@@ -1,0 +1,34 @@
+{
+  "summary": "Implemented hosted telemetry deploy preflight and verifier without live Cloudflare mutation. Added pure deploy readiness helpers, a gated package script wrapper, package scripts for preflight/verify/live deploy, tests for auth/binding/build/verify output shape, and runbook commands. Live deployment now requires explicit deploy:live plus NARADA_SITE_TELEMETRY_DEPLOY_APPROVED=1.",
+  "changed_files": [
+    "packages/site-registry-cloudflare/src/deploy-readiness.ts",
+    "packages/site-registry-cloudflare/scripts/hosted-telemetry-surface.mjs",
+    "packages/site-registry-cloudflare/test/deploy-readiness.test.ts",
+    "packages/site-registry-cloudflare/package.json",
+    "docs/deployment/cloudflare-hosted-site-registry.md",
+    ".ai/handoffs/task-1413-amended.md",
+    ".ai/handoffs/task-1413-report.json"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare test",
+      "result": "passed: 37 tests"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare build",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare deploy:preflight",
+      "result": "passed: returned blocked/non-mutating preflight for missing wrangler auth reference and placeholder KV/D1 ids"
+    }
+  ],
+  "residuals": [
+    "No live Cloudflare deploy or post-deploy smoke was performed.",
+    "A real deployment still needs non-placeholder local wrangler config, operator capability grant, Cloudflare auth, secret bindings, and post-deploy smoke evidence."
+  ]
+}

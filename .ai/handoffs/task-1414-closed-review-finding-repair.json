@@ -1,0 +1,14 @@
+{
+  "title": "Repair Site Telemetry operations posture fixture status enum mismatch",
+  "chapter": "Site Telemetry Publication / Readiness And Operations",
+  "goal": "Align the operations posture fixture with the secret rotation status enum specified in the operations posture contract.",
+  "context": "Builder review of closed task 1414 found that docs/product/fixtures/site-telemetry-operations-posture/monitoring-rotation-handoff.valid.json uses secret_rotation_evidence.status = missing_live_verification, while docs/product/site-telemetry-operations-posture.v0.md lists allowed values as fresh, stale, revoked, missing, rotating, or blocked. The 1414 review had already closed before the rejection could be admitted, so this bounded repair preserves the finding through a new governed task.",
+  "required_work": "1. Read docs/product/site-telemetry-operations-posture.v0.md and the monitoring-rotation fixture.\n2. Align the fixture's secret_rotation_evidence.status with the specified enum, or update the spec only if a new status is explicitly justified.\n3. Re-run JSON parsing for the operations posture fixture.\n4. Run git diff whitespace checks for the operations posture doc and fixture.\n5. Report the repair with the original review finding referenced.",
+  "non_goals": "- Do not change live monitoring, deployment, Cloudflare, or secret state.\n- Do not broaden the operations posture schema beyond the enum mismatch unless the spec requires it.",
+  "criteria": [
+    "Fixture status matches the operations posture status contract.",
+    "JSON fixture parses.",
+    "No live external system is mutated."
+  ],
+  "depends_on": [1414]
+}

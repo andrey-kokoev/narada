@@ -1,0 +1,35 @@
+{
+  "summary": "Implemented the read-only `narada_doctrine_grounding_refs` MCP tool for public doctrine grounding. The tool returns bounded doctrine refs for telemetry ownership questions, includes an explicit proof case, and blocks requests that require private Inquiry Space data instead of copying unavailable/private records. Registered the tool as read-only, documented the contract, and added tests for discovery, read-only output, and blocked private-data behavior.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "packages/narada-proper-mcp/src/server.ts",
+    "packages/narada-proper-mcp/src/surface-registry.ts",
+    "packages/narada-proper-mcp/test/narada-proper-mcp.test.ts",
+    "docs/product/site-telemetry-doctrine-grounding-mcp.v0.md",
+    "docs/product/site-telemetry-publication-outcome-shapes.md",
+    ".ai/handoffs/task-1416-body.md",
+    ".ai/handoffs/task-1416-report.json"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --filter @narada2/narada-proper-mcp test",
+      "result": "passed: 24 tests"
+    },
+    {
+      "command": "pnpm --filter @narada2/narada-proper-mcp typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/narada-proper-mcp build",
+      "result": "passed"
+    },
+    {
+      "command": "git diff --check -- packages/narada-proper-mcp/src/server.ts packages/narada-proper-mcp/src/surface-registry.ts packages/narada-proper-mcp/test/narada-proper-mcp.test.ts docs/product/site-telemetry-doctrine-grounding-mcp.v0.md docs/product/site-telemetry-publication-outcome-shapes.md",
+      "result": "passed: line-ending warnings only"
+    }
+  ],
+  "residuals": [
+    "Task 1415 intake contract remains unfinished/claimed, so the MCP tool intentionally blocks private Inquiry Space data import.",
+    "Replay of the telemetry branch into Inquiry Space remains later governed work."
+  ]
+}

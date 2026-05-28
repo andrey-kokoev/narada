@@ -1,0 +1,28 @@
+{
+  "summary": "Implemented SiteRegistry read-model derivation in site-config with typed projection interfaces, deterministic event grouping, freshness/provenance preservation, conflict representation, projection-only authority limits, and fixture-backed tests for the 1403 schema plus stale/conflicting signals.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "packages/site-config/src/index.ts",
+    "packages/site-config/test/site-config.test.ts",
+    ".ai/handoffs/task-1404-amended.md",
+    ".ai/handoffs/task-1404-report.json"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --filter @narada2/site-config test",
+      "result": "passed: 21 tests"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-config typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-config build",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "Cloudflare aggregate SiteRegistry endpoint integration remains later work.",
+    "The read model remains projection-only; authority-bearing registry mutation requires separate admitted work."
+  ]
+}

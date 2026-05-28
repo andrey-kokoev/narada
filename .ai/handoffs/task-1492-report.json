@@ -1,0 +1,36 @@
+{
+  "task": 1492,
+  "agent": "narada.builder",
+  "status": "complete",
+  "changed_files": [
+    "docs/product/incoming-intake-trust-provenance-projection.md",
+    "docs/product/incoming-message-intake-edge.md",
+    "docs/product/remote-candidate-exchange.v0.md",
+    "docs/concepts/canonical-inbox.md",
+    "docs/concepts/canonical-admission-rejection-ledger.md",
+    "docs/product/hosted-message-local-admission-boundary.md",
+    "docs/concepts/verifiable-envelope-trust.md"
+  ],
+  "summary": "Added doctrine defining incoming intake trust/provenance as evidence and projection rather than authority; specified attachment points for intake edges, remote candidates, Canonical Inbox envelopes, and Admission Rejection Ledger entries; defined default display posture and raw cryptographic material redaction limits; cross-linked the projection doctrine from affected intake and trust docs.",
+  "verification": [
+    {
+      "command": "git diff --check -- docs/product/incoming-intake-trust-provenance-projection.md docs/product/incoming-message-intake-edge.md docs/product/remote-candidate-exchange.v0.md docs/concepts/canonical-inbox.md docs/concepts/canonical-admission-rejection-ledger.md docs/product/hosted-message-local-admission-boundary.md docs/concepts/verifiable-envelope-trust.md",
+      "result": "passed; only existing LF/CRLF working-copy warnings were emitted"
+    },
+    {
+      "command": "rg \"verified|unverified|failed|expired|revoked|unknown|not_signed|encrypted_unreadable|decrypted_verified|Incoming Intake Trust\" docs/product/incoming-intake-trust-provenance-projection.md docs/product/incoming-message-intake-edge.md docs/product/remote-candidate-exchange.v0.md docs/concepts/canonical-inbox.md docs/concepts/canonical-admission-rejection-ledger.md docs/product/hosted-message-local-admission-boundary.md docs/concepts/verifiable-envelope-trust.md",
+      "result": "passed; vocabulary and cross-links present"
+    }
+  ],
+  "acceptance": {
+    "trust_is_evidence_projection_not_lifecycle_authority": true,
+    "vocabulary_aligns_with_verifiable_envelope_trust": true,
+    "affected_intake_artifacts_have_attachment_points": true,
+    "raw_cryptographic_material_excluded_from_default_displays": true
+  },
+  "non_goals_preserved": [
+    "No cryptographic substrate selected.",
+    "No signing, encryption, key storage, or verification command implemented.",
+    "No mandatory signing requirement introduced for current local envelopes."
+  ]
+}

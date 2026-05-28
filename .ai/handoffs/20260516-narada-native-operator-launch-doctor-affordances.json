@@ -1,0 +1,130 @@
+{
+  "slug": "narada-native-operator-launch-doctor-affordances",
+  "title": "Narada-native Operator Launch Doctor Affordances",
+  "depends_on": [
+    1312,
+    1339
+  ],
+  "tasks": [
+    {
+      "title": "Define Narada-native launch command posture",
+      "goal": "Extend operator-facing Narada-native launch output toward admitted dry-run and live launch planning.",
+      "context": "Launch affordances are projections and entrypoints, not authority loci.",
+      "required_work": [
+        "Expose runtime kind, carrier session id, startup command, capability posture, withheld authorities, launch evidence refs, and execution admission state.",
+        "Support dry-run launch planning without executing live providers.",
+        "Add tests proving launch output contains no raw secrets, prompts, provider config values, or model output."
+      ],
+      "non_goals": [
+        "Do not make launch visibility a capability grant.",
+        "Do not infer volatile handles from labels.",
+        "Do not require an operator UI rewrite."
+      ],
+      "acceptance_criteria": [
+        "Launch output has bounded runtime, session, capability, authority, and evidence fields.",
+        "Dry-run planning is available without live provider calls.",
+        "Tests prove output is redacted and non-authoritative."
+      ]
+    },
+    {
+      "title": "Define Narada-native doctor command",
+      "goal": "Provide a compact Narada-native doctor command over supervisor and readiness surfaces.",
+      "context": "Operators need configured, blocked, fixture-only, provider-backed, live, failed, and stopped posture without private file inspection.",
+      "required_work": [
+        "Wrap supervisor doctor and readiness into JSON and human output.",
+        "Report runtime posture, provider posture, data posture, consent posture, blocked reasons, latest evidence refs, reconstruction status, and next diagnostic command.",
+        "Add tests distinguishing configured, blocked, fixture-only, provider-backed, live-running, failed, and stopped states."
+      ],
+      "non_goals": [
+        "Do not perform repair mutation.",
+        "Do not expose raw provider configuration or credential values.",
+        "Do not treat doctor output as task truth."
+      ],
+      "acceptance_criteria": [
+        "Doctor command returns compact bounded JSON/human output.",
+        "All required states are distinguishable.",
+        "Tests prove doctor output does not expose secrets or raw model text."
+      ]
+    },
+    {
+      "title": "Add bounded evidence-ref projection",
+      "goal": "Project Narada-native evidence refs without raw transcript, prompt, provider output, or credential leakage.",
+      "context": "Operator surfaces need enough evidence refs for reconstruction, not private payload display.",
+      "required_work": [
+        "List evidence refs by family, status, path, and recency only.",
+        "Redact or omit raw transcript, prompt, provider output, credential, and secret-like values.",
+        "Add tests with secret-like fixture data proving raw values are omitted."
+      ],
+      "non_goals": [
+        "Do not inline full evidence payloads.",
+        "Do not expose raw provider output.",
+        "Do not read credential stores for display."
+      ],
+      "acceptance_criteria": [
+        "Evidence refs are bounded by family, status, path, and recency.",
+        "Secret-like and raw model values are omitted.",
+        "Tests prove projection is redacted."
+      ]
+    },
+    {
+      "title": "Add operator-surface affordance projection",
+      "goal": "Expose launch and doctor availability through operator-surface projections without authority collapse.",
+      "context": "Buttons and labels may point to canonical commands but must not themselves become grants or mutation authority.",
+      "required_work": [
+        "Define launch/doctor availability and posture projection records.",
+        "Ensure projected commands point to canonical surfaces rather than direct mutation primitives.",
+        "Add tests proving launch/focus convenience does not imply authority or capability grants."
+      ],
+      "non_goals": [
+        "Do not implement a full UI rewrite.",
+        "Do not grant capabilities through buttons or labels.",
+        "Do not infer runtime locus from volatile window handles."
+      ],
+      "acceptance_criteria": [
+        "Operator-surface projections expose launch and doctor affordances with canonical command targets.",
+        "Projection records separate convenience from authority.",
+        "Tests prove no capability grants are implied."
+      ]
+    },
+    {
+      "title": "Add repair guidance and refusal posture",
+      "goal": "Provide bounded operator guidance for blocked Narada-native launch and doctor states.",
+      "context": "Blocked states should guide the operator without automatically repairing authority-bearing substrate.",
+      "required_work": [
+        "Cover missing registration, missing consent, revoked grant, missing runtime, stale heartbeat, and unavailable provider transport.",
+        "Return bounded repair guidance and next diagnostic commands.",
+        "Add tests proving no automatic repair mutation occurs."
+      ],
+      "non_goals": [
+        "Do not rotate credentials, edit consent, start daemons, or mutate tasks automatically.",
+        "Do not print raw secret values in guidance.",
+        "Do not bypass canonical capability consent."
+      ],
+      "acceptance_criteria": [
+        "Blocked states produce bounded guidance and diagnostics.",
+        "No automatic repair mutation occurs.",
+        "Tests cover all required blocked states."
+      ]
+    },
+    {
+      "title": "Add end-to-end operator readback proof",
+      "goal": "Prove dry-run launch, start or heartbeat evidence, doctor readback, and reconstruction link by carrier session id.",
+      "context": "Operator-facing use should be proven without live provider network calls.",
+      "required_work": [
+        "Run dry-run launch planning for fixture and provider-configured paths.",
+        "Link start or heartbeat evidence, doctor readback, and reconstruction by carrier session id.",
+        "Add tests proving bounded output and no live provider network calls."
+      ],
+      "non_goals": [
+        "Do not require live provider credentials.",
+        "Do not send outbound effects or publish repositories.",
+        "Do not close proof by transcript inspection alone."
+      ],
+      "acceptance_criteria": [
+        "Dry-run launch, evidence, doctor, and reconstruction are linked by carrier session id.",
+        "Fixture and provider-configured paths are covered.",
+        "Tests pass without live provider network calls or raw secrets."
+      ]
+    }
+  ]
+}

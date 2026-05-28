@@ -1,0 +1,31 @@
+{
+  "summary": "Specified message_routing_authority posture for local compatibility, cross-locus enforcement, and capability-gated cross-Site delegated submission. The new doctrine documents required route fields, refusal output, doctor/preflight expectations, and examples for local CLI submission, Builder-to-Architect handoff, hosted message pull, and cross-Site delegated submission. It links the posture from Canonical Inbox, MCP facade, Site Governance Coordinates, and Incoming Message Intake Edge doctrine.",
+  "changed_files": [
+    "docs/product/message-routing-authority-posture.md",
+    "docs/concepts/canonical-inbox.md",
+    "docs/concepts/narada-mcp-facade.md",
+    "docs/product/site-governance-coordinates.md",
+    "docs/product/incoming-message-intake-edge.md",
+    ".ai/handoffs/task-1490-body.md",
+    ".ai/handoffs/task-1490-report.json"
+  ],
+  "verification": [
+    {
+      "command": "git diff --check -- docs\\product\\message-routing-authority-posture.md docs\\concepts\\canonical-inbox.md docs\\product\\site-governance-coordinates.md docs\\concepts\\narada-mcp-facade.md docs\\product\\incoming-message-intake-edge.md",
+      "result": "passed: no whitespace errors; Git reported line-ending warnings for existing markdown files"
+    },
+    {
+      "command": "rg -n \"Compatibility And Enforcement|Required Policy Shape|target_locus|kinds|authority_levels|capability_kind|capability_action|Refusal Posture|Doctor And Preflight|Local CLI Submission|Builder-To-Architect|Hosted Message Pull|Cross-Site Delegated\" docs\\product\\message-routing-authority-posture.md",
+      "result": "passed: required posture sections, fields, refusal posture, doctor/preflight expectations, and examples present"
+    },
+    {
+      "command": "Select-String -Path docs\\concepts\\canonical-inbox.md,docs\\product\\site-governance-coordinates.md,docs\\concepts\\narada-mcp-facade.md,docs\\product\\incoming-message-intake-edge.md -Pattern \"Message Routing Authority Posture|message-routing-authority-posture\"",
+      "result": "passed: cross-links present"
+    }
+  ],
+  "residuals": [
+    "No code enforcement was changed in this task.",
+    "No capabilities or credentials were granted.",
+    "Future doctor/preflight implementation can project the specified distinctions more explicitly."
+  ]
+}

@@ -1,0 +1,128 @@
+{
+  "slug": "narada-native-intellect-provider-adapters",
+  "title": "Narada-native Intellect Provider Adapters",
+  "depends_on": [
+    1291,
+    1297,
+    1298,
+    1299
+  ],
+  "tasks": [
+    {
+      "title": "Define Narada-native provider adapter execution contract",
+      "goal": "Add the shared execution contract that lets Narada-native run provider-backed intellect adapters from registered capability references without moving authority into the provider.",
+      "context": "The current Narada-native carrier has a replaceable adapter boundary and provider registration metadata, but only the deterministic fixture adapter is executable. Kimi, OpenAI, Anthropic, and OpenRouter should share one invocation and evidence contract rather than each inventing provider-specific semantics.",
+      "required_work": [
+        "Inspect the existing Narada-native adapter, adapter-registration, work-loop, task-handoff, readiness, and supervisor surfaces.",
+        "Define a provider adapter interface for request construction, credential/capability lookup by reference, response normalization, refusal handling, timeout/failure posture, and redacted invocation evidence.",
+        "Implement the smallest shared runner or registry needed for provider adapters to be selected by registered provider kind.",
+        "Ensure provider outputs remain inert proposed action packets or refusal/closeout summaries until admitted through canonical Narada surfaces.",
+        "Add focused tests proving no raw secrets, raw prompts, raw model outputs, or unbounded transcripts are recorded."
+      ],
+      "non_goals": [
+        "Do not grant provider adapters task, inbox, outbox, command, publication, credential-store, or external Site mutation authority.",
+        "Do not hardcode API keys or provider secrets.",
+        "Do not require live network calls in unit tests."
+      ],
+      "acceptance_criteria": [
+        "A shared provider adapter execution contract exists and is used by provider-specific adapters.",
+        "Provider selection is driven by registered provider kind and capability reference, not raw provider secrets.",
+        "Invocation evidence records bounded summaries and redaction posture only.",
+        "Provider output is inert until admitted through canonical Narada surfaces.",
+        "Focused tests cover selection, failure/refusal posture, and evidence redaction."
+      ]
+    },
+    {
+      "title": "Add Kimi Narada-native intellect provider adapter",
+      "goal": "Implement a Kimi-compatible Narada-native provider adapter behind the shared execution contract.",
+      "context": "Kimi should be usable as a Narada-native intellect provider only through the governed provider adapter boundary. Registration must use a capability reference and must not store raw credentials.",
+      "required_work": [
+        "Add Kimi provider kind registration and readiness behavior using the shared provider adapter contract.",
+        "Implement request construction and response normalization for a Kimi-compatible chat/completions endpoint or documented OpenAI-compatible Kimi posture.",
+        "Represent missing capability, missing endpoint/model configuration, provider refusal, timeout, and malformed response as bounded refusal/failure evidence.",
+        "Ensure Kimi adapter evidence omits raw secrets, raw prompt text, raw output text, and unbounded transcripts.",
+        "Add tests with mocked transport for success, refusal/failure, missing capability, and redaction."
+      ],
+      "non_goals": [
+        "Do not perform live Kimi network calls in normal tests.",
+        "Do not select Kimi as a default provider.",
+        "Do not embed Kimi credentials in repository files or task evidence."
+      ],
+      "acceptance_criteria": [
+        "Kimi provider kind can be registered and reported as provider-configured when capability posture is valid.",
+        "Mocked Kimi invocation returns normalized inert adapter output.",
+        "Failure/refusal cases are bounded and reconstructable.",
+        "Evidence redaction tests prove no raw prompt, output, or secret values are persisted."
+      ]
+    },
+    {
+      "title": "Add OpenAI Narada-native intellect provider adapter",
+      "goal": "Implement an OpenAI Narada-native provider adapter behind the shared execution contract.",
+      "context": "OpenAI should be usable as one provider-backed intellect substrate for Narada-native carrier sessions, without making OpenAI output a Narada authority decision.",
+      "required_work": [
+        "Add OpenAI provider kind registration and readiness behavior using the shared provider adapter contract.",
+        "Implement request construction and response normalization for OpenAI chat/responses posture selected by current local dependency constraints.",
+        "Represent missing capability, missing model configuration, provider refusal, timeout, rate-limit, and malformed response as bounded refusal/failure evidence.",
+        "Ensure OpenAI adapter evidence omits raw secrets, raw prompt text, raw output text, and unbounded transcripts.",
+        "Add tests with mocked transport for success, refusal/failure, missing capability, and redaction."
+      ],
+      "non_goals": [
+        "Do not perform live OpenAI network calls in normal tests.",
+        "Do not grant OpenAI tool-call effects directly.",
+        "Do not embed OpenAI credentials in repository files or task evidence."
+      ],
+      "acceptance_criteria": [
+        "OpenAI provider kind can be registered and reported as provider-configured when capability posture is valid.",
+        "Mocked OpenAI invocation returns normalized inert adapter output.",
+        "Failure/refusal cases are bounded and reconstructable.",
+        "Evidence redaction tests prove no raw prompt, output, or secret values are persisted."
+      ]
+    },
+    {
+      "title": "Add Anthropic Narada-native intellect provider adapter",
+      "goal": "Implement an Anthropic Narada-native provider adapter behind the shared execution contract.",
+      "context": "Anthropic should be usable as one provider-backed intellect substrate for Narada-native carrier sessions, with the same authority and evidence posture as other providers.",
+      "required_work": [
+        "Add Anthropic provider kind registration and readiness behavior using the shared provider adapter contract.",
+        "Implement request construction and response normalization for Anthropic messages-compatible posture selected by current local dependency constraints.",
+        "Represent missing capability, missing model configuration, provider refusal, timeout, rate-limit, and malformed response as bounded refusal/failure evidence.",
+        "Ensure Anthropic adapter evidence omits raw secrets, raw prompt text, raw output text, and unbounded transcripts.",
+        "Add tests with mocked transport for success, refusal/failure, missing capability, and redaction."
+      ],
+      "non_goals": [
+        "Do not perform live Anthropic network calls in normal tests.",
+        "Do not grant Anthropic tool-use effects directly.",
+        "Do not embed Anthropic credentials in repository files or task evidence."
+      ],
+      "acceptance_criteria": [
+        "Anthropic provider kind can be registered and reported as provider-configured when capability posture is valid.",
+        "Mocked Anthropic invocation returns normalized inert adapter output.",
+        "Failure/refusal cases are bounded and reconstructable.",
+        "Evidence redaction tests prove no raw prompt, output, or secret values are persisted."
+      ]
+    },
+    {
+      "title": "Add OpenRouter Narada-native intellect provider adapter",
+      "goal": "Implement an OpenRouter Narada-native provider adapter behind the shared execution contract.",
+      "context": "OpenRouter should be usable as a model-routing provider substrate while preserving Narada-native authority separation and evidence redaction.",
+      "required_work": [
+        "Add OpenRouter provider kind registration and readiness behavior using the shared provider adapter contract.",
+        "Implement request construction and response normalization for OpenRouter OpenAI-compatible posture with explicit model/router configuration.",
+        "Represent missing capability, missing model/router configuration, provider refusal, timeout, rate-limit, and malformed response as bounded refusal/failure evidence.",
+        "Ensure OpenRouter adapter evidence omits raw secrets, raw prompt text, raw output text, and unbounded transcripts.",
+        "Add tests with mocked transport for success, refusal/failure, missing capability, and redaction."
+      ],
+      "non_goals": [
+        "Do not perform live OpenRouter network calls in normal tests.",
+        "Do not let OpenRouter routing metadata become authority over Narada task or effect decisions.",
+        "Do not embed OpenRouter credentials in repository files or task evidence."
+      ],
+      "acceptance_criteria": [
+        "OpenRouter provider kind can be registered and reported as provider-configured when capability posture is valid.",
+        "Mocked OpenRouter invocation returns normalized inert adapter output.",
+        "Failure/refusal cases are bounded and reconstructable.",
+        "Evidence redaction tests prove no raw prompt, output, or secret values are persisted."
+      ]
+    }
+  ]
+}

@@ -1,11 +1,13 @@
 ---
-status: closed
+status: confirmed
 amended_by: narada.builder
 amended_at: 2026-05-16T20:17:39.846Z
 closed_at: 2026-05-16T20:32:12.414Z
 closed_by: narada.builder2
 governed_by: task_close:narada.builder2
 closure_mode: peer_reviewed
+confirmed_by: narada.architect
+confirmed_at: 2026-05-18T17:35:04.936Z
 ---
 
 # Align hosted message routes with Remote Candidate Exchange contract

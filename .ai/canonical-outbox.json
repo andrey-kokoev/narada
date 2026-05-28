@@ -29,6 +29,34 @@
       "composed_by": "narada.architect",
       "composed_at": "2026-05-13T02:21:48.406Z",
       "updated_at": "2026-05-13T02:21:48.406Z"
+    },
+    {
+      "outbox_id": "out_216c869d-5781-4539-a3d6-8ec21cd6b7c5",
+      "target_kind": "site_inbox",
+      "target_ref": "narada-andrey",
+      "transport": "mcp_fabric_route_required",
+      "payload_ref": null,
+      "payload_body": "Narada proper asks narada-andrey to register/publish itself on the hosted Narada proper Site Registry.\n\nRegistry URL: https://narada-site-registry.andrei-kokoev.workers.dev\nRequested posture: narada-andrey should locally decide whether to admit an active public relation/projection to this registry. If admitted, please provide or publish registration evidence with site_id=narada-andrey, relation kind/posture, projection/publication endpoint posture, and capability references only. Do not send raw secrets.\n\nAuthority limits: this request does not register narada-andrey by itself; narada-andrey local admission is required; Site Registry projection is not Site authority; no raw secrets should cross.\n\nSuggested response: inbox reply, registry publication event, or relation-registration evidence from narada-andrey; include any refusal or conditions.",
+      "authority_level": "operator_confirmed",
+      "principal_id": "operator",
+      "approval_required": true,
+      "approved_by": "operator",
+      "approved_at": "2026-05-17T01:49:42.318Z",
+      "route_id": null,
+      "capability_grant_id": null,
+      "status": "confirmed",
+      "dry_run_rendering": "target=site_inbox:narada-andrey\ntransport=mcp_fabric_route_required\nauthority=operator_confirmed\nroute=unresolved\ncapability=ungranted\npayload=Narada proper asks narada-andrey to register/publish itself on the hosted Narada proper Site Registry.\n\nRegistry URL: https://narada-site-registry.andrei-kokoev.workers.dev\nRequested posture: narada-andrey should locally decide whether to admit an active public relation/projection to this registry. If admitted, please provide or publish registration evidence with site_id=narada-andrey, relation kind/posture, projection/publication endpoint posture, and capability references only. Do not send raw",
+      "execution_evidence_ref": "inbox-envelope:env_37e5cd13-d005-4ba9-b0a2-e982139f246b",
+      "delivery_confirmation_ref": "target-inbox:C:\\Users\\Andrey\\Narada\\.ai\\inbox-envelopes\\2026-05-17T16-50-32-744Z-env_37e5cd13-d005-4ba9-b0a2-e982139f246b.json",
+      "retry_of": null,
+      "supersedes": null,
+      "superseded_by": null,
+      "archived_by": null,
+      "archived_at": null,
+      "archive_reason": null,
+      "composed_by": "narada.architect",
+      "composed_at": "2026-05-17T01:49:35.580Z",
+      "updated_at": "2026-05-17T16:50:41.508Z"
     }
   ]
 }

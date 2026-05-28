@@ -1,5 +1,5 @@
 ---
-status: closed
+status: confirmed
 depends_on: [1391]
 amended_by: narada.builder
 amended_at: 2026-05-16T20:20:51.062Z
@@ -7,6 +7,8 @@ closed_at: 2026-05-16T20:25:17.280Z
 closed_by: narada.builder2
 governed_by: task_close:narada.builder2
 closure_mode: peer_reviewed
+confirmed_by: narada.architect
+confirmed_at: 2026-05-18T17:35:06.121Z
 ---
 
 # Specify Local Publisher and Puller tool contract

@@ -1,0 +1,32 @@
+{
+  "summary": "Specified the Site Telemetry Event Contract v0 as a documentation/fixture artifact without runtime behavior changes. The spec defines the current compatibility baseline, future-only fields, event-family interpretation, SiteEventEnvelope compatibility mapping, fixture set, and residual package/runtime adoption tasks.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "docs/product/site-telemetry-event-contract.v0.md",
+    "docs/product/site-telemetry-publication-outcome-shapes.md",
+    "docs/product/fixtures/site-telemetry-event-contract/site-health.current-envelope.json",
+    "docs/product/fixtures/site-telemetry-event-contract/site-health.future-contract.json",
+    "docs/product/fixtures/site-telemetry-event-contract/site-event-envelope-compatibility-map.json",
+    ".ai/handoffs/task-1394-amended.md",
+    ".ai/handoffs/task-1394-report.json"
+  ],
+  "verification": [
+    {
+      "command": "node -e \"const fs=require('fs'); for (const f of fs.readdirSync('docs/product/fixtures/site-telemetry-event-contract')) JSON.parse(fs.readFileSync('docs/product/fixtures/site-telemetry-event-contract/'+f,'utf8')); console.log('fixtures json ok')\"",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-config test",
+      "result": "passed: 13 tests"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-config typecheck",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "Package-level schema/types and fixture-loading tests remain for task 1395.",
+    "Hosted receiver integration and runtime adoption of Publication Edge/evidence coordinates remain for task 1396 and later Publication Edge tasks.",
+    "The future schema value narada.site_telemetry.event.v0 is illustrative until package adoption decides whether to alias, succeed, or keep the current narada.site_event.envelope.v0 runtime schema."
+  ]
+}

@@ -1,0 +1,130 @@
+{
+  "slug": "narada-native-governed-effect-handoff",
+  "title": "Narada-native Governed Effect Handoff",
+  "depends_on": [
+    1311,
+    1327
+  ],
+  "tasks": [
+    {
+      "title": "Define generic carrier action packet envelope",
+      "goal": "Define the inert proposal envelope for all Narada-native action handoff families.",
+      "context": "Carrier outputs must be reconstructable proposals until canonical Narada surfaces admit them.",
+      "required_work": [
+        "Define fields packet_id, carrier_session_id, action_family, status=inert_proposal, summary, payload_summary, payload_ref, requires_canonical_admission=true, raw_transcript_recorded=false, and direct_mutation_performed=false.",
+        "Cover task-report, inbox, command intent, outbox intent, and repository publication families.",
+        "Add schema tests for all families and no-authority flags."
+      ],
+      "non_goals": [
+        "Do not execute any effect from the envelope.",
+        "Do not treat model output as accepted evidence.",
+        "Do not record raw transcripts or raw provider output."
+      ],
+      "acceptance_criteria": [
+        "A generic inert action packet envelope exists.",
+        "All required action families are represented.",
+        "Tests prove canonical admission is required and direct mutation is false."
+      ]
+    },
+    {
+      "title": "Implement task-report handoff family",
+      "goal": "Implement inert task-report draft packets for canonical task report admission.",
+      "context": "The carrier may draft a work result report but must not submit or close it.",
+      "required_work": [
+        "Include task number/id, report summary, changed-file refs, verification refs, residuals, and suggested narada task report command.",
+        "Write the draft as a reconstructable payload ref.",
+        "Add tests proving no task lifecycle mutation occurs before canonical admission."
+      ],
+      "non_goals": [
+        "Do not call narada task report, review, close, finish, or confirm.",
+        "Do not store raw task markdown or provider transcript.",
+        "Do not mark draft evidence accepted."
+      ],
+      "acceptance_criteria": [
+        "Task-report handoff packets are inert and reconstructable.",
+        "Suggested canonical admission command is present.",
+        "Tests prove lifecycle state is not mutated."
+      ]
+    },
+    {
+      "title": "Implement inbox handoff family",
+      "goal": "Implement inert inbox proposal packets without envelope transition authority.",
+      "context": "The carrier may propose inbox submissions or promotions but must leave envelope admission to canonical inbox surfaces.",
+      "required_work": [
+        "Include envelope kind, source ref, authority assertion, bounded payload summary, and suggested inbox submit/import/triage/promote surface.",
+        "Redact raw secret-like payload values.",
+        "Add tests proving no inbox database write or status transition occurs."
+      ],
+      "non_goals": [
+        "Do not submit, import, triage, promote, archive, or task inbox envelopes.",
+        "Do not write .ai/inbox.db from the carrier.",
+        "Do not record unbounded payload bodies."
+      ],
+      "acceptance_criteria": [
+        "Inbox handoff packets are bounded and inert.",
+        "Canonical inbox admission surface is explicit.",
+        "Tests prove no inbox mutation occurs."
+      ]
+    },
+    {
+      "title": "Implement command intent handoff family",
+      "goal": "Implement inert CEIZ command run request drafts.",
+      "context": "Command execution requires a governed command intent zone crossing, not direct carrier process spawn.",
+      "required_work": [
+        "Represent argv vector, cwd, env policy, side-effect class, timeout, output admission profile, and rationale.",
+        "Use payload refs for bounded drafts.",
+        "Add tests proving no process spawn occurs and shell strings/env secrets are not persisted."
+      ],
+      "non_goals": [
+        "Do not execute shell commands.",
+        "Do not persist secret-bearing env values.",
+        "Do not stringify argv into an unsafe shell command."
+      ],
+      "acceptance_criteria": [
+        "Command intent packets match CEIZ draft posture.",
+        "No process is spawned by the carrier.",
+        "Tests prove env secrets and unsafe shell strings are not persisted."
+      ]
+    },
+    {
+      "title": "Implement outbox and publication handoff families",
+      "goal": "Implement inert outbox and repository publication proposal packets.",
+      "context": "Outbound transport and repository publication must remain owned by canonical outbox and publication zones.",
+      "required_work": [
+        "Define outbox intent shape with target kind/ref, transport, route/capability refs, bounded payload body/ref, and approval posture.",
+        "Define RPIZ publication intent draft with repo root, branch, task linkage, include paths, message summary, and preparation command.",
+        "Add tests proving no transport send, commit, or push occurs."
+      ],
+      "non_goals": [
+        "Do not send outbound messages.",
+        "Do not commit or push repositories.",
+        "Do not treat publication preparation as publication confirmation."
+      ],
+      "acceptance_criteria": [
+        "Outbox and publication handoff packets are inert and reconstructable.",
+        "Canonical admission boundaries are explicit.",
+        "Tests prove no outbound transport, commit, or push occurs."
+      ]
+    },
+    {
+      "title": "Add handoff reconstruction and doctor integration",
+      "goal": "Expose handoff artifacts through readiness and doctor by id, family, and status only.",
+      "context": "Operators need handoff visibility without raw transcript or payload leakage.",
+      "required_work": [
+        "List handoff artifacts in readiness and supervisor doctor output by id, family, status, and payload ref.",
+        "Reconstruct all handoff families from durable JSON refs.",
+        "Add tests proving reconstruction omits raw transcripts and direct mutation remains false."
+      ],
+      "non_goals": [
+        "Do not display raw model transcripts or unbounded payloads.",
+        "Do not execute admission commands from doctor.",
+        "Do not make doctor output authority."
+      ],
+      "acceptance_criteria": [
+        "Handoff artifacts are visible by bounded refs in readiness/doctor output.",
+        "All handoff families reconstruct from durable JSON refs.",
+        "Tests prove raw transcripts are absent and mutation flags remain false."
+      ]
+    }
+  ]
+}

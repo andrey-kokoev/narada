@@ -1,0 +1,39 @@
+{
+  "task": 1511,
+  "agent": "narada.builder",
+  "status": "complete",
+  "changed_files": [
+    "packages/narada-proper-mcp/src/server.ts",
+    "packages/narada-proper-mcp/src/surface-registry.ts",
+    "packages/narada-proper-mcp/test/narada-proper-mcp.test.ts",
+    "docs/concepts/narada-mcp-facade.md",
+    ".ai/do-not-open/tasks/20260518-1511-wire-mcp-policy-reconciliation-into-startup-and-doctor-postu.md"
+  ],
+  "summary": "Startup and MCP fabric posture now run read-only MCP role-policy reconciliation. They report aligned/drift/error status, exact additions/removals, validation errors, and the explicit reconciler repair command without mutating config.json.",
+  "verification": [
+    {
+      "command": "pnpm --filter @narada2/narada-proper-mcp typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/narada-proper-mcp test",
+      "result": "passed; 1 file, 38 tests"
+    },
+    {
+      "command": "pnpm --filter @narada2/narada-proper-mcp build",
+      "result": "passed"
+    },
+    {
+      "command": "node --input-type=module -e \"import { handleMcpRequest } from './packages/narada-proper-mcp/dist/server.js'; ...\"",
+      "result": "passed; live startup probe reported mcp_policy_reconciliation.status aligned with no additions/removals and no mutation"
+    }
+  ],
+  "acceptance": {
+    "startup_or_doctor_reports_policy_drift": true,
+    "repair_path_uses_reconciler": true,
+    "docs_explain_reconciliation_over_generation": true
+  },
+  "residuals": [
+    "The repository still has extensive pre-existing dirty and untracked files unrelated to this task."
+  ]
+}

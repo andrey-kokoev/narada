@@ -1,0 +1,22 @@
+{
+  "summary": "Specified the Telemetry Surface realization contract with Cloudflare and local filesystem variants. The spec distinguishes Telemetry Surface realization from SiteRegistry read model and Site authority, records naming rules, and marks routes, domains, Worker/D1/KV ids, paths, and processes as deployment coordinates.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "docs/product/site-telemetry-surface-realization.v0.md",
+    "docs/product/site-telemetry-publication-outcome-shapes.md",
+    "docs/product/fixtures/site-telemetry-surface-realization/cloudflare-surface.valid.json",
+    "docs/product/fixtures/site-telemetry-surface-realization/local-filesystem-surface.valid.json",
+    ".ai/handoffs/task-1400-amended.md",
+    ".ai/handoffs/task-1400-report.json"
+  ],
+  "verification": [
+    {
+      "command": "node -e \"const fs=require('fs'); for (const f of fs.readdirSync('docs/product/fixtures/site-telemetry-surface-realization')) JSON.parse(fs.readFileSync('docs/product/fixtures/site-telemetry-surface-realization/'+f,'utf8')); console.log('surface realization fixtures json ok')\"",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "No dedicated markdown/schema linter exists for this documentation-only artifact in the current package surface.",
+    "Package-level validation, package naming/docs layering, local fixture realization implementation, and deploy hash/smoke verifier parity remain later tasks."
+  ]
+}

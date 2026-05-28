@@ -1,0 +1,28 @@
+{
+  "schema": "https://narada.dev/schemas/audit-note/v1",
+  "created_at": "2026-05-15T16:18:00.000Z",
+  "created_by": "narada.architect",
+  "target_locus": "Narada proper",
+  "summary": "Repaired review routing so pending review work is builder-role targeted rather than operator-targeted.",
+  "operator_request": "operator is not assignable to review. change reviewer to be builder",
+  "changes": [
+    {
+      "surface": "roster projection",
+      "detail": "Updated narada.builder role from implementer to builder through `narada task roster add narada.builder --role builder --format json`."
+    },
+    {
+      "surface": "work-next projection",
+      "detail": "Changed pending review fallback suggested_owner from operator to builder and suggested_command to use <builder-agent>."
+    },
+    {
+      "surface": "review work eligibility",
+      "detail": "Changed generic review work eligibility so builder-role agents can own review work while operator is no longer a review-owner keyword."
+    }
+  ],
+  "verification": [
+    "`pnpm --filter @narada2/cli test -- work-next.test.ts` passed.",
+    "`pnpm --filter @narada2/cli build` passed.",
+    "`narada work-next --agent narada.builder --peek --format json` selects an open role-targeted review obligation with target_role=builder and target_agent_id=null.",
+    "`narada work-next --agent narada.architect --peek --format json` lists pending_reviews with suggested_owner=builder and <builder-agent> review commands."
+  ]
+}

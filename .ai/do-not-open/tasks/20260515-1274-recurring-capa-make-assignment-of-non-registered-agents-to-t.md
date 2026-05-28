@@ -1,5 +1,9 @@
 ---
-status: in_review
+status: closed
+closed_at: 2026-05-15T19:19:16.887Z
+closed_by: narada.architect
+governed_by: task_close:narada.architect
+closure_mode: peer_reviewed
 ---
 
 # Recurring CAPA: Make assignment of non-registered agents to tasks impossible
@@ -53,16 +57,22 @@ Recommendation: Admit as recurring CAPA candidate and route to Architect for ass
 
 ## Execution Notes
 
-<!-- Record what was done, decisions made, and files changed during execution. -->
+- Audited the inbox task promotion and architect-process assignment path. `resolveAssignableAgent` in `packages/layers/cli/src/commands/inbox.ts` now requires assignment targets to resolve through the active roster before task creation or promotion proceeds.
+- Confirmed non-roster assignment targets return `agent_not_in_roster` or `agent_address_ambiguous` with `no_workaround` guidance, rather than auto-creating a task or roster identity.
+- Confirmed carrier/runtime-shaped labels such as `narada.claude-code` and `narada.native` receive an explicit carrier/runtime warning stating that carrier type is not task assignment authority.
+- Confirmed valid roster assignments such as `builder` still create and claim tasks successfully through inbox promotion.
+- Confirmed `work-next` agent address resolution fails closed for non-roster agents, role-shaped addresses with no active roster match, and ambiguous role-shaped addresses, while resolving exact-one site-qualified role addresses to concrete roster agents.
 
 ## Verification
 
-<!-- Record commands run, results observed, and how correctness was checked. -->
+- `pnpm --filter @narada2/cli test -- work-next.test.ts` passed as part of `pnpm --filter @narada2/cli test -- inbox.test.ts work-next.test.ts`; `work-next.test.ts` ran 29 passing tests.
+- `$env:NARADA_GIT_BINARY='git'; pnpm --filter @narada2/cli test -- inbox.test.ts -t "non-roster|carrier labels|assigned tasks directly"` passed with 3 focused inbox assignment tests.
+- The broader `inbox.test.ts` run still has unrelated Windows test-environment failures: several tests default to `/usr/bin/git`, and two assertions expect POSIX `.ai/mutation-evidence/inbox/` separators while Windows returns backslashes. Those are residual test-portability issues, not failures of the non-roster assignment boundary.
 
 ## Acceptance Criteria
 
-- [ ] Proposal handled: Corrective action: audit the assignment/admission path that allowed or suggested non-registered agent targets and identify any existing tasks/envelopes carrying non-roster agent identities.
-- [ ] Proposal handled: Preventive action: require assignment targets to resolve to active roster agents before task assignment, promotion, or work routing is accepted.
-- [ ] Proposal handled: Preventive action: distinguish carrier/runtime types from agent identities in validation errors and repair hints so runtime labels are not presented as roster roles by default.
-- [ ] Proposal handled: Verification: attempting to assign/promote work to an unregistered agent identity must fail at the assignment boundary with a durable rejection/admission record; registered agents such as narada.builder must continue to resolve normally.
-- [ ] Recommendation addressed or explicitly rejected: Admit as recurring CAPA candidate and route to Architect for assignment-boundary validation hardening.
+- [x] Proposal handled: Corrective action: audit the assignment/admission path that allowed or suggested non-registered agent targets and identify any existing tasks/envelopes carrying non-roster agent identities.
+- [x] Proposal handled: Preventive action: require assignment targets to resolve to active roster agents before task assignment, promotion, or work routing is accepted.
+- [x] Proposal handled: Preventive action: distinguish carrier/runtime types from agent identities in validation errors and repair hints so runtime labels are not presented as roster roles by default.
+- [x] Proposal handled: Verification: attempting to assign/promote work to an unregistered agent identity must fail at the assignment boundary with a durable rejection/admission record; registered agents such as narada.builder must continue to resolve normally.
+- [x] Recommendation addressed or explicitly rejected: Admit as recurring CAPA candidate and route to Architect for assignment-boundary validation hardening.

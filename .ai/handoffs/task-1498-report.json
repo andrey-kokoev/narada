@@ -1,0 +1,59 @@
+{
+  "task": 1498,
+  "agent": "narada.builder",
+  "status": "complete",
+  "changed_files": [
+    ".ai/decisions/2026-05-18-1494-1497-chapter-closure-draft.md",
+    ".ai/decisions/2026-05-18-1494-1497-chapter-closure.md",
+    ".ai/do-not-open/tasks/20260518-1494-1498-operator-site-communication-relation.md",
+    ".ai/do-not-open/tasks/20260518-1498-close-operator-site-communication-relation-chapter.md"
+  ],
+  "summary": "Closed the Operator Site Communication Relation chapter by inspecting task evidence for 1494-1497, running the focused Site Registry documentation/chat/Worker tests and fixture checks, generating and accepting the closure decision, confirming 1494-1497, and recording residual implementation posture without overclaiming hosted registry messaging or chat readiness.",
+  "verification": [
+    {
+      "command": "narada task read 1494 --format json && narada task read 1495 --format json && narada task read 1496 --format json && narada task read 1497 --format json",
+      "result": "passed; tasks 1494-1497 were closed with governed reports, closure provenance, and all criteria checked"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare test -- test/communication-docs.test.ts test/site-scope-chat.test.ts test/worker-boundary.test.ts",
+      "result": "passed; 3 test files, 48 tests"
+    },
+    {
+      "command": "Get-ChildItem docs/product/fixtures/operator-site-communication-relation -Filter *.json | ForEach-Object { Get-Content -Raw $_.FullName | ConvertFrom-Json | Out-Null; $_.Name }",
+      "result": "passed; all relation fixtures parse as JSON"
+    },
+    {
+      "command": "rg -n \"OperatorSiteCommunicationRelation|governed configuration|projection-only|IncomingMessageIntakeEdge|Canonical Outbox|remote_preserved|transport_delivered|local_admitted|operator_acknowledged|operator_approved|outbound_communication|Site-to-Operator|Operator-to-Site\" docs/product/operator-site-communication-relation.v0.md docs/product/site-registry-communication-relation-reconciliation-20260518.md docs/product/site-communication-surface.v0.md docs/product/incoming-message-intake-edge.md docs/concepts/canonical-inbox.md docs/concepts/canonical-outbox.md docs/concepts/operator-surface.md docs/product/site-factorization.md",
+      "result": "passed; final doctrine and reconciliation terms are present"
+    },
+    {
+      "command": "narada task evidence assert-complete 1494-1497 --format json",
+      "result": "passed; incomplete_count=0"
+    },
+    {
+      "command": "narada chapter close 1494-1497 --finish --by narada.builder --format json",
+      "result": "passed; closure accepted and tasks 1494-1497 transitioned to confirmed"
+    },
+    {
+      "command": "git diff --check -- .ai/decisions/2026-05-18-1494-1497-chapter-closure-draft.md .ai/decisions/2026-05-18-1494-1497-chapter-closure.md .ai/do-not-open/tasks/20260518-1494-1498-operator-site-communication-relation.md .ai/do-not-open/tasks/20260518-1498-close-operator-site-communication-relation-chapter.md",
+      "result": "passed"
+    }
+  ],
+  "acceptance": {
+    "chapter_closure_artifact_exists": true,
+    "chapter_tasks_closed_or_accounted_for": true,
+    "verification_evidence_recorded": true,
+    "residual_implementation_work_named_without_overclaiming_readiness": true,
+    "final_posture_preserves_site_authority_boundaries": true
+  },
+  "residuals": [
+    "Worker/API responses should include Operator Site Communication Relation and inbound-edge coordinates before further UI implementation depends on them.",
+    "UI copy should distinguish candidate preservation, transport delivery, target admission, operator acknowledgement, and operator approval.",
+    "Site-to-Operator outbound notification or Canonical Outbox work remains future governed implementation."
+  ],
+  "non_goals_preserved": [
+    "No implementation-only work was closed as complete.",
+    "No hosted registry messaging or chat production readiness was claimed.",
+    "No missing validator or UI residual was hidden."
+  ]
+}

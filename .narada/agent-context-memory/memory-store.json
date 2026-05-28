@@ -38,6 +38,60 @@
       "capturedAt": "2026-05-15T04:28:55.974Z",
       "persistedByPackage": false,
       "sourceImportFindings": []
+    },
+    {
+      "schema": "narada.agent_context_memory.checkpoint_descriptor.v0",
+      "checkpointId": "20260516-narada-architect-inquiry-space-mcp-relaunch-prep",
+      "sessionId": "codex-session-20260516-inquiry-space-mcp-relaunch",
+      "namedAgentId": "narada.architect",
+      "summary": "Operator requested User Site narada-andrey prepare a lift package for full Inquiry Space machinery. Current Narada proper MCP session does not expose the newly implemented inbox cross-Site submission tools, though local repo inspection confirms packages/narada-proper-mcp now contains inbox_submit_observation, inbox_submit_typed_envelope, inbox_stage_submission_workflow, narada_inbox_* aliases, canonical_inbox_cross_site_submission gating, surface registry entries, and tests. tool_search in this running session still returns no matching tools, so relaunch/rebind is needed before using inbox_stage_submission_workflow. Current available checkpoint tool is agent_context_memory_record_checkpoint. After relaunch, verify MCP tool exposure, dry-run cross-Site inbox submission to C:\\Users\\Andrey\\Narada if sending from Narada proper is still desired, and avoid broad cleanup of the dirty Narada proper worktree.",
+      "evidenceRefs": [
+        "packages/narada-proper-mcp/src/server.ts",
+        "packages/narada-proper-mcp/src/commands/inbox.ts",
+        "packages/narada-proper-mcp/src/surface-registry.ts",
+        "packages/narada-proper-mcp/test/narada-proper-mcp.test.ts"
+      ],
+      "capturedAt": "2026-05-16T14:21:24.143Z",
+      "persistedByPackage": false,
+      "sourceImportFindings": []
+    },
+    {
+      "schema": "narada.agent_context_memory.checkpoint_descriptor.v0",
+      "checkpointId": "checkpoint_20260518_doctrinal_grounding_mcp_parity",
+      "sessionId": "carrier_session_20260516_143108458_narada_architect",
+      "namedAgentId": "narada.architect",
+      "summary": "Checkpoint before operator restarts Codex session. Current locus is Narada proper at D:\\code\\narada, authority_locus narada_proper, agent narada.architect. User preference/tool hierarchy is MCP-specific commands first, MCP shell second when no specific command exists, native shell last. Recent completed task: 1507 Adopt doctrinal grounding MCP command from narada-andrey lift package. Implemented replacement of narada_doctrine_grounding_refs with agent_context_doctrinal_grounding(mode: reground, optional doctrine_ids/question/require_inquiry_space_data) in packages/narada-proper-mcp/src/server.ts and surface-registry.ts; updated tests and docs. Verified @narada2/narada-proper-mcp test/typecheck/build passed; fresh MCP tools/list exposes agent_context_doctrinal_grounding; fresh tools/call mode=reground returns narada.agent_context.doctrinal_grounding.v0 with posture_summary, doctrine_catalog, doctrine_filter, ccc_coordinates, ias_mapping, review_protocol, authority_limits, and private Inquiry Space refusal posture. Task 1507 is closed and confirmed; lifecycle snapshot exported and fresh. Important caveat: this current Codex session's loaded MCP tool list may remain stale until restart/reload, even though fresh MCP runtime exposes the new tool. User will restart and may ask whether checkpoint structure captures everything needed. Answer should distinguish compact checkpoint summary from full transcript: it captures current locus, identity, completed task, verification, caveats, and next-continuity hooks, but not every shell output or full diff; those remain in Git/worktree/task evidence.",
+      "evidenceRefs": [
+        "task:1507",
+        ".ai/do-not-open/tasks/20260518-1507-adopt-doctrinal-grounding-mcp-command-from-narada-andrey-lif.md",
+        ".ai/task-lifecycle-snapshot.json",
+        "packages/narada-proper-mcp/src/server.ts",
+        "packages/narada-proper-mcp/src/surface-registry.ts",
+        "packages/narada-proper-mcp/test/narada-proper-mcp.test.ts",
+        "docs/product/site-telemetry-doctrine-grounding-mcp.v0.md"
+      ],
+      "capturedAt": "2026-05-18T13:10:45.289Z",
+      "persistedByPackage": false,
+      "sourceImportFindings": []
+    },
+    {
+      "schema": "narada.agent_context_memory.checkpoint_descriptor.v0",
+      "checkpointId": "checkpoint_20260518_doctrine_grounding_thoughts_corpus_parity",
+      "sessionId": "carrier_session_20260518_131154472_narada_architect",
+      "namedAgentId": "narada.architect",
+      "summary": "Checkpoint after repairing Narada proper MCP doctrine grounding corpus parity. Current locus is Narada proper at D:\\code\\narada, authority_locus narada_proper, agent narada.architect. Operator reported that doctrines should match narada-andrey's shared corpus in D:\\code\\thoughts. Diagnosis: previous agent_context_doctrinal_grounding adopted the command shape but used a hardcoded Narada proper local catalog. Implemented read-only external thoughts concept corpus grounding in packages/narada-proper-mcp/src/server.ts: command now resolves ../thoughts/content/concepts relative to Site root, with NARADA_DOCTRINE_CORPUS_ROOT / doctrineCorpusRoot override support, enumerates markdown concept files, extracts frontmatter title/description, supports doctrine_id filtering, and reports doctrine_source with primary_corpus, primary_corpus_kind external_thoughts_concepts, ref authority false, availability, and missing index refs. It keeps local Narada proper refs only as supplemental, does not import private Inquiry Space data, and remains advisory/read-only. Added focused test coverage in packages/narada-proper-mcp/test/narada-proper-mcp.test.ts using a temp corpus to avoid CI dependence on D:\\code\\thoughts. Verification passed: pnpm --filter @narada2/narada-proper-mcp test (28 tests), typecheck, and build. Fresh built MCP process call for doctrine_ids [intelligence_authority_separation] returned D:/code/thoughts/content/concepts/intelligence-authority-separation.md and doctrine_source primary_corpus D:\\code\\thoughts\\content\\concepts. Caveat: the already-loaded MCP process in this chat is stale and still returns the old catalog until MCP reload/restart. Worktree already had many unrelated dirty changes; touched files for this work are packages/narada-proper-mcp/src/server.ts and packages/narada-proper-mcp/test/narada-proper-mcp.test.ts.",
+      "evidenceRefs": [
+        "packages/narada-proper-mcp/src/server.ts",
+        "packages/narada-proper-mcp/test/narada-proper-mcp.test.ts",
+        "D:/code/thoughts/content/concepts/intelligence-authority-separation.md",
+        "command:pnpm --filter @narada2/narada-proper-mcp test",
+        "command:pnpm --filter @narada2/narada-proper-mcp typecheck",
+        "command:pnpm --filter @narada2/narada-proper-mcp build",
+        "mcp:fresh-built-agent_context_doctrinal_grounding-doctrine_ids-intelligence_authority_separation"
+      ],
+      "capturedAt": "2026-05-18T13:23:40.980Z",
+      "persistedByPackage": false,
+      "sourceImportFindings": []
     }
   ],
   "hydration_events": []

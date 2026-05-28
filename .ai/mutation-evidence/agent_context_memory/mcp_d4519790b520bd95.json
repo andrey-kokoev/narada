@@ -1,0 +1,14 @@
+{
+  "schema": "narada.agent_context_memory.mcp_mutation_evidence.v0",
+  "command": "agent_context_memory.record_checkpoint",
+  "authority_class": "mcp_local_json_store_checkpoint_mutation",
+  "runtimeHydrationExecuted": false,
+  "packageExecutedSqliteMutation": false,
+  "sourceStateImported": false,
+  "siteId": "narada-proper",
+  "checkpointId": "20260516-narada-architect-inquiry-space-mcp-relaunch-prep",
+  "sessionId": "codex-session-20260516-inquiry-space-mcp-relaunch",
+  "namedAgentId": "narada.architect",
+  "recordedAt": "2026-05-16T14:21:24.144Z",
+  "storePath": "D:\\code\\narada\\.narada\\agent-context-memory\\memory-store.json"
+}

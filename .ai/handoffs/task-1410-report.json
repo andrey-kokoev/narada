@@ -1,0 +1,36 @@
+{
+  "summary": "Implemented local Site Telemetry CLI wrappers for publish and pull, defaulting to dry-run, requiring explicit send/import before transport, using capability references only at transport time, and testing dry-run, missing config, mocked send, and mocked pull preview without raw secret output.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "packages/layers/cli/package.json",
+    "pnpm-lock.yaml",
+    "packages/layers/cli/src/main.ts",
+    "packages/layers/cli/src/commands/site-telemetry.ts",
+    "packages/layers/cli/src/commands/site-telemetry-register.ts",
+    "packages/layers/cli/test/commands/site-telemetry.test.ts",
+    ".ai/handoffs/task-1410-amended.md",
+    ".ai/handoffs/task-1410-report.json"
+  ],
+  "verification": [
+    {
+      "command": "pnpm install --offline",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli test -- test/commands/site-telemetry.test.ts",
+      "result": "passed: 5 tests"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli build",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "Scheduler/runtime recurring publish-pull loops remain later work.",
+    "The pull import wrapper currently performs remote candidate preview/poll only; local admission callback wiring remains later runtime work."
+  ]
+}

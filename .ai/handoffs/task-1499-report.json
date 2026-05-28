@@ -1,0 +1,89 @@
+{
+  "task": 1499,
+  "agent": "narada.builder",
+  "status": "complete",
+  "changed_files": [
+    ".ai/decisions/2026-05-18-inbox-publication-pending-posture-diagnosis.md",
+    ".ai/do-not-open/tasks/20260518-1499-diagnose-inbox-publication-pending-posture.md"
+  ],
+  "summary": "Diagnosed the inbox publication pending posture and recorded a bounded cleanup decision. The reported 200 artifacts are the exported envelope artifact set, not the actual Git-uncommitted set: 182 are already tracked, 0 tracked artifacts are modified, and 18 May 15-17 received envelopes are untracked. No publication or deletion was performed.",
+  "classification": {
+    "total_envelope_json_files": 200,
+    "git_tracked": 182,
+    "git_modified": 0,
+    "git_untracked": 18,
+    "status_counts": {
+      "promoted": 87,
+      "received": 69,
+      "archived": 44
+    },
+    "untracked_kind_status_counts": {
+      "observation_received": 13,
+      "incident_received": 2,
+      "task_candidate_received": 2,
+      "command_request_received": 1
+    },
+    "untracked_date_counts": {
+      "2026-05-15": 11,
+      "2026-05-16": 5,
+      "2026-05-17": 2
+    }
+  },
+  "decision": {
+    "publish_now": false,
+    "delete_or_ignore_now": false,
+    "reason": "The doctor label overstates the Git-uncommitted set. The artifacts are portable Canonical Inbox evidence, and task 1499 is diagnostic with a non-goal against broad repo commits.",
+    "next_command_when_admitted": "narada inbox publish --execute --limit 200 --message \"Publish inbox envelope artifacts\"",
+    "push_authorized": false,
+    "repair_followup": "If this recurs, repair inbox doctor/publish wording to distinguish exported artifact count from actual Git untracked/modified count."
+  },
+  "verification": [
+    {
+      "command": "narada inbox doctor --format json",
+      "result": "reported ready=false, publication_pending, 200 reported envelope artifacts, no unpushed commits, and next step narada inbox publish --execute"
+    },
+    {
+      "command": "narada inbox publish --format json",
+      "result": "dry run only; would export 50 by default, stage .ai/inbox-envelopes, commit, and not push"
+    },
+    {
+      "command": "git ls-files -- .ai/inbox-envelopes | Measure-Object",
+      "result": "182 tracked envelope artifacts"
+    },
+    {
+      "command": "git ls-files --modified -- .ai/inbox-envelopes | Measure-Object",
+      "result": "0 modified tracked envelope artifacts"
+    },
+    {
+      "command": "git ls-files --others --exclude-standard -- .ai/inbox-envelopes | Measure-Object",
+      "result": "18 untracked envelope artifacts"
+    },
+    {
+      "command": "git status --porcelain=v1 --untracked-files=all -- .ai/inbox-envelopes | Measure-Object",
+      "result": "18 status entries"
+    },
+    {
+      "command": "PowerShell JSON classification over .ai/inbox-envelopes/*.json",
+      "result": "200 total; promoted=87, received=69, archived=44; actual untracked split observation/received=13, incident/received=2, task_candidate/received=2, command_request/received=1"
+    },
+    {
+      "command": "git log --oneline -- .ai/inbox-envelopes/2026-04-27T05-32-22-560Z-env_abd1f7d2-3c50-463d-8c50-d85bc250ee5e.json",
+      "result": "showed prior commits for a doctor-reported artifact, proving the 200 count is not strictly a Git-uncommitted count"
+    },
+    {
+      "command": "git diff --check -- .ai/decisions/2026-05-18-inbox-publication-pending-posture-diagnosis.md .ai/do-not-open/tasks/20260518-1499-diagnose-inbox-publication-pending-posture.md",
+      "result": "passed"
+    }
+  ],
+  "acceptance": {
+    "pending_artifacts_classified": true,
+    "governed_cleanup_decision_exists_with_evidence": true,
+    "inbox_artifact_publication_distinguished_from_raw_sqlite_authority": true,
+    "no_broad_deletion_or_publication_happened_without_bounded_decision": true
+  },
+  "non_goals_preserved": [
+    "No broad repo changes were committed or pushed.",
+    "No direct .ai/inbox.db mutation was performed.",
+    "No uncommitted envelope artifact was treated as automatically erroneous."
+  ]
+}

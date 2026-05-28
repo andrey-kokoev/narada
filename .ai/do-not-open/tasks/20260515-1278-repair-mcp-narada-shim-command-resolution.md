@@ -1,10 +1,15 @@
 ---
-status: in_review
+status: closed
 criteria_proved_by: narada.builder
 criteria_proved_at: 2026-05-15T15:51:58.940Z
 criteria_proof_verification:
   state: unbound
   rationale: proof via task finish
+no_continuation_needed_rationale: Concrete MCP shim-resolution repair is complete; facade wording names the affected surface, not a deferred prototype.
+closed_at: 2026-05-15T20:46:12.014Z
+closed_by: narada.architect
+governed_by: task_close:narada.architect
+closure_mode: peer_reviewed
 ---
 
 # Repair MCP Narada shim command resolution
@@ -52,11 +57,16 @@ Recommendation: Route as MCP facade/runtime embodiment repair.
 
 ## Execution Notes
 
-<!-- Record what was done, decisions made, and files changed during execution. -->
+- Verified the Narada proper MCP subprocess command path uses declared shim/PATH resolution through `packages/narada-proper-mcp/src/commands/process.ts`.
+- Confirmed `localNaradaCliEnvironment` prepends the target workspace `node_modules/.bin` directory to PATH without hardcoding Node, package-manager, NVM, or WSL paths.
+- Confirmed `localNaradaCliInvocation` resolves Windows `narada.ps1` shims through PATH and invokes them through PowerShell with `-NoLogo -NoProfile -ExecutionPolicy Bypass -File`.
+- Confirmed `.cmd`/`.bat` shims are routed through `ComSpec`/`cmd.exe`, and the target workspace shim is preferred over later PATH entries.
+- No additional source change was needed in this pass; this task needed repaired evidence after the prior report left scaffold placeholders.
 
 ## Verification
 
-<!-- Record commands run, results observed, and how correctness was checked. -->
+- `pnpm --filter @narada2/narada-proper-mcp test` passed with 7 tests.
+- Test coverage includes `projects the target workspace bin directory onto the Narada CLI PATH`, `resolves a PowerShell Narada shim through PATH on Windows`, and `prefers the target workspace Narada shim over later PATH entries`.
 
 ## Acceptance Criteria
 

@@ -1,0 +1,23 @@
+{
+  "registry_kind": "routing_addressing_registry",
+  "registry_version": 1,
+  "routes": [
+    {
+      "route_id": "route_1c33db5b-d527-4b45-aa6b-f917ddb7c45c",
+      "target_kind": "site",
+      "target_ref": "narada-andrey",
+      "authority_locus": "narada-andrey:canonical_inbox",
+      "address_kind": "site_root",
+      "address_ref": "C:\\Users\\Andrey\\Narada",
+      "transport": "filesystem",
+      "capability_kind": "canonical_inbox_cross_site_submission",
+      "priority": 100,
+      "active": true,
+      "fallback_target": null,
+      "evidence_ref": "C:\\Users\\Andrey\\Narada\\config.json",
+      "created_by": "narada.architect",
+      "created_at": "2026-05-17T20:41:53.582Z",
+      "updated_at": "2026-05-17T20:41:53.582Z"
+    }
+  ]
+}

@@ -1,0 +1,36 @@
+{
+  "summary": "Wired Publication Edge policy into Cloudflare client helpers with an additive edge-based publish path. The new helpers preflight a named edge before event preparation/transport, enforce event-family allowance, keep dry-runs network-free, and resolve raw capability values only at live transport time.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "packages/site-registry-cloudflare/src/client.ts",
+    "packages/site-registry-cloudflare/test/client.test.ts",
+    "packages/site-config/src/index.ts",
+    "packages/site-config/test/site-config.test.ts",
+    "docs/product/site-telemetry-publication-edge.v0.md",
+    "docs/product/site-telemetry-publication-outcome-shapes.md",
+    "docs/product/fixtures/site-telemetry-publication-edge/publication-edge.valid.json",
+    "docs/product/fixtures/site-telemetry-publication-edge/publication-edge-preflight.pass.json",
+    "docs/product/fixtures/site-telemetry-publication-edge/publication-edge-preflight.failures.json",
+    ".ai/handoffs/task-1399-amended.md",
+    ".ai/handoffs/task-1399-report.json"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare test",
+      "result": "passed: 30 tests"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare build",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "Existing ad hoc publish helper remains for compatibility; callers must adopt the edge-based helper path where Publication Edge policy is required.",
+    "Scheduler/runtime integration remains later work.",
+    "No live network publish was performed."
+  ]
+}

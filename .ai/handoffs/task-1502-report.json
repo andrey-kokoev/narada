@@ -1,0 +1,64 @@
+{
+  "task": 1502,
+  "agent": "narada.builder",
+  "status": "complete",
+  "changed_files": [
+    ".ai/do-not-open/tasks/20260518-1502-audit-in-progress-and-blocked-task-posture.md",
+    ".ai/decisions/2026-05-18-in-progress-and-deferred-task-posture-audit.md"
+  ],
+  "summary": "Audited the current in-progress and deferred task posture through governed lifecycle/workboard/task-show surfaces. No lifecycle mutation was admissible: 1502 is the current active audit, 1443 is claimed by narada.builder2 without abandonment evidence, and the 11 deferred tasks have explicit parked/blocker posture.",
+  "in_progress": [
+    {
+      "task": 1502,
+      "owner": "narada.builder",
+      "classification": "legitimate active audit task"
+    },
+    {
+      "task": 1443,
+      "owner": "narada.builder2",
+      "classification": "claimed by another Builder identity; no governed abandonment evidence; leave parked"
+    }
+  ],
+  "deferred": [
+    { "task": 403, "classification": "parked live mailbox dry-run work" },
+    { "task": 404, "classification": "parked downstream operator inspection/no-effect proof" },
+    { "task": 1445, "classification": "parked withdrawal verifier smoke proof" },
+    { "task": 1447, "classification": "parked relation capability verifier chapter closure" },
+    { "task": 1451, "classification": "parked dashboard generator CLI follow-up" },
+    { "task": 1455, "classification": "parked dashboard generator chapter closure" },
+    { "task": 1466, "classification": "parked on admitted target coordinates and capability evidence" },
+    { "task": 1467, "classification": "parked route-mediated retry residual; direct delivery recorded separately" },
+    { "task": 1468, "classification": "parked narada-andrey route chapter closure" },
+    { "task": 1472, "classification": "parked on explicit reusable consent artifact" },
+    { "task": 1480, "classification": "parked on registry-owner credential/capability admission" }
+  ],
+  "mutations": [],
+  "residuals": [
+    "Task 1443 can become a lifecycle cleanup candidate only with narada.builder2 or Architect abandonment/transfer evidence.",
+    "Workboard review obligations are separate from this audit and should be handled by normal Builder duty loop."
+  ],
+  "verification": [
+    {
+      "command": "narada task lifecycle status --format json",
+      "result": "passed; reported in_progress_task_count=2 and blocked_or_deferred_count=11"
+    },
+    {
+      "command": "narada task workboard --format json",
+      "result": "passed; identified 1502, 1443, and 11 deferred tasks"
+    },
+    {
+      "command": "narada task show <task> --format json",
+      "result": "passed for 403, 404, 1443, 1445, 1447, 1451, 1455, 1466, 1467, 1468, 1472, and 1480"
+    },
+    {
+      "command": "narada task release --help && narada task defer --help",
+      "result": "sanctioned mutation surfaces inspected; no mutation run"
+    }
+  ],
+  "acceptance": {
+    "in_progress_identified": true,
+    "blocked_deferred_summarized": true,
+    "mutations_sanctioned_and_evidence_backed": true,
+    "residual_parked_work_explicit": true
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "summary": "Specified the Site Telemetry Inquiry Doctrine Feedback intake contract and added fixtures for inquiry branch, doctrine lift, and Canonical Inbox fallback candidates. The contract preserves branch pressure without making it a task, canonical doctrine, concept lifecycle authority, or implemented Inquiry Space storage.",
+  "reviewer": "narada.builder",
+  "changed_files": [
+    "docs/product/site-telemetry-inquiry-doctrine-feedback.v0.md",
+    "docs/product/fixtures/site-telemetry-inquiry-doctrine-feedback/inquiry-branch-candidate.json",
+    "docs/product/fixtures/site-telemetry-inquiry-doctrine-feedback/doctrine-lift-candidate.json",
+    "docs/product/fixtures/site-telemetry-inquiry-doctrine-feedback/inbox-fallback-candidate.json",
+    "docs/product/site-telemetry-publication-outcome-shapes.md",
+    ".ai/handoffs/task-1415-report.json"
+  ],
+  "verification": [
+    {
+      "command": "Get-ChildItem docs\\product\\fixtures\\site-telemetry-inquiry-doctrine-feedback\\*.json | ForEach-Object { Get-Content $_.FullName -Raw | ConvertFrom-Json | Out-Null; $_.Name }",
+      "result": "passed: 3 JSON fixtures parsed"
+    },
+    {
+      "command": "git diff --check -- docs/product/site-telemetry-inquiry-doctrine-feedback.v0.md docs/product/site-telemetry-publication-outcome-shapes.md docs/product/fixtures/site-telemetry-inquiry-doctrine-feedback",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "Doctrine grounding MCP lift package remains task 1416.",
+    "Replay of Site Telemetry Publication into admitted Inquiry Space machinery remains task 1417.",
+    "Concept lifecycle authority remains a future design decision; the fixture is only a candidate shape."
+  ]
+}

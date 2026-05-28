@@ -1,0 +1,25 @@
+{
+  "summary": "Implemented startup first-work orientation in the agent launcher. Launch packets now append a read-only task/work orientation step after identity hydration and checkpoint continuity. Explicit handoffs are supplied with --startup-task and emit narada_task_read for the concrete task; generic launches use narada_task_work_next with claim=false. Builder2 coverage verifies explicit task 1406 handoff, no silent claim, and no publish/deploy authority.",
+  "changed_files": [
+    "tools/agent-start/start-agent.mjs",
+    "tools/agent-start/start-agent.test.mjs",
+    "docs/product/agent-carrier-launch-packet.v0.json"
+  ],
+  "verification": [
+    {
+      "command": "node --test tools/agent-start/start-agent.test.mjs",
+      "result": "passed: 14 tests"
+    },
+    {
+      "command": "node -e \"JSON.parse(require('node:fs').readFileSync('docs/product/agent-carrier-launch-packet.v0.json','utf8')); console.log('json ok')\"",
+      "result": "passed: json ok"
+    },
+    {
+      "command": "node tools/agent-start/start-agent.mjs narada.builder2 --runtime codex --dry-run --startup-task 1406 --json",
+      "result": "passed: packet includes narada_task_read task_number 1406 and startup_first_work_orientation explicit_task_handoff with claim_attempted false"
+    }
+  ],
+  "residuals": [
+    "MCP startup affordance agent_context_startup_sequence still hydrates continuity; first-work orientation is carried in the launch packet startup_sequence for the carrier to execute through narada_task_read or narada_task_work_next. A future MCP-native startup sequence executor could execute the declared steps directly."
+  ]
+}

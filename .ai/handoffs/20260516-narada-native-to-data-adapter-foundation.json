@@ -1,0 +1,134 @@
+{
+  "slug": "narada-native-to-data-adapter-foundation",
+  "title": "Narada-native To-data Adapter Foundation",
+  "depends_on": [
+    1307
+  ],
+  "tasks": [
+    {
+      "title": "Define Narada-native to-data packet contract",
+      "goal": "Define the shared read-only packet contract used by Narada-native to-data adapters.",
+      "context": "The Narada-native carrier needs bounded, attributed data packets that can feed intelligence and orchestration without becoming mutation authority.",
+      "required_work": [
+        "Specify shared packet envelope fields: schema, read_family, carrier_session_id, agent_id, source_surface, capability_ref, attribution, freshness, bounded_summary, raw_values_recorded=false, and authority_mutation_performed=false.",
+        "Define packet families for task_packet, work_next_peek, inbox_summary, readiness_snapshot, evidence_ref_summary, and bounded_file_excerpt.",
+        "Add schema fixtures and tests proving each family has attribution, capability posture, bounded evidence, and explicit no-mutation flags."
+      ],
+      "non_goals": [
+        "Do not implement live Narada reads in this task.",
+        "Do not grant task, inbox, outbox, command, publication, repository, or credential mutation authority.",
+        "Do not record raw secrets, raw transcripts, or raw provider outputs."
+      ],
+      "acceptance_criteria": [
+        "A shared to-data packet contract exists with explicit read family, attribution, capability, freshness, bounded summary, and no-mutation fields.",
+        "All required packet families are represented by fixtures or tests.",
+        "Tests prove raw_values_recorded is false and authority_mutation_performed is false for every packet family."
+      ]
+    },
+    {
+      "title": "Implement task and work-next to-data readers",
+      "goal": "Implement read-only task and work-next packet readers for Narada-native sessions.",
+      "context": "The carrier must be able to inspect assigned work and possible next work without claiming, reporting, closing, or mutating lifecycle state.",
+      "required_work": [
+        "Route task packet reads through narada task read --format json or an injected equivalent reader.",
+        "Route work selection through a no-claim peek surface when available, and return a refusal packet if only claim-capable work-next surfaces are available.",
+        "Record command/source attribution, cwd or Site root, requested task or agent, timestamp, and bounded field presence.",
+        "Add tests proving task claim, report, review, close, inbox, outbox, command, publication, and repository mutation flags remain false."
+      ],
+      "non_goals": [
+        "Do not use direct SQLite reads as the normal task or work-next interface.",
+        "Do not record raw task markdown in carrier evidence.",
+        "Do not auto-claim work from the to-data reader."
+      ],
+      "acceptance_criteria": [
+        "Task reads produce bounded to-data packets through canonical Narada surfaces.",
+        "Work-next reads refuse safely when no no-claim read surface is available.",
+        "Tests prove the readers do not mutate lifecycle, inbox, outbox, command, publication, or repository state."
+      ]
+    },
+    {
+      "title": "Implement inbox summary to-data reader",
+      "goal": "Implement a bounded read-only inbox summary reader for Narada-native sessions.",
+      "context": "The carrier needs inbox awareness without gaining envelope transition authority or exposing raw payload values.",
+      "required_work": [
+        "Read inbox state only through canonical inbox list, pending, read, or injected test readers, not direct SQLite as the normal path.",
+        "Summarize envelope ids, statuses, source refs, kind, target locus, and bounded summary fields.",
+        "Redact or omit raw secret-like values and unbounded payload text.",
+        "Add tests proving no inbox status transition occurs."
+      ],
+      "non_goals": [
+        "Do not claim, triage, promote, archive, import, export, or otherwise transition envelopes.",
+        "Do not treat inbox payloads as admitted task evidence.",
+        "Do not expose raw secrets or unbounded envelope bodies."
+      ],
+      "acceptance_criteria": [
+        "Inbox summaries are bounded and attributed to canonical read surfaces.",
+        "Secret-like values and unbounded bodies are not recorded.",
+        "Tests prove the reader performs no inbox mutation."
+      ]
+    },
+    {
+      "title": "Implement readiness and evidence reference readers",
+      "goal": "Implement to-data readers for carrier readiness and evidence reference summaries.",
+      "context": "Narada-native sessions need reconstructable evidence visibility without storing raw provider output or transcripts.",
+      "required_work": [
+        "Use operationalReadiness, reconstruct, supervisor doctor, and registration readiness as source surfaces.",
+        "Emit readiness_snapshot and evidence_ref_summary packets with evidence file refs, schema/status summaries, capability posture, and source attribution.",
+        "Ensure provider and fixture sessions reconstruct with bounded evidence refs and no raw provider output.",
+        "Add tests for fixture-backed, provider-backed, blocked, and missing-evidence states."
+      ],
+      "non_goals": [
+        "Do not inspect private SQLite state as readiness truth.",
+        "Do not record raw provider output or raw transcripts.",
+        "Do not let runtime liveness become task authority."
+      ],
+      "acceptance_criteria": [
+        "Readiness and evidence readers emit bounded attributed packets.",
+        "Fixture and provider sessions reconstruct from evidence refs.",
+        "Tests prove raw provider output and unbounded transcripts are not recorded."
+      ]
+    },
+    {
+      "title": "Implement bounded local file excerpt reader",
+      "goal": "Implement a capability-gated local text excerpt reader for admitted Site roots.",
+      "context": "The carrier may need small local text excerpts, but file readability must not collapse into Narada authority or secret access.",
+      "required_work": [
+        "Require an explicit site_file_excerpt_read capability reference before reading local files.",
+        "Reject traversal outside the admitted Site root, binary files, oversized excerpts, secret-like paths, and files that require a stronger canonical reader.",
+        "Emit bounded_file_excerpt packets with path attribution, byte or line bounds, redaction posture, and no-mutation flags.",
+        "Add tests for path containment, size limits, binary refusal, secret-path refusal, and excerpt redaction posture."
+      ],
+      "non_goals": [
+        "Do not implement broad filesystem browsing.",
+        "Do not read credential stores, secret files, private keys, SQLite databases, or raw transcripts.",
+        "Do not treat local file content as admitted Narada truth."
+      ],
+      "acceptance_criteria": [
+        "The file reader is capability-gated and Site-root-contained.",
+        "Secret-like, binary, oversized, traversal, and stronger-reader paths are refused.",
+        "Tests prove excerpts are bounded, attributed, and non-mutating."
+      ]
+    },
+    {
+      "title": "Add integrated to-data adapter reconstruction proof",
+      "goal": "Prove the to-data adapters compose into a bounded Narada-native data bundle.",
+      "context": "After individual readers exist, the carrier needs an end-to-end mocked read bundle that can feed orchestration without carrying mutation authority.",
+      "required_work": [
+        "Build an end-to-end mocked carrier session that reads task, work-next or refusal, inbox summary, readiness, evidence refs, and a bounded file excerpt into one to-data bundle.",
+        "Verify the bundle records source attribution, capability refs, freshness, and no-mutation flags for every read family.",
+        "Verify no raw secrets, unbounded transcripts, direct SQLite requirement, raw provider output, or authority-bearing mutations are recorded.",
+        "Document residuals for capability consent binding and orchestration wrapper chapters."
+      ],
+      "non_goals": [
+        "Do not invoke live intelligence providers in this proof.",
+        "Do not submit task reports, inbox transitions, outbox intents, command intents, or publications.",
+        "Do not require network access for tests."
+      ],
+      "acceptance_criteria": [
+        "An integrated mocked to-data bundle proof exists.",
+        "The proof covers all required read families or explicit refusal packets.",
+        "Tests prove the bundle is bounded, attributed, reconstructable, and non-mutating."
+      ]
+    }
+  ]
+}

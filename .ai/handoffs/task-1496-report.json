@@ -1,0 +1,43 @@
+{
+  "task": 1496,
+  "agent": "narada.builder",
+  "status": "complete",
+  "changed_files": [
+    "docs/product/fixtures/operator-site-communication-relation/projection-ui.valid.json",
+    "docs/product/fixtures/operator-site-communication-relation/invalid-direct-task-mutation.json",
+    "docs/product/fixtures/operator-site-communication-relation/invalid-direct-inbox-admission.json",
+    "docs/product/fixtures/operator-site-communication-relation/invalid-raw-secret-field.json",
+    "docs/product/operator-site-communication-relation.v0.md",
+    "packages/site-registry-cloudflare/test/communication-docs.test.ts"
+  ],
+  "summary": "Added Operator Site Communication Relation validation fixtures and extended the existing Site Registry communication docs test with focused authority-collapse checks for task mutation, direct inbox admission, projection-only relation collapse, acknowledgement-as-approval, remote-preservation-as-admission, credential values, and raw secret fields.",
+  "verification": [
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare test -- test/communication-docs.test.ts",
+      "result": "passed; 2 tests"
+    },
+    {
+      "command": "Get-ChildItem docs/product/fixtures/operator-site-communication-relation -Filter *.json | ForEach-Object { Get-Content -Raw $_.FullName | ConvertFrom-Json | Out-Null; $_.Name }",
+      "result": "passed; all relation fixtures parse as JSON"
+    },
+    {
+      "command": "rg --pcre2 -n '\"(raw_token|password|api_key|private_key|refresh_token)\"\\s*:\\s*\"(?!REDACTED\")' docs/product/fixtures/operator-site-communication-relation",
+      "result": "passed; no non-redacted raw secret-like fixture values found"
+    },
+    {
+      "command": "git diff --check -- docs/product/fixtures/operator-site-communication-relation docs/product/operator-site-communication-relation.v0.md packages/site-registry-cloudflare/test/communication-docs.test.ts",
+      "result": "passed"
+    }
+  ],
+  "acceptance": {
+    "relation_fixtures_exist": true,
+    "invalid_examples_cover_authority_collapse": true,
+    "focused_validation_test_exists": true,
+    "fixtures_contain_no_raw_secrets_or_private_site_data": true
+  },
+  "non_goals_preserved": [
+    "No broad schema framework built.",
+    "No live Cloudflare data validated.",
+    "No real tokens, credentials, or private Site payloads stored in fixtures."
+  ]
+}

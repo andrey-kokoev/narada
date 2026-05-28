@@ -1,0 +1,132 @@
+{
+  "slug": "narada-native-live-supervised-session",
+  "title": "Narada-native Live Supervised Session",
+  "depends_on": [
+    1310,
+    1321,
+    1333
+  ],
+  "tasks": [
+    {
+      "title": "Define live runtime handle schema",
+      "goal": "Define bounded runtime handle evidence for fixture, local process, and MCP-backed Narada-native sessions.",
+      "context": "Live carrier liveness is embodiment evidence, not task or effect authority.",
+      "required_work": [
+        "Add runtime handle kinds for local_process, mcp_session, and fixture.",
+        "Record stable handle id, process or session presence, started_at, heartbeat_due_at, reachability summary, and raw transcript/secret flags false.",
+        "Add schema tests for fixture, live process, MCP session, and missing runtime handles."
+      ],
+      "non_goals": [
+        "Do not infer task authority from runtime liveness.",
+        "Do not store raw transcripts, prompts, provider outputs, or secret values.",
+        "Do not require a permanently running daemon for unit tests."
+      ],
+      "acceptance_criteria": [
+        "Runtime handle schema covers fixture, local process, MCP session, and missing handle states.",
+        "Handle evidence is bounded and has raw transcript/secret flags false.",
+        "Tests prove runtime liveness is not task or effect authority."
+      ]
+    },
+    {
+      "title": "Implement live start evidence",
+      "goal": "Record live session start evidence with reachability posture and blocked states.",
+      "context": "Session start should report configured reachability without performing provider calls or Narada mutations.",
+      "required_work": [
+        "Record runtime handle and configured to-data/to-intelligence reachability probes.",
+        "Emit blocked posture for missing registration, missing consent, stale or revoked grant, and missing required local executable.",
+        "Add tests covering fixture-only, provider-configured, blocked-missing-capability, and blocked-runtime-unavailable start."
+      ],
+      "non_goals": [
+        "Do not perform live provider calls during start evidence.",
+        "Do not claim, report, review, close, publish, or mutate inbox/outbox state.",
+        "Do not reveal credential values."
+      ],
+      "acceptance_criteria": [
+        "Start evidence records bounded runtime and reachability posture.",
+        "Blocked start states are explicit and reconstructable.",
+        "Tests prove no provider calls or Narada mutations occur."
+      ]
+    },
+    {
+      "title": "Implement heartbeat evidence",
+      "goal": "Emit bounded heartbeat evidence for live Narada-native sessions.",
+      "context": "Heartbeat should show runtime and adapter health without capturing raw transcripts or provider output.",
+      "required_work": [
+        "Report runtime alive, degraded, stale, or missing posture.",
+        "Include latest bounded work packet summary, latest handoff ref, to-data reachability, and provider readiness posture.",
+        "Add tests proving no raw transcript, raw provider output, prompt, or secret values are recorded."
+      ],
+      "non_goals": [
+        "Do not make heartbeat freshness lifecycle truth.",
+        "Do not store raw conversation or provider text.",
+        "Do not perform automatic repair."
+      ],
+      "acceptance_criteria": [
+        "Heartbeat evidence distinguishes alive, degraded, stale, and missing states.",
+        "Heartbeat includes bounded work, handoff, to-data, and provider summaries.",
+        "Tests prove raw transcript, provider output, prompt, and secret values are absent."
+      ]
+    },
+    {
+      "title": "Implement interrupt close and failure semantics",
+      "goal": "Implement bounded lifecycle evidence for interrupt, close, and failure outcomes.",
+      "context": "Runtime control evidence must avoid killing unrelated processes or implying authority transfer.",
+      "required_work": [
+        "Record interrupt as requested, acknowledged, refused, or unsupported.",
+        "Record close as stopped, unknown, or stale with authority_transfer=false.",
+        "Record failure reason class, terminal flag, bounded diagnostics, and latest evidence refs.",
+        "Add tests for clean close, stale close, interrupted, failed nonterminal, and failed terminal states."
+      ],
+      "non_goals": [
+        "Do not kill unrelated processes.",
+        "Do not close tasks or execute external effects.",
+        "Do not store raw stderr/stdout transcripts."
+      ],
+      "acceptance_criteria": [
+        "Interrupt, close, and failure evidence are bounded and reconstructable.",
+        "Authority transfer remains false.",
+        "Tests cover clean, stale, interrupted, nonterminal failure, and terminal failure states."
+      ]
+    },
+    {
+      "title": "Expand supervisor doctor states",
+      "goal": "Expand Narada-native doctor output for fixture, provider, blocked, running, degraded, failed, interrupted, and stopped states.",
+      "context": "Operators need compact state visibility without repair mutation or credential exposure.",
+      "required_work": [
+        "Add doctor states for fixture_only, provider_configured, blocked, running, degraded, failed, interrupted, and stopped.",
+        "Report residual blockers and next diagnostic command, not automatic repair mutation.",
+        "Add doctor tests covering every state."
+      ],
+      "non_goals": [
+        "Do not expose raw provider config or credential values.",
+        "Do not make doctor output an authority locus.",
+        "Do not perform repair actions from doctor."
+      ],
+      "acceptance_criteria": [
+        "Doctor output distinguishes all required states.",
+        "Doctor reports blockers and diagnostics without repair mutation.",
+        "Tests prove output is bounded and redacted."
+      ]
+    },
+    {
+      "title": "Expand reconstruction from durable evidence",
+      "goal": "Reconstruct live session posture from bounded session JSON evidence.",
+      "context": "Narada-native live posture should be reconstructable without direct SQLite or secret-store inspection.",
+      "required_work": [
+        "Reconstruct launch, supervisor events, adapter evidence, handoff, interrupt, closeout, and failure evidence from session JSON refs.",
+        "Preserve event ordering and latest posture summary.",
+        "Add tests proving reconstruction works without direct SQLite or secret-store inspection."
+      ],
+      "non_goals": [
+        "Do not treat reconstruction as canonical task truth.",
+        "Do not require live network calls.",
+        "Do not inspect raw credential stores."
+      ],
+      "acceptance_criteria": [
+        "Live session reconstruction reads bounded durable JSON evidence.",
+        "Event ordering and latest posture are available.",
+        "Tests prove no direct SQLite or secret-store inspection is required."
+      ]
+    }
+  ]
+}

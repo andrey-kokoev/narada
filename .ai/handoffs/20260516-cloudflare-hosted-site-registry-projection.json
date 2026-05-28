@@ -1,0 +1,55 @@
+{
+  "schema": "narada.chapter_handoff.v0",
+  "chapter": "Cloudflare hosted Site Registry projection",
+  "created_at": "2026-05-16T16:20:00.000Z",
+  "created_by": "narada.architect",
+  "purpose": "Materialize a Cloudflare-hosted Site Registry projection Worker, guided by Staccato's hosted surface shape without importing Staccato-specific authority.",
+  "source_evidence": [
+    "packages/site-config/src/index.ts",
+    "packages/site-config/test/site-config.test.ts",
+    "packages/site-config/README.md",
+    "packages/sites/cloudflare/README.md",
+    "docs/deployment/cloudflare-site-materialization.md",
+    "D:/code/staccato-elt/workers/staccato/src/index.mjs",
+    "D:/code/staccato-elt/workers/staccato/wrangler.jsonc",
+    "D:/code/staccato-elt/workers/staccato/migrations/0001_surface_inbox.sql",
+    "D:/code/staccato-elt/tests/staccato-cloud-worker.test.mjs",
+    "D:/code/staccato-elt/runbooks/cloudflare-published-surface.md"
+  ],
+  "staccato_patterns_to_lift": [
+    "Worker-local route table with POST /webhook and guarded read APIs",
+    "Wrangler config with KV latest-projection binding and D1 durable rows",
+    "Bearer capability tokens split by read, publish, message submit, local admission, and admin actions",
+    "D1 inbox/message rows with source + idempotency uniqueness and receipt projection",
+    "Capability audit rows for allowed and denied requests",
+    "Local publisher and puller scripts with dry-run and finalization posture",
+    "Human peek surface that reads projection state without becoming authority"
+  ],
+  "authority_limits": [
+    "hosted_registry_is_projection_only",
+    "hosted_registry_cannot_mutate_site_config",
+    "hosted_registry_cannot_admit_inbox_or_task_state",
+    "hosted_registry_cannot_certify_identity",
+    "hosted_registry_cannot_grant_capability",
+    "live_cloudflare_deploy_requires_separate_operator_capability_grant"
+  ],
+  "tasks": [
+    { "number": 1377, "title": "Specify Cloudflare hosted Site Registry projection chapter", "depends_on": [] },
+    { "number": 1378, "title": "Scaffold hosted Site Registry Cloudflare Worker package", "depends_on": [1377] },
+    { "number": 1379, "title": "Implement typed Site event receiver and projection storage", "depends_on": [1378] },
+    { "number": 1380, "title": "Implement read-only Site Registry peek API and human surface", "depends_on": [1379] },
+    { "number": 1381, "title": "Implement hosted registry message exchange and receipts", "depends_on": [1379] },
+    { "number": 1382, "title": "Add Site publisher and registry puller client tools", "depends_on": [1380, 1381] },
+    { "number": 1383, "title": "Add hosted registry deployment and smoke verification runbook", "depends_on": [1382] },
+    { "number": 1384, "title": "Run hosted Site Registry readiness proof and close chapter", "depends_on": [1383] }
+  ],
+  "live_deployment_posture": {
+    "status": "not_authorized_by_this_chapter_creation",
+    "requires": [
+      "operator Cloudflare deployment instruction",
+      "capability grant for Cloudflare account/worker mutation",
+      "secret binding plan",
+      "post-deploy smoke evidence"
+    ]
+  }
+}

@@ -1,0 +1,108 @@
+---
+status: draft
+closes_tasks: [1475, 1476, 1477, 1478, 1479, 1480, 1481]
+range: 1475-1481
+---
+
+# Chapter Closure: 1475-1481
+
+**Date**: 2026-05-17
+**Operator**: narada.architect
+**Tasks in chapter**: 7
+
+## Task-by-Task Assessment
+
+| Task # | Task ID | Status |
+|--------|---------|--------|
+| 1475 | 20260517-1475-define-boundary-between-site-operational-telemetry-and-site- | closed |
+| 1476 | 20260517-1476-audit-hosted-registry-docs-and-routes-for-telemetry-registry | closed |
+| 1477 | 20260517-1477-clarify-docs-and-ui-language-for-separate-hosted-service-con | closed |
+| 1478 | 20260517-1478-specify-site-registry-relation-publication-command-and-mcp-s | closed |
+| 1479 | 20260517-1479-implement-dry-run-site-registry-relation-publication-planner | closed |
+| 1480 | 20260517-1480-plan-live-site-registry-relation-publication-capability-as-a | deferred |
+| 1481 | 20260517-1481-notify-narada-andrey-of-hosted-telemetry-and-registry-separa | closed |
+
+## Semantic Drift Check
+
+- [x] Terminology consistent with SEMANTICS.md
+- [x] No authority boundary violations introduced
+- [x] No substrate/vertical/agent collapse
+
+## Authority Boundary Check
+
+- [x] All kernel invariants respected
+- [x] No hidden authority in UI or observations
+- [x] Effect execution routed through Intent/OutboundHandoff
+
+## Gap Table
+
+| # | Gap | Severity | Recommended Action |
+|---|-----|----------|-------------------|
+| 1 | Live Site Registry relation publication is not admitted because the registry-owner relation capability and `config-ref:NARADA_SITE_REGISTRY_RELATION_ADMIN_TOKEN` binding are absent. Task 1480 is deferred with the bounded unblock commands. | Medium | Keep hosted relation publication pending until capability/credential binding is admitted; then create or reopen guarded live-publish work using `site-registry relation publish-transition --live --payload-file <file>`. |
+| 2 | Cross-Site MCP inbox mutation to narada-andrey remains unadmitted without `canonical_inbox_cross_site_submission`; task 1481 used the documented direct target authority fallback. | Low | Treat the fallback as correct current posture; only enable MCP cross-Site inbox mutation through explicit capability admission. |
+
+## CCC Posture Before / After
+
+| Coordinate | Before | After |
+|------------|--------|-------|
+| semantic_resolution | Site telemetry, registry projection, registry operational telemetry, and Site communication were smeared in wording and route interpretation. | Four hosted service concerns are named and documented separately; `site-telemetry publish` is explicitly not the relation lifecycle path. |
+| invariant_preservation | Registry publication risked being treated as a telemetry send or generic hosted site effect. | Registry relation lifecycle is a registry-owner crossing with dry-run planning separated from live mutation. |
+| constructive_executability | narada-andrey could admit relation locally but Narada proper had no bounded planner for hosted publication. | Dry-run planner exists in CLI and MCP; live publish is blocked on explicit capability/credential admission. |
+| grounded_universalization | Staccato-derived telemetry shape had not been lifted into a named Narada concern set. | Site Telemetry Publication and Site Registry relation publication now have separate docs, commands, and residuals. |
+| authority_reviewability | Hosted UI/route labels could overclaim registry completion or confuse projection state with Site authority. | UI/docs wording now says Registry Projection and records no hosted registry completion without live evidence. |
+| teleological_pressure | Operator pressure was toward "register the Site" through whichever hosted endpoint existed. | Pressure is routed into the correct sequence: boundary, spec, dry-run planner, capability-gated live publish, and bounded target notification. |
+
+## Review Findings and Resolutions
+
+### 20260517-1475-define-boundary-between-site-operational-telemetry-and-site- (review-20260517-1475-define-boundary-between-site-operational-telemetry-and-site--1779051754025)
+
+Verdict: **accepted**
+
+
+
+### 20260517-1476-audit-hosted-registry-docs-and-routes-for-telemetry-registry (review-20260517-1476-audit-hosted-registry-docs-and-routes-for-telemetry-registry-1779051840540)
+
+Verdict: **accepted**
+
+
+
+### 20260517-1477-clarify-docs-and-ui-language-for-separate-hosted-service-con (review-20260517-1477-clarify-docs-and-ui-language-for-separate-hosted-service-con-1779051960953)
+
+Verdict: **accepted**
+
+
+
+### 20260517-1478-specify-site-registry-relation-publication-command-and-mcp-s (review-20260517-1478-specify-site-registry-relation-publication-command-and-mcp-s-1779052044367)
+
+Verdict: **accepted**
+
+
+
+### 20260517-1479-implement-dry-run-site-registry-relation-publication-planner (review-20260517-1479-implement-dry-run-site-registry-relation-publication-planner-1779052543932)
+
+Verdict: **accepted**
+
+
+
+### 20260517-1479-implement-dry-run-site-registry-relation-publication-planner (review-20260517-1479-implement-dry-run-site-registry-relation-publication-planner-1779052606665)
+
+Verdict: **accepted**
+
+
+
+## Residuals (Unresolved Gaps)
+
+- Task 1480 remains deferred. Live Site Registry relation publication is pending on registry-owner relation capability and relation admin credential binding; no live Cloudflare D1/KV mutation was performed.
+- narada-andrey was notified through direct target Site authority fallback because cross-Site MCP inbox submission capability remains absent.
+
+## Recommended Next Work
+
+- Bind or approve the registry-owner relation publication capability and `config-ref:NARADA_SITE_REGISTRY_RELATION_ADMIN_TOKEN` without exposing raw token material.
+- After preflight passes, create or reopen guarded live-publish work for `narada site-registry relation publish-transition --live --payload-file <file>`.
+- Do not use `site-telemetry publish` for Site Registry relation lifecycle publication.
+
+## Closure Action
+
+- [x] All non-deferred chapter tasks are closed; deferred task 1480 carries bounded unblock evidence.
+- [x] Closure decision reviewed
+- [x] Ready to confirm with residual deferral recorded

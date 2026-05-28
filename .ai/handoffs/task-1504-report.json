@@ -1,0 +1,72 @@
+{
+  "task": 1504,
+  "agent": "narada.builder",
+  "status": "complete",
+  "changed_files": [
+    ".ai/do-not-open/tasks/20260518-1504-close-global-coherence-cleanup-chapter.md",
+    ".ai/decisions/2026-05-18-1499-1504-global-coherence-cleanup-chapter-closure.md",
+    ".ai/task-lifecycle-snapshot.json"
+  ],
+  "summary": "Reviewed and recorded final posture for the global coherence cleanup chapter. Operational and mutation-evidence scans are clean after lifecycle snapshot export; inbox publication, authority-inversion warnings, publication-prepare ENOBUFS, blocked/deferred tasks, and broad dirty worktree state remain explicit residuals.",
+  "final_posture": {
+    "architect_work_available": "empty",
+    "inbox_doctor": "ready=false; publication_pending; 200 uncommitted envelope artifacts",
+    "lifecycle_snapshot": "fresh after export",
+    "operational_scan": "finding_count=0 after export",
+    "mutation_evidence_scan": "finding_count=0",
+    "authority_inversion_scan": "finding_count=11 residuals",
+    "repo_cleanliness": "not claimed"
+  },
+  "residuals": [
+    "Inbox publication pending: narada inbox publish --execute --limit 200 --message \"Publish inbox envelope artifacts\"; no --push without Operator grant.",
+    "Authority inversion scan has 11 residual findings, including known authority risks and a likely lifecycle snapshot secret-pattern false positive.",
+    "Repository publication prepare failed with spawnSync git ENOBUFS in the dirty worktree; bounded publication plan recorded by task 1503.",
+    "Task 1443 remains claimed by narada.builder2 and 11 deferred tasks remain explicitly parked.",
+    "The repository remains broadly dirty with unrelated pre-existing work."
+  ],
+  "verification": [
+    {
+      "command": "narada task evidence 1499..1503 --format json",
+      "result": "prior chapter tasks closed with complete evidence"
+    },
+    {
+      "command": "narada work-available --agent narada.architect --format json",
+      "result": "status=empty; architect duty loop clear"
+    },
+    {
+      "command": "narada inbox doctor --format json",
+      "result": "ready=false; publication_pending; 200 uncommitted envelope artifacts"
+    },
+    {
+      "command": "narada task lifecycle export --output .ai/task-lifecycle-snapshot.json --format json",
+      "result": "passed; 26 tables, 3182 rows"
+    },
+    {
+      "command": "narada task lifecycle status --format json",
+      "result": "snapshot_freshness=snapshot_fresh after export"
+    },
+    {
+      "command": "narada coherence scan --module operational --format json",
+      "result": "finding_count=0 after export"
+    },
+    {
+      "command": "narada coherence scan --module mutation_evidence --format json",
+      "result": "finding_count=0"
+    },
+    {
+      "command": "narada coherence scan --module authority_inversion --format json",
+      "result": "finding_count=11 residuals"
+    },
+    {
+      "command": "narada chapter close 1499-1504 --start --by narada.builder --format json",
+      "result": "correctly refused before 1504 was terminal"
+    }
+  ],
+  "acceptance": {
+    "chapter_closure_artifact_exists": true,
+    "final_coherence_posture_stated": true,
+    "remaining_residuals_explicit": true,
+    "lifecycle_snapshot_exported_after_closure": true,
+    "no_global_coherence_overclaim": true
+  }
+}

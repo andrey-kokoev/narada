@@ -1,0 +1,31 @@
+{
+  "summary": "Specified the hosted message target-Site pull/admit/finalize boundary. The new doctrine separates remote preservation, descriptor-only local admission planning, local Canonical Inbox or Admission Rejection Ledger decisions, and remote finalization. It defines evidence requirements for admitted/rejected/deferred/expired/superseded/error outcomes, keeps submit/poll/read/finalize/admin capabilities separate, and maps current /api/messages routes to Remote Candidate Exchange semantics without renaming routes.",
+  "changed_files": [
+    "docs/product/hosted-message-local-admission-boundary.md",
+    "docs/product/remote-candidate-exchange.v0.md",
+    "docs/product/site-communication-surface.v0.md",
+    "docs/product/site-telemetry-hosted-route-storage-contract.v0.md",
+    "docs/product/incoming-message-intake-edge.md",
+    ".ai/handoffs/task-1491-body.md",
+    ".ai/handoffs/task-1491-report.json"
+  ],
+  "verification": [
+    {
+      "command": "git diff --check -- docs\\product\\hosted-message-local-admission-boundary.md docs\\product\\remote-candidate-exchange.v0.md docs\\product\\site-communication-surface.v0.md docs\\product\\site-telemetry-hosted-route-storage-contract.v0.md docs\\product\\incoming-message-intake-edge.md",
+      "result": "passed: no whitespace errors; Git reported line-ending warnings for existing markdown files"
+    },
+    {
+      "command": "rg -n \"Remote preservation, local admission|Descriptor-Only Local Admission Plan|Local Decisions|Finalization Payload|Capability Separation|Existing Route Compatibility|POST /api/messages|GET /api/messages/pending|finalize|admitted|rejected|deferred|expired|superseded|error\" docs\\product\\hosted-message-local-admission-boundary.md",
+      "result": "passed: required flow, plan semantics, outcomes, capabilities, and route compatibility present"
+    },
+    {
+      "command": "Select-String -Path docs\\product\\remote-candidate-exchange.v0.md,docs\\product\\site-communication-surface.v0.md,docs\\product\\site-telemetry-hosted-route-storage-contract.v0.md,docs\\product\\incoming-message-intake-edge.md -Pattern \"hosted-message-local-admission-boundary\"",
+      "result": "passed: cross-links present"
+    }
+  ],
+  "residuals": [
+    "No network puller was implemented.",
+    "No hosted Cloudflare state was deployed or mutated.",
+    "Current hosted route implementation may still support only a subset of the specified finalization statuses; route compatibility is preserved for future widening."
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "summary": "Repaired the rejected CLI wrapper task by aligning command and artifact shapes with the Site Telemetry Local Tools contract. Added explicit publish/pull plan/run subcommands, preserved compatibility publish --send and pull --import forms, updated dry-run/send/import result envelopes to emit publish_plan, pull_plan, and run_result schemas with separated transport, pull, local admission, and remote finalization posture, and restored the task dependency on 1409.",
+  "changed_files": [
+    "packages/layers/cli/src/commands/site-telemetry.ts",
+    "packages/layers/cli/src/commands/site-telemetry-register.ts",
+    "packages/layers/cli/test/commands/site-telemetry.test.ts",
+    ".ai/handoffs/task-1410-amended.md",
+    ".ai/handoffs/task-1410-repair-report.json"
+  ],
+  "verification": [
+    {
+      "command": "narada task amend 1410 --by narada.builder --depends-on 1409 --format json",
+      "result": "passed: dependency restored"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli test -- test/commands/site-telemetry.test.ts",
+      "result": "passed: 5 tests"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli build",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "Scheduler/runtime recurring publish-pull loops remain later work.",
+    "The pull run wrapper still performs remote poll/import preview only; local admission callback wiring remains later runtime work."
+  ]
+}

@@ -1,0 +1,591 @@
+flowchart TD
+  T17["17<br/>20260414-017-impl-charter-runtime-envelope<br/>unknown"]
+  T18["18<br/>20260414-018-impl-tool-binding-runtime<br/>unknown"]
+  T19["19<br/>20260414-019-impl-daemon-dispatch<br/>unknown"]
+  T22["22<br/>20260414-022-execute-phase-a-make-it-real<br/>unknown"]
+  T23["23<br/>20260414-023-phase-a-hardening-corrections<br/>unknown"]
+  T24["24<br/>20260414-024-phase-b-crash-replay-determinism<br/>unknown"]
+  T25["25<br/>20260415-025-fix-phase-a-hardening-runtime-fallback<br/>unknown"]
+  T26["26<br/>20260415-026-identity-unification-conversation-thread-session<br/>unknown"]
+  T27["27<br/>20260415-027-trace-system-reanchored-on-canonical-identity<br/>unknown"]
+  T28["28<br/>20260415-028-mailbox-policy-routing-and-charter-binding<br/>unknown"]
+  T29["29<br/>20260415-029-outbound-idempotency-and-effect-of-once-boundary<br/>unknown"]
+  T30["30<br/>20260415-030-foreman-arbitration-and-action-governance<br/>unknown"]
+  T31["31<br/>20260415-031-daemon-end-to-end-crash-recovery-proof<br/>unknown"]
+  T32["32<br/>20260415-032-multi-mailbox-dispatch-completion<br/>unknown"]
+  T33["33<br/>20260415-033-session-lifecycle-and-operator-resume-model<br/>unknown"]
+  T34["34<br/>20260415-034-observability-without-authority<br/>unknown"]
+  T35["35<br/>20260415-035-configuration-and-secret-surface-consolidation<br/>unknown"]
+  T36["36<br/>20260415-036-architecture-and-agents-docs-realignment<br/>unknown"]
+  T38["38<br/>20260415-038-extract-domain-neutral-source-contract<br/>unknown"]
+  T39["39<br/>20260415-039-introduce-unified-fact-envelope<br/>unknown"]
+  T40["40<br/>20260415-040-generalize-outbound-into-intent-log<br/>unknown"]
+  T41["41<br/>20260415-041-implement-timer-source-through-fact-pipeline<br/>unknown"]
+  T42["42<br/>20260415-042-add-process-executor-adapter<br/>unknown"]
+  T43["43<br/>20260415-043-introduce-worker-registry-and-concurrency-policy<br/>unknown"]
+  T44["44<br/>20260415-044-add-execution-lease-and-recovery-generalization<br/>unknown"]
+  T45["45<br/>20260415-045-add-observation-plane<br/>unknown"]
+  T46["46<br/>20260415-046-rebind-mailbox-as-one-vertical<br/>unknown"]
+  T47["47<br/>20260415-047-route-live-control-plane-through-fact-boundary<br/>unknown"]
+  T48["48<br/>20260415-048-generalize-policy-admission-and-context-formation<br/>unknown"]
+  T49["49<br/>20260415-049-generalize-work-object-model<br/>unknown"]
+  T50["50<br/>20260415-050-unify-executor-lifecycle-and-confirmation-semantics<br/>unknown"]
+  T51["51<br/>20260415-051-add-filesystem-or-webhook-vertical-proof<br/>unknown"]
+  T52["52<br/>20260415-052-write-irreducible-kernel-spec<br/>unknown"]
+  C54["54<br/>20260414-054-063<br/>unknown"]
+  T54["54<br/>20260415-054-de-mailbox-charter-envelope<br/>unknown"]
+  T55["55<br/>20260415-055-de-mailbox-evaluation-resolution<br/>unknown"]
+  T56["56<br/>20260415-056-context-materializer-layer<br/>unknown"]
+  T57["57<br/>20260415-057-multi-vertical-config<br/>unknown"]
+  T58["58<br/>20260415-058-filesystem-vertical<br/>unknown"]
+  T59["59<br/>20260415-059-intent-family-registry<br/>unknown"]
+  T60["60<br/>20260415-060-unified-confirmation-algebra<br/>unknown"]
+  T61["61<br/>20260415-061-multi-source-scope<br/>unknown"]
+  T62["62<br/>20260415-062-kernel-doc-alignment<br/>unknown"]
+  T63["63<br/>20260415-063-kernel-invariant-guards<br/>unknown"]
+  C64["64<br/>20260415-064-073<br/>unknown"]
+  T64["64<br/>20260415-064-control-plane-ui-read-model-audit<br/>unknown"]
+  T65["65<br/>20260415-065-observation-api-surface<br/>unknown"]
+  T66["66<br/>20260415-066-control-plane-ui-shell<br/>unknown"]
+  T67["67<br/>20260415-067-fact-context-work-timeline-views<br/>unknown"]
+  T68["68<br/>20260415-068-intent-execution-confirmation-views<br/>unknown"]
+  T69["69<br/>20260415-069-worker-and-lease-operability-view<br/>unknown"]
+  T70["70<br/>20260415-070-scope-and-vertical-overview<br/>unknown"]
+  T71["71<br/>20260415-071-safe-operator-actions<br/>unknown"]
+  T72["72<br/>20260415-072-mailbox-vertical-ui<br/>unknown"]
+  T73["73<br/>20260415-073-ui-authority-guardrails<br/>unknown"]
+  T74["74<br/>20260416-074-split-observation-api-from-operator-actions<br/>unknown"]
+  T75["75<br/>20260416-075-make-ui-shell-vertical-neutral<br/>unknown"]
+  T76["76<br/>20260416-076-surface-intent-execution-confirmation-lifecycles<br/>unknown"]
+  T77["77<br/>20260416-077-expose-lease-quiescence-and-backlog-operability<br/>unknown"]
+  T78["78<br/>20260416-078-add-scope-and-vertical-overview-surface<br/>unknown"]
+  T79["79<br/>20260416-079-de-mailbox-ui-read-models-and-observation-types<br/>unknown"]
+  T80["80<br/>20260416-080-add-ui-authority-guardrails-and-regression-tests<br/>unknown"]
+  T81["81<br/>20260416-081-add-non-mail-vertical-ui-fixtures-and-e2e-proof<br/>unknown"]
+  C82["82<br/>20260416-082-085<br/>unknown"]
+  T82["82<br/>20260416-082-complete-de-mailboxing-of-observation-storage-models<br/>unknown"]
+  T83["83<br/>20260416-083-make-control-surface-explicit<br/>unknown"]
+  T84["84<br/>20260416-084-prove-non-mail-contexts-without-mailbox-shaped-seeding<br/>unknown"]
+  T85["85<br/>20260416-085-freeze-observation-boundary-invariants<br/>unknown"]
+  T86["86<br/>20260416-086-replace-mailbox-era-base-tables-with-neutral-durable-models<br/>unknown"]
+  T87["87<br/>20260416-087-confine-mailbox-schema-to-mailbox-vertical-boundary<br/>unknown"]
+  T88["88<br/>20260416-088-remove-mailbox-era-compatibility-names-from-generic-store-apis<br/>unknown"]
+  T89["89<br/>20260416-089-split-mailbox-compatibility-types-from-generic-types<br/>unknown"]
+  T90["90<br/>20260416-090-narrow-kernel-lint-allowlist<br/>unknown"]
+  T91["91<br/>20260416-091-move-mailbox-drill-down-observability-into-mailbox-module<br/>unknown"]
+  T92["92<br/>20260416-092-de-mailbox-runtime-policy-language<br/>unknown"]
+  T93["93<br/>20260416-093-terminal-reader-proof<br/>unknown"]
+  C94["94<br/>20260416-094-098<br/>unknown"]
+  T94["94<br/>20260416-094-classify-remaining-mail-runtime-semantics<br/>unknown"]
+  T95["95<br/>20260416-095-move-mail-essential-runtime-semantics-to-mailbox-adapters<br/>unknown"]
+  T96["96<br/>20260416-096-remove-classified-historical-mailbox-residue<br/>unknown"]
+  T97["97<br/>20260416-097-tighten-package-boundaries-for-mailbox-runtime<br/>unknown"]
+  T98["98<br/>20260416-098-final-kernel-neutrality-audit<br/>unknown"]
+  T99["99<br/>20260416-099-eliminate-mailbox-fields-from-outbound-types<br/>unknown"]
+  T100["100<br/>20260417-100-remove-mailbox-leak-from-generic-health-surfaces<br/>unknown"]
+  T101["101<br/>20260417-101-explicit-vertical-materializer-registry<br/>unknown"]
+  T102["102<br/>20260417-102-tighten-final-lint-to-zero-mailbox-in-generic-surfaces<br/>unknown"]
+  T103["103<br/>20260417-103-final-closure-audit<br/>unknown"]
+  T104["104<br/>20260417-104-remove-final-explicit-mailbox-identifiers-from-kernel-surfaces<br/>unknown"]
+  T105["105<br/>20260417-105-target-package-taxonomy<br/>unknown"]
+  T106["106<br/>20260417-106-target-package-taxonomy-corrections<br/>unknown"]
+  T107["107<br/>20260417-107-examples-catalog<br/>unknown"]
+  T108["108<br/>20260417-108-example-context-case-schema<br/>unknown"]
+  T109["109<br/>20260417-109-mailbox-context-case-specialization<br/>unknown"]
+  T110["110<br/>20260417-110-seed-example-fixtures<br/>unknown"]
+  T111["111<br/>20260417-111-example-runner<br/>unknown"]
+  T112["112<br/>20260417-112-ops-kit-v1-intent-to-operationalization<br/>unknown"]
+  T113["113<br/>20260418-113-implement-package-taxonomy-migration<br/>unknown"]
+  T114["114<br/>20260418-114-unify-user-cli-under-narada-and-add-init-repo<br/>unknown"]
+  T115["115<br/>20260418-115-first-run-just-make-it-work-user-journey<br/>unknown"]
+  T116["116<br/>20260418-116-correct-task-113-compatibility-and-consumer-breakages<br/>unknown"]
+  T117["117<br/>20260418-117-establish-operation-as-primary-user-facing-term<br/>unknown"]
+  T118["118<br/>20260418-118-make-layers-cli-the-only-public-cli-and-demote-ops-kit<br/>unknown"]
+  T119["119<br/>20260418-119-remove-remaining-legacy-exchange-surfaces<br/>unknown"]
+  T120["120<br/>20260418-120-correct-task-115-first-run-gold-path-breakages<br/>unknown"]
+  T121["121<br/>20260418-121-implement-demo-and-safe-local-trial-paths<br/>unknown"]
+  T122["122<br/>20260418-122-correct-task-019-daemon-dispatch-semantics-and-health<br/>unknown"]
+  T123["123<br/>20260418-123-correct-task-017-runtime-envelope-authority-and-persistence<br/>unknown"]
+  T124["124<br/>20260418-124-comprehensive-semantic-architecture-audit<br/>unknown"]
+  T125["125<br/>20260418-125-correct-task-120-standalone-init-repo-and-preflight-cli-ux<br/>unknown"]
+  T126["126<br/>20260418-126-correct-task-121-safe-trial-coherence-and-entry-ordering<br/>unknown"]
+  T127["127<br/>20260418-127-correct-task-124-audit-factual-drift-and-missed-ontology-conflicts<br/>unknown"]
+  T128["128<br/>20260418-128-nail-down-agent-test-usage-policy-and-guardrails<br/>unknown"]
+  T129["129<br/>20260418-129-correct-task-125-missing-gold-path-reverification-evidence<br/>unknown"]
+  T130["130<br/>20260418-130-correct-task-126-and-127-remaining-documentation-drift<br/>unknown"]
+  T131["131<br/>20260418-131-correct-task-123-persist-evaluation-authority-ambiguity<br/>unknown"]
+  T132["132<br/>20260418-132-correct-task-122-wake-controller-runtime-integration<br/>unknown"]
+  T133["133<br/>20260418-133-materialize-124-I-consolidate-envelope-authority-into-charters<br/>unknown"]
+  T134["134<br/>20260418-134-materialize-124-H-make-evaluation-persistence-runtime-owned<br/>unknown"]
+  T135["135<br/>20260418-135-materialize-124-D-rename-cli-scope-id-to-operation<br/>unknown"]
+  T136["136<br/>20260418-136-materialize-124-T-make-operation-strictly-atomic<br/>unknown"]
+  T137["137<br/>20260418-137-materialize-124-F-align-posture-preset-naming<br/>unknown"]
+  T138["138<br/>20260418-138-ban-derivative-task-status-files-and-enforce-in-repo<br/>unknown"]
+  T139["139<br/>20260418-139-correct-task-135-remaining-user-facing-scope-leaks<br/>unknown"]
+  T140["140<br/>20260418-140-correct-task-137-explain-surface-and-task-file-policy-slip<br/>unknown"]
+  T141["141<br/>20260418-141-materialize-124-A-rename-kernel-to-control-plane<br/>unknown"]
+  T142["142<br/>20260418-142-materialize-124-B-delete-empty-layer-packages<br/>unknown"]
+  T143["143<br/>20260418-143-materialize-124-C-document-monolithic-control-plane-honestly<br/>unknown"]
+  T144["144<br/>20260418-144-materialize-124-G-rewrite-readme-for-full-cli-and-ops-repo-story<br/>unknown"]
+  T145["145<br/>20260418-145-materialize-124-J-route-terminal-failures-through-foreman<br/>unknown"]
+  T146["146<br/>20260418-146-materialize-124-K-extend-governance-to-tool-requests<br/>unknown"]
+  T147["147<br/>20260418-147-materialize-124-L-resolve-stale-coordinator-schema-surface<br/>unknown"]
+  T148["148<br/>20260418-148-materialize-124-M-resolve-charter-outputs-table-fate<br/>unknown"]
+  T149["149<br/>20260418-149-materialize-124-N-rename-agent-traces-conversation-id-to-context-id<br/>unknown"]
+  T150["150<br/>20260418-150-materialize-124-O-register-mail-workers-in-worker-registry<br/>unknown"]
+  T151["151<br/>20260418-151-materialize-124-P-unify-process-executor-recovery-model<br/>unknown"]
+  T152["152<br/>20260418-152-materialize-124-Q-extract-observation-routes-from-daemon<br/>unknown"]
+  T153["153<br/>20260418-153-materialize-124-R-update-kernel-lawbook-authority-boundaries<br/>unknown"]
+  T154["154<br/>20260418-154-materialize-124-S-create-root-semantics-document<br/>unknown"]
+  T155["155<br/>20260418-155-correct-tasks-143-and-144-doc-surface-drift<br/>unknown"]
+  T156["156<br/>20260418-156-sweep-stale-old-kernel-references-after-control-plane-rename<br/>unknown"]
+  T157["157<br/>20260418-157-correct-task-146-make-tool-governance-authoritative-before-execution<br/>unknown"]
+  T158["158<br/>20260418-158-correct-task-149-add-agent-traces-context-id-migration<br/>unknown"]
+  T159["159<br/>20260418-159-correct-task-153-authority-boundary-reality<br/>unknown"]
+  T160["160<br/>20260418-160-correct-task-154-complete-semantics-ontology<br/>unknown"]
+  T161["161<br/>20260418-161-correct-task-159-root-agents-authority-drift<br/>unknown"]
+  T162["162<br/>20260418-162-correct-tasks-160-and-161-semantic-authority-residuals<br/>unknown"]
+  T163["163<br/>20260418-163-optional-harden-mail-worker-registry-wiring<br/>unknown"]
+  T165["165<br/>20260418-165-add-cis-admissibility-policy-to-narada-usc<br/>unknown"]
+  T166["166<br/>20260418-166-add-real-schema-validation-to-narada-usc<br/>unknown"]
+  T167["167<br/>20260418-167-equip-narada-usc-with-user-tools<br/>unknown"]
+  T168["168<br/>20260418-168-add-usc-app-repo-initializer<br/>unknown"]
+  T169["169<br/>20260418-169-pivot-narada-usc-to-executable-constructor<br/>unknown"]
+  T170["170<br/>20260418-170-correct-task-169-usc-command-semantics<br/>unknown"]
+  T171["171<br/>20260418-171-add-usc-intent-refinement-engine<br/>unknown"]
+  T172["172<br/>20260418-172-add-usc-domain-packs-architecture<br/>unknown"]
+  T173["173<br/>20260418-173-add-high-value-usc-domain-packs<br/>unknown"]
+  T174["174<br/>20260418-174-add-second-batch-usc-domain-packs<br/>unknown"]
+  T175["175<br/>20260418-175-add-third-batch-usc-domain-packs<br/>unknown"]
+  T176["176<br/>20260418-176-add-fourth-batch-usc-domain-packs<br/>unknown"]
+  T177["177<br/>20260418-177-add-fifth-batch-usc-domain-packs<br/>unknown"]
+  T178["178<br/>20260418-178-correct-task-174-missing-second-batch-domain-packs<br/>unknown"]
+  T179["179<br/>20260418-179-correct-task-171-refine-target-overwrite<br/>unknown"]
+  T180["180<br/>20260418-180-reframe-domain-packs-as-domain-priors<br/>unknown"]
+  T181["181<br/>20260418-181-correct-usc-cli-machine-output<br/>unknown"]
+  T182["182<br/>20260418-182-correct-task-170-cycle-target-resolution<br/>unknown"]
+  T183["183<br/>20260418-183-correct-task-182-stale-cycle-readme-example<br/>unknown"]
+  T184["184<br/>20260418-184-add-usc-task-graph-state-model<br/>unknown"]
+  T185["185<br/>20260418-185-add-usc-plan-command<br/>unknown"]
+  T186["186<br/>20260418-186-add-usc-task-lifecycle-commands<br/>unknown"]
+  T187["187<br/>20260418-187-add-usc-task-executor-adapter<br/>unknown"]
+  T188["188<br/>20260418-188-add-bounded-usc-loop-command<br/>unknown"]
+  T189["189<br/>20260418-189-correct-usc-constructor-loop-residuals<br/>unknown"]
+  T190["190<br/>20260418-190-correct-task-189-completion-reviewer-boundary<br/>unknown"]
+  T191["191<br/>20260419-191-lift-deriver-vs-operator-authority-policy<br/>unknown"]
+  T192["192<br/>20260419-192-add-narada-proper-usc-app-initialization<br/>unknown"]
+  T193["193<br/>20260419-193-correct-task-191-authority-enforcement-and-usc-template-drift<br/>unknown"]
+  T194["194<br/>20260419-194-correct-task-192-publishable-usc-dependency-and-followup-numbering<br/>unknown"]
+  T195["195<br/>20260419-195-register-usc-app-as-narada-operation<br/>unknown"]
+  T196["196<br/>20260419-196-diagnose-control-plane-v8-crash<br/>unknown"]
+  T197["197<br/>20260419-197-correct-task-194-prepublish-package-list<br/>unknown"]
+  T198["198<br/>20260419-198-correct-task-193-runtime-authority-and-usc-schema-drift<br/>unknown"]
+  T199["199<br/>20260419-199-correct-task-198-usc-summary-and-protocol-residuals<br/>unknown"]
+  T200["200<br/>20260419-200-correct-usc-core-schema-operator-lifecycle-leakage<br/>unknown"]
+  C201["201<br/>20260419-201-206<br/>unknown"]
+  T201["201<br/>20260419-201-add-explicit-work-derivation-from-stored-facts<br/>unknown"]
+  T202["202<br/>20260419-202-document-re-derivation-and-recovery-operator-family<br/>unknown"]
+  T203["203<br/>20260419-203-add-preview-derivation-from-stored-facts<br/>unknown"]
+  T204["204<br/>20260419-204-add-control-plane-recovery-from-facts<br/>unknown"]
+  T205["205<br/>20260419-205-add-confirmation-replay-from-durable-execution-state<br/>unknown"]
+  T206["206<br/>20260419-206-add-explicit-projection-rebuild-operator-family<br/>unknown"]
+  T207["207<br/>20260419-207-create-closure-family-tasks-in-a-disciplined-way<br/>unknown"]
+  T208["208<br/>20260419-208-selection-operator-family<br/>unknown"]
+  T209["209<br/>20260419-209-promotion-operator-family<br/>unknown"]
+  T210["210<br/>20260419-210-inspection-operator-family-alignment<br/>unknown"]
+  T211["211<br/>20260419-211-add-test-runtime-observability-and-better-sqlite3-teardown-hardening<br/>unknown"]
+  T212["212<br/>20260419-212-add-continuation-affinity-to-work-routing<br/>unknown"]
+  T213["213<br/>20260419-213-add-soft-routing-signals-layer<br/>unknown"]
+  T214["214<br/>20260419-214-add-advisory-signals-clan-to-semantics-and-doc-hierarchy<br/>unknown"]
+  T215["215<br/>20260419-215-correct-task-204-recovery-vs-replay-and-task-state<br/>unknown"]
+  T216["216<br/>20260419-216-correct-task-208-selector-surface-overclaim-and-partial-consumption<br/>unknown"]
+  T217["217<br/>20260419-217-correct-task-209-promotion-retry-transition-semantics<br/>unknown"]
+  T218["218<br/>20260419-218-correct-task-211-test-telemetry-and-teardown-overclaim<br/>unknown"]
+  T219["219<br/>20260419-219-correct-task-214-advisory-signals-runtime-overclaim-and-task-state<br/>unknown"]
+  T220["220<br/>20260419-220-correct-task-205-confirm-replay-cli-and-selection-surface<br/>unknown"]
+  T221["221<br/>20260419-221-correct-task-206-projection-rebuild-multi-mailbox-and-task-state<br/>unknown"]
+  T222["222<br/>20260419-222-correct-task-212-affinity-routing-observability-and-task-state<br/>unknown"]
+  T223["223<br/>20260419-223-correct-task-215-kernel-doc-coherence-for-recovery-surface<br/>unknown"]
+  T224["224<br/>20260419-224-correct-task-219-semantic-example-overclaim-and-task-state<br/>unknown"]
+  T225["225<br/>20260419-225-close-residual-corrective-task-artifacts-and-operator-action-doc-list<br/>unknown"]
+  T226["226<br/>20260419-226-correct-task-222-v1-affinity-wording-and-task-artifact<br/>unknown"]
+  T227["227<br/>20260419-227-create-live-operation-chapter-task-graph<br/>unknown"]
+  C228["228<br/>20260419-228-232<br/>unknown"]
+  T228["228<br/>20260419-228-live-operation-config-and-sync-readiness<br/>unknown"]
+  T230["230<br/>20260419-230-live-operation-draft-proposal-pipeline<br/>unknown"]
+  T233["233<br/>20260419-233-flesh-out-operational-trust-chapter<br/>unknown"]
+  T242["242<br/>20260420-242-correct-show-unknown-scope-fallback<br/>unknown"]
+  T258["258<br/>20260420-258-product-surface-coherence-closure<br/>unknown"]
+  C260["260<br/>20260420-260-264<br/>unknown"]
+  T260["260<br/>20260420-260-agent-roster-and-assignment-state<br/>unknown"]
+  T264["264<br/>20260420-264-runtime-usc-boundary-and-chapter-closure<br/>unknown"]
+  T281["281<br/>20260420-281-complete-task-264-runtime-usc-boundary-and-chapter-closure<br/>unknown"]
+  C283["283<br/>20260420-283-287<br/>unknown"]
+  T283["283<br/>20260420-283-intent-to-operation-bootstrap-contract<br/>unknown"]
+  T287["287<br/>20260420-287-operation-realization-closure<br/>unknown"]
+  T289["289<br/>20260420-289-mailbox-vertical-completion-backlog<br/>unknown"]
+  C291["291<br/>20260420-291-296<br/>unknown"]
+  T291["291<br/>20260420-291-live-graph-proof-saturation<br/>unknown"]
+  T296["296<br/>20260420-296-mailbox-operator-polish-and-closure<br/>unknown"]
+  C297["297<br/>20260420-297-302<br/>unknown"]
+  T297["297<br/>20260420-297-operational-trial-setup-contract<br/>unknown"]
+  T302["302<br/>20260420-302-operational-trial-closure<br/>unknown"]
+  T309["309<br/>20260420-309-cloudflare-site-prototype-task-graph<br/>closed"]
+  C320["320<br/>20260420-320-329-cloudflare-site-prototype-chapter<br/>unknown"]
+  T330["330<br/>20260421-330-cloudflare-site-ontology-closure-review<br/>closed"]
+  T331["331<br/>20260421-331-define-post-cloudflare-coherence-backlog<br/>closed"]
+  T333["333<br/>20260421-333-canonical-vocabulary-hardening<br/>deferred"]
+  T335["335<br/>20260421-335-runtime-locus-abstraction<br/>deferred"]
+  C371["371<br/>20260421-371-377-windows-site-materialization<br/>opened"]
+  T394["394<br/>20260422-394-email-marketing-operation-closure<br/>closed"]
+  T398["398<br/>20260422-398-email-marketing-live-dry-run-chapter-shaping<br/>closed"]
+  C399["399<br/>20260422-399-405-email-marketing-live-dry-run<br/>opened"]
+  T400["400<br/>20260422-400-windows-site-real-step-handler-port<br/>closed"]
+  T401["401<br/>20260422-401-campaign-brief-runtime-integration<br/>closed"]
+  T402["402<br/>20260422-402-private-ops-repo-setup<br/>closed"]
+  T403["403<br/>Task 403 — Controlled Live Input & Dry Run Execution<br/>deferred"]
+  T404["404<br/>Task 404 — Operator Inspection & No-Effect Proof<br/>opened"]
+  T405["405<br/>20260422-405-live-dry-run-chapter-closure<br/>opened"]
+  T416["416<br/>20260422-416-task-403-operator-runbook-and-preflight-guardrails<br/>closed"]
+  T428["428<br/>20260422-428-macos-site-materialization-chapter<br/>closed"]
+  T429["429<br/>20260422-429-linux-site-materialization-chapter<br/>closed"]
+  C431["431<br/>20260422-431-436-macos-site-materialization<br/>opened"]
+  C437["437<br/>20260422-437-442-linux-site-materialization<br/>opened"]
+  T461["461<br/>20260418-461-comprehensive-semantic-architecture-audit-report<br/>unknown"]
+  T462["462<br/>20260420-462-plan<br/>unknown"]
+  C531["531<br/>20260423-531-535-mail-connectivity-generalization-and-provider-boundary<br/>opened"]
+  T589["589<br/>20260424-589-command-mediated-task-authority-closure<br/>closed"]
+  C595["595<br/>20260424-595-599-task-spec-lifecycle-and-dispatch-command-completion<br/>opened"]
+  C595["595<br/>20260426-595-595-windows-user-site-ergonomics<br/>opened"]
+  C606["606<br/>20260424-606-610-testing-intent-zone-implementation-and-cutover<br/>opened"]
+  C612["612<br/>20260424-612-615-agent-next-task-surfaces<br/>opened"]
+  C618["618<br/>20260424-618-622-residual-task-authority-filesystem-elimination<br/>opened"]
+  C623["623<br/>20260424-623-627-task-spec-authority-to-sqlite-and-markdown-projection-cutover<br/>opened"]
+  C629["629<br/>20260425-629-633-command-execution-intent-zone<br/>opened"]
+  C634["634<br/>20260425-634-638-agent-self-cycle-rough-surfaces<br/>opened"]
+  C644["644<br/>20260425-644-649-ops-zone-completion<br/>opened"]
+  C652["652<br/>20260425-652-655-ops-zone-execution-plan<br/>opened"]
+  C666["666<br/>20260425-666-675-task-dna-incoherency-steamroll<br/>opened"]
+  C676["676<br/>20260425-676-685-task-dna-incoherency-steamroll-2<br/>opened"]
+  C686["686<br/>20260425-686-695-task-dna-incoherency-steamroll-3<br/>opened"]
+  C697["697<br/>20260425-697-706-task-dna-incoherency-steamroll-4<br/>opened"]
+  C707["707<br/>20260425-707-711-task-governance-package-tracks<br/>opened"]
+  C712["712<br/>20260425-712-714-task-service-extraction-2<br/>opened"]
+  C715["715<br/>20260425-715-717-task-assignment-lifecycle-service<br/>opened"]
+  C718["718<br/>20260425-718-720-task-service-extraction-3<br/>opened"]
+  C721["721<br/>20260425-721-723-review-verdict-canonicalization<br/>opened"]
+  C724["724<br/>20260425-724-726-chapter-commit-coherence<br/>opened"]
+  C727["727<br/>20260425-727-729-chapter-coherence-ergonomics<br/>opened"]
+  C730["730<br/>20260425-730-732-sqlite-contention-posture<br/>opened"]
+  C733["733<br/>20260425-733-735-cli-command-boundary-unification<br/>opened"]
+  C736["736<br/>20260425-736-738-task-artifact-eof-invariant<br/>opened"]
+  C739["739<br/>20260425-739-741-cli-boundary-library-runner<br/>opened"]
+  C742["742<br/>20260425-742-744-simple-task-command-runner-migration<br/>opened"]
+  C745["745<br/>20260425-745-747-store-scoped-command-boundary<br/>opened"]
+  C748["748<br/>20260425-748-750-task-output-admission-cleanup<br/>opened"]
+  C751["751<br/>20260425-751-753-roster-runner-migration<br/>opened"]
+  C754["754<br/>20260425-754-756-evidence-runner-migration<br/>opened"]
+  C757["757<br/>20260425-757-759-chapter-runner-migration<br/>opened"]
+  C760["760<br/>20260425-760-762-chapter-pure-result-boundary<br/>opened"]
+  C764["764<br/>20260425-764-766-direct-action-helper<br/>opened"]
+  C767["767<br/>20260426-767-769-task-authoring-registration-extraction<br/>opened"]
+  C770["770<br/>20260426-770-772-task-lifecycle-registration-extraction<br/>opened"]
+  C773["773<br/>20260426-773-775-recommend-next-output-normalization<br/>opened"]
+  C776["776<br/>20260426-776-778-task-control-registration-normalization<br/>opened"]
+  C779["779<br/>20260426-779-781-admission-surface-registration-normalization<br/>opened"]
+  C782["782<br/>20260426-782-783-chapter-registration-normalization<br/>opened"]
+  C784["784<br/>20260426-784-786-construction-loop-registration-normalization<br/>opened"]
+  C787["787<br/>20260426-787-789-intent-zone-registration-normalization<br/>opened"]
+  C790["790<br/>20260426-790-793-command-surface-normalization<br/>opened"]
+  C794["794<br/>20260426-794-797-outbound-action-registration<br/>opened"]
+  C798["798<br/>20260426-798-801-ops-kit-registration<br/>opened"]
+  C802["802<br/>20260426-802-805-runtime-surface-registration<br/>opened"]
+  C806["806<br/>20260426-806-809-principal-registration<br/>opened"]
+  C810["810<br/>20260426-810-813-task-operations-registration<br/>opened"]
+  C814["814<br/>20260426-814-817-core-command-registration<br/>opened"]
+  C818["818<br/>20260426-818-821-registrar-output-normalization<br/>opened"]
+  C822["822<br/>20260426-822-825-registrar-command-kind-normalization<br/>opened"]
+  C826["826<br/>20260426-826-829-finite-command-output-admission-slice<br/>opened"]
+  C830["830<br/>20260426-830-833-output-admission-guard<br/>opened"]
+  C834["834<br/>20260426-834-837-output-admission-ergonomics<br/>opened"]
+  C838["838<br/>20260426-838-841-small-output-debt-burndown<br/>opened"]
+  C842["842<br/>20260426-842-845-medium-output-debt-burndown<br/>opened"]
+  C846["846<br/>20260426-846-849-integrity-output-debt-burndown<br/>opened"]
+  C850["850<br/>20260426-850-853-sync-output-debt-burndown<br/>opened"]
+  C854["854<br/>20260426-854-857-config-output-debt-burndown<br/>opened"]
+  C858["858<br/>20260426-858-861-long-lived-shutdown-output-debt-burndown<br/>opened"]
+  C862["862<br/>20260426-862-865-config-interactive-output-debt-burndown<br/>opened"]
+  C866["866<br/>20260426-866-869-usc-init-output-debt-burndown<br/>opened"]
+  C870["870<br/>20260426-870-873-cli-output-admission-taxonomy<br/>opened"]
+  C874["874<br/>20260426-874-877-cli-output-internal-admission-cleanup<br/>opened"]
+  C878["878<br/>20260426-878-881-canonical-inbox-typed-envelope-intake-zone<br/>opened"]
+  C882["882<br/>20260426-882-886-canonical-inbox-cli-and-store<br/>opened"]
+  C887["887<br/>20260426-887-891-inbox-executable-promotion<br/>opened"]
+  C892["892<br/>20260426-892-896-inbox-promotion-ergonomics<br/>opened"]
+  C897["897<br/>20260426-897-901-claim-inbox-triage-coherence<br/>opened"]
+  C902["902<br/>20260426-902-906-inbox-work-next-coherence<br/>opened"]
+  C907["907<br/>20260426-907-911-inbox-handling-lease<br/>opened"]
+  C912["912<br/>20260427-912-916-git-commit-preflight<br/>opened"]
+  C917["917<br/>20260427-917-921-unified-work-next<br/>opened"]
+  C922["922<br/>20260427-922-926-unified-review-work-next<br/>opened"]
+  C927["927<br/>20260427-927-931-work-next-dispatch-start<br/>opened"]
+  C932["932<br/>20260427-932-936-work-next-decision-trace<br/>opened"]
+  C937["937<br/>20260427-937-941-inbox-payload-ingestion<br/>opened"]
+  C942["942<br/>20260427-942-946-bootstrap-doctor<br/>opened"]
+  C947["947<br/>20260427-947-951-bootstrap-repair-plan<br/>opened"]
+  C1044["1044<br/>20260428-1044-1048-role-specific-ai-thread-bootstrap<br/>opened"]
+  C1049["1049<br/>20260428-1049-1053-operator-surface<br/>opened"]
+  C1056["1056<br/>20260428-1056-1059-site-local-daemon-source<br/>opened"]
+  C1105["1105<br/>20260430-1105-1109-first-time-operator-ergonomics<br/>opened"]
+  C1113["1113<br/>20260430-1113-1118-windows-bootstrap-correctness<br/>opened"]
+  C1120["1120<br/>20260430-1120-1120-safe-task-authoring-input<br/>opened"]
+  C1121["1121<br/>20260430-1121-1121-observer-surface-addressability<br/>opened"]
+  C1122["1122<br/>20260430-1122-1123-operator-surface-workstate-ergonomics<br/>opened"]
+  T1275["1275<br/>Build Claude Code Agent Carrier<br/>closed"]
+  T1276["1276<br/>Build Narada Native Agent Carrier<br/>closed"]
+  C1282["1282<br/>Admit Claude Code execution policy slice<br/>opened"]
+  T1283["1283<br/>Implement Claude Code process launch adapter<br/>closed"]
+  T1284["1284<br/>Add Claude Code carrier doctor and smoke proof<br/>closed"]
+  C1285["1285<br/>Define Narada-native carrier runtime boundary<br/>opened"]
+  T1286["1286<br/>Implement Narada-native minimal session harness<br/>closed"]
+  T1287["1287<br/>Add Narada-native carrier doctor and readiness proof<br/>closed"]
+  C1288["1288<br/>Implement Claude Code interactive session lifecycle<br/>opened"]
+  T1289["1289<br/>Mediate Claude Code tool and effect requests<br/>closed"]
+  T1290["1290<br/>Add Claude Code resume handoff and operator launch affordance<br/>closed"]
+  C1291["1291<br/>Add Narada-native model adapter boundary<br/>opened"]
+  T1292["1292<br/>Implement Narada-native governed work loop prototype<br/>closed"]
+  T1293["1293<br/>Add Narada-native operational readiness and reconstruction proof<br/>closed"]
+  C1294["1294<br/>Add Claude Code live runtime availability and launch bridge<br/>opened"]
+  T1297["1297<br/>Add Narada-native production adapter capability registration<br/>confirmed"]
+  T1298["1298<br/>Wire Narada-native work loop to governed task handoff path<br/>confirmed"]
+  T1299["1299<br/>Add Narada-native supervised session runtime and operational doctor<br/>confirmed"]
+  C1301["1301<br/>Define Narada-native provider adapter execution contract<br/>opened"]
+  T1302["1302<br/>Add Kimi Narada-native intellect provider adapter<br/>confirmed"]
+  T1303["1303<br/>Add OpenAI Narada-native intellect provider adapter<br/>confirmed"]
+  T1304["1304<br/>Add Anthropic Narada-native intellect provider adapter<br/>confirmed"]
+  T1305["1305<br/>Add OpenRouter Narada-native intellect provider adapter<br/>confirmed"]
+  C1306["1306<br/>Specify to-intelligence integration repair chapter<br/>opened"]
+  T1307["1307<br/>Specify to-data adapter foundation chapter<br/>confirmed"]
+  T1308["1308<br/>Specify carrier orchestration wrapper chapter<br/>confirmed"]
+  T1309["1309<br/>Specify capability and consent binding chapter<br/>confirmed"]
+  T1310["1310<br/>Specify live supervised session chapter<br/>confirmed"]
+  T1311["1311<br/>Specify governed effect handoff chapter<br/>confirmed"]
+  T1312["1312<br/>Specify operator launch and doctor affordance chapter<br/>confirmed"]
+  T1313["1313<br/>Specify end-to-end Narada-native proof chapter<br/>confirmed"]
+  C1321["1321<br/>Define Narada-native to-data packet contract<br/>opened"]
+  T1322["1322<br/>Implement task and work-next to-data readers<br/>closed"]
+  T1323["1323<br/>Implement inbox summary to-data reader<br/>closed"]
+  T1324["1324<br/>Implement readiness and evidence reference readers<br/>closed"]
+  T1325["1325<br/>Implement bounded local file excerpt reader<br/>closed"]
+  T1326["1326<br/>Add integrated to-data adapter reconstruction proof<br/>closed"]
+  C1327["1327<br/>Define carrier orchestration session contract<br/>opened"]
+  T1332["1332<br/>Add end-to-end mocked wrapper proof<br/>closed"]
+  C1333["1333<br/>Define carrier capability projection schema<br/>opened"]
+  T1338["1338<br/>Add capability-consent reconstruction proof<br/>closed"]
+  C1339["1339<br/>Define live runtime handle schema<br/>opened"]
+  T1344["1344<br/>Expand reconstruction from durable evidence<br/>closed"]
+  C1345["1345<br/>Define generic carrier action packet envelope<br/>opened"]
+  T1350["1350<br/>Add handoff reconstruction and doctor integration<br/>closed"]
+  C1351["1351<br/>Define Narada-native launch command posture<br/>opened"]
+  T1356["1356<br/>Add end-to-end operator readback proof<br/>closed"]
+  C1357["1357<br/>Prepare controlled Builder proof task<br/>opened"]
+  C1364["1364<br/>Audit narada-andrey MCP lift evidence freshness<br/>opened"]
+  T1377["1377<br/>Specify Cloudflare hosted Site Registry projection chapter<br/>opened"]
+  T1378["1378<br/>Scaffold hosted Site Registry Cloudflare Worker package<br/>opened"]
+  T1379["1379<br/>Implement typed Site event receiver and projection storage<br/>opened"]
+  T1380["1380<br/>Implement read-only Site Registry peek API and human surface<br/>opened"]
+  T1381["1381<br/>Implement hosted registry message exchange and receipts<br/>opened"]
+  T1382["1382<br/>Add Site publisher and registry puller client tools<br/>opened"]
+  T1383["1383<br/>Add hosted registry deployment and smoke verification runbook<br/>opened"]
+  T1384["1384<br/>Run hosted Site Registry readiness proof and close chapter<br/>opened"]
+  T309 --> C320
+  T330 --> T331
+  T330 --> T333
+  T331 --> T333
+  T330 --> T335
+  T331 --> T335
+  T394 --> T398
+  T398 --> C399
+  C399 --> T400
+  C399 --> T401
+  C399 --> T402
+  T400 --> T403
+  T401 --> T403
+  T402 --> T403
+  T416 --> T403
+  T403 --> T404
+  T404 --> T405
+  C399 --> T416
+  T400 --> T416
+  T401 --> T416
+  T402 --> T416
+  C371 --> T428
+  C371 --> T429
+  T428 --> C431
+  T429 --> C437
+  T394 --> C531
+  T589 --> C595
+  T1275 --> C1282
+  T1275 --> T1283
+  T1275 --> T1284
+  T1276 --> C1285
+  T1276 --> T1286
+  T1276 --> T1287
+  C1282 --> C1288
+  T1283 --> C1288
+  T1284 --> C1288
+  C1282 --> T1289
+  T1283 --> T1289
+  T1284 --> T1289
+  C1282 --> T1290
+  T1283 --> T1290
+  T1284 --> T1290
+  C1285 --> C1291
+  T1286 --> C1291
+  T1287 --> C1291
+  C1285 --> T1292
+  T1286 --> T1292
+  T1287 --> T1292
+  C1285 --> T1293
+  T1286 --> T1293
+  T1287 --> T1293
+  C1288 --> C1294
+  T1289 --> C1294
+  T1290 --> C1294
+  C1291 --> C1294
+  T1292 --> C1294
+  T1293 --> C1294
+  C1288 --> T1297
+  T1289 --> T1297
+  T1290 --> T1297
+  C1291 --> T1297
+  T1292 --> T1297
+  T1293 --> T1297
+  C1288 --> T1298
+  T1289 --> T1298
+  T1290 --> T1298
+  C1291 --> T1298
+  T1292 --> T1298
+  T1293 --> T1298
+  C1288 --> T1299
+  T1289 --> T1299
+  T1290 --> T1299
+  C1291 --> T1299
+  T1292 --> T1299
+  T1293 --> T1299
+  C1291 --> C1301
+  T1297 --> C1301
+  T1298 --> C1301
+  T1299 --> C1301
+  C1291 --> T1302
+  T1297 --> T1302
+  T1298 --> T1302
+  T1299 --> T1302
+  C1291 --> T1303
+  T1297 --> T1303
+  T1298 --> T1303
+  T1299 --> T1303
+  C1291 --> T1304
+  T1297 --> T1304
+  T1298 --> T1304
+  T1299 --> T1304
+  C1291 --> T1305
+  T1297 --> T1305
+  T1298 --> T1305
+  T1299 --> T1305
+  C1301 --> C1306
+  T1302 --> C1306
+  T1303 --> C1306
+  T1304 --> C1306
+  T1305 --> C1306
+  C1301 --> T1307
+  T1302 --> T1307
+  T1303 --> T1307
+  T1304 --> T1307
+  T1305 --> T1307
+  C1301 --> T1308
+  T1302 --> T1308
+  T1303 --> T1308
+  T1304 --> T1308
+  T1305 --> T1308
+  C1301 --> T1309
+  T1302 --> T1309
+  T1303 --> T1309
+  T1304 --> T1309
+  T1305 --> T1309
+  C1301 --> T1310
+  T1302 --> T1310
+  T1303 --> T1310
+  T1304 --> T1310
+  T1305 --> T1310
+  C1301 --> T1311
+  T1302 --> T1311
+  T1303 --> T1311
+  T1304 --> T1311
+  T1305 --> T1311
+  C1301 --> T1312
+  T1302 --> T1312
+  T1303 --> T1312
+  T1304 --> T1312
+  T1305 --> T1312
+  C1301 --> T1313
+  T1302 --> T1313
+  T1303 --> T1313
+  T1304 --> T1313
+  T1305 --> T1313
+  T1307 --> C1321
+  T1307 --> T1322
+  T1307 --> T1323
+  T1307 --> T1324
+  T1307 --> T1325
+  T1307 --> T1326
+  T1308 --> C1327
+  C1321 --> C1327
+  T1322 --> C1327
+  T1323 --> C1327
+  T1324 --> C1327
+  T1325 --> C1327
+  T1326 --> C1327
+  T1308 --> T1332
+  C1321 --> T1332
+  T1322 --> T1332
+  T1323 --> T1332
+  T1324 --> T1332
+  T1325 --> T1332
+  T1326 --> T1332
+  T1309 --> C1333
+  C1321 --> C1333
+  T1309 --> T1338
+  C1321 --> T1338
+  T1310 --> C1339
+  C1321 --> C1339
+  C1333 --> C1339
+  T1310 --> T1344
+  C1321 --> T1344
+  C1333 --> T1344
+  T1311 --> C1345
+  C1327 --> C1345
+  T1311 --> T1350
+  C1327 --> T1350
+  T1312 --> C1351
+  C1339 --> C1351
+  T1312 --> T1356
+  C1339 --> T1356
+  T1313 --> C1357
+  C1301 --> C1357
+  T1302 --> C1357
+  T1303 --> C1357
+  T1304 --> C1357
+  T1305 --> C1357
+  T1326 --> C1357
+  T1332 --> C1357
+  T1338 --> C1357
+  T1344 --> C1357
+  T1350 --> C1357
+  T1356 --> C1357
+  T1377 --> T1378
+  T1378 --> T1379
+  T1379 --> T1380
+  T1379 --> T1381
+  T1382 --> T1383
+  T1383 --> T1384

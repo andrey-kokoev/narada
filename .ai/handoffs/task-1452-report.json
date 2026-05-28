@@ -1,0 +1,34 @@
+{
+  "summary": "Added the optional local live dashboard server as a generic package export. `createDashboardServer` serves read-only HTML and JSON snapshot endpoints from a caller-owned snapshot loader, forwards `siteRoot`/`refreshMs` context, returns derived summaries and attention rows, emits no-store cache headers, and refuses mutation methods. README documentation now names caller-owned port selection and provider separation.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "packages/site-operational-dashboard/src/index.ts",
+    "packages/site-operational-dashboard/test/site-operational-dashboard.test.ts",
+    "packages/site-operational-dashboard/README.md",
+    ".ai/handoffs/task-1452-body.md",
+    ".ai/handoffs/task-1452-report.json"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --filter @narada2/site-operational-dashboard test",
+      "result": "passed: 8 tests"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-operational-dashboard typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-operational-dashboard build",
+      "result": "passed"
+    },
+    {
+      "command": "git diff --check -- packages/site-operational-dashboard/src/index.ts packages/site-operational-dashboard/test/site-operational-dashboard.test.ts packages/site-operational-dashboard/README.md",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "The server is a generic package export, not a Site-specific startup script.",
+    "Narada proper row providers remain owned by task 1450 and are not implemented here.",
+    "The server does not perform Site mutation or credential access."
+  ]
+}

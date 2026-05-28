@@ -1,0 +1,36 @@
+{
+  "task": 1509,
+  "agent": "narada.builder",
+  "status": "complete",
+  "changed_files": [
+    "packages/narada-proper-mcp/src/surface-registry.ts",
+    "packages/narada-proper-mcp/src/index.ts",
+    "packages/narada-proper-mcp/test/narada-proper-mcp.test.ts",
+    ".ai/do-not-open/tasks/20260518-1509-define-canonical-mcp-role-policy-projection-contract.md"
+  ],
+  "summary": "Defined a typed Narada proper MCP architect role-policy projection contract derived from the MCP surface registry. The contract keeps config.json as reconciled Site-local runtime posture, separates canonical tools from optional aliases/refused tools, and validates missing, stale, alias, and refused entries.",
+  "verification": [
+    {
+      "command": "pnpm --filter @narada2/narada-proper-mcp typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/narada-proper-mcp test",
+      "result": "passed; 1 file, 31 tests"
+    },
+    {
+      "command": "pnpm --filter @narada2/narada-proper-mcp build",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "The reconciler that reads/writes local config.json remains for task 1510.",
+    "Startup/doctor integration remains for task 1511.",
+    "packages/narada-proper-mcp/test/narada-proper-mcp.test.ts already contains unrelated pre-existing dirty changes; this task only owns the role-policy projection tests and removal of the config.json-dependent guard."
+  ],
+  "acceptance": {
+    "typed_projection_contract_exists": true,
+    "registry_policy_source_and_config_runtime_posture_named": true,
+    "tests_cover_missing_stale_alias_refused_tools": true
+  }
+}

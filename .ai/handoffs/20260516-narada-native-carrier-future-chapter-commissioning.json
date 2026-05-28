@@ -1,0 +1,197 @@
+{
+  "slug": "narada-native-carrier-future-chapter-commissioning",
+  "title": "Narada-native Carrier Future Chapter Commissioning",
+  "depends_on": [
+    1301,
+    1302,
+    1303,
+    1304,
+    1305
+  ],
+  "tasks": [
+    {
+      "title": "Specify to-intelligence integration repair chapter",
+      "goal": "Create a structured chapter proposal that turns the rejected provider adapter work into an executable repair chapter without duplicating active task 1301.",
+      "context": "Tasks 1301-1305 were rejected because provider registration is readiness-visible but not reachable from the normal Narada-native carrier task execution path. This task produces the next chapter specification or amendment handoff for that repair.",
+      "required_work": [
+        "Inspect review findings on tasks 1301-1305 and the current state of task 1301 before proposing any new build tasks.",
+        "Define the smallest ordered repair chapter needed to wire provider selection into the governed work-loop or task-handoff path.",
+        "Include tasks for preserving provider output as inert handoff evidence and for proving the fixture fallback still works.",
+        "Represent the result as structured chapter input or an explicit no-new-chapter rationale if the active 1301-1305 tasks already cover the repair.",
+        "Submit the chapter proposal through a governed handoff for Architect commissioning."
+      ],
+      "non_goals": [
+        "Do not create duplicate build tasks that race active task 1301.",
+        "Do not bypass provider capability references or store raw provider secrets.",
+        "Do not perform live provider calls as part of chapter specification."
+      ],
+      "acceptance_criteria": [
+        "The proposal names the exact current gap from the rejected reviews.",
+        "The proposed tasks are ordered and do not duplicate active claimed work.",
+        "The proposal preserves Intelligence-Authority Separation and inert output admission.",
+        "The handoff is ready for chapter commission or explicitly explains why no new chapter should be created."
+      ]
+    },
+    {
+      "title": "Specify to-data adapter foundation chapter",
+      "goal": "Create a structured build chapter for the Narada-native carrier to-data side: bounded read access to Narada and local Site data without authority mutation.",
+      "context": "The carrier can be factored as to-data, to-intelligence, and an orchestration wrapper. The to-data side should provide governed reads of task packets, inbox/work-next, readiness, evidence, and bounded local files.",
+      "required_work": [
+        "Inspect existing task-handoff, readiness, adapter-registration, and supervisor read surfaces.",
+        "Define a to-data interface for bounded task, inbox, work-next, readiness, evidence, and file read packets.",
+        "Specify capability and attribution requirements for each read family.",
+        "Include tests proving no raw secret values, unbounded transcripts, or authority-bearing mutations are recorded.",
+        "Submit structured chapter input with ordered implementation and verification tasks."
+      ],
+      "non_goals": [
+        "Do not grant task, inbox, outbox, command, publication, or repository mutation authority to to-data adapters.",
+        "Do not make direct SQLite reads the normal to-data interface.",
+        "Do not collapse local file readability into Narada authority."
+      ],
+      "acceptance_criteria": [
+        "The chapter proposal defines a clear to-data contract and adapter set.",
+        "Every read surface has capability, attribution, and bounded evidence posture.",
+        "Mutation authority remains outside the carrier.",
+        "The proposed tasks are ready for governed chapter commission."
+      ]
+    },
+    {
+      "title": "Specify carrier orchestration wrapper chapter",
+      "goal": "Create a structured build chapter for composing to-data and to-intelligence adapters inside a supervised Narada-native carrier session.",
+      "context": "A usable carrier needs a wrapper that obtains bounded data, invokes configured intelligence, and emits inert handoff drafts without owning task or effect authority.",
+      "required_work": [
+        "Inspect current work-loop, task-handoff, supervisor, and reconstruction surfaces.",
+        "Define orchestration boundaries between to-data reads, to-intelligence invocation, and canonical handoff emission.",
+        "Specify fallback behavior for missing data adapters, missing provider configuration, refusal, timeout, and malformed outputs.",
+        "Include tests proving orchestration emits bounded handoff drafts and preserves fixture fallback.",
+        "Submit structured chapter input with ordered build tasks."
+      ],
+      "non_goals": [
+        "Do not let the wrapper directly close, report, publish, command, or mutate inbox state.",
+        "Do not make provider text a Narada decision.",
+        "Do not require live network providers in normal tests."
+      ],
+      "acceptance_criteria": [
+        "The proposed chapter cleanly composes to-data and to-intelligence through a wrapper.",
+        "The wrapper has explicit refusal and fallback behavior.",
+        "All outputs remain inert until canonical admission.",
+        "The chapter is ready for governed commission."
+      ]
+    },
+    {
+      "title": "Specify capability and consent binding chapter",
+      "goal": "Create a structured build chapter for binding provider capabilities, data-read capabilities, and consent records to Narada-native carrier sessions.",
+      "context": "Carrier adapters should receive references and projected grants, not raw secrets or implicit authority. Capability and consent binding needs a coherent chapter before live use.",
+      "required_work": [
+        "Inspect current adapter registration and capability posture code.",
+        "Define how provider capability refs, data-read capability refs, and consent records are projected into a session.",
+        "Specify secret redaction, stale grant, revoked grant, and missing consent behavior.",
+        "Include reconstruction and doctor requirements for configured, blocked, revoked, and fixture-only states.",
+        "Submit structured chapter input with ordered implementation and verification tasks."
+      ],
+      "non_goals": [
+        "Do not implement a raw secret store in the carrier.",
+        "Do not infer consent from the presence of config files.",
+        "Do not grant mutation capabilities through this chapter."
+      ],
+      "acceptance_criteria": [
+        "The proposal separates credential references, capability grants, and consent posture.",
+        "The carrier receives only projected authority needed for bounded reads or provider invocation.",
+        "Revoked or missing grants produce bounded blocked posture.",
+        "The chapter is ready for governed commission."
+      ]
+    },
+    {
+      "title": "Specify live supervised session chapter",
+      "goal": "Create a structured build chapter for a real Narada-native supervised session lifecycle with start, heartbeat, interrupt, close, and reconstruction evidence.",
+      "context": "The current supervised lifecycle is fixture-oriented. A live supervised session chapter should prove runtime handles and adapter reachability without granting Narada authority to the carrier.",
+      "required_work": [
+        "Inspect supervisor lifecycle, doctor, readiness, and reconstruction code.",
+        "Define live session startup and heartbeat evidence that can report to-data and to-intelligence reachability.",
+        "Specify interrupt, close, failure, and reconstruction behavior.",
+        "Include tests for blocked, fixture-only, provider-backed, and live-running states.",
+        "Submit structured chapter input with ordered build tasks."
+      ],
+      "non_goals": [
+        "Do not require a permanently running daemon to pass unit tests.",
+        "Do not store raw transcripts or raw provider outputs in supervisor evidence.",
+        "Do not let runtime liveness become task authority."
+      ],
+      "acceptance_criteria": [
+        "The proposal defines live supervised session lifecycle evidence.",
+        "Doctor output distinguishes fixture-only, provider-backed, blocked, failed, and live-running states.",
+        "Session reconstruction works from durable bounded evidence.",
+        "The chapter is ready for governed commission."
+      ]
+    },
+    {
+      "title": "Specify governed effect handoff chapter",
+      "goal": "Create a structured build chapter for converting Narada-native carrier outputs into canonical inert task, inbox, command, outbox, or publication handoff intents.",
+      "context": "The carrier may propose work but must not execute authority-bearing effects. Effect handoff needs canonical artifact shapes and admission boundaries.",
+      "required_work": [
+        "Inspect current work-loop handoff, task report draft, command intent, inbox, outbox, and publication posture docs or code.",
+        "Define proposed action packet shapes for task reports, inbox submissions, command intents, outbox intents, and publication intents.",
+        "Specify admission commands or surfaces required after each handoff type.",
+        "Include tests proving direct mutation remains false and handoff artifacts are reconstructable.",
+        "Submit structured chapter input with ordered build tasks."
+      ],
+      "non_goals": [
+        "Do not allow the carrier to execute shell commands, send outbound messages, close tasks, or publish repositories directly.",
+        "Do not treat model output as accepted evidence without review or admission.",
+        "Do not record raw transcripts in handoff artifacts."
+      ],
+      "acceptance_criteria": [
+        "The proposal covers the canonical handoff families needed by Narada-native.",
+        "Each handoff family has an explicit admission boundary.",
+        "Direct mutation by the carrier remains structurally false.",
+        "The chapter is ready for governed commission."
+      ]
+    },
+    {
+      "title": "Specify operator launch and doctor affordance chapter",
+      "goal": "Create a structured build chapter for operator-facing Narada-native launch, readiness, and doctor affordances.",
+      "context": "Operators need to see whether Narada-native is configured, blocked, fixture-only, provider-backed, or live without reading private implementation files.",
+      "required_work": [
+        "Inspect existing agent-start, supervisor doctor, readiness, and operator-surface patterns.",
+        "Define launch and doctor commands or surfaced affordances for Narada-native sessions.",
+        "Specify bounded output fields for provider posture, data posture, consent posture, runtime posture, and latest evidence refs.",
+        "Include tests proving command output is bounded and does not expose raw secrets, prompts, or model output.",
+        "Submit structured chapter input with ordered build tasks."
+      ],
+      "non_goals": [
+        "Do not make launch affordances an authority locus.",
+        "Do not expose raw provider configuration or credential values.",
+        "Do not require an operator UI rewrite."
+      ],
+      "acceptance_criteria": [
+        "The proposal defines clear operator-facing launch and doctor surfaces.",
+        "Output distinguishes configured, blocked, fixture-only, provider-backed, and live states.",
+        "Evidence refs are bounded and reconstructable.",
+        "The chapter is ready for governed commission."
+      ]
+    },
+    {
+      "title": "Specify end-to-end Narada-native proof chapter",
+      "goal": "Create a structured build chapter for proving one Builder task can pass through Narada-native data read, intelligence invocation, inert handoff, and canonical admission.",
+      "context": "After the component chapters, Narada-native needs an end-to-end proof that shows the carrier can do useful governed work without owning Narada authority.",
+      "required_work": [
+        "Define prerequisites from the to-data, to-intelligence, orchestration, capability, session, handoff, and operator affordance chapters.",
+        "Specify one controlled Builder-task scenario for end-to-end proof.",
+        "Define evidence requirements for data read, provider invocation, handoff draft, canonical admission, review, and reconstruction.",
+        "Include negative tests proving the carrier cannot directly mutate task, inbox, command, outbox, or publication state.",
+        "Submit structured chapter input with ordered proof tasks."
+      ],
+      "non_goals": [
+        "Do not run the proof before prerequisite chapters are accepted.",
+        "Do not use private credentials or live provider calls unless explicitly capability-granted for the proof.",
+        "Do not close the proof by transcript inspection alone."
+      ],
+      "acceptance_criteria": [
+        "The proposal defines an end-to-end proof with explicit prerequisites.",
+        "The proof covers data read, intelligence invocation, inert handoff, canonical admission, and reconstruction.",
+        "Negative authority tests are included.",
+        "The chapter is ready for governed commission when prerequisites are satisfied."
+      ]
+    }
+  ]
+}

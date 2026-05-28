@@ -1,0 +1,21 @@
+{
+  "summary": "Specified the local Site Telemetry publisher/puller tool contract, including command shapes, publish/pull plan artifacts, run-result separation for publication intent, transport, local admission, and remote finalization, plus dry-run, credential-reference, no-secret-logging, error, and authority-boundary requirements.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "docs/product/site-telemetry-local-tools.v0.md",
+    "docs/product/site-telemetry-publication-outcome-shapes.md",
+    ".ai/handoffs/task-1409-amended.md",
+    ".ai/handoffs/task-1409-report.json"
+  ],
+  "verification": [
+    {
+      "command": "git diff --check -- docs/product/site-telemetry-local-tools.v0.md docs/product/site-telemetry-publication-outcome-shapes.md",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "CLI wrappers or scripts that emit these artifacts remain later implementation work.",
+    "Secret resolver integration and scheduler posture remain later work.",
+    "A live receiving Site runtime proof remains later work beyond the fixture proof."
+  ]
+}

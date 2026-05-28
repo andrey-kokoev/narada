@@ -1,0 +1,22 @@
+{
+  "summary": "Specified the SiteRegistry read model as a bounded projection over telemetry events, with explicit authority limits, derivation rules, stale/conflict representation, future authority-substrate criteria, and fixtures covering a repo Site plus a User Site with multiple telemetry surfaces.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "docs/product/site-registry-read-model.v0.md",
+    "docs/product/site-telemetry-publication-outcome-shapes.md",
+    "docs/product/fixtures/site-registry-read-model/site-registry-input-events.json",
+    "docs/product/fixtures/site-registry-read-model/site-registry.expected.json",
+    ".ai/handoffs/task-1403-amended.md",
+    ".ai/handoffs/task-1403-report.json"
+  ],
+  "verification": [
+    {
+      "command": "node -e \"const fs=require('fs'); const dir='docs/product/fixtures/site-registry-read-model'; for (const f of fs.readdirSync(dir)) JSON.parse(fs.readFileSync(dir+'/'+f,'utf8')); console.log('site registry read model fixtures json ok')\"",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "Runtime derivation code and package API exposure remain later implementation work.",
+    "A SiteRegistry authority substrate remains unearned until admitted with separate owner, lifecycle, mutation, evidence, replay, and conflict rules."
+  ]
+}

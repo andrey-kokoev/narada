@@ -1,5 +1,9 @@
 ---
-status: in_review
+status: closed
+closed_at: 2026-05-15T18:11:41.074Z
+closed_by: narada.builder
+governed_by: task_close:narada.builder
+closure_mode: peer_reviewed
 ---
 
 # Review Narada proper MCP surface rebuild

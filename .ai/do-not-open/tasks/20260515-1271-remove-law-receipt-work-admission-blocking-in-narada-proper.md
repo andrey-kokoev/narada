@@ -1,5 +1,9 @@
 ---
-status: in_review
+status: closed
+closed_at: 2026-05-15T19:18:56.613Z
+closed_by: narada.architect
+governed_by: task_close:narada.architect
+closure_mode: peer_reviewed
 ---
 
 # Remove law receipt work-admission blocking in Narada proper
@@ -28,14 +32,20 @@ Identify the law admission / qualification gate that blocks work-next or task co
 
 ## Execution Notes
 
-<!-- Record what was done, decisions made, and files changed during execution. -->
+- Verified Narada proper work selection no longer treats unread mandatory law receipts as a work-admission blocker by itself.
+- Confirmed `packages/layers/cli/src/commands/work-next.ts` keeps law admission as evidence passed into Site qualification, while ordinary unread law receipt state does not block task selection.
+- Confirmed law status/read surfaces still preserve unread, blocked, expired, and absorbed receipt evidence through `law status`, `law unread`, and role-loop advisory state.
+- Confirmed focused tests cover both `work-next` advisory behavior and task claim behavior under unread law notices.
 
 ## Verification
 
-<!-- Record commands run, results observed, and how correctness was checked. -->
+- `pnpm --filter @narada2/cli test -- work-next.test.ts law.test.ts` passed with 37 tests.
+- `packages/layers/cli/test/commands/work-next.test.ts` includes `does not turn unread law receipts into work admission blockers`, proving work-next claims task work despite unread applicable law.
+- `packages/layers/cli/test/commands/law.test.ts` includes `surfaces unread mandatory law without blocking task claim`, proving law status remains visible while task claim succeeds.
+- `packages/layers/cli/test/commands/law.test.ts` keeps blocked/expired receipt state visible as escalation evidence without changing `admission: clear`.
 
 ## Acceptance Criteria
 
-- [ ] narada work-next no longer blocks solely because law_admission has unread mandatory law changes.
-- [ ] law status/unread commands still report unread receipts as evidence.
-- [ ] Focused tests pass.
+- [x] narada work-next no longer blocks solely because law_admission has unread mandatory law changes.
+- [x] law status/unread commands still report unread receipts as evidence.
+- [x] Focused tests pass.

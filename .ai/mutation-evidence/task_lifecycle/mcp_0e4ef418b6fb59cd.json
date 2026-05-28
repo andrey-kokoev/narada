@@ -1,0 +1,25 @@
+{
+  "schema": "narada.site_task_lifecycle.mcp_mutation_evidence.v0",
+  "command": "site_task_lifecycle.materialize_task",
+  "authority_class": "mcp_adapter_bound_task_lifecycle_mutation",
+  "packageExecutedSqliteMutation": false,
+  "sourceStateImported": false,
+  "taskId": "local-config-mcp-policy-drift-20260518",
+  "siteId": "narada-proper",
+  "sourceRef": "operator:2026-05-18-config-json-mcp-policy-drift",
+  "eventId": "mcp-task-materialized-628bfcabfc346610",
+  "dbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+  "recordedAt": "2026-05-18T15:28:30.914Z",
+  "materializedBy": "narada.architect",
+  "materializedTaskId": "20260518-1508-repair-narada-proper-mcp-role-policy-drift-in-config-json",
+  "materializedTaskNumber": 1508,
+  "claimFor": "narada.architect",
+  "readback": [
+    {
+      "task_id": "local-config-mcp-policy-drift-20260518",
+      "status": "materialized",
+      "source_site": "narada-proper",
+      "source_ref": "operator:2026-05-18-config-json-mcp-policy-drift"
+    }
+  ]
+}

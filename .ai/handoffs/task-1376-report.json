@@ -1,0 +1,31 @@
+{
+  "summary": "Repaired Builder work-next directed-obligation selection so stale review_request obligations for terminal tasks no longer block admissible work discovery. The selector now checks lifecycle status for review_request obligations and only treats them as selectable when the referenced task is in_review. Added a focused regression proving stale closed-task review obligations are skipped.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "packages/layers/cli/src/commands/work-next.ts",
+    "packages/layers/cli/src/commands/task-next.ts",
+    "packages/layers/cli/test/commands/work-next.test.ts",
+    ".ai/handoffs/task-1376-report.json"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --dir packages/layers/cli test -- test/commands/work-next.test.ts",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --dir packages/layers/cli build",
+      "result": "passed"
+    },
+    {
+      "command": "narada task work-next --agent narada.builder --format json",
+      "result": "passed: returned empty/no_admissible_task after rebuild instead of selecting stale closed-task review obligations for 1357 or 1358"
+    }
+  ],
+  "residuals": [
+    "pnpm --dir packages/layers/cli test -- test/commands/task-next.test.ts currently fails 10 broader task-next tests with fixture/expectation drift such as agent_not_found versus agent_not_in_roster and opened-task selection expectations returning empty. This was observed after touching task-next.ts but was not repaired in this narrow selector task."
+  ]
+}

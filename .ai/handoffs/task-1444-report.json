@@ -1,0 +1,36 @@
+{
+  "summary": "Added a governed relation verifier enrollment/rotation posture for the Cloudflare Site Registry package. The new preflight helper produces inert dry-run/ready/blocked plans, requires registry-owner/operator standing, gates live D1 mutation behind explicit execute/admin approval, and never plans remote secret mutation. Rotation now supersedes old verifier records, creates a new active verifier, retains audit evidence, and avoids raw secret serialization. Tests cover first enrollment planning, non-owner refusal, live-mutation gating, rotation, revocation, and raw-secret exclusion.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "packages/site-registry-cloudflare/src/index.ts",
+    "packages/site-registry-cloudflare/test/worker-boundary.test.ts",
+    "packages/site-registry-cloudflare/test/smoke-fixture.test.ts",
+    "docs/product/site-registry-relation-capability-verifier.v0.md",
+    "docs/deployment/cloudflare-hosted-site-registry.md",
+    ".ai/handoffs/task-1444-body.md",
+    ".ai/handoffs/task-1444-report.json"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare test",
+      "result": "passed: 52 tests"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare build",
+      "result": "passed"
+    },
+    {
+      "command": "git diff --check -- packages/site-registry-cloudflare/src/index.ts packages/site-registry-cloudflare/test/worker-boundary.test.ts packages/site-registry-cloudflare/test/smoke-fixture.test.ts docs/product/site-registry-relation-capability-verifier.v0.md docs/deployment/cloudflare-hosted-site-registry.md",
+      "result": "passed: line-ending warnings only"
+    }
+  ],
+  "residuals": [
+    "The verifier enrollment posture is exposed as a package preflight/seed helper, not as a public Worker enrollment route.",
+    "No Cloudflare Worker secret was created, rotated, or set.",
+    "Route authentication replacement remains assigned to task 1443 and was intentionally not changed here."
+  ]
+}

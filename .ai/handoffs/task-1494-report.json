@@ -1,0 +1,46 @@
+{
+  "task": 1494,
+  "agent": "narada.builder",
+  "status": "complete",
+  "changed_files": [
+    "docs/product/operator-site-communication-relation.v0.md",
+    "docs/product/fixtures/operator-site-communication-relation/relation.valid.json",
+    "docs/product/site-communication-surface.v0.md",
+    "docs/concepts/operator-surface.md",
+    "docs/product/site-factorization.md",
+    "docs/product/incoming-message-intake-edge.md",
+    "docs/concepts/canonical-outbox.md"
+  ],
+  "summary": "Added the versioned Operator Site Communication Relation product contract and fixture, defining the relation as Site-governed configuration with projection-only UI derivations while mapping inbound communication to IncomingMessageIntakeEdge and outbound communication to Canonical Outbox or outbound notification/handoff edges.",
+  "verification": [
+    {
+      "command": "git diff --check -- docs/product/operator-site-communication-relation.v0.md docs/product/fixtures/operator-site-communication-relation/relation.valid.json docs/product/site-communication-surface.v0.md docs/concepts/operator-surface.md docs/product/site-factorization.md docs/product/incoming-message-intake-edge.md docs/concepts/canonical-outbox.md",
+      "result": "passed; only existing LF/CRLF working-copy warnings were emitted"
+    },
+    {
+      "command": "Get-Content -Raw docs/product/fixtures/operator-site-communication-relation/relation.valid.json | ConvertFrom-Json | ConvertTo-Json -Depth 20",
+      "result": "passed; fixture is valid JSON"
+    },
+    {
+      "command": "rg \"OperatorSiteCommunicationRelation|governed configuration|projection-only|IncomingMessageIntakeEdge|Canonical Outbox|operator_acknowledged|operator_approved|remote_preserved|transport_delivered|local_admitted|relation_id|operator_principal_ref|operator_surface_ref|inbound_edge_ref|outbound_edge_ref|allowed_message_kinds|capability_posture|trust_posture|lifecycle_state|receipt_policy|suspension_posture|evidence_refs\" docs/product/operator-site-communication-relation.v0.md docs/product/fixtures/operator-site-communication-relation/relation.valid.json",
+      "result": "passed; required terms, owned fields, and receipt distinctions are present"
+    },
+    {
+      "command": "rg \"operator-site-communication-relation|Operator Site Communication Relation|OperatorSiteCommunicationRelation\" docs/product/site-communication-surface.v0.md docs/concepts/operator-surface.md docs/product/site-factorization.md docs/product/incoming-message-intake-edge.md docs/concepts/canonical-outbox.md",
+      "result": "passed; adjacent doctrine cross-links are present"
+    }
+  ],
+  "acceptance": {
+    "versioned_artifact_exists": true,
+    "governed_configuration_with_projections_not_projection_only": true,
+    "directional_crossings_mapped_to_existing_artifacts": true,
+    "owned_fields_authority_limits_lifecycle_states_and_receipts_explicit": true,
+    "fixture_demonstrates_valid_relation_and_projection_only_ui": true
+  },
+  "non_goals_preserved": [
+    "No Cloudflare routes, dashboard UI, chat runtime, or transport execution implemented.",
+    "No existing public APIs renamed.",
+    "No generic MessageCandidate ontology introduced.",
+    "Operator acknowledgement remains distinct from approval and target Site admission."
+  ]
+}

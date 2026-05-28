@@ -1,0 +1,34 @@
+{
+  "summary": "Added private D1 verifier storage and helper functions for Site-scoped relation withdrawal capabilities. The new migration defines `site_registry_relation_capability_verifiers`; helpers create, look up active records by relation/site/capability family, read by id, and revoke verifier records without serializing raw secrets. Tests cover scoped lookup, active-vs-revoked behavior, no raw secret persistence, and separation from public relation rows.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "packages/site-registry-cloudflare/migrations/0003_relation_capability_verifiers.sql",
+    "packages/site-registry-cloudflare/src/index.ts",
+    "packages/site-registry-cloudflare/test/worker-boundary.test.ts",
+    ".ai/handoffs/task-1442-body.md",
+    ".ai/handoffs/task-1442-report.json"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare test",
+      "result": "passed: 49 tests"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare build",
+      "result": "passed"
+    },
+    {
+      "command": "git diff --check -- packages/site-registry-cloudflare/migrations/0003_relation_capability_verifiers.sql packages/site-registry-cloudflare/src/index.ts packages/site-registry-cloudflare/test/worker-boundary.test.ts",
+      "result": "passed: line-ending warnings only"
+    }
+  ],
+  "residuals": [
+    "Verifier helpers are not yet wired into the public relation transition route.",
+    "No Cloudflare Worker secret was created, rotated, or set.",
+    "PBKDF2-SHA256 v0 is documented in code as transitional Worker-compatible verifier storage, not a general password-vault posture."
+  ]
+}

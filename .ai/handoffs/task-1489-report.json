@@ -1,0 +1,33 @@
+{
+  "summary": "Added an Intake Edge audit for current incoming message and observation channels. The audit classifies mailbox, file-drop/leave-message, CLI inbox, MCP inbox, hosted registry messages, webhook, pub/sub, agent report, system observation, daemon source, and external hosted communication paths with source owner, target authority, artifact, admission boundary, lifecycle status, capability/trust posture, implementation posture, and known gaps. It records current inbox doctor posture as operational visibility state rather than semantic authority failure.",
+  "changed_files": [
+    "docs/product/incoming-message-intake-edge-audit-20260518.md",
+    "docs/product/incoming-message-intake-edge.md",
+    ".ai/handoffs/task-1489-body.md",
+    ".ai/handoffs/task-1489-report.json"
+  ],
+  "verification": [
+    {
+      "command": "narada inbox doctor --format json",
+      "result": "passed: local inbox DB accessible, CLI build present, message_routing_authority unconfigured with legacy local allow posture, publication_pending with 200 uncommitted inbox artifacts"
+    },
+    {
+      "command": "rg -n \"inbox submit|submit-observation|narada_inbox_submit|message_candidate|remote_candidate|WebhookSource|InboxDropSource|ExchangeSource|TimerSource|filesystem.change|system_observation|agent_report|message_routing_authority\" packages docs -g \"*.ts\" -g \"*.md\" -g \"*.json\"",
+      "result": "passed: located current implementation and doctrine evidence for audited surfaces"
+    },
+    {
+      "command": "git diff --check -- docs\\product\\incoming-message-intake-edge-audit-20260518.md docs\\product\\incoming-message-intake-edge.md",
+      "result": "passed: no whitespace errors"
+    },
+    {
+      "command": "rg -n \"Exchange mailbox|Human file drop|CLI inbox submit|MCP inbox submit|Hosted registry message candidate|Webhook source|Site pub/sub signal|Agent report|System observation|Site-local daemon source|message_routing_authority|publication_pending|Doctrine-only|Implemented|Residuals\" docs\\product\\incoming-message-intake-edge-audit-20260518.md",
+      "result": "passed: required channel coverage, implementation classification, operational posture, and residuals present"
+    }
+  ],
+  "residuals": [
+    "No first-class edge registry/read model exists yet.",
+    "Cross-Site MCP inbox submission still requires admitted canonical_inbox_cross_site_submission capability.",
+    "General Site pub/sub remains doctrine-only.",
+    "Ledger integration for rejected/deferred candidates is partial and should be added incrementally."
+  ]
+}

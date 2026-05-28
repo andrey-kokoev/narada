@@ -1,6 +1,17 @@
 ---
-status: opened
+status: deferred
 depends_on: [403]
+deferred_by: narada.architect
+deferred_at: 2026-05-16T20:45:38.830Z
+defer_reason: Task 404 verifies the output of task 403, but task 403 is deferred and has not executed a live Cycle. No output exists to inspect.
+unblock_condition: Unblock and complete task 403 with one controlled live Cycle and durable outbound evidence; then reopen/unblock task 404 for no-effect inspection.
+continuation_packet:
+  kind: task_defer
+  deferred_by: narada.architect
+  deferred_at: 2026-05-16T20:45:38.830Z
+  reason: Task 404 verifies the output of task 403, but task 403 is deferred and has not executed a live Cycle. No output exists to inspect.
+  unblock_condition: Unblock and complete task 403 with one controlled live Cycle and durable outbound evidence; then reopen/unblock task 404 for no-effect inspection.
+  residuals: [Task 404 remains valid as post-403 inspection work, but it is not executable before task 403 produces output.]
 ---
 
 # Task 404 — Operator Inspection & No-Effect Proof

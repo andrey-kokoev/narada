@@ -1,0 +1,36 @@
+{
+  "summary": "Integrated the Telemetry Event Contract validator into the Cloudflare hosted receiver before projection storage. The receiver now accepts current SiteEventEnvelope compatibility events and future telemetry contract-shaped events, normalizes them to the existing projection path, and distinguishes contract validation refusals from bearer capability failures.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "packages/site-registry-cloudflare/src/index.ts",
+    "packages/site-registry-cloudflare/test/worker-boundary.test.ts",
+    "packages/site-config/src/index.ts",
+    "packages/site-config/test/site-config.test.ts",
+    "docs/product/site-telemetry-event-contract.v0.md",
+    "docs/product/site-telemetry-publication-outcome-shapes.md",
+    "docs/product/fixtures/site-telemetry-event-contract/site-health.current-envelope.json",
+    "docs/product/fixtures/site-telemetry-event-contract/site-health.future-contract.json",
+    "docs/product/fixtures/site-telemetry-event-contract/site-event-envelope-compatibility-map.json",
+    ".ai/handoffs/task-1396-amended.md",
+    ".ai/handoffs/task-1396-report.json"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare test",
+      "result": "passed: 26 tests"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare build",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "No live Cloudflare deployment or publishing was performed.",
+    "Publication Edge runtime config/preflight remains for later Publication Edge tasks.",
+    "The hosted receiver still stores normalized SiteEventEnvelope-shaped projection records; preserving future contract fields in audit/projection storage remains later work if needed."
+  ]
+}

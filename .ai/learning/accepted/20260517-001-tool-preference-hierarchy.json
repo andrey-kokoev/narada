@@ -1,0 +1,36 @@
+{
+  "artifact_id": "20260517-001",
+  "artifact_type": "contract_patch",
+  "state": "accepted",
+  "created_at": "2026-05-17T17:20:00-05:00",
+  "source": {
+    "kind": "operator_instruction",
+    "conversation_context": "Operator corrected agent tool-selection preference after observing native shell overuse.",
+    "contract_file": "AGENTS.md"
+  },
+  "title": "Prefer MCP-specific tools before MCP shell before native shell",
+  "content": {
+    "principle": "When executing Narada work, prefer MCP-exposed specific commands first, MCP-governed shell second, and native shell only when neither is available or the Operator explicitly requests native shell.",
+    "rationale": "Narada authority boundaries are better preserved when agents use typed MCP affordances and governed execution surfaces instead of defaulting to ambient native shell access.",
+    "contract_patch": "Add Tool Preference Hierarchy to root AGENTS.md.",
+    "not_applicable_when": [
+      "The Operator explicitly requests native shell",
+      "No MCP-specific command exists for the operation and no MCP-governed shell surface is available",
+      "The action is a non-authority-affecting local inspection and MCP surfaces are unavailable"
+    ]
+  },
+  "reviewed_at": "2026-05-17T17:20:00-05:00",
+  "reviewed_by": "operator",
+  "accepted_at": "2026-05-17T17:20:00-05:00",
+  "accepted_by": "operator",
+  "scopes": [
+    "agent-execution",
+    "tool-selection",
+    "mcp",
+    "shell",
+    "command-execution",
+    "task-governance"
+  ],
+  "superseded_by": null,
+  "rejection_reason": null
+}

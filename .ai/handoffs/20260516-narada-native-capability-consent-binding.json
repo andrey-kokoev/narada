@@ -1,0 +1,133 @@
+{
+  "slug": "narada-native-capability-consent-binding",
+  "title": "Narada-native Capability Consent Binding",
+  "depends_on": [
+    1309,
+    1321
+  ],
+  "tasks": [
+    {
+      "title": "Define carrier capability projection schema",
+      "goal": "Define the bounded capability projection schema used by Narada-native sessions.",
+      "context": "The carrier must receive projected references and grant posture, not raw secrets or implicit authority.",
+      "required_work": [
+        "Define fields for capability_ref, capability_kind, consent_ref, credential_ref_present, grant_status, grant_freshness, revocation_status, scope_summary, raw_secret_values_recorded=false, and projected_capabilities_are_not_grants=true.",
+        "Represent provider, data-read, fixture-only, missing, revoked, and stale projections.",
+        "Add schema tests for every projection state."
+      ],
+      "non_goals": [
+        "Do not implement the canonical consent registry itself.",
+        "Do not store raw credentials or raw secret values in carrier files.",
+        "Do not grant mutation authority through projection records."
+      ],
+      "acceptance_criteria": [
+        "A capability projection schema exists with explicit grant, consent, credential-reference, freshness, and revocation posture.",
+        "Provider, data-read, fixture-only, missing, revoked, and stale projections are covered.",
+        "Tests prove raw secret values are absent and projected capabilities are not grants."
+      ]
+    },
+    {
+      "title": "Implement provider capability projection lookup",
+      "goal": "Resolve provider capability refs into bounded provider invocation posture.",
+      "context": "Provider adapters need to know whether invocation is allowed without receiving raw credential material.",
+      "required_work": [
+        "Use provider registration capability_ref as lookup input.",
+        "Return credential reference presence, policy refs, scope summary, consent refs, grant freshness, and revocation status only.",
+        "Refuse missing_capability_ref, missing_consent_record, revoked_capability, stale_grant, and secret_bearing_capability_material.",
+        "Add tests proving each refusal is bounded and redacted."
+      ],
+      "non_goals": [
+        "Do not return raw credential values.",
+        "Do not infer consent from provider config presence.",
+        "Do not invoke provider transport in this lookup."
+      ],
+      "acceptance_criteria": [
+        "Provider capability lookup returns bounded projection posture only.",
+        "All specified refusal states are represented.",
+        "Tests prove refusal evidence is redacted and non-mutating."
+      ]
+    },
+    {
+      "title": "Implement data-read capability projection lookup",
+      "goal": "Bind to-data read families to explicit read capability projections.",
+      "context": "Data reads require their own consent posture and must not be implied by provider configuration.",
+      "required_work": [
+        "Bind task_read_packet, work_next_peek, inbox_summary_read, carrier_readiness_read, carrier_evidence_ref_read, and site_file_excerpt_read to explicit projections.",
+        "Return bounded grant, consent, freshness, and revocation posture for each read family.",
+        "Add tests proving missing read consent blocks the matching reader without blocking fixture-only carrier lifecycle."
+      ],
+      "non_goals": [
+        "Do not collapse all reads into one broad filesystem or task capability.",
+        "Do not grant mutation capabilities to to-data readers.",
+        "Do not require provider capability to read fixture-only readiness evidence."
+      ],
+      "acceptance_criteria": [
+        "Every to-data read family has an explicit projection lookup.",
+        "Missing data-read consent blocks only the matching read family.",
+        "Tests prove fixture-only lifecycle remains inspectable without provider capability."
+      ]
+    },
+    {
+      "title": "Wire projections into session start and supervisor doctor",
+      "goal": "Expose capability projection posture through session start evidence and supervisor doctor output.",
+      "context": "Operators need to see configured, blocked, revoked, stale, and fixture-only states without reading secret stores.",
+      "required_work": [
+        "Record projection refs and statuses at session start, not grants or secrets.",
+        "Update supervisor doctor to report configured, blocked_missing_consent, blocked_revoked, blocked_stale, and fixture_only states.",
+        "Add doctor and reconstruction tests covering each state and proving raw secret values are absent."
+      ],
+      "non_goals": [
+        "Do not reveal credential material in doctor output.",
+        "Do not make supervisor doctor an authority locus.",
+        "Do not require direct secret-store inspection for ordinary reconstruction."
+      ],
+      "acceptance_criteria": [
+        "Session start evidence includes projection refs and statuses only.",
+        "Supervisor doctor distinguishes configured, missing consent, revoked, stale, and fixture-only states.",
+        "Tests prove raw secret values are absent."
+      ]
+    },
+    {
+      "title": "Integrate projection checks into provider and to-data execution",
+      "goal": "Require valid capability projections before provider transport or to-data reader execution.",
+      "context": "Projection posture must be enforced before the carrier touches provider transport or protected read surfaces.",
+      "required_work": [
+        "Require valid provider projection before provider invocation.",
+        "Require valid read-family projection before each protected to-data reader.",
+        "Emit blocked or refused evidence before provider transport or data reader execution when grants are revoked, stale, or missing.",
+        "Add tests proving no provider transport call or data reader call occurs after revoked, stale, or missing consent."
+      ],
+      "non_goals": [
+        "Do not implement consent override paths in the carrier.",
+        "Do not perform live credential reveal in tests.",
+        "Do not grant mutation capabilities through execution checks."
+      ],
+      "acceptance_criteria": [
+        "Provider invocation and protected to-data reads require valid projections.",
+        "Revoked, stale, and missing grants block before transport or read execution.",
+        "Tests prove no blocked transport or protected reader call occurs."
+      ]
+    },
+    {
+      "title": "Add capability-consent reconstruction proof",
+      "goal": "Prove session capability posture can be reconstructed from bounded carrier evidence.",
+      "context": "Reconstruction should not require raw secret-store inspection or unbounded transcripts.",
+      "required_work": [
+        "Reconstruct session capability posture from durable session evidence and registration/projection summaries.",
+        "Assert no direct secret-store inspection is required for reconstruction.",
+        "Assert raw secret fields are absent from evidence and doctor output.",
+        "Document residuals owned by canonical capability-governed secret management."
+      ],
+      "non_goals": [
+        "Do not implement credential reveal, use, rotation, or revocation authority in the carrier.",
+        "Do not store raw secret material for reconstruction.",
+        "Do not make reconstructed posture equivalent to canonical consent truth."
+      ],
+      "acceptance_criteria": [
+        "Capability posture reconstructs from bounded session and projection evidence.",
+        "No direct secret-store inspection is required for reconstruction.",
+        "Tests prove raw secret fields are absent and residual ownership is explicit."
+      ]
+    }
+  ]
+}

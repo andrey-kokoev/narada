@@ -1,5 +1,5 @@
 ---
-status: closed
+status: confirmed
 amended_by: narada.builder
 amended_at: 2026-05-16T20:34:58.129Z
 criteria_proved_by: narada.builder
@@ -11,6 +11,8 @@ closed_at: 2026-05-16T20:41:54.335Z
 closed_by: narada.builder2
 governed_by: task_close:narada.builder2
 closure_mode: peer_reviewed
+confirmed_by: narada.architect
+confirmed_at: 2026-05-18T17:35:07.801Z
 ---
 
 # Add scheduler posture for telemetry publisher and puller

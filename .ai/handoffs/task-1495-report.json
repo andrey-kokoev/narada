@@ -1,0 +1,36 @@
+{
+  "task": 1495,
+  "agent": "narada.builder",
+  "status": "complete",
+  "changed_files": [
+    "docs/product/site-communication-surface.v0.md",
+    "docs/product/incoming-message-intake-edge.md",
+    "docs/concepts/canonical-inbox.md"
+  ],
+  "summary": "Aligned communication doctrine terminology around OperatorSiteCommunicationRelation by scoping IncomingMessageIntakeEdge as the inbound directional component, naming Canonical Inbox as the possible local inbound artifact, and preserving relation/projection/intake/outbox/chat/authority distinctions without implementation changes.",
+  "verification": [
+    {
+      "command": "git diff --check -- docs/product/site-communication-surface.v0.md docs/product/incoming-message-intake-edge.md docs/concepts/canonical-inbox.md docs/concepts/canonical-outbox.md docs/concepts/operator-surface.md docs/product/site-factorization.md docs/product/operator-site-communication-relation.v0.md",
+      "result": "passed; only existing LF/CRLF working-copy warnings were emitted"
+    },
+    {
+      "command": "rg -n \"OperatorSiteCommunicationEdge|Operator Site Communication Edge|site communication edge|communication edge|relation authority|UI delivery is local admission|UI delivery is.*approval\" docs/product docs/concepts -g \"*.md\"",
+      "result": "passed; no matches found"
+    },
+    {
+      "command": "rg -n \"OperatorSiteCommunicationRelation|operator-site-communication-relation|directional component|inbound artifact|projection-only|local admission|operator approval|Canonical Outbox|IncomingMessageIntakeEdge\" docs/product/site-communication-surface.v0.md docs/product/incoming-message-intake-edge.md docs/concepts/canonical-inbox.md docs/concepts/canonical-outbox.md docs/concepts/operator-surface.md docs/product/site-factorization.md",
+      "result": "passed; relation links, directional wording, inbound artifact wording, projection-only language, and authority distinctions are present"
+    }
+  ],
+  "acceptance": {
+    "neighboring_doctrine_links_relation_artifact": true,
+    "ambiguous_edge_only_wording_corrected_or_scoped": true,
+    "relation_projection_intake_outbox_chat_authority_distinctions_preserved": true,
+    "no_ui_delivery_as_local_admission_or_approval_claim": true
+  },
+  "non_goals_preserved": [
+    "No CLI behavior or Worker route changes.",
+    "No broadening into registry-wide chat.",
+    "Existing Site Communication Surface terminology was retained and related precisely."
+  ]
+}

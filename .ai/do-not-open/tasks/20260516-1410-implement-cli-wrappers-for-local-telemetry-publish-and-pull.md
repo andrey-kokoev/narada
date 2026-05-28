@@ -1,11 +1,13 @@
 ---
-status: closed
+status: confirmed
 amended_by: narada.builder
 amended_at: 2026-05-16T20:35:53.848Z
 closed_at: 2026-05-16T20:36:38.318Z
 closed_by: narada.builder
 governed_by: task_close:narada.builder
 closure_mode: peer_reviewed
+confirmed_by: narada.architect
+confirmed_at: 2026-05-18T17:35:06.972Z
 ---
 
 # Implement CLI wrappers for local telemetry publish and pull

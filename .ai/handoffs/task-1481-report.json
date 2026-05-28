@@ -1,0 +1,37 @@
+{
+  "summary": "Delivered a bounded narada-andrey notification for chapter 1475-1481. The message states that site-telemetry publish is not the relation publication path, that the dry-run Site Registry relation planner exists locally, and that live registry relation publication remains pending on admitted capability/credential binding and a future guarded live publish task. MCP routed submission refused because cross-Site mutation is not admitted in the v1 fabric proof, so delivery used the documented target Site authority fallback.",
+  "changed_files": [
+    ".ai/handoffs/task-1480-body.md",
+    ".ai/handoffs/task-1481-body.md",
+    ".ai/handoffs/task-1481-narada-andrey-notification.json",
+    ".ai/handoffs/task-1481-report.json",
+    "C:\\Users\\Andrey\\Narada\\.ai\\inbox-envelopes\\2026-05-17T21-16-02-803Z-env_2265d546-744b-4b3e-ac3c-15e03d91151a.json"
+  ],
+  "verification": [
+    {
+      "command": "narada_mcp_fabric_context target site:narada-andrey",
+      "result": "passed: active route inspected; no mutation attempted"
+    },
+    {
+      "command": "narada_inbox_doctor target site:narada-andrey",
+      "result": "observed: route visible; readiness false because local publication backlog exists"
+    },
+    {
+      "command": "narada_inbox_submit_observation target ref narada-andrey",
+      "result": "refused: Cross-Site MCP mutation is not admitted in v1 fabric proof; capability_status=missing"
+    },
+    {
+      "command": "narada_inbox_submit_observation target site_root C:\\Users\\Andrey\\Narada",
+      "result": "refused: Cross-Site MCP mutation is not admitted in v1 fabric proof"
+    },
+    {
+      "command": "narada inbox submit --cwd C:\\Users\\Andrey\\Narada --source-kind agent_report --source-ref narada-proper:task-1481-hosted-telemetry-registry-separation-outcome --kind observation --authority-level agent_reported --principal narada.builder --payload-file D:\\code\\narada\\.ai\\handoffs\\task-1481-narada-andrey-notification.json --target-locus local_site --format json --output full",
+      "result": "passed: delivered env_2265d546-744b-4b3e-ac3c-15e03d91151a via direct_target_authority"
+    }
+  ],
+  "residuals": [
+    "Cross-Site MCP mutation remains unavailable until canonical_inbox_cross_site_submission capability is admitted.",
+    "This notification does not prove target local promotion/admission beyond received inbox envelope status.",
+    "Hosted registry relation publication remains pending and must not be overclaimed as complete."
+  ]
+}

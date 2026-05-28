@@ -1,0 +1,66 @@
+{
+  "task": 1500,
+  "agent": "narada.builder",
+  "status": "complete",
+  "changed_files": [
+    "packages/layers/cli/src/commands/coherence-scan.ts",
+    "packages/layers/cli/test/commands/coherence-scan.test.ts",
+    ".ai/task-lifecycle-snapshot.json",
+    ".ai/do-not-open/tasks/20260518-1500-repair-coherence-scan-cross-embodiment-node-resolution.md"
+  ],
+  "summary": "Repaired operational coherence scan lifecycle snapshot checking by replacing the bash guard subprocess with a current-process Git/filesystem freshness check. The scanner no longer reports WSL shim node failures, still reports real stale snapshots with mtime evidence, and returns zero operational findings once the lifecycle snapshot is fresh.",
+  "root_cause": "checkTaskLifecycleSnapshot spawned bash scripts/guard-task-lifecycle-db.sh. On this Windows run, the shell script resolved narada through a stale WSL-style /mnt/d/.../node_modules/.bin/narada shim whose node executable was unavailable, so coherence scan reported a false task-lifecycle-snapshot-stale finding with exec: node: not found evidence.",
+  "verification": [
+    {
+      "command": "narada coherence scan --module operational --format json",
+      "result": "reproduced original WSL shim evidence before repair"
+    },
+    {
+      "command": "pnpm --filter @narada2/cli typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/cli build",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/cli exec vitest run test/commands/coherence-scan.test.ts --pool=forks --poolOptions.forks.singleFork=true",
+      "result": "passed; 1 file, 12 tests"
+    },
+    {
+      "command": "pnpm --filter @narada2/cli test -- test/commands/coherence-scan.test.ts",
+      "result": "assertions passed with 12 tests, but the Windows process exited after teardown with status 3221225477"
+    },
+    {
+      "command": "narada coherence scan --module operational --format json",
+      "result": "after repair and before snapshot export, reported real stale evidence as db_mtime_ms/snapshot_mtime_ms/snapshot_freshness with no WSL shim evidence"
+    },
+    {
+      "command": "narada task lifecycle export --output .ai/task-lifecycle-snapshot.json --format json",
+      "result": "passed; refreshed lifecycle snapshot"
+    },
+    {
+      "command": "narada task lifecycle status --format json",
+      "result": "passed; snapshot_freshness=snapshot_fresh"
+    },
+    {
+      "command": "narada coherence scan --module operational --format json",
+      "result": "passed; finding_count=0"
+    },
+    {
+      "command": "git diff --check -- packages/layers/cli/src/commands/coherence-scan.ts packages/layers/cli/test/commands/coherence-scan.test.ts .ai/task-lifecycle-snapshot.json .ai/do-not-open/tasks/20260518-1500-repair-coherence-scan-cross-embodiment-node-resolution.md",
+      "result": "passed with existing LF/CRLF warnings"
+    }
+  ],
+  "acceptance": {
+    "root_cause_documented": true,
+    "operational_scan_uses_current_process_or_direct_internal_check": true,
+    "regression_coverage_added": true,
+    "operational_scan_clean_when_lifecycle_snapshot_fresh": true
+  },
+  "non_goals_preserved": [
+    "No Node, NVM, WSL, or package-manager path was hardcoded.",
+    "Real stale snapshot findings remain visible.",
+    "The coherence scanner was not rewritten wholesale."
+  ]
+}

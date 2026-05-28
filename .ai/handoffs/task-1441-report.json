@@ -1,0 +1,28 @@
+{
+  "summary": "Specified the Site Registry relation capability verifier contract before Worker/D1 auth changes. Added a versioned product artifact that separates relation current state, transition admission, capability grants, credential refs, private verifier records, and enrollment evidence; defines first-verifier bootstrap and v0 unsupported paths; and spells out raw-secret, replay, rotation, revocation, and cross-Site refusal posture. Added four JSON fixtures for verifier record, enrollment event, withdrawal request, and cross-Site refusal.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "docs/product/site-registry-relation-capability-verifier.v0.md",
+    "docs/product/fixtures/site-registry-relation-capability-verifier/verifier-record.valid.json",
+    "docs/product/fixtures/site-registry-relation-capability-verifier/enrollment-event.valid.json",
+    "docs/product/fixtures/site-registry-relation-capability-verifier/withdraw-request.valid.json",
+    "docs/product/fixtures/site-registry-relation-capability-verifier/refusal-cross-site.json",
+    ".ai/handoffs/task-1441-body.md",
+    ".ai/handoffs/task-1441-report.json"
+  ],
+  "verification": [
+    {
+      "command": "Get-ChildItem docs\\product\\fixtures\\site-registry-relation-capability-verifier\\*.json | ForEach-Object { Get-Content $_.FullName -Raw | ConvertFrom-Json | Out-Null; $_.Name }",
+      "result": "passed: 4 JSON fixtures parsed"
+    },
+    {
+      "command": "git diff --check -- docs/product/site-registry-relation-capability-verifier.v0.md docs/product/fixtures/site-registry-relation-capability-verifier",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "No D1 migration, Worker route/auth change, Cloudflare secret setting, or live verifier enrollment was implemented in this task.",
+    "Signed Site envelope support remains future posture only.",
+    "Registry-owner/admin suppression credentials remain out of scope for this slice."
+  ]
+}

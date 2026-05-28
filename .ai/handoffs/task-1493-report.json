@@ -1,0 +1,51 @@
+{
+  "task": 1493,
+  "agent": "narada.builder",
+  "status": "complete",
+  "changed_files": [
+    ".ai/decisions/2026-05-18-1488-1492-chapter-closure-draft.md",
+    ".ai/decisions/2026-05-18-1488-1492-chapter-closure.md",
+    ".ai/do-not-open/tasks/20260518-1493-close-incoming-message-intake-edge-coherence-chapter.md"
+  ],
+  "summary": "Closed the Incoming Message Intake Edge coherence chapter by generating and accepting the 1488-1492 closure decision, confirming those tasks, naming residual implementation chapters, refreshing lifecycle evidence, and keeping closure language bounded to doctrine/coherence rather than live implementation.",
+  "verification": [
+    {
+      "command": "narada task evidence assert-complete 1488-1492 --format json",
+      "result": "passed with incomplete_count=0"
+    },
+    {
+      "command": "git diff --check -- .ai/decisions/2026-05-18-1488-1492-chapter-closure-draft.md",
+      "result": "passed"
+    },
+    {
+      "command": "rg \"TBD|Implementation chapter|does not claim implementation completeness|Ready to confirm\" .ai/decisions/2026-05-18-1488-1492-chapter-closure-draft.md",
+      "result": "passed; no TBD remained and residual/non-overclaim language was present"
+    },
+    {
+      "command": "narada chapter close 1488-1492 --finish --by narada.builder --format json",
+      "result": "passed; closure decision created and tasks 1488-1492 transitioned to confirmed"
+    },
+    {
+      "command": "narada chapter status 1488-1493 --format json",
+      "result": "passed; reports five confirmed tasks and task 1493 as the remaining claimed closure task"
+    },
+    {
+      "command": "narada task evidence assert-complete 1488-1492 --format json",
+      "result": "passed after chapter finish"
+    }
+  ],
+  "acceptance": {
+    "chapter_closure_decision_exists": true,
+    "residual_implementation_chapters_named_or_deferred": true,
+    "lifecycle_evidence_refreshed_after_closure": true,
+    "closure_language_does_not_overclaim_live_implementation": true
+  },
+  "residuals": [
+    "Intake Edge Registry And Read Model.",
+    "Message Routing Authority Enforcement Coverage.",
+    "Hosted Remote Candidate Pull/Admit/Finalize.",
+    "Admission Rejection Ledger Intake Integration.",
+    "Incoming Trust Projection Schemas And Displays.",
+    "Deferred pub/sub, webhook, and daemon-source intake edge materialization."
+  ]
+}

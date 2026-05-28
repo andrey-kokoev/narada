@@ -1,0 +1,29 @@
+{
+  "summary": "Defined IncomingMessageIntakeEdge as the configured lifecycle path from a source surface to a Site intake boundary, with lifecycle states, authority/health semantics, arrival mapping to existing artifact families, and an explicit rejection of a duplicate generic MessageCandidate ontology. Added cross-links from Canonical Inbox, Remote Candidate Exchange, Admission Rejection Ledger, Site Communication Surface, Site Pub/Sub, Site-local daemon sources, and mailbox readiness doctrine.",
+  "changed_files": [
+    "docs/product/incoming-message-intake-edge.md",
+    "docs/concepts/canonical-inbox.md",
+    "docs/product/remote-candidate-exchange.v0.md",
+    "docs/concepts/canonical-admission-rejection-ledger.md",
+    "docs/product/site-communication-surface.v0.md",
+    "docs/product/site-pubsub-signal-exchange.md",
+    "docs/product/site-local-daemon-sources.md",
+    "docs/product/mailbox-runtime-readiness.md",
+    ".ai/handoffs/task-1488-body.md",
+    ".ai/handoffs/task-1488-report.json"
+  ],
+  "verification": [
+    {
+      "command": "git diff --check -- docs\\product\\incoming-message-intake-edge.md docs\\concepts\\canonical-inbox.md docs\\product\\remote-candidate-exchange.v0.md docs\\concepts\\canonical-admission-rejection-ledger.md docs\\product\\site-communication-surface.v0.md docs\\product\\site-pubsub-signal-exchange.md docs\\product\\site-local-daemon-sources.md docs\\product\\mailbox-runtime-readiness.md",
+      "result": "passed: no whitespace errors; Git reported line-ending warnings for existing markdown files"
+    },
+    {
+      "command": "rg -n \"IncomingMessageIntakeEdge|No Generic MessageCandidate|Canonical Inbox|Remote Candidate Exchange|Admission Rejection Ledger|SourceRecord/Fact|Site Communication Surface|Site Pub/Sub|Site-Local Daemon|Mailbox\" docs\\product\\incoming-message-intake-edge.md docs\\concepts\\canonical-inbox.md docs\\product\\remote-candidate-exchange.v0.md docs\\concepts\\canonical-admission-rejection-ledger.md docs\\product\\site-communication-surface.v0.md docs\\product\\site-pubsub-signal-exchange.md docs\\product\\site-local-daemon-sources.md docs\\product\\mailbox-runtime-readiness.md",
+      "result": "passed: required definition, artifact reuse, lifecycle, duplicate ontology rejection, and cross-links are present"
+    }
+  ],
+  "residuals": [
+    "No CLI/schema implementation was added; future tasks can decide whether doctor or work-next should expose edge posture.",
+    "Existing public command names and mailbox behavior were intentionally left unchanged."
+  ]
+}

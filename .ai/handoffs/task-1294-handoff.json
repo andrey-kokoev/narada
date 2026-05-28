@@ -1,0 +1,61 @@
+{
+  "packet_id": "thp_0cf0098f-a599-4941-8982-e881c377fc50",
+  "packet_type": "task_handoff",
+  "generated_at": "2026-05-15T22:07:56.285Z",
+  "generated_by": "narada.architect",
+  "task": {
+    "task_id": "20260515-1294-add-claude-code-live-runtime-availability-and-launch-bridge",
+    "task_number": 1294,
+    "title": "Add Claude Code live runtime availability and launch bridge",
+    "status": "opened",
+    "goal": "Move Claude Code carrier launch from fixture/readback proof to a live-runtime launch bridge when the declared Claude Code runtime is available.",
+    "context_summary": "Stage 3 proved Claude Code lifecycle, effect mediation, and operator affordance packets without requiring live Claude Code availability. Stage 4 should add the smallest live launch bridge while preserving Narada proper as the authority locus.",
+    "acceptance_criteria": [
+      {
+        "text": "Claude Code runtime availability is reported through a bounded doctor/readiness surface.",
+        "checked": true
+      },
+      {
+        "text": "Live launch attempts use the existing launch packet and emit reconstructable evidence.",
+        "checked": true
+      },
+      {
+        "text": "Unavailable or ambiguous runtime posture is refused with actionable diagnostics.",
+        "checked": true
+      },
+      {
+        "text": "Tests cover configured, unavailable, and ambiguous runtime states without requiring a live Claude Code install.",
+        "checked": true
+      }
+    ],
+    "dependencies": [
+      1288,
+      1289,
+      1290,
+      1291,
+      1292,
+      1293
+    ],
+    "assignment": null
+  },
+  "source_envelopes": [],
+  "changed_loci": [
+    ".ai/do-not-open/tasks/20260515-1294-add-claude-code-live-runtime-availability-and-launch-bridge.md"
+  ],
+  "verification_expectations": [
+    "Run focused tests covering the changed behavior.",
+    "Run pnpm verify before reporting completion.",
+    "Record verification commands and results in task report evidence."
+  ],
+  "residuals": [],
+  "return_review_path": {
+    "command": "narada task review 1294 --agent <reviewer> --verdict accepted --report <report-id> --findings '[]'",
+    "report_command": "narada task report 1294 --agent <builder> --summary <summary> --verification <json>",
+    "review_command": "narada task review 1294 --agent <reviewer> --verdict accepted --report <report-id> --findings '[]'"
+  },
+  "output_bounds": {
+    "full_task_body_included": false,
+    "full_inbox_payloads_included": false,
+    "max_source_envelopes": 10
+  }
+}

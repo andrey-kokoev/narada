@@ -1,0 +1,14 @@
+{
+  "schema": "narada.agent_context_memory.mcp_mutation_evidence.v0",
+  "command": "agent_context_memory.record_checkpoint",
+  "authority_class": "mcp_local_json_store_checkpoint_mutation",
+  "runtimeHydrationExecuted": false,
+  "packageExecutedSqliteMutation": false,
+  "sourceStateImported": false,
+  "siteId": "narada-proper",
+  "checkpointId": "checkpoint_20260518_doctrine_grounding_thoughts_corpus_parity",
+  "sessionId": "carrier_session_20260518_131154472_narada_architect",
+  "namedAgentId": "narada.architect",
+  "recordedAt": "2026-05-18T13:23:40.982Z",
+  "storePath": "D:\\code\\narada\\.narada\\agent-context-memory\\memory-store.json"
+}

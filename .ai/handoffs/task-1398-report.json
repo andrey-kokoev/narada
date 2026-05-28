@@ -1,0 +1,34 @@
+{
+  "summary": "Implemented read-only Publication Edge parsing and preflight diagnostics in @narada2/site-config. The helpers validate edge configuration, separate capability references from raw secrets, and report non-publishing preflight checks for endpoint, capability, credential freshness, event-family allowance, and target surface coherence.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "packages/site-config/src/index.ts",
+    "packages/site-config/test/site-config.test.ts",
+    "docs/product/site-telemetry-publication-edge.v0.md",
+    "docs/product/site-telemetry-publication-outcome-shapes.md",
+    "docs/product/fixtures/site-telemetry-publication-edge/publication-edge.valid.json",
+    "docs/product/fixtures/site-telemetry-publication-edge/publication-edge-preflight.pass.json",
+    "docs/product/fixtures/site-telemetry-publication-edge/publication-edge-preflight.failures.json",
+    ".ai/handoffs/task-1398-amended.md",
+    ".ai/handoffs/task-1398-report.json"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --filter @narada2/site-config test",
+      "result": "passed: 18 tests"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-config typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-config build",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "Client helper enforcement remains for task 1399.",
+    "No network publish or external mutation was performed.",
+    "Credential freshness is represented through explicit preflight input/config posture; resolver integration with the capability/consent registry remains later work."
+  ]
+}

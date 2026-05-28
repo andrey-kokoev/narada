@@ -1,0 +1,137 @@
+{
+  "slug": "narada-native-carrier-orchestration-wrapper",
+  "title": "Narada-native Carrier Orchestration Wrapper",
+  "depends_on": [
+    1308,
+    1321,
+    1322,
+    1323,
+    1324,
+    1325,
+    1326
+  ],
+  "tasks": [
+    {
+      "title": "Define carrier orchestration session contract",
+      "goal": "Define the Narada-native wrapper input and output contract for composing to-data, to-intelligence, and handoff emission.",
+      "context": "The carrier needs a wrapper contract before orchestration code can safely coordinate bounded reads, intelligence invocation, and inert handoff drafts.",
+      "required_work": [
+        "Specify wrapper input fields: siteRoot, carrierSessionId, agentId, taskNumber, to-data registry, provider or intelligence registry, capability lookup, and clock.",
+        "Specify orchestration_result.v0 output fields for mode, stage statuses, evidence refs, refusal or fallback reason, and all mutation flags false.",
+        "Add schema tests covering success, refusal, fixture fallback, provider-backed execution, and no-authority flags."
+      ],
+      "non_goals": [
+        "Do not implement live provider transport in this task.",
+        "Do not call task report, task close, inbox, outbox, command, or publication commands.",
+        "Do not store raw prompts, raw provider outputs, raw transcripts, or credential values."
+      ],
+      "acceptance_criteria": [
+        "The wrapper contract has explicit inputs, outputs, stage statuses, evidence refs, and no-mutation flags.",
+        "Schema tests cover success, refusal, fixture fallback, and provider-backed modes.",
+        "The contract preserves Intelligence-Authority Separation."
+      ]
+    },
+    {
+      "title": "Implement to-data orchestration stage",
+      "goal": "Invoke required to-data readers before intelligence invocation and refuse when required data is unavailable.",
+      "context": "The wrapper must not synthesize missing authority or proceed to intelligence when the governed data packet is absent.",
+      "required_work": [
+        "Invoke to-data readers for task packet, readiness, and evidence refs before intelligence invocation.",
+        "Emit a bounded refusal handoff and closeout when required data is unavailable.",
+        "Add tests proving missing to-data returns refused_missing_data_packet before adapter or provider invocation."
+      ],
+      "non_goals": [
+        "Do not claim work or mutate task lifecycle from this stage.",
+        "Do not directly inspect SQLite as the normal data path.",
+        "Do not bypass to-data packet attribution."
+      ],
+      "acceptance_criteria": [
+        "The wrapper reads required data through to-data packets before invoking intelligence.",
+        "Missing required data produces bounded refusal evidence.",
+        "Tests prove no provider invocation occurs after missing required data."
+      ]
+    },
+    {
+      "title": "Implement to-intelligence orchestration stage",
+      "goal": "Select fixture or provider execution through registered intelligence posture and preserve outputs as inert proposals.",
+      "context": "Provider text must remain proposed action material, not a Narada decision or direct mutation authority.",
+      "required_work": [
+        "Select fixture or provider route through existing registration and readiness posture.",
+        "Preserve provider output as inert proposed_action_packet evidence only.",
+        "Represent provider refusal, timeout, failure, and malformed output as bounded evidence.",
+        "Add tests for provider success, refusal, timeout, malformed output, failure, and fixture fallback."
+      ],
+      "non_goals": [
+        "Do not require live network providers in normal tests.",
+        "Do not admit provider output as task evidence without canonical review.",
+        "Do not store raw provider output or unbounded transcript text."
+      ],
+      "acceptance_criteria": [
+        "Fixture and provider routes are selected through registered posture.",
+        "All provider outputs remain inert proposed action evidence.",
+        "Tests cover success, refusal, timeout, malformed output, failure, and fixture fallback."
+      ]
+    },
+    {
+      "title": "Implement canonical handoff emission stage",
+      "goal": "Emit canonical inert handoff drafts without performing task, inbox, outbox, command, or publication mutations.",
+      "context": "The orchestration wrapper may propose work results but must leave all authority-bearing admission to canonical surfaces.",
+      "required_work": [
+        "Emit task-report draft artifacts with suggested narada task report command and report-file path.",
+        "Ensure the wrapper never invokes task report, task close, inbox, outbox, command, or publication commands.",
+        "Add tests proving direct mutation flags remain false and lifecycle state does not change during handoff emission."
+      ],
+      "non_goals": [
+        "Do not close tasks, submit reports, transition inbox envelopes, execute commands, send outbox transport, or publish repositories.",
+        "Do not treat draft handoff artifacts as accepted evidence.",
+        "Do not record raw prompts or raw provider outputs in the draft."
+      ],
+      "acceptance_criteria": [
+        "Handoff drafts are emitted as inert artifacts with suggested canonical admission commands.",
+        "No authority-bearing commands are executed by the wrapper.",
+        "Tests prove lifecycle and other mutation flags remain false."
+      ]
+    },
+    {
+      "title": "Integrate supervisor heartbeat and reconstruction",
+      "goal": "Expose orchestration stage summaries through supervisor heartbeat and readiness reconstruction.",
+      "context": "Operators need reconstructable wrapper evidence without raw prompt, output, transcript, or credential capture.",
+      "required_work": [
+        "Add wrapper stage summaries to supervisor heartbeat evidence.",
+        "Include wrapper evidence refs in readiness reconstruction.",
+        "Ensure reconstruction uses session JSON refs and bounded summaries only.",
+        "Add reconstruction tests proving wrapper evidence can be rebuilt from durable refs."
+      ],
+      "non_goals": [
+        "Do not make runtime liveness task authority.",
+        "Do not store raw prompt, raw provider output, raw transcript, or credential material.",
+        "Do not require a permanently running daemon for unit tests."
+      ],
+      "acceptance_criteria": [
+        "Supervisor heartbeat includes bounded orchestration stage summaries.",
+        "Readiness reconstruction includes wrapper evidence refs.",
+        "Tests prove reconstruction works without raw prompt, output, transcript, or credential capture."
+      ]
+    },
+    {
+      "title": "Add end-to-end mocked wrapper proof",
+      "goal": "Prove the orchestration wrapper composes mocked to-data, intelligence, handoff, supervisor, and readiness evidence.",
+      "context": "The wrapper needs an end-to-end proof before live sessions can rely on it.",
+      "required_work": [
+        "Mock to-data and provider transport for one task packet.",
+        "Run the wrapper and assert report draft, handoff, interrupt, closeout, supervisor heartbeat, and readiness posture are coherent.",
+        "Assert no raw secrets, raw prompts, raw provider output, unbounded transcripts, credential material, or authority mutations are recorded."
+      ],
+      "non_goals": [
+        "Do not perform live network calls.",
+        "Do not mutate canonical task, inbox, outbox, command, or publication state.",
+        "Do not close the proof by transcript inspection alone."
+      ],
+      "acceptance_criteria": [
+        "The mocked wrapper proof covers data read, intelligence invocation, handoff draft, supervisor heartbeat, closeout, and readiness reconstruction.",
+        "The proof records bounded evidence refs and no authority mutations.",
+        "Tests pass without network access or raw secret material."
+      ]
+    }
+  ]
+}

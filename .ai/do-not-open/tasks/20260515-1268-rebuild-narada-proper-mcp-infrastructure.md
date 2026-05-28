@@ -1,5 +1,10 @@
 ---
-status: in_review
+status: closed
+no_continuation_needed_rationale: Task scope completed the target-local Narada proper MCP infrastructure rebuild with tests and launch evidence; no separate continuation task is required for this bounded rebuild.
+closed_at: 2026-05-15T17:05:44.336Z
+closed_by: narada.builder
+governed_by: task_close:narada.builder
+closure_mode: peer_reviewed
 ---
 
 # Rebuild Narada proper MCP infrastructure

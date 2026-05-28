@@ -1,0 +1,30 @@
+{
+  "summary": "Refactored Cloudflare package-facing docs toward Site Telemetry Surface realization language while preserving package/API compatibility. The package name, routes, import paths, and NARADA_SITE_REGISTRY_* bindings remain compatibility coordinates, with SiteRegistry documented as one read model served by the surface.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "packages/site-registry-cloudflare/README.md",
+    "packages/site-registry-cloudflare/package.json",
+    "packages/site-registry-cloudflare/wrangler.example.jsonc",
+    "docs/deployment/cloudflare-hosted-site-registry.md",
+    ".ai/handoffs/task-1401-amended.md",
+    ".ai/handoffs/task-1401-report.json"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare test",
+      "result": "passed: 30 tests"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare build",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "External deployment names and Cloudflare resources were not changed.",
+    "Package rename or broader API deprecation is intentionally deferred; current compatibility names remain active."
+  ]
+}

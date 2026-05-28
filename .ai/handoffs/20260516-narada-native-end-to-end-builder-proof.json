@@ -1,0 +1,160 @@
+{
+  "slug": "narada-native-end-to-end-builder-proof",
+  "title": "Narada-native End-to-End Builder Proof",
+  "depends_on": [
+    1313,
+    1301,
+    1302,
+    1303,
+    1304,
+    1305,
+    1326,
+    1332,
+    1338,
+    1344,
+    1350,
+    1356
+  ],
+  "tasks": [
+    {
+      "title": "Prepare controlled Builder proof task",
+      "goal": "Create or select a low-risk Builder task for Narada-native end-to-end proof.",
+      "context": "The proof needs a controlled task whose expected output is small, local, and free of external side effects.",
+      "required_work": [
+        "Define proof task scope, acceptance criteria, and no-external-effect constraints.",
+        "Ensure the task is claimed by Builder through normal lifecycle, not by carrier mutation.",
+        "Record proof task id, expected evidence, and rollback-free residual posture."
+      ],
+      "non_goals": [
+        "Do not use a task with external side effects.",
+        "Do not let the carrier claim or mutate lifecycle directly.",
+        "Do not rely on transcript inspection as proof."
+      ],
+      "acceptance_criteria": [
+        "A controlled low-risk Builder proof task is selected or created.",
+        "The proof task is claimable through normal lifecycle only.",
+        "No-external-effect constraints and evidence requirements are recorded."
+      ]
+    },
+    {
+      "title": "Run fixture-mode Narada-native proof",
+      "goal": "Run the Narada-native path in fixture mode from bounded data read to inert report draft.",
+      "context": "Fixture mode is the normal CI-safe proof that avoids live provider credentials and network calls.",
+      "required_work": [
+        "Execute full wrapper in fixture mode with bounded to-data packets.",
+        "Emit inert task-report draft, handoff, supervisor heartbeat, closeout, and reconstruction evidence.",
+        "Verify data read evidence, adapter invocation, handoff draft, supervisor heartbeat, closeout, and reconstruction all exist and are bounded."
+      ],
+      "non_goals": [
+        "Do not call live providers.",
+        "Do not submit the task report from the carrier.",
+        "Do not record raw prompts, raw transcripts, raw provider output, or secrets."
+      ],
+      "acceptance_criteria": [
+        "Fixture-mode proof emits bounded data, invocation, handoff, supervisor, closeout, and reconstruction evidence.",
+        "The report remains an inert draft.",
+        "Tests prove no raw prompts, transcripts, provider outputs, or secrets are recorded."
+      ]
+    },
+    {
+      "title": "Admit carrier draft through canonical task report",
+      "goal": "Admit the carrier-produced report draft through the canonical task report surface.",
+      "context": "The carrier may prepare a draft; lifecycle mutation must happen through Narada task report admission.",
+      "required_work": [
+        "Use the suggested report-file admission command as an Operator or Builder action, not carrier-side mutation.",
+        "Record task report id and lifecycle mutation evidence.",
+        "Verify carrier evidence still reports direct mutation false."
+      ],
+      "non_goals": [
+        "Do not have the carrier call task report directly.",
+        "Do not bypass reviewer obligations.",
+        "Do not mark model output as accepted evidence without admission."
+      ],
+      "acceptance_criteria": [
+        "The carrier draft is admitted through canonical task report.",
+        "Lifecycle evidence records the report admission.",
+        "Carrier evidence retains direct mutation false."
+      ]
+    },
+    {
+      "title": "Complete Architect review and closure proof",
+      "goal": "Complete the proof task review through canonical Architect review and lifecycle closure.",
+      "context": "The end-to-end proof must demonstrate canonical review, not artifact self-authorization.",
+      "required_work": [
+        "Review the admitted report through narada task review.",
+        "Record review id, verdict, closure/governance fields, and reconstruction refs.",
+        "Verify task closure is governed by task lifecycle, not carrier artifacts."
+      ],
+      "non_goals": [
+        "Do not auto-accept carrier output.",
+        "Do not close tasks by editing markdown or evidence files directly.",
+        "Do not skip review obligations."
+      ],
+      "acceptance_criteria": [
+        "Architect review is recorded through canonical task review.",
+        "Closure/governance fields are present.",
+        "Proof distinguishes carrier artifacts from lifecycle authority."
+      ]
+    },
+    {
+      "title": "Run provider-backed proof when capability is granted",
+      "goal": "Repeat the proof with mocked or explicitly capability-granted provider projection.",
+      "context": "Provider-backed proof is optional unless capability consent is explicitly granted; mocked provider remains sufficient for CI.",
+      "required_work": [
+        "Run the proof with a mocked provider or explicit granted provider projection.",
+        "Record provider invocation evidence with capability refs and summaries only.",
+        "Verify no raw provider output, raw secrets, credential values, or unbounded transcripts are recorded."
+      ],
+      "non_goals": [
+        "Do not use private credentials without explicit consent.",
+        "Do not require live provider network calls in normal CI.",
+        "Do not persist raw provider output."
+      ],
+      "acceptance_criteria": [
+        "Provider-backed or mocked-provider proof records bounded invocation evidence.",
+        "Capability refs and summaries are present.",
+        "Tests prove raw provider output, secrets, credentials, and unbounded transcripts are absent."
+      ]
+    },
+    {
+      "title": "Run negative authority tests",
+      "goal": "Prove the carrier cannot directly execute authority-bearing Narada actions.",
+      "context": "The end-to-end proof must fail closed for task, inbox, command, outbox, and publication mutations.",
+      "required_work": [
+        "Prove carrier cannot directly call task report, task close, or task review.",
+        "Prove carrier cannot mutate inbox, execute CEIZ command, compose/approve/confirm outbox, or prepare/confirm publication.",
+        "Assert mocked command surfaces are not invoked and outputs contain false mutation flags and bounded refusal reasons."
+      ],
+      "non_goals": [
+        "Do not execute destructive or external-effect commands.",
+        "Do not rely on policy text without tests.",
+        "Do not weaken canonical admission boundaries to make the proof pass."
+      ],
+      "acceptance_criteria": [
+        "Negative tests cover task, inbox, command, outbox, and publication mutation attempts.",
+        "Mocked authority-bearing surfaces are not invoked.",
+        "Outputs contain false mutation flags and bounded refusal reasons."
+      ]
+    },
+    {
+      "title": "Run operator doctor and reconstruction proof",
+      "goal": "Prove operator-facing doctor and reconstruction report the final Narada-native proof posture.",
+      "context": "Operators need bounded readback of the completed proof without raw prompt, model output, transcript, or secret exposure.",
+      "required_work": [
+        "Run operator-facing doctor after proof execution.",
+        "Verify doctor reports final posture, evidence refs, provider/data/consent/runtime states, and reconstruction status.",
+        "Verify output is bounded and omits raw prompts, model output, transcripts, and secret values."
+      ],
+      "non_goals": [
+        "Do not display raw evidence payloads.",
+        "Do not treat doctor output as lifecycle authority.",
+        "Do not require live provider credentials for readback proof."
+      ],
+      "acceptance_criteria": [
+        "Doctor and reconstruction report final proof posture with bounded refs.",
+        "Provider, data, consent, and runtime states are visible.",
+        "Tests prove raw prompts, model output, transcripts, and secret values are omitted."
+      ]
+    }
+  ]
+}

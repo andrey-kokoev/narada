@@ -1,0 +1,34 @@
+{
+  "summary": "Implemented the Telemetry Event Contract package surface in @narada2/site-config with additive types, validation, fixture parsing, compatibility mapping, and explicit mapping from current SiteEventEnvelope data to the future telemetry event shape. Existing receiver behavior is unchanged.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "packages/site-config/src/index.ts",
+    "packages/site-config/test/site-config.test.ts",
+    "docs/product/site-telemetry-event-contract.v0.md",
+    "docs/product/site-telemetry-publication-outcome-shapes.md",
+    "docs/product/fixtures/site-telemetry-event-contract/site-health.current-envelope.json",
+    "docs/product/fixtures/site-telemetry-event-contract/site-health.future-contract.json",
+    "docs/product/fixtures/site-telemetry-event-contract/site-event-envelope-compatibility-map.json",
+    ".ai/handoffs/task-1395-amended.md",
+    ".ai/handoffs/task-1395-report.json"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --filter @narada2/site-config test",
+      "result": "passed: 16 tests"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-config typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-config build",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "Hosted receiver integration remains for task 1396.",
+    "Publication Edge runtime config/preflight integration remains for the Publication Edge chapter.",
+    "The package exposes validation and mapping helpers but does not yet load fixture files from disk at runtime; tests load fixtures as package-contract evidence."
+  ]
+}

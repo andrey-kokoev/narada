@@ -1,0 +1,23 @@
+{
+  "summary": "Specified the reusable Site operational dashboard generator contract in `docs/product/site-operational-dashboard-generator.v0.md`. The artifact grounds the dashboard as a projection, not authority; defines snapshot, row, section, summary, row-provider, renderer, and freshness contracts; separates reusable Staccato mechanics from Staccato-specific providers; names default generic sections; and makes no-secret/no-mutation UI invariants explicit.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "docs/product/site-operational-dashboard-generator.v0.md",
+    ".ai/handoffs/task-1448-body.md",
+    ".ai/handoffs/task-1448-report.json"
+  ],
+  "verification": [
+    {
+      "command": "git diff --check -- docs/product/site-operational-dashboard-generator.v0.md",
+      "result": "passed"
+    },
+    {
+      "command": "Select-String -Path docs\\product\\site-operational-dashboard-generator.v0.md -Pattern \"Site Operational Dashboard Generator v0|Reusable Staccato Mechanics|Core Data Contracts|Default Generic Sections|No-Secret Rule|Next Implementation Boundaries\"",
+      "result": "passed: required sections present"
+    }
+  ],
+  "residuals": [
+    "This task is specification-only; package implementation, Narada proper row providers, CLI generation, live server, and Site registry telemetry integration remain for later tasks.",
+    "Existing untracked `packages/site-operational-dashboard` material was not modified under this specification task."
+  ]
+}

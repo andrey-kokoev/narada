@@ -1,10 +1,14 @@
 ---
-status: in_review
+status: closed
 criteria_proved_by: narada.builder
 criteria_proved_at: 2026-05-15T16:12:22.501Z
 criteria_proof_verification:
   state: unbound
   rationale: proof via task finish
+closed_at: 2026-05-15T19:28:14.717Z
+closed_by: narada.architect
+governed_by: task_close:narada.architect
+closure_mode: peer_reviewed
 ---
 
 # MCP task admission remains inert for Builder claimability
@@ -53,16 +57,18 @@ Recommendation: Route as lifecycle/work-next scheduler capability follow-up.
 ## Execution Notes
 
 - Claimed task for `narada.builder` through `task work-next`.
-- Chose the bounded documentation/contract path from the proposal rather than building a new materialization pipeline in this slice.
-- Updated `packages/narada-proper-mcp/src/server.ts` so `site_task_lifecycle.admit_task` is described as an inert admission-row write and returns explicit `canonicalTaskMaterialized: false`, `workNextClaimable: false`, and materialization guidance.
-- Updated `.narada/capabilities/mcp-surfaces.json` and `.narada/tasks/task-0005-mutating-task-lifecycle-mcp-admission.md` to record the same posture.
-- Added test coverage that `tools/list` advertises the inert/non-materializing contract.
+- Preserved `site_task_lifecycle.admit_task` as an inert admission-row write and made that posture explicit in the MCP tool description and result packet.
+- Added `site_task_lifecycle.materialize_task` to turn a previously admitted inert task row into a canonical governed Narada task through the local `task create` surface.
+- Added optional `claim_for` support so the materialized task can be claimed through the governed task claim surface after creation.
+- Kept MCP admission and materialization target-local: the MCP package shells out through the declared Narada CLI surface and does not own task lifecycle authority itself.
+- Added test coverage that `tools/list` advertises both the inert admission contract and the materialization transition.
 
 ## Verification
 
-- `pnpm --filter @narada2/narada-proper-mcp test` passed.
-- `pnpm --filter @narada2/narada-proper-mcp typecheck` passed.
-- `node --test tools/agent-start/start-agent.test.mjs` passed before this slice and was not affected by the task-admission wording change.
+- `pnpm --dir packages/narada-proper-mcp test` passed with 7 tests.
+- `pnpm --dir packages/narada-proper-mcp typecheck` passed.
+- `pnpm --dir packages/narada-proper-mcp build` passed.
+- Temp-site MCP stdio smoke for `site_task_lifecycle.admit_task` followed by `site_task_lifecycle.materialize_task` passed: admission stayed inert, materialization returned `canonicalTaskMaterialized=true`, `workNextVisible=true`, and a canonical task file was created in the temp Site.
 
 ## Acceptance Criteria
 

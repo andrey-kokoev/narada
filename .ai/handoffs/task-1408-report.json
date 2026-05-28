@@ -1,0 +1,36 @@
+{
+  "summary": "Added and repaired a receiving-Site Remote Candidate Exchange fixture using the generic narada.remote_candidate.message.v0 shape, with a site-inbox adapter test proving pending cloud candidates remain inert before local admission, accepted/rejected/deferred-error receipts are finalized from local evidence, and duplicate replay does not reapply local admission.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "docs/product/fixtures/remote-candidate-exchange/receiving-site-admission.json",
+    "packages/site-inbox/test/remote-exchange.test.ts",
+    ".ai/handoffs/task-1408-amended.md",
+    ".ai/handoffs/task-1408-report.json"
+  ],
+  "verification": [
+    {
+      "command": "node -e \"JSON.parse(require('fs').readFileSync('docs/product/fixtures/remote-candidate-exchange/receiving-site-admission.json','utf8')); console.log('remote candidate receiving fixture json ok')\"",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-inbox test",
+      "result": "passed: 10 tests"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-inbox typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-inbox build",
+      "result": "passed"
+    },
+    {
+      "command": "re-run after generic candidate fixture repair: node fixture parse, pnpm --filter @narada2/site-inbox test, typecheck, build",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "A live receiving Site pull/admit/finalize runtime loop remains later work.",
+    "The fixture models deferred admission as retryable finalization error evidence; a first-class deferred remote candidate status remains future contract work if needed."
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "summary": "Added explicit generated-artifact authority posture to task review and finish outputs so review/report artifacts cannot appear self-authorizing without lifecycle admission, reviewer identity, evidence verdict, and closure status.",
+  "reviewer": "builder",
+  "changed_files": [
+    "packages/task-governance/src/task-review-service.ts",
+    "packages/task-governance/src/task-finish-service.ts",
+    "packages/task-governance/dist/task-review-service.js",
+    "packages/task-governance/dist/task-review-service.d.ts",
+    "packages/task-governance/dist/task-finish-service.js",
+    "packages/task-governance/dist/task-finish-service.d.ts",
+    "packages/layers/cli/src/commands/task-review.ts",
+    "packages/layers/cli/src/commands/task-finish.ts",
+    "packages/layers/cli/test/commands/task-review.test.ts",
+    "packages/layers/cli/test/commands/task-finish.test.ts"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --filter @narada2/task-governance build",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm vitest run packages/layers/cli/test/commands/task-review.test.ts",
+      "result": "passed: 17 tests"
+    },
+    {
+      "command": "pnpm vitest run packages/layers/cli/test/commands/task-finish.test.ts -t \"submits report and clears roster when all evidence is present\"",
+      "result": "passed: targeted new finish note assertion"
+    },
+    {
+      "command": "pnpm vitest run packages/layers/cli/test/commands/task-finish.test.ts -t \"returns stable fields for automation\"",
+      "result": "passed: targeted stable-field assertion"
+    },
+    {
+      "command": "pnpm vitest run packages/layers/cli/test/commands/task-finish.test.ts",
+      "result": "failed: 2 close-path expectations still return exitCode 1; unrelated to generated_artifact_authority_note coverage"
+    }
+  ],
+  "residuals": [
+    "Full task-finish.test.ts still has two close-path failures that were present before the new finish-note assertions passed; targeted new finish assertions pass."
+  ]
+}

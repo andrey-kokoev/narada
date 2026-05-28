@@ -1,0 +1,28 @@
+{
+  "summary": "Aligned hosted Cloudflare message routes with the generic Remote Candidate Exchange contract by returning remote_candidate response envelopes, accepting replay_key and generic finalize envelopes, preserving existing message/receipt compatibility fields, and adding route tests for accepted, malformed, duplicate, and unauthorized candidates.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "packages/site-registry-cloudflare/src/index.ts",
+    "packages/site-registry-cloudflare/test/worker-boundary.test.ts",
+    ".ai/handoffs/task-1407-amended.md",
+    ".ai/handoffs/task-1407-report.json"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare test",
+      "result": "passed: 32 tests"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-registry-cloudflare build",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "The detailed task 1406 spec artifact was not present in docs/handoffs; implementation used the Remote Candidate Exchange outcome shape and preserved compatibility fields.",
+    "D1 schema versioning and receiving Site runtime admission proof remain later work."
+  ]
+}

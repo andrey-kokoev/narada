@@ -1,0 +1,34 @@
+{
+  "summary": "Added optional Site Registry / telemetry projection row providers to the dashboard package. `buildSiteRegistryProjectionSection` and `buildSiteRegistryProjectionRows` consume caller-supplied read-model or fixture JSON, emit bounded observation rows for registry freshness, relation lifecycle, publication edge, pending remote messages, capability readiness, and explicit live-fetch posture, and preserve projection-only/no-capability authority limits.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "packages/site-operational-dashboard/src/index.ts",
+    "packages/site-operational-dashboard/test/site-operational-dashboard.test.ts",
+    "packages/site-operational-dashboard/README.md",
+    ".ai/handoffs/task-1453-body.md",
+    ".ai/handoffs/task-1453-report.json"
+  ],
+  "verification": [
+    {
+      "command": "pnpm --filter @narada2/site-operational-dashboard test",
+      "result": "passed: 15 tests"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-operational-dashboard typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-operational-dashboard build",
+      "result": "passed"
+    },
+    {
+      "command": "git diff --check -- packages/site-operational-dashboard/src/index.ts packages/site-operational-dashboard/test/site-operational-dashboard.test.ts packages/site-operational-dashboard/README.md",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "The provider does not perform live network fetch; it only exposes explicit live-fetch posture from caller configuration.",
+    "Rows are projection-only and do not grant Site authority, relation authority, or capability authority.",
+    "Narada proper local row providers remain owned by task 1450."
+  ]
+}

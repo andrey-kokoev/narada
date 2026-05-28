@@ -1,0 +1,32 @@
+{
+  "schema": "narada.review_obligation_retarget_repair.v0",
+  "repair_id": "repair_20260515_task_1267_review_role_retarget",
+  "recorded_at": "2026-05-15T17:19:00.000Z",
+  "task_number": 1267,
+  "task_id": "20260514-1267-review-and-repair-agent-carrier-factorization-handoff-from-n",
+  "principal": "narada.architect",
+  "reason": "The repaired task report was submitted before role alias review routing was fixed, so reviewer=builder created an identity-targeted obligation.",
+  "obligation_id": "obl_review_20260514-1267-review-and-repair-agent-carrier-factorization-handoff-from-n_wrr_7d384f38_20260514-1267-review-and-repair-agent-carrier-factorization-handoff-from-n_narada.architect_narada.builder",
+  "before": {
+    "target_agent_id": "narada.builder",
+    "target_role": "builder",
+    "target_ref": "builder",
+    "target_resolution": "unique_role_alias"
+  },
+  "after": {
+    "target_agent_id": null,
+    "target_role": "builder",
+    "target_ref": null,
+    "target_resolution": "role_alias",
+    "review_command": "narada task review 1267 --agent <builder-agent> --verdict accepted --report wrr_7d384f38_20260514-1267-review-and-repair-agent-carrier-factorization-handoff-from-n_narada.architect"
+  },
+  "code_repair": {
+    "summary": "Role names used as review targets now produce role-targeted obligations; exact agent ids remain identity-targeted.",
+    "files": [
+      "packages/task-governance/src/task-review-authority.ts",
+      "packages/task-governance/src/task-report-service.ts",
+      "packages/layers/cli/src/commands/task-review-request.ts",
+      "packages/layers/cli/test/commands/task-report.test.ts"
+    ]
+  }
+}

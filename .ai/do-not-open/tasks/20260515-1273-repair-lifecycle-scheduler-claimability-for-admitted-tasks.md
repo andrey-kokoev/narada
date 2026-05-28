@@ -1,10 +1,14 @@
 ---
-status: in_review
+status: closed
 criteria_proved_by: narada.builder
 criteria_proved_at: 2026-05-15T15:19:32.990Z
 criteria_proof_verification:
   state: unbound
   rationale: Verification is recorded in WorkResultReport wrr_f98511dd_20260515-1273-repair-lifecycle-scheduler-claimability-for-admitted-tasks_narada.builder: peek-next returned task 1275, task list showed 1275 and 1276 opened, and lifecycle status showed allocation max 1276 with no drift.
+closed_at: 2026-05-15T20:45:41.750Z
+closed_by: narada.architect
+governed_by: task_close:narada.architect
+closure_mode: peer_reviewed
 ---
 
 # Repair lifecycle scheduler claimability for admitted tasks
@@ -58,11 +62,17 @@ Recommendation: Promote to a Narada proper task or repair item for lifecycle/wor
 
 ## Execution Notes
 
-<!-- Record what was done, decisions made, and files changed during execution. -->
+- Verified the governed admitted-to-claimable path through the task lifecycle surfaces rather than direct SQLite mutation.
+- Confirmed the original blocked Agent Carrier buildout work has been materialized into numbered runnable tasks and claimed through `narada task work-next --agent narada.builder --format json`.
+- The two original admitted rows are now represented by governed numbered work: Claude Code carrier work progressed through tasks 1275 and 1282-1284, and Narada-native carrier work progressed through tasks 1276 and 1285-1287.
+- Confirmed subsequent stage-3 work also became claimable through the same governed path: task 1288 was claimed by Builder via work-next.
+- No additional source change was needed in this pass; this task needed repaired evidence after the prior report left scaffold placeholders.
 
 ## Verification
 
-<!-- Record commands run, results observed, and how correctness was checked. -->
+- `narada task work-next --agent narada.builder --format json` returned and claimed task 1288, proving the Builder work-next path can now select the materialized Agent Carrier follow-up tasks.
+- `narada task read 1288 --format json --verbose` showed task 1288 claimed by `narada.builder` with dependencies on 1282, 1283, and 1284.
+- Prior verification recorded in `wrr_f98511dd_20260515-1273-repair-lifecycle-scheduler-claimability-for-admitted-tasks_narada.builder` showed `peek-next` returned task 1275, task list showed 1275 and 1276 opened, and lifecycle allocation had no drift.
 
 ## Acceptance Criteria
 

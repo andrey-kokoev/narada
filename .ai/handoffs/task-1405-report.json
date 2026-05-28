@@ -1,0 +1,35 @@
+{
+  "summary": "Integrated SiteRegistry read-model output with User Site awareness posture by adding an advisory awareness adapter, multiple-Site fixtures, doctrine text, and tests proving stale/conflicting remote records stay projection data and do not import ownership or mutation authority.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "packages/site-config/src/index.ts",
+    "packages/site-config/test/site-config.test.ts",
+    "docs/product/user-site-awareness-registry.md",
+    "docs/product/fixtures/user-site-awareness-from-registry/site-awareness-input-registry.json",
+    "docs/product/fixtures/user-site-awareness-from-registry/site-awareness.expected.json",
+    ".ai/handoffs/task-1405-amended.md",
+    ".ai/handoffs/task-1405-report.json"
+  ],
+  "verification": [
+    {
+      "command": "node -e \"const fs=require('fs'); for (const dir of ['docs/product/fixtures/user-site-awareness-from-registry']) for (const f of fs.readdirSync(dir)) JSON.parse(fs.readFileSync(dir+'/'+f,'utf8')); console.log('user site awareness fixtures json ok')\"",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-config test",
+      "result": "passed: 22 tests"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-config typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/site-config build",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "Runtime storage or first-class User Site awareness mutation commands remain later work.",
+    "Remote SiteRegistry output remains advisory until a separate authority-bearing registry path is admitted."
+  ]
+}

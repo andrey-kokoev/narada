@@ -1,5 +1,9 @@
 ---
-status: in_review
+status: closed
+closed_at: 2026-05-15T17:08:42.457Z
+closed_by: narada.builder
+governed_by: task_close:narada.builder
+closure_mode: peer_reviewed
 ---
 
 # Lift Narada proper MCP handler out of CLI source

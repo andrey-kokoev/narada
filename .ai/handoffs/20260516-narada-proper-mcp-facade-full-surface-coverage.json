@@ -1,0 +1,170 @@
+{
+  "slug": "narada-proper-mcp-facade-full-surface-coverage",
+  "title": "Narada Proper MCP Facade Full Surface Coverage",
+  "tasks": [
+    {
+      "title": "Audit narada-andrey MCP lift evidence freshness",
+      "goal": "Determine which MCP registry, lift catalog, client config, and server patterns in C:/Users/Andrey/Narada are current enough to use as source evidence for Narada proper.",
+      "context": "Source evidence is C:/Users/Andrey/Narada, especially AGENTS.md, config.json, .narada/capabilities/mcp-surfaces.json, .ai/mcp/*.json, site-lift/lift-catalog.json, tools/mcp-payload-file.mjs, tools/typed-mcp, tools/task-lifecycle, tools/mcp-servers, tools/operator-surface, tools/capability-lifecycle, tools/site-lift, tools/site-probe, tools/site-connectivity, and tools/site-identity. The lift catalog may be stale and must not be trusted without verification against current source files and tests.",
+      "required_work": [
+        "Read the source registry, lift catalog, generated MCP client snippets, and relevant server/test mtimes or Git state under C:/Users/Andrey/Narada without mutating that Site.",
+        "Compare declared surfaces and tool contracts against the actual server tool lists and tests.",
+        "Classify each source artifact as current, stale-but-instructive, non-portable, or rejected for Narada proper adoption.",
+        "Record explicit non-portable boundaries: narada-andrey identities, local PC runtime paths, SQLite DBs, task histories, inbox histories, checkpoints, secrets, and generated runtime projections."
+      ],
+      "non_goals": [
+        "Do not copy narada-andrey runtime state into Narada proper.",
+        "Do not mutate C:/Users/Andrey/Narada.",
+        "Do not treat source registry or lift catalog claims as receiving-Site authority."
+      ],
+      "acceptance_criteria": [
+        "Freshness audit identifies the source evidence refs used for every follow-on task.",
+        "Stale or unverifiable source lift claims are excluded or marked as advisory only.",
+        "Narada proper adoption candidates are separated from non-portable User Site state."
+      ]
+    },
+    {
+      "title": "Map Narada proper MCP package coverage against command surfaces",
+      "goal": "Create a coverage matrix for existing Narada proper MCP packages against canonical CLI and service families.",
+      "context": "Narada proper already has packages/narada-proper-mcp, packages/mcp-shell-windows, packages/mcp-test-windows, packages/mcp-surface-carrier-supervisor, and legacy packages/layers/cli/src/mcp-server.ts. The task is to describe real coverage and gaps before expanding implementation.",
+      "required_work": [
+        "Inventory tools exposed by packages/narada-proper-mcp/src/server.ts and compare to packages/layers/cli/src/mcp-server.ts.",
+        "Map coverage for Site context, inbox, task lifecycle, work-next, agent context, capability/consent, command execution, filesystem, tests, shell/Git, operator surface, Site probe/connectivity/identity/lift, outbox, and publication surfaces.",
+        "For every missing or intentionally refused surface, record the canonical service or command that should own behavior before MCP exposure.",
+        "Identify legacy coupled CLI facade behavior that should be quarantined, retained for compatibility, or deleted after replacement."
+      ],
+      "non_goals": [
+        "Do not implement new tools before the matrix names the canonical owner.",
+        "Do not claim full surface coverage from package presence alone."
+      ],
+      "acceptance_criteria": [
+        "Coverage matrix names implemented, partial, missing, refused, and legacy-coupled surfaces.",
+        "Each missing mutating tool has a canonical owner or a refusal rationale.",
+        "Legacy CLI MCP facade quarantine posture is explicit."
+      ]
+    },
+    {
+      "title": "Add Narada proper MCP surface registry contract",
+      "goal": "Introduce a target-local MCP surface registry contract for Narada proper packages without importing narada-andrey identities or runtime authority.",
+      "context": "narada-andrey has .narada/capabilities/mcp-surfaces.json and validation/generation tooling. Narada proper needs an equivalent package-backed contract that can describe target-local surfaces and generated client snippets without making client config the authority.",
+      "required_work": [
+        "Define a Narada proper registry schema or package contract for surface_id, surface_type, semantic purpose, runtime binding, authority boundary, tool contract, evidence refs, failure modes, and generated client config posture.",
+        "Implement validation tests proving read-only and mutating tool lists are subsets of exposed tools and that generated snippets are transport wiring only.",
+        "Populate registry records for existing Narada proper MCP packages and mark unimplemented surfaces as planned or refused rather than live.",
+        "Ensure source evidence from C:/Users/Andrey/Narada is recorded as provenance, not authority."
+      ],
+      "non_goals": [
+        "Do not write private MCP client config outside Narada proper.",
+        "Do not declare unavailable surfaces as live."
+      ],
+      "acceptance_criteria": [
+        "Narada proper has an inspectable MCP surface registry contract with tests.",
+        "Registry entries distinguish package contract, runtime binding, target Site authority, and transport projection.",
+        "Validation catches stale or mismatched tool declarations."
+      ]
+    },
+    {
+      "title": "Implement shared MCP payload and output ref primitives",
+      "goal": "Add target-local payload_ref and output_ref primitives for Narada proper MCP tools so large inputs and outputs remain bounded and reconstructable.",
+      "context": "C:/Users/Andrey/Narada/tools/mcp-payload-file.mjs provides immutable mcp_payload refs and mcp_output refs. Narada proper should lift the pattern into packages, de-arbitrized and tested.",
+      "required_work": [
+        "Implement or package shared mcp_payload and mcp_output helpers under Narada proper package conventions.",
+        "Support immutable payload revisions, payload validation, wrong-ref-family errors, size limits, stable hashes, and transient-not-authority markers.",
+        "Support bounded output locators and a readback tool/utility for large JSON results.",
+        "Add tests proving long inline payloads are refused where required and output truncation preserves a durable readback ref."
+      ],
+      "non_goals": [
+        "Do not store secrets or raw provider transcripts in payload/output refs.",
+        "Do not make transient payload refs authority records."
+      ],
+      "acceptance_criteria": [
+        "Payload and output ref helpers are available to Narada proper MCP packages.",
+        "Tests cover immutability, size limits, wrong ref family, hashing, and bounded output.",
+        "Tool results clearly mark payload refs as transient transport, not authority."
+      ]
+    },
+    {
+      "title": "Expand Narada proper task lifecycle MCP coverage",
+      "goal": "Close the gap between Narada proper task MCP exposure and the canonical task lifecycle command surface.",
+      "context": "Narada proper MCP currently exposes limited task lifecycle tools. narada-andrey task lifecycle MCP exposes list, show/read, roster, claim, continue, unclaim, next, workboard, obligations, inspect, evidence preflight/admission, prove criteria, finish, close, search, related, defer/un-defer, reopen, review, observation, bridge/inbox targeting, create, routing, recurring tasks, test tool, and run tests.",
+      "required_work": [
+        "Select the first safe expansion slice from the coverage matrix, prioritizing read/show/inspect/workboard/obligations/evidence-preflight before mutating tools.",
+        "Delegate each MCP tool to the canonical Narada proper command or service with the same authorization, refusal, and evidence behavior as CLI.",
+        "Use payload_ref for task creation or large report-like inputs where inline definitions would be unsafe.",
+        "Add tests proving no direct SQLite shortcuts, no review/finish authority bypass, and no cross-Site mutation."
+      ],
+      "non_goals": [
+        "Do not reimplement task lifecycle as a second authority model inside MCP.",
+        "Do not expose mutating task tools before the canonical service path and evidence are proven."
+      ],
+      "acceptance_criteria": [
+        "Narada proper task lifecycle MCP exposes a larger, tested, canonical subset.",
+        "Read-only and mutating tools are clearly classified.",
+        "MCP task lifecycle behavior matches CLI/service authorization and evidence posture."
+      ]
+    },
+    {
+      "title": "Lift filesystem test and shell MCP contracts into Narada proper packages",
+      "goal": "Turn existing Narada proper descriptor packages for filesystem/test/shell-like execution into coherent target-local MCP contracts with clear execution posture.",
+      "context": "Narada proper has packages/mcp-shell-windows and packages/mcp-test-windows. narada-andrey has live filesystem, test, and shell MCP servers with path boundaries, approved tests, audit logging, payload refs, break-glass records, and Git closeout helpers.",
+      "required_work": [
+        "Define Narada proper filesystem MCP posture: root-bounded read/glob/grep/media and narrowly admitted write/replace with audit and path policy.",
+        "Define Narada proper test MCP posture: approved test registry, identity binding, bounded timeout/output, and structured evidence without importing source pass/fail history.",
+        "Define Narada proper shell/EE-MCP posture: CEIZ-mediated command intent first, shell MCP as policy-aware execution surface only where admitted, and native shell as break-glass last resort.",
+        "Implement the next smallest package slice with tests, or produce explicit refusal records for live execution if canonical CEIZ ownership is not ready."
+      ],
+      "non_goals": [
+        "Do not grant arbitrary shell access through MCP.",
+        "Do not import narada-andrey allowlists, audit logs, or PC runtime state as Narada proper authority.",
+        "Do not bypass CEIZ, task lifecycle, RPIZ, or publication preflight."
+      ],
+      "acceptance_criteria": [
+        "Filesystem, test, and shell/EE-MCP contracts have explicit authority boundaries and tests.",
+        "Live execution is either canonically routed or explicitly refused with next-step guidance.",
+        "Break-glass shell posture is recorded as exceptional, scoped, time-bounded, and operator-authorized."
+      ]
+    },
+    {
+      "title": "Add Site probe connectivity identity and lift advisory MCP coverage",
+      "goal": "Add or specify Narada proper MCP coverage for read-only Site awareness, connectivity planning, Site identity, and advisory lift catalog behavior.",
+      "context": "narada-andrey has site-probe, site-connectivity, site-identity, and site-lift MCP servers. These are especially relevant for federated Site work but must preserve receiving-Site admission and trust boundaries.",
+      "required_work": [
+        "Define Narada proper read-only Site probe and connectivity planning surfaces with no target mutation.",
+        "Define Site identity materialization/sign/verify posture, including key storage outside public Site artifacts and trust-pin requirements.",
+        "Define advisory lift catalog behavior for Narada proper adoption packets, including stale-source detection and non-portable path refusal.",
+        "Add tests or specification fixtures proving unregistered roots require operator authority basis and observed identities are untrusted until pinned."
+      ],
+      "non_goals": [
+        "Do not make cross-Site read awareness into mutation authority.",
+        "Do not copy private keys, trust records, target roots, or source Site runtime state.",
+        "Do not let advisory lift packets install or bootstrap receiving Sites by themselves."
+      ],
+      "acceptance_criteria": [
+        "Read-only Site probe/connectivity behavior is specified or implemented with trust residuals.",
+        "Site identity posture separates public identity documents, private key storage, and local trust pins.",
+        "Lift catalog/adoption packets remain advisory and receiving-Site-admitted."
+      ]
+    },
+    {
+      "title": "Generate carrier MCP config and quarantine legacy facade",
+      "goal": "Provide tested carrier-facing MCP configuration generation for Narada proper and quarantine the old coupled CLI MCP facade after target-local coverage is available.",
+      "context": "narada-andrey generates carrier configs for Codex/Kimi from the MCP surface registry. Narada proper needs equivalent generated config for current and future carriers, while decoupling agent-facing runtime from packages/layers/cli/dist.",
+      "required_work": [
+        "Implement generated carrier MCP config from the Narada proper surface registry for at least Codex-style and generic stdio client shapes.",
+        "Ensure generated configs include only transport wiring plus required inherited Narada environment variables, not private client mutation.",
+        "Add tests proving registry/tool contract drift is detected and missing snippets are reported.",
+        "Quarantine or mark packages/layers/cli/src/mcp-server.ts as compatibility only after equivalent target-local package coverage exists, with migration guidance."
+      ],
+      "non_goals": [
+        "Do not mutate private user MCP client config.",
+        "Do not remove legacy facade before replacement coverage and tests exist.",
+        "Do not hardcode narada-andrey paths or identities."
+      ],
+      "acceptance_criteria": [
+        "Carrier config generation is driven by Narada proper registry state and tested.",
+        "Legacy coupled CLI MCP facade has an explicit compatibility/quarantine posture.",
+        "Agent-facing MCP runtime no longer depends on the monolithic packages/layers/cli/dist path for the covered surfaces."
+      ]
+    }
+  ]
+}

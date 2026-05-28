@@ -1,0 +1,25 @@
+{
+  "schema": "narada.site_task_lifecycle.mcp_mutation_evidence.v0",
+  "command": "site_task_lifecycle.materialize_task",
+  "authority_class": "mcp_adapter_bound_task_lifecycle_mutation",
+  "packageExecutedSqliteMutation": false,
+  "sourceStateImported": false,
+  "taskId": "local-stale-review-obligation-projection-20260518",
+  "siteId": "narada-proper",
+  "sourceRef": "operator:2026-05-18-stale-review-obligation-projection",
+  "eventId": "mcp-task-materialized-a12467c3f9b7431b",
+  "dbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+  "recordedAt": "2026-05-18T17:36:07.991Z",
+  "materializedBy": "narada.architect",
+  "materializedTaskId": "20260518-1512-fix-stale-architect-review-obligations-for-terminal-tasks",
+  "materializedTaskNumber": 1512,
+  "claimFor": "narada.architect",
+  "readback": [
+    {
+      "task_id": "local-stale-review-obligation-projection-20260518",
+      "status": "materialized",
+      "source_site": "narada-proper",
+      "source_ref": "operator:2026-05-18-stale-review-obligation-projection"
+    }
+  ]
+}

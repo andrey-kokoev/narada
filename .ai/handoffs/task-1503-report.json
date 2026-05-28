@@ -1,0 +1,50 @@
+{
+  "task": 1503,
+  "agent": "narada.builder",
+  "status": "complete",
+  "changed_files": [
+    ".ai/do-not-open/tasks/20260518-1503-prepare-bounded-publication-cleanup-plan.md",
+    ".ai/decisions/2026-05-18-bounded-global-coherence-cleanup-publication-plan.md"
+  ],
+  "summary": "Prepared a bounded publication plan for the global coherence cleanup chapter. The plan separates governance/evidence artifacts, coherence-scan source/test changes, inbox envelope publication, mutation-evidence residuals, and unrelated dirty work. No push or broad staging was performed.",
+  "publication_plan": {
+    "governance_evidence_bundle": "cleanup task specs, handoffs/reports, decisions, and lifecycle snapshot only",
+    "source_test_bundle": "packages/layers/cli/src/commands/coherence-scan.ts and packages/layers/cli/test/commands/coherence-scan.test.ts only",
+    "inbox_publication": "separate narada inbox publish crossing; dry-run reports 200 pending envelope artifacts overall",
+    "mutation_evidence": "separate admitted repair/publication; excluded from cleanup bundle because dirty set is broad and historical",
+    "unrelated_dirty_work": "excluded"
+  },
+  "tooling_residuals": [
+    "narada publication prepare failed with spawnSync git ENOBUFS in the very dirty worktree.",
+    "The failed prepare left .ai/publications/rpi_0d7d5b56c1b0 with only a bundle and no publication record; that incomplete residue was removed.",
+    "Publication prepare likely needs bounded Git output handling for narrow include bundles in very dirty repositories."
+  ],
+  "verification": [
+    {
+      "command": "git status --short",
+      "result": "inspected broad dirty worktree and cleanup-specific paths"
+    },
+    {
+      "command": "narada publication prepare --help",
+      "result": "confirmed include/governance-only/task/by surfaces"
+    },
+    {
+      "command": "narada publication prepare ... --governance-only ... --format json",
+      "result": "failed with spawnSync git ENOBUFS; no publication record listed"
+    },
+    {
+      "command": "narada publication list --format json",
+      "result": "passed; count=0"
+    },
+    {
+      "command": "narada inbox publish --limit 200 --format json",
+      "result": "dry-run passed; would_export_count=50, uncommitted_envelope_artifacts_count=200, would_commit=true, would_push=false"
+    }
+  ],
+  "acceptance": {
+    "bounded_publication_plan_exists": true,
+    "cleanup_artifacts_separated": true,
+    "inbox_and_repository_publication_not_collapsed": true,
+    "no_push_without_operator_grant": true
+  }
+}

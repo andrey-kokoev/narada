@@ -1,0 +1,141 @@
+---
+status: draft
+closes_tasks: [1294, 1295, 1296, 1297, 1298, 1299]
+range: 1294-1299
+---
+
+# Chapter Closure: 1294-1299
+
+**Date**: 2026-05-15
+**Operator**: narada.architect
+**Tasks in chapter**: 6
+
+## Task-by-Task Assessment
+
+| Task # | Task ID | Status |
+|--------|---------|--------|
+| 1294 | 20260515-1294-add-claude-code-live-runtime-availability-and-launch-bridge | closed |
+| 1295 | 20260515-1295-prove-claude-code-live-session-smoke-lifecycle | closed |
+| 1296 | 20260515-1296-wire-claude-code-governed-effect-handoffs-into-canonical-sur | closed |
+| 1297 | 20260515-1297-add-narada-native-production-adapter-capability-registration | closed |
+| 1298 | 20260515-1298-wire-narada-native-work-loop-to-governed-task-handoff-path | closed |
+| 1299 | 20260515-1299-add-narada-native-supervised-session-runtime-and-operational | closed |
+
+## Semantic Drift Check
+
+- [x] Terminology consistent with SEMANTICS.md
+- [x] No authority boundary violations introduced
+- [x] No substrate/vertical/agent collapse
+
+## Authority Boundary Check
+
+- [x] All kernel invariants respected
+- [x] No hidden authority in UI or observations
+- [x] Effect execution routed through Intent/OutboundHandoff
+
+## Gap Table
+
+| # | Gap | Severity | Recommended Action |
+|---|-----|----------|-------------------|
+| 1 | Live Claude Code and Narada-native carrier work now has production-shaped local affordances, but site installation/service hardening remains outside this chapter. | residual | Admit a later operations chapter only when service installation, credential grants, or external Site effects are explicitly required. |
+
+## CCC Posture Before / After
+
+| Coordinate | Before | After |
+|------------|--------|-------|
+| semantic_resolution | Stage 3 carriers were reconstructable but fixture/readback bounded. | Stage 4 carriers expose bounded live-launch, handoff, registration, work-loop, and supervisor surfaces. |
+| invariant_preservation | Authority non-claims were asserted but not yet proven across live-shaped paths. | Reviews forced allowlisted environment projection, canonical handoff command shapes, unsafe evidence-policy refusal, governed task read/report paths, and bounded supervisor commands. |
+| constructive_executability | Carrier use remained mostly proof/helper oriented. | Carrier use is operationally startable, inspectable, smoke-testable, and reportable through local governed surfaces. |
+| grounded_universalization | General carrier doctrine existed, with implementation gaps for Claude Code and Narada-native. | Both carriers now have concrete Stage 4 affordances without granting autonomous authority or raw secret/transcript capture. |
+| authority_reviewability | Earlier reports overclaimed readiness where helpers or advisory artifacts were insufficient. | Rejected findings were repaired and accepted with focused tests and CLI-shape checks. |
+| teleological_pressure | Operator pressure was to determine whether carriers are usable beyond Stage 3 proofs. | Current answer is production-shaped local use is available, while service installation and broader effect authority remain future admitted work. |
+
+## Review Findings and Resolutions
+
+### 20260515-1294-add-claude-code-live-runtime-availability-and-launch-bridge (review-20260515-1294-add-claude-code-live-runtime-availability-and-launch-bridge-1778882726868)
+
+Verdict: **rejected**
+
+- [x] **blocking**: The live Claude Code launch bridge passes the full parent process.env into the spawned carrier process. That can expose ambient credentials or secret-bearing environment variables while the evidence claims credential_access=false and raw_secret_values_recorded=false. Build a bounded carrier environment allowlist from the launch packet/startup posture and test that unrelated SECRET/TOKEN/PASSWORD env vars are not passed.
+
+### 20260515-1294-add-claude-code-live-runtime-availability-and-launch-bridge (review-20260515-1294-add-claude-code-live-runtime-availability-and-launch-bridge-1778888930062)
+
+Verdict: **accepted**
+
+
+
+### 20260515-1295-prove-claude-code-live-session-smoke-lifecycle (review-20260515-1295-prove-claude-code-live-session-smoke-lifecycle-1778882742712)
+
+Verdict: **rejected**
+
+- [x] **blocking**: The smoke proof depends on bridgeClaudeCodeLiveLaunch from task 1294, which currently passes the full parent process.env to the carrier process. Until the launch bridge uses a bounded allowlisted environment and tests prove secret-bearing env vars are withheld, the smoke cannot prove no credential authority or no secret leakage for a live Claude Code session.
+
+### 20260515-1295-prove-claude-code-live-session-smoke-lifecycle (review-20260515-1295-prove-claude-code-live-session-smoke-lifecycle-1778888946397)
+
+Verdict: **accepted**
+
+
+
+### 20260515-1296-wire-claude-code-governed-effect-handoffs-into-canonical-sur (review-20260515-1296-wire-claude-code-governed-effect-handoffs-into-canonical-sur-1778882769352)
+
+Verdict: **rejected**
+
+- [x] **blocking**: The canonical handoff path still stops at a local .narada/crew JSON artifact and only records advisory admission_command strings. It does not invoke or produce an artifact accepted by the canonical inbox/task/command/outbox/publication surfaces, and at least the task admission string (`narada inbox task --payload-file <request>`) is not a valid CLI shape because `inbox task` requires an existing envelope id. Wire the handoff to real canonical request/admission surfaces or constrain the task/evidence to an explicitly inert design artifact.
+
+### 20260515-1296-wire-claude-code-governed-effect-handoffs-into-canonical-sur (review-20260515-1296-wire-claude-code-governed-effect-handoffs-into-canonical-sur-1778888966576)
+
+Verdict: **accepted**
+
+
+
+### 20260515-1297-add-narada-native-production-adapter-capability-registration (review-20260515-1297-add-narada-native-production-adapter-capability-registration-1778882791337)
+
+Verdict: **rejected**
+
+- [x] **blocking**: sanitizeRegistration seeds a safe evidence_policy and then spreads record.evidence_policy over it, so a provider registration can set raw_prompts_recorded/raw_outputs_recorded/raw_secret_values_recorded/unbounded_transcripts_recorded to true and still be accepted and persisted. Reject or override unsafe evidence_policy values and add a regression test for secret/transcript policy refusal.
+
+### 20260515-1297-add-narada-native-production-adapter-capability-registration (review-20260515-1297-add-narada-native-production-adapter-capability-registration-1778888982134)
+
+Verdict: **accepted**
+
+
+
+### 20260515-1298-wire-narada-native-work-loop-to-governed-task-handoff-path (review-20260515-1298-wire-narada-native-work-loop-to-governed-task-handoff-path-1778882815620)
+
+Verdict: **rejected**
+
+- [x] **blocking**: The task handoff path does not actually read a task packet through Narada CLI/MCP governed surfaces; it accepts an injected readTaskPacket function and the tests use an in-memory fixture. It also records an invalid suggested admission command (`--payload-file` instead of the supported `--report-file`). Wire this to a real bounded task read/work packet surface or narrow the evidence to fixture-only, and make the recorded admission command executable.
+
+### 20260515-1298-wire-narada-native-work-loop-to-governed-task-handoff-path (review-20260515-1298-wire-narada-native-work-loop-to-governed-task-handoff-path-1778889002329)
+
+Verdict: **accepted**
+
+
+
+### 20260515-1299-add-narada-native-supervised-session-runtime-and-operational (review-20260515-1299-add-narada-native-supervised-session-runtime-and-operational-1778882837079)
+
+Verdict: **rejected**
+
+- [x] **blocking**: The supervisor is only exposed as module functions; there is no operator-facing doctor/readback command or CLI/MCP surface for start/inspect/interrupt/close/reconstruct posture, despite the task requiring an operational doctor/readback command. Add a bounded command/readback surface or amend the task scope to fixture-only module helpers.
+- [x] **blocking**: The supervisor proof depends on task 1297 adapter registration and task 1298 task handoff, both rejected in review. Until registration refuses unsafe evidence_policy values and task handoff reads/submits through real governed surfaces with valid command shapes, the supervisor cannot prove production-shaped operational readiness.
+
+### 20260515-1299-add-narada-native-supervised-session-runtime-and-operational (review-20260515-1299-add-narada-native-supervised-session-runtime-and-operational-1778889020140)
+
+Verdict: **accepted**
+
+
+
+## Residuals (Unresolved Gaps)
+
+_No residual gaps identified._
+
+## Recommended Next Work
+
+- Treat service installation, scheduled operation, credential grant, and external Site mutation as separate admitted work, not implicit consequences of Stage 4.
+- Re-run the carrier doctors from the intended runtime locus before using either carrier for a live external effect.
+
+## Closure Action
+
+- [x] All tasks terminal
+- [x] Closure decision reviewed
+- [x] Ready to confirm

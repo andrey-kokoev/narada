@@ -1,0 +1,64 @@
+{
+  "task": 1501,
+  "agent": "narada.builder",
+  "status": "complete",
+  "changed_files": [
+    "packages/layers/cli/src/commands/coherence-scan.ts",
+    "packages/layers/cli/test/commands/coherence-scan.test.ts",
+    ".ai/do-not-open/tasks/20260518-1501-resolve-mutation-evidence-warnings-for-dirty-authority-surfa.md"
+  ],
+  "summary": "Resolved the active mutation evidence coherence warning by fixing a scanner false positive where global dirty-file truncation hid dirty .ai/mutation-evidence artifacts from the posture check. Historical task-lifecycle and inbox reconcile apply paths were left as explicit residuals because dry-runs found malformed, missing, stale, and conflict records.",
+  "root_cause": "checkMutationEvidencePosture relied on the globally expanded and truncated gitPorcelainChangedFiles result to detect dirty mutation evidence artifacts. In a large dirty worktree, authority-surface files were within the first 200 expanded paths while .ai/mutation-evidence artifacts were beyond the truncation window, so the scanner reported missing evidence even though companion mutation-evidence files were dirty.",
+  "grouping": {
+    "task_specs_projections": 197,
+    "task_lifecycle_snapshot": 1,
+    "inbox_envelopes": 18,
+    "outbox": 1,
+    "decisions": 24,
+    "mutation_evidence": 596,
+    "canonical_outbox": 1,
+    "other_authority_surfaces": 111,
+    "non_authority": 219
+  },
+  "residuals": [
+    "task_lifecycle reconcile apply was not run because dry-run found malformed and missing historical evidence records.",
+    "inbox reconcile apply was not run because dry-run found stale, conflict, and malformed records.",
+    "Existing unrelated dirty authority-surface work was not reverted."
+  ],
+  "verification": [
+    {
+      "command": "narada coherence scan --module mutation_evidence --format json",
+      "result": "initially reported finding_count=1 with mutation-evidence-missing-for-authority-surface"
+    },
+    {
+      "command": "narada mutation-evidence reconcile --family task_lifecycle --format json --limit 50",
+      "result": "dry-run only; reported current records plus malformed and missing historical records"
+    },
+    {
+      "command": "narada mutation-evidence reconcile --family inbox --format json --limit 50",
+      "result": "dry-run only; reported current records plus stale, conflict, and malformed records"
+    },
+    {
+      "command": "pnpm --filter @narada2/cli typecheck",
+      "result": "passed"
+    },
+    {
+      "command": "pnpm --filter @narada2/cli exec vitest run test/commands/coherence-scan.test.ts --pool=forks --poolOptions.forks.singleFork=true",
+      "result": "passed; 1 file, 13 tests"
+    },
+    {
+      "command": "pnpm --filter @narada2/cli build",
+      "result": "passed"
+    },
+    {
+      "command": "narada coherence scan --module mutation_evidence --format json",
+      "result": "passed after repair with finding_count=0"
+    }
+  ],
+  "acceptance": {
+    "mutation_evidence_warnings_grouped": true,
+    "sanctioned_commands_used_where_admissible": true,
+    "residuals_explicit": true,
+    "unrelated_dirty_work_not_reverted": true
+  }
+}

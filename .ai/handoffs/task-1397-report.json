@@ -1,0 +1,23 @@
+{
+  "summary": "Specified the Publication Edge and capability policy schema as a documentation/fixture artifact. The spec defines durable edge identity, publisher/owner/surface coordinates, endpoint and event-family configuration, separate capability references, secret resolver posture, lifecycle states, preflight checks, failure states, and residual implementation tasks.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "docs/product/site-telemetry-publication-edge.v0.md",
+    "docs/product/site-telemetry-publication-outcome-shapes.md",
+    "docs/product/fixtures/site-telemetry-publication-edge/publication-edge.valid.json",
+    "docs/product/fixtures/site-telemetry-publication-edge/publication-edge-preflight.pass.json",
+    "docs/product/fixtures/site-telemetry-publication-edge/publication-edge-preflight.failures.json",
+    ".ai/handoffs/task-1397-amended.md",
+    ".ai/handoffs/task-1397-report.json"
+  ],
+  "verification": [
+    {
+      "command": "node -e \"const fs=require('fs'); for (const f of fs.readdirSync('docs/product/fixtures/site-telemetry-publication-edge')) JSON.parse(fs.readFileSync('docs/product/fixtures/site-telemetry-publication-edge/'+f,'utf8')); console.log('publication edge fixtures json ok')\"",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "No dedicated markdown/schema linter exists for this documentation-only artifact in the current package surface.",
+    "Package-level edge types/validator, local config projection, non-publishing preflight, stale/revoked credential checks, and client-helper enforcement remain implementation tasks."
+  ]
+}

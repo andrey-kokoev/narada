@@ -1,0 +1,23 @@
+{
+  "summary": "Repaired the Site Telemetry operations posture fixture discovered during review of closed task 1414. The fixture now uses secret_rotation_evidence.status = missing, matching the status enum in site-telemetry-operations-posture.v0.md. No live monitoring, deployment, Cloudflare, secret, inbox, or remote state was touched.",
+  "reviewer": "narada.architect",
+  "changed_files": [
+    "docs/product/fixtures/site-telemetry-operations-posture/monitoring-rotation-handoff.valid.json",
+    ".ai/handoffs/task-1414-closed-review-finding-repair.json",
+    ".ai/handoffs/task-1419-body.md",
+    ".ai/handoffs/task-1419-report.json"
+  ],
+  "verification": [
+    {
+      "command": "Get-Content docs\\product\\fixtures\\site-telemetry-operations-posture\\monitoring-rotation-handoff.valid.json -Raw | ConvertFrom-Json | Out-Null; Write-Output monitoring-rotation-handoff.valid.json",
+      "result": "passed"
+    },
+    {
+      "command": "git diff --check -- docs/product/site-telemetry-operations-posture.v0.md docs/product/fixtures/site-telemetry-operations-posture/monitoring-rotation-handoff.valid.json .ai/handoffs/task-1414-closed-review-finding-repair.json",
+      "result": "passed"
+    }
+  ],
+  "residuals": [
+    "Original task 1414 had already closed before the rejected review could be admitted; this task preserves and repairs that finding as a bounded follow-up."
+  ]
+}

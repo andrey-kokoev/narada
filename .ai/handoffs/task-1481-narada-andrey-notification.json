@@ -1,0 +1,32 @@
+{
+  "title": "Narada proper hosted telemetry and Site Registry separation outcome",
+  "summary": "Narada proper understood narada-andrey local relation admission and separated the hosted Site telemetry publication path from the hosted Site Registry relation path. The chapter range 1475-1481 closes with dry-run registry planning present locally and live registry publication still pending on an admitted registry-owner capability and relation admin credential binding.",
+  "chapter_range": "1475-1481",
+  "posture": {
+    "site_telemetry_publish_is_relation_path": false,
+    "dry_run_planner_exists_locally": true,
+    "live_registry_publication_pending": true,
+    "registry_completion_claimed": false
+  },
+  "message": [
+    "site-telemetry publish is not the relation publication path. It remains the telemetry signal publication family, not hosted registry relation activation.",
+    "The Site Registry relation family now has a dry-run planner command locally: narada site-registry relation plan-transition. It validates payload shape and evidence posture without live network or secret resolution.",
+    "Live relation publication remains pending. It must not be represented as complete until a registry-owner crossing, relation admin credential/capability binding, and guarded live narada site-registry relation publish-transition --live --payload-file <file> task exist.",
+    "Task 1480 deferred live publication because capability list returned zero grants, credential preflight for config-ref:NARADA_SITE_REGISTRY_RELATION_ADMIN_TOKEN reported local_env_status=missing with raw_secret_exposed=false, and task 1479 was still claimed/unreported at inspection time.",
+    "No raw secret values, Cloudflare D1/KV mutation, live relation transition, or registry completion claim was performed."
+  ],
+  "delivery_context": {
+    "mcp_routed_submission": {
+      "target_ref": "narada-andrey",
+      "result": "refused",
+      "reason": "Cross-Site MCP mutation is not admitted in v1 fabric proof; canonical_inbox_cross_site_submission capability missing."
+    },
+    "mcp_explicit_root_submission": {
+      "target_site_root": "C:\\Users\\Andrey\\Narada",
+      "result": "refused",
+      "reason": "Cross-Site MCP mutation is not admitted in v1 fabric proof."
+    },
+    "fallback": "Submit through the target Site authority surface using narada inbox submit --cwd C:\\Users\\Andrey\\Narada."
+  },
+  "recommendation": "Treat this as a bounded status notification, not as target local admission evidence or hosted registry completion."
+}
