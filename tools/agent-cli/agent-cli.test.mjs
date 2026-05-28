@@ -19,6 +19,8 @@ import {
   createTerminalStyle,
   discoverAndStartMcpServers,
   executeMcpTool,
+  formatKeyValueRows,
+  formatToolResultContent,
   handleSlashCommand,
   normalizeInputRecord,
   normalizeThinkingLevel,
@@ -30,11 +32,13 @@ import {
   parseAnthropicMessagesResponse,
   parseCodexExecJsonLine,
   parseNaradaToolCall,
+  renderMarkdownForTerminal,
   runConversationTurn,
   resolveProviderAdapter,
   resolveProviderSupportState,
   sessionEventEntry,
   sessionLogEntry,
+  wrapTerminalLine,
 } from './agent-cli.mjs';
 
 const metadata = JSON.parse(readFileSync(new URL('./intelligence-providers.json', import.meta.url), 'utf8')).providers;
@@ -95,6 +99,10 @@ assert.deepEqual(parseArgs(['--color', '--no-color']), { color: false });
 assert.equal(parseColorEnv('off', true), false);
 assert.equal(createTerminalStyle({ enabled: false }).prompt('narada> '), 'narada> ');
 assert.equal(createTerminalStyle({ enabled: true }).prompt('narada> ').includes('\x1b['), true);
+assert.equal(formatToolResultContent('{"status":"success","schema":"narada.test.v1","directive_count":2,"extra":true}'), 'success · narada.test.v1 · directives=2 · keys=status,schema,directive_count,extra');
+assert.equal(formatKeyValueRows({ A: 1, Longer: 'two' }), 'A       1\nLonger  two');
+assert.deepEqual(wrapTerminalLine('alpha beta gamma', 10), ['alpha beta', 'gamma']);
+assert.equal(renderMarkdownForTerminal('- `code`').includes('• '), true);
 rmSync(tempDir, { recursive: true, force: true });
 
 const expectedAdapters = {

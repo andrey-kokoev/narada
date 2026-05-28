@@ -20,7 +20,7 @@ During a running turn it prints elapsed working status. Press `Esc` to request i
 
 Use `--stream` or `--no-stream` to control incremental provider output. Interactive mode defaults to streaming; `--server` mode defaults to non-streaming terminal rendering and emits structured events only. `NARADA_AGENT_CLI_STREAM=1|0` provides the same default as an environment variable.
 
-Use `--color` or `--no-color` to control ANSI terminal color. Interactive mode enables color when stdout is a TTY; `NO_COLOR` disables it unless `--color` is explicit. Assistant, tool, progress, and prompt output use light paragraph spacing for readability. Server mode remains protocol-only JSONL on stdout.
+Use `--color` or `--no-color` to control ANSI terminal color. Interactive mode enables color when stdout is a TTY; `NO_COLOR` disables it unless `--color` is explicit. Assistant, tool, progress, and prompt output use labeled message blocks, light paragraph spacing, terminal-width wrapping, basic markdown rendering, and compact JSON tool summaries. Server mode remains protocol-only JSONL on stdout.
 
 For `codex-subscription`, the default transport is `codex exec --json`. With streaming enabled, the CLI renders Codex JSONL assistant events as they arrive. With `--no-stream`, it buffers JSONL events and prints the final assistant message at turn completion. Current Codex JSONL emits completed assistant-message events, not token deltas; if Codex adds token delta events, this transport is the place to surface them. Set `NARADA_CODEX_SUBSCRIPTION_TRANSPORT=mcp-server` to use the older request/response MCP transport.
 

@@ -163,20 +163,28 @@ async function handleSlashCommand(input, { mcpServers, allTools }) {
   const command = rawCommand.toLowerCase();
   const value = rest.join(' ').trim();
   if (command === '/help') {
-    printAssistantMessage('Commands: /help, /status, /model <name>, /thinking none|low|medium|high, /exit');
+    printAssistantMessage([
+      'Commands',
+      '',
+      '/help                 Show commands',
+      '/status               Show session state',
+      '/model <name>         Set model for later turns',
+      '/thinking <level>     none, low, medium, high',
+      '/exit                 Save and quit',
+    ].join('\n'));
     return 'handled';
   }
   if (command === '/status') {
-    printAssistantMessage([
-      `Identity: ${IDENTITY}`,
-      `Session: ${SESSION}`,
-      `Provider: ${INTELLIGENCE_PROVIDER}`,
-      `Model: ${sessionSettings.model}`,
-      `Thinking: ${sessionSettings.thinking}`,
-      `Stream: ${sessionSettings.stream ? 'on' : 'off'}`,
-      `MCP servers: ${Object.keys(mcpServers).length}`,
-      `Tools: ${allTools.length}`,
-    ].join('\n'));
+    printAssistantMessage(formatKeyValueRows({
+      Identity: IDENTITY,
+      Session: SESSION,
+      Provider: INTELLIGENCE_PROVIDER,
+      Model: sessionSettings.model,
+      Thinking: sessionSettings.thinking,
+      Stream: sessionSettings.stream ? 'on' : 'off',
+      'MCP servers': Object.keys(mcpServers).length,
+      Tools: allTools.length,
+    }));
     appendSession(SESSION_PATH, sessionEventEntry('session_command', { command: '/status' }));
     return 'handled';
   }
@@ -454,7 +462,7 @@ async function executeMcpTool(toolCall, mcpServers, rl, options = {}) {
               params: { name, arguments: { ...args, __auto_approved: true } },
             });
             const autoContent = autoResult.content?.[0]?.text ?? JSON.stringify(autoResult);
-            printToolLine(`-> ${autoContent.slice(0, 500)}${autoContent.length > 500 ? '...' : ''}`);
+            printToolLine(`-> ${formatToolResultContent(autoContent)}`);
             return { role: 'tool', tool_call_id: toolCall.id, content: autoContent };
           }
         }
@@ -464,7 +472,7 @@ async function executeMcpTool(toolCall, mcpServers, rl, options = {}) {
     }
 
     const content = result.content?.[0]?.text ?? JSON.stringify(result);
-    if (!serverMode) printToolLine(`-> ${content.slice(0, 500)}${content.length > 500 ? '...' : ''}`);
+    if (!serverMode) printToolLine(`-> ${formatToolResultContent(content)}`);
     emit?.('tool_result', {
       turn_id: turnId,
       tool: name,
@@ -1479,7 +1487,8 @@ function sendCodexExecJsonRequest(request, settings = {}) {
           if (settings.emit) {
             settings.emit('assistant_message_stream', { turn_id: settings.turn?.turnId ?? null, content: text });
           } else {
-            process.stdout.write(`\r\x1b[K\n${text}\n`);
+            process.stdout.write('\r\x1b[K');
+            printAssistantMessage(text);
             rendered = true;
           }
         }
@@ -1724,6 +1733,10 @@ function createTerminalStyle({ enabled = true } = {}) {
     header: (text) => color('36', text),
     tool: (text) => color('35', text),
     assistant: (text) => color('37', text),
+    label: (text) => color('1;36', text),
+    muted: (text) => color('2', text),
+    code: (text) => color('90', text),
+    success: (text) => color('32', text),
     prompt: (text) => color('1;32', text),
     progress: (text) => color('2;33', text),
     warn: (text) => color('33', text),
@@ -1739,19 +1752,108 @@ function printHeader(text, { before = false, after = false, level = 'info' } = {
 }
 
 function printToolLine(text, { before = false, level = 'info' } = {}) {
-  const prefixed = `[tool] ${text}`;
-  const styled = level === 'error'
-    ? terminalStyle.error(prefixed)
-    : level === 'warn'
-      ? terminalStyle.warn(prefixed)
-      : terminalStyle.tool(prefixed);
-  console.log(`${before ? '\n' : ''}${styled}`);
+  printMessageBlock({
+    label: 'tool',
+    text,
+    before,
+    labelStyle: level === 'error' ? terminalStyle.error : level === 'warn' ? terminalStyle.warn : terminalStyle.tool,
+    bodyStyle: level === 'error' ? terminalStyle.error : level === 'warn' ? terminalStyle.warn : terminalStyle.muted,
+  });
 }
 
 function printAssistantMessage(text) {
   const normalized = String(text ?? '').trim();
   if (!normalized) return;
-  console.log(`\n${terminalStyle.assistant(normalized)}\n`);
+  printMessageBlock({
+    label: 'assistant',
+    text: renderMarkdownForTerminal(normalized),
+    before: true,
+    after: true,
+    labelStyle: terminalStyle.label,
+    bodyStyle: terminalStyle.assistant,
+  });
+}
+
+function printMessageBlock({ label, text, before = false, after = false, labelStyle = (value) => value, bodyStyle = (value) => value }) {
+  const width = terminalWidth();
+  const border = terminalStyle.muted('│');
+  const labelText = `${labelStyle(label)} ${terminalStyle.muted('·')}`;
+  const bodyWidth = Math.max(32, width - 4);
+  const lines = String(text ?? '').split(/\r?\n/).flatMap((line) => wrapTerminalLine(line, bodyWidth));
+  const rendered = lines.map((line, index) => {
+    const prefix = index === 0 ? `${border} ${labelText} ` : `${border}   `;
+    return `${prefix}${bodyStyle(line)}`;
+  }).join('\n');
+  console.log(`${before ? '\n' : ''}${rendered}${after ? '\n' : ''}`);
+}
+
+function renderMarkdownForTerminal(text) {
+  const lines = String(text ?? '').split(/\r?\n/);
+  let inFence = false;
+  return lines.map((line) => {
+    if (line.trim().startsWith('```')) {
+      inFence = !inFence;
+      return terminalStyle.code(line);
+    }
+    if (inFence) return terminalStyle.code(`  ${line}`);
+    if (/^#{1,6}\s+/.test(line)) return terminalStyle.label(line.replace(/^#{1,6}\s+/, ''));
+    if (/^\s*[-*]\s+/.test(line)) return line.replace(/^(\s*)[-*]\s+/, '$1• ');
+    return line.replace(/`([^`]+)`/g, (_match, code) => terminalStyle.code(code));
+  }).join('\n');
+}
+
+function terminalWidth() {
+  return Math.max(50, Math.min(120, process.stdout.columns || 88));
+}
+
+function wrapTerminalLine(line, width) {
+  if (line.trim() === '') return [''];
+  const visible = stripAnsi(line);
+  if (visible.length <= width) return [line];
+  const words = line.split(/(\s+)/);
+  const lines = [];
+  let current = '';
+  for (const word of words) {
+    if (!word) continue;
+    if (stripAnsi(current + word).length > width && current.trim()) {
+      lines.push(current.trimEnd());
+      current = word.trimStart();
+    } else {
+      current += word;
+    }
+  }
+  if (current.trim()) lines.push(current.trimEnd());
+  return lines.length ? lines : [line];
+}
+
+function formatToolResultContent(content) {
+  const text = String(content ?? '');
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const keys = Object.keys(parsed);
+      const status = typeof parsed.status === 'string' ? `${parsed.status}` : null;
+      const schema = typeof parsed.schema === 'string' ? parsed.schema : null;
+      const count = typeof parsed.directive_count === 'number'
+        ? `directives=${parsed.directive_count}`
+        : typeof parsed.directiveCount === 'number'
+          ? `directives=${parsed.directiveCount}`
+          : null;
+      return [status, schema, count, `keys=${keys.slice(0, 8).join(',')}${keys.length > 8 ? ',…' : ''}`]
+        .filter(Boolean)
+        .join(' · ');
+    }
+    if (Array.isArray(parsed)) return `array(${parsed.length})`;
+  } catch {
+    // Fall through to text summary.
+  }
+  return text.length > 500 ? `${text.slice(0, 500)}...` : text;
+}
+
+function formatKeyValueRows(record) {
+  const entries = Object.entries(record);
+  const width = entries.reduce((max, [key]) => Math.max(max, key.length), 0);
+  return entries.map(([key, value]) => `${key.padEnd(width)}  ${value}`).join('\n');
 }
 
 function parseColorEnv(value, defaultValue) {
@@ -1892,6 +1994,10 @@ export {
   parseCodexMcpResponse,
   parseNaradaToolCall,
   createTerminalStyle,
+  formatKeyValueRows,
+  formatToolResultContent,
+  renderMarkdownForTerminal,
+  wrapTerminalLine,
   runConversationTurn,
   runServerMode,
   resolveProviderAdapter,
