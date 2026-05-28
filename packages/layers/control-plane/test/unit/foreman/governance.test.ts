@@ -159,6 +159,21 @@ describe("governAction", () => {
     );
     expect(result.requires_approval).toBe(true);
   });
+
+  it("does not require approval for draft_reply only because uncertainty flags are present", () => {
+    const result = governAction(
+      makeAction({
+        action_type: "draft_reply",
+        payload_json: JSON.stringify({ body_text: "Could you clarify the missing details?" }),
+      }),
+      makePolicy({ allowed_actions: ["draft_reply", "no_action"] }),
+      { overall: "high", uncertainty_flags: ["missing_details"] },
+    );
+    expect(result.allowed).toBe(true);
+    expect(result.payload_valid).toBe(true);
+    expect(result.confidence_sufficient).toBe(true);
+    expect(result.requires_approval).toBe(false);
+  });
 });
 
 describe("governToolRequest", () => {
@@ -583,5 +598,50 @@ describe("campaign_brief governance", () => {
     expect(result.allowed).toBe(true);
     expect(result.payload_valid).toBe(false);
     expect(result.payload_errors[0]).toContain("campaign_brief requires");
+  });
+});
+
+describe("create_deliverable governance", () => {
+  it("accepts create_deliverable with valid payload", () => {
+    const result = governAction(
+      {
+        action_type: "create_deliverable",
+        authority: "recommended",
+        payload_json: JSON.stringify({
+          operation_slug: "staccato-gtm-strategy",
+          deliverable_type: "gtm_framework",
+          title: "GTM Framework",
+          body_markdown: "## Strategy\n\nDo the work.",
+          source_message_ids: ["msg-1"],
+          source_attachment_names: ["brief.pdf"],
+        }),
+        rationale: "Valid deliverable",
+      },
+      { primary_charter: "gtm_strategist", allowed_actions: ["create_deliverable", "draft_reply", "no_action"] },
+      { overall: "high", uncertainty_flags: [] },
+    );
+    expect(result.allowed).toBe(true);
+    expect(result.payload_valid).toBe(true);
+  });
+
+  it("rejects create_deliverable without body or source message", () => {
+    const result = governAction(
+      {
+        action_type: "create_deliverable",
+        authority: "recommended",
+        payload_json: JSON.stringify({
+          operation_slug: "staccato-brand-strategy",
+          deliverable_type: "brand_strategy_analysis",
+          title: "Brand Strategy",
+        }),
+        rationale: "Invalid deliverable",
+      },
+      { primary_charter: "brand_strategist", allowed_actions: ["create_deliverable", "draft_reply", "no_action"] },
+      { overall: "high", uncertainty_flags: [] },
+    );
+    expect(result.allowed).toBe(true);
+    expect(result.payload_valid).toBe(false);
+    expect(result.payload_errors.join("; ")).toContain("body_markdown");
+    expect(result.payload_errors.join("; ")).toContain("source_message_id");
   });
 });

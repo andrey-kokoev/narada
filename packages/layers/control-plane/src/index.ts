@@ -1,5 +1,5 @@
 // Main exports
-export { default as Database } from "better-sqlite3";
+export { default as Database } from "./sqlite/database.js";
 export { loadConfig } from "./config/load.js";
 export { loadEnvFile } from "./config/dotenv.js";
 export { validateCharterRuntimeConfig } from "./config/validation.js";
@@ -49,6 +49,37 @@ export {
   isActionableInboxCommandRequest,
   isInertReceivedInboxEnvelope,
 } from "./inbox/types.js";
+export {
+  DIRECTIVE_EVENT_SCHEMA,
+  DIRECTIVE_SCHEMA,
+  activeAdmittedDirectives,
+  admitDirective,
+  compareDirectives,
+  createDirective,
+  directiveEvent,
+  markDirectiveDelivered,
+  refuseDirective,
+  renderDirectivePromptContext,
+} from "./directives/index.js";
+export { FileDirectiveStore } from "./directives/store.js";
+export type {
+  Directive,
+  DirectiveAdmission,
+  DirectiveAdmissionStatus,
+  DirectiveAuthority,
+  DirectiveContent,
+  DirectiveContentKind,
+  DirectiveDelivery,
+  DirectiveDraft,
+  DirectiveEvent,
+  DirectiveEventKind,
+  DirectiveOrdering,
+  DirectiveSource,
+  DirectiveSourceKind,
+  DirectiveTarget,
+  DirectiveTargetKind,
+} from "./directives/index.js";
+export type { DirectiveStoreSnapshot, FileDirectiveStorePaths } from "./directives/store.js";
 export {
   SqliteInboxStore,
   defaultInboxDbPath,
@@ -276,6 +307,8 @@ export { SqliteProcessExecutionStore } from "./executors/store.js";
 export type { ProcessExecutionStore, ProcessExecutionStoreView, SqliteProcessExecutionStoreOptions, SqliteProcessExecutionStoreDbOptions } from "./executors/store.js";
 export { ProcessExecutor } from "./executors/process-executor.js";
 export type { ProcessExecutorDeps } from "./executors/process-executor.js";
+export { DeliverableExecutor } from "./executors/deliverable-executor.js";
+export type { DeliverableExecutorDeps, CreateDeliverablePayload } from "./executors/deliverable-executor.js";
 export type { ProcessExecution, ProcessRunPayload } from "./executors/types.js";
 export {
   isValidPhaseTransition,

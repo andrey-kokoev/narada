@@ -99,7 +99,9 @@ const AllowedActionSchema = z.enum([
   'extract_obligations',
   'create_followup',
   'campaign_brief',
+  'create_deliverable',
   'tool_request',
+  'process_run',
   'no_action',
 ]);
 

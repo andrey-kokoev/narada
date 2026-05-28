@@ -37,6 +37,7 @@ import {
   SqliteIntentStore,
   SqliteProcessExecutionStore,
   ProcessExecutor,
+  DeliverableExecutor,
   DefaultWorkerRegistry,
   drainWorker,
   SendReplyWorker,
@@ -140,6 +141,92 @@ export interface DispatchHooks {
   duringToolExecution?: (workItem: WorkItem, attempt: ExecutionAttempt, request: ToolInvocationRequest, index: number) => Promise<void>;
   afterToolExecution?: (workItem: WorkItem, attempt: ExecutionAttempt) => Promise<void>;
   beforeResolveWorkItem?: (workItem: WorkItem, attempt: ExecutionAttempt, evaluation: ReturnType<typeof buildEvaluationRecord>) => Promise<void>;
+}
+
+function deriveSiteRootFromConfigPath(configPath?: string): string {
+  if (!configPath) {
+    return process.cwd();
+  }
+  const resolvedConfigPath = resolve(configPath);
+  const configDir = dirname(resolvedConfigPath);
+  if (configDir.endsWith(`${join(".narada", "config")}`)) {
+    return resolve(configDir, "..", "..");
+  }
+  return process.cwd();
+}
+
+function hasDraftReplyAction(output: import("@narada2/control-plane").CharterOutputEnvelope): boolean {
+  return output.proposed_actions.some((action) => action.action_type === "draft_reply");
+}
+
+function parseReviewVerdict(output: import("@narada2/control-plane").CharterOutputEnvelope): { passed: boolean; violations: string[]; notes: string[] } {
+  const verdictFact = output.facts.find((fact) => fact.kind === "draft_review_verdict");
+  if (!verdictFact) {
+    return { passed: false, violations: ["reviewer did not return draft_review_verdict fact"], notes: [output.summary] };
+  }
+  try {
+    const parsed = JSON.parse(verdictFact.value_json) as { passed?: unknown; violations?: unknown; notes?: unknown };
+    return {
+      passed: parsed.passed === true,
+      violations: Array.isArray(parsed.violations) ? parsed.violations.map(String) : [],
+      notes: Array.isArray(parsed.notes) ? parsed.notes.map(String) : [],
+    };
+  } catch {
+    return { passed: false, violations: ["reviewer returned unparseable draft_review_verdict"], notes: [output.summary] };
+  }
+}
+
+function buildDraftReviewEnvelope(
+  base: import("@narada2/control-plane").CharterInvocationEnvelope,
+  candidate: import("@narada2/control-plane").CharterOutputEnvelope,
+  reviewerIndex: 1 | 2,
+  priorReview?: import("@narada2/control-plane").CharterOutputEnvelope,
+): import("@narada2/control-plane").CharterInvocationEnvelope {
+  return {
+    ...base,
+    execution_id: `${base.execution_id}_draft_review_${reviewerIndex}`,
+    role: "secondary",
+    invoked_at: new Date().toISOString(),
+    context_materialization: {
+      review_contract: [
+        "You are a pre-persistence reviewer for a Narada draft_reply candidate.",
+        "Do not propose actions, tools, sends, or edits. Evaluate only.",
+        "Check whether the candidate draft_reply is useful, correctly addressed, grounded in the supplied context, preserves reply context, and does not claim send/schedule authority.",
+        "Check for obvious client-facing defects: wrong recipient, third-person address to the recipient, missing requested content, hallucinated facts, stale intake posture, or incomplete reply body.",
+        "Return exactly one fact with kind draft_review_verdict and value_json as a JSON string: {\"passed\": boolean, \"violations\": string[], \"notes\": string[]}.",
+        "Set passed true only if this candidate is safe to persist into outbound draft state.",
+      ].join("\n"),
+      reviewer_index: reviewerIndex,
+      original_context_materialization: base.context_materialization,
+      candidate_output: candidate,
+      prior_review_output: priorReview ?? null,
+    },
+    allowed_actions: ["no_action"],
+    available_tools: [],
+    coordinator_flags: [...base.coordinator_flags, "pre_persistence_draft_review"],
+    prior_evaluations: [],
+    max_prior_evaluations: 0,
+  };
+}
+
+export async function runPrePersistenceDraftReviews(
+  charterRunner: CharterRunner,
+  envelope: import("@narada2/control-plane").CharterInvocationEnvelope,
+  output: import("@narada2/control-plane").CharterOutputEnvelope,
+): Promise<void> {
+  if (!hasDraftReplyAction(output)) return;
+
+  let priorReview: import("@narada2/control-plane").CharterOutputEnvelope | undefined;
+  for (const reviewerIndex of [1, 2] as const) {
+    const reviewEnvelope = buildDraftReviewEnvelope(envelope, output, reviewerIndex, priorReview);
+    const reviewOutput = await charterRunner.run(reviewEnvelope);
+    const verdict = parseReviewVerdict(reviewOutput);
+    if (!verdict.passed) {
+      const detail = verdict.violations.length ? verdict.violations.join("; ") : "reviewer did not pass candidate";
+      throw new Error(`draft_reply pre-persistence review ${reviewerIndex} failed: ${detail}`);
+    }
+    priorReview = reviewOutput;
+  }
 }
 
 /**
@@ -478,6 +565,7 @@ async function createDispatchContext(
     workerRegistry: InstanceType<typeof DefaultWorkerRegistry>;
     processExecutionStore: InstanceType<typeof SqliteProcessExecutionStore>;
     processExecutor: InstanceType<typeof ProcessExecutor>;
+    deliverableExecutor: InstanceType<typeof DeliverableExecutor>;
     factStore: InstanceType<typeof SqliteFactStore>;
     principalRegistry: PrincipalRuntimeRegistry;
   } | null = null;
@@ -573,6 +661,11 @@ async function createDispatchContext(
     processExecutionStore.initSchema();
 
     const processExecutor = new ProcessExecutor({ intentStore, executionStore: processExecutionStore });
+    const deliverableExecutor = new DeliverableExecutor({
+      intentStore,
+      executionStore: processExecutionStore,
+      siteRootDir: deriveSiteRootFromConfigPath(opts.configPath),
+    });
 
     const workerRegistry = new DefaultWorkerRegistry();
     const [SEND_REPLY, SEND_EXECUTION, NON_SEND_ACTIONS, OUTBOUND_RECONCILER] = OUTBOUND_WORKER_IDS;
@@ -584,6 +677,15 @@ async function createDispatchContext(
         description: 'Executes process.run intents via local subprocess',
       },
       fn: () => processExecutor.processNext(),
+    });
+    workerRegistry.register({
+      identity: {
+        worker_id: 'deliverable_executor',
+        executor_family: 'deliverable',
+        concurrency_policy: 'singleton',
+        description: 'Writes deliverable.create intents to local markdown artifacts',
+      },
+      fn: () => deliverableExecutor.processNext(),
     });
 
     // Mail outbound workers — only registered when graph source is present
@@ -762,7 +864,7 @@ async function createDispatchContext(
       });
     }
 
-    dispatchDeps = { db, coordinatorStore, outboundStore, intentStore, traceStore, foreman, scheduler, charterRunner, materializerRegistry, toolCatalog, toolDefinitions, processExecutionStore, workerRegistry, processExecutor, factStore, principalRegistry };
+    dispatchDeps = { db, coordinatorStore, outboundStore, intentStore, traceStore, foreman, scheduler, charterRunner, materializerRegistry, toolCatalog, toolDefinitions, processExecutionStore, workerRegistry, processExecutor, deliverableExecutor, factStore, principalRegistry };
     return dispatchDeps;
   }
 
@@ -1059,6 +1161,8 @@ async function createDispatchContext(
 
         await opts.dispatchHooks?.afterRuntimeComplete?.(workItem, attempt, output);
 
+        await runPrePersistenceDraftReviews(deps.charterRunner, envelope, output);
+
         deps.scheduler.completeExecution(attempt.execution_id, JSON.stringify(output));
 
         const evaluation = buildEvaluationRecord(output, {
@@ -1195,6 +1299,14 @@ async function createDispatchContext(
     } catch (processError) {
       const msg = processError instanceof Error ? processError.message : String(processError);
       logger.error('Process executor error', { scope: scope.scope_id, error: msg });
+    }
+
+    // Worker registry pass: run pending deliverable intents
+    try {
+      await drainWorker(deps.workerRegistry, 'deliverable_executor');
+    } catch (deliverableError) {
+      const msg = deliverableError instanceof Error ? deliverableError.message : String(deliverableError);
+      logger.error('Deliverable executor error', { scope: scope.scope_id, error: msg });
     }
 
     // Worker registry pass: run outbound workers through unified registry path
@@ -1366,6 +1478,10 @@ export async function createScopeService(
 ) {
   const rootDir = scope.root_dir;
   const graphSource = scope.graph ?? (scope.sources.find(s => s.type === 'graph') as ScopeConfig['graph'] | undefined);
+  const fallbackGraphSource = globalConfig.scopes
+    .map((configuredScope) => configuredScope.graph ?? (configuredScope.sources.find((source) => source.type === 'graph') as ScopeConfig['graph'] | undefined))
+    .find((source) => source?.user_id);
+  const outboundGraphSource = graphSource ?? fallbackGraphSource;
   const hasGraph = !!graphSource;
 
   // Build graph infrastructure only when a graph source is present
@@ -1394,6 +1510,15 @@ export async function createScopeService(
       include_headers: scope.normalize.include_headers,
       normalize_folder_ref: normalizeFolderRef,
       normalize_flagged: normalizeFlagged,
+    });
+  }
+
+  let outboundClient = client;
+  if (!outboundClient && outboundGraphSource) {
+    const tokenProvider = buildGraphTokenProvider({ graph: outboundGraphSource });
+    outboundClient = new GraphHttpClient({
+      tokenProvider,
+      preferImmutableIds: outboundGraphSource.prefer_immutable_ids ?? true,
     });
   }
 
@@ -1489,8 +1614,8 @@ export async function createScopeService(
     globalConfig,
     opts,
     logger,
-    client,
-    graphSource?.user_id,
+    outboundClient,
+    outboundGraphSource?.user_id,
     {
       rebuildViews: () => viewStore.rebuildAll(),
       rebuildProjections,
@@ -1500,7 +1625,16 @@ export async function createScopeService(
     syncFreshThresholdMs,
   );
 
-  return { scope, runner, dispatchContext };
+  const scopeDispatchContext = {
+    ...dispatchContext,
+    close: async () => {
+      await dispatchContext.close();
+      factStore.close();
+      searchEngine.close();
+    },
+  };
+
+  return { scope, runner, dispatchContext: scopeDispatchContext };
 }
 
 export async function createSyncService(

@@ -309,7 +309,7 @@ describe('Config Schema Validation', () => {
         policy: {
           primary_charter: 'obligation_keeper',
           secondary_charters: ['support_steward'],
-          allowed_actions: ['send_reply', 'no_action'],
+          allowed_actions: ['create_deliverable', 'send_reply', 'no_action'],
           allowed_tools: ['echo_test'],
           require_human_approval: true,
         },
@@ -317,7 +317,7 @@ describe('Config Schema Validation', () => {
       expect(result.success).toBe(true);
       if (result.success) {
         expect(result.data.policy.primary_charter).toBe('obligation_keeper');
-        expect(result.data.policy.allowed_actions).toEqual(['send_reply', 'no_action']);
+        expect(result.data.policy.allowed_actions).toEqual(['create_deliverable', 'send_reply', 'no_action']);
         expect(result.data.policy.require_human_approval).toBe(true);
       }
     });

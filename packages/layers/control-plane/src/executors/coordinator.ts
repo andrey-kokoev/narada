@@ -49,7 +49,7 @@ export class ExecutionCoordinator {
     executorFamily: string,
     intentId?: string,
   ): ExecutionLifecycle | undefined {
-    if (executorFamily === "process") {
+    if (executorFamily === "process" || executorFamily === "deliverable") {
       const ex = this.deps.processStore.getById(executionId);
       if (!ex) {
         return undefined;

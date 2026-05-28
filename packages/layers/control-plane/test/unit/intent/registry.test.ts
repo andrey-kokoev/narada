@@ -17,6 +17,7 @@ describe("Intent Family Registry", () => {
       "mail.draft_reply",
       "mail.set_categories",
       "process.run",
+      "deliverable.create",
     ] as const;
     for (const t of types) {
       expect(INTENT_FAMILIES[t]).toBeDefined();
@@ -47,6 +48,25 @@ describe("Intent Family Registry", () => {
       intent_type: "process.run",
       executor_family: "process",
       payload_json: JSON.stringify({ command: "/bin/echo", args: ["hi"] }),
+    };
+    const result = validateIntent(intent);
+    expect(result.valid).toBe(true);
+    if (result.valid) {
+      expect(result.family.confirmation_model).toBe("none");
+    }
+  });
+
+  it("validates a correct deliverable intent", () => {
+    const intent: Pick<Intent, "intent_type" | "executor_family" | "payload_json"> = {
+      intent_type: "deliverable.create",
+      executor_family: "deliverable",
+      payload_json: JSON.stringify({
+        operation_slug: "staccato-gtm-strategy",
+        deliverable_type: "gtm_framework",
+        title: "GTM Framework",
+        body_markdown: "## Strategy",
+        source_message_ids: ["msg-1"],
+      }),
     };
     const result = validateIntent(intent);
     expect(result.valid).toBe(true);
@@ -100,6 +120,23 @@ describe("Intent Family Registry", () => {
     expect(result.valid).toBe(false);
     if (!result.valid) {
       expect(result.reason).toContain("missing required field: command");
+    }
+  });
+
+  it("rejects deliverable.create without a title", () => {
+    const result = validateIntent({
+      intent_type: "deliverable.create",
+      executor_family: "deliverable",
+      payload_json: JSON.stringify({
+        operation_slug: "staccato-gtm-strategy",
+        deliverable_type: "gtm_framework",
+        body_markdown: "## Strategy",
+        source_message_ids: ["msg-1"],
+      }),
+    });
+    expect(result.valid).toBe(false);
+    if (!result.valid) {
+      expect(result.reason).toContain("missing required field: title");
     }
   });
 

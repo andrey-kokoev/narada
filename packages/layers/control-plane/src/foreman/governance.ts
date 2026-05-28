@@ -202,6 +202,31 @@ function validateCampaignBriefPayload(payload: unknown): { valid: boolean; error
   return { valid: errors.length === 0, errors };
 }
 
+function validateCreateDeliverablePayload(payload: unknown): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    errors.push("Payload must be an object");
+    return { valid: false, errors };
+  }
+  const p = payload as Record<string, unknown>;
+  if (!p.operation_slug || typeof p.operation_slug !== "string" || p.operation_slug.trim().length === 0) {
+    errors.push("create_deliverable requires operation_slug");
+  }
+  if (!p.deliverable_type || typeof p.deliverable_type !== "string" || p.deliverable_type.trim().length === 0) {
+    errors.push("create_deliverable requires deliverable_type");
+  }
+  if (!p.title || typeof p.title !== "string" || p.title.trim().length === 0) {
+    errors.push("create_deliverable requires title");
+  }
+  if (!p.body_markdown || typeof p.body_markdown !== "string" || p.body_markdown.trim().length === 0) {
+    errors.push("create_deliverable requires body_markdown");
+  }
+  if (!Array.isArray(p.source_message_ids) || p.source_message_ids.length === 0) {
+    errors.push("create_deliverable requires at least one source_message_id");
+  }
+  return { valid: errors.length === 0, errors };
+}
+
 function defaultPayloadValidator(payload: unknown): { valid: boolean; errors: string[] } {
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return { valid: false, errors: ["Payload must be an object"] };
@@ -217,6 +242,7 @@ const payloadValidators: Record<AllowedAction, (payload: unknown) => { valid: bo
   move_message: validateMoveMessagePayload,
   set_categories: validateSetCategoriesPayload,
   campaign_brief: validateCampaignBriefPayload,
+  create_deliverable: validateCreateDeliverablePayload,
   extract_obligations: defaultPayloadValidator,
   create_followup: validateCreateFollowupPayload,
   tool_request: defaultPayloadValidator,
@@ -265,7 +291,7 @@ export function governAction(
     requiresApproval = true;
   } else if (confidence.overall === "medium" && isHighStakes) {
     requiresApproval = true;
-  } else if (confidence.uncertainty_flags.length > 0) {
+  } else if (confidence.uncertainty_flags.length > 0 && action.action_type !== "draft_reply") {
     requiresApproval = true;
   }
 

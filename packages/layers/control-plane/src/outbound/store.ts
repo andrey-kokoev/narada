@@ -2,10 +2,10 @@
  * Outbound SQLite Store
  *
  * Durable persistence for outbound commands, versions, transitions,
- * and managed drafts. Uses better-sqlite3.
+ * and managed drafts. Uses the Narada synchronous SQLite adapter.
  */
 
-import Database from "better-sqlite3";
+import Database from "../sqlite/database.js";
 import type {
   OutboundCommand,
   OutboundVersion,
@@ -26,7 +26,7 @@ const ACTIVE_UNSENT_STATUSES: readonly OutboundStatus[] = [
 ];
 
 export interface OutboundStore {
-  readonly db: import("better-sqlite3").Database;
+  readonly db: import("../sqlite/database.js").default;
   initSchema(): void;
   createCommand(command: OutboundCommand, version: OutboundVersion): void;
   getCommandByIdempotencyKey(idempotencyKey: string): OutboundCommand | undefined;
@@ -78,7 +78,7 @@ export interface SqliteOutboundStoreOptions {
 }
 
 export interface SqliteOutboundStoreDbOptions {
-  db: Database.Database;
+  db: Database;
 }
 
 function rowToCommand(row: Record<string, unknown>): OutboundCommand {
@@ -148,7 +148,7 @@ function rowToManagedDraft(row: Record<string, unknown>): ManagedDraft {
  * evolve, and we want explicit error messages and the ability to supersede.
  */
 export class SqliteOutboundStore implements OutboundStore {
-  readonly db: Database.Database;
+  readonly db: Database;
   private readonly shouldClose: boolean;
 
   constructor(opts: SqliteOutboundStoreOptions | SqliteOutboundStoreDbOptions) {

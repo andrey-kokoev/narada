@@ -148,6 +148,23 @@ export const INTENT_FAMILIES: Record<IntentType, IntentFamily> = {
     idempotency_scope: "context_action",
     confirmation_model: "explicit",
   },
+  "deliverable.create": {
+    intent_type: "deliverable.create",
+    executor_family: "deliverable",
+    payload_schema: obj(
+      {
+        operation_slug: { type: "string" },
+        deliverable_type: { type: "string" },
+        title: { type: "string" },
+        body_markdown: { type: "string" },
+        source_message_ids: { type: "array", items: { type: "string" } },
+        source_attachment_names: { type: "array", items: { type: "string" } },
+      },
+      ["operation_slug", "deliverable_type", "title", "body_markdown", "source_message_ids"],
+    ),
+    idempotency_scope: "context_action",
+    confirmation_model: "none",
+  },
 };
 
 export function getIntentFamily(intentType: string): IntentFamily | undefined {

@@ -8,7 +8,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import type Database from "better-sqlite3";
+import type Database from "../sqlite/database.js";
 import type {
   ForemanFacade,
   SyncCompletionSignal,
@@ -45,7 +45,7 @@ export interface ForemanFacadeDeps {
   coordinatorStore: CoordinatorStore;
   outboundStore: OutboundStore;
   intentStore: IntentStore;
-  db: Database.Database;
+  db: Database;
   foremanId: string;
   getRuntimePolicy: (scopeId: string) => RuntimePolicy;
   contextFormationStrategy: ContextFormationStrategy;

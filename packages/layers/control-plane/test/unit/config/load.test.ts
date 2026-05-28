@@ -520,6 +520,30 @@ describe("loadConfig", () => {
     expect(scope.policy.allowed_actions).toContain("campaign_brief");
   });
 
+  it("accepts create_deliverable in allowed_actions", async () => {
+    const path = await writeConfigFile({
+      mailbox_id: "mailbox_primary",
+      root_dir: "./data/mail-sync",
+      graph: {
+        user_id: "user@example.com",
+        prefer_immutable_ids: true,
+      },
+      scope: {
+        included_container_refs: ["inbox"],
+        included_item_kinds: ["message"],
+      },
+      policy: {
+        primary_charter: "gtm_strategist",
+        allowed_actions: ["create_deliverable", "draft_reply", "no_action"],
+      },
+    });
+    createdPaths.push(path);
+
+    const config = await loadConfig({ path });
+    const scope = config.scopes[0]!;
+    expect(scope.policy.allowed_actions).toContain("create_deliverable");
+  });
+
   it("accepts operation_intake routing for shared mailbox scopes", async () => {
     const path = await writeConfigFile({
       mailbox_id: "shared_mailbox",

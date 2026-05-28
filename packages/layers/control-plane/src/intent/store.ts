@@ -4,12 +4,12 @@
  * Durable persistence for the domain-neutral Intent boundary.
  */
 
-import Database from "better-sqlite3";
+import Database from "../sqlite/database.js";
 import type { Intent, IntentStatus } from "./types.js";
 import { assertValidIntent } from "./registry.js";
 
 export interface IntentStore {
-  readonly db: import("better-sqlite3").Database;
+  readonly db: import("../sqlite/database.js").default;
   initSchema(): void;
   admit(intent: Omit<Intent, "created_at" | "updated_at">): { intent: Intent; isNew: boolean };
   getById(intentId: string): Intent | undefined;
@@ -35,7 +35,7 @@ export interface SqliteIntentStoreOptions {
 }
 
 export interface SqliteIntentStoreDbOptions {
-  db: Database.Database;
+  db: Database;
 }
 
 function rowToIntent(row: Record<string, unknown>): Intent {
@@ -55,7 +55,7 @@ function rowToIntent(row: Record<string, unknown>): Intent {
 }
 
 export class SqliteIntentStore implements IntentStore {
-  readonly db: Database.Database;
+  readonly db: Database;
   private readonly shouldClose: boolean;
 
   constructor(opts: SqliteIntentStoreOptions | SqliteIntentStoreDbOptions) {

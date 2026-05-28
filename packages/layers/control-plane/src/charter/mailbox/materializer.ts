@@ -10,7 +10,7 @@
 
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type Database from "better-sqlite3";
+import type Database from "../../sqlite/database.js";
 import type { PolicyContext } from "../../foreman/context.js";
 import type { NormalizedMessage } from "../../types/normalized.js";
 import { FileMessageStore } from "../../persistence/messages.js";
@@ -76,6 +76,31 @@ async function getThreadMessageIds(rootDir: string, conversationId: string): Pro
   }
 }
 
+async function loadAttachmentTextExcerpts(rootDir: string, messageId: string, msg: NormalizedMessage): Promise<Array<Record<string, unknown>>> {
+  const attachments = Array.isArray(msg.attachments) ? msg.attachments as unknown as Array<Record<string, unknown>> : [];
+  const excerpts: Array<Record<string, unknown>> = [];
+  for (const attachment of attachments) {
+    const key = typeof attachment.attachment_key === "string" ? attachment.attachment_key : null;
+    if (!key) continue;
+    const textPath = join(rootDir, "messages", safeSegment(messageId), "attachments", "text", `${safeSegment(key)}.txt`);
+    try {
+      const text = await readFile(textPath, "utf-8");
+      excerpts.push({
+        attachment_key: key,
+        display_name: attachment.display_name ?? null,
+        content_type: attachment.content_type ?? null,
+        text_excerpt: text.slice(0, 12000),
+      });
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT") {
+        throw error;
+      }
+    }
+  }
+  return excerpts;
+}
+
 function routedConversationId(contextId: string): string | null {
   const separator = contextId.indexOf(":");
   if (separator <= 0 || separator === contextId.length - 1) {
@@ -94,7 +119,7 @@ export class MailboxContextMaterializer implements ContextMaterializer {
   constructor(
     private rootDir: string,
     private messageStore: FileMessageStore,
-    private db?: Database.Database,
+    private db?: Database,
   ) {}
 
   async materialize(context: PolicyContext): Promise<unknown> {
@@ -126,8 +151,24 @@ export class MailboxContextMaterializer implements ContextMaterializer {
     for (const messageId of messageIds) {
       const record = await this.messageStore.readRecord(messageId);
       if (record && typeof record === "object") {
-        messages.push(normalizeMessageForEnvelope(record as NormalizedMessage));
+        const normalized = normalizeMessageForEnvelope(record as NormalizedMessage) as NormalizedMessage & {
+          attachment_texts?: Array<Record<string, unknown>>;
+        };
+        const attachmentTexts = await loadAttachmentTextExcerpts(this.rootDir, messageId, record as NormalizedMessage);
+        if (attachmentTexts.length > 0) {
+          normalized.attachment_texts = attachmentTexts;
+        }
+        messages.push(normalized);
       }
+    }
+    const seenMessageIds = new Set(messages.map((message) => message.message_id));
+    for (const fact of context.facts ?? []) {
+      const message = messageFromFact(fact);
+      if (!message || seenMessageIds.has(message.message_id)) {
+        continue;
+      }
+      messages.push(normalizeMessageForEnvelope(message));
+      seenMessageIds.add(message.message_id);
     }
 
     messages.sort((a, b) => {
@@ -138,11 +179,16 @@ export class MailboxContextMaterializer implements ContextMaterializer {
 
     const knowledgeSources = await loadKnowledgeSources(this.rootDir);
     const campaignIntake = await loadCampaignIntakeProjection(this.rootDir, context.context_id);
+    const activationRecommendation =
+      "campaign_activation_recommendation" in context
+        ? (context as Record<string, unknown>).campaign_activation_recommendation
+        : null;
 
     return {
-      messages,
+      messages: activationRecommendation ? [] : messages,
       knowledge_sources: knowledgeSources,
-      ...(campaignIntake ? { campaign_intake: campaignIntake } : {}),
+      ...(activationRecommendation ? { campaign_activation_recommendation: activationRecommendation } : {}),
+      ...(!activationRecommendation && campaignIntake ? { campaign_intake: campaignIntake } : {}),
     };
   }
 
@@ -174,6 +220,36 @@ function conversationIdFromFact(fact: { payload_json: string }): string | null {
   }
 }
 
+function messageFromFact(fact: { payload_json: string }): NormalizedMessage | null {
+  try {
+    const payload = JSON.parse(fact.payload_json) as Record<string, unknown>;
+    const event = payload.event as Record<string, unknown> | undefined;
+    const normalizedPayload = event?.payload as NormalizedMessage | undefined;
+    return normalizedPayload && typeof normalizedPayload.message_id === "string"
+      ? normalizedPayload
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function attachmentForEnvelope(attachment: Record<string, unknown>): Record<string, unknown> {
+  return {
+    attachment_key: attachment.attachment_key ?? null,
+    ordinal: attachment.ordinal ?? null,
+    display_name: attachment.display_name ?? null,
+    content_type: attachment.content_type ?? null,
+    size_bytes: attachment.size_bytes ?? null,
+    inline: attachment.inline ?? false,
+    content_hash: attachment.content_hash ?? null,
+  };
+}
+
+function cleanPromptText(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  return value.replace(/[\uD800-\uDFFF]/g, "");
+}
+
 /**
  * Canonical projection from Narada message model into charter runtime model.
  *
@@ -195,10 +271,29 @@ export function normalizeMessageForEnvelope(msg: NormalizedMessage): NormalizedM
     email: a.email ?? null,
     name: a.display_name ?? null,
   });
+  const attachments = Array.isArray((msg as unknown as Record<string, unknown>).attachments)
+    ? ((msg as unknown as Record<string, unknown>).attachments as Array<Record<string, unknown>>)
+    : [];
+  const attachmentTexts = attachments
+    .filter((attachment) => typeof attachment.text_excerpt === "string")
+    .map((attachment) => ({
+      attachment_key: attachment.attachment_key ?? null,
+      display_name: attachment.display_name ?? null,
+      content_type: attachment.content_type ?? null,
+      text_excerpt: cleanPromptText(attachment.text_excerpt) ?? "",
+    }));
   return {
     ...msg,
     internet_message_id: (r.internet_message_id as string | undefined) ?? null,
-    body_preview: (r.body_preview as string | undefined) ?? bodyPreview ?? bodyText,
+    body: msg.body && typeof msg.body === "object"
+      ? {
+          ...msg.body,
+          ...("text" in msg.body ? { text: cleanPromptText((msg.body as { text?: string }).text) ?? "" } : {}),
+          ...("preview" in msg.body ? { preview: cleanPromptText((msg.body as { preview?: string }).preview) ?? "" } : {}),
+        }
+      : msg.body,
+    body_preview: cleanPromptText(r.body_preview) ?? cleanPromptText(bodyPreview) ?? cleanPromptText(bodyText),
+    attachments: attachments.map(attachmentForEnvelope),
     from: Array.isArray(msg.from) ? msg.from.map(mapAddr) : msg.from ? [mapAddr(msg.from)] : [],
     to: (msg.to ?? []).map(mapAddr),
     cc: (msg.cc ?? []).map(mapAddr),
@@ -209,5 +304,6 @@ export function normalizeMessageForEnvelope(msg: NormalizedMessage): NormalizedM
     categories: msg.category_refs ?? [],
     parent_folder_id: (r.parent_folder_id as string | undefined) ?? null,
     importance: (r.importance as "low" | "normal" | "high" | undefined) ?? null,
-  } as NormalizedMessage;
+    ...(attachmentTexts.length ? { attachment_texts: attachmentTexts } : {}),
+  } as unknown as NormalizedMessage;
 }

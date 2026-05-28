@@ -162,10 +162,34 @@ function buildAttachmentManifest(
     ...(attachment.content_id ? { content_id: attachment.content_id } : {}),
     ...(attachment.content_hash ? { content_hash: attachment.content_hash } : {}),
     ...(attachment.content_ref ? { content_ref: attachment.content_ref } : {}),
+    ...(attachment.content_ref?.startsWith("inline-base64:")
+      ? { content_file_ref: `attachments/by-id/${safeSegment(attachment.attachment_key)}` }
+      : {}),
     ...(attachment.source_extensions
       ? { source_extensions: attachment.source_extensions }
       : {}),
   }));
+}
+
+function filenameForAttachment(attachment: NormalizedAttachment): string {
+  const name = attachment.display_name?.trim() || attachment.attachment_key;
+  return safeSegment(name);
+}
+
+async function writeAttachmentFiles(
+  stagingDir: string,
+  attachments: NormalizedAttachment[],
+): Promise<void> {
+  for (const attachment of attachments) {
+    const ref = attachment.content_ref;
+    if (!ref?.startsWith("inline-base64:")) {
+      continue;
+    }
+
+    const bytes = Buffer.from(ref.slice("inline-base64:".length), "base64");
+    await writeFile(join(stagingDir, "attachments", "by-id", safeSegment(attachment.attachment_key)), bytes);
+    await writeFile(join(stagingDir, "attachments", "by-name", filenameForAttachment(attachment)), bytes);
+  }
 }
 
 /**
@@ -236,6 +260,7 @@ export class FileMessageStore implements MessageStore {
 
       const manifest = buildAttachmentManifest(mergedPayload.attachments ?? []);
       await writeJson(join(stagingDir, "attachments", "manifest.json"), manifest);
+      await writeAttachmentFiles(stagingDir, mergedPayload.attachments ?? []);
 
       // Calculate checksum of the record for integrity validation
       const record = {

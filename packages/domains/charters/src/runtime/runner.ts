@@ -232,10 +232,19 @@ export class CodexCharterRunner implements CharterRunner {
     let contextBody: string;
     if (mat && Array.isArray(mat.messages)) {
       const messages = (mat.messages as Array<Record<string, unknown>>)
-        .map(
-          (m) =>
-            `[${m.received_at ?? "unknown"}] ${JSON.stringify(m.from ?? "unknown")}: ${m.subject ?? "(no subject)"}\n${m.body_preview ?? ""}`,
-        )
+        .map((m) => {
+          const attachments = Array.isArray(m.attachments)
+            ? (m.attachments as Array<Record<string, unknown>>)
+                .map((a) => `- ${a.display_name ?? a.attachment_key ?? "attachment"} (${a.content_type ?? "unknown"}, ${a.size_bytes ?? "unknown"} bytes)`)
+                .join("\n")
+            : "";
+          const attachmentTexts = Array.isArray(m.attachment_texts)
+            ? (m.attachment_texts as Array<Record<string, unknown>>)
+                .map((a) => `=== attachment text: ${a.display_name ?? a.attachment_key ?? "attachment"} ===\n${a.text_excerpt ?? ""}\n=== end attachment text ===`)
+                .join("\n")
+            : "";
+          return `[${m.received_at ?? "unknown"}] ${JSON.stringify(m.from ?? "unknown")}: ${m.subject ?? "(no subject)"}\n${m.body_preview ?? ""}${attachments ? `\nAttachments:\n${attachments}` : ""}${attachmentTexts ? `\n${attachmentTexts}` : ""}`;
+        })
         .join("\n---\n");
       contextBody = `Context messages:\n${messages}`;
     } else {

@@ -1146,7 +1146,7 @@ export function getProcessExecutionDetails(
 }
 
 export function getIntentLifecycleTransitions(
-  db: import("better-sqlite3").Database,
+  db: import("../sqlite/database.js").default,
   intentId: string,
 ): IntentLifecycleTransition[] {
   const intentRows = db

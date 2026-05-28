@@ -63,6 +63,15 @@ function tagQueriedFolderRef(
   }));
 }
 
+function shouldHydrateAttachments(message: GraphDeltaMessage): boolean {
+  return Boolean(
+    !message["@removed"] &&
+    message.hasAttachments &&
+    (!Array.isArray(message.attachments) || message.attachments.length === 0) &&
+    message.id,
+  );
+}
+
 export class DefaultGraphAdapter implements GraphAdapter {
   private readonly cfg: GraphAdapterConfig;
   private readonly deltaWalker?: GraphDeltaWalker;
@@ -79,6 +88,22 @@ export class DefaultGraphAdapter implements GraphAdapter {
     }
   }
 
+  private async hydrateAttachments(messages: GraphDeltaMessage[]): Promise<GraphDeltaMessage[]> {
+    if (this.cfg.attachment_policy === "exclude") {
+      return messages;
+    }
+
+    return Promise.all(
+      messages.map(async (message) => {
+        if (!shouldHydrateAttachments(message)) {
+          return message;
+        }
+        const attachments = await this.cfg.client.getMessageAttachments(this.cfg.user_id, message.id);
+        return { ...message, attachments };
+      }),
+    );
+  }
+
   async fetch_since(cursor?: string | null): Promise<NormalizedBatch> {
     const fetchedAt = new Date().toISOString();
     const refs = this.cfg.adapter_scope.included_container_refs;
@@ -86,13 +111,14 @@ export class DefaultGraphAdapter implements GraphAdapter {
     if (refs.length === 1 && this.deltaWalker) {
       const folderRef = resolveFirstFolderId(this.cfg.adapter_scope);
       const walked = await this.deltaWalker.walkFromCursor(cursor);
+      const messages = await this.hydrateAttachments(tagQueriedFolderRef(walked.messages, folderRef));
       return normalizeBatch({
         mailbox_id: this.cfg.mailbox_id,
         adapter_scope: this.cfg.adapter_scope,
         prior_cursor: cursor ?? null,
         next_cursor: walked.nextCursor,
         fetched_at: fetchedAt,
-        messages: tagQueriedFolderRef(walked.messages, folderRef),
+        messages,
         has_more: false,
         body_policy: this.cfg.body_policy,
         attachment_policy: this.cfg.attachment_policy,
@@ -118,7 +144,7 @@ export class DefaultGraphAdapter implements GraphAdapter {
       });
       const folderCursor = resolveFolderCursor(cursor, trimmedFolderId);
       const walked = await walker.walkFromCursor(folderCursor);
-      allMessages.push(...tagQueriedFolderRef(walked.messages, trimmedFolderId));
+      allMessages.push(...(await this.hydrateAttachments(tagQueriedFolderRef(walked.messages, trimmedFolderId))));
       nextCursors[trimmedFolderId] = walked.nextCursor;
     }
 

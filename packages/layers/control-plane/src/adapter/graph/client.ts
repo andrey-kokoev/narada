@@ -1,4 +1,4 @@
-import type { GraphDeltaMessage, GraphDeltaPage } from "../../types/graph.js";
+import type { GraphAttachment, GraphDeltaMessage, GraphDeltaPage, GraphListResponse } from "../../types/graph.js";
 import type { GraphTokenProvider } from "./auth.js";
 import { handleGraphError, withRetry, type RetryConfig } from "../../retry.js";
 
@@ -91,6 +91,20 @@ export class GraphHttpClient {
 
   async getDeltaPage(url: string): Promise<GraphDeltaPage<GraphDeltaMessage>> {
     return this.requestJson<GraphDeltaPage<GraphDeltaMessage>>(url);
+  }
+
+  async getMessageAttachments(userId: string, messageId: string): Promise<GraphAttachment[]> {
+    const path = `/users/${encodeURIComponent(userId)}/messages/${encodeURIComponent(messageId)}/attachments`;
+    const attachments: GraphAttachment[] = [];
+    let url: string | undefined = path;
+
+    while (url) {
+      const page: GraphListResponse<GraphAttachment> = await this.getJson<GraphListResponse<GraphAttachment>>(url);
+      attachments.push(...(page.value ?? []));
+      url = page["@odata.nextLink"];
+    }
+
+    return attachments;
   }
 
   /**

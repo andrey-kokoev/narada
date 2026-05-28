@@ -59,7 +59,7 @@ describe("daemon worker registry wiring", () => {
   });
 
   afterEach(() => {
-    rmSync(rootDir, { recursive: true, force: true });
+    rmSync(rootDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   });
 
   it("registers all expected workers including outbound mail workers", async () => {
@@ -83,14 +83,15 @@ describe("daemon worker registry wiring", () => {
 
     // Process executor must be present
     expect(workerIds).toContain("process_executor");
+    expect(workerIds).toContain("deliverable_executor");
 
     // All outbound workers must be present
     for (const id of OUTBOUND_WORKER_IDS) {
       expect(workerIds).toContain(id);
     }
 
-    // Exact count: process_executor + 3 outbound workers
-    expect(workerIds).toHaveLength(1 + OUTBOUND_WORKER_IDS.length);
+    // Exact count: process_executor + deliverable_executor + outbound workers
+    expect(workerIds).toHaveLength(2 + OUTBOUND_WORKER_IDS.length);
 
     // Outbound workers must have the correct executor family
     for (const id of OUTBOUND_WORKER_IDS) {
@@ -103,6 +104,40 @@ describe("daemon worker registry wiring", () => {
     const processWorker = apiScope.workerRegistry.getWorker("process_executor");
     expect(processWorker).toBeDefined();
     expect(processWorker!.identity.executor_family).toBe("process");
+    const deliverableWorker = apiScope.workerRegistry.getWorker("deliverable_executor");
+    expect(deliverableWorker).toBeDefined();
+    expect(deliverableWorker!.identity.executor_family).toBe("deliverable");
+
+    await dispatchContext.close();
+  });
+
+  it("registers outbound workers for mock operation scopes using global graph authority", async () => {
+    const graphScope = buildMinimalScopeConfig(join(rootDir, "mailbox"));
+    const operationScope: ScopeConfig = {
+      ...buildMinimalScopeConfig(join(rootDir, "operation")),
+      scope_id: "test-operation",
+      sources: [{ type: "mock" }],
+      graph: undefined,
+    };
+    const globalConfig: ExchangeFsSyncConfig = {
+      root_dir: rootDir,
+      scopes: [graphScope, operationScope],
+    };
+    const logger = createLogger({ component: "test", verbose: false });
+
+    const { dispatchContext } = await createScopeService(
+      operationScope,
+      globalConfig,
+      {},
+      logger,
+    );
+
+    const apiScope = await dispatchContext.getObservationApiScope();
+    const workerIds = apiScope.workerRegistry.listWorkers().map((w) => w.worker_id);
+
+    for (const id of OUTBOUND_WORKER_IDS) {
+      expect(workerIds).toContain(id);
+    }
 
     await dispatchContext.close();
   });

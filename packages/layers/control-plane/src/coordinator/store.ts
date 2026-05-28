@@ -4,7 +4,7 @@
  * Durable state for foreman, evaluations, context records, and policy overrides.
  */
 
-import Database from "better-sqlite3";
+import Database from "../sqlite/database.js";
 import type {
   CoordinatorStore,
   ForemanDecisionRow,
@@ -210,11 +210,11 @@ function rowToToolCallRecord(row: Record<string, unknown>): ToolCallRecord {
 }
 
 export interface SqliteCoordinatorStoreOptions {
-  db: Database.Database;
+  db: Database;
 }
 
 export class SqliteCoordinatorStore implements CoordinatorStore {
-  readonly db: Database.Database;
+  readonly db: Database;
 
   constructor(opts: SqliteCoordinatorStoreOptions) {
     this.db = opts.db;

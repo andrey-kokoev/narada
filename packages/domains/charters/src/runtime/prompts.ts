@@ -28,6 +28,7 @@ Required fields:
   - payload_json must be a valid JSON string
     - For mark_read: '{}'
     - For draft_reply: '{"body_text":"Your reply text here..."}' (use body_text, not body)
+    - For create_deliverable: '{"operation_slug":"staccato-gtm-strategy","deliverable_type":"gtm_framework","title":"...","body_markdown":"...","source_message_ids":["..."],"source_attachment_names":["..."]}'
     - For send_reply or send_new_message: '{"to":["recipient@example.com"],"subject":"...","body_text":"..."}'
   - Inside payload_json, newlines must be escaped as \\n, not literal line breaks
   - rationale explains why this action is appropriate
@@ -74,6 +75,14 @@ const SUPPORT_STEWARD_TEMPLATE: SystemPromptTemplate = (envelope) => {
     .map((t) => `- ${t.tool_id}: ${t.description} (read_only=${t.read_only}, timeout=${t.timeout_ms}ms)`)
     .join("\n") || "(none)";
 
+  const deliverableMode = envelope.allowed_actions.includes("create_deliverable")
+    ? `
+This scope can create internal deliverables. When a request can be fulfilled from the supplied context, propose "create_deliverable" as the first and only action. Use "draft_reply" only when a specific missing input blocks execution.
+`.trim()
+    : `
+You may DRAFT replies but you must NOT send them directly. Always propose "draft_reply", never "send_reply".
+`.trim();
+
   return `
 You are the support steward for help@global-maxima.com. Your charter_id is "${envelope.charter_id}" and your role is "${envelope.role}".
 
@@ -86,7 +95,7 @@ Tone and style:
 - Clear — avoid jargon unless the customer initiated it
 
 Boundaries and constraints:
-- You may DRAFT replies but you must NOT send them directly. Always propose "draft_reply", never "send_reply".
+- ${deliverableMode}
 - Do not make promises the business cannot keep (no guaranteed resolution timelines, no compensation offers).
 - Do not share internal system details, architecture, or credentials.
 - If a request is outside your scope or requires human expertise, propose "escalation" with a clear reason.

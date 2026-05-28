@@ -5,11 +5,11 @@
  * Aligned with the unified executor lifecycle model.
  */
 
-import Database from "better-sqlite3";
+import Database from "../sqlite/database.js";
 import type { ProcessExecution } from "./types.js";
 
 export interface ProcessExecutionStore {
-  readonly db: import("better-sqlite3").Database;
+  readonly db: import("../sqlite/database.js").default;
   initSchema(): void;
   create(execution: Omit<ProcessExecution, "created_at">): void;
   getById(executionId: string): ProcessExecution | undefined;
@@ -36,7 +36,7 @@ export interface SqliteProcessExecutionStoreOptions {
 }
 
 export interface SqliteProcessExecutionStoreDbOptions {
-  db: Database.Database;
+  db: Database;
 }
 
 function rowToExecution(row: Record<string, unknown>): ProcessExecution {
@@ -77,7 +77,7 @@ function rowToExecution(row: Record<string, unknown>): ProcessExecution {
 }
 
 export class SqliteProcessExecutionStore implements ProcessExecutionStore {
-  readonly db: Database.Database;
+  readonly db: Database;
   private readonly shouldClose: boolean;
 
   constructor(

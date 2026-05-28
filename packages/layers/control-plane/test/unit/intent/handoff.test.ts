@@ -205,6 +205,31 @@ describe("IntentHandoff", () => {
         expect(intent!.intent_type).toBe(intentType);
       }
     });
+
+    it("admits create_deliverable as a non-mail intent without outbound command", () => {
+      const decision = makeDecision({
+        decision_id: "fd-deliverable",
+        approved_action: "create_deliverable" as ForemanDecisionRow["approved_action"],
+        payload_json: JSON.stringify({
+          operation_slug: "staccato-gtm-strategy",
+          deliverable_type: "gtm_framework",
+          title: "GTM Framework",
+          body_markdown: "## Strategy",
+          source_message_ids: ["msg-1"],
+        }),
+      });
+      coordinatorStore.insertDecision(decision);
+
+      const targetId = db.transaction(() => handoff.admitIntentFromDecision(decision))();
+      const intent = intentStore.getById(targetId);
+      expect(intent).toBeDefined();
+      expect(intent!.intent_type).toBe("deliverable.create");
+      expect(intent!.executor_family).toBe("deliverable");
+      expect(intent!.target_id).toBeNull();
+
+      const cmdCount = (db.prepare("select count(*) as c from outbound_commands").get() as { c: number }).c;
+      expect(cmdCount).toBe(0);
+    });
   });
 
   describe("cancelUnsentCommandsForContext", () => {

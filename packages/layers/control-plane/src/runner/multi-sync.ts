@@ -7,7 +7,7 @@
 
 import { mkdir } from "node:fs/promises";
 import { resolve, join } from "node:path";
-import Database from "better-sqlite3";
+import Database from "../sqlite/database.js";
 import type { MultiMailboxConfig, MailboxConfig } from "../config/multi-mailbox.js";
 import { ResourceManager } from "../utils/resources.js";
 import type { MailboxSyncResult } from "../health-multi.js";

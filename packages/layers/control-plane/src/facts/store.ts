@@ -4,7 +4,7 @@
  * Durable, append-safe, duplicate-resistant persistence for canonical facts.
  */
 
-import Database from "better-sqlite3";
+import Database from "../sqlite/database.js";
 import type { Fact, FactStore, FactType, FactProvenance } from "./types.js";
 import { extractContextId } from "./context-extractor.js";
 
@@ -19,11 +19,11 @@ function rowToFact(row: Record<string, unknown>): Fact {
 }
 
 export interface SqliteFactStoreOptions {
-  db: Database.Database;
+  db: Database;
 }
 
 export class SqliteFactStore implements FactStore {
-  readonly db: Database.Database;
+  readonly db: Database;
 
   constructor(opts: SqliteFactStoreOptions) {
     this.db = opts.db;

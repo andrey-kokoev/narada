@@ -176,9 +176,11 @@ const ALLOWED_ACTIONS = new Set([
   "move_message",
   "set_categories",
   "campaign_brief",
+  "create_deliverable",
   "extract_obligations",
   "create_followup",
   "tool_request",
+  "process_run",
   "no_action",
 ]);
 

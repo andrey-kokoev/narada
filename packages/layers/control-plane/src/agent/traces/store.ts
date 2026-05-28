@@ -5,7 +5,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import Database from "better-sqlite3";
+import Database from "../../sqlite/database.js";
 import type { AgentTrace, AgentTraceStore, TraceType } from "./types.js";
 
 function rowToAgentTrace(row: Record<string, unknown>): AgentTrace {
@@ -28,11 +28,11 @@ function rowToAgentTrace(row: Record<string, unknown>): AgentTrace {
 }
 
 export interface SqliteAgentTraceStoreOptions {
-  db: Database.Database;
+  db: Database;
 }
 
 export class SqliteAgentTraceStore implements AgentTraceStore {
-  readonly db: Database.Database;
+  readonly db: Database;
 
   constructor(opts: SqliteAgentTraceStoreOptions) {
     this.db = opts.db;

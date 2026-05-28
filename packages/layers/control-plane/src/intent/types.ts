@@ -15,7 +15,8 @@ export type IntentType =
   | "mail.draft_reply"
   | "mail.set_categories"
   | "process.run"
-  | "campaign.brief";
+  | "campaign.brief"
+  | "deliverable.create";
 
 export type IntentStatus =
   | "admitted"
@@ -48,6 +49,9 @@ export function toExecutorFamily(actionType: string): string {
   if (actionType === "campaign_brief") {
     return "campaign";
   }
+  if (actionType === "create_deliverable") {
+    return "deliverable";
+  }
   return "mail";
 }
 
@@ -70,6 +74,8 @@ export function toIntentType(actionType: string): IntentType {
       return "process.run";
     case "campaign_brief":
       return "campaign.brief";
+    case "create_deliverable":
+      return "deliverable.create";
     default:
       throw new Error(`Cannot map unknown action type to intent: ${actionType}`);
   }

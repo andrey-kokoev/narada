@@ -44,7 +44,7 @@ export interface Fact {
 }
 
 export interface FactStore {
-  readonly db: import("better-sqlite3").Database;
+  readonly db: import("../sqlite/database.js").default;
   initSchema(): void;
   /** Idempotent insert — returns existing fact if already present */
   ingest(fact: Omit<Fact, "created_at">): { fact: Fact; isNew: boolean };

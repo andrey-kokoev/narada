@@ -227,7 +227,7 @@ export interface AgentSession {
 }
 
 export interface CoordinatorStore {
-  readonly db: import("better-sqlite3").Database;
+  readonly db: import("../sqlite/database.js").default;
   initSchema(): void;
 
   // Context records (v2) — primary durable contract

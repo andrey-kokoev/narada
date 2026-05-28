@@ -1,6 +1,6 @@
 import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import Database from 'better-sqlite3';
+import Database from '../sqlite/database.js';
 import {
   createInboxEnvelope,
   promoteInboxEnvelope,
@@ -40,7 +40,7 @@ export function defaultInboxDbPath(cwd: string): string {
 }
 
 export class SqliteInboxStore implements InboxStore {
-  readonly db: Database.Database;
+  readonly db: Database;
 
   constructor(dbPath: string) {
     mkdirSync(dirname(dbPath), { recursive: true });
