@@ -1,0 +1,36 @@
+{
+  "schema": "narada.directive-store.snapshot.v1",
+  "directives": [
+    {
+      "schema": "narada.directive.v1",
+      "created_at": "2026-05-28T16:32:16.400Z",
+      "source": {
+        "kind": "system",
+        "id": "narada.architect"
+      },
+      "authority": {
+        "locus": "narada_proper",
+        "basis": "directive_emission_authorization:auth_1b96156e55cf21676568c625a777b3f5"
+      },
+      "target": {
+        "kind": "role",
+        "id": "architect"
+      },
+      "content": {
+        "kind": "instruction",
+        "text": "next"
+      },
+      "ordering": {
+        "priority": 0,
+        "sequence": 0
+      },
+      "directive_id": "dir_32e9d4cc40e127514ac2d5180b0e5f2f",
+      "admission": {
+        "status": "admitted",
+        "decided_at": "2026-05-28T16:32:16.400Z",
+        "decided_by": "mcp-client",
+        "reason": "operator_authorized_system_directive_emission"
+      }
+    }
+  ]
+}

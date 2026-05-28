@@ -14,15 +14,22 @@ Interactive CLI accepts:
 - `/status`
 - `/model <model-name>`
 - `/thinking none|low|medium|high`
+- `/clear`
 - `/exit`
 
-During a running turn it prints elapsed working status. Press `Esc` to request interruption; if a provider call is already in flight, the CLI records the interrupt and stops after that call returns.
+The interactive prompt is `operator -> <agent>` followed by `>` while waiting for input. After submission, the visible transcript line is rewritten as `operator -> <agent>: <message>`, making the operator the speaker and the agent identity the target.
+Slash command output is rendered as `agent-cli:` because it comes from the carrier CLI, not the agent model.
+Programmatic inputs can be marked with `--operator-directive` or `--system-directive`; in interactive display they render as `operator directive -> <agent>:` or `system directive:` with distinct label colors.
+Interactive mode does not schedule startup system directives by default. Use `--enable-startup-system-directive` to schedule the default `run startup sequence` directive after 10 seconds, or `--startup-system-directive <text>` and `--startup-system-directive-delay-ms <ms>` to opt in with custom content/timing. `NARADA_AGENT_CLI_STARTUP_SYSTEM_DIRECTIVE_ENABLE=1` provides the same opt-in as an environment default.
+Tool mediation renders as `<agent> -> agent-cli:` for requested tool calls and `agent-cli -> <agent>:` for returned results.
+
+During a running turn it prints a spinner with elapsed time and the active phase, such as `thinking` or `calling agent_context_startup_sequence`. Press `Esc` to request interruption; if a provider call is already in flight, the CLI records the interrupt and stops after that call returns. Tool calls print lifecycle summaries with status and duration.
 
 Use `--stream` or `--no-stream` to control incremental provider output. Interactive mode defaults to streaming; `--server` mode defaults to non-streaming terminal rendering and emits structured events only. `NARADA_AGENT_CLI_STREAM=1|0` provides the same default as an environment variable.
 
-Use `--color` or `--no-color` to control ANSI terminal color. Interactive mode enables color when stdout is a TTY; `NO_COLOR` disables it unless `--color` is explicit. Assistant, tool, progress, and prompt output use labeled message blocks, light paragraph spacing, terminal-width wrapping, basic markdown rendering, and compact JSON tool summaries. Server mode remains protocol-only JSONL on stdout.
+Use `--color` or `--no-color` to control ANSI terminal color. Interactive mode enables color when stdout is a TTY; `NO_COLOR` disables it unless `--color` is explicit. Operator input, agent output, tool, progress, and prompt output use `label:` message blocks, light paragraph spacing, terminal-width wrapping, basic markdown rendering, and compact JSON tool summaries. Server mode remains protocol-only JSONL on stdout.
 
-For `codex-subscription`, the default transport is `codex exec --json`. With streaming enabled, the CLI renders Codex JSONL assistant events as they arrive. With `--no-stream`, it buffers JSONL events and prints the final assistant message at turn completion. Current Codex JSONL emits completed assistant-message events, not token deltas; if Codex adds token delta events, this transport is the place to surface them. Set `NARADA_CODEX_SUBSCRIPTION_TRANSPORT=mcp-server` to use the older request/response MCP transport.
+For `codex-subscription`, the default transport is `codex exec --json`. With streaming enabled, the CLI renders Codex JSONL model events as agent output as they arrive. With `--no-stream`, it buffers JSONL events and prints the final agent message at turn completion. Current Codex JSONL emits completed assistant-message events, not token deltas; if Codex adds token delta events, this transport is the place to surface them. Set `NARADA_CODEX_SUBSCRIPTION_TRANSPORT=mcp-server` to use the older request/response MCP transport.
 
 Narada proper admits both runtime names:
 
@@ -30,6 +37,34 @@ Narada proper admits both runtime names:
 - `nars` for the JSONL stdio server carrier.
 
 Both use `tools/agent-cli/agent-cli.mjs`; `nars` adds `--server`.
+
+Interactive `agent-cli` also admits a structured sideband control file when
+launched with `--control-jsonl <path>`. System directive delivery must append
+JSONL frames such as `{"method":"system_directive.deliver",...}` to that file;
+do not paste directive frames into the operator stdin stream. NARS receives the
+same directive method over its existing JSONL stdio protocol.
+
+When launched by `narada.ps1 agent-start`, interactive `agent-cli` is registered
+with a Site-local `control_path` under
+`.narada\crew\nars-sessions\<carrier_session_id>\control.jsonl`. That sideband is
+the programmatic control transport; terminal stdin remains the operator text
+surface. The sideband is deliberately line-oriented JSONL rather than pasted
+terminal text so operator input, system directives, and slash commands keep
+separate provenance.
+
+Both `agent-cli` and `nars` normalize terminal input, programmatic input, NARS
+JSONL messages, and delivered system directives into one internal input queue
+before the model turn. Slash commands are carrier-local and do not enter that
+queue. If the operator has non-whitespace text in the interactive prompt,
+delivered system directives remain queued and the CLI reports the waiting count;
+empty or whitespace-only prompts do not block system directives.
+
+When a system directive enters the carrier turn queue, the carrier records
+`narada.directive.carrier_receipt_evidence.v1` in the session evidence. NARS also
+emits a `directive_receipt_recorded` protocol event. This receipt means the
+carrier accepted the directive into its conversation loop; it does not mean the
+agent completed the referenced work, claimed a task, or executed the directive
+content.
 
 Model and thinking defaults can be supplied at launch:
 

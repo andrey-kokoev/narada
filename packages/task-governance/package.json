@@ -62,6 +62,10 @@
       "types": "./dist/task-lifecycle-store.d.ts",
       "import": "./dist/task-lifecycle-store.js"
     },
+    "./directive-runtime-store": {
+      "types": "./dist/directive-runtime-store.d.ts",
+      "import": "./dist/directive-runtime-store.js"
+    },
     "./task-projection": {
       "types": "./dist/task-projection.d.ts",
       "import": "./dist/task-projection.js"

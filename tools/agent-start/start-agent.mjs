@@ -464,10 +464,12 @@ function narsArgs({ siteRoot, startupEvidence }) {
 }
 
 function agentCliArgs({ siteRoot, startupEvidence }) {
+  const controlPath = join(narsSessionDir(siteRoot, startupEvidence.carrierSessionId), 'control.jsonl');
   return [
     narsEntrypoint(siteRoot),
     '--identity', startupEvidence.agentId,
     '--session', startupEvidence.carrierSessionId,
+    '--control-jsonl', controlPath,
   ];
 }
 
@@ -1092,9 +1094,11 @@ function buildLaunchPlanFromArgs(args, options = {}) {
           command: runtimeCommand(runtime),
           argv: runtimeArgs,
           transport: 'interactive_stdio',
+          control_transport: 'jsonl_sideband_file',
           carrier_relation: 'interactive_agent_cli',
           session_dir: narsSessionDir(siteRoot, session.carrier_session_id),
           session_path: join(narsSessionDir(siteRoot, session.carrier_session_id), 'session.jsonl'),
+          control_path: join(narsSessionDir(siteRoot, session.carrier_session_id), 'control.jsonl'),
           site_mcp_fabric: join(siteRoot, '.ai', 'mcp'),
           reads_only_target_site_mcp_fabric: true,
           user_site_mcp_injected: false,

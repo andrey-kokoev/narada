@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { readFileSync, rmSync, writeFileSync, mkdirSync, mkdtempSync } from 'node:fs';
+import { appendFileSync, readFileSync, rmSync, writeFileSync, mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { PassThrough } from 'node:stream';
 import {
   PROVIDER_SUPPORT_STATES,
   REQUEST_ADAPTERS,
@@ -16,12 +17,21 @@ import {
   codexExecConfigToml,
   buildOpenAiChatRequest,
   codexExecEventText,
+  createInputQueue,
   createTerminalStyle,
+  directiveReceiptEvidence,
   discoverAndStartMcpServers,
   executeMcpTool,
+  formatDuration,
+  formatHeaderRow,
+  formatHeaderRows,
   formatKeyValueRows,
+  formatProgressStatus,
   formatToolResultContent,
   handleSlashCommand,
+  inputRecordDisplayLabel,
+  normalizeDisplayTerms,
+  normalizeInputEvent,
   normalizeInputRecord,
   normalizeThinkingLevel,
   parseArgs,
@@ -33,11 +43,16 @@ import {
   parseCodexExecJsonLine,
   parseNaradaToolCall,
   renderMarkdownForTerminal,
+  rewriteSubmittedPromptForTest,
   runConversationTurn,
+  runServerMode,
   resolveProviderAdapter,
   resolveProviderSupportState,
   sessionEventEntry,
   sessionLogEntry,
+  shouldDeferInteractiveInput,
+  startInteractiveControlJsonlWatcher,
+  toolDirectionLabel,
   wrapTerminalLine,
 } from './agent-cli.mjs';
 
@@ -53,10 +68,79 @@ const programmaticInputs = buildProgrammaticInputs({
   authorityRef: 'task:1186',
 });
 assert.deepEqual(programmaticInputs, [
-  { content: 'flag supplied message', source: 'programmatic_flag', authority_ref: 'task:1186' },
-  { content: 'file supplied message', source: 'programmatic_file', authority_ref: 'task:1186' },
+  { content: 'flag supplied message', source: 'programmatic_operator', authority_ref: 'task:1186' },
+  { content: 'file supplied message', source: 'programmatic_operator', authority_ref: 'task:1186' },
 ]);
+assert.deepEqual(buildProgrammaticInputs({ messages: ['op'], operatorDirective: true }), [
+  { content: 'op', source: 'operator_directive', authority_ref: null },
+]);
+assert.deepEqual(buildProgrammaticInputs({ messages: ['sys'], systemDirective: true }), [
+  { content: 'sys', source: 'system_directive', authority_ref: null },
+]);
+assert.equal(inputRecordDisplayLabel({ source: 'operator_directive' }), 'operator directive -> narada.architect');
+assert.equal(inputRecordDisplayLabel({ source: 'system_directive' }), 'system directive');
 assert.deepEqual(normalizeInputRecord('typed message'), { content: 'typed message', source: 'manual_operator' });
+const normalizedEvent = normalizeInputEvent(
+  { content: 'run startup sequence', source: 'system_directive', authority_ref: 'dir_1', directive_id: 'dir_1' },
+  { transport: 'control_jsonl' },
+);
+assert.equal(normalizedEvent.source, 'system_directive');
+assert.equal(normalizedEvent.transport, 'control_jsonl');
+assert.equal(normalizedEvent.directive_id, 'dir_1');
+assert.match(normalizedEvent.event_id, /^input_/);
+const receiptEvidence = directiveReceiptEvidence(normalizedEvent, {
+  agentId: 'narada.architect',
+  carrierSessionId: 'carrier_session_test',
+  receivedAt: '2026-05-28T00:00:00.000Z',
+});
+assert.equal(receiptEvidence.schema, 'narada.directive.carrier_receipt_evidence.v1');
+assert.equal(receiptEvidence.directive_id, 'dir_1');
+assert.equal(receiptEvidence.agent_id, 'narada.architect');
+assert.match(receiptEvidence.receipt_id, /^dirrcpt_/);
+const queueDrainOrder = [];
+const queue = createInputQueue({ drain: async (event) => { queueDrainOrder.push(event.content); return { terminal_state: 'completed' }; } });
+await queue.enqueue(normalizeInputEvent({ content: 'operator', source: 'manual_operator' }, { transport: 'terminal' }));
+await queue.enqueue(normalizeInputEvent({ content: 'system', source: 'system_directive' }, { transport: 'control_jsonl' }), { drain: true });
+assert.deepEqual(queueDrainOrder, ['operator', 'system']);
+let defer = true;
+let deferredNotice = null;
+const deferredQueue = createInputQueue({
+  drain: async (event) => { queueDrainOrder.push(event.content); return { terminal_state: 'completed' }; },
+  shouldDefer: () => defer,
+  onDeferred: (event, queueState) => { deferredNotice = `${event.content}:${queueState.pendingSystemDirectiveCount}`; },
+});
+await deferredQueue.enqueue(normalizeInputEvent({ content: 'queued-system', source: 'system_directive' }, { transport: 'control_jsonl' }), { drain: true });
+assert.equal(deferredQueue.pendingCount, 1);
+assert.equal(deferredQueue.pendingSystemDirectiveCount, 1);
+assert.equal(deferredNotice, 'queued-system:1');
+defer = false;
+await deferredQueue.drainUntilIdle();
+assert.equal(deferredQueue.pendingCount, 0);
+assert.equal(shouldDeferInteractiveInput({ source: 'manual_operator' }, { promptState: { active: true } }), false);
+assert.equal(shouldDeferInteractiveInput({ source: 'system_directive' }, { rl: { line: '' }, promptState: { active: true } }), false);
+assert.equal(shouldDeferInteractiveInput({ source: 'system_directive' }, { rl: { line: '   ' }, promptState: { active: true } }), false);
+assert.equal(shouldDeferInteractiveInput({ source: 'system_directive' }, { rl: { line: 'partial' }, promptState: { active: true } }), true);
+assert.equal(shouldDeferInteractiveInput({ source: 'system_directive' }, { rl: { line: 'partial' }, promptState: { active: false } }), false);
+const controlJsonlDir = mkdtempSync(join(tmpdir(), 'narada-agent-cli-control-jsonl-'));
+const controlJsonlPath = join(controlJsonlDir, 'control.jsonl');
+const controlEvents = [];
+const controlQueue = createInputQueue({
+  drain: async (event) => { controlEvents.push(event); return { terminal_state: 'completed' }; },
+});
+const watcher = startInteractiveControlJsonlWatcher({ controlPath: controlJsonlPath, inputQueue: controlQueue });
+const controlFrame = JSON.stringify({
+  method: 'system_directive.deliver',
+  params: { directive_id: 'dir_partial', message: 'run startup sequence' },
+});
+appendFileSync(controlJsonlPath, controlFrame.slice(0, 20), 'utf8');
+await delayForTest(350);
+assert.equal(controlEvents.length, 0);
+appendFileSync(controlJsonlPath, `${controlFrame.slice(20)}\n`, 'utf8');
+await delayForTest(500);
+watcher.stop();
+assert.equal(controlEvents.length, 1);
+assert.equal(controlEvents[0].directive_id, 'dir_partial');
+rmSync(controlJsonlDir, { recursive: true, force: true });
 assert.deepEqual(removeInvalidToolHistory([
   { role: 'user', content: 'run startup sequence' },
   { role: 'tool', content: '{}', tool_call_id: 'orphan:0' },
@@ -80,7 +164,7 @@ assert.deepEqual(removeInvalidToolHistory([
 const programmaticLogEntry = sessionLogEntry({ role: 'user', content: programmaticInputs[0].content, source: programmaticInputs[0].source, authorityRef: programmaticInputs[0].authority_ref });
 assert.equal(programmaticLogEntry.role, 'user');
 assert.equal(programmaticLogEntry.content, 'flag supplied message');
-assert.equal(programmaticLogEntry.source, 'programmatic_flag');
+assert.equal(programmaticLogEntry.source, 'programmatic_operator');
 assert.equal(programmaticLogEntry.authority_ref, 'task:1186');
 assert.match(programmaticLogEntry.timestamp, /T/);
 const eventEntry = sessionEventEntry('session_setting_changed', { setting: 'model', value: 'gpt-5.5' });
@@ -96,13 +180,42 @@ assert.equal(parseBooleanEnv(undefined, true), true);
 assert.deepEqual(parseArgs(['--stream', '--model', 'gpt-x']), { stream: true, model: 'gpt-x' });
 assert.deepEqual(parseArgs(['--no-stream', '--thinking', 'low']), { stream: false, thinking: 'low' });
 assert.deepEqual(parseArgs(['--color', '--no-color']), { color: false });
+assert.deepEqual(parseArgs(['--operator-directive', '--system-directive']), { operatorDirective: true, systemDirective: true });
+assert.deepEqual(parseArgs(['--enable-startup-system-directive']), { startupSystemDirective: true });
+assert.deepEqual(parseArgs(['--startup-system-directive', 'run startup sequence', '--startup-system-directive-delay-ms', '10000']), {
+  startupSystemDirective: true,
+  startupSystemDirectiveText: 'run startup sequence',
+  startupSystemDirectiveDelayMs: 10000,
+});
+assert.deepEqual(parseArgs(['--no-startup-system-directive']), { startupSystemDirective: false });
+assert.deepEqual(parseArgs(['--control-jsonl', '.narada/control.jsonl']), { controlJsonl: '.narada/control.jsonl' });
 assert.equal(parseColorEnv('off', true), false);
 assert.equal(createTerminalStyle({ enabled: false }).prompt('narada> '), 'narada> ');
 assert.equal(createTerminalStyle({ enabled: true }).prompt('narada> ').includes('\x1b['), true);
-assert.equal(formatToolResultContent('{"status":"success","schema":"narada.test.v1","directive_count":2,"extra":true}'), 'success · narada.test.v1 · directives=2 · keys=status,schema,directive_count,extra');
+assert.equal(formatToolResultContent('{"status":"success","schema":"narada.test.v1","directive_count":2,"extra":true}'), 'success · narada.test.v1 · directives=2\nkeys:\n  status\n  schema\n  directive_count\n  extra');
 assert.equal(formatKeyValueRows({ A: 1, Longer: 'two' }), 'A       1\nLonger  two');
+assert.equal(formatDuration(1250), '1.3s');
+assert.equal(formatDuration(65000), '1m 5s');
+assert.equal(formatProgressStatus({ spinner: '-', phase: 'thinking', totalMs: 6000, phaseMs: 6000 }), '- thinking 6.0s · Esc to interrupt');
+assert.equal(formatProgressStatus({ spinner: '/', phase: 'calling read_file', totalMs: 7000, phaseMs: 1200 }), '/ calling read_file 1.2s · total 7.0s · Esc to interrupt');
+assert.equal(formatHeaderRow('Identity', 'narada.architect', {}).includes('Identity'), true);
+assert.equal(formatHeaderRow('Stream', 'on', {}).includes('on'), true);
+assert.equal(formatHeaderRow('Identity', 'narada.architect', {}).includes('\x1b[90m[agent-cli]\x1b[0m \x1b[33mIdentity'), true);
+const headerRows = stripAnsiForTest(formatHeaderRows([['MCP servers', 1], ['  narada-proper', '29 tools']]));
+assert.equal(headerRows.includes('MCP servers     1'), true);
+assert.equal(headerRows.includes('  narada-proper 29 tools'), true);
 assert.deepEqual(wrapTerminalLine('alpha beta gamma', 10), ['alpha beta', 'gamma']);
 assert.equal(renderMarkdownForTerminal('- `code`').includes('• '), true);
+assert.equal(renderMarkdownForTerminal('- `code`').includes('\x1b[90mcode\x1b[0m'), true);
+assert.equal(renderMarkdownForTerminal('Site: `narada-proper`').includes('\x1b[90mnarada-proper\x1b[0m'), true);
+assert.equal(normalizeDisplayTerms('authority_locus: narada_proper and authority_posture: facade_only'), 'authority locus: `narada_proper` and authority posture: `facade_only`');
+assert.equal(normalizeDisplayTerms('authority_locus: `narada_proper`'), 'authority locus: `narada_proper`');
+assert.equal(renderMarkdownForTerminal('  ```powershell\n    narada\n  ```').includes('```'), false);
+assert.equal(renderMarkdownForTerminal('  ```powershell\n    narada\n  ```').includes('narada'), true);
+assert.equal(stripAnsiForTest(toolDirectionLabel('invoke')), 'narada.architect -> agent-cli');
+assert.equal(stripAnsiForTest(toolDirectionLabel('result')), 'agent-cli -> narada.architect');
+assert.equal(rewriteSubmittedPromptForTest('operator -> narada.architect', 'short', 120), '\x1b[1A\r\x1b[Koperator -> narada.architect: short\n');
+assert.equal(rewriteSubmittedPromptForTest('operator -> narada.architect', 'x'.repeat(200), 80), null);
 rmSync(tempDir, { recursive: true, force: true });
 
 const expectedAdapters = {
@@ -647,6 +760,98 @@ assert.equal(stdout.includes('[agent-cli]'), false);
 assert.equal(stderr.includes('Fatal error'), false);
 rmSync(serverSite, { recursive: true, force: true });
 
+const directiveServerSite = mkdtempSync(join(tmpdir(), 'narada-agent-cli-directive-server-'));
+mkdirSync(join(directiveServerSite, '.ai', 'mcp'), { recursive: true });
+const previousSiteRoot = process.env.NARADA_SITE_ROOT;
+process.env.NARADA_SITE_ROOT = directiveServerSite;
+try {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  let directiveStdout = '';
+  output.setEncoding('utf8');
+  output.on('data', (chunk) => { directiveStdout += chunk; });
+  const serverDone = runServerMode({
+    input,
+    output,
+    callChatApiFn: async () => ({
+      choices: [{ message: { role: 'assistant', content: 'ack directive' } }],
+    }),
+  });
+  input.write(`${JSON.stringify({
+    id: 'directive-1',
+    method: 'system_directive.deliver',
+    params: {
+      directive_id: 'dir_test',
+      message: 'run startup sequence',
+      authority_ref: 'dir_test',
+    },
+  })}\n`);
+  input.end();
+  await serverDone;
+  const directiveEvents = directiveStdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+  assert.equal(directiveEvents.some((event) => event.event === 'directive_received' && event.directive_id === 'dir_test'), true);
+  assert.equal(directiveEvents.some((event) => event.event === 'directive_receipt_recorded' && event.directive_id === 'dir_test' && event.receipt_id?.startsWith('dirrcpt_')), true);
+  assert.equal(directiveEvents.some((event) => event.event === 'turn_complete' && event.directive_id === 'dir_test'), true);
+} finally {
+  if (previousSiteRoot === undefined) delete process.env.NARADA_SITE_ROOT;
+  else process.env.NARADA_SITE_ROOT = previousSiteRoot;
+  rmSync(directiveServerSite, { recursive: true, force: true });
+}
+
+const interruptServerSite = mkdtempSync(join(tmpdir(), 'narada-agent-cli-interrupt-server-'));
+mkdirSync(join(interruptServerSite, '.ai', 'mcp'), { recursive: true });
+process.env.NARADA_SITE_ROOT = interruptServerSite;
+try {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  let interruptStdout = '';
+  output.setEncoding('utf8');
+  output.on('data', (chunk) => { interruptStdout += chunk; });
+  const serverDone = runServerMode({
+    input,
+    output,
+    callChatApiFn: async () => {
+      await delayForTest(75);
+      return { choices: [{ message: { role: 'assistant', content: 'late ack' } }] };
+    },
+  });
+  input.write(`${JSON.stringify({ id: 'send-1', method: 'conversation.send', params: { message: 'long turn' } })}\n`);
+  await delayForTest(15);
+  input.write(`${JSON.stringify({ id: 'interrupt-1', method: 'conversation.interrupt', params: {} })}\n`);
+  input.end();
+  await serverDone;
+  const interruptEvents = interruptStdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+  assert.equal(interruptEvents.some((event) => event.event === 'turn_interrupted' && event.request_id === 'interrupt-1'), true);
+  assert.equal(interruptEvents.some((event) => event.event === 'turn_complete' && event.request_id === 'send-1' && event.terminal_state === 'interrupted'), true);
+} finally {
+  if (previousSiteRoot === undefined) delete process.env.NARADA_SITE_ROOT;
+  else process.env.NARADA_SITE_ROOT = previousSiteRoot;
+  rmSync(interruptServerSite, { recursive: true, force: true });
+}
+
+const closedServerSite = mkdtempSync(join(tmpdir(), 'narada-agent-cli-closed-server-'));
+mkdirSync(join(closedServerSite, '.ai', 'mcp'), { recursive: true });
+process.env.NARADA_SITE_ROOT = closedServerSite;
+try {
+  const input = new PassThrough();
+  const output = new PassThrough();
+  let closedStdout = '';
+  output.setEncoding('utf8');
+  output.on('data', (chunk) => { closedStdout += chunk; });
+  const serverDone = runServerMode({ input, output, callChatApiFn: async () => ({ choices: [{ message: { role: 'assistant', content: 'should not run' } }] }) });
+  input.write(`${JSON.stringify({ id: 'close-before-send', method: 'session.close', params: {} })}\n`);
+  input.write(`${JSON.stringify({ id: 'send-after-close', method: 'conversation.send', params: { message: 'after close' } })}\n`);
+  input.end();
+  await serverDone;
+  const closedEvents = closedStdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+  assert.equal(closedEvents.some((event) => event.event === 'session_closed' && event.request_id === 'close-before-send'), true);
+  assert.equal(closedEvents.some((event) => event.event === 'error' && event.request_id === 'send-after-close' && event.code === 'session_closed'), true);
+} finally {
+  if (previousSiteRoot === undefined) delete process.env.NARADA_SITE_ROOT;
+  else process.env.NARADA_SITE_ROOT = previousSiteRoot;
+  rmSync(closedServerSite, { recursive: true, force: true });
+}
+
 console.log('agent-cli adapter tests PASSED.');
 
 function stopChildProcess(proc) {
@@ -656,4 +861,12 @@ function stopChildProcess(proc) {
     proc.kill();
     setTimeout(resolveStop, 1000);
   });
+}
+
+function stripAnsiForTest(text) {
+  return String(text).replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, '');
+}
+
+function delayForTest(ms) {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
 }

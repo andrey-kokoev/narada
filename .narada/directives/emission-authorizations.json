@@ -1,0 +1,37 @@
+{
+  "schema": "narada.directive-emission-authorization-store.v1",
+  "authorizations": [
+    {
+      "schema": "narada.directive-emission-authorization.v1",
+      "authorized_at": "2026-05-28T16:32:16.400Z",
+      "authorized_by": {
+        "kind": "operator",
+        "id": "operator.interactive"
+      },
+      "authorized_emitter": {
+        "kind": "system",
+        "id": "narada.architect"
+      },
+      "authority": {
+        "locus": "narada_proper",
+        "basis": "operator_requested_system_directive"
+      },
+      "directive_template": {
+        "target": {
+          "kind": "role",
+          "id": "architect"
+        },
+        "content": {
+          "kind": "instruction",
+          "text": "next"
+        },
+        "ordering": {
+          "priority": 0,
+          "sequence": 0
+        }
+      },
+      "status": "authorized",
+      "authorization_id": "auth_1b96156e55cf21676568c625a777b3f5"
+    }
+  ]
+}

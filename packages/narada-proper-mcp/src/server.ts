@@ -65,6 +65,21 @@ interface McpDirective {
   admission: { status: 'admitted' | 'refused' | 'delivered' | 'candidate'; decided_at?: string; decided_by?: string; reason?: string };
 }
 
+interface McpDirectiveEmissionAuthorization {
+  schema: 'narada.directive-emission-authorization.v1';
+  authorization_id: string;
+  authorized_at: string;
+  authorized_by: { kind: DirectiveSourceKind; id: string; label?: string };
+  authorized_emitter: { kind: DirectiveSourceKind; id: string; label?: string };
+  authority: { locus: string; basis: string };
+  directive_template: {
+    target: { kind: DirectiveTargetKind; id: string };
+    content: { kind: DirectiveContentKind; text: string };
+    ordering: { priority: number; sequence: number; not_before?: string; expires_at?: string };
+  };
+  status: 'authorized';
+}
+
 interface McpTarget {
   kind: 'site';
   ref?: string;
@@ -161,8 +176,34 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
       expires_at: stringSchema('Optional ISO expiry time.'),
       admitted_by: stringSchema('Admitting principal; defaults to current agent or mcp-client.'),
       reason: stringSchema('Admission reason.'),
+      emission_authorized_by_kind: { type: 'string', enum: ['operator', 'agent', 'system'], description: 'Optional authorizing source kind for system-emitted directives.' },
+      emission_authorized_by_id: stringSchema('Optional authorizing source id for system-emitted directives.'),
+      emission_authorized_by_label: stringSchema('Optional authorizing source label.'),
+      emission_authority_basis: stringSchema('Optional basis for emission authorization; defaults to authority_basis.'),
       target: targetSchema(),
     }, ['source_kind', 'source_id', 'authority_locus', 'authority_basis', 'target_kind', 'target_id', 'content_kind', 'text']),
+  },
+  {
+    name: 'narada_directive_record_operator_authorized_system_emission',
+    description: 'Record an operator authorization and immediately emit/admit a Site-scoped system directive. This does not execute directive content or deliver it to a carrier.',
+    inputSchema: objectSchema({
+      operator_id: { type: 'string', description: 'Authorizing operator id.' },
+      operator_label: stringSchema('Optional operator label.'),
+      system_emitter_id: { type: 'string', description: 'Site-scoped system emitter id, for example narada-proper.system.directive_emitter. Defaults to the target Site directive emitter.' },
+      authority_locus: { type: 'string', description: 'Authority locus for the authorization and directive. Defaults to the target Site authority locus.' },
+      authorization_basis: { type: 'string', description: 'Basis for operator authorization. Defaults to operator_requested_system_directive.' },
+      target_kind: { type: 'string', enum: ['agent', 'carrier', 'site', 'role', 'task', 'session', 'workspace'], description: 'Directive target kind.' },
+      target_id: { type: 'string', description: 'Directive target id.' },
+      content_kind: { type: 'string', enum: ['instruction', 'constraint', 'routing', 'delivery', 'context'], description: 'Directive content kind.' },
+      text: { type: 'string', description: 'Directive text to render or deliver later.' },
+      priority: numberSchema('Ordering priority; higher sorts first.'),
+      sequence: numberSchema('Ordering sequence; lower sorts first after priority.'),
+      not_before: stringSchema('Optional ISO not-before time; controls future activation but not execution.'),
+      expires_at: stringSchema('Optional ISO expiry time.'),
+      admitted_by: stringSchema('Admitting principal; defaults to current agent or mcp-client.'),
+      reason: stringSchema('Admission reason.'),
+      target: targetSchema(),
+    }, ['target_kind', 'target_id', 'text']),
   },
   {
     name: 'narada_directive_list',
@@ -536,7 +577,7 @@ async function dispatchMcpMethod(method: string, params: unknown, siteContext: M
 async function callTool(params: unknown, siteContext: McpSiteContext, options: McpServerOptions): Promise<McpToolResult> {
   const record = asRecord(params);
   const name = stringField(record, 'name');
-  const args = asRecord(record.arguments);
+  const args = normalizeDirectiveToolArguments(name, asRecord(record.arguments));
   if (!name) throw new Error('tools/call requires params.name');
   const mutationAttempted = INBOX_SUBMIT_OBSERVATION_TOOLS.has(name)
     || INBOX_SUBMIT_TYPED_TOOLS.has(name)
@@ -547,6 +588,7 @@ async function callTool(params: unknown, siteContext: McpSiteContext, options: M
     || name === 'site_task_lifecycle.materialize_task'
     || name === 'agent_context_memory.record_checkpoint'
     || name === 'narada_directive_create'
+    || name === 'narada_directive_record_operator_authorized_system_emission'
     || name === 'narada_ee_run';
   const traversal = await resolveMcpTraversal({
     sourceSite: siteContext,
@@ -605,7 +647,46 @@ async function callTool(params: unknown, siteContext: McpSiteContext, options: M
         expiresAt: stringField(args, 'expires_at'),
         admittedBy: stringField(args, 'admitted_by') ?? siteContext.startup_evidence?.agent_id ?? 'mcp-client',
         reason: stringField(args, 'reason') ?? 'mcp_directive_create',
+        emissionAuthorizedByKind: enumField(args, 'emission_authorized_by_kind', ['operator', 'agent', 'system']) as DirectiveSourceKind | undefined,
+        emissionAuthorizedById: stringField(args, 'emission_authorized_by_id'),
+        emissionAuthorizedByLabel: stringField(args, 'emission_authorized_by_label'),
+        emissionAuthorityBasis: stringField(args, 'emission_authority_basis'),
       }), traversal));
+    case 'narada_directive_record_operator_authorized_system_emission':
+      return jsonToolResult(attachTraversal({
+        ...createMcpDirective({
+          siteRoot: traversal.target_site.site_root,
+          siteId: traversal.target_site.site_id,
+          sourceKind: 'system',
+          sourceId: requireSiteScopedSystemEmitter(
+            traversal.target_site.site_id,
+            stringField(args, 'system_emitter_id') ?? `${traversal.target_site.site_id}.system.directive_emitter`,
+          ),
+          authorityLocus: stringField(args, 'authority_locus') ?? defaultAuthorityLocusForSite(traversal.target_site),
+          authorityBasis: stringField(args, 'authorization_basis') ?? 'operator_requested_system_directive',
+          targetKind: requiredEnum(args, 'target_kind', ['agent', 'carrier', 'site', 'role', 'task', 'session', 'workspace']) as DirectiveTargetKind,
+          targetId: requiredString(args, 'target_id'),
+          contentKind: requiredEnum(args, 'content_kind', ['instruction', 'constraint', 'routing', 'delivery', 'context']) as DirectiveContentKind,
+          text: requiredString(args, 'text'),
+          priority: numberField(args, 'priority') ?? 0,
+          sequence: numberField(args, 'sequence') ?? 0,
+          notBefore: stringField(args, 'not_before'),
+          expiresAt: stringField(args, 'expires_at'),
+          admittedBy: stringField(args, 'admitted_by') ?? siteContext.startup_evidence?.agent_id ?? 'mcp-client',
+          reason: stringField(args, 'reason') ?? 'operator_authorized_system_directive_emission',
+          emissionAuthorizedByKind: 'operator',
+          emissionAuthorizedById: stringField(args, 'operator_id') ?? 'operator.interactive',
+          emissionAuthorizedByLabel: stringField(args, 'operator_label'),
+          emissionAuthorityBasis: stringField(args, 'authorization_basis') ?? 'operator_requested_system_directive',
+        }),
+        toolSemantics: {
+          operatorAuthorizationRecorded: true,
+          systemDirectiveEmitted: true,
+          emissionTimeSemantics: stringField(args, 'not_before') ? 'not_before' : 'immediate',
+          executionAttempted: false,
+          deliveryAttempted: false,
+        },
+      }, traversal));
     case 'narada_directive_list':
       return jsonToolResult(attachTraversal(listMcpDirectives({
         siteRoot: traversal.target_site.site_root,
@@ -840,6 +921,60 @@ async function callTool(params: unknown, siteContext: McpSiteContext, options: M
   }
 }
 
+function normalizeDirectiveToolArguments(name: string | undefined, args: Record<string, unknown>): Record<string, unknown> {
+  if (name !== 'narada_directive_create' && name !== 'narada_directive_record_operator_authorized_system_emission') return args;
+  const normalized = { ...args };
+  const target = asRecord(normalized.target);
+  const targetKind = stringField(target, 'kind');
+  const targetId = stringField(target, 'id');
+  if (targetKind && targetKind !== 'site' && !stringField(normalized, 'target_kind')) {
+    normalized.target_kind = targetKind;
+    if (targetId) normalized.target_id = targetId;
+    delete normalized.target;
+  }
+  if (name === 'narada_directive_record_operator_authorized_system_emission') {
+    if (!stringField(normalized, 'system_emitter_id') && stringField(normalized, 'system_emitter')) {
+      normalized.system_emitter_id = stringField(normalized, 'system_emitter');
+    }
+    if (!stringField(normalized, 'text') && stringField(normalized, 'directive_text')) {
+      normalized.text = stringField(normalized, 'directive_text');
+    }
+    if (!stringField(normalized, 'text') && stringField(normalized, 'directive')) {
+      normalized.text = stringField(normalized, 'directive');
+    }
+    if (!stringField(normalized, 'target_kind') && stringField(normalized, 'role')) {
+      normalized.target_kind = 'role';
+      normalized.target_id = stringField(normalized, 'role');
+    }
+    if (!stringField(normalized, 'content_kind')) {
+      normalized.content_kind = 'instruction';
+    }
+    if (stringField(normalized, 'content_kind') === 'system_directive') {
+      normalized.content_kind = 'instruction';
+    }
+    if (!stringField(normalized, 'operator_id')) {
+      normalized.operator_id = 'operator.interactive';
+    }
+    if (!stringField(normalized, 'authorization_basis')) {
+      normalized.authorization_basis = 'operator_requested_system_directive';
+    }
+  }
+  return normalized;
+}
+
+function requireSiteScopedSystemEmitter(siteId: string, emitterId: string): string {
+  const expected = `${siteId}.system.directive_emitter`;
+  if (emitterId !== expected) {
+    throw new Error(`Invalid system_emitter_id: ${emitterId}. Expected Site-scoped system emitter: ${expected}`);
+  }
+  return emitterId;
+}
+
+function defaultAuthorityLocusForSite(site: McpSiteContext): string {
+  if (site.authority_locus && site.authority_locus !== 'unspecified') return site.authority_locus;
+  return site.site_id.replace(/-/g, '_');
+}
+
 function buildAgentContextHydrateCurrent(siteContext: McpSiteContext, sourceContext: McpSiteContext): Record<string, unknown> {
   const startup = startupEvidence(sourceContext);
   const agentId = startup.agent_id;
@@ -878,14 +1013,22 @@ function createMcpDirective(args: {
   expiresAt?: string;
   admittedBy: string;
   reason: string;
+  emissionAuthorizedByKind?: DirectiveSourceKind;
+  emissionAuthorizedById?: string;
+  emissionAuthorizedByLabel?: string;
+  emissionAuthorityBasis?: string;
 }): Record<string, unknown> {
   const store = new McpDirectiveStore(args.siteRoot);
   const now = new Date().toISOString();
+  const emissionAuthorization = createMcpDirectiveEmissionAuthorization(args, now);
+  const authorityBasis = emissionAuthorization
+    ? `directive_emission_authorization:${emissionAuthorization.authorization_id}`
+    : args.authorityBasis;
   const draft = {
     schema: 'narada.directive.v1' as const,
     created_at: now,
     source: { kind: args.sourceKind, id: args.sourceId, label: args.sourceLabel },
-    authority: { locus: args.authorityLocus, basis: args.authorityBasis },
+    authority: { locus: args.authorityLocus, basis: authorityBasis },
     target: { kind: args.targetKind, id: args.targetId },
     content: { kind: args.contentKind, text: args.text },
     ordering: {
@@ -906,21 +1049,79 @@ function createMcpDirective(args: {
     },
   };
   store.upsert(directive, [
-    directiveEventRecord(directive, 'directive.created', now, args.admittedBy),
+    ...(emissionAuthorization ? [directiveEmissionAuthorizedEventRecord(directive, emissionAuthorization, args.admittedBy)] : []),
+    directiveEventRecord(directive, 'directive.created', now, args.admittedBy, undefined, emissionAuthorization?.authorization_id),
     directiveEventRecord(directive, 'directive.admitted', now, args.admittedBy, args.reason),
-  ]);
+  ], emissionAuthorization);
 
   return {
     status: 'success',
     schema: 'narada.directive.mcp_create_result.v1',
     siteId: args.siteId,
     directive,
+    emissionAuthorization,
     directiveStorePath: store.paths.storePath,
     directiveEventLogPath: store.paths.eventLogPath,
+    directiveEmissionAuthorizationStorePath: store.paths.authorizationPath,
     mutationAttempted: true,
     mutationExecuted: true,
     taskCreated: false,
     executableAuthorityGranted: false,
+  };
+}
+
+function createMcpDirectiveEmissionAuthorization(args: {
+  sourceKind: DirectiveSourceKind;
+  sourceId: string;
+  sourceLabel?: string;
+  authorityLocus: string;
+  authorityBasis: string;
+  targetKind: DirectiveTargetKind;
+  targetId: string;
+  contentKind: DirectiveContentKind;
+  text: string;
+  priority: number;
+  sequence: number;
+  notBefore?: string;
+  expiresAt?: string;
+  emissionAuthorizedByKind?: DirectiveSourceKind;
+  emissionAuthorizedById?: string;
+  emissionAuthorizedByLabel?: string;
+  emissionAuthorityBasis?: string;
+}, now: string): McpDirectiveEmissionAuthorization | null {
+  if (args.sourceKind !== 'system' || !args.emissionAuthorizedByKind || !args.emissionAuthorizedById) return null;
+  const authorization = {
+    schema: 'narada.directive-emission-authorization.v1' as const,
+    authorized_at: now,
+    authorized_by: {
+      kind: args.emissionAuthorizedByKind,
+      id: args.emissionAuthorizedById,
+      label: args.emissionAuthorizedByLabel,
+    },
+    authorized_emitter: {
+      kind: args.sourceKind,
+      id: args.sourceId,
+      label: args.sourceLabel,
+    },
+    authority: {
+      locus: args.authorityLocus,
+      basis: args.emissionAuthorityBasis ?? args.authorityBasis,
+    },
+    directive_template: {
+      target: { kind: args.targetKind, id: args.targetId },
+      content: { kind: args.contentKind, text: args.text },
+      ordering: {
+        priority: args.priority,
+        sequence: args.sequence,
+        not_before: args.notBefore,
+        expires_at: args.expiresAt,
+      },
+    },
+    status: 'authorized' as const,
+  };
+  return {
+    ...authorization,
+    authorization_id: `auth_${hashStable(authorization).slice(0, 32)}`,
   };
 }
 
@@ -978,15 +1179,17 @@ function renderMcpDirectives(directives: McpDirective[]): string {
 class McpDirectiveStore {
   readonly storePath: string;
   readonly eventLogPath: string;
+  readonly authorizationPath: string;
 
   constructor(siteRoot: string) {
     const root = resolve(siteRoot, '.narada', 'directives');
     this.storePath = resolve(root, 'directives.json');
     this.eventLogPath = resolve(root, 'events.jsonl');
+    this.authorizationPath = resolve(root, 'emission-authorizations.json');
   }
 
-  get paths(): { storePath: string; eventLogPath: string } {
-    return { storePath: this.storePath, eventLogPath: this.eventLogPath };
+  get paths(): { storePath: string; eventLogPath: string; authorizationPath: string } {
+    return { storePath: this.storePath, eventLogPath: this.eventLogPath, authorizationPath: this.authorizationPath };
   }
 
   list(): McpDirective[] {
@@ -1008,7 +1211,7 @@ class McpDirectiveStore {
     return renderMcpDirectives(this.active(target));
   }
 
-  upsert(directive: McpDirective, events: Record<string, unknown>[]): void {
+  upsert(directive: McpDirective, events: Record<string, unknown>[], authorization?: McpDirectiveEmissionAuthorization | null): void {
     const directives = this.list();
     const index = directives.findIndex((entry) => entry.directive_id === directive.directive_id);
     if (index >= 0) directives[index] = directive;
@@ -1018,10 +1221,24 @@ class McpDirectiveStore {
       schema: 'narada.directive-store.snapshot.v1',
       directives,
     }, null, 2)}\n`, 'utf8');
+    if (authorization) this.upsertAuthorization(authorization);
     mkdirSync(dirname(this.eventLogPath), { recursive: true });
     for (const event of events) {
       writeFileSync(this.eventLogPath, `${JSON.stringify(event)}\n`, { encoding: 'utf8', flag: 'a' });
     }
+  }
+
+  private upsertAuthorization(authorization: McpDirectiveEmissionAuthorization): void {
+    const existing = readJsonObject(this.authorizationPath);
+    const authorizations = Array.isArray(existing?.authorizations) ? existing.authorizations as McpDirectiveEmissionAuthorization[] : [];
+    const index = authorizations.findIndex((entry) => entry.authorization_id === authorization.authorization_id);
+    if (index >= 0) authorizations[index] = authorization;
+    else authorizations.push(authorization);
+    mkdirSync(dirname(this.authorizationPath), { recursive: true });
+    writeFileSync(this.authorizationPath, `${JSON.stringify({
+      schema: 'narada.directive-emission-authorization-store.v1',
+      authorizations,
+    }, null, 2)}\n`, 'utf8');
   }
 }
 
@@ -1034,7 +1251,7 @@ function compareMcpDirectives(left: McpDirective, right: McpDirective): number {
   );
 }
 
-function directiveEventRecord(directive: McpDirective, kind: string, occurredAt: string, actor: string, reason?: string): Record<string, unknown> {
+function directiveEventRecord(directive: McpDirective, kind: string, occurredAt: string, actor: string, reason?: string, authorizationId?: string): Record<string, unknown> {
   const event = {
     schema: 'narada.directive-event.v1',
     directive_id: directive.directive_id,
@@ -1042,11 +1259,23 @@ function directiveEventRecord(directive: McpDirective, kind: string, occurredAt:
     occurred_at: occurredAt,
     actor,
     reason,
+    authorization_id: authorizationId,
   };
   return {
     ...event,
     event_id: `direvt_${hashStable(event).slice(0, 32)}`,
   };
+}
+
+function directiveEmissionAuthorizedEventRecord(directive: McpDirective, authorization: McpDirectiveEmissionAuthorization, actor: string): Record<string, unknown> {
+  return directiveEventRecord(
+    directive,
+    'directive.emission_authorized',
+    authorization.authorized_at,
+    actor,
+    authorization.authority.basis,
+    authorization.authorization_id,
+  );
 }
 
 function hashStable(value: unknown): string {

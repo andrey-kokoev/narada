@@ -350,6 +350,181 @@ describe('narada proper MCP surface', () => {
     }
   });
 
+  it('records operator authorization for system-emitted directives', async () => {
+    mkdirSync(resolve('.ai', 'tmp'), { recursive: true });
+    const siteRoot = mkdtempSync(resolve('.ai', 'tmp', 'narada-mcp-system-directives-'));
+    try {
+      const create = await handleMcpRequest({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'narada_directive_create',
+          arguments: {
+            source_kind: 'system',
+            source_id: 'narada-proper.system.directive_emitter',
+            authority_locus: 'narada_proper',
+            authority_basis: 'interactive_operator_request',
+            emission_authorized_by_kind: 'operator',
+            emission_authorized_by_id: 'operator.andrey',
+            emission_authority_basis: 'operator_requested_system_directive',
+            target_kind: 'role',
+            target_id: 'architect',
+            content_kind: 'instruction',
+            text: 'Always include active first-class directives in startup context.',
+          },
+        },
+      }, { siteRoot, siteId: 'narada-proper', agentId: 'narada.architect' });
+      const created = JSON.parse(((create?.result as { content: Array<{ text: string }> }).content[0]).text);
+
+      expect(created.emissionAuthorization).toMatchObject({
+        schema: 'narada.directive-emission-authorization.v1',
+        authorized_by: { kind: 'operator', id: 'operator.andrey' },
+        authorized_emitter: { kind: 'system', id: 'narada-proper.system.directive_emitter' },
+        authority: { locus: 'narada_proper', basis: 'operator_requested_system_directive' },
+        status: 'authorized',
+      });
+      expect(created.emissionAuthorization.authorization_id).toMatch(/^auth_/);
+      expect(created.directive.authority.basis).toBe(`directive_emission_authorization:${created.emissionAuthorization.authorization_id}`);
+      const eventLog = readFileSync(created.directiveEventLogPath, 'utf8');
+      expect(eventLog).toContain('directive.emission_authorized');
+      expect(eventLog).toContain(created.emissionAuthorization.authorization_id);
+      const authorizationStore = JSON.parse(readFileSync(created.directiveEmissionAuthorizationStorePath, 'utf8'));
+      expect(authorizationStore.authorizations).toHaveLength(1);
+    } finally {
+      rmSync(siteRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('exposes explicit operator-authorized system directive emission tool', async () => {
+    mkdirSync(resolve('.ai', 'tmp'), { recursive: true });
+    const siteRoot = mkdtempSync(resolve('.ai', 'tmp', 'narada-mcp-system-emission-tool-'));
+    try {
+      const response = await handleMcpRequest({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'narada_directive_record_operator_authorized_system_emission',
+          arguments: {
+            operator_id: 'operator.andrey',
+            system_emitter_id: 'narada-proper.system.directive_emitter',
+            authority_locus: 'narada_proper',
+            authorization_basis: 'operator_requested_system_directive',
+            target_kind: 'role',
+            target_id: 'architect',
+            content_kind: 'instruction',
+            text: 'Always include active first-class directives in startup context.',
+          },
+        },
+      }, { siteRoot, siteId: 'narada-proper', agentId: 'narada.architect' });
+      const result = JSON.parse(((response?.result as { content: Array<{ text: string }> }).content[0]).text);
+
+      expect(result.schema).toBe('narada.directive.mcp_create_result.v1');
+      expect(result.emissionAuthorization.authorization_id).toMatch(/^auth_/);
+      expect(result.directive.source).toMatchObject({
+        kind: 'system',
+        id: 'narada-proper.system.directive_emitter',
+      });
+      expect(result.directive.authority.basis).toBe(`directive_emission_authorization:${result.emissionAuthorization.authorization_id}`);
+      expect(result.toolSemantics).toMatchObject({
+        operatorAuthorizationRecorded: true,
+        systemDirectiveEmitted: true,
+        emissionTimeSemantics: 'immediate',
+        executionAttempted: false,
+        deliveryAttempted: false,
+      });
+    } finally {
+      rmSync(siteRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('normalizes model-shaped system directive emission arguments', async () => {
+    mkdirSync(resolve('.ai', 'tmp'), { recursive: true });
+    const siteRoot = mkdtempSync(resolve('.ai', 'tmp', 'narada-mcp-system-emission-normalized-'));
+    try {
+      const response = await handleMcpRequest({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'narada_directive_record_operator_authorized_system_emission',
+          arguments: {
+            operator_id: 'operator.andrey',
+            system_emitter: 'narada-proper.system.directive_emitter',
+            authority_locus: 'narada_proper',
+            authorization_basis: 'operator_requested_system_directive',
+            target: { kind: 'role', id: 'architect' },
+            content_kind: 'instruction',
+            directive_text: 'Always include active first-class directives in startup context.',
+          },
+        },
+      }, { siteRoot, siteId: 'narada-proper', agentId: 'narada.architect' });
+      const result = JSON.parse(((response?.result as { content: Array<{ text: string }> }).content[0]).text);
+
+      expect(result.status).toBe('success');
+      expect(result.directive.target).toEqual({ kind: 'role', id: 'architect' });
+      expect(result.directive.source.id).toBe('narada-proper.system.directive_emitter');
+    } finally {
+      rmSync(siteRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('normalizes terse role and system_directive aliases for system directive emission', async () => {
+    mkdirSync(resolve('.ai', 'tmp'), { recursive: true });
+    const siteRoot = mkdtempSync(resolve('.ai', 'tmp', 'narada-mcp-system-emission-terse-'));
+    try {
+      const response = await handleMcpRequest({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'narada_directive_record_operator_authorized_system_emission',
+          arguments: {
+            role: 'architect',
+            content_kind: 'system_directive',
+            directive: 'Always include active first-class directives in startup context.',
+          },
+        },
+      }, { siteRoot, siteId: 'narada-proper', agentId: 'narada.architect' });
+      const result = JSON.parse(((response?.result as { content: Array<{ text: string }> }).content[0]).text);
+
+      expect(result.status).toBe('success');
+      expect(result.directive.target).toEqual({ kind: 'role', id: 'architect' });
+      expect(result.directive.source.id).toBe('narada-proper.system.directive_emitter');
+      expect(result.directive.authority.locus).toBe('narada_proper');
+      expect(result.directive.content.kind).toBe('instruction');
+      expect(result.emissionAuthorization.authorized_by).toMatchObject({ kind: 'operator', id: 'operator.interactive' });
+    } finally {
+      rmSync(siteRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses non-site-scoped system emitters for system directive emission', async () => {
+    mkdirSync(resolve('.ai', 'tmp'), { recursive: true });
+    const siteRoot = mkdtempSync(resolve('.ai', 'tmp', 'narada-mcp-system-emission-bad-emitter-'));
+    try {
+      const response = await handleMcpRequest({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: 'narada_directive_record_operator_authorized_system_emission',
+          arguments: {
+            role: 'architect',
+            system_emitter_id: 'narada.architect',
+            directive: 'Always include active first-class directives in startup context.',
+          },
+        },
+      }, { siteRoot, siteId: 'narada-proper', agentId: 'narada.architect' });
+
+      expect(response?.error?.message).toContain('Invalid system_emitter_id');
+      expect(response?.error?.message).toContain('narada-proper.system.directive_emitter');
+    } finally {
+      rmSync(siteRoot, { recursive: true, force: true });
+    }
+  });
+
   it('filters agent context doctrinal grounding by doctrine ids', async () => {
     const response = await handleMcpRequest({
       jsonrpc: '2.0',

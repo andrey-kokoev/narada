@@ -1,6 +1,7 @@
 #!/usr/bin/env node
+import { createHash } from 'node:crypto';
 import { createInterface } from 'node:readline';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
 import { request as httpsRequest } from 'node:https';
@@ -63,6 +64,19 @@ const sessionSettings = {
   thinking: normalizeThinkingLevel(options.thinking ?? THINKING_LEVEL),
   stream: options.stream ?? parseBooleanEnv(process.env.NARADA_AGENT_CLI_STREAM, !SERVER_MODE),
 };
+const STARTUP_SYSTEM_DIRECTIVE = options.startupSystemDirectiveText
+  ?? process.env.NARADA_AGENT_CLI_STARTUP_SYSTEM_DIRECTIVE
+  ?? 'run startup sequence';
+const STARTUP_SYSTEM_DIRECTIVE_DELAY_MS = Number(options.startupSystemDirectiveDelayMs ?? process.env.NARADA_AGENT_CLI_STARTUP_SYSTEM_DIRECTIVE_DELAY_MS ?? 10000);
+const STARTUP_SYSTEM_DIRECTIVE_ENABLED = options.startupSystemDirective === true
+  || options.startupSystemDirectiveText !== undefined
+  || parseBooleanEnv(process.env.NARADA_AGENT_CLI_STARTUP_SYSTEM_DIRECTIVE_ENABLE, false);
+const SHOULD_RUN_STARTUP_SYSTEM_DIRECTIVE = STARTUP_SYSTEM_DIRECTIVE_ENABLED
+  && !SERVER_MODE
+  && PROGRAMMATIC_INPUTS.length === 0
+  && STARTUP_SYSTEM_DIRECTIVE.trim().length > 0
+  && Number.isFinite(STARTUP_SYSTEM_DIRECTIVE_DELAY_MS)
+  && STARTUP_SYSTEM_DIRECTIVE_DELAY_MS >= 0;
 const terminalStyle = createTerminalStyle({
   enabled: options.color ?? parseColorEnv(process.env.NARADA_AGENT_CLI_COLOR, process.stdout.isTTY && !SERVER_MODE),
 });
@@ -94,28 +108,40 @@ async function main() {
   const allTools = aggregateTools(mcpServers);
   const rolePrompt = loadRolePrompt(IDENTITY, SITE_ROOT);
   const rl = createInterface({ input: process.stdin, output: process.stdout });
+  let controlWatcher = null;
+  const promptState = { active: false };
 
-  printHeader(`Identity: ${IDENTITY}`, { before: true });
-  printHeader(`Session: ${SESSION}`);
-  printHeader(`Provider: ${INTELLIGENCE_PROVIDER}`);
-  printHeader(`Model: ${sessionSettings.model}`);
-  printHeader(`Thinking: ${sessionSettings.thinking}`);
-  printHeader(`Stream: ${sessionSettings.stream ? 'on' : 'off'}`);
-  printHeader(`MCP servers: ${Object.keys(mcpServers).length}`);
-  for (const [name, srv] of Object.entries(mcpServers)) {
-    printHeader(`  ${name}: ${srv.tools.length} tools`);
-  }
-  printHeader(`Tools available: ${allTools.length}`);
-  printHeader('Tool approvals: disabled');
-  printHeader('Type /help for commands.', { after: true });
+  printHeaderRows([
+    ['Identity', IDENTITY],
+    ['Session', SESSION],
+    ['Provider', INTELLIGENCE_PROVIDER],
+    ['Model', sessionSettings.model],
+    ['Thinking', sessionSettings.thinking],
+    ['Stream', sessionSettings.stream ? 'on' : 'off'],
+    ['MCP servers', Object.keys(mcpServers).length],
+    ...Object.entries(mcpServers).map(([name, srv]) => [`  ${name}`, `${srv.tools.length} tools`]),
+    ['Tools', allTools.length],
+    ['Approvals', 'disabled'],
+    ['Help', '/help'],
+  ], { before: true, after: true });
 
   let messages = loadSession(SESSION_PATH);
   if (messages.length === 0 && rolePrompt) {
     messages.push({ role: 'system', content: rolePrompt });
   }
+  const inputQueue = createInputQueue({
+    drain: (event) => submitUserInput({ input: event, messages, tools: allTools, mcpServers, rl }),
+    shouldDefer: (event) => shouldDeferInteractiveInput(event, { rl, promptState }),
+    onDeferred: (event, queueState) => {
+      if (event.source === 'system_directive') {
+        const count = queueState.pendingSystemDirectiveCount ?? 1;
+        printCliMessage(`Queued ${count} system directive${count === 1 ? '' : 's'}; waiting for operator input to be submitted or cleared.`);
+      }
+    },
+  });
 
   for (const input of PROGRAMMATIC_INPUTS) {
-    await submitUserInput({ input, messages, tools: allTools, mcpServers, rl });
+    await inputQueue.enqueue(normalizeInputEvent(input, { transport: 'programmatic' }), { drain: true });
   }
   if (EXIT_AFTER_PROGRAMMATIC_INPUT) {
     rl.close();
@@ -126,28 +152,124 @@ async function main() {
     return;
   }
 
-  while (true) {
-    const userInput = await question(rl, terminalStyle.prompt(`${IDENTITY}> `));
-    if (userInput === '__READLINE_CLOSED__') break;
-    const slashCommand = await handleSlashCommand(userInput, { mcpServers, allTools });
-    if (slashCommand === 'exit') break;
-    if (slashCommand === 'handled') continue;
-    if (userInput.trim().length === 0) continue;
+  if (SHOULD_RUN_STARTUP_SYSTEM_DIRECTIVE) {
+    printCliMessage(`System directive scheduled in ${formatDuration(STARTUP_SYSTEM_DIRECTIVE_DELAY_MS)}.`);
+    setTimeout(() => {
+      inputQueue.enqueue(normalizeInputEvent({
+        content: STARTUP_SYSTEM_DIRECTIVE,
+        source: 'system_directive',
+        authority_ref: 'agent-cli-startup-system-directive',
+      }, { transport: 'programmatic' }), { drain: true }).catch((error) => {
+        printCliMessage(`Startup system directive failed: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }, STARTUP_SYSTEM_DIRECTIVE_DELAY_MS);
+  }
 
-    await submitUserInput({
-      input: { content: userInput, source: 'manual_operator' },
-      messages,
-      tools: allTools,
-      mcpServers,
-      rl,
+  if (options.controlJsonl) {
+    controlWatcher = startInteractiveControlJsonlWatcher({
+      controlPath: resolve(options.controlJsonl),
+      inputQueue,
     });
   }
 
+  while (true) {
+    const promptLabel = `operator -> ${IDENTITY}`;
+    promptState.active = true;
+    const userInput = await question(rl, terminalStyle.prompt(`${promptLabel}> `));
+    promptState.active = false;
+    if (userInput === '__READLINE_CLOSED__') break;
+    rewriteSubmittedPrompt(promptLabel, userInput);
+    const slashCommand = await handleSlashCommand(userInput, { mcpServers, allTools });
+    if (slashCommand === 'exit') break;
+    if (slashCommand === 'handled') {
+      await inputQueue.drainUntilIdle();
+      continue;
+    }
+    if (userInput.trim().length === 0) {
+      await inputQueue.drainUntilIdle();
+      continue;
+    }
+
+    await inputQueue.enqueue(normalizeInputEvent(
+      { content: userInput, source: 'manual_operator' },
+      { transport: 'terminal' },
+    ), { drain: true });
+  }
+
   rl.close();
+  controlWatcher?.stop();
   for (const server of Object.values(mcpServers)) {
     if (server.process) server.process.kill();
   }
   printHeader('Session saved. Goodbye.', { before: true });
+}
+
+function startInteractiveControlJsonlWatcher({ controlPath, inputQueue }) {
+  mkdirSync(resolve(controlPath, '..'), { recursive: true });
+  if (!existsSync(controlPath)) writeFileSync(controlPath, '', 'utf8');
+  let offset = statSync(controlPath).size;
+  let stopped = false;
+  let chain = Promise.resolve();
+  let buffer = '';
+  const timer = setInterval(() => {
+    if (stopped) return;
+    let size = 0;
+    try {
+      size = statSync(controlPath).size;
+    } catch {
+      return;
+    }
+    if (size <= offset) return;
+    const content = readFileSync(controlPath, 'utf8').slice(offset);
+    offset = size;
+    buffer += content;
+    const lines = buffer.split(/\r?\n/);
+    buffer = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      chain = chain.then(() => handleInteractiveControlLine(line, { inputQueue })).catch((error) => {
+        printCliMessage(`Control directive failed: ${error instanceof Error ? error.message : String(error)}`);
+      });
+    }
+  }, 250);
+  printCliMessage(`Control path: ${controlPath}`);
+  return {
+    stop: () => {
+      stopped = true;
+      clearInterval(timer);
+    },
+  };
+}
+
+function shouldDeferInteractiveInput(event, { rl, promptState } = {}) {
+  if (event?.source !== 'system_directive') return false;
+  return Boolean(promptState?.active && readlineHasNonWhitespaceInput(rl));
+}
+
+async function handleInteractiveControlLine(line, { inputQueue }) {
+  let request;
+  try {
+    request = JSON.parse(line);
+  } catch {
+    printCliMessage('Ignored invalid control JSON.');
+    return;
+  }
+  if (request?.method !== 'system_directive.deliver') {
+    printCliMessage(`Ignored unsupported control method: ${request?.method ?? '<missing>'}`);
+    return;
+  }
+  const directive = request?.params?.directive ?? null;
+  const message = String(request?.params?.message ?? directive?.content?.text ?? '');
+  if (!message.trim()) {
+    printCliMessage('Ignored empty system directive control frame.');
+    return;
+  }
+  await inputQueue.enqueue(normalizeInputEvent({
+      content: message,
+      source: 'system_directive',
+      authority_ref: request?.params?.authority_ref ?? directive?.directive_id ?? request?.params?.directive_id ?? null,
+      directive_id: directive?.directive_id ?? request?.params?.directive_id ?? null,
+    }, { transport: 'control_jsonl' }), { drain: true });
 }
 
 async function handleSlashCommand(input, { mcpServers, allTools }) {
@@ -163,19 +285,25 @@ async function handleSlashCommand(input, { mcpServers, allTools }) {
   const command = rawCommand.toLowerCase();
   const value = rest.join(' ').trim();
   if (command === '/help') {
-    printAssistantMessage([
+    printCliMessage([
       'Commands',
       '',
       '/help                 Show commands',
       '/status               Show session state',
       '/model <name>         Set model for later turns',
       '/thinking <level>     none, low, medium, high',
+      '/clear                Clear terminal display',
       '/exit                 Save and quit',
     ].join('\n'));
     return 'handled';
   }
+  if (command === '/clear') {
+    clearTerminalDisplay();
+    appendSession(SESSION_PATH, sessionEventEntry('session_command', { command: '/clear' }));
+    return 'handled';
+  }
   if (command === '/status') {
-    printAssistantMessage(formatKeyValueRows({
+    printCliMessage(formatKeyValueRows({
       Identity: IDENTITY,
       Session: SESSION,
       Provider: INTELLIGENCE_PROVIDER,
@@ -190,40 +318,161 @@ async function handleSlashCommand(input, { mcpServers, allTools }) {
   }
   if (command === '/model') {
     if (!value) {
-      printAssistantMessage(`Current model: ${sessionSettings.model}`);
+      printCliMessage(`Current model: ${sessionSettings.model}`);
       return 'handled';
     }
     sessionSettings.model = value;
     appendSession(SESSION_PATH, sessionEventEntry('session_setting_changed', { setting: 'model', value }));
-    printAssistantMessage(`Model set to ${sessionSettings.model}`);
+    printCliMessage(`Model set to ${sessionSettings.model}`);
     return 'handled';
   }
   if (command === '/thinking') {
     if (!value) {
-      printAssistantMessage(`Current thinking: ${sessionSettings.thinking}`);
+      printCliMessage(`Current thinking: ${sessionSettings.thinking}`);
       return 'handled';
     }
     const next = normalizeThinkingLevel(value);
     if (next !== value.toLowerCase()) {
-      printAssistantMessage('Usage: /thinking none|low|medium|high');
+      printCliMessage('Usage: /thinking none|low|medium|high');
       return 'handled';
     }
     sessionSettings.thinking = next;
     appendSession(SESSION_PATH, sessionEventEntry('session_setting_changed', { setting: 'thinking', value: next }));
-    printAssistantMessage(`Thinking set to ${sessionSettings.thinking}`);
+    printCliMessage(`Thinking set to ${sessionSettings.thinking}`);
     return 'handled';
   }
-  printAssistantMessage(`Unknown command: ${command}. Type /help.`);
+  printCliMessage(`Unknown command: ${command}. Type /help.`);
   return 'handled';
 }
 
 // ---------------------------------------------------------------------------
 // Conversation loop
 // ---------------------------------------------------------------------------
+function normalizeInputEvent(input, defaults = {}) {
+  const record = normalizeInputRecord(input);
+  const receivedAt = defaults.received_at ?? input?.received_at ?? new Date().toISOString();
+  return {
+    event_id: input?.event_id ?? `input_${randomId()}`,
+    received_at: receivedAt,
+    content: record.content,
+    source: record.source,
+    authority_ref: record.authority_ref,
+    directive_id: input?.directive_id ?? null,
+    request_id: input?.request_id ?? null,
+    transport: input?.transport ?? defaults.transport ?? transportForInputSource(record.source),
+  };
+}
+
+function transportForInputSource(source) {
+  if (source === 'automation_jsonl') return 'jsonl_stdio';
+  if (source === 'programmatic_operator' || source === 'operator_directive' || source === 'system_directive') return 'programmatic';
+  return 'terminal';
+}
+
+function createInputQueue({ drain, shouldDefer = () => false, onDeferred = null } = {}) {
+  const pending = [];
+  const state = { running: false, deferredNotified: new Set() };
+  return {
+    get isRunning() { return state.running; },
+    get pendingCount() { return pending.length; },
+    get pendingSystemDirectiveCount() { return pending.filter((event) => event.source === 'system_directive').length; },
+    enqueue: async (event, options = {}) => {
+      const normalized = normalizeInputEvent(event);
+      pending.push(normalized);
+      appendSession(SESSION_PATH, sessionEventEntry('input_event_queued', {
+        event_id: normalized.event_id,
+        source: normalized.source,
+        transport: normalized.transport,
+        authority_ref: normalized.authority_ref,
+        directive_id: normalized.directive_id,
+      }));
+      if (options.drain) await drainUntilIdle();
+      return normalized;
+    },
+    drainOnce,
+    drainUntilIdle,
+    state: queueSnapshot,
+  };
+
+  function queueSnapshot() {
+    return {
+      running: state.running,
+      pendingCount: pending.length,
+      pendingSystemDirectiveCount: pending.filter((event) => event.source === 'system_directive').length,
+    };
+  }
+
+  async function drainOnce() {
+    if (state.running || pending.length === 0) return null;
+    if (shouldDefer(pending[0])) {
+      const event = pending[0];
+      if (event && !state.deferredNotified.has(event.event_id)) {
+        state.deferredNotified.add(event.event_id);
+        onDeferred?.(event, queueSnapshot());
+      }
+      return null;
+    }
+    const event = pending.shift();
+    state.deferredNotified.delete(event.event_id);
+    state.running = true;
+    appendSession(SESSION_PATH, sessionEventEntry('input_event_started', {
+      event_id: event.event_id,
+      source: event.source,
+      transport: event.transport,
+      authority_ref: event.authority_ref,
+      directive_id: event.directive_id,
+    }));
+    if (event.source === 'system_directive' && event.directive_id) {
+      appendSession(SESSION_PATH, sessionEventEntry('directive_receipt_recorded', directiveReceiptEvidence(event, {
+        agentId: IDENTITY,
+        carrierSessionId: SESSION,
+      })));
+    }
+    try {
+      const result = await drain(event);
+      appendSession(SESSION_PATH, sessionEventEntry('input_event_completed', {
+        event_id: event.event_id,
+        terminal_state: result?.terminal_state ?? 'completed',
+      }));
+      return result;
+    } finally {
+      state.running = false;
+    }
+  }
+
+  async function drainUntilIdle() {
+    let last = null;
+    while (!state.running && pending.length > 0 && !shouldDefer(pending[0])) {
+      last = await drainOnce();
+    }
+    if (!state.running && pending.length > 0 && shouldDefer(pending[0])) await drainOnce();
+    return last;
+  }
+}
+
+function readlineHasPartialInput(rl) {
+  return Boolean(rl && typeof rl.line === 'string' && rl.line.length > 0);
+}
+
+function readlineHasNonWhitespaceInput(rl) {
+  return Boolean(rl && typeof rl.line === 'string' && rl.line.trim().length > 0);
+}
+
 async function submitUserInput({ input, messages, tools, mcpServers, rl, turn = null, emit = null, callChatApiFn = callChatApi }) {
   const record = normalizeInputRecord(input);
   messages.push({ role: 'user', content: record.content });
-  appendSession(SESSION_PATH, sessionLogEntry({ role: 'user', content: record.content, source: record.source, authorityRef: record.authority_ref }));
+  appendSession(SESSION_PATH, sessionLogEntry({
+    role: 'user',
+    content: record.content,
+    source: record.source,
+    authorityRef: record.authority_ref,
+    eventId: input?.event_id,
+    transport: input?.transport,
+    directiveId: input?.directive_id,
+  }));
+  if (!emit && record.source !== 'manual_operator') {
+    printInputRecord(record);
+  }
   const progress = !emit && !turn ? startInteractiveTurnProgress() : null;
   try {
     return await runConversationTurn(messages, tools, mcpServers, rl, { turn: turn ?? progress?.turn ?? null, emit, callChatApiFn });
@@ -241,6 +490,7 @@ async function runConversationTurn(messages, tools, mcpServers, rl, options = {}
       emit?.('turn_interrupted', { turn_id: turn.turnId, terminal_state: 'interrupted' });
       return { terminal_state: 'interrupted' };
     }
+    turn?.setPhase?.('thinking');
     const response = await callChatApiFn(messages, tools, { ...sessionSettings, turn, emit, mcpServers });
     if (turn?.interruptRequested) {
       emit?.('turn_interrupted', { turn_id: turn.turnId, terminal_state: 'interrupted' });
@@ -264,7 +514,7 @@ async function runConversationTurn(messages, tools, mcpServers, rl, options = {}
 
     if (message.content) {
       if (emit) emit('assistant_message', { turn_id: turn?.turnId ?? null, content: message.content });
-      else if (response.streaming_rendered !== true) printAssistantMessage(message.content);
+      else if (response.streaming_rendered !== true) printAgentMessage(message.content);
     }
 
     if (message.tool_calls && message.tool_calls.length > 0) {
@@ -274,7 +524,7 @@ async function runConversationTurn(messages, tools, mcpServers, rl, options = {}
           emit?.('turn_interrupted', { turn_id: turn.turnId, terminal_state: 'interrupted' });
           break;
         }
-        const result = await executeMcpTool(toolCall, mcpServers, rl, { emit, turnId: turn?.turnId ?? null, serverMode: !!emit });
+        const result = await executeMcpTool(toolCall, mcpServers, rl, { emit, turn, turnId: turn?.turnId ?? null, serverMode: !!emit });
         toolResults.push(result);
       }
       if (turn?.interruptRequested) return { terminal_state: 'interrupted' };
@@ -283,6 +533,7 @@ async function runConversationTurn(messages, tools, mcpServers, rl, options = {}
         appendSession(SESSION_PATH, { role: 'tool', content: result.content, tool_call_id: result.tool_call_id, timestamp: new Date().toISOString() });
       }
       // Loop back to send tool results to AI
+      turn?.setPhase?.('thinking');
       continue;
     }
 
@@ -300,8 +551,10 @@ async function executeMcpTool(toolCall, mcpServers, rl, options = {}) {
   const server = binding?.server ?? null;
   const toolMetadata = resolveToolMetadata({ toolName: name, server, tool: binding?.tool ?? null });
   const emit = options.emit ?? null;
+  const turn = options.turn ?? null;
   const turnId = options.turnId ?? null;
   const serverMode = options.serverMode === true;
+  const startedAt = Date.now();
   const admissionClassification = serverMode
     ? classifyCarrierActionRequest(name, args, { toolAvailable: !!server, toolMetadata })
     : null;
@@ -333,10 +586,17 @@ async function executeMcpTool(toolCall, mcpServers, rl, options = {}) {
       });
     }
   }
-  if (!serverMode) printToolLine(`${name}(${JSON.stringify(args).slice(0, 200)})`, { before: true });
+  turn?.setPhase?.(`calling ${name}`);
+  if (!serverMode) {
+    turn?.clearStatus?.();
+    printToolRequestLine(`${name}(${JSON.stringify(args).slice(0, 200)})`, { before: true });
+  }
 
   if (category === 'block') {
-    if (!serverMode) printToolLine(`BLOCKED: ${name} is on the blocklist.`, { level: 'warn' });
+    if (!serverMode) {
+      turn?.clearStatus?.();
+      printToolResultLine(`blocked ${name} in ${formatDuration(Date.now() - startedAt)} · blocklist`, { level: 'warn' });
+    }
     emit?.('tool_result', { turn_id: turnId, tool: name, status: 'blocked' });
     return {
       role: 'tool',
@@ -389,6 +649,10 @@ async function executeMcpTool(toolCall, mcpServers, rl, options = {}) {
       };
     }
     emit?.('tool_result', { turn_id: turnId, tool: name, status: 'error', error: `Tool ${name} not found in any MCP server.` });
+    if (!serverMode) {
+      turn?.clearStatus?.();
+      printToolResultLine(`failed ${name} in ${formatDuration(Date.now() - startedAt)} · tool not found`, { level: 'error' });
+    }
     return {
       role: 'tool',
       tool_call_id: toolCall.id,
@@ -462,7 +726,8 @@ async function executeMcpTool(toolCall, mcpServers, rl, options = {}) {
               params: { name, arguments: { ...args, __auto_approved: true } },
             });
             const autoContent = autoResult.content?.[0]?.text ?? JSON.stringify(autoResult);
-            printToolLine(`-> ${formatToolResultContent(autoContent)}`);
+            turn?.clearStatus?.();
+            printToolResultLine(`ok ${name} in ${formatDuration(Date.now() - startedAt)} · ${formatToolResultContent(autoContent)}`);
             return { role: 'tool', tool_call_id: toolCall.id, content: autoContent };
           }
         }
@@ -472,7 +737,10 @@ async function executeMcpTool(toolCall, mcpServers, rl, options = {}) {
     }
 
     const content = result.content?.[0]?.text ?? JSON.stringify(result);
-    if (!serverMode) printToolLine(`-> ${formatToolResultContent(content)}`);
+    if (!serverMode) {
+      turn?.clearStatus?.();
+      printToolResultLine(`ok ${name} in ${formatDuration(Date.now() - startedAt)} · ${formatToolResultContent(content)}`);
+    }
     emit?.('tool_result', {
       turn_id: turnId,
       tool: name,
@@ -487,7 +755,10 @@ async function executeMcpTool(toolCall, mcpServers, rl, options = {}) {
       content,
     };
   } catch (err) {
-    if (!serverMode) printToolLine(`ERROR: ${err.message}`, { level: 'error' });
+    if (!serverMode) {
+      turn?.clearStatus?.();
+      printToolResultLine(`failed ${name} in ${formatDuration(Date.now() - startedAt)} · ${err.message}`, { level: 'error' });
+    }
     emit?.('tool_result', { turn_id: turnId, tool: name, status: 'error', error: err.message });
     return {
       role: 'tool',
@@ -719,11 +990,14 @@ function appendSession(path, entry) {
   appendFileSync(path, JSON.stringify(entry) + '\n', 'utf-8');
 }
 
-function sessionLogEntry({ role, content, source, authorityRef, toolCallId }) {
+function sessionLogEntry({ role, content, source, authorityRef, toolCallId, eventId, transport, directiveId }) {
   const entry = { role, content, timestamp: new Date().toISOString() };
   if (toolCallId) entry.tool_call_id = toolCallId;
   if (source) entry.source = source;
   if (authorityRef) entry.authority_ref = authorityRef;
+  if (eventId) entry.event_id = eventId;
+  if (transport) entry.transport = transport;
+  if (directiveId) entry.directive_id = directiveId;
   return entry;
 }
 
@@ -731,15 +1005,61 @@ function sessionEventEntry(event, payload = {}) {
   return { role: 'event', event, ...payload, timestamp: new Date().toISOString() };
 }
 
+function directiveReceiptEvidence(event, { agentId, carrierSessionId, receivedAt = new Date().toISOString() }) {
+  const evidence = {
+    schema: 'narada.directive.carrier_receipt_evidence.v1',
+    directive_id: event.directive_id,
+    input_event_id: event.event_id,
+    received_at: receivedAt,
+    agent_id: agentId,
+    carrier_session_id: carrierSessionId,
+    transport: event.transport,
+    authority_ref: event.authority_ref,
+    source: event.source,
+  };
+  return {
+    ...evidence,
+    receipt_id: `dirrcpt_${hashStable(evidence).slice(0, 32)}`,
+  };
+}
+
 function startInteractiveTurnProgress() {
-  const turn = { turnId: randomId(), interruptRequested: false };
+  const turn = {
+    turnId: randomId(),
+    interruptRequested: false,
+    phase: 'thinking',
+    phaseStartedAt: Date.now(),
+    setPhase(phase) {
+      if (!phase || this.phase === phase) return;
+      this.phase = phase;
+      this.phaseStartedAt = Date.now();
+      forceNextStatus = true;
+    },
+    clearStatus() {
+      process.stdout.write('\r\x1b[K');
+      statusVisible = false;
+      forceNextStatus = true;
+    },
+  };
   const started = Date.now();
   let lastSeconds = -1;
-  const writeStatus = () => {
+  let spinnerIndex = 0;
+  let statusVisible = false;
+  let forceNextStatus = false;
+  const writeStatus = (force = false) => {
     const seconds = Math.floor((Date.now() - started) / 1000);
-    if (seconds === lastSeconds || seconds % 5 !== 0) return;
+    if (!force && !forceNextStatus && seconds === lastSeconds) return;
     lastSeconds = seconds;
-    process.stdout.write(`\r${terminalStyle.progress(`[agent-cli] Working (${seconds}s, Esc to interrupt)`)}`);
+    forceNextStatus = false;
+    const spinner = ['-', '\\', '|', '/'][spinnerIndex++ % 4];
+    const phaseSeconds = Math.floor((Date.now() - turn.phaseStartedAt) / 1000);
+    process.stdout.write(`\r\x1b[K${terminalStyle.progress(formatProgressStatus({
+      spinner,
+      phase: turn.phase,
+      totalMs: seconds * 1000,
+      phaseMs: phaseSeconds * 1000,
+    }))}`);
+    statusVisible = true;
   };
   const onData = (chunk) => {
     if (Buffer.from(chunk).includes(0x1b)) {
@@ -751,14 +1071,14 @@ function startInteractiveTurnProgress() {
   if (process.stdin.isTTY) process.stdin.setRawMode(true);
   process.stdin.on('data', onData);
   writeStatus();
-  const timer = setInterval(writeStatus, 1000);
+  const timer = setInterval(writeStatus, 250);
   return {
     turn,
     stop: () => {
       clearInterval(timer);
       process.stdin.off('data', onData);
       if (process.stdin.isTTY) process.stdin.setRawMode(!!previousRawMode);
-      process.stdout.write('\r\x1b[K');
+      if (statusVisible) process.stdout.write('\r\x1b[K');
     },
   };
 }
@@ -774,11 +1094,16 @@ function normalizeInputRecord(input) {
 
 function buildProgrammaticInputs(opts) {
   const inputs = [];
+  const source = opts.systemDirective === true
+    ? 'system_directive'
+    : opts.operatorDirective === true
+      ? 'operator_directive'
+      : 'programmatic_operator';
   for (const message of opts.messages ?? []) {
-    inputs.push({ content: message, source: 'programmatic_flag', authority_ref: opts.authorityRef ?? null });
+    inputs.push({ content: message, source, authority_ref: opts.authorityRef ?? null });
   }
   for (const filePath of opts.messageFiles ?? []) {
-    inputs.push({ content: readFileSync(resolve(filePath), 'utf8'), source: 'programmatic_file', authority_ref: opts.authorityRef ?? null });
+    inputs.push({ content: readFileSync(resolve(filePath), 'utf8'), source, authority_ref: opts.authorityRef ?? null });
   }
   return inputs;
 }
@@ -799,6 +1124,30 @@ async function runServerMode({ input = process.stdin, output = process.stdout, c
   if (messages.length === 0 && rolePrompt) {
     messages.push({ role: 'system', content: rolePrompt });
   }
+  state.inputQueue = createInputQueue({
+    drain: (event) => {
+      const requestId = event.request_id ?? event.event_id;
+      if (state.closed) {
+        emit('error', {
+          request_id: requestId,
+          code: 'session_closed',
+          message: 'Session is closed.',
+        });
+        return { terminal_state: 'rejected' };
+      }
+      return runServerConversationTurn({
+        requestId,
+        state,
+        messages,
+        allTools,
+        mcpServers,
+        emit,
+        callChatApiFn,
+        input: event,
+        directiveId: event.directive_id ?? null,
+      });
+    },
+  });
 
   const emit = (event, payload = {}) => emitServerEvent(output, {
     event,
@@ -843,7 +1192,6 @@ async function runServerMode({ input = process.stdin, output = process.stdout, c
     for (const line of lines) {
       if (!line.trim()) continue;
       dispatchRequestLine(line);
-      if (state.closed) break;
     }
     if (state.closed) break;
   }
@@ -873,6 +1221,14 @@ async function handleServerRequest(request, { state, messages, allTools, mcpServ
   const requestId = request?.id ?? null;
   const method = request?.method;
   try {
+    if (state.closed && method !== 'session.status' && method !== 'session.close') {
+      emit('error', {
+        request_id: requestId,
+        code: 'session_closed',
+        message: 'Session is closed.',
+      });
+      return;
+    }
     if (method === 'session.status') {
       emit('session_status', serverStatus({ requestId, state, allTools, mcpServers }));
       return;
@@ -899,6 +1255,28 @@ async function handleServerRequest(request, { state, messages, allTools, mcpServ
       });
       return;
     }
+    if (method === 'system_directive.deliver') {
+      const directive = request?.params?.directive ?? null;
+      const message = String(request?.params?.message ?? directive?.content?.text ?? '');
+      const directiveId = directive?.directive_id ?? request?.params?.directive_id ?? null;
+      if (!message.trim()) {
+        emit('error', {
+          request_id: requestId,
+          directive_id: directiveId,
+          code: 'directive_message_required',
+          message: 'system_directive.deliver requires params.message or params.directive.content.text',
+        });
+        return;
+      }
+      await state.inputQueue.enqueue(normalizeInputEvent({
+        content: message,
+        source: 'system_directive',
+        authority_ref: request?.params?.authority_ref ?? directiveId,
+        directive_id: directiveId,
+        request_id: requestId,
+      }, { transport: 'jsonl_stdio' }), { drain: true });
+      return;
+    }
     if (method !== 'conversation.send') {
       emit('error', {
         request_id: requestId,
@@ -916,56 +1294,86 @@ async function handleServerRequest(request, { state, messages, allTools, mcpServ
       });
       return;
     }
-    if (state.activeTurn) {
-      emit('error', {
-        request_id: requestId,
-        code: 'turn_already_running',
-        message: `Active turn already running: ${state.activeTurn.turnId}`,
-      });
-      return;
-    }
-    const turnId = `turn_${randomId()}`;
-    const turn = { turnId, requestId, interruptRequested: false };
-    state.activeTurn = turn;
-    emit('turn_started', { request_id: requestId, turn_id: turnId, terminal_state: 'accepted' });
-    try {
-      const result = await submitUserInput({
-        input: { content: message, source: 'automation_jsonl', authority_ref: request?.params?.authority_ref ?? null },
-        messages,
-        tools: allTools,
-        mcpServers,
-        rl: null,
-        turn,
-        emit,
-        callChatApiFn,
-      });
-      const terminalState = turn.interruptRequested ? 'interrupted' : (result?.terminal_state ?? 'completed');
-      if (terminalState === 'failed') {
-        emit('turn_failed', {
-          request_id: requestId,
-          turn_id: turnId,
-          terminal_state: 'failed',
-          reason: result?.reason ?? 'conversation_turn_failed',
-        });
-      } else {
-        emit('turn_complete', { request_id: requestId, turn_id: turnId, terminal_state: terminalState });
-      }
-    } catch (error) {
-      emit('turn_failed', {
-        request_id: requestId,
-        turn_id: turnId,
-        terminal_state: 'failed',
-        error: error instanceof Error ? error.message : String(error),
-      });
-    } finally {
-      state.activeTurn = null;
-    }
+    await state.inputQueue.enqueue(normalizeInputEvent({
+      content: message,
+      source: 'automation_jsonl',
+      authority_ref: request?.params?.authority_ref ?? null,
+      request_id: requestId,
+    }, { transport: 'jsonl_stdio' }), { drain: true });
   } catch (error) {
     emit('error', {
       request_id: requestId,
       code: 'request_failed',
       message: error instanceof Error ? error.message : String(error),
     });
+  }
+}
+
+async function runServerConversationTurn({ requestId, state, messages, allTools, mcpServers, emit, callChatApiFn, input, directiveId = null }) {
+  const turnId = `turn_${randomId()}`;
+  const turn = { turnId, requestId, interruptRequested: false };
+  state.activeTurn = turn;
+  if (directiveId) {
+    emit('directive_received', {
+      request_id: requestId,
+      turn_id: turnId,
+      directive_id: directiveId,
+      terminal_state: 'accepted',
+      source: 'system_directive',
+    });
+    emit('directive_receipt_recorded', {
+      request_id: requestId,
+      turn_id: turnId,
+      ...directiveReceiptEvidence(input, {
+        agentId: IDENTITY,
+        carrierSessionId: SESSION,
+      }),
+    });
+  }
+  emit('turn_started', {
+    request_id: requestId,
+    turn_id: turnId,
+    terminal_state: 'accepted',
+    ...(directiveId ? { directive_id: directiveId, source: 'system_directive' } : {}),
+  });
+  try {
+    const result = await submitUserInput({
+      input,
+      messages,
+      tools: allTools,
+      mcpServers,
+      rl: null,
+      turn,
+      emit,
+      callChatApiFn,
+    });
+    const terminalState = turn.interruptRequested ? 'interrupted' : (result?.terminal_state ?? 'completed');
+    if (terminalState === 'failed') {
+      emit('turn_failed', {
+        request_id: requestId,
+        turn_id: turnId,
+        ...(directiveId ? { directive_id: directiveId } : {}),
+        terminal_state: 'failed',
+        reason: result?.reason ?? 'conversation_turn_failed',
+      });
+    } else {
+      emit('turn_complete', {
+        request_id: requestId,
+        turn_id: turnId,
+        ...(directiveId ? { directive_id: directiveId } : {}),
+        terminal_state: terminalState,
+      });
+    }
+  } catch (error) {
+    emit('turn_failed', {
+      request_id: requestId,
+      turn_id: turnId,
+      ...(directiveId ? { directive_id: directiveId } : {}),
+      terminal_state: 'failed',
+      error: error instanceof Error ? error.message : String(error),
+    });
+  } finally {
+    if (state.activeTurn === turn) state.activeTurn = null;
   }
 }
 
@@ -1488,7 +1896,7 @@ function sendCodexExecJsonRequest(request, settings = {}) {
             settings.emit('assistant_message_stream', { turn_id: settings.turn?.turnId ?? null, content: text });
           } else {
             process.stdout.write('\r\x1b[K');
-            printAssistantMessage(text);
+            printAgentMessage(text);
             rendered = true;
           }
         }
@@ -1723,6 +2131,25 @@ function stringifyContent(value) {
   return typeof value === 'string' ? value : JSON.stringify(value ?? '');
 }
 
+function delay(ms) {
+  return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
+}
+
+function hashStable(value) {
+  return createHash('sha256').update(stableStringify(value)).digest('hex');
+}
+
+function stableStringify(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => stableStringify(item)).join(',')}]`;
+  const record = value;
+  return `{${Object.keys(record)
+    .filter((key) => record[key] !== undefined)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
+    .join(',')}}`;
+}
+
 // ---------------------------------------------------------------------------
 // Terminal presentation
 // ---------------------------------------------------------------------------
@@ -1734,7 +2161,11 @@ function createTerminalStyle({ enabled = true } = {}) {
     tool: (text) => color('35', text),
     assistant: (text) => color('37', text),
     label: (text) => color('1;36', text),
+    operatorDirective: (text) => color('1;33', text),
+    systemDirective: (text) => color('1;35', text),
     muted: (text) => color('2', text),
+    source: (text) => color('90', text),
+    key: (text) => color('33', text),
     code: (text) => color('90', text),
     success: (text) => color('32', text),
     prompt: (text) => color('1;32', text),
@@ -1751,39 +2182,146 @@ function printHeader(text, { before = false, after = false, level = 'info' } = {
   console.log(`${before ? '\n' : ''}${styled}${after ? '\n' : ''}`);
 }
 
-function printToolLine(text, { before = false, level = 'info' } = {}) {
+function clearTerminalDisplay() {
+  process.stdout.write('\x1b[2J\x1b[3J\x1b[H');
+}
+
+function printHeaderRow(key, value, { before = false, after = false } = {}) {
+  console.log(formatHeaderRow(key, value, { before, after }));
+}
+
+function printHeaderRows(rows, { before = false, after = false } = {}) {
   printMessageBlock({
-    label: 'tool',
-    text,
+    label: 'agent-cli',
+    text: formatHeaderRows(rows),
     before,
-    labelStyle: level === 'error' ? terminalStyle.error : level === 'warn' ? terminalStyle.warn : terminalStyle.tool,
-    bodyStyle: level === 'error' ? terminalStyle.error : level === 'warn' ? terminalStyle.warn : terminalStyle.muted,
+    after,
+    labelStyle: terminalStyle.tool,
+    bodyStyle: (value) => value,
   });
 }
 
-function printAssistantMessage(text) {
+function formatHeaderRows(rows) {
+  const width = rows.reduce((max, [key]) => Math.max(max, stripAnsi(String(key)).length), 0);
+  return rows.map(([key, value]) => formatHeaderRow(key, value, { width, includePrefix: false })).join('\n');
+}
+
+function formatHeaderRow(key, value, { before = false, after = false, width = 12, includePrefix = true } = {}) {
+  const prefix = includePrefix ? `${terminalStyle.source('[agent-cli]')} ` : '';
+  const keyText = terminalStyle.key(String(key).padEnd(width));
+  const valueText = String(value) === 'on'
+    ? terminalStyle.success(String(value))
+    : terminalStyle.header(String(value));
+  return `${before ? '\n' : ''}${prefix}${keyText} ${valueText}${after ? '\n' : ''}`;
+}
+
+function printToolRequestLine(text, { before = false } = {}) {
+  printInlineEvent(toolDirectionLabel('invoke'), text, {
+    before,
+    bodyStyle: terminalStyle.muted,
+  });
+}
+
+function printToolResultLine(text, { before = false, level = 'info' } = {}) {
+  const label = toolDirectionLabel('result');
+  const bodyStyle = level === 'error' ? terminalStyle.error : level === 'warn' ? terminalStyle.warn : terminalStyle.muted;
+  if (!String(text ?? '').includes('\n')) {
+    printInlineEvent(label, text, { before, labelStyle: level === 'error' ? terminalStyle.error : level === 'warn' ? terminalStyle.warn : (value) => value, bodyStyle });
+    return;
+  }
+  printMessageBlock({ label, text, before, labelStyle: level === 'error' ? terminalStyle.error : level === 'warn' ? terminalStyle.warn : (value) => value, bodyStyle });
+}
+
+function toolDirectionLabel(direction) {
+  const arrow = terminalStyle.muted('->');
+  if (direction === 'result') return `${terminalStyle.tool('agent-cli')} ${arrow} ${terminalStyle.label(IDENTITY)}`;
+  return `${terminalStyle.label(IDENTITY)} ${arrow} ${terminalStyle.tool('agent-cli')}`;
+}
+
+function printInlineEvent(label, text, { before = false, labelStyle = (value) => value, bodyStyle = (value) => value } = {}) {
+  console.log(`${before ? '\n' : ''}${labelStyle(label)}${terminalStyle.muted(':')} ${bodyStyle(String(text ?? ''))}`);
+}
+
+function printAgentMessage(text) {
   const normalized = String(text ?? '').trim();
   if (!normalized) return;
   printMessageBlock({
-    label: 'assistant',
+    label: IDENTITY,
     text: renderMarkdownForTerminal(normalized),
     before: true,
     after: true,
     labelStyle: terminalStyle.label,
-    bodyStyle: terminalStyle.assistant,
+    bodyStyle: (value) => value,
   });
+}
+
+function printCliMessage(text) {
+  const normalized = String(text ?? '').trim();
+  if (!normalized) return;
+  printMessageBlock({
+    label: 'agent-cli',
+    text: renderMarkdownForTerminal(normalized),
+    before: true,
+    after: true,
+    labelStyle: terminalStyle.tool,
+    bodyStyle: (value) => value,
+  });
+}
+
+function printInputRecord(record) {
+  const label = inputRecordDisplayLabel(record);
+  const labelStyle = record.source === 'system_directive'
+    ? terminalStyle.systemDirective
+    : record.source === 'operator_directive'
+      ? terminalStyle.operatorDirective
+      : terminalStyle.prompt;
+  printMessageBlock({
+    label,
+    text: String(record.content ?? '').trim(),
+    before: true,
+    labelStyle,
+    bodyStyle: (value) => value,
+  });
+}
+
+function inputRecordDisplayLabel(record) {
+  if (record?.source === 'system_directive') return 'system directive';
+  if (record?.source === 'operator_directive') return `operator directive -> ${IDENTITY}`;
+  return `operator -> ${IDENTITY}`;
+}
+
+function printOperatorMessage(text) {
+  const normalized = String(text ?? '').trim();
+  if (!normalized) return;
+  printMessageBlock({
+    label: 'operator',
+    text: normalized,
+    before: true,
+    labelStyle: terminalStyle.prompt,
+    bodyStyle: (value) => value,
+  });
+}
+
+function rewriteSubmittedPrompt(promptLabel, input) {
+  if (!process.stdout.isTTY) return;
+  const rewritten = rewriteSubmittedPromptForTest(promptLabel, input, process.stdout.columns || 80);
+  if (rewritten) process.stdout.write(terminalStyle.prompt(rewritten));
+}
+
+function rewriteSubmittedPromptForTest(promptLabel, input, columns = 80) {
+  const text = String(input ?? '');
+  if (text.includes('\n') || text.includes('\r')) return null;
+  const visibleLength = stripAnsi(`${promptLabel}: ${text}`).length;
+  if (visibleLength >= columns) return null;
+  return `\x1b[1A\r\x1b[K${promptLabel}: ${text}\n`;
 }
 
 function printMessageBlock({ label, text, before = false, after = false, labelStyle = (value) => value, bodyStyle = (value) => value }) {
   const width = terminalWidth();
-  const border = terminalStyle.muted('│');
-  const labelText = `${labelStyle(label)} ${terminalStyle.muted('·')}`;
-  const bodyWidth = Math.max(32, width - 4);
+  const labelLine = `${labelStyle(label)}${terminalStyle.muted(':')}`;
+  const bodyWidth = Math.max(32, width - 2);
   const lines = String(text ?? '').split(/\r?\n/).flatMap((line) => wrapTerminalLine(line, bodyWidth));
-  const rendered = lines.map((line, index) => {
-    const prefix = index === 0 ? `${border} ${labelText} ` : `${border}   `;
-    return `${prefix}${bodyStyle(line)}`;
-  }).join('\n');
+  const rendered = [labelLine, ...lines.map((line) => `  ${bodyStyle(line)}`)].join('\n');
   console.log(`${before ? '\n' : ''}${rendered}${after ? '\n' : ''}`);
 }
 
@@ -1791,15 +2329,37 @@ function renderMarkdownForTerminal(text) {
   const lines = String(text ?? '').split(/\r?\n/);
   let inFence = false;
   return lines.map((line) => {
-    if (line.trim().startsWith('```')) {
+    const fenceMatch = line.match(/^(\s*)```/);
+    if (fenceMatch) {
       inFence = !inFence;
-      return terminalStyle.code(line);
+      return null;
     }
-    if (inFence) return terminalStyle.code(`  ${line}`);
+    if (inFence) return terminalStyle.code(`  ${line.replace(/^\s{0,4}/, '')}`);
     if (/^#{1,6}\s+/.test(line)) return terminalStyle.label(line.replace(/^#{1,6}\s+/, ''));
-    if (/^\s*[-*]\s+/.test(line)) return line.replace(/^(\s*)[-*]\s+/, '$1• ');
-    return line.replace(/`([^`]+)`/g, (_match, code) => terminalStyle.code(code));
-  }).join('\n');
+    const normalizedLine = normalizeDisplayTerms(line);
+    const bulletLine = /^\s*[-*]\s+/.test(normalizedLine)
+      ? normalizedLine.replace(/^(\s*)[-*]\s+/, '$1• ')
+      : normalizedLine;
+    return styleInlineCode(bulletLine);
+  }).filter((line) => line !== null).join('\n');
+}
+
+function styleInlineCode(line) {
+  return String(line ?? '').replace(/`([^`]+)`/g, (_match, code) => terminalStyle.code(code));
+}
+
+function normalizeDisplayTerms(line) {
+  return transformOutsideInlineCode(String(line ?? ''), (chunk) => chunk
+    .replace(/\bauthority_locus\b/g, 'authority locus')
+    .replace(/\bauthority_posture\b/g, 'authority posture')
+    .replace(/\bfacade_only\b/g, '`facade_only`')
+    .replace(/\bnarada_proper\b/g, '`narada_proper`'));
+}
+
+function transformOutsideInlineCode(text, transform) {
+  return String(text ?? '').split(/(`[^`]*`)/g)
+    .map((part) => part.startsWith('`') && part.endsWith('`') ? part : transform(part))
+    .join('');
 }
 
 function terminalWidth() {
@@ -1839,9 +2399,10 @@ function formatToolResultContent(content) {
         : typeof parsed.directiveCount === 'number'
           ? `directives=${parsed.directiveCount}`
           : null;
-      return [status, schema, count, `keys=${keys.slice(0, 8).join(',')}${keys.length > 8 ? ',…' : ''}`]
-        .filter(Boolean)
-        .join(' · ');
+      return [
+        [status, schema, count].filter(Boolean).join(' · '),
+        ['keys:', ...keys.slice(0, 8).map((key) => `  ${key}`), ...(keys.length > 8 ? ['  ...'] : [])].join('\n'),
+      ].filter(Boolean).join('\n');
     }
     if (Array.isArray(parsed)) return `array(${parsed.length})`;
   } catch {
@@ -1854,6 +2415,22 @@ function formatKeyValueRows(record) {
   const entries = Object.entries(record);
   const width = entries.reduce((max, [key]) => Math.max(max, key.length), 0);
   return entries.map(([key, value]) => `${key.padEnd(width)}  ${value}`).join('\n');
+}
+
+function formatDuration(ms) {
+  const seconds = Math.max(0, Math.round(ms / 100) / 10);
+  if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainder = Math.round(seconds % 60);
+  return `${minutes}m ${remainder}s`;
+}
+
+function formatProgressStatus({ spinner, phase, totalMs, phaseMs }) {
+  const phaseText = String(phase ?? 'working');
+  const phaseDuration = formatDuration(phaseMs ?? totalMs ?? 0);
+  const totalDuration = formatDuration(totalMs ?? 0);
+  const totalSuffix = phaseText === 'thinking' ? '' : ` · total ${totalDuration}`;
+  return `${spinner} ${phaseText} ${phaseDuration}${totalSuffix} · Esc to interrupt`;
 }
 
 function parseColorEnv(value, defaultValue) {
@@ -1903,6 +2480,21 @@ function parseArgs(argv) {
     } else if (argv[i] === '--authority-ref' && i + 1 < argv.length) {
       opts.authorityRef = argv[i + 1];
       i++;
+    } else if (argv[i] === '--operator-directive') {
+      opts.operatorDirective = true;
+    } else if (argv[i] === '--system-directive') {
+      opts.systemDirective = true;
+    } else if (argv[i] === '--enable-startup-system-directive') {
+      opts.startupSystemDirective = true;
+    } else if (argv[i] === '--startup-system-directive' && i + 1 < argv.length) {
+      opts.startupSystemDirective = true;
+      opts.startupSystemDirectiveText = argv[i + 1];
+      i++;
+    } else if (argv[i] === '--startup-system-directive-delay-ms' && i + 1 < argv.length) {
+      opts.startupSystemDirectiveDelayMs = Number(argv[i + 1]);
+      i++;
+    } else if (argv[i] === '--no-startup-system-directive') {
+      opts.startupSystemDirective = false;
     } else if (argv[i] === '--interactive-after-message') {
       opts.interactiveAfterMessage = true;
     } else if (argv[i] === '--auto-approve') {
@@ -1917,6 +2509,9 @@ function parseArgs(argv) {
       opts.color = true;
     } else if (argv[i] === '--no-color') {
       opts.color = false;
+    } else if (argv[i] === '--control-jsonl' && i + 1 < argv.length) {
+      opts.controlJsonl = argv[i + 1];
+      i++;
     } else if (argv[i] === '--model' && i + 1 < argv.length) {
       opts.model = argv[i + 1];
       i++;
@@ -1976,15 +2571,20 @@ export {
   codexExecConfigToml,
   buildCodexMcpRequest,
   buildOpenAiChatRequest,
+  clearTerminalDisplay,
   cleanAnthropicMessages,
   cleanOpenAiMessages,
   codexExecEventText,
   discoverAndStartMcpServers,
   executeMcpTool,
   handleSlashCommand,
+  createInputQueue,
+  normalizeInputEvent,
   normalizeProviderSupportState,
   normalizeThinkingLevel,
   normalizeInputRecord,
+  shouldDeferInteractiveInput,
+  startInteractiveControlJsonlWatcher,
   parseArgs,
   parseBooleanEnv,
   parseColorEnv,
@@ -1994,23 +2594,38 @@ export {
   parseCodexMcpResponse,
   parseNaradaToolCall,
   createTerminalStyle,
+  formatDuration,
+  formatHeaderRow,
+  formatHeaderRows,
   formatKeyValueRows,
+  formatProgressStatus,
   formatToolResultContent,
+  normalizeDisplayTerms,
+  printAgentMessage,
+  printCliMessage,
+  printInputRecord,
+  printOperatorMessage,
+  printInlineEvent,
+  rewriteSubmittedPromptForTest,
+  toolDirectionLabel,
+  inputRecordDisplayLabel,
+  rewriteSubmittedPrompt,
   renderMarkdownForTerminal,
   wrapTerminalLine,
   runConversationTurn,
   runServerMode,
   resolveProviderAdapter,
   resolveProviderSupportState,
+  directiveReceiptEvidence,
   sessionEventEntry,
   sessionLogEntry,
 };
 
 if (isEntrypoint) {
   if (options.help) {
-    console.log(`Usage: node tools/agent-cli/agent-cli.mjs --identity <name> [--session <name>] [--server] [--stream|--no-stream] [--color|--no-color] [--message <text>] [--message-file <path>] [--interactive-after-message] [--auto-approve]`);
+    console.log(`Usage: node tools/agent-cli/agent-cli.mjs --identity <name> [--session <name>] [--server] [--stream|--no-stream] [--color|--no-color] [--control-jsonl <path>] [--message <text>] [--message-file <path>] [--operator-directive|--system-directive] [--enable-startup-system-directive|--startup-system-directive <text>|--no-startup-system-directive] [--interactive-after-message] [--auto-approve]`);
     console.log('Programmatic input: --message and --message-file are explicit control inputs; do not use raw stdin piping as the control API.');
-    console.log(`Environment: NARADA_INTELLIGENCE_PROVIDER, ANTHROPIC_API_KEY, NARADA_AI_API_KEY, NARADA_AI_BASE_URL, NARADA_AI_MODEL, NARADA_AGENT_CLI_STREAM, NARADA_AGENT_CLI_COLOR, NARADA_SITE_ROOT`);
+    console.log(`Environment: NARADA_INTELLIGENCE_PROVIDER, ANTHROPIC_API_KEY, NARADA_AI_API_KEY, NARADA_AI_BASE_URL, NARADA_AI_MODEL, NARADA_AGENT_CLI_STREAM, NARADA_AGENT_CLI_COLOR, NARADA_AGENT_CLI_STARTUP_SYSTEM_DIRECTIVE_ENABLE, NARADA_AGENT_CLI_STARTUP_SYSTEM_DIRECTIVE, NARADA_AGENT_CLI_STARTUP_SYSTEM_DIRECTIVE_DELAY_MS, NARADA_SITE_ROOT`);
     process.exit(0);
   }
 

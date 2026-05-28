@@ -11,6 +11,7 @@ export * as taskAssignmentLifecycleService from './task-assignment-lifecycle-ser
 export * as taskSearchService from './task-search-service.js';
 export * as taskGraph from './task-graph.js';
 export * as taskLifecycleStore from './task-lifecycle-store.js';
+export * as directiveRuntimeStore from './directive-runtime-store.js';
 export * as taskProjection from './task-projection.js';
 export * as taskRecommender from './task-recommender.js';
 export * as taskSpec from './task-spec.js';

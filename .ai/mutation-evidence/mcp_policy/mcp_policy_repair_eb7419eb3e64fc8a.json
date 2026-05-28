@@ -1,0 +1,23 @@
+{
+  "schema": "narada.local_mcp_policy_repair_evidence.v0",
+  "authority_class": "site_local_config_role_policy_reconciliation",
+  "config_json_role": "site_local_runtime_posture",
+  "mutation_scope": "allowed_tools_subtree_only",
+  "mutation_performed": true,
+  "occurred_at": "2026-05-28T14:05:22.842Z",
+  "by": "narada-proper-mcp",
+  "config_path": "D:\\code\\narada\\config.json",
+  "target_subtree": "mcp.role_policies.architect.servers[\"narada-proper\"].allowed_tools",
+  "policy_source": {
+    "kind": "mcp_surface_registry",
+    "package_name": "@narada2/narada-proper-mcp",
+    "surface_id": "narada-proper.surface.agent-facing-mcp.v1"
+  },
+  "additions": [
+    "narada_directive_record_operator_authorized_system_emission"
+  ],
+  "removals": [],
+  "validation_errors": [
+    "missing_canonical_tool:narada_directive_record_operator_authorized_system_emission"
+  ]
+}

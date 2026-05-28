@@ -51,15 +51,21 @@ export {
 } from "./inbox/types.js";
 export {
   DIRECTIVE_EVENT_SCHEMA,
+  DIRECTIVE_EMISSION_AUTHORIZATION_SCHEMA,
   DIRECTIVE_SCHEMA,
   activeAdmittedDirectives,
   admitDirective,
   compareDirectives,
   createDirective,
+  createDirectiveEmissionAuthorization,
+  createDirectiveTriageRecord,
   directiveEvent,
   markDirectiveDelivered,
+  markDirectiveDeliveryLeased,
+  recordDirectiveReceipt,
   refuseDirective,
   renderDirectivePromptContext,
+  validateDirectiveForAdmission,
 } from "./directives/index.js";
 export { FileDirectiveStore } from "./directives/store.js";
 export type {
@@ -70,14 +76,24 @@ export type {
   DirectiveContent,
   DirectiveContentKind,
   DirectiveDelivery,
+  DirectiveDeliveryAttempt,
+  DirectiveDeliveryStatus,
   DirectiveDraft,
+  DirectiveEmissionAuthorization,
   DirectiveEvent,
   DirectiveEventKind,
+  DirectiveKind,
   DirectiveOrdering,
+  DirectiveReceipt,
+  DirectiveRef,
+  DirectiveRefKind,
   DirectiveSource,
   DirectiveSourceKind,
   DirectiveTarget,
   DirectiveTargetKind,
+  DirectiveTriageRecord,
+  DirectiveTriageStatus,
+  DirectiveValidationResult,
 } from "./directives/index.js";
 export type { DirectiveStoreSnapshot, FileDirectiveStorePaths } from "./directives/store.js";
 export {
