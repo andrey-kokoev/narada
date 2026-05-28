@@ -3107,7 +3107,7 @@ export async function sitesDoctorCommand(
       addCheck(checks, 'task_lifecycle_db_exists', 'pass', `Task lifecycle DB exists: ${lifecycleDbPath}`);
       try {
         const { Database } = await import('@narada2/control-plane');
-        const db = new Database(lifecycleDbPath, { readonly: true, fileMustExist: true });
+        const db = new Database(lifecycleDbPath);
         try {
           const rows = db.prepare("select name from sqlite_master where type = 'table' and name in ('task_lifecycle', 'task_number_sequence')").all() as Array<{ name: string }>;
           const names = new Set(rows.map((row) => row.name));

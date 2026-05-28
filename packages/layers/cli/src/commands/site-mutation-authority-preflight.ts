@@ -59,9 +59,9 @@ interface AuthorityFiles {
 
 const SUPPORTED_FAMILIES: SiteMutationFamily[] = ['task_lifecycle', 'inbox', 'publication', 'secret', 'site'];
 
-export async function siteMutationAuthorityPreflightCommand(
-  options: SiteMutationAuthorityPreflightOptions = {},
-): Promise<{ exitCode: ExitCode; result: unknown }> {
+export function inspectSiteMutationAuthorityPreflight(
+  options: Omit<SiteMutationAuthorityPreflightOptions, 'format'> = {},
+): SiteMutationAuthorityPreflightResult {
   const cwd = resolve(options.cwd ?? process.cwd());
   const mutationFamily = String(options.mutationFamily ?? 'task_lifecycle');
   const repo = inspectGitPosture(cwd);
@@ -71,7 +71,7 @@ export async function siteMutationAuthorityPreflightCommand(
   const authorityClone = inspectAuthorityClonePosture(cwd);
   const embodiments = authorityClone.embodiments;
   const embodimentWarnings = embodimentWarningsFor(embodiments);
-  const result: SiteMutationAuthorityPreflightResult = {
+  return {
     status: 'success',
     cwd,
     mutation_family: mutationFamily,
@@ -85,6 +85,12 @@ export async function siteMutationAuthorityPreflightCommand(
     embodiment_warnings: embodimentWarnings,
     integration_hooks: buildIntegrationHooks(),
   };
+}
+
+export async function siteMutationAuthorityPreflightCommand(
+  options: SiteMutationAuthorityPreflightOptions = {},
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const result = inspectSiteMutationAuthorityPreflight(options);
 
   return {
     exitCode: ExitCode.SUCCESS,

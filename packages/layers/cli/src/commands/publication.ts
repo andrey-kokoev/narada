@@ -8,6 +8,10 @@ import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { openTaskLifecycleStore, type TaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 import {
+  inspectSiteMutationAuthorityPreflight,
+  type SiteMutationAuthorityPreflightResult,
+} from './site-mutation-authority-preflight.js';
+import {
   type RepoPublicationRow,
   type RepoPublicationStatus,
 } from '@narada2/intent-zones/repo-publication-intent';
@@ -166,6 +170,30 @@ function renderPublication(row: RepoPublicationRow): string[] {
   return lines;
 }
 
+function publicPublicationPreflight(preflight: SiteMutationAuthorityPreflightResult): Record<string, unknown> {
+  return {
+    mutation_family: preflight.mutation_family,
+    locus_state: preflight.locus_state,
+    mutation_safety: preflight.mutation_safety,
+    next_safe_command: preflight.next_safe_command,
+    reason: preflight.reason,
+  };
+}
+
+function publicationPreflightError(preflight: SiteMutationAuthorityPreflightResult): { exitCode: ExitCode; result: unknown } | null {
+  if (preflight.mutation_safety === 'allowed_with_command') return null;
+  return {
+    exitCode: ExitCode.GENERAL_ERROR,
+    result: {
+      status: 'error',
+      reason: 'publication_authority_preflight_failed',
+      publication_authority_preflight: publicPublicationPreflight(preflight),
+      error: preflight.reason,
+      next_safe_command: preflight.next_safe_command,
+    },
+  };
+}
+
 export async function publicationPrepareCommand(options: PublicationPrepareOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
   const repoRoot = options.cwd ? resolve(options.cwd) : process.cwd();
   const format = options.format ?? 'auto';
@@ -182,6 +210,9 @@ export async function publicationPrepareCommand(options: PublicationPrepareOptio
   let tempGitDir: string | null = null;
   try {
     store = options.store ?? openTaskLifecycleStore(repoRoot);
+    const preflight = inspectSiteMutationAuthorityPreflight({ cwd: repoRoot, mutationFamily: 'publication' });
+    const preflightError = publicationPreflightError(preflight);
+    if (preflightError) return preflightError;
     const branch = runGit(repoRoot, ['rev-parse', '--abbrev-ref', 'HEAD']);
     const remote = options.remote ?? 'origin';
     const baseRef = options.baseRef ?? `${remote}/${branch}`;
@@ -233,7 +264,11 @@ export async function publicationPrepareCommand(options: PublicationPrepareOptio
     store.upsertRepoPublication(row);
     return {
       exitCode: ExitCode.SUCCESS,
-      result: formattedResult({ status: 'success', publication: publicPublication(row) }, renderPublication(row), format),
+      result: formattedResult({
+        status: 'success',
+        publication: publicPublication(row),
+        publication_authority_preflight: publicPublicationPreflight(preflight),
+      }, renderPublication(row), format),
     };
   } catch (error) {
     return {
@@ -261,6 +296,9 @@ export async function publicationConfirmCommand(options: PublicationConfirmOptio
   let store: TaskLifecycleStore | null = null;
   try {
     store = options.store ?? openTaskLifecycleStore(repoRoot);
+    const preflight = inspectSiteMutationAuthorityPreflight({ cwd: repoRoot, mutationFamily: 'publication' });
+    const preflightError = publicationPreflightError(preflight);
+    if (preflightError) return preflightError;
     const existing = store.getRepoPublication(options.publicationId);
     if (!existing) throw new Error(`Publication ${options.publicationId} not found`);
     const now = nowIso();
@@ -276,7 +314,11 @@ export async function publicationConfirmCommand(options: PublicationConfirmOptio
     store.upsertRepoPublication(row);
     return {
       exitCode: ExitCode.SUCCESS,
-      result: formattedResult({ status: 'success', publication: publicPublication(row) }, renderPublication(row), format),
+      result: formattedResult({
+        status: 'success',
+        publication: publicPublication(row),
+        publication_authority_preflight: publicPublicationPreflight(preflight),
+      }, renderPublication(row), format),
     };
   } catch (error) {
     return {

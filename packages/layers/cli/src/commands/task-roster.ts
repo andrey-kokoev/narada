@@ -200,7 +200,7 @@ export async function taskRosterAddCommand(
     const now = new Date().toISOString();
     const capabilities = options.capabilities && options.capabilities.length > 0
       ? [...new Set(options.capabilities)]
-      : ['derive', 'propose', 'claim', 'execute', 'resolve', 'confirm'];
+      : defaultRosterCapabilities(options.role ?? 'implementer');
     roster.agents.push({
       agent_id: agentId,
       role: options.role ?? 'implementer',
@@ -232,6 +232,11 @@ export async function taskRosterAddCommand(
       result: { status: 'error', error: msg },
     };
   }
+}
+
+function defaultRosterCapabilities(role: string): string[] {
+  if (role === 'builder') return ['derive', 'propose', 'claim', 'execute', 'resolve', 'confirm', 'review'];
+  return ['derive', 'propose', 'claim', 'execute', 'resolve', 'confirm'];
 }
 
 export async function taskRosterAssignCommand(

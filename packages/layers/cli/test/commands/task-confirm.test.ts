@@ -9,6 +9,7 @@ import { ExitCode } from '../../src/lib/exit-codes.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { openTaskLifecycleStore, type TaskStatus } from '../../src/lib/task-lifecycle-store.js';
 
 function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
@@ -22,6 +23,28 @@ function createClosedTask(tempDir: string, num: number, hasProvenance = true) {
     join(tempDir, '.ai', 'do-not-open', 'tasks', `20260420-${num}-test.md`),
     `${fm}\n# Task ${num}\n\n## Goal\nDone.\n`,
   );
+}
+
+function seedLifecycle(tempDir: string, num: number, status: TaskStatus): void {
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    store.upsertLifecycle({
+      task_id: `20260420-${num}-test`,
+      task_number: num,
+      status,
+      source: 'sqlite',
+      closed_at: status === 'closed' || status === 'confirmed' ? '2026-04-20T00:00:00.000Z' : null,
+      closed_by: status === 'closed' || status === 'confirmed' ? 'operator' : null,
+      closure_mode: status === 'closed' || status === 'confirmed' ? 'operator_direct' : null,
+      governed_by: status === 'closed' || status === 'confirmed' ? 'task_close:operator' : null,
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      updated_at: '2026-04-20T00:00:00.000Z',
+    });
+  } finally {
+    store.db.close();
+  }
 }
 
 describe('task confirm operator', () => {
@@ -55,6 +78,55 @@ describe('task confirm operator', () => {
     expect(content).toContain('status: confirmed');
     expect(content).toContain('confirmed_by: operator-1');
     expect(content).toContain('confirmed_at:');
+  });
+
+  it('updates sqlite lifecycle authority when confirming a closed task', async () => {
+    createClosedTask(tempDir, 206, true);
+    seedLifecycle(tempDir, 206, 'closed');
+
+    const result = await taskConfirmCommand({
+      taskNumber: '206',
+      by: 'operator-1',
+      format: 'json',
+      cwd: tempDir,
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      const lifecycle = store.getLifecycle('20260420-206-test');
+      expect(lifecycle?.status).toBe('confirmed');
+      expect(lifecycle?.governed_by).toBe('task_confirm:operator-1');
+    } finally {
+      store.db.close();
+    }
+  });
+
+  it('repairs confirmed markdown projection when sqlite lifecycle is still closed', async () => {
+    createClosedTask(tempDir, 207, true);
+    seedLifecycle(tempDir, 207, 'closed');
+    const taskPath = join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-207-test.md');
+    const confirmedContent = readFileSync(taskPath, 'utf8')
+      .replace('status: closed', 'status: confirmed')
+      .replace('---\n\n# Task 207', 'confirmed_by: prior\nconfirmed_at: 2026-04-21T00:00:00.000Z\n---\n\n# Task 207');
+    writeFileSync(taskPath, confirmedContent);
+
+    const result = await taskConfirmCommand({
+      taskNumber: '207',
+      by: 'operator-1',
+      format: 'json',
+      cwd: tempDir,
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      expect(store.getLifecycle('20260420-207-test')?.status).toBe('confirmed');
+    } finally {
+      store.db.close();
+    }
   });
 
   it('rejects confirming a task without governed provenance', async () => {

@@ -46,7 +46,13 @@ export function detectNodeSqliteAvailability(): boolean {
     builtins.add(name);
     builtins.add(`node:${name}`);
   }
-  return builtins.has('sqlite') || builtins.has('node:sqlite');
+  if (builtins.has('sqlite') || builtins.has('node:sqlite')) return true;
+  try {
+    createRequire(import.meta.url).resolve('node:sqlite');
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function detectBetterSqlite3Availability(rootPackageJsonPath = process.cwd()): boolean {
@@ -75,17 +81,17 @@ export function selectSqliteRuntime(options: SelectSqliteRuntimeOptions = {}): S
     return {
       preference,
       selected: 'node:sqlite',
-      supported: false,
+      supported,
       node_version: nodeVersion,
       node_major: nodeMajor,
       node_sqlite_available: nodeSqliteAvailable,
       better_sqlite3_available: betterSqlite3Available,
       reason: supported
-        ? 'node:sqlite is available, but Narada has not yet promoted a node:sqlite lifecycle adapter as authoritative'
+        ? 'node:sqlite is the authoritative Narada SQLite runtime'
         : 'node:sqlite is unavailable in this Node runtime',
       remediation: supported
-        ? 'Keep NARADA_SQLITE_BACKEND=auto until the adapter conformance suite is implemented.'
-        : 'Use Node 22+ with node:sqlite or keep NARADA_SQLITE_BACKEND=auto.',
+        ? undefined
+        : 'Use Node 22+ with node:sqlite, or explicitly set NARADA_SQLITE_BACKEND=better-sqlite3 in an installation that still carries that native addon.',
     };
   }
 
@@ -93,34 +99,30 @@ export function selectSqliteRuntime(options: SelectSqliteRuntimeOptions = {}): S
     return {
       preference,
       selected: 'better-sqlite3',
-      supported: betterSqlite3Available,
+      supported: false,
       node_version: nodeVersion,
       node_major: nodeMajor,
       node_sqlite_available: nodeSqliteAvailable,
       better_sqlite3_available: betterSqlite3Available,
-      reason: betterSqlite3Available
-        ? 'better-sqlite3 is the current authoritative Narada SQLite runtime'
-        : 'better-sqlite3 is not resolvable in this installation',
-      remediation: betterSqlite3Available
-        ? undefined
-        : 'Run pnpm install and pnpm rebuild better-sqlite3, or use an installation with native build scripts enabled.',
+      reason: 'better-sqlite3 has been retired from the Narada task lifecycle runtime',
+      remediation: 'Unset NARADA_SQLITE_BACKEND or set it to node:sqlite under Node 22+.',
     };
   }
 
   return {
     preference,
-    selected: 'better-sqlite3',
-    supported: betterSqlite3Available,
+    selected: nodeSqliteAvailable && nodeMajor >= 22 ? 'node:sqlite' : 'better-sqlite3',
+    supported: (nodeSqliteAvailable && nodeMajor >= 22) || betterSqlite3Available,
     node_version: nodeVersion,
     node_major: nodeMajor,
     node_sqlite_available: nodeSqliteAvailable,
     better_sqlite3_available: betterSqlite3Available,
     reason: nodeSqliteAvailable && nodeMajor >= 22
-      ? 'auto keeps better-sqlite3 until node:sqlite passes Narada adapter conformance'
+      ? 'auto selects node:sqlite on Node 22+'
       : 'auto keeps better-sqlite3 because node:sqlite is not available on this runtime',
-    remediation: betterSqlite3Available
+    remediation: (nodeSqliteAvailable && nodeMajor >= 22) || betterSqlite3Available
       ? undefined
-      : 'Run pnpm install and pnpm rebuild better-sqlite3, or use an installation with native build scripts enabled.',
+      : 'Use Node 22+ with node:sqlite, or install and rebuild better-sqlite3.',
   };
 }
 

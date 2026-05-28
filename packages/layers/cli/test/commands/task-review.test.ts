@@ -252,6 +252,16 @@ describe('task review command', () => {
       verdict: 'accepted',
       new_status: 'closed',
       close_action: 'closed',
+      generated_artifact_authority_note: {
+        posture: 'not_self_authorizing',
+        message: 'Generated review/report artifacts are not self-authorizing; authority requires lifecycle admission, reviewer identity, task evidence verdict, and closure status.',
+        authority_requires: [
+          'lifecycle_admission_rule',
+          'reviewer_identity',
+          'task_evidence_verdict',
+          'closure_status',
+        ],
+      },
     });
 
     const store = openTaskLifecycleStore(tempDir);
@@ -489,6 +499,7 @@ describe('task review command', () => {
 
       expect(result.exitCode).toBe(ExitCode.SUCCESS);
       const output = consoleSpy.mock.calls.map((call) => call.join(' ')).join('\n');
+      expect(output).toContain('Generated review/report artifacts are not self-authorizing');
       expect(output).toContain('Review diagnostics: #1 projection_only compatibility_projection_noise');
       expect(output).toContain('non-blocking/compatibility-only/projection-only');
       expect(output).toContain('Review reply: inbox to worker');
@@ -891,6 +902,12 @@ describe('task review command', () => {
       close_action: 'blocked',
       next_command: 'narada task close 1004 --by reviewer --mode peer_reviewed --no-continuation-needed "<one-line rationale>"',
       blocked_rationale: 'Facade/prototype/spike/design-only task requires linked continuation task evidence or --no-continuation-needed rationale before closure',
+      duty_loop_continuation: {
+        required: true,
+        reason: 'task_review_returned_nonterminal_next_command',
+        next_command: 'narada task close 1004 --by reviewer --mode peer_reviewed --no-continuation-needed "<one-line rationale>"',
+        terminal: false,
+      },
       review_authority: {
         authority_kind: 'role_capability',
       },

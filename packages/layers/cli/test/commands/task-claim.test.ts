@@ -7,26 +7,25 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { taskClaimCommand } from '../../src/commands/task-claim.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
-import { loadAssignment, loadRoster } from '../../src/lib/task-governance.js';
+import { loadAssignment, loadRoster, saveRoster } from '../../src/lib/task-governance.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-function setupRepo(tempDir: string) {
+async function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'assignments'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
 
-  writeFileSync(
-    join(tempDir, '.ai', 'agents', 'roster.json'),
-    JSON.stringify({
-      version: 1,
-      updated_at: '2026-01-01T00:00:00Z',
-      agents: [
-        { agent_id: 'test-agent', role: 'implementer', capabilities: ['claim'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
-      ],
-    }, null, 2),
-  );
+  const roster = {
+    version: 1,
+    updated_at: '2026-01-01T00:00:00Z',
+    agents: [
+      { agent_id: 'test-agent', role: 'implementer', capabilities: ['claim'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
+    ],
+  };
+  writeFileSync(join(tempDir, '.ai', 'agents', 'roster.json'), JSON.stringify(roster, null, 2));
+  await saveRoster(tempDir, roster);
 
   writeFileSync(
     join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
@@ -37,9 +36,9 @@ function setupRepo(tempDir: string) {
 describe('task claim operator', () => {
   let tempDir: string;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'narada-task-claim-test-'));
-    setupRepo(tempDir);
+    await setupRepo(tempDir);
   });
 
   afterEach(() => {
@@ -92,6 +91,55 @@ describe('task claim operator', () => {
     } finally {
       store.db.close();
     }
+  });
+
+  it('claims by full task id while recording the numeric task number', async () => {
+    const result = await taskClaimCommand({
+      taskNumber: '20260420-999-test-task',
+      agent: 'test-agent',
+      reason: 'Testing full-id claim',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      task_id: '20260420-999-test-task',
+      agent_id: 'test-agent',
+    });
+
+    const parsed = result.result as { assignment_intent_id: string };
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      const intent = store.getAssignmentIntent(parsed.assignment_intent_id);
+      expect(intent?.task_number).toBe(999);
+      expect(intent?.task_id).toBe('20260420-999-test-task');
+    } finally {
+      store.db.close();
+    }
+  });
+
+  it('claims the canonical numeric task when another task slug mentions that number', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-1000-repair-task-999.md'),
+      '---\nstatus: claimed\n---\n\n# Repair task 999 lookup\n',
+    );
+
+    const result = await taskClaimCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      reason: 'Testing numeric collision claim',
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      task_id: '20260420-999-test-task',
+      agent_id: 'test-agent',
+    });
   });
 
   it('surfaces manual continuation affinity when claiming without enforcing it', async () => {
@@ -423,8 +471,7 @@ describe('task claim operator', () => {
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
 
-    const rosterRaw = readFileSync(join(tempDir, '.ai', 'agents', 'roster.json'), 'utf8');
-    const roster = JSON.parse(rosterRaw) as { agents: Array<{ agent_id: string; status: string; task: number | null }> };
+    const roster = await loadRoster(tempDir);
     const agent = roster.agents.find((a) => a.agent_id === 'test-agent');
     expect(agent).toBeDefined();
     expect(agent!.status).toBe('working');

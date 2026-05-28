@@ -97,12 +97,33 @@ export interface ReviewTaskServiceResponse {
       no_workaround: string;
     };
     review_authority?: ReviewAuthorityAdmission;
+    generated_artifact_authority_note?: GeneratedArtifactAuthorityNote;
     closure_posture?: PrototypeClosurePosture | Record<string, unknown>;
     closure_claim?: PrototypeClosurePosture;
     remediation?: string[];
+    duty_loop_continuation?: {
+      required: boolean;
+      reason: string;
+      next_command: string;
+      terminal: false;
+    };
     error?: string;
   };
 }
+
+export interface GeneratedArtifactAuthorityNote {
+  posture: 'not_self_authorizing';
+  message: string;
+  generated_artifacts: string[];
+  authority_requires: string[];
+}
+
+export const GENERATED_ARTIFACT_AUTHORITY_NOTE: GeneratedArtifactAuthorityNote = {
+  posture: 'not_self_authorizing',
+  message: 'Generated review/report artifacts are not self-authorizing; authority requires lifecycle admission, reviewer identity, task evidence verdict, and closure status.',
+  generated_artifacts: ['review_artifact', 'work_result_report', 'evidence_admission'],
+  authority_requires: ['lifecycle_admission_rule', 'reviewer_identity', 'task_evidence_verdict', 'closure_status'],
+};
 
 const CAPA_TRIGGER_PATTERNS: Array<{ trigger: string; pattern: RegExp }> = [
   { trigger: 'authority_boundary_bug', pattern: /\bauthority\b|\bboundary\b|\billicit crossing\b|\bpermission\b/i },
@@ -671,6 +692,7 @@ export async function reviewTaskService(
     admission_id: admission.result.admission_id,
     close_action: closeAction,
     review_authority: reviewAuthority,
+    generated_artifact_authority_note: GENERATED_ARTIFACT_AUTHORITY_NOTE,
   };
   if (reviewDiagnostics.findings.length > 0) {
     result.review_diagnostics = reviewDiagnostics;
@@ -691,6 +713,12 @@ export async function reviewTaskService(
     if (resultRemediationFromClose?.length) {
       result.remediation = resultRemediationFromClose;
     }
+    result.duty_loop_continuation = {
+      required: true,
+      reason: 'task_review_returned_nonterminal_next_command',
+      next_command: result.next_command,
+      terminal: false,
+    };
     result.closure_posture = admission.result.verdict === 'rejected'
       ? {
           closure_posture: 'repair_required',

@@ -138,6 +138,13 @@ describe('task read operator', () => {
     expect(parsed.task.task_id).toBe('20260420-200-test');
     expect(parsed.task.title).toBe('Task 200: Test Task Title');
     expect(parsed.task.status).toBe('opened');
+    expect(parsed.task.authority_posture).toMatchObject({
+      lifecycle_authority: 'sqlite_task_lifecycle',
+      spec_authority: 'sqlite_task_spec',
+      markdown_role: 'compatibility_projection',
+      status_source: 'sqlite',
+      mutation_rule: expect.stringContaining('governed task commands'),
+    });
     expect(parsed.task.goal).toBe('Do the thing.');
     expect(parsed.task.context).toBe('Some background.');
     expect(parsed.task.required_work).toContain('Step one');
@@ -364,15 +371,21 @@ Repair missing authority rows.
     expect(text).toContain('Evidence:');
   });
 
-  it('does not leak raw substrate info on default path', async () => {
+  it('exposes bounded authority posture without leaking raw paths', async () => {
     createTask(tempDir, 205, 'opened');
     const result = await taskReadCommand({ taskNumber: '205', cwd: tempDir, format: 'json' });
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
 
+    expect(result.result).toMatchObject({
+      task: {
+        authority_posture: {
+          lifecycle_authority: 'sqlite_task_lifecycle',
+          markdown_role: 'compatibility_projection',
+          mutation_rule: expect.stringContaining('governed task commands'),
+        },
+      },
+    });
     const json = JSON.stringify(result.result);
-    // Should not contain substrate implementation details
-    expect(json).not.toContain('markdown');
-    expect(json).not.toContain('sqlite');
     expect(json).not.toContain('front matter');
     expect(json).not.toContain('.ai/do-not-open');
   });

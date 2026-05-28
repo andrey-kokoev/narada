@@ -15,6 +15,9 @@ import {
 import { checkLawAdmission, lawUpdateRequiredResult } from '../lib/law-sync.js';
 import { mergeTaskReportFileFields, readTaskReportFile } from '../lib/task-report-file.js';
 
+const GENERATED_ARTIFACT_AUTHORITY_HUMAN_NOTE =
+  'Generated review/report artifacts are not self-authorizing; authority requires lifecycle admission, reviewer identity, task evidence verdict, and closure status.';
+
 export interface TaskFinishOptions {
   taskNumber?: string;
   agent?: string;
@@ -140,6 +143,7 @@ export async function taskFinishCommand(
     if (effectiveOptions.allowIncomplete) {
       summaryLines.push('  Incomplete evidence allowed; roster marks agent availability only.');
     }
+    summaryLines.push(`  Authority note: ${GENERATED_ARTIFACT_AUTHORITY_HUMAN_NOTE}`);
     fmt.message(summaryLines.join('\n'), serviceResult.exitCode === ExitCode.SUCCESS ? 'success' : 'warning');
   }
 

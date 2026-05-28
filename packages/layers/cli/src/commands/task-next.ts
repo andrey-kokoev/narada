@@ -176,6 +176,72 @@ function emptyNextResult(agent: string, action: NextTaskAction, field: 'task' | 
   };
 }
 
+function directedObligationWork(
+  store: TaskLifecycleStore,
+  agentId: string,
+  role: string | null | undefined,
+): Record<string, unknown> | null {
+  const obligation = store.listDirectedObligationsForTarget(agentId, role ?? null, 'open')
+    .find((candidate) => isSelectableDirectedObligation(store, candidate)) ?? null;
+  if (!obligation) return null;
+
+  let evidence: Record<string, unknown> = {};
+  let consumptionRule: Record<string, unknown> = {};
+  try {
+    evidence = JSON.parse(obligation.evidence_json) as Record<string, unknown>;
+  } catch {
+    evidence = {};
+  }
+  try {
+    consumptionRule = JSON.parse(obligation.consumption_rule_json) as Record<string, unknown>;
+  } catch {
+    consumptionRule = {};
+  }
+
+  const reviewCommand = typeof consumptionRule.review_command === 'string'
+    ? consumptionRule.review_command
+    : obligation.kind === 'review_request' && obligation.task_number !== null
+      ? `narada task review ${obligation.task_number} --agent ${agentId} --verdict accepted`
+      : null;
+
+  return {
+    obligation_id: obligation.obligation_id,
+    kind: obligation.kind,
+    status: obligation.status,
+    task_id: obligation.task_id,
+    task_number: obligation.task_number,
+    source_kind: obligation.source_kind,
+    source_ref: obligation.source_ref,
+    source_agent_id: obligation.source_agent_id,
+    target_agent_id: obligation.target_agent_id,
+    target_role: obligation.target_role,
+    target_ref: obligation.target_ref,
+    evidence,
+    consumption_rule: consumptionRule,
+    command: reviewCommand,
+    command_args: obligation.kind === 'review_request' && obligation.task_number !== null
+      ? ['task', 'review', String(obligation.task_number), '--agent', agentId, '--verdict', 'accepted']
+      : null,
+    recommendation_reason: obligation.kind === 'review_request' ? 'direct_review_request' : 'directed_obligation',
+    selection_reason: 'open_directed_obligation_addressed_to_agent',
+    outranks: 'generic_task_queue',
+  };
+}
+
+function isSelectableDirectedObligation(
+  store: TaskLifecycleStore,
+  obligation: { kind: string; task_id: string | null; task_number: number | null },
+): boolean {
+  if (obligation.kind !== 'review_request') return true;
+  const lifecycle = obligation.task_id
+    ? store.getLifecycle(obligation.task_id)
+    : obligation.task_number !== null
+      ? store.getLifecycleByNumber(obligation.task_number)
+      : null;
+  if (!lifecycle) return false;
+  return lifecycle.status === 'in_review';
+}
+
 function withAgentResolution<T extends Record<string, unknown>>(
   record: T,
   agentCheck: { requestedAgent: string; resolvedAgent: string; resolution: AgentAddressResolution },
@@ -494,7 +560,39 @@ export async function taskWorkNextCommand(
     let taskNumber: number | null = agent.task ?? null;
     let pulled = false;
 
-    // 2. If no current task, pull next
+    // 2. Directed obligations are addressed work, not generic task queue work.
+    // They must be surfaced before concluding that the agent has no work or
+    // pulling an unrelated task.
+    if (taskNumber === null && store) {
+      const obligation = directedObligationWork(store, agentId, agent.role);
+      if (obligation) {
+        const lines = [
+          `Directed obligation for ${agentId}:`,
+          `  Obligation: ${String(obligation.obligation_id)}`,
+          `  Kind:       ${String(obligation.kind)}`,
+          `  Task:       ${String(obligation.task_number ?? '—')}`,
+        ];
+        if (obligation.command) lines.push(`  Command:    ${String(obligation.command)}`);
+        const result = withAgentResolution({
+          status: 'ok',
+          agent: agentId,
+          agent_id: agentId,
+          action: 'directed_obligation',
+          primary: obligation,
+          packet: null,
+          directed_obligation: obligation,
+          next_step: obligation.command
+            ? `Handle the directed obligation: ${String(obligation.command)}`
+            : 'Handle the directed obligation through its consumption rule before generic task discovery.',
+        }, agentCheck);
+        return {
+          exitCode: ExitCode.SUCCESS,
+          result: fmt.getFormat() === 'json' ? result : { ...result, _formatted: lines.join('\n') },
+        };
+      }
+    }
+
+    // 3. If no current task, pull next
     if (taskNumber === null) {
       const pullResult = await taskPullNextCommand({
         agent: agentId,

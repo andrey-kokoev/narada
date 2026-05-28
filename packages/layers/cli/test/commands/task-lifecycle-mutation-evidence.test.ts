@@ -42,6 +42,13 @@ function setupRepo(tempDir: string): void {
           first_seen_at: '2026-01-01T00:00:00Z',
           last_active_at: '2026-01-01T00:00:00Z',
         },
+        {
+          agent_id: 'reviewer-1',
+          role: 'reviewer',
+          capabilities: ['review'],
+          first_seen_at: '2026-01-01T00:00:00Z',
+          last_active_at: '2026-01-01T00:00:00Z',
+        },
       ],
     }, null, 2),
   );
@@ -61,11 +68,11 @@ function setupRepo(tempDir: string): void {
 
   const store = openTaskLifecycleStore(tempDir);
   try {
-    for (const [agentId, role] of [['impl-agent', 'implementer'], ['operator-1', 'operator']] as const) {
+    for (const [agentId, role] of [['impl-agent', 'implementer'], ['operator-1', 'operator'], ['reviewer-1', 'reviewer']] as const) {
       store.upsertRosterEntry({
         agent_id: agentId,
         role,
-        capabilities_json: JSON.stringify(role === 'operator' ? ['resolve'] : ['claim']),
+        capabilities_json: JSON.stringify(role === 'operator' ? ['resolve'] : role === 'reviewer' ? ['review'] : ['claim']),
         first_seen_at: '2026-01-01T00:00:00Z',
         last_active_at: '2026-01-01T00:00:00Z',
         status: 'idle',
@@ -128,6 +135,18 @@ describe('task lifecycle mutation evidence', () => {
     expect(evidence.before?.status).toBe('opened');
     expect(evidence.after?.status).toBe('claimed');
     expect(evidence.confirmation).toMatchObject({ kind: 'read_back', status: 'confirmed' });
+    expect(evidence.replay_payload).toMatchObject({
+      transition: {
+        family: 'task_lifecycle',
+        command: 'task claim',
+        authority_class: 'claim',
+        source_status: 'opened',
+        target_status: 'claimed',
+        source_kind: 'task_artifact',
+        target_kind: 'sqlite',
+        normalized: true,
+      },
+    });
   });
 
   it('records accepted stale governance freshness posture in mutation evidence', async () => {
@@ -183,6 +202,7 @@ describe('task lifecycle mutation evidence', () => {
     const result = await taskReportCommand({
       taskNumber: '999',
       agent: 'impl-agent',
+      reviewer: 'reviewer-1',
       summary: 'Implemented feature X',
       verification: JSON.stringify([{ command: 'pnpm test', result: 'passed' }]),
       cwd: tempDir,
@@ -194,6 +214,15 @@ describe('task lifecycle mutation evidence', () => {
     expect(evidence.authority_class).toBe('resolve');
     expect(evidence.before?.status).toBe('claimed');
     expect(evidence.after?.status).toBe('in_review');
+    expect(evidence.replay_payload).toMatchObject({
+      transition: {
+        command: 'task report',
+        authority_class: 'resolve',
+        source_status: 'claimed',
+        target_status: 'in_review',
+        normalized: true,
+      },
+    });
     expect((evidence.replay_payload.command_result as { report_id?: string }).report_id).toBeTruthy();
   });
 
@@ -203,6 +232,7 @@ describe('task lifecycle mutation evidence', () => {
     const result = await taskFinishCommand({
       taskNumber: '999',
       agent: 'impl-agent',
+      reviewer: 'reviewer-1',
       summary: 'Implemented feature X',
       verification: JSON.stringify([{ command: 'pnpm test', result: 'passed' }]),
       cwd: tempDir,
@@ -239,6 +269,16 @@ describe('task lifecycle mutation evidence', () => {
     expect(evidence.before?.status).toBe('in_review');
     expect(evidence.after?.status).toBe('closed');
     expect(evidence.after?.closed_by).toBe('operator-1');
+    expect(evidence.replay_payload).toMatchObject({
+      transition: {
+        command: 'task close',
+        authority_class: 'confirm',
+        source_status: 'in_review',
+        target_status: 'closed',
+        target_closed_by: 'operator-1',
+        normalized: true,
+      },
+    });
   });
 });
 

@@ -87,6 +87,7 @@ export async function writeInboxMutationEvidence(
       after_status: options.after?.status ?? null,
       promotion_target_kind: options.after?.promotion_target_kind ?? null,
       promotion_target_ref: options.after?.promotion_target_ref ?? null,
+      transition: inboxTransitionEvidence(options),
       envelope: extractEnvelope(options.result),
       command_result: summarizeCommandResult(options.result),
       ...(freshness ? { governance_freshness: freshness } : {}),
@@ -114,6 +115,27 @@ async function readExisting(path: string): Promise<string | null> {
     }
     throw error;
   }
+}
+
+function inboxTransitionEvidence(options: WriteInboxMutationEvidenceOptions): Record<string, unknown> {
+  return {
+    family: 'inbox',
+    command: options.command,
+    authority_class: options.authorityClass,
+    confirmation_kind: options.confirmationKind ?? 'read_back',
+    subject_id: options.after?.envelope_id ?? options.before?.envelope_id ?? null,
+    source_status: options.before?.status ?? null,
+    target_status: options.after?.status ?? null,
+    source_handling_by: options.before?.handling_by ?? null,
+    target_handling_by: options.after?.handling_by ?? null,
+    source_promotion_target_kind: options.before?.promotion_target_kind ?? null,
+    target_promotion_target_kind: options.after?.promotion_target_kind ?? null,
+    source_promotion_target_ref: options.before?.promotion_target_ref ?? null,
+    target_promotion_target_ref: options.after?.promotion_target_ref ?? null,
+    source_promotion_enactment_status: options.before?.promotion_enactment_status ?? null,
+    target_promotion_enactment_status: options.after?.promotion_enactment_status ?? null,
+    normalized: true,
+  };
 }
 
 function extractTimestamp(result: unknown): string | null {

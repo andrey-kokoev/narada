@@ -330,6 +330,20 @@ describe('findTaskFile', () => {
     expect(first?.taskId).toBe('20260425-724-chapter-commit-coherence-1');
     expect(last?.taskId).toBe('20260425-726-chapter-commit-coherence-3');
   });
+
+  it('does not resolve numeric lookup to another task that merely mentions the number in its slug', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260517-1483-refresh-task-lifecycle-snapshot-after-chapter-closure.md'),
+      '---\nstatus: opened\n---\n\n# Refresh task lifecycle snapshot after chapter closure\n',
+    );
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260517-1485-repair-missing-lifecycle-authority-row-for-task-1483.md'),
+      '---\nstatus: claimed\n---\n\n# Repair missing lifecycle authority row for task 1483\n',
+    );
+
+    const result = await findTaskFile(tempDir, '1483');
+    expect(result?.taskId).toBe('20260517-1483-refresh-task-lifecycle-snapshot-after-chapter-closure');
+  });
 });
 
 describe('lintTaskFiles', () => {

@@ -9,7 +9,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
-import { siteMutationAuthorityPreflightCommand } from '../../src/commands/site-mutation-authority-preflight.js';
+import {
+  inspectSiteMutationAuthorityPreflight,
+  siteMutationAuthorityPreflightCommand,
+} from '../../src/commands/site-mutation-authority-preflight.js';
 
 const gitBinary = process.env.NARADA_GIT_BINARY ?? '/usr/bin/git';
 
@@ -32,6 +35,33 @@ describe('site mutation authority preflight', () => {
         locus_state: 'authority_locus',
         mutation_safety: 'allowed_with_command',
         next_safe_command: 'narada work-next --agent <agent> --claim',
+      });
+    } finally {
+      rmSync(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('exposes the same classifier without going through CLI formatting', () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'narada-site-authority-'));
+    try {
+      initGit(cwd);
+      mkdirSync(join(cwd, '.ai', 'do-not-open', 'tasks'), { recursive: true });
+      writeFileSync(join(cwd, '.ai', 'task-lifecycle-snapshot.json'), '{"tasks":[]}');
+
+      const result = inspectSiteMutationAuthorityPreflight({
+        cwd,
+        mutationFamily: 'task_lifecycle',
+      });
+
+      expect(result).toMatchObject({
+        status: 'success',
+        locus_state: 'authority_locus',
+        mutation_safety: 'allowed_with_command',
+        integration_hooks: {
+          task_lifecycle: expect.arrayContaining([
+            'preflight before task claim/report/review/finish/close/reopen/release/confirm',
+          ]),
+        },
       });
     } finally {
       rmSync(cwd, { recursive: true, force: true });

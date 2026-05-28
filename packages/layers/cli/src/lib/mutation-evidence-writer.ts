@@ -116,6 +116,7 @@ export async function writeTaskLifecycleMutationEvidence(
       task_number: taskNumber,
       before_status: options.before?.status ?? null,
       after_status: options.after?.status ?? null,
+      transition: taskLifecycleTransitionEvidence(options),
       command_result: resultSummary,
       ...(freshness ? { governance_freshness: freshness } : {}),
     },
@@ -131,6 +132,27 @@ export async function writeTaskLifecycleMutationEvidence(
   }
   await writeFile(path, body, { flag: 'wx' });
   return { operation_id: record.operation_id, path, wrote: true };
+}
+
+function taskLifecycleTransitionEvidence(options: WriteTaskLifecycleMutationEvidenceOptions): Record<string, unknown> {
+  return {
+    family: 'task_lifecycle',
+    command: options.command,
+    authority_class: options.authorityClass,
+    subject_id: options.after?.task_id ?? options.before?.task_id ?? null,
+    subject_number: options.after?.task_number ?? options.before?.task_number ?? Number(options.taskNumber),
+    source_status: options.before?.status ?? null,
+    target_status: options.after?.status ?? null,
+    source_kind: options.before?.source ?? null,
+    target_kind: options.after?.source ?? null,
+    source_governed_by: options.before?.governed_by ?? null,
+    target_governed_by: options.after?.governed_by ?? null,
+    source_closed_by: options.before?.closed_by ?? null,
+    target_closed_by: options.after?.closed_by ?? null,
+    source_closure_mode: options.before?.closure_mode ?? null,
+    target_closure_mode: options.after?.closure_mode ?? null,
+    normalized: true,
+  };
 }
 
 function lifecycleRowToEvidenceState(row: TaskLifecycleRow): TaskLifecycleEvidenceState {

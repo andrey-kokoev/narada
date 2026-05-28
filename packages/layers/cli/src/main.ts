@@ -31,6 +31,7 @@ import { registerObservationCommands } from './commands/observation-register.js'
 import { registerOpsKitCommands } from './commands/ops-kit-register.js';
 import { registerInboxCommands } from './commands/inbox-register.js';
 import { registerAdmissionCommands } from './commands/admission-register.js';
+import { registerCarrierActionsCommands } from './commands/carrier-actions-register.js';
 import { registerOutboxCommands } from './commands/outbox-register.js';
 import { registerCoherenceCommands } from './commands/coherence-register.js';
 import { registerCapabilityCommands } from './commands/capability-register.js';
@@ -48,6 +49,7 @@ import { registerLawCommands } from './commands/law-register.js';
 import { registerKbCommands } from './commands/kb-register.js';
 import { registerQualificationCommands } from './commands/qualification-register.js';
 import { registerSiteTelemetryCommands } from './commands/site-telemetry-register.js';
+import { registerSiteRegistryCommands } from './commands/site-registry-register.js';
 
 loadEnvFile('./.env');
 
@@ -96,6 +98,7 @@ registerRoleLoopCommands(program);
 registerPrincipalCommands(program);
 registerQualificationCommands(program);
 registerSiteTelemetryCommands(program);
+registerSiteRegistryCommands(program);
 
 const taskCmd = program
   .command('task')
@@ -112,6 +115,7 @@ registerPostureCommands(program);
 registerObservationCommands(program);
 registerInboxCommands(program);
 registerAdmissionCommands(program);
+registerCarrierActionsCommands(program);
 registerOutboxCommands(program);
 registerMutationEvidenceCommands(program);
 registerCapabilityCommands(program);

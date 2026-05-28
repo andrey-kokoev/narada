@@ -700,13 +700,16 @@ export function resolveMcpSiteContext(options: Pick<McpServerOptions, 'cwd' | 's
   const root = resolve(options.siteRoot ?? options.cwd ?? processCwd());
   const configPath = resolve(root, 'config.json');
   const config = readJsonObject(configPath);
-  const locus = asRecord(config?.locus);
-  const configuredSiteRoot = stringField(config ?? {}, 'site_root');
+  const configRecord = asRecord(config);
+  const staticConfig = asRecord(configRecord.static_config);
+  const locus = asRecord(configRecord.locus);
+  const staticLocus = asRecord(staticConfig.locus);
+  const configuredSiteRoot = stringField(configRecord, 'site_root') ?? stringField(staticConfig, 'site_root');
   const siteRoot = resolve(configuredSiteRoot ?? root);
-  const siteId = options.siteId ?? stringField(config ?? {}, 'site_id') ?? basename(siteRoot) ?? 'unknown-site';
-  const siteKind = options.siteKind ?? stringField(config ?? {}, 'site_kind') ?? 'unspecified';
-  const authorityLocus = stringField(locus, 'authority_locus') ?? siteKind;
-  const workspaceRoot = stringField(config ?? {}, 'workspace_root');
+  const siteId = options.siteId ?? stringField(configRecord, 'site_id') ?? stringField(staticConfig, 'site_id') ?? basename(siteRoot) ?? 'unknown-site';
+  const siteKind = options.siteKind ?? stringField(configRecord, 'site_kind') ?? stringField(staticConfig, 'site_kind') ?? 'unspecified';
+  const authorityLocus = stringField(locus, 'authority_locus') ?? stringField(staticLocus, 'authority_locus') ?? siteKind;
+  const workspaceRoot = stringField(configRecord, 'workspace_root') ?? stringField(staticConfig, 'workspace_root');
 
   const context: McpSiteContext = {
     site_id: siteId,

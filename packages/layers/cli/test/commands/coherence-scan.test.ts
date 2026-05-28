@@ -5,7 +5,7 @@ vi.unmock('node:fs/promises');
 vi.unmock('node:child_process');
 
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -94,6 +94,65 @@ describe('coherence scan command', () => {
     });
   });
 
+  it('uses current-process lifecycle snapshot freshness instead of stale shell shims', async () => {
+    const dbPath = join(tempDir, '.ai', 'task-lifecycle.db');
+    const snapshotPath = join(tempDir, '.ai', 'task-lifecycle-snapshot.json');
+    writeFileSync(dbPath, 'sqlite-placeholder');
+    writeFileSync(snapshotPath, JSON.stringify({ snapshot_kind: 'task_lifecycle_snapshot', fresh: true }));
+    const oldTime = new Date('2026-05-18T00:00:00.000Z');
+    const freshTime = new Date('2026-05-18T00:00:10.000Z');
+    utimesSync(dbPath, oldTime, oldTime);
+    utimesSync(snapshotPath, freshTime, freshTime);
+    mkdirSync(join(tempDir, 'scripts'), { recursive: true });
+    writeFileSync(
+      join(tempDir, 'scripts', 'guard-task-lifecycle-db.sh'),
+      [
+        '#!/usr/bin/env bash',
+        'echo "/mnt/d/code/narada/node_modules/.bin/narada: 16: exec: node: not found" >&2',
+        'exit 2',
+      ].join('\n'),
+    );
+
+    const result = await coherenceScanCommand({
+      cwd: tempDir,
+      format: 'json',
+      modules: ['operational'],
+      limit: 20,
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const body = result.result as { findings: Array<{ finding_id: string; evidence: string[] }> };
+    expect(body.findings.map((finding) => finding.finding_id)).not.toContain('task-lifecycle-snapshot-stale');
+    expect(JSON.stringify(body.findings)).not.toContain('/mnt/d/code/narada');
+  });
+
+  it('still reports stale lifecycle snapshots through the current process check', async () => {
+    const dbPath = join(tempDir, '.ai', 'task-lifecycle.db');
+    const snapshotPath = join(tempDir, '.ai', 'task-lifecycle-snapshot.json');
+    writeFileSync(dbPath, 'sqlite-placeholder');
+    writeFileSync(snapshotPath, JSON.stringify({ snapshot_kind: 'task_lifecycle_snapshot', stale: true }));
+    const oldTime = new Date('2026-05-18T00:00:00.000Z');
+    const freshTime = new Date('2026-05-18T00:00:10.000Z');
+    utimesSync(snapshotPath, oldTime, oldTime);
+    utimesSync(dbPath, freshTime, freshTime);
+
+    const result = await coherenceScanCommand({
+      cwd: tempDir,
+      format: 'json',
+      modules: ['operational'],
+      limit: 20,
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const body = result.result as { findings: Array<{ finding_id: string; evidence: string[] }> };
+    const stale = body.findings.find((finding) => finding.finding_id === 'task-lifecycle-snapshot-stale');
+    expect(stale).toBeDefined();
+    expect(stale!.evidence).toEqual(expect.arrayContaining([
+      'snapshot_freshness=snapshot_stale',
+    ]));
+    expect(JSON.stringify(stale)).not.toContain('exec: node: not found');
+  });
+
   it('scans authority inversion inventory only when explicitly selected', async () => {
     const defaultScan = await coherenceScanCommand({ cwd: tempDir, format: 'json' });
     const authorityScan = await coherenceScanCommand({
@@ -157,6 +216,61 @@ describe('coherence scan command', () => {
     store.close();
   });
 
+  it('flags secret-like changed artifacts without recording raw values', async () => {
+    writeFileSync(join(tempDir, 'operator-output.txt'), 'API_TOKEN=sk-testsecretvalue123456\n');
+
+    const result = await coherenceScanCommand({
+      cwd: tempDir,
+      format: 'json',
+      modules: ['authority_inversion'],
+      limit: 20,
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const body = result.result as { findings: Array<{ finding_id: string; evidence: string[]; proposed_action: string }> };
+    const finding = body.findings.find((item) => item.finding_id === 'authority-inversion-secret-value-artifact-detected');
+    expect(finding).toBeDefined();
+    expect(finding).toMatchObject({
+      proposed_action: expect.stringContaining('capability references'),
+    });
+    expect(finding!.evidence).toEqual([
+      'secret_like_artifact=operator-output.txt:pattern=secret_key_assignment:value_recorded=false',
+      'secret_like_artifact=operator-output.txt:pattern=provider_secret_literal:value_recorded=false',
+    ]);
+    expect(JSON.stringify(finding)).not.toContain('sk-testsecretvalue123456');
+  });
+
+  it('flags changed CLI command sources that bypass output admission helpers', async () => {
+    const commandPath = join(tempDir, 'packages', 'layers', 'cli', 'src', 'commands', 'raw-output.ts');
+    writeFileSync(
+      commandPath,
+      [
+        'export async function rawOutputCommand(): Promise<void> {',
+        '  console.log("raw transcript " + "x".repeat(1000));',
+        '}',
+      ].join('\n'),
+    );
+
+    const result = await coherenceScanCommand({
+      cwd: tempDir,
+      format: 'json',
+      modules: ['authority_inversion'],
+      limit: 20,
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const body = result.result as { findings: Array<{ finding_id: string; evidence: string[]; proposed_action: string }> };
+    const finding = body.findings.find((item) => item.finding_id === 'authority-inversion-cli-output-admission-bypass-detected');
+    expect(finding).toBeDefined();
+    expect(finding).toMatchObject({
+      proposed_action: expect.stringContaining('formattedResult'),
+      evidence: [
+        'cli_output_bypass=packages/layers/cli/src/commands/raw-output.ts:pattern=console_stdout_stderr:raw_output_recorded=false',
+      ],
+    });
+    expect(JSON.stringify(finding)).not.toContain('raw transcript');
+  });
+
   it('reports missing mutation evidence for dirty authority surfaces and dedupes submissions', async () => {
     writeFileSync(join(tempDir, '.ai', 'task-lifecycle-snapshot.json'), JSON.stringify({ changed: true }));
     const store = new SqliteInboxStore(join(tempDir, '.ai', 'inbox.db'));
@@ -187,6 +301,28 @@ describe('coherence scan command', () => {
     expect((first.result as { submitted: unknown[] }).submitted).toHaveLength(1);
     expect((second.result as { submitted: unknown[] }).submitted).toHaveLength(0);
     store.close();
+  });
+
+  it('does not report missing mutation evidence when evidence artifacts are dirty', async () => {
+    writeFileSync(join(tempDir, '.ai', 'task-lifecycle-snapshot.json'), JSON.stringify({ changed: true }));
+    mkdirSync(join(tempDir, '.ai', 'mutation-evidence', 'task_lifecycle'), { recursive: true });
+    writeFileSync(
+      join(tempDir, '.ai', 'mutation-evidence', 'task_lifecycle', 'mev_current.json'),
+      JSON.stringify({ schema: 'https://narada.dev/schemas/mutation-evidence/v1' }),
+    );
+
+    const result = await coherenceScanCommand({
+      cwd: tempDir,
+      format: 'json',
+      modules: ['mutation_evidence'],
+    });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      modules: ['mutation_evidence'],
+      finding_count: 0,
+      findings: [],
+    });
   });
 
   it('reports wrong-locus mutation risk with an exact next command', async () => {
@@ -280,9 +416,14 @@ function setupRepo(cwd: string): void {
       ],
     }, null, 2),
   );
-  execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['init', '-b', 'main'], { cwd });
-  execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['config', 'user.email', 'test@example.invalid'], { cwd });
-  execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['config', 'user.name', 'Test Agent'], { cwd });
-  execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['add', '.gitignore', '.ai/task-lifecycle-snapshot.json'], { cwd });
-  execFileSync(process.env.NARADA_GIT_BINARY ?? '/usr/bin/git', ['commit', '-m', 'base'], { cwd });
+  const git = gitBinary();
+  execFileSync(git, ['init', '-b', 'main'], { cwd });
+  execFileSync(git, ['config', 'user.email', 'test@example.invalid'], { cwd });
+  execFileSync(git, ['config', 'user.name', 'Test Agent'], { cwd });
+  execFileSync(git, ['add', '.gitignore', '.ai/task-lifecycle-snapshot.json'], { cwd });
+  execFileSync(git, ['commit', '-m', 'base'], { cwd });
+}
+
+function gitBinary(): string {
+  return process.env.NARADA_GIT_BINARY ?? (process.platform === 'win32' ? 'git' : '/usr/bin/git');
 }

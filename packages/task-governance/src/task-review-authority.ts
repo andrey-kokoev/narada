@@ -32,9 +32,9 @@ export interface ReviewAuthorityAdmission {
 export interface ResolvedReviewTarget {
   ok: true;
   requested: string;
-  target_agent_id: string;
+  target_agent_id: string | null;
   target_role: string | null;
-  resolution: 'agent_id' | 'unique_role_alias';
+  resolution: 'agent_id' | 'role_alias';
   review_authority: ReviewAuthorityAdmission & { admitted: true };
 }
 
@@ -144,15 +144,51 @@ export function resolveReviewTargetFromRoster(
     };
   };
 
+  const roleMatches = roster.agents.filter((agent) => agent.role === trimmed);
+  if (trimmed === 'builder' && roleMatches.length > 0) {
+    const admitted = roleMatches
+      .map((agent) => ({ agent, authority: explainTaskReviewAuthority(agent) }))
+      .filter((entry): entry is { agent: AgentRosterEntry; authority: ReviewAuthorityAdmission & { admitted: true } } =>
+        entry.authority.admitted,
+      );
+    if (admitted.length > 0) {
+      return {
+        ok: true,
+        requested: trimmed,
+        target_agent_id: null,
+        target_role: trimmed,
+        resolution: 'role_alias',
+        review_authority: admitted[0]!.authority,
+      };
+    }
+    return {
+      ok: false,
+      error: `Review target '${trimmed}' matches role agents without admitted review authority: ${roleMatches.map((agent) => agent.agent_id).join(', ')}`,
+    };
+  }
+
   const exact = roster.agents.find((agent) => agent.agent_id === trimmed);
   if (exact) return resolveAgent(exact, 'agent_id');
 
-  const roleMatches = roster.agents.filter((agent) => agent.role === trimmed);
-  if (roleMatches.length === 1) return resolveAgent(roleMatches[0]!, 'unique_role_alias');
-  if (roleMatches.length > 1) {
+  if (roleMatches.length > 0) {
+    const admitted = roleMatches
+      .map((agent) => ({ agent, authority: explainTaskReviewAuthority(agent) }))
+      .filter((entry): entry is { agent: AgentRosterEntry; authority: ReviewAuthorityAdmission & { admitted: true } } =>
+        entry.authority.admitted,
+      );
+    if (admitted.length > 0) {
+      return {
+        ok: true,
+        requested: trimmed,
+        target_agent_id: null,
+        target_role: trimmed,
+        resolution: 'role_alias',
+        review_authority: admitted[0]!.authority,
+      };
+    }
     return {
       ok: false,
-      error: `Review target '${trimmed}' matches multiple agents: ${roleMatches.map((agent) => agent.agent_id).join(', ')}`,
+      error: `Review target '${trimmed}' matches role agents without admitted review authority: ${roleMatches.map((agent) => agent.agent_id).join(', ')}`,
     };
   }
   return {
@@ -181,15 +217,14 @@ export function resolveDefaultReviewerFromRoster(
       error: `Default reviewer role '${defaultRole}' matches no agents with review authority`,
     };
   }
-  const exact = roleMatches.find((agent) => agent.agent_id.endsWith(`.${defaultRole}`));
-  const agent = exact ?? roleMatches[0]!;
+  const agent = roleMatches[0]!;
   const authority = explainTaskReviewAuthority(agent);
   return {
     ok: true,
     requested: defaultRole,
-    target_agent_id: agent.agent_id,
-    target_role: agent.role ?? null,
-    resolution: exact ? 'unique_role_alias' : 'agent_id',
+    target_agent_id: null,
+    target_role: defaultRole,
+    resolution: 'role_alias',
     review_authority: authority as ReviewAuthorityAdmission & { admitted: true },
   };
 }

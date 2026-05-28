@@ -68,8 +68,11 @@ function seedTask(
 
 describe('task workboard command', () => {
   let tempDir: string;
+  let originalAgentId: string | undefined;
 
   beforeEach(() => {
+    originalAgentId = process.env.NARADA_AGENT_ID;
+    delete process.env.NARADA_AGENT_ID;
     tempDir = mkdtempSync(join(tmpdir(), 'narada-task-workboard-'));
     setupRepo(tempDir);
     const db = new Database(join(tempDir, '.ai', 'task-lifecycle.db'));
@@ -125,6 +128,11 @@ describe('task workboard command', () => {
   });
 
   afterEach(() => {
+    if (originalAgentId === undefined) {
+      delete process.env.NARADA_AGENT_ID;
+    } else {
+      process.env.NARADA_AGENT_ID = originalAgentId;
+    }
     rmSync(tempDir, { recursive: true, force: true });
   });
 
@@ -215,6 +223,51 @@ describe('task workboard command', () => {
     expect(compact.closure_semantics).toBeUndefined();
     expect(compact.concurrency_boundaries).toBeUndefined();
     expect(JSON.stringify(compact)).not.toContain('Reviewer must not infer completion');
+  });
+
+  it('does not surface open review obligations for terminal tasks', async () => {
+    const db = new Database(join(tempDir, '.ai', 'task-lifecycle.db'));
+    const store = new SqliteTaskLifecycleStore({ db });
+    store.initSchema();
+    try {
+      seedTask(store, 405, 'confirmed', 'Already confirmed', 'Operator Surface');
+      store.upsertDirectedObligation({
+        obligation_id: 'obl_review_405_architect_stale',
+        source_kind: 'task_report',
+        source_ref: 'wrr_405',
+        source_agent_id: 'builder',
+        target_agent_id: 'architect',
+        target_role: 'architect',
+        target_ref: null,
+        kind: 'review_request',
+        status: 'open',
+        task_id: '20260429-405-workboard',
+        task_number: 405,
+        evidence_json: JSON.stringify({ report_id: 'wrr_405' }),
+        consumption_rule_json: JSON.stringify({
+          review_command: 'narada task review 405 --agent architect --verdict accepted --report wrr_405',
+        }),
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        consumed_at: null,
+        consumed_by: null,
+        consumption_ref: null,
+      });
+    } finally {
+      db.close();
+    }
+
+    const result = await taskWorkboardCommand({ cwd: tempDir, format: 'json', limit: 10, view: 'compact', agent: 'architect' });
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const compact = result.result as {
+      counts: { my_review_obligations: number };
+      my_review_obligations: Array<{ obligation_id: string }>;
+      high_priority_diagnostics: string[];
+    };
+
+    expect(compact.counts.my_review_obligations).toBe(0);
+    expect(compact.my_review_obligations).toEqual([]);
+    expect(compact.high_priority_diagnostics).not.toContain('my_review_obligations:405');
   });
 
   it('accepts the remembered compact workboard CLI shape at the commander boundary', async () => {

@@ -57,6 +57,13 @@ describe('publication RPIZ surface', () => {
     });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      publication_authority_preflight: {
+        mutation_family: 'publication',
+        locus_state: 'authority_locus',
+        mutation_safety: 'allowed_with_command',
+      },
+    });
     const publication = (result.result as { publication: Record<string, unknown> }).publication;
     expect(publication.status).toBe('prepared');
     expect(publication.commit_hash).toEqual(expect.any(String));
@@ -93,6 +100,13 @@ describe('publication RPIZ surface', () => {
     });
 
     expect(confirmed.exitCode).toBe(ExitCode.SUCCESS);
+    expect(confirmed.result).toMatchObject({
+      publication_authority_preflight: {
+        mutation_family: 'publication',
+        locus_state: 'authority_locus',
+        mutation_safety: 'allowed_with_command',
+      },
+    });
     const publication = (confirmed.result as { publication: Record<string, unknown> }).publication;
     expect(publication.status).toBe('pushed');
     expect(publication.confirmed_by).toBe('operator');

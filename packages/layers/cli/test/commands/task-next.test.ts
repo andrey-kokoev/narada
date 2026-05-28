@@ -353,6 +353,109 @@ describe('task-next surfaces', () => {
       expect(data.packet.pulled).toBe(true);
     });
 
+    it('surfaces addressed directed obligations before reporting no work', async () => {
+      const store = openTaskLifecycleStore(tempDir);
+      try {
+        store.upsertLifecycle({
+          task_id: '20260420-200-review',
+          task_number: 200,
+          status: 'in_review',
+          governed_by: null,
+          closed_at: null,
+          closed_by: null,
+          closure_mode: null,
+          reopened_at: null,
+          reopened_by: null,
+          continuation_packet_json: null,
+          updated_at: '2026-01-01T00:00:00Z',
+        });
+        store.upsertDirectedObligation({
+          obligation_id: 'obl_review_200_builder',
+          source_kind: 'task_report',
+          source_ref: 'wrr_200',
+          source_agent_id: 'architect',
+          target_agent_id: null,
+          target_role: 'implementer',
+          target_ref: null,
+          kind: 'review_request',
+          status: 'open',
+          task_id: '20260420-200-review',
+          task_number: 200,
+          evidence_json: JSON.stringify({ report_id: 'wrr_200' }),
+          consumption_rule_json: JSON.stringify({
+            review_command: 'narada task review 200 --agent <builder-agent> --verdict accepted --report wrr_200',
+          }),
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+          consumed_at: null,
+          consumed_by: null,
+          consumption_ref: null,
+        });
+      } finally {
+        store.db.close();
+      }
+
+      const result = await taskWorkNextCommand({ agent: 'a1', cwd: tempDir, format: 'json' });
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      expect(result.result).toMatchObject({
+        status: 'ok',
+        agent_id: 'a1',
+        action: 'directed_obligation',
+        primary: {
+          obligation_id: 'obl_review_200_builder',
+          kind: 'review_request',
+          task_number: 200,
+          target_agent_id: null,
+          target_role: 'implementer',
+          target_ref: null,
+          selection_reason: 'open_directed_obligation_addressed_to_agent',
+        },
+        directed_obligation: {
+          command_args: ['task', 'review', '200', '--agent', 'a1', '--verdict', 'accepted'],
+        },
+      });
+    });
+
+    it('skips addressed review obligations with no referenced lifecycle task', async () => {
+      const store = openTaskLifecycleStore(tempDir);
+      try {
+        store.upsertDirectedObligation({
+          obligation_id: 'obl_review_unrouted_builder',
+          source_kind: 'task_report',
+          source_ref: 'wrr_unrouted',
+          source_agent_id: 'architect',
+          target_agent_id: null,
+          target_role: 'implementer',
+          target_ref: null,
+          kind: 'review_request',
+          status: 'open',
+          task_id: null,
+          task_number: null,
+          evidence_json: JSON.stringify({ report_id: 'wrr_unrouted' }),
+          consumption_rule_json: JSON.stringify({
+            review_command: 'narada task review <task> --agent <builder-agent> --verdict accepted --report wrr_unrouted',
+          }),
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+          consumed_at: null,
+          consumed_by: null,
+          consumption_ref: null,
+        });
+      } finally {
+        store.db.close();
+      }
+
+      const result = await taskWorkNextCommand({ agent: 'a1', cwd: tempDir, format: 'json' });
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      expect(result.result).toMatchObject({
+        status: 'empty',
+        reason: 'no_admissible_task',
+        primary: null,
+      });
+    });
+
     it('returns empty when no work available', async () => {
       const result = await taskWorkNextCommand({ agent: 'a1', cwd: tempDir, format: 'json' });
       expect(result.exitCode).toBe(ExitCode.SUCCESS);

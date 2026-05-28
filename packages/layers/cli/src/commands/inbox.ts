@@ -2366,12 +2366,13 @@ function inspectInboxPublication(cwdInput: string): Record<string, unknown> {
   const tracked = new Set((git(repoRoot, ['ls-files', '--', '.ai/inbox-envelopes']) ?? '')
     .split('\n')
     .map((line) => line.trim())
+    .map(toGitPath)
     .filter(Boolean));
   const porcelain = new Set((git(repoRoot, ['status', '--porcelain', '--', '.ai/inbox-envelopes']) ?? '')
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
-    .map((line) => line.replace(/^[ MARCUD?!]{1,2}\s+/, '')));
+    .map((line) => toGitPath(line.replace(/^[ MARCUD?!]{1,2}\s+/, ''))));
   const uncommitted = artifactFiles.filter((file) => !tracked.has(file) || porcelain.has(file));
 
   const upstream = git(repoRoot, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);
@@ -2406,12 +2407,16 @@ function listInboxEnvelopeArtifactFiles(repoRoot: string): string[] {
       if (stat.isDirectory()) {
         visit(path);
       } else if (name.endsWith('.json')) {
-        files.push(relative(repoRoot, path));
+        files.push(toGitPath(relative(repoRoot, path)));
       }
     }
   };
   visit(root);
   return files.sort();
+}
+
+function toGitPath(path: string): string {
+  return path.replace(/\\/g, '/');
 }
 
 function inspectInboxReadiness(cwdInput: string, inboxDbPath: unknown): Record<string, unknown> {

@@ -78,7 +78,7 @@ export async function markReviewedCommand(
 
   for (let i = 0; i < scopeIds.length; i++) {
     const dbPath = join(rootDirs[i]!, '.narada', 'coordinator.db');
-    let db: import('better-sqlite3').Database | null = null;
+    let db: InstanceType<typeof Database> | null = null;
     try {
       db = new Database(dbPath);
       const coordinatorStore = new SqliteCoordinatorStore({ db });

@@ -77,6 +77,13 @@ export interface TaskReadResult {
     all_criteria_checked: boolean | null;
     unchecked_count: number;
   };
+  authority_posture: {
+    lifecycle_authority: 'sqlite_task_lifecycle' | 'markdown_front_matter_fallback';
+    spec_authority: 'sqlite_task_spec';
+    markdown_role: 'compatibility_projection';
+    status_source: 'sqlite' | 'markdown_front_matter';
+    mutation_rule: string;
+  };
   warnings: string[];
 }
 
@@ -351,6 +358,7 @@ export async function taskReadCommand(
 
   const hasDerivatives = num !== null ? await hasDerivativeFiles(cwd, num) : false;
   const governedProvenance = hasGovernedProvenance(mergedFrontMatter, hasReview, hasClosure, status);
+  const statusSource = sqliteLifecycle ? 'sqlite' : 'markdown_front_matter';
 
   const warnings: string[] = [];
   if (status === 'closed' || status === 'confirmed') {
@@ -405,6 +413,13 @@ export async function taskReadCommand(
       all_criteria_checked: criteria.allChecked,
       unchecked_count: criteria.unchecked,
     },
+    authority_posture: {
+      lifecycle_authority: sqliteLifecycle ? 'sqlite_task_lifecycle' : 'markdown_front_matter_fallback',
+      spec_authority: 'sqlite_task_spec',
+      markdown_role: 'compatibility_projection',
+      status_source: statusSource,
+      mutation_rule: 'Use governed task commands for lifecycle mutation; do not treat task markdown edits as lifecycle authority.',
+    },
     warnings,
   };
 
@@ -428,6 +443,7 @@ export async function taskReadCommand(
 
   lines.push(`  Task:        ${result.task_number ?? result.task_id}`);
   lines.push(`  Status:      ${result.status ?? 'unknown'}`);
+  lines.push(`  Authority:   lifecycle=${result.authority_posture.lifecycle_authority}; markdown=${result.authority_posture.markdown_role}`);
   if (result.assignment?.agent_id) {
     lines.push(`  Assigned:    ${result.assignment.agent_id} (${result.assignment.intent ?? 'primary'})`);
   }

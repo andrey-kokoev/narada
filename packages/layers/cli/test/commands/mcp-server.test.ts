@@ -76,6 +76,29 @@ describe('Narada MCP facade', () => {
     });
   });
 
+  it('resolves Site context from nested static_config Site config', () => {
+    const workspaceRoot = join(tempDir, '..', 'workspace');
+    writeSiteConfig(tempDir, {
+      schema: 'narada.site.config.v0',
+      static_config: {
+        site_id: 'narada-andrey',
+        site_kind: 'user_site',
+        site_root: tempDir,
+        workspace_root: workspaceRoot,
+        locus: { authority_locus: 'user' },
+      },
+    });
+
+    expect(resolveMcpSiteContext({ siteRoot: tempDir })).toMatchObject({
+      site_id: 'narada-andrey',
+      site_kind: 'user_site',
+      site_root: tempDir,
+      workspace_root: workspaceRoot,
+      authority_locus: 'user',
+      source: 'config',
+    });
+  });
+
   it('exposes Site identity through initialize and Site context tool', async () => {
     writeSiteConfig(tempDir, {
       site_id: 'mcp-client',

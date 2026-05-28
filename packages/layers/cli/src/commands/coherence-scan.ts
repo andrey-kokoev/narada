@@ -1,5 +1,5 @@
-import { execFileSync, spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -66,6 +66,18 @@ interface SubmittedFinding {
   envelope_id: string;
   kind: CoherenceEnvelopeKind;
 }
+
+const SECRET_ARTIFACT_PATTERNS: Array<{ code: string; pattern: RegExp }> = [
+  { code: 'secret_key_assignment', pattern: /\b[A-Z0-9_-]*(api[_-]?key|client[_-]?secret|password|private[_-]?key|token|authorization)[A-Z0-9_-]*\b\s*[:=]\s*['"]?[^\s'"]{8,}/i },
+  { code: 'bearer_token_literal', pattern: /\bBearer\s+[A-Za-z0-9._~+/=-]{12,}/i },
+  { code: 'private_key_block', pattern: /-----BEGIN [A-Z ]*PRIVATE KEY-----/ },
+  { code: 'provider_secret_literal', pattern: /\bsk-[A-Za-z0-9_-]{12,}/ },
+];
+
+const CLI_OUTPUT_BYPASS_PATTERNS: Array<{ code: string; pattern: RegExp }> = [
+  { code: 'console_stdout_stderr', pattern: /\bconsole\.(log|error|warn|info)\s*\(/ },
+  { code: 'process_stdout_stderr_write', pattern: /\bprocess\.(stdout|stderr)\.write\s*\(/ },
+];
 
 export async function coherenceScanCommand(options: CoherenceScanOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
   const cwd = resolve(options.cwd ?? process.cwd());
@@ -148,13 +160,12 @@ function checkTaskLifecycleSnapshot(cwd: string): CoherenceFinding | null {
   const snapshotExists = existsSync(join(cwd, '.ai', 'task-lifecycle-snapshot.json'));
   const dbIgnored = git(cwd, ['check-ignore', '-q', '.ai/task-lifecycle.db']) !== null;
   if (!dbTracked && snapshotTracked && snapshotExists && dbIgnored) {
-    if (!existsSync(join(cwd, 'scripts', 'guard-task-lifecycle-db.sh'))) return null;
-    const guard = spawnSync('bash', ['scripts/guard-task-lifecycle-db.sh'], {
-      cwd,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    if (guard.status === 0) return null;
+    const dbPath = join(cwd, '.ai', 'task-lifecycle.db');
+    const snapshotPath = join(cwd, '.ai', 'task-lifecycle-snapshot.json');
+    const dbMtime = mtimeMs(dbPath);
+    const snapshotMtime = mtimeMs(snapshotPath);
+    if (dbMtime === null) return null;
+    if (snapshotMtime !== null && snapshotMtime >= dbMtime) return null;
     return {
       finding_id: 'task-lifecycle-snapshot-stale',
       module: 'operational',
@@ -164,7 +175,11 @@ function checkTaskLifecycleSnapshot(cwd: string): CoherenceFinding | null {
       kind: 'observation',
       title: 'Task lifecycle snapshot posture guard is failing',
       summary: 'The local lifecycle DB and tracked snapshot posture do not currently satisfy the guard.',
-      evidence: firstLines(guard.stderr || guard.stdout, 4),
+      evidence: [
+        `db_mtime_ms=${dbMtime}`,
+        `snapshot_mtime_ms=${snapshotMtime}`,
+        'snapshot_freshness=snapshot_stale',
+      ],
       proposed_action: 'narada task lifecycle export --output .ai/task-lifecycle-snapshot.json',
       cooldown_key: 'task-lifecycle-snapshot-stale',
     };
@@ -355,7 +370,85 @@ async function checkAuthorityInversionInventory(cwd: string): Promise<CoherenceF
     }];
   }
 
-  return entries.map((entry) => inventoryEntryToFinding(entry));
+  const findings = entries.map((entry) => inventoryEntryToFinding(entry));
+  const cliOutputFinding = await checkCliOutputAdmissionBypass(cwd);
+  const secretArtifactFinding = await checkSecretValueArtifacts(cwd);
+  return [
+    ...findings,
+    ...(cliOutputFinding ? [cliOutputFinding] : []),
+    ...(secretArtifactFinding ? [secretArtifactFinding] : []),
+  ];
+}
+
+async function checkCliOutputAdmissionBypass(cwd: string): Promise<CoherenceFinding | null> {
+  const changedFiles = gitPorcelainChangedFiles(cwd)
+    .filter((file) => isCliSourceWorthScanningForOutputBypass(file))
+    .slice(0, 50);
+  const evidence: string[] = [];
+  for (const file of changedFiles) {
+    const text = await readFile(join(cwd, file), 'utf8').catch(() => null);
+    if (!text || text.includes('\u0000')) continue;
+    const matchedCodes = CLI_OUTPUT_BYPASS_PATTERNS
+      .filter(({ pattern }) => pattern.test(text))
+      .map(({ code }) => code);
+    for (const code of matchedCodes) {
+      evidence.push(`cli_output_bypass=${file}:pattern=${code}:raw_output_recorded=false`);
+      if (evidence.length >= 8) break;
+    }
+    if (evidence.length >= 8) break;
+  }
+  if (evidence.length === 0) return null;
+  return {
+    finding_id: 'authority-inversion-cli-output-admission-bypass-detected',
+    module: 'authority_inversion',
+    severity: 'warning',
+    confidence: 'medium',
+    locus: 'cli_output_admission',
+    kind: 'task_candidate',
+    title: 'Authority inversion risk: CLI output admission bypass detected',
+    summary: 'Changed CLI source appears to write directly to stdout/stderr instead of routing finite output through formatter/admission helpers.',
+    evidence,
+    proposed_action: 'Route finite command output through formattedResult, emitCommandResult, createFormatter, or an explicit interactive/long-lived output admission helper.',
+    cooldown_key: `authority-inversion:cli-output-admission-bypass:${evidence.join('|')}`,
+  };
+}
+
+function mtimeMs(path: string): number | null {
+  if (!existsSync(path)) return null;
+  return statSync(path).mtimeMs;
+}
+
+async function checkSecretValueArtifacts(cwd: string): Promise<CoherenceFinding | null> {
+  const changedFiles = gitPorcelainChangedFiles(cwd)
+    .filter((file) => isTextArtifactWorthScanning(file))
+    .slice(0, 50);
+  const evidence: string[] = [];
+  for (const file of changedFiles) {
+    const text = await readFile(join(cwd, file), 'utf8').catch(() => null);
+    if (!text || text.includes('\u0000')) continue;
+    const matchedCodes = SECRET_ARTIFACT_PATTERNS
+      .filter(({ pattern }) => pattern.test(text))
+      .map(({ code }) => code);
+    for (const code of matchedCodes) {
+      evidence.push(`secret_like_artifact=${file}:pattern=${code}:value_recorded=false`);
+      if (evidence.length >= 8) break;
+    }
+    if (evidence.length >= 8) break;
+  }
+  if (evidence.length === 0) return null;
+  return {
+    finding_id: 'authority-inversion-secret-value-artifact-detected',
+    module: 'authority_inversion',
+    severity: 'warning',
+    confidence: 'medium',
+    locus: 'secrets',
+    kind: 'task_candidate',
+    title: 'Authority inversion risk: secret value artifact detected',
+    summary: 'Changed text artifacts contain secret-like material that must be handled as capability lifecycle evidence, not copied command/output truth.',
+    evidence,
+    proposed_action: 'Replace raw secret-like values with credential or capability references and route any reveal/use/rotation through capability-governed secret management.',
+    cooldown_key: `authority-inversion:secret-value-artifact:${evidence.join('|')}`,
+  };
 }
 
 function checkMutationEvidencePosture(cwd: string): CoherenceFinding | null {
@@ -370,7 +463,7 @@ function checkMutationEvidencePosture(cwd: string): CoherenceFinding | null {
   if (authorityMutationFiles.length === 0) return null;
 
   const mutationEvidenceFiles = changedFiles.filter((file) => file.startsWith('.ai/mutation-evidence/'));
-  if (mutationEvidenceFiles.length > 0) return null;
+  if (mutationEvidenceFiles.length > 0 || hasGitChanges(cwd, ['.ai/mutation-evidence'])) return null;
 
   return {
     finding_id: 'mutation-evidence-missing-for-authority-surface',
@@ -516,7 +609,7 @@ function gitLines(cwd: string, args: string[]): string[] {
 
 function gitPorcelainChangedFiles(cwd: string): string[] {
   try {
-    return execFileSync('git', ['status', '--porcelain'], {
+    const paths = execFileSync('git', ['status', '--porcelain'], {
       cwd,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
@@ -524,9 +617,67 @@ function gitPorcelainChangedFiles(cwd: string): string[] {
       .split(/\r?\n/)
       .map((line) => line.slice(3).trim())
       .filter(Boolean);
+    return [...new Set(paths.flatMap((file) => expandChangedPath(cwd, file)).slice(0, 200))];
   } catch {
     return [];
   }
+}
+
+function hasGitChanges(cwd: string, paths: string[]): boolean {
+  try {
+    return execFileSync('git', ['status', '--porcelain', '--', ...paths], {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function expandChangedPath(cwd: string, file: string): string[] {
+  const fullPath = join(cwd, file);
+  if (!existsSync(fullPath)) return [file];
+  const stat = statSync(fullPath);
+  if (!stat.isDirectory()) return [file];
+  const files: string[] = [];
+  const visit = (dir: string): void => {
+    for (const entry of readdirSync(dir)) {
+      if (entry === '.git' || entry === 'node_modules' || entry === 'dist' || entry === 'coverage') continue;
+      const path = join(dir, entry);
+      const entryStat = statSync(path);
+      if (entryStat.isDirectory()) {
+        visit(path);
+      } else {
+        files.push(path.slice(cwd.length + 1).replace(/\\/g, '/'));
+      }
+      if (files.length >= 200) return;
+    }
+  };
+  visit(fullPath);
+  return files.length > 0 ? files : [file];
+}
+
+function isTextArtifactWorthScanning(file: string): boolean {
+  if (
+    file.startsWith('.git/') ||
+    file.startsWith('node_modules/') ||
+    file.startsWith('dist/') ||
+    file.startsWith('coverage/') ||
+    file.startsWith('.ai/mutation-evidence/')
+  ) return false;
+  return !/\.(png|jpe?g|gif|webp|ico|pdf|zip|gz|db|sqlite|wasm)$/i.test(file);
+}
+
+function isCliSourceWorthScanningForOutputBypass(file: string): boolean {
+  const normalized = file.replace(/\\/g, '/');
+  if (!normalized.startsWith('packages/layers/cli/src/')) return false;
+  if (!/\.(ts|tsx|js|mjs|cjs)$/.test(normalized)) return false;
+  return ![
+    'packages/layers/cli/src/lib/cli-output.ts',
+    'packages/layers/cli/src/lib/formatter.ts',
+    'packages/layers/cli/src/lib/logger.ts',
+  ].includes(normalized);
 }
 
 function firstLines(text: string, limit: number): string[] {

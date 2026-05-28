@@ -40,6 +40,16 @@ describe('inbox mutation evidence', () => {
     expect(evidence.before).toBeNull();
     expect(evidence.after).toMatchObject({ status: 'received', kind: 'proposal' });
     expect(evidence.confirmation).toMatchObject({ kind: 'read_back', status: 'confirmed' });
+    expect(evidence.replay_payload).toMatchObject({
+      transition: {
+        family: 'inbox',
+        command: 'inbox submit',
+        authority_class: 'claim',
+        source_status: null,
+        target_status: 'received',
+        normalized: true,
+      },
+    });
   });
 
   it('emits archive triage evidence without target-zone mutation', async () => {
@@ -60,6 +70,16 @@ describe('inbox mutation evidence', () => {
     expect(evidence.after).toMatchObject({
       status: 'archived',
       promotion_target_kind: 'archive',
+    });
+    expect(evidence.replay_payload).toMatchObject({
+      transition: {
+        command: 'inbox promote archive',
+        source_status: 'received',
+        target_status: 'archived',
+        target_promotion_target_kind: 'archive',
+        target_promotion_enactment_status: 'recorded',
+        normalized: true,
+      },
     });
     expect((evidence.replay_payload.command_result as { target_mutation?: boolean }).target_mutation).toBe(false);
   });
@@ -103,12 +123,12 @@ describe('inbox mutation evidence', () => {
     const promoted = (pending.result as { envelope: { promotion: { target_kind: string; target_ref: string } } }).envelope;
     expect(promoted.promotion).toMatchObject({
       target_kind: 'task',
-      target_ref: '100',
+      target_ref: 'task:100',
     });
     const evidence = findEvidence(tempDir, 'inbox promote task target', envelope.envelope_id);
     expect(evidence.after).toMatchObject({
       promotion_target_kind: 'task',
-      promotion_target_ref: '100',
+      promotion_target_ref: 'task:100',
     });
   });
 
@@ -158,6 +178,15 @@ describe('inbox mutation evidence', () => {
       expect(evidence?.principal).toBe('import_replay');
       expect(evidence?.confirmation.kind).toBe('import_replay');
       expect(evidence?.after?.status).toBe('received');
+      expect(evidence?.replay_payload).toMatchObject({
+        transition: {
+          command: 'inbox import',
+          confirmation_kind: 'import_replay',
+          source_status: null,
+          target_status: 'received',
+          normalized: true,
+        },
+      });
     } finally {
       rmSync(sourceDir, { recursive: true, force: true });
     }

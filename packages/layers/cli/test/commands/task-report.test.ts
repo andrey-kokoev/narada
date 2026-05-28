@@ -30,7 +30,7 @@ function setupRepo(tempDir: string) {
       agents: [
         { agent_id: 'test-agent', role: 'implementer', capabilities: ['claim'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
         { agent_id: 'other-agent', role: 'implementer', capabilities: ['claim'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
-        { agent_id: 'builder', role: 'builder', capabilities: ['claim', 'execute'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
+        { agent_id: 'builder', role: 'builder', capabilities: ['claim', 'execute', 'review'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
         { agent_id: 'architect', role: 'architect', capabilities: ['propose', 'review'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
         { agent_id: 'implementer-reviewer', role: 'implementer', capabilities: ['claim', 'review'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
         { agent_id: 'reviewer-1', role: 'reviewer', capabilities: ['review'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
@@ -42,7 +42,7 @@ function setupRepo(tempDir: string) {
     for (const agent of [
       { agent_id: 'test-agent', role: 'implementer', capabilities: ['claim'] },
       { agent_id: 'other-agent', role: 'implementer', capabilities: ['claim'] },
-      { agent_id: 'builder', role: 'builder', capabilities: ['claim', 'execute'] },
+      { agent_id: 'builder', role: 'builder', capabilities: ['claim', 'execute', 'review'] },
       { agent_id: 'architect', role: 'architect', capabilities: ['propose', 'review'] },
       { agent_id: 'implementer-reviewer', role: 'implementer', capabilities: ['claim', 'review'] },
       { agent_id: 'reviewer-1', role: 'reviewer', capabilities: ['review'] },
@@ -91,7 +91,7 @@ function listReportRecords(tempDir: string): ReportRecordRow[] {
   }
 }
 
-function listDirectedObligations(tempDir: string, targetAgent: string, targetRole?: string) {
+function listDirectedObligations(tempDir: string, targetAgent: string | null, targetRole?: string) {
   const store = openTaskLifecycleStore(tempDir);
   try {
     return store.listDirectedObligationsForTarget(targetAgent, targetRole ?? null, 'open');
@@ -179,7 +179,8 @@ describe('task report operator', () => {
     const obligations = listOpenTaskObligations(tempDir);
     expect(obligations).toHaveLength(1);
     expect(obligations[0]!.target_ref).not.toBe('unrouted');
-    expect(obligations[0]!.target_agent_id).toBe('reviewer-1');
+    expect(obligations[0]!.target_agent_id).toBeNull();
+    expect(obligations[0]!.target_role).toBe('builder');
 
     const report = JSON.parse(reportRecords[0]!.report_json);
     expect(report.task_id).toBe('20260420-999-test-task');
@@ -370,7 +371,7 @@ describe('task report operator', () => {
     expect(evidence.verification).toEqual([{ command: 'pnpm test', result: 'passed' }]);
   });
 
-  it('creates a directed review obligation for a unique reviewer role alias', async () => {
+  it('creates a role-targeted review obligation for a reviewer role alias', async () => {
     await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
 
     const result = await taskReportCommand({
@@ -389,12 +390,12 @@ describe('task report operator', () => {
       status: 'success',
       review_target: {
         requested: 'reviewer',
-        target_agent_id: 'reviewer-1',
+        target_agent_id: null,
         target_role: 'reviewer',
-        resolution: 'unique_role_alias',
+        resolution: 'role_alias',
       },
     });
-    expect(listDirectedObligations(tempDir, 'reviewer-1', 'reviewer')).toHaveLength(1);
+    expect(listDirectedObligations(tempDir, 'missing-agent', 'reviewer')).toHaveLength(1);
   });
 
   it('creates a review obligation for a non-operator role composed with review capability', async () => {
@@ -490,6 +491,54 @@ describe('task report operator', () => {
       },
     });
     expect((result.result as { error: string }).error).toContain('Unrouted review obligations are not admitted');
+    expect(listReportRecords(tempDir)).toHaveLength(0);
+    expect(listOpenTaskObligations(tempDir)).toHaveLength(0);
+  });
+
+  it('refuses report before review obligation when task evidence remains scaffolded or unchecked', async () => {
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
+      [
+        '---',
+        'task_id: 999',
+        'status: opened',
+        '---',
+        '',
+        '# Task 999: Test Task',
+        '',
+        '## Acceptance Criteria',
+        '',
+        '- [ ] Implementation evidence is complete.',
+        '',
+        '## Execution Notes',
+        '',
+        '<!-- Record what was done, decisions made, and files changed. -->',
+        '',
+        '## Verification',
+        '',
+        '<!-- Record commands run, results observed, and how correctness was checked. -->',
+        '',
+      ].join('\n'),
+    );
+    await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
+
+    const result = await taskReportCommand({
+      taskNumber: '999',
+      agent: 'test-agent',
+      summary: 'Should fail with incomplete task evidence',
+      verification: JSON.stringify([{ command: 'pnpm test', result: 'passed' }]),
+      residuals: JSON.stringify([]),
+      cwd: tempDir,
+      format: 'json',
+    });
+
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect((result.result as { error: string }).error).toContain('evidence is incomplete');
+    expect((result.result as { evidence_blockers: string[] }).evidence_blockers).toEqual([
+      'Acceptance Criteria contains unchecked checklist items.',
+      'Execution Notes still contains scaffold placeholder text.',
+      'Verification still contains scaffold placeholder text.',
+    ]);
     expect(listReportRecords(tempDir)).toHaveLength(0);
     expect(listOpenTaskObligations(tempDir)).toHaveLength(0);
   });

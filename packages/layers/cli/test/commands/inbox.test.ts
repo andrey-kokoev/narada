@@ -784,6 +784,46 @@ describe('Canonical Inbox CLI commands', () => {
     });
   });
 
+  it('doctor treats tracked portable inbox envelope artifacts as published on native Windows paths', async () => {
+    setupGitRepo(tempDir);
+    const submitted = await inboxSubmitCommand({
+      cwd: tempDir,
+      format: 'json',
+      sourceKind: 'cli',
+      sourceRef: 'manual:published-artifact',
+      kind: 'observation',
+      authorityLevel: 'operator_confirmed',
+      payload: JSON.stringify({ title: 'Already published' }),
+    });
+    expect(submitted.exitCode).toBe(ExitCode.SUCCESS);
+
+    const published = await inboxPublishCommand({
+      cwd: tempDir,
+      format: 'json',
+      execute: true,
+      message: 'Publish inbox artifacts',
+    });
+    expect(published.exitCode).toBe(ExitCode.SUCCESS);
+
+    const doctor = await inboxDoctorCommand({ cwd: tempDir, format: 'json' });
+    const result = doctor.result as {
+      publication: {
+        status: string;
+        uncommitted_envelope_artifacts_count: number;
+        uncommitted_envelope_artifacts: string[];
+      };
+      checks: Array<{ name: string; ok: boolean; detail: string }>;
+    };
+
+    expect(result.publication.status).toBe('published_or_no_artifacts_pending');
+    expect(result.publication.uncommitted_envelope_artifacts_count).toBe(0);
+    expect(result.publication.uncommitted_envelope_artifacts).toEqual([]);
+    expect(result.checks.find((check) => check.name === 'inbox_envelope_artifacts_committed')).toMatchObject({
+      ok: true,
+      detail: 'no uncommitted inbox envelope artifacts',
+    });
+  });
+
   it('dry-runs inbox publication without exporting or staging artifacts', async () => {
     setupGitRepo(tempDir);
     const submitted = await inboxSubmitCommand({

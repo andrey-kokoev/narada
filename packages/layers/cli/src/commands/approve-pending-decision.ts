@@ -141,7 +141,7 @@ export async function approvePendingDecisionCommand(
 
   for (const target of targets) {
     const dbPath = join(target.rootDir, '.narada', 'coordinator.db');
-    let db: import('better-sqlite3').Database | null = null;
+    let db: InstanceType<typeof Database> | null = null;
     try {
       db = new Database(dbPath);
       const coordinatorStore = new SqliteCoordinatorStore({ db });

@@ -158,6 +158,16 @@ describe('task finish operator', () => {
       expect(data.report_id).toBeTruthy();
       expect(data.roster_transition).toBe('done');
       expect(data.evidence_verdict).toBe('needs_review');
+      expect(data.generated_artifact_authority_note).toMatchObject({
+        posture: 'not_self_authorizing',
+        message: 'Generated review/report artifacts are not self-authorizing; authority requires lifecycle admission, reviewer identity, task evidence verdict, and closure status.',
+        authority_requires: [
+          'lifecycle_admission_rule',
+          'reviewer_identity',
+          'task_evidence_verdict',
+          'closure_status',
+        ],
+      });
     });
 
     it('submits report from a JSON report file and creates reviewer obligation', async () => {
@@ -541,6 +551,7 @@ describe('task finish operator', () => {
       expect(data).toHaveProperty('report_action');
       expect(data).toHaveProperty('evidence_verdict');
       expect(data).toHaveProperty('roster_transition');
+      expect(data).toHaveProperty('generated_artifact_authority_note');
     });
   });
 });

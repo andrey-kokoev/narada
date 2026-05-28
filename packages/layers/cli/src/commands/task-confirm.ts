@@ -11,6 +11,7 @@
 
 import { resolve } from 'node:path';
 import { findTaskFile, readTaskFile, writeTaskFile } from '../lib/task-governance.js';
+import { openTaskLifecycleStore, type TaskLifecycleRow } from '../lib/task-lifecycle-store.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import {
@@ -61,10 +62,19 @@ export async function taskConfirmCommand(
   }
 
   const { frontMatter, body } = await readTaskFile(taskFile.path);
-  const currentStatus = frontMatter.status as string | undefined;
+  const markdownStatus = frontMatter.status as string | undefined;
+  let lifecycle: TaskLifecycleRow | undefined;
+  const statusStore = openTaskLifecycleStore(cwd);
+  try {
+    lifecycle = statusStore.getLifecycle(taskFile.taskId);
+  } finally {
+    statusStore.db.close();
+  }
+  const currentStatus = lifecycle?.status ?? markdownStatus;
+  const repairsConfirmedProjection = markdownStatus === 'confirmed' && lifecycle?.status === 'closed';
 
   // Must be closed to confirm
-  if (currentStatus !== 'closed') {
+  if (currentStatus !== 'closed' && !repairsConfirmedProjection) {
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: {
@@ -87,10 +97,20 @@ export async function taskConfirmCommand(
 
   // Transition
   frontMatter.status = 'confirmed';
-  frontMatter.confirmed_by = confirmedBy;
-  frontMatter.confirmed_at = new Date().toISOString();
+  frontMatter.confirmed_by = typeof frontMatter.confirmed_by === 'string' ? frontMatter.confirmed_by : confirmedBy;
+  frontMatter.confirmed_at = typeof frontMatter.confirmed_at === 'string' ? frontMatter.confirmed_at : new Date().toISOString();
 
   await writeTaskFile(taskFile.path, frontMatter, body);
+  if (lifecycle && lifecycle.status !== 'confirmed') {
+    const store = openTaskLifecycleStore(cwd);
+    try {
+      store.updateStatus(taskFile.taskId, 'confirmed', confirmedBy, {
+        governed_by: `task_confirm:${confirmedBy}`,
+      });
+    } finally {
+      store.db.close();
+    }
+  }
   const after = await captureTaskLifecycleEvidenceState(cwd, taskNumber);
   const successResult = {
     status: 'success',

@@ -17,7 +17,12 @@ import { parseTaskSpecFromMarkdown, extractProjectionSections, renderTaskBodyFro
 import { openTaskLifecycleStore, type TaskLifecycleStore } from './task-lifecycle-store.js';
 import { ExitCode } from './exit-codes.js';
 import { reportTaskService, type ReportTaskServiceOptions } from './task-report-service.js';
-import { reviewTaskService, type ReviewTaskServiceOptions } from './task-review-service.js';
+import {
+  GENERATED_ARTIFACT_AUTHORITY_NOTE,
+  reviewTaskService,
+  type GeneratedArtifactAuthorityNote,
+  type ReviewTaskServiceOptions,
+} from './task-review-service.js';
 
 export interface FinishTaskServiceOptions {
   taskNumber?: string;
@@ -68,6 +73,7 @@ export interface FinishTaskServiceResponse {
     allow_incomplete?: boolean;
     error?: string;
     evidence_warnings?: string[];
+    generated_artifact_authority_note?: GeneratedArtifactAuthorityNote;
   };
 }
 
@@ -355,6 +361,8 @@ export async function finishTaskService(
   let reviewId: string | null = null;
   let reviewReusePosture: FinishTaskServiceResponse['result']['review_reuse_posture'];
   let ignoredReviewIds: string[] = [];
+  let criteriaProofAction: 'proved' | 'skipped' | 'blocked' = 'skipped';
+  let criteriaProofBlockers: string[] = [];
 
   const existingReviews = await listReviewsForTask(cwd, taskFile.taskId);
   const existingReports = await listReportsForTask(cwd, taskFile.taskId);
@@ -504,6 +512,28 @@ export async function finishTaskService(
         };
       }
 
+      if (options.proveCriteria) {
+        const proofStore = options.store ?? openTaskLifecycleStore(cwd);
+        const proofOwn = options.store ? null : proofStore;
+        try {
+          const proofResult = await proveCriteriaInService({
+            taskNumber,
+            taskFileId: taskFile.taskId,
+            by: agentId,
+            cwd,
+            store: proofStore,
+          });
+          if (proofResult.blockers.length === 0) {
+            criteriaProofAction = 'proved';
+          } else {
+            criteriaProofAction = 'blocked';
+            criteriaProofBlockers = proofResult.blockers;
+          }
+        } finally {
+          if (proofOwn) proofOwn.db.close();
+        }
+      }
+
       const reportResult = await reportTaskService({
         taskNumber,
         agent: agentId,
@@ -569,10 +599,8 @@ export async function finishTaskService(
   }
 
   let evidence = await inspectTaskEvidence(cwd, taskNumber, options.store);
-  let criteriaProofAction: 'proved' | 'skipped' | 'blocked' = 'skipped';
-  let criteriaProofBlockers: string[] = [];
 
-  if (options.proveCriteria) {
+  if (options.proveCriteria && criteriaProofAction === 'skipped') {
     const proofStore = options.store ?? openTaskLifecycleStore(cwd);
     const proofOwn = options.store ? null : proofStore;
     try {
@@ -681,6 +709,7 @@ export async function finishTaskService(
     roster_transition: rosterResult.exitCode === ExitCode.SUCCESS ? 'done' : 'blocked',
     close_action: closeAction,
     criteria_proof_action: criteriaProofAction,
+    generated_artifact_authority_note: GENERATED_ARTIFACT_AUTHORITY_NOTE,
   };
 
   if (reviewReusePosture) {

@@ -110,7 +110,8 @@ export function parseTaskAuthorityCapabilities(value: string | undefined): strin
 function defaultTaskCapabilities(role: string): string[] {
   if (role === 'architect') return ['review', 'architect_as_reviewer'];
   if (role === 'reviewer') return ['review'];
-  if (role === 'builder' || role === 'implementer') return ['claim', 'execute'];
+  if (role === 'builder') return ['claim', 'execute', 'review'];
+  if (role === 'implementer') return ['claim', 'execute'];
   return [];
 }
 

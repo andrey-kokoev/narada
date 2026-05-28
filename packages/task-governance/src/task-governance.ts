@@ -32,6 +32,14 @@ export interface AgentRoster {
   agents: AgentRosterEntry[];
 }
 
+export interface RoleEligibilityResult {
+  eligible: boolean;
+  warning: string | null;
+  targetRole: string | null;
+  agentRole: string | null;
+  preferredAgentId: string | null;
+}
+
 export const ASSIGNMENT_INTENTS = ['primary', 'review', 'repair', 'takeover'] as const;
 export type AssignmentIntent = typeof ASSIGNMENT_INTENTS[number];
 
@@ -560,8 +568,9 @@ export function isExecutableTaskFile(fileName: string): boolean {
   // Exclude chapter range files: DATE-START-END-...
   if (/^[0-9]{8}-[0-9]+-[0-9]+/.test(base)) return false;
 
-  // Exclude chapter closure artifacts. A normal task slug may contain "chapter".
-  if (base.endsWith('-closure')) return false;
+  // Exclude chapter closure artifacts, but keep normal numbered tasks whose
+  // slug happens to end with "closure".
+  if (base.endsWith('-closure') && extractTaskNumberFromFileName(fileName) === null) return false;
 
   return true;
 }
@@ -987,6 +996,56 @@ function buildRosterFromRows(rows: AgentRosterRow[]): AgentRoster {
   };
 }
 
+export function checkRoleEligibility(
+  store: TaskLifecycleStore,
+  taskId: string,
+  agentId: string,
+): RoleEligibilityResult {
+  const rosterEntry = store.getRosterEntry(agentId);
+  const agentRole = rosterEntry?.role ?? null;
+  const obligation = store.db
+    .prepare(`
+      select target_agent_id, target_role
+      from directed_obligations
+      where task_id = ?
+        and status = 'open'
+        and kind in ('review_request', 'handoff', 'expectation')
+      order by created_at asc
+      limit 1
+    `)
+    .get(taskId) as { target_agent_id?: string | null; target_role?: string | null } | undefined;
+  const preferredAgentId = obligation?.target_agent_id ?? null;
+  const targetRole = obligation?.target_role ?? null;
+
+  if (preferredAgentId && preferredAgentId !== agentId) {
+    return {
+      eligible: true,
+      warning: `Task prefers ${preferredAgentId}; ${agentId} is claiming it.`,
+      targetRole,
+      agentRole,
+      preferredAgentId,
+    };
+  }
+
+  if (targetRole && agentRole !== targetRole) {
+    return {
+      eligible: false,
+      warning: `Task targets role ${targetRole}; ${agentId} has role ${agentRole ?? 'unknown'}.`,
+      targetRole,
+      agentRole,
+      preferredAgentId,
+    };
+  }
+
+  return {
+    eligible: true,
+    warning: null,
+    targetRole,
+    agentRole,
+    preferredAgentId,
+  };
+}
+
 export async function loadRoster(cwd: string): Promise<AgentRoster> {
   await mkdir(join(resolveRepoPath(cwd), '.ai'), { recursive: true });
 
@@ -1270,11 +1329,10 @@ export async function findTaskFile(cwd: string, taskNumber: string): Promise<{ p
   const candidates = files.filter((f) => {
     if (!isExecutableTaskFile(f)) return false;
     const base = f.replace(/\.md$/, '');
-    // Match patterns like 20260420-260-... or 260 anywhere in the filename
-    // Also handle zero-padded numbers (e.g., 050 matches 50)
-    const numMatch = base.match(/-(\d+)-/);
-    const fileNum = numMatch ? Number(numMatch[1]) : null;
-    return fileNum === Number(taskNumber) || base.includes(`-${taskNumber}-`) || base === taskNumber || base.endsWith(`-${taskNumber}`);
+    // Match the canonical task-number segment only. Do not match arbitrary
+    // mentions like "...task-260" in another task's slug.
+    const fileNum = extractTaskNumberFromFileName(f);
+    return fileNum === Number(taskNumber) || base === taskNumber;
   });
 
   const executableCandidates: string[] = [];

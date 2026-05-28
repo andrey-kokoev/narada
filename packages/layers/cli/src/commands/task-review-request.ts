@@ -32,6 +32,14 @@ function safeIdPart(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || 'unknown';
 }
 
+function reviewTargetIdPart(target: { target_agent_id: string | null; target_role: string | null }): string {
+  return target.target_agent_id ?? (target.target_role ? `role_${target.target_role}` : 'unknown');
+}
+
+function reviewCommandAgentPlaceholder(target: { target_agent_id: string | null; target_role: string | null }): string {
+  return target.target_agent_id ?? `<${target.target_role ?? 'reviewer'}-agent>`;
+}
+
 function selectReport(reports: WorkResultReport[], reportId?: string): WorkResultReport | null {
   if (reportId) return reports.find((report) => report.report_id === reportId) ?? null;
   return reports[reports.length - 1] ?? null;
@@ -112,11 +120,12 @@ export async function taskReviewRequestCommand(
   const closeStore = !options.store;
   try {
     const taskNumber = Number(options.taskNumber);
-    const obligationId = `obl_review_${safeIdPart(taskFile.taskId)}_${safeIdPart(report.report_id)}_${safeIdPart(target.target_agent_id)}`;
+    const obligationId = `obl_review_${safeIdPart(taskFile.taskId)}_${safeIdPart(report.report_id)}_${safeIdPart(reviewTargetIdPart(target))}`;
     const existing = store.listDirectedObligationsForTask(taskFile.taskId, 'open')
       .find((obligation) => obligation.source_kind === 'task_report'
         && obligation.source_ref === report.report_id
         && obligation.target_agent_id === target.target_agent_id
+        && obligation.target_role === target.target_role
         && obligation.kind === 'review_request');
     if (existing) {
       const result = {
@@ -160,7 +169,7 @@ export async function taskReviewRequestCommand(
       }),
       consumption_rule_json: JSON.stringify({
         consume_on: ['task_review', 'task_defer', 'delegation', 'rejection', 'completion'],
-        review_command: `narada task review ${options.taskNumber} --agent ${target.target_agent_id} --verdict accepted --report ${report.report_id}`,
+        review_command: `narada task review ${options.taskNumber} --agent ${reviewCommandAgentPlaceholder(target)} --verdict accepted --report ${report.report_id}`,
       }),
       created_at: now,
       updated_at: now,
@@ -177,7 +186,7 @@ export async function taskReviewRequestCommand(
       task_number: taskNumber,
       report_id: report.report_id,
       review_target: target,
-      review_command: `narada task review ${options.taskNumber} --agent ${target.target_agent_id} --verdict accepted --report ${report.report_id}`,
+      review_command: `narada task review ${options.taskNumber} --agent ${reviewCommandAgentPlaceholder(target)} --verdict accepted --report ${report.report_id}`,
     };
     await writeTaskLifecycleMutationEvidence({
       cwd,

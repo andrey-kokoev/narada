@@ -467,7 +467,7 @@ describe('work-next unified next action', () => {
   });
 
   it('returns review work before inbox fallback', async () => {
-    seedRosterEntry(tempDir, 'operator', 'operator', 'idle', null);
+    seedRosterEntry(tempDir, 'builder', 'builder', 'idle', null);
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-101-review.md'),
       '---\ntask_id: 101\nstatus: in_review\n---\n\n# Task 101\n\n## Goal\nReview me.\n',
@@ -484,13 +484,13 @@ describe('work-next unified next action', () => {
     });
     expect(submitted.exitCode).toBe(ExitCode.SUCCESS);
 
-    const result = await workNextCommand({ agent: 'operator', cwd: tempDir, format: 'json' });
+    const result = await workNextCommand({ agent: 'builder', cwd: tempDir, format: 'json' });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({
       status: 'success',
       action_kind: 'review_work',
-      agent_id: 'operator',
+      agent_id: 'builder',
       checked: [
         { zone: 'directed_obligation', status: 'empty', reason: 'no_open_addressed_obligation' },
         { zone: 'task_work', status: 'empty', reason: 'no_admissible_task' },
@@ -499,13 +499,13 @@ describe('work-next unified next action', () => {
       primary: {
         task_number: 101,
         status: 'in_review',
-        command_args: ['task', 'review', '101', '--agent', 'operator', '--verdict', 'accepted'],
+        command_args: ['task', 'review', '101', '--agent', 'builder', '--verdict', 'accepted'],
       },
     });
   });
 
   it('lets a fresh active collaborator review blocker outrank ordinary pending review ordering', async () => {
-    seedRosterEntry(tempDir, 'operator', 'operator', 'idle', null);
+    seedRosterEntry(tempDir, 'builder', 'builder', 'idle', null);
     seedRosterEntry(tempDir, 'bob', 'builder', 'done', 202);
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-101-generic-review.md'),
@@ -516,7 +516,7 @@ describe('work-next unified next action', () => {
       '---\ntask_id: 202\nstatus: in_review\n---\n\n# Task 202 Bob Awaiting Review\n\n## Goal\nReview Bob work.\n',
     );
 
-    const result = await workNextCommand({ agent: 'operator', cwd: tempDir, format: 'json' });
+    const result = await workNextCommand({ agent: 'builder', cwd: tempDir, format: 'json' });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({
@@ -556,7 +556,7 @@ describe('work-next unified next action', () => {
   });
 
   it('keeps authority ahead of projection when active collaborator facts disagree', async () => {
-    seedRosterEntry(tempDir, 'operator', 'operator', 'idle', null);
+    seedRosterEntry(tempDir, 'builder', 'builder', 'idle', null);
     seedRosterEntry(tempDir, 'bob', 'builder', 'done', 202);
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-101-generic-review.md'),
@@ -567,7 +567,7 @@ describe('work-next unified next action', () => {
       '---\ntask_id: 202\nstatus: closed\n---\n\n# Task 202 Bob Closed\n\n## Goal\nAlready closed.\n',
     );
 
-    const result = await workNextCommand({ agent: 'operator', cwd: tempDir, format: 'json' });
+    const result = await workNextCommand({ agent: 'builder', cwd: tempDir, format: 'json' });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({
@@ -648,6 +648,210 @@ describe('work-next unified next action', () => {
       },
     });
     expect(readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-generic.md'), 'utf8')).toContain('status: opened');
+  });
+
+  it('skips stale review obligations for tasks that are no longer in review', async () => {
+    seedRosterEntry(tempDir, 'kevin', 'architect', 'idle', null);
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-101-generic-review.md'),
+      '---\ntask_id: 20260427-101-generic-review\nstatus: in_review\n---\n\n# Task 101 Generic Review\n\n## Goal\nReview generic work.\n',
+    );
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-generic.md'),
+      '---\ntask_id: 20260427-100-generic\nstatus: opened\n---\n\n# Task 100 Generic\n\n## Goal\nGeneric task.\n\n## Acceptance Criteria\n- [ ] Do task work.\n',
+    );
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      store.upsertLifecycle({
+        task_id: '20260427-76-review',
+        task_number: 76,
+        status: 'closed',
+        governed_by: 'task_close:architect',
+        closed_at: '2026-01-01T00:00:00Z',
+        closed_by: 'architect',
+        closure_mode: 'agent_finish',
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      });
+      store.upsertDirectedObligation({
+        obligation_id: 'obl_review_76_kevin_stale',
+        source_kind: 'task_report',
+        source_ref: 'wrr_76',
+        source_agent_id: 'bob',
+        target_agent_id: 'kevin',
+        target_role: 'architect',
+        target_ref: 'kevin',
+        kind: 'review_request',
+        status: 'open',
+        task_id: '20260427-76-review',
+        task_number: 76,
+        evidence_json: JSON.stringify({ report_id: 'wrr_76' }),
+        consumption_rule_json: JSON.stringify({ review_command: 'narada task review 76 --agent kevin --verdict accepted --report wrr_76' }),
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        consumed_at: null,
+        consumed_by: null,
+        consumption_ref: null,
+      });
+      store.upsertLifecycle({
+        task_id: '20260427-101-generic-review',
+        task_number: 101,
+        status: 'in_review',
+        governed_by: null,
+        closed_at: null,
+        closed_by: null,
+        closure_mode: null,
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      });
+      store.upsertTaskSpec({
+        task_id: '20260427-101-generic-review',
+        task_number: 101,
+        title: 'Task 101 Generic Review',
+        chapter_markdown: null,
+        goal_markdown: 'Review generic work.',
+        context_markdown: null,
+        required_work_markdown: '1. Review generic work.',
+        non_goals_markdown: null,
+        acceptance_criteria_json: JSON.stringify(['Reviewed.']),
+        dependencies_json: JSON.stringify([]),
+        updated_at: '2026-01-01T00:00:00Z',
+      });
+      store.upsertReportRecord({
+        report_id: 'wrr_101',
+        task_id: '20260427-101-generic-review',
+        assignment_id: 'assign-101',
+        agent_id: 'builder',
+        reported_at: '2026-01-01T00:00:00Z',
+        report_json: JSON.stringify({
+          report_id: 'wrr_101',
+          task_number: 101,
+          task_id: '20260427-101-generic-review',
+          agent_id: 'builder',
+          assignment_id: 'assign-101',
+          reported_at: '2026-01-01T00:00:00Z',
+          summary: 'Ready for review.',
+          changed_files: [],
+          verification: [],
+          known_residuals: [],
+          ready_for_review: true,
+          report_status: 'submitted',
+        }),
+      });
+      store.upsertLifecycle({
+        task_id: '20260427-100-generic',
+        task_number: 100,
+        status: 'opened',
+        governed_by: null,
+        closed_at: null,
+        closed_by: null,
+        closure_mode: null,
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      });
+      store.upsertTaskSpec({
+        task_id: '20260427-100-generic',
+        task_number: 100,
+        title: 'Task 100 Generic',
+        chapter_markdown: null,
+        goal_markdown: 'Generic task.',
+        context_markdown: null,
+        required_work_markdown: '1. Do task work.',
+        non_goals_markdown: null,
+        acceptance_criteria_json: JSON.stringify(['Do task work.']),
+        dependencies_json: JSON.stringify([]),
+        updated_at: '2026-01-01T00:00:00Z',
+      });
+    } finally {
+      store.db.close();
+    }
+
+    const result = await workNextCommand({ agent: 'kevin', cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      action_kind: 'task_work',
+      primary: {
+        task_number: 100,
+      },
+    });
+  });
+
+  it('skips review obligations with no referenced lifecycle task', async () => {
+    seedRosterEntry(tempDir, 'kevin', 'architect', 'idle', null);
+    writeFileSync(
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260427-100-generic.md'),
+      '---\ntask_id: 20260427-100-generic\nstatus: opened\n---\n\n# Task 100 Generic\n\n## Goal\nGeneric task.\n\n## Acceptance Criteria\n- [ ] Do task work.\n',
+    );
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      store.upsertDirectedObligation({
+        obligation_id: 'obl_review_unrouted_kevin_stale',
+        source_kind: 'task_report',
+        source_ref: 'wrr_unrouted',
+        source_agent_id: 'bob',
+        target_agent_id: 'kevin',
+        target_role: 'architect',
+        target_ref: 'kevin',
+        kind: 'review_request',
+        status: 'open',
+        task_id: null,
+        task_number: null,
+        evidence_json: JSON.stringify({ report_id: 'wrr_unrouted' }),
+        consumption_rule_json: JSON.stringify({ review_command: 'narada task review <task> --agent kevin --verdict accepted --report wrr_unrouted' }),
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+        consumed_at: null,
+        consumed_by: null,
+        consumption_ref: null,
+      });
+      store.upsertLifecycle({
+        task_id: '20260427-100-generic',
+        task_number: 100,
+        status: 'opened',
+        governed_by: null,
+        closed_at: null,
+        closed_by: null,
+        closure_mode: null,
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      });
+      store.upsertTaskSpec({
+        task_id: '20260427-100-generic',
+        task_number: 100,
+        title: 'Task 100 Generic',
+        chapter_markdown: null,
+        goal_markdown: 'Generic task.',
+        context_markdown: null,
+        required_work_markdown: '1. Do task work.',
+        non_goals_markdown: null,
+        acceptance_criteria_json: JSON.stringify(['Do task work.']),
+        dependencies_json: JSON.stringify([]),
+        updated_at: '2026-01-01T00:00:00Z',
+      });
+    } finally {
+      store.db.close();
+    }
+
+    const result = await workNextCommand({ agent: 'kevin', cwd: tempDir, format: 'json' });
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      action_kind: 'task_work',
+      primary: {
+        task_number: 100,
+      },
+    });
   });
 
   it('returns idle when no task or inbox work exists', async () => {
@@ -829,8 +1033,8 @@ describe('work-next unified next action', () => {
           title: 'Pending review',
           report_id: 'wrr_pending_review_builder',
           reported_by: 'builder',
-          suggested_owner: 'operator',
-          suggested_command: 'narada task review 77 --agent operator --verdict accepted',
+          suggested_owner: 'builder',
+          suggested_command: 'narada task review 77 --agent <builder-agent> --verdict accepted',
         }],
       },
     });
@@ -871,6 +1075,16 @@ describe('work-next unified next action', () => {
         status: 'warning',
         blockers: [],
         next_commands: ['narada coherence scan --module authority_inversion --submit'],
+        mutation_authority_preflight: {
+          mutation_family: 'task_lifecycle',
+          locus_state: 'authority_locus',
+          mutation_safety: 'allowed_with_command',
+        },
+        publication_authority_preflight: {
+          mutation_family: 'publication',
+          locus_state: 'authority_locus',
+          mutation_safety: 'allowed_with_command',
+        },
         warnings: [{
           finding_id: 'resume-tool-process-authority',
           surface: 'resume_work_next',

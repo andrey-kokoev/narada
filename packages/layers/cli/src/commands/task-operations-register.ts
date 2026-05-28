@@ -18,7 +18,22 @@ import { directCommandAction, runDirectCommand } from '../lib/command-wrapper.js
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 function outputFormat(format?: unknown): 'json' | 'human' | 'auto' {
-  return (format as 'json' | 'human' | 'auto') || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto';
+  return formatFromArgv(process.argv)
+    || (format as 'json' | 'human' | 'auto')
+    || process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto';
+}
+
+function formatFromArgv(argv: string[]): 'json' | 'human' | 'auto' | undefined {
+  for (let i = argv.length - 1; i >= 0; i -= 1) {
+    const arg = argv[i];
+    if (arg === '--format') return normalizeFormat(argv[i + 1]);
+    if (arg?.startsWith('--format=')) return normalizeFormat(arg.slice('--format='.length));
+  }
+  return undefined;
+}
+
+function normalizeFormat(value: string | undefined): 'json' | 'human' | 'auto' | undefined {
+  return value === 'json' || value === 'human' || value === 'auto' ? value : undefined;
 }
 
 export function registerTaskOperationsCommands(taskCmd: Command): void {
@@ -149,6 +164,26 @@ export function registerTaskOperationsCommands(taskCmd: Command): void {
     .action(async (taskNumber: string, opts: Record<string, unknown>) => {
       await runDirectCommand({
         command: 'task read',
+        emit: emitCommandResult,
+        format: opts.format,
+        invocation: () => taskReadCommand({
+          taskNumber,
+          format: resolveCommandFormat(opts.format, 'human'),
+          verbose: opts.verbose as boolean | undefined,
+          cwd: opts.cwd as string | undefined,
+        }),
+      });
+    });
+
+  taskCmd
+    .command('show <task-number>')
+    .description('Alias for task read - canonical task observation operator')
+    .option('--format <fmt>', 'Output format: json or human', 'human')
+    .option('--verbose', 'Show full sections (human mode only)', false)
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .action(async (taskNumber: string, opts: Record<string, unknown>) => {
+      await runDirectCommand({
+        command: 'task show',
         emit: emitCommandResult,
         format: opts.format,
         invocation: () => taskReadCommand({

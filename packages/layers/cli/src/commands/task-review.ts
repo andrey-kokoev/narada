@@ -18,6 +18,9 @@ import {
 } from '../lib/task-review-reply-obligation.js';
 import { operatorSurfaceTaskAuthorityRepair } from '../lib/operator-surface-task-authority.js';
 
+const GENERATED_ARTIFACT_AUTHORITY_HUMAN_NOTE =
+  'Generated review/report artifacts are not self-authorizing; authority requires lifecycle admission, reviewer identity, task evidence verdict, and closure status.';
+
 export interface TaskReviewOptions {
   taskNumber?: string;
   format?: 'json' | 'human' | 'auto';
@@ -191,6 +194,7 @@ export async function taskReviewCommand(
     } else {
       fmt.message(`Reviewed task ${String((result as { task_id?: string }).task_id)}: ${(result as { verdict: string }).verdict} → ${target}`, 'success');
     }
+    fmt.message(GENERATED_ARTIFACT_AUTHORITY_HUMAN_NOTE, 'info');
     emitReviewDiagnostics();
     emitReviewReplyObligation();
     if (capa?.recommended) {

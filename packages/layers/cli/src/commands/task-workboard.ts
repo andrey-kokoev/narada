@@ -78,6 +78,7 @@ export interface TaskWorkboard {
 
 const ACTIVE_STATUSES = new Set(['claimed', 'needs_continuation', 'in_review']);
 const DEFERRED_STATUSES = new Set(['deferred']);
+const TERMINAL_REVIEW_OBLIGATION_TASK_STATUSES = new Set(['closed', 'confirmed']);
 
 export async function taskWorkboardCommand(
   options: TaskWorkboardOptions,
@@ -160,6 +161,12 @@ function listMyReviewObligations(
   const role = store.getRosterEntry(agentId)?.role ?? null;
   return store.listDirectedObligationsForTarget(agentId, role, 'open')
     .filter((obligation) => obligation.kind === 'review_request')
+    .filter((obligation) => {
+      const lifecycle = obligation.task_number === null
+        ? (obligation.task_id === null ? undefined : store.getLifecycle(obligation.task_id))
+        : store.getLifecycleByNumber(obligation.task_number);
+      return !lifecycle || !TERMINAL_REVIEW_OBLIGATION_TASK_STATUSES.has(lifecycle.status);
+    })
     .slice(0, limit)
     .map((obligation) => {
       const spec = obligation.task_number === null ? undefined : store.getTaskSpecByNumber(obligation.task_number);

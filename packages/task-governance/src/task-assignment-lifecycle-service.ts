@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import {
   findTaskFile,
+  extractTaskNumberFromFileName,
   getActiveAssignment,
   continuationReasonToIntent,
   isValidTransition,
@@ -127,7 +128,13 @@ export async function claimTaskService(
     };
   }
 
-  const parsedTaskNumber = Number(taskNumber);
+  const parsedTaskNumber = await resolveTaskNumberForAssignment(cwd, taskNumber);
+  if (!Number.isInteger(parsedTaskNumber)) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: { status: 'error', error: `Cannot resolve task number: ${String(taskNumber)}` },
+    };
+  }
   const admission = await admitAssignmentIntent(cwd, {
     kind: 'claim',
     taskNumber: parsedTaskNumber,
@@ -222,6 +229,14 @@ export async function claimTaskService(
       warnings: admission.warnings.length > 0 ? admission.warnings : undefined,
     },
   };
+}
+
+async function resolveTaskNumberForAssignment(cwd: string, taskNumber: string | number): Promise<number> {
+  const numeric = Number(taskNumber);
+  if (Number.isInteger(numeric)) return numeric;
+  const taskFile = await findTaskFile(cwd, String(taskNumber));
+  if (!taskFile) return Number.NaN;
+  return extractTaskNumberFromFileName(`${taskFile.taskId}.md`) ?? Number.NaN;
 }
 
 export async function continueTaskService(

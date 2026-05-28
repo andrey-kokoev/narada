@@ -32,7 +32,7 @@ import {
   selectSqliteRuntime,
 } from "./sqlite-runtime.js";
 
-type Db = Database.Database;
+type Db = Database;
 
 export type TaskStatus =
   | "draft"

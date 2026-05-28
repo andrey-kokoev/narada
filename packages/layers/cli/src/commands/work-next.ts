@@ -26,6 +26,7 @@ import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 import { inboxWorkNextCommand } from './inbox.js';
 import { taskDispatchCommand } from './task-dispatch.js';
 import { taskPeekNextCommand, taskWorkNextCommand } from './task-next.js';
+import { inspectSiteMutationAuthorityPreflight } from './site-mutation-authority-preflight.js';
 import { agentAddressResolutionPublic, resolveAgentAddress } from '../lib/agent-address.js';
 import { classifyTaskHandoffActionability } from '../lib/task-actionability.js';
 import { operatorSurfaceTaskAuthorityRepair } from '../lib/operator-surface-task-authority.js';
@@ -67,6 +68,8 @@ interface DoctrineGuardStatus {
   warnings: unknown[];
   blockers: string[];
   next_commands: string[];
+  mutation_authority_preflight?: Record<string, unknown>;
+  publication_authority_preflight?: Record<string, unknown>;
 }
 
 interface PendingReviewWork {
@@ -187,7 +190,7 @@ function formatHuman(result: Record<string, unknown>): string {
 
 function canOwnReviewWork(role: string | undefined, agentId: string): boolean {
   const normalized = `${role ?? ''} ${agentId}`.toLowerCase();
-  return /\b(reviewer|operator|admin)\b/.test(normalized);
+  return /\b(builder|reviewer|admin)\b/.test(normalized);
 }
 
 function taskTitleFromStore(store: ReturnType<typeof openTaskLifecycleStore>, taskNumber: number): string | null {
@@ -299,10 +302,10 @@ async function listPendingReviewWork(cwd: string, limit = 5): Promise<PendingRev
         status,
         report_id: report?.report_id ?? null,
         reported_by: report?.agent_id ?? null,
-        suggested_owner: 'operator',
+        suggested_owner: 'builder',
         suggested_command: task.taskNumber === null
           ? null
-          : `narada task review ${task.taskNumber} --agent operator --verdict accepted`,
+          : `narada task review ${task.taskNumber} --agent <builder-agent> --verdict accepted`,
       });
       if (rows.length >= limit) break;
     }
@@ -316,12 +319,34 @@ async function buildDoctrineGuard(cwd: string): Promise<DoctrineGuardStatus> {
   const changedFiles = currentChangedFiles(cwd);
   const authorityWarnings = await evaluateAuthorityInversionForChangedFiles(cwd, changedFiles.join(','));
   const posture = inspectAuthorityClonePosture(cwd);
+  const mutationAuthorityPreflight = inspectSiteMutationAuthorityPreflight({
+    cwd,
+    mutationFamily: 'task_lifecycle',
+  });
+  const publicationAuthorityPreflight = inspectSiteMutationAuthorityPreflight({
+    cwd,
+    mutationFamily: 'publication',
+  });
   const blockers: string[] = [];
   const nextCommands: string[] = [];
 
   if (posture.configured && posture.status !== 'authority_clone') {
     blockers.push(`authority_locus:${posture.status}`);
     if (posture.next_safe_command) nextCommands.push(posture.next_safe_command);
+  }
+
+  if (mutationAuthorityPreflight.mutation_safety === 'refuse') {
+    blockers.push(`site_mutation_authority:${mutationAuthorityPreflight.locus_state}`);
+    nextCommands.push(mutationAuthorityPreflight.next_safe_command);
+  } else if (mutationAuthorityPreflight.mutation_safety === 'inspect_only') {
+    nextCommands.push(mutationAuthorityPreflight.next_safe_command);
+  }
+
+  if (publicationAuthorityPreflight.mutation_safety === 'refuse') {
+    blockers.push(`publication_authority:${publicationAuthorityPreflight.locus_state}`);
+    nextCommands.push(publicationAuthorityPreflight.next_safe_command);
+  } else if (publicationAuthorityPreflight.mutation_safety === 'inspect_only') {
+    nextCommands.push(publicationAuthorityPreflight.next_safe_command);
   }
 
   if (authorityWarnings.length > 0) {
@@ -338,6 +363,20 @@ async function buildDoctrineGuard(cwd: string): Promise<DoctrineGuardStatus> {
     warnings,
     blockers,
     next_commands: [...new Set(nextCommands)],
+    mutation_authority_preflight: {
+      mutation_family: mutationAuthorityPreflight.mutation_family,
+      locus_state: mutationAuthorityPreflight.locus_state,
+      mutation_safety: mutationAuthorityPreflight.mutation_safety,
+      next_safe_command: mutationAuthorityPreflight.next_safe_command,
+      reason: mutationAuthorityPreflight.reason,
+    },
+    publication_authority_preflight: {
+      mutation_family: publicationAuthorityPreflight.mutation_family,
+      locus_state: publicationAuthorityPreflight.locus_state,
+      mutation_safety: publicationAuthorityPreflight.mutation_safety,
+      next_safe_command: publicationAuthorityPreflight.next_safe_command,
+      reason: publicationAuthorityPreflight.reason,
+    },
   };
 }
 
@@ -531,7 +570,8 @@ async function findCurrentTaskWork(cwd: string, agentId: string): Promise<Record
 function findDirectedObligationWork(cwd: string, agentId: string, role?: string | null): Record<string, unknown> | null {
   const store = openTaskLifecycleStore(cwd);
   try {
-    const obligation = store.listDirectedObligationsForTarget(agentId, role ?? null, 'open')[0] ?? null;
+    const obligation = store.listDirectedObligationsForTarget(agentId, role ?? null, 'open')
+      .find((candidate) => isSelectableDirectedObligation(store, candidate)) ?? null;
     if (!obligation) return null;
     let evidence: Record<string, unknown> = {};
     let consumptionRule: Record<string, unknown> = {};
@@ -575,6 +615,20 @@ function findDirectedObligationWork(cwd: string, agentId: string, role?: string 
   } finally {
     store.db.close();
   }
+}
+
+function isSelectableDirectedObligation(
+  store: ReturnType<typeof openTaskLifecycleStore>,
+  obligation: { kind: string; task_id: string | null; task_number: number | null },
+): boolean {
+  if (obligation.kind !== 'review_request') return true;
+  const lifecycle = obligation.task_id
+    ? store.getLifecycle(obligation.task_id)
+    : obligation.task_number !== null
+      ? store.getLifecycleByNumber(obligation.task_number)
+      : null;
+  if (!lifecycle) return false;
+  return lifecycle.status === 'in_review';
 }
 
 export async function workNextCommand(options: WorkNextOptions): Promise<CommandEnvelope> {
