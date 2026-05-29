@@ -1,0 +1,13 @@
+{
+  "name": "@narada2/agent-start-renderer",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/agent-start-renderer.mjs"
+  },
+  "scripts": {
+    "test": "node --test src/agent-start-renderer.test.mjs",
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/agent-start-renderer.mjs"
+  }
+}
