@@ -2567,6 +2567,16 @@ export interface SitesReconcileAgentCliWrapperOptions extends SitesOptions {
   apply?: boolean;
 }
 
+export interface SitesReconcileToolSurfaceManifestOptions extends SitesOptions {
+  root?: string;
+  apply?: boolean;
+}
+
+export interface SitesAuditToolSurfaceDuplicatesOptions extends SitesOptions {
+  root?: string | string[];
+  limit?: number;
+}
+
 const AGENT_CLI_WRAPPER_RELATIVE_PATH = join('tools', 'operator-surface-carriers', 'Start-AgentCliSession.ps1');
 const AGENT_CLI_WRAPPER_TEMPLATE_HASH_PLACEHOLDER = '__NARADA_TEMPLATE_HASH__';
 const AGENT_CLI_WRAPPER_TEMPLATE_HASH_LINE = /^# narada_template_hash: .*$/m;
@@ -2734,6 +2744,197 @@ function isExecutableToolPath(pathValue: string): boolean {
   return /\.(mjs|js|cjs|ts|tsx|ps1|cmd|bat|py)$/i.test(pathValue);
 }
 
+async function desiredToolSurfaceEntry(siteRoot: string, filePath: string): Promise<Record<string, unknown>> {
+  const relativePath = slashRelative(siteRoot, filePath);
+  const text = await readFile(filePath, 'utf8');
+  const hash = sha256Text(text);
+  const allowedRootRefs = ['NARADA_USER_SITE_ROOT', 'NARADA_SITE_ROOT', 'NARADA_WORKSPACE_ROOT', 'NARADA_PC_SITE_ROOT', 'NARADA_PROPER_ROOT'];
+  if (text.includes('narada_template_id: narada.agent_cli.windows_wrapper')) {
+    const version = /^# narada_template_version: (.+)$/m.exec(text)?.[1]?.trim() ?? '';
+    const templateHash = /^# narada_template_hash: (.+)$/m.exec(text)?.[1]?.trim() ?? '';
+    return {
+      path: relativePath,
+      class: 'generated_wrapper',
+      owner: 'narada-proper',
+      surface: 'agent-cli',
+      package: '@narada2/agent-cli',
+      version,
+      hash: templateHash,
+      allowed_root_refs: allowedRootRefs,
+    };
+  }
+  if (text.includes('legacy_session_launcher_retired')) {
+    return {
+      path: relativePath,
+      class: 'retired_refusal',
+      owner: 'site',
+      surface: 'legacy-launcher',
+      package: '',
+      version: '',
+      hash,
+      allowed_root_refs: allowedRootRefs,
+    };
+  }
+  if (/(\.test\.(mjs|js|ts|tsx)$|[\\/](tests?|__tests__)[\\/])/i.test(relativePath)) {
+    return {
+      path: relativePath,
+      class: 'test_surface',
+      owner: 'site',
+      surface: 'test',
+      package: '',
+      version: '',
+      hash,
+      allowed_root_refs: allowedRootRefs,
+    };
+  }
+  const surface = relativePath.startsWith('tools/agent-start/')
+    ? 'agent-start'
+    : relativePath.startsWith('tools/task-lifecycle/')
+      ? 'task-lifecycle'
+      : relativePath.startsWith('tools/typed-mcp/')
+        ? 'typed-mcp'
+        : relativePath.startsWith('tools/operator-surface-carriers/')
+          ? 'operator-surface'
+          : relativePath.startsWith('tools/window-surface-overlay/')
+            ? 'window-surface-overlay'
+            : 'site-tools';
+  return {
+    path: relativePath,
+    class: 'site_owned',
+    owner: 'site',
+    surface,
+    package: '',
+    version: '',
+    hash,
+    reason: 'transitional site-owned executable pending package cutover review',
+    review_at: '2026-06-30',
+    allowed_root_refs: allowedRootRefs,
+  };
+}
+
+async function buildToolSurfaceManifest(siteRoot: string): Promise<Record<string, unknown>> {
+  const toolRoot = join(siteRoot, 'tools');
+  const files = (await listFilesRecursive(toolRoot)).filter(isExecutableToolPath);
+  const entries = await Promise.all(files.map((file) => desiredToolSurfaceEntry(siteRoot, file)));
+  entries.sort((a, b) => String(a.path ?? '').localeCompare(String(b.path ?? '')));
+  return {
+    schema: 'narada.site_tool_surface.manifest.v1',
+    site_root: siteRoot,
+    tool_root: toolRoot,
+    generated_at: new Date().toISOString(),
+    entries,
+  };
+}
+
+async function readSiteToolSurfaceManifest(siteRoot: string): Promise<{
+  manifestPath: string;
+  manifest: { entries?: Array<Record<string, unknown>> } | null;
+  error?: string;
+}> {
+  const manifestPath = join(siteRoot, 'site-tool-surface.manifest.json');
+  if (!existsSync(manifestPath)) {
+    return { manifestPath, manifest: null, error: 'manifest_missing' };
+  }
+  try {
+    return {
+      manifestPath,
+      manifest: JSON.parse(await readFile(manifestPath, 'utf8')) as { entries?: Array<Record<string, unknown>> },
+    };
+  } catch (err) {
+    return {
+      manifestPath,
+      manifest: null,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+function normalizeRootsOption(root: string | string[] | undefined): string[] {
+  const raw = Array.isArray(root) ? root : root ? [root] : ['.'];
+  return raw
+    .flatMap((value) => value.split(';'))
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function chooseDuplicateCutoverCandidates(groups: Array<{
+  hash: string;
+  surface: string | null;
+  count: number;
+  sites: string[];
+  entries: Array<Record<string, unknown>>;
+}>): Array<{
+  surface: string | null;
+  duplicate_group_count: number;
+  duplicate_entry_count: number;
+  representative_paths: string[];
+}> {
+  const bySurface = new Map<string, {
+    surface: string | null;
+    duplicate_group_count: number;
+    duplicate_entry_count: number;
+    representative_paths: Set<string>;
+  }>();
+  for (const group of groups) {
+    const key = group.surface ?? 'site-tools';
+    const existing = bySurface.get(key) ?? {
+      surface: group.surface,
+      duplicate_group_count: 0,
+      duplicate_entry_count: 0,
+      representative_paths: new Set<string>(),
+    };
+    existing.duplicate_group_count += 1;
+    existing.duplicate_entry_count += group.count;
+    for (const entry of group.entries.slice(0, 3)) {
+      existing.representative_paths.add(String(entry.path ?? ''));
+    }
+    bySurface.set(key, existing);
+  }
+  return [...bySurface.values()]
+    .sort((a, b) => b.duplicate_entry_count - a.duplicate_entry_count || b.duplicate_group_count - a.duplicate_group_count)
+    .map((candidate) => ({
+      surface: candidate.surface,
+      duplicate_group_count: candidate.duplicate_group_count,
+      duplicate_entry_count: candidate.duplicate_entry_count,
+      representative_paths: [...candidate.representative_paths].filter(Boolean).slice(0, 5),
+    }));
+}
+
+function chooseSiteOwnedBurdenCandidates(entries: Array<Record<string, unknown> & { site_root: string }>): Array<{
+  surface: string | null;
+  site_count: number;
+  entry_count: number;
+  representative_paths: string[];
+}> {
+  const bySurface = new Map<string, {
+    surface: string | null;
+    sites: Set<string>;
+    entry_count: number;
+    representative_paths: Set<string>;
+  }>();
+  for (const entry of entries) {
+    const key = String(entry.surface ?? '') || 'site-tools';
+    const existing = bySurface.get(key) ?? {
+      surface: String(entry.surface ?? '') || null,
+      sites: new Set<string>(),
+      entry_count: 0,
+      representative_paths: new Set<string>(),
+    };
+    existing.sites.add(entry.site_root);
+    existing.entry_count += 1;
+    existing.representative_paths.add(String(entry.path ?? ''));
+    bySurface.set(key, existing);
+  }
+  return [...bySurface.values()]
+    .sort((a, b) => b.entry_count - a.entry_count || b.sites.size - a.sites.size)
+    .map((candidate) => ({
+      surface: candidate.surface,
+      site_count: candidate.sites.size,
+      entry_count: candidate.entry_count,
+      representative_paths: [...candidate.representative_paths].filter(Boolean).slice(0, 5),
+    }));
+}
+
 async function addSiteToolSurfaceChecks(checks: SiteDoctorCheck[], siteRoot: string): Promise<void> {
   const manifestPath = join(siteRoot, 'site-tool-surface.manifest.json');
   const toolsRoot = join(siteRoot, 'tools');
@@ -2775,7 +2976,7 @@ async function addSiteToolSurfaceChecks(checks: SiteDoctorCheck[], siteRoot: str
       : `${missing.length} executable tool surface(s) are undeclared: ${missing.slice(0, 5).join(', ')}${missing.length > 5 ? ', ...' : ''}`,
   );
 
-  const validClasses = new Set(['canonical_package', 'generated_wrapper', 'site_owned', 'retired_refusal', 'runtime_state']);
+  const validClasses = new Set(['canonical_package', 'generated_wrapper', 'site_owned', 'retired_refusal', 'runtime_state', 'test_surface']);
   const invalidClasses = entries.filter((entry) => !validClasses.has(String(entry.class ?? '')));
   addCheck(
     checks,
@@ -2902,6 +3103,144 @@ export async function sitesReconcileAgentCliWrapperCommand(
   ];
   return {
     exitCode: after.current || !options.apply ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
+    result: formattedResult(result, lines, (options.format ?? 'auto') as CliFormat),
+  };
+}
+
+export async function sitesReconcileToolSurfaceManifestCommand(
+  options: SitesReconcileToolSurfaceManifestOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const inputRoot = resolve(options.root ?? '.');
+  const siteRoot = containedSiteRootFromInput(inputRoot);
+  const manifestPath = join(siteRoot, 'site-tool-surface.manifest.json');
+  const existingText = existsSync(manifestPath) ? await readFile(manifestPath, 'utf8') : '';
+  const manifest = await buildToolSurfaceManifest(siteRoot);
+  let nextText = `${JSON.stringify(manifest, null, 2)}\n`;
+  if (existingText) {
+    try {
+      const existing = JSON.parse(existingText) as Record<string, unknown>;
+      const existingComparable = { ...existing, generated_at: '<ignored>' };
+      const nextComparable = { ...manifest, generated_at: '<ignored>' };
+      if (JSON.stringify(existingComparable) === JSON.stringify(nextComparable)) {
+        nextText = existingText;
+      }
+    } catch {
+      // Invalid existing JSON should be replaced by the generated manifest when --apply is present.
+    }
+  }
+  const mutationNeeded = existingText !== nextText;
+  if (options.apply && mutationNeeded) {
+    await writeFile(manifestPath, nextText, 'utf8');
+  }
+  const result = {
+    schema: 'narada.site_tool_surface_manifest_reconcile.v1',
+    status: mutationNeeded ? options.apply ? 'repaired' : 'stale' : 'current',
+    mutation_attempted: options.apply === true,
+    mutation_performed: options.apply === true && mutationNeeded,
+    site_root: siteRoot,
+    manifest_path: manifestPath,
+    entry_count: Array.isArray(manifest.entries) ? manifest.entries.length : 0,
+    site_owned_count: Array.isArray(manifest.entries) ? manifest.entries.filter((entry) => entry.class === 'site_owned').length : 0,
+    test_surface_count: Array.isArray(manifest.entries) ? manifest.entries.filter((entry) => entry.class === 'test_surface').length : 0,
+  };
+  const lines = [
+    `tool-surface manifest: ${result.status}`,
+    `site_root: ${siteRoot}`,
+    `manifest_path: ${manifestPath}`,
+    `entries: ${result.entry_count}`,
+    `site_owned: ${result.site_owned_count}`,
+    `test_surface: ${result.test_surface_count}`,
+    `mutation_performed: ${String(result.mutation_performed)}`,
+  ];
+  return {
+    exitCode: ExitCode.SUCCESS,
+    result: formattedResult(result, lines, (options.format ?? 'auto') as CliFormat),
+  };
+}
+
+export async function sitesAuditToolSurfaceDuplicatesCommand(
+  options: SitesAuditToolSurfaceDuplicatesOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const siteRoots = normalizeRootsOption(options.root)
+    .map((root) => containedSiteRootFromInput(root))
+    .filter((root, index, roots) => roots.findIndex((candidate) => normalizeNativePath(candidate) === normalizeNativePath(root)) === index);
+  const manifests = await Promise.all(siteRoots.map(async (siteRoot) => ({
+    siteRoot,
+    ...await readSiteToolSurfaceManifest(siteRoot),
+  })));
+  const entriesByHash = new Map<string, Array<Record<string, unknown> & { site_root: string; manifest_path: string }>>();
+  const siteOwnedEntries: Array<Record<string, unknown> & { site_root: string; manifest_path: string }> = [];
+  for (const record of manifests) {
+    for (const entry of record.manifest?.entries ?? []) {
+      if (entry.class !== 'site_owned') continue;
+      siteOwnedEntries.push({ ...entry, site_root: record.siteRoot, manifest_path: record.manifestPath });
+      const hash = String(entry.hash ?? '').trim();
+      if (!hash) continue;
+      const enriched = { ...entry, site_root: record.siteRoot, manifest_path: record.manifestPath };
+      entriesByHash.set(hash, [...(entriesByHash.get(hash) ?? []), enriched]);
+    }
+  }
+  const duplicateGroups = [...entriesByHash.entries()]
+    .map(([hash, entries]) => {
+      const sites = [...new Set(entries.map((entry) => normalizeNativePath(entry.site_root)))];
+      return {
+        hash,
+        surface: String(entries[0]?.surface ?? '') || null,
+        count: entries.length,
+        site_count: sites.length,
+        sites: [...new Set(entries.map((entry) => entry.site_root))],
+        entries: entries.map((entry) => ({
+          site_root: entry.site_root,
+          path: entry.path,
+          surface: entry.surface,
+          owner: entry.owner,
+          reason: entry.reason,
+          review_at: entry.review_at,
+        })),
+      };
+    })
+    .filter((group) => group.site_count > 1)
+    .sort((a, b) => b.count - a.count || String(a.surface ?? '').localeCompare(String(b.surface ?? '')));
+  const limit = Number.isFinite(options.limit) ? Number(options.limit) : 20;
+  const candidates = chooseDuplicateCutoverCandidates(duplicateGroups);
+  const manifestErrors = manifests.filter((record) => record.error).map((record) => ({
+    site_root: record.siteRoot,
+    manifest_path: record.manifestPath,
+    error: record.error,
+  }));
+  const result = {
+    schema: 'narada.site_tool_surface_duplicate_audit.v1',
+    status: manifestErrors.length > 0 ? 'manifest_errors' : duplicateGroups.length > 0 ? 'duplicates_found' : 'passed',
+    mutation_attempted: false,
+    site_roots: siteRoots,
+    site_count: siteRoots.length,
+    duplicate_group_count: duplicateGroups.length,
+    duplicate_entry_count: duplicateGroups.reduce((sum, group) => sum + group.count, 0),
+    site_owned_entry_count: siteOwnedEntries.length,
+    manifest_errors: manifestErrors,
+    cutover_candidates: candidates.slice(0, limit),
+    site_owned_burden_candidates: chooseSiteOwnedBurdenCandidates(siteOwnedEntries).slice(0, limit),
+    duplicate_groups: duplicateGroups.slice(0, limit),
+    duplicate_groups_truncated: duplicateGroups.length > limit,
+  };
+  const lines = [
+    `tool-surface duplicate audit: ${result.status}`,
+    `sites: ${siteRoots.length}`,
+    `duplicate_groups: ${result.duplicate_group_count}`,
+    `duplicate_entries: ${result.duplicate_entry_count}`,
+    `site_owned_entries: ${result.site_owned_entry_count}`,
+    ...(
+      result.cutover_candidates.length > 0
+        ? result.cutover_candidates.slice(0, 5).map((candidate) =>
+          `duplicate candidate: ${candidate.surface ?? 'site-tools'} (${candidate.duplicate_entry_count} entries, ${candidate.duplicate_group_count} groups)`)
+        : result.site_owned_burden_candidates.slice(0, 5).map((candidate) =>
+          `burden candidate: ${candidate.surface ?? 'site-tools'} (${candidate.entry_count} entries, ${candidate.site_count} sites)`)
+    ),
+  ];
+  return {
+    exitCode: ExitCode.SUCCESS,
     result: formattedResult(result, lines, (options.format ?? 'auto') as CliFormat),
   };
 }

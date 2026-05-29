@@ -24,6 +24,8 @@ import {
   sitesRelationRecordCommand,
   sitesRelationValidateCommand,
   sitesReconcileAgentCliWrapperCommand,
+  sitesReconcileToolSurfaceManifestCommand,
+  sitesAuditToolSurfaceDuplicatesCommand,
 } from './sites.js';
 import { siteImmuneScanCommand } from './site-immune-scan.js';
 import { siteMutationAuthorityPreflightCommand } from './site-mutation-authority-preflight.js';
@@ -174,6 +176,44 @@ export function registerSitesCommands(program: Command): void {
       const result = await sitesReconcileAgentCliWrapperCommand({
         root: opts.root as string | undefined,
         apply: opts.apply as boolean | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitFormatterBackedCommandResult(result, { format: opts.format });
+    });
+
+  reconcileCmd
+    .command('tool-surface-manifest')
+    .description('Reconcile site-tool-surface.manifest.json from the current Site-local tools tree')
+    .option('--root <path>', 'Site root or containing workspace root', '.')
+    .option('--apply', 'Write the reconciled manifest', false)
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (opts: Record<string, unknown>) => {
+      const result = await sitesReconcileToolSurfaceManifestCommand({
+        root: opts.root as string | undefined,
+        apply: opts.apply as boolean | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitFormatterBackedCommandResult(result, { format: opts.format });
+    });
+
+  const auditCmd = sitesCmd
+    .command('audit')
+    .description('Read-only coherence audits over Site declarations');
+
+  auditCmd
+    .command('tool-surface-duplicates')
+    .description('Find duplicated site_owned executable hashes across Sites')
+    .option('--root <path...>', 'Site root or containing workspace root; repeat or pass several values')
+    .option('--limit <n>', 'Maximum duplicate groups/candidates to show', '20')
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (opts: Record<string, unknown>) => {
+      const result = await sitesAuditToolSurfaceDuplicatesCommand({
+        root: opts.root as string[] | undefined,
+        limit: opts.limit ? Number(opts.limit) : undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
         verbose: opts.verbose as boolean | undefined,
       }, silentCommandContext({ verbose: !!opts.verbose }));
