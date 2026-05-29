@@ -194,7 +194,7 @@ assert.deepEqual(parseArgs(['--control-jsonl', '.narada/control.jsonl']), { cont
 assert.equal(parseColorEnv('off', true), false);
 assert.equal(createTerminalStyle({ enabled: false }).prompt('narada> '), 'narada> ');
 assert.equal(createTerminalStyle({ enabled: true }).prompt('narada> ').includes('\x1b['), true);
-assert.equal(formatToolResultContent('{"status":"success","schema":"narada.test.v1","directive_count":2,"extra":true}'), 'success · narada.test.v1 · directives=2\nkeys:\n  status\n  schema\n  directive_count\n  extra');
+assert.equal(formatToolResultContent('{"status":"success","schema":"narada.test.v1","directive_count":2,"extra":true}'), 'success · narada.test.v1 · directives=2\nkeys: status, schema, directive_count, extra');
 assert.equal(formatKeyValueRows({ A: 1, Longer: 'two' }), 'A       1\nLonger  two');
 assert.equal(formatDuration(1250), '1s');
 assert.equal(formatDuration(65000), '1m 5s');

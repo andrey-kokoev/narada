@@ -2476,9 +2476,13 @@ function formatToolResultContent(content) {
         : typeof parsed.directiveCount === 'number'
           ? `directives=${parsed.directiveCount}`
           : null;
+      const shownKeys = keys.slice(0, 8);
+      const keySummary = shownKeys.length
+        ? `keys: ${shownKeys.join(', ')}${keys.length > shownKeys.length ? ', ...' : ''}`
+        : null;
       return [
         [status, schema, count].filter(Boolean).join(' · '),
-        ['keys:', ...keys.slice(0, 8).map((key) => `  ${key}`), ...(keys.length > 8 ? ['  ...'] : [])].join('\n'),
+        keySummary,
       ].filter(Boolean).join('\n');
     }
     if (Array.isArray(parsed)) return `array(${parsed.length})`;
