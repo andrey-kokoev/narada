@@ -1,0 +1,21 @@
+{
+  "name": "@narada2/agent-cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "narada-agent-cli": "./bin/narada-agent-cli.mjs"
+  },
+  "exports": {
+    ".": "./src/agent-cli.mjs",
+    "./provider-resolution": "./src/provider-resolution.mjs"
+  },
+  "scripts": {
+    "test": "node --test src/agent-cli.test.mjs",
+    "typecheck": "tsc --noEmit --allowJs --checkJs false bin/narada-agent-cli.mjs src/agent-cli.mjs src/provider-resolution.mjs"
+  },
+  "dependencies": {
+    "@narada2/carrier-action-admission": "workspace:*",
+    "@narada2/mcp-fabric": "workspace:*"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@narada2/mcp-fabric",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/mcp-fabric.mjs"
+  },
+  "scripts": {
+    "test": "node --test src/mcp-fabric.test.mjs",
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/mcp-fabric.mjs"
+  },
+  "dependencies": {
+    "@narada2/carrier-action-admission": "workspace:*"
+  }
+}

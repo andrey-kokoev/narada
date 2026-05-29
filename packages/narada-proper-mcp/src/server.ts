@@ -355,9 +355,10 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
     inputSchema: objectSchema({
       cwd: stringSchema('Working directory; defaults to current process cwd.'),
       agent: { type: 'string', description: 'Roster agent id.' },
+      agent_id: { type: 'string', description: 'Alias for agent; accepted for compatibility with Narada agent identity vocabulary.' },
       claim: booleanSchema('Claim/pull work and return an execution packet. Defaults to false for read-only discovery.'),
       target: targetSchema(),
-    }, ['agent']),
+    }),
   },
   {
     name: 'narada_task_read',
@@ -802,19 +803,21 @@ async function callTool(params: unknown, siteContext: McpSiteContext, options: M
         by: stringField(args, 'by'),
         format: 'json',
       }), traversal);
-    case 'narada_task_work_next':
+    case 'narada_task_work_next': {
+      const taskWorkNextAgent = requiredStringAlias(args, 'agent', 'agent_id');
       if (booleanField(args, 'claim') === true) {
         return commandToolResult(await taskWorkNextCommand({
           cwd: scopedCwd,
-          agent: requiredString(args, 'agent'),
+          agent: taskWorkNextAgent,
           format: 'json',
         }), traversal);
       }
       return commandToolResult(await taskPeekNextCommand({
         cwd: scopedCwd,
-        agent: requiredString(args, 'agent'),
+        agent: taskWorkNextAgent,
         format: 'json',
       }), traversal);
+    }
     case 'narada_task_read':
       return commandToolResult(await taskReadCommand({
         cwd: scopedCwd,
@@ -2806,6 +2809,14 @@ function stringField(record: Record<string, unknown>, key: string): string | und
 function requiredString(record: Record<string, unknown>, key: string): string {
   const value = stringField(record, key);
   if (!value) throw new Error(`Missing required tool argument: ${key}`);
+  return value;
+}
+
+function requiredStringAlias(record: Record<string, unknown>, canonicalKey: string, aliasKey: string): string {
+  const canonicalValue = stringField(record, canonicalKey);
+  const aliasValue = stringField(record, aliasKey);
+  const value = canonicalValue ?? aliasValue;
+  if (!value) throw new Error(`Missing required tool argument: ${canonicalKey}`);
   return value;
 }
 

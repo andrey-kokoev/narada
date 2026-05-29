@@ -18,6 +18,10 @@ The adjacent coherence gate checks declared startup contract presence from Site-
 node tools\mcp-fabric\adjacent-coherence-gate.mjs --pretty
 ```
 
+`@narada2/mcp-fabric` owns the shared fabric loading/projection semantics used by
+Narada carriers. `tools\mcp-fabric\adjacent-coherence-gate.mjs` is the
+operator-facing gate command for this startup contract.
+
 Generated conservative registries may include these read-only tools for `agent-context` surfaces because startup hydration is part of the carrier contract, not a task or mailbox mutation.
 
 This is declaration evidence only. Runtime proof still requires an MCP handshake/tool-list or launch smoke against the carrier session.

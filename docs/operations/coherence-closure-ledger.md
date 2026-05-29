@@ -14,6 +14,10 @@ This ledger tracks adjacent coherence areas that are not task-lifecycle work:
 
 ## Gates
 
+`@narada2/mcp-fabric` owns MCP fabric loading/projection semantics for carriers.
+The `tools\mcp-fabric\*.mjs` commands in this ledger are operator-facing audit
+and registry-maintenance entrypoints over that fabric posture.
+
 Base carrier and Site fabric gate:
 
 ```powershell

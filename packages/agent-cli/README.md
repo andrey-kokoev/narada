@@ -2,6 +2,28 @@
 
 Narada-owned MCP-native agent client and first-slice Narada Agent Runtime Server implementation.
 
+## Package Authority
+
+`@narada2/agent-cli` is the canonical Narada agent-cli implementation.
+
+Canonical binary:
+
+```text
+D:\code\narada\packages\agent-cli\bin\narada-agent-cli.mjs
+```
+
+Canonical source and provider metadata:
+
+```text
+D:\code\narada\packages\agent-cli\src\
+D:\code\narada\packages\agent-cli\src\intelligence-providers.json
+```
+
+Registered Site launchers and Windows wrappers must call the packaged binary.
+They must not recreate `tools\agent-cli`, fork provider metadata, or maintain
+Site-local carrier behavior. Site-local launch code is a shim for identity,
+session, Site root, MCP fabric path, and operator affordances only.
+
 ## Modes
 
 - Interactive CLI: human terminal prompt for one Agent identity.
@@ -36,7 +58,7 @@ Narada proper admits both runtime names:
 - `agent-cli` for the interactive CLI carrier.
 - `nars` for the JSONL stdio server carrier.
 
-Both use `tools/agent-cli/agent-cli.mjs`; `nars` adds `--server`.
+Both use the packaged `narada-agent-cli` bin from `packages/agent-cli`; `nars` adds `--server`. The implementation lives in `packages/agent-cli/src/agent-cli.mjs`.
 
 Interactive `agent-cli` also admits a structured sideband control file when
 launched with `--control-jsonl <path>`. System directive delivery must append
@@ -69,7 +91,7 @@ content.
 Model and thinking defaults can be supplied at launch:
 
 ```powershell
-node tools/agent-cli/agent-cli.mjs --identity narada.architect --model gpt-5.5 --thinking high
+node packages/agent-cli/bin/narada-agent-cli.mjs --identity narada.architect --model gpt-5.5 --thinking high
 ```
 
 Environment defaults:
@@ -83,7 +105,7 @@ Environment defaults:
 ## NARS Server Mode
 
 ```powershell
-node tools/agent-cli/agent-cli.mjs --server --identity narada.architect --session carrier_session_example
+node packages/agent-cli/bin/narada-agent-cli.mjs --server --identity narada.architect --session carrier_session_example
 ```
 
 Requests are one JSON object per stdin line. Events are one JSON object per stdout line. In `--server` mode stdout is protocol-only; diagnostics go to stderr.
@@ -105,7 +127,7 @@ Session evidence is stored under:
 
 ## Provider Posture
 
-Provider metadata lives in `tools/agent-cli/intelligence-providers.json`.
+Provider metadata lives in `packages/agent-cli/src/intelligence-providers.json`.
 
 Supported first-slice providers:
 
@@ -127,3 +149,21 @@ The client discovers target Site MCP config from:
 NARS does not inject User Site MCP servers. Model-selected tool calls are requests routed through the declared MCP fabric, not authority by themselves.
 
 In `--server` mode, only tools classified read-only execute automatically. Other MCP tool calls return `action_admission_required` / `admission_required` events and are not executed by the NARS process. A separate admission layer must convert a requested effect into an authorized MCP action.
+
+## Launch Invariants
+
+The standard Windows interactive wrapper is `Start-AgentCliSession.ps1`. It may
+resolve launch context and call the packaged binary, but it must not own provider
+resolution or carrier behavior.
+
+Workspace dry-run is non-executing. `Start-NaradaWorkspace.ps1 -DryRun` must not
+open Windows Terminal, start carrier sessions, or wait for operator input; its
+result must report `windows_terminal_invoked: false`.
+
+Verification for carrier launch changes:
+
+```powershell
+pnpm --filter @narada2/agent-cli test
+pnpm --filter @narada2/agent-cli typecheck
+pwsh -NoProfile -File C:\Users\Andrey\Narada\tools\agent-start\Test-AgentCliPackageCutover.ps1
+```

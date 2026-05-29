@@ -451,7 +451,7 @@ function narsSessionDir(siteRoot, carrierSessionId) {
 }
 
 function narsEntrypoint(siteRoot) {
-  return join(siteRoot, 'tools', 'agent-cli', 'agent-cli.mjs');
+  return join(siteRoot, 'packages', 'agent-cli', 'bin', 'narada-agent-cli.mjs');
 }
 
 function narsArgs({ siteRoot, startupEvidence }) {

@@ -1019,6 +1019,35 @@ describe('narada proper MCP surface', () => {
     rmSync(workspace, { recursive: true, force: true });
   });
 
+  it('accepts agent_id as an alias for narada_task_work_next agent', async () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'narada-mcp-task-work-next-alias-'));
+    const workspaceBin = join(workspace, 'node_modules', '.bin');
+    mkdirSync(workspaceBin, { recursive: true });
+    writeFileSync(join(workspaceBin, 'narada.cmd'), '@echo off\r\necho {"status":"ok","agent_id":"narada.architect","source":"canonical_task_work_next"}\r\n');
+    const input = new PassThrough();
+    const output = new CaptureStream();
+    const running = runNaradaProperMcp({
+      stdin: input,
+      stdout: output,
+      siteRoot: workspace,
+      siteId: 'narada-proper',
+    });
+
+    input.write('{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"narada_task_work_next","arguments":{"agent_id":"narada.architect","claim":false}}}\n');
+    await output.waitForLineCount(1);
+    input.end();
+    await running;
+
+    const payload = JSON.parse(JSON.parse(output.lines[0]).result.content[0].text);
+    expect(payload).toMatchObject({
+      status: 'ok',
+      agent_id: 'narada.architect',
+      source: 'canonical_task_work_next',
+    });
+    expect(payload.traversal.mutation_attempted).toBe(false);
+    rmSync(workspace, { recursive: true, force: true });
+  });
+
   it('delegates Site Registry relation transition planning to the canonical CLI without live mutation', async () => {
     const workspace = mkdtempSync(join(tmpdir(), 'narada-mcp-site-registry-plan-'));
     const workspaceBin = join(workspace, 'node_modules', '.bin');

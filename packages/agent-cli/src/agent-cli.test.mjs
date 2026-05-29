@@ -27,6 +27,7 @@ import {
   formatHeaderRows,
   formatKeyValueRows,
   formatProgressStatus,
+  formatTimestamp,
   formatToolResultContent,
   handleSlashCommand,
   inputRecordDisplayLabel,
@@ -196,6 +197,7 @@ assert.equal(formatToolResultContent('{"status":"success","schema":"narada.test.
 assert.equal(formatKeyValueRows({ A: 1, Longer: 'two' }), 'A       1\nLonger  two');
 assert.equal(formatDuration(1250), '1.3s');
 assert.equal(formatDuration(65000), '1m 5s');
+assert.equal(formatTimestamp(new Date('2026-05-28T16:37:21Z')), '2026-05-28Z16:37');
 assert.equal(formatProgressStatus({ spinner: '-', phase: 'thinking', totalMs: 6000, phaseMs: 6000 }), '- thinking 6.0s · Esc to interrupt');
 assert.equal(formatProgressStatus({ spinner: '/', phase: 'calling read_file', totalMs: 7000, phaseMs: 1200 }), '/ calling read_file 1.2s · total 7.0s · Esc to interrupt');
 assert.equal(formatHeaderRow('Identity', 'narada.architect', {}).includes('Identity'), true);
@@ -214,8 +216,12 @@ assert.equal(renderMarkdownForTerminal('  ```powershell\n    narada\n  ```').inc
 assert.equal(renderMarkdownForTerminal('  ```powershell\n    narada\n  ```').includes('narada'), true);
 assert.equal(stripAnsiForTest(toolDirectionLabel('invoke')), 'narada.architect -> agent-cli');
 assert.equal(stripAnsiForTest(toolDirectionLabel('result')), 'agent-cli -> narada.architect');
-assert.equal(rewriteSubmittedPromptForTest('operator -> narada.architect', 'short', 120), '\x1b[1A\r\x1b[Koperator -> narada.architect: short\n');
-assert.equal(rewriteSubmittedPromptForTest('operator -> narada.architect', 'x'.repeat(200), 80), null);
+const fixedTimestamp = new Date('2026-05-28T16:37:21Z');
+assert.equal(stripAnsiForTest(rewriteSubmittedPromptForTest('operator -> narada.architect', 'short', 120, fixedTimestamp)).replace(/\r/g, ''), 'operator -> narada.architect: short\n  2026-05-28Z16:37\n');
+assert.equal(
+  stripAnsiForTest(rewriteSubmittedPromptForTest('operator -> narada.architect', 'review what has been going on in commits since checkpoint', 64, fixedTimestamp)).replace(/\r/g, ''),
+  'operator -> narada.architect: review what has been going on in\n  commits since checkpoint\n  2026-05-28Z16:37\n'
+);
 rmSync(tempDir, { recursive: true, force: true });
 
 const expectedAdapters = {

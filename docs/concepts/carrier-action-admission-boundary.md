@@ -162,7 +162,7 @@ NARS remains responsible for turn/session evidence. The Carrier Action Admission
 
 The first implemented NARS slice is a non-effectful admission layer.
 
-MCP surface metadata is projected from the Site-local `.narada/capabilities/mcp-surfaces.json` registry through `tools/mcp-fabric`. The registry loader accepts both current `surfaces` entries with `tool_contract` and older `mcp_surfaces` entries with `registered_live_tools`. Registered live tools without an explicit contract receive conservative metadata: known read-only names remain read-only, known mutating names route to admission, and unknown registered tools require admission rather than execution. The live carrier/server layer preserves matched registry metadata on discovered MCP servers and passes it into Carrier Action Admission before any tool execution decision.
+MCP surface metadata is projected from the Site-local `.narada/capabilities/mcp-surfaces.json` registry through `@narada2/mcp-fabric`. The registry loader accepts both current `surfaces` entries with `tool_contract` and older `mcp_surfaces` entries with `registered_live_tools`. Registered live tools without an explicit contract receive conservative metadata: known read-only names remain read-only, known mutating names route to admission, and unknown registered tools require admission rather than execution. The live carrier/server layer preserves matched registry metadata on discovered MCP servers and passes it into `@narada2/carrier-action-admission` before any tool execution decision.
 
 Registry metadata is authoritative for a matched surface. If a live MCP server exposes a tool that is absent from its authoritative surface contract, the request is refused with `surface_registry_tool_not_declared`. Closed-name fallback classification is reserved for tools and servers without registry-backed metadata; it must not silently grant posture to an unlisted tool on an authoritative surface. Registry-to-client-config validation is diagnostic during carrier startup and strict only when explicitly requested by tooling such as doctors, audits, or tests.
 
@@ -179,9 +179,12 @@ This is not the full authority layer. It is the boundary that prevents carrier t
 Verification commands for this slice:
 
 ```powershell
-node --test tools\mcp-fabric\mcp-fabric.test.mjs
-node --test tools\carrier-action-admission\carrier-action-admission.test.mjs
-node --test tools\agent-cli\agent-cli.test.mjs
+pnpm --filter @narada2/mcp-fabric test
+pnpm --filter @narada2/mcp-fabric typecheck
+pnpm --filter @narada2/carrier-action-admission test
+pnpm --filter @narada2/carrier-action-admission typecheck
+pnpm --filter @narada2/agent-cli test
+pnpm --filter @narada2/agent-cli typecheck
 pnpm --filter @narada2/cli test -- carrier-actions
 pnpm --filter @narada2/cli typecheck
 ```

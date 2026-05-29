@@ -44,6 +44,10 @@ Launcher-known Sites are sourced from:
 C:\Users\Andrey\Narada\config\launch\agents.psd1
 ```
 
+`@narada2/mcp-fabric` owns the carrier-side fabric loader and projection
+semantics. The `tools\mcp-fabric\*.mjs` commands below are operator audit and
+registry-maintenance entrypoints; they do not own the runtime library contract.
+
 The audit command is:
 
 ```powershell
