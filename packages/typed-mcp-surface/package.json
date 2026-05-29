@@ -1,0 +1,21 @@
+{
+  "name": "@narada2/typed-mcp-surface",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./adr-mcp-server": "./src/adr-mcp-server.mjs",
+    "./ee-mcp-server": "./src/ee-mcp-server.mjs",
+    "./generate-carrier-mcp-config": "./src/generate-carrier-mcp-config.mjs",
+    "./inbox-admission-log": "./src/inbox-admission-log.mjs",
+    "./inbox-admit": "./src/inbox-admit.mjs",
+    "./inbox-mcp-server": "./src/inbox-mcp-server.mjs",
+    "./invoke-ee-mcp-prototype": "./src/Invoke-EeMcpPrototype.ps1",
+    "./invoke-inbox-mcp-prototype": "./src/Invoke-InboxMcpPrototype.ps1",
+    "./validate-mcp-surface-registry": "./src/validate-mcp-surface-registry.mjs",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test src/typed-mcp-surface.test.mjs"
+  }
+}

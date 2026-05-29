@@ -2905,6 +2905,28 @@ async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<str
       });
     }
   }
+  const typedMcpScripts = [
+    'adr-mcp-server.mjs',
+    'ee-mcp-server.mjs',
+    'generate-carrier-mcp-config.mjs',
+    'inbox-admission-log.mjs',
+    'inbox-admit.mjs',
+    'inbox-mcp-server.mjs',
+    'Invoke-EeMcpPrototype.ps1',
+    'Invoke-InboxMcpPrototype.ps1',
+    'validate-mcp-surface-registry.mjs',
+  ];
+  for (const script of typedMcpScripts) {
+    const scriptPath = fileURLToPath(new URL(`../../../../../packages/typed-mcp-surface/src/${script}`, import.meta.url));
+    if (existsSync(scriptPath)) {
+      entries.set(`tools/typed-mcp/${script}`, {
+        package: '@narada2/typed-mcp-surface',
+        version: '0.1.0',
+        surface: 'typed-mcp',
+        hash: sha256Text(await readFile(scriptPath, 'utf8')),
+      });
+    }
+  }
   canonicalToolSurfaceEntries = entries;
   return entries;
 }
