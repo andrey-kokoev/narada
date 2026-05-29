@@ -8,7 +8,7 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { join, posix, resolve, win32 } from 'node:path';
+import { basename, dirname, join, posix, resolve, win32 } from 'node:path';
 import { hostname } from 'node:os';
 import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
@@ -203,7 +203,7 @@ interface SiteListEntry {
 
 export interface SiteDoctorCheck {
   name: string;
-  status: 'pass' | 'warn' | 'fail';
+  status: 'pass' | 'warn' | 'fail' | 'declared_exception';
   message: string;
   remediation?: string;
 }
@@ -2572,6 +2572,47 @@ function addCheck(
   checks.push({ name, status, message, remediation });
 }
 
+function siteDoctorMessageKind(status: SiteDoctorCheck['status']): 'success' | 'warning' | 'error' | 'info' {
+  if (status === 'pass') return 'success';
+  if (status === 'fail') return 'error';
+  if (status === 'declared_exception') return 'info';
+  return 'warning';
+}
+
+function siteDoctorPrefix(status: SiteDoctorCheck['status']): string {
+  if (status === 'pass') return '[pass]';
+  if (status === 'fail') return '[fail]';
+  if (status === 'declared_exception') return '[declared_exception]';
+  return '[warn]';
+}
+
+function containedSiteRootFromInput(root: string): string {
+  const resolved = resolve(root);
+  if (existsSync(join(resolved, 'config.json')) || resolved.toLowerCase().endsWith(`${win32.sep}.narada`) || resolved.toLowerCase().endsWith('/.narada')) {
+    return resolved;
+  }
+  return clientSiteRootFromWorkspace(resolved);
+}
+
+function workspaceRootFromContainedInput(inputRoot: string, siteRoot: string): string {
+  const resolved = resolve(inputRoot);
+  if (normalizeNativePath(resolved) === normalizeNativePath(siteRoot) && basename(siteRoot).toLowerCase() === '.narada') {
+    return dirname(siteRoot);
+  }
+  return resolved;
+}
+
+function configSiteField(config: Record<string, unknown>, field: string): unknown {
+  const nested = config.site && typeof config.site === 'object' ? config.site as Record<string, unknown> : null;
+  return config[field] ?? nested?.[field];
+}
+
+function configSyncPosture(config: Record<string, unknown>): string | undefined {
+  const sync = config.sync && typeof config.sync === 'object' ? config.sync as { posture?: string } : null;
+  const nested = config.site && typeof config.site === 'object' ? config.site as { sync_posture?: string } : null;
+  return sync?.posture ?? nested?.sync_posture;
+}
+
 function addDelegatedCliEmbodimentCheck(checks: SiteDoctorCheck[], siteRoot: string): void {
   const health = inspectDelegatedCliHealth(siteRoot);
   addCheck(
@@ -2580,6 +2621,166 @@ function addDelegatedCliEmbodimentCheck(checks: SiteDoctorCheck[], siteRoot: str
     health.status,
     health.detail,
     health.ok ? undefined : 'Repair the delegated Narada CLI embodiment referenced by Site-local package scripts, then rerun Site doctor.',
+  );
+}
+
+async function listFilesRecursive(root: string): Promise<string[]> {
+  if (!existsSync(root)) return [];
+  const files: string[] = [];
+  async function walk(current: string): Promise<void> {
+    const entries = await readdir(current, { withFileTypes: true });
+    for (const entry of entries) {
+      const absolute = join(current, entry.name);
+      if (entry.isDirectory()) {
+        if (entry.name.includes('node_modules') || entry.name === '.git' || entry.name === 'dist' || entry.name === '.cache') {
+          continue;
+        }
+        await walk(absolute);
+      } else if (entry.isFile()) {
+        files.push(absolute);
+      }
+    }
+  }
+  await walk(root);
+  return files;
+}
+
+function slashRelative(root: string, absolute: string): string {
+  return win32.relative(root, absolute).replace(/\\/g, '/');
+}
+
+function isExecutableToolPath(pathValue: string): boolean {
+  return /\.(mjs|js|cjs|ts|tsx|ps1|cmd|bat|py)$/i.test(pathValue);
+}
+
+async function addSiteToolSurfaceChecks(checks: SiteDoctorCheck[], siteRoot: string): Promise<void> {
+  const manifestPath = join(siteRoot, 'site-tool-surface.manifest.json');
+  const toolsRoot = join(siteRoot, 'tools');
+  const toolFiles = (await listFilesRecursive(toolsRoot)).filter(isExecutableToolPath);
+  if (!existsSync(manifestPath)) {
+    addCheck(
+      checks,
+      'site_tool_surface_manifest',
+      toolFiles.length === 0 ? 'pass' : 'fail',
+      toolFiles.length === 0
+        ? 'No executable Site-local tool surfaces require a manifest'
+        : `Missing site-tool-surface.manifest.json for ${toolFiles.length} executable tool file(s)`,
+      'Generate or reconcile site-tool-surface.manifest.json from Narada proper before launching Site-local tools.',
+    );
+    return;
+  }
+
+  addCheck(checks, 'site_tool_surface_manifest', 'pass', `Tool surface manifest exists: ${manifestPath}`);
+  let manifest: { entries?: Array<Record<string, unknown>>; site_root?: string } | null = null;
+  try {
+    manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as { entries?: Array<Record<string, unknown>>; site_root?: string };
+    addCheck(checks, 'site_tool_surface_manifest_parse', 'pass', 'Tool surface manifest parses as JSON');
+  } catch (err) {
+    addCheck(checks, 'site_tool_surface_manifest_parse', 'fail', `Tool surface manifest is invalid JSON: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+
+  const entries = Array.isArray(manifest.entries) ? manifest.entries : [];
+  const entryByPath = new Map(entries.map((entry) => [String(entry.path ?? '').replace(/\\/g, '/'), entry]));
+  const missing = toolFiles
+    .map((file) => slashRelative(siteRoot, file))
+    .filter((relative) => !entryByPath.has(relative));
+  addCheck(
+    checks,
+    'site_tool_surface_coverage',
+    missing.length === 0 ? 'pass' : 'fail',
+    missing.length === 0
+      ? `${toolFiles.length} executable tool surface(s) are declared`
+      : `${missing.length} executable tool surface(s) are undeclared: ${missing.slice(0, 5).join(', ')}${missing.length > 5 ? ', ...' : ''}`,
+  );
+
+  const validClasses = new Set(['canonical_package', 'generated_wrapper', 'site_owned', 'retired_refusal', 'runtime_state']);
+  const invalidClasses = entries.filter((entry) => !validClasses.has(String(entry.class ?? '')));
+  addCheck(
+    checks,
+    'site_tool_surface_classes',
+    invalidClasses.length === 0 ? 'pass' : 'fail',
+    invalidClasses.length === 0 ? 'All manifest entries use known ownership classes' : `${invalidClasses.length} manifest entries use unknown ownership classes`,
+  );
+
+  const generatedWrappers = entries.filter((entry) => entry.class === 'generated_wrapper');
+  const generatedMissingEvidence = generatedWrappers.filter((entry) => !entry.package || !entry.version || !entry.hash);
+  addCheck(
+    checks,
+    'generated_wrapper_evidence',
+    generatedMissingEvidence.length === 0 ? 'pass' : 'fail',
+    generatedMissingEvidence.length === 0
+      ? `${generatedWrappers.length} generated wrapper(s) carry package/version/hash evidence`
+      : `${generatedMissingEvidence.length} generated wrapper(s) lack package/version/hash evidence`,
+  );
+
+  const agentCliWrapperPath = join(siteRoot, 'tools', 'operator-surface-carriers', 'Start-AgentCliSession.ps1');
+  if (existsSync(agentCliWrapperPath)) {
+    const wrapper = await readFile(agentCliWrapperPath, 'utf8');
+    const hasTemplateEvidence = wrapper.includes('narada_template_source: @narada2/agent-cli') && wrapper.includes('narada_template_hash:');
+    addCheck(
+      checks,
+      'agent_cli_package_wrapper',
+      hasTemplateEvidence ? 'pass' : 'fail',
+      hasTemplateEvidence
+        ? 'agent-cli wrapper carries Narada package template evidence'
+        : 'agent-cli wrapper is present but lacks package template evidence',
+      'Regenerate Start-AgentCliSession.ps1 from @narada2/agent-cli windows wrapper template.',
+    );
+  } else if (generatedWrappers.some((entry) => entry.surface === 'agent-cli')) {
+    addCheck(checks, 'agent_cli_package_wrapper', 'fail', 'Manifest declares an agent-cli generated wrapper, but Start-AgentCliSession.ps1 is missing');
+  }
+
+  const siteOwned = entries.filter((entry) => entry.class === 'site_owned');
+  const weakSiteOwned = siteOwned.filter((entry) => !entry.owner || !entry.surface || (!entry.reason && !entry.review_at && !entry.expires_at));
+  addCheck(
+    checks,
+    'site_owned_surface_declarations',
+    weakSiteOwned.length === 0 ? 'pass' : 'declared_exception',
+    weakSiteOwned.length === 0
+      ? `${siteOwned.length} site-owned surface(s) include ownership metadata`
+      : `${weakSiteOwned.length} site-owned surface(s) are declared but lack reason/review metadata`,
+    'Add owner, scope/surface, reason, and review_at or expires_at to site_owned entries.',
+  );
+}
+
+async function addMcpFreshnessChecks(checks: SiteDoctorCheck[], siteRoot: string): Promise<void> {
+  const tmpRoot = join(siteRoot, '.ai', 'tmp');
+  const legacyBaseline = join(tmpRoot, 'mcp-baseline.json');
+  const perSurfaceBaselines = join(tmpRoot, 'mcp-baselines');
+  const restartRequests = join(tmpRoot, 'mcp-restart-requests');
+  const restartEvidence = join(tmpRoot, 'mcp-restart-evidence');
+
+  const baselineFiles = (await listFilesRecursive(perSurfaceBaselines)).filter((file) => file.endsWith('.json'));
+  if (baselineFiles.length > 0) {
+    addCheck(checks, 'mcp_freshness_markers', 'pass', `${baselineFiles.length} per-surface MCP baseline marker(s) present`);
+  } else if (existsSync(legacyBaseline)) {
+    addCheck(
+      checks,
+      'mcp_freshness_markers',
+      'warn',
+      'Legacy Site-wide MCP baseline exists without per-surface baseline markers',
+      'Migrate to .ai/tmp/mcp-baselines/<surface-key>.json keyed by canonical_site_root + surface_id + server_entrypoint.',
+    );
+  } else {
+    addCheck(checks, 'mcp_freshness_markers', 'warn', 'No per-surface MCP baseline markers found');
+  }
+
+  const requestFiles = (await listFilesRecursive(restartRequests)).filter((file) => file.endsWith('.json'));
+  if (requestFiles.length === 0) {
+    addCheck(checks, 'mcp_restart_pressure', 'pass', 'No active per-surface MCP restart request markers found');
+    return;
+  }
+
+  const evidenceFiles = (await listFilesRecursive(restartEvidence)).filter((file) => file.endsWith('.json') || file.endsWith('.jsonl'));
+  addCheck(
+    checks,
+    'mcp_restart_pressure',
+    evidenceFiles.length > 0 ? 'warn' : 'fail',
+    evidenceFiles.length > 0
+      ? `${requestFiles.length} restart request marker(s) present with ${evidenceFiles.length} evidence artifact(s); verify disposition`
+      : `${requestFiles.length} restart request marker(s) present without restart-pressure acknowledgement evidence`,
+    'Write durable reconciliation evidence before claiming restart pressure is acknowledged or cleared.',
   );
 }
 
@@ -2607,8 +2808,9 @@ async function sitesClientDoctorCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
   const checks: SiteDoctorCheck[] = [];
-  const workspaceRoot = resolve(options.root ?? '.');
-  const siteRoot = clientSiteRootFromWorkspace(workspaceRoot);
+  const inputRoot = resolve(options.root ?? '.');
+  const siteRoot = containedSiteRootFromInput(inputRoot);
+  const workspaceRoot = workspaceRootFromContainedInput(inputRoot, siteRoot);
   const configPath = join(siteRoot, 'config.json');
   let config: Record<string, unknown> | null = null;
 
@@ -2645,38 +2847,42 @@ async function sitesClientDoctorCommand(
   }
 
   if (config) {
+    const configSiteId = configSiteField(config, 'site_id');
+    const configSiteKind = configSiteField(config, 'site_kind');
+    const configWorkspaceRoot = configSiteField(config, 'workspace_root');
+    const posture = configSyncPosture(config);
     addCheck(
       checks,
       'config_site_id',
-      config.site_id === siteId ? 'pass' : 'fail',
-      config.site_id === siteId ? `Config site_id matches ${siteId}` : `Config site_id is ${String(config.site_id)}, expected ${siteId}`,
+      configSiteId === siteId ? 'pass' : 'fail',
+      configSiteId === siteId ? `Config site_id matches ${siteId}` : `Config site_id is ${String(configSiteId)}, expected ${siteId}`,
     );
     addCheck(
       checks,
       'site_kind',
-      config.site_kind === 'client_service' ? 'pass' : 'fail',
-      config.site_kind === 'client_service' ? 'Site kind is client_service' : `Site kind is ${String(config.site_kind)}, expected client_service`,
+      configSiteKind === 'client_service' ? 'pass' : 'fail',
+      configSiteKind === 'client_service' ? 'Site kind is client_service' : `Site kind is ${String(configSiteKind)}, expected client_service`,
     );
     addCheck(
       checks,
       'workspace_root',
-      String(config.workspace_root) === workspaceRoot ? 'pass' : 'fail',
-      String(config.workspace_root) === workspaceRoot ? `Workspace root matches ${workspaceRoot}` : `Workspace root is ${String(config.workspace_root)}, expected ${workspaceRoot}`,
+      normalizeNativePath(String(configWorkspaceRoot)) === normalizeNativePath(workspaceRoot) ? 'pass' : 'warn',
+      normalizeNativePath(String(configWorkspaceRoot)) === normalizeNativePath(workspaceRoot) ? `Workspace root matches ${workspaceRoot}` : `Workspace root is ${String(configWorkspaceRoot)}, inspected root is ${workspaceRoot}`,
     );
     const sync = config.sync as { posture?: string; onedrive_safe?: boolean } | undefined;
     addCheck(
       checks,
       'durability_posture',
-      sync?.posture === 'onedrive_non_git' || sync?.posture === 'local_non_git' ? 'pass' : 'fail',
-      sync?.posture ? `Sync posture is ${sync.posture}` : 'Sync posture is missing',
+      posture === 'onedrive_non_git' || posture === 'local_non_git' ? 'pass' : 'fail',
+      posture ? `Sync posture is ${posture}` : 'Sync posture is missing',
       'Use onedrive_non_git or local_non_git for client Site bootstrap',
     );
     if (workspaceRoot.toLowerCase().includes('onedrive')) {
       addCheck(
         checks,
         'onedrive_non_git_posture',
-        sync?.posture === 'onedrive_non_git' && sync?.onedrive_safe === true ? 'pass' : 'fail',
-        sync?.posture === 'onedrive_non_git' ? 'OneDrive workspace has explicit non-Git posture' : 'OneDrive workspace should use onedrive_non_git posture',
+        posture === 'onedrive_non_git' && (sync?.onedrive_safe === true || config.site) ? 'pass' : 'fail',
+        posture === 'onedrive_non_git' ? 'OneDrive workspace has explicit non-Git posture' : 'OneDrive workspace should use onedrive_non_git posture',
       );
     }
   }
@@ -2702,6 +2908,8 @@ async function sitesClientDoctorCommand(
   }
 
   addDelegatedCliEmbodimentCheck(checks, siteRoot);
+  await addSiteToolSurfaceChecks(checks, siteRoot);
+  await addMcpFreshnessChecks(checks, siteRoot);
 
   const failed = checks.filter((check) => check.status === 'fail');
   const warned = checks.filter((check) => check.status === 'warn');
@@ -2713,8 +2921,7 @@ async function sitesClientDoctorCommand(
     fmt.kv('Site Root', siteRoot);
     fmt.kv('Health', health);
     for (const check of checks) {
-      const prefix = check.status === 'pass' ? '[pass]' : check.status === 'warn' ? '[warn]' : '[fail]';
-      fmt.message(`${prefix} ${check.name}: ${check.message}`, check.status === 'pass' ? 'success' : check.status === 'warn' ? 'warning' : 'error');
+      fmt.message(`${siteDoctorPrefix(check.status)} ${check.name}: ${check.message}`, siteDoctorMessageKind(check.status));
       if (check.remediation && options.verbose) {
         fmt.message(`  remediation: ${check.remediation}`, 'info');
       }
@@ -2741,8 +2948,9 @@ async function sitesProjectDoctorCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
   const checks: SiteDoctorCheck[] = [];
-  const workspaceRoot = resolve(options.root ?? '.');
-  const siteRoot = clientSiteRootFromWorkspace(workspaceRoot);
+  const inputRoot = resolve(options.root ?? '.');
+  const siteRoot = containedSiteRootFromInput(inputRoot);
+  const workspaceRoot = workspaceRootFromContainedInput(inputRoot, siteRoot);
   const configPath = join(siteRoot, 'config.json');
   let config: Record<string, unknown> | null = null;
 
@@ -2780,30 +2988,33 @@ async function sitesProjectDoctorCommand(
   }
 
   if (config) {
+    const configSiteId = configSiteField(config, 'site_id');
+    const configSiteKind = configSiteField(config, 'site_kind');
+    const configWorkspaceRoot = configSiteField(config, 'workspace_root');
+    const posture = configSyncPosture(config);
     addCheck(
       checks,
       'config_site_id',
-      config.site_id === siteId ? 'pass' : 'fail',
-      config.site_id === siteId ? `Config site_id matches ${siteId}` : `Config site_id is ${String(config.site_id)}, expected ${siteId}`,
+      configSiteId === siteId ? 'pass' : 'fail',
+      configSiteId === siteId ? `Config site_id matches ${siteId}` : `Config site_id is ${String(configSiteId)}, expected ${siteId}`,
     );
     addCheck(
       checks,
       'site_kind',
-      config.site_kind === 'project' ? 'pass' : 'fail',
-      config.site_kind === 'project' ? 'Site kind is project' : `Site kind is ${String(config.site_kind)}, expected project`,
+      configSiteKind === 'project' ? 'pass' : 'fail',
+      configSiteKind === 'project' ? 'Site kind is project' : `Site kind is ${String(configSiteKind)}, expected project`,
     );
     addCheck(
       checks,
       'workspace_root',
-      String(config.workspace_root) === workspaceRoot ? 'pass' : 'fail',
-      String(config.workspace_root) === workspaceRoot ? `Workspace root matches ${workspaceRoot}` : `Workspace root is ${String(config.workspace_root)}, expected ${workspaceRoot}`,
+      normalizeNativePath(String(configWorkspaceRoot)) === normalizeNativePath(workspaceRoot) ? 'pass' : 'warn',
+      normalizeNativePath(String(configWorkspaceRoot)) === normalizeNativePath(workspaceRoot) ? `Workspace root matches ${workspaceRoot}` : `Workspace root is ${String(configWorkspaceRoot)}, inspected root is ${workspaceRoot}`,
     );
-    const sync = config.sync as { posture?: string } | undefined;
     addCheck(
       checks,
       'project_sync_posture',
-      sync?.posture === 'git_backed_project_repo' ? 'pass' : 'fail',
-      sync?.posture ? `Sync posture is ${sync.posture}` : 'Sync posture is missing',
+      posture === 'git_backed_project_repo' ? 'pass' : 'fail',
+      posture ? `Sync posture is ${posture}` : 'Sync posture is missing',
       'Use git_backed_project_repo for contained project Site bootstrap',
     );
   }
@@ -2829,6 +3040,8 @@ async function sitesProjectDoctorCommand(
   }
 
   addDelegatedCliEmbodimentCheck(checks, siteRoot);
+  await addSiteToolSurfaceChecks(checks, siteRoot);
+  await addMcpFreshnessChecks(checks, siteRoot);
 
   const failed = checks.filter((check) => check.status === 'fail');
   const warned = checks.filter((check) => check.status === 'warn');
@@ -2840,8 +3053,7 @@ async function sitesProjectDoctorCommand(
     fmt.kv('Site Root', siteRoot);
     fmt.kv('Health', health);
     for (const check of checks) {
-      const prefix = check.status === 'pass' ? '[pass]' : check.status === 'warn' ? '[warn]' : '[fail]';
-      fmt.message(`${prefix} ${check.name}: ${check.message}`, check.status === 'pass' ? 'success' : check.status === 'warn' ? 'warning' : 'error');
+      fmt.message(`${siteDoctorPrefix(check.status)} ${check.name}: ${check.message}`, siteDoctorMessageKind(check.status));
       if (check.remediation && options.verbose) {
         fmt.message(`  remediation: ${check.remediation}`, 'info');
       }
@@ -3126,6 +3338,10 @@ export async function sitesDoctorCommand(
     } else {
       addCheck(checks, 'task_lifecycle_db_exists', 'fail', `Task lifecycle DB is missing: ${lifecycleDbPath}`, 'Run narada sites init with current Windows User Site bootstrap');
     }
+    if (siteRoot) {
+      await addSiteToolSurfaceChecks(checks, siteRoot);
+      await addMcpFreshnessChecks(checks, siteRoot);
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     addCheck(checks, 'doctor_runtime', 'fail', `Site doctor failed: ${message}`);
@@ -3140,8 +3356,7 @@ export async function sitesDoctorCommand(
     fmt.kv('Root', siteRoot ?? '-');
     fmt.kv('Health', health);
     for (const check of checks) {
-      const prefix = check.status === 'pass' ? '[pass]' : check.status === 'warn' ? '[warn]' : '[fail]';
-      fmt.message(`${prefix} ${check.name}: ${check.message}`, check.status === 'pass' ? 'success' : check.status === 'warn' ? 'warning' : 'error');
+      fmt.message(`${siteDoctorPrefix(check.status)} ${check.name}: ${check.message}`, siteDoctorMessageKind(check.status));
       if (check.remediation && options.verbose) {
         fmt.message(`  remediation: ${check.remediation}`, 'info');
       }

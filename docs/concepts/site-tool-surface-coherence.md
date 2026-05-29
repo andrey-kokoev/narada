@@ -30,6 +30,10 @@ Broad executable declarations such as `tools/**/*.ps1` are refused. They hide co
 
 ## Enforcement
 
+`narada sites doctor <site-id> --kind <client|project|windows> --root <path>` is
+the read-only guardrail for this domain. It reports checks as `pass`, `warn`,
+`fail`, or `declared_exception`.
+
 The coherence audit fails when:
 
 - executable tool files are not declared by the manifest;
@@ -38,5 +42,9 @@ The coherence audit fails when:
 - broad executable declarations are present;
 - known hardcoded local root/CLI defaults appear in executable surfaces;
 - `TargetSiteRoot` defaults from the user Site root.
+
+It reports a declared exception when a Site-local executable surface is
+manifested as `site_owned` but does not yet carry full owner, scope, reason,
+and review metadata.
 
 The current transitional posture still permits per-file `site_owned` declarations for copied toolsets. That is not the final architecture; it is a declared state from which surfaces can be cut over one at a time to package-owned implementations and generated wrappers.
