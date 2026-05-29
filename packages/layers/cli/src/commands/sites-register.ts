@@ -220,6 +220,23 @@ export function registerSitesCommands(program: Command): void {
       emitFormatterBackedCommandResult(result, { format: opts.format });
     });
 
+  auditCmd
+    .command('tool-surfaces')
+    .description('Audit Site-owned tool surface duplication and cutover burden across Sites')
+    .option('--root <path...>', 'Site root or containing workspace root; repeat or pass several values')
+    .option('--limit <n>', 'Maximum duplicate groups/candidates to show', '20')
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (opts: Record<string, unknown>) => {
+      const result = await sitesAuditToolSurfaceDuplicatesCommand({
+        root: opts.root as string[] | undefined,
+        limit: opts.limit ? Number(opts.limit) : undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitFormatterBackedCommandResult(result, { format: opts.format });
+    });
+
   sitesCmd
     .command('agent-bootstrap <site-id-or-root>')
     .description('Show the bounded Architect, Builder, or Observer bootstrap contract for a Site')

@@ -2580,6 +2580,7 @@ export interface SitesAuditToolSurfaceDuplicatesOptions extends SitesOptions {
 const AGENT_CLI_WRAPPER_RELATIVE_PATH = join('tools', 'operator-surface-carriers', 'Start-AgentCliSession.ps1');
 const AGENT_CLI_WRAPPER_TEMPLATE_HASH_PLACEHOLDER = '__NARADA_TEMPLATE_HASH__';
 const AGENT_CLI_WRAPPER_TEMPLATE_HASH_LINE = /^# narada_template_hash: .*$/m;
+let legacyToolSurfaceEntries: Map<string, Record<string, unknown>> | null = null;
 
 function addCheck(
   checks: SiteDoctorCheck[],
@@ -2744,6 +2745,24 @@ function isExecutableToolPath(pathValue: string): boolean {
   return /\.(mjs|js|cjs|ts|tsx|ps1|cmd|bat|py)$/i.test(pathValue);
 }
 
+async function loadLegacyToolSurfaceEntries(): Promise<Map<string, Record<string, unknown>>> {
+  if (legacyToolSurfaceEntries) return legacyToolSurfaceEntries;
+  const manifestPath = fileURLToPath(new URL('../../../../../packages/site-tool-surface-legacy/manifest.json', import.meta.url));
+  const entries = new Map<string, Record<string, unknown>>();
+  if (existsSync(manifestPath)) {
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as { files?: Array<Record<string, unknown>> };
+    for (const file of manifest.files ?? []) {
+      const pathValue = String(file.path ?? '').replace(/\\/g, '/');
+      const hash = String(file.hash ?? '');
+      if (pathValue && hash) {
+        entries.set(`${pathValue}\n${hash}`, file);
+      }
+    }
+  }
+  legacyToolSurfaceEntries = entries;
+  return entries;
+}
+
 async function desiredToolSurfaceEntry(siteRoot: string, filePath: string): Promise<Record<string, unknown>> {
   const relativePath = slashRelative(siteRoot, filePath);
   const text = await readFile(filePath, 'utf8');
@@ -2775,7 +2794,7 @@ async function desiredToolSurfaceEntry(siteRoot: string, filePath: string): Prom
       allowed_root_refs: allowedRootRefs,
     };
   }
-  if (/(\.test\.(mjs|js|ts|tsx)$|[\\/](tests?|__tests__)[\\/])/i.test(relativePath)) {
+  if (/(\.test\.(mjs|js|ts|tsx)$|[\\/](tests?|__tests__)[\\/]|[\\/]test-[^\\/]+\.(mjs|js|ts|tsx|ps1)$|[\\/]Test-[^\\/]+\.(mjs|js|ts|tsx|ps1)$)/i.test(relativePath)) {
     return {
       path: relativePath,
       class: 'test_surface',
@@ -2783,6 +2802,19 @@ async function desiredToolSurfaceEntry(siteRoot: string, filePath: string): Prom
       surface: 'test',
       package: '',
       version: '',
+      hash,
+      allowed_root_refs: allowedRootRefs,
+    };
+  }
+  const legacyEntry = (await loadLegacyToolSurfaceEntries()).get(`${relativePath}\n${hash}`);
+  if (legacyEntry) {
+    return {
+      path: relativePath,
+      class: 'canonical_package',
+      owner: 'narada-proper',
+      surface: legacyEntry.surface ?? 'legacy-tool-surface',
+      package: '@narada2/site-tool-surface-legacy',
+      version: '0.0.0',
       hash,
       allowed_root_refs: allowedRootRefs,
     };
