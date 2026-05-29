@@ -62,6 +62,10 @@
       "types": "./dist/task-lifecycle-store.d.ts",
       "import": "./dist/task-lifecycle-store.js"
     },
+    "./task-lifecycle-mcp-contract": {
+      "types": "./dist/task-lifecycle-mcp-contract.d.ts",
+      "import": "./dist/task-lifecycle-mcp-contract.js"
+    },
     "./directive-runtime-store": {
       "types": "./dist/directive-runtime-store.d.ts",
       "import": "./dist/directive-runtime-store.js"
@@ -85,6 +89,51 @@
     "./sqlite-runtime": {
       "types": "./dist/sqlite-runtime.d.ts",
       "import": "./dist/sqlite-runtime.js"
+    },
+    "./task-lifecycle-mcp-server": {
+      "import": "./runtime/task-lifecycle/task-mcp-server.mjs"
+    },
+    "./task-lifecycle-runtime/agent-role-resolution": {
+      "import": "./runtime/task-lifecycle/agent-role-resolution.mjs"
+    },
+    "./task-lifecycle-runtime/closure-authority": {
+      "import": "./runtime/task-lifecycle/closure-authority.mjs"
+    },
+    "./task-lifecycle-runtime/emit-checkpoint": {
+      "import": "./runtime/task-lifecycle/emit-checkpoint.mjs"
+    },
+    "./task-lifecycle-runtime/follow-up-ledger-validation": {
+      "import": "./runtime/task-lifecycle/follow-up-ledger-validation.mjs"
+    },
+    "./task-lifecycle-runtime/follow-up-policy-service": {
+      "import": "./runtime/task-lifecycle/follow-up-policy-service.mjs"
+    },
+    "./task-lifecycle-runtime/inbox-bridge": {
+      "import": "./runtime/task-lifecycle/inbox-bridge.mjs"
+    },
+    "./task-lifecycle-runtime/inbox-workboard": {
+      "import": "./runtime/task-lifecycle/inbox-workboard.mjs"
+    },
+    "./task-lifecycle-runtime/operator-identity": {
+      "import": "./runtime/task-lifecycle/operator-identity.mjs"
+    },
+    "./task-lifecycle-runtime/recovery-truthfulness-guard": {
+      "import": "./runtime/task-lifecycle/recovery-truthfulness-guard.mjs"
+    },
+    "./task-lifecycle-runtime/self-certification-guard": {
+      "import": "./runtime/task-lifecycle/self-certification-guard.mjs"
+    },
+    "./task-lifecycle-runtime/task-lifecycle-mutation-services": {
+      "import": "./runtime/task-lifecycle/task-lifecycle-mutation-services.mjs"
+    },
+    "./task-lifecycle-runtime/task-relatedness": {
+      "import": "./runtime/task-lifecycle/task-relatedness.mjs"
+    },
+    "./task-lifecycle-runtime/unified-workboard": {
+      "import": "./runtime/task-lifecycle/unified-workboard.mjs"
+    },
+    "./task-lifecycle-runtime/workboard": {
+      "import": "./runtime/task-lifecycle/workboard.mjs"
     }
   },
   "scripts": {
@@ -98,7 +147,9 @@
   },
   "dependencies": {
     "@narada2/control-plane": "workspace:*",
-    "@narada2/intent-zones": "workspace:*"
+    "@narada2/intent-zones": "workspace:*",
+    "@narada2/mcp-transport": "workspace:*",
+    "@narada2/task-lifecycle-kernel": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

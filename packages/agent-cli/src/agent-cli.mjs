@@ -92,6 +92,7 @@ const EVENTS_PATH = join(SESSION_DIR, 'events.jsonl');
 const CARRIER_SESSION_DIR = join(SITE_ROOT, '.narada', 'crew', 'nars-sessions', SESSION);
 if (!existsSync(CARRIER_SESSION_DIR)) mkdirSync(CARRIER_SESSION_DIR, { recursive: true });
 const HEARTBEAT_PATH = join(CARRIER_SESSION_DIR, 'heartbeat.json');
+const HEARTBEAT_ENABLED = parseBooleanEnv(process.env.NARADA_AGENT_CLI_HEARTBEAT_ENABLE, true);
 let activeHeartbeat = null;
 
 // Set window title for OSL binding
@@ -103,15 +104,17 @@ if (process.title !== IDENTITY) {
 // Main
 // ---------------------------------------------------------------------------
 async function main() {
-  activeHeartbeat = startCarrierHeartbeat({
-    path: HEARTBEAT_PATH,
-    session: SESSION,
-    identity: IDENTITY,
-    runtime: 'agent-cli',
-    mode: SERVER_MODE ? 'server' : 'interactive',
-    sessionDir: SESSION_DIR,
-    carrierSessionDir: CARRIER_SESSION_DIR,
-  });
+  if (HEARTBEAT_ENABLED) {
+    activeHeartbeat = startCarrierHeartbeat({
+      path: HEARTBEAT_PATH,
+      session: SESSION,
+      identity: IDENTITY,
+      runtime: 'agent-cli',
+      mode: SERVER_MODE ? 'server' : 'interactive',
+      sessionDir: SESSION_DIR,
+      carrierSessionDir: CARRIER_SESSION_DIR,
+    });
+  }
   if (SERVER_MODE) {
     await runServerMode();
     return;
@@ -508,7 +511,16 @@ async function runConversationTurn(messages, tools, mcpServers, rl, options = {}
       return { terminal_state: 'interrupted' };
     }
     turn?.setPhase?.('thinking');
-    const response = await callChatApiFn(messages, tools, { ...sessionSettings, turn, emit, mcpServers });
+    let response;
+    try {
+      response = await callChatApiFn(messages, tools, { ...sessionSettings, turn, abortSignal: turn?.abortSignal, emit, mcpServers });
+    } catch (error) {
+      if (turn?.interruptRequested || isAbortError(error)) {
+        emit?.('turn_interrupted', { turn_id: turn?.turnId ?? null, terminal_state: 'interrupted' });
+        return { terminal_state: 'interrupted' };
+      }
+      throw error;
+    }
     if (turn?.interruptRequested) {
       emit?.('turn_interrupted', { turn_id: turn.turnId, terminal_state: 'interrupted' });
       return { terminal_state: 'interrupted' };
@@ -1116,11 +1128,17 @@ function directiveAcceptedEvidence(event, { agentId, carrierSessionId, acceptedA
 }
 
 function startInteractiveTurnProgress() {
+  const abortController = new AbortController();
   const turn = {
     turnId: randomId(),
     interruptRequested: false,
+    abortSignal: abortController.signal,
     phase: 'thinking',
     phaseStartedAt: Date.now(),
+    requestInterrupt() {
+      this.interruptRequested = true;
+      if (!abortController.signal.aborted) abortController.abort(new Error('agent_cli_interrupt_requested'));
+    },
     setPhase(phase) {
       if (!phase || this.phase === phase) return;
       this.phase = phase;
@@ -1155,8 +1173,8 @@ function startInteractiveTurnProgress() {
   };
   const onData = (chunk) => {
     if (Buffer.from(chunk).includes(0x1b)) {
-      turn.interruptRequested = true;
-      process.stdout.write(`\r${terminalStyle.warn('[agent-cli] Interrupt requested. Waiting for current provider call to return...')}\n`);
+      turn.requestInterrupt();
+      process.stdout.write(`\r${terminalStyle.warn('[agent-cli] Interrupt requested. Cancelling current provider call...')}\n`);
     }
   };
   const previousRawMode = process.stdin.isTTY ? process.stdin.isRaw : false;
@@ -1173,6 +1191,31 @@ function startInteractiveTurnProgress() {
       if (statusVisible) process.stdout.write('\r\x1b[K');
     },
   };
+}
+
+function attachTurnAbortController(turn) {
+  if (!turn || turn.abortSignal) return turn;
+  const abortController = new AbortController();
+  turn.abortSignal = abortController.signal;
+  turn.requestInterrupt = function requestInterrupt() {
+    this.interruptRequested = true;
+    if (!abortController.signal.aborted) abortController.abort(new Error('agent_cli_interrupt_requested'));
+  };
+  return turn;
+}
+
+function requestTurnInterrupt(turn) {
+  if (!turn) return;
+  if (typeof turn.requestInterrupt === 'function') turn.requestInterrupt();
+  else turn.interruptRequested = true;
+}
+
+function isAbortError(error) {
+  const message = String(error?.message ?? error ?? '');
+  return error?.name === 'AbortError'
+    || error?.code === 'ABORT_ERR'
+    || message.includes('agent_cli_interrupt_requested')
+    || message.includes('The operation was aborted');
 }
 
 function normalizeInputRecord(input) {
@@ -1327,7 +1370,7 @@ async function handleServerRequest(request, { state, messages, allTools, mcpServ
     }
     if (method === 'conversation.interrupt') {
       if (state.activeTurn) {
-        state.activeTurn.interruptRequested = true;
+        requestTurnInterrupt(state.activeTurn);
         emit('turn_interrupted', {
           request_id: requestId,
           turn_id: state.activeTurn.turnId,
@@ -1340,7 +1383,7 @@ async function handleServerRequest(request, { state, messages, allTools, mcpServ
     }
     if (method === 'session.close') {
       state.closed = true;
-      if (state.activeTurn) state.activeTurn.interruptRequested = true;
+      if (state.activeTurn) requestTurnInterrupt(state.activeTurn);
       emit('session_closed', {
         request_id: requestId,
         terminal_state: 'closed',
@@ -1404,6 +1447,7 @@ async function handleServerRequest(request, { state, messages, allTools, mcpServ
 async function runServerConversationTurn({ requestId, state, messages, allTools, mcpServers, emit, callChatApiFn, input, directiveId = null }) {
   const turnId = `turn_${randomId()}`;
   const turn = { turnId, requestId, interruptRequested: false };
+  attachTurnAbortController(turn);
   state.activeTurn = turn;
   if (directiveId) {
     emit('directive_received', {
@@ -1521,7 +1565,7 @@ async function callChatApi(messages, tools, settings = sessionSettings) {
         : await sendCodexExecJsonRequest(request, settings);
     return adapterResolution.adapter.parseResponse(response);
   }
-  const response = await sendProviderRequest(adapterResolution.adapter.buildRequest(messages, tools, settings));
+  const response = await sendProviderRequest(adapterResolution.adapter.buildRequest(messages, tools, settings), settings);
   return adapterResolution.adapter.parseResponse(response);
 }
 
@@ -1883,7 +1927,7 @@ function parseAnthropicMessagesResponse(response) {
   };
 }
 
-function sendProviderRequest({ url, body, headers }) {
+function sendProviderRequest({ url, body, headers }, settings = {}) {
   const serializedBody = JSON.stringify(body);
   return new Promise((resolve, reject) => {
     const isHttps = url.protocol === 'https:';
@@ -1896,6 +1940,7 @@ function sendProviderRequest({ url, body, headers }) {
         headers: {
           ...headers,
           'Content-Length': Buffer.byteLength(serializedBody),
+          signal: settings.abortSignal,
         },
       },
       (res) => {
@@ -1921,6 +1966,9 @@ function sendProviderRequest({ url, body, headers }) {
       }
     );
     req.on('error', reject);
+    settings.abortSignal?.addEventListener('abort', () => {
+      req.destroy(new Error('agent_cli_interrupt_requested'));
+    }, { once: true });
     req.write(serializedBody);
     req.end();
   });
@@ -1973,6 +2021,18 @@ function sendCodexExecJsonRequest(request, settings = {}) {
     let threadId = request.arguments?.threadId ?? null;
     let content = '';
     let rendered = false;
+    let aborted = false;
+    const abortChild = () => {
+      aborted = true;
+      try { child.kill('SIGTERM'); } catch {}
+      setTimeout(() => {
+        if (!child.killed) {
+          try { child.kill('SIGKILL'); } catch {}
+        }
+      }, 1500).unref?.();
+    };
+    if (settings.abortSignal?.aborted) abortChild();
+    settings.abortSignal?.addEventListener('abort', abortChild, { once: true });
 
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
@@ -2005,6 +2065,11 @@ function sendCodexExecJsonRequest(request, settings = {}) {
     child.stderr.on('data', (chunk) => { stderr += chunk; });
     child.on('error', rejectRequest);
     child.on('exit', (code) => {
+      settings.abortSignal?.removeEventListener?.('abort', abortChild);
+      if (aborted || settings.abortSignal?.aborted) {
+        rejectRequest(new Error('agent_cli_interrupt_requested'));
+        return;
+      }
       if (stdoutBuffer.trim()) {
         const event = parseCodexExecJsonLine(stdoutBuffer.trim());
         const text = event ? codexExecEventText(event) : '';
@@ -2037,6 +2102,18 @@ function sendCodexExecJsonBufferedRequest(request, settings = {}) {
     let stderr = '';
     let threadId = request.arguments?.threadId ?? null;
     let content = '';
+    let aborted = false;
+    const abortChild = () => {
+      aborted = true;
+      try { child.kill('SIGTERM'); } catch {}
+      setTimeout(() => {
+        if (!child.killed) {
+          try { child.kill('SIGKILL'); } catch {}
+        }
+      }, 1500).unref?.();
+    };
+    if (settings.abortSignal?.aborted) abortChild();
+    settings.abortSignal?.addEventListener('abort', abortChild, { once: true });
 
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
@@ -2044,6 +2121,11 @@ function sendCodexExecJsonBufferedRequest(request, settings = {}) {
     child.stderr.on('data', (chunk) => { stderr += chunk; });
     child.on('error', rejectRequest);
     child.on('exit', (code) => {
+      settings.abortSignal?.removeEventListener?.('abort', abortChild);
+      if (aborted || settings.abortSignal?.aborted) {
+        rejectRequest(new Error('agent_cli_interrupt_requested'));
+        return;
+      }
       for (const line of stdoutBuffer.split(/\r?\n/)) {
         if (!line.trim()) continue;
         const event = parseCodexExecJsonLine(line);

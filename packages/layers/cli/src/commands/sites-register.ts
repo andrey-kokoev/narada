@@ -26,6 +26,7 @@ import {
   sitesReconcileAgentCliWrapperCommand,
   sitesReconcileToolSurfaceManifestCommand,
   sitesAuditToolSurfaceDuplicatesCommand,
+  sitesDepsSyncCommand,
 } from './sites.js';
 import { siteImmuneScanCommand } from './site-immune-scan.js';
 import { siteMutationAuthorityPreflightCommand } from './site-mutation-authority-preflight.js';
@@ -160,6 +161,30 @@ export function registerSitesCommands(program: Command): void {
     .option('-v, --verbose', 'Enable verbose output', false)
     .action(wrapCommand('sites-discover', (opts, ctx) =>
       sitesDiscoverCommand({ format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto', verbose: opts.verbose }, ctx)));
+
+  const depsCmd = sitesCmd
+    .command('deps')
+    .description('Manage shared Narada package links and provenance for a Site');
+
+  depsCmd
+    .command('sync')
+    .description('Synchronize shared Narada package workspace links and write Site package provenance')
+    .option('--root <path>', 'Site root or containing workspace root', '.')
+    .option('--apply', 'Create or repair package links and provenance', false)
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (opts: Record<string, unknown>) => {
+      const result = await sitesDepsSyncCommand({
+        root: opts.root as string | undefined,
+        apply: opts.apply as boolean | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitCommandResult(result.result, opts.format);
+      if (result.exitCode !== 0) {
+        process.exit(result.exitCode);
+      }
+    });
 
   const reconcileCmd = sitesCmd
     .command('reconcile')

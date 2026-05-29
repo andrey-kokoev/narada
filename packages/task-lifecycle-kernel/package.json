@@ -1,0 +1,16 @@
+{
+  "name": "@narada2/task-lifecycle-kernel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/kernel.test.mjs && node test/stdio-json-rpc.test.mjs"
+  },
+  "exports": {
+    ".": "./src/index.mjs",
+    "./stdio-json-rpc": "./src/stdio-json-rpc.mjs"
+  },
+  "files": [
+    "src/"
+  ]
+}

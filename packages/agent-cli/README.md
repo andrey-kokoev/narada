@@ -67,7 +67,7 @@ Programmatic inputs can be marked with `--operator-directive` or `--system-direc
 Interactive mode does not schedule startup system directives by default. Use `--enable-startup-system-directive` to schedule the default `run startup sequence` directive after 10 seconds, or `--startup-system-directive <text>` and `--startup-system-directive-delay-ms <ms>` to opt in with custom content/timing. `NARADA_AGENT_CLI_STARTUP_SYSTEM_DIRECTIVE_ENABLE=1` provides the same opt-in as an environment default.
 Tool mediation renders as `<agent> -> agent-cli:` for requested tool calls and `agent-cli -> <agent>:` for returned results.
 
-During a running turn it prints a spinner with elapsed time and the active phase, such as `thinking` or `calling agent_context_startup_sequence`. Press `Esc` to request interruption; if a provider call is already in flight, the CLI records the interrupt and stops after that call returns. Tool calls print lifecycle summaries with status and duration.
+During a running turn it prints a spinner with elapsed time and the active phase, such as `thinking` or `calling agent_context_startup_sequence`. Press `Esc` to request interruption. The CLI aborts the current provider request when the active transport supports cancellation; for `codex-subscription` over `codex exec --json`, it terminates the child process and marks the turn interrupted. Tool calls print lifecycle summaries with status and duration.
 
 Use `--stream` or `--no-stream` to control incremental provider output. Interactive mode defaults to streaming; `--server` mode defaults to non-streaming terminal rendering and emits structured events only. `NARADA_AGENT_CLI_STREAM=1|0` provides the same default as an environment variable.
 

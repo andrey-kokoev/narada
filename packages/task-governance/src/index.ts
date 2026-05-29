@@ -17,3 +17,4 @@ export * as taskRecommender from './task-recommender.js';
 export * as taskSpec from './task-spec.js';
 export * as mutationEvidence from './mutation-evidence.js';
 export * as sqliteRuntime from './sqlite-runtime.js';
+export * as taskLifecycleMcpContract from './task-lifecycle-mcp-contract.js';

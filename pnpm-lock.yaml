@@ -33,6 +33,15 @@ importers:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@20.19.39)
 
+  packages/agent-cli:
+    dependencies:
+      '@narada2/carrier-action-admission':
+        specifier: workspace:*
+        version: link:../carrier-action-admission
+      '@narada2/mcp-fabric':
+        specifier: workspace:*
+        version: link:../mcp-fabric
+
   packages/agent-context-memory:
     devDependencies:
       '@types/node':
@@ -44,6 +53,14 @@ importers:
       vitest:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@20.19.39)
+
+  packages/agent-context-tools: {}
+
+  packages/agent-start-bootstrap: {}
+
+  packages/agent-start-renderer: {}
+
+  packages/carrier-action-admission: {}
 
   packages/crew-startup-shortcut:
     devDependencies:
@@ -214,6 +231,18 @@ importers:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@20.19.39)
 
+  packages/local-filesystem-mcp:
+    dependencies:
+      '@narada2/mcp-transport':
+        specifier: workspace:*
+        version: link:../mcp-transport
+
+  packages/mcp-fabric:
+    dependencies:
+      '@narada2/carrier-action-admission':
+        specifier: workspace:*
+        version: link:../carrier-action-admission
+
   packages/mcp-shell-windows:
     devDependencies:
       '@types/node':
@@ -250,6 +279,8 @@ importers:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@20.19.39)
 
+  packages/mcp-transport: {}
+
   packages/narada-proper-mcp:
     dependencies:
       '@narada2/agent-context-memory':
@@ -265,6 +296,8 @@ importers:
       vitest:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@20.19.39)
+
+  packages/operator-surface-carriers: {}
 
   packages/ops-kit:
     dependencies:
@@ -370,6 +403,8 @@ importers:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@20.19.39)
 
+  packages/site-tool-surface-legacy: {}
+
   packages/sites/cloudflare:
     dependencies:
       '@narada2/charters':
@@ -451,6 +486,12 @@ importers:
       '@narada2/intent-zones':
         specifier: workspace:*
         version: link:../intent-zones
+      '@narada2/mcp-transport':
+        specifier: workspace:*
+        version: link:../mcp-transport
+      '@narada2/task-lifecycle-kernel':
+        specifier: workspace:*
+        version: link:../task-lifecycle-kernel
     devDependencies:
       '@types/node':
         specifier: ^20.10.0
@@ -461,6 +502,12 @@ importers:
       vitest:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@20.19.39)
+
+  packages/task-lifecycle-kernel: {}
+
+  packages/task-lifecycle-tools: {}
+
+  packages/typed-mcp-surface: {}
 
   packages/verticals/mailbox:
     devDependencies:
@@ -492,6 +539,8 @@ importers:
       vitest:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@20.19.39)
+
+  packages/window-surface-overlay: {}
 
   packages/windows-komorebi-yasb-kit:
     devDependencies:

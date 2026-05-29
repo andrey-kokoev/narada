@@ -562,9 +562,18 @@ assert.match(payloadLimitContent.recovery, /mcp_payload_create/);
 assert.match(payloadLimitContent.recovery, /Do not print JSON as prose/);
 assert.equal(payloadLimitEvents.some((event) => event.event === 'tool_result' && event.recovery?.includes('mcp_payload_create')), true);
 
-const interruptedTurn = { turnId: 'turn_interrupt', interruptRequested: false };
+const interruptedAbortController = new AbortController();
+const interruptedTurn = {
+  turnId: 'turn_interrupt',
+  interruptRequested: false,
+  abortSignal: interruptedAbortController.signal,
+  requestInterrupt() {
+    this.interruptRequested = true;
+    interruptedAbortController.abort(new Error('agent_cli_interrupt_requested'));
+  },
+};
 setTimeout(() => {
-  interruptedTurn.interruptRequested = true;
+  interruptedTurn.requestInterrupt();
 }, 20);
 const interruptedResult = await runConversationTurn(
   [{ role: 'user', content: 'wait' }],
@@ -574,13 +583,15 @@ const interruptedResult = await runConversationTurn(
   {
     turn: interruptedTurn,
     emit: (event, payload) => emitted.push({ event, ...payload }),
-    callChatApiFn: async () => new Promise((resolveDelay) => {
+    callChatApiFn: async (_messages, _tools, settings) => new Promise((resolveDelay, rejectDelay) => {
+      settings.abortSignal.addEventListener('abort', () => rejectDelay(new Error('agent_cli_interrupt_requested')), { once: true });
       setTimeout(() => resolveDelay({ choices: [{ message: { role: 'assistant', content: 'late' } }] }), 60);
     }),
   },
 );
 assert.equal(interruptedResult.terminal_state, 'interrupted');
 assert.equal(emitted.some((event) => event.event === 'turn_interrupted' && event.turn_id === 'turn_interrupt'), true);
+assert.equal(interruptedAbortController.signal.aborted, true);
 
 const admissionEvents = [];
 let mutatingToolSendCalled = false;

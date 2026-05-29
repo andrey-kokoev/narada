@@ -31,7 +31,12 @@ export interface Statement {
 }
 
 const require = createRequire(import.meta.url);
-const { DatabaseSync } = require("node:sqlite") as NodeSqliteModule;
+let nodeSqliteModule: NodeSqliteModule | null = null;
+
+function loadNodeSqlite(): NodeSqliteModule {
+  nodeSqliteModule ??= require("node:sqlite") as NodeSqliteModule;
+  return nodeSqliteModule;
+}
 
 export default class Database {
   private readonly db: NodeSqliteDatabase;
@@ -40,6 +45,7 @@ export default class Database {
   private savepointSequence = 0;
 
   constructor(path: string) {
+    const { DatabaseSync } = loadNodeSqlite();
     this.db = new DatabaseSync(path);
   }
 
