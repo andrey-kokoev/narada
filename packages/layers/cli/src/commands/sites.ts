@@ -2753,9 +2753,8 @@ async function loadLegacyToolSurfaceEntries(): Promise<Map<string, Record<string
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as { files?: Array<Record<string, unknown>> };
     for (const file of manifest.files ?? []) {
       const pathValue = String(file.path ?? '').replace(/\\/g, '/');
-      const hash = String(file.hash ?? '');
-      if (pathValue && hash) {
-        entries.set(`${pathValue}\n${hash}`, file);
+      if (pathValue) {
+        entries.set(pathValue, file);
       }
     }
   }
@@ -2794,7 +2793,7 @@ async function desiredToolSurfaceEntry(siteRoot: string, filePath: string): Prom
       allowed_root_refs: allowedRootRefs,
     };
   }
-  if (/(\.test\.(mjs|js|ts|tsx)$|[\\/](tests?|__tests__)[\\/]|[\\/]test-[^\\/]+\.(mjs|js|ts|tsx|ps1)$|[\\/]Test-[^\\/]+\.(mjs|js|ts|tsx|ps1)$)/i.test(relativePath)) {
+  if (/(\.test\.(mjs|js|ts|tsx|ps1|py)$|[\\/](tests?|__tests__)[\\/]|[\\/]test-[^\\/]+\.(mjs|js|ts|tsx|ps1|py)$|[\\/]Test-[^\\/]+\.(mjs|js|ts|tsx|ps1|py)$)/i.test(relativePath)) {
     return {
       path: relativePath,
       class: 'test_surface',
@@ -2806,11 +2805,11 @@ async function desiredToolSurfaceEntry(siteRoot: string, filePath: string): Prom
       allowed_root_refs: allowedRootRefs,
     };
   }
-  const legacyEntry = (await loadLegacyToolSurfaceEntries()).get(`${relativePath}\n${hash}`);
+  const legacyEntry = (await loadLegacyToolSurfaceEntries()).get(relativePath);
   if (legacyEntry) {
     return {
       path: relativePath,
-      class: 'canonical_package',
+      class: 'legacy_package_mirror',
       owner: 'narada-proper',
       surface: legacyEntry.surface ?? 'legacy-tool-surface',
       package: '@narada2/site-tool-surface-legacy',
@@ -3008,7 +3007,7 @@ async function addSiteToolSurfaceChecks(checks: SiteDoctorCheck[], siteRoot: str
       : `${missing.length} executable tool surface(s) are undeclared: ${missing.slice(0, 5).join(', ')}${missing.length > 5 ? ', ...' : ''}`,
   );
 
-  const validClasses = new Set(['canonical_package', 'generated_wrapper', 'site_owned', 'retired_refusal', 'runtime_state', 'test_surface']);
+  const validClasses = new Set(['canonical_package', 'legacy_package_mirror', 'generated_wrapper', 'site_owned', 'retired_refusal', 'runtime_state', 'test_surface']);
   const invalidClasses = entries.filter((entry) => !validClasses.has(String(entry.class ?? '')));
   addCheck(
     checks,

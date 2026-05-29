@@ -285,6 +285,14 @@
       "duplicate_site_count": 4
     },
     {
+      "path": "tools/mailbox-sync/graph-sync.mjs",
+      "hash": "9d7109463dea7dfab1dce017020dd2d1f7b2383a3945b98d94382538a1e42535",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\mailbox-sync\\graph-sync.mjs",
+      "duplicate_site_count": 3
+    },
+    {
       "path": "tools/mailbox-sync/mailbox-scheduler.mjs",
       "hash": "a407956c8d0128ba6a3c155f21452d96b72195a9fc671ab0df1c3f5e12bdea1f",
       "surface": "site-tools",
