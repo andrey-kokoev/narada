@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { basename, dirname, join, posix, resolve, win32 } from 'node:path';
 import { hostname } from 'node:os';
 import { promisify } from 'node:util';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
@@ -2562,6 +2562,15 @@ export interface SitesDoctorOptions extends SitesOptions {
   kind?: string;
 }
 
+export interface SitesReconcileAgentCliWrapperOptions extends SitesOptions {
+  root?: string;
+  apply?: boolean;
+}
+
+const AGENT_CLI_WRAPPER_RELATIVE_PATH = join('tools', 'operator-surface-carriers', 'Start-AgentCliSession.ps1');
+const AGENT_CLI_WRAPPER_TEMPLATE_HASH_PLACEHOLDER = '__NARADA_TEMPLATE_HASH__';
+const AGENT_CLI_WRAPPER_TEMPLATE_HASH_LINE = /^# narada_template_hash: .*$/m;
+
 function addCheck(
   checks: SiteDoctorCheck[],
   name: string,
@@ -2622,6 +2631,78 @@ function addDelegatedCliEmbodimentCheck(checks: SiteDoctorCheck[], siteRoot: str
     health.detail,
     health.ok ? undefined : 'Repair the delegated Narada CLI embodiment referenced by Site-local package scripts, then rerun Site doctor.',
   );
+}
+
+function sha256Text(text: string): string {
+  return createHash('sha256').update(text, 'utf8').digest('hex');
+}
+
+function normalizeAgentCliWrapperTemplateText(text: string): string {
+  return text
+    .replace(AGENT_CLI_WRAPPER_TEMPLATE_HASH_LINE, `# narada_template_hash: ${AGENT_CLI_WRAPPER_TEMPLATE_HASH_PLACEHOLDER}`)
+    .trimEnd();
+}
+
+function agentCliWrapperTemplatePath(): string {
+  return fileURLToPath(new URL('../../../../../packages/agent-cli/templates/Start-AgentCliSession.ps1', import.meta.url));
+}
+
+async function loadAgentCliWrapperTemplate(): Promise<{
+  templatePath: string;
+  normalizedText: string;
+  normalizedHash: string;
+  renderedText: string;
+}> {
+  const templatePath = agentCliWrapperTemplatePath();
+  const templateText = await readFile(templatePath, 'utf8');
+  const normalizedText = normalizeAgentCliWrapperTemplateText(templateText);
+  const normalizedHash = sha256Text(normalizedText);
+  return {
+    templatePath,
+    normalizedText,
+    normalizedHash,
+    renderedText: `${normalizedText.replace(AGENT_CLI_WRAPPER_TEMPLATE_HASH_PLACEHOLDER, normalizedHash)}\n`,
+  };
+}
+
+async function inspectAgentCliWrapper(siteRoot: string): Promise<{
+  wrapperPath: string;
+  exists: boolean;
+  current: boolean;
+  existingHash: string | null;
+  templatePath: string;
+  templateHash: string;
+  hasTemplateEvidence: boolean;
+}> {
+  const wrapperPath = join(siteRoot, AGENT_CLI_WRAPPER_RELATIVE_PATH);
+  const template = await loadAgentCliWrapperTemplate();
+  if (!existsSync(wrapperPath)) {
+    return {
+      wrapperPath,
+      exists: false,
+      current: false,
+      existingHash: null,
+      templatePath: template.templatePath,
+      templateHash: template.normalizedHash,
+      hasTemplateEvidence: false,
+    };
+  }
+  const wrapperText = await readFile(wrapperPath, 'utf8');
+  const normalizedWrapper = normalizeAgentCliWrapperTemplateText(wrapperText);
+  const existingHash = sha256Text(normalizedWrapper);
+  const hasTemplateEvidence = wrapperText.includes('narada_template_source: @narada2/agent-cli')
+    && wrapperText.includes('narada_template_id:')
+    && wrapperText.includes('narada_template_version:')
+    && wrapperText.includes('narada_template_hash:');
+  return {
+    wrapperPath,
+    exists: true,
+    current: hasTemplateEvidence && existingHash === template.normalizedHash,
+    existingHash,
+    templatePath: template.templatePath,
+    templateHash: template.normalizedHash,
+    hasTemplateEvidence,
+  };
 }
 
 async function listFilesRecursive(root: string): Promise<string[]> {
@@ -2716,16 +2797,15 @@ async function addSiteToolSurfaceChecks(checks: SiteDoctorCheck[], siteRoot: str
 
   const agentCliWrapperPath = join(siteRoot, 'tools', 'operator-surface-carriers', 'Start-AgentCliSession.ps1');
   if (existsSync(agentCliWrapperPath)) {
-    const wrapper = await readFile(agentCliWrapperPath, 'utf8');
-    const hasTemplateEvidence = wrapper.includes('narada_template_source: @narada2/agent-cli') && wrapper.includes('narada_template_hash:');
+    const wrapper = await inspectAgentCliWrapper(siteRoot);
     addCheck(
       checks,
       'agent_cli_package_wrapper',
-      hasTemplateEvidence ? 'pass' : 'fail',
-      hasTemplateEvidence
-        ? 'agent-cli wrapper carries Narada package template evidence'
-        : 'agent-cli wrapper is present but lacks package template evidence',
-      'Regenerate Start-AgentCliSession.ps1 from @narada2/agent-cli windows wrapper template.',
+      wrapper.current ? 'pass' : 'fail',
+      wrapper.current
+        ? `agent-cli wrapper matches @narada2/agent-cli template hash ${wrapper.templateHash}`
+        : `agent-cli wrapper is stale or lacks package template evidence; existing_hash=${wrapper.existingHash ?? 'missing'} expected_hash=${wrapper.templateHash}`,
+      'Run narada sites reconcile agent-cli-wrapper --root <site-root-or-workspace> --apply.',
     );
   } else if (generatedWrappers.some((entry) => entry.surface === 'agent-cli')) {
     addCheck(checks, 'agent_cli_package_wrapper', 'fail', 'Manifest declares an agent-cli generated wrapper, but Start-AgentCliSession.ps1 is missing');
@@ -2782,6 +2862,48 @@ async function addMcpFreshnessChecks(checks: SiteDoctorCheck[], siteRoot: string
       : `${requestFiles.length} restart request marker(s) present without restart-pressure acknowledgement evidence`,
     'Write durable reconciliation evidence before claiming restart pressure is acknowledged or cleared.',
   );
+}
+
+export async function sitesReconcileAgentCliWrapperCommand(
+  options: SitesReconcileAgentCliWrapperOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const inputRoot = resolve(options.root ?? '.');
+  const siteRoot = containedSiteRootFromInput(inputRoot);
+  const wrapper = await inspectAgentCliWrapper(siteRoot);
+  const template = await loadAgentCliWrapperTemplate();
+  const mutationNeeded = !wrapper.current;
+  if (options.apply && mutationNeeded) {
+    await mkdir(dirname(wrapper.wrapperPath), { recursive: true });
+    await writeFile(wrapper.wrapperPath, template.renderedText, 'utf8');
+  }
+
+  const after = options.apply ? await inspectAgentCliWrapper(siteRoot) : wrapper;
+  const result = {
+    schema: 'narada.site_agent_cli_wrapper_reconcile.v1',
+    status: after.current ? 'current' : options.apply ? 'failed' : 'stale',
+    mutation_attempted: options.apply === true,
+    mutation_performed: options.apply === true && mutationNeeded,
+    site_root: siteRoot,
+    wrapper_path: after.wrapperPath,
+    wrapper_exists: after.exists,
+    wrapper_current: after.current,
+    existing_hash: after.existingHash,
+    expected_template_hash: after.templateHash,
+    template_path: after.templatePath,
+  };
+  const lines = [
+    `agent-cli wrapper: ${result.status}`,
+    `site_root: ${siteRoot}`,
+    `wrapper_path: ${after.wrapperPath}`,
+    `expected_template_hash: ${after.templateHash}`,
+    `existing_hash: ${after.existingHash ?? 'missing'}`,
+    `mutation_performed: ${String(result.mutation_performed)}`,
+  ];
+  return {
+    exitCode: after.current || !options.apply ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
+    result: formattedResult(result, lines, (options.format ?? 'auto') as CliFormat),
+  };
 }
 
 function normalizeNativePath(pathValue: string): string {

@@ -23,6 +23,7 @@ import {
   sitesRelationListCommand,
   sitesRelationRecordCommand,
   sitesRelationValidateCommand,
+  sitesReconcileAgentCliWrapperCommand,
 } from './sites.js';
 import { siteImmuneScanCommand } from './site-immune-scan.js';
 import { siteMutationAuthorityPreflightCommand } from './site-mutation-authority-preflight.js';
@@ -157,6 +158,27 @@ export function registerSitesCommands(program: Command): void {
     .option('-v, --verbose', 'Enable verbose output', false)
     .action(wrapCommand('sites-discover', (opts, ctx) =>
       sitesDiscoverCommand({ format: process.env.OUTPUT_FORMAT as 'json' | 'human' | 'auto', verbose: opts.verbose }, ctx)));
+
+  const reconcileCmd = sitesCmd
+    .command('reconcile')
+    .description('Repair generated Site-local surfaces from Narada proper package templates');
+
+  reconcileCmd
+    .command('agent-cli-wrapper')
+    .description('Reconcile Start-AgentCliSession.ps1 from the packaged @narada2/agent-cli template')
+    .option('--root <path>', 'Site root or containing workspace root', '.')
+    .option('--apply', 'Write the reconciled wrapper', false)
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (opts: Record<string, unknown>) => {
+      const result = await sitesReconcileAgentCliWrapperCommand({
+        root: opts.root as string | undefined,
+        apply: opts.apply as boolean | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitFormatterBackedCommandResult(result, { format: opts.format });
+    });
 
   sitesCmd
     .command('agent-bootstrap <site-id-or-root>')
