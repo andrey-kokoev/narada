@@ -28,6 +28,14 @@ The manifest is enforced by the user-site `Sync-SiteToolSurfaceManifest.ps1` val
 
 Broad executable declarations such as `tools/**/*.ps1` are refused. They hide copied implementation drift. Transitional `site_owned` declarations must be per-file so the remaining copied surface is visible and countable.
 
+## Duplicate Site-Owned Surfaces
+
+Repeated `site_owned` executable hashes across Sites are incoherent by default. Same bytes in multiple Sites means the file is acting like a package without a package contract.
+
+The user-site duplicate audit groups manifest entries by content hash and fails unless every cross-Site duplicate group has an explicit exception record. Exceptions must name an owner, reason, and expiry. Expired exceptions fail. Stale exceptions with no current duplicate also fail.
+
+The exception ledger is transitional evidence, not permission to keep copied toolsets indefinitely. It exists to make the remaining cutover work concrete and auditable while package-owned replacements are introduced.
+
 ## Enforcement
 
 `narada sites doctor <site-id> --kind <client|project|windows> --root <path>` is
@@ -40,8 +48,13 @@ The coherence audit fails when:
 - generated `agent-cli` wrappers are not declared as `generated_wrapper`;
 - generated wrappers have missing or mismatched version/hash evidence;
 - broad executable declarations are present;
+- repeated `site_owned` executable hashes appear across Sites without an explicit unexpired exception;
+- duplicate exceptions are missing owner, reason, or expiry;
+- duplicate exceptions remain after the corresponding duplicate no longer exists;
 - known hardcoded local root/CLI defaults appear in executable surfaces;
 - `TargetSiteRoot` defaults from the user Site root.
+
+Generated agent-cli wrappers are repaired by running `narada sites reconcile agent-cli-wrapper --root <site-root-or-workspace> --apply`. The command renders `Start-AgentCliSession.ps1` from the packaged `@narada2/agent-cli` template and stamps the normalized template hash into the Site-local wrapper.
 
 It reports a declared exception when a Site-local executable surface is
 manifested as `site_owned` but does not yet carry full owner, scope, reason,
