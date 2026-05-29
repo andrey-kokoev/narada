@@ -676,7 +676,7 @@ export async function taskWorkNextCommand(
       required_work: spec?.required_work_markdown ?? null,
       handoff_actionability: handoffActionability,
       acceptance_criteria: spec
-        ? (JSON.parse(spec.acceptance_criteria_json) as string[]).join('\n')
+        ? (JSON.parse(spec.acceptance_criteria_json ?? '[]') as string[]).join('\n')
         : null,
       file_path: taskFile.path,
       assignment: activeAssignment

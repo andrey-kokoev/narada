@@ -245,7 +245,7 @@ export async function taskAmendCommand(
       changes.push('acceptance criteria');
     }
     if (options.appendCriteria && options.appendCriteria.length > 0) {
-      const existing = JSON.parse(updatedSpec.acceptance_criteria_json) as string[];
+      const existing = JSON.parse(updatedSpec.acceptance_criteria_json ?? '[]') as string[];
       updatedSpec.acceptance_criteria_json = JSON.stringify([...existing, ...options.appendCriteria]);
       changes.push('appended criteria');
     }
@@ -285,12 +285,12 @@ export async function taskAmendCommand(
   const newBody = renderTaskBodyFromSpec({
     spec: {
       title: updatedSpec.title,
-      chapter: updatedSpec.chapter_markdown,
-      goal: updatedSpec.goal_markdown,
-      context: updatedSpec.context_markdown,
-      required_work: updatedSpec.required_work_markdown,
-      non_goals: updatedSpec.non_goals_markdown,
-      acceptance_criteria: JSON.parse(updatedSpec.acceptance_criteria_json) as string[],
+      chapter: updatedSpec.chapter_markdown ?? null,
+      goal: updatedSpec.goal_markdown ?? null,
+      context: updatedSpec.context_markdown ?? null,
+      required_work: updatedSpec.required_work_markdown ?? null,
+      non_goals: updatedSpec.non_goals_markdown ?? null,
+      acceptance_criteria: JSON.parse(updatedSpec.acceptance_criteria_json ?? '[]') as string[],
     },
     executionNotes: projectionSections.executionNotes,
     verification: projectionSections.verification,

@@ -7,7 +7,7 @@
 import { lstat, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { execFile } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { basename, dirname, join, posix, resolve, win32 } from 'node:path';
 import { hostname } from 'node:os';
 import { promisify } from 'node:util';
@@ -2891,6 +2891,25 @@ function isExecutableToolPath(pathValue: string): boolean {
   return /\.(mjs|js|cjs|ts|tsx|ps1|cmd|bat|py)$/i.test(pathValue);
 }
 
+function appendCanonicalHash(entry: Record<string, unknown>, hash: string): Record<string, unknown> {
+  const hashes = new Set<string>();
+  if (typeof entry.hash === 'string' && entry.hash) {
+    hashes.add(entry.hash);
+  }
+  for (const item of Array.isArray(entry.hashes) ? entry.hashes : []) {
+    if (typeof item === 'string' && item) {
+      hashes.add(item);
+    }
+  }
+  hashes.add(hash);
+  return { ...entry, hashes: Array.from(hashes) };
+}
+
+function canonicalEntryMatches(entry: Record<string, unknown> | undefined, hash: string): boolean {
+  if (!entry) return false;
+  return entry.hash === hash || (Array.isArray(entry.hashes) && entry.hashes.includes(hash));
+}
+
 async function loadLegacyToolSurfaceEntries(): Promise<Map<string, Record<string, unknown>>> {
   if (legacyToolSurfaceEntries) return legacyToolSurfaceEntries;
   const manifestPath = fileURLToPath(new URL('../../../../../packages/site-tool-surface-legacy/manifest.json', import.meta.url));
@@ -2911,6 +2930,25 @@ async function loadLegacyToolSurfaceEntries(): Promise<Map<string, Record<string
 async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<string, unknown>>> {
   if (canonicalToolSurfaceEntries) return canonicalToolSurfaceEntries;
   const entries = new Map<string, Record<string, unknown>>();
+  async function addCanonicalHash(options: {
+    path: string;
+    packageName: string;
+    version: string;
+    surface: string;
+    fileUrl: URL;
+  }): Promise<void> {
+    const filePath = fileURLToPath(options.fileUrl);
+    if (!existsSync(filePath)) return;
+    const hash = sha256Text(await readFile(filePath, 'utf8'));
+    const existing = entries.get(options.path);
+    const entry = {
+      package: options.packageName,
+      version: options.version,
+      surface: options.surface,
+      hash,
+    };
+    entries.set(options.path, existing ? appendCanonicalHash(existing, hash) : entry);
+  }
   async function addCanonicalPackageTree(options: {
     packageName: string;
     version: string;
@@ -2929,11 +2967,12 @@ async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<str
         }
         if (!isExecutableToolPath(entry.name)) continue;
         const relativeFromSrc = slashRelative(srcRoot, entryPath);
-        entries.set(`${options.relativeToolRoot}/${relativeFromSrc}`, {
-          package: options.packageName,
+        await addCanonicalHash({
+          path: `${options.relativeToolRoot}/${relativeFromSrc}`,
+          packageName: options.packageName,
           version: options.version,
           surface: options.surface,
-          hash: sha256Text(await readFile(entryPath, 'utf8')),
+          fileUrl: pathToFileURL(entryPath),
         });
       }
     }
@@ -2941,11 +2980,12 @@ async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<str
   }
   const bootstrapPath = fileURLToPath(new URL('../../../../../packages/agent-start-bootstrap/src/synthesize-bootstrap.mjs', import.meta.url));
   if (existsSync(bootstrapPath)) {
-    entries.set('tools/agent-start/synthesize-bootstrap.mjs', {
-      package: '@narada2/agent-start-bootstrap',
+    await addCanonicalHash({
+      path: 'tools/agent-start/synthesize-bootstrap.mjs',
+      packageName: '@narada2/agent-start-bootstrap',
       version: '0.1.0',
       surface: 'agent-start',
-      hash: sha256Text(await readFile(bootstrapPath, 'utf8')),
+      fileUrl: new URL('../../../../../packages/agent-start-bootstrap/src/synthesize-bootstrap.mjs', import.meta.url),
     });
   }
   const overlayScripts = [
@@ -2957,11 +2997,12 @@ async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<str
   for (const script of overlayScripts) {
     const scriptPath = fileURLToPath(new URL(`../../../../../packages/window-surface-overlay/src/${script}`, import.meta.url));
     if (existsSync(scriptPath)) {
-      entries.set(`tools/window-surface-overlay/${script}`, {
-        package: '@narada2/window-surface-overlay',
+      await addCanonicalHash({
+        path: `tools/window-surface-overlay/${script}`,
+        packageName: '@narada2/window-surface-overlay',
         version: '0.1.0',
         surface: 'window-surface-overlay',
-        hash: sha256Text(await readFile(scriptPath, 'utf8')),
+        fileUrl: new URL(`../../../../../packages/window-surface-overlay/src/${script}`, import.meta.url),
       });
     }
   }
@@ -2979,14 +3020,36 @@ async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<str
   for (const script of typedMcpScripts) {
     const scriptPath = fileURLToPath(new URL(`../../../../../packages/typed-mcp-surface/src/${script}`, import.meta.url));
     if (existsSync(scriptPath)) {
-      entries.set(`tools/typed-mcp/${script}`, {
-        package: '@narada2/typed-mcp-surface',
+      await addCanonicalHash({
+        path: `tools/typed-mcp/${script}`,
+        packageName: '@narada2/typed-mcp-surface',
         version: '0.1.0',
         surface: 'typed-mcp',
-        hash: sha256Text(await readFile(scriptPath, 'utf8')),
+        fileUrl: new URL(`../../../../../packages/typed-mcp-surface/src/${script}`, import.meta.url),
       });
     }
   }
+  await addCanonicalHash({
+    path: 'tools/mcp-payload-file.mjs',
+    packageName: '@narada2/site-common-tools',
+    version: '0.1.0',
+    surface: 'site-tools',
+    fileUrl: new URL('../../../../../packages/site-common-tools/compat/mcp-payload-file.legacy-site.mjs', import.meta.url),
+  });
+  await addCanonicalHash({
+    path: 'tools/task-lifecycle/task-mcp-server.mjs',
+    packageName: '@narada2/task-lifecycle-tools',
+    version: '0.1.0',
+    surface: 'task-lifecycle',
+    fileUrl: new URL('../../../../../packages/task-lifecycle-tools/compat/task-mcp-server.legacy-site.mjs', import.meta.url),
+  });
+  await addCanonicalHash({
+    path: 'tools/typed-mcp/inbox-mcp-server.mjs',
+    packageName: '@narada2/typed-mcp-surface',
+    version: '0.1.0',
+    surface: 'typed-mcp',
+    fileUrl: new URL('../../../../../packages/typed-mcp-surface/compat/inbox-mcp-server.legacy-site.mjs', import.meta.url),
+  });
   await addCanonicalPackageTree({
     packageName: '@narada2/operator-surface-carriers',
     version: '0.1.0',
@@ -3063,7 +3126,7 @@ async function desiredToolSurfaceEntry(siteRoot: string, filePath: string): Prom
     };
   }
   const canonicalEntry = (await loadCanonicalToolSurfaceEntries()).get(relativePath);
-  if (canonicalEntry && canonicalEntry.hash === hash) {
+  if (canonicalEntry && canonicalEntryMatches(canonicalEntry, hash)) {
     return {
       path: relativePath,
       class: 'canonical_package',
@@ -3076,7 +3139,7 @@ async function desiredToolSurfaceEntry(siteRoot: string, filePath: string): Prom
     };
   }
   const legacyEntry = (await loadLegacyToolSurfaceEntries()).get(relativePath);
-  if (legacyEntry) {
+  if (legacyEntry && legacyEntry.hash === hash) {
     return {
       path: relativePath,
       class: 'legacy_package_mirror',
@@ -3085,6 +3148,20 @@ async function desiredToolSurfaceEntry(siteRoot: string, filePath: string): Prom
       package: '@narada2/site-tool-surface-legacy',
       version: '0.0.0',
       hash,
+      allowed_root_refs: allowedRootRefs,
+    };
+  }
+  if (legacyEntry) {
+    return {
+      path: relativePath,
+      class: 'site_variant',
+      owner: 'site',
+      surface: legacyEntry.surface ?? 'site-tools',
+      package: '',
+      version: '',
+      hash,
+      reason: 'site-local variant of a historical Narada proper mirror; not byte-identical to a packaged surface',
+      review_at: '2026-06-30',
       allowed_root_refs: allowedRootRefs,
     };
   }
@@ -3277,7 +3354,7 @@ async function addSiteToolSurfaceChecks(checks: SiteDoctorCheck[], siteRoot: str
       : `${missing.length} executable tool surface(s) are undeclared: ${missing.slice(0, 5).join(', ')}${missing.length > 5 ? ', ...' : ''}`,
   );
 
-  const validClasses = new Set(['canonical_package', 'legacy_package_mirror', 'generated_wrapper', 'site_owned', 'retired_refusal', 'runtime_state', 'test_surface']);
+  const validClasses = new Set(['canonical_package', 'legacy_package_mirror', 'generated_wrapper', 'site_owned', 'site_variant', 'retired_refusal', 'runtime_state', 'test_surface']);
   const invalidClasses = entries.filter((entry) => !validClasses.has(String(entry.class ?? '')));
   addCheck(
     checks,

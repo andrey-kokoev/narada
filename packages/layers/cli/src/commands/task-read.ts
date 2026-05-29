@@ -210,7 +210,7 @@ export async function taskReadCommand(
   }
 
   const projectionSections = extractProjectionSections(body);
-  const specCriteria = specRow ? JSON.parse(specRow.acceptance_criteria_json) as string[] : [];
+  const specCriteria = JSON.parse(specRow.acceptance_criteria_json ?? '[]') as string[];
   const acceptanceCriteria = mergeAcceptanceCriteriaState(
     specCriteria,
     projectionSections.acceptanceCriteriaState,
@@ -270,7 +270,7 @@ export async function taskReadCommand(
     status = frontMatter.status as string | undefined;
   }
 
-  const dependsOn = JSON.parse(specRow.dependencies_json) as number[];
+  const dependsOn = JSON.parse(specRow.dependencies_json ?? '[]') as number[];
 
   // Assignment state
   let assignment: TaskReadResult['assignment'] = null;

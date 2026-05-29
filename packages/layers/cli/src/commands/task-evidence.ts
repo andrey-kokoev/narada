@@ -318,7 +318,7 @@ export async function taskEvidenceProveCriteriaCommand(
       store.upsertTaskSpec(specRow);
     }
 
-    const criteria = JSON.parse(specRow.acceptance_criteria_json) as string[];
+    const criteria = JSON.parse(specRow.acceptance_criteria_json ?? '[]') as string[];
     if (criteria.length === 0) {
       return {
         exitCode: ExitCode.GENERAL_ERROR,
@@ -331,11 +331,11 @@ export async function taskEvidenceProveCriteriaCommand(
     const newBody = renderTaskBodyFromSpec({
       spec: {
         title: specRow.title,
-        chapter: specRow.chapter_markdown,
-        goal: specRow.goal_markdown,
-        context: specRow.context_markdown,
-        required_work: specRow.required_work_markdown,
-        non_goals: specRow.non_goals_markdown,
+        chapter: specRow.chapter_markdown ?? null,
+        goal: specRow.goal_markdown ?? null,
+        context: specRow.context_markdown ?? null,
+        required_work: specRow.required_work_markdown ?? null,
+        non_goals: specRow.non_goals_markdown ?? null,
         acceptance_criteria: criteria,
       },
       executionNotes: projectionSections.executionNotes,
