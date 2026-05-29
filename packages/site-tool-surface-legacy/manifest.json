@@ -1,0 +1,1856 @@
+{
+  "schema": "narada.site_tool_surface_legacy_package.v1",
+  "package": "@narada2/site-tool-surface-legacy",
+  "generated_at": "2026-05-29T11:45:36.1982244-05:00",
+  "mirror_root": "mirrors",
+  "files": [
+    {
+      "path": "tools/adoptable-deltas/adoptable-deltas-mcp-server.mjs",
+      "hash": "4d0a0ade5cb1e8062ed10077ee7062106ffe42dbaa81dca4d1b2b042d85e62c3",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\adoptable-deltas\\adoptable-deltas-mcp-server.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/agent-context/agent-context-hydration-service.mjs",
+      "hash": "f715ba10dc310d811345727421f235ab79739512b91107f63a2204b7ea512d89",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\agent-context\\agent-context-hydration-service.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/agent-context/agent-context-mcp-server.mjs",
+      "hash": "15b345d629f7ef5c37478dce2051f5a9ccad9a7ea11afd5d2d7f1c347324a8f1",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\Utz\\.narada",
+      "source_path": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\Utz\\.narada\\tools\\agent-context\\agent-context-mcp-server.mjs",
+      "duplicate_site_count": 2
+    },
+    {
+      "path": "tools/agent-context/codex-session-evidence.mjs",
+      "hash": "e0b9a788c10dcdf12e1b238ba71622cffa868ff4965ce43503633aaa9913fecf",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\agent-context\\codex-session-evidence.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/agent-context/concept-protocol-lifecycle-service.mjs",
+      "hash": "29a59b11c9bde3ec528a808b9716130e4ca0ab1b495c5842a1c20b8b7ca61683",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\agent-context\\concept-protocol-lifecycle-service.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/agent-context/doctrinal-reground.mjs",
+      "hash": "4a4ecd284f12de48afbf13d551a8b152fcd0e9d5c775a51948065cbec4186623",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\agent-context\\doctrinal-reground.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/agent-context/inquiry-space-service.mjs",
+      "hash": "9f91ae5c8bc07c01afe266d33ae1dd2550afe121da632b7bbdda9847db5460ca",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\agent-context\\inquiry-space-service.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/agent-context/list-sessions.mjs",
+      "hash": "ba2e85426441f1f2c3c074db4ad9fe98304f30d8b004fa21be533c527dcb97b8",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\agent-context\\list-sessions.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/agent-context/path-policy.mjs",
+      "hash": "b6448bbf338140ba7e20d57375c2f4bd9eb60d92d56feb06fe66712e13262805",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\agent-context\\path-policy.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/agent-context/session-start.mjs",
+      "hash": "79dbaaab187eafc77d10702846840b166a75e30f18b17e6762f944e380fb747f",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\Staccato\\.narada",
+      "source_path": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\Staccato\\.narada\\tools\\agent-context\\session-start.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/agent-context/site-evolution-orientation.mjs",
+      "hash": "0a0290d4cb20c3ebd5207cebb9a0228e122949fa6f646ce8d774fdf4acfa15cc",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\agent-context\\site-evolution-orientation.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/agent-context/synthesize-bootstrap.mjs",
+      "hash": "70d4e1d9832257ee82566f66b248eee00ea92b3392b6415361e6453e7e475db5",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\agent-context\\synthesize-bootstrap.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/agent-start/synthesize-bootstrap.mjs",
+      "hash": "9e630d205135271310f8ada5917e1ebdde53a95d718c338e0ac34de6f643f594",
+      "surface": "agent-start",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\agent-start\\synthesize-bootstrap.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/architecture/generate-adr-index.mjs",
+      "hash": "fcfc800cb3e02b38d961095fe81da546306b3d47da31529d7a672d69ad74e038",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\architecture\\generate-adr-index.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/capability-lifecycle/capability-lifecycle-mcp-server.mjs",
+      "hash": "d09342214ee0f1092f7dfef009c27efbecbb32a241f25fc16cf4d546ddce35d8",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\capability-lifecycle\\capability-lifecycle-mcp-server.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/capability-updates/capability-update-broadcast.mjs",
+      "hash": "a9507678813ee4b775eeb4c2610a93b5261e95bd35e665684390f8450e0835f7",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\capability-updates\\capability-update-broadcast.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/elevated-diagnostics/Invoke-NaradaElevatedDumpDiagnostics.ps1",
+      "hash": "d2385b0faeb603a2a70e3508ab44617fb5300953f1923b6b7156164825d2f8a2",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\elevated-diagnostics\\Invoke-NaradaElevatedDumpDiagnostics.ps1",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/elevated-diagnostics/Start-NaradaElevatedDumpDiagnostics.ps1",
+      "hash": "2dbf811ace4739cfe6e179b614bf7640829c403657c0d2416707b4f1517875f6",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\elevated-diagnostics\\Start-NaradaElevatedDumpDiagnostics.ps1",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/generic-command-registry.mjs",
+      "hash": "3b64ce66756b340bd5cc6f5ac69ed5012cca7449ced047ea0ed3cf68961e5b46",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\generic-command-registry.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/generic-command-workloop-helper.mjs",
+      "hash": "9889093676476c6bac9df6e7bda5456f4eca7e5d84762adb85d15ae0b4e1fc90",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\generic-command-workloop-helper.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/inbox/admission-log.mjs",
+      "hash": "52cb4519ae38cc4ffba9c68d0d7e23f1e9c9a732e8dd5be77ea1d796ba0957fc",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\inbox\\admission-log.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/inbox/batch-triage.mjs",
+      "hash": "33a90eaf896ef80fe13b9b19ee813d58909b2f074ca2d09e76eec061b5cc8e83",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\inbox\\batch-triage.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/inbox/envelope-kinds.mjs",
+      "hash": "8ed39a606b3b7d4077e0e13dbf95825379604d48d08c4fdebc8384d003a3e109",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\inbox\\envelope-kinds.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/inbox/inbox-index.mjs",
+      "hash": "7dbcf2e87e370d68cab359c26dc7caaa0a51fb6e513c2d21ffad99ac6e96e248",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\inbox\\inbox-index.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/inbox/inbox-policy.mjs",
+      "hash": "cf00be8c831f18d9e3d50f7e844563e07db012894c2f407b841c16e6be1ebd48",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\inbox\\inbox-policy.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/inbox/triage-envelopes.mjs",
+      "hash": "e303800bb50e4faff2aaf96673a0688253015afeb6ef245741168306653c7002",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\inbox\\triage-envelopes.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/incubation/dry-run-agent-start.mjs",
+      "hash": "4a59edfadc8b3a4b5afca63252746649000cb3230f12971ad437c5a9f1d764a5",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\incubation\\dry-run-agent-start.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/incubation/lint-residual-records.mjs",
+      "hash": "0bbf1ea0a0c5564c63c370bedcb8b00188b17f1bd5d308d190b36a86de4f12ab",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\incubation\\lint-residual-records.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/incubation/validate-intelligence-context.mjs",
+      "hash": "eeabbbc02b6fbe2dd11e96b993959cf2b497cc54ce5c96a74d0e2ac3e57ca594",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\incubation\\validate-intelligence-context.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/incubation/verify-agent-context-schema.mjs",
+      "hash": "f5208567be1e8787b4f2d4b05921a216982087394bbba17a5075d6c4ab1f3907",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\incubation\\verify-agent-context-schema.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/incubation/write-file-utf8.mjs",
+      "hash": "a0537dbc75e391caa621b1747d93a5e06b9508ea01301051bd0e62fde726cefc",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\incubation\\write-file-utf8.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/lifecycle/continue-first-time-operator-onboarding.mjs",
+      "hash": "39853e31dd4a194683b75dce8e14cb96e278ab02b88a07eb42992c181362b2ab",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\lifecycle\\continue-first-time-operator-onboarding.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/lifecycle/probe-first-time-onboarding-prerequisites.mjs",
+      "hash": "bd6897b33f8aff63ca462530ac853bad144f48acf5a01ab9a900b8840946143f",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\lifecycle\\probe-first-time-onboarding-prerequisites.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/lifecycle/project-onboarding-intent.mjs",
+      "hash": "8401136f6afab86a1240a2b58cbc7f321a022eae67e2dc085e2d7819cdf16300",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\lifecycle\\project-onboarding-intent.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/local-evidence/Invoke-OperatorEvidencePipeline.ps1",
+      "hash": "18b7f940b8ac860ceeccdfd4dd6f3b3cfa0fc57273f002c774866050beee2843",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\local-evidence\\Invoke-OperatorEvidencePipeline.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/mailbox-sync/mailbox-scheduler.mjs",
+      "hash": "a407956c8d0128ba6a3c155f21452d96b72195a9fc671ab0df1c3f5e12bdea1f",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\mailbox-sync\\mailbox-scheduler.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/mailbox-sync/mailbox-sync-daemon.mjs",
+      "hash": "e7dd5eb18fbfa942d4322a14ba0bc4080d8658c28093e08a4ab0ce14fa113bb0",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\mailbox-sync\\mailbox-sync-daemon.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/mailbox/mailbox-admission.mjs",
+      "hash": "297ad80413b5b838fe3b0b6c0d0971bd5a249c43b11dca043bdac360983f5581",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\mailbox\\mailbox-admission.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/mcp-freshness-service.mjs",
+      "hash": "d3b05398e821ca761ba5f140397a9d8d02a0f8248651c0597c64bbbede5e3b24",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\mcp-freshness-service.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/mcp-payload-file.mjs",
+      "hash": "ab1fcd6d90130aed11e479df00558ac29f646533088b42b8abcb1e408053eadb",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\mcp-payload-file.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/mcp-servers/filesystem/filesystem-mcp-server.mjs",
+      "hash": "e12af18a451088a94bb73f10672568cc9a20f12a77469fe66af9031f172e21b5",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\mcp-servers\\filesystem\\filesystem-mcp-server.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/mcp-servers/shell/shell-mcp-server.mjs",
+      "hash": "f761656d6a06b74a158585dc6a17966aaef361a49acc19125cedc8762c6e223e",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\mcp-servers\\shell\\shell-mcp-server.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/mcp-smoke-test.mjs",
+      "hash": "1b985be1a43ada1bfd6b9c54c6330ff675567216bce9381b21db769d7f2dcd67",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\mcp-smoke-test.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/microsoft-graph/Connect-NaradaGraphMailbox.ps1",
+      "hash": "4398791ff7f54ff84a00a868ab13d8d3ccaa76e7202bd6b308ecbdd54d69fd82",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\microsoft-graph\\Connect-NaradaGraphMailbox.ps1",
+      "duplicate_site_count": 2
+    },
+    {
+      "path": "tools/narada-andrey/Assert-NoRawWslCrossing.ps1",
+      "hash": "03a896cfc0d47722bcf664dabdbe2fb48da7d9f7c1b9ab319c32f87322dd7127",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\narada-andrey\\Assert-NoRawWslCrossing.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/narada-andrey/convert_codex_conversation_to_markdown.py",
+      "hash": "24474d5d9132aa184feba00db618a5ad73a964d7d19f4930714bc6f3ff98b202",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\narada-andrey\\convert_codex_conversation_to_markdown.py",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/narada-andrey/convert_kimi_conversation_to_markdown.py",
+      "hash": "ba92e5ea50c5ef30ddcaadd317e5d886bece7a1095378b976c38d9127f95b35b",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\narada-andrey\\convert_kimi_conversation_to_markdown.py",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/narada-andrey/distill_codex_session.py",
+      "hash": "37254b3532f53affd484fa65d01fb614d3c3f081733d4a4da4fd2a463f416584",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\narada-andrey\\distill_codex_session.py",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/narada-andrey/distill_kimi_session.py",
+      "hash": "6f9a990bff7be226be6058c06dcf2c33d86bb9b8ae9da177448e84772a0faa6e",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\narada-andrey\\distill_kimi_session.py",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/narada-andrey/extract_meta_arc.py",
+      "hash": "fa76951d079a7aeadeda72ffb42197240dddadf81ff4a16f61a3fce05e98748e",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\narada-andrey\\extract_meta_arc.py",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/narada-andrey/Invoke-NaradaAndrey.ps1",
+      "hash": "8b4c93eeda540132e4d86acdd17ac6fa16ae26de5e09454165b7f9539fa3a390",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\Utz\\.narada",
+      "source_path": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\Utz\\.narada\\tools\\narada-andrey\\Invoke-NaradaAndrey.ps1",
+      "duplicate_site_count": 2
+    },
+    {
+      "path": "tools/narada-andrey/Invoke-SiteTargetCapabilities.ps1",
+      "hash": "d77f8587845b1570a09651fed57681fb69e063bbd94dea245c74f1498ada0463",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\narada-andrey\\Invoke-SiteTargetCapabilities.ps1",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/narada-andrey/measure_codex_session.py",
+      "hash": "a1f394ebd53ba5feca8170baf1d60885be8047ebcc80c00f8b908332c73acdd3",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\narada-andrey\\measure_codex_session.py",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/narada-andrey/measure_kimi_session.py",
+      "hash": "d592ca06ac96ed14f6be8fa95bd1055b12cef458903fe9605e11eebce30f8d84",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\narada-andrey\\measure_kimi_session.py",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/narada-andrey/run-psscriptanalyzer.ps1",
+      "hash": "36c6b19ede4baf881db39768ffbd93f24563eef163a82700188f23c8b6760d3f",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\narada-andrey\\run-psscriptanalyzer.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/narada-andrey/site-doctor.mjs",
+      "hash": "535fe9a1e384a833effd1bea8b07665cc3b4c64616d8eafe0eabcb95f579c7c2",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\narada-andrey\\site-doctor.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-avatar-overlay/Inspect-AvatarOverlay.ps1",
+      "hash": "8783829cc0764803fc6097a3fd9911009f6e3d36c37b721b9ffe2d4ebd150278",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-avatar-overlay\\Inspect-AvatarOverlay.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-avatar-overlay/Install-AvatarOverlay.ps1",
+      "hash": "199fab9a8e7b06c8ddf4c9d66455c24596ad0b70ad976e4c17e96f14b8ef4444",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-avatar-overlay\\Install-AvatarOverlay.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-avatar-overlay/Start-AvatarOverlay.ps1",
+      "hash": "93cadf608937fdaec4aa7f99977b840a2eded4fd2a9cd4b8d0a7645bbcf5e281",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-avatar-overlay\\Start-AvatarOverlay.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-avatar-overlay/Stop-AvatarOverlay.ps1",
+      "hash": "14a42668638936024f33cd4dc6b0337682def1845b8593722f084f0952db008c",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-avatar-overlay\\Stop-AvatarOverlay.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/AddMissingSiteIds.py",
+      "hash": "dd3a4498b7deec8e608d3be9b1393dd6eb04d0999036169810b4c1ad4b835aea",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\!Revolution\\.narada",
+      "source_path": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\!Revolution\\.narada\\tools\\operator-surface-carriers\\AddMissingSiteIds.py",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/operator-surface-carriers/Build-AvatarOverlayRuntime.ps1",
+      "hash": "e223c91a778cbd4601d29935eb6f83b1c80e4d226265df6223a5d8f474ac37e1",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Build-AvatarOverlayRuntime.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Build-OperatorWorkspaceSelectorProjection.ps1",
+      "hash": "7843e6778d2ef131a3b4aa457d3ad7901da5194678bfd6f37220f2bf46f02d1b",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Build-OperatorWorkspaceSelectorProjection.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Build-WindowLabelsFromIdentities.ps1",
+      "hash": "83db4bdaa19aab9d65820f2b8d291b6ddefe07ebd86a9a874ec1ffdc9c9ba694",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Build-WindowLabelsFromIdentities.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/camera_gesture_local_monitor.py",
+      "hash": "8bf38b26a941a69e1fcb3a32ec7461c8bcd15d4929b8954708d4edefe11015c8",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\camera_gesture_local_monitor.py",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Confirm-OperatorSurfaceBinding.ps1",
+      "hash": "75b143a93209592ca73f03db5b5a456e1f962d98213ed6a758011e18fa89cfcc",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Confirm-OperatorSurfaceBinding.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Confirm-OperatorSurfaceForkAdoption.ps1",
+      "hash": "ec21289efe6cc0a74e2319bc5129fc190e26161b297f790ae1c675ddc5807687",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Confirm-OperatorSurfaceForkAdoption.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Get-ArchitectWorkSelection.ps1",
+      "hash": "09b066b68178bc29f254a6ead261f0b3994e32f4985ee31dff9251b013e40f2c",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\!Revolution\\.narada",
+      "source_path": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\!Revolution\\.narada\\tools\\operator-surface-carriers\\Get-ArchitectWorkSelection.ps1",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/operator-surface-carriers/Get-BoundedWorkloopNext.mjs",
+      "hash": "a003c39a023f2ccdfb0cfa2111b8b5882dc67d9d3f715cfa1e4fe67af77c8954",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Get-BoundedWorkloopNext.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Get-BoundedWorkloopNext.ps1",
+      "hash": "9078ed52aab957ca3ebc7c117cef84a76dc5ccd9559b848dae9c6d38323b8388",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Get-BoundedWorkloopNext.ps1",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/operator-surface-carriers/Get-DirectedObligations.ps1",
+      "hash": "c39ca8c84d3210ff4561fc48df9a09d41db6dbbcbcf5839911cdc2c4fe2cd97f",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Get-DirectedObligations.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Get-KomorebiShortcutAndRoleBorderHealth.ps1",
+      "hash": "3307e938f2a18449b80681f6b411e513af18acee9d8b2a18ba86b71eac9aff01",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Get-KomorebiShortcutAndRoleBorderHealth.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Get-OperatorSurfaceInputEvents.ps1",
+      "hash": "99f6e965524843d63548adf78a8710581190ad1bb77a189a7cebf84d057f18c2",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Get-OperatorSurfaceInputEvents.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Get-OperatorSurfaceMessageBusState.ps1",
+      "hash": "d02c3b75375d537f6c3911a9c04c18fbfc231a6d451924d01e393d5380ecf00d",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Get-OperatorSurfaceMessageBusState.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Get-OperatorWorkspaceTransitionLedger.ps1",
+      "hash": "b5087787ec8bff7dc0ccf77243c36f9852b7edd14b2a27d7439867b161299ff3",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Get-OperatorWorkspaceTransitionLedger.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/HostTopology.Model.ps1",
+      "hash": "aa4d6fb0908d9a56b4231a1178694d7190f04b2ab6ec0c956b83f03449ab9bc0",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\HostTopology.Model.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Install-AgentDesktopShortcuts.ps1",
+      "hash": "6050e8bcfc2e4ed54b26e2dbdf7cbf8ce3af5f31b4aa68c815833fb33b592473",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\Utz\\.narada",
+      "source_path": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\Utz\\.narada\\tools\\operator-surface-carriers\\Install-AgentDesktopShortcuts.ps1",
+      "duplicate_site_count": 2
+    },
+    {
+      "path": "tools/operator-surface-carriers/Invoke-DirectedObligationDispatcher.ps1",
+      "hash": "bff4a7c37baa7a2d45fa78a28d5808714bf645f5ba5f2545924d73c2fb4afde6",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Invoke-DirectedObligationDispatcher.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Invoke-KomorebiStack.ps1",
+      "hash": "2a1b2bede486e59ded3fdbfdf6ec319b2fe08a7d0abc4ef0ef0c60d1d383b81c",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Invoke-KomorebiStack.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Invoke-OperatorSurfaceReconcile.ps1",
+      "hash": "529841b5a4e9004e5decd7ac9763e163c6a0a2645b4c0e92636f5d022c743d46",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Invoke-OperatorSurfaceReconcile.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Invoke-ReviewPickupEscalation.ps1",
+      "hash": "0ef79011d180f6a3ac5968bef44b268ddc02d9b1970fa1b3f896af58fe38644f",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Invoke-ReviewPickupEscalation.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Invoke-VoiceIntentCapturePrototype.ps1",
+      "hash": "995c64a46301ceb680de9ff368ce9f3d8e56470e50b8c0a75885987a76f12d86",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Invoke-VoiceIntentCapturePrototype.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Invoke-VoiceRecognitionAdapter.ps1",
+      "hash": "9e6da3b3ded267cd92f3f81b612f1eaa71590dfe1d9b9dabb03e266d7e48655b",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Invoke-VoiceRecognitionAdapter.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Materialize-WindowsTerminalCarrier.ps1",
+      "hash": "f7641bd7250f11cb0d441735854a5f4c901862ec8a8eeed4b26b2c2ec2279e24",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Materialize-WindowsTerminalCarrier.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/New-OperatorSurfaceForkHandoffPacket.ps1",
+      "hash": "2f1197135dd012c7088a7e7a619679b3e57238bb117a58a4d6a069ade974b327",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\New-OperatorSurfaceForkHandoffPacket.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/NormalizeIdentitiesJson.py",
+      "hash": "4ab85a872f619b8f4845dd175ccccc581ae106eaa5f23d4d73a7aa8db5ce9ebd",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\!Revolution\\.narada",
+      "source_path": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\!Revolution\\.narada\\tools\\operator-surface-carriers\\NormalizeIdentitiesJson.py",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/operator-surface-carriers/Open-OperatorWorkspace.ps1",
+      "hash": "f0729b2df15beab0fca5c912a52292e6346066fed94b3bb7e8a6e697de4b4fa4",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Open-OperatorWorkspace.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/OperatorSurfaceDesktopDelivery.Model.ps1",
+      "hash": "ea30f4c2f052e1a8a39503aaad7fe79f8eac0bab86befdcffd0d8f696b9f6ccc",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\OperatorSurfaceDesktopDelivery.Model.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/OperatorSurfaceMessageEnvelope.Model.ps1",
+      "hash": "ecbaeef3f486dc1f38b1609c7d8909f655fa8dd578adf17e4fbe676fcf69e379",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\OperatorSurfaceMessageEnvelope.Model.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/OperatorWorkspaceProjection.Model.ps1",
+      "hash": "0bb2ddc098cc2af9281a314944223b74e7f8632412771e5f8985c095078ad43e",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\OperatorWorkspaceProjection.Model.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Repair-NaradaArchitectCarrier.ps1",
+      "hash": "d41070833db4ee220d6d315023fc5b480ee031f228998ccff7c8d1929469c323",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Repair-NaradaArchitectCarrier.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Resolve-VoiceOperatorSurfaceIntent.ps1",
+      "hash": "50563f51100f64deb96d7ddfc078b97cf2b6e34af356ea525de687972ba675d3",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Resolve-VoiceOperatorSurfaceIntent.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Restart-WhkdDaemon.ps1",
+      "hash": "b4c9725efcba6a2ca8d2fe0826a7af287838d636386f041f41f2339f428e963e",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Restart-WhkdDaemon.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Restore-OperatorSurfaceSession.ps1",
+      "hash": "b9d198aaeff0b3c8681a982b167cb97a22526ec195e388adef0f6cf64d129c01",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Restore-OperatorSurfaceSession.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/RuntimeWindowBindingStore.ps1",
+      "hash": "928d6581ceb0c930cefb4d2d8d509a3f68f2e40816c417ede0c7046c2bddfdae",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\RuntimeWindowBindingStore.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Save-CurrentOperatorWorkspace.ps1",
+      "hash": "3446914302d256d15921af5a3dbd23363b76bde7fcd73de254cec2d61a78113d",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Save-CurrentOperatorWorkspace.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Send-OperatorSurfaceIntent.ps1",
+      "hash": "4ce81e7cbe475751ba4f2251ffb9afa161dcd0d854c44e3ad0dc1c1963c0078e",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Send-OperatorSurfaceIntent.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Send-OperatorSurfaceMessageBus.ps1",
+      "hash": "4ec5623c6accd309d884c82ea37e378957a4af23811789c0d58efcd7b32af684",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Send-OperatorSurfaceMessageBus.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Send-Os.ps1",
+      "hash": "6b8246e8ed7e621be708a168312de66081884c24c395bb5f42062fdcd602dab9",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Send-Os.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Set-CameraGestureSensingLifecycle.ps1",
+      "hash": "aa5f4ab3d08e992b9c9711feca4875ef563cd45ee470385ad079919ee79607c9",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Set-CameraGestureSensingLifecycle.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Set-DirectedObligation.ps1",
+      "hash": "2a2133b828f51dc2588e0928be0d30a9f0d7b492b499b7aaae99aa716a7ba0f9",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Set-DirectedObligation.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Show-FocusedWindowIdentityBindingDialog.ps1",
+      "hash": "90b7444a61eff1850549f3b182f1d90b27aba9632d1266ed54f55bc8b33c8f28",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Show-FocusedWindowIdentityBindingDialog.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Show-OperatorSurfaceBindDialog.ps1",
+      "hash": "0e3388faaeda3d4aeab553ae2a1175acfc80f59ed3d85e6c0d031a4813e6cca3",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Show-OperatorSurfaceBindDialog.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Start-CameraGestureLocalMonitor.ps1",
+      "hash": "ebaa4a2140f96c360673bc3fec435ab572637792cb244b0375a775f49b92f912",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Start-CameraGestureLocalMonitor.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Start-VoiceIntentLocalMonitor.ps1",
+      "hash": "e7aecb55c2d2c69b8182637fa9cccb068620ef7b8cbf720d8d8fcd4d435bc205",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Start-VoiceIntentLocalMonitor.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/Switch-OperatorWorkspace.ps1",
+      "hash": "9e46eaf262a2897c4c7fa1e2bfb402e65ab2209a15af80d354a8e70d00a45ed1",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\Switch-OperatorWorkspace.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/voice_intent_local_monitor.py",
+      "hash": "520b14f1ff9e5363e711e6c030f0682f90d0d3205dc4fe6c038a41e30239dbb0",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\voice_intent_local_monitor.py",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/voice_recognition_adapter.py",
+      "hash": "e5972d752dd5aacdc4e5da4128a496ec59af76c50681155cf7771ac89391214d",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\voice_recognition_adapter.py",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/windows-glue/Focus-OperatorSurfaceIdentity.ps1",
+      "hash": "c4ce3ac0cc449e298b5c9010c8740ad661a34f4590269bc93cca32e38af1259c",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\windows-glue\\Focus-OperatorSurfaceIdentity.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/windows-glue/Invoke-OperatorWorkspaceProjection.ps1",
+      "hash": "82b2d95cb10081346e363aed7dd398f9ff5872f03ceed4a5aeb90e3ad2d197f3",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\windows-glue\\Invoke-OperatorWorkspaceProjection.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/windows-glue/Repair-OperatorSurfaceWindows.ps1",
+      "hash": "5ee223c4b24b6ebfbd55aed52849087408625aa2b43de253daf7e89a7def2bce",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\windows-glue\\Repair-OperatorSurfaceWindows.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/windows-glue/Resolve-OperatorSurfaceCarrierWindow.ps1",
+      "hash": "4ac85d2c0ce6adfab85aebb3549362360815b4c3100fa67138a5fba75e305c22",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\windows-glue\\Resolve-OperatorSurfaceCarrierWindow.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/windows-glue/Send-OperatorSurfaceInput.ps1",
+      "hash": "d30d2bfdcaad9c3f0bbc82c2c83cf94b01d3bfb56654c5a386a71cfca0d6ddd1",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface-carriers\\windows-glue\\Send-OperatorSurfaceInput.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface-carriers/windows-glue/Start-AgentOperatorSurfaceCarrierChild.ps1",
+      "hash": "9b076273363fd8bb6fdf4beecef9b21bd781a1b05eb7c7fd3d9ae83a351aa7bc",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\Utz\\.narada",
+      "source_path": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\Utz\\.narada\\tools\\operator-surface-carriers\\windows-glue\\Start-AgentOperatorSurfaceCarrierChild.ps1",
+      "duplicate_site_count": 2
+    },
+    {
+      "path": "tools/operator-surface-carriers/windows-glue/Start-CodexResumeOperatorSurfaces.ps1",
+      "hash": "5f46cb0da25ff8e2bb33383b9d7aac72df9e9df74e24871de09ef6fe62401ed4",
+      "surface": "operator-surface",
+      "source_site": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\Utz\\.narada",
+      "source_path": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\Utz\\.narada\\tools\\operator-surface-carriers\\windows-glue\\Start-CodexResumeOperatorSurfaces.ps1",
+      "duplicate_site_count": 2
+    },
+    {
+      "path": "tools/operator-surface/capability-announcements-validator.mjs",
+      "hash": "07ae2c5809675be75aa216cb2b0c27e63b6e714e46f4c727e9840fe7011fed96",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface\\capability-announcements-validator.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface/list-active-sessions.mjs",
+      "hash": "65c231fa3310af4458ea3acbcfa705cd6893961bd1eda81525b14687728178e9",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface\\list-active-sessions.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface/mcp-runtime-instance-registry.mjs",
+      "hash": "d5256a90058c9d97dc114dc4f918769e4863512cb0573813febc16fb3f18a11f",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface\\mcp-runtime-instance-registry.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/operator-surface/migrate-identities-to-sqlite.mjs",
+      "hash": "29041ced7a7bcc9e3f68e125ca128722da18f13f98a5ada29ce1c9329a036158",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface\\migrate-identities-to-sqlite.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface/operator-surface-binding-services.mjs",
+      "hash": "b032f79dd0af2fce0c17061830061565b1c082f6f58393d1d0b03d6dd2afa8bf",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface\\operator-surface-binding-services.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/operator-surface/operator-surface-mcp-server.mjs",
+      "hash": "e3b57c115600628ebafd0594d45739e68d7cdc69dbd8935104097f7f53b0c9d8",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface\\operator-surface-mcp-server.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/osl-webview2-panel-host/Inspect-OslPanelHost.ps1",
+      "hash": "1dbaa7d30656992af52a80022e53d35c352c0dfacc7aef6332f99b61cc9f0084",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\osl-webview2-panel-host\\Inspect-OslPanelHost.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/osl-webview2-panel-host/Install-OslPanelHost.ps1",
+      "hash": "d3fa875b3114f73ec3542e5cd3f30627ee42b0f6d27d0cd78c6063db96d5d051",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\osl-webview2-panel-host\\Install-OslPanelHost.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/osl-webview2-panel-host/Start-OslPanelHost.ps1",
+      "hash": "9802b6a36a9b579abb324c59b897e99ae8289aedcbb7a84457a80f0c33acb6ce",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\osl-webview2-panel-host\\Start-OslPanelHost.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/osl-webview2-panel-host/Stop-OslPanelHost.ps1",
+      "hash": "7c084cea26836fa183738c6a7c8f1debdad671b4009c6a5b91c4321316d63e97",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\osl-webview2-panel-host\\Stop-OslPanelHost.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/site-config/agent-execution-policy.mjs",
+      "hash": "eb44188d7191e501c99acf6b6e7bbe8345ce95640992ebba3a728a937ff65ec1",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\site-config\\agent-execution-policy.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/site-config/cleanup-tmp.mjs",
+      "hash": "e2626be44fcfc6f553c21e176c23c5a394175670270ab15a169a2a3067f651c4",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\site-config\\cleanup-tmp.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/site-config/get-runtime-value.mjs",
+      "hash": "006b5aa7829ad30e6c19f8d801e3ecd7e309aefe429eaa6e4c9e601b08d67abd",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\site-config\\get-runtime-value.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/site-config/Remove-LeakedSonarMcpFromCodexConfig.ps1",
+      "hash": "3ac4721f9228437b079e3c08710a0416dc890f611198c669bd4c0fa4017077bf",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\site-config\\Remove-LeakedSonarMcpFromCodexConfig.ps1",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/site-config/staccato-config-crossing-mcp-server.mjs",
+      "hash": "7b23e57d01fb6ec53511cc581f2f1dffb2117ed15a4e6caeaf699077b2f784b2",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\site-config\\staccato-config-crossing-mcp-server.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/site-config/validate-agent-execution-policy.mjs",
+      "hash": "31de7e4815a7855285d4af720ecbd68be8237fdbf072846f03520b749b283500",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\site-config\\validate-agent-execution-policy.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/site-config/validate-site-config.mjs",
+      "hash": "7c87ae32fbafad70a3610d720908d1234b9e784f2afcd65f54c9083e9e2b2074",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\site-config\\validate-site-config.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/site-connectivity/site-connectivity-mcp-server.mjs",
+      "hash": "678cc5fc761ac8466f09bebd4adc60a2bd15c051937095b288f903205c15a093",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\site-connectivity\\site-connectivity-mcp-server.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/site-identity/materialize-site-identity.mjs",
+      "hash": "8ce931d059976a1ed34a8e2e92cc2bb2dce12bdb7dea9f4076b2e20f0516a1d6",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\site-identity\\materialize-site-identity.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/site-identity/signed-declaration.mjs",
+      "hash": "8e0404f6c4303cf7db8a9bd8031508250761a0a001969420aa85ba25b0c2f0ce",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\site-identity\\signed-declaration.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/site-identity/site-identity-mcp-server.mjs",
+      "hash": "f89e0e32a14fcbdc91bf3c2f59f408f3fc5bd477b29486522b4f80d8e93b5651",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\site-identity\\site-identity-mcp-server.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/site-init/site-init.mjs",
+      "hash": "79ab02918d5276db582382af312f9a51c83873dad648d2766f6c68b496a47513",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\site-init\\site-init.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/site-init/site-live-carriers.mjs",
+      "hash": "ddbb505820785618d46dcb3524c9e10fb4c03371d851122a9b9c983c50494957",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\site-init\\site-live-carriers.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/site-lift/create-lift-package.mjs",
+      "hash": "60b77da8af4b6ad8a8ee81378775d594fa93c7c4826d5575f03bafe127c7da76",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\site-lift\\create-lift-package.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/site-lift/send-lift-package.mjs",
+      "hash": "14ed97be0fd5806d1ae2849539abd4b55ba2b95cb31721cf3fb1c94596e3671c",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\site-lift\\send-lift-package.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/site-lift/site-lift-command-admission.mjs",
+      "hash": "e04221373f7529e0f729421979d57757ef0d05de73b41efcc7e8df26beec8c79",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\site-lift\\site-lift-command-admission.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/site-lift/site-lift-mcp-server.mjs",
+      "hash": "68bac3582bb12ab3046cdffbb5cc025fb2c597dd5df8293305319ac332ca4bb4",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\site-lift\\site-lift-mcp-server.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/site-locus-shim.mjs",
+      "hash": "25475b43061515dbb7b154b5955b2781d0bd5258dbeb54a71fe9c346bdafa5eb",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\site-locus-shim.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/site-mail/site-mail-mcp-server.mjs",
+      "hash": "12aa9cc2f056375599e5f40e45a8df9e342cedcc7bb04634bcc93769f2a132bb",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\site-mail\\site-mail-mcp-server.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/site-probe/site-probe-mcp-server.mjs",
+      "hash": "e50e7da249f9516ca096d8ff7cda476d7280d2aabba8742aa1fa7fd676dd6f52",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\site-probe\\site-probe-mcp-server.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/task-lifecycle/agent-role-resolution.mjs",
+      "hash": "10f547338d1a3daa57bce8699bfbb4a36243f7453bfa99c0fdeb50d2a7d3ba84",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\agent-role-resolution.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/task-lifecycle/audit-agents-posture.mjs",
+      "hash": "de9e1f428a86b6f9edc1f6a5b57d2567692c895bf442121f29d224c4505bf901",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\audit-agents-posture.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/task-lifecycle/audit-task-reports.mjs",
+      "hash": "abaeed7c3d172460678b2e846bd3fd1209e68bf52b121bb2374b61c11ef36579",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\audit-task-reports.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/bridge-poll.mjs",
+      "hash": "41110380f30cf85a593682aac88a3738deff9d189dd45703cddbe95f6255b29d",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\bridge-poll.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/task-lifecycle/bulk-routing.mjs",
+      "hash": "016132c4ecfce3cfd0800a1ec1e28dc424751ffc6cbd77cf0bb7edbb2b55684d",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\bulk-routing.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/task-lifecycle/chapter-lifecycle.mjs",
+      "hash": "e3bc09eea6c3fafd26a10df1495d0730f4062820b85f4862587448ca846071da",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\chapter-lifecycle.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/task-lifecycle/check-assignment-consistency.mjs",
+      "hash": "d9f9530b4c2f72d2fa75fdad876ec50846eb2112824bb62905393e58417f7623",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\check-assignment-consistency.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/check-roster-consistency.mjs",
+      "hash": "a0c6a335217eb32ee7f2746fe119adbc1609e2c0f9ed3e30bc903cb0af473bb3",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\check-roster-consistency.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/task-lifecycle/check-roster-divergence.mjs",
+      "hash": "50c457e71426903799cc9a2a1324766bb62e38329b465f0e0399cb3ea256831d",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\check-roster-divergence.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/task-lifecycle/check-task-filename-consistency.mjs",
+      "hash": "a79ff13bbba22b5cf67c3b55286e76509e9ff24a94104262729a6884438f3446",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\check-task-filename-consistency.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/closure-authority.mjs",
+      "hash": "ba5fe6bf9526ed09581a456d7d83c4fd0fb0b58cc1975e03072cb1b360f49ce1",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\closure-authority.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/task-lifecycle/corrective-debt-workboard.mjs",
+      "hash": "4b694d8f0b745c73545ec8a9b96339d6453ce1147ab921e6300f23652be93c1a",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\corrective-debt-workboard.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/task-lifecycle/emit-checkpoint.mjs",
+      "hash": "bedce7db4ddb7a34dcfb612080c55e502b7d62031d9be300e934cf282e449220",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\emit-checkpoint.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/fix-schema-assertions.mjs",
+      "hash": "4db6476506bfbb38941378c42b0c273be5fe980f9e8894dfc221cdd7bc249cd3",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\fix-schema-assertions.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/follow-up-ledger-validation.mjs",
+      "hash": "5ba6bde16696a8662544bfa4bc99e7484ba4e32a92da88d0961ecb22ce018fa7",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\follow-up-ledger-validation.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/task-lifecycle/follow-up-policy-service.mjs",
+      "hash": "3db96307e3fecadf0ea217a6ee819ea6f61f5c13fd945fa2fad724a304d940d7",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\!Revolution\\.narada",
+      "source_path": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\!Revolution\\.narada\\tools\\task-lifecycle\\follow-up-policy-service.mjs",
+      "duplicate_site_count": 2
+    },
+    {
+      "path": "tools/task-lifecycle/generate-workboard.mjs",
+      "hash": "8dfa89c98c277af1637bb25283cfd96e5bc5a5234d39f81038baa5e3075c669d",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\generate-workboard.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/task-lifecycle/inbox-bridge.mjs",
+      "hash": "b0f066072b4855886f94e7148f1f71262b0ddbcd1da8e31cf71ce6c8453cad85",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\inbox-bridge.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/task-lifecycle/inbox-workboard.mjs",
+      "hash": "e69ffd78931bfef7716f126ad886ee1d8a7dd15b593315a313c7e2ff1b49224e",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\inbox-workboard.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/task-lifecycle/inspect-schema.mjs",
+      "hash": "53e9f35362cde83ee5e1f3131f677e9924d3c643fb0c392e8370bc71271ac0ad",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\inspect-schema.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/Invoke-McpServerReload.ps1",
+      "hash": "9e6b938c93e80353bc8d086d222ee867cc5e87f6f60ca746bd4393da867a90e2",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\Invoke-McpServerReload.ps1",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/lint-ps1.mjs",
+      "hash": "8d8243c449409a397f2bfa38a4574307038da2c08a7c7de77a8971fb73864c1c",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\lint-ps1.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/mcp-guard.mjs",
+      "hash": "2e5b92a57ee3f36bb53de7d8ea2c135798d6558f169ab55855a4ed32d2c2c2c6",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\mcp-guard.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/task-lifecycle/mcp-reload-detect.mjs",
+      "hash": "2181984a4aab002a7630676a9d4dcecf35a5ef188c799684e2e9e870c6fc7b43",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\mcp-reload-detect.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/mcp-reload-request.mjs",
+      "hash": "e94015db6db0f9c7fb70c1b63eb5c0e1766b0ef77c6cecfbe4ab7f2eae791541",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\mcp-reload-request.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/migrate-add-relative-priority.mjs",
+      "hash": "6a3e4efc3a7f95993f3c19d25a93ecac074cf70a1b5d97ff20fcb84bf3815a05",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\migrate-add-relative-priority.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/migrate-assignment-consistency.mjs",
+      "hash": "85482b3a793835564c0e239ec60dc5aa9dfe449717ba45ee8536811308920162",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\migrate-assignment-consistency.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/migrate-drop-task-assignment-records.mjs",
+      "hash": "92a8e0d103c3fff468b19117f0a4636b931fc19efdf7a1b95aecc459304ff802",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\migrate-drop-task-assignment-records.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/migrate-orphaned-obligations.mjs",
+      "hash": "dd49563cfdf341af69b948e3204cf8597e91ae2d3fcba2b0b6e80c927e603417",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\migrate-orphaned-obligations.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/migrate-stale-review-obligations.mjs",
+      "hash": "0184de89bd4fcc74d4bde6b6704575434b803e7ffd033fde70c04e828940396c",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\migrate-stale-review-obligations.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/migrate-task-reports.mjs",
+      "hash": "ef0868afe897f9681277d2b1af737b289c39d3d187bc11f206015a8d424a35ec",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\migrate-task-reports.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/operator-identity.mjs",
+      "hash": "6a3119683878b0e7fb89380d26a2082e7a49c3f7f7f4f3f60d474ee150d39225",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\operator-identity.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/task-lifecycle/recovery-truthfulness-guard.mjs",
+      "hash": "36485c4ea225d964a5809b5291fb1faecfec6dac9087d66c6e0286c1551b6a58",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\recovery-truthfulness-guard.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/task-lifecycle/repair-roster-from-sql.mjs",
+      "hash": "336ef469007d1d5272ee00dad818e936d0ab92a27cba6272c315a27ff45e94b9",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\repair-roster-from-sql.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/self-certification-guard.mjs",
+      "hash": "c39dbf799a4b7b4eeac7bbdb63cd57eac3eb650dbdd1674bd64a71220b6cab44",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\self-certification-guard.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/task-lifecycle/setup-vendor.ps1",
+      "hash": "8432f0a058b68bbc6115e4cbe29bae47bf12162ede104a82b7f0c78dd6abe04e",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\setup-vendor.ps1",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/Show-TaskAuthority.ps1",
+      "hash": "d94f099d2f266bbe25910b4ccf1c2d8818f4f2c47ca5ce0348d2faf9587282f7",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\Show-TaskAuthority.ps1",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/task-lifecycle/sql-diagnose.mjs",
+      "hash": "5d23c75c48030dd03caba6c6b413e84b5a9ff7d2a01bfeb06fb009a72f85bb27",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\sql-diagnose.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/sync-roster.mjs",
+      "hash": "614fca7609dfdc0fc486b9c4fe0a3c879128c10e69999066313078b3246cf276",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\sync-roster.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/task-lifecycle/sync-task-number-sequence.mjs",
+      "hash": "4291c8f88127ca431da50b4eb6bfe69339fcccd1c795c9d43619ba1e341b36e4",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\sync-task-number-sequence.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/sync-task-roles.mjs",
+      "hash": "5a6c0957b3932d4292723ce689761613c2a8e880639287947b73a9d3cae834fc",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\sync-task-roles.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/task-lifecycle/sync-task-specs.mjs",
+      "hash": "93528b5643854406f0f16bd50f35bbad9fae7d9ee104d00b730935c8e30983c3",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\sync-task-specs.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/task-lifecycle/task-admin.mjs",
+      "hash": "903950844b5f8dd39e2fa9b2391d6725698adbb16303f226242e0b87e8558d59",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task-admin.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/task-claim.mjs",
+      "hash": "9aa3c224c0bca5c29e7c6f4acf2dc3675df923d055349654010822c1eac5fb3f",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task-claim.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/task-lifecycle/task-close.mjs",
+      "hash": "0774869d3f19f863eada2023983ee0e698442d91605f903e69289d96feadf271",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task-close.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/task-continue.mjs",
+      "hash": "0f8817bec5e686db6e22aea3361ad16f96ae8949d00776bb393cd094501e3da5",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task-continue.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/task-create.mjs",
+      "hash": "4def10278d4ae429f3a77d3df3278d383013e85a60cd08e5fb3ba9e901c5090b",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task-create.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/task-defer.mjs",
+      "hash": "11aa9c42bc3b79e45f2c59625f836577f26cb5fc8c1a936060a6da1f0515913f",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task-defer.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/task-evidence.mjs",
+      "hash": "a5b7dfe4400f19340e9154f06560eca9028166b75c237e768da8a2ef341bf630",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task-evidence.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/task-finish.mjs",
+      "hash": "5bcf5e11b46f460e9d450d4ab1bff63d948cb34fcb99e1a6e1e328f28a50d284",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task-finish.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/task-lifecycle/task-inspect.mjs",
+      "hash": "72b940f46385d96484d0c6cf3cd890d97c228c669b97a76aec9006a7940969b8",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task-inspect.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/task-lifecycle/task-lifecycle-mutation-services.mjs",
+      "hash": "9462e628bac0b2fa34c9fe0d6591f4bafa03f489e5aba2778ce35d87d8356c48",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task-lifecycle-mutation-services.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/task-lifecycle/task-list.mjs",
+      "hash": "486e60164d04378067e5690e6bd541523792dda750d2140918b10a7c98ef2f3b",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task-list.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/task-lifecycle/task-mcp-server.mjs",
+      "hash": "23ed70b6dc0d16c122cf4ebb62f55862c9320c346a93d25291f4448345d0b6ce",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task-mcp-server.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/task-lifecycle/task-mcp-tool-registry.mjs",
+      "hash": "bf25adc9b5055573473da36ddf0dfe27f71695f10b40dfb02ae2afcc1f16cf2d",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task-mcp-tool-registry.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/task-lifecycle/task-next.mjs",
+      "hash": "0ee60cef57a7b7534fa0dfe392433a76c303186b9927dd9b707276dcc103a8d9",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task-next.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/task-lifecycle/task-obligations.mjs",
+      "hash": "8a1d109f374c80d1416d659ebfa36fc9ea145e05cb070e8c7eab102181a81c75",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task-obligations.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/task-lifecycle/task-read.mjs",
+      "hash": "5bf38f41e1409505f2df7857db659a8147c5f66f362e97da38ebfe70f20dc93f",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task-read.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/task-lifecycle/task-related.mjs",
+      "hash": "653ae8037cc82dbbaddc58fae57f6c8c30d5c6ccd28fbc812a9dcbd8dcf58371",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task-related.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/task-relatedness.mjs",
+      "hash": "6eb4c28b346bacf2a9d4b6790728f5aded9c8a3ac3c506be62cc8852bc3a7601",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task-relatedness.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/task-reopen.mjs",
+      "hash": "ac4c4746da29077ee1d59a3637c990773edfd30acb847a0b1080953928dcf956",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task-reopen.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/task-report.mjs",
+      "hash": "abcce87240ba423eff5350e445e1e8fcae017526564cd4fb1000dc6f816c3755",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task-report.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/task-review.mjs",
+      "hash": "33f8d13d11e7a283d0910006dd3cd1122b2db9260c15bf6a8c9f570f3ca9adf6",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task-review.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/task-lifecycle/task-search.mjs",
+      "hash": "f113e5c70fabbbcaf44cd23abbdf238810fea1f04d9ea7cb6d0c761d8519c5c9",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task-search.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/task-unclaim.mjs",
+      "hash": "6339b7e48838bb00d4421f1b79ae5adc39e981b0940c89ffe3ca7c1f85a2b922",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task-unclaim.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/task-lifecycle/task.mjs",
+      "hash": "f695dbe8c4251b3525134946e147bcb8e24801f85e177b2e3c5de94cf2153724",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\task.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/task-lifecycle/unified-workboard.mjs",
+      "hash": "0fa2f05db450e54808c2443c11b6ac5c8207a8113a658f2f40c84cc1ad6f6f83",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\unified-workboard.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/task-lifecycle/update-roster-agent.mjs",
+      "hash": "52b9b97d79119b69422565d4214c8e5e9eda1042a9253dc95b0579048f5d1e57",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\update-roster-agent.mjs",
+      "duplicate_site_count": 5
+    },
+    {
+      "path": "tools/task-lifecycle/validate-powershell-runtime.mjs",
+      "hash": "85ecdaf3b555cef153b2a25015041a1bafbd97aec1f6676ecf30c8beb4b4f8dc",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\validate-powershell-runtime.mjs",
+      "duplicate_site_count": 6
+    },
+    {
+      "path": "tools/task-lifecycle/workboard.mjs",
+      "hash": "2355a6a3a7cf23c4f61099c3ef388c70b745dd4e54e329db0ffc5063afbc549d",
+      "surface": "task-lifecycle",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\task-lifecycle\\workboard.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/typed-mcp/adr-mcp-server.mjs",
+      "hash": "cc8cc9015702d5277726e5278b12204673b4d9247c232383a3463a7851145b52",
+      "surface": "typed-mcp",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\typed-mcp\\adr-mcp-server.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/typed-mcp/ee-mcp-server.mjs",
+      "hash": "03f220dce9d77daf9ac190a81f5506a0d56bb59c81f2cff163986f287416c5e7",
+      "surface": "typed-mcp",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\typed-mcp\\ee-mcp-server.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/typed-mcp/generate-carrier-mcp-config.mjs",
+      "hash": "912a05cd36d985e4844a60ec72b1f97a75613113e9d15639f1f2f0d54578a613",
+      "surface": "typed-mcp",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\typed-mcp\\generate-carrier-mcp-config.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/typed-mcp/inbox-admission-log.mjs",
+      "hash": "e051c4f4ba476890f5dad1961f06d964619fd7ccb00416f2e75482adaaab03b3",
+      "surface": "typed-mcp",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\typed-mcp\\inbox-admission-log.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/typed-mcp/inbox-admit.mjs",
+      "hash": "512b7ba1af7c38154252fccd63646d666f46fd6e9bbf31fd75694267cd3d627d",
+      "surface": "typed-mcp",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\typed-mcp\\inbox-admit.mjs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/typed-mcp/inbox-mcp-server.mjs",
+      "hash": "363e382b7d56f32361052fb2b2e9c092d5d77120ac269589e9b9b6464cdb4ea0",
+      "surface": "typed-mcp",
+      "source_site": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\Utz\\.narada",
+      "source_path": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\Utz\\.narada\\tools\\typed-mcp\\inbox-mcp-server.mjs",
+      "duplicate_site_count": 2
+    },
+    {
+      "path": "tools/typed-mcp/Invoke-EeMcpPrototype.ps1",
+      "hash": "a16b517b8c61754d1654b2053c1fba67e25203c211906f1d09b5c0079352e9d9",
+      "surface": "typed-mcp",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\typed-mcp\\Invoke-EeMcpPrototype.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/typed-mcp/Invoke-InboxMcpPrototype.ps1",
+      "hash": "7025f73e892711cf41224330e6ef3e593be689da4a1a8b2dc6d92ff0a883f01c",
+      "surface": "typed-mcp",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\typed-mcp\\Invoke-InboxMcpPrototype.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/typed-mcp/validate-mcp-surface-registry.mjs",
+      "hash": "04104c028a60dd6ab25ab8dd8398f79cce59f50c6f8270be19306096d70e27ed",
+      "surface": "typed-mcp",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\typed-mcp\\validate-mcp-surface-registry.mjs",
+      "duplicate_site_count": 3
+    },
+    {
+      "path": "tools/Update-InquirySpaceActualGraphFromMcpOutput.ps1",
+      "hash": "f522f45da69b48bbfdc287765f90bded42a7d206d0aa53969336a588ec51ff1e",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\Update-InquirySpaceActualGraphFromMcpOutput.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/Vendor-D3ForInquirySpaceGraph.ps1",
+      "hash": "11d7e7f9e5678682946dff9b01188c0a9fc00c9379c138c3f700982b98927415",
+      "surface": "site-tools",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\Vendor-D3ForInquirySpaceGraph.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/window-surface-overlay/Inspect-WindowSurfaceOverlay.ps1",
+      "hash": "4c025145d15e7e8633b26a790ecff8bbe78f51795309b88fd1c334b6f92b5060",
+      "surface": "window-surface-overlay",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\window-surface-overlay\\Inspect-WindowSurfaceOverlay.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/window-surface-overlay/Install-WindowSurfaceOverlay.ps1",
+      "hash": "2b22a624e8e625f99ba6595fc73eb39a468cf339ab19379c32f6c8294519198f",
+      "surface": "window-surface-overlay",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\window-surface-overlay\\Install-WindowSurfaceOverlay.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/window-surface-overlay/src/main.rs",
+      "hash": "fc7e8ae0ed1e2568b05f3b25a2156de60eefb41c53c7d16406ec08a2f44cc4fc",
+      "surface": "window-surface-overlay",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\window-surface-overlay\\src\\main.rs",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/window-surface-overlay/Start-WindowSurfaceOverlay.ps1",
+      "hash": "82f80cfa4c7e5b05fa0938db040ab086c4b338ead970295335154c75253ecf3c",
+      "surface": "window-surface-overlay",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\window-surface-overlay\\Start-WindowSurfaceOverlay.ps1",
+      "duplicate_site_count": 4
+    },
+    {
+      "path": "tools/window-surface-overlay/Stop-WindowSurfaceOverlay.ps1",
+      "hash": "ea0e11327d00af150a0744e7dcb281eb349603c195950b6e39f2b13d726fef79",
+      "surface": "window-surface-overlay",
+      "source_site": "C:\\Users\\Andrey\\Narada",
+      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\window-surface-overlay\\Stop-WindowSurfaceOverlay.ps1",
+      "duplicate_site_count": 4
+    }
+  ]
+}

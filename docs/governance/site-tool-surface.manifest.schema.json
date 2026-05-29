@@ -21,6 +21,7 @@
               "canonical_package",
               "generated_wrapper",
               "site_owned",
+              "test_surface",
               "retired_refusal",
               "runtime_state"
             ]

@@ -7,6 +7,7 @@ Narada Sites may hold state and declarations. Reusable executable logic should b
 - `canonical_package`: implementation lives in a Narada package and is invoked through the package contract.
 - `generated_wrapper`: Site-local wrapper generated from a package template, with version/hash evidence.
 - `site_owned`: executable logic intentionally owned by this Site.
+- `test_surface`: executable tests and conformance checks. These are governed evidence, not runtime tool authority.
 - `retired_refusal`: legacy entrypoint kept only to refuse and point at the replacement.
 - `runtime_state`: runtime artifact, not executable authority.
 
@@ -36,6 +37,12 @@ The user-site duplicate audit groups manifest entries by content hash and fails 
 
 The exception ledger is transitional evidence, not permission to keep copied toolsets indefinitely. It exists to make the remaining cutover work concrete and auditable while package-owned replacements are introduced.
 
+Copied legacy runtime tools that have not yet been split into domain packages are mirrored by `@narada2/site-tool-surface-legacy`. Site manifests may classify a local copy as `canonical_package` only when its path and content hash match the package mirror manifest. This removes duplicate-authority debt without pretending the Site owns the copied implementation.
+
+Tests are classified as `test_surface`, not `site_owned`, so repeated tests do not create runtime tool authority debt.
+
+When duplicate hashes are absent, the next cutover target is selected by `site_owned` burden: the surface family with the largest number of Site-owned executable entries across inspected Sites. This keeps package extraction grounded in observed Site-local surface area rather than intuition.
+
 ## Enforcement
 
 `narada sites doctor <site-id> --kind <client|project|windows> --root <path>` is
@@ -55,6 +62,8 @@ The coherence audit fails when:
 - `TargetSiteRoot` defaults from the user Site root.
 
 Generated agent-cli wrappers are repaired by running `narada sites reconcile agent-cli-wrapper --root <site-root-or-workspace> --apply`. The command renders `Start-AgentCliSession.ps1` from the packaged `@narada2/agent-cli` template and stamps the normalized template hash into the Site-local wrapper.
+
+Tool-surface manifests are repaired by running `narada sites reconcile tool-surface-manifest --root <site-root-or-workspace> --apply`. This command is Narada-proper-owned; it replaces profile-local manifest sync as the canonical finite repair surface.
 
 It reports a declared exception when a Site-local executable surface is
 manifested as `site_owned` but does not yet carry full owner, scope, reason,
