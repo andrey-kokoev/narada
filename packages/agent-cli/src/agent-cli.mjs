@@ -772,17 +772,24 @@ async function executeMcpTool(toolCall, mcpServers, rl, options = {}) {
       content,
     };
   } catch (err) {
+    const recovery = toolFailureRecovery(err?.message);
     if (!serverMode) {
       turn?.clearStatus?.();
-      printToolResultLine(`failed ${name} in ${formatDuration(Date.now() - startedAt)} · ${err.message}`, { level: 'error' });
+      printToolResultLine(`failed ${name} in ${formatDuration(Date.now() - startedAt)} · ${err.message}${recovery ? `\n${recovery}` : ''}`, { level: 'error' });
     }
-    emit?.('tool_result', { turn_id: turnId, tool: name, status: 'error', error: err.message });
+    emit?.('tool_result', { turn_id: turnId, tool: name, status: 'error', error: err.message, recovery });
     return {
       role: 'tool',
       tool_call_id: toolCall.id,
-      content: JSON.stringify({ error: err.message }),
+      content: JSON.stringify({ error: err.message, ...(recovery ? { recovery } : {}) }),
     };
   }
+}
+
+function toolFailureRecovery(message) {
+  const text = String(message ?? '');
+  if (!text.includes('inline_payload_too_long')) return null;
+  return 'Recovery: call mcp_payload_create with {"payload":{...}}, then retry the original tool with {"payload_ref":"mcp_payload:<id>@v1"}. Do not print JSON as prose.';
 }
 
 function extractOutputRef(content) {

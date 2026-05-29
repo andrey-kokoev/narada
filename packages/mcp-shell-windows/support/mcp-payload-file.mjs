@@ -151,7 +151,7 @@ export function enforceInlinePayloadLimit({
   if (violations.length === 0) return;
   const first = violations[0];
   throw new Error(
-    `inline_payload_too_long: field=${first.field} length=${first.length} threshold=${limit} remediation=use payload_ref`
+    `inline_payload_too_long: field=${first.field} length=${first.length} threshold=${limit} remediation=call mcp_payload_create with {"payload":{...}} then call ${toolName} with {"payload_ref":"mcp_payload:<id>@v1"}`
   );
 }
 
@@ -273,6 +273,8 @@ export function buildOutputRefToolContent({
     truncated: true,
     output_ref: stored.ref,
     reader_tool: 'mcp_output_show',
+    read_command: `mcp_output_show({"ref":"${stored.ref}","output_limit":10000})`,
+    remediation: `Call mcp_output_show with ref="${stored.ref}" or output_ref="${stored.ref}" to read the full result.`,
     inline_limit: limit,
     full_output_char_length: stored.full_output_char_length,
   };
@@ -460,7 +462,14 @@ function outputStatus(value, isError) {
 function fitInlineJson(value, limit) {
   let text = JSON.stringify(value);
   if (text.length <= limit) return text;
-  const minimal = { truncated: true, output_ref: value.output_ref, reader_tool: value.reader_tool };
+  const minimal = {
+    status: value.status,
+    truncated: true,
+    output_ref: value.output_ref,
+    reader_tool: value.reader_tool,
+    inline_limit: value.inline_limit,
+    full_output_char_length: value.full_output_char_length,
+  };
   text = JSON.stringify(minimal);
   if (text.length <= limit) return text;
   return text.slice(0, limit);

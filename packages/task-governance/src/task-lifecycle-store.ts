@@ -58,6 +58,8 @@ export interface TaskLifecycleRow {
   closed_at: string | null;
   closed_by: string | null;
   closure_mode?: TaskClosureMode | null;
+  relative_priority?: number | null;
+  priority_reason?: string | null;
   reopened_at: string | null;
   reopened_by: string | null;
   continuation_packet_json: string | null;
@@ -284,14 +286,29 @@ export interface TaskSpecRow {
   task_id: string;
   task_number: number;
   title: string;
-  chapter_markdown: string | null;
-  goal_markdown: string | null;
-  context_markdown: string | null;
-  required_work_markdown: string | null;
-  non_goals_markdown: string | null;
-  acceptance_criteria_json: string;
-  dependencies_json: string;
-  updated_at: string;
+  chapter_markdown?: string | null;
+  goal_markdown?: string | null;
+  context_markdown?: string | null;
+  required_work_markdown?: string | null;
+  non_goals_markdown?: string | null;
+  acceptance_criteria_json?: string;
+  dependencies_json?: string;
+  updated_at?: string;
+}
+
+export interface EnvelopeTaskMappingRow {
+  envelope_id: string;
+  task_id: string;
+  task_number: number;
+  materialized_at: string;
+}
+
+export interface TaskLifecycleDetailRow extends TaskLifecycleRow {
+  title: string | null;
+  assigned_agent: string | null;
+  target_role: string | null;
+  preferred_role: string | null;
+  preferred_agent_id: string | null;
 }
 
 export type DirectedObligationKind = "review_request" | "handoff" | "expectation";
@@ -325,6 +342,8 @@ export interface TaskLifecycleStore {
   getLifecycle(taskId: string): TaskLifecycleRow | undefined;
   getLifecycleByNumber(taskNumber: number): TaskLifecycleRow | undefined;
   getAllLifecycle(): TaskLifecycleRow[];
+  getAllLifecycleWithDetails(status?: string | null): TaskLifecycleDetailRow[];
+  getAllLifecyclePaginated(options?: { since?: string | null; offset?: number; limit?: number }): TaskLifecycleDetailRow[];
   updateStatus(
     taskId: string,
     status: TaskStatus,
@@ -410,6 +429,9 @@ export interface TaskLifecycleStore {
   upsertTaskSpec(row: TaskSpecRow): void;
   getTaskSpec(taskId: string): TaskSpecRow | undefined;
   getTaskSpecByNumber(taskNumber: number): TaskSpecRow | undefined;
+  upsertEnvelopeTaskMapping(envelopeId: string, taskId: string, taskNumber: number, materializedAt: string): void;
+  getTaskByEnvelopeId(envelopeId: string): EnvelopeTaskMappingRow | undefined;
+  getEnvelopeMappingsByTaskId(taskId: string): EnvelopeTaskMappingRow[];
 }
 
 function nowIso(): string {
@@ -425,6 +447,8 @@ function rowToLifecycle(row: Record<string, unknown>): TaskLifecycleRow {
     closed_at: row.closed_at ? String(row.closed_at) : null,
     closed_by: row.closed_by ? String(row.closed_by) : null,
     closure_mode: row.closure_mode ? String(row.closure_mode) as TaskClosureMode : null,
+    relative_priority: row.relative_priority !== null && row.relative_priority !== undefined ? Number(row.relative_priority) : 0,
+    priority_reason: row.priority_reason ? String(row.priority_reason) : null,
     reopened_at: row.reopened_at ? String(row.reopened_at) : null,
     reopened_by: row.reopened_by ? String(row.reopened_by) : null,
     continuation_packet_json: row.continuation_packet_json
@@ -692,6 +716,15 @@ function rowToDirectedObligation(row: Record<string, unknown>): DirectedObligati
   };
 }
 
+function rowToEnvelopeTaskMapping(row: Record<string, unknown>): EnvelopeTaskMappingRow {
+  return {
+    envelope_id: String(row.envelope_id),
+    task_id: String(row.task_id),
+    task_number: Number(row.task_number),
+    materialized_at: String(row.materialized_at),
+  };
+}
+
 function normalizeDirectedObligation(entry: DirectedObligationRow): DirectedObligationRow {
   const duplicateRoleRef = entry.target_role ? `role:${entry.target_role}` : null;
   if (entry.target_agent_id === null && duplicateRoleRef && entry.target_ref === duplicateRoleRef) {
@@ -826,6 +859,8 @@ const REQUIRED_LIFECYCLE_TABLES = [
   'directed_obligations',
   'task_number_reservations',
   'task_specs',
+  'envelope_task_mappings',
+  'narada_andrey_task_role_preferences',
 ];
 
 function hasCurrentLifecycleSchema(db: Db): boolean {
@@ -893,6 +928,8 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
         closed_at text,
         closed_by text,
         closure_mode text,
+        relative_priority integer default 0,
+        priority_reason text,
         reopened_at text,
         reopened_by text,
         continuation_packet_json text,
@@ -1323,6 +1360,25 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
       create index if not exists idx_task_specs_task_number
         on task_specs(task_number);
 
+      create table if not exists envelope_task_mappings (
+        envelope_id text primary key,
+        task_id text not null,
+        task_number integer not null,
+        materialized_at text not null,
+        foreign key (task_id) references task_lifecycle(task_id)
+      );
+
+      create index if not exists idx_envelope_task_mappings_task_id
+        on envelope_task_mappings(task_id, materialized_at desc);
+
+      create table if not exists narada_andrey_task_role_preferences (
+        task_id text primary key,
+        preferred_role text,
+        target_role text,
+        preferred_agent_id text,
+        updated_at text not null
+      );
+
       commit;
     `);
     } catch (error) {
@@ -1339,6 +1395,12 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
     if (!lifecycleColumns.some((column) => column.name === 'closure_mode')) {
       this.db.exec('alter table task_lifecycle add column closure_mode text;');
     }
+    if (!lifecycleColumns.some((column) => column.name === 'relative_priority')) {
+      this.db.exec('alter table task_lifecycle add column relative_priority integer default 0;');
+    }
+    if (!lifecycleColumns.some((column) => column.name === 'priority_reason')) {
+      this.db.exec('alter table task_lifecycle add column priority_reason text;');
+    }
     const reportColumns = this.db
       .prepare('pragma table_info(task_reports)')
       .all() as Array<{ name?: string }>;
@@ -1353,14 +1415,16 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
     const stmt = this.db.prepare(`
       insert into task_lifecycle (
         task_id, task_number, status, governed_by, closed_at, closed_by,
-        closure_mode, reopened_at, reopened_by, continuation_packet_json, updated_at
-      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        closure_mode, relative_priority, priority_reason, reopened_at, reopened_by, continuation_packet_json, updated_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       on conflict(task_id) do update set
         status = excluded.status,
         governed_by = excluded.governed_by,
         closed_at = excluded.closed_at,
         closed_by = excluded.closed_by,
         closure_mode = excluded.closure_mode,
+        relative_priority = excluded.relative_priority,
+        priority_reason = excluded.priority_reason,
         reopened_at = excluded.reopened_at,
         reopened_by = excluded.reopened_by,
         continuation_packet_json = excluded.continuation_packet_json,
@@ -1374,6 +1438,8 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
       row.closed_at,
       row.closed_by,
       row.closure_mode ?? null,
+      row.relative_priority ?? 0,
+      row.priority_reason ?? null,
       row.reopened_at,
       row.reopened_by,
       row.continuation_packet_json,
@@ -1400,6 +1466,82 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
       .prepare("select * from task_lifecycle")
       .all() as Record<string, unknown>[];
     return rows.map(rowToLifecycle);
+  }
+
+  getAllLifecycleWithDetails(status?: string | null): TaskLifecycleDetailRow[] {
+    const statusClause = status ? 'where l.status = ?' : '';
+    const rows = this.db
+      .prepare(`
+        select
+          l.*,
+          s.title as title,
+          a.agent_id as assigned_agent,
+          p.target_role as target_role,
+          p.preferred_role as preferred_role,
+          p.preferred_agent_id as preferred_agent_id
+        from task_lifecycle l
+        left join task_specs s on s.task_id = l.task_id
+        left join task_assignments a
+          on a.assignment_id = (
+            select assignment_id
+            from task_assignments
+            where task_id = l.task_id and released_at is null
+            order by claimed_at desc
+            limit 1
+          )
+        left join narada_andrey_task_role_preferences p on p.task_id = l.task_id
+        ${statusClause}
+        order by l.task_number asc
+      `)
+      .all(...(status ? [status] : [])) as Record<string, unknown>[];
+    return rows.map((row) => ({
+      ...rowToLifecycle(row),
+      title: row.title ? String(row.title) : null,
+      assigned_agent: row.assigned_agent ? String(row.assigned_agent) : null,
+      target_role: row.target_role ? String(row.target_role) : null,
+      preferred_role: row.preferred_role ? String(row.preferred_role) : null,
+      preferred_agent_id: row.preferred_agent_id ? String(row.preferred_agent_id) : null,
+    }));
+  }
+
+  getAllLifecyclePaginated(options: { since?: string | null; offset?: number; limit?: number } = {}): TaskLifecycleDetailRow[] {
+    const where = options.since ? 'where l.updated_at >= ?' : '';
+    const limit = Number.isFinite(options.limit) ? Math.max(1, Number(options.limit)) : 100;
+    const offset = Number.isFinite(options.offset) ? Math.max(0, Number(options.offset)) : 0;
+    const params = options.since ? [options.since, limit, offset] : [limit, offset];
+    const rows = this.db
+      .prepare(`
+        select
+          l.*,
+          s.title as title,
+          a.agent_id as assigned_agent,
+          p.target_role as target_role,
+          p.preferred_role as preferred_role,
+          p.preferred_agent_id as preferred_agent_id
+        from task_lifecycle l
+        left join task_specs s on s.task_id = l.task_id
+        left join task_assignments a
+          on a.assignment_id = (
+            select assignment_id
+            from task_assignments
+            where task_id = l.task_id and released_at is null
+            order by claimed_at desc
+            limit 1
+          )
+        left join narada_andrey_task_role_preferences p on p.task_id = l.task_id
+        ${where}
+        order by l.updated_at desc, l.task_number desc
+        limit ? offset ?
+      `)
+      .all(...params) as Record<string, unknown>[];
+    return rows.map((row) => ({
+      ...rowToLifecycle(row),
+      title: row.title ? String(row.title) : null,
+      assigned_agent: row.assigned_agent ? String(row.assigned_agent) : null,
+      target_role: row.target_role ? String(row.target_role) : null,
+      preferred_role: row.preferred_role ? String(row.preferred_role) : null,
+      preferred_agent_id: row.preferred_agent_id ? String(row.preferred_agent_id) : null,
+    }));
   }
 
   updateStatus(
@@ -2636,14 +2778,14 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
       row.task_id,
       row.task_number,
       row.title,
-      row.chapter_markdown,
-      row.goal_markdown,
-      row.context_markdown,
-      row.required_work_markdown,
-      row.non_goals_markdown,
-      row.acceptance_criteria_json,
-      row.dependencies_json,
-      row.updated_at,
+      row.chapter_markdown ?? null,
+      row.goal_markdown ?? null,
+      row.context_markdown ?? null,
+      row.required_work_markdown ?? null,
+      row.non_goals_markdown ?? null,
+      row.acceptance_criteria_json ?? '[]',
+      row.dependencies_json ?? '[]',
+      row.updated_at ?? nowIso(),
     );
   }
 
@@ -2659,6 +2801,34 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
       .prepare('select * from task_specs where task_number = ?')
       .get(taskNumber) as Record<string, unknown> | undefined;
     return row ? rowToTaskSpec(row) : undefined;
+  }
+
+  upsertEnvelopeTaskMapping(envelopeId: string, taskId: string, taskNumber: number, materializedAt: string): void {
+    this.db
+      .prepare(`
+        insert into envelope_task_mappings (
+          envelope_id, task_id, task_number, materialized_at
+        ) values (?, ?, ?, ?)
+        on conflict(envelope_id) do update set
+          task_id = excluded.task_id,
+          task_number = excluded.task_number,
+          materialized_at = excluded.materialized_at
+      `)
+      .run(envelopeId, taskId, taskNumber, materializedAt);
+  }
+
+  getTaskByEnvelopeId(envelopeId: string): EnvelopeTaskMappingRow | undefined {
+    const row = this.db
+      .prepare('select * from envelope_task_mappings where envelope_id = ?')
+      .get(envelopeId) as Record<string, unknown> | undefined;
+    return row ? rowToEnvelopeTaskMapping(row) : undefined;
+  }
+
+  getEnvelopeMappingsByTaskId(taskId: string): EnvelopeTaskMappingRow[] {
+    const rows = this.db
+      .prepare('select * from envelope_task_mappings where task_id = ? order by materialized_at desc')
+      .all(taskId) as Record<string, unknown>[];
+    return rows.map(rowToEnvelopeTaskMapping);
   }
 }
 

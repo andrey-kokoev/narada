@@ -535,6 +535,33 @@ assert.equal('arguments' in readOnlyToolCallEvent, false);
 assert.equal(readOnlyToolCallEvent.raw_arguments_recorded, false);
 assert.equal(readOnlyToolCallEvent.decision, 'read_only_admitted');
 
+const payloadLimitEvents = [];
+const payloadLimitResult = await executeMcpTool(
+  {
+    id: 'call_payload_limit',
+    type: 'function',
+    function: { name: 'read_file', arguments: '{}' },
+  },
+  {
+    fixture: {
+      tools: [{ name: 'read_file' }],
+      send: async () => {
+        throw new Error('inline_payload_too_long: field=summary length=584 threshold=200 remediation=use payload_ref');
+      },
+      config: {},
+    },
+  },
+  null,
+  {
+    turnId: 'turn_payload_limit',
+    emit: (event, payload) => payloadLimitEvents.push({ event, ...payload }),
+  },
+);
+const payloadLimitContent = JSON.parse(payloadLimitResult.content);
+assert.match(payloadLimitContent.recovery, /mcp_payload_create/);
+assert.match(payloadLimitContent.recovery, /Do not print JSON as prose/);
+assert.equal(payloadLimitEvents.some((event) => event.event === 'tool_result' && event.recovery?.includes('mcp_payload_create')), true);
+
 const interruptedTurn = { turnId: 'turn_interrupt', interruptRequested: false };
 setTimeout(() => {
   interruptedTurn.interruptRequested = true;
