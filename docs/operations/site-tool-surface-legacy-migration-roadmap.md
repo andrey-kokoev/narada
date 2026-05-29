@@ -2,7 +2,7 @@
 
 Current user-site audit posture:
 
-- `legacy_package_mirror_count`: 1515
+- `legacy_package_mirror_count`: 1507
 - `duplicate_group_count`: 0
 - `exception_count`: 0
 
@@ -17,7 +17,10 @@ Ranked migration order from current manifests:
 | 3 | `operator-surface` | 330 | Keep launcher wrappers generated; package shared operator-surface tools. |
 | 4 | `typed-mcp` | 55 | Move MCP facade helpers behind package exports. |
 | 5 | `window-surface-overlay` | 24 | Package overlay runtime as a platform surface. |
-| 6 | `agent-start` | 8 | Finish after root contract stays green. |
+
+Completed:
+
+- `agent-start`: `tools/agent-start/synthesize-bootstrap.mjs` is now classified as `canonical_package` from `@narada2/agent-start-bootstrap`.
 
 Migration rule:
 

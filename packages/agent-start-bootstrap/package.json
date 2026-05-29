@@ -1,0 +1,15 @@
+{
+  "name": "@narada2/agent-start-bootstrap",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/synthesize-bootstrap.mjs",
+    "./synthesize-bootstrap": "./src/synthesize-bootstrap.mjs",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test src/synthesize-bootstrap.test.mjs",
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/synthesize-bootstrap.mjs"
+  }
+}

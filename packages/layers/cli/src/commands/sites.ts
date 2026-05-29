@@ -4,7 +4,7 @@
  * Site discovery and registry management commands.
  */
 
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -2572,6 +2572,11 @@ export interface SitesReconcileToolSurfaceManifestOptions extends SitesOptions {
   apply?: boolean;
 }
 
+export interface SitesDepsSyncOptions extends SitesOptions {
+  root?: string;
+  apply?: boolean;
+}
+
 export interface SitesAuditToolSurfaceDuplicatesOptions extends SitesOptions {
   root?: string | string[];
   limit?: number;
@@ -2580,7 +2585,22 @@ export interface SitesAuditToolSurfaceDuplicatesOptions extends SitesOptions {
 const AGENT_CLI_WRAPPER_RELATIVE_PATH = join('tools', 'operator-surface-carriers', 'Start-AgentCliSession.ps1');
 const AGENT_CLI_WRAPPER_TEMPLATE_HASH_PLACEHOLDER = '__NARADA_TEMPLATE_HASH__';
 const AGENT_CLI_WRAPPER_TEMPLATE_HASH_LINE = /^# narada_template_hash: .*$/m;
+const SHARED_SITE_PACKAGES = [
+  {
+    package_name: '@narada2/agent-cli',
+    source_locus: fileURLToPath(new URL('../../../../../packages/agent-cli', import.meta.url)),
+  },
+  {
+    package_name: '@narada2/mcp-transport',
+    source_locus: fileURLToPath(new URL('../../../../../packages/mcp-transport', import.meta.url)),
+  },
+  {
+    package_name: '@narada2/task-lifecycle-kernel',
+    source_locus: fileURLToPath(new URL('../../../../../packages/task-lifecycle-kernel', import.meta.url)),
+  },
+] as const;
 let legacyToolSurfaceEntries: Map<string, Record<string, unknown>> | null = null;
+let canonicalToolSurfaceEntries: Map<string, Record<string, unknown>> | null = null;
 
 function addCheck(
   checks: SiteDoctorCheck[],
@@ -2656,6 +2676,78 @@ function normalizeAgentCliWrapperTemplateText(text: string): string {
 
 function agentCliWrapperTemplatePath(): string {
   return fileURLToPath(new URL('../../../../../packages/agent-cli/templates/Start-AgentCliSession.ps1', import.meta.url));
+}
+
+function packageInstallPath(siteRoot: string, packageName: string): string {
+  const parts = packageName.split('/');
+  return packageName.startsWith('@')
+    ? join(siteRoot, 'node_modules', parts[0] ?? '', parts[1] ?? '')
+    : join(siteRoot, 'node_modules', packageName);
+}
+
+async function inspectPackageLink(siteRoot: string, packageName: string, sourceLocus: string): Promise<{
+  installPath: string;
+  exists: boolean;
+  linked: boolean;
+  current: boolean;
+}> {
+  const installPath = packageInstallPath(siteRoot, packageName);
+  try {
+    const stat = await lstat(installPath);
+    const linked = stat.isSymbolicLink();
+    const target = linked ? await realpath(installPath) : installPath;
+    const current = linked && normalizeNativePath(target) === normalizeNativePath(resolve(sourceLocus));
+    return { installPath, exists: true, linked, current };
+  } catch {
+    return { installPath, exists: false, linked: false, current: false };
+  }
+}
+
+async function syncPackageLink(siteRoot: string, packageName: string, sourceLocus: string, apply: boolean): Promise<{
+  package_name: string;
+  source_locus: string;
+  install_path: string;
+  mode: 'workspace_link';
+  status: 'current' | 'stale' | 'repaired';
+  mutation_performed: boolean;
+}> {
+  const before = await inspectPackageLink(siteRoot, packageName, sourceLocus);
+  if (apply && !before.current) {
+    if (before.exists) {
+      await rm(before.installPath, { recursive: true, force: true });
+    }
+    await mkdir(dirname(before.installPath), { recursive: true });
+    await symlink(sourceLocus, before.installPath, 'junction');
+  }
+  const after = await inspectPackageLink(siteRoot, packageName, sourceLocus);
+  return {
+    package_name: packageName,
+    source_locus: sourceLocus,
+    install_path: after.installPath,
+    mode: 'workspace_link',
+    status: after.current ? (before.current ? 'current' : 'repaired') : 'stale',
+    mutation_performed: apply && !before.current && after.current,
+  };
+}
+
+async function writeSitePackageProvenance(siteRoot: string, records: Array<Record<string, unknown>>, apply: boolean): Promise<{
+  path: string;
+  mutation_performed: boolean;
+}> {
+  const path = join(siteRoot, '.ai', 'runtime', 'package-provenance.json');
+  const payload = {
+    schema: 'narada.site_package_provenance.v1',
+    site_root: siteRoot,
+    generated_at: new Date().toISOString(),
+    mode: 'workspace_link',
+    packages: records,
+  };
+  if (!apply) {
+    return { path, mutation_performed: false };
+  }
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
+  return { path, mutation_performed: true };
 }
 
 async function loadAgentCliWrapperTemplate(): Promise<{
@@ -2762,6 +2854,22 @@ async function loadLegacyToolSurfaceEntries(): Promise<Map<string, Record<string
   return entries;
 }
 
+async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<string, unknown>>> {
+  if (canonicalToolSurfaceEntries) return canonicalToolSurfaceEntries;
+  const entries = new Map<string, Record<string, unknown>>();
+  const bootstrapPath = fileURLToPath(new URL('../../../../../packages/agent-start-bootstrap/src/synthesize-bootstrap.mjs', import.meta.url));
+  if (existsSync(bootstrapPath)) {
+    entries.set('tools/agent-start/synthesize-bootstrap.mjs', {
+      package: '@narada2/agent-start-bootstrap',
+      version: '0.1.0',
+      surface: 'agent-start',
+      hash: sha256Text(await readFile(bootstrapPath, 'utf8')),
+    });
+  }
+  canonicalToolSurfaceEntries = entries;
+  return entries;
+}
+
 async function desiredToolSurfaceEntry(siteRoot: string, filePath: string): Promise<Record<string, unknown>> {
   const relativePath = slashRelative(siteRoot, filePath);
   const text = await readFile(filePath, 'utf8');
@@ -2801,6 +2909,19 @@ async function desiredToolSurfaceEntry(siteRoot: string, filePath: string): Prom
       surface: 'test',
       package: '',
       version: '',
+      hash,
+      allowed_root_refs: allowedRootRefs,
+    };
+  }
+  const canonicalEntry = (await loadCanonicalToolSurfaceEntries()).get(relativePath);
+  if (canonicalEntry && canonicalEntry.hash === hash) {
+    return {
+      path: relativePath,
+      class: 'canonical_package',
+      owner: 'narada-proper',
+      surface: canonicalEntry.surface ?? 'site-tools',
+      package: canonicalEntry.package ?? '',
+      version: canonicalEntry.version ?? '',
       hash,
       allowed_root_refs: allowedRootRefs,
     };
@@ -3186,6 +3307,40 @@ export async function sitesReconcileToolSurfaceManifestCommand(
   ];
   return {
     exitCode: ExitCode.SUCCESS,
+    result: formattedResult(result, lines, (options.format ?? 'auto') as CliFormat),
+  };
+}
+
+export async function sitesDepsSyncCommand(
+  options: SitesDepsSyncOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const inputRoot = resolve(options.root ?? '.');
+  const siteRoot = containedSiteRootFromInput(inputRoot);
+  const packageRecords = [];
+  for (const descriptor of SHARED_SITE_PACKAGES) {
+    packageRecords.push(await syncPackageLink(siteRoot, descriptor.package_name, descriptor.source_locus, options.apply === true));
+  }
+  const provenance = await writeSitePackageProvenance(siteRoot, packageRecords, options.apply === true);
+  const stale = packageRecords.filter((record) => record.status === 'stale');
+  const result = {
+    schema: 'narada.site_deps_sync.v1',
+    status: stale.length > 0 ? 'stale' : packageRecords.some((record) => record.status === 'repaired') ? 'repaired' : 'current',
+    mutation_attempted: options.apply === true,
+    mutation_performed: packageRecords.some((record) => record.mutation_performed) || provenance.mutation_performed,
+    site_root: siteRoot,
+    provenance_path: provenance.path,
+    packages: packageRecords,
+  };
+  const lines = [
+    `site deps: ${result.status}`,
+    `site_root: ${siteRoot}`,
+    `provenance_path: ${provenance.path}`,
+    ...packageRecords.map((record) => `${record.package_name}: ${record.status}`),
+    `mutation_performed: ${String(result.mutation_performed)}`,
+  ];
+  return {
+    exitCode: stale.length === 0 || !options.apply ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
     result: formattedResult(result, lines, (options.format ?? 'auto') as CliFormat),
   };
 }
