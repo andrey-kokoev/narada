@@ -146,7 +146,7 @@ async function main() {
     messages.push({ role: 'system', content: rolePrompt });
   }
   const inputQueue = createInputQueue({
-    drain: (event) => submitUserInput({ input: event, messages, tools: allTools, mcpServers, rl }),
+    drain: (event) => submitUserInput({ input: event, messages, tools: allTools, mcpServers, rl, inputQueue }),
     shouldDefer: (event) => shouldDeferInteractiveInput(event, { rl, promptState }),
     onDeferred: (event, queueState) => {
       if (event.source === 'system_directive') {
@@ -392,6 +392,7 @@ function createInputQueue({ drain, shouldDefer = () => false, onDeferred = null 
     get isRunning() { return state.running; },
     get pendingCount() { return pending.length; },
     get pendingSystemDirectiveCount() { return pending.filter((event) => event.source === 'system_directive').length; },
+    get pendingOperatorDirectiveCount() { return pending.filter((event) => event.source === 'operator_directive').length; },
     enqueue: async (event, options = {}) => {
       const normalized = normalizeInputEvent(event);
       pending.push(normalized);
@@ -415,6 +416,7 @@ function createInputQueue({ drain, shouldDefer = () => false, onDeferred = null 
       running: state.running,
       pendingCount: pending.length,
       pendingSystemDirectiveCount: pending.filter((event) => event.source === 'system_directive').length,
+      pendingOperatorDirectiveCount: pending.filter((event) => event.source === 'operator_directive').length,
     };
   }
 
@@ -478,7 +480,7 @@ function readlineHasNonWhitespaceInput(rl) {
   return Boolean(rl && typeof rl.line === 'string' && rl.line.trim().length > 0);
 }
 
-async function submitUserInput({ input, messages, tools, mcpServers, rl, turn = null, emit = null, callChatApiFn = callChatApi }) {
+async function submitUserInput({ input, messages, tools, mcpServers, rl, inputQueue = null, turn = null, emit = null, callChatApiFn = callChatApi }) {
   const record = normalizeInputRecord(input);
   messages.push({ role: 'user', content: record.content });
   appendSession(SESSION_PATH, sessionLogEntry({
@@ -493,7 +495,17 @@ async function submitUserInput({ input, messages, tools, mcpServers, rl, turn = 
   if (!emit && record.source !== 'manual_operator') {
     printInputRecord(record);
   }
-  const progress = !emit && !turn ? startInteractiveTurnProgress() : null;
+  const progress = !emit && !turn ? startInteractiveTurnProgress({
+    onOperatorDirective: async (content) => {
+      if (!inputQueue) return null;
+      await inputQueue.enqueue(normalizeInputEvent({
+        content,
+        source: 'operator_directive',
+        authority_ref: 'interactive_working_input',
+      }, { transport: 'terminal' }), { drain: false });
+      return inputQueue.state();
+    },
+  }) : null;
   try {
     return await runConversationTurn(messages, tools, mcpServers, rl, { turn: turn ?? progress?.turn ?? null, emit, callChatApiFn });
   } finally {
@@ -1127,7 +1139,7 @@ function directiveAcceptedEvidence(event, { agentId, carrierSessionId, acceptedA
   };
 }
 
-function startInteractiveTurnProgress() {
+function startInteractiveTurnProgress({ onOperatorDirective = null } = {}) {
   const abortController = new AbortController();
   const turn = {
     turnId: randomId(),
@@ -1156,6 +1168,8 @@ function startInteractiveTurnProgress() {
   let spinnerIndex = 0;
   let statusVisible = false;
   let forceNextStatus = false;
+  let operatorDirectiveBuffer = '';
+  let queuedOperatorDirectiveCount = 0;
   const writeStatus = (force = false) => {
     const seconds = Math.floor((Date.now() - started) / 1000);
     if (!force && !forceNextStatus && seconds === lastSeconds) return;
@@ -1168,13 +1182,49 @@ function startInteractiveTurnProgress() {
       phase: turn.phase,
       totalMs: seconds * 1000,
       phaseMs: phaseSeconds * 1000,
+      operatorDirectiveDraftLength: operatorDirectiveBuffer.length,
+      queuedOperatorDirectiveCount,
     }))}`);
     statusVisible = true;
   };
+  const printProgressMessage = (text) => {
+    process.stdout.write(`\r\x1b[K${terminalStyle.tool('agent-cli')}${terminalStyle.muted(':')} ${text}\n`);
+    statusVisible = false;
+    forceNextStatus = true;
+  };
   const onData = (chunk) => {
-    if (Buffer.from(chunk).includes(0x1b)) {
+    const buffer = Buffer.from(chunk);
+    if (buffer.includes(0x1b) || buffer.includes(0x03)) {
       turn.requestInterrupt();
-      process.stdout.write(`\r${terminalStyle.warn('[agent-cli] Interrupt requested. Cancelling current provider call...')}\n`);
+      printProgressMessage(terminalStyle.warn('Interrupt requested. Cancelling current provider call...'));
+      return;
+    }
+    if (!onOperatorDirective) return;
+    for (const byte of buffer) {
+      if (byte === 0x0d || byte === 0x0a) {
+        const content = operatorDirectiveBuffer.trim();
+        operatorDirectiveBuffer = '';
+        if (!content) {
+          forceNextStatus = true;
+          continue;
+        }
+        Promise.resolve(onOperatorDirective(content)).then((queueState) => {
+          queuedOperatorDirectiveCount = queueState?.pendingOperatorDirectiveCount ?? queuedOperatorDirectiveCount + 1;
+          printProgressMessage(terminalStyle.operatorDirective(`operator directive queued (${queuedOperatorDirectiveCount})`));
+        }).catch((error) => {
+          printProgressMessage(terminalStyle.warn(`operator directive queue failed: ${error instanceof Error ? error.message : String(error)}`));
+        });
+        continue;
+      }
+      if (byte === 0x7f || byte === 0x08) {
+        operatorDirectiveBuffer = operatorDirectiveBuffer.slice(0, -1);
+        forceNextStatus = true;
+        continue;
+      }
+      if (byte >= 0x20 && byte !== 0x7f) {
+        operatorDirectiveBuffer += Buffer.from([byte]).toString('utf8');
+        forceNextStatus = true;
+      }
     }
   };
   const previousRawMode = process.stdin.isTTY ? process.stdin.isRaw : false;
@@ -2650,12 +2700,14 @@ function formatDuration(ms) {
   return `${minutes}m ${seconds}s`;
 }
 
-function formatProgressStatus({ spinner, phase, totalMs, phaseMs }) {
+function formatProgressStatus({ spinner, phase, totalMs, phaseMs, operatorDirectiveDraftLength = 0, queuedOperatorDirectiveCount = 0 }) {
   const phaseText = String(phase ?? 'working');
   const phaseDuration = formatDuration(phaseMs ?? totalMs ?? 0);
   const totalDuration = formatDuration(totalMs ?? 0);
   const totalSuffix = phaseText === 'thinking' ? '' : ` · total ${totalDuration}`;
-  return `${spinner} ${phaseText} ${phaseDuration}${totalSuffix} · Esc to interrupt`;
+  const queuedSuffix = queuedOperatorDirectiveCount > 0 ? ` · queued operator directives ${queuedOperatorDirectiveCount}` : '';
+  const draftSuffix = operatorDirectiveDraftLength > 0 ? ` · typing operator directive (${operatorDirectiveDraftLength})` : '';
+  return `${spinner} ${phaseText} ${phaseDuration}${totalSuffix}${queuedSuffix}${draftSuffix} · Enter queues note · Esc to interrupt`;
 }
 
 function parseColorEnv(value, defaultValue) {
