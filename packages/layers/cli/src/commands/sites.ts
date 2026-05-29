@@ -2879,6 +2879,34 @@ async function loadLegacyToolSurfaceEntries(): Promise<Map<string, Record<string
 async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<string, unknown>>> {
   if (canonicalToolSurfaceEntries) return canonicalToolSurfaceEntries;
   const entries = new Map<string, Record<string, unknown>>();
+  async function addCanonicalPackageTree(options: {
+    packageName: string;
+    version: string;
+    surface: string;
+    relativeToolRoot: string;
+    packageSrcUrl: URL;
+  }): Promise<void> {
+    const srcRoot = fileURLToPath(options.packageSrcUrl);
+    if (!existsSync(srcRoot)) return;
+    async function walk(dir: string): Promise<void> {
+      for (const entry of await readdir(dir, { withFileTypes: true })) {
+        const entryPath = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          await walk(entryPath);
+          continue;
+        }
+        if (!isExecutableToolPath(entry.name)) continue;
+        const relativeFromSrc = slashRelative(srcRoot, entryPath);
+        entries.set(`${options.relativeToolRoot}/${relativeFromSrc}`, {
+          package: options.packageName,
+          version: options.version,
+          surface: options.surface,
+          hash: sha256Text(await readFile(entryPath, 'utf8')),
+        });
+      }
+    }
+    await walk(srcRoot);
+  }
   const bootstrapPath = fileURLToPath(new URL('../../../../../packages/agent-start-bootstrap/src/synthesize-bootstrap.mjs', import.meta.url));
   if (existsSync(bootstrapPath)) {
     entries.set('tools/agent-start/synthesize-bootstrap.mjs', {
@@ -2927,6 +2955,13 @@ async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<str
       });
     }
   }
+  await addCanonicalPackageTree({
+    packageName: '@narada2/operator-surface-carriers',
+    version: '0.1.0',
+    surface: 'operator-surface',
+    relativeToolRoot: 'tools/operator-surface-carriers',
+    packageSrcUrl: new URL('../../../../../packages/operator-surface-carriers/src', import.meta.url),
+  });
   canonicalToolSurfaceEntries = entries;
   return entries;
 }
