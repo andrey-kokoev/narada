@@ -2598,6 +2598,10 @@ const SHARED_SITE_PACKAGES = [
     package_name: '@narada2/task-lifecycle-kernel',
     source_locus: fileURLToPath(new URL('../../../../../packages/task-lifecycle-kernel', import.meta.url)),
   },
+  {
+    package_name: '@narada2/task-governance',
+    source_locus: fileURLToPath(new URL('../../../../../packages/task-governance', import.meta.url)),
+  },
 ] as const;
 const NARADA_PROPER_ROOT = resolve(fileURLToPath(new URL('../../../../..', import.meta.url)));
 let legacyToolSurfaceEntries: Map<string, Record<string, unknown>> | null = null;
@@ -2727,8 +2731,10 @@ async function syncPackageLink(siteRoot: string, packageName: string, sourceLocu
   mode: 'workspace_link';
   status: 'current' | 'stale' | 'repaired';
   mutation_performed: boolean;
+  shadow_paths_removed?: string[];
 }> {
   const before = await inspectPackageLink(siteRoot, packageName, sourceLocus);
+  const shadowPathsRemoved = await removeNestedPackageShadows(siteRoot, packageName, sourceLocus, apply);
   if (apply && !before.current) {
     assertContainedPackageInstallPath(siteRoot, packageName, before.installPath);
     if (before.exists) {
@@ -2744,8 +2750,34 @@ async function syncPackageLink(siteRoot: string, packageName: string, sourceLocu
     install_path: after.installPath,
     mode: 'workspace_link',
     status: after.current ? (before.current ? 'current' : 'repaired') : 'stale',
-    mutation_performed: apply && !before.current && after.current,
+    mutation_performed: apply && ((!before.current && after.current) || shadowPathsRemoved.length > 0),
+    ...(shadowPathsRemoved.length > 0 ? { shadow_paths_removed: shadowPathsRemoved } : {}),
   };
+}
+
+async function removeNestedPackageShadows(siteRoot: string, packageName: string, sourceLocus: string, apply: boolean): Promise<string[]> {
+  if (!apply) return [];
+  const nestedRoots = [
+    join(siteRoot, 'tools', 'task-lifecycle', 'node_modules'),
+  ];
+  const removed: string[] = [];
+  for (const nestedRoot of nestedRoots) {
+    const parts = packageName.split('/');
+    const shadowPath = packageName.startsWith('@')
+      ? join(nestedRoot, parts[0] ?? '', parts[1] ?? '')
+      : join(nestedRoot, packageName);
+    if (!normalizeNativePath(shadowPath).startsWith(`${normalizeNativePath(siteRoot)}${process.platform === 'win32' ? '\\' : '/'}`)) {
+      throw new Error(`refusing_uncontained_nested_package_shadow_path: ${shadowPath}`);
+    }
+    try {
+      await lstat(shadowPath);
+      await rm(shadowPath, { recursive: true, force: true });
+      removed.push(shadowPath);
+    } catch {
+      // No nested shadow for this package.
+    }
+  }
+  return removed;
 }
 
 async function writeSitePackageProvenance(siteRoot: string, records: Array<Record<string, unknown>>, apply: boolean): Promise<{
@@ -2961,6 +2993,13 @@ async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<str
     surface: 'operator-surface',
     relativeToolRoot: 'tools/operator-surface-carriers',
     packageSrcUrl: new URL('../../../../../packages/operator-surface-carriers/src', import.meta.url),
+  });
+  await addCanonicalPackageTree({
+    packageName: '@narada2/agent-context-tools',
+    version: '0.1.0',
+    surface: 'site-tools',
+    relativeToolRoot: 'tools/agent-context',
+    packageSrcUrl: new URL('../../../../../packages/agent-context-tools/src', import.meta.url),
   });
   canonicalToolSurfaceEntries = entries;
   return entries;
