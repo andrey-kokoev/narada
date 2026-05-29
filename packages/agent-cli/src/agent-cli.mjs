@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
 import { createInterface } from 'node:readline';
+import { StringDecoder } from 'node:string_decoder';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -496,6 +497,7 @@ async function submitUserInput({ input, messages, tools, mcpServers, rl, inputQu
     printInputRecord(record);
   }
   const progress = !emit && !turn ? startInteractiveTurnProgress({
+    readlineInterface: rl,
     onOperatorDirective: async (content) => {
       if (!inputQueue) return null;
       await inputQueue.enqueue(normalizeInputEvent({
@@ -1139,7 +1141,7 @@ function directiveAcceptedEvidence(event, { agentId, carrierSessionId, acceptedA
   };
 }
 
-function startInteractiveTurnProgress({ onOperatorDirective = null } = {}) {
+function startInteractiveTurnProgress({ onOperatorDirective = null, readlineInterface = null } = {}) {
   const abortController = new AbortController();
   const turn = {
     turnId: randomId(),
@@ -1170,6 +1172,7 @@ function startInteractiveTurnProgress({ onOperatorDirective = null } = {}) {
   let forceNextStatus = false;
   let operatorDirectiveBuffer = '';
   let queuedOperatorDirectiveCount = 0;
+  const operatorDirectiveDecoder = new StringDecoder('utf8');
   const writeStatus = (force = false) => {
     const seconds = Math.floor((Date.now() - started) / 1000);
     if (!force && !forceNextStatus && seconds === lastSeconds) return;
@@ -1200,8 +1203,8 @@ function startInteractiveTurnProgress({ onOperatorDirective = null } = {}) {
       return;
     }
     if (!onOperatorDirective) return;
-    for (const byte of buffer) {
-      if (byte === 0x0d || byte === 0x0a) {
+    for (const char of operatorDirectiveDecoder.write(buffer)) {
+      if (char === '\r' || char === '\n') {
         const content = operatorDirectiveBuffer.trim();
         operatorDirectiveBuffer = '';
         if (!content) {
@@ -1216,13 +1219,13 @@ function startInteractiveTurnProgress({ onOperatorDirective = null } = {}) {
         });
         continue;
       }
-      if (byte === 0x7f || byte === 0x08) {
-        operatorDirectiveBuffer = operatorDirectiveBuffer.slice(0, -1);
+      if (char === '\x7f' || char === '\b') {
+        operatorDirectiveBuffer = Array.from(operatorDirectiveBuffer).slice(0, -1).join('');
         forceNextStatus = true;
         continue;
       }
-      if (byte >= 0x20 && byte !== 0x7f) {
-        operatorDirectiveBuffer += Buffer.from([byte]).toString('utf8');
+      if (char >= ' ') {
+        operatorDirectiveBuffer += char;
         forceNextStatus = true;
       }
     }
@@ -1237,10 +1240,22 @@ function startInteractiveTurnProgress({ onOperatorDirective = null } = {}) {
     stop: () => {
       clearInterval(timer);
       process.stdin.off('data', onData);
+      clearReadlineDraft(readlineInterface);
       if (process.stdin.isTTY) process.stdin.setRawMode(!!previousRawMode);
       if (statusVisible) process.stdout.write('\r\x1b[K');
     },
   };
+}
+
+function clearReadlineDraft(rl) {
+  if (!rl) return;
+  try {
+    if (typeof rl.line === 'string') rl.line = '';
+    if (typeof rl.cursor === 'number') rl.cursor = 0;
+    rl._refreshLine?.();
+  } catch {
+    // Best-effort cleanup for the next prompt only.
+  }
 }
 
 function attachTurnAbortController(turn) {
