@@ -4,11 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node test/kernel.test.mjs && node test/stdio-json-rpc.test.mjs"
+    "test": "node test/kernel.test.mjs && node test/stdio-json-rpc.test.mjs && node test/tool-call-pipeline.test.mjs && node test/import-boundary.test.mjs"
   },
   "exports": {
     ".": "./src/index.mjs",
-    "./stdio-json-rpc": "./src/stdio-json-rpc.mjs"
+    "./stdio-json-rpc": "./src/stdio-json-rpc.mjs",
+    "./tool-call-pipeline": "./src/tool-call-pipeline.mjs"
   },
   "files": [
     "src/"

@@ -27,7 +27,10 @@ import { validateRecoveryTruthfulnessBody, validateRecoveryTruthfulnessPacket } 
 import { validateSelfCertificationBody, validateSelfCertificationPacket } from './self-certification-guard.mjs';
 import { claimLifecycleTask, proveTaskCriteria, transitionLifecycleTask, unclaimLifecycleTask, unDeferLifecycleTask } from './task-lifecycle-mutation-services.mjs';
 import { TASK_LIFECYCLE_TOOL_ALIASES, taskLifecycleDomainTools } from '@narada2/task-governance/task-lifecycle-mcp-contract';
-import { normalizeToolName, validateArgs, validationErrorResult } from '@narada2/task-lifecycle-kernel';
+import {
+  buildLifecycleTargetLocusStatus as buildPipelineLifecycleTargetLocusStatus,
+  createTaskLifecycleToolCaller,
+} from '@narada2/task-lifecycle-kernel/tool-call-pipeline';
 import { runJsonRpcStdioServer } from '@narada2/task-lifecycle-kernel/stdio-json-rpc';
 import { deriveClosureAuthority } from './closure-authority.mjs';
 import {
@@ -54,6 +57,13 @@ import {
   writeMcpRestartRequest,
 } from '../mcp-freshness-service.mjs';
 import { agentExistsWithRole, checkTaskRoleEligibilityLocal, resolveAgentRole, resolveAgentRoleWithDiagnostics, roleExistsInRoster } from './agent-role-resolution.mjs';
+import { createTaskLifecycleHandlerRegistry } from './task-lifecycle-handler-registry.mjs';
+import { createTaskLifecycleAdminHandlers } from './task-lifecycle-admin-handlers.mjs';
+import { createTaskLifecycleReadHandlers } from './task-lifecycle-read-handlers.mjs';
+import { createTaskLifecycleAssignmentHandlers } from './task-lifecycle-assignment-handlers.mjs';
+import { createTaskLifecycleNavigationHandlers } from './task-lifecycle-navigation-handlers.mjs';
+import { createTaskLifecycleInspectionHandlers } from './task-lifecycle-inspection-handlers.mjs';
+import { createTaskLifecycleRemainingHandlers } from './task-lifecycle-remaining-handlers.mjs';
 
 const PROTOCOL_VERSION = '2026-04-18';
 const SERVER_NAME = 'narada-task-lifecycle-mcp';
@@ -86,6 +96,8 @@ const LOCUS_GUARDED_MUTATION_TOOLS = new Set([
 // If NARADA_AGENT_ID is set, mutating operations warn/block on mismatched agent_id params.
 let SESSION_IDENTITY = null;
 let activeOutputToolName = null;
+let taskLifecycleToolCaller = null;
+let taskLifecycleHandlerRegistry = null;
 
 const TOOL_ALIASES = TASK_LIFECYCLE_TOOL_ALIASES;
 
@@ -124,6 +136,8 @@ export function configureTaskLifecycleMcpRuntime({
     throw new Error(`Failed to open task lifecycle store: ${error.message}`);
   }
   runtimeConfigured = true;
+  taskLifecycleToolCaller = null;
+  taskLifecycleHandlerRegistry = null;
   recordTaskLifecycleRuntimeObservation();
   return { status: 'configured', siteRoot };
 }
@@ -651,11 +665,6 @@ async function dispatchMethod(method, params) {
   }
 }
 
-function isStoreError(error) {
-  const msg = error instanceof Error ? error.message : String(error);
-  return /database|sqlite|SQLITE|disk I\/O|malformed|not a database/i.test(msg);
-}
-
 /**
  * Best-effort session identity verification.
  * If NARADA_AGENT_ID is set in the MCP server environment and the caller's agent_id
@@ -694,1853 +703,201 @@ function enforceSessionIdentity(agentId) {
   }
 }
 
+function getTaskLifecycleToolCaller() {
+  ensureRuntimeConfigured();
+  if (!taskLifecycleToolCaller) {
+    taskLifecycleToolCaller = createTaskLifecycleToolCaller({
+      toolAliases: TOOL_ALIASES,
+      taskLifecycleTools,
+      siteRoot,
+      dispatchTool,
+      refreshStore,
+      jsonToolResult,
+      resolveToolPayloadArgs,
+      enforceInlinePayloadLimit,
+      locusGuardedMutationTools: LOCUS_GUARDED_MUTATION_TOOLS,
+      setActiveOutputToolName: (name) => {
+        activeOutputToolName = name;
+      },
+    });
+  }
+  return taskLifecycleToolCaller;
+}
+
 async function callTool(params) {
-  const record = asRecord(params);
-  const name = stringField(record, 'name');
-  const args = asRecord(record.arguments);
-  if (!name) throw new Error('tools_call_requires_name');
-
-  const canonicalName = normalizeToolName(name, TOOL_ALIASES);
-  activeOutputToolName = canonicalName;
-  if (canonicalName === 'task_lifecycle_create') {
-    const createArgs = resolveTaskCreatePayloadArgs(args);
-    const locusGuard = guardLifecycleTargetLocus(canonicalName, args);
-    if (locusGuard.status === 'refused') return jsonToolResult(locusGuard, true);
-    return await dispatchTool(canonicalName, createArgs.args, { payloadSource: createArgs.payloadSource });
-  }
-
-  const registeredToolNames = taskLifecycleTools().map((t) => t.name);
-  const payloadResolution = resolveToolPayloadArgs({
-    siteRoot,
-    toolName: canonicalName,
-    args,
-    allowedTools: registeredToolNames,
-  });
-  const effectiveArgs = payloadResolution.args;
-
-  const toolDef = taskLifecycleTools().find((t) => t.name === canonicalName);
-  if (toolDef?.inputSchema) {
-    const validationErrors = validateArgs(canonicalName, effectiveArgs, toolDef.inputSchema);
-    if (validationErrors) {
-      return jsonToolResult(validationErrorResult(validationErrors), true);
-    }
-  }
-  if (!payloadResolution.payloadSource) {
-    enforceInlinePayloadLimit({ toolName: canonicalName, args: effectiveArgs, allowPayloadCreation: true });
-  }
-  const locusGuard = guardLifecycleTargetLocus(canonicalName, effectiveArgs);
-  if (locusGuard.status === 'refused') return jsonToolResult(locusGuard, true);
-
-  try {
-    return await dispatchTool(canonicalName, effectiveArgs, { payloadSource: payloadResolution.payloadSource });
-  } catch (error) {
-    if (isStoreError(error)) {
-      const refreshed = refreshStore();
-      if (refreshed) {
-        try {
-          return await dispatchTool(canonicalName, effectiveArgs, { payloadSource: payloadResolution.payloadSource });
-        } catch (retryError) {
-          if (isStoreError(retryError)) {
-            throw new Error(`store_unavailable: ${retryError instanceof Error ? retryError.message : String(retryError)}`);
-          }
-          throw retryError;
-        }
-      }
-      throw new Error(`store_unavailable: ${error instanceof Error ? error.message : String(error)}`);
-    }
-    throw error;
-  }
-}
-
-function resolveTaskCreatePayloadArgs(args) {
-  const input = asRecord(args);
-  const inlineTaskFields = [
-    'title',
-    'goal',
-    'context',
-    'required_work',
-    'non_goals',
-    'acceptance_criteria',
-    'preferred_role',
-    'target_role',
-  ];
-  const inlineFields = inlineTaskFields.filter((field) => Object.prototype.hasOwnProperty.call(input, field));
-  if (inlineFields.length > 0) {
-    throw new Error(`task_lifecycle_create_inline_definition_refused: task definition fields must be supplied by immutable payload_ref, not inline tool arguments; fields=${inlineFields.join(',')}`);
-  }
-  if (Object.prototype.hasOwnProperty.call(input, 'payload_path')) {
-    throw new Error('task_lifecycle_create_payload_path_refused: task_lifecycle_create requires immutable payload_ref, not payload_path');
-  }
-  if (!stringField(input, 'payload_ref')) {
-    throw new Error('task_lifecycle_create_requires_payload_ref');
-  }
-  const payloadResolution = resolveToolPayloadArgs({
-    siteRoot,
-    toolName: 'task_lifecycle_create',
-    args: input,
-    allowedTools: ['task_lifecycle_create'],
-  });
-  if (!payloadResolution.payloadSource?.ref) {
-    throw new Error('task_lifecycle_create_requires_payload_ref');
-  }
-  validateTaskCreatePayload(payloadResolution.args);
-  return payloadResolution;
-}
-
-function validateTaskCreatePayload(args) {
-  const title = stringField(args, 'title');
-  if (!title) throw new Error('task_lifecycle_create_payload_title_required');
-  if (args.acceptance_criteria !== undefined && (!Array.isArray(args.acceptance_criteria) || args.acceptance_criteria.some((item) => typeof item !== 'string'))) {
-    throw new Error('task_lifecycle_create_payload_acceptance_criteria_must_be_string_array');
-  }
-  for (const field of ['goal', 'context', 'required_work', 'non_goals', 'preferred_role', 'target_role']) {
-    if (args[field] !== undefined && args[field] !== null && typeof args[field] !== 'string') {
-      throw new Error(`task_lifecycle_create_payload_${field}_must_be_string`);
-    }
-  }
+  return getTaskLifecycleToolCaller()(params);
 }
 
 function buildLifecycleTargetLocusStatus() {
-  const operatorStatedRoot = process.env.NARADA_OPERATOR_STATED_SITE_ROOT
-    || process.env.NARADA_REQUESTED_WORK_ROOT
-    || process.env.NARADA_TARGET_SITE_ROOT
-    || null;
-  const resolvedOperatorRoot = operatorStatedRoot ? resolve(String(operatorStatedRoot)) : null;
-  const mismatch = resolvedOperatorRoot && resolve(String(resolvedOperatorRoot)).toLowerCase() !== resolve(siteRoot).toLowerCase();
-  return {
-    schema: 'narada.task_lifecycle.target_locus_guard.v0',
-    default_target_site_root: siteRoot,
-    operator_stated_locus_root: resolvedOperatorRoot,
-    status: mismatch ? 'operator_stated_locus_mismatch' : 'clear',
-    explicit_target_site_root_supported: false,
-    rule: 'Task lifecycle MCP is bound to its --site-root. Startup/control-surface identity does not authorize mutating a different requested work substrate.',
-  };
+  return buildPipelineLifecycleTargetLocusStatus({ siteRoot, env: process.env });
 }
 
-function guardLifecycleTargetLocus(canonicalName, args) {
-  if (!LOCUS_GUARDED_MUTATION_TOOLS.has(canonicalName)) return { status: 'clear' };
-  if ((canonicalName === 'task_lifecycle_bridge_poll' || canonicalName === 'task_lifecycle_inbox_target') && booleanField(args, 'dry_run') === true) {
-    return { status: 'clear' };
+function getTaskLifecycleHandlerRegistry() {
+  if (!taskLifecycleHandlerRegistry) {
+    taskLifecycleHandlerRegistry = createTaskLifecycleHandlerRegistry({
+      toolNames: taskLifecycleTools().map((tool) => tool.name),
+      domainDispatch: createTaskLifecycleRemainingHandlers({
+        NO_FILES_CHANGED_MARKER,
+        store,
+        siteRoot,
+        jsonToolResult,
+        stringField,
+        numberField,
+        booleanField,
+        objectField,
+        stringArrayField,
+        nullableStringField,
+        arrayOfStrings,
+        enforceSessionIdentity,
+        verifySessionIdentity,
+        admitRosterIdentity,
+        validateSelfCertificationPacket,
+        validateRecoveryTruthfulnessPacket,
+        validateSelfCertificationBody,
+        validateRecoveryTruthfulnessBody,
+        admitTaskEvidence,
+        proveTaskCriteria,
+        taskLifecycleDispositionCloseout,
+        finishTaskService,
+        closeTaskService,
+        transitionLifecycleTask,
+        unDeferLifecycleTask,
+        reviewTaskService,
+        withAuthoredRosterJsonPreserved,
+        openTaskLifecycleStore,
+        detectSameOperatorReview,
+        detectSelfReview,
+        validateTaskFinishRecoveryTruthfulness,
+        finishGateExamples,
+        buildStateAwareFinishBlockerRemediation,
+        detectGitChangedFiles,
+        buildTaskEvidencePreflight,
+        buildPostCloseoutContinuation,
+        emitCheckpoint,
+        evaluatePostTransitionFollowups,
+        pollInboxBridge,
+        targetInboxEnvelope,
+        roleExistsInRoster,
+        agentExistsWithRole,
+        resolveAgentRoleWithDiagnostics,
+        ensureTaskRoutingTables,
+        getTaskRouting,
+        findTaskFile,
+        readTaskFile,
+        writeTaskProjection,
+        testMcpTool,
+        testTargetsForSelector,
+        allocateTaskNumbers,
+        slugify,
+        todayYmd,
+        renderTaskBodyFromSpec,
+        writeFileSync,
+        join,
+        randomUUID,
+        attachPayloadSource,
+        normalizeRecurringAuthorityBasis,
+        requireRecurringAuthorityActor,
+        ensureRecurringTaskTables,
+        insertRecurringDefinition,
+        insertRecurringEvent,
+        hydrateRecurringDefinition,
+        getRecurringDefinition,
+        listRecurringRuns,
+        listRecurringDefinitions,
+        updateRecurringDefinitionStatus,
+        parseIsoOrNow,
+        listDueRecurringDefinitions,
+        recurringDueKey,
+        createRecurringTaskInstance,
+        insertRecurringRun,
+      }),
+      explicitHandlers: {
+        ...createTaskLifecycleAdminHandlers({
+          jsonToolResult,
+          getRegisteredTools: () => taskLifecycleTools().map((tool) => tool.name),
+          getSiteRoot: () => siteRoot,
+          getToolAliases: () => TOOL_ALIASES,
+          buildTaskLifecycleFreshness,
+          buildLifecycleTargetLocusStatus,
+          taskLifecycleRestart,
+        }),
+        ...createTaskLifecycleReadHandlers({
+          store,
+          jsonToolResult,
+          stringField,
+          numberField,
+        }),
+        ...createTaskLifecycleAssignmentHandlers({
+          store,
+          siteRoot,
+          jsonToolResult,
+          stringField,
+          numberField,
+          enforceSessionIdentity,
+          verifySessionIdentity,
+          checkTaskRoleEligibilityLocal,
+          validatePreferredAgentMismatchAuthority,
+          recordClaimIntent,
+          claimLifecycleTask,
+          continueTaskService,
+          unclaimLifecycleTask,
+          withAuthoredRosterJsonPreserved,
+        }),
+        ...createTaskLifecycleNavigationHandlers({
+          store,
+          siteRoot,
+          jsonToolResult,
+          stringField,
+          numberField,
+          booleanField,
+          objectField,
+          resolveAgentRoleWithDiagnostics,
+          buildUnifiedWorkboard,
+          buildCorrectiveDebtReadiness,
+          deriveNextRecommendation,
+          buildTaskLifecycleFreshness: ({ registeredTools }) => buildTaskLifecycleFreshness({ registeredTools: registeredTools ?? taskLifecycleTools().map((tool) => tool.name) }),
+          buildMcpRestartPressure,
+          buildStaleLiveNavigationDegradation,
+          deriveMcpRestartPressureRecommendation,
+          buildNextWorkContract,
+          computeStateFreshness,
+          buildConciseNextActionView,
+          buildWorkboardSnapshotPacket,
+          verifySessionIdentity,
+        }),
+        ...createTaskLifecycleInspectionHandlers({
+          store,
+          siteRoot,
+          jsonToolResult,
+          stringField,
+          numberField,
+          getSingleOperatorReviewMeta,
+          findTaskFile,
+          readTaskFile,
+          deriveClosureAuthority,
+          getTaskRouting,
+          inspectTaskEvidence,
+          readTaskRouting,
+          buildTaskEvidencePreflight,
+          buildRoutingAssignmentDivergence,
+          searchTasksService,
+          findRelatedTasks,
+        }),
+        mcp_payload_create: (args) => jsonToolResult(payloadCreate({ siteRoot, args })),
+        mcp_payload_show: (args) => jsonToolResult(payloadShow({ siteRoot, args })),
+        mcp_output_show: (args) => jsonToolResult(outputShow({ siteRoot, args })),
+        mcp_payload_derive: (args) => jsonToolResult(payloadDerive({ siteRoot, args })),
+        mcp_payload_validate: (args) => jsonToolResult(payloadValidate({ siteRoot, args })),
+      },
+    });
   }
-  const status = buildLifecycleTargetLocusStatus();
-  if (status.status === 'clear') return status;
-  return {
-    status: 'refused',
-    refusal_code: 'target_locus_preflight_required',
-    tool_name: canonicalName,
-    ...status,
-    remediation: 'Relaunch the task lifecycle MCP for the intended Site, clear the operator-stated locus after explicit correction, or use a mutation surface that accepts explicit target_site_root.',
-  };
+  return taskLifecycleHandlerRegistry;
 }
 
 async function dispatchTool(canonicalName, args, dispatchContext = {}) {
-  switch (canonicalName) {
-    case 'task_lifecycle_doctor': {
-      const registeredTools = taskLifecycleTools().map((t) => t.name);
-      return jsonToolResult({
-        status: 'ok',
-        site_root: siteRoot,
-        authority_posture: 'facade_only',
-        surface_type: 'task_lifecycle_mcp',
-        canonical_tools: registeredTools,
-        deprecated_aliases: TOOL_ALIASES,
-        allowed_tools: registeredTools,
-        mcp_freshness: buildTaskLifecycleFreshness({ registeredTools }),
-        target_locus_guard: buildLifecycleTargetLocusStatus(),
-        conceptual_role: {
-          execution_context_relation: 'available MCP tool surface',
-          intelligence_context_relation: 'materializes task/work context for evaluation',
-          authority_state_relation: 'local task lifecycle authority state',
-        },
-      });
-    }
-    case 'task_lifecycle_restart':
-      return jsonToolResult(taskLifecycleRestart(args));
-    case 'task_lifecycle_list': {
-      const statusFilter = stringField(args, 'status');
-      const agentFilter = stringField(args, 'agent_id');
-      const limit = numberField(args, 'limit') ?? 50;
-      const rows = store.db.prepare('SELECT * FROM task_lifecycle ORDER BY task_number DESC LIMIT ?').all(limit);
-      const tasks = rows.map((row) => {
-        const spec = store.getTaskSpec(row.task_id);
-        const assignment = store.db.prepare("SELECT * FROM task_assignments WHERE task_id = ? AND released_at IS NULL ORDER BY claimed_at DESC LIMIT 1").get(row.task_id);
-        return {
-          task_number: row.task_number,
-          task_id: row.task_id,
-          status: row.status,
-          title: spec?.title ?? null,
-          assigned_to: assignment?.agent_id ?? null,
-          claimed_at: assignment?.claimed_at ?? null,
-          updated_at: row.updated_at,
-        };
-      });
-      const filtered = tasks.filter((t) => {
-        if (statusFilter && t.status !== statusFilter) return false;
-        if (agentFilter && t.assigned_to !== agentFilter) return false;
-        return true;
-      });
-      return jsonToolResult({ status: 'ok', count: filtered.length, tasks: filtered });
-    }
-
-    case 'task_lifecycle_show': {
-      const taskNumber = numberField(args, 'task_number');
-      if (!taskNumber) throw new Error('task_number_required');
-      const lifecycle = store.getLifecycleByNumber(taskNumber);
-      if (!lifecycle) throw new Error(`task_not_found: ${taskNumber}`);
-      const spec = store.getTaskSpec(lifecycle.task_id);
-      const routing = getTaskRouting(store, lifecycle.task_id);
-      const assignment = store.db.prepare("SELECT * FROM task_assignments WHERE task_id = ? AND released_at IS NULL ORDER BY claimed_at DESC LIMIT 1").get(lifecycle.task_id);
-      const observations = store.db.prepare("SELECT * FROM observation_artifacts WHERE task_id = ? ORDER BY created_at DESC").all(lifecycle.task_id);
-      const reviewRows = store.db.prepare("SELECT * FROM task_reviews WHERE task_id = ? ORDER BY reviewed_at DESC").all(lifecycle.task_id);
-      const assignmentIntents = store.listAssignmentIntentsForTask ? store.listAssignmentIntentsForTask(lifecycle.task_id) : [];
-      const reviews = reviewRows.map((r) => ({
-        review_id: r.review_id,
-        reviewer_agent_id: r.reviewer_agent_id,
-        verdict: r.verdict,
-        reviewed_at: r.reviewed_at,
-        single_operator_meta: getSingleOperatorReviewMeta(r),
-      }));
-      let body = null;
-      try {
-        const taskFile = await findTaskFile(siteRoot, String(taskNumber));
-        if (taskFile) {
-          const fileData = await readTaskFile(taskFile.path);
-          body = fileData.body;
-        }
-      } catch {
-        // ignore missing or unreadable task file
-      }
-      return jsonToolResult({
-        status: 'ok',
-        task_number: taskNumber,
-        task_id: lifecycle.task_id,
-        lifecycle,
-        closure_authority: deriveClosureAuthority(lifecycle),
-        spec: spec ? { ...spec, target_role: routing.target_role, preferred_agent_id: routing.preferred_agent_id } : null,
-        routing,
-        active_assignment: assignment ?? null,
-        assignment_intents: assignmentIntents,
-        observations: observations ?? [],
-        reviews: reviews ?? [],
-        body,
-      });
-    }
-
-    case 'task_lifecycle_roster': {
-      const roster = store.getRoster();
-      return jsonToolResult({ status: 'ok', roster: roster ?? [] });
-    }
-
-    case 'task_lifecycle_roster_admit': {
-      return jsonToolResult(admitRosterIdentity(args));
-    }
-
-    case 'task_lifecycle_claim': {
-      const taskNumber = numberField(args, 'task_number');
-      const agentId = stringField(args, 'agent_id');
-      if (!taskNumber) throw new Error('task_number_required');
-      if (!agentId) throw new Error('agent_id_required');
-      enforceSessionIdentity(agentId);
-      const identityWarning = verifySessionIdentity(agentId);
-      const lifecycle = store.getLifecycleByNumber(taskNumber);
-      if (!lifecycle) throw new Error(`task_not_found: ${taskNumber}`);
-
-      // Role eligibility check
-      const eligibility = checkTaskRoleEligibilityLocal({ store, siteRoot, taskId: lifecycle.task_id, taskNumber, agentId });
-      if (!eligibility.eligible) {
-        return jsonToolResult({
-          status: 'role_mismatch',
-          task_number: taskNumber,
-          target_role: eligibility.targetRole,
-          agent_role: eligibility.agentRole,
-          role_resolution: eligibility.roleResolution,
-          message: eligibility.warning,
-        }, true);
-      }
-      const mismatchAuthority = validatePreferredAgentMismatchAuthority({ args, eligibility, lifecycle, taskNumber, agentId });
-      if (mismatchAuthority.status === 'blocked') {
-        recordClaimIntent({
-          store,
-          lifecycle,
-          taskNumber,
-          agentId,
-          status: 'rejected',
-          rejectionReason: 'preferred_agent_mismatch_requires_authority',
-          authorityBasis: mismatchAuthority.authority_basis,
-          preferredAgentWarning: mismatchAuthority.preferred_agent_warning,
-        });
-        return jsonToolResult({
-          status: 'preferred_agent_mismatch_requires_authority',
-          task_number: taskNumber,
-          preferred_agent_id: eligibility.preferredAgentId,
-          claiming_agent: agentId,
-          pre_claim_warnings: [mismatchAuthority.preferred_agent_warning],
-          remediation: 'Retry the claim with authority_basis: { kind: "operator_direct_instruction" | "directed_obligation" | "task_owner_handoff", summary: "..." }.',
-          preferred_agent_warning: mismatchAuthority.preferred_agent_warning,
-          schema: 'narada.task.claim.preferred_agent_authority.v0',
-        }, true);
-      }
-
-      const serviceResult = await claimLifecycleTask({ siteRoot, store, taskNumber, agentId });
-      if (serviceResult.status === 'closure_authority_blocks_claim') {
-        return jsonToolResult(serviceResult, true);
-      }
-      if (serviceResult.status === 'already_claimed') {
-        return jsonToolResult({
-          status: 'already_claimed',
-          assignment: serviceResult.assignment,
-          pre_claim_warnings: [{
-            kind: 'active_assignment',
-            severity: 'blocker',
-            assigned_agent: serviceResult.assignment?.agent_id ?? null,
-            claimed_at: serviceResult.assignment?.claimed_at ?? null,
-            message: `Task already has an active assignment by ${serviceResult.assignment?.agent_id ?? 'unknown'}.`,
-          }],
-        }, true);
-      }
-      const result = { status: 'claimed', assignment_id: serviceResult.assignment_id, task_number: taskNumber };
-      if (eligibility.warning) {
-        result.preferred_agent_warning = {
-          kind: 'preferred_agent_mismatch',
-          severity: 'requires_authority',
-          warning: 'preferred_agent_mismatch',
-          preferred_agent_id: eligibility.preferredAgentId,
-          claiming_agent: agentId,
-          message: eligibility.warning,
-        };
-        result.pre_claim_warnings = [result.preferred_agent_warning];
-        result.preferred_agent_mismatch_authority = mismatchAuthority.authority_basis;
-      }
-      recordClaimIntent({
-        store,
-        lifecycle,
-        taskNumber,
-        agentId,
-        status: 'claimed',
-        assignmentId: serviceResult.assignment_id,
-        authorityBasis: mismatchAuthority.authority_basis,
-        preferredAgentWarning: result.preferred_agent_warning ?? null,
-      });
-      if (identityWarning) {
-        result.identity_warning = identityWarning;
-      }
-      return jsonToolResult(result);
-    }
-
-    case 'task_lifecycle_continue': {
-      const taskNumber = numberField(args, 'task_number');
-      const agentId = stringField(args, 'agent_id');
-      const reason = stringField(args, 'reason');
-      if (!taskNumber) throw new Error('task_number_required');
-      if (!agentId) throw new Error('agent_id_required');
-      if (!reason) throw new Error('reason_required');
-      enforceSessionIdentity(agentId);
-      const lifecycle = store.getLifecycleByNumber(taskNumber);
-      if (!lifecycle) throw new Error(`task_not_found: ${taskNumber}`);
-
-      // Role eligibility check
-      const eligibility = checkTaskRoleEligibilityLocal({ store, siteRoot, taskId: lifecycle.task_id, taskNumber, agentId });
-      if (!eligibility.eligible) {
-        return jsonToolResult({
-          status: 'role_mismatch',
-          task_number: taskNumber,
-          target_role: eligibility.targetRole,
-          agent_role: eligibility.agentRole,
-          role_resolution: eligibility.roleResolution,
-          message: eligibility.warning,
-        }, true);
-      }
-
-      const result = await withAuthoredRosterJsonPreserved(siteRoot, () => continueTaskService({ cwd: siteRoot, taskNumber, agent: agentId, reason }));
-      return jsonToolResult(result.result || result, result.exitCode !== 0);
-    }
-
-    case 'task_lifecycle_unclaim': {
-      const taskNumber = numberField(args, 'task_number');
-      const agentId = stringField(args, 'agent_id');
-      const reason = stringField(args, 'reason') ?? 'mcp_unclaim';
-      if (!taskNumber) throw new Error('task_number_required');
-      if (agentId) enforceSessionIdentity(agentId);
-      const serviceResult = await unclaimLifecycleTask({ siteRoot, store, taskNumber, agentId, reason });
-      return jsonToolResult(serviceResult, ['not_claimed', 'claimed_by_other', 'closure_authority_blocks_unclaim'].includes(serviceResult.status));
-    }
-
-    case 'task_lifecycle_next': {
-      const agentId = stringField(args, 'agent_id');
-      const limit = numberField(args, 'limit') ?? 8;
-      const lastWorkboardCheckAt = stringField(args, 'last_workboard_check_at');
-      const view = stringField(args, 'view');
-      const conciseOnly = view === 'concise' || booleanField(args, 'concise') === true;
-      if (!agentId) throw new Error('agent_id_required');
-
-      const roleResolution = resolveAgentRoleWithDiagnostics(store, siteRoot, agentId);
-      const agentRole = roleResolution.role;
-
-      const all = store.getAllLifecycle();
-      const board = buildUnifiedWorkboard({ store, siteRoot, agentId, agentRole, allTasks: all, limit });
-      const correctiveDebtReadiness = buildCorrectiveDebtReadiness({ allTasks: all });
-
-      const recommendation = deriveNextRecommendation(board, agentId);
-      const mcpFreshness = buildTaskLifecycleFreshness({ registeredTools: taskLifecycleTools().map((t) => t.name) });
-      const mcpRestartPressure = buildMcpRestartPressure([mcpFreshness]);
-      const staleLiveNavigation = buildStaleLiveNavigationDegradation(mcpRestartPressure);
-      const restartRecommendation = deriveMcpRestartPressureRecommendation(mcpRestartPressure);
-      const environmentPressure = restartRecommendation ? {
-        status: 'active',
-        executable_by_agent: false,
-        pressure: restartRecommendation,
-      } : { status: 'clear', executable_by_agent: false, pressure: null };
-      const finalRecommendation = recommendation ?? null;
-      const nextWorkContract = buildNextWorkContract(board, finalRecommendation);
-      const myInProgress = board.in_progress.filter((t) => t.assigned_agent === agentId);
-      const myNeedsContinuation = board.needs_continuation.filter((t) => t.assigned_agent === agentId);
-
-      // pending_reviews = only in_review tasks that the agent has an open review obligation for
-      const obligatedTaskIds = new Set(board.my_review_obligations.map((o) => o.task_id));
-      const pending_reviews = board.pending_reviews.filter((t) => obligatedTaskIds.has(t.task_id));
-
-      const responseCounts = {
-        ...board.counts,
-        all_in_review: board.counts.pending_reviews,
-        corrective_debt_active: correctiveDebtReadiness.counts.active_total,
-        corrective_debt_high_severity: correctiveDebtReadiness.counts.high_severity,
-        corrective_debt_missing_coverage: correctiveDebtReadiness.counts.missing_corrective_task_coverage,
-      };
-
-      const identityBanner = `>>> YOU ARE QUERYING AS: ${agentId}${agentRole ? ` (${agentRole})` : ''} <<<`;
-      const identityWarning = verifySessionIdentity(agentId);
-      const responseGeneratedAt = new Date().toISOString();
-
-      const responsePayload = {
-        status: 'ok',
-        agent_id: agentId,
-        agent_role: agentRole,
-        role_binding: roleResolution.role_binding,
-        role_resolution: roleResolution,
-        identity_banner: identityBanner,
-        identity_warning: identityWarning,
-        stale_live_navigation: staleLiveNavigation,
-        navigation_critical_field_quality: staleLiveNavigation.field_quality,
-        stale_live_warning: staleLiveNavigation.warning,
-        recommendation: finalRecommendation,
-        next_work_contract: nextWorkContract,
-        no_work_assertion_guardrail: nextWorkContract.no_work_assertion_guardrail,
-        executable_work_available: nextWorkContract.executable_work_available,
-        agent_actionable_recommendation: Boolean(recommendation),
-        environment_pressure: environmentPressure,
-        blocked_external: !recommendation && restartRecommendation ? environmentPressure : null,
-        recommendation_quality: staleLiveNavigation.field_quality.recommendation,
-        in_progress: myInProgress.slice(0, limit),
-        needs_continuation: myNeedsContinuation.slice(0, limit),
-        pending_reviews: pending_reviews.slice(0, limit),
-        all_in_review: board.pending_reviews.slice(0, limit),
-        local_followups: board.local_followups.slice(0, limit),
-        role_wide_followups: (board.role_wide_followups || []).slice(0, limit),
-        non_actionable_parent_followups: (board.non_actionable_parent_followups || []).slice(0, limit),
-        closure_authority_conflicts: (board.closure_authority_conflicts || []).slice(0, limit),
-        downstream_role_followups: (board.downstream_role_followups || []).slice(0, limit),
-        my_review_obligations: board.my_review_obligations.slice(0, limit),
-        deferred: board.deferred.slice(0, limit),
-        actionable_deferred: board.actionable_deferred.slice(0, limit),
-        inbox_backlog: board.inbox_backlog.slice(0, limit),
-        inbox_linked_task_suppressed: (board.inbox_linked_task_suppressed || []).slice(0, limit),
-        inbox_index: board.inbox_index ?? null,
-        corrective_debt_readiness: correctiveDebtReadiness,
-        recommendations: [
-          ...(restartRecommendation ? [{
-            type: 'mcp_restart_pressure',
-            priority: staleLiveNavigation.status === 'degraded' ? 0 : 9,
-            action: restartRecommendation.action,
-            title: restartRecommendation.reason,
-            authority_boundary: restartRecommendation.authority_boundary,
-            agent_actionable: restartRecommendation.authority_boundary?.agent_can_execute_restart === true,
-          }] : []),
-          ...board.recommendations,
-        ].slice(0, limit),
-        new_tasks_available: board.new_tasks_available ?? false,
-        recently_materialized: (board.recently_materialized || []).slice(0, limit),
-        counts: responseCounts,
-        schema: 'narada.task.mcp.next.v3',
-        generated_at: responseGeneratedAt,
-        workboard_generated_at: board.generated_at ?? null,
-        state_freshness: computeStateFreshness(lastWorkboardCheckAt, responseGeneratedAt),
-        mcp_freshness: mcpFreshness,
-        mcp_restart_pressure: mcpRestartPressure,
-      };
-      responsePayload.concise_next_action = buildConciseNextActionView(responsePayload);
-      return jsonToolResult(conciseOnly ? responsePayload.concise_next_action : responsePayload);
-    }
-
-    case 'task_lifecycle_workboard_snapshot': {
-      const agentId = stringField(args, 'agent_id');
-      const limit = numberField(args, 'limit') ?? 8;
-      const lastWorkboardCheckAt = stringField(args, 'last_workboard_check_at');
-      const previousSnapshot = objectField(args, 'previous_snapshot');
-      if (!agentId) throw new Error('agent_id_required');
-
-      const roleResolution = resolveAgentRoleWithDiagnostics(store, siteRoot, agentId);
-      const agentRole = roleResolution.role;
-      const all = store.getAllLifecycle();
-      const board = buildUnifiedWorkboard({ store, siteRoot, agentId, agentRole, allTasks: all, limit });
-      const generatedAt = new Date().toISOString();
-      const recommendation = deriveNextRecommendation(board, agentId);
-      const myInProgress = board.in_progress.filter((t) => t.assigned_agent === agentId);
-      const myNeedsContinuation = board.needs_continuation.filter((t) => t.assigned_agent === agentId);
-      const obligatedTaskIds = new Set(board.my_review_obligations.map((o) => o.task_id));
-      const pendingReviews = board.pending_reviews.filter((t) => obligatedTaskIds.has(t.task_id));
-      const responseCounts = { ...board.counts, all_in_review: board.counts.pending_reviews };
-      const snapshot = buildWorkboardSnapshotPacket({
-        agentId,
-        agentRole,
-        roleBinding: roleResolution.role_binding,
-        generatedAt,
-        board,
-        recommendation,
-        myInProgress,
-        myNeedsContinuation,
-        pendingReviews,
-        responseCounts,
-        lastWorkboardCheckAt,
-        previousSnapshot,
-        limit,
-      });
-      return jsonToolResult(snapshot);
-    }
-
-    case 'task_lifecycle_obligations': {
-      const agentId = stringField(args, 'agent_id');
-      const status = stringField(args, 'status') || 'open';
-      if (!agentId) throw new Error('agent_id_required');
-      const roleResolution = resolveAgentRoleWithDiagnostics(store, siteRoot, agentId);
-      const agentRole = roleResolution.role;
-      const obligations = store.listDirectedObligationsForTarget(agentId, agentRole, status)
-        .map((o) => {
-          const spec = o.task_number ? store.getTaskSpecByNumber(o.task_number) : null;
-          return {
-            obligation_id: o.obligation_id,
-            kind: o.kind,
-            status: o.status,
-            task_number: o.task_number,
-            task_id: o.task_id,
-            title: spec?.title || '(untitled)',
-            target_agent_id: o.target_agent_id,
-            target_role: o.target_role,
-            source_agent_id: o.source_agent_id,
-            created_at: o.created_at,
-            updated_at: o.updated_at,
-          };
-        });
-      return jsonToolResult({
-        status: 'ok',
-        agent_id: agentId,
-        agent_role: agentRole,
-        role_binding: roleResolution.role_binding,
-        role_resolution: roleResolution,
-        status_filter: status,
-        count: obligations.length,
-        obligations,
-        schema: 'narada.task.mcp.obligations.v0',
-      });
-    }
-
-    case 'task_lifecycle_inspect': {
-      const taskNumber = numberField(args, 'task_number');
-      if (!taskNumber) throw new Error('task_number_required');
-      const lifecycle = store.getLifecycleByNumber(taskNumber);
-      if (!lifecycle) throw new Error(`task_not_found: ${taskNumber}`);
-      const evidence = await inspectTaskEvidence(siteRoot, String(taskNumber), store);
-      const spec = store.getTaskSpecByNumber(taskNumber);
-      const assignment = store.getActiveAssignment(lifecycle.task_id);
-      const routing = readTaskRouting(store, lifecycle.task_id, spec);
-      const obligations = store.listDirectedObligationsForTask(lifecycle.task_id, null);
-      const reports = store.db.prepare('SELECT report_id, agent_id, submitted_at as reported_at FROM task_reports WHERE task_id = ?').all(lifecycle.task_id);
-      const reviewRows = store.db.prepare("SELECT * FROM task_reviews WHERE task_id = ? ORDER BY reviewed_at DESC").all(lifecycle.task_id);
-      const assignmentIntents = store.listAssignmentIntentsForTask ? store.listAssignmentIntentsForTask(lifecycle.task_id) : [];
-      const reviews = reviewRows.map((r) => ({
-        review_id: r.review_id,
-        reviewer_agent_id: r.reviewer_agent_id,
-        verdict: r.verdict,
-        reviewed_at: r.reviewed_at,
-        single_operator_meta: getSingleOperatorReviewMeta(r),
-      }));
-      return jsonToolResult({
-        status: 'ok',
-        task_number: taskNumber,
-        task_id: lifecycle.task_id,
-        lifecycle: {
-          status: lifecycle.status,
-          governed_by: lifecycle.governed_by,
-          closed_at: lifecycle.closed_at,
-          closed_by: lifecycle.closed_by,
-          closure_mode: lifecycle.closure_mode,
-          updated_at: lifecycle.updated_at,
-        },
-        evidence: evidence ? {
-          verdict: evidence.verdict,
-          all_criteria_checked: evidence.all_criteria_checked,
-          unchecked_count: evidence.unchecked_count,
-          has_report: evidence.has_report,
-          has_execution_notes: evidence.has_execution_notes,
-          has_verification: evidence.has_verification,
-          violations: evidence.violations,
-        } : null,
-        evidence_preflight: await buildTaskEvidencePreflight({ siteRoot, store, taskNumber }),
-        assignment: assignment ? { agent_id: assignment.agent_id, claimed_at: assignment.claimed_at, intent: assignment.intent } : null,
-        routing,
-        routing_assignment_divergence: buildRoutingAssignmentDivergence({ lifecycle, routing, assignment, reports }),
-        assignment_intents: assignmentIntents,
-        reports: reports || [],
-        reviews: reviews || [],
-        obligations: obligations.map((o) => ({ obligation_id: o.obligation_id, kind: o.kind, status: o.status })),
-        schema: 'narada.task.mcp.inspect.v0',
-      });
-    }
-
-    case 'task_lifecycle_evidence_preflight': {
-      const taskNumber = numberField(args, 'task_number');
-      if (!taskNumber) throw new Error('task_number_required');
-      return jsonToolResult(await buildTaskEvidencePreflight({ siteRoot, store, taskNumber }));
-    }
-
-    case 'task_lifecycle_self_certification_preflight': {
-      const packet = objectField(args, 'self_certification');
-      if (!packet) throw new Error('self_certification_required');
-      const validation = validateSelfCertificationPacket({
-        ...packet,
-        surface: stringField(args, 'surface') ?? packet.surface,
-        summary: stringField(args, 'summary') ?? packet.summary,
-        body: stringField(args, 'body') ?? packet.body,
-        actor_principal: stringField(args, 'actor_principal') ?? packet.actor_principal ?? packet.closer_principal ?? packet.reviewer_principal,
-        terminal_correction_claim: booleanField(args, 'terminal_correction_claim') === true || packet.terminal_correction_claim === true,
-      });
-      return jsonToolResult({
-        status: validation.ok ? 'allowed' : 'blocked',
-        schema: 'narada.task.mcp.self_certification_preflight.v0',
-        ok: validation.ok,
-        close_blocked: !validation.ok,
-        blockers: validation.errors,
-        evaluation: validation.evaluation,
-        required_fields: validation.evaluation.required_fields,
-        allowed_pending_states: validation.evaluation.allowed_pending_states,
-      }, !validation.ok);
-    }
-
-    case 'task_lifecycle_admit_evidence': {
-      const taskNumber = numberField(args, 'task_number');
-      const agentId = stringField(args, 'agent_id');
-      if (!taskNumber) throw new Error('task_number_required');
-      if (!agentId) throw new Error('agent_id_required');
-      enforceSessionIdentity(agentId);
-      const selfCertification = objectField(args, 'self_certification');
-      if (selfCertification) {
-        const validation = validateSelfCertificationPacket({
-          ...selfCertification,
-          surface: 'evidence_admission',
-          actor_principal: selfCertification.actor_principal ?? agentId,
-        });
-        if (!validation.ok) {
-          return jsonToolResult({
-            status: 'blocked',
-            error: 'self_certification_guard_failed',
-            close_blocked: true,
-            close_blockers: validation.errors,
-            task_number: taskNumber,
-            schema: 'narada.task.mcp.evidence.self_certification_gate.v0',
-            evaluation: validation.evaluation,
-            remediation: 'Evidence admission may preserve same-subject evidence, but closure-sensitive architect-failure/deception/trust evidence must carry valid guard metadata and cannot assert terminal correction without independent review or operator acceptance.',
-          }, true);
-        }
-      }
-      const admission = await admitTaskEvidence({ cwd: siteRoot, taskNumber, admittedBy: agentId, methods: ['admission'] });
-      return jsonToolResult({
-        status: admission.blockers.length === 0 ? 'admitted' : 'rejected',
-        task_number: taskNumber,
-        admission_id: admission.result.admission_id,
-        blockers: admission.blockers,
-        verdict: admission.result.verdict,
-        evidence_preflight: admission.blockers.length > 0 ? await buildTaskEvidencePreflight({ siteRoot, store, taskNumber }) : null,
-        schema: 'narada.task.mcp.admit_evidence.v0',
-      });
-    }
-
-    case 'task_lifecycle_prove_criteria': {
-      const taskNumber = numberField(args, 'task_number');
-      const agentId = stringField(args, 'agent_id');
-      if (!taskNumber) throw new Error('task_number_required');
-      if (!agentId) throw new Error('agent_id_required');
-      enforceSessionIdentity(agentId);
-      return jsonToolResult(await proveTaskCriteria({ siteRoot, store, taskNumber, agentId }));
-    }
-
-    case 'task_lifecycle_disposition_closeout': {
-      const taskNumber = numberField(args, 'task_number');
-      const agentId = stringField(args, 'agent_id');
-      if (!taskNumber) throw new Error('task_number_required');
-      if (!agentId) throw new Error('agent_id_required');
-      enforceSessionIdentity(agentId);
-      const result = await taskLifecycleDispositionCloseout({
-        siteRoot,
-        store,
-        taskNumber,
-        agentId,
-        envelopeId: stringField(args, 'envelope_id'),
-        disposition: stringField(args, 'disposition'),
-        summary: stringField(args, 'summary'),
-        dryRun: booleanField(args, 'dry_run') === true,
-        proveCriteria: booleanField(args, 'prove_criteria') === true,
-        finish: booleanField(args, 'finish') === true,
-        changedFiles: stringArrayField(args, 'changed_files'),
-        noFilesChanged: booleanField(args, 'no_files_changed') === true,
-      });
-      return jsonToolResult(result, result.status === 'error');
-    }
-
-    case 'task_lifecycle_audit': {
-      const since = stringField(args, 'since');
-      const until = stringField(args, 'until');
-      const now = new Date();
-      const defaultSince = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-      const sinceVal = since || defaultSince;
-      const untilVal = until || now.toISOString();
-      const sql = `
-        SELECT 'claim' AS event_type, CAST(ai.task_number AS TEXT) AS task, ai.agent_id AS actor, ai.requested_at AS occurred_at, ai.status AS result, ai.assignment_id AS ref
-        FROM assignment_intents ai
-        WHERE ai.kind = 'claim' AND ai.requested_at >= ? AND ai.requested_at <= ?
-        UNION ALL
-        SELECT 'report', CAST(tl.task_number AS TEXT), tr.agent_id, tr.submitted_at, 'submitted', tr.report_id
-        FROM task_reports tr
-        JOIN task_lifecycle tl ON tl.task_id = tr.task_id
-        WHERE tr.submitted_at >= ? AND tr.submitted_at <= ?
-        UNION ALL
-        SELECT 'review', CAST(tl.task_number AS TEXT), rv.reviewer_agent_id, rv.reviewed_at, rv.verdict, rv.review_id
-        FROM task_reviews rv
-        JOIN task_lifecycle tl ON tl.task_id = rv.task_id
-        WHERE rv.reviewed_at >= ? AND rv.reviewed_at <= ?
-        UNION ALL
-        SELECT 'admission', CAST(task_number AS TEXT), admitted_by, admitted_at, verdict, admission_id
-        FROM evidence_admission_results
-        WHERE admitted_at >= ? AND admitted_at <= ?
-        UNION ALL
-        SELECT 'close', CAST(task_number AS TEXT), closed_by, closed_at, closure_mode, task_id
-        FROM task_lifecycle
-        WHERE closed_at IS NOT NULL AND closed_at >= ? AND closed_at <= ?
-        ORDER BY occurred_at DESC
-      `;
-      const rows = store.db.prepare(sql).all(sinceVal, untilVal, sinceVal, untilVal, sinceVal, untilVal, sinceVal, untilVal, sinceVal, untilVal);
-      return jsonToolResult({
-        status: 'ok',
-        schema: 'narada.task.mcp.audit.v0',
-        since: sinceVal,
-        until: untilVal,
-        count: rows.length,
-        events: rows,
-      });
-    }
-
-    case 'task_lifecycle_finish': {
-      const taskNumber = numberField(args, 'task_number');
-      const agentId = stringField(args, 'agent_id');
-      const summary = stringField(args, 'summary');
-      const verdict = stringField(args, 'verdict');
-      const reviewer = stringField(args, 'reviewer');
-      const changedFiles = stringArrayField(args, 'changed_files');
-      const noFilesChanged = booleanField(args, 'no_files_changed') === true;
-      const recoveryTruthfulness = objectField(args, 'recovery_truthfulness');
-      const selfCertification = objectField(args, 'self_certification');
-      if (!taskNumber) throw new Error('task_number_required');
-      if (!agentId) throw new Error('agent_id_required');
-      if (changedFiles && noFilesChanged) {
-        return jsonToolResult({
-          status: 'error',
-          error: 'changed_files_conflicts_with_no_files_changed',
-          schema: 'narada.task.mcp.finish.changed_file_evidence.v0',
-          remediation: 'Provide changed_files for code/document edits, or no_files_changed=true for legitimate design-only/research tasks, but not both.',
-          examples: finishGateExamples('changed_files'),
-        }, true);
-      }
-      enforceSessionIdentity(agentId);
-      const identityWarning = verifySessionIdentity(agentId);
-      const truthfulnessGate = validateTaskFinishRecoveryTruthfulness({
-        taskNumber,
-        summary,
-        changedFiles,
-        noFilesChanged,
-        recoveryTruthfulness,
-      });
-      if (!truthfulnessGate.ok) {
-        const payload = {
-          status: 'blocked',
-          error: 'recovery_truthfulness_guard_failed',
-          close_blocked: true,
-          task_number: taskNumber,
-          schema: 'narada.task.mcp.finish.recovery_truthfulness_gate.v0',
-          close_blockers: truthfulnessGate.errors,
-          evaluation: truthfulnessGate.evaluation,
-          recovery_state_vocabulary: truthfulnessGate.evaluation.state_vocabulary,
-          required_fields: truthfulnessGate.evaluation.required_fields,
-          remediation: 'For serious-failure recovery finish/report claims, provide recovery_truthfulness with known_facts, inferences, uncertainty, changed, not_changed, remaining_work, evidence_limits, capa_open_status, and state. Use terminal_corrected only when corrective implementation is complete, no related CAPA/task/review remains open, and repository_durability names committed/pushed state; task creation alone is not correction.',
-          examples: finishGateExamples('recovery_truthfulness'),
-        };
-        if (identityWarning) {
-          payload.identity_warning = identityWarning;
-        }
-        return jsonToolResult(payload, true);
-      }
-      const lifecycle = store.getLifecycleByNumber(taskNumber);
-      const testGate = lifecycle ? testResultArtifactGate(store, lifecycle.task_id) : { failed_test_artifacts: [], latest_passing_artifacts: [] };
-      if (testGate.failed_test_artifacts.length > 0) {
-        const payload = {
-          status: 'blocked',
-          schema: 'narada.task.mcp.finish.test_gate.v0',
-          task_number: taskNumber,
-          close_blocked: true,
-          close_blockers: ['Task has current failed structured test evidence. Run the same selector again and produce a newer passing artifact before finish.'],
-          failed_test_artifacts: testGate.failed_test_artifacts,
-          latest_passing_artifacts: testGate.latest_passing_artifacts,
-          remediation: 'Run task_lifecycle_run_tests with the same selector as each failed artifact. A newer passed artifact for that selector supersedes earlier failures.',
-        };
-        if (identityWarning) {
-          payload.identity_warning = identityWarning;
-        }
-        return jsonToolResult(payload, true);
-      }
-      const taskFile = await findTaskFile(siteRoot, taskNumber);
-      if (taskFile) {
-        const { body } = await readTaskFile(taskFile.path);
-        const selfCertificationValidation = selfCertification
-          ? validateSelfCertificationPacket({
-            ...selfCertification,
-            actor_principal: selfCertification.actor_principal ?? selfCertification.closer_principal ?? agentId,
-            summary,
-            body,
-            terminal_correction_claim: true,
-            surface: 'task_lifecycle_finish',
-          })
-          : validateSelfCertificationBody({ body, summary, actor_principal: agentId });
-        if (!selfCertificationValidation.ok) {
-          const payload = {
-            status: 'blocked',
-            error: 'self_certification_guard_failed',
-            close_blocked: true,
-            close_blockers: selfCertificationValidation.errors,
-            task_number: taskNumber,
-            schema: 'narada.task.mcp.finish.self_certification_gate.v0',
-            evaluation: selfCertificationValidation.evaluation,
-            required_fields: selfCertificationValidation.evaluation.required_fields,
-            allowed_pending_states: selfCertificationValidation.evaluation.allowed_pending_states,
-            remediation: 'For architect-failure/deception/trust same-subject terminal correction, provide self_certification with target_category, subject_principal, requires_independent_review, misleading_completion_answer, allowed_pending_state, and either eligible independent review refs or explicit operator acceptance. Otherwise keep the work in a review-required/pending/blocker state.',
-          };
-          if (identityWarning) {
-            payload.identity_warning = identityWarning;
-          }
-          return jsonToolResult(payload, true);
-        }
-        const followUpValidation = validateFollowUpLedger(body);
-        if (!followUpValidation.ok) {
-          const payload = {
-            status: 'error',
-            error: 'follow_up_ledger_required',
-            close_blocked: true,
-            close_blockers: followUpValidation.errors,
-            task_number: taskNumber,
-            next_command: `Update task ${taskNumber} with a ## Follow-Up Ledger linking each preserved follow-up to created #N, covered by #N, envelope env_<id>, CAPA <capa_id>, deferred: <reason>, or no follow-up needed: <rationale>.`,
-            schema: 'narada.task.mcp.finish.follow_up_ledger_gate.v0',
-            examples: finishGateExamples('follow_up_ledger'),
-          };
-          if (identityWarning) {
-            payload.identity_warning = identityWarning;
-          }
-          return jsonToolResult(payload, true);
-        }
-        const recoveryTruthfulnessValidation = recoveryTruthfulness
-          ? { ok: true }
-          : validateRecoveryTruthfulnessBody({ body, summary, context: `task:${taskNumber}` });
-        if (!recoveryTruthfulnessValidation.ok) {
-          const payload = {
-            status: 'error',
-            error: 'recovery_truthfulness_guard_required',
-            close_blocked: true,
-            close_blockers: recoveryTruthfulnessValidation.errors,
-            task_number: taskNumber,
-            trigger_evaluation: recoveryTruthfulnessValidation.evaluation,
-            next_command: `Update task ${taskNumber} with a ## Recovery Truthfulness section naming known facts, inferences, uncertainty, changed, not changed, remaining work, evidence limits, CAPA-open status, and state. For terminal_corrected, also name repository durability / commit-push state.`,
-            schema: 'narada.task.mcp.finish.recovery_truthfulness_gate.v0',
-            examples: finishGateExamples('recovery_truthfulness'),
-          };
-          if (identityWarning) {
-            payload.identity_warning = identityWarning;
-          }
-          return jsonToolResult(payload, true);
-        }
-      }
-      ensureStaticRosterAgentInSql(store, siteRoot, agentId);
-      const autoDetectedChangedFiles = !changedFiles && !noFilesChanged ? detectGitChangedFiles(siteRoot) : [];
-      const finishOptions = { cwd: siteRoot, taskNumber, agent: agentId, summary, verdict, close: true };
-      if (reviewer) finishOptions.reviewer = reviewer;
-      if (changedFiles) finishOptions.changedFiles = JSON.stringify(changedFiles);
-      if (!changedFiles && autoDetectedChangedFiles.length > 0) finishOptions.changedFiles = JSON.stringify(autoDetectedChangedFiles);
-      if (noFilesChanged) finishOptions.changedFiles = JSON.stringify([NO_FILES_CHANGED_MARKER]);
-      const result = await withAuthoredRosterJsonPreserved(siteRoot, () => finishTaskService(finishOptions));
-      const payload = result.result || result;
-      const isBlocked = payload.close_action === 'blocked';
-      if (isBlocked) {
-        payload.close_blocked = true;
-        payload.evidence_preflight = await buildTaskEvidencePreflight({ siteRoot, store, taskNumber });
-        if (!payload.evidence_reason && payload.close_blockers?.length > 0) {
-          payload.evidence_reason = payload.close_blockers.join('; ');
-        }
-        const remediation = buildStateAwareFinishBlockerRemediation({ taskNumber, agentId, lifecycle, payload });
-        payload.next_action = remediation.next_action;
-        payload.next_command = remediation.next_command;
-        payload.remediation = remediation.remediation;
-      }
-      payload.follow_up_policy = evaluatePostTransitionFollowups({
-        event: { transition_kind: payload.close_action ?? 'finish', task_number: taskNumber, task_id: payload.task_id, agent_id: agentId },
-        source_task: { task_number: taskNumber, task_id: payload.task_id },
-        actor: { agent_id: agentId },
-        result: payload,
-        signals: { evidence_blocked: isBlocked },
-      });
-      if (!isBlocked && result.exitCode === 0) {
-        payload.post_closeout_continuation = buildPostCloseoutContinuation({ agentId, result: payload });
-      }
-      if (!isBlocked && result.exitCode === 0) {
-        try {
-          const checkpointResult = await emitCheckpoint({
-            cwd: siteRoot,
-            agentId,
-            sessionId: process.env.KIMI_SESSION_ID || process.env.SESSION_ID || 'unknown',
-            taskNumber,
-            taskId: payload.task_id || null,
-            boundaryType: 'finish',
-            summary,
-          });
-          payload.checkpoint_event = checkpointResult;
-        } catch {
-          // Non-blocking: checkpoint emission failure must not prevent finish
-        }
-      }
-      if (identityWarning) {
-        payload.identity_warning = identityWarning;
-      }
-      return jsonToolResult(payload, result.exitCode !== 0 || isBlocked);
-    }
-
-    case 'task_lifecycle_close': {
-      const taskNumber = numberField(args, 'task_number');
-      const agentId = stringField(args, 'agent_id');
-      const mode = stringField(args, 'mode') || 'agent_finish';
-      const noContinuationNeeded = stringField(args, 'no_continuation_needed');
-      if (!taskNumber) throw new Error('task_number_required');
-      if (!agentId) throw new Error('agent_id_required');
-      enforceSessionIdentity(agentId);
-      const selfCertification = objectField(args, 'self_certification');
-      if (selfCertification) {
-        const validation = validateSelfCertificationPacket({
-          ...selfCertification,
-          surface: 'task_lifecycle_close',
-          actor_principal: selfCertification.actor_principal ?? selfCertification.closer_principal ?? agentId,
-          terminal_correction_claim: true,
-        });
-        if (!validation.ok) {
-          return jsonToolResult({
-            status: 'blocked',
-            error: 'self_certification_guard_failed',
-            close_blocked: true,
-            close_blockers: validation.errors,
-            task_number: taskNumber,
-            schema: 'narada.task.mcp.close.self_certification_gate.v0',
-            evaluation: validation.evaluation,
-            remediation: 'Task close for same-subject architect-failure/deception/trust material requires eligible independent review or explicit operator acceptance, otherwise use a pending/blocker state.',
-          }, true);
-        }
-      }
-      const result = await withAuthoredRosterJsonPreserved(siteRoot, () => closeTaskService({ cwd: siteRoot, taskNumber, agent: agentId, mode, noContinuationNeeded }));
-      const payload = result.result || result;
-      const isBlocked = result.exitCode !== 0 || payload.close_action === 'blocked';
-      if (!isBlocked) {
-        payload.post_closeout_continuation = buildPostCloseoutContinuation({ agentId, result: payload });
-      }
-      return jsonToolResult(payload, isBlocked);
-    }
-
-    case 'task_lifecycle_search': {
-      const query = stringField(args, 'query');
-      const statusFilter = stringField(args, 'status');
-      const limit = numberField(args, 'limit') ?? 20;
-      if (!query) throw new Error('query_required');
-      const result = await searchTasksService({ cwd: siteRoot, query, maxSnippets: 3 });
-      const output = result.result || result;
-      if (statusFilter && output.results) {
-        output.results = output.results.filter((r) => r.status === statusFilter);
-        output.count = output.results.length;
-      }
-      output.results = output.results?.slice(0, limit);
-      return jsonToolResult(output, result.exitCode !== 0);
-    }
-
-    case 'task_lifecycle_related': {
-      const taskNumber = numberField(args, 'task_number');
-      const limit = numberField(args, 'limit') ?? 8;
-      if (!taskNumber) throw new Error('task_number_required');
-      const result = findRelatedTasks({ tasksDir: join(siteRoot, '.ai', 'do-not-open', 'tasks'), targetTaskNumber: taskNumber, limit });
-      return jsonToolResult(result);
-    }
-
-    case 'task_lifecycle_defer': {
-      const taskNumber = numberField(args, 'task_number');
-      const agentId = stringField(args, 'agent_id');
-      const reason = stringField(args, 'reason');
-      if (!taskNumber) throw new Error('task_number_required');
-      if (!agentId) throw new Error('agent_id_required');
-      enforceSessionIdentity(agentId);
-      const serviceResult = await transitionLifecycleTask({ siteRoot, store, taskNumber, agentId, reason, toStatus: 'deferred', resultStatus: 'deferred' });
-      return jsonToolResult(serviceResult, serviceResult.status === 'error');
-    }
-
-    case 'task_lifecycle_un_defer': {
-      const taskNumber = numberField(args, 'task_number');
-      const agentId = stringField(args, 'agent_id');
-      const reason = stringField(args, 'reason');
-      const authorityBasis = objectField(args, 'authority_basis');
-      if (!taskNumber) throw new Error('task_number_required');
-      if (!agentId) throw new Error('agent_id_required');
-      enforceSessionIdentity(agentId);
-      const serviceResult = await unDeferLifecycleTask({ siteRoot, store, taskNumber, agentId, reason, authorityBasis });
-      return jsonToolResult(serviceResult, serviceResult.status === 'error');
-    }
-
-    case 'task_lifecycle_reopen': {
-      const taskNumber = numberField(args, 'task_number');
-      const agentId = stringField(args, 'agent_id');
-      const reason = stringField(args, 'reason');
-      if (!taskNumber) throw new Error('task_number_required');
-      if (!agentId) throw new Error('agent_id_required');
-      enforceSessionIdentity(agentId);
-      const serviceResult = await transitionLifecycleTask({ siteRoot, store, taskNumber, agentId, reason, toStatus: 'opened', resultStatus: 'reopened' });
-      return jsonToolResult(serviceResult, serviceResult.status === 'error');
-    }
-
-    case 'task_lifecycle_review': {
-      const taskNumber = numberField(args, 'task_number');
-      const agentId = stringField(args, 'agent_id');
-      const verdict = stringField(args, 'verdict');
-      let findings = args.findings;
-      if (Array.isArray(findings)) {
-        findings = JSON.stringify(findings);
-      }
-      if (!taskNumber) throw new Error('task_number_required');
-      if (!agentId) throw new Error('agent_id_required');
-      if (!verdict) throw new Error('verdict_required');
-      enforceSessionIdentity(agentId);
-      const identityWarning = verifySessionIdentity(agentId);
-      const selfCertification = objectField(args, 'self_certification');
-      if (selfCertification) {
-        const validation = validateSelfCertificationPacket({
-          ...selfCertification,
-          surface: 'task_lifecycle_review',
-          actor_principal: selfCertification.actor_principal ?? selfCertification.reviewer_principal ?? agentId,
-          terminal_correction_claim: ['accepted', 'accepted_with_notes'].includes(verdict),
-        });
-        if (!validation.ok) {
-          const payload = {
-            status: 'blocked',
-            error: 'self_certification_guard_failed',
-            close_blocked: true,
-            close_blockers: validation.errors,
-            task_number: taskNumber,
-            schema: 'narada.task.mcp.review.self_certification_gate.v0',
-            evaluation: validation.evaluation,
-            remediation: 'Same-subject review cannot satisfy final independent review for architect-failure/deception/trust material without eligible independent-review metadata or explicit operator acceptance.',
-          };
-          if (identityWarning) payload.identity_warning = identityWarning;
-          return jsonToolResult(payload, true);
-        }
-      }
-
-      // Same-operator and self-review detection
-      let structuralReviewInfo = null;
-      try {
-        const store = openTaskLifecycleStore(siteRoot);
-        try {
-          structuralReviewInfo = detectSameOperatorReview(store, agentId, taskNumber);
-          if (!structuralReviewInfo?.sameOperator) {
-            structuralReviewInfo = detectSelfReview(store, agentId, taskNumber);
-          }
-        } finally {
-          store.db.close();
-        }
-      } catch {
-        // Best-effort
-      }
-
-      const isStructuralReview = structuralReviewInfo?.sameOperator || structuralReviewInfo?.selfReview;
-      if (isStructuralReview && !args.single_operator_review) {
-        return jsonToolResult({
-          status: 'error',
-          error: 'single_operator_review_blocked',
-          message: structuralReviewInfo.warning,
-          hint: 'Pass single_operator_review: true to allow single-operator review with annotation recorded.',
-        }, true);
-      }
-
-      // Prepend annotation when single-operator review is explicitly requested
-      let parsedFindings = null;
-      if (findings) {
-        try {
-          parsedFindings = JSON.parse(findings);
-          if (!Array.isArray(parsedFindings)) parsedFindings = null;
-        } catch {
-          parsedFindings = null;
-        }
-      }
-      if (isStructuralReview && args.single_operator_review) {
-        const annotation = {
-          severity: 'note',
-          description: `single_operator_review: ${structuralReviewInfo.warning} This review is annotated as single-operator review (kind: ${structuralReviewInfo.kind || 'same_operator'}).`,
-          location: 'review_authority',
-        };
-        if (Array.isArray(parsedFindings)) {
-          parsedFindings.unshift(annotation);
-        } else {
-          parsedFindings = [annotation];
-        }
-        findings = JSON.stringify(parsedFindings);
-      }
-
-      const result = await withAuthoredRosterJsonPreserved(siteRoot, () => reviewTaskService({ cwd: siteRoot, taskNumber, agent: agentId, verdict, findings }));
-      const payload = result.result || result;
-      const isBlocked = payload.evidence_blocked === true || payload.close_action === 'blocked';
-      if (isBlocked) {
-        payload.close_blocked = true;
-      }
-      if (isStructuralReview) {
-        payload.single_operator_review = true;
-        payload.single_operator_annotation = structuralReviewInfo.warning;
-        payload.single_operator_kind = structuralReviewInfo.kind || 'same_operator';
-      }
-      if (identityWarning) {
-        payload.identity_warning = identityWarning;
-      }
-      return jsonToolResult(payload, result.exitCode !== 0 || isBlocked);
-    }
-
-    case 'task_lifecycle_submit_observation': {
-      const taskNumber = numberField(args, 'task_number');
-      const artifactUri = stringField(args, 'artifact_uri');
-      const content = args.content;
-      if (!artifactUri) throw new Error('artifact_uri_required');
-      const taskId = taskNumber ? store.getLifecycleByNumber(taskNumber)?.task_id : null;
-      const artifactId = randomUUID();
-      const admittedView = JSON.stringify(content ?? {});
-      store.upsertObservationArtifact({
-        artifact_id: artifactId,
-        artifact_type: 'observation',
-        source_operator: stringField(args, 'source_operator') ?? 'mcp_agent',
-        task_id: taskId ?? null,
-        task_number: taskNumber ?? null,
-        agent_id: stringField(args, 'agent_id') ?? null,
-        artifact_uri: artifactUri,
-        digest: artifactId.slice(0, 16),
-        admitted_view_json: admittedView,
-        created_at: new Date().toISOString(),
-      });
-      return jsonToolResult({ status: 'submitted', artifact_id: artifactId, artifact_uri: artifactUri });
-    }
-
-    case 'task_lifecycle_bridge_poll': {
-      const dryRun = booleanField(args, 'dry_run') ?? false;
-      const threshold = numberField(args, 'threshold');
-      const limit = numberField(args, 'limit');
-      const result = await pollInboxBridge(siteRoot, { dryRun, threshold, limit });
-      return jsonToolResult(result, result.status === 'error');
-    }
-
-    case 'task_lifecycle_inbox_target': {
-      const envelopeId = stringField(args, 'envelope_id');
-      const dryRun = booleanField(args, 'dry_run') ?? false;
-      const disposition = stringField(args, 'disposition') ?? 'materialize';
-      const principal = stringField(args, 'principal') ?? stringField(args, 'agent_id') ?? 'task_lifecycle_mcp';
-      const reason = stringField(args, 'reason');
-      const result = await targetInboxEnvelope(siteRoot, { envelopeId, dryRun, disposition, principal, reason });
-      return jsonToolResult(result, result.status === 'not_found');
-    }
-
-    case 'task_lifecycle_set_routing': {
-      const taskNumber = numberField(args, 'task_number');
-      const actorAgentId = stringField(args, 'actor_agent_id');
-      const targetRole = nullableStringField(args, 'target_role');
-      const preferredAgentId = nullableStringField(args, 'preferred_agent_id');
-      const relativePriority = numberField(args, 'relative_priority');
-      const reason = stringField(args, 'reason');
-      if (!taskNumber) throw new Error('task_number_required');
-      if (!actorAgentId) throw new Error('actor_agent_id_required');
-      if (!reason) throw new Error('reason_required');
-      if (targetRole === undefined && preferredAgentId === undefined && relativePriority === undefined) {
-        throw new Error('routing_change_required');
-      }
-      enforceSessionIdentity(actorAgentId);
-
-      const lifecycle = store.getLifecycleByNumber(taskNumber);
-      if (!lifecycle) throw new Error(`task_not_found: ${taskNumber}`);
-      if (lifecycle.status !== 'opened') {
-        return jsonToolResult({
-          status: 'blocked',
-          reason: 'task_not_opened',
-          task_number: taskNumber,
-          current_status: lifecycle.status,
-          message: 'Routing is only allowed for opened tasks; claim/finish ownership gates remain separate.',
-        }, true);
-      }
-
-      const actorRoleResolution = resolveAgentRoleWithDiagnostics(store, siteRoot, actorAgentId);
-      const actorRole = actorRoleResolution.role;
-      if (!['architect', 'operator'].includes(actorRole)) {
-        return jsonToolResult({
-          status: 'blocked',
-          reason: 'routing_actor_not_authorized',
-          actor_agent_id: actorAgentId,
-          actor_role: actorRole,
-          role_resolution: actorRoleResolution,
-          message: 'Only architect/operator agents can route tasks through this tool.',
-        }, true);
-      }
-
-      if (targetRole && !roleExistsInRoster(store, siteRoot, targetRole)) {
-        return jsonToolResult({ status: 'blocked', reason: 'target_role_not_in_roster', target_role: targetRole }, true);
-      }
-
-      if (preferredAgentId) {
-        const preferred = agentExistsWithRole(store, siteRoot, preferredAgentId);
-        if (!preferred.exists) {
-          return jsonToolResult({ status: 'blocked', reason: 'preferred_agent_not_in_roster', preferred_agent_id: preferredAgentId, role_resolution: preferred.role_resolution }, true);
-        }
-        if (targetRole && preferred.role !== targetRole) {
-          return jsonToolResult({
-            status: 'blocked',
-            reason: 'preferred_agent_role_mismatch',
-            preferred_agent_id: preferredAgentId,
-            preferred_agent_role: preferred.role,
-            target_role: targetRole,
-            role_resolution: preferred.role_resolution,
-          }, true);
-        }
-      }
-
-      ensureTaskRoutingTables(store);
-      const now = new Date().toISOString();
-      const previousRouting = getTaskRouting(store, lifecycle.task_id);
-      const nextRouting = {
-        target_role: targetRole !== undefined ? targetRole : previousRouting.target_role,
-        preferred_agent_id: preferredAgentId !== undefined ? preferredAgentId : previousRouting.preferred_agent_id,
-        relative_priority: relativePriority !== undefined ? relativePriority : previousRouting.relative_priority,
-      };
-      const changedFields = {};
-      for (const field of ['target_role', 'preferred_agent_id', 'relative_priority']) {
-        if (previousRouting[field] !== nextRouting[field]) {
-          changedFields[field] = { before: previousRouting[field], after: nextRouting[field] };
-        }
-      }
-      if (Object.keys(changedFields).length === 0) {
-        return jsonToolResult({
-          schema: 'narada.task.routing.v0',
-          status: 'unchanged',
-          task_number: taskNumber,
-          task_id: lifecycle.task_id,
-          routing: nextRouting,
-        });
-      }
-
-      store.db.exec('BEGIN');
-      try {
-        store.db.prepare(`
-          INSERT INTO narada_andrey_task_role_preferences (task_id, preferred_role, target_role, preferred_agent_id, updated_at)
-          VALUES (?, ?, ?, ?, ?)
-          ON CONFLICT(task_id) DO UPDATE SET
-            preferred_role = excluded.preferred_role,
-            target_role = excluded.target_role,
-            preferred_agent_id = excluded.preferred_agent_id,
-            updated_at = excluded.updated_at
-        `).run(lifecycle.task_id, nextRouting.target_role, nextRouting.target_role, nextRouting.preferred_agent_id, now);
-        store.db.prepare(`
-          UPDATE task_lifecycle
-          SET relative_priority = ?, priority_reason = ?, updated_at = ?
-          WHERE task_id = ?
-        `).run(nextRouting.relative_priority, reason, now, lifecycle.task_id);
-        const eventId = `route-${randomUUID()}`;
-        store.db.prepare(`
-          INSERT INTO task_routing_events (
-            event_id, task_id, task_number, actor_agent_id, actor_role,
-            reason, changed_fields_json, previous_routing_json, new_routing_json, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).run(
-          eventId,
-          lifecycle.task_id,
-          taskNumber,
-          actorAgentId,
-          actorRole,
-          reason,
-          JSON.stringify(changedFields),
-          JSON.stringify(previousRouting),
-          JSON.stringify(nextRouting),
-          now,
-        );
-        store.db.exec('COMMIT');
-
-        try {
-          const taskFile = await findTaskFile(siteRoot, taskNumber);
-          if (taskFile) {
-            const { frontMatter, body } = await readTaskFile(taskFile.path);
-            if (nextRouting.target_role) {
-              frontMatter.target_role = nextRouting.target_role;
-              frontMatter.preferred_role = nextRouting.target_role;
-            } else {
-              delete frontMatter.target_role;
-              delete frontMatter.preferred_role;
-            }
-            if (nextRouting.preferred_agent_id) {
-              frontMatter.preferred_agent_id = nextRouting.preferred_agent_id;
-            } else {
-              delete frontMatter.preferred_agent_id;
-            }
-            const shouldProjectPriority = nextRouting.relative_priority !== null
-              && nextRouting.relative_priority !== undefined
-              && (
-                relativePriority !== undefined
-                || Object.prototype.hasOwnProperty.call(frontMatter, 'relative_priority')
-                || nextRouting.relative_priority !== 0
-              );
-            if (shouldProjectPriority) {
-              frontMatter.relative_priority = nextRouting.relative_priority;
-            } else {
-              delete frontMatter.relative_priority;
-            }
-            await writeTaskProjection(taskFile.path, frontMatter, body);
-          }
-        } catch {
-          // Projection write is compatibility-only; SQLite routing state is authoritative.
-        }
-
-        return jsonToolResult({
-          schema: 'narada.task.routing.v0',
-          status: 'routed',
-          task_number: taskNumber,
-          task_id: lifecycle.task_id,
-          actor_agent_id: actorAgentId,
-          actor_role: actorRole,
-          reason,
-          changed_fields: changedFields,
-          routing: nextRouting,
-          audit_event_id: eventId,
-        });
-      } catch (error) {
-        try { store.db.exec('ROLLBACK'); } catch { /* ignore rollback failure */ }
-        throw error;
-      }
-    }
-
-    case 'task_lifecycle_test_mcp_tool': {
-      const serverPath = stringField(args, 'server_path');
-      const toolName = stringField(args, 'tool_name');
-      const toolArgs = args.arguments ?? {};
-      const timeoutSeconds = numberField(args, 'timeout_seconds');
-      if (!serverPath) throw new Error('server_path_required');
-      if (!toolName) throw new Error('tool_name_required');
-
-      const result = await testMcpTool(siteRoot, serverPath, toolName, toolArgs, { timeoutSeconds });
-      return jsonToolResult(result);
-    }
-    case 'mcp_payload_create':
-      return jsonToolResult(payloadCreate({ siteRoot, args }));
-    case 'mcp_payload_show':
-      return jsonToolResult(payloadShow({ siteRoot, args }));
-    case 'mcp_output_show':
-      return jsonToolResult(outputShow({ siteRoot, args }));
-    case 'mcp_payload_derive':
-      return jsonToolResult(payloadDerive({ siteRoot, args }));
-    case 'mcp_payload_validate':
-      return jsonToolResult(payloadValidate({ siteRoot, args }));
-
-    case 'task_lifecycle_run_tests': {
-      const selector = stringField(args, 'selector') || 'task-lifecycle';
-      const taskNumber = numberField(args, 'task_number');
-      const agentId = stringField(args, 'agent_id');
-      const timeoutSeconds = numberField(args, 'timeout_seconds') || 120;
-      if (!agentId) throw new Error('agent_id_required');
-      enforceSessionIdentity(agentId);
-      const lifecycle = taskNumber ? store.getLifecycleByNumber(taskNumber) : null;
-      if (taskNumber && !lifecycle) throw new Error(`task_not_found: ${taskNumber}`);
-      const targets = testTargetsForSelector(selector);
-      const results = [];
-      for (const target of targets) {
-        const result = await testMcpTool(siteRoot, 'tools/mcp-servers/test/test-mcp-server.mjs', 'run_test', target, { timeoutSeconds });
-        results.push(result);
-      }
-      const failed = results.filter((result) => result.status !== 'passed');
-      const payload = {
-        schema: 'narada.task_lifecycle.run_tests.v0',
-        status: failed.length === 0 ? 'passed' : 'failed',
-        selector,
-        task_number: taskNumber ?? null,
-        task_id: lifecycle?.task_id ?? null,
-        agent_id: agentId,
-        total: results.length,
-        passed: results.length - failed.length,
-        failed: failed.length,
-        results,
-      };
-      if (taskNumber) {
-        const artifactId = randomUUID();
-        store.upsertObservationArtifact({
-          artifact_id: artifactId,
-          artifact_type: 'test_result',
-          source_operator: agentId,
-          task_id: lifecycle.task_id,
-          task_number: taskNumber,
-          agent_id: agentId,
-          artifact_uri: `task://${taskNumber}/test-results/${artifactId}`,
-          digest: artifactId.slice(0, 16),
-          admitted_view_json: JSON.stringify(payload),
-          created_at: new Date().toISOString(),
-        });
-        payload.artifact_id = artifactId;
-      }
-      return jsonToolResult(payload, failed.length > 0);
-    }
-
-    case 'task_lifecycle_create': {
-      const payloadSource = dispatchContext.payloadSource ?? null;
-      const title = stringField(args, 'title');
-      if (!title) throw new Error('title_required');
-      const goal = stringField(args, 'goal') || title;
-      const context = stringField(args, 'context') || null;
-      const requiredWork = stringField(args, 'required_work') || '1. TBD';
-      const nonGoals = stringField(args, 'non_goals') || null;
-      const preferredRole = stringField(args, 'preferred_role') || null;
-      const targetRole = stringField(args, 'target_role') || null;
-      const acceptanceCriteria = Array.isArray(args.acceptance_criteria) && args.acceptance_criteria.length > 0
-        ? args.acceptance_criteria
-        : ['TBD'];
-
-      const taskNumber = (await allocateTaskNumbers(siteRoot, 1))[0];
-      const slug = slugify(title);
-      const taskId = `${todayYmd()}-${taskNumber}-${slug}`;
-      const tasksDir = join(siteRoot, '.ai', 'do-not-open', 'tasks');
-      const filePath = join(tasksDir, `${taskId}.md`);
-
-      const body = renderTaskBodyFromSpec({
-        spec: {
-          title,
-          goal,
-          context,
-          required_work: requiredWork,
-          non_goals: nonGoals,
-          acceptance_criteria: acceptanceCriteria,
-        },
-        executionNotes: null,
-        verification: null,
-      });
-
-      const frontMatterLines = [
-        '---',
-        `number: ${taskNumber}`,
-        `governed_by: ${preferredRole || 'unknown'}`,
-        'status: opened',
-      ];
-      if (preferredRole) {
-        frontMatterLines.push(`preferred_role: ${preferredRole}`);
-      }
-      if (targetRole) {
-        frontMatterLines.push(`target_role: ${targetRole}`);
-      }
-      if (payloadSource?.ref) {
-        frontMatterLines.push(`creation_payload_ref: ${payloadSource.ref}`);
-      }
-      if (payloadSource?.sha256) {
-        frontMatterLines.push(`creation_payload_sha256: ${payloadSource.sha256}`);
-      }
-      frontMatterLines.push('---');
-
-      const fileContent = `${frontMatterLines.join('\n')}\n${body}`;
-      writeFileSync(filePath, fileContent, 'utf8');
-
-      const now = new Date().toISOString();
-      store.upsertLifecycle({
-        task_id: taskId,
-        task_number: taskNumber,
-        status: 'opened',
-        governed_by: preferredRole || null,
-        closed_at: null,
-        closed_by: null,
-        reopened_at: null,
-        reopened_by: null,
-        continuation_packet_json: null,
-        updated_at: now,
-      });
-      store.upsertTaskSpec({
-        task_id: taskId,
-        task_number: taskNumber,
-        title,
-        chapter_markdown: null,
-        goal_markdown: goal,
-        context_markdown: context,
-        required_work_markdown: requiredWork,
-        non_goals_markdown: nonGoals,
-        acceptance_criteria_json: JSON.stringify(acceptanceCriteria),
-        dependencies_json: '[]',
-        updated_at: now,
-      });
-      ensureTaskRoutingTables(store);
-      if (preferredRole || targetRole) {
-        store.db.prepare(`
-          INSERT INTO narada_andrey_task_role_preferences (task_id, preferred_role, target_role, preferred_agent_id, updated_at)
-          VALUES (?, ?, ?, ?, ?)
-          ON CONFLICT(task_id) DO UPDATE SET
-            preferred_role = excluded.preferred_role,
-            target_role = excluded.target_role,
-            preferred_agent_id = excluded.preferred_agent_id,
-            updated_at = excluded.updated_at
-        `).run(taskId, preferredRole, targetRole || preferredRole, null, now);
-      }
-
-      return jsonToolResult(attachPayloadSource({
-        schema: 'narada.task.create.v0',
-        status: 'created',
-        task_number: taskNumber,
-        task_id: taskId,
-        file_path: filePath,
-        title,
-        target_role: targetRole || preferredRole,
-        preferred_role: preferredRole,
-        payload_ref: payloadSource?.ref ?? null,
-        payload_sha256: payloadSource?.sha256 ?? null,
-      }, payloadSource));
-    }
-
-    case 'task_lifecycle_recurring_create': {
-      const title = stringField(args, 'title');
-      const actorAgentId = stringField(args, 'actor_agent_id');
-      const authorityBasis = normalizeRecurringAuthorityBasis(args.authority_basis);
-      if (!title) throw new Error('title_required');
-      if (!actorAgentId) throw new Error('actor_agent_id_required');
-      if (!authorityBasis) throw new Error('valid_authority_basis_required');
-      enforceSessionIdentity(actorAgentId);
-      const actorRole = requireRecurringAuthorityActor({ store, siteRoot, actorAgentId });
-      const initialStatus = stringField(args, 'initial_status') || 'active';
-      if (!['draft', 'active'].includes(initialStatus)) throw new Error('invalid_initial_status');
-      const targetRole = stringField(args, 'target_role') || null;
-      const preferredRole = stringField(args, 'preferred_role') || targetRole;
-      if (targetRole && !roleExistsInRoster(store, siteRoot, targetRole)) {
-        return jsonToolResult({ status: 'blocked', reason: 'target_role_not_in_roster', target_role: targetRole }, true);
-      }
-      if (preferredRole && !roleExistsInRoster(store, siteRoot, preferredRole)) {
-        return jsonToolResult({ status: 'blocked', reason: 'preferred_role_not_in_roster', preferred_role: preferredRole }, true);
-      }
-      const triggerMode = stringField(args, 'trigger_mode') || 'manual';
-      if (!['manual', 'schedule'].includes(triggerMode)) throw new Error('invalid_trigger_mode');
-      const scheduleKind = stringField(args, 'schedule_kind') || (triggerMode === 'schedule' ? 'daily' : null);
-      if (triggerMode === 'schedule' && scheduleKind !== 'daily') throw new Error('unsupported_schedule_kind');
-      if (triggerMode === 'manual' && scheduleKind) throw new Error('schedule_kind_requires_schedule_trigger_mode');
-      const scheduleTimezone = stringField(args, 'schedule_timezone') || (triggerMode === 'schedule' ? 'UTC' : null);
-      if (scheduleTimezone && scheduleTimezone !== 'UTC') throw new Error('unsupported_schedule_timezone');
-      const recurrenceId = `rtask_${randomUUID()}`;
-      const now = new Date().toISOString();
-      const definition = {
-        recurrence_id: recurrenceId,
-        title,
-        status: initialStatus,
-        trigger_mode: triggerMode,
-        trigger_description: stringField(args, 'trigger_description') || null,
-        schedule_kind: scheduleKind,
-        schedule_interval: triggerMode === 'schedule' ? 1 : null,
-        schedule_timezone: scheduleTimezone,
-        last_due_key: null,
-        last_auto_triggered_at: null,
-        target_role: targetRole,
-        preferred_role: preferredRole,
-        goal_markdown: stringField(args, 'goal') || title,
-        context_markdown: stringField(args, 'context') || null,
-        required_work_markdown: stringField(args, 'required_work') || '1. Execute the recurring task instance.',
-        non_goals_markdown: stringField(args, 'non_goals') || null,
-        acceptance_criteria_json: JSON.stringify(arrayOfStrings(args.acceptance_criteria, ['Complete the recurring task instance with verification evidence.'])),
-        evidence_requirements_json: JSON.stringify(arrayOfStrings(args.evidence_requirements, [])),
-        created_by: actorAgentId,
-        created_at: now,
-        updated_at: now,
-        suspended_at: null,
-        retired_at: null,
-      };
-      ensureRecurringTaskTables(store);
-      store.db.exec('BEGIN');
-      try {
-        insertRecurringDefinition(store, definition);
-        insertRecurringEvent(store, {
-          recurrenceId,
-          eventType: 'created',
-          stateAfter: initialStatus,
-          actorAgentId,
-          authorityBasis,
-          event: { actor_role: actorRole, title },
-          now,
-        });
-        store.db.exec('COMMIT');
-      } catch (error) {
-        try { store.db.exec('ROLLBACK'); } catch { /* ignore rollback failure */ }
-        throw error;
-      }
-      return jsonToolResult({
-        schema: 'narada.task.recurring.definition.v0',
-        status: 'created',
-        recurrence_id: recurrenceId,
-        definition: hydrateRecurringDefinition(definition),
-      });
-    }
-
-    case 'task_lifecycle_recurring_show': {
-      const recurrenceId = stringField(args, 'recurrence_id');
-      if (!recurrenceId) throw new Error('recurrence_id_required');
-      const definition = getRecurringDefinition(store, recurrenceId);
-      if (!definition) return jsonToolResult({ status: 'not_found', recurrence_id: recurrenceId }, true);
-      const includeRuns = booleanField(args, 'include_runs') ?? true;
-      return jsonToolResult({
-        schema: 'narada.task.recurring.show.v0',
-        status: 'ok',
-        definition,
-        runs: includeRuns ? listRecurringRuns(store, recurrenceId, 20) : [],
-      });
-    }
-
-    case 'task_lifecycle_recurring_list': {
-      const status = stringField(args, 'status');
-      const limit = numberField(args, 'limit') ?? 50;
-      return jsonToolResult({
-        schema: 'narada.task.recurring.list.v0',
-        status: 'ok',
-        definitions: listRecurringDefinitions(store, { status, limit }),
-      });
-    }
-
-    case 'task_lifecycle_recurring_suspend': {
-      return jsonToolResult(updateRecurringDefinitionStatus({
-        store,
-        siteRoot,
-        recurrenceId: stringField(args, 'recurrence_id'),
-        actorAgentId: stringField(args, 'actor_agent_id'),
-        authorityBasis: normalizeRecurringAuthorityBasis(args.authority_basis),
-        nextStatus: 'suspended',
-        eventType: 'suspended',
-        reason: stringField(args, 'reason'),
-      }));
-    }
-
-    case 'task_lifecycle_recurring_retire': {
-      return jsonToolResult(updateRecurringDefinitionStatus({
-        store,
-        siteRoot,
-        recurrenceId: stringField(args, 'recurrence_id'),
-        actorAgentId: stringField(args, 'actor_agent_id'),
-        authorityBasis: normalizeRecurringAuthorityBasis(args.authority_basis),
-        nextStatus: 'retired',
-        eventType: 'retired',
-        reason: stringField(args, 'reason'),
-      }));
-    }
-
-    case 'task_lifecycle_recurring_trigger': {
-      const recurrenceId = stringField(args, 'recurrence_id');
-      const actorAgentId = stringField(args, 'actor_agent_id');
-      const authorityBasis = normalizeRecurringAuthorityBasis(args.authority_basis);
-      const runReason = stringField(args, 'run_reason');
-      if (!recurrenceId) throw new Error('recurrence_id_required');
-      if (!actorAgentId) throw new Error('actor_agent_id_required');
-      if (!authorityBasis) throw new Error('valid_authority_basis_required');
-      if (!runReason) throw new Error('run_reason_required');
-      enforceSessionIdentity(actorAgentId);
-      const actorRole = requireRecurringAuthorityActor({ store, siteRoot, actorAgentId });
-      const definition = getRecurringDefinition(store, recurrenceId);
-      if (!definition) return jsonToolResult({ status: 'not_found', recurrence_id: recurrenceId }, true);
-      if (definition.status !== 'active') {
-        return jsonToolResult({
-          status: 'blocked',
-          reason: 'recurrence_not_active',
-          recurrence_id: recurrenceId,
-          current_status: definition.status,
-        }, true);
-      }
-      const now = new Date().toISOString();
-      const taskNumber = (await allocateTaskNumbers(siteRoot, 1))[0];
-      const taskTitle = `${definition.title} (${now.slice(0, 10)})`;
-      const taskId = `${todayYmd()}-${taskNumber}-${slugify(taskTitle)}`;
-      const tasksDir = join(siteRoot, '.ai', 'do-not-open', 'tasks');
-      const filePath = join(tasksDir, `${taskId}.md`);
-      const evidenceRequirements = definition.evidence_requirements;
-      const recurrenceContext = [
-        definition.context_markdown,
-        '',
-        `Recurring task definition: ${recurrenceId}`,
-        `Manual run reason: ${runReason}`,
-        evidenceRequirements.length > 0 ? `Evidence requirements: ${evidenceRequirements.join('; ')}` : null,
-      ].filter(Boolean).join('\n');
-      const body = renderTaskBodyFromSpec({
-        spec: {
-          title: taskTitle,
-          goal: definition.goal_markdown || definition.title,
-          context: recurrenceContext,
-          required_work: definition.required_work_markdown || 'Execute the recurring task instance.',
-          non_goals: definition.non_goals_markdown,
-          acceptance_criteria: definition.acceptance_criteria,
-        },
-        executionNotes: null,
-        verification: null,
-      });
-      const frontMatterLines = [
-        '---',
-        `number: ${taskNumber}`,
-        `governed_by: ${definition.preferred_role || definition.target_role || 'unknown'}`,
-        'status: opened',
-        `recurring_task_id: ${recurrenceId}`,
-      ];
-      if (definition.preferred_role) frontMatterLines.push(`preferred_role: ${definition.preferred_role}`);
-      if (definition.target_role) frontMatterLines.push(`target_role: ${definition.target_role}`);
-      frontMatterLines.push('---');
-      const runId = `rtrun_${randomUUID()}`;
-      store.db.exec('BEGIN');
-      try {
-        writeFileSync(filePath, `${frontMatterLines.join('\n')}\n${body}`, 'utf8');
-        store.upsertLifecycle({
-          task_id: taskId,
-          task_number: taskNumber,
-          status: 'opened',
-          governed_by: definition.preferred_role || definition.target_role || null,
-          closed_at: null,
-          closed_by: null,
-          reopened_at: null,
-          reopened_by: null,
-          continuation_packet_json: null,
-          updated_at: now,
-        });
-        store.upsertTaskSpec({
-          task_id: taskId,
-          task_number: taskNumber,
-          title: taskTitle,
-          chapter_markdown: null,
-          goal_markdown: definition.goal_markdown || definition.title,
-          context_markdown: recurrenceContext,
-          required_work_markdown: definition.required_work_markdown || 'Execute the recurring task instance.',
-          non_goals_markdown: definition.non_goals_markdown,
-          acceptance_criteria_json: JSON.stringify(definition.acceptance_criteria),
-          dependencies_json: '[]',
-          updated_at: now,
-        });
-        ensureTaskRoutingTables(store);
-        if (definition.preferred_role || definition.target_role) {
-          store.db.prepare(`
-            INSERT INTO narada_andrey_task_role_preferences (task_id, preferred_role, target_role, preferred_agent_id, updated_at)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(task_id) DO UPDATE SET
-              preferred_role = excluded.preferred_role,
-              target_role = excluded.target_role,
-              preferred_agent_id = excluded.preferred_agent_id,
-              updated_at = excluded.updated_at
-          `).run(taskId, definition.preferred_role, definition.target_role || definition.preferred_role, null, now);
-        }
-        insertRecurringRun(store, {
-          run_id: runId,
-          recurrence_id: recurrenceId,
-          task_id: taskId,
-          task_number: taskNumber,
-          trigger_mode: 'manual',
-          run_reason: runReason,
-          actor_agent_id: actorAgentId,
-          authority_basis_json: JSON.stringify(authorityBasis),
-          created_at: now,
-        });
-        insertRecurringEvent(store, {
-          recurrenceId,
-          eventType: 'manual_triggered',
-          stateAfter: definition.status,
-          actorAgentId,
-          authorityBasis,
-          event: { actor_role: actorRole, run_id: runId, task_id: taskId, task_number: taskNumber, run_reason: runReason },
-          now,
-        });
-        store.db.exec('COMMIT');
-      } catch (error) {
-        try { store.db.exec('ROLLBACK'); } catch { /* ignore rollback failure */ }
-        throw error;
-      }
-      return jsonToolResult({
-        schema: 'narada.task.recurring.trigger.v0',
-        status: 'triggered',
-        recurrence_id: recurrenceId,
-        run_id: runId,
-        task_number: taskNumber,
-        task_id: taskId,
-        file_path: filePath,
-      });
-    }
-
-    case 'task_lifecycle_recurring_run_due': {
-      const actorAgentId = stringField(args, 'actor_agent_id');
-      const authorityBasis = normalizeRecurringAuthorityBasis(args.authority_basis);
-      if (!actorAgentId) throw new Error('actor_agent_id_required');
-      if (!authorityBasis) throw new Error('valid_authority_basis_required');
-      enforceSessionIdentity(actorAgentId);
-      const actorRole = requireRecurringAuthorityActor({ store, siteRoot, actorAgentId });
-      const now = parseIsoOrNow(stringField(args, 'current_time'));
-      const limit = Math.max(1, Math.min(numberField(args, 'limit') ?? 20, 100));
-      const dueDefinitions = listDueRecurringDefinitions(store, { now, limit });
-      const created = [];
-      const skipped = [];
-      for (const definition of dueDefinitions) {
-        const dueKey = recurringDueKey(definition, now);
-        if (!dueKey || definition.last_due_key === dueKey) {
-          skipped.push({ recurrence_id: definition.recurrence_id, reason: 'not_due_or_already_created', due_key: dueKey });
-          continue;
-        }
-        const result = await createRecurringTaskInstance({
-          store,
-          siteRoot,
-          definition,
-          actorAgentId,
-          actorRole,
-          authorityBasis,
-          triggerMode: 'schedule',
-          runReason: `Scheduled daily run for ${dueKey}`,
-          eventType: 'scheduled_triggered',
-          now,
-          dueKey,
-        });
-        created.push(result);
-      }
-      return jsonToolResult({
-        schema: 'narada.task.recurring.run_due.v0',
-        status: 'ok',
-        trigger_mode: 'schedule',
-        schedule_kind: 'daily',
-        evaluated_at: now.toISOString(),
-        created_count: created.length,
-        skipped_count: skipped.length,
-        created,
-        skipped,
-      });
-    }
-
-    case 'task_lifecycle_recurring_runs': {
-      const recurrenceId = stringField(args, 'recurrence_id');
-      if (!recurrenceId) throw new Error('recurrence_id_required');
-      const limit = numberField(args, 'limit') ?? 20;
-      return jsonToolResult({
-        schema: 'narada.task.recurring.runs.v0',
-        status: 'ok',
-        recurrence_id: recurrenceId,
-        runs: listRecurringRuns(store, recurrenceId, limit),
-      });
-    }
-
-    default:
-      throw new Error(`task_mcp_refused: ${canonicalName}`);
-  }
+  const handler = getTaskLifecycleHandlerRegistry().get(canonicalName);
+  if (!handler) throw new Error(`task_mcp_refused: ${canonicalName}`);
+  return handler(args, dispatchContext);
 }
 
 function buildTaskLifecycleFreshness({ registeredTools }) {
