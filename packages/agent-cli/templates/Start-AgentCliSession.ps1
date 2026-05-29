@@ -1,6 +1,6 @@
 # Start-AgentCliSession.ps1
 # narada_template_id: narada.agent_cli.windows_wrapper
-# narada_template_version: 1
+# narada_template_version: 2
 # narada_template_source: @narada2/agent-cli ./windows-wrapper-template
 # narada_template_hash: __NARADA_TEMPLATE_HASH__
 
@@ -21,7 +21,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$SiteRoot = 'C:\Users\Andrey\Narada'
+$SiteRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $NaradaProperRoot = if ($env:NARADA_PROPER_ROOT) { $env:NARADA_PROPER_ROOT } else { 'D:\code\narada' }
 
 function Resolve-NaradaPackageRoot {

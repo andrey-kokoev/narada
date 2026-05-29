@@ -38,7 +38,7 @@ materialize `Start-AgentCliSession.ps1` from package export
 
 ```text
 narada_template_id:      narada.agent_cli.windows_wrapper
-narada_template_version: 1
+narada_template_version: 2
 narada_template_hash:    <sha256 of normalized template>
 ```
 
