@@ -22,9 +22,11 @@ Narada Sites may hold state and declarations. Reusable executable logic should b
 
 ## Manifest
 
-Each Site has a `site-tool-surface.manifest.json` at the Site control root. It declares tool path patterns, ownership class, package/version/hash evidence where applicable, and allowed root references.
+Each Site has a `site-tool-surface.manifest.json` at the Site control root. It declares executable tool files, ownership class, package/version/hash evidence where applicable, and allowed root references.
 
 The manifest is enforced by the user-site `Sync-SiteToolSurfaceManifest.ps1` validator. Non-git Sites also receive a `site-tool-surface-updates.jsonl` ledger when manifests are reconciled.
+
+Broad executable declarations such as `tools/**/*.ps1` are refused. They hide copied implementation drift. Transitional `site_owned` declarations must be per-file so the remaining copied surface is visible and countable.
 
 ## Enforcement
 
@@ -32,7 +34,9 @@ The coherence audit fails when:
 
 - executable tool files are not declared by the manifest;
 - generated `agent-cli` wrappers are not declared as `generated_wrapper`;
+- generated wrappers have missing or mismatched version/hash evidence;
+- broad executable declarations are present;
 - known hardcoded local root/CLI defaults appear in executable surfaces;
 - `TargetSiteRoot` defaults from the user Site root.
 
-The current transitional posture still permits broad `site_owned` declarations for copied toolsets. That is not the final architecture; it is a declared state from which surfaces can be cut over one at a time to package-owned implementations and generated wrappers.
+The current transitional posture still permits per-file `site_owned` declarations for copied toolsets. That is not the final architecture; it is a declared state from which surfaces can be cut over one at a time to package-owned implementations and generated wrappers.

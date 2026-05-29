@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "narada.site_tool_surface.manifest.schema.v1",
+  "title": "Narada Site Tool Surface Manifest",
+  "type": "object",
+  "required": ["schema", "site_root", "generated_at", "entries"],
+  "properties": {
+    "schema": { "const": "narada.site_tool_surface.manifest.v1" },
+    "site_root": { "type": "string" },
+    "generated_at": { "type": "string" },
+    "tool_root": { "type": "string" },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "class", "owner"],
+        "properties": {
+          "path": { "type": "string" },
+          "class": {
+            "enum": [
+              "canonical_package",
+              "generated_wrapper",
+              "site_owned",
+              "retired_refusal",
+              "runtime_state"
+            ]
+          },
+          "owner": { "type": "string" },
+          "surface": { "type": "string" },
+          "package": { "type": "string" },
+          "version": { "type": "string" },
+          "hash": { "type": "string" },
+          "allowed_root_refs": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "notes": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}
