@@ -4,7 +4,8 @@
   "type": "module",
   "private": true,
   "exports": {
-    ".": "./src/agent-start-renderer.mjs"
+    ".": "./src/agent-start-renderer.mjs",
+    "./package.json": "./package.json"
   },
   "scripts": {
     "test": "node --test src/agent-start-renderer.test.mjs",

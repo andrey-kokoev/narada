@@ -24,6 +24,18 @@ They must not recreate `tools\agent-cli`, fork provider metadata, or maintain
 Site-local carrier behavior. Site-local launch code is a shim for identity,
 session, Site root, MCP fabric path, and operator affordances only.
 
+Launchers should resolve the carrier through the package contract:
+
+```text
+package: @narada2/agent-cli
+bin:     narada-agent-cli
+export:  ./intelligence-providers
+```
+
+`NARADA_PROPER_ROOT` is a local workspace fallback for finding that package
+root. It is not permission to import `packages/agent-cli/src/...` or
+`packages/agent-cli/bin/...` directly from launcher code.
+
 ## Modes
 
 - Interactive CLI: human terminal prompt for one Agent identity.
@@ -58,7 +70,7 @@ Narada proper admits both runtime names:
 - `agent-cli` for the interactive CLI carrier.
 - `nars` for the JSONL stdio server carrier.
 
-Both use the packaged `narada-agent-cli` bin from `packages/agent-cli`; `nars` adds `--server`. The implementation lives in `packages/agent-cli/src/agent-cli.mjs`.
+Both use the packaged `narada-agent-cli` bin from `@narada2/agent-cli`; `nars` adds `--server`. The implementation lives in `packages/agent-cli/src/agent-cli.mjs`.
 
 Interactive `agent-cli` also admits a structured sideband control file when
 launched with `--control-jsonl <path>`. System directive delivery must append
@@ -91,7 +103,7 @@ content.
 Model and thinking defaults can be supplied at launch:
 
 ```powershell
-node packages/agent-cli/bin/narada-agent-cli.mjs --identity narada.architect --model gpt-5.5 --thinking high
+narada-agent-cli --identity narada.architect --model gpt-5.5 --thinking high
 ```
 
 Environment defaults:
@@ -105,7 +117,7 @@ Environment defaults:
 ## NARS Server Mode
 
 ```powershell
-node packages/agent-cli/bin/narada-agent-cli.mjs --server --identity narada.architect --session carrier_session_example
+narada-agent-cli --server --identity narada.architect --session carrier_session_example
 ```
 
 Requests are one JSON object per stdin line. Events are one JSON object per stdout line. In `--server` mode stdout is protocol-only; diagnostics go to stderr.
@@ -127,7 +139,7 @@ Session evidence is stored under:
 
 ## Provider Posture
 
-Provider metadata lives in `packages/agent-cli/src/intelligence-providers.json`.
+Provider metadata is exported as `@narada2/agent-cli ./intelligence-providers`.
 
 Supported first-slice providers:
 

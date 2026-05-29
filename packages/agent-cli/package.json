@@ -8,7 +8,9 @@
   },
   "exports": {
     ".": "./src/agent-cli.mjs",
-    "./provider-resolution": "./src/provider-resolution.mjs"
+    "./provider-resolution": "./src/provider-resolution.mjs",
+    "./intelligence-providers": "./src/intelligence-providers.json",
+    "./package.json": "./package.json"
   },
   "scripts": {
     "test": "node --test src/agent-cli.test.mjs",
