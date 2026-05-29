@@ -78,6 +78,61 @@ const SHOULD_RUN_STARTUP_SYSTEM_DIRECTIVE = STARTUP_SYSTEM_DIRECTIVE_ENABLED
   && STARTUP_SYSTEM_DIRECTIVE.trim().length > 0
   && Number.isFinite(STARTUP_SYSTEM_DIRECTIVE_DELAY_MS)
   && STARTUP_SYSTEM_DIRECTIVE_DELAY_MS >= 0;
+
+const CHILD_PROCESS_ENV_ALLOWLIST = Object.freeze([
+  'PATH',
+  'Path',
+  'PATHEXT',
+  'SystemRoot',
+  'WINDIR',
+  'COMSPEC',
+  'TEMP',
+  'TMP',
+  'USERPROFILE',
+  'USERNAME',
+  'USERDOMAIN',
+  'APPDATA',
+  'LOCALAPPDATA',
+  'HOME',
+  'PROGRAMFILES',
+  'ProgramFiles',
+  'PROGRAMFILES(X86)',
+  'ProgramFiles(x86)',
+  'ProgramW6432',
+  'PROCESSOR_ARCHITECTURE',
+  'CODEX_HOME',
+  'CODEX_CONFIG_DIR',
+  'NARADA_AGENT_ID',
+  'NARADA_AGENT_START_EVENT_ID',
+  'NARADA_CARRIER_SESSION_ID',
+  'NARADA_SITE_ROOT',
+  'NARADA_WORKSPACE_ROOT',
+  'NARADA_AGENT_CONTEXT_DB',
+  'NARADA_PC_SITE_ROOT',
+  'NARADA_PROPER_ROOT',
+  'NARADA_INTELLIGENCE_PROVIDER',
+  'NARADA_AI_BASE_URL',
+  'NARADA_AI_MODEL',
+  'NARADA_AI_THINKING',
+  'NARADA_THINKING_LEVEL',
+  'NARADA_CODEX_MODEL',
+  'NARADA_CODEX_SUBSCRIPTION_TRANSPORT',
+  'NARADA_AI_API_KEY',
+  'OPENAI_API_KEY',
+  'ANTHROPIC_API_KEY',
+]);
+
+function buildChildProcessEnv(extra = {}, baseEnv = process.env) {
+  const env = {};
+  for (const key of CHILD_PROCESS_ENV_ALLOWLIST) {
+    if (baseEnv[key] !== undefined) env[key] = baseEnv[key];
+  }
+  return { ...env, ...extra, FORCE_COLOR: '0', NO_COLOR: '1' };
+}
+
+function environmentBlockLength(env) {
+  return Object.entries(env).reduce((total, [key, value]) => total + key.length + String(value ?? '').length + 2, 1);
+}
 const terminalStyle = createTerminalStyle({
   enabled: options.color ?? parseColorEnv(process.env.NARADA_AGENT_CLI_COLOR, process.stdout.isTTY && !SERVER_MODE),
 });
@@ -852,7 +907,7 @@ async function discoverAndStartMcpServers(siteRoot) {
       const proc = spawn(serverConfig.command, args, {
         cwd: siteRoot,
         windowsHide: true,
-        env: { ...process.env, ...projectServerEnvironment(serverConfig), FORCE_COLOR: '0', NO_COLOR: '1' },
+        env: buildChildProcessEnv(projectServerEnvironment(serverConfig)),
       });
 
       let buffer = '';
@@ -2078,7 +2133,7 @@ function sendCodexExecJsonRequest(request, settings = {}) {
     const child = spawn(command.command, [...command.prefixArgs, ...args], {
       cwd: request.arguments?.cwd ?? settings.siteRoot ?? SITE_ROOT,
       windowsHide: true,
-      env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
+      env: buildChildProcessEnv(),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdoutBuffer = '';
@@ -2160,7 +2215,7 @@ function sendCodexExecJsonBufferedRequest(request, settings = {}) {
     const child = spawn(command.command, [...command.prefixArgs, ...args], {
       cwd: request.arguments?.cwd ?? settings.siteRoot ?? SITE_ROOT,
       windowsHide: true,
-      env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
+      env: buildChildProcessEnv(),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     let stdoutBuffer = '';
@@ -2295,7 +2350,7 @@ function sendCodexMcpRequest(request, settings = {}) {
     const child = spawn(command.command, [...command.prefixArgs, ...args], {
       cwd: SITE_ROOT,
       windowsHide: true,
-      env: { ...process.env, FORCE_COLOR: '0', NO_COLOR: '1' },
+      env: buildChildProcessEnv(),
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     let buffer = '';
@@ -2863,11 +2918,13 @@ export {
   codexExecConfigToml,
   buildCodexMcpRequest,
   buildOpenAiChatRequest,
+  buildChildProcessEnv,
   clearTerminalDisplay,
   cleanAnthropicMessages,
   cleanOpenAiMessages,
   codexExecEventText,
   discoverAndStartMcpServers,
+  environmentBlockLength,
   executeMcpTool,
   handleSlashCommand,
   createInputQueue,

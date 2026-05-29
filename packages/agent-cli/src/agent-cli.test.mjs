@@ -12,6 +12,7 @@ import {
   buildProgrammaticInputs,
   buildAnthropicMessagesRequest,
   buildCodexMcpRequest,
+  buildChildProcessEnv,
   buildCodexExecArgs,
   codexExecMcpConfigArgs,
   codexExecConfigToml,
@@ -19,6 +20,7 @@ import {
   codexExecEventText,
   createInputQueue,
   createTerminalStyle,
+  environmentBlockLength,
   directiveReceiptEvidence,
   discoverAndStartMcpServers,
   executeMcpTool,
@@ -63,6 +65,27 @@ const tempDir = resolve('.ai/tmp-agent-cli-programmatic-test');
 mkdirSync(tempDir, { recursive: true });
 const messageFile = resolve(tempDir, 'message.txt');
 writeFileSync(messageFile, 'file supplied message', 'utf8');
+
+const hugeEnv = {
+  Path: 'C:\\Windows\\System32',
+  APPDATA: 'C:\\Users\\Andrey\\AppData\\Roaming',
+  NARADA_AGENT_ID: 'narada-andrey.Kevin',
+  NARADA_SITE_ROOT: 'C:\\Users\\Andrey\\Narada',
+  NARADA_PROPER_ROOT: 'D:\\code\\narada',
+  NARADA_AI_MODEL: 'gpt-5.5',
+  GIANT_UNRELATED_ENV: 'x'.repeat(100000),
+};
+const childEnv = buildChildProcessEnv({ MCP_SERVER_NAME: 'narada-andrey-task-lifecycle' }, hugeEnv);
+assert.equal(childEnv.Path, hugeEnv.Path);
+assert.equal(childEnv.NARADA_AGENT_ID, 'narada-andrey.Kevin');
+assert.equal(childEnv.NARADA_SITE_ROOT, 'C:\\Users\\Andrey\\Narada');
+assert.equal(childEnv.NARADA_PROPER_ROOT, 'D:\\code\\narada');
+assert.equal(childEnv.NARADA_AI_MODEL, 'gpt-5.5');
+assert.equal(childEnv.MCP_SERVER_NAME, 'narada-andrey-task-lifecycle');
+assert.equal(childEnv.GIANT_UNRELATED_ENV, undefined);
+assert.equal(childEnv.FORCE_COLOR, '0');
+assert.equal(childEnv.NO_COLOR, '1');
+assert.ok(environmentBlockLength(childEnv) < 32767);
 
 const programmaticInputs = buildProgrammaticInputs({
   messages: ['flag supplied message'],
