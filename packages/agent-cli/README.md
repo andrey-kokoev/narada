@@ -12,6 +12,7 @@ Canonical binary and provider metadata contract:
 package: @narada2/agent-cli
 bin:     narada-agent-cli
 export:  ./intelligence-providers
+export:  ./windows-wrapper-template
 ```
 
 Registered Site launchers and Windows wrappers must call the packaged binary.
@@ -30,6 +31,20 @@ export:  ./intelligence-providers
 `NARADA_PROPER_ROOT` is a local workspace fallback for finding that package
 root. It is not permission to import `packages/agent-cli/src/...` or
 `packages/agent-cli/bin/...` directly from launcher code.
+
+The standard Windows wrapper is also package-owned. Registered Sites should
+materialize `Start-AgentCliSession.ps1` from package export
+`@narada2/agent-cli ./windows-wrapper-template`. Generated copies carry:
+
+```text
+narada_template_id:      narada.agent_cli.windows_wrapper
+narada_template_version: 1
+narada_template_hash:    <sha256 of normalized template>
+```
+
+The hash makes wrapper drift mechanically detectable. Local launcher code may
+render or reconcile that wrapper, but it must not hand-maintain a divergent
+carrier implementation.
 
 ## Modes
 
@@ -161,7 +176,9 @@ In `--server` mode, only tools classified read-only execute automatically. Other
 
 The standard Windows interactive wrapper is `Start-AgentCliSession.ps1`. It may
 resolve launch context and call the packaged binary, but it must not own provider
-resolution or carrier behavior.
+resolution or carrier behavior. It is generated from
+`@narada2/agent-cli ./windows-wrapper-template`; local edits should be made in
+the package template and reconciled into Sites.
 
 Workspace dry-run is non-executing. `Start-NaradaWorkspace.ps1 -DryRun` must not
 open Windows Terminal, start carrier sessions, or wait for operator input; its
