@@ -3008,6 +3008,13 @@ async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<str
     relativeToolRoot: 'tools/task-lifecycle',
     packageSrcUrl: new URL('../../../../../packages/task-lifecycle-tools/src', import.meta.url),
   });
+  await addCanonicalPackageTree({
+    packageName: '@narada2/site-common-tools',
+    version: '0.1.0',
+    surface: 'site-tools',
+    relativeToolRoot: 'tools',
+    packageSrcUrl: new URL('../../../../../packages/site-common-tools/src', import.meta.url),
+  });
   canonicalToolSurfaceEntries = entries;
   return entries;
 }

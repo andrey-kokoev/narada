@@ -1,0 +1,9 @@
+{
+  "name": "@narada2/site-common-tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test src/site-common-tools.test.mjs"
+  }
+}
