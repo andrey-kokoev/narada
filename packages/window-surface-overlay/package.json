@@ -1,0 +1,16 @@
+{
+  "name": "@narada2/window-surface-overlay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./inspect": "./src/Inspect-WindowSurfaceOverlay.ps1",
+    "./install": "./src/Install-WindowSurfaceOverlay.ps1",
+    "./start": "./src/Start-WindowSurfaceOverlay.ps1",
+    "./stop": "./src/Stop-WindowSurfaceOverlay.ps1",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test src/window-surface-overlay.test.mjs"
+  }
+}

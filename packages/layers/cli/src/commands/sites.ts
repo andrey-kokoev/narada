@@ -16,7 +16,6 @@ import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { createFormatter } from '../lib/formatter.js';
-import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 import {
   explainSiteRelation,
   makeSiteRelationRecord,
@@ -2067,6 +2066,7 @@ export async function sitesTaskLifecycleInitCommand(
 
   if (!options.dryRun) {
     await mkdir(aiPath, { recursive: true });
+    const { openTaskLifecycleStore } = await import('../lib/task-lifecycle-store.js');
     const store = openTaskLifecycleStore(sitePath);
     try {
       const rows = store.db
@@ -2599,6 +2599,7 @@ const SHARED_SITE_PACKAGES = [
     source_locus: fileURLToPath(new URL('../../../../../packages/task-lifecycle-kernel', import.meta.url)),
   },
 ] as const;
+const NARADA_PROPER_ROOT = resolve(fileURLToPath(new URL('../../../../..', import.meta.url)));
 let legacyToolSurfaceEntries: Map<string, Record<string, unknown>> | null = null;
 let canonicalToolSurfaceEntries: Map<string, Record<string, unknown>> | null = null;
 
@@ -2685,6 +2686,22 @@ function packageInstallPath(siteRoot: string, packageName: string): string {
     : join(siteRoot, 'node_modules', packageName);
 }
 
+function isNaradaProperWorkspaceRoot(siteRoot: string): boolean {
+  return normalizeNativePath(siteRoot) === normalizeNativePath(NARADA_PROPER_ROOT)
+    && existsSync(join(siteRoot, 'pnpm-workspace.yaml'))
+    && existsSync(join(siteRoot, 'packages', 'agent-cli'));
+}
+
+function assertContainedPackageInstallPath(siteRoot: string, packageName: string, installPath: string): void {
+  const expected = packageInstallPath(siteRoot, packageName);
+  const normalizedInstall = normalizeNativePath(resolve(installPath));
+  const normalizedExpected = normalizeNativePath(resolve(expected));
+  const normalizedScopeRoot = normalizeNativePath(resolve(siteRoot, 'node_modules', '@narada2'));
+  if (normalizedInstall !== normalizedExpected || !normalizedInstall.startsWith(`${normalizedScopeRoot}${win32.sep}`)) {
+    throw new Error(`refusing_uncontained_package_link_path: ${installPath}`);
+  }
+}
+
 async function inspectPackageLink(siteRoot: string, packageName: string, sourceLocus: string): Promise<{
   installPath: string;
   exists: boolean;
@@ -2713,11 +2730,12 @@ async function syncPackageLink(siteRoot: string, packageName: string, sourceLocu
 }> {
   const before = await inspectPackageLink(siteRoot, packageName, sourceLocus);
   if (apply && !before.current) {
+    assertContainedPackageInstallPath(siteRoot, packageName, before.installPath);
     if (before.exists) {
       await rm(before.installPath, { recursive: true, force: true });
     }
     await mkdir(dirname(before.installPath), { recursive: true });
-    await symlink(sourceLocus, before.installPath, 'junction');
+    await symlink(sourceLocus, before.installPath, process.platform === 'win32' ? 'junction' : 'dir');
   }
   const after = await inspectPackageLink(siteRoot, packageName, sourceLocus);
   return {
@@ -2740,7 +2758,11 @@ async function writeSitePackageProvenance(siteRoot: string, records: Array<Recor
     site_root: siteRoot,
     generated_at: new Date().toISOString(),
     mode: 'workspace_link',
-    packages: records,
+    packages: records.map((record) => ({
+      ...record,
+      link_status: record.status === 'stale' ? 'stale' : 'current',
+      last_sync_action: record.status,
+    })),
   };
   if (!apply) {
     return { path, mutation_performed: false };
@@ -2865,6 +2887,23 @@ async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<str
       surface: 'agent-start',
       hash: sha256Text(await readFile(bootstrapPath, 'utf8')),
     });
+  }
+  const overlayScripts = [
+    'Inspect-WindowSurfaceOverlay.ps1',
+    'Install-WindowSurfaceOverlay.ps1',
+    'Start-WindowSurfaceOverlay.ps1',
+    'Stop-WindowSurfaceOverlay.ps1',
+  ];
+  for (const script of overlayScripts) {
+    const scriptPath = fileURLToPath(new URL(`../../../../../packages/window-surface-overlay/src/${script}`, import.meta.url));
+    if (existsSync(scriptPath)) {
+      entries.set(`tools/window-surface-overlay/${script}`, {
+        package: '@narada2/window-surface-overlay',
+        version: '0.1.0',
+        surface: 'window-surface-overlay',
+        hash: sha256Text(await readFile(scriptPath, 'utf8')),
+      });
+    }
   }
   canonicalToolSurfaceEntries = entries;
   return entries;
@@ -3317,6 +3356,24 @@ export async function sitesDepsSyncCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const inputRoot = resolve(options.root ?? '.');
   const siteRoot = containedSiteRootFromInput(inputRoot);
+  if (isNaradaProperWorkspaceRoot(siteRoot)) {
+    const result = {
+      schema: 'narada.site_deps_sync.v1',
+      status: 'refused',
+      mutation_attempted: options.apply === true,
+      mutation_performed: false,
+      site_root: siteRoot,
+      reason: 'narada_proper_workspace_uses_pnpm_workspace_links',
+    };
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: formattedResult(result, [
+        'site deps: refused',
+        `site_root: ${siteRoot}`,
+        'reason: narada_proper_workspace_uses_pnpm_workspace_links',
+      ], (options.format ?? 'auto') as CliFormat),
+    };
+  }
   const packageRecords = [];
   for (const descriptor of SHARED_SITE_PACKAGES) {
     packageRecords.push(await syncPackageLink(siteRoot, descriptor.package_name, descriptor.source_locus, options.apply === true));
@@ -4856,6 +4913,7 @@ export async function sitesInitCommand(
         }
         await mkdir(join(siteRoot, '.ai'), { recursive: true });
         await mkdir(pathLib.join(siteRoot, '.ai', 'tasks'), { recursive: true });
+        const { openTaskLifecycleStore } = await import('../lib/task-lifecycle-store.js');
         const taskStore = openTaskLifecycleStore(siteRoot);
         taskStore.db.close();
       }
