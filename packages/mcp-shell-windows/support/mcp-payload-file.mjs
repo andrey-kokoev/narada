@@ -294,11 +294,16 @@ export function listOutputTools() {
       description: 'Show an MCP output ref inline up to output_limit characters. Defaults to 10000 characters.',
       inputSchema: {
         type: 'object',
+        additionalProperties: false,
         properties: {
           ref: { type: 'string', description: 'Output ref, e.g. mcp_output:<id>.' },
+          output_ref: { type: 'string', description: 'Alias for ref, accepted for compatibility with truncated tool envelopes.' },
           output_limit: { type: 'integer', description: 'Maximum characters of stored output to inline. Defaults to 10000.' },
         },
-        required: ['ref'],
+        anyOf: [
+          { required: ['ref'] },
+          { required: ['output_ref'] },
+        ],
       },
     },
   ];
@@ -427,7 +432,8 @@ function parseOutputRef(ref) {
 }
 
 function requireOutputRef(args, message, field = 'ref') {
-  const value = asRecord(args)[field];
+  const record = asRecord(args);
+  const value = record[field] ?? (field === 'ref' ? record.output_ref : undefined);
   if (typeof value !== 'string' || value.trim().length === 0) throw new Error(message);
   return value.trim();
 }
@@ -467,6 +473,7 @@ export function listPayloadTools() {
       description: 'Create immutable transient MCP payload revision v1 under .ai/tmp/mcp-payloads/workspace.',
       inputSchema: {
         type: 'object',
+        additionalProperties: false,
         properties: {
           payload_id: { type: 'string', description: 'Optional stable id segment. Defaults to a generated id.' },
           payload: { type: 'object', description: 'JSON object payload to store as v1.' },
@@ -480,6 +487,7 @@ export function listPayloadTools() {
       description: 'Show an immutable transient MCP payload revision by ref.',
       inputSchema: {
         type: 'object',
+        additionalProperties: false,
         properties: { ref: { type: 'string', description: 'Payload ref, e.g. mcp_payload:<id>@v1.' } },
         required: ['ref'],
       },
@@ -489,6 +497,7 @@ export function listPayloadTools() {
       description: 'Derive a new immutable payload revision by applying a constrained object overlay.',
       inputSchema: {
         type: 'object',
+        additionalProperties: false,
         properties: {
           source_ref: { type: 'string', description: 'Source payload ref, e.g. mcp_payload:<id>@v1.' },
           overlay: { type: 'object', description: 'Recursive object overlay. No deletion semantics.' },
@@ -502,6 +511,7 @@ export function listPayloadTools() {
       description: 'Validate that a payload ref exists, is well-formed, and is within size limits.',
       inputSchema: {
         type: 'object',
+        additionalProperties: false,
         properties: { ref: { type: 'string', description: 'Payload ref, e.g. mcp_payload:<id>@v1.' } },
         required: ['ref'],
       },
