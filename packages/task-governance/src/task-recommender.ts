@@ -448,6 +448,7 @@ export async function generateRecommendations(
   const weights = DEFAULT_WEIGHTS;
   const now = new Date().toISOString();
   const store = options.store ?? openTaskLifecycleStore(cwd);
+  const shouldCloseStore = options.store === undefined;
 
   // 1. Load task graph directly (need dependsOn which listRunnableTasks omits)
   const tasksDir = join(cwd, '.ai', 'do-not-open', 'tasks');
@@ -872,7 +873,7 @@ export async function generateRecommendations(
 
   const summary = `${limitedPrimary.length} recommendation${limitedPrimary.length !== 1 ? 's' : ''}, ${alternativeList.length} alternative${alternativeList.length !== 1 ? 's' : ''}, ${abstained.length} abstained.`;
 
-  return {
+  const result = {
     recommendation_id: `rec-${Date.now()}`,
     generated_at: now,
     recommender_id: options.architectId ?? 'system',
@@ -881,6 +882,10 @@ export async function generateRecommendations(
     abstained,
     summary,
   };
+  if (shouldCloseStore) {
+    store.db.close();
+  }
+  return result;
 }
 
 /**

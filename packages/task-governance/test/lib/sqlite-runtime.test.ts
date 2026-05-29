@@ -5,7 +5,7 @@ import {
 } from '../../src/sqlite-runtime.js';
 
 describe('sqlite runtime posture', () => {
-  it('defaults to better-sqlite3 in auto mode until node:sqlite has conformance coverage', () => {
+  it('defaults to node:sqlite in auto mode on Node 22+', () => {
     const posture = selectSqliteRuntime({
       preference: 'auto',
       nodeVersion: '22.16.0',
@@ -13,9 +13,9 @@ describe('sqlite runtime posture', () => {
       betterSqlite3Available: true,
     });
 
-    expect(posture.selected).toBe('better-sqlite3');
+    expect(posture.selected).toBe('node:sqlite');
     expect(posture.supported).toBe(true);
-    expect(posture.reason).toContain('adapter conformance');
+    expect(posture.reason).toContain('auto selects node:sqlite');
   });
 
   it('keeps auto mode supported when node:sqlite is absent but better-sqlite3 is available', () => {
@@ -31,7 +31,7 @@ describe('sqlite runtime posture', () => {
     expect(posture.reason).toContain('node:sqlite is not available');
   });
 
-  it('rejects explicit node:sqlite until it is promoted behind the lifecycle adapter', () => {
+  it('supports explicit node:sqlite on Node 22+', () => {
     const posture = selectSqliteRuntime({
       preference: 'node:sqlite',
       nodeVersion: '22.16.0',
@@ -40,8 +40,8 @@ describe('sqlite runtime posture', () => {
     });
 
     expect(posture.selected).toBe('node:sqlite');
-    expect(posture.supported).toBe(false);
-    expect(posture.reason).toContain('not yet promoted');
+    expect(posture.supported).toBe(true);
+    expect(posture.reason).toContain('authoritative');
   });
 
   it('rejects invalid backend preference values', () => {

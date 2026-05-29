@@ -41,6 +41,7 @@ export interface ReportTaskServiceOptions {
   agent?: string;
   reviewer?: string;
   summary?: string;
+  directiveId?: string;
   changedFiles?: string;
   verification?: string;
   residuals?: string;
@@ -615,6 +616,7 @@ export async function reportTaskService(
     task_id: taskFile.taskId,
     agent_id: agentId,
     assignment_id: assignmentId,
+    directive_id: options.directiveId ?? null,
     reported_at: now,
     summary,
     changed_files: changedFiles,

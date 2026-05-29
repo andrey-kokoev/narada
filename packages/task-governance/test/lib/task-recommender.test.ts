@@ -10,6 +10,35 @@ import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+function seedRoster(tempDir: string, agents: Array<{
+  agent_id: string;
+  role: string;
+  capabilities: string[];
+  first_seen_at: string;
+  last_active_at: string;
+  status?: string;
+  task?: number | null;
+}>): void {
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    for (const agent of agents) {
+      store.upsertRosterEntry({
+        agent_id: agent.agent_id,
+        role: agent.role,
+        capabilities_json: JSON.stringify(agent.capabilities),
+        first_seen_at: agent.first_seen_at,
+        last_active_at: agent.last_active_at,
+        status: agent.status ?? 'idle',
+        task_number: agent.task ?? null,
+        last_done: null,
+        updated_at: agent.last_active_at,
+      });
+    }
+  } finally {
+    store.db.close();
+  }
+}
+
 function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments'), { recursive: true });
@@ -18,16 +47,19 @@ function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'learning', 'accepted'), { recursive: true });
 
+  const agents = [
+    { agent_id: 'agent-alpha', role: 'implementer', capabilities: ['typescript', 'testing', 'cli'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
+  ];
+
   writeFileSync(
     join(tempDir, '.ai', 'agents', 'roster.json'),
     JSON.stringify({
       version: 1,
       updated_at: '2026-01-01T00:00:00Z',
-      agents: [
-        { agent_id: 'agent-alpha', role: 'implementer', capabilities: ['typescript', 'testing', 'cli'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
-      ],
+      agents,
     }, null, 2),
   );
+  seedRoster(tempDir, agents);
 
   // Task 998: opened in markdown, will be overridden in SQLite
   writeFileSync(
@@ -56,17 +88,20 @@ function setupWarmContextRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
 
   // Two equivalent agents — same capabilities, both idle
+  const agents = [
+    { agent_id: 'agent-warm', role: 'implementer', capabilities: ['typescript', 'testing'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
+    { agent_id: 'agent-cold', role: 'implementer', capabilities: ['typescript', 'testing'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
+  ];
+
   writeFileSync(
     join(tempDir, '.ai', 'agents', 'roster.json'),
     JSON.stringify({
       version: 1,
       updated_at: '2026-04-20T00:00:00Z',
-      agents: [
-        { agent_id: 'agent-warm', role: 'implementer', capabilities: ['typescript', 'testing'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
-        { agent_id: 'agent-cold', role: 'implementer', capabilities: ['typescript', 'testing'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
-      ],
+      agents,
     }, null, 2),
   );
+  seedRoster(tempDir, agents);
 
   // Task 1000: in "Warm Chapter" — opened
   writeFileSync(
@@ -287,18 +322,10 @@ describe('generateRecommendations warm-context affinity', () => {
       null,
     );
 
-    // Also mark agent-warm as working in roster so load score drops
-    writeFileSync(
-      join(tempDir, '.ai', 'agents', 'roster.json'),
-      JSON.stringify({
-        version: 1,
-        updated_at: '2026-04-20T00:00:00Z',
-        agents: [
-          { agent_id: 'agent-warm', role: 'implementer', capabilities: ['typescript', 'testing'], status: 'working', task: 1002, first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
-          { agent_id: 'agent-cold', role: 'implementer', capabilities: ['typescript', 'testing'], status: 'idle', first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
-        ],
-      }, null, 2),
-    );
+    seedRoster(tempDir, [
+      { agent_id: 'agent-warm', role: 'implementer', capabilities: ['typescript', 'testing'], status: 'working', task: 1002, first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
+      { agent_id: 'agent-cold', role: 'implementer', capabilities: ['typescript', 'testing'], status: 'idle', task: null, first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z' },
+    ]);
 
     const result = await generateRecommendations({ cwd: tempDir });
 

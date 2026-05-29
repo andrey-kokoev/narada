@@ -9,26 +9,58 @@ import { openTaskLifecycleStore } from '../../src/task-lifecycle-store.js';
 
 process.env.NARADA_TASK_LIFECYCLE_FAST_SQLITE = '1';
 
+function seedRoster(tempDir: string, agents: Array<{
+  agent_id: string;
+  role: string;
+  capabilities: string[];
+  first_seen_at: string;
+  last_active_at: string;
+  status?: string;
+  task?: number | null;
+}>): void {
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    for (const agent of agents) {
+      store.upsertRosterEntry({
+        agent_id: agent.agent_id,
+        role: agent.role,
+        capabilities_json: JSON.stringify(agent.capabilities),
+        first_seen_at: agent.first_seen_at,
+        last_active_at: agent.last_active_at,
+        status: agent.status ?? 'idle',
+        task_number: agent.task ?? null,
+        last_done: null,
+        updated_at: agent.last_active_at,
+      });
+    }
+  } finally {
+    store.db.close();
+  }
+}
+
 function setupRepo(tempDir: string): void {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
+
+  const agents = [
+    {
+      agent_id: 'test-agent',
+      role: 'implementer',
+      capabilities: ['claim'],
+      first_seen_at: '2026-01-01T00:00:00Z',
+      last_active_at: '2026-01-01T00:00:00Z',
+    },
+  ];
 
   writeFileSync(
     join(tempDir, '.ai', 'agents', 'roster.json'),
     JSON.stringify({
       version: 1,
       updated_at: '2026-01-01T00:00:00Z',
-      agents: [
-        {
-          agent_id: 'test-agent',
-          role: 'implementer',
-          capabilities: ['claim'],
-          first_seen_at: '2026-01-01T00:00:00Z',
-          last_active_at: '2026-01-01T00:00:00Z',
-        },
-      ],
+      agents,
     }, null, 2),
   );
+  seedRoster(tempDir, agents);
 
   writeFileSync(
     join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
@@ -40,17 +72,20 @@ function setupContinuationRepo(tempDir: string): void {
   mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
   mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
 
+  const agents = [
+    { agent_id: 'alpha', role: 'implementer', capabilities: ['typescript'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z', status: 'working', task: 100 },
+    { agent_id: 'beta', role: 'implementer', capabilities: ['testing'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z', status: 'done', task: null },
+  ];
+
   writeFileSync(
     join(tempDir, '.ai', 'agents', 'roster.json'),
     JSON.stringify({
       version: 1,
       updated_at: '2026-01-01T00:00:00Z',
-      agents: [
-        { agent_id: 'alpha', role: 'implementer', capabilities: ['typescript'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z', status: 'working', task: 100 },
-        { agent_id: 'beta', role: 'implementer', capabilities: ['testing'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z', status: 'done', task: null },
-      ],
+      agents,
     }, null, 2),
   );
+  seedRoster(tempDir, agents);
 
   writeFileSync(
     join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-claimed-task.md'),
@@ -152,16 +187,12 @@ describe('task assignment lifecycle service', () => {
     expect(assignment?.assignments[0]!.agent_id).toBe('test-agent');
     expect(assignment?.assignments[0]!.claim_context).toBe('Testing claim');
 
-    const roster = JSON.parse(readFileSync(join(tempDir, '.ai', 'agents', 'roster.json'), 'utf8')) as {
-      agents: Array<{ agent_id: string; status?: string; task?: number | null }>;
-    };
-    expect(roster.agents.find((a) => a.agent_id === 'test-agent')).toMatchObject({
-      status: 'working',
-      task: 999,
-    });
-
     const store = openTaskLifecycleStore(tempDir);
     try {
+      expect(store.getRosterEntry('test-agent')).toMatchObject({
+        status: 'working',
+        task_number: 999,
+      });
       expect(store.getLifecycle('20260420-999-test-task')?.status).toBe('claimed');
       const intent = store.getAssignmentIntent(result.result.assignment_intent_id!);
       expect(intent?.status).toBe('applied');

@@ -27,6 +27,7 @@ export interface Statement {
   all(...args: BindArgs): unknown[];
   get(...args: BindArgs): unknown;
   run(...args: BindArgs): RunResult;
+  pluck(): Statement;
 }
 
 const require = createRequire(import.meta.url);
@@ -49,7 +50,7 @@ export default class Database {
 
   prepare(sql: string): Statement {
     this.assertOpen();
-    return this.db.prepare(sql);
+    return new StatementAdapter(this.db.prepare(sql));
   }
 
   pragma(source: string): unknown {
@@ -111,6 +112,36 @@ export default class Database {
       throw new Error("database is not open");
     }
   }
+}
+
+class StatementAdapter implements Statement {
+  private pluckFirstValue = false;
+
+  constructor(private readonly statement: NodeSqliteStatement) {}
+
+  all(...args: BindArgs): unknown[] {
+    const rows = this.statement.all(...args);
+    return this.pluckFirstValue ? rows.map(firstColumnValue) : rows;
+  }
+
+  get(...args: BindArgs): unknown {
+    const row = this.statement.get(...args);
+    return this.pluckFirstValue ? firstColumnValue(row) : row;
+  }
+
+  run(...args: BindArgs): RunResult {
+    return this.statement.run(...args);
+  }
+
+  pluck(): Statement {
+    this.pluckFirstValue = true;
+    return this;
+  }
+}
+
+function firstColumnValue(row: unknown): unknown {
+  if (!row || typeof row !== "object") return row;
+  return Object.values(row as Record<string, unknown>)[0];
 }
 
 export namespace Database {

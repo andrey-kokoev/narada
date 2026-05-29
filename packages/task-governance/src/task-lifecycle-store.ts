@@ -83,6 +83,7 @@ export interface TaskReportRow {
   summary: string;
   changed_files_json: string | null;
   verification_json: string | null;
+  directive_id?: string | null;
   submitted_at: string;
 }
 
@@ -458,6 +459,7 @@ function rowToReport(row: Record<string, unknown>): TaskReportRow {
     verification_json: row.verification_json
       ? String(row.verification_json)
       : null,
+    directive_id: row.directive_id ? String(row.directive_id) : null,
     submitted_at: String(row.submitted_at),
   };
 }
@@ -1068,6 +1070,7 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
         summary text not null,
         changed_files_json text,
         verification_json text,
+        directive_id text,
         submitted_at text not null,
         foreign key (task_id) references task_lifecycle(task_id)
       );
@@ -1353,6 +1356,13 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
     if (!lifecycleColumns.some((column) => column.name === 'closure_mode')) {
       this.db.exec('alter table task_lifecycle add column closure_mode text;');
     }
+    const reportColumns = this.db
+      .prepare('pragma table_info(task_reports)')
+      .all() as Array<{ name?: string }>;
+    if (!reportColumns.some((column) => column.name === 'directive_id')) {
+      this.db.exec('alter table task_reports add column directive_id text;');
+    }
+    this.db.exec('create index if not exists idx_task_reports_directive_id on task_reports(directive_id);');
     ensureDirectedObligationTargetRefShape(this.db);
   }
 
@@ -1877,8 +1887,16 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
   insertReport(report: TaskReportRow): void {
     const stmt = this.db.prepare(`
       insert into task_reports (
-        report_id, task_id, agent_id, summary, changed_files_json, verification_json, submitted_at
-      ) values (?, ?, ?, ?, ?, ?, ?)
+        report_id, task_id, agent_id, summary, changed_files_json, verification_json, directive_id, submitted_at
+      ) values (?, ?, ?, ?, ?, ?, ?, ?)
+      on conflict(report_id) do update set
+        task_id = excluded.task_id,
+        agent_id = excluded.agent_id,
+        summary = excluded.summary,
+        changed_files_json = excluded.changed_files_json,
+        verification_json = excluded.verification_json,
+        directive_id = excluded.directive_id,
+        submitted_at = excluded.submitted_at
     `);
     stmt.run(
       report.report_id,
@@ -1887,6 +1905,7 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
       report.summary,
       report.changed_files_json,
       report.verification_json,
+      report.directive_id ?? null,
       report.submitted_at,
     );
   }

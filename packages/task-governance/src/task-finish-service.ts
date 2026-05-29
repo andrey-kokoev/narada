@@ -29,6 +29,7 @@ export interface FinishTaskServiceOptions {
   agent?: string;
   reviewer?: string;
   summary?: string;
+  directiveId?: string;
   changedFiles?: string;
   verification?: string;
   residuals?: string;
@@ -539,6 +540,7 @@ export async function finishTaskService(
         agent: agentId,
         reviewer: options.reviewer,
         summary: options.summary,
+        directiveId: options.directiveId,
         changedFiles: options.changedFiles,
         verification: JSON.stringify(parsedVerification.value),
         residuals: options.residuals,

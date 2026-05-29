@@ -200,14 +200,14 @@ describe('SqliteTaskLifecycleStore', () => {
       }
     });
 
-    it('fails clearly when node:sqlite is explicitly selected before adapter promotion', async () => {
+    it('fails clearly when retired better-sqlite3 is explicitly selected', async () => {
       const previous = process.env[SQLITE_BACKEND_ENV];
-      process.env[SQLITE_BACKEND_ENV] = 'node:sqlite';
-      tempDir = await mkdtemp(join(tmpdir(), 'narada-lifecycle-store-node-sqlite-'));
+      process.env[SQLITE_BACKEND_ENV] = 'better-sqlite3';
+      tempDir = await mkdtemp(join(tmpdir(), 'narada-lifecycle-store-better-sqlite3-'));
       await mkdir(join(tempDir, '.ai'), { recursive: true });
 
       try {
-        expect(() => openTaskLifecycleStore(tempDir)).toThrow('NARADA_SQLITE_BACKEND=node:sqlite');
+        expect(() => openTaskLifecycleStore(tempDir)).toThrow('NARADA_SQLITE_BACKEND=better-sqlite3');
       } finally {
         if (previous === undefined) {
           delete process.env[SQLITE_BACKEND_ENV];

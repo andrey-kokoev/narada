@@ -148,6 +148,7 @@ export interface WorkResultReport {
   task_id: string;
   agent_id: string;
   assignment_id: string;
+  directive_id?: string | null;
   reported_at: string;
   summary: string;
   changed_files: string[];
@@ -316,6 +317,16 @@ export async function saveReport(cwd: string, report: WorkResultReport): Promise
       agent_id: report.agent_id,
       reported_at: report.reported_at,
       report_json: JSON.stringify(report),
+    });
+    store.insertReport({
+      report_id: report.report_id,
+      task_id: report.task_id,
+      agent_id: report.agent_id,
+      summary: report.summary,
+      changed_files_json: JSON.stringify(report.changed_files),
+      verification_json: JSON.stringify(report.verification),
+      directive_id: report.directive_id ?? null,
+      submitted_at: report.reported_at,
     });
   } finally {
     store.db.close();

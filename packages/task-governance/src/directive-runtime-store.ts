@@ -21,7 +21,7 @@ export type DirectiveContentKind = "instruction" | "constraint" | "routing" | "d
 export type DirectiveAdmissionStatus = "candidate" | "admitted" | "refused" | "delivered" | "superseded" | "expired";
 export type DirectiveDeliveryStatus = "pending" | "leased" | "delivered" | "receipt_recorded" | "failed" | "expired";
 export type DirectiveRefKind = "task" | "work" | "source" | "policy" | "carrier" | "session";
-export type DirectiveTriageStatus = "untriaged" | "accepted" | "refused" | "ignored_stale" | "superseded" | "blocked" | "needs_operator";
+export type DirectiveTriageStatus = "untriaged" | "carrier_accepted" | "accepted" | "refused" | "ignored_stale" | "superseded" | "blocked" | "needs_operator";
 
 export interface DirectiveSource { readonly kind: DirectiveSourceKind; readonly id: string; readonly label?: string }
 export interface DirectiveAuthority { readonly locus: string; readonly basis: string }
@@ -388,8 +388,8 @@ export class SqliteDirectiveRuntimeStore {
       content: {
         kind: "work_ref",
         text: input.title
-          ? `Attend to newly admitted work: ${input.title}`
-          : `Attend to newly admitted work ${input.taskNumber ?? input.taskId}.`,
+          ? `Resident work contract: inspect task ${input.taskNumber ?? input.taskId}; claim it as the resident if eligible; do bounded work only within admitted Site authority; submit a task lifecycle report with findings, no_files_changed or changed_files evidence, blockers if any, and the delivered directive_id token; do not send outbound customer-visible effects. Newly admitted work: ${input.title}`
+          : `Resident work contract: inspect task ${input.taskNumber ?? input.taskId}; claim it as the resident if eligible; do bounded work only within admitted Site authority; submit a task lifecycle report with findings, no_files_changed or changed_files evidence, blockers if any, and the delivered directive_id token; do not send outbound customer-visible effects.`,
         refs,
         data: {
           task_id: input.taskId,
