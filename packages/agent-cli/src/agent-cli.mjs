@@ -89,6 +89,10 @@ const SESSION_DIR = SERVER_MODE
 if (!existsSync(SESSION_DIR)) mkdirSync(SESSION_DIR, { recursive: true });
 const SESSION_PATH = SERVER_MODE ? join(SESSION_DIR, 'session.jsonl') : join(SESSION_DIR, `${SESSION}.jsonl`);
 const EVENTS_PATH = join(SESSION_DIR, 'events.jsonl');
+const CARRIER_SESSION_DIR = join(SITE_ROOT, '.narada', 'crew', 'nars-sessions', SESSION);
+if (!existsSync(CARRIER_SESSION_DIR)) mkdirSync(CARRIER_SESSION_DIR, { recursive: true });
+const HEARTBEAT_PATH = join(CARRIER_SESSION_DIR, 'heartbeat.json');
+let activeHeartbeat = null;
 
 // Set window title for OSL binding
 if (process.title !== IDENTITY) {
@@ -99,6 +103,15 @@ if (process.title !== IDENTITY) {
 // Main
 // ---------------------------------------------------------------------------
 async function main() {
+  activeHeartbeat = startCarrierHeartbeat({
+    path: HEARTBEAT_PATH,
+    session: SESSION,
+    identity: IDENTITY,
+    runtime: 'agent-cli',
+    mode: SERVER_MODE ? 'server' : 'interactive',
+    sessionDir: SESSION_DIR,
+    carrierSessionDir: CARRIER_SESSION_DIR,
+  });
   if (SERVER_MODE) {
     await runServerMode();
     return;
@@ -1001,6 +1014,46 @@ function removeInvalidToolHistory(messages) {
 
 function appendSession(path, entry) {
   appendFileSync(path, JSON.stringify(entry) + '\n', 'utf-8');
+}
+
+function startCarrierHeartbeat({ path, session, identity, runtime, mode, sessionDir, carrierSessionDir, intervalMs = 5000 }) {
+  const startedAt = new Date().toISOString();
+  const write = (status = 'alive') => {
+    writeFileSync(path, `${JSON.stringify({
+      schema: 'narada.carrier_heartbeat.v1',
+      status,
+      carrier_session_id: session,
+      agent_id: identity,
+      runtime,
+      mode,
+      pid: process.pid,
+      session_dir: sessionDir,
+      carrier_session_dir: carrierSessionDir,
+      started_at: startedAt,
+      heartbeat_at: new Date().toISOString(),
+    }, null, 2)}\n`, 'utf8');
+  };
+  write();
+  const timer = setInterval(() => write(), intervalMs);
+  timer.unref?.();
+  const stop = () => {
+    clearInterval(timer);
+    try {
+      write('stopped');
+    } catch {
+      // Best-effort carrier evidence only.
+    }
+  };
+  process.once('exit', stop);
+  process.once('SIGINT', () => {
+    stop();
+    process.exit(130);
+  });
+  process.once('SIGTERM', () => {
+    stop();
+    process.exit(143);
+  });
+  return { stop };
 }
 
 function sessionLogEntry({ role, content, source, authorityRef, toolCallId, eventId, transport, directiveId }) {
@@ -2716,6 +2769,7 @@ if (isEntrypoint) {
   }
 
   main().catch((err) => {
+    activeHeartbeat?.stop();
     console.error(`[agent-cli] Fatal error: ${err.message}`);
     process.exit(1);
   });

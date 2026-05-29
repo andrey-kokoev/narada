@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import { appendFileSync, readFileSync, rmSync, writeFileSync, mkdirSync, mkdtempSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, rmSync, writeFileSync, mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { PassThrough } from 'node:stream';
 import {
@@ -192,6 +192,26 @@ assert.deepEqual(parseArgs(['--startup-system-directive', 'run startup sequence'
 assert.deepEqual(parseArgs(['--no-startup-system-directive']), { startupSystemDirective: false });
 assert.deepEqual(parseArgs(['--control-jsonl', '.narada/control.jsonl']), { controlJsonl: '.narada/control.jsonl' });
 assert.equal(parseColorEnv('off', true), false);
+const heartbeatRoot = mkdtempSync(join(tmpdir(), 'narada-agent-cli-heartbeat-'));
+const heartbeatSession = 'carrier_session_heartbeat_test';
+const heartbeatRun = spawnSync(process.execPath, [
+  fileURLToPath(new URL('./agent-cli.mjs', import.meta.url)),
+  '--help',
+  '--identity',
+  'sonar.resident',
+  '--session',
+  heartbeatSession,
+], {
+  cwd: heartbeatRoot,
+  env: { ...process.env, NARADA_SITE_ROOT: heartbeatRoot },
+  encoding: 'utf8',
+});
+assert.equal(heartbeatRun.status, 0);
+assert.equal(
+  existsSync(join(heartbeatRoot, '.narada', 'crew', 'nars-sessions', heartbeatSession, 'heartbeat.json')),
+  false,
+);
+rmSync(heartbeatRoot, { recursive: true, force: true });
 assert.equal(createTerminalStyle({ enabled: false }).prompt('narada> '), 'narada> ');
 assert.equal(createTerminalStyle({ enabled: true }).prompt('narada> ').includes('\x1b['), true);
 assert.equal(formatToolResultContent('{"status":"success","schema":"narada.test.v1","directive_count":2,"extra":true}'), 'success · narada.test.v1 · directives=2\nkeys: status, schema, directive_count, extra');
@@ -768,6 +788,11 @@ assert.equal(serverEvents[0].event, 'session_started');
 assert.equal(serverEvents.some((event) => event.event === 'error' && event.code === 'invalid_json'), true);
 assert.equal(serverEvents.some((event) => event.event === 'session_status' && event.request_id === 'status-1'), true);
 assert.equal(serverEvents.at(-1).event, 'session_closed');
+const serverHeartbeat = JSON.parse(readFileSync(join(serverSite, '.narada', 'crew', 'nars-sessions', 'server-test', 'heartbeat.json'), 'utf8'));
+assert.equal(serverHeartbeat.schema, 'narada.carrier_heartbeat.v1');
+assert.equal(serverHeartbeat.carrier_session_id, 'server-test');
+assert.equal(serverHeartbeat.agent_id, 'narada.test');
+assert.equal(serverHeartbeat.runtime, 'agent-cli');
 assert.equal(stdout.includes('[agent-cli]'), false);
 assert.equal(stderr.includes('Fatal error'), false);
 rmSync(serverSite, { recursive: true, force: true });
