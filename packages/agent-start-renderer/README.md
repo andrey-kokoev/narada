@@ -13,10 +13,11 @@ fallback for locating the package root. Launchers must not hardcode a
 machine-specific `file:///D:/...` module URL or import `packages/.../src`
 directly.
 
-Canonical source:
+Canonical package export:
 
 ```text
-D:\code\narada\packages\agent-start-renderer\src\agent-start-renderer.mjs
+package: @narada2/agent-start-renderer
+export:  .
 ```
 
 Verification:

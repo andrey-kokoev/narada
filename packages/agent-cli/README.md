@@ -6,17 +6,12 @@ Narada-owned MCP-native agent client and first-slice Narada Agent Runtime Server
 
 `@narada2/agent-cli` is the canonical Narada agent-cli implementation.
 
-Canonical binary:
+Canonical binary and provider metadata contract:
 
 ```text
-D:\code\narada\packages\agent-cli\bin\narada-agent-cli.mjs
-```
-
-Canonical source and provider metadata:
-
-```text
-D:\code\narada\packages\agent-cli\src\
-D:\code\narada\packages\agent-cli\src\intelligence-providers.json
+package: @narada2/agent-cli
+bin:     narada-agent-cli
+export:  ./intelligence-providers
 ```
 
 Registered Site launchers and Windows wrappers must call the packaged binary.

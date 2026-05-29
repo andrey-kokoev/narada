@@ -15,19 +15,15 @@ the packaged Narada proper binary.
 Executable entrypoint:
 
 ```text
-D:\code\narada\packages\agent-cli\bin\narada-agent-cli.mjs
-```
-
-Implementation:
-
-```text
-D:\code\narada\packages\agent-cli\src\
+package: @narada2/agent-cli
+bin:     narada-agent-cli
 ```
 
 Provider metadata:
 
 ```text
-D:\code\narada\packages\agent-cli\src\intelligence-providers.json
+package: @narada2/agent-cli
+export:  ./intelligence-providers
 ```
 
 User sites and client sites may declare identities, roles, MCP fabric, policies,
@@ -37,7 +33,7 @@ semantics.
 
 `C:\Users\Andrey\Narada` is the operator/user-site control surface. It may contain launchers, registry configuration, and operator affordances, but it delegates carrier execution to Narada proper's packaged `narada-agent-cli`.
 
-Site-local `start-agent.mjs` files are compatibility shims. They may resolve site-local roster and MCP fabric, but `agent-cli` provider metadata and the executable carrier path are owned by Narada proper.
+Site-local `start-agent.mjs` files are compatibility shims. They may resolve site-local roster and MCP fabric, but `agent-cli` provider metadata and the executable carrier path are owned by Narada proper package exports/bins.
 
 ## Wrapper Contract
 
