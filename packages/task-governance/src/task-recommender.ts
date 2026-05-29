@@ -922,7 +922,7 @@ export async function buildInputSnapshot(
   try {
     const store = openTaskLifecycleStore(cwd);
     try {
-      assignmentCount = Number((store.db.prepare('select count(*) as count from task_assignment_records').get() as { count: number } | undefined)?.count ?? 0);
+      assignmentCount = Number((store.db.prepare('select count(*) as count from task_assignments').get() as { count: number } | undefined)?.count ?? 0);
       reportCount = Number((store.db.prepare('select count(*) as count from task_report_records').get() as { count: number } | undefined)?.count ?? 0);
       reviewCount = store.listAllReviews().length;
     } finally {

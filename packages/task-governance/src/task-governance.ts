@@ -48,7 +48,7 @@ export interface TaskAssignment {
   claimed_at: string;
   claim_context: string | null;
   released_at: string | null;
-  release_reason: 'completed' | 'abandoned' | 'superseded' | 'transferred' | 'budget_exhausted' | 'continued' | 'deferred' | null;
+  release_reason: 'completed' | 'blocked' | 'abandoned' | 'superseded' | 'transferred' | 'budget_exhausted' | 'continued' | 'deferred' | null;
   /** If this assignment is a continuation/takeover, the reason why. */
   continuation_reason?: 'evidence_repair' | 'review_fix' | 'handoff' | 'blocked_agent' | 'operator_override' | null;
   /** The agent_id of the prior active assignment, if this is a continuation. */
@@ -155,7 +155,7 @@ export interface WorkResultReport {
   verification: Array<{ command: string; result: string }>;
   known_residuals: string[];
   ready_for_review: boolean;
-  report_status: 'submitted' | 'accepted' | 'rejected' | 'superseded';
+  report_status: 'submitted' | 'blocked' | 'accepted' | 'rejected' | 'superseded';
 }
 
 /**
@@ -1255,8 +1255,23 @@ export async function loadAssignment(cwd: string, taskId: string): Promise<TaskA
   try {
     const store = openTaskLifecycleStore(cwd);
     try {
-      const record = store.getAssignmentRecord(taskId);
-      return record ? JSON.parse(record.record_json) as TaskAssignmentRecord : null;
+      const assignments = store.getAssignments(taskId);
+      if (assignments.length > 0) {
+        return {
+          task_id: taskId,
+          assignments: assignments.map((assignment) => ({
+            assignment_id: assignment.assignment_id,
+            agent_id: assignment.agent_id,
+            claimed_at: assignment.claimed_at,
+            claim_context: null,
+            released_at: assignment.released_at,
+            release_reason: assignment.release_reason as TaskAssignment['release_reason'],
+            intent: assignment.intent as AssignmentIntent,
+          })),
+          continuations: [],
+        };
+      }
+      return null;
     } finally {
       store.db.close();
     }
@@ -1314,11 +1329,30 @@ export async function atomicWriteFile(targetPath: string, data: string): Promise
 export async function saveAssignment(cwd: string, record: TaskAssignmentRecord): Promise<void> {
   const store = openTaskLifecycleStore(cwd);
   try {
-    store.upsertAssignmentRecord({
-      task_id: record.task_id,
-      record_json: JSON.stringify(record),
-      updated_at: new Date().toISOString(),
-    });
+    for (const assignment of record.assignments ?? []) {
+      const existing = store.db
+        .prepare('select assignment_id from task_assignments where task_id = ? and agent_id = ? and claimed_at = ?')
+        .get(record.task_id, assignment.agent_id, assignment.claimed_at) as { assignment_id?: string } | undefined;
+      const assignmentId = existing?.assignment_id
+        ?? `${record.task_id}-${assignment.claimed_at}`;
+      if (existing) {
+        store.db
+          .prepare(`update task_assignments
+            set released_at = ?, release_reason = ?, intent = ?
+            where assignment_id = ?`)
+          .run(assignment.released_at ?? null, assignment.release_reason ?? null, getAssignmentIntent(assignment), assignmentId);
+      } else {
+        store.insertAssignment({
+          assignment_id: assignmentId,
+          task_id: record.task_id,
+          agent_id: assignment.agent_id,
+          claimed_at: assignment.claimed_at,
+          released_at: assignment.released_at ?? null,
+          release_reason: assignment.release_reason ?? null,
+          intent: getAssignmentIntent(assignment),
+        });
+      }
+    }
   } finally {
     store.db.close();
   }

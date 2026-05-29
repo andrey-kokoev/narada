@@ -16,7 +16,7 @@ import { closeTaskService } from './task-close-service.js';
 import { parseTaskSpecFromMarkdown, extractProjectionSections, renderTaskBodyFromSpec } from './task-spec.js';
 import { openTaskLifecycleStore, type TaskLifecycleStore } from './task-lifecycle-store.js';
 import { ExitCode } from './exit-codes.js';
-import { reportTaskService, type ReportTaskServiceOptions } from './task-report-service.js';
+import { reportTaskService, type ReportTaskServiceOptions, type ReportTaskServiceResult } from './task-report-service.js';
 import {
   GENERATED_ARTIFACT_AUTHORITY_NOTE,
   reviewTaskService,
@@ -75,6 +75,13 @@ export interface FinishTaskServiceResponse {
     error?: string;
     evidence_warnings?: string[];
     generated_artifact_authority_note?: GeneratedArtifactAuthorityNote;
+    report_status?: WorkResultReport['report_status'];
+    ready_for_review?: boolean;
+    new_status?: string;
+    assignment_id?: string;
+    obligation_id?: string | null;
+    evidence_posture?: 'reported_with_incomplete_task_evidence';
+    evidence_blockers?: string[];
   };
 }
 
@@ -364,12 +371,37 @@ export async function finishTaskService(
   let ignoredReviewIds: string[] = [];
   let criteriaProofAction: 'proved' | 'skipped' | 'blocked' = 'skipped';
   let criteriaProofBlockers: string[] = [];
+  let submittedReportResult: ReportTaskServiceResult | null = null;
 
   const existingReviews = await listReviewsForTask(cwd, taskFile.taskId);
   const existingReports = await listReportsForTask(cwd, taskFile.taskId);
   const myReviews = existingReviews
     .filter((review) => review.reviewer_agent_id === agentId)
     .sort(newestFirst);
+  const validReviewVerdicts = ['accepted', 'accepted_with_notes', 'rejected'] as const;
+  if (options.verdict !== undefined && !(validReviewVerdicts as readonly string[]).includes(options.verdict)) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: {
+        status: 'error',
+        completion_mode: taskStatus === 'claimed' ? 'report' : 'review',
+        task_id: taskFile.taskId,
+        agent_id: agentId,
+        report_action: reportAction,
+        review_action: reviewAction,
+        report_id: null,
+        review_id: null,
+        evidence_verdict: 'unknown',
+        roster_transition: 'blocked',
+        close_action: 'skipped',
+        criteria_proof_action: 'skipped',
+        error: 'invalid_finish_verdict',
+        invalid_verdict: options.verdict,
+        valid_review_verdicts: [...validReviewVerdicts],
+        remediation: 'For claimed-state finish, run without verdict and provide summary plus changed_files or no_files_changed. For review-state finish, use accepted, accepted_with_notes, or rejected.',
+      } as FinishTaskServiceResponse['result'],
+    };
+  }
   const reusableReview = myReviews.find((review) => reviewMatchesRequestedVerdict(review, options.verdict));
   const staleRejectedReviews = myReviews.filter(isRejectedReview);
   const myReport = existingReports.find((report) => report.agent_id === agentId);
@@ -569,6 +601,7 @@ export async function finishTaskService(
       }
       reportAction = 'submitted';
       reportId = (reportResult.result as { report_id?: string }).report_id ?? null;
+      submittedReportResult = reportResult.result;
     } else if (taskStatus === 'in_review') {
       reportAction = 'skipped';
     } else {
@@ -713,6 +746,19 @@ export async function finishTaskService(
     criteria_proof_action: criteriaProofAction,
     generated_artifact_authority_note: GENERATED_ARTIFACT_AUTHORITY_NOTE,
   };
+  if (submittedReportResult) {
+    output.report_status = submittedReportResult.report_status;
+    output.ready_for_review = submittedReportResult.ready_for_review;
+    output.new_status = submittedReportResult.new_status;
+    output.assignment_id = submittedReportResult.assignment_id;
+    output.obligation_id = submittedReportResult.obligation_id;
+    if (submittedReportResult.evidence_posture) {
+      output.evidence_posture = submittedReportResult.evidence_posture;
+    }
+    if (submittedReportResult.evidence_blockers) {
+      output.evidence_blockers = submittedReportResult.evidence_blockers;
+    }
+  }
 
   if (reviewReusePosture) {
     output.review_reuse_posture = reviewReusePosture;

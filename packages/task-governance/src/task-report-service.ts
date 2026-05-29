@@ -4,19 +4,15 @@ import {
   createReportId,
   findReportByAssignmentId,
   findTaskFile,
-  getActiveAssignment,
   getActiveContinuation,
-  getAssignmentIntent,
   loadAssignment,
   loadRoster,
   readTaskFile,
   saveAssignment,
-  saveReport,
   updateAgentRosterEntry,
   writeTaskProjection,
   isValidTransition,
   type WorkResultReport,
-  type AssignmentIntent,
 } from './task-governance.js';
 import { openTaskLifecycleStore, type TaskLifecycleStore } from './task-lifecycle-store.js';
 import { ExitCode } from './exit-codes.js';
@@ -58,7 +54,10 @@ export interface ReportTaskServiceResult {
   note?: string;
   task_number?: number;
   assignment_id?: string;
-  obligation_id?: string;
+  obligation_id?: string | null;
+  report_status?: WorkResultReport['report_status'];
+  ready_for_review?: boolean;
+  evidence_posture?: 'reported_with_incomplete_task_evidence';
   review_target?: {
     requested: string;
     target_agent_id: string | null;
@@ -115,6 +114,53 @@ function findTaskEvidenceBlockers(markdown: string): string[] {
   }
 
   return blockers;
+}
+
+function loadSqlActiveAssignment(cwd: string, taskId: string, providedStore?: TaskLifecycleStore) {
+  if (providedStore) {
+    return providedStore.getActiveAssignment(taskId) ?? null;
+  }
+  const store = openTaskLifecycleStore(cwd);
+  try {
+    return store.getActiveAssignment(taskId) ?? null;
+  } finally {
+    store.db.close();
+  }
+}
+
+function loadSqlTaskStatus(cwd: string, taskId: string, taskNumber: string, providedStore?: TaskLifecycleStore): string | undefined {
+  if (providedStore) {
+    return providedStore.getLifecycle(taskId)?.status
+      ?? providedStore.getLifecycleByNumber(Number(taskNumber))?.status;
+  }
+  const store = openTaskLifecycleStore(cwd);
+  try {
+    return store.getLifecycle(taskId)?.status
+      ?? store.getLifecycleByNumber(Number(taskNumber))?.status;
+  } finally {
+    store.db.close();
+  }
+}
+
+function persistReportInStore(store: TaskLifecycleStore, report: WorkResultReport): void {
+  store.upsertReportRecord({
+    report_id: report.report_id,
+    task_id: report.task_id,
+    assignment_id: report.assignment_id,
+    agent_id: report.agent_id,
+    reported_at: report.reported_at,
+    report_json: JSON.stringify(report),
+  });
+  store.insertReport({
+    report_id: report.report_id,
+    task_id: report.task_id,
+    agent_id: report.agent_id,
+    summary: report.summary,
+    changed_files_json: JSON.stringify(report.changed_files),
+    verification_json: JSON.stringify(report.verification),
+    directive_id: report.directive_id ?? null,
+    submitted_at: report.reported_at,
+  });
 }
 
 function parseChangedFiles(value: string | undefined): ReportTaskServiceResponse | null | { ok: true; value: string[] } {
@@ -452,16 +498,6 @@ export async function reportTaskService(
       result: { status: 'error', error: `Agent not found in roster: ${agentId}` },
     };
   }
-  const reviewTargetResult = resolveMandatoryReviewTarget({
-    roster,
-    requested: options.reviewer,
-    reporterAgentId: agentId,
-    cwd,
-    taskNumber,
-  });
-  if (!('ok' in reviewTargetResult)) return reviewTargetResult;
-  const reviewTarget = reviewTargetResult.value;
-
   let taskFile;
   try {
     taskFile = await findTaskFile(cwd, taskNumber);
@@ -483,43 +519,34 @@ export async function reportTaskService(
   const { frontMatter, body: baseBody } = await readTaskFile(taskFile.path);
   let body = baseBody;
 
-  if (frontMatter.status !== 'claimed') {
+  const taskStatus = loadSqlTaskStatus(cwd, taskFile.taskId, taskNumber, options.store);
+  if (taskStatus !== 'claimed') {
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: {
         status: 'error',
-        error: `Task ${taskFile.taskId} cannot be reported (status: ${frontMatter.status ?? 'missing'}, expected: claimed)`,
+        error: `Task ${taskFile.taskId} cannot be reported (status: ${taskStatus ?? 'missing'}, expected: claimed)`,
       },
     };
   }
 
-  const assignmentRecord = await loadAssignment(cwd, taskFile.taskId);
-  if (!assignmentRecord) {
-    return {
-      exitCode: ExitCode.GENERAL_ERROR,
-      result: {
-        status: 'error',
-        error: `Task ${taskFile.taskId} has no assignment record`,
-      },
-    };
-  }
-
-  const activeAssignment = getActiveAssignment(assignmentRecord);
-  const activeContinuation = getActiveContinuation(assignmentRecord, agentId);
-
+  const activeAssignment = loadSqlActiveAssignment(cwd, taskFile.taskId, options.store);
   if (!activeAssignment) {
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: {
         status: 'error',
-        error: `Task ${taskFile.taskId} has no active assignment`,
+        error: `Task ${taskFile.taskId} has no active SQL assignment`,
       },
     };
   }
 
+  const assignmentRecord = await loadAssignment(cwd, taskFile.taskId);
+  const activeContinuation = assignmentRecord ? getActiveContinuation(assignmentRecord, agentId) : null;
+
   const isPrimary = activeAssignment.agent_id === agentId;
   const isContinuation = activeContinuation != null;
-  const activeIntent = getAssignmentIntent(activeAssignment);
+  const activeIntent = activeAssignment.intent ?? 'primary';
 
   if (activeIntent === 'review' && isPrimary) {
     return {
@@ -543,7 +570,7 @@ export async function reportTaskService(
 
   const assignmentId = isContinuation
     ? `${taskFile.taskId}-continuation-${activeContinuation!.started_at}`
-    : `${taskFile.taskId}-${activeAssignment.claimed_at}`;
+    : activeAssignment.assignment_id;
 
   const existingReport = await findReportByAssignmentId(cwd, assignmentId);
   if (existingReport) {
@@ -554,18 +581,8 @@ export async function reportTaskService(
         report_id: existingReport.report_id,
         task_id: taskFile.taskId,
         agent_id: agentId,
-        new_status: frontMatter.status,
+        new_status: taskStatus,
         note: 'Report already exists for this assignment; returning existing report without duplicate.',
-      },
-    };
-  }
-
-  if (!isValidTransition(frontMatter.status as string, 'in_review')) {
-    return {
-      exitCode: ExitCode.GENERAL_ERROR,
-      result: {
-        status: 'error',
-        error: `Transition from '${String(frontMatter.status)}' to 'in_review' is not allowed by the state machine`,
       },
     };
   }
@@ -595,38 +612,51 @@ export async function reportTaskService(
     : [];
 
   const evidenceBlockers = findTaskEvidenceBlockers(body);
-  if (evidenceBlockers.length > 0) {
+  const hasEvidenceBlockers = evidenceBlockers.length > 0;
+  const nextStatus = hasEvidenceBlockers ? 'needs_continuation' : 'in_review';
+  if (!isValidTransition(taskStatus, nextStatus)) {
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: {
         status: 'error',
-        error: `Task ${taskFile.taskId} evidence is incomplete; refusing to create report or review obligation.`,
-        evidence_blockers: evidenceBlockers,
+        error: `Transition from '${String(taskStatus)}' to '${nextStatus}' is not allowed by the state machine`,
       },
     };
   }
+  let reviewTarget: ResolvedReviewTarget | null = null;
+  if (!hasEvidenceBlockers) {
+    const reviewTargetResult = resolveMandatoryReviewTarget({
+      roster,
+      requested: options.reviewer,
+      reporterAgentId: agentId,
+      cwd,
+      taskNumber,
+    });
+    if (!('ok' in reviewTargetResult)) return reviewTargetResult;
+    reviewTarget = reviewTargetResult.value;
+  }
 
   const now = new Date().toISOString();
-  const reportId = createReportId(taskFile.taskId, agentId, assignmentId);
-  const obligationSuffix = safeIdPart(reviewTargetIdPart(reviewTarget));
-  const obligationId = `obl_review_${safeIdPart(taskFile.taskId)}_${safeIdPart(reportId)}_${obligationSuffix}`;
+  const reportAssignmentId = hasEvidenceBlockers ? `${assignmentId}:blocked` : assignmentId;
+  const reportId = createReportId(taskFile.taskId, agentId, reportAssignmentId);
+  const obligationId = reviewTarget
+    ? `obl_review_${safeIdPart(taskFile.taskId)}_${safeIdPart(reportId)}_${safeIdPart(reviewTargetIdPart(reviewTarget))}`
+    : null;
   const report: WorkResultReport = {
     report_id: reportId,
     task_number: taskNumber,
     task_id: taskFile.taskId,
     agent_id: agentId,
-    assignment_id: assignmentId,
+    assignment_id: reportAssignmentId,
     directive_id: options.directiveId ?? null,
     reported_at: now,
     summary,
     changed_files: changedFiles,
     verification,
     known_residuals: knownResiduals,
-    ready_for_review: true,
-    report_status: 'submitted',
+    ready_for_review: !hasEvidenceBlockers,
+    report_status: hasEvidenceBlockers ? 'blocked' : 'submitted',
   };
-
-  await saveReport(cwd, report);
 
   const missingSections: string[] = [];
   if (!/##\s*Execution Notes\s*\n/i.test(body)) {
@@ -641,16 +671,39 @@ export async function reportTaskService(
 
   if (isContinuation) {
     activeContinuation!.completed_at = now;
-    await saveAssignment(cwd, assignmentRecord);
     if (missingSections.length > 0) {
       await writeTaskProjection(taskFile.path, frontMatter, body);
     }
+    const store = options.store ?? openTaskLifecycleStore(cwd);
+    const closeOwnStore = () => {
+      if (!options.store) {
+        store.db.close();
+      }
+    };
+    try {
+      const persist = store.db.transaction(() => {
+        persistReportInStore(store, report);
+      });
+      persist();
+      closeOwnStore();
+    } catch (error) {
+      closeOwnStore();
+      const msg = error instanceof Error ? error.message : String(error);
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: {
+          status: 'error',
+          error: `Failed to update task lifecycle store: ${msg}`,
+          report_id: reportId,
+          task_id: taskFile.taskId,
+          agent_id: agentId,
+          report_status: report.report_status,
+        },
+      };
+    }
+    if (assignmentRecord) await saveAssignment(cwd, assignmentRecord);
   } else {
-    activeAssignment.released_at = now;
-    activeAssignment.release_reason = 'completed';
-    await saveAssignment(cwd, assignmentRecord);
-
-    const nextFrontMatter = { ...frontMatter, status: 'in_review' } as typeof frontMatter;
+    const nextFrontMatter = { ...frontMatter, status: nextStatus } as typeof frontMatter;
     await writeTaskProjection(taskFile.path, nextFrontMatter, body);
 
     const store = options.store ?? openTaskLifecycleStore(cwd);
@@ -661,41 +714,59 @@ export async function reportTaskService(
     };
 
     try {
-      store.updateStatus(taskFile.taskId, 'in_review', agentId);
-
-      store.upsertDirectedObligation({
-        obligation_id: obligationId,
-        source_kind: 'task_report',
-        source_ref: reportId,
-        source_agent_id: agentId,
-        target_agent_id: reviewTarget.target_agent_id,
-        target_role: reviewTarget.target_role,
-        target_ref: reviewTarget.requested,
-        kind: 'review_request',
-        status: 'open',
-        task_id: taskFile.taskId,
-        task_number: Number(taskNumber),
-        evidence_json: JSON.stringify({
-          report_id: reportId,
-          assignment_id: assignmentId,
-          task_number: Number(taskNumber),
-          requested_target: reviewTarget.requested,
-          target_resolution: reviewTarget.resolution,
-        }),
-        consumption_rule_json: JSON.stringify({
-          consume_on: ['task_review', 'task_defer', 'delegation', 'rejection', 'completion'],
-          review_command: `narada task review ${taskNumber} --agent ${reviewCommandAgentPlaceholder(reviewTarget)} --verdict accepted --report ${reportId}`,
-        }),
-        created_at: now,
-        updated_at: now,
-        consumed_at: null,
-        consumed_by: null,
-        consumption_ref: null,
+      const persist = store.db.transaction(() => {
+        persistReportInStore(store, report);
+        store.releaseAssignment(activeAssignment.assignment_id, hasEvidenceBlockers ? 'blocked' : 'completed');
+        store.updateStatus(taskFile.taskId, nextStatus, agentId);
+        if (reviewTarget && obligationId) {
+          store.upsertDirectedObligation({
+            obligation_id: obligationId,
+            source_kind: 'task_report',
+            source_ref: reportId,
+            source_agent_id: agentId,
+            target_agent_id: reviewTarget.target_agent_id,
+            target_role: reviewTarget.target_role,
+            target_ref: reviewTarget.requested,
+            kind: 'review_request',
+            status: 'open',
+            task_id: taskFile.taskId,
+            task_number: Number(taskNumber),
+            evidence_json: JSON.stringify({
+              report_id: reportId,
+              assignment_id: reportAssignmentId,
+              task_number: Number(taskNumber),
+              requested_target: reviewTarget.requested,
+              target_resolution: reviewTarget.resolution,
+            }),
+            consumption_rule_json: JSON.stringify({
+              consume_on: ['task_review', 'task_defer', 'delegation', 'rejection', 'completion'],
+              review_command: `narada task review ${taskNumber} --agent ${reviewCommandAgentPlaceholder(reviewTarget)} --verdict accepted --report ${reportId}`,
+            }),
+            created_at: now,
+            updated_at: now,
+            consumed_at: null,
+            consumed_by: null,
+            consumption_ref: null,
+          });
+        }
       });
+      persist();
 
       closeOwnStore();
-    } catch {
+    } catch (error) {
       closeOwnStore();
+      const msg = error instanceof Error ? error.message : String(error);
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: {
+          status: 'error',
+          error: `Failed to update task lifecycle store: ${msg}`,
+          report_id: reportId,
+          task_id: taskFile.taskId,
+          agent_id: agentId,
+          report_status: report.report_status,
+        },
+      };
     }
   }
 
@@ -712,8 +783,10 @@ export async function reportTaskService(
       report_id: reportId,
       task_id: taskFile.taskId,
       agent_id: agentId,
-      new_status: 'in_review',
-      assignment_id: assignmentId,
+      new_status: hasEvidenceBlockers ? 'needs_continuation' : 'in_review',
+      assignment_id: reportAssignmentId,
+      report_status: report.report_status,
+      ready_for_review: report.ready_for_review,
       obligation_id: obligationId,
       review_target: reviewTarget
         ? {
@@ -724,6 +797,10 @@ export async function reportTaskService(
             review_authority: reviewTarget.review_authority,
           }
         : undefined,
+      ...(hasEvidenceBlockers ? {
+        evidence_blockers: evidenceBlockers,
+        evidence_posture: 'reported_with_incomplete_task_evidence' as const,
+      } : {}),
     },
   };
 }

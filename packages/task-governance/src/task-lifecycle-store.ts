@@ -76,6 +76,12 @@ export interface TaskAssignmentRow {
   intent: AssignmentIntent;
 }
 
+export interface TaskAssignmentRecordRow {
+  task_id: string;
+  record_json: string;
+  updated_at: string;
+}
+
 export interface TaskReportRow {
   report_id: string;
   task_id: string;
@@ -129,12 +135,6 @@ export interface TaskReviewRow {
 
 export interface NewTaskReviewRow extends Omit<TaskReviewRow, "verdict"> {
   verdict: CanonicalReviewVerdict;
-}
-
-export interface AssignmentRecordRow {
-  task_id: string;
-  record_json: string;
-  updated_at: string;
 }
 
 export type AssignmentIntentKind = "claim" | "roster_assign" | "continue";
@@ -334,9 +334,8 @@ export interface TaskLifecycleStore {
   insertAssignment(assignment: TaskAssignmentRow): void;
   getActiveAssignment(taskId: string): TaskAssignmentRow | undefined;
   getAssignments(taskId: string): TaskAssignmentRow[];
+  getAssignmentRecord(taskId: string): TaskAssignmentRecordRow | undefined;
   releaseAssignment(assignmentId: string, releaseReason: string): void;
-  upsertAssignmentRecord(record: AssignmentRecordRow): void;
-  getAssignmentRecord(taskId: string): AssignmentRecordRow | undefined;
   upsertAssignmentIntent(intent: AssignmentIntentRow): void;
   getAssignmentIntent(requestId: string): AssignmentIntentRow | undefined;
   listAssignmentIntentsForTask(taskId: string): AssignmentIntentRow[];
@@ -472,14 +471,6 @@ function rowToReview(row: Record<string, unknown>): TaskReviewRow {
     verdict: String(row.verdict) as ReviewVerdict,
     findings_json: row.findings_json ? String(row.findings_json) : null,
     reviewed_at: String(row.reviewed_at),
-  };
-}
-
-function rowToAssignmentRecord(row: Record<string, unknown>): AssignmentRecordRow {
-  return {
-    task_id: String(row.task_id),
-    record_json: String(row.record_json),
-    updated_at: String(row.updated_at),
   };
 }
 
@@ -815,7 +806,6 @@ const initializedLifecycleDbPaths = new Set<string>();
 const REQUIRED_LIFECYCLE_TABLES = [
   'task_lifecycle',
   'task_assignments',
-  'task_assignment_records',
   'assignment_intents',
   'evidence_bundles',
   'evidence_admission_results',
@@ -925,13 +915,6 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
 
       create index if not exists idx_task_assignments_task_id
         on task_assignments(task_id);
-
-      create table if not exists task_assignment_records (
-        task_id text primary key,
-        record_json text not null,
-        updated_at text not null,
-        foreign key (task_id) references task_lifecycle(task_id)
-      );
 
       create table if not exists assignment_intents (
         request_id text primary key,
@@ -1486,30 +1469,28 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
     if (rows.length > 0) {
       return rows.map(rowToAssignment);
     }
-    const record = this.getAssignmentRecord(taskId);
-    if (!record) return [];
-    try {
-      const parsed = JSON.parse(record.record_json) as {
-        assignments?: Array<{
-          agent_id: string;
-          claimed_at: string;
-          released_at: string | null;
-          release_reason: string | null;
-          intent?: AssignmentIntent;
-        }>;
-      };
-      return (parsed.assignments ?? []).map((a) => ({
-        assignment_id: `${taskId}-${a.claimed_at}`,
+    return [];
+  }
+
+  getAssignmentRecord(taskId: string): TaskAssignmentRecordRow | undefined {
+    const assignments = this.getAssignments(taskId);
+    if (assignments.length === 0) return undefined;
+    return {
+      task_id: taskId,
+      record_json: JSON.stringify({
         task_id: taskId,
-        agent_id: a.agent_id,
-        claimed_at: a.claimed_at,
-        released_at: a.released_at ?? null,
-        release_reason: a.release_reason ?? null,
-        intent: a.intent ?? "primary",
-      }));
-    } catch {
-      return [];
-    }
+        assignments: assignments.map((assignment) => ({
+          agent_id: assignment.agent_id,
+          claimed_at: assignment.claimed_at,
+          claim_context: null,
+          released_at: assignment.released_at,
+          release_reason: assignment.release_reason,
+          intent: assignment.intent,
+        })),
+        continuations: [],
+      }),
+      updated_at: assignments[0]?.claimed_at ?? nowIso(),
+    };
   }
 
   releaseAssignment(assignmentId: string, releaseReason: string): void {
@@ -1522,25 +1503,6 @@ export class SqliteTaskLifecycleStore implements TaskLifecycleStore {
     if (result.changes === 0) {
       throw new Error(`Assignment ${assignmentId} not found`);
     }
-  }
-
-  upsertAssignmentRecord(record: AssignmentRecordRow): void {
-    const stmt = this.db.prepare(`
-      insert into task_assignment_records (
-        task_id, record_json, updated_at
-      ) values (?, ?, ?)
-      on conflict(task_id) do update set
-        record_json = excluded.record_json,
-        updated_at = excluded.updated_at
-    `);
-    stmt.run(record.task_id, record.record_json, record.updated_at);
-  }
-
-  getAssignmentRecord(taskId: string): AssignmentRecordRow | undefined {
-    const row = this.db
-      .prepare("select * from task_assignment_records where task_id = ?")
-      .get(taskId) as Record<string, unknown> | undefined;
-    return row ? rowToAssignmentRecord(row) : undefined;
   }
 
   upsertAssignmentIntent(intent: AssignmentIntentRow): void {

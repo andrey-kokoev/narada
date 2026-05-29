@@ -8,9 +8,6 @@ import {
   hasDerivativeFiles,
   loadRoster,
   updateAgentRosterEntry,
-  loadAssignment,
-  getActiveAssignment,
-  saveAssignment,
 } from './task-governance.js';
 import { ExitCode } from './exit-codes.js';
 import { analyzePrototypeClosure } from './prototype-closure.js';
@@ -242,15 +239,15 @@ export async function closeTaskService(
 
   let assignmentReleased = false;
   try {
-    const assignmentRecord = await loadAssignment(cwd, taskFile.taskId);
-    if (assignmentRecord) {
-      const active = getActiveAssignment(assignmentRecord);
+    const assignmentStore = options.store ?? openTaskLifecycleStore(cwd);
+    try {
+      const active = assignmentStore.getActiveAssignment(taskFile.taskId);
       if (active) {
-        active.released_at = now;
-        active.release_reason = 'completed';
-        await saveAssignment(cwd, assignmentRecord);
+        assignmentStore.releaseAssignment(active.assignment_id, 'completed');
         assignmentReleased = true;
       }
+    } finally {
+      if (!options.store) assignmentStore.db.close();
     }
   } catch {
     // Best-effort: lifecycle closure remains authoritative.

@@ -273,7 +273,7 @@ export async function admitAssignmentIntent(
     if (!active) {
       shouldBackfillAssignment = true;
       assignmentId = generateAssignmentId(taskFile.taskId, request.agentId);
-      warnings.push(`Task ${taskFile.taskId} is already claimed but has no active assignment; assignment record backfilled`);
+      warnings.push(`Task ${taskFile.taskId} is already claimed but has no active SQL assignment; SQL assignment backfilled`);
     } else {
       warnings.push(`Task ${taskFile.taskId} is already claimed; roster updated without re-claiming`);
     }

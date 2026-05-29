@@ -3,19 +3,13 @@ import { resolve } from 'node:path';
 import {
   findTaskFile,
   extractTaskNumberFromFileName,
-  getActiveAssignment,
   continuationReasonToIntent,
   isValidTransition,
   loadRoster,
-  loadAssignment,
   readTaskFile,
-  saveAssignment,
   updateAgentRosterEntry,
   writeTaskFile,
   type ContinuationPacket,
-  type TaskAssignment,
-  type TaskAssignmentRecord,
-  type TaskContinuation,
 } from './task-governance.js';
 import { openTaskLifecycleStore, type TaskStatus } from './task-lifecycle-store.js';
 import {
@@ -151,16 +145,6 @@ export async function claimTaskService(
 
   const { taskFile, frontMatter, body } = admission;
   const now = new Date().toISOString();
-  const existing = await loadAssignment(cwd, taskFile.taskId);
-  const record: TaskAssignmentRecord = existing ?? { task_id: taskFile.taskId, assignments: [] };
-  record.assignments.push({
-    agent_id: agentId,
-    claimed_at: now,
-    claim_context: reason ?? null,
-    released_at: null,
-    release_reason: null,
-    intent: 'primary',
-  });
 
   try {
     const store = openTaskLifecycleStore(cwd);
@@ -170,8 +154,6 @@ export async function claimTaskService(
     } finally {
       store.db.close();
     }
-
-    await saveAssignment(cwd, record);
 
     frontMatter.status = 'claimed';
     await writeTaskFile(taskFile.path, frontMatter, body);
@@ -206,7 +188,7 @@ export async function claimTaskService(
         task_number: parsedTaskNumber,
         lifecycle_status: 'claimed',
         roster_status: 'working',
-        assignment_record_agent_id: agentId,
+        assignment_agent_id: agentId,
       },
     });
   } catch (error) {
@@ -295,8 +277,13 @@ export async function continueTaskService(
 
   const { taskFile, frontMatter, body } = admission;
   const currentStatus = admission.currentStatus;
-  const existing = await loadAssignment(cwd, taskFile.taskId);
-  const active = existing?.assignments.find((a) => a.released_at === null && a.agent_id === admission.previousAgentId);
+  const assignmentStoreForAdmission = openTaskLifecycleStore(cwd);
+  let active: ReturnType<typeof assignmentStoreForAdmission.getActiveAssignment> | undefined;
+  try {
+    active = assignmentStoreForAdmission.getActiveAssignment(taskFile.taskId);
+  } finally {
+    assignmentStoreForAdmission.db.close();
+  }
   const canStartWithoutActive =
     currentStatus === 'needs_continuation' ||
     (currentStatus === 'in_review' && reason === 'evidence_repair');
@@ -313,59 +300,10 @@ export async function continueTaskService(
   }
 
   const now = new Date().toISOString();
-  const record: TaskAssignmentRecord = existing ?? {
-    task_id: taskFile.taskId,
-    assignments: [],
-    continuations: [],
-  };
-
-  if (!record.continuations) {
-    record.continuations = [];
-  }
-
   const supersedes = admission.supersedes;
   let previousRosterReconciled = false;
 
   try {
-    if (supersedes) {
-      if (active) {
-        active.released_at = now;
-        active.release_reason = 'continued';
-      }
-
-      const newAssignment: TaskAssignment = {
-        agent_id: agentId,
-        claimed_at: now,
-        claim_context: null,
-        released_at: null,
-        release_reason: null,
-        continuation_reason: reason,
-        previous_agent_id: active?.agent_id ?? null,
-        intent: continuationReasonToIntent(reason),
-      };
-      record.assignments.push(newAssignment);
-    } else if (!active) {
-      const newAssignment: TaskAssignment = {
-        agent_id: agentId,
-        claimed_at: now,
-        claim_context: null,
-        released_at: null,
-        release_reason: null,
-        continuation_reason: reason,
-        previous_agent_id: null,
-        intent: continuationReasonToIntent(reason),
-      };
-      record.assignments.push(newAssignment);
-    } else {
-      const continuation: TaskContinuation = {
-        agent_id: agentId,
-        started_at: now,
-        reason,
-        previous_agent_id: active.agent_id,
-      };
-      record.continuations.push(continuation);
-    }
-
     if (currentStatus === 'needs_continuation' || (currentStatus === 'in_review' && reason === 'evidence_repair')) {
       frontMatter.status = 'claimed';
       await writeTaskFile(taskFile.path, frontMatter, body);
@@ -380,26 +318,23 @@ export async function continueTaskService(
     } finally {
       store.db.close();
     }
-
-    await saveAssignment(cwd, record);
-
     const assignmentStore = openTaskLifecycleStore(cwd);
     try {
-      if (supersedes || !active) {
+      if (supersedes) {
         const activeRow = assignmentStore.getActiveAssignment(taskFile.taskId);
         if (activeRow) {
           assignmentStore.releaseAssignment(activeRow.assignment_id, 'continued');
         }
-        assignmentStore.insertAssignment({
-          assignment_id: admission.intent.assignment_id ?? `assign-${taskFile.taskId}-${agentId}-${Date.now()}`,
-          task_id: taskFile.taskId,
-          agent_id: agentId,
-          claimed_at: now,
-          released_at: null,
-          release_reason: null,
-          intent: continuationReasonToIntent(reason),
-        });
       }
+      assignmentStore.insertAssignment({
+        assignment_id: admission.intent.assignment_id ?? `assign-${taskFile.taskId}-${agentId}-${Date.now()}`,
+        task_id: taskFile.taskId,
+        agent_id: agentId,
+        claimed_at: now,
+        released_at: null,
+        release_reason: null,
+        intent: continuationReasonToIntent(reason),
+      });
     } finally {
       assignmentStore.db.close();
     }
@@ -513,19 +448,13 @@ export async function releaseTaskService(
     };
   }
 
-  const record = await loadAssignment(cwd, taskFile.taskId);
-  if (!record) {
-    return {
-      exitCode: ExitCode.GENERAL_ERROR,
-      result: { status: 'error', error: `Task ${taskFile.taskId} has no assignment record` },
-    };
-  }
-
-  const active = getActiveAssignment(record);
+  const assignmentStore = openTaskLifecycleStore(cwd);
+  const active = assignmentStore.getActiveAssignment(taskFile.taskId);
+  assignmentStore.db.close();
   if (!active) {
     return {
       exitCode: ExitCode.GENERAL_ERROR,
-      result: { status: 'error', error: `Task ${taskFile.taskId} has no active assignment` },
+      result: { status: 'error', error: `Task ${taskFile.taskId} has no active SQL assignment` },
     };
   }
 
@@ -575,11 +504,6 @@ export async function releaseTaskService(
   }
 
   const now = new Date().toISOString();
-  active.released_at = now;
-  active.release_reason = releaseReason;
-
-  await saveAssignment(cwd, record);
-
   frontMatter.status = newStatus;
   if (continuationPacket) {
     frontMatter.continuation_packet = continuationPacket;
