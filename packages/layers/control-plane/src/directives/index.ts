@@ -55,6 +55,7 @@ export type DirectiveDeliveryStatus =
 
 export type DirectiveTriageStatus =
   | "untriaged"
+  | "carrier_accepted"
   | "accepted"
   | "refused"
   | "ignored_stale"

@@ -427,6 +427,10 @@ function createInputQueue({ drain, shouldDefer = () => false, onDeferred = null 
         agentId: IDENTITY,
         carrierSessionId: SESSION,
       })));
+      appendSession(SESSION_PATH, sessionEventEntry('directive_carrier_accepted_recorded', directiveAcceptedEvidence(event, {
+        agentId: IDENTITY,
+        carrierSessionId: SESSION,
+      })));
     }
     try {
       const result = await drain(event);
@@ -810,6 +814,7 @@ async function discoverAndStartMcpServers(siteRoot) {
       proc.stderr.setEncoding('utf-8');
       proc.stderr.on('data', (d) => {
         const msg = d.toString().trim();
+        if (shouldSuppressMcpStderr(msg)) return;
         if (msg) process.stderr.write(`[${serverName}] ${msg}\n`);
       });
 
@@ -871,6 +876,14 @@ async function discoverAndStartMcpServers(siteRoot) {
   }
 
   return servers;
+}
+
+function shouldSuppressMcpStderr(message) {
+  if (!message) return true;
+  return (
+    message.includes('ExperimentalWarning: SQLite is an experimental feature') ||
+    message.includes('Use `node --trace-warnings ...` to show where the warning was created')
+  );
 }
 
 function aggregateTools(mcpServers) {
@@ -1020,6 +1033,25 @@ function directiveReceiptEvidence(event, { agentId, carrierSessionId, receivedAt
   return {
     ...evidence,
     receipt_id: `dirrcpt_${hashStable(evidence).slice(0, 32)}`,
+  };
+}
+
+function directiveAcceptedEvidence(event, { agentId, carrierSessionId, acceptedAt = new Date().toISOString() }) {
+  const evidence = {
+    schema: 'narada.directive.carrier_acceptance_evidence.v1',
+    directive_id: event.directive_id,
+    input_event_id: event.event_id,
+    accepted_at: acceptedAt,
+    agent_id: agentId,
+    carrier_session_id: carrierSessionId,
+    transport: event.transport,
+    authority_ref: event.authority_ref,
+    source: event.source,
+    acceptance_semantics: 'carrier_started_directive_turn',
+  };
+  return {
+    ...evidence,
+    acceptance_id: `diraccept_${hashStable(evidence).slice(0, 32)}`,
   };
 }
 
@@ -1325,6 +1357,14 @@ async function runServerConversationTurn({ requestId, state, messages, allTools,
       request_id: requestId,
       turn_id: turnId,
       ...directiveReceiptEvidence(input, {
+        agentId: IDENTITY,
+        carrierSessionId: SESSION,
+      }),
+    });
+    emit('directive_carrier_accepted_recorded', {
+      request_id: requestId,
+      turn_id: turnId,
+      ...directiveAcceptedEvidence(input, {
         agentId: IDENTITY,
         carrierSessionId: SESSION,
       }),
@@ -2455,11 +2495,13 @@ function formatKeyValueRows(record) {
 }
 
 function formatDuration(ms) {
-  const seconds = Math.max(0, Math.round(ms / 100) / 10);
-  if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)}s`;
-  const minutes = Math.floor(seconds / 60);
-  const remainder = Math.round(seconds % 60);
-  return `${minutes}m ${remainder}s`;
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+  return `${minutes}m ${seconds}s`;
 }
 
 function formatProgressStatus({ spinner, phase, totalMs, phaseMs }) {
@@ -2626,6 +2668,7 @@ export {
   parseBooleanEnv,
   parseColorEnv,
   removeInvalidToolHistory,
+  shouldSuppressMcpStderr,
   parseAnthropicMessagesResponse,
   parseCodexExecJsonLine,
   parseCodexMcpResponse,
@@ -2654,6 +2697,7 @@ export {
   runServerMode,
   resolveProviderAdapter,
   resolveProviderSupportState,
+  directiveAcceptedEvidence,
   directiveReceiptEvidence,
   sessionEventEntry,
   sessionLogEntry,

@@ -52,6 +52,7 @@ import {
   sessionEventEntry,
   sessionLogEntry,
   shouldDeferInteractiveInput,
+  shouldSuppressMcpStderr,
   startInteractiveControlJsonlWatcher,
   toolDirectionLabel,
   wrapTerminalLine,
@@ -195,11 +196,13 @@ assert.equal(createTerminalStyle({ enabled: false }).prompt('narada> '), 'narada
 assert.equal(createTerminalStyle({ enabled: true }).prompt('narada> ').includes('\x1b['), true);
 assert.equal(formatToolResultContent('{"status":"success","schema":"narada.test.v1","directive_count":2,"extra":true}'), 'success · narada.test.v1 · directives=2\nkeys:\n  status\n  schema\n  directive_count\n  extra');
 assert.equal(formatKeyValueRows({ A: 1, Longer: 'two' }), 'A       1\nLonger  two');
-assert.equal(formatDuration(1250), '1.3s');
+assert.equal(formatDuration(1250), '1s');
 assert.equal(formatDuration(65000), '1m 5s');
+assert.equal(formatDuration(3661000), '1h 1m 1s');
 assert.equal(formatTimestamp(new Date('2026-05-28T16:37:21Z')), '2026-05-28Z16:37');
-assert.equal(formatProgressStatus({ spinner: '-', phase: 'thinking', totalMs: 6000, phaseMs: 6000 }), '- thinking 6.0s · Esc to interrupt');
-assert.equal(formatProgressStatus({ spinner: '/', phase: 'calling read_file', totalMs: 7000, phaseMs: 1200 }), '/ calling read_file 1.2s · total 7.0s · Esc to interrupt');
+assert.equal(formatProgressStatus({ spinner: '-', phase: 'thinking', totalMs: 6000, phaseMs: 6000 }), '- thinking 6s · Esc to interrupt');
+assert.equal(formatProgressStatus({ spinner: '/', phase: 'calling read_file', totalMs: 7000, phaseMs: 1200 }), '/ calling read_file 1s · total 7s · Esc to interrupt');
+assert.equal(formatProgressStatus({ spinner: '/', phase: 'calling read_file', totalMs: 65000, phaseMs: 61000 }), '/ calling read_file 1m 1s · total 1m 5s · Esc to interrupt');
 assert.equal(formatHeaderRow('Identity', 'narada.architect', {}).includes('Identity'), true);
 assert.equal(formatHeaderRow('Stream', 'on', {}).includes('on'), true);
 assert.equal(formatHeaderRow('Identity', 'narada.architect', {}).includes('\x1b[90m[agent-cli]\x1b[0m \x1b[33mIdentity'), true);
@@ -216,6 +219,9 @@ assert.equal(renderMarkdownForTerminal('  ```powershell\n    narada\n  ```').inc
 assert.equal(renderMarkdownForTerminal('  ```powershell\n    narada\n  ```').includes('narada'), true);
 assert.equal(stripAnsiForTest(toolDirectionLabel('invoke')), 'narada.architect -> agent-cli');
 assert.equal(stripAnsiForTest(toolDirectionLabel('result')), 'agent-cli -> narada.architect');
+assert.equal(shouldSuppressMcpStderr('(node:1) ExperimentalWarning: SQLite is an experimental feature and might change at any time'), true);
+assert.equal(shouldSuppressMcpStderr('(Use `node --trace-warnings ...` to show where the warning was created)'), true);
+assert.equal(shouldSuppressMcpStderr('real MCP server error'), false);
 const fixedTimestamp = new Date('2026-05-28T16:37:21Z');
 assert.equal(stripAnsiForTest(rewriteSubmittedPromptForTest('operator -> narada.architect', 'short', 120, fixedTimestamp)).replace(/\r/g, ''), 'operator -> narada.architect: short\n  2026-05-28Z16:37\n');
 assert.equal(
@@ -797,6 +803,7 @@ try {
   const directiveEvents = directiveStdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
   assert.equal(directiveEvents.some((event) => event.event === 'directive_received' && event.directive_id === 'dir_test'), true);
   assert.equal(directiveEvents.some((event) => event.event === 'directive_receipt_recorded' && event.directive_id === 'dir_test' && event.receipt_id?.startsWith('dirrcpt_')), true);
+  assert.equal(directiveEvents.some((event) => event.event === 'directive_carrier_accepted_recorded' && event.directive_id === 'dir_test' && event.acceptance_id?.startsWith('diraccept_')), true);
   assert.equal(directiveEvents.some((event) => event.event === 'turn_complete' && event.directive_id === 'dir_test'), true);
 } finally {
   if (previousSiteRoot === undefined) delete process.env.NARADA_SITE_ROOT;
