@@ -36,3 +36,51 @@ test('formats agent-start preamble with redacted API keys and startup sequence',
 test('formats wait prompt', () => {
   assert.equal(formatAgentStartWaitPrompt('site.builder', 'agent-cli'), 'Press Enter to start agent-cli for site.builder...');
 });
+
+test('handles sparse result without optional sections', () => {
+  const text = formatAgentStartResult({
+    identity: 'site.architect',
+    role: null,
+    runtime: 'codex',
+    required_environment: {},
+    startup_sequence: [],
+    exec: false,
+  }, { colorEnabled: false });
+
+  assert.match(text, /agent_start_event: <dry-run>/);
+  assert.match(text, /role: /);
+  assert.match(text, /runtime_substrate_kind: codex/);
+  assert.match(text, /required_environment:/);
+  assert.match(text, /startup_sequence:/);
+  assert.doesNotMatch(text, /capability_policy:/);
+  assert.doesNotMatch(text, /agent_start_result_end:/);
+});
+
+test('does not redact empty API key values', () => {
+  const text = formatAgentStartResult({
+    identity: 'site.builder',
+    role: 'builder',
+    runtime: 'agent-cli',
+    required_environment: {
+      NARADA_AI_API_KEY: '',
+    },
+    startup_sequence: [],
+  }, { colorEnabled: false });
+
+  assert.match(text, /NARADA_AI_API_KEY=/);
+  assert.doesNotMatch(text, /<set>/);
+});
+
+test('emits ANSI color only when enabled', () => {
+  const result = {
+    identity: 'site.builder',
+    role: 'builder',
+    runtime: 'agent-cli',
+    runtime_substrate_kind: 'agent-cli',
+    required_environment: {},
+    startup_sequence: [],
+  };
+
+  assert.doesNotMatch(formatAgentStartResult(result, { colorEnabled: false }), /\x1b\[/);
+  assert.match(formatAgentStartResult(result, { colorEnabled: true }), /\x1b\[/);
+});
