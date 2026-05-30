@@ -11,7 +11,7 @@ const defaultRootDir = join(__dirname, '..', '..');
 const require = createRequire(import.meta.url);
 const RESULT_SCHEMA = 'narada.agent_start.result.v0';
 const DEFAULT_PC_SITE_ROOT = process.env.NARADA_PC_SITE_ROOT ?? 'C:/ProgramData/Narada/sites/pc/desktop-sunroom-2';
-const ADMITTED_AGENTS = new Set(['narada.architect', 'narada.builder', 'narada.builder2']);
+const ADMITTED_AGENTS = new Set(['narada.architect', 'narada.builder', 'narada.builder2', 'narada.resident']);
 const ADMITTED_RUNTIMES = new Set(['codex', 'agent-cli', 'claude-code', 'narada-native', 'nars']);
 const NARADA_PROPER_MCP_SERVER_NAME = 'narada-proper';
 const NARADA_PROPER_APPROVED_MCP_SERVERS = [
@@ -84,6 +84,7 @@ function identityToken(identity) {
 function identityRole(identity) {
   if (identity === 'narada.architect') return 'architect';
   if (identity === 'narada.builder' || identity === 'narada.builder2') return 'builder';
+  if (identity === 'narada.resident') return 'resident';
   return 'unknown';
 }
 
