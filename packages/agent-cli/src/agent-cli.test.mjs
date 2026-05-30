@@ -458,10 +458,12 @@ assert.equal(codexExecArgs.includes('--json'), true);
 assert.equal(codexExecArgs.includes('--dangerously-bypass-approvals-and-sandbox'), true);
 assert.equal(codexExecArgs.includes('model_reasoning_effort="high"'), true);
 assert.equal(codexExecArgs.includes('-C'), true);
-assert.equal(codexExecArgs.at(-1).includes('Say ok.'), true);
+assert.equal(codexExecArgs.at(-1), '-');
+assert.equal(codexExecArgs.join(' ').includes('Say ok.'), false);
 const codexExecReplyArgs = buildCodexExecArgs(codexMcpReplyRequest, { model: 'gpt-5.5-mini', thinking: 'low', siteRoot: 'D:/code/narada' });
 assert.deepEqual(codexExecReplyArgs.slice(0, 3), ['exec', 'resume', '--json']);
 assert.equal(codexExecReplyArgs.includes('thread_123'), true);
+assert.equal(codexExecReplyArgs.at(-1), '-');
 assert.equal(codexExecReplyArgs.includes('-C'), false);
 const codexConfigToml = codexExecConfigToml({
   'narada-proper': {

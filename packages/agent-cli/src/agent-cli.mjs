@@ -2094,9 +2094,8 @@ function sendProviderRequest({ url, body, headers }, settings = {}) {
   });
 }
 
-function buildCodexExecArgs(request, { model = MODEL, thinking = THINKING_LEVEL, siteRoot = SITE_ROOT, mcpServers = {} } = {}) {
+function buildCodexExecArgs(request, { model = MODEL, thinking = THINKING_LEVEL, siteRoot = SITE_ROOT } = {}) {
   const effort = reasoningEffort(thinking);
-  const prompt = codexExecPrompt(request);
   const common = [
     '--json',
     '--dangerously-bypass-approvals-and-sandbox',
@@ -2105,12 +2104,11 @@ function buildCodexExecArgs(request, { model = MODEL, thinking = THINKING_LEVEL,
     '-c',
     'approval_policy="never"',
   ];
-  common.push(...codexExecMcpConfigArgs(mcpServers));
   if (effort) common.push('-c', `model_reasoning_effort="${effort}"`);
   if (request.tool === 'codex-reply') {
-    return ['exec', 'resume', ...common, request.arguments.threadId, prompt];
+    return ['exec', 'resume', ...common, request.arguments.threadId, '-'];
   }
-  return ['exec', ...common, '-C', request.arguments?.cwd ?? siteRoot, prompt];
+  return ['exec', ...common, '-C', request.arguments?.cwd ?? siteRoot, '-'];
 }
 
 function codexExecPrompt(request) {
@@ -2130,12 +2128,14 @@ function sendCodexExecJsonRequest(request, settings = {}) {
   return new Promise((resolveRequest, rejectRequest) => {
     const command = codexCommand();
     const args = buildCodexExecArgs(request, settings);
+    const prompt = codexExecPrompt(request);
     const child = spawn(command.command, [...command.prefixArgs, ...args], {
       cwd: request.arguments?.cwd ?? settings.siteRoot ?? SITE_ROOT,
       windowsHide: true,
       env: buildChildProcessEnv(),
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
+    child.stdin.end(prompt);
     let stdoutBuffer = '';
     let stderr = '';
     let threadId = request.arguments?.threadId ?? null;
@@ -2212,12 +2212,14 @@ function sendCodexExecJsonBufferedRequest(request, settings = {}) {
   return new Promise((resolveRequest, rejectRequest) => {
     const command = codexCommand();
     const args = buildCodexExecArgs(request, settings);
+    const prompt = codexExecPrompt(request);
     const child = spawn(command.command, [...command.prefixArgs, ...args], {
       cwd: request.arguments?.cwd ?? settings.siteRoot ?? SITE_ROOT,
       windowsHide: true,
       env: buildChildProcessEnv(),
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['pipe', 'pipe', 'pipe'],
     });
+    child.stdin.end(prompt);
     let stdoutBuffer = '';
     let stderr = '';
     let threadId = request.arguments?.threadId ?? null;
