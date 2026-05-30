@@ -624,7 +624,7 @@ test('launch result file records its own authoritative path', () => {
   assert.equal(persisted.startup_sequence[0].tool, 'agent_context_hydrate_current');
 });
 
-test('compact launch summary avoids full JSON packet for interactive exec', async () => {
+test('interactive exec summary uses normalized agent-start renderer', async () => {
   const siteRoot = tempSite();
   const pcSiteRoot = tempPcSite();
   const { result } = buildLaunchPlanFromArgs({
@@ -636,9 +636,12 @@ test('compact launch summary avoids full JSON packet for interactive exec', asyn
   writeLaunchResult(result, siteRoot);
 
   const summary = compactLaunchSummary(result);
-  assert.match(summary, /agent-start: narada\.architect \(agent-cli\)/);
-  assert.match(summary, /carrier_session:/);
-  assert.match(summary, /launch_result:/);
+  assert.match(summary, /agent_start_event:/);
+  assert.match(summary, /identity: narada\.architect/);
+  assert.match(summary, /role: architect/);
+  assert.match(summary, /tool_fabric_adapter_kind: narada-agent-cli-mcp-client/);
+  assert.match(summary, /capability_policy:/);
+  assert.match(summary, /launch_result_path:/);
   assert.equal(summary.includes('"schema"'), false);
 
   let written = '';

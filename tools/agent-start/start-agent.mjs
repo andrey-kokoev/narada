@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { formatAgentStartResult } from '../../packages/agent-start-renderer/src/agent-start-renderer.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const defaultRootDir = join(__dirname, '..', '..');
@@ -1009,7 +1010,18 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     schema: RESULT_SCHEMA,
     status: exec && !dryRun ? 'launching' : 'planned',
     identity,
+    role: event.role,
     runtime,
+    tool_fabric_adapter_kind: runtime === 'agent-cli' ? 'narada-agent-cli-mcp-client' : null,
+    resume_command: runtime,
+    capability_policy: runtime === 'agent-cli'
+      ? {
+        direct_substrate_script_execution: 'forbidden',
+        script_execution_surface: 'mcp_only',
+        shell_access: 'mcp_only',
+        lifecycle_mutations: 'mcp_only',
+      }
+      : null,
     agent_start_event: event.event_id,
     carrier_session_id: session.carrier_session_id,
     event_path: eventPath,
@@ -1222,13 +1234,11 @@ function writeJsonResult(result, output = process.stdout) {
 }
 
 function compactLaunchSummary(result) {
-  return [
-    `agent-start: ${result.identity} (${result.runtime})`,
-    `carrier_session: ${result.carrier_session_id}`,
-    `mcp: ${result.mcp_tool_approval?.approved_servers?.length ?? 0} approved server(s)`,
-    `launch_result: ${result.launch_result_path ?? 'not_written'}`,
-    '',
-  ].join('\n');
+  return formatAgentStartResult(result, {
+    colorEnabled: process.stdout.isTTY,
+    runtime: result.runtime,
+    dryRun: result.dry_run,
+  });
 }
 
 function writeCompactResult(result, output = process.stdout) {
