@@ -54,6 +54,7 @@ import {
   sessionEventEntry,
   sessionLogEntry,
   shouldDeferInteractiveInput,
+  styleInputRouteLabel,
   shouldSuppressMcpStderr,
   startInteractiveControlJsonlWatcher,
   toolDirectionLabel,
@@ -238,6 +239,9 @@ assert.equal(
 rmSync(heartbeatRoot, { recursive: true, force: true });
 assert.equal(createTerminalStyle({ enabled: false }).prompt('narada> '), 'narada> ');
 assert.equal(createTerminalStyle({ enabled: true }).prompt('narada> ').includes('\x1b['), true);
+assert.equal(stripAnsiForTest(styleInputRouteLabel('operator -> narada.architect')), 'operator -> narada.architect');
+assert.equal(styleInputRouteLabel('operator -> narada.architect').includes('\x1b[1;32moperator\x1b[0m'), true);
+assert.equal(styleInputRouteLabel('operator -> narada.architect').includes('\x1b[1;36mnarada.architect\x1b[0m'), true);
 assert.equal(formatToolResultContent('{"status":"success","schema":"narada.test.v1","directive_count":2,"extra":true}'), 'success · narada.test.v1 · directives=2\nkeys: status, schema, directive_count, extra');
 assert.equal(formatKeyValueRows({ A: 1, Longer: 'two' }), 'A       1\nLonger  two');
 assert.equal(formatDuration(1250), '1s');

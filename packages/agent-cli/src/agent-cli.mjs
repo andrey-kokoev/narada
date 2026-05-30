@@ -247,7 +247,7 @@ async function main() {
   while (true) {
     const promptLabel = `operator -> ${IDENTITY}`;
     promptState.active = true;
-    const userInput = await question(rl, terminalStyle.prompt(`${promptLabel}> `));
+    const userInput = await question(rl, `${styleInputRouteLabel(promptLabel)}${terminalStyle.muted('>')} `);
     promptState.active = false;
     if (userInput === '__READLINE_CLOSED__') break;
     rewriteSubmittedPrompt(promptLabel, userInput);
@@ -2463,6 +2463,7 @@ function createTerminalStyle({ enabled = true } = {}) {
     tool: (text) => color('35', text),
     assistant: (text) => color('37', text),
     label: (text) => color('1;36', text),
+    operator: (text) => color('1;32', text),
     operatorDirective: (text) => color('1;33', text),
     systemDirective: (text) => color('1;35', text),
     muted: (text) => color('2', text),
@@ -2542,6 +2543,15 @@ function toolDirectionLabel(direction) {
   return `${terminalStyle.label(IDENTITY)} ${arrow} ${terminalStyle.tool('agent-cli')}`;
 }
 
+function styleInputRouteLabel(label) {
+  const manual = `operator -> ${IDENTITY}`;
+  const directive = `operator directive -> ${IDENTITY}`;
+  const arrow = terminalStyle.muted('->');
+  if (label === manual) return `${terminalStyle.operator('operator')} ${arrow} ${terminalStyle.label(IDENTITY)}`;
+  if (label === directive) return `${terminalStyle.operatorDirective('operator directive')} ${arrow} ${terminalStyle.label(IDENTITY)}`;
+  return terminalStyle.prompt(label);
+}
+
 function printInlineEvent(label, text, { before = false, timestamp = false, labelStyle = (value) => value, bodyStyle = (value) => value } = {}) {
   const suffix = timestamp ? ` ${terminalStyle.timestamp(formatTimestamp())}` : '';
   console.log(`${before ? '\n' : ''}${labelStyle(label)}${terminalStyle.muted(':')} ${bodyStyle(String(text ?? ''))}${suffix}`);
@@ -2578,9 +2588,7 @@ function printInputRecord(record) {
   const label = inputRecordDisplayLabel(record);
   const labelStyle = record.source === 'system_directive'
     ? terminalStyle.systemDirective
-    : record.source === 'operator_directive'
-      ? terminalStyle.operatorDirective
-      : terminalStyle.prompt;
+    : styleInputRouteLabel;
   printMessageBlock({
     label,
     text: String(record.content ?? '').trim(),
@@ -2639,7 +2647,7 @@ function formatSubmittedPrompt(promptLabel, text, columns = 80, now = new Date()
   const lines = wrapTerminalLine(String(text ?? ''), firstLineWidth);
   const [first = '', ...rest] = lines;
   return [
-    `${terminalStyle.prompt(promptLabel)}${terminalStyle.muted(':')} ${first}`,
+    `${styleInputRouteLabel(promptLabel)}${terminalStyle.muted(':')} ${first}`,
     ...rest.map((line) => `  ${line}`),
     `  ${terminalStyle.timestamp(formatTimestamp(now))}`,
   ].join('\n') + '\n';
@@ -2971,6 +2979,7 @@ export {
   directiveReceiptEvidence,
   sessionEventEntry,
   sessionLogEntry,
+  styleInputRouteLabel,
 };
 
 if (isEntrypoint) {
