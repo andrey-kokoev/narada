@@ -80,7 +80,7 @@ mod tests {
         assert_eq!(model.layout.composer.height, 3);
         assert_eq!(model.transcript_rows.len(), 1);
         assert_eq!(model.transcript_rows[0].actor_label, "operator");
-        assert_eq!(model.status.compact_line, "agent=sonar.resident | session=carrier_1 | turn=idle | queued=0 | held=0 | transcript=1 | provider=provider_disabled | mcp=mcp_disabled | terminal=terminal_disabled | error=none");
+        assert_eq!(model.status.compact_line, "agent=sonar.resident | session=carrier_1 | turn=idle | queued=0 | held=0 | transcript=1 | provider=provider_disabled | provider_adapter=provider_adapter_disabled | mcp=mcp_disabled | terminal=terminal_disabled | error=none");
         assert_eq!(model.composer.prompt_label, "operator -> sonar.resident>");
     }
 

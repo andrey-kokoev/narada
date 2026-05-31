@@ -1,4 +1,5 @@
 use crate::mcp_runtime_config::McpRuntimeConfig;
+use crate::provider_adapter_admission::ProviderAdapterAdmission;
 use crate::provider_runtime_config::ProviderRuntimeConfig;
 use crate::status_view_model::RuntimePostureState;
 use crate::terminal_runtime_config::TerminalRuntimeConfig;
@@ -7,21 +8,30 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeConfigSnapshot {
     pub provider: ProviderRuntimeConfig,
+    pub provider_adapter: ProviderAdapterAdmission,
     pub mcp: McpRuntimeConfig,
     pub terminal: TerminalRuntimeConfig,
 }
 
 impl RuntimeConfigSnapshot {
     pub fn from_env_map(env_map: &BTreeMap<String, String>) -> Self {
+        let provider = ProviderRuntimeConfig::from_env_map(env_map);
+        let provider_adapter = ProviderAdapterAdmission::from_runtime_config(&provider, None);
         Self {
-            provider: ProviderRuntimeConfig::from_env_map(env_map),
+            provider,
+            provider_adapter,
             mcp: McpRuntimeConfig::from_env_map(env_map),
             terminal: TerminalRuntimeConfig::from_env_map(env_map),
         }
     }
 
     pub fn posture(&self) -> RuntimePostureState {
-        RuntimePostureState::from_runtime_configs(&self.provider, &self.mcp, &self.terminal)
+        RuntimePostureState::from_runtime_configs(
+            &self.provider,
+            &self.provider_adapter,
+            &self.mcp,
+            &self.terminal,
+        )
     }
 }
 
@@ -70,11 +80,19 @@ mod tests {
             snapshot.provider.status.as_str(),
             "configured_not_implemented"
         );
+        assert_eq!(
+            snapshot.provider_adapter.status.as_str(),
+            "configured_without_adapter"
+        );
         assert_eq!(snapshot.mcp.status.as_str(), "configured");
         assert_eq!(snapshot.terminal.status.as_str(), "configured");
         assert_eq!(
             posture.provider_state.as_str(),
             "provider_configured_not_implemented"
+        );
+        assert_eq!(
+            posture.provider_adapter_state.as_str(),
+            "provider_adapter_configured_without_adapter"
         );
         assert_eq!(posture.mcp_state.as_str(), "mcp_configured");
         assert_eq!(posture.terminal_state.as_str(), "terminal_configured");

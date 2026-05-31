@@ -1,5 +1,6 @@
 use crate::input_queue::TurnState;
 use crate::mcp_runtime_config::{McpRuntimeAdmissionStatus, McpRuntimeConfig};
+use crate::provider_adapter_admission::{ProviderAdapterAdmission, ProviderAdapterAdmissionStatus};
 use crate::provider_runtime_config::{ProviderRuntimeAdmissionStatus, ProviderRuntimeConfig};
 use crate::terminal_runtime_config::{TerminalRuntimeConfig, TerminalRuntimeStatus};
 
@@ -34,6 +35,36 @@ impl ProviderRuntimeState {
             Self::Working => "provider_working",
             Self::Interrupted => "provider_interrupted",
             Self::Failed => "provider_failed",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProviderAdapterState {
+    Disabled,
+    ConfiguredWithoutAdapter,
+    Refused,
+    Admitted,
+}
+
+impl ProviderAdapterState {
+    pub fn from_provider_adapter_admission(admission: &ProviderAdapterAdmission) -> Self {
+        match admission.status {
+            ProviderAdapterAdmissionStatus::Disabled => Self::Disabled,
+            ProviderAdapterAdmissionStatus::ConfiguredWithoutAdapter => {
+                Self::ConfiguredWithoutAdapter
+            }
+            ProviderAdapterAdmissionStatus::Refused => Self::Refused,
+            ProviderAdapterAdmissionStatus::Admitted => Self::Admitted,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Disabled => "provider_adapter_disabled",
+            Self::ConfiguredWithoutAdapter => "provider_adapter_configured_without_adapter",
+            Self::Refused => "provider_adapter_refused",
+            Self::Admitted => "provider_adapter_admitted",
         }
     }
 }
@@ -91,6 +122,7 @@ impl TerminalRuntimeState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimePostureState {
     pub provider_state: ProviderRuntimeState,
+    pub provider_adapter_state: ProviderAdapterState,
     pub mcp_state: McpRuntimeState,
     pub terminal_state: TerminalRuntimeState,
 }
@@ -99,6 +131,7 @@ impl RuntimePostureState {
     pub fn disabled() -> Self {
         Self {
             provider_state: ProviderRuntimeState::Disabled,
+            provider_adapter_state: ProviderAdapterState::Disabled,
             mcp_state: McpRuntimeState::Disabled,
             terminal_state: TerminalRuntimeState::Disabled,
         }
@@ -106,11 +139,15 @@ impl RuntimePostureState {
 
     pub fn from_runtime_configs(
         provider_config: &ProviderRuntimeConfig,
+        provider_adapter_admission: &ProviderAdapterAdmission,
         mcp_config: &McpRuntimeConfig,
         terminal_config: &TerminalRuntimeConfig,
     ) -> Self {
         Self {
             provider_state: ProviderRuntimeState::from_provider_runtime_config(provider_config),
+            provider_adapter_state: ProviderAdapterState::from_provider_adapter_admission(
+                provider_adapter_admission,
+            ),
             mcp_state: McpRuntimeState::from_mcp_runtime_config(mcp_config),
             terminal_state: TerminalRuntimeState::from_terminal_runtime_config(terminal_config),
         }
@@ -162,6 +199,11 @@ pub fn build_status_view(input: &StatusViewInput) -> StatusViewModel {
             "provider_state",
             "provider",
             input.runtime_posture.provider_state.as_str(),
+        ),
+        segment(
+            "provider_adapter_state",
+            "provider_adapter",
+            input.runtime_posture.provider_adapter_state.as_str(),
         ),
         segment("mcp_state", "mcp", input.runtime_posture.mcp_state.as_str()),
         segment(
@@ -223,17 +265,18 @@ mod tests {
     fn builds_status_segments_in_stable_order() {
         let model = build_status_view(&input());
 
-        assert_eq!(model.segments.len(), 10);
+        assert_eq!(model.segments.len(), 11);
         assert_eq!(model.segments[0].key, "identity");
         assert_eq!(model.segments[0].label, "agent");
         assert_eq!(model.segments[0].value, "sonar.resident");
         assert_eq!(model.segments[3].key, "queued_inputs");
         assert_eq!(model.segments[3].value, "2");
         assert_eq!(model.segments[6].value, "provider_disabled");
-        assert_eq!(model.segments[7].value, "mcp_disabled");
-        assert_eq!(model.segments[8].value, "terminal_disabled");
-        assert_eq!(model.segments[9].key, "last_error");
-        assert_eq!(model.segments[9].value, "none");
+        assert_eq!(model.segments[7].value, "provider_adapter_disabled");
+        assert_eq!(model.segments[8].value, "mcp_disabled");
+        assert_eq!(model.segments[9].value, "terminal_disabled");
+        assert_eq!(model.segments[10].key, "last_error");
+        assert_eq!(model.segments[10].value, "none");
     }
 
     #[test]
@@ -242,7 +285,7 @@ mod tests {
 
         assert_eq!(
             model.compact_line,
-            "agent=sonar.resident | session=carrier_1 | turn=idle | queued=2 | held=1 | transcript=8 | provider=provider_disabled | mcp=mcp_disabled | terminal=terminal_disabled | error=none"
+            "agent=sonar.resident | session=carrier_1 | turn=idle | queued=2 | held=1 | transcript=8 | provider=provider_disabled | provider_adapter=provider_adapter_disabled | mcp=mcp_disabled | terminal=terminal_disabled | error=none"
         );
     }
 
@@ -253,7 +296,7 @@ mod tests {
             ..input()
         });
 
-        assert_eq!(model.segments[9].value, "read failed");
+        assert_eq!(model.segments[10].value, "read failed");
         assert!(model.compact_line.ends_with("error=read failed"));
     }
 
@@ -399,11 +442,21 @@ mod tests {
             ),
         ]));
 
-        let posture = RuntimePostureState::from_runtime_configs(&provider, &mcp, &terminal);
+        let provider_adapter = ProviderAdapterAdmission::from_runtime_config(&provider, None);
+        let posture = RuntimePostureState::from_runtime_configs(
+            &provider,
+            &provider_adapter,
+            &mcp,
+            &terminal,
+        );
 
         assert_eq!(
             posture.provider_state,
             ProviderRuntimeState::ConfiguredNotImplemented
+        );
+        assert_eq!(
+            posture.provider_adapter_state,
+            ProviderAdapterState::ConfiguredWithoutAdapter
         );
         assert_eq!(posture.mcp_state, McpRuntimeState::Configured);
         assert_eq!(posture.terminal_state, TerminalRuntimeState::Configured);
@@ -422,5 +475,6 @@ mod tests {
 
         assert_eq!(model.segments[2].value, "active");
         assert_eq!(model.segments[6].value, "provider_working");
+        assert_eq!(model.segments[7].value, "provider_adapter_disabled");
     }
 }

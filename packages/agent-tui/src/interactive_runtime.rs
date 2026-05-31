@@ -4,6 +4,7 @@ use crate::composer_view_model::ComposerViewInput;
 use crate::input_queue::SessionEvidenceContext;
 use crate::layout_model::{LayoutConfig, TerminalSize};
 use crate::mcp_runtime_config::McpRuntimeConfig;
+use crate::provider_adapter_admission::ProviderAdapterAdmission;
 use crate::provider_dispatch::ProviderAdapter;
 use crate::provider_runtime_config::ProviderRuntimeConfig;
 use crate::runtime_coordinator::{RuntimeCoordinator, RuntimeCoordinatorClock};
@@ -93,6 +94,8 @@ impl AgentTuiInteractiveRuntime {
         mcp_runtime_config: McpRuntimeConfig,
         terminal_runtime_config: TerminalRuntimeConfig,
     ) -> Self {
+        let provider_adapter_admission =
+            ProviderAdapterAdmission::from_runtime_config(&provider_runtime_config, None);
         Self::with_provider_adapter_and_state(
             identity,
             session,
@@ -106,6 +109,7 @@ impl AgentTuiInteractiveRuntime {
             ),
             RuntimePostureState::from_runtime_configs(
                 &provider_runtime_config,
+                &provider_adapter_admission,
                 &mcp_runtime_config,
                 &terminal_runtime_config,
             ),
