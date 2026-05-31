@@ -7,6 +7,7 @@ import {
   buildLaunchPlanFromArgs,
   compactLaunchSummary,
   materializeAgentTuiLaunchFiles,
+  parseAgentTuiLaunchSliceContract,
   parseAgentTuiMcpRuntimeContract,
   parseAgentTuiProviderAdapterContract,
   parseAgentTuiTerminalRuntimeContract,
@@ -34,6 +35,10 @@ const AGENT_TUI_PROVIDER_ADAPTER_CONTRACT = parseAgentTuiProviderAdapterContract
 ));
 const AGENT_TUI_TERMINAL_RUNTIME_CONTRACT = parseAgentTuiTerminalRuntimeContract(fs.readFileSync(
   path.join(process.cwd(), 'packages', 'agent-tui', 'contracts', 'terminal-runtime.json'),
+  'utf8',
+));
+const AGENT_TUI_LAUNCH_SLICE_CONTRACT = parseAgentTuiLaunchSliceContract(fs.readFileSync(
+  path.join(process.cwd(), 'packages', 'agent-tui', 'contracts', 'launch-slice.json'),
   'utf8',
 ));
 
@@ -103,6 +108,23 @@ test('agent-tui terminal runtime contract parser rejects invalid contracts', () 
   );
 });
 
+test('agent-tui launch slice contract parser rejects invalid contracts', () => {
+  assert.throws(
+    () => parseAgentTuiLaunchSliceContract('{'),
+    /launch_slice_contract_parse_failed/,
+  );
+  assert.throws(
+    () => parseAgentTuiLaunchSliceContract(JSON.stringify({
+      schema: 'narada.agent_tui.launch_slice_contract.v0',
+      admitted_runtime_slice: 'terminal_interactive_loop',
+      carrier_flag: '--interactive-step-once',
+      tool_fabric_adapter_kind: 'narada-agent-tui-interactive-step',
+      capability_policy_smoke_step: 'bounded_non_terminal_control_jsonl',
+      terminal_mode: false,
+    })),
+    /launch_slice_contract_invalid:admitted_runtime_slice/,
+  );
+});
 function tempSite() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'narada-agent-start-'));
 }
@@ -444,8 +466,8 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   assert.equal(result.runtime_kind, 'agent_tui_carrier');
   assert.equal(result.runtime_substrate_kind, 'agent-tui');
   assert.equal(result.transport, 'control_jsonl_session_jsonl');
-  assert.equal(result.tool_fabric_adapter_kind, 'narada-agent-tui-interactive-step');
-  assert.equal(result.capability_policy.smoke_step, 'bounded_non_terminal_control_jsonl');
+  assert.equal(result.tool_fabric_adapter_kind, AGENT_TUI_LAUNCH_SLICE_CONTRACT.tool_fabric_adapter_kind);
+  assert.equal(result.capability_policy.smoke_step, AGENT_TUI_LAUNCH_SLICE_CONTRACT.capability_policy_smoke_step);
   assert.equal(result.planned_environment.NARADA_AGENT_TUI_SESSION_DIR, result.agent_tui_session_dir);
   assert.equal(result.planned_environment.NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION, 'false');
   assert.equal(result.planned_environment.NARADA_AGENT_TUI_ENABLE_MCP_FABRIC, 'false');
@@ -456,7 +478,7 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   assert.equal(result.agent_tui_launch.session_dir, result.agent_tui_session_dir);
   assert.equal(result.agent_tui_launch.session_path, path.join(result.agent_tui_session_dir, 'session.jsonl'));
   assert.equal(result.agent_tui_launch.control_path, path.join(result.agent_tui_session_dir, 'control.jsonl'));
-  assert.equal(result.agent_tui_launch.admitted_runtime_slice, 'bounded_non_terminal_interactive_step_once');
+  assert.equal(result.agent_tui_launch.admitted_runtime_slice, AGENT_TUI_LAUNCH_SLICE_CONTRACT.admitted_runtime_slice);
   assert.equal(result.agent_tui_launch.rust_toolchain_readiness.schema, 'narada.agent_tui.rust_toolchain_readiness.command.v0');
   assert.equal(result.agent_tui_launch.rust_toolchain_readiness.status, 'operator_preflight_available');
   assert.equal(result.agent_tui_launch.rust_toolchain_readiness.command, 'node');
@@ -467,7 +489,7 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   assert.equal(result.agent_tui_launch.rust_toolchain_readiness.expected_blocker, 'missing_msvc_link_exe_or_windows_sdk_lib_not_loaded');
   assert.equal(result.agent_tui_launch.rust_toolchain_readiness.success_exit_code, 0);
   assert.equal(result.agent_tui_launch.rust_toolchain_readiness.blocked_exit_code, 1);
-  assert.equal(result.agent_tui_launch.smoke_step.terminal_mode, false);
+  assert.equal(result.agent_tui_launch.smoke_step.terminal_mode, AGENT_TUI_LAUNCH_SLICE_CONTRACT.terminal_mode);
   assert.equal(result.agent_tui_launch.interactive_loop.mode, 'interactive_loop');
   assert.equal(result.agent_tui_launch.interactive_loop.admitted, false);
   assert.equal(result.agent_tui_launch.interactive_loop.required_flag, '--interactive-loop');
@@ -589,7 +611,7 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   assert.equal(result.runtime_args[0], 'run');
   assert.equal(result.runtime_args.includes('--manifest-path'), true);
   assert.equal(result.runtime_args.includes(path.join(siteRoot, 'packages', 'agent-tui', 'Cargo.toml')), true);
-  assert.equal(result.runtime_args.includes('--interactive-step-once'), true);
+  assert.equal(result.runtime_args.includes(AGENT_TUI_LAUNCH_SLICE_CONTRACT.carrier_flag), true);
   assert.equal(result.runtime_args.includes('--interactive-smoke-loop'), false);
   assert.equal(result.runtime_args.includes('--persistent-smoke-session'), false);
   assert.equal(result.runtime_args.includes('--runtime-loop'), false);

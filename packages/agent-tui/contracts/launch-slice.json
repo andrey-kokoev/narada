@@ -1,0 +1,8 @@
+{
+  "schema": "narada.agent_tui.launch_slice_contract.v0",
+  "admitted_runtime_slice": "bounded_non_terminal_interactive_step_once",
+  "carrier_flag": "--interactive-step-once",
+  "tool_fabric_adapter_kind": "narada-agent-tui-interactive-step",
+  "capability_policy_smoke_step": "bounded_non_terminal_control_jsonl",
+  "terminal_mode": false
+}

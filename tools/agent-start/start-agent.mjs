@@ -21,6 +21,10 @@ const AGENT_TUI_TERMINAL_RUNTIME_CONTRACT = parseAgentTuiTerminalRuntimeContract
   join(defaultRootDir, 'packages', 'agent-tui', 'contracts', 'terminal-runtime.json'),
   'utf8',
 ));
+const AGENT_TUI_LAUNCH_SLICE_CONTRACT = parseAgentTuiLaunchSliceContract(readFileSync(
+  join(defaultRootDir, 'packages', 'agent-tui', 'contracts', 'launch-slice.json'),
+  'utf8',
+));
 const RESULT_SCHEMA = 'narada.agent_start.result.v0';
 const DEFAULT_PC_SITE_ROOT = process.env.NARADA_PC_SITE_ROOT ?? 'C:/ProgramData/Narada/sites/pc/desktop-sunroom-2';
 const ADMITTED_AGENTS = new Set(['narada.architect', 'narada.builder', 'narada.builder2', 'narada.resident']);
@@ -122,6 +126,34 @@ export function parseAgentTuiTerminalRuntimeContract(jsonText) {
   }
   if (contract?.required_terminal_mode !== 'interactive_loop') {
     throw new Error('terminal_runtime_contract_invalid:required_terminal_mode');
+  }
+  return contract;
+}
+
+export function parseAgentTuiLaunchSliceContract(jsonText) {
+  let contract;
+  try {
+    contract = JSON.parse(jsonText);
+  } catch (error) {
+    throw new Error(`launch_slice_contract_parse_failed:${error.message}`);
+  }
+  if (contract?.schema !== 'narada.agent_tui.launch_slice_contract.v0') {
+    throw new Error('launch_slice_contract_invalid:schema');
+  }
+  if (contract?.admitted_runtime_slice !== 'bounded_non_terminal_interactive_step_once') {
+    throw new Error('launch_slice_contract_invalid:admitted_runtime_slice');
+  }
+  if (contract?.carrier_flag !== '--interactive-step-once') {
+    throw new Error('launch_slice_contract_invalid:carrier_flag');
+  }
+  if (contract?.tool_fabric_adapter_kind !== 'narada-agent-tui-interactive-step') {
+    throw new Error('launch_slice_contract_invalid:tool_fabric_adapter_kind');
+  }
+  if (contract?.capability_policy_smoke_step !== 'bounded_non_terminal_control_jsonl') {
+    throw new Error('launch_slice_contract_invalid:capability_policy_smoke_step');
+  }
+  if (contract?.terminal_mode !== false) {
+    throw new Error('launch_slice_contract_invalid:terminal_mode');
   }
   return contract;
 }
@@ -569,7 +601,7 @@ function agentTuiArgs({ siteRoot, startupEvidence }) {
     '--site-root', siteRoot,
     '--control-jsonl', join(sessionDir, 'control.jsonl'),
     '--session-jsonl', join(sessionDir, 'session.jsonl'),
-    '--interactive-step-once',
+    AGENT_TUI_LAUNCH_SLICE_CONTRACT.carrier_flag,
   ];
 }
 
@@ -1423,7 +1455,7 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     role: event.role,
     runtime,
     runtime_aliases: requestedRuntime !== runtime ? [requestedRuntime] : [],
-    tool_fabric_adapter_kind: runtimeUsesAgentCliMcp ? 'narada-agent-cli-mcp-client' : (runtimeUsesAgentTuiScaffold ? 'narada-agent-tui-interactive-step' : null),
+    tool_fabric_adapter_kind: runtimeUsesAgentCliMcp ? 'narada-agent-cli-mcp-client' : (runtimeUsesAgentTuiScaffold ? AGENT_TUI_LAUNCH_SLICE_CONTRACT.tool_fabric_adapter_kind : null),
     resume_command: runtime,
     capability_policy: runtimeUsesAgentCliMcp
       ? {
@@ -1438,7 +1470,7 @@ function buildLaunchPlanFromArgs(args, options = {}) {
               script_execution_surface: 'not_admitted',
               shell_access: 'not_admitted',
               lifecycle_mutations: 'not_admitted',
-              smoke_step: 'bounded_non_terminal_control_jsonl',
+              smoke_step: AGENT_TUI_LAUNCH_SLICE_CONTRACT.capability_policy_smoke_step,
             }
           : null),
     agent_start_event: event.event_id,
@@ -1562,12 +1594,12 @@ function buildLaunchPlanFromArgs(args, options = {}) {
           carrier_relation: 'non_terminal_agent_tui_smoke_step',
           session_dir: agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id),
           session_path: join(agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id), 'session.jsonl'),
-          admitted_runtime_slice: 'bounded_non_terminal_interactive_step_once',
+          admitted_runtime_slice: AGENT_TUI_LAUNCH_SLICE_CONTRACT.admitted_runtime_slice,
           control_path: join(agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id), 'control.jsonl'),
           rust_toolchain_readiness: agentTuiRustToolchainReadiness(siteRoot),
           smoke_step: {
             mode: 'interactive_step_once',
-            terminal_mode: false,
+            terminal_mode: AGENT_TUI_LAUNCH_SLICE_CONTRACT.terminal_mode,
           },
           interactive_loop: agentTuiInteractiveLoopGate(),
           promotion_gate: agentTuiPromotionGate(),
