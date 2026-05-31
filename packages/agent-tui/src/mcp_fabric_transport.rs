@@ -161,7 +161,10 @@ impl McpFabricTransportServer {
             .or(raw.tool_names)
             .unwrap_or_default()
             .into_iter()
-            .collect();
+            .collect::<BTreeSet<_>>();
+        if tools.is_empty() {
+            return Err(format!("mcp_fabric_server_tools_missing:{name}"));
+        }
         Ok(Self {
             name,
             transport,
@@ -220,6 +223,24 @@ mod tests {
                 .map(String::as_str),
             Some("sonar-site-loop")
         );
+    }
+
+    #[test]
+    fn rejects_server_without_visible_tools() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node"
+                }
+              }
+            }"#,
+        )
+        .expect_err("server without visible tools is invalid");
+
+        assert_eq!(error, "mcp_fabric_server_tools_missing:sonar-site-loop");
     }
 
     #[test]
