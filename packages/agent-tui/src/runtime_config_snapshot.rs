@@ -1,12 +1,10 @@
 use crate::mcp_fabric_transport::McpFabricTransportClient;
 use crate::mcp_runtime_config::McpRuntimeConfig;
-use crate::mcp_runtime_contract::mcp_runtime_contract;
 use crate::provider_adapter_admission::ProviderAdapterAdmission;
 use crate::provider_adapter_contract::provider_adapter_contract;
 use crate::provider_runtime_config::ProviderRuntimeConfig;
 use crate::status_view_model::RuntimePostureState;
 use crate::terminal_runtime_config::TerminalRuntimeConfig;
-use crate::terminal_runtime_contract::terminal_runtime_contract;
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -78,6 +76,8 @@ fn normalize_mcp_config_error(error: String) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::mcp_runtime_contract::mcp_runtime_contract;
+    use crate::terminal_runtime_contract::terminal_runtime_contract;
 
     #[test]
     fn snapshot_reads_narada_env_map_once() {

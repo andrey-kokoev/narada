@@ -207,6 +207,9 @@ mod tests {
     use crate::mcp_fabric_boundary::McpToolResult;
     use crate::mcp_fabric_transport::McpFabricPreparedToolCall;
     use crate::mcp_json_rpc::McpJsonRpcExchange;
+    use crate::mcp_runtime_config::{
+        mcp_config_env_var, mcp_fabric_env_var, site_mcp_fabric_env_var,
+    };
     use std::collections::BTreeMap;
     use std::fs::{read_to_string, remove_file};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -273,16 +276,13 @@ mod tests {
 
     fn configured_mcp_runtime() -> McpRuntimeConfig {
         McpRuntimeConfig::from_env_map(&BTreeMap::from([
+            (mcp_fabric_env_var().to_string(), "true".to_string()),
             (
-                "NARADA_AGENT_TUI_ENABLE_MCP_FABRIC".to_string(),
-                "true".to_string(),
-            ),
-            (
-                "NARADA_AGENT_TUI_MCP_CONFIG".to_string(),
+                mcp_config_env_var().to_string(),
                 "D:/code/narada.sonar/.ai/mcp/agent-tui.json".to_string(),
             ),
             (
-                "NARADA_SITE_MCP_FABRIC".to_string(),
+                site_mcp_fabric_env_var().to_string(),
                 "D:/code/narada.sonar/.ai/mcp".to_string(),
             ),
         ]))
