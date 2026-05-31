@@ -78,7 +78,7 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - Smoke runner API: `AgentTuiSmokeSession`, `run_interactive_smoke_step`, and `interactive_smoke_step_summary_lines`.
 - Smoke acceptance covers canonical system directive delivery, held directive release, queued operator FIFO ordering, interrupt evidence, malformed control JSONL, and provider-boundary transcript rows.
 - Narada proper `agent-start` admits `agent-tui` as a distinct runtime but launches only bounded non-terminal `--interactive-step-once` by default.
-- Agent-start launch metadata names the admitted bounded runtime slice, the gated terminal interactive loop, the terminal rendering environment gate, and the unsatisfied promotion gate.
+- Agent-start launch metadata names the admitted bounded runtime slice, the shared terminal rendering gate for `--render-once` and `--interactive-loop`, the terminal rendering environment gate, and the unsatisfied promotion gate.
 - Agent-start launch metadata keeps provider execution disabled and records the missing provider adapter, evidence, streaming, and tool-call contracts required before admission.
 - Agent-start launch metadata keeps Site MCP fabric access disabled for the bounded runtime slice and records the implemented-but-withheld Rust MCP bridge plus remaining live Site execution admission requirements.
 - Agent-start uses named metadata builders for the shared `agent-tui` terminal, provider, and MCP promotion gates instead of inline ad hoc gate objects.

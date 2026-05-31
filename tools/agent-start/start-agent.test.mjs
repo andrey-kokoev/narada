@@ -394,6 +394,8 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   assert.deepEqual(result.agent_tui_launch.interactive_loop.environment_gate, {
     variable: 'NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING',
     value: 'false',
+    mode_variable: 'NARADA_AGENT_TUI_TERMINAL_MODE',
+    required_mode: 'interactive_loop',
     operator_override_admitted: false,
   });
   assert.equal(result.agent_tui_launch.interactive_loop.promotion_gate, 'agent_tui_terminal_interactive_loop_promotion_gate');
@@ -421,9 +423,18 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'launch_metadata_runtime_slice').status, 'satisfied');
   assert.match(result.agent_tui_launch.promotion_gate.reason, /bounded non-terminal smoke/);
   assert.match(result.agent_tui_launch.promotion_gate.reason, /Rust tests/);
-  assert.equal(result.agent_tui_launch.tui_rendering_enabled, false);
   assert.equal(result.agent_tui_launch.terminal_rendering.status, 'not_admitted_for_runtime_slice');
+  assert.equal(result.agent_tui_launch.terminal_rendering.admitted, false);
+  assert.deepEqual(result.agent_tui_launch.terminal_rendering.gated_modes, ['--render-once', '--interactive-loop']);
+  assert.deepEqual(result.agent_tui_launch.terminal_rendering.environment_gate, {
+    variable: 'NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING',
+    value: 'false',
+    mode_variable: 'NARADA_AGENT_TUI_TERMINAL_MODE',
+    required_mode: 'interactive_loop',
+    operator_override_admitted: false,
+  });
   assert.match(result.agent_tui_launch.terminal_rendering.reason, /without alternate screen/);
+  assert.equal(result.agent_tui_launch.terminal_rendering.promotion_gate, 'agent_tui_terminal_rendering_promotion_gate');
   assert.equal(result.agent_tui_launch.provider_execution_enabled, false);
   assert.equal(result.agent_tui_launch.provider_execution.status, 'not_admitted_for_runtime_slice');
   assert.equal(result.agent_tui_launch.provider_execution.adapter_contract, 'not_implemented');

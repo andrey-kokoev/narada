@@ -665,20 +665,36 @@ function agentTuiPromotionGate() {
     reason: 'Production launch remains bounded non-terminal smoke until Rust tests, terminal-frame acceptance, provider admission, and MCP fabric admission pass.',
   };
 }
+function agentTuiTerminalRenderingEnvironmentGate() {
+  return {
+    variable: 'NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING',
+    value: 'false',
+    mode_variable: 'NARADA_AGENT_TUI_TERMINAL_MODE',
+    required_mode: 'interactive_loop',
+    operator_override_admitted: false,
+  };
+}
+
+function agentTuiTerminalRenderingGate() {
+  return {
+    status: 'not_admitted_for_runtime_slice',
+    admitted: false,
+    gated_modes: ['--render-once', '--interactive-loop'],
+    environment_gate: agentTuiTerminalRenderingEnvironmentGate(),
+    reason: 'Smoke step runs without alternate screen or interactive terminal handoff.',
+    promotion_gate: 'agent_tui_terminal_rendering_promotion_gate',
+  };
+}
+
 function agentTuiInteractiveLoopGate() {
   return {
     mode: 'interactive_loop',
     admitted: false,
     required_flag: '--interactive-loop',
-    environment_gate: {
-      variable: 'NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING',
-      value: 'false',
-      operator_override_admitted: false,
-    },
+    environment_gate: agentTuiTerminalRenderingEnvironmentGate(),
     promotion_gate: 'agent_tui_terminal_interactive_loop_promotion_gate',
   };
 }
-
 function agentTuiProviderExecutionGate() {
   return {
     status: 'not_admitted_for_runtime_slice',
@@ -1468,10 +1484,7 @@ function buildLaunchPlanFromArgs(args, options = {}) {
           interactive_loop: agentTuiInteractiveLoopGate(),
           promotion_gate: agentTuiPromotionGate(),
           tui_rendering_enabled: false,
-          terminal_rendering: {
-            status: 'not_admitted_for_runtime_slice',
-            reason: 'Smoke step runs without alternate screen or interactive terminal handoff.',
-          },
+          terminal_rendering: agentTuiTerminalRenderingGate(),
           provider_execution_enabled: false,
           provider_execution: agentTuiProviderExecutionGate(),
           mcp_fabric_access_enabled: false,
