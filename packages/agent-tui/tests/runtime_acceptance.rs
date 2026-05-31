@@ -6,18 +6,17 @@ use narada_agent_tui::transcript_store::TranscriptStore;
 use std::fs::{read_to_string, remove_file, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 const CONTROL_FIXTURE: &str =
     include_str!("../../carrier-protocol/fixtures/control-input-event.json");
+static TEMP_PATH_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn temp_path(name: &str) -> PathBuf {
-    let unique = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("clock works")
-        .as_nanos();
+    let unique = TEMP_PATH_COUNTER.fetch_add(1, Ordering::Relaxed);
     std::env::temp_dir().join(format!(
-        "narada-agent-tui-runtime-acceptance-{name}-{unique}.jsonl"
+        "narada-agent-tui-runtime-acceptance-{name}-{}-{unique}.jsonl",
+        std::process::id()
     ))
 }
 

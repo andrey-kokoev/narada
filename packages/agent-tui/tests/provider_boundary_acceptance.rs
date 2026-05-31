@@ -10,16 +10,17 @@ use narada_agent_tui::transcript_store::TranscriptStore;
 use narada_agent_tui::turn_coordinator::{TurnCoordinator, TurnCoordinatorClock};
 use std::fs::{read_to_string, remove_file};
 use std::path::PathBuf;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 const INPUT_FIXTURE: &str = include_str!("../../carrier-protocol/fixtures/input-event.json");
+static TEMP_PATH_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn temp_session_path() -> PathBuf {
-    let unique = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("clock works")
-        .as_nanos();
-    std::env::temp_dir().join(format!("narada-agent-tui-provider-boundary-{unique}.jsonl"))
+    let unique = TEMP_PATH_COUNTER.fetch_add(1, Ordering::Relaxed);
+    std::env::temp_dir().join(format!(
+        "narada-agent-tui-provider-boundary-{}-{unique}.jsonl",
+        std::process::id()
+    ))
 }
 
 fn context() -> SessionEvidenceContext {
