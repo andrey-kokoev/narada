@@ -44,15 +44,14 @@ struct CarrierConfigFile {
     #[serde(default, rename = "mcpServers")]
     mcp_servers: BTreeMap<String, RawMcpServer>,
 }
-
 #[derive(Debug, Deserialize)]
 struct RawMcpServer {
     transport: Option<String>,
     command: Option<String>,
     args: Option<Vec<String>>,
-    tools: Option<Vec<String>>,
-    allowed_tools: Option<Vec<String>>,
-    tool_names: Option<Vec<String>>,
+    tools: Option<Value>,
+    allowed_tools: Option<Value>,
+    tool_names: Option<Value>,
     surface_id: Option<String>,
     target_site_root: Option<String>,
 }
@@ -226,9 +225,9 @@ fn normalize_optional_config_field(
 
 fn select_tool_list(
     server_name: &str,
-    tools: Option<Vec<String>>,
-    allowed_tools: Option<Vec<String>>,
-    tool_names: Option<Vec<String>>,
+    tools: Option<Value>,
+    allowed_tools: Option<Value>,
+    tool_names: Option<Value>,
 ) -> Result<Vec<String>, String> {
     let configured_count = u8::from(tools.is_some())
         + u8::from(allowed_tools.is_some())
@@ -238,9 +237,28 @@ fn select_tool_list(
             "mcp_fabric_server_tool_list_ambiguous:{server_name}"
         ));
     }
-    Ok(tools.or(allowed_tools).or(tool_names).unwrap_or_default())
+    let Some((field_name, value)) = tools
+        .map(|value| ("tools", value))
+        .or_else(|| allowed_tools.map(|value| ("allowed_tools", value)))
+        .or_else(|| tool_names.map(|value| ("tool_names", value)))
+    else {
+        return Ok(Vec::new());
+    };
+    let Some(values) = value.as_array() else {
+        return Err(format!(
+            "mcp_fabric_server_tool_list_invalid:{server_name}:{field_name}"
+        ));
+    };
+    values
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .map(str::to_string)
+                .ok_or_else(|| format!("mcp_fabric_server_tool_name_invalid:{server_name}"))
+        })
+        .collect()
 }
-
 fn normalize_optional_server_field(
     server_name: &str,
     field_name: &str,
@@ -648,6 +666,28 @@ mod tests {
         assert_eq!(
             error,
             "mcp_fabric_server_tool_list_ambiguous:sonar-site-loop"
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_tool_list_shape() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "tools": "site_loop_status"
+                }
+              }
+            }"#,
+        )
+        .expect_err("tool list must be an array");
+
+        assert_eq!(
+            error,
+            "mcp_fabric_server_tool_list_invalid:sonar-site-loop:tools"
         );
     }
 
