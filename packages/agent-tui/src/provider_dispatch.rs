@@ -130,9 +130,19 @@ impl ProviderAdapterRequest {
             self.model.clone(),
             self.thinking.clone(),
             self.stream,
+            provider_streaming_contract(adapter_admission.provider_execution_enabled, self.stream),
             adapter_admission.refusal_reason.clone(),
             &self.content_preview,
         )
+    }
+}
+
+fn provider_streaming_contract(provider_execution_enabled: bool, stream: bool) -> &'static str {
+    match (provider_execution_enabled, stream) {
+        (true, true) => "streaming_text_delta_events",
+        (true, false) => "single_provider_output_batch",
+        (false, true) => "requested_but_not_dispatched",
+        (false, false) => "not_requested",
     }
 }
 

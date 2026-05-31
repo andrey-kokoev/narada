@@ -289,6 +289,7 @@ pub fn create_provider_request_payload(
     model: Option<String>,
     thinking: Option<String>,
     stream: bool,
+    provider_streaming_contract: &str,
     provider_adapter_refusal_reason: Option<String>,
     content_preview: &str,
 ) -> Value {
@@ -305,6 +306,7 @@ pub fn create_provider_request_payload(
         "model": model,
         "thinking": thinking,
         "stream": stream,
+        "provider_streaming_contract": provider_streaming_contract,
         "provider_adapter_refusal_reason": provider_adapter_refusal_reason,
         "content_preview": content_preview,
     })
@@ -427,6 +429,7 @@ fn validate_provider_request_payload(payload: &Value) -> Result<(), String> {
             "provider_runtime_status",
             "provider_adapter_admission_status",
             "stream",
+            "provider_streaming_contract",
             "content_preview",
         ],
     )?;
@@ -439,7 +442,8 @@ fn validate_provider_request_payload(payload: &Value) -> Result<(), String> {
     require_payload_nonempty_string(payload, "turn_id")?;
     require_payload_nonempty_string(payload, "input_event_id")?;
     require_payload_nonempty_string(payload, "provider_request_status")?;
-    require_payload_nonempty_string(payload, "provider_runtime_status")?;
+    require_payload_nonempty_string(payload, "provider_adapter_admission_status")?;
+    require_payload_nonempty_string(payload, "provider_streaming_contract")?;
     require_payload_nonempty_string(payload, "provider_adapter_admission_status")?;
     require_payload_string(payload, "content_preview")?;
     match payload.get("provider_execution_enabled") {
@@ -1116,6 +1120,7 @@ mod tests {
                 Some("gpt-5.5".to_string()),
                 Some("medium".to_string()),
                 true,
+                "requested_but_not_dispatched",
                 Some("provider_adapter_not_configured".to_string()),
                 "run startup sequence",
             )

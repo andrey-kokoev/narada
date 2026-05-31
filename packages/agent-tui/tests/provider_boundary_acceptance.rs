@@ -62,6 +62,7 @@ impl ProviderAdapter for StreamingProviderAdapter {
                 Some("gpt-5.5".to_string()),
                 None,
                 true,
+                "streaming_text_delta_events",
                 None,
                 &input.content,
             ),
@@ -127,6 +128,10 @@ fn provider_boundary_acceptance_records_disabled_provider_posture() {
         provider_request.payload["provider_adapter_refusal_reason"],
         serde_json::Value::Null
     );
+    assert_eq!(
+        provider_request.payload["provider_streaming_contract"],
+        "not_requested"
+    );
     assert_eq!(provider_request.payload["content_preview"], input.content);
 
     assert_eq!(terminal.event_kind, SessionEventKind::TurnCompleted);
@@ -168,6 +173,12 @@ fn provider_boundary_acceptance_projects_streaming_text_as_one_agent_message() {
     let session_jsonl = read_to_string(&path).expect("session jsonl exists");
     let lines: Vec<&str> = session_jsonl.lines().collect();
     assert_eq!(lines.len(), 6);
+    assert_eq!(
+        parse_session_event(lines[1])
+            .expect("provider request parses")
+            .payload["provider_streaming_contract"],
+        "streaming_text_delta_events"
+    );
     assert_eq!(
         parse_session_event(lines[2])
             .expect("first delta parses")

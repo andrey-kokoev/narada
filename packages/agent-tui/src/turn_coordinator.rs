@@ -326,6 +326,7 @@ mod tests {
                     None,
                     None,
                     false,
+                    "not_requested",
                     Some("test_adapter_recorded".to_string()),
                     &input.content,
                 ),

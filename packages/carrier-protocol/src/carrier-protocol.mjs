@@ -500,6 +500,7 @@ export function createProviderRequestPayload({
   model = null,
   thinking = null,
   stream,
+  provider_streaming_contract,
   provider_adapter_refusal_reason = null,
   content_preview,
 }) {
@@ -516,6 +517,7 @@ export function createProviderRequestPayload({
     model,
     thinking,
     stream,
+    provider_streaming_contract,
     provider_adapter_refusal_reason,
     content_preview,
   };
@@ -529,14 +531,16 @@ function validateProviderRequestPayload(payload) {
     'provider_request_status',
     'provider_execution_enabled',
     'provider_runtime_status',
-    'provider_adapter_admission_status',
     'stream',
+    'provider_streaming_contract',
+    'content_preview',
     'content_preview',
   ]);
   if (errors.length > 0) return errors;
   if (payload.schema !== PROVIDER_REQUEST_PAYLOAD_SCHEMA) errors.push(`payload.invalid_schema:${String(payload.schema)}`);
   for (const field of ['turn_id', 'input_event_id', 'provider_request_status', 'provider_runtime_status', 'provider_adapter_admission_status']) {
-    if (typeof payload[field] !== 'string' || payload[field].length === 0) errors.push(`payload.invalid_${field}`);
+  if (typeof payload.stream !== 'boolean') errors.push('payload.invalid_stream');
+  if (typeof payload.provider_streaming_contract !== 'string' || payload.provider_streaming_contract.length === 0) errors.push('payload.invalid_provider_streaming_contract');
   }
   if (typeof payload.provider_execution_enabled !== 'boolean') errors.push('payload.invalid_provider_execution_enabled');
   if (typeof payload.stream !== 'boolean') errors.push('payload.invalid_stream');

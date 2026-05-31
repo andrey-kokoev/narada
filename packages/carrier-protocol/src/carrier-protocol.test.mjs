@@ -131,6 +131,7 @@ assert.deepEqual(providerRequestFixture.payload, createProviderRequestPayload({
   model: 'gpt-5.5',
   thinking: 'medium',
   stream: true,
+  provider_streaming_contract: 'requested_but_not_dispatched',
   provider_adapter_refusal_reason: 'provider_adapter_not_configured',
   content_preview: 'run startup sequence',
 }));
@@ -332,8 +333,9 @@ const providerRequestPayload = createProviderRequestPayload({
   provider_adapter_admission_status: 'configured_without_adapter',
   provider: 'codex-subscription',
   model: 'gpt-5.5',
-  thinking: 'medium',
   stream: true,
+  provider_streaming_contract: 'requested_but_not_dispatched',
+  provider_adapter_refusal_reason: 'provider_adapter_not_configured',
   provider_adapter_refusal_reason: 'provider_adapter_not_configured',
   content_preview: input.content,
 });
