@@ -12,7 +12,7 @@ use narada_agent_tui::smoke_runner::{
     interactive_smoke_step_summary_lines, run_interactive_smoke_step_with_provider_runtime_config,
     AgentTuiSmokeSession, AgentTuiSmokeStepConfig,
 };
-use narada_agent_tui::status_view_model::{ProviderRuntimeState, StatusViewInput};
+use narada_agent_tui::status_view_model::{McpRuntimeState, ProviderRuntimeState, StatusViewInput};
 use narada_agent_tui::terminal_input_tick::CrosstermTerminalInputReader;
 use narada_agent_tui::terminal_lifecycle::TerminalSession;
 use narada_agent_tui::terminal_runtime_config::{TerminalRuntimeConfig, TerminalRuntimeStatus};
@@ -422,13 +422,14 @@ fn build_interactive_runtime(args: &Args) -> Result<AgentTuiInteractiveRuntime, 
     let session = args.session.clone().unwrap_or_default();
     let control_jsonl = args.control_jsonl.clone().expect("validated control jsonl");
     let session_jsonl = args.session_jsonl.clone().expect("validated session jsonl");
-    Ok(AgentTuiInteractiveRuntime::with_provider_runtime_config(
+    Ok(AgentTuiInteractiveRuntime::with_runtime_configs(
         identity,
         session,
         control_jsonl,
         session_jsonl,
         build_evidence_context(args),
         provider_config_from_process_env(),
+        mcp_config_from_process_env(),
     ))
 }
 
@@ -513,6 +514,7 @@ fn build_scaffold_app_view(args: &Args) -> Result<AppViewModel, String> {
             provider_state: ProviderRuntimeState::from_provider_runtime_config(
                 &provider_config_from_process_env(),
             ),
+            mcp_state: McpRuntimeState::from_mcp_runtime_config(&mcp_config_from_process_env()),
             last_error: None,
         },
         composer: ComposerViewInput {

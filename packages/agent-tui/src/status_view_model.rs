@@ -1,4 +1,5 @@
 use crate::input_queue::TurnState;
+use crate::mcp_runtime_config::{McpRuntimeAdmissionStatus, McpRuntimeConfig};
 use crate::provider_runtime_config::{ProviderRuntimeAdmissionStatus, ProviderRuntimeConfig};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,6 +38,31 @@ impl ProviderRuntimeState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum McpRuntimeState {
+    Disabled,
+    Configured,
+    Refused,
+}
+
+impl McpRuntimeState {
+    pub fn from_mcp_runtime_config(config: &McpRuntimeConfig) -> Self {
+        match config.status {
+            McpRuntimeAdmissionStatus::Disabled => Self::Disabled,
+            McpRuntimeAdmissionStatus::Configured => Self::Configured,
+            McpRuntimeAdmissionStatus::Refused => Self::Refused,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Disabled => "mcp_disabled",
+            Self::Configured => "mcp_configured",
+            Self::Refused => "mcp_refused",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatusViewInput {
     pub identity: String,
     pub session: String,
@@ -45,6 +71,7 @@ pub struct StatusViewInput {
     pub held_system_directives: usize,
     pub transcript_items: usize,
     pub provider_state: ProviderRuntimeState,
+    pub mcp_state: McpRuntimeState,
     pub last_error: Option<String>,
 }
 
@@ -78,6 +105,7 @@ pub fn build_status_view(input: &StatusViewInput) -> StatusViewModel {
             &input.transcript_items.to_string(),
         ),
         segment("provider_state", "provider", input.provider_state.as_str()),
+        segment("mcp_state", "mcp", input.mcp_state.as_str()),
         segment(
             "last_error",
             "error",
@@ -124,6 +152,7 @@ mod tests {
             held_system_directives: 1,
             transcript_items: 8,
             provider_state: ProviderRuntimeState::Disabled,
+            mcp_state: McpRuntimeState::Disabled,
             last_error: None,
         }
     }
@@ -132,15 +161,16 @@ mod tests {
     fn builds_status_segments_in_stable_order() {
         let model = build_status_view(&input());
 
-        assert_eq!(model.segments.len(), 8);
+        assert_eq!(model.segments.len(), 9);
         assert_eq!(model.segments[0].key, "identity");
         assert_eq!(model.segments[0].label, "agent");
         assert_eq!(model.segments[0].value, "sonar.resident");
         assert_eq!(model.segments[3].key, "queued_inputs");
         assert_eq!(model.segments[3].value, "2");
         assert_eq!(model.segments[6].value, "provider_disabled");
-        assert_eq!(model.segments[7].key, "last_error");
-        assert_eq!(model.segments[7].value, "none");
+        assert_eq!(model.segments[7].value, "mcp_disabled");
+        assert_eq!(model.segments[8].key, "last_error");
+        assert_eq!(model.segments[8].value, "none");
     }
 
     #[test]
@@ -149,7 +179,7 @@ mod tests {
 
         assert_eq!(
             model.compact_line,
-            "agent=sonar.resident | session=carrier_1 | turn=idle | queued=2 | held=1 | transcript=8 | provider=provider_disabled | error=none"
+            "agent=sonar.resident | session=carrier_1 | turn=idle | queued=2 | held=1 | transcript=8 | provider=provider_disabled | mcp=mcp_disabled | error=none"
         );
     }
 
@@ -160,7 +190,7 @@ mod tests {
             ..input()
         });
 
-        assert_eq!(model.segments[7].value, "read failed");
+        assert_eq!(model.segments[8].value, "read failed");
         assert!(model.compact_line.ends_with("error=read failed"));
     }
 
@@ -195,6 +225,43 @@ mod tests {
         assert_eq!(
             ProviderRuntimeState::from_provider_runtime_config(&refused),
             ProviderRuntimeState::Refused
+        );
+    }
+
+    #[test]
+    fn maps_mcp_runtime_config_to_mcp_state() {
+        let disabled = McpRuntimeConfig::disabled();
+        assert_eq!(
+            McpRuntimeState::from_mcp_runtime_config(&disabled),
+            McpRuntimeState::Disabled
+        );
+
+        let configured = McpRuntimeConfig::from_env_map(&std::collections::BTreeMap::from([
+            (
+                "NARADA_AGENT_TUI_ENABLE_MCP_FABRIC".to_string(),
+                "true".to_string(),
+            ),
+            (
+                "NARADA_AGENT_TUI_MCP_CONFIG".to_string(),
+                "D:/site/.ai/mcp/config.json".to_string(),
+            ),
+            (
+                "NARADA_SITE_MCP_FABRIC".to_string(),
+                "D:/site/.ai/mcp".to_string(),
+            ),
+        ]));
+        assert_eq!(
+            McpRuntimeState::from_mcp_runtime_config(&configured),
+            McpRuntimeState::Configured
+        );
+
+        let refused = McpRuntimeConfig::from_env_map(&std::collections::BTreeMap::from([(
+            "NARADA_AGENT_TUI_ENABLE_MCP_FABRIC".to_string(),
+            "true".to_string(),
+        )]));
+        assert_eq!(
+            McpRuntimeState::from_mcp_runtime_config(&refused),
+            McpRuntimeState::Refused
         );
     }
 

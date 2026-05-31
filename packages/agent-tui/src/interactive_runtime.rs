@@ -3,10 +3,11 @@ use crate::composer_draft::ComposerDraftState;
 use crate::composer_view_model::ComposerViewInput;
 use crate::input_queue::SessionEvidenceContext;
 use crate::layout_model::{LayoutConfig, TerminalSize};
+use crate::mcp_runtime_config::McpRuntimeConfig;
 use crate::provider_dispatch::ProviderAdapter;
 use crate::provider_runtime_config::ProviderRuntimeConfig;
 use crate::runtime_coordinator::{RuntimeCoordinator, RuntimeCoordinatorClock};
-use crate::status_view_model::{ProviderRuntimeState, StatusViewInput};
+use crate::status_view_model::{McpRuntimeState, ProviderRuntimeState, StatusViewInput};
 use crate::transcript_store::{TranscriptIngestSummary, TranscriptStore};
 use crate::turn_coordinator::{TurnCoordinator, TurnCoordinatorClock};
 use std::path::PathBuf;
@@ -40,6 +41,7 @@ pub struct AgentTuiInteractiveRuntime {
     turns: TurnCoordinator,
     transcript: TranscriptStore,
     provider_state: ProviderRuntimeState,
+    mcp_state: McpRuntimeState,
 }
 
 impl AgentTuiInteractiveRuntime {
@@ -58,6 +60,7 @@ impl AgentTuiInteractiveRuntime {
             evidence_context,
             Box::new(crate::provider_dispatch::ProviderDispatchStub::default()),
             ProviderRuntimeState::Disabled,
+            McpRuntimeState::Disabled,
         )
     }
 
@@ -68,6 +71,26 @@ impl AgentTuiInteractiveRuntime {
         session_jsonl_path: impl Into<PathBuf>,
         evidence_context: SessionEvidenceContext,
         provider_runtime_config: ProviderRuntimeConfig,
+    ) -> Self {
+        Self::with_runtime_configs(
+            identity,
+            session,
+            control_jsonl_path,
+            session_jsonl_path,
+            evidence_context,
+            provider_runtime_config,
+            McpRuntimeConfig::disabled(),
+        )
+    }
+
+    pub fn with_runtime_configs(
+        identity: impl Into<String>,
+        session: impl Into<String>,
+        control_jsonl_path: impl Into<PathBuf>,
+        session_jsonl_path: impl Into<PathBuf>,
+        evidence_context: SessionEvidenceContext,
+        provider_runtime_config: ProviderRuntimeConfig,
+        mcp_runtime_config: McpRuntimeConfig,
     ) -> Self {
         Self::with_provider_adapter_and_state(
             identity,
@@ -81,6 +104,7 @@ impl AgentTuiInteractiveRuntime {
                 ),
             ),
             ProviderRuntimeState::from_provider_runtime_config(&provider_runtime_config),
+            McpRuntimeState::from_mcp_runtime_config(&mcp_runtime_config),
         )
     }
 
@@ -100,6 +124,7 @@ impl AgentTuiInteractiveRuntime {
             evidence_context,
             provider_adapter,
             ProviderRuntimeState::Disabled,
+            McpRuntimeState::Disabled,
         )
     }
 
@@ -111,6 +136,7 @@ impl AgentTuiInteractiveRuntime {
         evidence_context: SessionEvidenceContext,
         provider_adapter: Box<dyn ProviderAdapter>,
         provider_state: ProviderRuntimeState,
+        mcp_state: McpRuntimeState,
     ) -> Self {
         let session_jsonl_path = session_jsonl_path.into();
         Self {
@@ -128,6 +154,7 @@ impl AgentTuiInteractiveRuntime {
             ),
             transcript: TranscriptStore::new(),
             provider_state,
+            mcp_state,
         }
     }
 
@@ -194,6 +221,7 @@ impl AgentTuiInteractiveRuntime {
                 held_system_directives: self.coordinator.queue().held_count(),
                 transcript_items: self.transcript.len(),
                 provider_state: self.provider_state.clone(),
+                mcp_state: self.mcp_state.clone(),
                 last_error,
             },
             composer: ComposerViewInput {
@@ -219,6 +247,7 @@ impl From<crate::runtime_step::RuntimeStepClock> for InteractiveStepClock {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::mcp_runtime_config::McpRuntimeConfig;
     use crate::provider_runtime_config::ProviderRuntimeConfig;
     use std::collections::BTreeMap;
     use std::fs::{remove_file, OpenOptions};
@@ -312,7 +341,7 @@ mod tests {
     }
 
     #[test]
-    fn build_view_reports_configured_not_implemented_provider_state() {
+    fn build_view_reports_configured_provider_and_mcp_state() {
         let control_path = temp_path("control");
         let session_path = temp_path("session");
         let provider_runtime_config = ProviderRuntimeConfig::from_env_map(&BTreeMap::from([
@@ -326,13 +355,28 @@ mod tests {
             ),
             ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
         ]));
-        let runtime = AgentTuiInteractiveRuntime::with_provider_runtime_config(
+        let mcp_runtime_config = McpRuntimeConfig::from_env_map(&BTreeMap::from([
+            (
+                "NARADA_AGENT_TUI_ENABLE_MCP_FABRIC".to_string(),
+                "true".to_string(),
+            ),
+            (
+                "NARADA_AGENT_TUI_MCP_CONFIG".to_string(),
+                "D:/site/.ai/mcp/config.json".to_string(),
+            ),
+            (
+                "NARADA_SITE_MCP_FABRIC".to_string(),
+                "D:/site/.ai/mcp".to_string(),
+            ),
+        ]));
+        let runtime = AgentTuiInteractiveRuntime::with_runtime_configs(
             "sonar.resident",
             "carrier_fixture_1",
             &control_path,
             &session_path,
             context(),
             provider_runtime_config,
+            mcp_runtime_config,
         );
 
         let model = runtime.build_view(
@@ -348,6 +392,7 @@ mod tests {
             .status
             .compact_line
             .contains("provider=provider_configured_not_implemented"));
+        assert!(model.status.compact_line.contains("mcp=mcp_configured"));
 
         remove_file(control_path).ok();
         remove_file(session_path).ok();
