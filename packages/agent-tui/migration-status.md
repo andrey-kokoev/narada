@@ -42,7 +42,7 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - Rendering boundary model converts provider stderr, MCP stderr, known-noise suppression, terminal resize, and payload threshold decisions into mediated diagnostics or payload references instead of raw terminal writes.
 - Provider output constructors and transcript projection enforce payload references for oversized or sensitive provider text/tool arguments instead of inlining them into transcript rows.
 - MCP fabric boundary acceptance verifies disabled-by-default posture, policy-bound tool visibility after admission, and valid tool request/result evidence records.
-- MCP fabric transport skeleton parses carrier MCP config, derives policy-bound visibility from configured tools, resolves tools to stdio server launch specs, and prepares evidenced JSON-RPC `tools/call` requests without spawning live transport yet.
+- MCP fabric transport parses carrier MCP config, derives policy-bound visibility from configured tools, resolves tools to stdio server launch specs, and prepares evidenced JSON-RPC `tools/call` requests for supervised stdio execution.
 - MCP JSON-RPC contract builds newline-delimited `tools/call` requests, parses success/error responses, and classifies responses into MCP tool result evidence summaries.
 - MCP stdio process I/O can write one prepared JSON-RPC request, read one response line, validate response identity, classify the result, and has a process-backed one-shot execution wrapper.
 - MCP process supervisor contract models server lifecycle states, initialize/initialized handshake frames, readiness gating, a bounded restart decision, and recovery diagnostics as session evidence.
@@ -78,7 +78,7 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - Narada proper `agent-start` admits `agent-tui` as a distinct runtime but launches only bounded non-terminal `--interactive-step-once` by default.
 - Agent-start launch metadata names the admitted bounded runtime slice, the gated terminal interactive loop, and the unsatisfied promotion gate.
 - Agent-start launch metadata keeps provider execution disabled and records the missing provider adapter, evidence, streaming, and tool-call contracts required before admission.
-- Agent-start launch metadata keeps Site MCP fabric access disabled and records the missing Rust MCP client, policy visibility, tool request/response, and tool evidence contracts required before admission.
+- Agent-start launch metadata keeps Site MCP fabric access disabled for the bounded runtime slice and records the implemented-but-withheld Rust MCP bridge plus remaining live Site execution admission requirements.
 - Agent-start uses named metadata builders for the shared `agent-tui` terminal, provider, and MCP promotion gates instead of inline ad hoc gate objects.
 - Agent-start promotion metadata includes a machine-readable checklist for Rust test availability, terminal-loop acceptance, carrier command acceptance, rendering/diagnostic boundary acceptance, payload-reference policy, provider adapter admission, MCP fabric client admission, Site rollout acceptance, and launch metadata runtime slice evidence; completed checklist items are marked satisfied instead of retained as stale rollout blockers.
 - Agent-start launch metadata includes a concrete `site_rollout_acceptance` matrix for all launcher-registry Narada Sites, with per-Site side-by-side agent-cli/agent-tui evidence requirements and default promotion blocked until acceptance is current.
