@@ -48,7 +48,7 @@ struct CarrierConfigFile {
 struct RawMcpServer {
     transport: Option<String>,
     command: Option<String>,
-    args: Option<Vec<String>>,
+    args: Option<Value>,
     tools: Option<Value>,
     allowed_tools: Option<Value>,
     tool_names: Option<Value>,
@@ -189,14 +189,7 @@ impl McpFabricTransportServer {
         if tools.is_empty() {
             return Err(format!("mcp_fabric_server_tools_missing:{name}"));
         }
-        let mut args = Vec::new();
-        for arg in raw.args.unwrap_or_default() {
-            let arg = arg.trim().to_string();
-            if arg.is_empty() {
-                return Err(format!("mcp_fabric_server_arg_invalid:{name}"));
-            }
-            args.push(arg);
-        }
+        let args = select_args(&name, raw.args)?;
         let surface_id = normalize_optional_server_field(&name, "surface_id", raw.surface_id)?;
         let target_site_root =
             normalize_optional_server_field(&name, "target_site_root", raw.target_site_root)?;
@@ -242,6 +235,31 @@ fn normalize_optional_config_field(
         return Err(format!("mcp_fabric_config_{field_name}_invalid"));
     }
     Ok(Some(value))
+}
+
+fn select_args(server_name: &str, args: Option<Value>) -> Result<Vec<String>, String> {
+    let Some(value) = args else {
+        return Ok(Vec::new());
+    };
+    let Some(values) = value.as_array() else {
+        return Err(format!("mcp_fabric_server_args_invalid:{server_name}"));
+    };
+    values
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .map(str::to_string)
+                .ok_or_else(|| format!("mcp_fabric_server_arg_invalid:{server_name}"))
+        })
+        .map(|arg| {
+            let arg = arg?.trim().to_string();
+            if arg.is_empty() {
+                return Err(format!("mcp_fabric_server_arg_invalid:{server_name}"));
+            }
+            Ok(arg)
+        })
+        .collect()
 }
 
 fn select_tool_list(
@@ -578,6 +596,46 @@ mod tests {
         .expect("trimmed command config parses");
 
         assert_eq!(client.servers["sonar-site-loop"].command, "node");
+    }
+
+    #[test]
+    fn rejects_invalid_server_args_shape() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "args": "site-loop.mjs",
+                  "tools": ["site_loop_status"]
+                }
+              }
+            }"#,
+        )
+        .expect_err("args must be an array");
+
+        assert_eq!(error, "mcp_fabric_server_args_invalid:sonar-site-loop");
+    }
+
+    #[test]
+    fn rejects_non_string_server_arg() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "args": [1],
+                  "tools": ["site_loop_status"]
+                }
+              }
+            }"#,
+        )
+        .expect_err("args must contain strings");
+
+        assert_eq!(error, "mcp_fabric_server_arg_invalid:sonar-site-loop");
     }
 
     #[test]
