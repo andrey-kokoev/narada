@@ -103,11 +103,20 @@ pub fn config_path_policy() -> &'static str {
     static CONTRACT: OnceLock<McpRuntimeContract> = OnceLock::new();
     CONTRACT
         .get_or_init(|| {
-            serde_json::from_str(MCP_RUNTIME_CONTRACT_JSON)
-                .expect("agent-tui MCP runtime contract parses")
+            parse_mcp_runtime_contract(MCP_RUNTIME_CONTRACT_JSON)
+                .expect("agent-tui MCP runtime contract is valid")
         })
         .mcp_config_path_policy
         .as_str()
+}
+
+fn parse_mcp_runtime_contract(json: &str) -> Result<McpRuntimeContract, String> {
+    let contract: McpRuntimeContract = serde_json::from_str(json)
+        .map_err(|error| format!("mcp_runtime_contract_parse_failed:{error}"))?;
+    if contract.mcp_config_path_policy.trim() != "inside_site_mcp_fabric_without_parent_traversal" {
+        return Err("mcp_runtime_contract_invalid:mcp_config_path_policy".to_string());
+    }
+    Ok(contract)
 }
 
 fn env_flag_enabled(value: Option<&String>) -> bool {
@@ -159,6 +168,35 @@ mod tests {
             .iter()
             .map(|(key, value)| (key.to_string(), value.to_string()))
             .collect()
+    }
+
+    #[test]
+    fn mcp_runtime_contract_rejects_malformed_json() {
+        assert_eq!(
+            parse_mcp_runtime_contract("not json").unwrap_err(),
+            "mcp_runtime_contract_parse_failed:expected ident at line 1 column 2"
+        );
+    }
+
+    #[test]
+    fn mcp_runtime_contract_rejects_wrong_path_policy() {
+        assert_eq!(
+            parse_mcp_runtime_contract(
+                r#"{"schema":"narada.agent_tui.mcp_runtime_contract.v0","mcp_config_path_policy":"prefix_only"}"#
+            )
+            .unwrap_err(),
+            "mcp_runtime_contract_invalid:mcp_config_path_policy"
+        );
+    }
+
+    #[test]
+    fn mcp_runtime_contract_reads_path_policy() {
+        assert_eq!(
+            parse_mcp_runtime_contract(MCP_RUNTIME_CONTRACT_JSON)
+                .expect("contract parses")
+                .mcp_config_path_policy,
+            "inside_site_mcp_fabric_without_parent_traversal"
+        );
     }
 
     #[test]

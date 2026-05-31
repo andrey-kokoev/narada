@@ -8,7 +8,7 @@ import { formatAgentStartResult } from '../../packages/agent-start-renderer/src/
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const defaultRootDir = join(__dirname, '..', '..');
-const AGENT_TUI_MCP_RUNTIME_CONTRACT = JSON.parse(readFileSync(
+const AGENT_TUI_MCP_RUNTIME_CONTRACT = parseAgentTuiMcpRuntimeContract(readFileSync(
   join(defaultRootDir, 'packages', 'agent-tui', 'contracts', 'mcp-runtime.json'),
   'utf8',
 ));
@@ -52,7 +52,18 @@ const CLAUDE_CODE_WITHHELD_AUTHORITIES = [
   'native_shell_authority',
   'external_site_authority',
 ];
-
+export function parseAgentTuiMcpRuntimeContract(jsonText) {
+  let contract;
+  try {
+    contract = JSON.parse(jsonText);
+  } catch (error) {
+    throw new Error(`mcp_runtime_contract_parse_failed:${error.message}`);
+  }
+  if (contract?.mcp_config_path_policy !== 'inside_site_mcp_fabric_without_parent_traversal') {
+    throw new Error('mcp_runtime_contract_invalid:mcp_config_path_policy');
+  }
+  return contract;
+}
 function parseArgs(argv) {
   const result = {};
   let i = 0;

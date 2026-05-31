@@ -7,6 +7,7 @@ import {
   buildLaunchPlanFromArgs,
   compactLaunchSummary,
   materializeAgentTuiLaunchFiles,
+  parseAgentTuiMcpRuntimeContract,
   readAgentStartEvent,
   writeCompactResult,
   writeClaudeCodeProcessAttempt,
@@ -21,10 +22,24 @@ import {
   validateEvidenceJson,
   writeReport as writeAgentTuiRolloutReport,
 } from './agent-tui-rollout-acceptance.mjs';
-const AGENT_TUI_MCP_RUNTIME_CONTRACT = JSON.parse(fs.readFileSync(
+const AGENT_TUI_MCP_RUNTIME_CONTRACT = parseAgentTuiMcpRuntimeContract(fs.readFileSync(
   path.join(process.cwd(), 'packages', 'agent-tui', 'contracts', 'mcp-runtime.json'),
   'utf8',
 ));
+
+test('agent-tui MCP runtime contract parser rejects invalid contracts', () => {
+  assert.throws(
+    () => parseAgentTuiMcpRuntimeContract('{'),
+    /mcp_runtime_contract_parse_failed/,
+  );
+  assert.throws(
+    () => parseAgentTuiMcpRuntimeContract(JSON.stringify({
+      schema: 'narada.agent_tui.mcp_runtime_contract.v0',
+      mcp_config_path_policy: 'inside_prefix_only',
+    })),
+    /mcp_runtime_contract_invalid:mcp_config_path_policy/,
+  );
+});
 
 function tempSite() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'narada-agent-start-'));
