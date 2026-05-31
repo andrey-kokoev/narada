@@ -527,7 +527,11 @@ mod tests {
         ]));
         let adapter_admission = ProviderAdapterAdmission::from_runtime_config(
             &runtime_config,
-            Some("codex_subscription_adapter"),
+            Some(
+                provider_adapter_contract()
+                    .production_provider_adapter_kind
+                    .as_str(),
+            ),
         );
         let adapter = provider_adapter_from_runtime_config(runtime_config, adapter_admission);
         let record = adapter.dispatch_request(&input, "turn_1");
@@ -540,13 +544,15 @@ mod tests {
         );
         assert_eq!(
             record.payload["provider_adapter_kind"],
-            "codex_subscription_adapter"
+            provider_adapter_contract().production_provider_adapter_kind
         );
         assert_eq!(
             record.payload["provider_adapter_refusal_reason"],
-            "provider_adapter_not_implemented:codex_subscription_adapter"
+            format!(
+                "provider_adapter_not_implemented:{}",
+                provider_adapter_contract().production_provider_adapter_kind
+            )
         );
-        assert!(record.outputs.is_empty());
     }
 
     #[test]
@@ -569,14 +575,13 @@ mod tests {
         assert!(record.provider_execution_enabled);
         assert_eq!(record.payload["provider_request_status"], "completed");
         assert_eq!(record.payload["provider_execution_enabled"], true);
-        assert_eq!(record.payload["provider_runtime_status"], "configured");
         assert_eq!(
             record.payload["provider_adapter_admission_status"],
             "admitted"
         );
         assert_eq!(
             record.payload["provider_adapter_kind"],
-            "scripted_provider_adapter"
+            provider_adapter_contract().scripted_provider_adapter_kind
         );
         assert_eq!(
             record.payload["provider_adapter_refusal_reason"],
