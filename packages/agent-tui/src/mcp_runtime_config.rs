@@ -38,12 +38,12 @@ impl McpRuntimeConfig {
     }
 
     pub fn from_env_map(env: &BTreeMap<String, String>) -> Self {
-        Self::from_env_map_with_config_readiness(env, |_| true)
+        Self::from_env_map_with_config_readiness(env, |_| Ok(()))
     }
 
     pub fn from_env_map_with_config_readiness(
         env: &BTreeMap<String, String>,
-        config_is_readable: impl Fn(&str) -> bool,
+        config_readiness: impl Fn(&str) -> Result<(), String>,
     ) -> Self {
         if !env_flag_enabled(env.get("NARADA_AGENT_TUI_ENABLE_MCP_FABRIC")) {
             return Self::disabled();
@@ -62,8 +62,8 @@ impl McpRuntimeConfig {
         if !config_path_is_within_fabric(&config_path, &site_mcp_fabric) {
             return Self::refused("mcp_config_outside_site_mcp_fabric");
         }
-        if !config_is_readable(&config_path) {
-            return Self::refused("mcp_config_unreadable");
+        if let Err(reason) = config_readiness(&config_path) {
+            return Self::refused(reason);
         }
 
         Self {
@@ -193,7 +193,7 @@ mod tests {
                 ("NARADA_AGENT_TUI_MCP_CONFIG", "D:/site/.ai/mcp/config.json"),
                 ("NARADA_SITE_MCP_FABRIC", "D:/site/.ai/mcp"),
             ]),
-            |_| false,
+            |_| Err("mcp_config_unreadable".to_string()),
         );
 
         assert_eq!(config.status, McpRuntimeAdmissionStatus::Refused);
