@@ -491,6 +491,29 @@ function validateProviderRequestPayload(payload) {
   return errors;
 }
 
+export function createProviderTextDeltaPayload({ turn_id, sequence, text_delta, text_delta_ref = null }) {
+  return {
+    schema: PROVIDER_OUTPUT_PAYLOAD_SCHEMA,
+    turn_id,
+    provider_output_kind: 'text_delta',
+    sequence,
+    text_delta,
+    text_delta_ref,
+  };
+}
+
+export function createProviderToolCallPayload({ turn_id, sequence, tool_name, arguments_summary, arguments_ref = null }) {
+  return {
+    schema: PROVIDER_OUTPUT_PAYLOAD_SCHEMA,
+    turn_id,
+    provider_output_kind: 'tool_call_request',
+    sequence,
+    tool_name,
+    arguments_summary,
+    arguments_ref,
+  };
+}
+
 function validateProviderOutputPayload(expectedKind, payload) {
   const errors = requireFields(payload, ['schema', 'turn_id', 'provider_output_kind', 'sequence']);
   if (errors.length > 0) return errors;

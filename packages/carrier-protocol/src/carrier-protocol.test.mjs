@@ -24,6 +24,8 @@ import {
   createPayloadRef,
   createPayloadPolicy,
   createProviderRequestPayload,
+  createProviderTextDeltaPayload,
+  createProviderToolCallPayload,
   createQueueLifecycleSessionEvent,
   createSessionEvent,
   createTurnTerminalPayload,
@@ -216,14 +218,12 @@ assert.match(thrownMessage(() => createSessionEvent({
   event_kind: 'provider_request_recorded',
   payload: { ...providerRequestPayload, stream: 'yes' },
 })), /payload.invalid_stream/);
-const providerTextDeltaPayload = {
-  schema: PROVIDER_OUTPUT_PAYLOAD_SCHEMA,
+const providerTextDeltaPayload = createProviderTextDeltaPayload({
   turn_id: 'turn_test',
-  provider_output_kind: 'text_delta',
   sequence: 1,
   text_delta: 'hello',
-  text_delta_ref: null,
-};
+});
+assert.equal(providerTextDeltaPayload.schema, PROVIDER_OUTPUT_PAYLOAD_SCHEMA);
 assert.deepEqual(validateSessionEvent(createSessionEvent({
   ...sessionBase,
   event_kind: 'provider_text_delta_recorded',
@@ -234,15 +234,13 @@ assert.match(thrownMessage(() => createSessionEvent({
   event_kind: 'provider_text_delta_recorded',
   payload: { ...providerTextDeltaPayload, sequence: -1 },
 })), /payload.invalid_sequence/);
-const providerToolCallPayload = {
-  schema: PROVIDER_OUTPUT_PAYLOAD_SCHEMA,
+const providerToolCallPayload = createProviderToolCallPayload({
   turn_id: 'turn_test',
-  provider_output_kind: 'tool_call_request',
   sequence: 2,
   tool_name: 'site_loop_run_once',
   arguments_summary: '{}',
-  arguments_ref: null,
-};
+});
+assert.equal(providerToolCallPayload.schema, PROVIDER_OUTPUT_PAYLOAD_SCHEMA);
 assert.deepEqual(validateSessionEvent(createSessionEvent({
   ...sessionBase,
   event_kind: 'provider_tool_call_requested',

@@ -1,5 +1,6 @@
 use crate::carrier_protocol::{
-    create_provider_request_payload, InputEvent, SessionEventKind, PROVIDER_OUTPUT_PAYLOAD_SCHEMA,
+    create_provider_request_payload, create_provider_text_delta_payload,
+    create_provider_tool_call_payload, InputEvent, SessionEventKind,
 };
 use crate::provider_adapter_admission::{ProviderAdapterAdmission, ProviderAdapterKind};
 use crate::provider_runtime_config::ProviderRuntimeConfig;
@@ -149,14 +150,12 @@ impl ProviderOutputRecord {
         let (text_delta, text_delta_ref) = inline_text_or_ref(delta, decision);
         Self {
             kind: ProviderOutputKind::TextDelta,
-            payload: json!({
-                "schema": PROVIDER_OUTPUT_PAYLOAD_SCHEMA,
-                "turn_id": turn_id,
-                "provider_output_kind": ProviderOutputKind::TextDelta.as_str(),
-                "sequence": sequence,
-                "text_delta": text_delta,
-                "text_delta_ref": text_delta_ref
-            }),
+            payload: create_provider_text_delta_payload(
+                turn_id,
+                sequence,
+                &text_delta,
+                text_delta_ref,
+            ),
         }
     }
 
@@ -213,15 +212,13 @@ impl ProviderOutputRecord {
         let (arguments_summary, arguments_ref) = inline_text_or_ref(arguments_summary, decision);
         Self {
             kind: ProviderOutputKind::ToolCallRequest,
-            payload: json!({
-                "schema": PROVIDER_OUTPUT_PAYLOAD_SCHEMA,
-                "turn_id": turn_id,
-                "provider_output_kind": ProviderOutputKind::ToolCallRequest.as_str(),
-                "sequence": sequence,
-                "tool_name": tool_name,
-                "arguments_summary": arguments_summary,
-                "arguments_ref": arguments_ref
-            }),
+            payload: create_provider_tool_call_payload(
+                turn_id,
+                sequence,
+                tool_name,
+                &arguments_summary,
+                arguments_ref,
+            ),
         }
     }
 }
@@ -333,7 +330,9 @@ impl ProviderAdapter for ProviderDispatchStub {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::carrier_protocol::{parse_input_event, PROVIDER_REQUEST_PAYLOAD_SCHEMA};
+    use crate::carrier_protocol::{
+        parse_input_event, PROVIDER_OUTPUT_PAYLOAD_SCHEMA, PROVIDER_REQUEST_PAYLOAD_SCHEMA,
+    };
     use std::collections::BTreeMap;
 
     const INPUT_FIXTURE: &str = include_str!("../../carrier-protocol/fixtures/input-event.json");

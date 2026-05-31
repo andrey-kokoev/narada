@@ -263,6 +263,40 @@ pub fn create_provider_request_payload(
     })
 }
 
+pub fn create_provider_text_delta_payload(
+    turn_id: &str,
+    sequence: u64,
+    text_delta: &str,
+    text_delta_ref: Value,
+) -> Value {
+    json!({
+        "schema": PROVIDER_OUTPUT_PAYLOAD_SCHEMA,
+        "turn_id": turn_id,
+        "provider_output_kind": "text_delta",
+        "sequence": sequence,
+        "text_delta": text_delta,
+        "text_delta_ref": text_delta_ref,
+    })
+}
+
+pub fn create_provider_tool_call_payload(
+    turn_id: &str,
+    sequence: u64,
+    tool_name: &str,
+    arguments_summary: &str,
+    arguments_ref: Value,
+) -> Value {
+    json!({
+        "schema": PROVIDER_OUTPUT_PAYLOAD_SCHEMA,
+        "turn_id": turn_id,
+        "provider_output_kind": "tool_call_request",
+        "sequence": sequence,
+        "tool_name": tool_name,
+        "arguments_summary": arguments_summary,
+        "arguments_ref": arguments_ref,
+    })
+}
+
 pub fn create_turn_terminal_payload(
     turn_id: &str,
     input_event_id: Option<&str>,
