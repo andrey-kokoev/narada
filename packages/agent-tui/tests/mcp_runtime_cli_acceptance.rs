@@ -1,4 +1,7 @@
+use std::fs::{create_dir_all, remove_dir_all, write};
+use std::path::PathBuf;
 use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 fn base_command() -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_narada-agent-tui"));
@@ -23,6 +26,20 @@ fn stdout(command: &mut Command) -> String {
         String::from_utf8_lossy(&output.stderr)
     );
     String::from_utf8(output.stdout).expect("stdout is utf8")
+}
+
+fn temp_mcp_fabric() -> PathBuf {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock works")
+        .as_nanos();
+    let fabric = std::env::temp_dir().join(format!("narada-agent-tui-mcp-{unique}"));
+    create_dir_all(&fabric).expect("create temp fabric");
+    fabric
+}
+
+fn path_string(path: &std::path::Path) -> String {
+    path.display().to_string()
 }
 
 #[test]
@@ -67,20 +84,39 @@ fn mcp_runtime_cli_acceptance_reports_refusal_for_config_outside_site_fabric() {
 }
 
 #[test]
-fn mcp_runtime_cli_acceptance_reports_configured_explicit_mcp_posture() {
+fn mcp_runtime_cli_acceptance_reports_refusal_for_unreadable_mcp_config() {
+    let fabric = temp_mcp_fabric();
+    let config_path = fabric.join("missing-agent-tui.json");
     let mut command = base_command();
     command
         .env("NARADA_AGENT_TUI_ENABLE_MCP_FABRIC", "true")
-        .env(
-            "NARADA_AGENT_TUI_MCP_CONFIG",
-            "D:/code/narada.sonar/.ai/mcp/agent-tui.json",
-        )
-        .env("NARADA_SITE_MCP_FABRIC", "D:/code/narada.sonar/.ai/mcp");
+        .env("NARADA_AGENT_TUI_MCP_CONFIG", path_string(&config_path))
+        .env("NARADA_SITE_MCP_FABRIC", path_string(&fabric));
 
     let output = stdout(&mut command);
+    remove_dir_all(&fabric).expect("remove temp fabric");
+
+    assert!(output.contains("mcp_status: refused"));
+    assert!(output.contains("mcp_fabric_access_enabled: false"));
+    assert!(output.contains("mcp_refusal: mcp_config_unreadable"));
+}
+
+#[test]
+fn mcp_runtime_cli_acceptance_reports_configured_explicit_mcp_posture() {
+    let fabric = temp_mcp_fabric();
+    let config_path = fabric.join("agent-tui.json");
+    write(&config_path, "{\"mcpServers\":{}}").expect("write temp mcp config");
+    let mut command = base_command();
+    command
+        .env("NARADA_AGENT_TUI_ENABLE_MCP_FABRIC", "true")
+        .env("NARADA_AGENT_TUI_MCP_CONFIG", path_string(&config_path))
+        .env("NARADA_SITE_MCP_FABRIC", path_string(&fabric));
+
+    let output = stdout(&mut command);
+    remove_dir_all(&fabric).expect("remove temp fabric");
 
     assert!(output.contains("mcp_status: configured"));
     assert!(output.contains("mcp_fabric_access_enabled: true"));
-    assert!(output.contains("mcp_config: D:/code/narada.sonar/.ai/mcp/agent-tui.json"));
-    assert!(output.contains("site_mcp_fabric: D:/code/narada.sonar/.ai/mcp"));
+    assert!(output.contains(&format!("mcp_config: {}", path_string(&config_path))));
+    assert!(output.contains(&format!("site_mcp_fabric: {}", path_string(&fabric))));
 }

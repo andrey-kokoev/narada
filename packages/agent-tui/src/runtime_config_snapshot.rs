@@ -4,6 +4,7 @@ use crate::provider_runtime_config::ProviderRuntimeConfig;
 use crate::status_view_model::RuntimePostureState;
 use crate::terminal_runtime_config::TerminalRuntimeConfig;
 use std::collections::BTreeMap;
+use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeConfigSnapshot {
@@ -12,9 +13,19 @@ pub struct RuntimeConfigSnapshot {
     pub mcp: McpRuntimeConfig,
     pub terminal: TerminalRuntimeConfig,
 }
-
 impl RuntimeConfigSnapshot {
     pub fn from_env_map(env_map: &BTreeMap<String, String>) -> Self {
+        Self::from_env_map_with_mcp_config_readiness(env_map, |_| true)
+    }
+
+    pub fn from_process_env_map(env_map: &BTreeMap<String, String>) -> Self {
+        Self::from_env_map_with_mcp_config_readiness(env_map, |path| Path::new(path).is_file())
+    }
+
+    pub fn from_env_map_with_mcp_config_readiness(
+        env_map: &BTreeMap<String, String>,
+        config_is_readable: impl Fn(&str) -> bool,
+    ) -> Self {
         let provider = ProviderRuntimeConfig::from_env_map(env_map);
         let provider_adapter_kind = env_map
             .get("NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND")
@@ -24,7 +35,7 @@ impl RuntimeConfigSnapshot {
         Self {
             provider,
             provider_adapter,
-            mcp: McpRuntimeConfig::from_env_map(env_map),
+            mcp: McpRuntimeConfig::from_env_map_with_config_readiness(env_map, config_is_readable),
             terminal: TerminalRuntimeConfig::from_env_map(env_map),
         }
     }

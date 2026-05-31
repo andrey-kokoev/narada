@@ -251,7 +251,7 @@ fn runtime_config_snapshot_from_process_env() -> RuntimeConfigSnapshot {
     let env_map = env::vars()
         .filter(|(key, _)| key.starts_with("NARADA_"))
         .collect::<BTreeMap<_, _>>();
-    RuntimeConfigSnapshot::from_env_map(&env_map)
+    RuntimeConfigSnapshot::from_process_env_map(&env_map)
 }
 
 fn terminal_config_from_process_env() -> TerminalRuntimeConfig {

@@ -32,7 +32,7 @@ $quotedCargoArgs = $cargoArgs | ForEach-Object {
 $cargoCommand = 'cargo ' + ($quotedCargoArgs -join ' ')
 $testScope = if ($Full) { 'full' } else { "focused:$Filter" }
 
-$cmd = "call `"$VsDevCmd`" -arch=x64 -host_arch=x64 >nul && cd /d `"$CrateRoot`" && cargo fmt -- --check >nul && $cargoCommand"
+$cmd = "call `"$VsDevCmd`" -arch=x64 -host_arch=x64 >nul && cd /d `"$CrateRoot`" && cargo fmt -- --check && $cargoCommand"
 $output = cmd /d /s /c $cmd 2>&1
 $exitCode = $LASTEXITCODE
 
