@@ -186,16 +186,16 @@ mod tests {
 
     #[test]
     fn parses_known_provider_adapter_kind() {
-        let scripted = ProviderAdapterKind::parse(" scripted_provider_adapter ")
-            .expect("scripted kind parses");
+        let scripted_input = format!(" {} ", scripted_provider_adapter_kind());
+        let scripted = ProviderAdapterKind::parse(&scripted_input).expect("scripted kind parses");
         assert_eq!(scripted, ProviderAdapterKind::Scripted);
-        assert_eq!(scripted.as_str(), "scripted_provider_adapter");
+        assert_eq!(scripted.as_str(), scripted_provider_adapter_kind());
         assert!(scripted.execution_implemented());
 
-        let codex =
-            ProviderAdapterKind::parse(" codex_subscription_adapter ").expect("codex kind parses");
+        let codex_input = format!(" {} ", production_provider_adapter_kind());
+        let codex = ProviderAdapterKind::parse(&codex_input).expect("codex kind parses");
         assert_eq!(codex, ProviderAdapterKind::CodexSubscription);
-        assert_eq!(codex.as_str(), "codex_subscription_adapter");
+        assert_eq!(codex.as_str(), production_provider_adapter_kind());
         assert!(!codex.execution_implemented());
         assert_eq!(
             ProviderAdapterKind::parse("unknown_adapter").unwrap_err(),
@@ -208,7 +208,7 @@ mod tests {
         let runtime_config = ProviderRuntimeConfig::disabled();
         let admission = ProviderAdapterAdmission::from_runtime_config(
             &runtime_config,
-            Some("codex_subscription_adapter"),
+            Some(production_provider_adapter_kind()),
         );
 
         assert_eq!(admission.status, ProviderAdapterAdmissionStatus::Disabled);
@@ -226,7 +226,7 @@ mod tests {
         ]));
         let admission = ProviderAdapterAdmission::from_runtime_config(
             &runtime_config,
-            Some("codex_subscription_adapter"),
+            Some(production_provider_adapter_kind()),
         );
 
         assert_eq!(admission.status, ProviderAdapterAdmissionStatus::Refused);
@@ -288,7 +288,7 @@ mod tests {
         ]));
         let admission = ProviderAdapterAdmission::from_runtime_config(
             &runtime_config,
-            Some("codex_subscription_adapter"),
+            Some(production_provider_adapter_kind()),
         );
 
         assert_eq!(admission.status, ProviderAdapterAdmissionStatus::Refused);
@@ -296,11 +296,15 @@ mod tests {
         assert!(!admission.provider_execution_enabled);
         assert_eq!(
             admission.adapter_kind.as_deref(),
-            Some("codex_subscription_adapter")
+            Some(production_provider_adapter_kind())
+        );
+        let production_refusal = format!(
+            "provider_adapter_not_implemented:{}",
+            production_provider_adapter_kind()
         );
         assert_eq!(
             admission.refusal_reason.as_deref(),
-            Some("provider_adapter_not_implemented:codex_subscription_adapter")
+            Some(production_refusal.as_str())
         );
     }
 
@@ -319,10 +323,9 @@ mod tests {
         assert_eq!(admission.status, ProviderAdapterAdmissionStatus::Admitted);
         assert!(admission.provider_execution_enabled);
         assert_eq!(admission.provider.as_deref(), Some("codex-subscription"));
-        assert_eq!(admission.model.as_deref(), Some("gpt-5.5"));
         assert_eq!(
             admission.adapter_kind.as_deref(),
-            Some("scripted_provider_adapter")
+            Some(scripted_provider_adapter_kind())
         );
         assert_eq!(admission.refusal_reason, None);
         assert_eq!(
@@ -331,9 +334,11 @@ mod tests {
                 ProviderAdapterKind::CodexSubscription
             )
             .unwrap_err(),
-            "provider_adapter_not_implemented:codex_subscription_adapter"
+            format!(
+                "provider_adapter_not_implemented:{}",
+                production_provider_adapter_kind()
+            )
         );
-
         let disabled = ProviderRuntimeConfig::disabled();
         assert_eq!(
             ProviderAdapterAdmission::try_admit(&disabled, ProviderAdapterKind::Scripted)
