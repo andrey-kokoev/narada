@@ -1,3 +1,4 @@
+use narada_agent_tui::provider_adapter_contract::provider_adapter_contract;
 use std::fs::{read_to_string, remove_file, write};
 use std::path::PathBuf;
 use std::process::Command;
@@ -8,6 +9,7 @@ const CONTROL_FIXTURE: &str =
 static TEMP_PATH_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn base_command() -> Command {
+    let contract = provider_adapter_contract();
     let mut command = Command::new(env!("CARGO_BIN_EXE_narada-agent-tui"));
     command
         .arg("--identity")
@@ -16,13 +18,29 @@ fn base_command() -> Command {
         .arg("carrier_fixture_1")
         .arg("--site-root")
         .arg("D:/code/narada.sonar")
-        .env_remove("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION")
-        .env_remove("NARADA_INTELLIGENCE_PROVIDER")
-        .env_remove("NARADA_AI_MODEL")
-        .env_remove("NARADA_AI_THINKING")
-        .env_remove("NARADA_AI_STREAM")
-        .env_remove("NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND");
+        .env_remove(&contract.provider_execution_env_var)
+        .env_remove(&contract.intelligence_provider_env_var)
+        .env_remove(&contract.ai_model_env_var)
+        .env_remove(&contract.ai_thinking_env_var)
+        .env_remove(&contract.ai_stream_env_var)
+        .env_remove(&contract.provider_adapter_kind_env_var);
     command
+}
+
+fn with_provider_env(command: &mut Command, pairs: &[(&str, &str)]) {
+    let contract = provider_adapter_contract();
+    for (semantic_key, value) in pairs {
+        let env_key = match *semantic_key {
+            "execution_enabled" => &contract.provider_execution_env_var,
+            "provider" => &contract.intelligence_provider_env_var,
+            "model" => &contract.ai_model_env_var,
+            "thinking" => &contract.ai_thinking_env_var,
+            "stream" => &contract.ai_stream_env_var,
+            "adapter_kind" => &contract.provider_adapter_kind_env_var,
+            unexpected => panic!("unknown provider runtime env semantic key: {unexpected}"),
+        };
+        command.env(env_key, value);
+    }
 }
 
 fn stdout(command: &mut Command) -> String {
@@ -56,9 +74,13 @@ fn provider_runtime_cli_acceptance_reports_disabled_by_default() {
 #[test]
 fn provider_runtime_cli_acceptance_reports_refusal_when_enabled_without_model() {
     let mut command = base_command();
-    command
-        .env("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true")
-        .env("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription");
+    with_provider_env(
+        &mut command,
+        &[
+            ("execution_enabled", "true"),
+            ("provider", "codex-subscription"),
+        ],
+    );
 
     let output = stdout(&mut command);
 
@@ -70,12 +92,16 @@ fn provider_runtime_cli_acceptance_reports_refusal_when_enabled_without_model() 
 #[test]
 fn provider_runtime_cli_acceptance_reports_configured_without_execution_adapter() {
     let mut command = base_command();
-    command
-        .env("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true")
-        .env("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription")
-        .env("NARADA_AI_MODEL", "gpt-5.5")
-        .env("NARADA_AI_THINKING", "medium")
-        .env("NARADA_AI_STREAM", "false");
+    with_provider_env(
+        &mut command,
+        &[
+            ("execution_enabled", "true"),
+            ("provider", "codex-subscription"),
+            ("model", "gpt-5.5"),
+            ("thinking", "medium"),
+            ("stream", "false"),
+        ],
+    );
 
     let output = stdout(&mut command);
 
@@ -94,11 +120,15 @@ fn provider_runtime_cli_acceptance_reports_configured_without_execution_adapter(
 #[test]
 fn provider_runtime_cli_acceptance_reports_unknown_adapter_as_refused() {
     let mut command = base_command();
-    command
-        .env("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true")
-        .env("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription")
-        .env("NARADA_AI_MODEL", "gpt-5.5")
-        .env("NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND", "unknown_adapter");
+    with_provider_env(
+        &mut command,
+        &[
+            ("execution_enabled", "true"),
+            ("provider", "codex-subscription"),
+            ("model", "gpt-5.5"),
+            ("adapter_kind", "unknown_adapter"),
+        ],
+    );
 
     let output = stdout(&mut command);
 
@@ -113,14 +143,15 @@ fn provider_runtime_cli_acceptance_reports_unknown_adapter_as_refused() {
 #[test]
 fn provider_runtime_cli_acceptance_reports_requested_adapter_as_refused_until_implemented() {
     let mut command = base_command();
-    command
-        .env("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true")
-        .env("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription")
-        .env("NARADA_AI_MODEL", "gpt-5.5")
-        .env(
-            "NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND",
-            "codex_subscription_adapter",
-        );
+    with_provider_env(
+        &mut command,
+        &[
+            ("execution_enabled", "true"),
+            ("provider", "codex-subscription"),
+            ("model", "gpt-5.5"),
+            ("adapter_kind", "codex_subscription_adapter"),
+        ],
+    );
 
     let output = stdout(&mut command);
 
@@ -174,10 +205,15 @@ fn provider_runtime_cli_acceptance_records_runtime_posture_in_runtime_step_evide
         .arg(&control_path)
         .arg("--session-jsonl")
         .arg(&session_path)
-        .arg("--runtime-step-once")
-        .env("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true")
-        .env("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription")
-        .env("NARADA_AI_MODEL", "gpt-5.5");
+        .arg("--runtime-step-once");
+    with_provider_env(
+        &mut command,
+        &[
+            ("execution_enabled", "true"),
+            ("provider", "codex-subscription"),
+            ("model", "gpt-5.5"),
+        ],
+    );
 
     let output = stdout(&mut command);
     assert!(output.contains("runtime_step_once: ok"));
@@ -201,14 +237,16 @@ fn provider_runtime_cli_acceptance_records_requested_adapter_refusal_in_runtime_
         .arg(&control_path)
         .arg("--session-jsonl")
         .arg(&session_path)
-        .arg("--runtime-step-once")
-        .env("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true")
-        .env("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription")
-        .env("NARADA_AI_MODEL", "gpt-5.5")
-        .env(
-            "NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND",
-            "codex_subscription_adapter",
-        );
+        .arg("--runtime-step-once");
+    with_provider_env(
+        &mut command,
+        &[
+            ("execution_enabled", "true"),
+            ("provider", "codex-subscription"),
+            ("model", "gpt-5.5"),
+            ("adapter_kind", "codex_subscription_adapter"),
+        ],
+    );
 
     let output = stdout(&mut command);
     assert!(output.contains("runtime_step_once: ok"));
@@ -237,10 +275,15 @@ fn provider_runtime_cli_acceptance_records_runtime_posture_in_interactive_step_e
         .arg(&control_path)
         .arg("--session-jsonl")
         .arg(&session_path)
-        .arg("--interactive-step-once")
-        .env("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true")
-        .env("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription")
-        .env("NARADA_AI_MODEL", "gpt-5.5");
+        .arg("--interactive-step-once");
+    with_provider_env(
+        &mut command,
+        &[
+            ("execution_enabled", "true"),
+            ("provider", "codex-subscription"),
+            ("model", "gpt-5.5"),
+        ],
+    );
 
     let output = stdout(&mut command);
     assert!(output.contains("interactive_step_once: ok"));
