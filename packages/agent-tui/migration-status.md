@@ -181,16 +181,23 @@ D:\code\thoughts\.narada\tools\agent-start\start-agent.mjs
 
 ## Current Verification
 
-Passing:
+## Current Verification
+
+Quiet defaults:
 
 ```powershell
+pnpm agent-tui:test:focused
+pnpm agent-tui:test
 pnpm --filter @narada2/carrier-protocol test
 node --test tools/agent-start/start-agent.test.mjs
-cargo fmt -- --check
-cmd /d /s /c "call ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"" -arch=x64 -host_arch=x64 >nul && cd /d D:\code\narada\packages\agent-tui && cargo test"
 ```
 
-Plain non-developer shells may still report blocked:
+Verbose Rust output is intentionally explicit:
+
+```powershell
+pnpm agent-tui:test:verbose
+```
+
 
 ```powershell
 cargo test
