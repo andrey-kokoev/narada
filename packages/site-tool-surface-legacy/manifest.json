@@ -333,14 +333,6 @@
       "duplicate_site_count": 3
     },
     {
-      "path": "tools/mcp-servers/filesystem/filesystem-mcp-server.mjs",
-      "hash": "e12af18a451088a94bb73f10672568cc9a20f12a77469fe66af9031f172e21b5",
-      "surface": "site-tools",
-      "source_site": "C:\\Users\\Andrey\\Narada",
-      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\mcp-servers\\filesystem\\filesystem-mcp-server.mjs",
-      "duplicate_site_count": 3
-    },
-    {
       "path": "tools/mcp-servers/shell/shell-mcp-server.mjs",
       "hash": "f761656d6a06b74a158585dc6a17966aaef361a49acc19125cedc8762c6e223e",
       "surface": "site-tools",
