@@ -573,8 +573,9 @@ fn derive_site_id(identity: &str) -> String {
 }
 
 fn print_help() {
+    let launch_slice_flag = launch_slice_contract().carrier_flag.as_str();
     println!(
-        "narada-agent-tui {VERSION}\n\nUsage:\n  narada-agent-tui --identity <agent-id> --session <carrier-session-id> --site-root <path> [--control-jsonl <path>] [--session-jsonl <path>] [--runtime-step-once | --runtime-loop --max-steps <n> | --interactive-step-once | --interactive-smoke-loop --max-steps <n> | --interactive-loop --max-steps <n> | --render-once]\n\nOptions:\n  --identity <agent-id>          Agent identity, e.g. sonar.resident\n  --session <carrier-session>    Carrier session id\n  --site-root <path>             Narada site root\n  --control-jsonl <path>         Optional carrier control JSONL path\n  --session-jsonl <path>         Optional carrier session JSONL path\n  --runtime-step-once            Run one non-UI runtime pass and exit\n  --runtime-loop                 Run bounded non-UI runtime passes and exit\n  --interactive-step-once        Run one interactive runtime pass without entering TUI mode\n  --interactive-smoke-loop       Run bounded persistent smoke passes without entering TUI mode\n  --interactive-loop             Run bounded TUI draw/input passes and exit\n  --max-steps <n>                Required positive step count for loop modes\n  --render-once                  Enter TUI mode, draw one scaffold frame, and exit\n  --composer-has-draft           Hold composer-clear system directives during runtime pass\n  --persistent-smoke-session     Use reusable smoke session path for interactive smoke step\n  --check-rust-toolchain         Check cargo and MSVC link.exe readiness for Rust tests\n  --version                      Print version\n  --help                         Show help\n\nStatus:\n  Interactive TUI scaffold has control JSONL polling, input queuing, transcript projection, provider-boundary evidence, and a gated MCP fabric bridge. Real provider dispatch and production MCP exposure remain withheld until their admission gates pass."
+        "narada-agent-tui {VERSION}\n\nUsage:\n  narada-agent-tui --identity <agent-id> --session <carrier-session-id> --site-root <path> [--control-jsonl <path>] [--session-jsonl <path>] [--runtime-step-once | --runtime-loop --max-steps <n> | {launch_slice_flag} | --interactive-smoke-loop --max-steps <n> | --interactive-loop --max-steps <n> | --render-once]\n\nOptions:\n  --identity <agent-id>          Agent identity, e.g. sonar.resident\n  --session <carrier-session>    Carrier session id\n  --site-root <path>             Narada site root\n  --control-jsonl <path>         Optional carrier control JSONL path\n  --session-jsonl <path>         Optional carrier session JSONL path\n  --runtime-step-once            Run one non-UI runtime pass and exit\n  --runtime-loop                 Run bounded non-UI runtime passes and exit\n  {launch_slice_flag:<29} Run one interactive runtime pass without entering TUI mode\n  --interactive-smoke-loop       Run bounded persistent smoke passes without entering TUI mode\n  --interactive-loop             Run bounded TUI draw/input passes and exit\n  --max-steps <n>                Required positive step count for loop modes\n  --render-once                  Enter TUI mode, draw one scaffold frame, and exit\n  --composer-has-draft           Hold composer-clear system directives during runtime pass\n  --persistent-smoke-session     Use reusable smoke session path for interactive smoke step\n  --check-rust-toolchain         Check cargo and MSVC link.exe readiness for Rust tests\n  --version                      Print version\n  --help                         Show help\n\nStatus:\n  Interactive TUI scaffold has control JSONL polling, input queuing, transcript projection, provider-boundary evidence, and a gated MCP fabric bridge. Real provider dispatch and production MCP exposure remain withheld until their admission gates pass."
     );
 }
 fn validate_launch_args(args: &Args) -> Result<(), String> {
@@ -626,7 +627,10 @@ fn validate_launch_args(args: &Args) -> Result<(), String> {
         return Err("--max-steps requires a loop mode".to_string());
     }
     if args.persistent_smoke_session && !args.interactive_step_once {
-        return Err("--persistent-smoke-session requires --interactive-step-once".to_string());
+        return Err(format!(
+            "--persistent-smoke-session requires {}",
+            launch_slice_contract().carrier_flag
+        ));
     }
     Ok(())
 }
@@ -758,7 +762,7 @@ mod tests {
             "control.jsonl",
             "--session-jsonl",
             "session.jsonl",
-            "--interactive-step-once",
+            launch_slice_contract().carrier_flag.as_str(),
         ])
         .expect("args parse");
 
@@ -778,7 +782,7 @@ mod tests {
             "control.jsonl",
             "--session-jsonl",
             "session.jsonl",
-            "--interactive-step-once",
+            launch_slice_contract().carrier_flag.as_str(),
             "--persistent-smoke-session",
         ])
         .expect("args parse");
@@ -909,7 +913,10 @@ mod tests {
         let err = validate_launch_args(&args).expect_err("invalid persistent smoke args");
         assert_eq!(
             err,
-            "--persistent-smoke-session requires --interactive-step-once"
+            format!(
+                "--persistent-smoke-session requires {}",
+                launch_slice_contract().carrier_flag
+            )
         );
     }
 
