@@ -584,6 +584,20 @@ mod tests {
     }
 
     #[test]
+    fn parses_shared_turn_terminal_session_event_fixture() {
+        let event = parse_session_event(include_str!(
+            "../../carrier-protocol/fixtures/turn-terminal-session-event.json"
+        ))
+        .expect("turn terminal session fixture parses");
+        assert_eq!(event.event_kind, SessionEventKind::TurnCompleted);
+        assert_eq!(event.payload["schema"], TURN_TERMINAL_PAYLOAD_SCHEMA);
+        assert_eq!(
+            event.payload["terminal_status"],
+            "completed_without_provider"
+        );
+    }
+
+    #[test]
     fn serializes_shared_session_event_fixture_as_jsonl_line() {
         let event = parse_session_event(include_str!(
             "../../carrier-protocol/fixtures/session-event.json"
