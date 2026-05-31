@@ -10,6 +10,7 @@ import {
   PAYLOAD_POLICY_SCHEMA,
   PROVIDER_REQUEST_PAYLOAD_SCHEMA,
   PROVIDER_OUTPUT_PAYLOAD_SCHEMA,
+  SESSION_EVENT_KINDS,
   SESSION_EVENT_SCHEMA,
   TURN_TERMINAL_PAYLOAD_SCHEMA,
   assertValidControlInputRecord,
@@ -64,10 +65,39 @@ const baseInput = {
   created_at: '2026-05-30T00:00:00.000Z',
 };
 
+const sessionEventFixtureByKind = Object.freeze({
+  input_queued_for_turn_boundary: 'input-queued-session-event.json',
+  input_admitted_to_turn: 'session-event.json',
+  input_dropped_by_operator: 'input-dropped-session-event.json',
+  input_abandoned_on_session_end: 'input-abandoned-session-event.json',
+  input_completed: 'input-completed-session-event.json',
+  system_directive_held: 'system-directive-held-session-event.json',
+  system_directive_released: 'system-directive-released-session-event.json',
+  directive_receipt_recorded: 'directive-receipt-session-event.json',
+  directive_carrier_accepted_recorded: 'directive-carrier-accepted-session-event.json',
+  turn_started: 'turn-started-session-event.json',
+  provider_request_recorded: 'provider-request-session-event.json',
+  provider_text_delta_recorded: 'provider-text-delta-session-event.json',
+  provider_tool_call_requested: 'provider-tool-call-session-event.json',
+  turn_completed: 'turn-terminal-session-event.json',
+  turn_interrupted: 'turn-interrupted-session-event.json',
+  turn_failed: 'turn-failed-session-event.json',
+  interrupt_requested: 'interrupt-requested-session-event.json',
+  tool_call_requested: 'tool-call-session-event.json',
+  tool_result_received: 'tool-result-session-event.json',
+  carrier_command_executed: 'carrier-command-session-event.json',
+  carrier_diagnostic_recorded: 'carrier-diagnostic-session-event.json',
+});
+
 assert.equal(CARRIER_PROTOCOL_SCHEMAS.input_event.schema, INPUT_EVENT_SCHEMA);
+assert.deepEqual(Object.keys(sessionEventFixtureByKind), SESSION_EVENT_KINDS);
+for (const [eventKind, fixtureName] of Object.entries(sessionEventFixtureByKind)) {
+  const fixture = readFixture(fixtureName);
+  assert.equal(fixture.event_kind, eventKind);
+  assert.deepEqual(validateSessionEvent(fixture), []);
+}
 assert.deepEqual(validateInputEvent(readFixture('input-event.json')), []);
 assert.deepEqual(validateControlInputRecord(readFixture('control-input-event.json')), []);
-assert.deepEqual(validateSessionEvent(readFixture('session-event.json')), []);
 for (const fixtureName of [
   'input-queued-session-event.json',
   'input-dropped-session-event.json',
