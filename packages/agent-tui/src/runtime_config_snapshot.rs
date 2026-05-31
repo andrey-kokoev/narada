@@ -1,10 +1,12 @@
 use crate::mcp_fabric_transport::McpFabricTransportClient;
 use crate::mcp_runtime_config::McpRuntimeConfig;
+use crate::mcp_runtime_contract::mcp_runtime_contract;
 use crate::provider_adapter_admission::ProviderAdapterAdmission;
 use crate::provider_adapter_contract::provider_adapter_contract;
 use crate::provider_runtime_config::ProviderRuntimeConfig;
 use crate::status_view_model::RuntimePostureState;
 use crate::terminal_runtime_config::TerminalRuntimeConfig;
+use crate::terminal_runtime_contract::terminal_runtime_contract;
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -79,39 +81,42 @@ mod tests {
 
     #[test]
     fn snapshot_reads_narada_env_map_once() {
+        let provider_contract = provider_adapter_contract();
+        let mcp_contract = mcp_runtime_contract();
+        let terminal_contract = terminal_runtime_contract();
         let env_map = BTreeMap::from([
             (
-                "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION".to_string(),
+                provider_contract.provider_execution_env_var.clone(),
                 "true".to_string(),
             ),
             (
-                "NARADA_INTELLIGENCE_PROVIDER".to_string(),
+                provider_contract.intelligence_provider_env_var.clone(),
                 "codex-subscription".to_string(),
             ),
-            ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
             (
-                "NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND".to_string(),
+                provider_contract.ai_model_env_var.clone(),
+                "gpt-5.5".to_string(),
+            ),
+            (
+                provider_contract.provider_adapter_kind_env_var.clone(),
                 "codex_subscription_adapter".to_string(),
             ),
+            (mcp_contract.mcp_fabric_env_var.clone(), "true".to_string()),
             (
-                "NARADA_AGENT_TUI_ENABLE_MCP_FABRIC".to_string(),
-                "true".to_string(),
-            ),
-            (
-                "NARADA_AGENT_TUI_MCP_CONFIG".to_string(),
+                mcp_contract.mcp_config_env_var.clone(),
                 "D:/site/.ai/mcp/config.json".to_string(),
             ),
             (
-                "NARADA_SITE_MCP_FABRIC".to_string(),
+                mcp_contract.site_mcp_fabric_env_var.clone(),
                 "D:/site/.ai/mcp".to_string(),
             ),
             (
-                "NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING".to_string(),
+                terminal_contract.terminal_rendering_env_var.clone(),
                 "true".to_string(),
             ),
             (
-                "NARADA_AGENT_TUI_TERMINAL_MODE".to_string(),
-                "interactive_loop".to_string(),
+                terminal_contract.terminal_mode_env_var.clone(),
+                terminal_contract.required_terminal_mode.clone(),
             ),
         ]);
 
