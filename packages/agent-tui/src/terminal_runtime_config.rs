@@ -1,4 +1,44 @@
 use std::collections::BTreeMap;
+use std::sync::OnceLock;
+
+use serde::Deserialize;
+
+const TERMINAL_RUNTIME_CONTRACT_JSON: &str = include_str!("../contracts/terminal-runtime.json");
+
+#[derive(Debug, Clone, Deserialize)]
+struct TerminalRuntimeContract {
+    schema: String,
+    terminal_rendering_env_var: String,
+    terminal_mode_env_var: String,
+    required_terminal_mode: String,
+}
+
+static TERMINAL_RUNTIME_CONTRACT: OnceLock<TerminalRuntimeContract> = OnceLock::new();
+
+fn terminal_runtime_contract() -> &'static TerminalRuntimeContract {
+    TERMINAL_RUNTIME_CONTRACT.get_or_init(|| {
+        parse_terminal_runtime_contract(TERMINAL_RUNTIME_CONTRACT_JSON)
+            .expect("bundled terminal runtime contract must be valid")
+    })
+}
+
+fn parse_terminal_runtime_contract(json_text: &str) -> Result<TerminalRuntimeContract, String> {
+    let contract: TerminalRuntimeContract = serde_json::from_str(json_text)
+        .map_err(|error| format!("terminal_runtime_contract_parse_failed:{error}"))?;
+    if contract.schema != "narada.agent_tui.terminal_runtime_contract.v0" {
+        return Err("terminal_runtime_contract_invalid:schema".to_string());
+    }
+    if contract.terminal_rendering_env_var != "NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING" {
+        return Err("terminal_runtime_contract_invalid:terminal_rendering_env_var".to_string());
+    }
+    if contract.terminal_mode_env_var != "NARADA_AGENT_TUI_TERMINAL_MODE" {
+        return Err("terminal_runtime_contract_invalid:terminal_mode_env_var".to_string());
+    }
+    if contract.required_terminal_mode != "interactive_loop" {
+        return Err("terminal_runtime_contract_invalid:required_terminal_mode".to_string());
+    }
+    Ok(contract)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TerminalRuntimeStatus {
@@ -36,15 +76,16 @@ impl TerminalRuntimeConfig {
     }
 
     pub fn from_env_map(env: &BTreeMap<String, String>) -> Self {
-        if !env_flag_enabled(env.get("NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING")) {
+        let contract = terminal_runtime_contract();
+        if !env_flag_enabled(env.get(&contract.terminal_rendering_env_var)) {
             return Self::disabled();
         }
 
-        let mode = trimmed_nonempty(env.get("NARADA_AGENT_TUI_TERMINAL_MODE"));
+        let mode = trimmed_nonempty(env.get(&contract.terminal_mode_env_var));
         let Some(mode) = mode else {
             return Self::refused("missing_terminal_mode");
         };
-        if mode != "interactive_loop" {
+        if mode != contract.required_terminal_mode {
             return Self::refused(format!("unsupported_terminal_mode:{mode}"));
         }
 
@@ -93,9 +134,10 @@ mod tests {
 
     #[test]
     fn terminal_runtime_is_disabled_without_explicit_rendering_flag() {
+        let contract = terminal_runtime_contract();
         let config = TerminalRuntimeConfig::from_env_map(&env(&[(
-            "NARADA_AGENT_TUI_TERMINAL_MODE",
-            "interactive_loop",
+            contract.terminal_mode_env_var.as_str(),
+            contract.required_terminal_mode.as_str(),
         )]));
 
         assert_eq!(config.status, TerminalRuntimeStatus::Disabled);
@@ -106,8 +148,9 @@ mod tests {
 
     #[test]
     fn terminal_runtime_refuses_missing_mode_when_enabled() {
+        let contract = terminal_runtime_contract();
         let config = TerminalRuntimeConfig::from_env_map(&env(&[(
-            "NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING",
+            contract.terminal_rendering_env_var.as_str(),
             "true",
         )]));
 
@@ -121,9 +164,10 @@ mod tests {
 
     #[test]
     fn terminal_runtime_refuses_unsupported_mode() {
+        let contract = terminal_runtime_contract();
         let config = TerminalRuntimeConfig::from_env_map(&env(&[
-            ("NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING", "true"),
-            ("NARADA_AGENT_TUI_TERMINAL_MODE", "render_once"),
+            (contract.terminal_rendering_env_var.as_str(), "true"),
+            (contract.terminal_mode_env_var.as_str(), "render_once"),
         ]));
 
         assert_eq!(config.status, TerminalRuntimeStatus::Refused);
@@ -136,14 +180,40 @@ mod tests {
 
     #[test]
     fn terminal_runtime_configures_interactive_loop_mode() {
+        let contract = terminal_runtime_contract();
         let config = TerminalRuntimeConfig::from_env_map(&env(&[
-            ("NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING", "yes"),
-            ("NARADA_AGENT_TUI_TERMINAL_MODE", "interactive_loop"),
+            (contract.terminal_rendering_env_var.as_str(), "yes"),
+            (
+                contract.terminal_mode_env_var.as_str(),
+                contract.required_terminal_mode.as_str(),
+            ),
         ]));
 
         assert_eq!(config.status, TerminalRuntimeStatus::Configured);
         assert_eq!(config.status.as_str(), "configured");
         assert!(config.terminal_rendering_enabled);
-        assert_eq!(config.mode.as_deref(), Some("interactive_loop"));
+        assert_eq!(
+            config.mode.as_deref(),
+            Some(contract.required_terminal_mode.as_str())
+        );
+    }
+
+    #[test]
+    fn terminal_runtime_contract_parser_rejects_invalid_contracts() {
+        assert!(parse_terminal_runtime_contract("{")
+            .unwrap_err()
+            .starts_with("terminal_runtime_contract_parse_failed:"));
+        assert_eq!(
+            parse_terminal_runtime_contract(
+                r#"{
+                    "schema":"narada.agent_tui.terminal_runtime_contract.v0",
+                    "terminal_rendering_env_var":"NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING",
+                    "terminal_mode_env_var":"NARADA_AGENT_TUI_TERMINAL_MODE",
+                    "required_terminal_mode":"render_once"
+                }"#,
+            )
+            .unwrap_err(),
+            "terminal_runtime_contract_invalid:required_terminal_mode"
+        );
     }
 }

@@ -17,6 +17,10 @@ const AGENT_TUI_PROVIDER_ADAPTER_CONTRACT = parseAgentTuiProviderAdapterContract
   join(defaultRootDir, 'packages', 'agent-tui', 'contracts', 'provider-adapters.json'),
   'utf8',
 ));
+const AGENT_TUI_TERMINAL_RUNTIME_CONTRACT = parseAgentTuiTerminalRuntimeContract(readFileSync(
+  join(defaultRootDir, 'packages', 'agent-tui', 'contracts', 'terminal-runtime.json'),
+  'utf8',
+));
 const RESULT_SCHEMA = 'narada.agent_start.result.v0';
 const DEFAULT_PC_SITE_ROOT = process.env.NARADA_PC_SITE_ROOT ?? 'C:/ProgramData/Narada/sites/pc/desktop-sunroom-2';
 const ADMITTED_AGENTS = new Set(['narada.architect', 'narada.builder', 'narada.builder2', 'narada.resident']);
@@ -68,7 +72,6 @@ export function parseAgentTuiMcpRuntimeContract(jsonText) {
   }
   return contract;
 }
-
 export function parseAgentTuiProviderAdapterContract(jsonText) {
   let contract;
   try {
@@ -84,6 +87,28 @@ export function parseAgentTuiProviderAdapterContract(jsonText) {
   }
   if (contract?.production_provider_adapter_implemented !== false) {
     throw new Error('provider_adapter_contract_invalid:production_provider_adapter_implemented');
+  }
+  return contract;
+}
+
+export function parseAgentTuiTerminalRuntimeContract(jsonText) {
+  let contract;
+  try {
+    contract = JSON.parse(jsonText);
+  } catch (error) {
+    throw new Error(`terminal_runtime_contract_parse_failed:${error.message}`);
+  }
+  if (contract?.schema !== 'narada.agent_tui.terminal_runtime_contract.v0') {
+    throw new Error('terminal_runtime_contract_invalid:schema');
+  }
+  if (contract?.terminal_rendering_env_var !== 'NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING') {
+    throw new Error('terminal_runtime_contract_invalid:terminal_rendering_env_var');
+  }
+  if (contract?.terminal_mode_env_var !== 'NARADA_AGENT_TUI_TERMINAL_MODE') {
+    throw new Error('terminal_runtime_contract_invalid:terminal_mode_env_var');
+  }
+  if (contract?.required_terminal_mode !== 'interactive_loop') {
+    throw new Error('terminal_runtime_contract_invalid:required_terminal_mode');
   }
   return contract;
 }
@@ -706,10 +731,10 @@ function agentTuiPromotionGate() {
 }
 function agentTuiTerminalRenderingEnvironmentGate() {
   return {
-    variable: 'NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING',
+    variable: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_rendering_env_var,
     value: 'false',
-    mode_variable: 'NARADA_AGENT_TUI_TERMINAL_MODE',
-    required_mode: 'interactive_loop',
+    mode_variable: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_mode_env_var,
+    required_mode: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.required_terminal_mode,
     operator_override_admitted: false,
   };
 }
