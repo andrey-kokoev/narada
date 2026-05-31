@@ -22,6 +22,7 @@ pub mod provider_tool_call_bridge;
 pub mod ratatui_renderer;
 pub mod rendering_boundary;
 pub mod runtime_clock;
+pub mod runtime_config_snapshot;
 pub mod runtime_coordinator;
 pub mod runtime_step;
 pub mod session_jsonl;

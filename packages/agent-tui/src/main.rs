@@ -3,16 +3,16 @@ use narada_agent_tui::composer_view_model::ComposerViewInput;
 use narada_agent_tui::input_queue::{SessionEvidenceContext, TurnState};
 use narada_agent_tui::interactive_runtime::AgentTuiInteractiveRuntime;
 use narada_agent_tui::layout_model::{LayoutConfig, TerminalSize};
-use narada_agent_tui::mcp_runtime_config::McpRuntimeConfig;
 use narada_agent_tui::provider_dispatch::ProviderDispatchStub;
 use narada_agent_tui::provider_runtime_config::ProviderRuntimeConfig;
 use narada_agent_tui::runtime_clock::RuntimeClock;
+use narada_agent_tui::runtime_config_snapshot::RuntimeConfigSnapshot;
 use narada_agent_tui::runtime_step::RuntimeStep;
 use narada_agent_tui::smoke_runner::{
     interactive_smoke_step_summary_lines, run_interactive_smoke_step_with_provider_runtime_config,
     AgentTuiSmokeSession, AgentTuiSmokeStepConfig,
 };
-use narada_agent_tui::status_view_model::{RuntimePostureState, StatusViewInput};
+use narada_agent_tui::status_view_model::StatusViewInput;
 use narada_agent_tui::terminal_input_tick::CrosstermTerminalInputReader;
 use narada_agent_tui::terminal_lifecycle::TerminalSession;
 use narada_agent_tui::terminal_runtime_config::{TerminalRuntimeConfig, TerminalRuntimeStatus};
@@ -231,32 +231,11 @@ fn print_scaffold(args: &Args) {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct ProcessRuntimeConfigSnapshot {
-    provider: ProviderRuntimeConfig,
-    mcp: McpRuntimeConfig,
-    terminal: TerminalRuntimeConfig,
-}
-
-impl ProcessRuntimeConfigSnapshot {
-    fn from_env_map(env_map: &BTreeMap<String, String>) -> Self {
-        Self {
-            provider: ProviderRuntimeConfig::from_env_map(env_map),
-            mcp: McpRuntimeConfig::from_env_map(env_map),
-            terminal: TerminalRuntimeConfig::from_env_map(env_map),
-        }
-    }
-
-    fn posture(&self) -> RuntimePostureState {
-        RuntimePostureState::from_runtime_configs(&self.provider, &self.mcp, &self.terminal)
-    }
-}
-
-fn runtime_config_snapshot_from_process_env() -> ProcessRuntimeConfigSnapshot {
+fn runtime_config_snapshot_from_process_env() -> RuntimeConfigSnapshot {
     let env_map = env::vars()
         .filter(|(key, _)| key.starts_with("NARADA_"))
         .collect::<BTreeMap<_, _>>();
-    ProcessRuntimeConfigSnapshot::from_env_map(&env_map)
+    RuntimeConfigSnapshot::from_env_map(&env_map)
 }
 
 fn provider_config_from_process_env() -> ProviderRuntimeConfig {
@@ -676,57 +655,6 @@ mod tests {
 
     fn parse(values: &[&str]) -> Result<Args, String> {
         parse_args(values.iter().map(|value| value.to_string()))
-    }
-
-    #[test]
-    fn process_runtime_config_snapshot_reads_narada_env_once() {
-        let env_map = BTreeMap::from([
-            (
-                "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION".to_string(),
-                "true".to_string(),
-            ),
-            (
-                "NARADA_INTELLIGENCE_PROVIDER".to_string(),
-                "codex-subscription".to_string(),
-            ),
-            ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
-            (
-                "NARADA_AGENT_TUI_ENABLE_MCP_FABRIC".to_string(),
-                "true".to_string(),
-            ),
-            (
-                "NARADA_AGENT_TUI_MCP_CONFIG".to_string(),
-                "D:/site/.ai/mcp/config.json".to_string(),
-            ),
-            (
-                "NARADA_SITE_MCP_FABRIC".to_string(),
-                "D:/site/.ai/mcp".to_string(),
-            ),
-            (
-                "NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING".to_string(),
-                "true".to_string(),
-            ),
-            (
-                "NARADA_AGENT_TUI_TERMINAL_MODE".to_string(),
-                "interactive_loop".to_string(),
-            ),
-        ]);
-
-        let snapshot = ProcessRuntimeConfigSnapshot::from_env_map(&env_map);
-        let posture = snapshot.posture();
-
-        assert_eq!(
-            snapshot.provider.status.as_str(),
-            "configured_not_implemented"
-        );
-        assert_eq!(snapshot.mcp.status.as_str(), "configured");
-        assert_eq!(snapshot.terminal.status.as_str(), "configured");
-        assert_eq!(
-            posture.provider_state.as_str(),
-            "provider_configured_not_implemented"
-        );
-        assert_eq!(posture.mcp_state.as_str(), "mcp_configured");
-        assert_eq!(posture.terminal_state.as_str(), "terminal_configured");
     }
 
     #[test]
