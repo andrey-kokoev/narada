@@ -116,18 +116,29 @@ fn trimmed_nonempty(value: Option<&String>) -> Option<String> {
 mod tests {
     use super::*;
 
-    fn env(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
+    fn provider_runtime_env(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
+        let contract = provider_adapter_contract();
         pairs
             .iter()
-            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .map(|(semantic_key, value)| {
+                let env_key = match *semantic_key {
+                    "execution_enabled" => &contract.provider_execution_env_var,
+                    "provider" => &contract.intelligence_provider_env_var,
+                    "model" => &contract.ai_model_env_var,
+                    "thinking" => &contract.ai_thinking_env_var,
+                    "stream" => &contract.ai_stream_env_var,
+                    unexpected => panic!("unknown provider runtime env semantic key: {unexpected}"),
+                };
+                (env_key.clone(), value.to_string())
+            })
             .collect()
     }
 
     #[test]
     fn provider_runtime_is_disabled_without_explicit_admission_flag() {
-        let config = ProviderRuntimeConfig::from_env_map(&env(&[
-            ("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription"),
-            ("NARADA_AI_MODEL", "gpt-5.5"),
+        let config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
+            ("provider", "codex-subscription"),
+            ("model", "gpt-5.5"),
         ]));
 
         assert_eq!(config.status, ProviderRuntimeAdmissionStatus::Disabled);
@@ -138,9 +149,9 @@ mod tests {
 
     #[test]
     fn provider_runtime_requires_provider_and_model_when_enabled() {
-        let missing_provider = ProviderRuntimeConfig::from_env_map(&env(&[
-            (provider_execution_env_var(), "true"),
-            ("NARADA_AI_MODEL", "gpt-5.5"),
+        let missing_provider = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
+            ("execution_enabled", "true"),
+            ("model", "gpt-5.5"),
         ]));
         assert_eq!(
             missing_provider.status,
@@ -151,9 +162,9 @@ mod tests {
             Some("missing_provider")
         );
 
-        let missing_model = ProviderRuntimeConfig::from_env_map(&env(&[
-            (provider_execution_env_var(), "true"),
-            ("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription"),
+        let missing_model = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
+            ("execution_enabled", "true"),
+            ("provider", "codex-subscription"),
         ]));
         assert_eq!(
             missing_model.status,
@@ -167,10 +178,10 @@ mod tests {
 
     #[test]
     fn provider_runtime_rejects_unknown_provider() {
-        let config = ProviderRuntimeConfig::from_env_map(&env(&[
-            (provider_execution_env_var(), "true"),
-            ("NARADA_INTELLIGENCE_PROVIDER", "unknown-provider"),
-            ("NARADA_AI_MODEL", "gpt-5.5"),
+        let config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
+            ("execution_enabled", "true"),
+            ("provider", "unknown-provider"),
+            ("model", "gpt-5.5"),
         ]));
 
         assert_eq!(config.status, ProviderRuntimeAdmissionStatus::Refused);
@@ -182,12 +193,12 @@ mod tests {
 
     #[test]
     fn provider_runtime_configures_explicit_provider_model_without_admitting_execution() {
-        let config = ProviderRuntimeConfig::from_env_map(&env(&[
-            (provider_execution_env_var(), "yes"),
-            ("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription"),
-            ("NARADA_AI_MODEL", "gpt-5.5"),
-            ("NARADA_AI_THINKING", "medium"),
-            ("NARADA_AI_STREAM", "off"),
+        let config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
+            ("execution_enabled", "yes"),
+            ("provider", "codex-subscription"),
+            ("model", "gpt-5.5"),
+            ("thinking", "medium"),
+            ("stream", "off"),
         ]));
 
         assert_eq!(config.status, ProviderRuntimeAdmissionStatus::Configured);
