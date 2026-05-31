@@ -9,8 +9,8 @@ use narada_agent_tui::provider_runtime_config::ProviderRuntimeConfig;
 use narada_agent_tui::runtime_clock::RuntimeClock;
 use narada_agent_tui::runtime_step::RuntimeStep;
 use narada_agent_tui::smoke_runner::{
-    interactive_smoke_step_summary_lines, run_interactive_smoke_step, AgentTuiSmokeSession,
-    AgentTuiSmokeStepConfig,
+    interactive_smoke_step_summary_lines, run_interactive_smoke_step_with_provider_runtime_config,
+    AgentTuiSmokeSession, AgentTuiSmokeStepConfig,
 };
 use narada_agent_tui::status_view_model::{ProviderRuntimeState, StatusViewInput};
 use narada_agent_tui::terminal_input_tick::CrosstermTerminalInputReader;
@@ -311,10 +311,16 @@ fn run_render_once(args: Args) -> Result<(), String> {
 fn run_interactive_step_once(args: Args) -> Result<(), String> {
     let config = build_smoke_step_config(&args)?;
     let result = if args.persistent_smoke_session {
-        let mut session = AgentTuiSmokeSession::new(&config)?;
+        let mut session = AgentTuiSmokeSession::with_provider_runtime_config(
+            &config,
+            provider_config_from_process_env(),
+        )?;
         session.run_step(config.composer_has_draft)?
     } else {
-        run_interactive_smoke_step(&config)?
+        run_interactive_smoke_step_with_provider_runtime_config(
+            &config,
+            provider_config_from_process_env(),
+        )?
     };
 
     println!("interactive_step_once: ok");
@@ -325,7 +331,10 @@ fn run_interactive_step_once(args: Args) -> Result<(), String> {
 fn run_interactive_smoke_loop(args: Args) -> Result<(), String> {
     let max_steps = args.max_steps.expect("validated max steps");
     let config = build_smoke_step_config(&args)?;
-    let mut session = AgentTuiSmokeSession::new(&config)?;
+    let mut session = AgentTuiSmokeSession::with_provider_runtime_config(
+        &config,
+        provider_config_from_process_env(),
+    )?;
 
     for step_index in 1..=max_steps {
         let result = session.run_step(config.composer_has_draft)?;

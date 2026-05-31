@@ -38,7 +38,7 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - Provider request evidence carries provider runtime posture, configured provider/model when present, and refusal reason so disabled/configured-not-implemented turns are reconstructable from session JSONL.
 - Provider boundary acceptance verifies ordered provider text deltas project as one accumulated agent transcript message for the turn.
 - Provider runtime config is explicit: provider execution remains disabled unless a real adapter is admitted; provider/model env can reach only `configured_not_implemented` posture while the adapter is absent.
-- Provider runtime CLI acceptance verifies the binary reports disabled-by-default, refused missing-model, and configured-but-not-implemented explicit provider/model/streaming posture.
+- Provider runtime CLI acceptance verifies the binary reports disabled-by-default, refused missing-model, and configured-but-not-implemented explicit provider/model/streaming posture, and that runtime-step and interactive-step evidence both carry the configured-not-implemented posture.
 - Agent-start launch env forces `NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION=false` for the bounded runtime slice and records that provider environment gate in launch metadata.
 - Rendering boundary model converts provider stderr, MCP stderr, known-noise suppression, terminal resize, and payload threshold decisions into mediated diagnostics or payload references instead of raw terminal writes.
 - Provider output constructors and transcript projection enforce payload references for oversized or sensitive provider text/tool arguments instead of inlining them into transcript rows.

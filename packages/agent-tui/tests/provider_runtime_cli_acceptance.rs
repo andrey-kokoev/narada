@@ -88,8 +88,18 @@ fn provider_runtime_cli_acceptance_reports_configured_without_execution_adapter(
     assert!(output.contains("stream: off"));
 }
 
+fn assert_configured_provider_posture_recorded(session_jsonl: &str) {
+    assert!(session_jsonl.contains("\"provider_request_status\":\"recorded_not_dispatched\""));
+    assert!(session_jsonl.contains("\"provider_runtime_status\":\"configured_not_implemented\""));
+    assert!(session_jsonl.contains("\"provider\":\"codex-subscription\""));
+    assert!(session_jsonl.contains("\"model\":\"gpt-5.5\""));
+    assert!(
+        session_jsonl.contains("\"provider_refusal_reason\":\"provider_adapter_not_implemented\"")
+    );
+}
+
 #[test]
-fn provider_runtime_cli_acceptance_records_runtime_posture_in_turn_evidence() {
+fn provider_runtime_cli_acceptance_records_runtime_posture_in_runtime_step_evidence() {
     let control_path = temp_path("control");
     let session_path = temp_path("session");
     write(&control_path, format!("{CONTROL_FIXTURE}\n")).expect("control fixture writes");
@@ -109,13 +119,34 @@ fn provider_runtime_cli_acceptance_records_runtime_posture_in_turn_evidence() {
     assert!(output.contains("runtime_step_once: ok"));
 
     let session_jsonl = read_to_string(&session_path).expect("session jsonl exists");
-    assert!(session_jsonl.contains("\"provider_request_status\":\"recorded_not_dispatched\""));
-    assert!(session_jsonl.contains("\"provider_runtime_status\":\"configured_not_implemented\""));
-    assert!(session_jsonl.contains("\"provider\":\"codex-subscription\""));
-    assert!(session_jsonl.contains("\"model\":\"gpt-5.5\""));
-    assert!(
-        session_jsonl.contains("\"provider_refusal_reason\":\"provider_adapter_not_implemented\"")
-    );
+    assert_configured_provider_posture_recorded(&session_jsonl);
+
+    remove_file(control_path).ok();
+    remove_file(session_path).ok();
+}
+
+#[test]
+fn provider_runtime_cli_acceptance_records_runtime_posture_in_interactive_step_evidence() {
+    let control_path = temp_path("control");
+    let session_path = temp_path("session");
+    write(&control_path, format!("{CONTROL_FIXTURE}\n")).expect("control fixture writes");
+
+    let mut command = base_command();
+    command
+        .arg("--control-jsonl")
+        .arg(&control_path)
+        .arg("--session-jsonl")
+        .arg(&session_path)
+        .arg("--interactive-step-once")
+        .env("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true")
+        .env("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription")
+        .env("NARADA_AI_MODEL", "gpt-5.5");
+
+    let output = stdout(&mut command);
+    assert!(output.contains("interactive_step_once: ok"));
+
+    let session_jsonl = read_to_string(&session_path).expect("session jsonl exists");
+    assert_configured_provider_posture_recorded(&session_jsonl);
 
     remove_file(control_path).ok();
     remove_file(session_path).ok();

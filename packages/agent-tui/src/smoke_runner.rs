@@ -3,6 +3,8 @@ use crate::input_queue::SessionEvidenceContext;
 use crate::interactive_runtime::{
     AgentTuiInteractiveRuntime, InteractiveStepClock, InteractiveStepResult,
 };
+use crate::provider_dispatch::ProviderDispatchStub;
+use crate::provider_runtime_config::ProviderRuntimeConfig;
 use crate::runtime_clock::RuntimeClock;
 use crate::transcript_store::TranscriptIngestSummary;
 use std::path::PathBuf;
@@ -24,13 +26,23 @@ pub struct AgentTuiSmokeSession {
 
 impl AgentTuiSmokeSession {
     pub fn new(config: &AgentTuiSmokeStepConfig) -> Result<Self, String> {
+        Self::with_provider_runtime_config(config, ProviderRuntimeConfig::disabled())
+    }
+
+    pub fn with_provider_runtime_config(
+        config: &AgentTuiSmokeStepConfig,
+        provider_runtime_config: ProviderRuntimeConfig,
+    ) -> Result<Self, String> {
         Ok(Self {
-            runtime: AgentTuiInteractiveRuntime::new(
+            runtime: AgentTuiInteractiveRuntime::with_provider_adapter(
                 config.identity.clone(),
                 config.session.clone(),
                 config.control_jsonl.clone(),
                 config.session_jsonl.clone(),
                 evidence_context(config),
+                Box::new(ProviderDispatchStub::with_runtime_config(
+                    provider_runtime_config,
+                )),
             ),
             clock: RuntimeClock::system_now()?,
         })
@@ -55,6 +67,15 @@ pub fn run_interactive_smoke_step(
     config: &AgentTuiSmokeStepConfig,
 ) -> Result<InteractiveStepResult, String> {
     let mut session = AgentTuiSmokeSession::new(config)?;
+    session.run_step(config.composer_has_draft)
+}
+
+pub fn run_interactive_smoke_step_with_provider_runtime_config(
+    config: &AgentTuiSmokeStepConfig,
+    provider_runtime_config: ProviderRuntimeConfig,
+) -> Result<InteractiveStepResult, String> {
+    let mut session =
+        AgentTuiSmokeSession::with_provider_runtime_config(config, provider_runtime_config)?;
     session.run_step(config.composer_has_draft)
 }
 

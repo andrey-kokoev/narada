@@ -3,6 +3,7 @@ use crate::composer_draft::ComposerDraftState;
 use crate::composer_view_model::ComposerViewInput;
 use crate::input_queue::SessionEvidenceContext;
 use crate::layout_model::{LayoutConfig, TerminalSize};
+use crate::provider_dispatch::ProviderAdapter;
 use crate::runtime_coordinator::{RuntimeCoordinator, RuntimeCoordinatorClock};
 use crate::status_view_model::{ProviderRuntimeState, StatusViewInput};
 use crate::transcript_store::{TranscriptIngestSummary, TranscriptStore};
@@ -47,6 +48,24 @@ impl AgentTuiInteractiveRuntime {
         session_jsonl_path: impl Into<PathBuf>,
         evidence_context: SessionEvidenceContext,
     ) -> Self {
+        Self::with_provider_adapter(
+            identity,
+            session,
+            control_jsonl_path,
+            session_jsonl_path,
+            evidence_context,
+            Box::new(crate::provider_dispatch::ProviderDispatchStub::default()),
+        )
+    }
+
+    pub fn with_provider_adapter(
+        identity: impl Into<String>,
+        session: impl Into<String>,
+        control_jsonl_path: impl Into<PathBuf>,
+        session_jsonl_path: impl Into<PathBuf>,
+        evidence_context: SessionEvidenceContext,
+        provider_adapter: Box<dyn ProviderAdapter>,
+    ) -> Self {
         let session_jsonl_path = session_jsonl_path.into();
         Self {
             identity: identity.into(),
@@ -56,7 +75,11 @@ impl AgentTuiInteractiveRuntime {
                 session_jsonl_path.clone(),
                 evidence_context.clone(),
             ),
-            turns: TurnCoordinator::new(session_jsonl_path, evidence_context),
+            turns: TurnCoordinator::with_provider_adapter(
+                session_jsonl_path,
+                evidence_context,
+                provider_adapter,
+            ),
             transcript: TranscriptStore::new(),
         }
     }
