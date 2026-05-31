@@ -4,6 +4,7 @@ use crate::mcp_fabric_transport::McpFabricPreparedToolCall;
 use crate::mcp_process_supervisor::{
     recovery_diagnostic_event, refuse_call_until_ready, McpProcessSupervisorState,
 };
+use crate::mcp_runtime_config::McpRuntimeConfig;
 use crate::mcp_stdio_process::McpStdioProcessIoResult;
 use crate::session_jsonl::append_session_event;
 use serde_json::json;
@@ -36,6 +37,7 @@ pub struct McpRuntimeExecutionBridge<E: McpRuntimeToolExecutor> {
     evidence_context: SessionEvidenceContext,
     session_jsonl_path: PathBuf,
     executor: E,
+    runtime_config: McpRuntimeConfig,
     supervisors: BTreeMap<String, McpProcessSupervisorState>,
     next_event_index: u64,
 }
@@ -46,10 +48,25 @@ impl<E: McpRuntimeToolExecutor> McpRuntimeExecutionBridge<E> {
         evidence_context: SessionEvidenceContext,
         executor: E,
     ) -> Self {
+        Self::with_runtime_config(
+            session_jsonl_path,
+            evidence_context,
+            executor,
+            McpRuntimeConfig::disabled(),
+        )
+    }
+
+    pub fn with_runtime_config(
+        session_jsonl_path: impl Into<PathBuf>,
+        evidence_context: SessionEvidenceContext,
+        executor: E,
+        runtime_config: McpRuntimeConfig,
+    ) -> Self {
         Self {
             evidence_context,
             session_jsonl_path: session_jsonl_path.into(),
             executor,
+            runtime_config,
             supervisors: BTreeMap::new(),
             next_event_index: 1,
         }
@@ -78,7 +95,8 @@ impl<E: McpRuntimeToolExecutor> McpRuntimeExecutionBridge<E> {
             refuse_call_until_ready(state, prepared)?;
         }
 
-        self.write_evidence(&prepared.request_event)?;
+        let request_event = self.tool_request_event_with_runtime_posture(prepared, clock);
+        self.write_evidence(&request_event)?;
         match self.executor.execute_tool_call(prepared) {
             Ok(io_result) => {
                 let result_event = self.tool_result_event(&io_result, clock);
@@ -123,6 +141,21 @@ impl<E: McpRuntimeToolExecutor> McpRuntimeExecutionBridge<E> {
             .or_insert_with(|| McpProcessSupervisorState::new(server_name))
     }
 
+    fn tool_request_event_with_runtime_posture(
+        &self,
+        prepared: &McpFabricPreparedToolCall,
+        _clock: &McpRuntimeExecutionClock,
+    ) -> SessionEvent {
+        let mut event = prepared.request_event.clone();
+        event.payload["mcp_runtime_status"] = json!(self.runtime_config.status.as_str());
+        event.payload["mcp_fabric_access_enabled"] =
+            json!(self.runtime_config.mcp_fabric_access_enabled);
+        event.payload["mcp_config"] = json!(self.runtime_config.config_path.clone());
+        event.payload["site_mcp_fabric"] = json!(self.runtime_config.site_mcp_fabric.clone());
+        event.payload["mcp_refusal_reason"] = json!(self.runtime_config.refusal_reason.clone());
+        event
+    }
+
     fn tool_result_event(
         &mut self,
         io_result: &McpStdioProcessIoResult,
@@ -145,6 +178,11 @@ impl<E: McpRuntimeToolExecutor> McpRuntimeExecutionBridge<E> {
                 "result_summary": io_result.tool_result.result_summary,
                 "result_ref": io_result.tool_result.result_ref,
                 "mcp_runtime_execution": "supervised_stdio",
+                "mcp_runtime_status": self.runtime_config.status.as_str(),
+                "mcp_fabric_access_enabled": self.runtime_config.mcp_fabric_access_enabled,
+                "mcp_config": self.runtime_config.config_path,
+                "site_mcp_fabric": self.runtime_config.site_mcp_fabric,
+                "mcp_refusal_reason": self.runtime_config.refusal_reason,
             }),
         }
     }
@@ -167,6 +205,7 @@ mod tests {
     use crate::mcp_fabric_boundary::McpToolResult;
     use crate::mcp_fabric_transport::McpFabricPreparedToolCall;
     use crate::mcp_json_rpc::McpJsonRpcExchange;
+    use std::collections::BTreeMap;
     use std::fs::{read_to_string, remove_file};
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -227,6 +266,23 @@ mod tests {
             )
             .expect("json rpc builds"),
         }
+    }
+
+    fn configured_mcp_runtime() -> McpRuntimeConfig {
+        McpRuntimeConfig::from_env_map(&BTreeMap::from([
+            (
+                "NARADA_AGENT_TUI_ENABLE_MCP_FABRIC".to_string(),
+                "true".to_string(),
+            ),
+            (
+                "NARADA_AGENT_TUI_MCP_CONFIG".to_string(),
+                "D:/code/narada.sonar/.ai/mcp/agent-tui.json".to_string(),
+            ),
+            (
+                "NARADA_SITE_MCP_FABRIC".to_string(),
+                "D:/code/narada.sonar/.ai/mcp".to_string(),
+            ),
+        ]))
     }
 
     struct SuccessfulExecutor;
@@ -295,7 +351,46 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].event_kind, SessionEventKind::ToolCallRequested);
+        assert_eq!(events[0].payload["mcp_runtime_status"], "disabled");
+        assert_eq!(events[0].payload["mcp_fabric_access_enabled"], false);
         assert_eq!(events[1].event_kind, SessionEventKind::ToolResultReceived);
+        assert_eq!(events[1].payload["mcp_runtime_status"], "disabled");
+        assert_eq!(events[1].payload["mcp_fabric_access_enabled"], false);
+        let _ = remove_file(path);
+    }
+
+    #[test]
+    fn writes_configured_mcp_runtime_posture_in_tool_evidence() {
+        let path = temp_session_path();
+        let mut bridge = McpRuntimeExecutionBridge::with_runtime_config(
+            &path,
+            context(),
+            SuccessfulExecutor,
+            configured_mcp_runtime(),
+        );
+        bridge.mark_server_ready("sonar-site-loop");
+
+        bridge
+            .execute_prepared_tool_call(&prepared(), &clock())
+            .expect("execution succeeds");
+
+        let contents = read_to_string(&path).expect("session jsonl exists");
+        let events = contents
+            .lines()
+            .map(|line| parse_session_event(line).expect("event parses"))
+            .collect::<Vec<_>>();
+        assert_eq!(events[0].payload["mcp_runtime_status"], "configured");
+        assert_eq!(events[0].payload["mcp_fabric_access_enabled"], true);
+        assert_eq!(
+            events[0].payload["mcp_config"],
+            "D:/code/narada.sonar/.ai/mcp/agent-tui.json"
+        );
+        assert_eq!(
+            events[0].payload["site_mcp_fabric"],
+            "D:/code/narada.sonar/.ai/mcp"
+        );
+        assert_eq!(events[1].payload["mcp_runtime_status"], "configured");
+        assert_eq!(events[1].payload["mcp_fabric_access_enabled"], true);
         let _ = remove_file(path);
     }
 

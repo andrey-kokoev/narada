@@ -47,7 +47,7 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - MCP JSON-RPC contract builds newline-delimited `tools/call` requests, parses success/error responses, and classifies responses into MCP tool result evidence summaries.
 - MCP stdio process I/O can write one prepared JSON-RPC request, read one response line, validate response identity, classify the result, and has a process-backed one-shot execution wrapper.
 - MCP process supervisor contract models server lifecycle states, initialize/initialized handshake frames, readiness gating, a bounded restart decision, and recovery diagnostics as session evidence.
-- MCP runtime execution bridge owns per-server supervisor state, gates tool calls on readiness, writes tool request/result evidence to session JSONL, and records recovery diagnostics when injected execution fails.
+- MCP runtime execution bridge owns per-server supervisor state, gates tool calls on readiness, writes tool request/result evidence to session JSONL, records MCP runtime posture on tool evidence, and records recovery diagnostics when injected execution fails.
 - Provider tool-call bridge converts provider `tool_call_request` outputs into MCP tool requests, validates inline JSON arguments, ignores non-tool output, and executes admitted calls through the supervised MCP runtime bridge.
 - Turn coordinator accepts an injectable provider tool-call executor and writes provider-origin tool request/result evidence before turn completion when the bridge is supplied.
 - Reusable MCP process executor implements the runtime tool executor boundary, executes initialize/initialized handshake when a server process is first spawned, caches one stdio child per server, replaces stale launch specs, records elapsed duration, preemptively terminates blocked reads at timeout, classifies timeout failures, and drops failed processes from the pool.
@@ -111,7 +111,7 @@ Current launch metadata now distinguishes satisfied gates from remaining promoti
 - Partial: Rust tests pass through the documented VS DevCmd toolchain; plain-shell readiness remains a diagnostic preflight.
 - Partial: terminal-loop acceptance has scripted frame, lifecycle, injected-loop, and terminal runtime config coverage; real-terminal promotion is not admitted.
 - Partial: provider admission has disabled/refused/configured-not-implemented posture, streaming transcript accumulation, and provider-origin tool-call mediation; real provider dispatch remains withheld.
-- Partial: MCP admission has config/fabric posture, policy visibility, request/response framing, supervised stdio execution, and launch gating; production Site MCP exposure remains withheld until live Site execution is admitted.
+- Partial: MCP admission has config/fabric posture, policy visibility, request/response framing, supervised stdio execution, runtime-posture evidence, and launch gating; production Site MCP exposure remains withheld until live Site execution is admitted.
 
 ## Live Rollout Evidence
 
