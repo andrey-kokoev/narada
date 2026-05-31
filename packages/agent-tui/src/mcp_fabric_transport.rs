@@ -199,16 +199,36 @@ impl McpFabricTransportServer {
             }
             args.push(arg);
         }
+        let surface_id = normalize_optional_server_field(&name, "surface_id", raw.surface_id)?;
+        let target_site_root =
+            normalize_optional_server_field(&name, "target_site_root", raw.target_site_root)?;
         Ok(Self {
             name,
             transport,
             command,
             args,
             tools,
-            surface_id: raw.surface_id,
-            target_site_root: raw.target_site_root,
+            surface_id,
+            target_site_root,
         })
     }
+}
+
+fn normalize_optional_server_field(
+    server_name: &str,
+    field_name: &str,
+    value: Option<String>,
+) -> Result<Option<String>, String> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let value = value.trim().to_string();
+    if value.is_empty() {
+        return Err(format!(
+            "mcp_fabric_server_{field_name}_invalid:{server_name}"
+        ));
+    }
+    Ok(Some(value))
 }
 
 #[cfg(test)]
@@ -444,6 +464,78 @@ mod tests {
         assert_eq!(
             client.servers["sonar-site-loop"].args,
             vec!["site-loop.mjs"]
+        );
+    }
+
+    #[test]
+    fn rejects_blank_surface_id() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "tools": ["site_loop_status"],
+                  "surface_id": " "
+                }
+              }
+            }"#,
+        )
+        .expect_err("blank surface id is invalid");
+
+        assert_eq!(
+            error,
+            "mcp_fabric_server_surface_id_invalid:sonar-site-loop"
+        );
+    }
+
+    #[test]
+    fn rejects_blank_target_site_root() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "tools": ["site_loop_status"],
+                  "target_site_root": " "
+                }
+              }
+            }"#,
+        )
+        .expect_err("blank target site root is invalid");
+
+        assert_eq!(
+            error,
+            "mcp_fabric_server_target_site_root_invalid:sonar-site-loop"
+        );
+    }
+
+    #[test]
+    fn trims_optional_server_metadata() {
+        let client = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "tools": ["site_loop_status"],
+                  "surface_id": " sonar.surface ",
+                  "target_site_root": " D:/code/narada.sonar "
+                }
+              }
+            }"#,
+        )
+        .expect("trimmed optional metadata config parses");
+
+        let server = &client.servers["sonar-site-loop"];
+        assert_eq!(server.surface_id.as_deref(), Some("sonar.surface"));
+        assert_eq!(
+            server.target_site_root.as_deref(),
+            Some("D:/code/narada.sonar")
         );
     }
 
