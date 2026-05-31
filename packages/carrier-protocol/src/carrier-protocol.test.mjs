@@ -68,6 +68,16 @@ assert.equal(CARRIER_PROTOCOL_SCHEMAS.input_event.schema, INPUT_EVENT_SCHEMA);
 assert.deepEqual(validateInputEvent(readFixture('input-event.json')), []);
 assert.deepEqual(validateControlInputRecord(readFixture('control-input-event.json')), []);
 assert.deepEqual(validateSessionEvent(readFixture('session-event.json')), []);
+for (const fixtureName of [
+  'input-queued-session-event.json',
+  'input-dropped-session-event.json',
+  'input-abandoned-session-event.json',
+  'input-completed-session-event.json',
+  'turn-started-session-event.json',
+  'interrupt-requested-session-event.json',
+]) {
+  assert.deepEqual(validateSessionEvent(readFixture(fixtureName)), []);
+}
 const turnTerminalFixture = readFixture('turn-terminal-session-event.json');
 assert.deepEqual(validateSessionEvent(turnTerminalFixture), []);
 assert.deepEqual(turnTerminalFixture.payload, createTurnTerminalPayload({

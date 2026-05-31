@@ -777,6 +777,57 @@ mod tests {
     }
 
     #[test]
+    fn parses_shared_input_lifecycle_session_event_fixtures() {
+        let queued = parse_session_event(include_str!(
+            "../../carrier-protocol/fixtures/input-queued-session-event.json"
+        ))
+        .expect("input queued session fixture parses");
+        assert_eq!(
+            queued.event_kind,
+            SessionEventKind::InputQueuedForTurnBoundary
+        );
+        assert_eq!(queued.payload["queue_state"], "queued_for_turn_boundary");
+
+        let dropped = parse_session_event(include_str!(
+            "../../carrier-protocol/fixtures/input-dropped-session-event.json"
+        ))
+        .expect("input dropped session fixture parses");
+        assert_eq!(dropped.event_kind, SessionEventKind::InputDroppedByOperator);
+        assert_eq!(dropped.payload["drop_reason"], "operator_queue_drop");
+
+        let abandoned = parse_session_event(include_str!(
+            "../../carrier-protocol/fixtures/input-abandoned-session-event.json"
+        ))
+        .expect("input abandoned session fixture parses");
+        assert_eq!(
+            abandoned.event_kind,
+            SessionEventKind::InputAbandonedOnSessionEnd
+        );
+        assert_eq!(abandoned.payload["input_event_id"], "input_fixture_1");
+
+        let completed = parse_session_event(include_str!(
+            "../../carrier-protocol/fixtures/input-completed-session-event.json"
+        ))
+        .expect("input completed session fixture parses");
+        assert_eq!(completed.event_kind, SessionEventKind::InputCompleted);
+        assert_eq!(completed.payload["terminal_state"], "completed");
+
+        let turn_started = parse_session_event(include_str!(
+            "../../carrier-protocol/fixtures/turn-started-session-event.json"
+        ))
+        .expect("turn started session fixture parses");
+        assert_eq!(turn_started.event_kind, SessionEventKind::TurnStarted);
+        assert_eq!(turn_started.payload["turn_id"], "turn_fixture_1");
+
+        let interrupt = parse_session_event(include_str!(
+            "../../carrier-protocol/fixtures/interrupt-requested-session-event.json"
+        ))
+        .expect("interrupt requested session fixture parses");
+        assert_eq!(interrupt.event_kind, SessionEventKind::InterruptRequested);
+        assert_eq!(interrupt.payload["turn_id"], "turn_fixture_1");
+    }
+
+    #[test]
     fn parses_shared_turn_terminal_session_event_fixture() {
         let event = parse_session_event(include_str!(
             "../../carrier-protocol/fixtures/turn-terminal-session-event.json"
