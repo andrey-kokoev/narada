@@ -12,9 +12,7 @@ use narada_agent_tui::smoke_runner::{
     interactive_smoke_step_summary_lines, run_interactive_smoke_step_with_provider_runtime_config,
     AgentTuiSmokeSession, AgentTuiSmokeStepConfig,
 };
-use narada_agent_tui::status_view_model::{
-    McpRuntimeState, ProviderRuntimeState, StatusViewInput, TerminalRuntimeState,
-};
+use narada_agent_tui::status_view_model::{RuntimePostureState, StatusViewInput};
 use narada_agent_tui::terminal_input_tick::CrosstermTerminalInputReader;
 use narada_agent_tui::terminal_lifecycle::TerminalSession;
 use narada_agent_tui::terminal_runtime_config::{TerminalRuntimeConfig, TerminalRuntimeStatus};
@@ -514,11 +512,9 @@ fn build_scaffold_app_view(args: &Args) -> Result<AppViewModel, String> {
             queued_inputs: 0,
             held_system_directives: 0,
             transcript_items: 0,
-            provider_state: ProviderRuntimeState::from_provider_runtime_config(
+            runtime_posture: RuntimePostureState::from_runtime_configs(
                 &provider_config_from_process_env(),
-            ),
-            mcp_state: McpRuntimeState::from_mcp_runtime_config(&mcp_config_from_process_env()),
-            terminal_state: TerminalRuntimeState::from_terminal_runtime_config(
+                &mcp_config_from_process_env(),
                 &terminal_config_from_process_env(),
             ),
             last_error: None,

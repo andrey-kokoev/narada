@@ -89,6 +89,35 @@ impl TerminalRuntimeState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimePostureState {
+    pub provider_state: ProviderRuntimeState,
+    pub mcp_state: McpRuntimeState,
+    pub terminal_state: TerminalRuntimeState,
+}
+
+impl RuntimePostureState {
+    pub fn disabled() -> Self {
+        Self {
+            provider_state: ProviderRuntimeState::Disabled,
+            mcp_state: McpRuntimeState::Disabled,
+            terminal_state: TerminalRuntimeState::Disabled,
+        }
+    }
+
+    pub fn from_runtime_configs(
+        provider_config: &ProviderRuntimeConfig,
+        mcp_config: &McpRuntimeConfig,
+        terminal_config: &TerminalRuntimeConfig,
+    ) -> Self {
+        Self {
+            provider_state: ProviderRuntimeState::from_provider_runtime_config(provider_config),
+            mcp_state: McpRuntimeState::from_mcp_runtime_config(mcp_config),
+            terminal_state: TerminalRuntimeState::from_terminal_runtime_config(terminal_config),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StatusViewInput {
     pub identity: String,
     pub session: String,
@@ -96,9 +125,7 @@ pub struct StatusViewInput {
     pub queued_inputs: usize,
     pub held_system_directives: usize,
     pub transcript_items: usize,
-    pub provider_state: ProviderRuntimeState,
-    pub mcp_state: McpRuntimeState,
-    pub terminal_state: TerminalRuntimeState,
+    pub runtime_posture: RuntimePostureState,
     pub last_error: Option<String>,
 }
 
@@ -131,9 +158,17 @@ pub fn build_status_view(input: &StatusViewInput) -> StatusViewModel {
             "transcript",
             &input.transcript_items.to_string(),
         ),
-        segment("provider_state", "provider", input.provider_state.as_str()),
-        segment("mcp_state", "mcp", input.mcp_state.as_str()),
-        segment("terminal_state", "terminal", input.terminal_state.as_str()),
+        segment(
+            "provider_state",
+            "provider",
+            input.runtime_posture.provider_state.as_str(),
+        ),
+        segment("mcp_state", "mcp", input.runtime_posture.mcp_state.as_str()),
+        segment(
+            "terminal_state",
+            "terminal",
+            input.runtime_posture.terminal_state.as_str(),
+        ),
         segment(
             "last_error",
             "error",
@@ -179,9 +214,7 @@ mod tests {
             queued_inputs: 2,
             held_system_directives: 1,
             transcript_items: 8,
-            provider_state: ProviderRuntimeState::Disabled,
-            mcp_state: McpRuntimeState::Disabled,
-            terminal_state: TerminalRuntimeState::Disabled,
+            runtime_posture: RuntimePostureState::disabled(),
             last_error: None,
         }
     }
@@ -329,10 +362,61 @@ mod tests {
     }
 
     #[test]
+    fn builds_runtime_posture_bundle_from_runtime_configs() {
+        let provider = ProviderRuntimeConfig::from_env_map(&std::collections::BTreeMap::from([
+            (
+                "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION".to_string(),
+                "true".to_string(),
+            ),
+            (
+                "NARADA_INTELLIGENCE_PROVIDER".to_string(),
+                "codex-subscription".to_string(),
+            ),
+            ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
+        ]));
+        let mcp = McpRuntimeConfig::from_env_map(&std::collections::BTreeMap::from([
+            (
+                "NARADA_AGENT_TUI_ENABLE_MCP_FABRIC".to_string(),
+                "true".to_string(),
+            ),
+            (
+                "NARADA_AGENT_TUI_MCP_CONFIG".to_string(),
+                "D:/site/.ai/mcp/config.json".to_string(),
+            ),
+            (
+                "NARADA_SITE_MCP_FABRIC".to_string(),
+                "D:/site/.ai/mcp".to_string(),
+            ),
+        ]));
+        let terminal = TerminalRuntimeConfig::from_env_map(&std::collections::BTreeMap::from([
+            (
+                "NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING".to_string(),
+                "true".to_string(),
+            ),
+            (
+                "NARADA_AGENT_TUI_TERMINAL_MODE".to_string(),
+                "interactive_loop".to_string(),
+            ),
+        ]));
+
+        let posture = RuntimePostureState::from_runtime_configs(&provider, &mcp, &terminal);
+
+        assert_eq!(
+            posture.provider_state,
+            ProviderRuntimeState::ConfiguredNotImplemented
+        );
+        assert_eq!(posture.mcp_state, McpRuntimeState::Configured);
+        assert_eq!(posture.terminal_state, TerminalRuntimeState::Configured);
+    }
+
+    #[test]
     fn represents_active_turn_and_provider_working() {
         let model = build_status_view(&StatusViewInput {
             turn_state: TurnState::Active,
-            provider_state: ProviderRuntimeState::Working,
+            runtime_posture: RuntimePostureState {
+                provider_state: ProviderRuntimeState::Working,
+                ..RuntimePostureState::disabled()
+            },
             ..input()
         });
 

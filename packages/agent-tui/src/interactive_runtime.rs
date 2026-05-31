@@ -7,9 +7,7 @@ use crate::mcp_runtime_config::McpRuntimeConfig;
 use crate::provider_dispatch::ProviderAdapter;
 use crate::provider_runtime_config::ProviderRuntimeConfig;
 use crate::runtime_coordinator::{RuntimeCoordinator, RuntimeCoordinatorClock};
-use crate::status_view_model::{
-    McpRuntimeState, ProviderRuntimeState, StatusViewInput, TerminalRuntimeState,
-};
+use crate::status_view_model::{RuntimePostureState, StatusViewInput};
 use crate::terminal_runtime_config::TerminalRuntimeConfig;
 use crate::transcript_store::{TranscriptIngestSummary, TranscriptStore};
 use crate::turn_coordinator::{TurnCoordinator, TurnCoordinatorClock};
@@ -43,9 +41,7 @@ pub struct AgentTuiInteractiveRuntime {
     coordinator: RuntimeCoordinator,
     turns: TurnCoordinator,
     transcript: TranscriptStore,
-    provider_state: ProviderRuntimeState,
-    mcp_state: McpRuntimeState,
-    terminal_state: TerminalRuntimeState,
+    runtime_posture: RuntimePostureState,
 }
 
 impl AgentTuiInteractiveRuntime {
@@ -63,11 +59,10 @@ impl AgentTuiInteractiveRuntime {
             session_jsonl_path,
             evidence_context,
             Box::new(crate::provider_dispatch::ProviderDispatchStub::default()),
-            ProviderRuntimeState::Disabled,
-            McpRuntimeState::Disabled,
-            TerminalRuntimeState::Disabled,
+            RuntimePostureState::disabled(),
         )
     }
+
     pub fn with_provider_runtime_config(
         identity: impl Into<String>,
         session: impl Into<String>,
@@ -109,9 +104,11 @@ impl AgentTuiInteractiveRuntime {
                     provider_runtime_config.clone(),
                 ),
             ),
-            ProviderRuntimeState::from_provider_runtime_config(&provider_runtime_config),
-            McpRuntimeState::from_mcp_runtime_config(&mcp_runtime_config),
-            TerminalRuntimeState::from_terminal_runtime_config(&terminal_runtime_config),
+            RuntimePostureState::from_runtime_configs(
+                &provider_runtime_config,
+                &mcp_runtime_config,
+                &terminal_runtime_config,
+            ),
         )
     }
 
@@ -130,9 +127,7 @@ impl AgentTuiInteractiveRuntime {
             session_jsonl_path,
             evidence_context,
             provider_adapter,
-            ProviderRuntimeState::Disabled,
-            McpRuntimeState::Disabled,
-            TerminalRuntimeState::Disabled,
+            RuntimePostureState::disabled(),
         )
     }
 
@@ -143,9 +138,7 @@ impl AgentTuiInteractiveRuntime {
         session_jsonl_path: impl Into<PathBuf>,
         evidence_context: SessionEvidenceContext,
         provider_adapter: Box<dyn ProviderAdapter>,
-        provider_state: ProviderRuntimeState,
-        mcp_state: McpRuntimeState,
-        terminal_state: TerminalRuntimeState,
+        runtime_posture: RuntimePostureState,
     ) -> Self {
         let session_jsonl_path = session_jsonl_path.into();
         Self {
@@ -162,9 +155,7 @@ impl AgentTuiInteractiveRuntime {
                 provider_adapter,
             ),
             transcript: TranscriptStore::new(),
-            provider_state,
-            mcp_state,
-            terminal_state,
+            runtime_posture,
         }
     }
 
@@ -230,9 +221,7 @@ impl AgentTuiInteractiveRuntime {
                 queued_inputs: self.coordinator.queue().queued_count(),
                 held_system_directives: self.coordinator.queue().held_count(),
                 transcript_items: self.transcript.len(),
-                provider_state: self.provider_state.clone(),
-                mcp_state: self.mcp_state.clone(),
-                terminal_state: self.terminal_state.clone(),
+                runtime_posture: self.runtime_posture.clone(),
                 last_error,
             },
             composer: ComposerViewInput {

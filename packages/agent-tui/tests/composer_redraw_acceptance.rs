@@ -4,9 +4,7 @@ use narada_agent_tui::composer_view_model::ComposerViewInput;
 use narada_agent_tui::input_queue::TurnState;
 use narada_agent_tui::layout_model::{LayoutConfig, TerminalSize};
 use narada_agent_tui::ratatui_renderer::render_app_to_buffer;
-use narada_agent_tui::status_view_model::{
-    McpRuntimeState, ProviderRuntimeState, StatusViewInput, TerminalRuntimeState,
-};
+use narada_agent_tui::status_view_model::{RuntimePostureState, StatusViewInput};
 use narada_agent_tui::terminal_input_tick::{
     run_textarea_composer_input_tick, TerminalInputReader,
 };
@@ -90,9 +88,7 @@ fn render_draft_text(draft_text: String) -> String {
             queued_inputs: 0,
             held_system_directives: 0,
             transcript_items: 0,
-            provider_state: ProviderRuntimeState::Disabled,
-            mcp_state: McpRuntimeState::Disabled,
-            terminal_state: TerminalRuntimeState::Disabled,
+            runtime_posture: RuntimePostureState::disabled(),
             last_error: None,
         },
         composer: ComposerViewInput {

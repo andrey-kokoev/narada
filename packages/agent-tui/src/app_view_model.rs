@@ -34,7 +34,7 @@ pub fn build_app_view(input: &AppViewInput) -> AppViewModel {
 mod tests {
     use super::*;
     use crate::input_queue::TurnState;
-    use crate::status_view_model::{McpRuntimeState, ProviderRuntimeState, TerminalRuntimeState};
+    use crate::status_view_model::{ProviderRuntimeState, RuntimePostureState};
     use crate::transcript_projection::{TranscriptActor, TranscriptItemKind};
 
     fn input() -> AppViewInput {
@@ -59,9 +59,7 @@ mod tests {
                 queued_inputs: 0,
                 held_system_directives: 0,
                 transcript_items: 1,
-                provider_state: ProviderRuntimeState::Disabled,
-                mcp_state: McpRuntimeState::Disabled,
-                terminal_state: TerminalRuntimeState::Disabled,
+                runtime_posture: RuntimePostureState::disabled(),
                 last_error: None,
             },
             composer: ComposerViewInput {
@@ -91,7 +89,10 @@ mod tests {
         let model = build_app_view(&AppViewInput {
             status: StatusViewInput {
                 turn_state: TurnState::Active,
-                provider_state: ProviderRuntimeState::Working,
+                runtime_posture: RuntimePostureState {
+                    provider_state: ProviderRuntimeState::Working,
+                    ..RuntimePostureState::disabled()
+                },
                 queued_inputs: 2,
                 ..input().status
             },
