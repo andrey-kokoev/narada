@@ -289,8 +289,8 @@ assert.equal(formatDuration(65000), '1m 5s');
 assert.equal(formatDuration(3661000), '1h 1m 1s');
 assert.equal(formatTimestamp(new Date('2026-05-28T16:37:21Z')), '2026-05-28Z16:37');
 assert.equal(formatProgressStatus({ spinner: '-', phase: 'thinking', totalMs: 6000, phaseMs: 6000 }), '- thinking 6s · Enter queues note · Esc to interrupt');
-assert.equal(formatProgressStatus({ spinner: '/', phase: 'calling read_file', totalMs: 7000, phaseMs: 1200 }), '/ calling read_file 1s · total 7s · Enter queues note · Esc to interrupt');
-assert.equal(formatProgressStatus({ spinner: '/', phase: 'calling read_file', totalMs: 65000, phaseMs: 61000 }), '/ calling read_file 1m 1s · total 1m 5s · Enter queues note · Esc to interrupt');
+assert.equal(formatProgressStatus({ spinner: '/', phase: 'calling fs_read_file', totalMs: 7000, phaseMs: 1200 }), '/ calling fs_read_file 1s · total 7s · Enter queues note · Esc to interrupt');
+assert.equal(formatProgressStatus({ spinner: '/', phase: 'calling fs_read_file', totalMs: 65000, phaseMs: 61000 }), '/ calling fs_read_file 1m 1s · total 1m 5s · Enter queues note · Esc to interrupt');
 assert.equal(formatProgressStatus({ spinner: '|', phase: 'thinking', totalMs: 8000, phaseMs: 8000, operatorDirectiveDraftLength: 12, queuedOperatorDirectiveCount: 2 }), '| thinking 8s · queued operator directives 2 · typing operator directive (12) · Enter queues note · Esc to interrupt');
 assert.equal(formatHeaderRow('Identity', 'narada.architect', {}).includes('Identity'), true);
 assert.equal(formatHeaderRow('Stream', 'on', {}).includes('on'), true);
@@ -371,7 +371,7 @@ assert.throws(
 const tools = [{
   type: 'function',
   function: {
-    name: 'read_file',
+    name: 'fs_read_file',
     description: 'Read a file',
     parameters: {
       type: 'object',
@@ -401,7 +401,7 @@ assert.equal(anthropicRequest.body.model, 'claude-sonnet-4.6');
 assert.equal(anthropicRequest.body.system, 'You are a test agent.');
 assert.deepEqual(anthropicRequest.body.messages, [{ role: 'user', content: 'Read package metadata.' }]);
 assert.deepEqual(anthropicRequest.body.tools, [{
-  name: 'read_file',
+  name: 'fs_read_file',
   description: 'Read a file',
   input_schema: tools[0].function.parameters,
 }]);
@@ -413,7 +413,7 @@ const parsedAnthropic = parseAnthropicMessagesResponse({
   usage: { input_tokens: 12, output_tokens: 8 },
   content: [
     { type: 'text', text: 'I will read it.' },
-    { type: 'tool_use', id: 'toolu_123', name: 'read_file', input: { path: 'package.json' } },
+    { type: 'tool_use', id: 'toolu_123', name: 'fs_read_file', input: { path: 'package.json' } },
   ],
 });
 
@@ -423,7 +423,7 @@ assert.equal(parsedAnthropic.choices[0].finish_reason, 'tool_calls');
 assert.deepEqual(parsedAnthropic.choices[0].message.tool_calls, [{
   id: 'toolu_123',
   type: 'function',
-  function: { name: 'read_file', arguments: JSON.stringify({ path: 'package.json' }) },
+  function: { name: 'fs_read_file', arguments: JSON.stringify({ path: 'package.json' }) },
 }]);
 
 const openAiRequest = buildOpenAiChatRequest(messages, tools, {
@@ -435,7 +435,7 @@ const openAiRequest = buildOpenAiChatRequest(messages, tools, {
 assert.equal(openAiRequest.url.href, 'https://api.openai.com/v1/chat/completions');
 assert.equal(openAiRequest.headers.Authorization, 'Bearer test-openai-key');
 assert.equal(openAiRequest.body.messages[0].role, 'system');
-assert.equal(openAiRequest.body.tools[0].function.name, 'read_file');
+assert.equal(openAiRequest.body.tools[0].function.name, 'fs_read_file');
 
 const codexMcpRequest = buildCodexMcpRequest([
   { role: 'system', content: 'You are a test agent.' },
@@ -451,7 +451,7 @@ assert.equal(codexMcpRequest.arguments.model, 'gpt-5.5');
 assert.equal(codexMcpRequest.arguments['reasoning-effort'], 'high');
 assert.equal(codexMcpRequest.arguments['developer-instructions'].startsWith('You are a test agent.'), true);
 assert.equal(codexMcpRequest.arguments['developer-instructions'].includes('narada_tool_call'), true);
-assert.equal(codexMcpRequest.arguments['developer-instructions'].includes('read_file'), true);
+assert.equal(codexMcpRequest.arguments['developer-instructions'].includes('fs_read_file'), true);
 if (process.platform === 'win32') {
   assert.equal(codexMcpRequest.arguments.sandbox, 'danger-full-access');
 } else {
@@ -580,14 +580,14 @@ await runConversationTurn(
   [{
     type: 'function',
     function: {
-      name: 'read_file',
+      name: 'fs_read_file',
       description: 'fixture tool',
       parameters: { type: 'object', properties: {} },
     },
   }],
   {
     fixture: {
-      tools: [{ name: 'read_file' }],
+      tools: [{ name: 'fs_read_file' }],
       send: async () => ({
         result: {
           content: [{ text: JSON.stringify({ status: 'ok', output_ref: 'mcp_output:o_test' }) }],
@@ -611,7 +611,7 @@ await runConversationTurn(
               tool_calls: [{
                 id: 'call_test',
                 type: 'function',
-                function: { name: 'read_file', arguments: '{}' },
+                function: { name: 'fs_read_file', arguments: '{}' },
               }],
             },
           }],
@@ -622,10 +622,10 @@ await runConversationTurn(
   },
 );
 assert.equal(emitted.some((event) => event.event === 'assistant_message' && event.content === 'Calling tool.'), true);
-assert.equal(emitted.some((event) => event.event === 'tool_call' && event.tool === 'read_file'), true);
+assert.equal(emitted.some((event) => event.event === 'tool_call' && event.tool === 'fs_read_file'), true);
 assert.equal(emitted.some((event) => event.event === 'tool_result' && event.output_ref === 'mcp_output:o_test'), true);
-assert.equal(emitted.some((event) => event.event === 'tool_result' && event.tool === 'read_file' && event.decision === 'read_only_admitted'), true);
-const readOnlyToolCallEvent = emitted.find((event) => event.event === 'tool_call' && event.tool === 'read_file');
+assert.equal(emitted.some((event) => event.event === 'tool_result' && event.tool === 'fs_read_file' && event.decision === 'read_only_admitted'), true);
+const readOnlyToolCallEvent = emitted.find((event) => event.event === 'tool_call' && event.tool === 'fs_read_file');
 assert.equal('arguments' in readOnlyToolCallEvent, false);
 assert.equal(readOnlyToolCallEvent.raw_arguments_recorded, false);
 assert.equal(readOnlyToolCallEvent.decision, 'read_only_admitted');
@@ -635,11 +635,11 @@ const payloadLimitResult = await executeMcpTool(
   {
     id: 'call_payload_limit',
     type: 'function',
-    function: { name: 'read_file', arguments: '{}' },
+    function: { name: 'fs_read_file', arguments: '{}' },
   },
   {
     fixture: {
-      tools: [{ name: 'read_file' }],
+      tools: [{ name: 'fs_read_file' }],
       send: async () => {
         throw new Error('inline_payload_too_long: field=summary length=584 threshold=200 remediation=use payload_ref');
       },
@@ -807,7 +807,7 @@ rl.on('line', (line) => {
   if (request.method === 'tools/list') {
     console.log(JSON.stringify({ jsonrpc: '2.0', id: request.id, result: { tools: [
       { name: 'task_lifecycle_claim', description: 'claim', inputSchema: { type: 'object', properties: {} } },
-      { name: 'read_file', description: 'read', inputSchema: { type: 'object', properties: {} } }
+      { name: 'fs_read_file', description: 'read', inputSchema: { type: 'object', properties: {} } }
     ] } }));
     return;
   }
@@ -868,7 +868,7 @@ try {
     {
       id: 'call_discovered_unlisted_read',
       type: 'function',
-      function: { name: 'read_file', arguments: '{"path":"package.json"}' },
+      function: { name: 'fs_read_file', arguments: '{"path":"package.json"}' },
     },
     discoveredServers,
     null,

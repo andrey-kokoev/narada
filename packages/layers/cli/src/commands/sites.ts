@@ -2955,6 +2955,7 @@ async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<str
     surface: string;
     relativeToolRoot: string;
     packageSrcUrl: URL;
+    excludeRelativePaths?: string[];
   }): Promise<void> {
     const srcRoot = fileURLToPath(options.packageSrcUrl);
     if (!existsSync(srcRoot)) return;
@@ -2967,6 +2968,7 @@ async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<str
         }
         if (!isExecutableToolPath(entry.name)) continue;
         const relativeFromSrc = slashRelative(srcRoot, entryPath);
+        if (options.excludeRelativePaths?.includes(relativeFromSrc)) continue;
         await addCanonicalHash({
           path: `${options.relativeToolRoot}/${relativeFromSrc}`,
           packageName: options.packageName,
@@ -3072,11 +3074,19 @@ async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<str
     packageSrcUrl: new URL('../../../../../packages/task-lifecycle-tools/src', import.meta.url),
   });
   await addCanonicalPackageTree({
+    packageName: '@narada2/local-filesystem-mcp',
+    version: '0.1.0',
+    surface: 'local-filesystem',
+    relativeToolRoot: 'tools/local-filesystem-mcp',
+    packageSrcUrl: new URL('../../../../../packages/local-filesystem-mcp/src', import.meta.url),
+  });
+  await addCanonicalPackageTree({
     packageName: '@narada2/site-common-tools',
     version: '0.1.0',
     surface: 'site-tools',
     relativeToolRoot: 'tools',
     packageSrcUrl: new URL('../../../../../packages/site-common-tools/src', import.meta.url),
+    excludeRelativePaths: ['mcp-servers/filesystem/filesystem-mcp-server.mjs'],
   });
   canonicalToolSurfaceEntries = entries;
   return entries;
