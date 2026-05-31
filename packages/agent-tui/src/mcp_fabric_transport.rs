@@ -154,7 +154,12 @@ impl McpFabricTransportServer {
         }
         let command = raw
             .command
-            .ok_or_else(|| format!("mcp_fabric_server_command_missing:{name}"))?;
+            .ok_or_else(|| format!("mcp_fabric_server_command_missing:{name}"))?
+            .trim()
+            .to_string();
+        if command.is_empty() {
+            return Err(format!("mcp_fabric_server_command_invalid:{name}"));
+        }
         let raw_tools = raw
             .tools
             .or(raw.allowed_tools)
@@ -229,6 +234,44 @@ mod tests {
                 .map(String::as_str),
             Some("sonar-site-loop")
         );
+    }
+
+    #[test]
+    fn rejects_blank_server_command() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": " ",
+                  "tools": ["site_loop_status"]
+                }
+              }
+            }"#,
+        )
+        .expect_err("blank command is invalid");
+
+        assert_eq!(error, "mcp_fabric_server_command_invalid:sonar-site-loop");
+    }
+
+    #[test]
+    fn trims_server_command() {
+        let client = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": " node ",
+                  "tools": ["site_loop_status"]
+                }
+              }
+            }"#,
+        )
+        .expect("trimmed command config parses");
+
+        assert_eq!(client.servers["sonar-site-loop"].command, "node");
     }
 
     #[test]
