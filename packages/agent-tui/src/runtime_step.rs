@@ -122,10 +122,11 @@ impl RuntimeStep {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::carrier_protocol::{parse_session_event, InputEvent, SessionEventKind};
-    use crate::provider_dispatch::{ProviderDispatchRecord, ProviderDispatchStatus};
+    use crate::carrier_protocol::{parse_session_event, SessionEventKind};
+    use crate::provider_adapter_admission::ProviderAdapterKind;
+    use crate::provider_dispatch::{ProviderOutputRecord, ScriptedProviderAdapter};
+    use crate::provider_runtime_config::ProviderRuntimeConfig;
     use crate::transcript_projection::{TranscriptActor, TranscriptItemKind};
-    use serde_json::json;
     use std::fs::{read_to_string, remove_file, OpenOptions};
     use std::io::Write;
     use std::path::Path;
@@ -164,23 +165,29 @@ mod tests {
     fn runtime_clock() -> RuntimeClock {
         RuntimeClock::fixed("2026-05-30T00:00:02.000Z")
     }
-
-    struct RuntimeLevelProviderAdapter;
-
-    impl ProviderAdapter for RuntimeLevelProviderAdapter {
-        fn dispatch_request(&self, input: &InputEvent, turn_id: &str) -> ProviderDispatchRecord {
-            ProviderDispatchRecord {
-                status: ProviderDispatchStatus::RecordedNotDispatched,
-                provider_execution_enabled: false,
-                payload: json!({
-                    "turn_id": turn_id,
-                    "input_event_id": input.event_id,
-                    "provider_request_status": "runtime_level_adapter_recorded",
-                    "provider_execution_enabled": false
-                }),
-                outputs: Vec::new(),
-            }
-        }
+    fn scripted_runtime_provider_adapter() -> ScriptedProviderAdapter {
+        let runtime_config =
+            ProviderRuntimeConfig::from_env_map(&std::collections::BTreeMap::from([
+                (
+                    "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION".to_string(),
+                    "true".to_string(),
+                ),
+                (
+                    "NARADA_INTELLIGENCE_PROVIDER".to_string(),
+                    "codex-subscription".to_string(),
+                ),
+                ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
+            ]));
+        ScriptedProviderAdapter::try_new(
+            runtime_config,
+            ProviderAdapterKind::CodexSubscription,
+            vec![ProviderOutputRecord::text_delta(
+                "turn_1",
+                "runtime hello",
+                1,
+            )],
+        )
+        .expect("scripted runtime provider admits configured runtime")
     }
 
     #[test]
@@ -276,18 +283,44 @@ mod tests {
             &session_path,
             context(),
             runtime_clock(),
-            Box::new(RuntimeLevelProviderAdapter),
+            Box::new(scripted_runtime_provider_adapter()),
         );
         let result = step.run_once(false).expect("runtime step succeeds");
         assert!(result.completed_turn.is_some());
-        assert_eq!(result.transcript.total_items, 2);
+        assert_eq!(result.transcript.total_items, 3);
 
         let session_jsonl = read_to_string(&session_path).expect("session jsonl exists");
         let lines: Vec<&str> = session_jsonl.lines().collect();
+        assert_eq!(lines.len(), 5);
         let provider_request = parse_session_event(lines[2]).expect("provider request parses");
         assert_eq!(
             provider_request.payload["provider_request_status"],
-            "runtime_level_adapter_recorded"
+            "completed"
+        );
+        assert_eq!(provider_request.payload["provider_execution_enabled"], true);
+        assert_eq!(
+            provider_request.payload["provider_runtime_status"],
+            "configured"
+        );
+        assert_eq!(
+            provider_request.payload["provider_adapter_admission_status"],
+            "admitted"
+        );
+        assert_eq!(
+            provider_request.payload["provider_adapter_kind"],
+            "codex_subscription_adapter"
+        );
+        assert_eq!(
+            parse_session_event(lines[3])
+                .expect("provider text parses")
+                .event_kind,
+            SessionEventKind::ProviderTextDeltaRecorded
+        );
+        assert_eq!(
+            parse_session_event(lines[4])
+                .expect("turn complete parses")
+                .payload["terminal_status"],
+            "completed"
         );
 
         remove_file(control_path).ok();
