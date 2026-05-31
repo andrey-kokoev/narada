@@ -15,6 +15,12 @@ import {
   createAndWriteCarrierActionAdmission,
   inspectPayloadForSecrets,
 } from '../../carrier-action-admission/src/carrier-action-admission.mjs';
+import {
+  createPayloadRef,
+  createSessionEvent as createCarrierSessionEvent,
+  normalizeControlInputRecord,
+  normalizeInputEvent as normalizeCarrierInputEvent,
+} from '../../carrier-protocol/src/carrier-protocol.mjs';
 import { buildFallbackToolMetadata, resolveToolMetadata } from '../../carrier-action-admission/src/tool-metadata.mjs';
 import {
   DEFAULT_AGENT_CLI_PROVIDER,
@@ -37,6 +43,7 @@ const {
 const THINKING_LEVEL = process.env.NARADA_AI_THINKING ?? process.env.NARADA_THINKING_LEVEL ?? 'medium';
 const CODEX_SUBSCRIPTION_TRANSPORT = process.env.NARADA_CODEX_SUBSCRIPTION_TRANSPORT ?? 'exec-json';
 const SITE_ROOT = resolve(process.env.NARADA_SITE_ROOT ?? process.cwd());
+const SITE_ID = process.env.NARADA_SITE_ID ?? process.env.NARADA_SITE_NAME ?? 'unknown-site';
 const REQUEST_ADAPTERS = Object.freeze({
   'openai-compatible-chat-completions': {
     buildRequest: buildOpenAiChatRequest,
@@ -216,6 +223,7 @@ async function main() {
     await inputQueue.enqueue(normalizeInputEvent(input, { transport: 'programmatic' }), { drain: true });
   }
   if (EXIT_AFTER_PROGRAMMATIC_INPUT) {
+    inputQueue.finalizeSession();
     rl.close();
     for (const server of Object.values(mcpServers)) {
       if (server.process) server.process.kill();
@@ -251,7 +259,7 @@ async function main() {
     promptState.active = false;
     if (userInput === '__READLINE_CLOSED__') break;
     rewriteSubmittedPrompt(promptLabel, userInput);
-    const slashCommand = await handleSlashCommand(userInput, { mcpServers, allTools });
+    const slashCommand = await handleSlashCommand(userInput, { mcpServers, allTools, inputQueue });
     if (slashCommand === 'exit') break;
     if (slashCommand === 'handled') {
       await inputQueue.drainUntilIdle();
@@ -269,6 +277,7 @@ async function main() {
   }
 
   rl.close();
+  inputQueue.finalizeSession();
   controlWatcher?.stop();
   for (const server of Object.values(mcpServers)) {
     if (server.process) server.process.kill();
@@ -324,27 +333,50 @@ async function handleInteractiveControlLine(line, { inputQueue }) {
     request = JSON.parse(line);
   } catch {
     printCliMessage('Ignored invalid control JSON.');
+    recordCarrierDiagnostic('warn', 'Ignored invalid control JSON.');
     return;
   }
-  if (request?.method !== 'system_directive.deliver') {
-    printCliMessage(`Ignored unsupported control method: ${request?.method ?? '<missing>'}`);
+  let controlRecord;
+  try {
+    controlRecord = normalizeAgentCliControlRecord(request);
+  } catch (error) {
+    const message = `Ignored invalid control frame: ${error instanceof Error ? error.message : String(error)}`;
+    printCliMessage(message);
+    recordCarrierDiagnostic('warn', message);
     return;
+  }
+  await inputQueue.enqueue(controlRecord.input, { drain: true });
+}
+
+function normalizeAgentCliControlRecord(request) {
+  if (request?.schema === 'narada.carrier.control.input_event.v1') {
+    return normalizeControlInputRecord(request, { transport: 'control_jsonl' });
+  }
+  if (request?.method !== 'system_directive.deliver') {
+    throw new Error(`unsupported_control_method:${request?.method ?? '<missing>'}`);
   }
   const directive = request?.params?.directive ?? null;
   const message = String(request?.params?.message ?? directive?.content?.text ?? '');
-  if (!message.trim()) {
-    printCliMessage('Ignored empty system directive control frame.');
-    return;
-  }
-  await inputQueue.enqueue(normalizeInputEvent({
-      content: message,
-      source: 'system_directive',
-      authority_ref: request?.params?.authority_ref ?? directive?.directive_id ?? request?.params?.directive_id ?? null,
-      directive_id: directive?.directive_id ?? request?.params?.directive_id ?? null,
-    }, { transport: 'control_jsonl' }), { drain: true });
+  if (!message.trim()) throw new Error('empty_system_directive_control_frame');
+  return normalizeControlInputRecord({
+    content: message,
+    source: 'system_directive',
+    source_id: request?.params?.source_id ?? 'agent-cli.system_directive',
+    authority_ref: request?.params?.authority_ref ?? directive?.directive_id ?? request?.params?.directive_id ?? null,
+    directive_id: directive?.directive_id ?? request?.params?.directive_id ?? null,
+    transport: 'control_jsonl',
+  }, { transport: 'control_jsonl' });
 }
 
-async function handleSlashCommand(input, { mcpServers, allTools }) {
+function recordCarrierDiagnostic(level, message, extra = {}) {
+  appendSession(SESSION_PATH, carrierSessionEventEntry('carrier_diagnostic_recorded', {
+    level,
+    message,
+    ...extra,
+  }));
+}
+
+async function handleSlashCommand(input, { mcpServers, allTools, inputQueue = null }) {
   const trimmed = String(input ?? '').trim();
   if (!trimmed) return 'none';
   if (trimmed.toLowerCase() === 'exit' || trimmed.toLowerCase() === '/exit' || trimmed.toLowerCase() === '/quit') {
@@ -364,9 +396,27 @@ async function handleSlashCommand(input, { mcpServers, allTools }) {
       '/status               Show session state',
       '/model <name>         Set model for later turns',
       '/thinking <level>     none, low, medium, high',
+      '/queue                Show queued carrier input',
+      '/queue clear          Clear queued operator steering',
+      '/queue drop <index>   Drop one queued operator steering item',
       '/clear                Clear terminal display',
       '/exit                 Save and quit',
     ].join('\n'));
+    return 'handled';
+  }
+  if (command === '/queue') {
+    if (!inputQueue) {
+      printCliMessage('Queue is unavailable in this mode.');
+      return 'handled';
+    }
+    const result = handleQueueCommand(value, inputQueue);
+    printCliMessage(result.message);
+    if (result.mutated) {
+      appendSession(SESSION_PATH, carrierSessionEventEntry('carrier_command_executed', {
+        command: `/queue${value ? ` ${value}` : ''}`,
+        mutation: result.mutation,
+      }));
+    }
     return 'handled';
   }
   if (command === '/clear') {
@@ -417,38 +467,124 @@ async function handleSlashCommand(input, { mcpServers, allTools }) {
   return 'handled';
 }
 
+function handleQueueCommand(value, inputQueue) {
+  const trimmed = String(value ?? '').trim();
+  if (!trimmed) {
+    const items = inputQueue.items();
+    if (items.length === 0) return { message: 'Queue is empty.', mutated: false };
+    return {
+      message: ['Queue', '', ...items.map(formatQueueItem)].join('\n'),
+      mutated: false,
+    };
+  }
+  if (trimmed === 'clear') {
+    const dropped = inputQueue.clearOperatorSteering();
+    return {
+      message: dropped.length === 0 ? 'No queued operator steering to clear.' : `Cleared ${dropped.length} queued operator steering item${dropped.length === 1 ? '' : 's'}.`,
+      mutated: dropped.length > 0,
+      mutation: { kind: 'queue_clear', dropped_input_event_ids: dropped.map((event) => event.event_id) },
+    };
+  }
+  const dropMatch = trimmed.match(/^drop\s+(\d+)$/i);
+  if (dropMatch) {
+    const index = Number(dropMatch[1]);
+    const dropped = inputQueue.dropOperatorSteering(index);
+    return {
+      message: dropped ? `Dropped queued operator steering ${index}.` : `No queued operator steering at index ${index}.`,
+      mutated: Boolean(dropped),
+      mutation: dropped ? { kind: 'queue_drop', dropped_input_event_ids: [dropped.event_id], index } : null,
+    };
+  }
+  return { message: 'Usage: /queue, /queue clear, /queue drop <index>', mutated: false };
+}
+
+function formatQueueItem(item) {
+  const age = formatDuration(Math.max(0, Date.now() - Date.parse(item.created_at ?? item.received_at ?? new Date().toISOString())));
+  const preview = firstLinePreview(item.content, 96);
+  return `${item.index}. ${item.source} · ${item.delivery_mode}${item.hold_condition ? ` · hold ${item.hold_condition}` : ''} · age ${age}\n   ${preview}`;
+}
+
+function firstLinePreview(text, limit = 96) {
+  const first = String(text ?? '').split(/\r?\n/)[0] ?? '';
+  return first.length > limit ? `${first.slice(0, Math.max(0, limit - 1))}…` : first;
+}
+
 // ---------------------------------------------------------------------------
 // Conversation loop
 // ---------------------------------------------------------------------------
 function normalizeInputEvent(input, defaults = {}) {
   const record = normalizeInputRecord(input);
   const receivedAt = defaults.received_at ?? input?.received_at ?? new Date().toISOString();
-  return {
+  const legacySource = record.source;
+  const protocolSourceKind = input?.source_kind ?? sourceKindForLegacyInputSource(legacySource);
+  const protocolMetadata = {
+    ...(input?.metadata ?? {}),
+    legacy_source: legacySource,
+    ...(protocolSourceKind === 'system' && record.directive_id ? { directive_provenance: { kind: 'system_directive' } } : {}),
+    ...(legacySource === 'operator_directive' ? { directive_provenance: { kind: 'explicit_operator_directive_surface' } } : {}),
+  };
+  const protocolEvent = normalizeCarrierInputEvent({
+    schema: 'narada.carrier.input_event.v1',
     event_id: input?.event_id ?? `input_${randomId()}`,
-    received_at: receivedAt,
+    source_kind: protocolSourceKind,
+    source_id: input?.source_id ?? sourceIdForLegacyInputSource(legacySource),
+    transport: normalizeLegacyTransport(input?.transport ?? defaults.transport ?? transportForInputSource(legacySource)),
+    delivery_mode: input?.delivery_mode ?? deliveryModeForLegacyInputSource(legacySource),
+    hold_condition: input?.hold_condition ?? null,
     content: record.content,
-    source: record.source,
+    created_at: receivedAt,
     authority_ref: record.authority_ref,
-    directive_id: input?.directive_id ?? null,
+    directive_id: input?.directive_id ?? record.directive_id ?? null,
+    metadata: protocolMetadata,
+  });
+  return {
+    ...protocolEvent,
+    received_at: protocolEvent.created_at,
+    content: record.content,
+    source: legacySource,
+    authority_ref: record.authority_ref,
+    directive_id: protocolEvent.directive_id,
     request_id: input?.request_id ?? null,
-    transport: input?.transport ?? defaults.transport ?? transportForInputSource(record.source),
+    transport: protocolEvent.transport,
   };
 }
 
 function transportForInputSource(source) {
-  if (source === 'automation_jsonl') return 'jsonl_stdio';
-  if (source === 'programmatic_operator' || source === 'operator_directive' || source === 'system_directive') return 'programmatic';
-  return 'terminal';
+  if (source === 'automation_jsonl') return 'control_jsonl';
+  if (source === 'programmatic_operator' || source === 'operator_directive' || source === 'system_directive') return 'carrier_server_api';
+  return 'interactive_terminal';
+}
+
+function normalizeLegacyTransport(transport) {
+  if (transport === 'terminal') return 'interactive_terminal';
+  if (transport === 'programmatic') return 'carrier_server_api';
+  if (transport === 'jsonl_stdio') return 'control_jsonl';
+  return transport;
+}
+
+function sourceKindForLegacyInputSource(source) {
+  if (source === 'system_directive') return 'system';
+  return 'operator';
+}
+
+function sourceIdForLegacyInputSource(source) {
+  if (source === 'system_directive') return 'agent-cli.system_directive';
+  return 'operator';
+}
+
+function deliveryModeForLegacyInputSource(source) {
+  if (source === 'operator_steering') return 'admit_after_active_turn';
+  return 'admit_for_current_turn';
 }
 
 function createInputQueue({ drain, shouldDefer = () => false, onDeferred = null } = {}) {
   const pending = [];
-  const state = { running: false, deferredNotified: new Set() };
+  const state = { running: false, deferredNotified: new Set(), heldSystemDirectives: new Set() };
   return {
     get isRunning() { return state.running; },
     get pendingCount() { return pending.length; },
     get pendingSystemDirectiveCount() { return pending.filter((event) => event.source === 'system_directive').length; },
-    get pendingOperatorDirectiveCount() { return pending.filter((event) => event.source === 'operator_directive').length; },
+    get pendingOperatorDirectiveCount() { return pending.filter((event) => event.source === 'operator_steering').length; },
     enqueue: async (event, options = {}) => {
       const normalized = normalizeInputEvent(event);
       pending.push(normalized);
@@ -459,12 +595,22 @@ function createInputQueue({ drain, shouldDefer = () => false, onDeferred = null 
         authority_ref: normalized.authority_ref,
         directive_id: normalized.directive_id,
       }));
+      if (normalized.delivery_mode === 'admit_after_active_turn') {
+        appendSession(SESSION_PATH, carrierSessionEventEntry('input_queued_for_turn_boundary', {
+          input_event_id: normalized.event_id,
+          queue_state: 'queued_for_turn_boundary',
+        }));
+      }
       if (options.drain) await drainUntilIdle();
       return normalized;
     },
     drainOnce,
     drainUntilIdle,
     state: queueSnapshot,
+    items: queueItems,
+    clearOperatorSteering,
+    dropOperatorSteering,
+    finalizeSession,
   };
 
   function queueSnapshot() {
@@ -472,8 +618,65 @@ function createInputQueue({ drain, shouldDefer = () => false, onDeferred = null 
       running: state.running,
       pendingCount: pending.length,
       pendingSystemDirectiveCount: pending.filter((event) => event.source === 'system_directive').length,
-      pendingOperatorDirectiveCount: pending.filter((event) => event.source === 'operator_directive').length,
+      pendingOperatorDirectiveCount: pending.filter((event) => event.source === 'operator_steering').length,
     };
+  }
+
+  function queueItems() {
+    return pending.map((event, index) => ({
+      index: index + 1,
+      event_id: event.event_id,
+      source: event.source,
+      source_kind: event.source_kind,
+      source_id: event.source_id,
+      transport: event.transport,
+      delivery_mode: event.delivery_mode,
+      hold_condition: event.hold_condition ?? null,
+      created_at: event.created_at,
+      received_at: event.received_at,
+      content: event.content,
+    }));
+  }
+
+  function clearOperatorSteering() {
+    const dropped = [];
+    for (let index = pending.length - 1; index >= 0; index--) {
+      if (pending[index].source !== 'operator_steering') continue;
+      const [event] = pending.splice(index, 1);
+      dropped.unshift(event);
+    }
+    for (const event of dropped) recordDroppedByOperator(event, 'queue_clear');
+    return dropped;
+  }
+
+  function dropOperatorSteering(index) {
+    const operatorSteering = pending
+      .map((event, pendingIndex) => ({ event, pendingIndex }))
+      .filter(({ event }) => event.source === 'operator_steering');
+    const target = operatorSteering[index - 1];
+    if (!target) return null;
+    const [event] = pending.splice(target.pendingIndex, 1);
+    recordDroppedByOperator(event, 'queue_drop');
+    return event;
+  }
+
+  function recordDroppedByOperator(event, dropReason) {
+    appendSession(SESSION_PATH, carrierSessionEventEntry('input_dropped_by_operator', {
+      input_event_id: event.event_id,
+      drop_reason: dropReason,
+    }));
+  }
+
+  function finalizeSession() {
+    const abandoned = pending.splice(0, pending.length);
+    for (const event of abandoned) {
+      appendSession(SESSION_PATH, carrierSessionEventEntry('input_abandoned_on_session_end', {
+        input_event_id: event.event_id,
+      }));
+      state.deferredNotified.delete(event.event_id);
+      state.heldSystemDirectives.delete(event.event_id);
+    }
+    return abandoned;
   }
 
   async function drainOnce() {
@@ -482,12 +685,14 @@ function createInputQueue({ drain, shouldDefer = () => false, onDeferred = null 
       const event = pending[0];
       if (event && !state.deferredNotified.has(event.event_id)) {
         state.deferredNotified.add(event.event_id);
+        recordSystemDirectiveHeld(event);
         onDeferred?.(event, queueSnapshot());
       }
       return null;
     }
     const event = pending.shift();
     state.deferredNotified.delete(event.event_id);
+    recordSystemDirectiveReleased(event);
     state.running = true;
     appendSession(SESSION_PATH, sessionEventEntry('input_event_started', {
       event_id: event.event_id,
@@ -495,6 +700,9 @@ function createInputQueue({ drain, shouldDefer = () => false, onDeferred = null 
       transport: event.transport,
       authority_ref: event.authority_ref,
       directive_id: event.directive_id,
+    }));
+    appendSession(SESSION_PATH, carrierSessionEventEntry('input_admitted_to_turn', {
+      input_event_id: event.event_id,
     }));
     if (event.source === 'system_directive' && event.directive_id) {
       appendSession(SESSION_PATH, sessionEventEntry('directive_receipt_recorded', directiveReceiptEvidence(event, {
@@ -512,10 +720,38 @@ function createInputQueue({ drain, shouldDefer = () => false, onDeferred = null 
         event_id: event.event_id,
         terminal_state: result?.terminal_state ?? 'completed',
       }));
+      appendSession(SESSION_PATH, carrierSessionEventEntry('input_completed', {
+        input_event_id: event.event_id,
+        terminal_state: result?.terminal_state ?? 'completed',
+      }));
       return result;
     } finally {
       state.running = false;
     }
+  }
+
+  function recordSystemDirectiveHeld(event) {
+    if (event?.source !== 'system_directive') return;
+    if (state.heldSystemDirectives.has(event.event_id)) return;
+    state.heldSystemDirectives.add(event.event_id);
+    appendSession(SESSION_PATH, carrierSessionEventEntry('system_directive_held', {
+      input_event_id: event.event_id,
+      ...(event.directive_id ? { directive_id: event.directive_id } : {}),
+      held_at: new Date().toISOString(),
+      held_reason: 'composer_nonempty',
+      original_delivery_mode: event.delivery_mode,
+    }));
+  }
+
+  function recordSystemDirectiveReleased(event) {
+    if (event?.source !== 'system_directive') return;
+    if (!state.heldSystemDirectives.has(event.event_id)) return;
+    state.heldSystemDirectives.delete(event.event_id);
+    appendSession(SESSION_PATH, carrierSessionEventEntry('system_directive_released', {
+      input_event_id: event.event_id,
+      ...(event.directive_id ? { directive_id: event.directive_id } : {}),
+      released_at: new Date().toISOString(),
+    }));
   }
 
   async function drainUntilIdle() {
@@ -557,14 +793,14 @@ async function submitUserInput({ input, messages, tools, mcpServers, rl, inputQu
       if (!inputQueue) return null;
       await inputQueue.enqueue(normalizeInputEvent({
         content,
-        source: 'operator_directive',
+        source: 'operator_steering',
         authority_ref: 'interactive_working_input',
       }, { transport: 'terminal' }), { drain: false });
       return inputQueue.state();
     },
   }) : null;
   try {
-    return await runConversationTurn(messages, tools, mcpServers, rl, { turn: turn ?? progress?.turn ?? null, emit, callChatApiFn });
+    return await runConversationTurn(messages, tools, mcpServers, rl, { turn: turn ?? progress?.turn ?? null, emit, callChatApiFn, inputEventId: input?.event_id ?? null });
   } finally {
     progress?.stop();
   }
@@ -574,29 +810,47 @@ async function runConversationTurn(messages, tools, mcpServers, rl, options = {}
   const emit = options.emit ?? null;
   const turn = options.turn ?? null;
   const callChatApiFn = options.callChatApiFn ?? callChatApi;
+  let turnStartedRecorded = false;
+  let turnTerminalRecorded = false;
+  const recordTurnStarted = () => {
+    if (turnStartedRecorded || !turn?.turnId) return;
+    turnStartedRecorded = true;
+    appendCarrierTurnEvent('turn_started', turn.turnId, { input_event_id: options.inputEventId ?? 'unknown_input_event' });
+  };
+  const recordTurnTerminal = (eventKind, payload = {}) => {
+    if (turnTerminalRecorded || !turn?.turnId) return;
+    turnTerminalRecorded = true;
+    appendCarrierTurnEvent(eventKind, turn.turnId, payload);
+  };
   while (true) {
     if (turn?.interruptRequested) {
       emit?.('turn_interrupted', { turn_id: turn.turnId, terminal_state: 'interrupted' });
+      recordTurnTerminal('turn_interrupted');
       return { terminal_state: 'interrupted' };
     }
     turn?.setPhase?.('thinking');
     let response;
     try {
+      recordTurnStarted();
       response = await callChatApiFn(messages, tools, { ...sessionSettings, turn, abortSignal: turn?.abortSignal, emit, mcpServers });
     } catch (error) {
       if (turn?.interruptRequested || isAbortError(error)) {
         emit?.('turn_interrupted', { turn_id: turn?.turnId ?? null, terminal_state: 'interrupted' });
+        recordTurnTerminal('turn_interrupted');
         return { terminal_state: 'interrupted' };
       }
+      recordTurnTerminal('turn_failed', { error_summary: error instanceof Error ? error.message : String(error) });
       throw error;
     }
     if (turn?.interruptRequested) {
       emit?.('turn_interrupted', { turn_id: turn.turnId, terminal_state: 'interrupted' });
+      recordTurnTerminal('turn_interrupted');
       return { terminal_state: 'interrupted' };
     }
     const choice = response.choices?.[0];
     if (!choice) {
       if (!emit) printHeader('No response from AI.', { level: 'warn' });
+      recordTurnTerminal('turn_failed', { error_summary: 'no_response_from_ai' });
       return { terminal_state: 'failed', reason: 'no_response_from_ai' };
     }
 
@@ -620,12 +874,16 @@ async function runConversationTurn(messages, tools, mcpServers, rl, options = {}
       for (const toolCall of message.tool_calls) {
         if (turn?.interruptRequested) {
           emit?.('turn_interrupted', { turn_id: turn.turnId, terminal_state: 'interrupted' });
+          recordTurnTerminal('turn_interrupted');
           break;
         }
         const result = await executeMcpTool(toolCall, mcpServers, rl, { emit, turn, turnId: turn?.turnId ?? null, serverMode: !!emit });
         toolResults.push(result);
       }
-      if (turn?.interruptRequested) return { terminal_state: 'interrupted' };
+      if (turn?.interruptRequested) {
+        recordTurnTerminal('turn_interrupted');
+        return { terminal_state: 'interrupted' };
+      }
       for (const result of toolResults) {
         messages.push(result);
         appendSession(SESSION_PATH, { role: 'tool', content: result.content, tool_call_id: result.tool_call_id, timestamp: new Date().toISOString() });
@@ -635,6 +893,7 @@ async function runConversationTurn(messages, tools, mcpServers, rl, options = {}
       continue;
     }
 
+    recordTurnTerminal('turn_completed');
     return { terminal_state: 'completed' };
   }
 }
@@ -653,6 +912,22 @@ async function executeMcpTool(toolCall, mcpServers, rl, options = {}) {
   const turnId = options.turnId ?? null;
   const serverMode = options.serverMode === true;
   const startedAt = Date.now();
+  const argSummary = argumentSummary(args);
+  const argSummaryText = stringifySummary(argSummary);
+  appendSession(SESSION_PATH, carrierSessionEventEntry('tool_call_requested', {
+    tool_name: name || '<missing>',
+    arguments_summary: argSummaryText,
+    requesting_agent_id: IDENTITY,
+  }));
+  const recordToolResult = (status, contentOrSummary, extra = {}) => {
+    appendSession(SESSION_PATH, carrierSessionEventEntry('tool_result_received', {
+      tool_name: name || '<missing>',
+      status,
+      duration_ms: Date.now() - startedAt,
+      result_summary: summarizeToolResult(contentOrSummary),
+      ...extra,
+    }));
+  };
   const admissionClassification = serverMode
     ? classifyCarrierActionRequest(name, args, { toolAvailable: !!server, toolMetadata })
     : null;
@@ -668,7 +943,7 @@ async function executeMcpTool(toolCall, mcpServers, rl, options = {}) {
         tool: name,
         decision: admissionClassification.decision,
         classifier_source: admissionClassification.classifier_source ?? toolMetadata?.source ?? null,
-        argument_summary: argumentSummary(args),
+        argument_summary: argSummary,
         payload_secret_findings: inspectPayloadForSecrets(args),
         raw_arguments_recorded: false,
         raw_secret_values_recorded: false,
@@ -696,6 +971,7 @@ async function executeMcpTool(toolCall, mcpServers, rl, options = {}) {
       printToolResultLine(`blocked ${name} in ${formatDuration(Date.now() - startedAt)} · blocklist`, { level: 'warn' });
     }
     emit?.('tool_result', { turn_id: turnId, tool: name, status: 'blocked' });
+    recordToolResult('blocked', `Tool ${name} is blocked by policy.`);
     return {
       role: 'tool',
       tool_call_id: toolCall.id,
@@ -728,6 +1004,7 @@ async function executeMcpTool(toolCall, mcpServers, rl, options = {}) {
         candidate_ref: decision.candidate_ref,
         carrier_mutation_admitted: decision.carrier_mutation_admitted,
       });
+      recordToolResult('admission_required', 'action_admission_required');
       return {
         role: 'tool',
         tool_call_id: toolCall.id,
@@ -742,11 +1019,12 @@ async function executeMcpTool(toolCall, mcpServers, rl, options = {}) {
           evidence_path: admission.path,
           candidate_ref: decision.candidate_ref,
           carrier_mutation_admitted: decision.carrier_mutation_admitted,
-          message: `NARS server mode could not execute this MCP tool because it is not available in the session.`,
+          message: `Agent Runtime Server could not execute this MCP tool because it is not available in the session.`,
         }),
       };
     }
     emit?.('tool_result', { turn_id: turnId, tool: name, status: 'error', error: `Tool ${name} not found in any MCP server.` });
+    recordToolResult('error', `Tool ${name} not found in any MCP server.`);
     if (!serverMode) {
       turn?.clearStatus?.();
       printToolResultLine(`failed ${name} in ${formatDuration(Date.now() - startedAt)} · tool not found`, { level: 'error' });
@@ -782,6 +1060,7 @@ async function executeMcpTool(toolCall, mcpServers, rl, options = {}) {
       candidate_ref: decision.candidate_ref,
       carrier_mutation_admitted: decision.carrier_mutation_admitted,
     });
+    recordToolResult('admission_required', 'action_admission_required');
     return {
       role: 'tool',
       tool_call_id: toolCall.id,
@@ -796,7 +1075,7 @@ async function executeMcpTool(toolCall, mcpServers, rl, options = {}) {
         evidence_path: admission.path,
         candidate_ref: decision.candidate_ref,
         carrier_mutation_admitted: decision.carrier_mutation_admitted,
-        message: 'NARS server mode did not execute this MCP tool because it is not classified read-only.',
+        message: 'Agent Runtime Server did not execute this MCP tool because it is not classified read-only.',
       }),
     };
   }
@@ -826,6 +1105,7 @@ async function executeMcpTool(toolCall, mcpServers, rl, options = {}) {
             const autoContent = autoResult.content?.[0]?.text ?? JSON.stringify(autoResult);
             turn?.clearStatus?.();
             printToolResultLine(`ok ${name} in ${formatDuration(Date.now() - startedAt)} · ${formatToolResultContent(autoContent)}`);
+            recordToolResult('ok', autoContent, { result_ref: payloadRefFromOutputRef(extractOutputRef(autoContent)) });
             return { role: 'tool', tool_call_id: toolCall.id, content: autoContent };
           }
         }
@@ -846,6 +1126,7 @@ async function executeMcpTool(toolCall, mcpServers, rl, options = {}) {
       decision: serverMode ? 'read_only_admitted' : undefined,
       output_ref: extractOutputRef(content),
     });
+    recordToolResult('ok', content, { result_ref: payloadRefFromOutputRef(extractOutputRef(content)) });
 
     return {
       role: 'tool',
@@ -859,6 +1140,7 @@ async function executeMcpTool(toolCall, mcpServers, rl, options = {}) {
       printToolResultLine(`failed ${name} in ${formatDuration(Date.now() - startedAt)} · ${err.message}${recovery ? `\n${recovery}` : ''}`, { level: 'error' });
     }
     emit?.('tool_result', { turn_id: turnId, tool: name, status: 'error', error: err.message, recovery });
+    recordToolResult('error', err.message, recovery ? { recovery } : {});
     return {
       role: 'tool',
       tool_call_id: toolCall.id,
@@ -882,6 +1164,30 @@ function extractOutputRef(content) {
   }
 }
 
+function payloadRefFromOutputRef(outputRef) {
+  if (!outputRef || !String(outputRef).startsWith('mcp_output:')) return null;
+  return createPayloadRef({
+    payload_ref: String(outputRef).replace(/^mcp_output:/, 'mcp_payload:'),
+    reader_tool: 'mcp_output_show',
+    summary: 'tool result payload stored out of transcript',
+  });
+}
+
+function summarizeToolResult(contentOrSummary) {
+  const text = typeof contentOrSummary === 'string' ? contentOrSummary : JSON.stringify(contentOrSummary);
+  const formatted = formatToolResultContent(text);
+  return formatted.length > 240 ? `${formatted.slice(0, 239)}…` : formatted;
+}
+
+function stringifySummary(summary) {
+  if (typeof summary === 'string') return summary;
+  try {
+    return JSON.stringify(summary);
+  } catch {
+    return String(summary);
+  }
+}
+
 function classifyTool(name, args) {
   const metadata = buildFallbackToolMetadata(name);
   if (metadata?.read_only === true) return 'auto';
@@ -898,7 +1204,7 @@ async function discoverAndStartMcpServers(siteRoot) {
   for (const [serverName, serverConfig] of Object.entries(fabric.servers)) {
     try {
       const args = [...serverConfig.args];
-      // Interactive agent-cli keeps its legacy shell affordance. NARS server
+      // Interactive agent-cli keeps its legacy shell affordance. Agent Runtime Server
       // mode must not widen authority when materializing the MCP fabric.
       if (!SERVER_MODE && serverName.includes('shell')) {
         if (!args.includes('--auto-approve')) args.push('--auto-approve');
@@ -1159,6 +1465,25 @@ function sessionEventEntry(event, payload = {}) {
   return { role: 'event', event, ...payload, timestamp: new Date().toISOString() };
 }
 
+function carrierSessionEventEntry(eventKind, payload = {}) {
+  return createCarrierSessionEvent({
+    event_kind: eventKind,
+    carrier_session_id: SESSION,
+    agent_id: IDENTITY,
+    site_id: SITE_ID,
+    site_root: SITE_ROOT,
+    payload,
+  });
+}
+
+function appendCarrierTurnEvent(eventKind, turnId, payload = {}) {
+  if (!turnId) return;
+  appendSession(SESSION_PATH, carrierSessionEventEntry(eventKind, {
+    turn_id: turnId,
+    ...payload,
+  }));
+}
+
 function directiveReceiptEvidence(event, { agentId, carrierSessionId, receivedAt = new Date().toISOString() }) {
   const evidence = {
     schema: 'narada.directive.carrier_receipt_evidence.v1',
@@ -1205,6 +1530,9 @@ function startInteractiveTurnProgress({ onOperatorDirective = null, readlineInte
     phase: 'thinking',
     phaseStartedAt: Date.now(),
     requestInterrupt() {
+      if (!this.interruptRequested) {
+        appendCarrierTurnEvent('interrupt_requested', this.turnId);
+      }
       this.interruptRequested = true;
       if (!abortController.signal.aborted) abortController.abort(new Error('agent_cli_interrupt_requested'));
     },
@@ -1340,10 +1668,27 @@ function isAbortError(error) {
 
 function normalizeInputRecord(input) {
   if (typeof input === 'string') return { content: input, source: 'manual_operator' };
+  if (input?.source_kind === 'system' && !input?.source) {
+    return {
+      content: String(input?.content ?? ''),
+      source: 'system_directive',
+      authority_ref: input?.authority_ref ?? null,
+      directive_id: input?.directive_id ?? null,
+    };
+  }
+  if (input?.delivery_mode === 'admit_after_active_turn' && !input?.source) {
+    return {
+      content: String(input?.content ?? ''),
+      source: 'operator_steering',
+      authority_ref: input?.authority_ref ?? null,
+      directive_id: input?.directive_id ?? null,
+    };
+  }
   return {
     content: String(input?.content ?? ''),
     source: input?.source ?? 'manual_operator',
     authority_ref: input?.authority_ref ?? null,
+    directive_id: input?.directive_id ?? null,
   };
 }
 
@@ -1364,7 +1709,7 @@ function buildProgrammaticInputs(opts) {
 }
 
 // ---------------------------------------------------------------------------
-// NARS JSONL Server Mode
+// Agent Runtime Server JSONL Mode
 // ---------------------------------------------------------------------------
 async function runServerMode({ input = process.stdin, output = process.stdout, callChatApiFn = callChatApi } = {}) {
   const mcpServers = await discoverAndStartMcpServers(SITE_ROOT);
@@ -2176,8 +2521,7 @@ function sendCodexExecJsonRequest(request, settings = {}) {
             settings.emit('assistant_message_stream', { turn_id: settings.turn?.turnId ?? null, content: text });
           } else {
             process.stdout.write('\r\x1b[K');
-            printAgentMessage(text);
-            rendered = true;
+            rendered = printAgentMessage(text) || rendered;
           }
         }
       }
@@ -2561,16 +2905,19 @@ function printInlineEvent(label, text, { before = false, timestamp = false, labe
 
 function printAgentMessage(text) {
   const normalized = String(text ?? '').trim();
-  if (!normalized) return;
+  if (!stripAnsi(normalized).trim()) return false;
+  const renderedText = renderMarkdownForTerminal(normalized);
+  if (!stripAnsi(renderedText).trim()) return false;
   printMessageBlock({
     label: IDENTITY,
-    text: renderMarkdownForTerminal(normalized),
+    text: renderedText,
     before: true,
-    after: true,
+    after: false,
     timestamp: true,
     labelStyle: terminalStyle.label,
     bodyStyle: (value) => value,
   });
+  return true;
 }
 
 function printCliMessage(text) {
@@ -2604,6 +2951,7 @@ function printInputRecord(record) {
 function inputRecordDisplayLabel(record) {
   if (record?.source === 'system_directive') return 'system directive';
   if (record?.source === 'operator_directive') return `operator directive -> ${IDENTITY}`;
+  if (record?.source === 'operator_steering') return `operator steering -> ${IDENTITY}`;
   return `operator -> ${IDENTITY}`;
 }
 
@@ -2630,7 +2978,7 @@ function rewriteSubmittedPromptForTest(promptLabel, input, columns = 80, now = n
   const text = String(input ?? '');
   if (text.includes('\n') || text.includes('\r')) return null;
   const rawPromptRows = Math.max(1, Math.ceil(stripAnsi(`${promptLabel}> ${text}`).length / Math.max(1, columns)));
-  return `${clearPreviousTerminalRows(rawPromptRows)}${formatSubmittedPrompt(promptLabel, text, columns, now)}`;
+  return `${clearPreviousTerminalRows(rawPromptRows)}\n${formatSubmittedPrompt(promptLabel, text, columns, now)}`;
 }
 
 function clearPreviousTerminalRows(rows) {
@@ -2936,6 +3284,7 @@ export {
   discoverAndStartMcpServers,
   environmentBlockLength,
   executeMcpTool,
+  handleInteractiveControlLine,
   handleSlashCommand,
   createInputQueue,
   normalizeInputEvent,

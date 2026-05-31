@@ -97,7 +97,7 @@ A request entering the boundary should be explicit enough to classify without re
   "agent_id": "narada-andrey.Kevin",
   "carrier_session_id": "carrier_...",
   "source": {
-    "kind": "nars_turn",
+    "kind": "agent_runtime_server_turn",
     "turn_id": "turn_..."
   },
   "target_locus": {
@@ -146,21 +146,21 @@ Allowed decision values:
 
 The decision must say whether carrier mutation was admitted. That field should be false for candidates, referrals, drafts, and refusals.
 
-## Relationship To NARS
+## Relationship To Agent Runtime Server
 
 A Narada Agent Runtime Server is allowed to host intelligence and mediate local MCP tools. It must not become the admission authority for effectful work.
 
-When NARS receives a model-selected tool call, it should do one of three things:
+When Agent Runtime Server receives a model-selected tool call, it should do one of three things:
 
 1. Execute it if it is classified read-only and admitted by policy.
 2. Emit an `action_admission_required` result and create or expose a Carrier Action Request.
 3. Refuse it when classification or target authority cannot be established.
 
-NARS remains responsible for turn/session evidence. The Carrier Action Admission Boundary remains responsible for the conversion from requested action to governed consequence.
+Agent Runtime Server remains responsible for turn/session evidence. The Carrier Action Admission Boundary remains responsible for the conversion from requested action to governed consequence.
 
-## Current NARS Implementation Posture
+## Current Agent Runtime Server Implementation Posture
 
-The first implemented NARS slice is a non-effectful admission layer.
+The first implemented Agent Runtime Server slice is a non-effectful admission layer.
 
 MCP surface metadata is projected from the Site-local `.narada/capabilities/mcp-surfaces.json` registry through `@narada2/mcp-fabric`. The registry loader accepts both current `surfaces` entries with `tool_contract` and older `mcp_surfaces` entries with `registered_live_tools`. Registered live tools without an explicit contract receive conservative metadata: known read-only names remain read-only, known mutating names route to admission, and unknown registered tools require admission rather than execution. The live carrier/server layer preserves matched registry metadata on discovered MCP servers and passes it into `@narada2/carrier-action-admission` before any tool execution decision.
 
@@ -198,7 +198,7 @@ Every carrier family needs the same boundary even if its implementation differs:
 | Codex CLI carrier | Disable native shell by default; route effect requests through Narada MCP/canonical surfaces. |
 | Claude Code carrier | Convert carrier effect requests into inert governed candidates before canonical admission. |
 | Pi carrier | Treat Pi tool/output requests as carrier action requests unless read-only admitted. |
-| Agent CLI / NARS | Return `action_admission_required` for non-read-only MCP calls in server mode. |
+| Agent CLI / Agent Runtime Server | Return `action_admission_required` for non-read-only MCP calls in server mode. |
 | Narada-native carrier | Implement the boundary directly as a first-class runtime component. |
 
 The boundary is invariant. The carrier-specific prompt, CLI flag, MCP bridge, or event adapter is an embodiment.
@@ -242,7 +242,7 @@ If any of these answers depends on the model's phrasing, a terminal's current af
 
 ## First Implementation Direction
 
-The first implementation should extend NARS server mode's current `action_admission_required` result into a durable Carrier Action Request record under the target Site, then add a small admission dispatcher that can:
+The first implementation should extend Agent Runtime Server mode's current `action_admission_required` result into a durable Carrier Action Request record under the target Site, then add a small admission dispatcher that can:
 
 - admit read-only requests mechanically;
 - route task/inbox/outbox/publication/command requests to existing canonical surfaces;

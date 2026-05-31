@@ -1,0 +1,373 @@
+{
+  "schema": "narada.agent_tui.site_rollout_acceptance_report.v0",
+  "status": "blocked",
+  "generated_at": "2026-05-31T04:49:58.213Z",
+  "site_root": "D:\\code\\narada",
+  "known_site_roots": {
+    "narada-andrey": "C:\\Users\\Andrey\\Narada",
+    "narada-staccato": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\Staccato\\.narada",
+    "narada-revolution": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\!Revolution\\.narada",
+    "narada-timour-marketing-agent": "C:\\Users\\Andrey\\Vose Software BE\\Timour Koupeev - MarketingAgent\\.narada",
+    "narada-utz": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\Utz\\.narada",
+    "narada-sonar": "D:\\code\\narada.sonar",
+    "smart-scheduling": "D:\\code\\smart-scheduling\\.narada",
+    "thoughts-project": "D:\\code\\thoughts\\.narada"
+  },
+  "agent_cli_evidence": {
+    "narada-proper": "D:\\code\\narada\\.narada\\crew\\agent-start-results\\agent_start_20260531_000417547_narada_architect.result.json",
+    "narada-andrey": "C:\\Users\\Andrey\\Narada\\.ai\\runtime\\agent-start-results\\evt-2026-05-31_00-04-19_e5147cef.result.json",
+    "narada-sonar": "D:\\code\\narada.sonar\\.ai\\runtime\\agent-start-results\\evt-2026-05-31_00-04-25_28290811.result.json",
+    "smart-scheduling": "D:\\code\\smart-scheduling\\.narada\\.ai\\runtime\\agent-start-results\\evt-2026-05-31_00-04-26_b975144f.result.json"
+  },
+  "agent_tui_evidence": {
+    "narada-proper": "D:\\code\\narada\\.narada\\crew\\agent-start-results\\agent_start_20260531_041426614_narada_architect.result.json",
+    "narada-andrey": "C:\\Users\\Andrey\\Narada\\.ai\\runtime\\agent-start-results\\evt-2026-05-31_04-27-29_a23016ab.result.json",
+    "narada-sonar": "D:\\code\\narada.sonar\\.ai\\runtime\\agent-start-results\\evt-2026-05-31_04-44-09_5121cad2.result.json",
+    "smart-scheduling": "D:\\code\\smart-scheduling\\.narada\\.ai\\runtime\\agent-start-results\\evt-2026-05-31_04-44-13_a5aa4cdf.result.json"
+  },
+  "source_launch_runtime": "agent-tui",
+  "source_launch_status": "planned",
+  "source_launch_admitted_runtime_slice": "bounded_non_terminal_interactive_step_once",
+  "acceptance": {
+    "schema": "narada.agent_tui.site_rollout_acceptance.v0",
+    "status": "defined_not_executed",
+    "promotion_gate": "agent_tui_site_rollout_acceptance_gate",
+    "acceptance_mode": "side_by_side_agent_cli_then_agent_tui",
+    "default_promotion_allowed": false,
+    "known_sites": [
+      {
+        "site_id": "narada-proper",
+        "site_kind": "proper",
+        "launch_root": "D:\\code\\narada",
+        "required_agent_cli_evidence": "agent-cli launch reaches prompt with target-local narada-proper MCP tools visible",
+        "required_agent_tui_evidence": "agent-tui bounded smoke step records control/session JSONL and exits cleanly",
+        "status": "pending_live_acceptance"
+      },
+      {
+        "site_id": "narada-andrey",
+        "site_kind": "user",
+        "launch_root": null,
+        "required_agent_cli_evidence": "agent-cli launch reaches prompt with User Site MCP fabric visible",
+        "required_agent_tui_evidence": "agent-tui bounded smoke step records control/session JSONL without importing Narada proper authority",
+        "status": "pending_live_acceptance"
+      },
+      {
+        "site_id": "narada-staccato",
+        "site_kind": "client",
+        "launch_root": null,
+        "required_agent_cli_evidence": "agent-cli launch reaches prompt for the Staccato Site without local carrier drift",
+        "required_agent_tui_evidence": "agent-tui bounded smoke step records Site-local control/session JSONL for Staccato",
+        "status": "pending_live_acceptance"
+      },
+      {
+        "site_id": "narada-revolution",
+        "site_kind": "client",
+        "launch_root": null,
+        "required_agent_cli_evidence": "agent-cli launch reaches prompt for the Revolution Site without local carrier drift",
+        "required_agent_tui_evidence": "agent-tui bounded smoke step records Site-local control/session JSONL for Revolution",
+        "status": "pending_live_acceptance"
+      },
+      {
+        "site_id": "narada-timour-marketing-agent",
+        "site_kind": "client",
+        "launch_root": null,
+        "required_agent_cli_evidence": "agent-cli launch reaches prompt for the Timour Marketing Agent Site without local carrier drift",
+        "required_agent_tui_evidence": "agent-tui bounded smoke step records Site-local control/session JSONL for Timour Marketing Agent",
+        "status": "pending_live_acceptance"
+      },
+      {
+        "site_id": "narada-utz",
+        "site_kind": "client",
+        "launch_root": null,
+        "required_agent_cli_evidence": "agent-cli launch reaches prompt for the Utz Site without local carrier drift",
+        "required_agent_tui_evidence": "agent-tui bounded smoke step records Site-local control/session JSONL for Utz",
+        "status": "pending_live_acceptance"
+      },
+      {
+        "site_id": "narada-sonar",
+        "site_kind": "project",
+        "launch_root": null,
+        "required_agent_cli_evidence": "agent-cli launch reaches resident prompt with Site operating-loop MCP tools visible",
+        "required_agent_tui_evidence": "agent-tui bounded smoke step preserves Site MCP timeout/recovery evidence boundaries",
+        "status": "pending_live_acceptance"
+      },
+      {
+        "site_id": "smart-scheduling",
+        "site_kind": "project",
+        "launch_root": null,
+        "required_agent_cli_evidence": "agent-cli launch reaches prompt using packaged agent-cli without local copy drift",
+        "required_agent_tui_evidence": "agent-tui bounded smoke step uses packaged Narada proper carrier contracts without local copy drift",
+        "status": "pending_live_acceptance"
+      },
+      {
+        "site_id": "thoughts-project",
+        "site_kind": "project",
+        "launch_root": null,
+        "required_agent_cli_evidence": "agent-cli launch reaches prompt for the Thoughts Project Site without local carrier drift",
+        "required_agent_tui_evidence": "agent-tui bounded smoke step records Site-local control/session JSONL for Thoughts Project",
+        "status": "pending_live_acceptance"
+      }
+    ],
+    "required_common_evidence": [
+      "agent-cli baseline launch result",
+      "agent-tui bounded smoke launch result",
+      "session JSONL evidence path",
+      "control JSONL evidence path",
+      "MCP fabric visibility or explicit withheld posture",
+      "timeout/recovery diagnostic evidence for failed MCP startup"
+    ],
+    "not_admitted_until": [
+      "each known Site has current acceptance evidence",
+      "failures are recorded as Site-specific rollout blockers",
+      "agent-tui remains non-default while any known Site is pending or blocked"
+    ]
+  },
+  "sites": [
+    {
+      "site_id": "narada-proper",
+      "site_kind": "proper",
+      "launch_root": "D:\\code\\narada",
+      "required_agent_cli_evidence": "agent-cli launch reaches prompt with target-local narada-proper MCP tools visible",
+      "required_agent_tui_evidence": "agent-tui bounded smoke step records control/session JSONL and exits cleanly",
+      "status": "accepted",
+      "agent_cli_evidence_path": "D:\\code\\narada\\.narada\\crew\\agent-start-results\\agent_start_20260531_000417547_narada_architect.result.json",
+      "agent_cli_evidence_status": "valid",
+      "agent_cli_evidence_validation": {
+        "status": "valid",
+        "reason": "launch_evidence_shape_valid",
+        "site_root": "D:\\code\\narada",
+        "launch_status": "launching",
+        "launch_schema": "narada.agent_start.result.v0",
+        "agent_start_event": "agent_start_20260531_000417547_narada_architect",
+        "carrier_session_id": "carrier_session_20260531_000417547_narada_architect"
+      },
+      "agent_tui_evidence_path": "D:\\code\\narada\\.narada\\crew\\agent-start-results\\agent_start_20260531_041426614_narada_architect.result.json",
+      "agent_tui_evidence_status": "valid",
+      "agent_tui_evidence_validation": {
+        "status": "valid",
+        "reason": "launch_evidence_shape_valid",
+        "site_root": "D:\\code\\narada",
+        "launch_status": "launching",
+        "launch_schema": "narada.agent_start.result.v0",
+        "agent_start_event": "agent_start_20260531_041426614_narada_architect",
+        "carrier_session_id": "carrier_session_20260531_041426614_narada_architect"
+      },
+      "launch_root_source": "primary_site_root",
+      "blocker": null
+    },
+    {
+      "site_id": "narada-andrey",
+      "site_kind": "user",
+      "launch_root": "C:\\Users\\Andrey\\Narada",
+      "required_agent_cli_evidence": "agent-cli launch reaches prompt with User Site MCP fabric visible",
+      "required_agent_tui_evidence": "agent-tui bounded smoke step records control/session JSONL without importing Narada proper authority",
+      "status": "accepted",
+      "agent_cli_evidence_path": "C:\\Users\\Andrey\\Narada\\.ai\\runtime\\agent-start-results\\evt-2026-05-31_00-04-19_e5147cef.result.json",
+      "agent_cli_evidence_status": "valid",
+      "agent_cli_evidence_validation": {
+        "status": "valid",
+        "reason": "launch_evidence_shape_valid",
+        "site_root": "C:\\Users\\Andrey\\Narada",
+        "launch_status": "materialized",
+        "launch_schema": "narada.agent_context.session_start.v0",
+        "agent_start_event": "evt-2026-05-31_00-04-19_e5147cef",
+        "carrier_session_id": "carrier_20260531000419_f79d9fd26e0e"
+      },
+      "agent_tui_evidence_path": "C:\\Users\\Andrey\\Narada\\.ai\\runtime\\agent-start-results\\evt-2026-05-31_04-27-29_a23016ab.result.json",
+      "agent_tui_evidence_status": "valid",
+      "agent_tui_evidence_validation": {
+        "status": "valid",
+        "reason": "launch_evidence_shape_valid",
+        "site_root": "C:\\Users\\Andrey\\Narada",
+        "launch_status": "materialized",
+        "launch_schema": "narada.agent_context.session_start.v0",
+        "agent_start_event": "evt-2026-05-31_04-27-29_a23016ab",
+        "carrier_session_id": "carrier_20260531042729_07baa1c5588b"
+      },
+      "launch_root_source": "operator_known_site_root",
+      "blocker": null
+    },
+    {
+      "site_id": "narada-staccato",
+      "site_kind": "client",
+      "launch_root": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\Staccato\\.narada",
+      "required_agent_cli_evidence": "agent-cli launch reaches prompt for the Staccato Site without local carrier drift",
+      "required_agent_tui_evidence": "agent-tui bounded smoke step records Site-local control/session JSONL for Staccato",
+      "status": "pending_live_acceptance",
+      "agent_cli_evidence_path": null,
+      "agent_cli_evidence_status": "not_recorded",
+      "agent_cli_evidence_validation": {
+        "status": "not_recorded",
+        "reason": "evidence_path_not_recorded"
+      },
+      "agent_tui_evidence_path": null,
+      "agent_tui_evidence_status": "not_recorded",
+      "agent_tui_evidence_validation": {
+        "status": "not_recorded",
+        "reason": "evidence_path_not_recorded"
+      },
+      "launch_root_source": "operator_known_site_root",
+      "blocker": "side_by_side_launch_evidence_not_recorded"
+    },
+    {
+      "site_id": "narada-revolution",
+      "site_kind": "client",
+      "launch_root": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\!Revolution\\.narada",
+      "required_agent_cli_evidence": "agent-cli launch reaches prompt for the Revolution Site without local carrier drift",
+      "required_agent_tui_evidence": "agent-tui bounded smoke step records Site-local control/session JSONL for Revolution",
+      "status": "pending_live_acceptance",
+      "agent_cli_evidence_path": null,
+      "agent_cli_evidence_status": "not_recorded",
+      "agent_cli_evidence_validation": {
+        "status": "not_recorded",
+        "reason": "evidence_path_not_recorded"
+      },
+      "agent_tui_evidence_path": null,
+      "agent_tui_evidence_status": "not_recorded",
+      "agent_tui_evidence_validation": {
+        "status": "not_recorded",
+        "reason": "evidence_path_not_recorded"
+      },
+      "launch_root_source": "operator_known_site_root",
+      "blocker": "side_by_side_launch_evidence_not_recorded"
+    },
+    {
+      "site_id": "narada-timour-marketing-agent",
+      "site_kind": "client",
+      "launch_root": "C:\\Users\\Andrey\\Vose Software BE\\Timour Koupeev - MarketingAgent\\.narada",
+      "required_agent_cli_evidence": "agent-cli launch reaches prompt for the Timour Marketing Agent Site without local carrier drift",
+      "required_agent_tui_evidence": "agent-tui bounded smoke step records Site-local control/session JSONL for Timour Marketing Agent",
+      "status": "pending_live_acceptance",
+      "agent_cli_evidence_path": null,
+      "agent_cli_evidence_status": "not_recorded",
+      "agent_cli_evidence_validation": {
+        "status": "not_recorded",
+        "reason": "evidence_path_not_recorded"
+      },
+      "agent_tui_evidence_path": null,
+      "agent_tui_evidence_status": "not_recorded",
+      "agent_tui_evidence_validation": {
+        "status": "not_recorded",
+        "reason": "evidence_path_not_recorded"
+      },
+      "launch_root_source": "operator_known_site_root",
+      "blocker": "side_by_side_launch_evidence_not_recorded"
+    },
+    {
+      "site_id": "narada-utz",
+      "site_kind": "client",
+      "launch_root": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\Utz\\.narada",
+      "required_agent_cli_evidence": "agent-cli launch reaches prompt for the Utz Site without local carrier drift",
+      "required_agent_tui_evidence": "agent-tui bounded smoke step records Site-local control/session JSONL for Utz",
+      "status": "pending_live_acceptance",
+      "agent_cli_evidence_path": null,
+      "agent_cli_evidence_status": "not_recorded",
+      "agent_cli_evidence_validation": {
+        "status": "not_recorded",
+        "reason": "evidence_path_not_recorded"
+      },
+      "agent_tui_evidence_path": null,
+      "agent_tui_evidence_status": "not_recorded",
+      "agent_tui_evidence_validation": {
+        "status": "not_recorded",
+        "reason": "evidence_path_not_recorded"
+      },
+      "launch_root_source": "operator_known_site_root",
+      "blocker": "side_by_side_launch_evidence_not_recorded"
+    },
+    {
+      "site_id": "narada-sonar",
+      "site_kind": "project",
+      "launch_root": "D:\\code\\narada.sonar",
+      "required_agent_cli_evidence": "agent-cli launch reaches resident prompt with Site operating-loop MCP tools visible",
+      "required_agent_tui_evidence": "agent-tui bounded smoke step preserves Site MCP timeout/recovery evidence boundaries",
+      "status": "accepted",
+      "agent_cli_evidence_path": "D:\\code\\narada.sonar\\.ai\\runtime\\agent-start-results\\evt-2026-05-31_00-04-25_28290811.result.json",
+      "agent_cli_evidence_status": "valid",
+      "agent_cli_evidence_validation": {
+        "status": "valid",
+        "reason": "launch_evidence_shape_valid",
+        "site_root": "D:\\code\\narada.sonar",
+        "launch_status": "materialized",
+        "launch_schema": "narada.agent_context.session_start.v0",
+        "agent_start_event": "evt-2026-05-31_00-04-25_28290811",
+        "carrier_session_id": "carrier_20260531000426_a1bbafaa0f22"
+      },
+      "agent_tui_evidence_path": "D:\\code\\narada.sonar\\.ai\\runtime\\agent-start-results\\evt-2026-05-31_04-44-09_5121cad2.result.json",
+      "agent_tui_evidence_status": "valid",
+      "agent_tui_evidence_validation": {
+        "status": "valid",
+        "reason": "launch_evidence_shape_valid",
+        "site_root": "D:\\code\\narada.sonar",
+        "launch_status": "materialized",
+        "launch_schema": "narada.agent_context.session_start.v0",
+        "agent_start_event": "evt-2026-05-31_04-44-09_5121cad2",
+        "carrier_session_id": "carrier_20260531044409_84f9ea98559a"
+      },
+      "launch_root_source": "operator_known_site_root",
+      "blocker": null
+    },
+    {
+      "site_id": "smart-scheduling",
+      "site_kind": "project",
+      "launch_root": "D:\\code\\smart-scheduling\\.narada",
+      "required_agent_cli_evidence": "agent-cli launch reaches prompt using packaged agent-cli without local copy drift",
+      "required_agent_tui_evidence": "agent-tui bounded smoke step uses packaged Narada proper carrier contracts without local copy drift",
+      "status": "accepted",
+      "agent_cli_evidence_path": "D:\\code\\smart-scheduling\\.narada\\.ai\\runtime\\agent-start-results\\evt-2026-05-31_00-04-26_b975144f.result.json",
+      "agent_cli_evidence_status": "valid",
+      "agent_cli_evidence_validation": {
+        "status": "valid",
+        "reason": "launch_evidence_shape_valid",
+        "site_root": "D:\\code\\smart-scheduling\\.narada",
+        "launch_status": "materialized",
+        "launch_schema": "narada.agent_context.session_start.v0",
+        "agent_start_event": "evt-2026-05-31_00-04-26_b975144f",
+        "carrier_session_id": "carrier_20260531000426_e5b8aca0422e"
+      },
+      "agent_tui_evidence_path": "D:\\code\\smart-scheduling\\.narada\\.ai\\runtime\\agent-start-results\\evt-2026-05-31_04-44-13_a5aa4cdf.result.json",
+      "agent_tui_evidence_status": "valid",
+      "agent_tui_evidence_validation": {
+        "status": "valid",
+        "reason": "launch_evidence_shape_valid",
+        "site_root": "D:\\code\\smart-scheduling\\.narada",
+        "launch_status": "materialized",
+        "launch_schema": "narada.agent_context.session_start.v0",
+        "agent_start_event": "evt-2026-05-31_04-44-13_a5aa4cdf",
+        "carrier_session_id": "carrier_20260531044413_3eaab92ea541"
+      },
+      "launch_root_source": "operator_known_site_root",
+      "blocker": null
+    },
+    {
+      "site_id": "thoughts-project",
+      "site_kind": "project",
+      "launch_root": "D:\\code\\thoughts\\.narada",
+      "required_agent_cli_evidence": "agent-cli launch reaches prompt for the Thoughts Project Site without local carrier drift",
+      "required_agent_tui_evidence": "agent-tui bounded smoke step records Site-local control/session JSONL for Thoughts Project",
+      "status": "pending_live_acceptance",
+      "agent_cli_evidence_path": null,
+      "agent_cli_evidence_status": "not_recorded",
+      "agent_cli_evidence_validation": {
+        "status": "not_recorded",
+        "reason": "evidence_path_not_recorded"
+      },
+      "agent_tui_evidence_path": null,
+      "agent_tui_evidence_status": "not_recorded",
+      "agent_tui_evidence_validation": {
+        "status": "not_recorded",
+        "reason": "evidence_path_not_recorded"
+      },
+      "launch_root_source": "operator_known_site_root",
+      "blocker": "side_by_side_launch_evidence_not_recorded"
+    }
+  ],
+  "summary": {
+    "accepted": 4,
+    "pending": 5,
+    "blocked": 0,
+    "total": 9
+  },
+  "default_promotion_allowed": false,
+  "next_required_action": "record side-by-side agent-cli and agent-tui launch evidence for each known Site without opening interactive carrier windows from this command"
+}

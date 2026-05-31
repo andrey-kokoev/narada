@@ -16,7 +16,7 @@ const TASK_CANDIDATE_SCHEMA = 'narada.carrier_action_candidate.task.v1';
 const INBOX_CANDIDATE_SCHEMA = 'narada.carrier_action_candidate.inbox.v1';
 const COMMAND_CANDIDATE_SCHEMA = 'narada.carrier_action_candidate.command.v1';
 const CLASSIFIER_VERSION = 'carrier_action_admission.metadata_aware_policy.v1';
-const POLICY_VERSION = 'carrier_action_admission.nars_operational_candidates.v1';
+const POLICY_VERSION = 'carrier_action_admission.agent_runtime_server_operational_candidates.v1';
 
 const SECRET_KEY_PATTERN = /(api[_-]?key|authorization|bearer|client[_-]?secret|credential|password|private[_-]?key|secret|token)/i;
 const SECRET_VALUE_PATTERN = /(-----BEGIN [A-Z ]*PRIVATE KEY-----|Bearer\s+[A-Za-z0-9._~+/=-]{12,}|sk-[A-Za-z0-9_-]{12,})/i;
@@ -270,7 +270,7 @@ function createCarrierActionRequest({
   toolName,
   args = {},
   siteRoot,
-  sourceKind = 'nars_turn',
+  sourceKind = 'agent_runtime_server_turn',
   toolMetadata = null,
   toolAvailable = true,
 }) {

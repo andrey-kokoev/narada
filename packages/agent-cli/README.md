@@ -1,4 +1,4 @@
-# Narada Agent CLI / NARS
+# Narada Agent CLI / Agent Runtime Server
 
 Narada-owned MCP-native agent client and first-slice Narada Agent Runtime Server implementation.
 
@@ -11,6 +11,7 @@ Canonical binary and provider metadata contract:
 ```text
 package: @narada2/agent-cli
 bin:     narada-agent-cli
+bin:     agent-runtime-server
 export:  ./intelligence-providers
 export:  ./windows-wrapper-template
 ```
@@ -21,10 +22,10 @@ Site-local carrier behavior. Site-local launch code is a shim for identity,
 session, Site root, MCP fabric path, and operator affordances only.
 
 Launchers should resolve the carrier through the package contract:
-
 ```text
 package: @narada2/agent-cli
 bin:     narada-agent-cli
+bin:     agent-runtime-server
 export:  ./intelligence-providers
 ```
 
@@ -50,7 +51,7 @@ carrier implementation.
 
 - Interactive CLI: human terminal prompt for one Agent identity.
 - Programmatic one-shot: `--message` / `--message-file` runs bounded input and exits.
-- NARS server mode: `--server` exposes JSONL stdio for machine-addressable multi-turn automation.
+- Agent Runtime Server mode: `--server` exposes JSONL stdio for machine-addressable multi-turn automation.
 
 Interactive CLI accepts:
 
@@ -75,17 +76,18 @@ Use `--color` or `--no-color` to control ANSI terminal color. Interactive mode e
 
 For `codex-subscription`, the default transport is `codex exec --json`. With streaming enabled, the CLI renders Codex JSONL model events as agent output as they arrive. With `--no-stream`, it buffers JSONL events and prints the final agent message at turn completion. Current Codex JSONL emits completed assistant-message events, not token deltas; if Codex adds token delta events, this transport is the place to surface them. Set `NARADA_CODEX_SUBSCRIPTION_TRANSPORT=mcp-server` to use the older request/response MCP transport.
 
-Narada proper admits both runtime names:
+Narada proper admits these runtime names:
 
 - `agent-cli` for the interactive CLI carrier.
-- `nars` for the JSONL stdio server carrier.
+- `agent-runtime-server` for the JSONL stdio server carrier.
+- `nars` as a legacy input alias for `agent-runtime-server` while old launch records still exist.
 
-Both use the packaged `narada-agent-cli` bin from `@narada2/agent-cli`; `nars` adds `--server`. The implementation lives in `packages/agent-cli/src/agent-cli.mjs`.
+Both canonical runtimes use the packaged `@narada2/agent-cli` bins: `narada-agent-cli` for interactive mode and `agent-runtime-server` for server mode. The implementation lives in `packages/agent-cli/src/agent-cli.mjs`.
 
 Interactive `agent-cli` also admits a structured sideband control file when
 launched with `--control-jsonl <path>`. System directive delivery must append
 JSONL frames such as `{"method":"system_directive.deliver",...}` to that file;
-do not paste directive frames into the operator stdin stream. NARS receives the
+do not paste directive frames into the operator stdin stream. Agent Runtime Server receives the
 same directive method over its existing JSONL stdio protocol.
 
 When launched by `narada.ps1 agent-start`, interactive `agent-cli` is registered
@@ -96,7 +98,7 @@ surface. The sideband is deliberately line-oriented JSONL rather than pasted
 terminal text so operator input, system directives, and slash commands keep
 separate provenance.
 
-Both `agent-cli` and `nars` normalize terminal input, programmatic input, NARS
+Both `agent-cli` and `agent-runtime-server` normalize terminal input, programmatic input, server
 JSONL messages, and delivered system directives into one internal input queue
 before the model turn. Slash commands are carrier-local and do not enter that
 queue. If the operator has non-whitespace text in the interactive prompt,
@@ -104,7 +106,7 @@ delivered system directives remain queued and the CLI reports the waiting count;
 empty or whitespace-only prompts do not block system directives.
 
 When a system directive enters the carrier turn queue, the carrier records
-`narada.directive.carrier_receipt_evidence.v1` in the session evidence. NARS also
+`narada.directive.carrier_receipt_evidence.v1` in the session evidence. Agent Runtime Server also
 emits a `directive_receipt_recorded` protocol event. This receipt means the
 carrier accepted the directive into its conversation loop; it does not mean the
 agent completed the referenced work, claimed a task, or executed the directive
@@ -124,10 +126,10 @@ Environment defaults:
 - `NARADA_AGENT_CLI_STREAM`
 - `NARADA_AGENT_CLI_COLOR`
 
-## NARS Server Mode
+## Agent Runtime Server Mode
 
 ```powershell
-narada-agent-cli --server --identity narada.architect --session carrier_session_example
+agent-runtime-server --identity narada.architect --session carrier_session_example
 ```
 
 Requests are one JSON object per stdin line. Events are one JSON object per stdout line. In `--server` mode stdout is protocol-only; diagnostics go to stderr.
@@ -168,9 +170,9 @@ The client discovers target Site MCP config from:
 <siteRoot>\.ai\mcp\*.json
 ```
 
-NARS does not inject User Site MCP servers. Model-selected tool calls are requests routed through the declared MCP fabric, not authority by themselves.
+Agent Runtime Server does not inject User Site MCP servers. Model-selected tool calls are requests routed through the declared MCP fabric, not authority by themselves.
 
-In `--server` mode, only tools classified read-only execute automatically. Other MCP tool calls return `action_admission_required` / `admission_required` events and are not executed by the NARS process. A separate admission layer must convert a requested effect into an authorized MCP action.
+In `--server` mode, only tools classified read-only execute automatically. Other MCP tool calls return `action_admission_required` / `admission_required` events and are not executed by the Agent Runtime Server process. A separate admission layer must convert a requested effect into an authorized MCP action.
 
 ## Launch Invariants
 

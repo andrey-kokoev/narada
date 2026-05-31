@@ -14,7 +14,7 @@ D:\code\narada\packages\mcp-fabric\src\mcp-fabric.mjs
 ```
 
 `@narada2/agent-cli` imports this package source for interactive `agent-cli` and
-NARS server mode. Site-local launcher code may point at a Site `.ai\mcp` fabric,
+Agent Runtime Server mode. Site-local launcher code may point at a Site `.ai\mcp` fabric,
 but it must not fork MCP fabric parsing or projection behavior.
 
 ## Boundary

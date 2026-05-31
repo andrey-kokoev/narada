@@ -12,7 +12,10 @@ const require = createRequire(import.meta.url);
 const RESULT_SCHEMA = 'narada.agent_start.result.v0';
 const DEFAULT_PC_SITE_ROOT = process.env.NARADA_PC_SITE_ROOT ?? 'C:/ProgramData/Narada/sites/pc/desktop-sunroom-2';
 const ADMITTED_AGENTS = new Set(['narada.architect', 'narada.builder', 'narada.builder2', 'narada.resident']);
-const ADMITTED_RUNTIMES = new Set(['codex', 'agent-cli', 'claude-code', 'narada-native', 'nars']);
+const AGENT_RUNTIME_SERVER_RUNTIME = 'agent-runtime-server';
+const AGENT_TUI_RUNTIME = 'agent-tui';
+const LEGACY_NARS_RUNTIME = 'nars';
+const ADMITTED_RUNTIMES = new Set(['codex', 'agent-cli', 'claude-code', 'narada-native', AGENT_RUNTIME_SERVER_RUNTIME, AGENT_TUI_RUNTIME, LEGACY_NARS_RUNTIME]);
 const NARADA_PROPER_MCP_SERVER_NAME = 'narada-proper';
 const NARADA_PROPER_APPROVED_MCP_SERVERS = [
   {
@@ -79,6 +82,10 @@ function stableTimestampToken(now) {
 
 function identityToken(identity) {
   return identity.replace(/[^A-Za-z0-9]+/g, '_');
+}
+
+function canonicalRuntime(runtime) {
+  return runtime === LEGACY_NARS_RUNTIME ? AGENT_RUNTIME_SERVER_RUNTIME : runtime;
 }
 
 function identityRole(identity) {
@@ -439,40 +446,280 @@ function codexArgs({ siteRoot, startupEvidence, enableNativeShell = false }) {
   }
   return args;
 }
-
 function claudeCodeArgs() {
   return [];
 }
 
-function naradaNativeArgs() {
-  return [];
-}
-
-function narsSessionDir(siteRoot, carrierSessionId) {
+function agentRuntimeServerSessionDir(siteRoot, carrierSessionId) {
   return join(siteRoot, '.narada', 'crew', 'nars-sessions', carrierSessionId);
 }
 
-function narsEntrypoint(siteRoot) {
-  return join(siteRoot, 'packages', 'agent-cli', 'bin', 'narada-agent-cli.mjs');
+function agentRuntimeServerEntrypoint(siteRoot) {
+  return join(siteRoot, 'packages', 'agent-cli', 'bin', 'agent-runtime-server.mjs');
 }
 
-function narsArgs({ siteRoot, startupEvidence }) {
+function agentRuntimeServerArgs({ siteRoot, startupEvidence }) {
   return [
-    narsEntrypoint(siteRoot),
-    '--server',
+    agentRuntimeServerEntrypoint(siteRoot),
     '--identity', startupEvidence.agentId,
     '--session', startupEvidence.carrierSessionId,
   ];
 }
 
+function agentCliEntrypoint(siteRoot) {
+  return join(siteRoot, 'packages', 'agent-cli', 'bin', 'narada-agent-cli.mjs');
+}
+
 function agentCliArgs({ siteRoot, startupEvidence }) {
-  const controlPath = join(narsSessionDir(siteRoot, startupEvidence.carrierSessionId), 'control.jsonl');
+  const controlPath = join(agentRuntimeServerSessionDir(siteRoot, startupEvidence.carrierSessionId), 'control.jsonl');
   return [
-    narsEntrypoint(siteRoot),
+    agentCliEntrypoint(siteRoot),
     '--identity', startupEvidence.agentId,
     '--session', startupEvidence.carrierSessionId,
     '--control-jsonl', controlPath,
   ];
+}
+
+function agentTuiArgs({ siteRoot, startupEvidence }) {
+  const sessionDir = agentRuntimeServerSessionDir(siteRoot, startupEvidence.carrierSessionId);
+  return [
+    'run',
+    '--manifest-path', join(siteRoot, 'packages', 'agent-tui', 'Cargo.toml'),
+    '--bin', 'narada-agent-tui',
+    '--',
+    '--identity', startupEvidence.agentId,
+    '--session', startupEvidence.carrierSessionId,
+    '--site-root', siteRoot,
+    '--control-jsonl', join(sessionDir, 'control.jsonl'),
+    '--session-jsonl', join(sessionDir, 'session.jsonl'),
+    '--interactive-step-once',
+  ];
+}
+
+function agentTuiPromotionChecklist() {
+  return [
+    {
+      id: 'rust_tests_available',
+      status: 'blocked',
+      required_evidence: 'cargo test passes in CI or documented local Rust toolchain',
+      current_blocker: 'MSVC link.exe is not available in this shell',
+    },
+    {
+      id: 'terminal_interactive_loop_acceptance',
+      status: 'partial',
+      required_evidence: 'scripted terminal-frame acceptance covers no blank frame, stable layout, preserved composer draft, and clean leave',
+      current_evidence: 'TestBackend frame, lifecycle harness, and injected-loop acceptance exist; real-terminal acceptance remains pending',
+    },
+    {
+      id: 'carrier_command_acceptance',
+      status: 'not_started',
+      required_evidence: '/queue, /queue clear, /queue drop <index>, and //literal slash input acceptance with session evidence for carrier-local mutations',
+      source_contract: 'target-functionality.md queue commands and literal slash input',
+    },
+    {
+      id: 'rendering_diagnostic_boundary_acceptance',
+      status: 'not_started',
+      required_evidence: 'provider stderr, MCP stderr, known-noise suppression, payload threshold policy, and resize behavior are mediated without corrupting transcript or composer',
+      source_contract: 'target-functionality.md rendering contract and carrier-protocol.md MCP/provider boundaries',
+    },
+    {
+      id: 'payload_reference_policy_acceptance',
+      status: 'not_started',
+      required_evidence: 'large or sensitive tool/provider payloads use deterministic payload references with recorded policy metadata',
+      source_contract: 'carrier-protocol.md payload references',
+    },
+    {
+      id: 'provider_adapter_admission',
+      status: 'not_started',
+      required_evidence: 'real provider adapter, provider boundary evidence, streaming output, and tool-call boundary contracts',
+    },
+    {
+      id: 'mcp_fabric_client_admission',
+      status: 'partial',
+      required_evidence: 'Rust MCP fabric client, Site policy visibility, tool request/response, and tool evidence contracts',
+      current_evidence: 'Policy-bound visibility model, valid tool request/result evidence, carrier MCP config parsing, JSON-RPC tools/call framing, response classification, one-shot stdio process I/O, supervisor handshake/recovery contracts, runtime session-evidence bridge, provider tool-call bridge, TurnCoordinator bridge wiring, reusable per-server process executor, initialize/initialized execution, and preemptive timeout cancellation exist; live Site rollout remains pending',
+    },
+    {
+      id: 'site_rollout_acceptance',
+      status: 'partial',
+      required_evidence: 'agent-tui launches cleanly side by side with agent-cli on known sites before default carrier promotion',
+      current_evidence: 'Launch metadata now names the live Site rollout matrix and required evidence; per-Site execution remains pending.',
+      source_contract: 'target-functionality.md migration policy',
+    },
+    {
+      id: 'launch_metadata_runtime_slice',
+      status: 'satisfied',
+      required_evidence: 'agent-start launch metadata names smoke step, gated terminal loop, provider gate, MCP gate, and toolchain readiness preflight',
+    },
+  ];
+}
+
+function agentTuiKnownSiteRolloutMatrix(siteRoot) {
+  return [
+    {
+      site_id: 'narada-proper',
+      site_kind: 'proper',
+      launch_root: siteRoot,
+      required_agent_cli_evidence: 'agent-cli launch reaches prompt with target-local narada-proper MCP tools visible',
+      required_agent_tui_evidence: 'agent-tui bounded smoke step records control/session JSONL and exits cleanly',
+      status: 'pending_live_acceptance',
+    },
+    {
+      site_id: 'narada-andrey',
+      site_kind: 'user',
+      launch_root: null,
+      required_agent_cli_evidence: 'agent-cli launch reaches prompt with User Site MCP fabric visible',
+      required_agent_tui_evidence: 'agent-tui bounded smoke step records control/session JSONL without importing Narada proper authority',
+      status: 'pending_live_acceptance',
+    },
+    {
+      site_id: 'narada-staccato',
+      site_kind: 'client',
+      launch_root: null,
+      required_agent_cli_evidence: 'agent-cli launch reaches prompt for the Staccato Site without local carrier drift',
+      required_agent_tui_evidence: 'agent-tui bounded smoke step records Site-local control/session JSONL for Staccato',
+      status: 'pending_live_acceptance',
+    },
+    {
+      site_id: 'narada-revolution',
+      site_kind: 'client',
+      launch_root: null,
+      required_agent_cli_evidence: 'agent-cli launch reaches prompt for the Revolution Site without local carrier drift',
+      required_agent_tui_evidence: 'agent-tui bounded smoke step records Site-local control/session JSONL for Revolution',
+      status: 'pending_live_acceptance',
+    },
+    {
+      site_id: 'narada-timour-marketing-agent',
+      site_kind: 'client',
+      launch_root: null,
+      required_agent_cli_evidence: 'agent-cli launch reaches prompt for the Timour Marketing Agent Site without local carrier drift',
+      required_agent_tui_evidence: 'agent-tui bounded smoke step records Site-local control/session JSONL for Timour Marketing Agent',
+      status: 'pending_live_acceptance',
+    },
+    {
+      site_id: 'narada-utz',
+      site_kind: 'client',
+      launch_root: null,
+      required_agent_cli_evidence: 'agent-cli launch reaches prompt for the Utz Site without local carrier drift',
+      required_agent_tui_evidence: 'agent-tui bounded smoke step records Site-local control/session JSONL for Utz',
+      status: 'pending_live_acceptance',
+    },
+    {
+      site_id: 'narada-sonar',
+      site_kind: 'project',
+      launch_root: null,
+      required_agent_cli_evidence: 'agent-cli launch reaches resident prompt with Site operating-loop MCP tools visible',
+      required_agent_tui_evidence: 'agent-tui bounded smoke step preserves Site MCP timeout/recovery evidence boundaries',
+      status: 'pending_live_acceptance',
+    },
+    {
+      site_id: 'smart-scheduling',
+      site_kind: 'project',
+      launch_root: null,
+      required_agent_cli_evidence: 'agent-cli launch reaches prompt using packaged agent-cli without local copy drift',
+      required_agent_tui_evidence: 'agent-tui bounded smoke step uses packaged Narada proper carrier contracts without local copy drift',
+      status: 'pending_live_acceptance',
+    },
+    {
+      site_id: 'thoughts-project',
+      site_kind: 'project',
+      launch_root: null,
+      required_agent_cli_evidence: 'agent-cli launch reaches prompt for the Thoughts Project Site without local carrier drift',
+      required_agent_tui_evidence: 'agent-tui bounded smoke step records Site-local control/session JSONL for Thoughts Project',
+      status: 'pending_live_acceptance',
+    },
+  ];
+}
+function agentTuiSiteRolloutAcceptance(siteRoot) {
+  return {
+    schema: 'narada.agent_tui.site_rollout_acceptance.v0',
+    status: 'defined_not_executed',
+    promotion_gate: 'agent_tui_site_rollout_acceptance_gate',
+    acceptance_mode: 'side_by_side_agent_cli_then_agent_tui',
+    default_promotion_allowed: false,
+    known_sites: agentTuiKnownSiteRolloutMatrix(siteRoot),
+    required_common_evidence: [
+      'agent-cli baseline launch result',
+      'agent-tui bounded smoke launch result',
+      'session JSONL evidence path',
+      'control JSONL evidence path',
+      'MCP fabric visibility or explicit withheld posture',
+      'timeout/recovery diagnostic evidence for failed MCP startup',
+    ],
+    not_admitted_until: [
+      'each known Site has current acceptance evidence',
+      'failures are recorded as Site-specific rollout blockers',
+      'agent-tui remains non-default while any known Site is pending or blocked',
+    ],
+  };
+}
+
+function agentTuiPromotionGate() {
+  return {
+    status: 'not_satisfied',
+    checklist: agentTuiPromotionChecklist(),
+    reason: 'Production launch remains bounded non-terminal smoke until Rust tests, terminal-frame acceptance, provider admission, and MCP fabric admission pass.',
+  };
+}
+function agentTuiInteractiveLoopGate() {
+  return {
+    mode: 'interactive_loop',
+    admitted: false,
+    required_flag: '--interactive-loop',
+    promotion_gate: 'agent_tui_terminal_interactive_loop_promotion_gate',
+  };
+}
+
+function agentTuiProviderExecutionGate() {
+  return {
+    status: 'not_admitted_for_runtime_slice',
+    adapter_contract: 'not_implemented',
+    dispatch_authority: 'withheld',
+    promotion_gate: 'agent_tui_provider_adapter_promotion_gate',
+    required_before_admission: [
+      'real_provider_adapter_contract',
+      'provider_boundary_evidence_contract',
+      'streaming_turn_output_contract',
+      'tool_call_boundary_contract',
+    ],
+    reason: 'Smoke step records provider boundary evidence without dispatching provider work.',
+  };
+}
+
+function agentTuiMcpFabricAccessGate(siteRoot) {
+  return {
+    status: 'not_admitted_for_runtime_slice',
+    client_contract: 'not_implemented',
+    tool_visibility_authority: 'withheld',
+    promotion_gate: 'agent_tui_rust_mcp_fabric_client_promotion_gate',
+    required_before_admission: [
+      'rust_mcp_fabric_client_contract',
+      'site_mcp_policy_visibility_contract',
+      'tool_call_request_response_contract',
+      'tool_call_evidence_contract',
+    ],
+    site_mcp_fabric: join(siteRoot, '.ai', 'mcp'),
+    reason: 'Smoke step does not read Site MCP fabric or expose MCP tools to the carrier.',
+  };
+}
+
+function agentTuiRustToolchainReadiness(siteRoot) {
+  return {
+    schema: 'narada.agent_tui.rust_toolchain_readiness.command.v0',
+    status: 'operator_preflight_available',
+    command: 'node',
+    argv: [
+      join(siteRoot, 'tools', 'agent-start', 'check-agent-tui-rust-toolchain.mjs'),
+    ],
+    working_directory: siteRoot,
+    expected_blocker: 'missing_msvc_link_exe_or_windows_sdk_lib_not_loaded',
+    success_exit_code: 0,
+    blocked_exit_code: 1,
+  };
+}
+
+function naradaNativeArgs() {
+  return [];
 }
 
 function runtimeArgsFor({ runtime, siteRoot, startupEvidence, enableNativeShell = false }) {
@@ -488,8 +735,11 @@ function runtimeArgsFor({ runtime, siteRoot, startupEvidence, enableNativeShell 
   if (runtime === 'agent-cli') {
     return agentCliArgs({ siteRoot, startupEvidence });
   }
-  if (runtime === 'nars') {
-    return narsArgs({ siteRoot, startupEvidence });
+  if (runtime === AGENT_RUNTIME_SERVER_RUNTIME) {
+    return agentRuntimeServerArgs({ siteRoot, startupEvidence });
+  }
+  if (runtime === AGENT_TUI_RUNTIME) {
+    return agentTuiArgs({ siteRoot, startupEvidence });
   }
   throw new Error(`runtime_not_admitted:${runtime}`);
 }
@@ -499,7 +749,8 @@ function runtimeCommand(runtime) {
   if (runtime === 'claude-code') return 'claude';
   if (runtime === 'narada-native') return 'narada-native-carrier';
   if (runtime === 'agent-cli') return process.execPath;
-  if (runtime === 'nars') return process.execPath;
+  if (runtime === AGENT_RUNTIME_SERVER_RUNTIME) return process.execPath;
+  if (runtime === AGENT_TUI_RUNTIME) return 'cargo';
   throw new Error(`runtime_not_admitted:${runtime}`);
 }
 
@@ -508,7 +759,8 @@ function runtimeKind(runtime) {
   if (runtime === 'claude-code') return 'claude_code_carrier';
   if (runtime === 'narada-native') return 'narada_native_carrier';
   if (runtime === 'agent-cli') return 'agent_cli_carrier';
-  if (runtime === 'nars') return 'nars';
+  if (runtime === AGENT_RUNTIME_SERVER_RUNTIME) return 'agent_runtime_server_carrier';
+  if (runtime === AGENT_TUI_RUNTIME) return 'agent_tui_carrier';
   throw new Error(`runtime_not_admitted:${runtime}`);
 }
 
@@ -600,24 +852,45 @@ function nativeExecutionPolicy({ runtime, enableNativeShell = false, identity, s
       },
     };
   }
-  if (runtime === 'nars') {
+  if (runtime === AGENT_RUNTIME_SERVER_RUNTIME) {
     return {
       native_shell: {
         status: 'not_admitted_for_runtime_slice',
         runtime,
-        reason: 'NARS first slice mediates local tools through Site MCP fabric and does not grant native shell execution.',
+        reason: 'Agent Runtime Server mediates local tools through Site MCP fabric and does not grant native shell execution.',
       },
       native_scripts: {
         status: 'not_admitted_for_runtime_slice',
-        reason: 'NARS process launch does not admit arbitrary script execution.',
+        reason: 'Agent Runtime Server process launch does not admit arbitrary script execution.',
       },
       policy_aware_shell_mcp: {
         status: 'site_fabric_only',
-        reason: 'NARS reads only the target Site .ai/mcp fabric; shell MCP must be declared and admitted there to be visible.',
+        reason: 'Agent Runtime Server reads only the target Site .ai/mcp fabric; shell MCP must be declared and admitted there to be visible.',
       },
     };
   }
-  throw new Error(`runtime_not_admitted:${runtime}`);
+  if (runtime === AGENT_TUI_RUNTIME) {
+    return {
+      native_shell: {
+        status: 'not_admitted_for_runtime_slice',
+        runtime,
+        reason: 'Agent TUI runtime loop scaffold mediates input through control JSONL and does not grant native shell execution.',
+      },
+      native_scripts: {
+        status: 'not_admitted_for_runtime_slice',
+        reason: 'Agent TUI process launch does not admit arbitrary script execution.',
+      },
+      policy_aware_shell_mcp: {
+        status: 'not_admitted_for_runtime_slice',
+        reason: 'The current Agent TUI scaffold has no Site MCP execution surface; tool access remains future work.',
+      },
+    };
+  }
+  return {
+    native_shell: { status: 'not_admitted_for_runtime_slice', runtime, reason: 'Runtime slice does not admit native shell execution.' },
+    native_scripts: { status: 'not_admitted_for_runtime_slice', reason: 'Runtime slice does not admit arbitrary script execution.' },
+    policy_aware_shell_mcp: { status: 'withheld', reason: 'Policy-aware shell MCP remains a separate capability.' },
+  };
 }
 
 function claudeCodeExecutionPolicyPath(siteRoot = defaultRootDir) {
@@ -852,8 +1125,11 @@ function mcpToolApprovalNote(runtime, enableNativeShell) {
   if (runtime === 'agent-cli') {
     return 'Interactive agent-cli reads only the target Site .ai/mcp fabric through its own MCP client. User Site MCP servers are not injected, and model-selected tool calls remain requests rather than authority.';
   }
-  if (runtime === 'nars') {
-    return 'NARS reads only the target Site .ai/mcp fabric through its own MCP client. User Site MCP servers are not injected, and model-selected tool calls remain requests rather than authority.';
+  if (runtime === AGENT_RUNTIME_SERVER_RUNTIME) {
+    return 'Agent Runtime Server reads only the target Site .ai/mcp fabric through its own MCP client. User Site MCP servers are not injected, and model-selected tool calls remain requests rather than authority.';
+  }
+  if (runtime === AGENT_TUI_RUNTIME) {
+    return 'Agent TUI is admitted here as a bounded non-terminal smoke step. It reads control JSONL and writes session JSONL; full terminal rendering and Site MCP execution remain separate future admissions.';
   }
   throw new Error(`runtime_not_admitted:${runtime}`);
 }
@@ -961,12 +1237,13 @@ function claudeCodeReadiness({ result, siteRoot = defaultRootDir }) {
 
 function buildLaunchPlanFromArgs(args, options = {}) {
   const identity = args.identity;
-  const runtime = args.runtime ?? 'codex';
+  const requestedRuntime = args.runtime ?? 'codex';
+  const runtime = canonicalRuntime(requestedRuntime);
   const dryRun = args.dry_run === true;
   const exec = args.exec === true;
   const enableNativeShell = args.enable_native_shell === true;
   const startupTaskNumber = args.startup_task_number ?? null;
-  if (!identity) throw new Error('identity_required');
+  if (!ADMITTED_RUNTIMES.has(requestedRuntime)) throw new Error(`runtime_not_admitted:${requestedRuntime}`);
   if (!ADMITTED_AGENTS.has(identity)) throw new Error(`agent_not_admitted:${identity}`);
   if (!ADMITTED_RUNTIMES.has(runtime)) throw new Error(`runtime_not_admitted:${runtime}`);
   if (startupTaskNumber !== null && (!Number.isInteger(startupTaskNumber) || startupTaskNumber <= 0)) {
@@ -992,6 +1269,8 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     agentContextDb: dbPath,
   };
   const runtimeArgs = runtimeArgsFor({ runtime, siteRoot, startupEvidence, enableNativeShell });
+  const runtimeUsesAgentCliMcp = runtime === 'agent-cli' || runtime === AGENT_RUNTIME_SERVER_RUNTIME;
+  const runtimeUsesAgentTuiScaffold = runtime === AGENT_TUI_RUNTIME;
   const codexConfig = runtime === 'codex'
     ? (dryRun ? codexConfigPath(siteRoot, identity) : writeCodexHomeConfig(siteRoot, identity, startupEvidence))
     : null;
@@ -1003,7 +1282,8 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     NARADA_WORKSPACE_ROOT: siteRoot,
     NARADA_AGENT_CONTEXT_DB: dbPath,
     NARADA_PC_SITE_ROOT: pcSiteRoot,
-    ...(runtime === 'nars' ? { NARADA_NARS_SESSION_DIR: narsSessionDir(siteRoot, session.carrier_session_id) } : {}),
+    ...(runtime === AGENT_RUNTIME_SERVER_RUNTIME ? { NARADA_AGENT_RUNTIME_SERVER_SESSION_DIR: agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id) } : {}),
+    ...(runtime === AGENT_TUI_RUNTIME ? { NARADA_AGENT_TUI_SESSION_DIR: agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id) } : {}),
     ...(runtime === 'codex' ? { CODEX_HOME: codexHomePath(siteRoot, identity) } : {}),
   };
   const launchEnvironment = dryRun ? null : plannedEnvironment;
@@ -1013,16 +1293,25 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     identity,
     role: event.role,
     runtime,
-    tool_fabric_adapter_kind: runtime === 'agent-cli' ? 'narada-agent-cli-mcp-client' : null,
+    runtime_aliases: requestedRuntime !== runtime ? [requestedRuntime] : [],
+    tool_fabric_adapter_kind: runtimeUsesAgentCliMcp ? 'narada-agent-cli-mcp-client' : (runtimeUsesAgentTuiScaffold ? 'narada-agent-tui-interactive-step' : null),
     resume_command: runtime,
-    capability_policy: runtime === 'agent-cli'
+    capability_policy: runtimeUsesAgentCliMcp
       ? {
         direct_substrate_script_execution: 'forbidden',
         script_execution_surface: 'mcp_only',
         shell_access: 'mcp_only',
         lifecycle_mutations: 'mcp_only',
       }
-      : null,
+      : (runtimeUsesAgentTuiScaffold
+          ? {
+              direct_substrate_script_execution: 'forbidden',
+              script_execution_surface: 'not_admitted',
+              shell_access: 'not_admitted',
+              lifecycle_mutations: 'not_admitted',
+              smoke_step: 'bounded_non_terminal_control_jsonl',
+            }
+          : null),
     agent_start_event: event.event_id,
     carrier_session_id: session.carrier_session_id,
     event_path: eventPath,
@@ -1036,9 +1325,10 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     runtime_kind: runtimeKind(runtime),
     runtime_substrate_kind: runtime,
     runtime_args: runtimeArgs,
-    transport: runtime === 'nars' ? 'jsonl_stdio' : null,
-    agent_cli_session_dir: runtime === 'agent-cli' ? narsSessionDir(siteRoot, session.carrier_session_id) : null,
-    nars_session_dir: runtime === 'nars' ? narsSessionDir(siteRoot, session.carrier_session_id) : null,
+    transport: runtime === AGENT_RUNTIME_SERVER_RUNTIME ? 'jsonl_stdio' : (runtime === AGENT_TUI_RUNTIME ? 'control_jsonl_session_jsonl' : null),
+    agent_cli_session_dir: runtime === 'agent-cli' ? agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id) : null,
+    agent_runtime_server_session_dir: runtime === AGENT_RUNTIME_SERVER_RUNTIME ? agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id) : null,
+    agent_tui_session_dir: runtime === AGENT_TUI_RUNTIME ? agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id) : null,
     mcp_runtime: {
       schema: 'narada.agent_start.mcp_runtime.v0',
       server_name: NARADA_PROPER_MCP_SERVER_NAME,
@@ -1077,26 +1367,23 @@ function buildLaunchPlanFromArgs(args, options = {}) {
             identity_mutable_after_start: false,
           },
           startup_hydration: startupCommand(),
+          lifecycle_plan: nativeCarrierLifecyclePlan(),
+          startup_hydration: startupCommand(),
           capability_posture: {
             status: 'facade_only',
-            approved_mcp_servers: NARADA_PROPER_APPROVED_MCP_SERVERS.map((server) => server.name),
             withheld_capabilities: [
               'task_lifecycle_mutation_authority',
-              'inbox_admission_authority',
-              'outbox_transport_authority',
+              'inbox_authority',
+              'outbox_authority',
               'repository_publication_authority',
               'native_shell_execution',
-              'credential_access',
             ],
           },
           readiness: {
-            status: 'ready_for_planned_carrier_session',
-            runtime_execution_attempted: false,
             direct_sqlite_inspection_required: false,
-            readback_surface: 'agent-start dry-run result packet',
+            source_state_import_required: false,
+            separate_execution_carrier_required_for_exec: true,
           },
-          lifecycle_plan: nativeCarrierLifecyclePlan(),
-          execution_admitted: false,
           execution_blocker: 'runtime_exec_not_admitted:narada-native',
         }
       : null,
@@ -1109,30 +1396,62 @@ function buildLaunchPlanFromArgs(args, options = {}) {
           transport: 'interactive_stdio',
           control_transport: 'jsonl_sideband_file',
           carrier_relation: 'interactive_agent_cli',
-          session_dir: narsSessionDir(siteRoot, session.carrier_session_id),
-          session_path: join(narsSessionDir(siteRoot, session.carrier_session_id), 'session.jsonl'),
-          control_path: join(narsSessionDir(siteRoot, session.carrier_session_id), 'control.jsonl'),
+          session_dir: agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id),
+          session_path: join(agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id), 'session.jsonl'),
+          control_path: join(agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id), 'control.jsonl'),
           site_mcp_fabric: join(siteRoot, '.ai', 'mcp'),
           reads_only_target_site_mcp_fabric: true,
           user_site_mcp_injected: false,
           native_shell_authority_admitted: false,
         }
       : null,
-    nars_launch: runtime === 'nars'
+    agent_runtime_server_launch: runtime === AGENT_RUNTIME_SERVER_RUNTIME
       ? {
-          schema: 'narada.agent_start.nars.v0',
+          schema: 'narada.agent_start.agent_runtime_server.v0',
           status: exec && !dryRun ? 'ready_to_spawn' : 'planned',
           command: runtimeCommand(runtime),
           argv: runtimeArgs,
           transport: 'jsonl_stdio',
-          exec_stdout_contract: 'nars_protocol_only',
+          exec_stdout_contract: 'agent_runtime_server_protocol_only',
           launch_packet_stream_when_exec: 'stderr',
-          session_dir: narsSessionDir(siteRoot, session.carrier_session_id),
-          session_path: join(narsSessionDir(siteRoot, session.carrier_session_id), 'session.jsonl'),
-          events_path: join(narsSessionDir(siteRoot, session.carrier_session_id), 'events.jsonl'),
+          session_dir: agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id),
+          session_path: join(agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id), 'session.jsonl'),
+          events_path: join(agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id), 'events.jsonl'),
           site_mcp_fabric: join(siteRoot, '.ai', 'mcp'),
           reads_only_target_site_mcp_fabric: true,
           user_site_mcp_injected: false,
+          native_shell_authority_admitted: false,
+        }
+      : null,
+    agent_tui_launch: runtime === AGENT_TUI_RUNTIME
+      ? {
+          schema: 'narada.agent_start.agent_tui.v0',
+          status: exec && !dryRun ? 'ready_to_spawn' : 'planned',
+          command: runtimeCommand(runtime),
+          argv: runtimeArgs,
+          transport: 'control_jsonl_session_jsonl',
+          carrier_relation: 'non_terminal_agent_tui_smoke_step',
+          session_dir: agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id),
+          session_path: join(agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id), 'session.jsonl'),
+          admitted_runtime_slice: 'bounded_non_terminal_interactive_step_once',
+          control_path: join(agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id), 'control.jsonl'),
+          rust_toolchain_readiness: agentTuiRustToolchainReadiness(siteRoot),
+          smoke_step: {
+            mode: 'interactive_step_once',
+            terminal_mode: false,
+          },
+          interactive_loop: agentTuiInteractiveLoopGate(),
+          promotion_gate: agentTuiPromotionGate(),
+          tui_rendering_enabled: false,
+          terminal_rendering: {
+            status: 'not_admitted_for_runtime_slice',
+            reason: 'Smoke step runs without alternate screen or interactive terminal handoff.',
+          },
+          provider_execution_enabled: false,
+          provider_execution: agentTuiProviderExecutionGate(),
+          mcp_fabric_access_enabled: false,
+          mcp_fabric_access: agentTuiMcpFabricAccessGate(siteRoot),
+          site_rollout_acceptance: agentTuiSiteRolloutAcceptance(siteRoot),
           native_shell_authority_admitted: false,
         }
       : null,
@@ -1220,6 +1539,25 @@ function writeLaunchResult(result, siteRoot = defaultRootDir) {
   return path;
 }
 
+function materializeAgentTuiLaunchFiles(result) {
+  if (result.runtime !== AGENT_TUI_RUNTIME || !result.exec || result.dry_run) return null;
+  const launch = result.agent_tui_launch;
+  if (!launch?.session_dir || !launch?.control_path || !launch?.session_path) {
+    throw new Error('agent_tui_launch_paths_missing');
+  }
+  mkdirSync(launch.session_dir, { recursive: true });
+  for (const path of [launch.control_path, launch.session_path]) {
+    if (!existsSync(path)) writeFileSync(path, '', 'utf8');
+  }
+  return {
+    schema: 'narada.agent_start.agent_tui_launch_files.v0',
+    status: 'materialized',
+    session_dir: launch.session_dir,
+    control_path: launch.control_path,
+    session_path: launch.session_path,
+  };
+}
+
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -1253,22 +1591,22 @@ function writeCompactResult(result, output = process.stdout) {
 
 async function main(argv = process.argv.slice(2)) {
   const parsedArgs = parseArgs(argv);
+  const jsonOutput = parsedArgs.json === true;
   const { result, launchEnvironment, runtimeArgs } = buildLaunchPlanFromArgs(parsedArgs);
-
   if (!result.dry_run) writeLaunchResult(result);
-  const jsonOutput = !!parsedArgs.json || result.dry_run || !result.exec;
   if (jsonOutput) {
-    const launchPacketOutput = result.runtime === 'nars' && result.exec && !result.dry_run
+    const launchPacketOutput = result.runtime === AGENT_RUNTIME_SERVER_RUNTIME && result.exec && !result.dry_run
       ? process.stderr
       : process.stdout;
     await writeJsonResult(result, launchPacketOutput);
-  } else if (result.runtime === 'nars') {
+  } else if (result.runtime === AGENT_RUNTIME_SERVER_RUNTIME) {
     await writeJsonResult(result, process.stderr);
   } else {
     await writeCompactResult(result, process.stdout);
   }
   if (!result.exec || result.dry_run) return;
   if (result.runtime === 'claude-code') writeClaudeCodeProcessAttempt(result);
+  materializeAgentTuiLaunchFiles(result);
   await delay(750);
 
   const child = spawn(runtimeCommand(result.runtime), runtimeArgs, {
@@ -1290,12 +1628,10 @@ async function main(argv = process.argv.slice(2)) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  try {
-    await main();
-  } catch (error) {
+  main().catch((error) => {
     console.error(JSON.stringify({ schema: RESULT_SCHEMA, status: 'refused', refusals: [error instanceof Error ? error.message : String(error)] }, null, 2));
     process.exit(2);
-  }
+  });
 }
 
 export {
@@ -1309,9 +1645,11 @@ export {
   readClaudeCodeExecutionPolicy,
   startEvent,
   startupSequence,
+  agentTuiSiteRolloutAcceptance,
   compactLaunchSummary,
   naradaProperMcpEntrypoint,
   naradaProperMcpCommand,
+  materializeAgentTuiLaunchFiles,
   writeClaudeCodeProcessAttempt,
   writeCompactResult,
   writeLaunchResult,

@@ -1,0 +1,28 @@
+{
+  "name": "@narada2/site-operating-loop",
+  "version": "0.1.0",
+  "description": "Narada Site Operating Loop substrate",
+  "private": true,
+  "type": "module",
+  "main": "./dist/site-loop-store.mjs",
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  },
+  "bin": {
+    "narada-site-loop": "./dist/bin/narada-site-loop.mjs"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/site-loop-store.mjs"
+    },
+    "./site-loop-store": {
+      "import": "./dist/site-loop-store.mjs"
+    },
+    "./runner": {
+      "import": "./dist/runner.mjs"
+    },
+    "./policy": {
+      "import": "./dist/policy.mjs"
+    }
+  }
+}

@@ -48,7 +48,7 @@ node tools\mcp-fabric\generate-mcp-surface-registry.mjs --site-root "<site-root>
 
 Status: bounded.
 
-Current decision: Pi is admitted for governed launch through the Narada-owned Pi MCP bridge extension. Its evidence level is config/adapter enforced, matching the Codex and Claude Code posture rather than NARS code-mediated execution.
+Current decision: Pi is admitted for governed launch through the Narada-owned Pi MCP bridge extension. Its evidence level is config/adapter enforced, matching the Codex and Claude Code posture rather than Agent Runtime Server code-mediated execution.
 
 Acceptance:
 

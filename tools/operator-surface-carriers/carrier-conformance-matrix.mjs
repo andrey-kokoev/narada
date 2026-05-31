@@ -19,7 +19,7 @@ const CARRIER_ROWS = Object.freeze([
     launch_supported: true,
     default_intelligence_auth_path: 'codex-subscription through local Codex MCP server unless another admitted provider is selected',
     mcp_fabric_source: 'tools/mcp-fabric/loadSiteMcpFabric at runtime',
-    native_shell_posture: 'not exposed as native carrier shell in NARS server mode; shell-like effects must be MCP tools and then admitted',
+    native_shell_posture: 'not exposed as native carrier shell in Agent Runtime Server mode; shell-like effects must be MCP tools and then admitted',
     mutating_call_handling: 'code-mediated Carrier Action Admission; read-only executes, mutating/unknown/credential-bearing routes or refuses',
     startup_sequence_availability: 'MCP tool if present in site fabric',
     evidence_level: EVIDENCE_LEVELS.CODE_ENFORCED,
@@ -38,7 +38,7 @@ const CARRIER_ROWS = Object.freeze([
     evidence_level: EVIDENCE_LEVELS.CONFIG_ENFORCED,
     known_gaps: [
       'Tool execution provenance is carrier-native unless routed through Narada-owned MCP/admission surfaces.',
-      'Codex approval settings are launcher configuration, not NARS code mediation.',
+      'Codex approval settings are launcher configuration, not Agent Runtime Server code mediation.',
     ],
   },
   {
@@ -49,11 +49,11 @@ const CARRIER_ROWS = Object.freeze([
     default_intelligence_auth_path: 'openai-codex provider/model via Pi CLI by launcher default',
     mcp_fabric_source: 'Narada-owned Pi extension loads Site MCP tools declared in .ai/mcp',
     native_shell_posture: 'depends on Pi runtime; Narada launch attaches only Site-local MCP bridge and governed prompt posture',
-    mutating_call_handling: 'configuration/adapter-mediated through Site MCP surfaces; not NARS code-mediated',
+    mutating_call_handling: 'configuration/adapter-mediated through Site MCP surfaces; not Agent Runtime Server code-mediated',
     startup_sequence_availability: 'MCP tool through Narada Pi extension when bridge loads correctly',
     evidence_level: EVIDENCE_LEVELS.CONFIG_ENFORCED,
     known_gaps: [
-      'Pi native carrier behavior is not universally intercepted by NARS; only Narada MCP bridge calls are governed by the projected Site surfaces.',
+      'Pi native carrier behavior is not universally intercepted by Agent Runtime Server; only Narada MCP bridge calls are governed by the projected Site surfaces.',
       'Bridge startup should be smoke-tested per installed Pi version.',
     ],
   },

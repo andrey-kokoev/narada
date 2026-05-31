@@ -28,6 +28,8 @@ config.json
 .narada/crew/agent-start-events/
 .narada/crew/agent-start-results/
 .narada/crew/codex-home/
+.narada/crew/nars-sessions/
+packages/*/target/
 packages/layers/cli/.ai/inbox.db
 packages/layers/cli/.ai/inbox.db-*
 packages/layers/cli/.ai/mutation-evidence/

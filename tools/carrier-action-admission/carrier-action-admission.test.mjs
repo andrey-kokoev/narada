@@ -121,7 +121,7 @@ assert.equal(decision.schema, 'narada.carrier_action_admission_decision.v0');
 assert.equal(decision.decision, 'routed');
 assert.equal(decision.reason, 'task_lifecycle_mutation_requires_canonical_task_authority');
 assert.equal(decision.classifier_version, 'carrier_action_admission.metadata_aware_policy.v1');
-assert.equal(decision.policy_version, 'carrier_action_admission.nars_operational_candidates.v1');
+assert.equal(decision.policy_version, 'carrier_action_admission.agent_runtime_server_operational_candidates.v1');
 assert.match(decision.created_at, /T/);
 assert.equal(decision.carrier_mutation_admitted, false);
 assert.equal(persisted.evidence_path, path);

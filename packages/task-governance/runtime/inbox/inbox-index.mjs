@@ -1,12 +1,8 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { Database } from '@narada2/control-plane';
 import { getLatestEventsByEnvelope } from './admission-log.mjs';
 
-const require = createRequire(import.meta.url);
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(__dirname, '..', '..');
 const INBOX_DIR = '.ai/inbox-envelopes';
 const INDEX_PATH = '.ai/state/inbox-index.sqlite';
 const INDEX_SCHEMA_VERSION = 1;
@@ -16,19 +12,6 @@ export function isValidEnvelopeId(envelopeId) {
   return typeof envelopeId === 'string' && ENVELOPE_ID_PATTERN.test(envelopeId);
 }
 
-function resolveBetterSqlite3(siteRoot) {
-  const candidates = [
-    join(resolve(siteRoot), 'node_modules', 'better-sqlite3'),
-    join(resolve(siteRoot), 'tools', 'incubation', 'node_modules', 'better-sqlite3'),
-    join(repoRoot, 'node_modules', 'better-sqlite3'),
-    join(repoRoot, 'tools', 'incubation', 'node_modules', 'better-sqlite3'),
-  ];
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) return candidate;
-  }
-  return 'better-sqlite3';
-}
-
 function indexPath(siteRoot) {
   return join(resolve(siteRoot), INDEX_PATH);
 }
@@ -36,7 +19,6 @@ function indexPath(siteRoot) {
 function openInboxIndex(siteRoot) {
   const dbPath = indexPath(siteRoot);
   mkdirSync(dirname(dbPath), { recursive: true });
-  const Database = require(resolveBetterSqlite3(siteRoot));
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma(`user_version = ${INDEX_SCHEMA_VERSION}`);

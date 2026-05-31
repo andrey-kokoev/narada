@@ -6,11 +6,21 @@ import path from 'node:path';
 import {
   buildLaunchPlanFromArgs,
   compactLaunchSummary,
+  materializeAgentTuiLaunchFiles,
   readAgentStartEvent,
   writeCompactResult,
   writeClaudeCodeProcessAttempt,
   writeLaunchResult,
 } from './start-agent.mjs';
+import {
+  buildAgentTuiRolloutAcceptanceReport,
+  defaultOutputPath as defaultAgentTuiRolloutOutputPath,
+  parseArgs as parseAgentTuiRolloutArgs,
+  parseKnownSiteRoot,
+  parseSiteEvidence,
+  validateEvidenceJson,
+  writeReport as writeAgentTuiRolloutReport,
+} from './agent-tui-rollout-acceptance.mjs';
 
 function tempSite() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'narada-agent-start-'));
@@ -294,36 +304,201 @@ test('second builder launch can carry explicit startup task handoff without clai
   assert.ok(result.not_claimed.includes('repository_publication_authority'));
 });
 
-test('nars launch reports JSONL stdio runtime and Site-local session paths', () => {
+test('agent-runtime-server launch reports JSONL stdio runtime and Site-local session paths', () => {
   const siteRoot = tempSite();
   const pcSiteRoot = tempPcSite();
   const { result } = buildLaunchPlanFromArgs({
     identity: 'narada.architect',
-    runtime: 'nars',
+    runtime: 'agent-runtime-server',
     exec: true,
     dry_run: true,
   }, { siteRoot, pcSiteRoot, now: '2026-05-26T23:00:00.000Z' });
 
-  assert.equal(result.runtime, 'nars');
-  assert.equal(result.runtime_kind, 'nars');
-  assert.equal(result.runtime_substrate_kind, 'nars');
+  assert.equal(result.runtime, 'agent-runtime-server');
+  assert.equal(result.runtime_kind, 'agent_runtime_server_carrier');
+  assert.equal(result.runtime_substrate_kind, 'agent-runtime-server');
   assert.equal(result.transport, 'jsonl_stdio');
-  assert.equal(result.planned_environment.NARADA_NARS_SESSION_DIR, result.nars_session_dir);
-  assert.match(result.nars_session_dir, /[\\/]\.narada[\\/]crew[\\/]nars-sessions[\\/]/);
-  assert.equal(result.nars_launch.transport, 'jsonl_stdio');
-  assert.equal(result.nars_launch.exec_stdout_contract, 'nars_protocol_only');
-  assert.equal(result.nars_launch.launch_packet_stream_when_exec, 'stderr');
-  assert.equal(result.nars_launch.reads_only_target_site_mcp_fabric, true);
-  assert.equal(result.nars_launch.user_site_mcp_injected, false);
-  assert.equal(result.nars_launch.native_shell_authority_admitted, false);
-  assert.deepEqual(result.runtime_args.slice(0, 4), [
-    result.nars_launch.argv[0],
-    '--server',
+  assert.equal(result.planned_environment.NARADA_AGENT_RUNTIME_SERVER_SESSION_DIR, result.agent_runtime_server_session_dir);
+  assert.match(result.agent_runtime_server_session_dir, /[\\/]\.narada[\\/]crew[\\/]nars-sessions[\\/]/);
+  assert.equal(result.agent_runtime_server_launch.transport, 'jsonl_stdio');
+  assert.equal(result.agent_runtime_server_launch.exec_stdout_contract, 'agent_runtime_server_protocol_only');
+  assert.equal(result.agent_runtime_server_launch.launch_packet_stream_when_exec, 'stderr');
+  assert.equal(result.agent_runtime_server_launch.reads_only_target_site_mcp_fabric, true);
+  assert.equal(result.agent_runtime_server_launch.user_site_mcp_injected, false);
+  assert.equal(result.agent_runtime_server_launch.native_shell_authority_admitted, false);
+  assert.deepEqual(result.runtime_args.slice(0, 3), [
+    result.agent_runtime_server_launch.argv[0],
     '--identity',
     'narada.architect',
   ]);
   assert.equal(result.runtime_args.includes('--session'), true);
   assert.equal(result.runtime_args.includes(result.carrier_session_id), true);
+});
+
+test('legacy nars runtime input canonicalizes to agent-runtime-server', () => {
+  const siteRoot = tempSite();
+  const pcSiteRoot = tempPcSite();
+  const { result } = buildLaunchPlanFromArgs({
+    identity: 'narada.architect',
+    runtime: 'nars',
+    dry_run: true,
+  }, { siteRoot, pcSiteRoot, now: '2026-05-26T23:00:00.000Z' });
+
+  assert.equal(result.runtime, 'agent-runtime-server');
+  assert.equal(result.runtime_kind, 'agent_runtime_server_carrier');
+  assert.equal(result.agent_runtime_server_launch.transport, 'jsonl_stdio');
+});
+
+test('agent-tui launch reports bounded non-terminal interactive smoke step', () => {
+  const siteRoot = tempSite();
+  const pcSiteRoot = tempPcSite();
+  const { result } = buildLaunchPlanFromArgs({
+    identity: 'narada.resident',
+    runtime: 'agent-tui',
+    exec: true,
+    dry_run: true,
+  }, { siteRoot, pcSiteRoot, now: '2026-05-30T12:00:00.000Z' });
+
+  assert.equal(result.runtime, 'agent-tui');
+  assert.equal(result.runtime_kind, 'agent_tui_carrier');
+  assert.equal(result.runtime_substrate_kind, 'agent-tui');
+  assert.equal(result.transport, 'control_jsonl_session_jsonl');
+  assert.equal(result.tool_fabric_adapter_kind, 'narada-agent-tui-interactive-step');
+  assert.equal(result.capability_policy.smoke_step, 'bounded_non_terminal_control_jsonl');
+  assert.equal(result.planned_environment.NARADA_AGENT_TUI_SESSION_DIR, result.agent_tui_session_dir);
+  assert.equal(result.agent_tui_session_dir.includes(`${path.sep}.narada${path.sep}crew${path.sep}nars-sessions${path.sep}`), true);
+  assert.equal(result.agent_tui_launch.schema, 'narada.agent_start.agent_tui.v0');
+  assert.equal(result.agent_tui_launch.transport, 'control_jsonl_session_jsonl');
+  assert.equal(result.agent_tui_launch.session_dir, result.agent_tui_session_dir);
+  assert.equal(result.agent_tui_launch.session_path, path.join(result.agent_tui_session_dir, 'session.jsonl'));
+  assert.equal(result.agent_tui_launch.control_path, path.join(result.agent_tui_session_dir, 'control.jsonl'));
+  assert.equal(result.agent_tui_launch.admitted_runtime_slice, 'bounded_non_terminal_interactive_step_once');
+  assert.equal(result.agent_tui_launch.rust_toolchain_readiness.schema, 'narada.agent_tui.rust_toolchain_readiness.command.v0');
+  assert.equal(result.agent_tui_launch.rust_toolchain_readiness.status, 'operator_preflight_available');
+  assert.equal(result.agent_tui_launch.rust_toolchain_readiness.command, 'node');
+  assert.deepEqual(result.agent_tui_launch.rust_toolchain_readiness.argv, [
+    path.join(siteRoot, 'tools', 'agent-start', 'check-agent-tui-rust-toolchain.mjs'),
+  ]);
+  assert.equal(result.agent_tui_launch.rust_toolchain_readiness.working_directory, siteRoot);
+  assert.equal(result.agent_tui_launch.rust_toolchain_readiness.expected_blocker, 'missing_msvc_link_exe_or_windows_sdk_lib_not_loaded');
+  assert.equal(result.agent_tui_launch.rust_toolchain_readiness.success_exit_code, 0);
+  assert.equal(result.agent_tui_launch.rust_toolchain_readiness.blocked_exit_code, 1);
+
+  assert.equal(result.agent_tui_launch.smoke_step.terminal_mode, false);
+  assert.equal(result.agent_tui_launch.interactive_loop.mode, 'interactive_loop');
+  assert.equal(result.agent_tui_launch.interactive_loop.admitted, false);
+  assert.equal(result.agent_tui_launch.interactive_loop.required_flag, '--interactive-loop');
+  assert.equal(result.agent_tui_launch.interactive_loop.promotion_gate, 'agent_tui_terminal_interactive_loop_promotion_gate');
+  assert.equal(result.agent_tui_launch.promotion_gate.status, 'not_satisfied');
+  assert.deepEqual(result.agent_tui_launch.promotion_gate.checklist.map((item) => item.id), [
+    'rust_tests_available',
+    'terminal_interactive_loop_acceptance',
+    'carrier_command_acceptance',
+    'rendering_diagnostic_boundary_acceptance',
+    'payload_reference_policy_acceptance',
+    'provider_adapter_admission',
+    'mcp_fabric_client_admission',
+    'site_rollout_acceptance',
+    'launch_metadata_runtime_slice',
+  ]);
+  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'rust_tests_available').status, 'blocked');
+  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'terminal_interactive_loop_acceptance').status, 'partial');
+  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'carrier_command_acceptance').status, 'not_started');
+  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'rendering_diagnostic_boundary_acceptance').status, 'not_started');
+  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'payload_reference_policy_acceptance').status, 'not_started');
+  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'site_rollout_acceptance').status, 'partial');
+  assert.match(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'site_rollout_acceptance').current_evidence, /rollout matrix/);
+  assert.match(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'rendering_diagnostic_boundary_acceptance').source_contract, /rendering contract/);
+  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'launch_metadata_runtime_slice').status, 'satisfied');
+  assert.match(result.agent_tui_launch.promotion_gate.reason, /bounded non-terminal smoke/);
+  assert.match(result.agent_tui_launch.promotion_gate.reason, /Rust tests/);
+  assert.equal(result.agent_tui_launch.tui_rendering_enabled, false);
+  assert.equal(result.agent_tui_launch.terminal_rendering.status, 'not_admitted_for_runtime_slice');
+  assert.match(result.agent_tui_launch.terminal_rendering.reason, /without alternate screen/);
+  assert.equal(result.agent_tui_launch.provider_execution_enabled, false);
+  assert.equal(result.agent_tui_launch.provider_execution.status, 'not_admitted_for_runtime_slice');
+  assert.equal(result.agent_tui_launch.provider_execution.adapter_contract, 'not_implemented');
+  assert.equal(result.agent_tui_launch.provider_execution.dispatch_authority, 'withheld');
+  assert.equal(result.agent_tui_launch.provider_execution.promotion_gate, 'agent_tui_provider_adapter_promotion_gate');
+  assert.deepEqual(result.agent_tui_launch.provider_execution.required_before_admission, [
+    'real_provider_adapter_contract',
+    'provider_boundary_evidence_contract',
+    'streaming_turn_output_contract',
+    'tool_call_boundary_contract',
+  ]);
+  assert.match(result.agent_tui_launch.provider_execution.reason, /without dispatching provider work/);
+  assert.equal(result.agent_tui_launch.mcp_fabric_access_enabled, false);
+  assert.equal(result.agent_tui_launch.mcp_fabric_access.status, 'not_admitted_for_runtime_slice');
+  assert.equal(result.agent_tui_launch.mcp_fabric_access.client_contract, 'not_implemented');
+  assert.equal(result.agent_tui_launch.mcp_fabric_access.tool_visibility_authority, 'withheld');
+  assert.equal(result.agent_tui_launch.mcp_fabric_access.promotion_gate, 'agent_tui_rust_mcp_fabric_client_promotion_gate');
+  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'mcp_fabric_client_admission').status, 'partial');
+  assert.match(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'mcp_fabric_client_admission').current_evidence, /live Site rollout remains pending/);
+  assert.deepEqual(result.agent_tui_launch.mcp_fabric_access.required_before_admission, [
+    'rust_mcp_fabric_client_contract',
+    'site_mcp_policy_visibility_contract',
+    'tool_call_request_response_contract',
+    'tool_call_evidence_contract',
+  ]);
+  assert.equal(result.agent_tui_launch.mcp_fabric_access.site_mcp_fabric, path.join(siteRoot, '.ai', 'mcp'));
+  assert.match(result.agent_tui_launch.mcp_fabric_access.reason, /does not read Site MCP fabric/);
+  assert.equal(result.agent_tui_launch.site_rollout_acceptance.schema, 'narada.agent_tui.site_rollout_acceptance.v0');
+  assert.equal(result.agent_tui_launch.site_rollout_acceptance.status, 'defined_not_executed');
+  assert.equal(result.agent_tui_launch.site_rollout_acceptance.default_promotion_allowed, false);
+  assert.deepEqual(result.agent_tui_launch.site_rollout_acceptance.known_sites.map((site) => site.site_id), [
+    'narada-proper',
+    'narada-andrey',
+    'narada-staccato',
+    'narada-revolution',
+    'narada-timour-marketing-agent',
+    'narada-utz',
+    'narada-sonar',
+    'smart-scheduling',
+    'thoughts-project',
+  ]);
+  assert.equal(result.agent_tui_launch.site_rollout_acceptance.known_sites[0].launch_root, siteRoot);
+  assert.ok(result.agent_tui_launch.site_rollout_acceptance.required_common_evidence.includes('agent-cli baseline launch result'));
+  assert.ok(result.agent_tui_launch.site_rollout_acceptance.not_admitted_until.includes('agent-tui remains non-default while any known Site is pending or blocked'));
+  assert.equal(result.runtime_args[0], 'run');
+  assert.equal(result.runtime_args.includes('--manifest-path'), true);
+  assert.equal(result.runtime_args.includes(path.join(siteRoot, 'packages', 'agent-tui', 'Cargo.toml')), true);
+  assert.equal(result.runtime_args.includes('--interactive-step-once'), true);
+  assert.equal(result.runtime_args.includes('--interactive-smoke-loop'), false);
+  assert.equal(result.runtime_args.includes('--persistent-smoke-session'), false);
+  assert.equal(result.runtime_args.includes('--runtime-loop'), false);
+  assert.equal(result.runtime_args.includes('--max-steps'), false);
+  assert.equal(result.runtime_args.includes('1'), false);
+  assert.equal(result.runtime_args.includes(result.agent_tui_launch.control_path), true);
+  assert.equal(result.runtime_args.includes('--session-jsonl'), true);
+  assert.equal(result.runtime_args.includes(result.agent_tui_launch.session_path), true);
+  assert.match(result.exec_command, /^cargo run /);
+  assert.equal(result.native_execution_policy.native_shell.status, 'not_admitted_for_runtime_slice');
+  assert.equal(result.native_execution_policy.policy_aware_shell_mcp.status, 'not_admitted_for_runtime_slice');
+  assert.match(result.mcp_tool_approval.note, /bounded non-terminal smoke step/);
+});
+
+test('agent-tui exec materializes session and control files before runtime spawn', () => {
+  const siteRoot = tempSite();
+  const pcSiteRoot = tempPcSite();
+  const { result } = buildLaunchPlanFromArgs({
+    identity: 'narada.resident',
+    runtime: 'agent-tui',
+    exec: true,
+    dry_run: false,
+  }, { siteRoot, pcSiteRoot, now: '2026-05-30T12:05:00.000Z' });
+
+  const materialized = materializeAgentTuiLaunchFiles(result);
+
+  assert.equal(materialized.status, 'materialized');
+  assert.equal(fs.existsSync(result.agent_tui_launch.session_dir), true);
+  assert.equal(fs.existsSync(result.agent_tui_launch.control_path), true);
+  assert.equal(fs.existsSync(result.agent_tui_launch.session_path), true);
+  assert.equal(fs.readFileSync(result.agent_tui_launch.control_path, 'utf8'), '');
+  assert.equal(fs.readFileSync(result.agent_tui_launch.session_path, 'utf8'), '');
+
+  fs.writeFileSync(result.agent_tui_launch.control_path, '{"kind":"test"}\n', 'utf8');
+  materializeAgentTuiLaunchFiles(result);
+  assert.equal(fs.readFileSync(result.agent_tui_launch.control_path, 'utf8'), '{"kind":"test"}\n');
 });
 
 test('agent-cli launch reports interactive runtime and Site-local session paths', () => {
@@ -356,6 +531,456 @@ test('agent-cli launch reports interactive runtime and Site-local session paths'
   assert.equal(result.native_execution_policy.native_shell.status, 'not_admitted_for_runtime_slice');
 });
 
+test('agent-tui rollout acceptance command reports known Site blockers without launching carriers', () => {
+  const siteRoot = tempSite();
+  const report = buildAgentTuiRolloutAcceptanceReport({
+    siteRoot,
+    now: '2026-05-30T13:00:00.000Z',
+  });
+
+  assert.equal(report.schema, 'narada.agent_tui.site_rollout_acceptance_report.v0');
+  assert.equal(report.status, 'blocked');
+  assert.equal(report.source_launch_runtime, 'agent-tui');
+  assert.equal(report.source_launch_status, 'planned');
+  assert.equal(report.default_promotion_allowed, false);
+  assert.equal(report.sites[0].agent_cli_evidence_status, 'not_recorded');
+  assert.equal(report.sites[0].agent_tui_evidence_status, 'not_recorded');
+  assert.deepEqual(report.sites.map((site) => site.site_id), [
+    'narada-proper',
+    'narada-andrey',
+    'narada-staccato',
+    'narada-revolution',
+    'narada-timour-marketing-agent',
+    'narada-utz',
+    'narada-sonar',
+    'smart-scheduling',
+    'thoughts-project',
+  ]);
+  assert.equal(report.sites[0].status, 'pending_live_acceptance');
+  assert.equal(report.sites[0].blocker, 'side_by_side_launch_evidence_not_recorded');
+  assert.equal(report.sites[0].launch_root_source, 'primary_site_root');
+  assert.equal(report.sites[1].status, 'pending_site_root_resolution');
+  assert.equal(report.sites[1].blocker, 'launch_root_not_known_to_narada_proper_acceptance_command');
+  assert.equal(report.summary.accepted, 0);
+  assert.equal(report.summary.pending, 9);
+  assert.equal(report.summary.blocked, 0);
+  assert.equal(report.summary.total, 9);
+
+  const outputPath = defaultAgentTuiRolloutOutputPath(siteRoot);
+  assert.match(outputPath, /agent-tui-rollout-acceptance[\\/]latest\.json$/);
+  const writtenPath = writeAgentTuiRolloutReport(report, outputPath);
+  assert.equal(writtenPath, outputPath);
+  assert.equal(JSON.parse(fs.readFileSync(outputPath, 'utf8')).schema, report.schema);
+});
+
+test('agent-tui rollout acceptance resolves operator supplied known Site roots', () => {
+  const siteRoot = tempSite();
+  const sonarRoot = tempSite();
+  const smartSchedulingRoot = path.join(os.tmpdir(), 'narada-missing-smart-scheduling-root');
+  const parsed = parseKnownSiteRoot(`narada-sonar=${sonarRoot}`);
+  assert.deepEqual(parsed, {
+    siteId: 'narada-sonar',
+    root: sonarRoot,
+  });
+  const args = parseAgentTuiRolloutArgs([
+    '--site-root', siteRoot,
+    '--known-site-root', `narada-sonar=${sonarRoot}`,
+    '--known-site-root', `smart-scheduling=${smartSchedulingRoot}`,
+    '--json',
+  ]);
+
+  const report = buildAgentTuiRolloutAcceptanceReport({
+    siteRoot: args.siteRoot,
+    knownSiteRoots: args.knownSiteRoots,
+    now: '2026-05-30T13:15:00.000Z',
+  });
+
+  const sonar = report.sites.find((site) => site.site_id === 'narada-sonar');
+  const smartScheduling = report.sites.find((site) => site.site_id === 'smart-scheduling');
+  assert.equal(sonar.launch_root, sonarRoot);
+  assert.equal(sonar.launch_root_source, 'operator_known_site_root');
+  assert.equal(sonar.status, 'pending_live_acceptance');
+  assert.equal(smartScheduling.launch_root, smartSchedulingRoot);
+  assert.equal(smartScheduling.launch_root_source, 'operator_known_site_root');
+  assert.equal(smartScheduling.status, 'blocked_site_root_missing');
+  assert.equal(smartScheduling.blocker, 'launch_root_does_not_exist');
+  assert.equal(report.summary.pending, 8);
+  assert.equal(report.summary.blocked, 1);
+});
+
+test('agent-tui rollout acceptance admits side-by-side evidence paths per Site', () => {
+  const siteRoot = tempSite();
+  const sonarRoot = tempSite();
+  const agentCliEvidencePath = path.join(sonarRoot, 'agent-cli-launch-result.json');
+  const agentTuiEvidencePath = path.join(sonarRoot, 'agent-tui-launch-result.json');
+  fs.writeFileSync(agentCliEvidencePath, `${JSON.stringify({
+    schema: 'narada.agent_start.result.v0',
+    status: 'launching',
+    dry_run: false,
+    exec: true,
+    agent_start_event_authoritative: true,
+    carrier_session_authoritative: true,
+    runtime: 'agent-cli',
+    runtime_kind: 'agent_cli_carrier',
+    agent_start_event: 'agent_start_test_cli',
+    carrier_session_id: 'carrier_test_cli',
+    required_environment: {
+      NARADA_SITE_ROOT: sonarRoot,
+    },
+    agent_cli_launch: {
+      session_path: path.join(sonarRoot, '.narada', 'crew', 'nars-sessions', 'cli', 'session.jsonl'),
+      control_path: path.join(sonarRoot, '.narada', 'crew', 'nars-sessions', 'cli', 'control.jsonl'),
+    },
+  })}\n`, 'utf8');
+  fs.writeFileSync(agentTuiEvidencePath, `${JSON.stringify({
+    schema: 'narada.agent_start.result.v0',
+    status: 'launching',
+    dry_run: false,
+    exec: true,
+    agent_start_event_authoritative: true,
+    carrier_session_authoritative: true,
+    runtime: 'agent-tui',
+    runtime_kind: 'agent_tui_carrier',
+    agent_start_event: 'agent_start_test_tui',
+    carrier_session_id: 'carrier_test_tui',
+    required_environment: {
+      NARADA_SITE_ROOT: sonarRoot,
+    },
+    agent_tui_launch: {
+      admitted_runtime_slice: 'bounded_non_terminal_interactive_step_once',
+      session_path: path.join(sonarRoot, '.narada', 'crew', 'nars-sessions', 'tui', 'session.jsonl'),
+      control_path: path.join(sonarRoot, '.narada', 'crew', 'nars-sessions', 'tui', 'control.jsonl'),
+    },
+  })}\n`, 'utf8');
+  assert.deepEqual(parseSiteEvidence(`narada-sonar=${agentCliEvidencePath}`, 'invalid_agent_cli_evidence'), {
+    siteId: 'narada-sonar',
+    path: agentCliEvidencePath,
+  });
+  assert.equal(validateEvidenceJson(agentCliEvidencePath, 'agent-cli').status, 'valid');
+  assert.equal(validateEvidenceJson(agentTuiEvidencePath, 'agent-tui').status, 'valid');
+
+  const args = parseAgentTuiRolloutArgs([
+    '--site-root', siteRoot,
+    '--known-site-root', `narada-sonar=${sonarRoot}`,
+    '--agent-cli-evidence', `narada-sonar=${agentCliEvidencePath}`,
+    '--agent-tui-evidence', `narada-sonar=${agentTuiEvidencePath}`,
+  ]);
+  const report = buildAgentTuiRolloutAcceptanceReport({
+    siteRoot: args.siteRoot,
+    knownSiteRoots: args.knownSiteRoots,
+    agentCliEvidence: args.agentCliEvidence,
+    agentTuiEvidence: args.agentTuiEvidence,
+    now: '2026-05-30T13:30:00.000Z',
+  });
+
+  const sonar = report.sites.find((site) => site.site_id === 'narada-sonar');
+  assert.equal(sonar.status, 'accepted');
+  assert.equal(sonar.blocker, null);
+  assert.equal(sonar.agent_cli_evidence_status, 'valid');
+  assert.equal(sonar.agent_tui_evidence_status, 'valid');
+  assert.equal(sonar.agent_cli_evidence_validation.agent_start_event, 'agent_start_test_cli');
+  assert.equal(sonar.agent_tui_evidence_validation.agent_start_event, 'agent_start_test_tui');
+  assert.equal(sonar.agent_cli_evidence_validation.site_root, sonarRoot);
+  assert.equal(sonar.agent_cli_evidence_path, agentCliEvidencePath);
+  assert.equal(sonar.agent_tui_evidence_path, agentTuiEvidencePath);
+  assert.equal(report.summary.accepted, 1);
+  assert.equal(report.status, 'blocked');
+  assert.equal(report.default_promotion_allowed, false);
+});
+
+test('agent-tui rollout acceptance admits Site launcher session-start evidence for agent-cli baseline', () => {
+  const siteRoot = tempSite();
+  const sonarRoot = tempSite();
+  const agentCliEvidencePath = path.join(sonarRoot, 'agent-cli-session-start.json');
+  fs.writeFileSync(agentCliEvidencePath, `${JSON.stringify({
+    schema: 'narada.agent_context.session_start.v0',
+    status: 'materialized',
+    agent_start_event: 'evt-2026-05-31_00-04-25_28290811',
+    identity: 'sonar.resident',
+    runtime: 'agent-cli',
+    runtime_substrate_kind: 'agent-cli',
+    required_environment: {
+      NARADA_SITE_ROOT: sonarRoot,
+      NARADA_CARRIER_SESSION_ID: 'carrier_20260531000426_a1bbafaa0f22',
+    },
+    runtime_args: [
+      'D:\\code\\narada\\packages\\agent-cli\\bin\\narada-agent-cli.mjs',
+      '--identity',
+      'sonar.resident',
+      '--session',
+      'carrier_20260531000426_a1bbafaa0f22',
+      '--control-jsonl',
+      path.join(sonarRoot, '.narada', 'crew', 'nars-sessions', 'carrier_20260531000426_a1bbafaa0f22', 'control.jsonl'),
+    ],
+  })}\n`, 'utf8');
+
+  const validation = validateEvidenceJson(agentCliEvidencePath, 'agent-cli', sonarRoot);
+
+  assert.equal(validation.status, 'valid');
+  assert.equal(validation.launch_schema, 'narada.agent_context.session_start.v0');
+  assert.equal(validation.carrier_session_id, 'carrier_20260531000426_a1bbafaa0f22');
+});
+
+test('agent-tui rollout acceptance infers agent-cli control path for wrapped Site launcher evidence', () => {
+  const siteRoot = tempSite();
+  const agentCliEvidencePath = path.join(siteRoot, 'agent-cli-wrapped-session-start.json');
+  fs.writeFileSync(agentCliEvidencePath, `${JSON.stringify({
+    schema: 'narada.agent_context.session_start.v0',
+    status: 'materialized',
+    agent_start_event: 'evt-2026-05-31_00-04-19_e5147cef',
+    identity: 'narada-andrey.resident',
+    runtime: 'agent-cli',
+    runtime_substrate_kind: 'agent-cli',
+    required_environment: {
+      NARADA_SITE_ROOT: siteRoot,
+      NARADA_CARRIER_SESSION_ID: 'carrier_20260531000419_abc123',
+    },
+    runtime_args: [
+      '-File',
+      path.join(siteRoot, 'tools', 'operator-surface-carriers', 'Start-AgentCliSession.ps1'),
+      '-IdentityName',
+      'narada-andrey.resident',
+    ],
+  })}\n`, 'utf8');
+
+  const validation = validateEvidenceJson(agentCliEvidencePath, 'agent-cli', siteRoot);
+
+  assert.equal(validation.status, 'valid');
+  assert.equal(validation.launch_schema, 'narada.agent_context.session_start.v0');
+  assert.equal(validation.carrier_session_id, 'carrier_20260531000419_abc123');
+});
+
+test('agent-tui rollout acceptance blocks missing recorded evidence paths', () => {
+  const siteRoot = tempSite();
+  const missingEvidencePath = path.join(siteRoot, 'missing-agent-tui-evidence.json');
+  const report = buildAgentTuiRolloutAcceptanceReport({
+    siteRoot,
+    agentCliEvidence: { 'narada-proper': missingEvidencePath },
+    agentTuiEvidence: { 'narada-proper': missingEvidencePath },
+    now: '2026-05-30T13:35:00.000Z',
+  });
+
+  const proper = report.sites.find((site) => site.site_id === 'narada-proper');
+  assert.equal(proper.status, 'blocked_evidence_path_missing');
+  assert.equal(proper.blocker, 'recorded_evidence_path_does_not_exist');
+  assert.equal(proper.agent_cli_evidence_status, 'missing');
+  assert.equal(proper.agent_tui_evidence_status, 'missing');
+  assert.equal(report.summary.blocked, 1);
+});
+
+test('agent-tui rollout acceptance blocks evidence from a different Site root', () => {
+  const siteRoot = tempSite();
+  const wrongRoot = tempSite();
+  const agentCliEvidencePath = path.join(siteRoot, 'agent-cli-wrong-root.json');
+  const agentTuiEvidencePath = path.join(siteRoot, 'agent-tui-wrong-root.json');
+  fs.writeFileSync(agentCliEvidencePath, `${JSON.stringify({
+    schema: 'narada.agent_start.result.v0',
+    status: 'launching',
+    dry_run: false,
+    exec: true,
+    agent_start_event_authoritative: true,
+    carrier_session_authoritative: true,
+    runtime: 'agent-cli',
+    runtime_kind: 'agent_cli_carrier',
+    agent_start_event: 'agent_start_wrong_root_cli',
+    carrier_session_id: 'carrier_wrong_root_cli',
+    required_environment: {
+      NARADA_SITE_ROOT: wrongRoot,
+    },
+    agent_cli_launch: {
+      session_path: path.join(wrongRoot, '.narada', 'crew', 'nars-sessions', 'cli', 'session.jsonl'),
+      control_path: path.join(wrongRoot, '.narada', 'crew', 'nars-sessions', 'cli', 'control.jsonl'),
+    },
+  })}\n`, 'utf8');
+  fs.writeFileSync(agentTuiEvidencePath, `${JSON.stringify({
+    schema: 'narada.agent_start.result.v0',
+    status: 'launching',
+    dry_run: false,
+    exec: true,
+    agent_start_event_authoritative: true,
+    carrier_session_authoritative: true,
+    runtime: 'agent-tui',
+    runtime_kind: 'agent_tui_carrier',
+    agent_start_event: 'agent_start_wrong_root_tui',
+    carrier_session_id: 'carrier_wrong_root_tui',
+    required_environment: {
+      NARADA_SITE_ROOT: siteRoot,
+    },
+    agent_tui_launch: {
+      admitted_runtime_slice: 'bounded_non_terminal_interactive_step_once',
+      session_path: path.join(siteRoot, '.narada', 'crew', 'nars-sessions', 'tui', 'session.jsonl'),
+      control_path: path.join(siteRoot, '.narada', 'crew', 'nars-sessions', 'tui', 'control.jsonl'),
+    },
+  })}\n`, 'utf8');
+
+  const report = buildAgentTuiRolloutAcceptanceReport({
+    siteRoot,
+    agentCliEvidence: { 'narada-proper': agentCliEvidencePath },
+    agentTuiEvidence: { 'narada-proper': agentTuiEvidencePath },
+    now: '2026-05-30T13:45:00.000Z',
+  });
+
+  const proper = report.sites.find((site) => site.site_id === 'narada-proper');
+  assert.equal(proper.status, 'blocked_evidence_invalid');
+  assert.equal(proper.agent_cli_evidence_status, 'invalid_site_root');
+  assert.equal(proper.agent_cli_evidence_validation.reason, 'site_root_mismatch');
+  assert.equal(proper.agent_cli_evidence_validation.expected_site_root, siteRoot);
+  assert.equal(proper.agent_cli_evidence_validation.actual_site_root, wrongRoot);
+});
+
+test('agent-tui rollout acceptance blocks incomplete launch evidence', () => {
+  const siteRoot = tempSite();
+  const agentCliEvidencePath = path.join(siteRoot, 'agent-cli-incomplete.json');
+  const agentTuiEvidencePath = path.join(siteRoot, 'agent-tui-complete.json');
+  fs.writeFileSync(agentCliEvidencePath, `${JSON.stringify({
+    schema: 'narada.agent_start.result.v0',
+    status: 'launching',
+    dry_run: false,
+    exec: true,
+    agent_start_event_authoritative: true,
+    carrier_session_authoritative: true,
+    runtime: 'agent-cli',
+    runtime_kind: 'agent_cli_carrier',
+    carrier_session_id: 'carrier_incomplete_cli',
+    required_environment: {
+      NARADA_SITE_ROOT: siteRoot,
+    },
+    agent_cli_launch: {
+      session_path: path.join(siteRoot, '.narada', 'crew', 'nars-sessions', 'cli', 'session.jsonl'),
+      control_path: path.join(siteRoot, '.narada', 'crew', 'nars-sessions', 'cli', 'control.jsonl'),
+    },
+  })}\n`, 'utf8');
+  fs.writeFileSync(agentTuiEvidencePath, `${JSON.stringify({
+    schema: 'narada.agent_start.result.v0',
+    status: 'launching',
+    dry_run: false,
+    exec: true,
+    agent_start_event_authoritative: true,
+    carrier_session_authoritative: true,
+    runtime: 'agent-tui',
+    runtime_kind: 'agent_tui_carrier',
+    agent_start_event: 'agent_start_complete_tui',
+    carrier_session_id: 'carrier_complete_tui',
+    required_environment: {
+      NARADA_SITE_ROOT: siteRoot,
+    },
+    agent_tui_launch: {
+      admitted_runtime_slice: 'bounded_non_terminal_interactive_step_once',
+      session_path: path.join(siteRoot, '.narada', 'crew', 'nars-sessions', 'tui', 'session.jsonl'),
+      control_path: path.join(siteRoot, '.narada', 'crew', 'nars-sessions', 'tui', 'control.jsonl'),
+    },
+  })}\n`, 'utf8');
+
+  const report = buildAgentTuiRolloutAcceptanceReport({
+    siteRoot,
+    agentCliEvidence: { 'narada-proper': agentCliEvidencePath },
+    agentTuiEvidence: { 'narada-proper': agentTuiEvidencePath },
+    now: '2026-05-30T13:50:00.000Z',
+  });
+
+  const proper = report.sites.find((site) => site.site_id === 'narada-proper');
+  assert.equal(proper.status, 'blocked_evidence_invalid');
+  assert.equal(proper.agent_cli_evidence_status, 'invalid_launch_identity');
+  assert.equal(proper.agent_cli_evidence_validation.reason, 'agent_start_event_required');
+});
+
+test('agent-tui rollout acceptance blocks dry-run launch evidence', () => {
+  const siteRoot = tempSite();
+  const agentCliEvidencePath = path.join(siteRoot, 'agent-cli-dry-run.json');
+  const agentTuiEvidencePath = path.join(siteRoot, 'agent-tui-live.json');
+  fs.writeFileSync(agentCliEvidencePath, `${JSON.stringify({
+    schema: 'narada.agent_start.result.v0',
+    status: 'planned',
+    dry_run: true,
+    exec: true,
+    agent_start_event_authoritative: false,
+    carrier_session_authoritative: false,
+    runtime: 'agent-cli',
+    runtime_kind: 'agent_cli_carrier',
+    agent_start_event: 'agent_start_dry_run_cli',
+    carrier_session_id: 'carrier_dry_run_cli',
+    required_environment: {
+      NARADA_SITE_ROOT: siteRoot,
+    },
+    agent_cli_launch: {
+      session_path: path.join(siteRoot, '.narada', 'crew', 'nars-sessions', 'cli', 'session.jsonl'),
+      control_path: path.join(siteRoot, '.narada', 'crew', 'nars-sessions', 'cli', 'control.jsonl'),
+    },
+  })}\n`, 'utf8');
+  fs.writeFileSync(agentTuiEvidencePath, `${JSON.stringify({
+    schema: 'narada.agent_start.result.v0',
+    status: 'launching',
+    dry_run: false,
+    exec: true,
+    agent_start_event_authoritative: true,
+    carrier_session_authoritative: true,
+    runtime: 'agent-tui',
+    runtime_kind: 'agent_tui_carrier',
+    agent_start_event: 'agent_start_live_tui',
+    carrier_session_id: 'carrier_live_tui',
+    required_environment: {
+      NARADA_SITE_ROOT: siteRoot,
+    },
+    agent_tui_launch: {
+      admitted_runtime_slice: 'bounded_non_terminal_interactive_step_once',
+      session_path: path.join(siteRoot, '.narada', 'crew', 'nars-sessions', 'tui', 'session.jsonl'),
+      control_path: path.join(siteRoot, '.narada', 'crew', 'nars-sessions', 'tui', 'control.jsonl'),
+    },
+  })}\n`, 'utf8');
+
+  const report = buildAgentTuiRolloutAcceptanceReport({
+    siteRoot,
+    agentCliEvidence: { 'narada-proper': agentCliEvidencePath },
+    agentTuiEvidence: { 'narada-proper': agentTuiEvidencePath },
+    now: '2026-05-30T13:55:00.000Z',
+  });
+
+  const proper = report.sites.find((site) => site.site_id === 'narada-proper');
+  assert.equal(proper.status, 'blocked_evidence_invalid');
+  assert.equal(proper.agent_cli_evidence_status, 'invalid_launch_status');
+  assert.equal(proper.agent_cli_evidence_validation.reason, 'launch_status_planned_not_accepted');
+});
+
+test('agent-tui rollout acceptance blocks invalid evidence shape', () => {
+  const siteRoot = tempSite();
+  const badAgentCliEvidencePath = path.join(siteRoot, 'bad-agent-cli-evidence.json');
+  const agentTuiEvidencePath = path.join(siteRoot, 'agent-tui-evidence.json');
+  fs.writeFileSync(badAgentCliEvidencePath, '{"schema":"wrong"}\n', 'utf8');
+  fs.writeFileSync(agentTuiEvidencePath, `${JSON.stringify({
+    schema: 'narada.agent_start.result.v0',
+    status: 'launching',
+    dry_run: false,
+    exec: true,
+    agent_start_event_authoritative: true,
+    carrier_session_authoritative: true,
+    runtime: 'agent-tui',
+    runtime_kind: 'agent_tui_carrier',
+    agent_start_event: 'agent_start_invalid_shape_tui',
+    carrier_session_id: 'carrier_invalid_shape_tui',
+    required_environment: {
+      NARADA_SITE_ROOT: siteRoot,
+    },
+    agent_tui_launch: {
+      admitted_runtime_slice: 'bounded_non_terminal_interactive_step_once',
+      session_path: path.join(siteRoot, '.narada', 'crew', 'nars-sessions', 'tui', 'session.jsonl'),
+      control_path: path.join(siteRoot, '.narada', 'crew', 'nars-sessions', 'tui', 'control.jsonl'),
+    },
+  })}\n`, 'utf8');
+
+  const report = buildAgentTuiRolloutAcceptanceReport({
+    siteRoot,
+    agentCliEvidence: { 'narada-proper': badAgentCliEvidencePath },
+    agentTuiEvidence: { 'narada-proper': agentTuiEvidencePath },
+    now: '2026-05-30T13:40:00.000Z',
+  });
+
+  const proper = report.sites.find((site) => site.site_id === 'narada-proper');
+  assert.equal(proper.status, 'blocked_evidence_invalid');
+  assert.equal(proper.blocker, 'recorded_evidence_shape_invalid');
+  assert.equal(proper.agent_cli_evidence_status, 'invalid_shape');
+  assert.equal(proper.agent_cli_evidence_validation.reason, 'unsupported_launch_evidence_schema');
+  assert.equal(report.summary.blocked, 1);
+});
 test('claude-code dry run represents a carrier session without native execution authority', () => {
   const siteRoot = tempSite();
   const pcSiteRoot = tempPcSite();

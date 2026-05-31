@@ -15,7 +15,7 @@ Canonical source:
 D:\code\narada\packages\carrier-action-admission\src\
 ```
 
-`@narada2/agent-cli` and NARS use this package to keep model-selected MCP calls
+`@narada2/agent-cli` and Agent Runtime Server use this package to keep model-selected MCP calls
 from becoming authority merely because a tool exists.
 
 ## Invariant

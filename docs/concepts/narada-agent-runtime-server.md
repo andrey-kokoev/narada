@@ -30,7 +30,7 @@ start durable Agent session
 
 ## De-Arbitrarized Core
 
-The surface phrase "stateful local agent server" bundles several different structures. NARS preserves the following split:
+The surface phrase "stateful local agent server" bundles several different structures. Agent Runtime Server preserves the following split:
 
 | Term | Primitive meaning | Not this |
 | --- | --- | --- |
@@ -41,7 +41,7 @@ The surface phrase "stateful local agent server" bundles several different struc
 | Local tool execution | Requests to admitted local tool surfaces, normally MCP, with structured call/result evidence. | Native unrestricted shell or SDK-private tool execution. |
 | Admission | The authority-bearing decision that a requested mutation, tool use, or effect may proceed. | The model choosing to call a tool. |
 
-NARS is therefore not defined by being interactive or non-interactive. It is defined by this invariant:
+Agent Runtime Server is therefore not defined by being interactive or non-interactive. It is defined by this invariant:
 
 ```text
 same Agent Session
@@ -89,7 +89,7 @@ Intelligence may contribute judgment.
 Authority must remain in governed structure.
 ```
 
-The governed conversion boundary for requested effects is the [`Carrier Action Admission Boundary`](carrier-action-admission-boundary.md). NARS may produce or carry action requests, but that boundary decides whether a request becomes admission, refusal, deferral, or an inert candidate for another authority surface.
+The governed conversion boundary for requested effects is the [`Carrier Action Admission Boundary`](carrier-action-admission-boundary.md). Agent Runtime Server may produce or carry action requests, but that boundary decides whether a request becomes admission, refusal, deferral, or an inert candidate for another authority surface.
 
 ## Required Properties
 
@@ -108,7 +108,7 @@ A Narada Agent Runtime Server must:
 
 ## Turn Lifecycle
 
-A NARS turn has explicit lifecycle state. This prevents raw prompt streaming from silently becoming operational control.
+An Agent Runtime Server turn has explicit lifecycle state. This prevents raw prompt streaming from silently becoming operational control.
 
 ```text
 accepted
@@ -135,11 +135,11 @@ Each turn must record:
 | `events` | Ordered event evidence emitted during the turn. |
 | `terminal_state` | Completion, blockage, interruption, failure, or refusal. |
 
-NARS must serialize turns for one Agent Session unless an explicit concurrency policy exists. Concurrent turn handling is not a default property of the concept.
+Agent Runtime Server must serialize turns for one Agent Session unless an explicit concurrency policy exists. Concurrent turn handling is not a default property of the concept.
 
 ## State Boundary
 
-NARS owns runtime/session state, not operational truth.
+Agent Runtime Server owns runtime/session state, not operational truth.
 
 It may persist:
 
@@ -160,7 +160,7 @@ It must not treat its own state as the source of truth for:
 - Site law or capability grants;
 - durable facts owned by another authority locus.
 
-When NARS needs those objects, it reads or mutates them through the declared authority surfaces and records the crossing.
+When Agent Runtime Server needs those objects, it reads or mutates them through the declared authority surfaces and records the crossing.
 
 ## Non-Claims
 
@@ -223,7 +223,7 @@ The following freedoms are intentionally left explicit rather than hidden in the
 | Tool substrate | MCP stdio, MCP HTTP, Narada-native capability surface, future adapter | Must expose governed call/result evidence. |
 | Concurrency | serialized turns by default, explicit concurrent policy later | Must not permit split-brain mutation or ambiguous terminal state. |
 
-These are parameters, not ontology. Changing one should not change what NARS is.
+These are parameters, not ontology. Changing one should not change what Agent Runtime Server is.
 
 ## Relationship To Agent Carriers
 
@@ -323,7 +323,7 @@ After descent, the remaining decision-relevant freedoms are explicit:
 The required invariant is no longer hidden:
 
 ```text
-NARS is a durable, addressable Agent Session control surface.
+Agent Runtime Server is a durable, addressable Agent Session control surface.
 It may host intelligence.
 It may mediate local tools.
 It does not own operational authority.

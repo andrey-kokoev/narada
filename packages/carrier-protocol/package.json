@@ -1,0 +1,13 @@
+{
+  "name": "@narada2/carrier-protocol",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/carrier-protocol.mjs",
+    "./fixtures/*": "./fixtures/*"
+  },
+  "scripts": {
+    "test": "node --test src/carrier-protocol.test.mjs"
+  }
+}

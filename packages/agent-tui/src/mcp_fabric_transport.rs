@@ -1,0 +1,309 @@
+use crate::mcp_fabric_boundary::{McpFabricBoundary, McpFabricPolicy, McpToolRequest};
+use crate::mcp_json_rpc::McpJsonRpcExchange;
+use crate::{carrier_protocol::SessionEvent, input_queue::SessionEvidenceContext};
+use serde::Deserialize;
+use serde_json::Value;
+use std::collections::{BTreeMap, BTreeSet};
+use std::fs;
+use std::path::Path;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct McpFabricTransportClient {
+    pub config_path: String,
+    pub site_id: Option<String>,
+    pub carrier: Option<String>,
+    pub servers: BTreeMap<String, McpFabricTransportServer>,
+    pub tool_to_server: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct McpFabricTransportServer {
+    pub name: String,
+    pub transport: String,
+    pub command: String,
+    pub args: Vec<String>,
+    pub tools: BTreeSet<String>,
+    pub surface_id: Option<String>,
+    pub target_site_root: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct McpFabricPreparedToolCall {
+    pub server_name: String,
+    pub command: String,
+    pub args: Vec<String>,
+    pub tool_name: String,
+    pub request_event: SessionEvent,
+    pub json_rpc: McpJsonRpcExchange,
+}
+
+#[derive(Debug, Deserialize)]
+struct CarrierConfigFile {
+    site_id: Option<String>,
+    carrier: Option<String>,
+    #[serde(default, rename = "mcpServers")]
+    mcp_servers: BTreeMap<String, RawMcpServer>,
+}
+
+#[derive(Debug, Deserialize)]
+struct RawMcpServer {
+    transport: Option<String>,
+    command: Option<String>,
+    args: Option<Vec<String>>,
+    tools: Option<Vec<String>>,
+    allowed_tools: Option<Vec<String>>,
+    tool_names: Option<Vec<String>>,
+    surface_id: Option<String>,
+    target_site_root: Option<String>,
+}
+
+impl McpFabricTransportClient {
+    pub fn from_path(path: impl AsRef<Path>) -> Result<Self, String> {
+        let path = path.as_ref();
+        let content = fs::read_to_string(path)
+            .map_err(|error| format!("mcp_fabric_config_read_failed:{}:{error}", path.display()))?;
+        Self::from_json_str(path.display().to_string(), &content)
+    }
+
+    pub fn from_json_str(config_path: impl Into<String>, content: &str) -> Result<Self, String> {
+        let config: CarrierConfigFile = serde_json::from_str(content)
+            .map_err(|error| format!("mcp_fabric_config_parse_failed:{error}"))?;
+        let mut servers = BTreeMap::new();
+        let mut tool_to_server = BTreeMap::new();
+        for (name, raw) in config.mcp_servers {
+            let server = McpFabricTransportServer::from_raw(name.clone(), raw)?;
+            for tool in &server.tools {
+                if let Some(previous) = tool_to_server.insert(tool.clone(), name.clone()) {
+                    return Err(format!(
+                        "mcp_fabric_tool_ambiguous:{tool}:{previous}:{name}"
+                    ));
+                }
+            }
+            servers.insert(name, server);
+        }
+        Ok(Self {
+            config_path: config_path.into(),
+            site_id: config.site_id,
+            carrier: config.carrier,
+            servers,
+            tool_to_server,
+        })
+    }
+
+    pub fn policy_from_visible_tools(
+        &self,
+        fabric_root: impl Into<String>,
+        policy_source: impl Into<String>,
+    ) -> McpFabricPolicy {
+        McpFabricPolicy::from_allowed_tools(
+            fabric_root,
+            policy_source,
+            self.tool_to_server.keys().cloned(),
+        )
+    }
+
+    pub fn admitted_boundary(
+        &self,
+        fabric_root: impl Into<String>,
+        policy_source: impl Into<String>,
+    ) -> McpFabricBoundary {
+        McpFabricBoundary::admitted(self.policy_from_visible_tools(fabric_root, policy_source))
+    }
+
+    pub fn resolve_tool(&self, tool_name: &str) -> Result<&McpFabricTransportServer, String> {
+        let Some(server_name) = self.tool_to_server.get(tool_name) else {
+            return Err(format!("mcp_fabric_tool_not_configured:{tool_name}"));
+        };
+        self.servers
+            .get(server_name)
+            .ok_or_else(|| format!("mcp_fabric_server_missing:{server_name}"))
+    }
+
+    pub fn prepare_tool_call(
+        &self,
+        boundary: &McpFabricBoundary,
+        request: &McpToolRequest,
+        arguments: Value,
+        json_rpc_id: u64,
+        context: &SessionEvidenceContext,
+        event_id: impl Into<String>,
+        occurred_at: impl Into<String>,
+    ) -> Result<McpFabricPreparedToolCall, String> {
+        boundary.assert_tool_access(&request.tool_name)?;
+        let server = self.resolve_tool(&request.tool_name)?;
+        let request_event = boundary.tool_request_event(request, context, event_id, occurred_at)?;
+        let json_rpc = McpJsonRpcExchange::for_tool_call(json_rpc_id, request, arguments)?;
+        Ok(McpFabricPreparedToolCall {
+            server_name: server.name.clone(),
+            command: server.command.clone(),
+            args: server.args.clone(),
+            tool_name: request.tool_name.clone(),
+            request_event,
+            json_rpc,
+        })
+    }
+}
+
+impl McpFabricTransportServer {
+    fn from_raw(name: String, raw: RawMcpServer) -> Result<Self, String> {
+        let transport = raw.transport.unwrap_or_else(|| "stdio".to_string());
+        if transport != "stdio" {
+            return Err(format!(
+                "mcp_fabric_transport_unsupported:{name}:{transport}"
+            ));
+        }
+        let command = raw
+            .command
+            .ok_or_else(|| format!("mcp_fabric_server_command_missing:{name}"))?;
+        let tools = raw
+            .tools
+            .or(raw.allowed_tools)
+            .or(raw.tool_names)
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
+        Ok(Self {
+            name,
+            transport,
+            command,
+            args: raw.args.unwrap_or_default(),
+            tools,
+            surface_id: raw.surface_id,
+            target_site_root: raw.target_site_root,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::carrier_protocol::SessionEventKind;
+
+    fn config_json() -> &'static str {
+        r#"{
+          "schema": "narada.mcp.carrier_client_config.v0",
+          "site_id": "narada-sonar",
+          "carrier": "agent-tui",
+          "mcpServers": {
+            "sonar-site-loop": {
+              "transport": "stdio",
+              "command": "node",
+              "args": ["site-loop.mjs"],
+              "tools": ["site_loop_run_once", "site_loop_status"],
+              "surface_id": "sonar.site-loop",
+              "target_site_root": "D:/code/narada.sonar"
+            }
+          }
+        }"#
+    }
+
+    fn context() -> SessionEvidenceContext {
+        SessionEvidenceContext {
+            carrier_session_id: "carrier_fixture_1".to_string(),
+            agent_id: "sonar.resident".to_string(),
+            site_id: "narada-sonar".to_string(),
+            site_root: "D:/code/narada.sonar".to_string(),
+        }
+    }
+
+    #[test]
+    fn parses_policy_bound_site_mcp_config() {
+        let client = McpFabricTransportClient::from_json_str("fixture.mcp.json", config_json())
+            .expect("config parses");
+
+        assert_eq!(client.site_id.as_deref(), Some("narada-sonar"));
+        assert_eq!(client.servers.len(), 1);
+        assert_eq!(
+            client
+                .tool_to_server
+                .get("site_loop_run_once")
+                .map(String::as_str),
+            Some("sonar-site-loop")
+        );
+    }
+
+    #[test]
+    fn derives_admitted_boundary_from_configured_tools() {
+        let client = McpFabricTransportClient::from_json_str("fixture.mcp.json", config_json())
+            .expect("config parses");
+        let boundary = client.admitted_boundary(
+            "D:/code/narada.sonar/.ai/mcp",
+            "fixture.mcp.json:mcpServers",
+        );
+
+        assert!(boundary.assert_tool_access("site_loop_run_once").is_ok());
+        assert_eq!(
+            boundary
+                .assert_tool_access("shell_exec")
+                .expect_err("not visible"),
+            "mcp_tool_not_visible:shell_exec:fixture.mcp.json:mcpServers"
+        );
+    }
+
+    #[test]
+    fn prepares_tool_call_without_spawning_transport() {
+        let client = McpFabricTransportClient::from_json_str("fixture.mcp.json", config_json())
+            .expect("config parses");
+        let boundary = client.admitted_boundary(
+            "D:/code/narada.sonar/.ai/mcp",
+            "fixture.mcp.json:mcpServers",
+        );
+        let call = client
+            .prepare_tool_call(
+                &boundary,
+                &McpToolRequest {
+                    tool_name: "site_loop_run_once".to_string(),
+                    arguments_summary: "{}".to_string(),
+                    arguments_ref: None,
+                    requesting_agent_id: "sonar.resident".to_string(),
+                },
+                serde_json::json!({}),
+                7,
+                &context(),
+                "session_event_tool_request_1",
+                "2026-05-30T00:00:00.000Z",
+            )
+            .expect("tool call prepared");
+
+        assert_eq!(call.server_name, "sonar-site-loop");
+        assert_eq!(call.command, "node");
+        assert_eq!(call.args, vec!["site-loop.mjs".to_string()]);
+        assert_eq!(call.tool_name, "site_loop_run_once");
+        assert_eq!(call.json_rpc.request.method, "tools/call");
+        assert!(call.json_rpc.request_line.contains("\"id\":7"));
+        assert_eq!(
+            call.request_event.event_kind,
+            SessionEventKind::ToolCallRequested
+        );
+    }
+
+    #[test]
+    fn rejects_unconfigured_tools_even_when_boundary_would_allow_them() {
+        let client = McpFabricTransportClient::from_json_str("fixture.mcp.json", config_json())
+            .expect("config parses");
+        let boundary = McpFabricBoundary::admitted(McpFabricPolicy::from_allowed_tools(
+            "D:/code/narada.sonar/.ai/mcp",
+            "manual_test_policy",
+            ["task_lifecycle_next"],
+        ));
+
+        let error = client
+            .prepare_tool_call(
+                &boundary,
+                &McpToolRequest {
+                    tool_name: "task_lifecycle_next".to_string(),
+                    arguments_summary: "{}".to_string(),
+                    arguments_ref: None,
+                    requesting_agent_id: "sonar.resident".to_string(),
+                },
+                serde_json::json!({}),
+                8,
+                &context(),
+                "session_event_tool_request_2",
+                "2026-05-30T00:00:00.000Z",
+            )
+            .expect_err("transport config rejects missing tool");
+
+        assert_eq!(error, "mcp_fabric_tool_not_configured:task_lifecycle_next");
+    }
+}

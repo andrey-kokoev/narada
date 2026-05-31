@@ -31,6 +31,7 @@ import {
   formatProgressStatus,
   formatTimestamp,
   formatToolResultContent,
+  handleInteractiveControlLine,
   handleSlashCommand,
   inputRecordDisplayLabel,
   normalizeDisplayTerms,
@@ -45,6 +46,7 @@ import {
   parseAnthropicMessagesResponse,
   parseCodexExecJsonLine,
   parseNaradaToolCall,
+  printAgentMessage,
   renderMarkdownForTerminal,
   rewriteSubmittedPromptForTest,
   runConversationTurn,
@@ -104,6 +106,7 @@ assert.deepEqual(buildProgrammaticInputs({ messages: ['sys'], systemDirective: t
   { content: 'sys', source: 'system_directive', authority_ref: null },
 ]);
 assert.equal(inputRecordDisplayLabel({ source: 'operator_directive' }), 'operator directive -> narada.architect');
+assert.equal(inputRecordDisplayLabel({ source: 'operator_steering' }), 'operator steering -> narada.architect');
 assert.equal(inputRecordDisplayLabel({ source: 'system_directive' }), 'system directive');
 assert.deepEqual(normalizeInputRecord('typed message'), { content: 'typed message', source: 'manual_operator' });
 const normalizedEvent = normalizeInputEvent(
@@ -112,6 +115,8 @@ const normalizedEvent = normalizeInputEvent(
 );
 assert.equal(normalizedEvent.source, 'system_directive');
 assert.equal(normalizedEvent.transport, 'control_jsonl');
+assert.equal(normalizedEvent.source_kind, 'system');
+assert.equal(normalizedEvent.delivery_mode, 'admit_for_current_turn');
 assert.equal(normalizedEvent.directive_id, 'dir_1');
 assert.match(normalizedEvent.event_id, /^input_/);
 const receiptEvidence = directiveReceiptEvidence(normalizedEvent, {
@@ -143,6 +148,13 @@ assert.equal(deferredNotice, 'queued-system:1');
 defer = false;
 await deferredQueue.drainUntilIdle();
 assert.equal(deferredQueue.pendingCount, 0);
+const abandonedQueue = createInputQueue({ drain: async () => ({ terminal_state: 'completed' }) });
+await abandonedQueue.enqueue(normalizeInputEvent({ content: 'abandon me', source: 'operator_steering' }, { transport: 'terminal' }));
+assert.equal(abandonedQueue.pendingCount, 1);
+const abandoned = abandonedQueue.finalizeSession();
+assert.equal(abandoned.length, 1);
+assert.equal(abandonedQueue.pendingCount, 0);
+assert.deepEqual(abandonedQueue.finalizeSession(), []);
 assert.equal(shouldDeferInteractiveInput({ source: 'manual_operator' }, { promptState: { active: true } }), false);
 assert.equal(shouldDeferInteractiveInput({ source: 'system_directive' }, { rl: { line: '' }, promptState: { active: true } }), false);
 assert.equal(shouldDeferInteractiveInput({ source: 'system_directive' }, { rl: { line: '   ' }, promptState: { active: true } }), false);
@@ -168,6 +180,34 @@ watcher.stop();
 assert.equal(controlEvents.length, 1);
 assert.equal(controlEvents[0].directive_id, 'dir_partial');
 rmSync(controlJsonlDir, { recursive: true, force: true });
+const nativeControlEvents = [];
+const nativeControlQueue = createInputQueue({
+  drain: async (event) => { nativeControlEvents.push(event); return { terminal_state: 'completed' }; },
+});
+await handleInteractiveControlLine(JSON.stringify({
+  schema: 'narada.carrier.control.input_event.v1',
+  control_event_id: 'control_native_1',
+  input_event_id: 'input_native_1',
+  written_at: '2026-05-30T00:00:00.000Z',
+  input: {
+    schema: 'narada.carrier.input_event.v1',
+    event_id: 'input_native_1',
+    source_kind: 'system',
+    source_id: 'narada-proper.system.directive_emitter',
+    transport: 'control_jsonl',
+    delivery_mode: 'admit_for_current_turn',
+    hold_condition: null,
+    content: 'native control directive',
+    created_at: '2026-05-30T00:00:00.000Z',
+    authority_ref: 'auth_native',
+    directive_id: 'dir_native',
+    metadata: { directive_provenance: { kind: 'system_directive' } },
+  },
+}), { inputQueue: nativeControlQueue });
+assert.equal(nativeControlEvents.length, 1);
+assert.equal(nativeControlEvents[0].source, 'system_directive');
+assert.equal(nativeControlEvents[0].source_kind, 'system');
+assert.equal(nativeControlEvents[0].directive_id, 'dir_native');
 assert.deepEqual(removeInvalidToolHistory([
   { role: 'user', content: 'run startup sequence' },
   { role: 'tool', content: '{}', tool_call_id: 'orphan:0' },
@@ -266,16 +306,28 @@ assert.equal(normalizeDisplayTerms('authority_locus: narada_proper and authority
 assert.equal(normalizeDisplayTerms('authority_locus: `narada_proper`'), 'authority locus: `narada_proper`');
 assert.equal(renderMarkdownForTerminal('  ```powershell\n    narada\n  ```').includes('```'), false);
 assert.equal(renderMarkdownForTerminal('  ```powershell\n    narada\n  ```').includes('narada'), true);
+const originalConsoleLog = console.log;
+const printedAgentMessages = [];
+console.log = (value = '') => { printedAgentMessages.push(String(value)); };
+try {
+  assert.equal(printAgentMessage('   \x1b[0m   '), false);
+  assert.deepEqual(printedAgentMessages, []);
+  assert.equal(printAgentMessage('hello'), true);
+  assert.equal(printedAgentMessages.length, 1);
+  assert.equal(stripAnsiForTest(printedAgentMessages[0]).includes('narada.architect:\n  hello'), true);
+} finally {
+  console.log = originalConsoleLog;
+}
 assert.equal(stripAnsiForTest(toolDirectionLabel('invoke')), 'narada.architect -> agent-cli');
 assert.equal(stripAnsiForTest(toolDirectionLabel('result')), 'agent-cli -> narada.architect');
 assert.equal(shouldSuppressMcpStderr('(node:1) ExperimentalWarning: SQLite is an experimental feature and might change at any time'), true);
 assert.equal(shouldSuppressMcpStderr('(Use `node --trace-warnings ...` to show where the warning was created)'), true);
 assert.equal(shouldSuppressMcpStderr('real MCP server error'), false);
 const fixedTimestamp = new Date('2026-05-28T16:37:21Z');
-assert.equal(stripAnsiForTest(rewriteSubmittedPromptForTest('operator -> narada.architect', 'short', 120, fixedTimestamp)).replace(/\r/g, ''), 'operator -> narada.architect: short\n  2026-05-28Z16:37\n');
+assert.equal(stripAnsiForTest(rewriteSubmittedPromptForTest('operator -> narada.architect', 'short', 120, fixedTimestamp)).replace(/\r/g, ''), '\noperator -> narada.architect: short\n  2026-05-28Z16:37\n');
 assert.equal(
   stripAnsiForTest(rewriteSubmittedPromptForTest('operator -> narada.architect', 'review what has been going on in commits since checkpoint', 64, fixedTimestamp)).replace(/\r/g, ''),
-  'operator -> narada.architect: review what has been going on in\n  commits since checkpoint\n  2026-05-28Z16:37\n'
+  '\noperator -> narada.architect: review what has been going on in\n  commits since checkpoint\n  2026-05-28Z16:37\n'
 );
 rmSync(tempDir, { recursive: true, force: true });
 
@@ -494,6 +546,18 @@ assert.equal(await handleSlashCommand('/help', { mcpServers: {}, allTools: [] })
 assert.equal(await handleSlashCommand('/bad', { mcpServers: {}, allTools: [] }), 'handled');
 assert.equal(await handleSlashCommand('plain message', { mcpServers: {}, allTools: [] }), 'none');
 assert.equal(await handleSlashCommand('/exit', { mcpServers: {}, allTools: [] }), 'exit');
+const slashQueue = createInputQueue({ drain: async () => ({ terminal_state: 'completed' }) });
+await slashQueue.enqueue(normalizeInputEvent({ content: 'first steering', source: 'operator_steering' }, { transport: 'terminal' }));
+await slashQueue.enqueue(normalizeInputEvent({ content: 'system held', source: 'system_directive' }, { transport: 'control_jsonl' }));
+await slashQueue.enqueue(normalizeInputEvent({ content: 'second steering', source: 'operator_steering' }, { transport: 'terminal' }));
+assert.equal(await handleSlashCommand('/queue', { mcpServers: {}, allTools: [], inputQueue: slashQueue }), 'handled');
+assert.equal(slashQueue.pendingCount, 3);
+assert.equal(await handleSlashCommand('/queue drop 2', { mcpServers: {}, allTools: [], inputQueue: slashQueue }), 'handled');
+assert.equal(slashQueue.pendingCount, 2);
+assert.equal(slashQueue.pendingOperatorDirectiveCount, 1);
+assert.equal(await handleSlashCommand('/queue clear', { mcpServers: {}, allTools: [], inputQueue: slashQueue }), 'handled');
+assert.equal(slashQueue.pendingCount, 1);
+assert.equal(slashQueue.pendingSystemDirectiveCount, 1);
 
 assert.throws(
   () => assertApiKeyConfigured('anthropic-api', ''),

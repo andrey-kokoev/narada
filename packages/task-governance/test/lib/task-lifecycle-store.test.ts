@@ -227,6 +227,8 @@ describe('SqliteTaskLifecycleStore', () => {
       closed_at: null,
       closed_by: null,
       closure_mode: null,
+      relative_priority: 0,
+      priority_reason: null,
       reopened_at: null,
       reopened_by: null,
       continuation_packet_json: null,
