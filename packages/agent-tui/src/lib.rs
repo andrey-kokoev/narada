@@ -16,6 +16,7 @@ pub mod mcp_reusable_process_executor;
 pub mod mcp_runtime_execution;
 pub mod mcp_stdio_process;
 pub mod provider_dispatch;
+pub mod provider_runtime_config;
 pub mod provider_tool_call_bridge;
 pub mod ratatui_renderer;
 pub mod rendering_boundary;

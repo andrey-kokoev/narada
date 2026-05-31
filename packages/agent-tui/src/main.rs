@@ -3,6 +3,7 @@ use narada_agent_tui::composer_view_model::ComposerViewInput;
 use narada_agent_tui::input_queue::{SessionEvidenceContext, TurnState};
 use narada_agent_tui::interactive_runtime::AgentTuiInteractiveRuntime;
 use narada_agent_tui::layout_model::{LayoutConfig, TerminalSize};
+use narada_agent_tui::provider_runtime_config::ProviderRuntimeConfig;
 use narada_agent_tui::runtime_clock::RuntimeClock;
 use narada_agent_tui::runtime_step::RuntimeStep;
 use narada_agent_tui::smoke_runner::{
@@ -16,6 +17,7 @@ use narada_agent_tui::tui_render_loop::{
     run_injected_interactive_loop, AgentTuiLoopState, RuntimeClockInteractiveSource,
     TerminalInputTickSource,
 };
+use std::collections::BTreeMap;
 use std::env;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -158,6 +160,7 @@ fn executable_candidates(name: &str) -> Vec<String> {
 }
 
 fn print_scaffold(args: &Args) {
+    let provider_config = provider_config_from_process_env();
     println!("narada-agent-tui scaffold");
     println!("identity: {}", args.identity.as_deref().unwrap_or(""));
     println!("session: {}", args.session.as_deref().unwrap_or(""));
@@ -174,6 +177,34 @@ fn print_scaffold(args: &Args) {
     if let Some(path) = &args.session_jsonl {
         println!("session_jsonl: {}", path.display());
     }
+    println!("provider_status: {}", provider_config.status.as_str());
+    println!(
+        "provider_execution_enabled: {}",
+        provider_config.provider_execution_enabled
+    );
+    if let Some(provider) = &provider_config.provider {
+        println!("provider: {provider}");
+    }
+    if let Some(model) = &provider_config.model {
+        println!("model: {model}");
+    }
+    if let Some(thinking) = &provider_config.thinking {
+        println!("thinking: {thinking}");
+    }
+    println!(
+        "stream: {}",
+        if provider_config.stream { "on" } else { "off" }
+    );
+    if let Some(reason) = &provider_config.refusal_reason {
+        println!("provider_refusal: {reason}");
+    }
+}
+
+fn provider_config_from_process_env() -> ProviderRuntimeConfig {
+    let env_map = env::vars()
+        .filter(|(key, _)| key.starts_with("NARADA_"))
+        .collect::<BTreeMap<_, _>>();
+    ProviderRuntimeConfig::from_env_map(&env_map)
 }
 
 fn run_runtime_step_once(args: Args) -> Result<(), String> {
