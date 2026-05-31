@@ -74,7 +74,7 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - Agent-start launch metadata keeps Site MCP fabric access disabled and records the missing Rust MCP client, policy visibility, tool request/response, and tool evidence contracts required before admission.
 - Agent-start uses named metadata builders for the shared `agent-tui` terminal, provider, and MCP promotion gates instead of inline ad hoc gate objects.
 - Agent-start promotion metadata includes a machine-readable checklist for Rust test availability, terminal-loop acceptance, carrier command acceptance, rendering/diagnostic boundary acceptance, payload-reference policy, provider adapter admission, MCP fabric client admission, Site rollout acceptance, and launch metadata runtime slice evidence.
-- Agent-start launch metadata includes a concrete `site_rollout_acceptance` matrix for Narada proper, narada-andrey, narada-sonar, and smart-scheduling, with per-Site side-by-side agent-cli/agent-tui evidence requirements and default promotion blocked until acceptance is current.
+- Agent-start launch metadata includes a concrete `site_rollout_acceptance` matrix for all launcher-registry Narada Sites, with per-Site side-by-side agent-cli/agent-tui evidence requirements and default promotion blocked until acceptance is current.
 - `tools/agent-start/agent-tui-rollout-acceptance.mjs` builds a non-launching rollout acceptance report from the launch metadata, accepts explicit `--known-site-root site=path` root resolution, accepts per-Site `--agent-cli-evidence site=path` and `--agent-tui-evidence site=path`, validates evidence as complete live authoritative `narada.agent_start.result.v0` launch packets for the expected runtime, `launching` status, `dry_run=false`, `exec=true`, authoritative agent-start and carrier-session records, event/session IDs, carrier-specific session/control paths, bounded `agent-tui` smoke slice, and matching Site root, marks a Site accepted only when both evidence paths are valid for that Site, names unresolved or missing Site roots and missing, incomplete, or invalid side-by-side evidence, and can write `.narada/crew/agent-tui-rollout-acceptance/latest.json`.
 - Agent-start launch metadata exposes the `agent-tui` Rust toolchain readiness preflight command, expected blocker, and exit-code semantics.
 - Agent-start tests assert production launch does not opt into `--interactive-smoke-loop`, `--persistent-smoke-session`, legacy `--runtime-loop`, or `--max-steps`.
@@ -124,34 +124,32 @@ The rollout scope is the launcher registry, not the earlier four-site pilot. Cur
 - `smart-scheduling`
 - `thoughts-project`
 
-The four-site pilot evidence is accepted for `narada-proper`, `narada-andrey`, `narada-sonar`, and `smart-scheduling`. Promotion is blocked again until the remaining registry Sites have side-by-side `agent-cli` and bounded `agent-tui` evidence.
+All launcher-registry Sites now have accepted side-by-side `agent-cli` and bounded `agent-tui` evidence.
 
-Recorded accepted pilot evidence:
+Recorded accepted rollout evidence:
 
 ```text
 narada-proper agent-cli: D:\code\narada\.narada\crew\agent-start-results\agent_start_20260531_000417547_narada_architect.result.json
 narada-proper agent-tui: D:\code\narada\.narada\crew\agent-start-results\agent_start_20260531_041426614_narada_architect.result.json
 narada-andrey agent-cli: C:\Users\Andrey\Narada\.ai\runtime\agent-start-results\evt-2026-05-31_00-04-19_e5147cef.result.json
 narada-andrey agent-tui: C:\Users\Andrey\Narada\.ai\runtime\agent-start-results\evt-2026-05-31_04-27-29_a23016ab.result.json
+narada-staccato agent-cli: C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Staccato\.narada\.ai\runtime\agent-start-results\evt-2026-05-31_00-04-20_131e872d.result.json
+narada-staccato agent-tui: C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Staccato\.narada\.ai\runtime\agent-start-results\evt-2026-05-31_05-04-35_975e949a.result.json
+narada-revolution agent-cli: C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\!Revolution\.narada\.ai\runtime\agent-start-results\evt-2026-05-31_00-04-22_c13890e1.result.json
+narada-revolution agent-tui: C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\!Revolution\.narada\.ai\runtime\agent-start-results\evt-2026-05-31_05-04-38_77515bed.result.json
+narada-timour-marketing-agent agent-cli: C:\Users\Andrey\Vose Software BE\Timour Koupeev - MarketingAgent\.narada\.ai\runtime\agent-start-results\evt-2026-05-31_00-04-23_466ee6d9.result.json
+narada-timour-marketing-agent agent-tui: C:\Users\Andrey\Vose Software BE\Timour Koupeev - MarketingAgent\.narada\.ai\runtime\agent-start-results\evt-2026-05-31_05-04-41_c370a882.result.json
+narada-utz agent-cli: C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Utz\.narada\.ai\runtime\agent-start-results\evt-2026-05-31_00-04-24_747be7a9.result.json
+narada-utz agent-tui: C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Utz\.narada\.ai\runtime\agent-start-results\evt-2026-05-31_05-04-44_fc733c37.result.json
 narada-sonar agent-cli: D:\code\narada.sonar\.ai\runtime\agent-start-results\evt-2026-05-31_00-04-25_28290811.result.json
-narada-sonar agent-tui: D:\code\narada.sonar\.ai\runtime\agent-start-results\evt-2026-05-31_04-44-09_5121cad2.result.json
+narada-sonar agent-tui: D:\code\narada.sonar\.ai\runtime\agent-start-results\evt-2026-05-31_05-04-28_cb53f734.result.json
 smart-scheduling agent-cli: D:\code\smart-scheduling\.narada\.ai\runtime\agent-start-results\evt-2026-05-31_00-04-26_b975144f.result.json
-smart-scheduling agent-tui: D:\code\smart-scheduling\.narada\.ai\runtime\agent-start-results\evt-2026-05-31_04-44-13_a5aa4cdf.result.json
+smart-scheduling agent-tui: D:\code\smart-scheduling\.narada\.ai\runtime\agent-start-results\evt-2026-05-31_05-04-31_40fb2fd0.result.json
+thoughts-project agent-cli: D:\code\thoughts\.narada\.ai\runtime\agent-start-results\evt-2026-05-31_00-04-27_275473a1.result.json
+thoughts-project agent-tui: D:\code\thoughts\.narada\.ai\runtime\agent-start-results\evt-2026-05-31_05-04-47_8b47a838.result.json
 ```
 
-Remaining registry Sites needing evidence:
-
-```text
-narada-staccato
-narada-revolution
-narada-timour-marketing-agent
-narada-utz
-thoughts-project
-```
-
-Default promotion remains blocked until all launcher-registry Sites have current accepted side-by-side evidence. Provider execution, MCP fabric execution, and terminal promotion remain gated separately.
-
-Default promotion is no longer blocked on named Site side-by-side rollout evidence. Provider execution, MCP fabric execution, and terminal promotion remain gated separately.
+Default promotion is no longer blocked on launcher-registry Site side-by-side rollout evidence. Provider execution, MCP fabric execution, and terminal promotion remain gated separately.
 
 ## Current Verification
 
@@ -267,4 +265,3 @@ node tools\agent-start\agent-tui-rollout-acceptance.mjs `
   --agent-tui-evidence smart-scheduling=<smart-scheduling-agent-tui-launch-result.json> `
   --write
 ```
-
