@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum McpRuntimeAdmissionStatus {
     Disabled,
-    Admitted,
+    Configured,
     Refused,
 }
 
@@ -11,7 +11,7 @@ impl McpRuntimeAdmissionStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Disabled => "disabled",
-            Self::Admitted => "admitted",
+            Self::Configured => "configured",
             Self::Refused => "refused",
         }
     }
@@ -53,7 +53,7 @@ impl McpRuntimeConfig {
         };
 
         Self {
-            status: McpRuntimeAdmissionStatus::Admitted,
+            status: McpRuntimeAdmissionStatus::Configured,
             mcp_fabric_access_enabled: true,
             config_path: Some(config_path),
             site_mcp_fabric: Some(site_mcp_fabric),
@@ -134,15 +134,15 @@ mod tests {
     }
 
     #[test]
-    fn mcp_runtime_admits_explicit_config_and_fabric() {
+    fn mcp_runtime_configures_explicit_config_and_fabric() {
         let config = McpRuntimeConfig::from_env_map(&env(&[
             ("NARADA_AGENT_TUI_ENABLE_MCP_FABRIC", "yes"),
             ("NARADA_AGENT_TUI_MCP_CONFIG", "D:/site/.ai/mcp/config.json"),
             ("NARADA_SITE_MCP_FABRIC", "D:/site/.ai/mcp"),
         ]));
 
-        assert_eq!(config.status, McpRuntimeAdmissionStatus::Admitted);
-        assert_eq!(config.status.as_str(), "admitted");
+        assert_eq!(config.status, McpRuntimeAdmissionStatus::Configured);
+        assert_eq!(config.status.as_str(), "configured");
         assert!(config.mcp_fabric_access_enabled);
         assert_eq!(
             config.config_path.as_deref(),

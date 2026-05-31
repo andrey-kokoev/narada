@@ -49,7 +49,7 @@ fn mcp_runtime_cli_acceptance_reports_refusal_when_enabled_without_config() {
 }
 
 #[test]
-fn mcp_runtime_cli_acceptance_reports_admitted_explicit_mcp_posture() {
+fn mcp_runtime_cli_acceptance_reports_configured_explicit_mcp_posture() {
     let mut command = base_command();
     command
         .env("NARADA_AGENT_TUI_ENABLE_MCP_FABRIC", "true")
@@ -61,7 +61,7 @@ fn mcp_runtime_cli_acceptance_reports_admitted_explicit_mcp_posture() {
 
     let output = stdout(&mut command);
 
-    assert!(output.contains("mcp_status: admitted"));
+    assert!(output.contains("mcp_status: configured"));
     assert!(output.contains("mcp_fabric_access_enabled: true"));
     assert!(output.contains("mcp_config: D:/code/narada.sonar/.ai/mcp/agent-tui.json"));
     assert!(output.contains("site_mcp_fabric: D:/code/narada.sonar/.ai/mcp"));
