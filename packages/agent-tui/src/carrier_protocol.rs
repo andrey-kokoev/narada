@@ -864,6 +864,25 @@ mod tests {
     }
 
     #[test]
+    fn parses_shared_tool_execution_session_event_fixtures() {
+        let tool_call = parse_session_event(include_str!(
+            "../../carrier-protocol/fixtures/tool-call-session-event.json"
+        ))
+        .expect("tool call session fixture parses");
+        assert_eq!(tool_call.event_kind, SessionEventKind::ToolCallRequested);
+        assert_eq!(tool_call.payload["tool_name"], "site_loop_run_once");
+        assert_eq!(tool_call.payload["requesting_agent_id"], "sonar.resident");
+
+        let tool_result = parse_session_event(include_str!(
+            "../../carrier-protocol/fixtures/tool-result-session-event.json"
+        ))
+        .expect("tool result session fixture parses");
+        assert_eq!(tool_result.event_kind, SessionEventKind::ToolResultReceived);
+        assert_eq!(tool_result.payload["tool_name"], "site_loop_run_once");
+        assert_eq!(tool_result.payload["status"], "ok");
+    }
+
+    #[test]
     fn serializes_shared_session_event_fixture_as_jsonl_line() {
         let event = parse_session_event(include_str!(
             "../../carrier-protocol/fixtures/session-event.json"

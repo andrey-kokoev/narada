@@ -107,6 +107,14 @@ assert.deepEqual(providerToolCallFixture.payload, createProviderToolCallPayload(
   tool_name: 'site_loop_run_once',
   arguments_summary: '{}',
 }));
+const toolCallFixture = readFixture('tool-call-session-event.json');
+assert.deepEqual(validateSessionEvent(toolCallFixture), []);
+assert.equal(toolCallFixture.event_kind, 'tool_call_requested');
+assert.equal(toolCallFixture.payload.tool_name, 'site_loop_run_once');
+const toolResultFixture = readFixture('tool-result-session-event.json');
+assert.deepEqual(validateSessionEvent(toolResultFixture), []);
+assert.equal(toolResultFixture.event_kind, 'tool_result_received');
+assert.equal(toolResultFixture.payload.status, 'ok');
 assert.deepEqual(validatePayloadRef(readFixture('payload-ref.json')), []);
 assert.deepEqual(validatePayloadPolicy(readFixture('payload-policy.json')), []);
 
