@@ -278,12 +278,16 @@ mod tests {
     use crate::carrier_protocol::{
         parse_session_event, SessionEvent, SessionEventKind, SESSION_EVENT_SCHEMA,
     };
-    use crate::mcp_runtime_config::McpRuntimeConfig;
+    use crate::mcp_runtime_config::{
+        mcp_config_env_var, mcp_fabric_env_var, site_mcp_fabric_env_var, McpRuntimeConfig,
+    };
     use crate::provider_adapter_admission::ProviderAdapterKind;
+    use crate::provider_adapter_contract::provider_adapter_contract;
     use crate::provider_dispatch::{ProviderOutputRecord, ScriptedProviderAdapter};
     use crate::provider_runtime_config::ProviderRuntimeConfig;
     use crate::session_jsonl::append_session_event;
     use crate::terminal_runtime_config::TerminalRuntimeConfig;
+    use crate::terminal_runtime_contract::terminal_runtime_contract;
     use serde_json::json;
     use std::collections::BTreeMap;
     use std::fs::{read_to_string, remove_file, OpenOptions};
@@ -336,20 +340,23 @@ mod tests {
             },
         }
     }
-
     fn scripted_interactive_provider_adapter(
         outputs: Vec<ProviderOutputRecord>,
     ) -> ScriptedProviderAdapter {
+        let provider_contract = provider_adapter_contract();
         let runtime_config = ProviderRuntimeConfig::from_env_map(&BTreeMap::from([
             (
-                "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION".to_string(),
+                provider_contract.provider_execution_env_var.clone(),
                 "true".to_string(),
             ),
             (
-                "NARADA_INTELLIGENCE_PROVIDER".to_string(),
+                provider_contract.intelligence_provider_env_var.clone(),
                 "codex-subscription".to_string(),
             ),
-            ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
+            (
+                provider_contract.ai_model_env_var.clone(),
+                "gpt-5.5".to_string(),
+            ),
         ]));
         ScriptedProviderAdapter::try_new(runtime_config, ProviderAdapterKind::Scripted, outputs)
             .expect("scripted interactive provider admits configured runtime")
@@ -482,39 +489,41 @@ mod tests {
     fn build_view_reports_configured_provider_mcp_and_terminal_state() {
         let control_path = temp_path("control");
         let session_path = temp_path("session");
+        let provider_contract = provider_adapter_contract();
+        let terminal_contract = terminal_runtime_contract();
         let provider_runtime_config = ProviderRuntimeConfig::from_env_map(&BTreeMap::from([
             (
-                "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION".to_string(),
+                provider_contract.provider_execution_env_var.clone(),
                 "true".to_string(),
             ),
             (
-                "NARADA_INTELLIGENCE_PROVIDER".to_string(),
+                provider_contract.intelligence_provider_env_var.clone(),
                 "codex-subscription".to_string(),
             ),
-            ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
+            (
+                provider_contract.ai_model_env_var.clone(),
+                "gpt-5.5".to_string(),
+            ),
         ]));
         let mcp_runtime_config = McpRuntimeConfig::from_env_map(&BTreeMap::from([
+            (mcp_fabric_env_var().to_string(), "true".to_string()),
             (
-                "NARADA_AGENT_TUI_ENABLE_MCP_FABRIC".to_string(),
-                "true".to_string(),
-            ),
-            (
-                "NARADA_AGENT_TUI_MCP_CONFIG".to_string(),
+                mcp_config_env_var().to_string(),
                 "D:/site/.ai/mcp/config.json".to_string(),
             ),
             (
-                "NARADA_SITE_MCP_FABRIC".to_string(),
+                site_mcp_fabric_env_var().to_string(),
                 "D:/site/.ai/mcp".to_string(),
             ),
         ]));
         let terminal_runtime_config = TerminalRuntimeConfig::from_env_map(&BTreeMap::from([
             (
-                "NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING".to_string(),
+                terminal_contract.terminal_rendering_env_var.clone(),
                 "true".to_string(),
             ),
             (
-                "NARADA_AGENT_TUI_TERMINAL_MODE".to_string(),
-                "interactive_loop".to_string(),
+                terminal_contract.terminal_mode_env_var.clone(),
+                terminal_contract.required_terminal_mode.clone(),
             ),
         ]));
         let runtime = AgentTuiInteractiveRuntime::with_runtime_configs(
