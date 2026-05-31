@@ -84,10 +84,7 @@ mod tests {
         let snapshot = RuntimeConfigSnapshot::from_env_map(&env_map);
         let posture = snapshot.posture();
 
-        assert_eq!(
-            snapshot.provider.status.as_str(),
-            "configured_not_implemented"
-        );
+        assert_eq!(snapshot.provider.status.as_str(), "configured");
         assert_eq!(snapshot.provider_adapter.status.as_str(), "refused");
         assert_eq!(
             snapshot.provider_adapter.adapter_kind.as_deref(),
@@ -95,10 +92,7 @@ mod tests {
         );
         assert_eq!(snapshot.mcp.status.as_str(), "configured");
         assert_eq!(snapshot.terminal.status.as_str(), "configured");
-        assert_eq!(
-            posture.provider_state.as_str(),
-            "provider_configured_not_implemented"
-        );
+        assert_eq!(posture.provider_state.as_str(), "provider_configured");
         assert_eq!(
             posture.provider_adapter_state.as_str(),
             "provider_adapter_refused"

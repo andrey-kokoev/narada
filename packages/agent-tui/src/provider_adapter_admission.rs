@@ -71,7 +71,7 @@ impl ProviderAdapterAdmission {
                 provider_execution_enabled: false,
                 refusal_reason: runtime_config.refusal_reason.clone(),
             },
-            ProviderRuntimeAdmissionStatus::ConfiguredNotImplemented => {
+            ProviderRuntimeAdmissionStatus::Configured => {
                 let adapter_kind = adapter_kind
                     .map(str::trim)
                     .filter(|value| !value.is_empty());

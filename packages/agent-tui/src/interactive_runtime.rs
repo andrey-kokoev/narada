@@ -407,7 +407,7 @@ mod tests {
         assert!(model
             .status
             .compact_line
-            .contains("provider=provider_configured_not_implemented"));
+            .contains("provider=provider_configured"));
         assert!(model.status.compact_line.contains("mcp=mcp_configured"));
         assert!(model
             .status

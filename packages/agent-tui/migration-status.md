@@ -36,10 +36,10 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - Provider dispatch trait plus stub adapter; real provider execution remains disabled.
 - Provider adapter admission boundary distinguishes disabled runtime, refused runtime, configured-without-adapter posture, explicit requested adapter kind via `NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND`, typed adapter-registry rejection for unknown adapter kinds, and future admitted adapter execution; known requested adapters are refused as `provider_adapter_not_implemented:<kind>` until a concrete adapter exists.
 - Provider boundary acceptance verifies request and terminal evidence both record `recorded_not_dispatched` and `provider_execution_enabled=false`.
-- Provider request evidence carries provider runtime posture, configured provider/model when present, and refusal reason so disabled/configured-not-implemented turns are reconstructable from session JSONL.
+- Provider request evidence carries provider runtime posture, configured provider/model when present, and separate adapter refusal reason so disabled/configured turns are reconstructable from session JSONL.
 - Provider boundary acceptance verifies ordered provider text deltas project as one accumulated agent transcript message for the turn.
-- Provider runtime config is explicit: provider execution remains disabled unless a real adapter is admitted; provider/model env can reach only `configured_not_implemented` posture while the adapter is absent.
-- Provider runtime CLI acceptance verifies the binary reports disabled-by-default, refused missing-model, and configured-but-not-implemented explicit provider/model/streaming posture, and that runtime-step and interactive-step evidence both carry the configured-not-implemented posture.
+- Provider runtime config is explicit: provider execution remains disabled unless a real adapter is admitted; provider/model env reaches `configured` runtime posture, while adapter admission separately records configured-without-adapter, unknown-adapter, or known-unimplemented adapter refusal.
+- Provider runtime CLI acceptance verifies the binary reports disabled-by-default, refused missing-model, configured provider/model/streaming posture, configured-without-adapter posture, unknown adapter refusal, and known-unimplemented adapter refusal; runtime-step and interactive-step evidence both carry separate runtime and adapter posture.
 - Agent-start launch env forces `NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION=false` for the bounded runtime slice and records that provider environment gate in launch metadata.
 - Rendering boundary model converts provider stderr, MCP stderr, known-noise suppression, terminal resize, and payload threshold decisions into mediated diagnostics or payload references instead of raw terminal writes.
 - Provider output constructors and transcript projection enforce payload references for oversized or sensitive provider text/tool arguments instead of inlining them into transcript rows.
@@ -56,7 +56,7 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - MCP runtime config is explicit: Site MCP fabric remains disabled unless `NARADA_AGENT_TUI_ENABLE_MCP_FABRIC` is enabled; MCP config/fabric env reaches `configured` posture, while production exposure remains controlled by launch admission gates.
 - Agent-start launch env forces `NARADA_AGENT_TUI_ENABLE_MCP_FABRIC=false` for the bounded runtime slice and records that MCP environment gate in launch metadata.
 - Transcript projection and store for operator/system input, system directive hold/release, provider output placeholders, provider tool-call placeholders, and terminal turn status.
-- Layout, status, composer, transcript, and aggregate app view models, including one runtime posture bundle for disabled/refused/configured-not-implemented provider posture, explicit provider-adapter admission posture, plus disabled/refused/configured MCP and terminal-rendering posture in status output; process env is snapshotted through the library runtime config snapshot boundary before deriving the combined posture.
+- Layout, status, composer, transcript, and aggregate app view models, including one runtime posture bundle for disabled/refused/configured provider posture, explicit provider-adapter admission posture, plus disabled/refused/configured MCP and terminal-rendering posture in status output; process env is snapshotted through the library runtime config snapshot boundary before deriving the combined posture.
 - Ratatui renderer for transcript/status/composer regions.
 - Renderer acceptance verifies nonblank buffer rendering, core region text, stable layout rectangles, and preserved composer draft in compact frames.
 - Terminal lifecycle state guard with clean leave semantics after normal exit and render-loop error.
@@ -111,7 +111,7 @@ Current launch metadata now distinguishes satisfied gates from remaining promoti
 - Satisfied: launcher-registry Site rollout has accepted side-by-side `agent-cli` and bounded `agent-tui` evidence for all known Sites.
 - Partial: Rust tests pass through the documented VS DevCmd toolchain; plain-shell readiness remains a diagnostic preflight.
 - Partial: terminal-loop acceptance has scripted frame, lifecycle, injected-loop, and terminal runtime config coverage; real-terminal promotion is not admitted.
-- Partial: provider admission has disabled/refused/configured-not-implemented runtime posture, explicit adapter admission evidence, streaming transcript accumulation, and provider-origin tool-call mediation; real provider dispatch remains withheld.
+- Partial: provider admission has disabled/refused/configured runtime posture, explicit adapter admission evidence, streaming transcript accumulation, and provider-origin tool-call mediation; real provider dispatch remains withheld.
 - Partial: MCP admission has config/fabric posture, policy visibility, request/response framing, supervised stdio execution, runtime-posture evidence, and launch gating; production Site MCP exposure remains withheld until live Site execution is admitted.
 
 ## Live Rollout Evidence

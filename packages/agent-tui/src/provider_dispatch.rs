@@ -353,10 +353,7 @@ mod tests {
 
         assert_eq!(record.status, ProviderDispatchStatus::RecordedNotDispatched);
         assert_eq!(record.provider_execution_enabled, false);
-        assert_eq!(
-            record.payload["provider_runtime_status"],
-            "configured_not_implemented"
-        );
+        assert_eq!(record.payload["provider_runtime_status"], "configured");
         assert_eq!(
             record.payload["provider_adapter_admission_status"],
             "configured_without_adapter"

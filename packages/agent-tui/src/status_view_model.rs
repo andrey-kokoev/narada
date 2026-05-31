@@ -7,7 +7,7 @@ use crate::terminal_runtime_config::{TerminalRuntimeConfig, TerminalRuntimeStatu
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProviderRuntimeState {
     Disabled,
-    ConfiguredNotImplemented,
+    Configured,
     Refused,
     Idle,
     Working,
@@ -19,9 +19,7 @@ impl ProviderRuntimeState {
     pub fn from_provider_runtime_config(config: &ProviderRuntimeConfig) -> Self {
         match config.status {
             ProviderRuntimeAdmissionStatus::Disabled => Self::Disabled,
-            ProviderRuntimeAdmissionStatus::ConfiguredNotImplemented => {
-                Self::ConfiguredNotImplemented
-            }
+            ProviderRuntimeAdmissionStatus::Configured => Self::Configured,
             ProviderRuntimeAdmissionStatus::Refused => Self::Refused,
         }
     }
@@ -29,7 +27,7 @@ impl ProviderRuntimeState {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Disabled => "provider_disabled",
-            Self::ConfiguredNotImplemented => "provider_configured_not_implemented",
+            Self::Configured => "provider_configured",
             Self::Refused => "provider_refused",
             Self::Idle => "provider_idle",
             Self::Working => "provider_working",
@@ -321,9 +319,8 @@ mod tests {
         ]));
         assert_eq!(
             ProviderRuntimeState::from_provider_runtime_config(&configured),
-            ProviderRuntimeState::ConfiguredNotImplemented
+            ProviderRuntimeState::Configured
         );
-
         let refused = ProviderRuntimeConfig::from_env_map(&std::collections::BTreeMap::from([(
             "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION".to_string(),
             "true".to_string(),
@@ -450,10 +447,7 @@ mod tests {
             &terminal,
         );
 
-        assert_eq!(
-            posture.provider_state,
-            ProviderRuntimeState::ConfiguredNotImplemented
-        );
+        assert_eq!(posture.provider_state, ProviderRuntimeState::Configured);
         assert_eq!(
             posture.provider_adapter_state,
             ProviderAdapterState::ConfiguredWithoutAdapter

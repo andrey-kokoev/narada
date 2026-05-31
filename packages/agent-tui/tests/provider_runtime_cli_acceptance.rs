@@ -80,9 +80,9 @@ fn provider_runtime_cli_acceptance_reports_configured_without_execution_adapter(
 
     let output = stdout(&mut command);
 
-    assert!(output.contains("provider_status: configured_not_implemented"));
+    assert!(output.contains("provider_status: configured"));
     assert!(output.contains("provider_execution_enabled: false"));
-    assert!(output.contains("provider_refusal: provider_adapter_not_implemented"));
+    assert!(!output.contains("provider_refusal:"));
     assert!(output.contains("provider_adapter_status: configured_without_adapter"));
     assert!(output.contains("provider_adapter_execution_enabled: false"));
     assert!(output.contains("provider_adapter_refusal: provider_adapter_not_admitted"));
@@ -103,7 +103,7 @@ fn provider_runtime_cli_acceptance_reports_unknown_adapter_as_refused() {
 
     let output = stdout(&mut command);
 
-    assert!(output.contains("provider_status: configured_not_implemented"));
+    assert!(output.contains("provider_status: configured"));
     assert!(output.contains("provider_execution_enabled: false"));
     assert!(output.contains("provider_adapter_status: refused"));
     assert!(output.contains("provider_adapter_execution_enabled: false"));
@@ -125,7 +125,7 @@ fn provider_runtime_cli_acceptance_reports_requested_adapter_as_refused_until_im
 
     let output = stdout(&mut command);
 
-    assert!(output.contains("provider_status: configured_not_implemented"));
+    assert!(output.contains("provider_status: configured"));
     assert!(output.contains("provider_execution_enabled: false"));
     assert!(output.contains("provider_adapter_status: refused"));
     assert!(output.contains("provider_adapter_execution_enabled: false"));
@@ -151,7 +151,7 @@ fn assert_configured_provider_posture_recorded_with_adapter(
     refusal_reason: &str,
 ) {
     assert!(session_jsonl.contains("\"provider_request_status\":\"recorded_not_dispatched\""));
-    assert!(session_jsonl.contains("\"provider_runtime_status\":\"configured_not_implemented\""));
+    assert!(session_jsonl.contains("\"provider_runtime_status\":\"configured\""));
     assert!(session_jsonl.contains("\"provider\":\"codex-subscription\""));
     assert!(session_jsonl.contains("\"model\":\"gpt-5.5\""));
     assert!(session_jsonl.contains(&format!(

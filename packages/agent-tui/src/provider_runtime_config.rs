@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProviderRuntimeAdmissionStatus {
     Disabled,
-    ConfiguredNotImplemented,
+    Configured,
     Refused,
 }
 
@@ -11,7 +11,7 @@ impl ProviderRuntimeAdmissionStatus {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Disabled => "disabled",
-            Self::ConfiguredNotImplemented => "configured_not_implemented",
+            Self::Configured => "configured",
             Self::Refused => "refused",
         }
     }
@@ -65,13 +65,13 @@ impl ProviderRuntimeConfig {
         }
 
         Self {
-            status: ProviderRuntimeAdmissionStatus::ConfiguredNotImplemented,
+            status: ProviderRuntimeAdmissionStatus::Configured,
             provider: Some(provider),
             model: Some(model),
             thinking,
             stream,
             provider_execution_enabled: false,
-            refusal_reason: Some("provider_adapter_not_implemented".to_string()),
+            refusal_reason: None,
         }
     }
 
@@ -188,16 +188,10 @@ mod tests {
             ("NARADA_AI_STREAM", "off"),
         ]));
 
-        assert_eq!(
-            config.status,
-            ProviderRuntimeAdmissionStatus::ConfiguredNotImplemented
-        );
-        assert_eq!(config.status.as_str(), "configured_not_implemented");
+        assert_eq!(config.status, ProviderRuntimeAdmissionStatus::Configured);
+        assert_eq!(config.status.as_str(), "configured");
         assert!(!config.provider_execution_enabled);
-        assert_eq!(
-            config.refusal_reason.as_deref(),
-            Some("provider_adapter_not_implemented")
-        );
+        assert_eq!(config.refusal_reason, None);
         assert_eq!(config.provider.as_deref(), Some("codex-subscription"));
         assert_eq!(config.model.as_deref(), Some("gpt-5.5"));
         assert_eq!(config.thinking.as_deref(), Some("medium"));
