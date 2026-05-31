@@ -248,7 +248,7 @@ function globSearchTool(args, state) {
   if (!pattern) throw new Error('glob_requires_pattern');
   const { path: directory } = resolveAllowedPath(stringField(args, 'directory') ?? '.', state.allowedRoots);
   const limit = Math.min(500, Math.max(1, integerField(args, 'limit') ?? 100));
-  const rg = spawnSync('rg', ['--files', '-g', pattern, directory], { encoding: 'utf8', maxBuffer: 2 * 1024 * 1024 });
+  const rg = spawnSync('rg', ['--files', '--hidden', '--no-ignore', '-g', pattern, directory], { encoding: 'utf8', maxBuffer: 2 * 1024 * 1024 });
   return cappedSearchResult({ state, kind: 'glob', args, lines: splitLines(rg.stdout), limit });
 }
 

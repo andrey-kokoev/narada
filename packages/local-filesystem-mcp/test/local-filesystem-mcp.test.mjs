@@ -12,6 +12,10 @@ try {
   mkdirSync(trusted, { recursive: true });
   mkdirSync(other, { recursive: true });
   writeFileSync(join(trusted, 'a.txt'), 'alpha\nbeta\n', 'utf8');
+  const revolutionRoot = join(trusted, 'OneDrive - Global Maxima LLC', '!Business', '!Clients', '!Revolution', '.narada');
+  mkdirSync(join(revolutionRoot, 'config'), { recursive: true });
+  writeFileSync(join(revolutionRoot, 'config', 'config.json'), '{"site":"revolution"}\n', 'utf8');
+  writeFileSync(join(revolutionRoot, 'config', 'settings.yaml'), 'site: revolution\n', 'utf8');
   const configPath = join(tempRoot, 'config.toml');
   writeFileSync(configPath, `
 [projects.'${trusted.replace(/\\/g, '\\\\')}']
@@ -57,6 +61,24 @@ trust_level = "untrusted"
     params: { name: 'fs_read_file_range', arguments: { path: join(trusted, 'a.txt'), start_line: 2, end_line: 2 } },
   }, readState);
   assert.equal(JSON.parse(rangeResponse.result.content[0].text).content, 'beta');
+  const revolutionConfigPath = join(revolutionRoot, 'config', 'config.json');
+  const revolutionReadResponse = handleRequest({
+    jsonrpc: '2.0',
+    id: 12,
+    method: 'tools/call',
+    params: { name: 'fs_read_file', arguments: { path: revolutionConfigPath } },
+  }, readState);
+  assert.equal(JSON.parse(revolutionReadResponse.result.content[0].text).relative_path.endsWith('!Revolution/.narada/config/config.json'), true);
+  for (const [id, pattern] of [[13, '**/*config*'], [14, '**/*.json'], [15, '**/*.{json,yaml,yml}']]) {
+    const globResponse = handleRequest({
+      jsonrpc: '2.0',
+      id,
+      method: 'tools/call',
+      params: { name: 'fs_glob_search', arguments: { directory: revolutionRoot, pattern } },
+    }, readState);
+    const globPayload = JSON.parse(globResponse.result.content[0].text);
+    assert.equal(globPayload.matches.some((match) => match.replace(/\\/g, '/').endsWith('config/config.json')), true, `${pattern} should find config/config.json`);
+  }
 
   const blockedWrite = handleRequest({
     jsonrpc: '2.0',
