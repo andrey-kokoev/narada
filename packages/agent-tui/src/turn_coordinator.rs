@@ -1,4 +1,6 @@
-use crate::carrier_protocol::{InputEvent, SessionEvent, SessionEventKind, SESSION_EVENT_SCHEMA};
+use crate::carrier_protocol::{
+    InputEvent, SessionEvent, SessionEventKind, SESSION_EVENT_SCHEMA, TURN_TERMINAL_PAYLOAD_SCHEMA,
+};
 use crate::input_queue::{InputQueue, SessionEvidenceContext, TurnState};
 use crate::provider_dispatch::{
     ProviderAdapter, ProviderDispatchRecord, ProviderDispatchStatus, ProviderDispatchStub,
@@ -7,8 +9,6 @@ use crate::provider_dispatch::{
 use crate::session_jsonl::append_session_event;
 use serde_json::json;
 use std::path::{Path, PathBuf};
-
-pub const TURN_TERMINAL_PAYLOAD_SCHEMA: &str = "narada.agent_tui.turn_terminal_payload.v0";
 
 pub trait ProviderToolCallExecutor {
     fn handle_provider_output(
@@ -196,18 +196,18 @@ impl TurnCoordinator {
         clock: &TurnCoordinatorClock,
     ) -> SessionEvent {
         let (kind, terminal_status) = provider_status_to_turn_terminal(&record.status);
-        self.session_event(
-            kind,
-            clock,
-            json!({
-                "schema": TURN_TERMINAL_PAYLOAD_SCHEMA,
-                "turn_id": turn_id,
-                "input_event_id": input.event_id,
-                "provider_request_status": record.status.as_str(),
-                "terminal_status": terminal_status,
-                "provider_execution_enabled": record.provider_execution_enabled
-            }),
-        )
+        let mut payload = json!({
+            "schema": TURN_TERMINAL_PAYLOAD_SCHEMA,
+            "turn_id": turn_id,
+            "input_event_id": input.event_id,
+            "provider_request_status": record.status.as_str(),
+            "terminal_status": terminal_status,
+            "provider_execution_enabled": record.provider_execution_enabled
+        });
+        if kind == SessionEventKind::TurnFailed {
+            payload["error_summary"] = json!(terminal_status);
+        }
+        self.session_event(kind, clock, payload)
     }
 
     fn session_event(

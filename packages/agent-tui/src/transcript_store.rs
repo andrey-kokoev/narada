@@ -148,7 +148,9 @@ impl TranscriptStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::carrier_protocol::{SessionEvent, SessionEventKind, SESSION_EVENT_SCHEMA};
+    use crate::carrier_protocol::{
+        SessionEvent, SessionEventKind, SESSION_EVENT_SCHEMA, TURN_TERMINAL_PAYLOAD_SCHEMA,
+    };
     use crate::transcript_projection::{TranscriptActor, TranscriptItemKind};
     use serde_json::json;
 
@@ -312,8 +314,11 @@ mod tests {
             "session_event_1",
             SessionEventKind::TurnCompleted,
             json!({
+                "schema": TURN_TERMINAL_PAYLOAD_SCHEMA,
                 "turn_id": "turn_1",
-                "terminal_status": "completed"
+                "terminal_status": "completed",
+                "provider_request_status": "completed",
+                "provider_execution_enabled": true
             }),
         );
 
@@ -363,8 +368,11 @@ mod tests {
             "session_event_2",
             SessionEventKind::TurnFailed,
             json!({
+                "schema": TURN_TERMINAL_PAYLOAD_SCHEMA,
                 "turn_id": "turn_1",
                 "terminal_status": "failed",
+                "provider_request_status": "failed",
+                "provider_execution_enabled": true,
                 "error_summary": "failed"
             }),
         ))

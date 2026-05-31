@@ -6,6 +6,7 @@ pub const CONTROL_INPUT_EVENT_SCHEMA: &str = "narada.carrier.control.input_event
 pub const SESSION_EVENT_SCHEMA: &str = "narada.carrier.session_event.v1";
 pub const PAYLOAD_REF_SCHEMA: &str = "narada.carrier.payload_ref.v1";
 pub const PAYLOAD_POLICY_SCHEMA: &str = "narada.carrier.payload_policy.v1";
+pub const TURN_TERMINAL_PAYLOAD_SCHEMA: &str = "narada.agent_tui.turn_terminal_payload.v0";
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -256,12 +257,9 @@ fn validate_session_payload(kind: &SessionEventKind, payload: &Value) -> Result<
         SessionEventKind::TurnStarted => {
             require_payload_fields(payload, &["input_event_id", "turn_id"])
         }
-        SessionEventKind::TurnCompleted | SessionEventKind::TurnInterrupted => {
-            require_payload_fields(payload, &["turn_id"])
-        }
-        SessionEventKind::TurnFailed => {
-            require_payload_fields(payload, &["turn_id", "error_summary"])
-        }
+        SessionEventKind::TurnCompleted
+        | SessionEventKind::TurnInterrupted
+        | SessionEventKind::TurnFailed => validate_turn_terminal_payload(kind, payload),
         SessionEventKind::InterruptRequested => require_payload_fields(payload, &["turn_id"]),
         SessionEventKind::ToolCallRequested => validate_tool_call_payload(payload),
         SessionEventKind::ToolResultReceived => validate_tool_result_payload(payload),
@@ -355,6 +353,45 @@ fn validate_carrier_diagnostic_payload(payload: &Value) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+fn validate_turn_terminal_payload(kind: &SessionEventKind, payload: &Value) -> Result<(), String> {
+    require_payload_fields(
+        payload,
+        &[
+            "schema",
+            "turn_id",
+            "terminal_status",
+            "provider_request_status",
+            "provider_execution_enabled",
+        ],
+    )?;
+    if payload.get("schema").and_then(Value::as_str) != Some(TURN_TERMINAL_PAYLOAD_SCHEMA) {
+        return Err(format!(
+            "payload.invalid_schema:{}",
+            payload_value_string(payload, "schema")
+        ));
+    }
+    require_payload_nonempty_string(payload, "turn_id")?;
+    require_payload_nonempty_string(payload, "provider_request_status")?;
+    match payload.get("provider_execution_enabled") {
+        Some(Value::Bool(_)) => {}
+        _ => return Err("payload.invalid_provider_execution_enabled".to_string()),
+    }
+    match (kind, payload.get("terminal_status").and_then(Value::as_str)) {
+        (
+            SessionEventKind::TurnCompleted,
+            Some("completed" | "completed_after_dispatch" | "completed_without_provider"),
+        ) => Ok(()),
+        (SessionEventKind::TurnInterrupted, Some("interrupted")) => Ok(()),
+        (SessionEventKind::TurnFailed, Some("failed")) => {
+            require_payload_nonempty_string(payload, "error_summary")
+        }
+        _ => Err(format!(
+            "payload.invalid_terminal_status:{}",
+            payload_value_string(payload, "terminal_status")
+        )),
+    }
 }
 
 fn require_payload_fields(payload: &Value, fields: &[&str]) -> Result<(), String> {
@@ -678,5 +715,29 @@ mod tests {
             })
         )
         .is_ok());
+        assert!(validate_session_payload(
+            &SessionEventKind::TurnCompleted,
+            &json!({
+                "schema": TURN_TERMINAL_PAYLOAD_SCHEMA,
+                "turn_id": "turn_1",
+                "terminal_status": "completed_without_provider",
+                "provider_request_status": "recorded_not_dispatched",
+                "provider_execution_enabled": false
+            })
+        )
+        .is_ok());
+        assert_eq!(
+            validate_session_payload(
+                &SessionEventKind::TurnCompleted,
+                &json!({
+                    "schema": TURN_TERMINAL_PAYLOAD_SCHEMA,
+                    "turn_id": "turn_1",
+                    "terminal_status": "failed",
+                    "provider_request_status": "recorded_not_dispatched",
+                    "provider_execution_enabled": false
+                })
+            ),
+            Err("payload.invalid_terminal_status:\"failed\"".to_string())
+        );
     }
 }
