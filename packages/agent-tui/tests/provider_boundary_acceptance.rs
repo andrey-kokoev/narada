@@ -115,7 +115,7 @@ fn provider_boundary_acceptance_records_disabled_provider_posture() {
         "disabled"
     );
     assert_eq!(
-        provider_request.payload["provider_refusal_reason"],
+        provider_request.payload["provider_adapter_refusal_reason"],
         serde_json::Value::Null
     );
     assert_eq!(provider_request.payload["content_preview"], input.content);

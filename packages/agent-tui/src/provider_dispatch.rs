@@ -231,7 +231,7 @@ impl ProviderAdapter for ProviderDispatchStub {
                 "model": self.runtime_config.model.clone(),
                 "thinking": self.runtime_config.thinking.clone(),
                 "stream": self.runtime_config.stream,
-                "provider_refusal_reason": admission.refusal_reason.clone(),
+                "provider_adapter_refusal_reason": admission.refusal_reason.clone(),
                 "content_preview": input.content.chars().take(120).collect::<String>()
             }),
             outputs: Vec::new(),
@@ -330,7 +330,10 @@ mod tests {
             "disabled"
         );
         assert_eq!(record.payload["provider_adapter_kind"], Value::Null);
-        assert_eq!(record.payload["provider_refusal_reason"], Value::Null);
+        assert_eq!(
+            record.payload["provider_adapter_refusal_reason"],
+            Value::Null
+        );
         assert!(record.outputs.is_empty());
     }
 
@@ -362,7 +365,7 @@ mod tests {
         assert_eq!(record.payload["provider"], "codex-subscription");
         assert_eq!(record.payload["model"], "gpt-5.5");
         assert_eq!(
-            record.payload["provider_refusal_reason"],
+            record.payload["provider_adapter_refusal_reason"],
             "provider_adapter_not_admitted"
         );
     }

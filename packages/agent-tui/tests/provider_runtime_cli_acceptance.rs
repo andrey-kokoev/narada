@@ -158,7 +158,9 @@ fn assert_configured_provider_posture_recorded_with_adapter(
         "\"provider_adapter_admission_status\":\"{adapter_status}\""
     )));
     assert!(session_jsonl.contains(adapter_kind_fragment));
-    assert!(session_jsonl.contains(&format!("\"provider_refusal_reason\":\"{refusal_reason}\"")));
+    assert!(session_jsonl.contains(&format!(
+        "\"provider_adapter_refusal_reason\":\"{refusal_reason}\""
+    )));
 }
 
 #[test]
