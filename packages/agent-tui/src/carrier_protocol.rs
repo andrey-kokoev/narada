@@ -735,17 +735,13 @@ fn validate_payload_policy(policy: &PayloadPolicy) -> Result<(), String> {
     Ok(())
 }
 
-pub fn validate_session_event_fixture_manifest(
+pub fn validate_session_event_fixture_manifest_errors(
     manifest: &SessionEventFixtureManifest,
-) -> Result<(), String> {
+) -> Vec<String> {
+    let mut errors = Vec::new();
     if manifest.schema != SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA {
-        return Err(format!("invalid_schema:{}", manifest.schema));
+        errors.push(format!("invalid_schema:{}", manifest.schema));
     }
-    let manifest_kinds = manifest
-        .fixtures
-        .iter()
-        .map(|entry| entry.event_kind.clone())
-        .collect::<Vec<_>>();
     let protocol_kinds = SESSION_EVENT_KINDS
         .iter()
         .map(|kind| {
@@ -756,19 +752,58 @@ pub fn validate_session_event_fixture_manifest(
                 .to_string()
         })
         .collect::<Vec<_>>();
-    if manifest_kinds != protocol_kinds {
-        return Err("fixtures.not_in_session_event_kind_order".to_string());
-    }
+    let mut seen_kinds = std::collections::HashSet::new();
+    let mut seen_fixtures = std::collections::HashSet::new();
     for (index, entry) in manifest.fixtures.iter().enumerate() {
+        if !protocol_kinds.contains(&entry.event_kind) {
+            errors.push(format!(
+                "fixtures.{index}.invalid_event_kind:{}",
+                entry.event_kind
+            ));
+        } else if !seen_kinds.insert(entry.event_kind.clone()) {
+            errors.push(format!(
+                "fixtures.{index}.duplicate_event_kind:{}",
+                entry.event_kind
+            ));
+        }
         if entry.fixture.is_empty()
             || entry.fixture.contains('/')
             || entry.fixture.contains('\\')
             || !entry.fixture.ends_with(".json")
         {
-            return Err(format!("fixtures.{index}.invalid_fixture"));
+            errors.push(format!("fixtures.{index}.invalid_fixture"));
+        } else if !seen_fixtures.insert(entry.fixture.clone()) {
+            errors.push(format!(
+                "fixtures.{index}.duplicate_fixture:{}",
+                entry.fixture
+            ));
         }
     }
-    Ok(())
+    let manifest_kinds = manifest
+        .fixtures
+        .iter()
+        .map(|entry| entry.event_kind.clone())
+        .collect::<Vec<_>>();
+    if manifest_kinds.len() == protocol_kinds.len() && manifest_kinds != protocol_kinds {
+        errors.push("fixtures.not_in_session_event_kind_order".to_string());
+    }
+    for event_kind in protocol_kinds {
+        if !seen_kinds.contains(&event_kind) {
+            errors.push(format!("fixtures.missing_event_kind:{event_kind}"));
+        }
+    }
+    errors
+}
+
+pub fn validate_session_event_fixture_manifest(
+    manifest: &SessionEventFixtureManifest,
+) -> Result<(), String> {
+    let errors = validate_session_event_fixture_manifest_errors(manifest);
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join(","))
+    }
 }
 
 fn require_prefix(field: &str, value: &str, prefix: &str) -> Result<(), String> {
@@ -864,37 +899,48 @@ mod tests {
 
     #[test]
     fn rejects_invalid_shared_session_event_fixture_manifest() {
+        let invalid_kind = SessionEventFixtureManifest {
+            schema: SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA.to_string(),
+            fixtures: vec![SessionEventFixtureManifestEntry {
+                event_kind: "missing".to_string(),
+                fixture: "x.json".to_string(),
+            }],
+        };
+        let invalid_kind_errors = validate_session_event_fixture_manifest_errors(&invalid_kind);
         assert_eq!(
-            validate_session_event_fixture_manifest(&SessionEventFixtureManifest {
-                schema: SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA.to_string(),
-                fixtures: vec![SessionEventFixtureManifestEntry {
-                    event_kind: "missing".to_string(),
-                    fixture: "x.json".to_string(),
-                }],
-            }),
-            Err("fixtures.not_in_session_event_kind_order".to_string())
+            invalid_kind_errors[0],
+            "fixtures.0.invalid_event_kind:missing"
         );
+        assert!(invalid_kind_errors
+            .iter()
+            .any(|error| error == "fixtures.missing_event_kind:input_queued_for_turn_boundary"));
         assert_eq!(
-            validate_session_event_fixture_manifest(&SessionEventFixtureManifest {
-                schema: SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA.to_string(),
-                fixtures: SESSION_EVENT_KINDS
-                    .iter()
-                    .enumerate()
-                    .map(|(index, kind)| SessionEventFixtureManifestEntry {
-                        event_kind: serde_json::to_value(kind)
-                            .expect("session event kind serializes")
-                            .as_str()
-                            .expect("session event kind string")
-                            .to_string(),
-                        fixture: if index == 0 {
-                            "nested/x.json".to_string()
-                        } else {
-                            format!("fixture-{index}.json")
-                        },
-                    })
-                    .collect(),
-            }),
-            Err("fixtures.0.invalid_fixture".to_string())
+            validate_session_event_fixture_manifest(&invalid_kind),
+            Err(invalid_kind_errors.join(","))
+        );
+
+        let invalid_fixture = SessionEventFixtureManifest {
+            schema: SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA.to_string(),
+            fixtures: SESSION_EVENT_KINDS
+                .iter()
+                .enumerate()
+                .map(|(index, kind)| SessionEventFixtureManifestEntry {
+                    event_kind: serde_json::to_value(kind)
+                        .expect("session event kind serializes")
+                        .as_str()
+                        .expect("session event kind string")
+                        .to_string(),
+                    fixture: if index == 0 {
+                        "nested/x.json".to_string()
+                    } else {
+                        format!("fixture-{index}.json")
+                    },
+                })
+                .collect(),
+        };
+        assert_eq!(
+            validate_session_event_fixture_manifest_errors(&invalid_fixture),
+            vec!["fixtures.0.invalid_fixture".to_string()]
         );
     }
 
