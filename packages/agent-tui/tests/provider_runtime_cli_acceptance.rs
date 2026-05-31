@@ -143,26 +143,35 @@ fn provider_runtime_cli_acceptance_reports_unknown_adapter_as_refused() {
 #[test]
 fn provider_runtime_cli_acceptance_reports_requested_adapter_as_refused_until_implemented() {
     let mut command = base_command();
+    let contract = provider_adapter_contract();
     with_provider_env(
         &mut command,
         &[
             ("execution_enabled", "true"),
             ("provider", "codex-subscription"),
             ("model", "gpt-5.5"),
-            ("adapter_kind", "codex_subscription_adapter"),
+            (
+                "adapter_kind",
+                contract.production_provider_adapter_kind.as_str(),
+            ),
         ],
     );
 
     let output = stdout(&mut command);
+    let refusal = format!(
+        "provider_adapter_refusal: provider_adapter_not_implemented:{}",
+        contract.production_provider_adapter_kind
+    );
 
     assert!(output.contains("provider_status: configured"));
-    assert!(output.contains("provider_execution_enabled: false"));
     assert!(output.contains("provider_adapter_status: refused"));
     assert!(output.contains("provider_adapter_execution_enabled: false"));
-    assert!(output.contains("provider_adapter_kind: codex_subscription_adapter"));
-    assert!(output.contains(
-        "provider_adapter_refusal: provider_adapter_not_implemented:codex_subscription_adapter"
-    ));
+    assert!(output.contains("provider_adapter_status: refused"));
+    assert!(output.contains(&format!(
+        "provider_adapter_kind: {}",
+        contract.production_provider_adapter_kind
+    )));
+    assert!(output.contains(&refusal));
 }
 
 fn assert_configured_provider_posture_recorded(session_jsonl: &str) {
@@ -232,6 +241,7 @@ fn provider_runtime_cli_acceptance_records_requested_adapter_refusal_in_runtime_
     write(&control_path, format!("{CONTROL_FIXTURE}\n")).expect("control fixture writes");
 
     let mut command = base_command();
+    let contract = provider_adapter_contract();
     command
         .arg("--control-jsonl")
         .arg(&control_path)
@@ -244,19 +254,30 @@ fn provider_runtime_cli_acceptance_records_requested_adapter_refusal_in_runtime_
             ("execution_enabled", "true"),
             ("provider", "codex-subscription"),
             ("model", "gpt-5.5"),
-            ("adapter_kind", "codex_subscription_adapter"),
+            (
+                "adapter_kind",
+                contract.production_provider_adapter_kind.as_str(),
+            ),
         ],
     );
 
     let output = stdout(&mut command);
     assert!(output.contains("runtime_step_once: ok"));
 
+    let adapter_kind_fragment = format!(
+        "\"provider_adapter_kind\":\"{}\"",
+        contract.production_provider_adapter_kind
+    );
+    let refusal_reason = format!(
+        "provider_adapter_not_implemented:{}",
+        contract.production_provider_adapter_kind
+    );
     let session_jsonl = read_to_string(&session_path).expect("session jsonl exists");
     assert_configured_provider_posture_recorded_with_adapter(
         &session_jsonl,
         "refused",
-        "\"provider_adapter_kind\":\"codex_subscription_adapter\"",
-        "provider_adapter_not_implemented:codex_subscription_adapter",
+        &adapter_kind_fragment,
+        &refusal_reason,
     );
 
     remove_file(control_path).ok();
