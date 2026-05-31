@@ -10,6 +10,7 @@ import {
   PAYLOAD_POLICY_SCHEMA,
   PROVIDER_REQUEST_PAYLOAD_SCHEMA,
   PROVIDER_OUTPUT_PAYLOAD_SCHEMA,
+  SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA,
   SESSION_EVENT_KINDS,
   SESSION_EVENT_SCHEMA,
   TURN_TERMINAL_PAYLOAD_SCHEMA,
@@ -39,6 +40,7 @@ import {
   validatePayloadRef,
   validatePayloadPolicy,
   validateSessionEvent,
+  validateSessionEventFixtureManifest,
 } from './carrier-protocol.mjs';
 
 function thrownMessage(fn) {
@@ -68,8 +70,10 @@ const baseInput = {
 const sessionEventFixtureManifest = readFixture('session-event-fixtures.json');
 
 assert.equal(CARRIER_PROTOCOL_SCHEMAS.input_event.schema, INPUT_EVENT_SCHEMA);
-assert.deepEqual(sessionEventFixtureManifest.map((entry) => entry.event_kind), SESSION_EVENT_KINDS);
-for (const entry of sessionEventFixtureManifest) {
+assert.equal(CARRIER_PROTOCOL_SCHEMAS.session_event_fixture_manifest.schema, SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA);
+assert.deepEqual(validateSessionEventFixtureManifest(sessionEventFixtureManifest), []);
+assert.deepEqual(sessionEventFixtureManifest.fixtures.map((entry) => entry.event_kind), SESSION_EVENT_KINDS);
+for (const entry of sessionEventFixtureManifest.fixtures) {
   assert.equal(typeof entry.fixture, 'string');
   const fixture = readFixture(entry.fixture);
   assert.equal(fixture.event_kind, entry.event_kind);
@@ -175,6 +179,30 @@ assert.deepEqual(validateSessionEvent(systemDirectiveReleasedFixture), []);
 assert.equal(systemDirectiveReleasedFixture.payload.released_at, '2026-05-30T00:00:13.000Z');
 assert.deepEqual(validatePayloadRef(readFixture('payload-ref.json')), []);
 assert.deepEqual(validatePayloadPolicy(readFixture('payload-policy.json')), []);
+assert.deepEqual(validateSessionEventFixtureManifest({ schema: SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA, fixtures: [{ event_kind: 'missing', fixture: 'x.json' }] }), [
+  'fixtures.0.invalid_event_kind:missing',
+  'fixtures.missing_event_kind:input_queued_for_turn_boundary',
+  'fixtures.missing_event_kind:input_admitted_to_turn',
+  'fixtures.missing_event_kind:input_dropped_by_operator',
+  'fixtures.missing_event_kind:input_abandoned_on_session_end',
+  'fixtures.missing_event_kind:input_completed',
+  'fixtures.missing_event_kind:system_directive_held',
+  'fixtures.missing_event_kind:system_directive_released',
+  'fixtures.missing_event_kind:directive_receipt_recorded',
+  'fixtures.missing_event_kind:directive_carrier_accepted_recorded',
+  'fixtures.missing_event_kind:turn_started',
+  'fixtures.missing_event_kind:provider_request_recorded',
+  'fixtures.missing_event_kind:provider_text_delta_recorded',
+  'fixtures.missing_event_kind:provider_tool_call_requested',
+  'fixtures.missing_event_kind:turn_completed',
+  'fixtures.missing_event_kind:turn_interrupted',
+  'fixtures.missing_event_kind:turn_failed',
+  'fixtures.missing_event_kind:interrupt_requested',
+  'fixtures.missing_event_kind:tool_call_requested',
+  'fixtures.missing_event_kind:tool_result_received',
+  'fixtures.missing_event_kind:carrier_command_executed',
+  'fixtures.missing_event_kind:carrier_diagnostic_recorded',
+]);
 
 const input = createInputEvent(baseInput);
 assert.equal(input.schema, INPUT_EVENT_SCHEMA);

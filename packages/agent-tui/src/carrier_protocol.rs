@@ -799,7 +799,16 @@ mod tests {
 
     fn shared_session_event_fixture_manifest() -> Vec<Value> {
         let manifest = read_shared_session_event_fixture("session-event-fixtures.json");
-        serde_json::from_str(&manifest).expect("shared session fixture manifest parses")
+        let manifest: Value =
+            serde_json::from_str(&manifest).expect("shared session fixture manifest parses");
+        assert_eq!(
+            manifest["schema"],
+            "narada.carrier.session_event_fixture_manifest.v1"
+        );
+        manifest["fixtures"]
+            .as_array()
+            .expect("shared session fixture manifest entries")
+            .clone()
     }
 
     #[test]

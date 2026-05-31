@@ -6,6 +6,7 @@ export const PAYLOAD_POLICY_SCHEMA = 'narada.carrier.payload_policy.v1';
 export const PROVIDER_REQUEST_PAYLOAD_SCHEMA = 'narada.agent_tui.provider_request_payload.v0';
 export const PROVIDER_OUTPUT_PAYLOAD_SCHEMA = 'narada.agent_tui.provider_output_payload.v0';
 export const TURN_TERMINAL_PAYLOAD_SCHEMA = 'narada.agent_tui.turn_terminal_payload.v0';
+export const SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA = 'narada.carrier.session_event_fixture_manifest.v1';
 
 export const SOURCE_KINDS = Object.freeze(['operator', 'system', 'agent', 'external']);
 export const TRANSPORTS = Object.freeze([
@@ -81,6 +82,10 @@ export const CARRIER_PROTOCOL_SCHEMAS = Object.freeze({
   payload_policy: Object.freeze({
     schema: PAYLOAD_POLICY_SCHEMA,
     required: Object.freeze(['schema', 'max_inline_chars', 'max_inline_bytes', 'sensitive_payloads_require_ref']),
+  }),
+  session_event_fixture_manifest: Object.freeze({
+    schema: SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA,
+    required: Object.freeze(['schema', 'fixtures']),
   }),
 });
 
@@ -189,6 +194,51 @@ export function validatePayloadRef(ref) {
 export function assertValidPayloadRef(ref) {
   const errors = validatePayloadRef(ref);
   if (errors.length > 0) throw new Error(`invalid_carrier_payload_ref:${errors.join(',')}`);
+}
+
+export function validateSessionEventFixtureManifest(manifest) {
+  const errors = [];
+  if (!isObject(manifest)) return ['session_event_fixture_manifest_not_object'];
+  if (manifest.schema !== SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA) errors.push(`invalid_schema:${String(manifest.schema)}`);
+  if (!Array.isArray(manifest.fixtures)) {
+    errors.push('invalid_fixtures');
+    return errors;
+  }
+  const seenKinds = new Set();
+  const seenFixtures = new Set();
+  manifest.fixtures.forEach((entry, index) => {
+    if (!isObject(entry)) {
+      errors.push(`fixtures.${index}.not_object`);
+      return;
+    }
+    if (typeof entry.event_kind !== 'string' || !enumIncludes(SESSION_EVENT_KINDS, entry.event_kind)) {
+      errors.push(`fixtures.${index}.invalid_event_kind:${String(entry.event_kind)}`);
+    } else if (seenKinds.has(entry.event_kind)) {
+      errors.push(`fixtures.${index}.duplicate_event_kind:${entry.event_kind}`);
+    } else {
+      seenKinds.add(entry.event_kind);
+    }
+    if (typeof entry.fixture !== 'string' || entry.fixture.length === 0 || entry.fixture.includes('/') || entry.fixture.includes('\\\\') || !entry.fixture.endsWith('.json')) {
+      errors.push(`fixtures.${index}.invalid_fixture`);
+    } else if (seenFixtures.has(entry.fixture)) {
+      errors.push(`fixtures.${index}.duplicate_fixture:${entry.fixture}`);
+    } else {
+      seenFixtures.add(entry.fixture);
+    }
+  });
+  const orderedKinds = manifest.fixtures.map((entry) => isObject(entry) ? entry.event_kind : undefined);
+  if (orderedKinds.length === SESSION_EVENT_KINDS.length && !orderedKinds.every((kind, index) => kind === SESSION_EVENT_KINDS[index])) {
+    errors.push('fixtures.not_in_session_event_kind_order');
+  }
+  for (const eventKind of SESSION_EVENT_KINDS) {
+    if (!seenKinds.has(eventKind)) errors.push(`fixtures.missing_event_kind:${eventKind}`);
+  }
+  return errors;
+}
+
+export function assertValidSessionEventFixtureManifest(manifest) {
+  const errors = validateSessionEventFixtureManifest(manifest);
+  if (errors.length > 0) throw new Error(`invalid_session_event_fixture_manifest:${errors.join(',')}`);
 }
 
 export function createInputEvent({
