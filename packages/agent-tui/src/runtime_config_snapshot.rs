@@ -1,11 +1,10 @@
+use crate::mcp_fabric_transport::McpFabricTransportClient;
 use crate::mcp_runtime_config::McpRuntimeConfig;
 use crate::provider_adapter_admission::ProviderAdapterAdmission;
 use crate::provider_runtime_config::ProviderRuntimeConfig;
 use crate::status_view_model::RuntimePostureState;
 use crate::terminal_runtime_config::TerminalRuntimeConfig;
-use serde_json::Value;
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -56,16 +55,21 @@ fn mcp_config_file_readiness(path: &str) -> Result<(), String> {
     if !Path::new(path).is_file() {
         return Err("mcp_config_unreadable".to_string());
     }
-    let content = fs::read_to_string(path).map_err(|_| "mcp_config_unreadable".to_string())?;
-    let value: Value =
-        serde_json::from_str(&content).map_err(|_| "mcp_config_parse_failed".to_string())?;
-    if !value
-        .get("mcpServers")
-        .is_some_and(|mcp_servers| mcp_servers.is_object())
-    {
+    let client = McpFabricTransportClient::from_path(path).map_err(normalize_mcp_config_error)?;
+    if client.servers.is_empty() {
         return Err("mcp_config_missing_mcp_servers".to_string());
     }
     Ok(())
+}
+
+fn normalize_mcp_config_error(error: String) -> String {
+    if error.starts_with("mcp_fabric_config_read_failed:") {
+        "mcp_config_unreadable".to_string()
+    } else if error.starts_with("mcp_fabric_config_parse_failed:") {
+        "mcp_config_parse_failed".to_string()
+    } else {
+        format!("mcp_config_invalid:{error}")
+    }
 }
 
 #[cfg(test)]
