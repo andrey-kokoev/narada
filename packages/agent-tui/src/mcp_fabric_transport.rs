@@ -217,8 +217,14 @@ fn validate_config_shape(value: &Value) -> Result<(), String> {
         return Err("mcp_fabric_config_shape_invalid".to_string());
     };
     if let Some(mcp_servers) = config.get("mcpServers") {
-        if !mcp_servers.is_object() {
+        let Some(server_map) = mcp_servers.as_object() else {
             return Err("mcp_fabric_config_mcp_servers_invalid".to_string());
+        };
+        for (server_name, server) in server_map {
+            let server_name = server_name.trim();
+            if !server.is_object() {
+                return Err(format!("mcp_fabric_server_record_invalid:{server_name}"));
+            }
         }
     }
     Ok(())
@@ -350,6 +356,21 @@ mod tests {
         .expect_err("mcpServers must be an object");
 
         assert_eq!(error, "mcp_fabric_config_mcp_servers_invalid");
+    }
+
+    #[test]
+    fn rejects_non_object_server_record() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": []
+              }
+            }"#,
+        )
+        .expect_err("server record must be an object");
+
+        assert_eq!(error, "mcp_fabric_server_record_invalid:sonar-site-loop");
     }
 
     #[test]
