@@ -13,6 +13,7 @@ pub mod mcp_fabric_transport;
 pub mod mcp_json_rpc;
 pub mod mcp_process_supervisor;
 pub mod mcp_reusable_process_executor;
+pub mod mcp_runtime_config;
 pub mod mcp_runtime_execution;
 pub mod mcp_stdio_process;
 pub mod provider_dispatch;

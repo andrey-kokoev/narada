@@ -367,6 +367,7 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   assert.equal(result.capability_policy.smoke_step, 'bounded_non_terminal_control_jsonl');
   assert.equal(result.planned_environment.NARADA_AGENT_TUI_SESSION_DIR, result.agent_tui_session_dir);
   assert.equal(result.planned_environment.NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION, 'false');
+  assert.equal(result.planned_environment.NARADA_AGENT_TUI_ENABLE_MCP_FABRIC, 'false');
   assert.equal(result.agent_tui_session_dir.includes(`${path.sep}.narada${path.sep}crew${path.sep}nars-sessions${path.sep}`), true);
   assert.equal(result.agent_tui_launch.schema, 'narada.agent_start.agent_tui.v0');
   assert.equal(result.agent_tui_launch.transport, 'control_jsonl_session_jsonl');
@@ -438,6 +439,11 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   assert.equal(result.agent_tui_launch.mcp_fabric_access.status, 'not_admitted_for_runtime_slice');
   assert.equal(result.agent_tui_launch.mcp_fabric_access.client_contract, 'implemented_but_not_admitted_for_production_runtime_slice');
   assert.equal(result.agent_tui_launch.mcp_fabric_access.tool_visibility_authority, 'withheld');
+  assert.deepEqual(result.agent_tui_launch.mcp_fabric_access.environment_gate, {
+    variable: 'NARADA_AGENT_TUI_ENABLE_MCP_FABRIC',
+    value: 'false',
+    operator_override_admitted: false,
+  });
   assert.equal(result.agent_tui_launch.mcp_fabric_access.promotion_gate, 'agent_tui_rust_mcp_fabric_client_promotion_gate');
   assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'mcp_fabric_client_admission').status, 'partial');
   assert.match(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'mcp_fabric_client_admission').current_evidence, /runtime session-evidence bridge/);

@@ -700,6 +700,11 @@ function agentTuiMcpFabricAccessGate(siteRoot) {
     status: 'not_admitted_for_runtime_slice',
     client_contract: 'implemented_but_not_admitted_for_production_runtime_slice',
     tool_visibility_authority: 'withheld',
+    environment_gate: {
+      variable: 'NARADA_AGENT_TUI_ENABLE_MCP_FABRIC',
+      value: 'false',
+      operator_override_admitted: false,
+    },
     promotion_gate: 'agent_tui_rust_mcp_fabric_client_promotion_gate',
     required_before_admission: [
       'rust_mcp_fabric_client_contract',
@@ -1296,6 +1301,7 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     ...(runtime === AGENT_TUI_RUNTIME ? {
       NARADA_AGENT_TUI_SESSION_DIR: agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id),
       NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION: 'false',
+      NARADA_AGENT_TUI_ENABLE_MCP_FABRIC: 'false',
     } : {}),
     ...(runtime === 'codex' ? { CODEX_HOME: codexHomePath(siteRoot, identity) } : {}),
   };

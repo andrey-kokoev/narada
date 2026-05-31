@@ -51,6 +51,8 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - Turn coordinator accepts an injectable provider tool-call executor and writes provider-origin tool request/result evidence before turn completion when the bridge is supplied.
 - Reusable MCP process executor implements the runtime tool executor boundary, executes initialize/initialized handshake when a server process is first spawned, caches one stdio child per server, replaces stale launch specs, records elapsed duration, preemptively terminates blocked reads at timeout, classifies timeout failures, and drops failed processes from the pool.
 - Agent-start MCP gate metadata now records the Rust MCP bridge as implemented but withheld from the production runtime slice until live Site MCP execution is admitted.
+- MCP runtime admission config is explicit: Site MCP fabric remains disabled unless `NARADA_AGENT_TUI_ENABLE_MCP_FABRIC` is enabled and MCP config/fabric paths are admitted; CLI acceptance verifies disabled/refused/admitted posture.
+- Agent-start launch env forces `NARADA_AGENT_TUI_ENABLE_MCP_FABRIC=false` for the bounded runtime slice and records that MCP environment gate in launch metadata.
 - Transcript projection and store for operator/system input, system directive hold/release, provider output placeholders, provider tool-call placeholders, and terminal turn status.
 - Layout, status, composer, transcript, and aggregate app view models.
 - Ratatui renderer for transcript/status/composer regions.

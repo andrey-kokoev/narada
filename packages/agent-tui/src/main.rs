@@ -3,6 +3,7 @@ use narada_agent_tui::composer_view_model::ComposerViewInput;
 use narada_agent_tui::input_queue::{SessionEvidenceContext, TurnState};
 use narada_agent_tui::interactive_runtime::AgentTuiInteractiveRuntime;
 use narada_agent_tui::layout_model::{LayoutConfig, TerminalSize};
+use narada_agent_tui::mcp_runtime_config::McpRuntimeConfig;
 use narada_agent_tui::provider_runtime_config::ProviderRuntimeConfig;
 use narada_agent_tui::runtime_clock::RuntimeClock;
 use narada_agent_tui::runtime_step::RuntimeStep;
@@ -161,6 +162,7 @@ fn executable_candidates(name: &str) -> Vec<String> {
 
 fn print_scaffold(args: &Args) {
     let provider_config = provider_config_from_process_env();
+    let mcp_config = mcp_config_from_process_env();
     println!("narada-agent-tui scaffold");
     println!("identity: {}", args.identity.as_deref().unwrap_or(""));
     println!("session: {}", args.session.as_deref().unwrap_or(""));
@@ -198,6 +200,20 @@ fn print_scaffold(args: &Args) {
     if let Some(reason) = &provider_config.refusal_reason {
         println!("provider_refusal: {reason}");
     }
+    println!("mcp_status: {}", mcp_config.status.as_str());
+    println!(
+        "mcp_fabric_access_enabled: {}",
+        mcp_config.mcp_fabric_access_enabled
+    );
+    if let Some(config_path) = &mcp_config.config_path {
+        println!("mcp_config: {config_path}");
+    }
+    if let Some(site_mcp_fabric) = &mcp_config.site_mcp_fabric {
+        println!("site_mcp_fabric: {site_mcp_fabric}");
+    }
+    if let Some(reason) = &mcp_config.refusal_reason {
+        println!("mcp_refusal: {reason}");
+    }
 }
 
 fn provider_config_from_process_env() -> ProviderRuntimeConfig {
@@ -205,6 +221,13 @@ fn provider_config_from_process_env() -> ProviderRuntimeConfig {
         .filter(|(key, _)| key.starts_with("NARADA_"))
         .collect::<BTreeMap<_, _>>();
     ProviderRuntimeConfig::from_env_map(&env_map)
+}
+
+fn mcp_config_from_process_env() -> McpRuntimeConfig {
+    let env_map = env::vars()
+        .filter(|(key, _)| key.starts_with("NARADA_"))
+        .collect::<BTreeMap<_, _>>();
+    McpRuntimeConfig::from_env_map(&env_map)
 }
 
 fn run_runtime_step_once(args: Args) -> Result<(), String> {
