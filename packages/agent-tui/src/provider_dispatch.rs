@@ -7,6 +7,7 @@ use crate::rendering_boundary::{
 use serde_json::{json, Value};
 
 pub const PROVIDER_REQUEST_PAYLOAD_SCHEMA: &str = "narada.agent_tui.provider_request_payload.v0";
+pub const PROVIDER_OUTPUT_PAYLOAD_SCHEMA: &str = "narada.agent_tui.provider_output_payload.v0";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProviderDispatchStatus {
@@ -151,6 +152,7 @@ impl ProviderOutputRecord {
         Self {
             kind: ProviderOutputKind::TextDelta,
             payload: json!({
+                "schema": PROVIDER_OUTPUT_PAYLOAD_SCHEMA,
                 "turn_id": turn_id,
                 "provider_output_kind": ProviderOutputKind::TextDelta.as_str(),
                 "sequence": sequence,
@@ -214,6 +216,7 @@ impl ProviderOutputRecord {
         Self {
             kind: ProviderOutputKind::ToolCallRequest,
             payload: json!({
+                "schema": PROVIDER_OUTPUT_PAYLOAD_SCHEMA,
                 "turn_id": turn_id,
                 "provider_output_kind": ProviderOutputKind::ToolCallRequest.as_str(),
                 "sequence": sequence,
@@ -385,6 +388,7 @@ mod tests {
             text.kind.session_event_kind(),
             SessionEventKind::ProviderTextDeltaRecorded
         );
+        assert_eq!(text.payload["schema"], PROVIDER_OUTPUT_PAYLOAD_SCHEMA);
         assert_eq!(text.payload["provider_output_kind"], "text_delta");
         assert_eq!(text.payload["text_delta"], "hello");
 
@@ -394,6 +398,7 @@ mod tests {
             tool.kind.session_event_kind(),
             SessionEventKind::ProviderToolCallRequested
         );
+        assert_eq!(tool.payload["schema"], PROVIDER_OUTPUT_PAYLOAD_SCHEMA);
         assert_eq!(tool.payload["provider_output_kind"], "tool_call_request");
         assert_eq!(tool.payload["tool_name"], "site_loop_run_once");
     }
