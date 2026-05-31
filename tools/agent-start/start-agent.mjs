@@ -540,7 +540,7 @@ function agentTuiPromotionChecklist() {
     {
       id: 'mcp_fabric_client_admission',
       status: 'partial',
-      required_evidence: 'Rust MCP fabric client, Site policy visibility, tool request/response, and tool evidence contracts',
+      required_evidence: 'production Site MCP exposure admission, Site policy visibility, tool request/response, and tool evidence contracts',
       current_evidence: 'Policy-bound visibility model, valid tool request/result evidence, carrier MCP config parsing, JSON-RPC tools/call framing, response classification, one-shot stdio process I/O, supervisor handshake/recovery contracts, runtime session-evidence bridge, provider tool-call bridge, TurnCoordinator/RuntimeStep/interactive runtime bridge wiring, reusable per-server process executor, initialize/initialized execution, runtime-config executor construction, and preemptive timeout cancellation exist; production Site MCP exposure remains withheld by launch admission',
     },
     {
@@ -735,7 +735,7 @@ function agentTuiMcpFabricAccessGate(siteRoot) {
     },
     promotion_gate: 'agent_tui_rust_mcp_fabric_client_promotion_gate',
     required_before_admission: [
-      'rust_mcp_fabric_client_contract',
+      'production_site_mcp_exposure_admission',
       'site_mcp_policy_visibility_contract',
       'tool_call_request_response_contract',
       'tool_call_evidence_contract',

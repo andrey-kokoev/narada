@@ -473,7 +473,7 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'mcp_fabric_client_admission').status, 'partial');
   assert.match(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'mcp_fabric_client_admission').current_evidence, /runtime-config executor construction/);
   assert.deepEqual(result.agent_tui_launch.mcp_fabric_access.required_before_admission, [
-    'rust_mcp_fabric_client_contract',
+    'production_site_mcp_exposure_admission',
     'site_mcp_policy_visibility_contract',
     'tool_call_request_response_contract',
     'tool_call_evidence_contract',
