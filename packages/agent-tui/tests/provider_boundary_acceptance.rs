@@ -2,7 +2,12 @@ use narada_agent_tui::carrier_protocol::{
     parse_input_event, parse_session_event, DeliveryMode, SessionEventKind,
 };
 use narada_agent_tui::input_queue::{InputQueue, SessionEvidenceContext};
+use narada_agent_tui::provider_dispatch::{
+    ProviderAdapter, ProviderDispatchRecord, ProviderDispatchStatus, ProviderOutputRecord,
+};
+use narada_agent_tui::transcript_store::TranscriptStore;
 use narada_agent_tui::turn_coordinator::{TurnCoordinator, TurnCoordinatorClock};
+use serde_json::json;
 use std::fs::{read_to_string, remove_file};
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -31,6 +36,32 @@ fn clock() -> TurnCoordinatorClock {
         occurred_at: "2026-05-30T00:00:04.000Z".to_string(),
         event_id_prefix: "session_event_turn".to_string(),
         turn_id_prefix: "turn".to_string(),
+    }
+}
+
+struct StreamingProviderAdapter;
+
+impl ProviderAdapter for StreamingProviderAdapter {
+    fn dispatch_request(
+        &self,
+        input: &narada_agent_tui::carrier_protocol::InputEvent,
+        turn_id: &str,
+    ) -> ProviderDispatchRecord {
+        ProviderDispatchRecord {
+            status: ProviderDispatchStatus::Completed,
+            provider_execution_enabled: true,
+            payload: json!({
+                "turn_id": turn_id,
+                "input_event_id": input.event_id,
+                "provider_request_status": "completed",
+                "provider_execution_enabled": true
+            }),
+            outputs: vec![
+                ProviderOutputRecord::text_delta(turn_id, "Startup ", 1),
+                ProviderOutputRecord::text_delta(turn_id, "sequence ", 2),
+                ProviderOutputRecord::text_delta(turn_id, "completed.", 3),
+            ],
+        }
     }
 }
 
@@ -93,6 +124,57 @@ fn provider_boundary_acceptance_records_disabled_provider_posture() {
         "completed_without_provider"
     );
     assert_eq!(terminal.payload["provider_execution_enabled"], false);
+
+    remove_file(path).ok();
+}
+
+#[test]
+fn provider_boundary_acceptance_projects_streaming_text_as_one_agent_message() {
+    let path = temp_session_path();
+    let mut input = parse_input_event(INPUT_FIXTURE).expect("input fixture parses");
+    input.delivery_mode = DeliveryMode::AdmitAfterActiveTurn;
+    let mut queue = InputQueue::new();
+    queue.admit_input_event(input.clone(), false);
+    let mut coordinator = TurnCoordinator::with_provider_adapter(
+        &path,
+        context(),
+        Box::new(StreamingProviderAdapter),
+    );
+
+    let completed = coordinator
+        .run_one_ready_turn(&mut queue, &clock())
+        .expect("turn run succeeds")
+        .expect("turn completes with provider output");
+
+    assert_eq!(completed.evidence_written, 6);
+
+    let session_jsonl = read_to_string(&path).expect("session jsonl exists");
+    let lines: Vec<&str> = session_jsonl.lines().collect();
+    assert_eq!(lines.len(), 6);
+    assert_eq!(
+        parse_session_event(lines[2])
+            .expect("first delta parses")
+            .event_kind,
+        SessionEventKind::ProviderTextDeltaRecorded
+    );
+    assert_eq!(
+        parse_session_event(lines[4])
+            .expect("third delta parses")
+            .payload["sequence"],
+        3
+    );
+
+    let mut transcript = TranscriptStore::new();
+    let summary = transcript
+        .ingest_jsonl_file_summary(&path)
+        .expect("session transcript ingests");
+    assert_eq!(summary.total_items, 3);
+    assert_eq!(transcript.items()[0].actor.as_str(), "operator");
+    assert_eq!(transcript.items()[1].actor.as_str(), "agent");
+    assert_eq!(transcript.items()[1].text, "Startup sequence completed.");
+    assert_eq!(transcript.items()[1].sequence, Some(3));
+    assert_eq!(transcript.items()[2].actor.as_str(), "agent-tui");
+    assert_eq!(transcript.items()[2].text, "completed");
 
     remove_file(path).ok();
 }

@@ -1,5 +1,5 @@
 use crate::carrier_protocol::{parse_session_event, SessionEvent};
-use crate::transcript_projection::{project_session_event, TranscriptItem};
+use crate::transcript_projection::{project_session_event, TranscriptItem, TranscriptItemKind};
 use std::collections::HashSet;
 use std::fs::read_to_string;
 use std::path::Path;
@@ -66,11 +66,32 @@ impl TranscriptStore {
                 }
                 self.ingested_projection_keys.insert(projection_key.clone());
             }
+            if self.merge_streaming_provider_delta(&item) {
+                return TranscriptIngestResult::Projected;
+            }
             self.items.push(item);
             TranscriptIngestResult::Projected
         } else {
             TranscriptIngestResult::Ignored
         }
+    }
+
+    fn merge_streaming_provider_delta(&mut self, item: &TranscriptItem) -> bool {
+        if item.kind != TranscriptItemKind::ProviderTextDelta {
+            return false;
+        }
+        let Some(previous) = self.items.last_mut() else {
+            return false;
+        };
+        if previous.kind != TranscriptItemKind::ProviderTextDelta
+            || previous.actor != item.actor
+            || previous.turn_id != item.turn_id
+        {
+            return false;
+        }
+        previous.text.push_str(&item.text);
+        previous.sequence = item.sequence;
+        true
     }
 
     pub fn ingest_jsonl_line(&mut self, line: &str) -> Result<TranscriptIngestResult, String> {
@@ -184,6 +205,71 @@ mod tests {
         assert_eq!(store.items()[0].text, "run startup sequence");
         assert_eq!(store.items()[1].actor, TranscriptActor::Agent);
         assert_eq!(store.items()[1].text, "done");
+    }
+
+    #[test]
+    fn merges_streaming_provider_text_deltas_for_same_turn() {
+        let mut store = TranscriptStore::new();
+
+        assert_eq!(
+            store.ingest_event(&event(
+                "session_event_1",
+                SessionEventKind::ProviderTextDeltaRecorded,
+                json!({
+                    "turn_id": "turn_1",
+                    "sequence": 1,
+                    "text_delta": "hello"
+                }),
+            )),
+            TranscriptIngestResult::Projected
+        );
+        assert_eq!(
+            store.ingest_event(&event(
+                "session_event_2",
+                SessionEventKind::ProviderTextDeltaRecorded,
+                json!({
+                    "turn_id": "turn_1",
+                    "sequence": 2,
+                    "text_delta": " world"
+                }),
+            )),
+            TranscriptIngestResult::Projected
+        );
+
+        assert_eq!(store.len(), 1);
+        assert_eq!(store.items()[0].kind, TranscriptItemKind::ProviderTextDelta);
+        assert_eq!(store.items()[0].actor, TranscriptActor::Agent);
+        assert_eq!(store.items()[0].turn_id, "turn_1");
+        assert_eq!(store.items()[0].text, "hello world");
+        assert_eq!(store.items()[0].sequence, Some(2));
+    }
+
+    #[test]
+    fn keeps_provider_text_deltas_separate_across_turns() {
+        let mut store = TranscriptStore::new();
+
+        store.ingest_event(&event(
+            "session_event_1",
+            SessionEventKind::ProviderTextDeltaRecorded,
+            json!({
+                "turn_id": "turn_1",
+                "sequence": 1,
+                "text_delta": "first"
+            }),
+        ));
+        store.ingest_event(&event(
+            "session_event_2",
+            SessionEventKind::ProviderTextDeltaRecorded,
+            json!({
+                "turn_id": "turn_2",
+                "sequence": 1,
+                "text_delta": "second"
+            }),
+        ));
+
+        assert_eq!(store.len(), 2);
+        assert_eq!(store.items()[0].text, "first");
+        assert_eq!(store.items()[1].text, "second");
     }
 
     #[test]

@@ -35,6 +35,7 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - Turn coordinator with provider dispatch boundary recording and explicit `completed_without_provider` terminal evidence.
 - Provider dispatch trait plus stub adapter; real provider execution remains disabled.
 - Provider boundary acceptance verifies request and terminal evidence both record `recorded_not_dispatched` and `provider_execution_enabled=false`.
+- Provider boundary acceptance verifies ordered provider text deltas project as one accumulated agent transcript message for the turn.
 - Rendering boundary model converts provider stderr, MCP stderr, known-noise suppression, terminal resize, and payload threshold decisions into mediated diagnostics or payload references instead of raw terminal writes.
 - Provider output constructors and transcript projection enforce payload references for oversized or sensitive provider text/tool arguments instead of inlining them into transcript rows.
 - MCP fabric boundary acceptance verifies disabled-by-default posture, policy-bound tool visibility after admission, and valid tool request/result evidence records.
