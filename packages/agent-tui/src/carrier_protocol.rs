@@ -9,6 +9,8 @@ pub const PAYLOAD_POLICY_SCHEMA: &str = "narada.carrier.payload_policy.v1";
 pub const PROVIDER_REQUEST_PAYLOAD_SCHEMA: &str = "narada.agent_tui.provider_request_payload.v0";
 pub const PROVIDER_OUTPUT_PAYLOAD_SCHEMA: &str = "narada.agent_tui.provider_output_payload.v0";
 pub const TURN_TERMINAL_PAYLOAD_SCHEMA: &str = "narada.agent_tui.turn_terminal_payload.v0";
+pub const SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA: &str =
+    "narada.carrier.session_event_fixture_manifest.v1";
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -797,18 +799,92 @@ mod tests {
         std::fs::read_to_string(path).expect("shared session fixture reads")
     }
 
+    fn validate_shared_session_event_fixture_manifest(manifest: &Value) -> Result<(), String> {
+        if !manifest.is_object() {
+            return Err("session_event_fixture_manifest_not_object".to_string());
+        }
+        if manifest.get("schema").and_then(Value::as_str)
+            != Some(SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA)
+        {
+            return Err(format!(
+                "invalid_schema:{}",
+                manifest
+                    .get("schema")
+                    .map(Value::to_string)
+                    .unwrap_or_else(|| "undefined".to_string())
+            ));
+        }
+        let fixtures = manifest
+            .get("fixtures")
+            .and_then(Value::as_array)
+            .ok_or_else(|| "invalid_fixtures".to_string())?;
+        let manifest_kinds = fixtures
+            .iter()
+            .enumerate()
+            .map(|(index, entry)| {
+                entry
+                    .get("event_kind")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| format!("fixtures.{index}.invalid_event_kind"))
+                    .map(ToString::to_string)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let protocol_kinds = SESSION_EVENT_KINDS
+            .iter()
+            .map(|kind| {
+                serde_json::to_value(kind)
+                    .expect("session event kind serializes")
+                    .as_str()
+                    .expect("session event kind string")
+                    .to_string()
+            })
+            .collect::<Vec<_>>();
+        if manifest_kinds != protocol_kinds {
+            return Err("fixtures.not_in_session_event_kind_order".to_string());
+        }
+        for (index, entry) in fixtures.iter().enumerate() {
+            let Some(fixture) = entry.get("fixture").and_then(Value::as_str) else {
+                return Err(format!("fixtures.{index}.invalid_fixture"));
+            };
+            if fixture.is_empty()
+                || fixture.contains('/')
+                || fixture.contains('\\')
+                || !fixture.ends_with(".json")
+            {
+                return Err(format!("fixtures.{index}.invalid_fixture"));
+            }
+        }
+        Ok(())
+    }
+
     fn shared_session_event_fixture_manifest() -> Vec<Value> {
         let manifest = read_shared_session_event_fixture("session-event-fixtures.json");
         let manifest: Value =
             serde_json::from_str(&manifest).expect("shared session fixture manifest parses");
-        assert_eq!(
-            manifest["schema"],
-            "narada.carrier.session_event_fixture_manifest.v1"
-        );
+        validate_shared_session_event_fixture_manifest(&manifest)
+            .expect("shared session fixture manifest is valid");
         manifest["fixtures"]
             .as_array()
             .expect("shared session fixture manifest entries")
             .clone()
+    }
+
+    #[test]
+    fn rejects_invalid_shared_session_event_fixture_manifest() {
+        assert_eq!(
+            validate_shared_session_event_fixture_manifest(&json!({
+                "schema": SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA,
+                "fixtures": [{ "event_kind": "missing", "fixture": "x.json" }]
+            })),
+            Err("fixtures.not_in_session_event_kind_order".to_string())
+        );
+        assert_eq!(
+            validate_shared_session_event_fixture_manifest(&json!({
+                "schema": SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA,
+                "fixtures": [{ "event_kind": "input_queued_for_turn_boundary", "fixture": "nested/x.json" }]
+            })),
+            Err("fixtures.not_in_session_event_kind_order".to_string())
+        );
     }
 
     #[test]
