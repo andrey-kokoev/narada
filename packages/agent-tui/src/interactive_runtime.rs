@@ -11,7 +11,9 @@ use crate::runtime_coordinator::{RuntimeCoordinator, RuntimeCoordinatorClock};
 use crate::status_view_model::{RuntimePostureState, StatusViewInput};
 use crate::terminal_runtime_config::TerminalRuntimeConfig;
 use crate::transcript_store::{TranscriptIngestSummary, TranscriptStore};
-use crate::turn_coordinator::{TurnCoordinator, TurnCoordinatorClock};
+use crate::turn_coordinator::{
+    NoopProviderToolCallExecutor, ProviderToolCallExecutor, TurnCoordinator, TurnCoordinatorClock,
+};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
@@ -134,7 +136,6 @@ impl AgentTuiInteractiveRuntime {
             RuntimePostureState::disabled(),
         )
     }
-
     pub fn with_provider_adapter_and_state(
         identity: impl Into<String>,
         session: impl Into<String>,
@@ -142,6 +143,28 @@ impl AgentTuiInteractiveRuntime {
         session_jsonl_path: impl Into<PathBuf>,
         evidence_context: SessionEvidenceContext,
         provider_adapter: Box<dyn ProviderAdapter>,
+        runtime_posture: RuntimePostureState,
+    ) -> Self {
+        Self::with_provider_adapter_tool_executor_and_state(
+            identity,
+            session,
+            control_jsonl_path,
+            session_jsonl_path,
+            evidence_context,
+            provider_adapter,
+            Box::new(NoopProviderToolCallExecutor),
+            runtime_posture,
+        )
+    }
+
+    pub fn with_provider_adapter_tool_executor_and_state(
+        identity: impl Into<String>,
+        session: impl Into<String>,
+        control_jsonl_path: impl Into<PathBuf>,
+        session_jsonl_path: impl Into<PathBuf>,
+        evidence_context: SessionEvidenceContext,
+        provider_adapter: Box<dyn ProviderAdapter>,
+        provider_tool_call_executor: Box<dyn ProviderToolCallExecutor>,
         runtime_posture: RuntimePostureState,
     ) -> Self {
         let session_jsonl_path = session_jsonl_path.into();
@@ -153,10 +176,11 @@ impl AgentTuiInteractiveRuntime {
                 session_jsonl_path.clone(),
                 evidence_context.clone(),
             ),
-            turns: TurnCoordinator::with_provider_adapter(
+            turns: TurnCoordinator::with_provider_adapter_and_tool_executor(
                 session_jsonl_path,
                 evidence_context,
                 provider_adapter,
+                provider_tool_call_executor,
             ),
             transcript: TranscriptStore::new(),
             runtime_posture,
@@ -251,11 +275,18 @@ impl From<crate::runtime_step::RuntimeStepClock> for InteractiveStepClock {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::carrier_protocol::{
+        parse_session_event, SessionEvent, SessionEventKind, SESSION_EVENT_SCHEMA,
+    };
     use crate::mcp_runtime_config::McpRuntimeConfig;
+    use crate::provider_adapter_admission::ProviderAdapterKind;
+    use crate::provider_dispatch::{ProviderOutputRecord, ScriptedProviderAdapter};
     use crate::provider_runtime_config::ProviderRuntimeConfig;
+    use crate::session_jsonl::append_session_event;
     use crate::terminal_runtime_config::TerminalRuntimeConfig;
+    use serde_json::json;
     use std::collections::BTreeMap;
-    use std::fs::{remove_file, OpenOptions};
+    use std::fs::{read_to_string, remove_file, OpenOptions};
     use std::io::Write;
     use std::path::Path;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -306,6 +337,62 @@ mod tests {
         }
     }
 
+    fn scripted_interactive_provider_adapter(
+        outputs: Vec<ProviderOutputRecord>,
+    ) -> ScriptedProviderAdapter {
+        let runtime_config = ProviderRuntimeConfig::from_env_map(&BTreeMap::from([
+            (
+                "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION".to_string(),
+                "true".to_string(),
+            ),
+            (
+                "NARADA_INTELLIGENCE_PROVIDER".to_string(),
+                "codex-subscription".to_string(),
+            ),
+            ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
+        ]));
+        ScriptedProviderAdapter::try_new(
+            runtime_config,
+            ProviderAdapterKind::CodexSubscription,
+            outputs,
+        )
+        .expect("scripted interactive provider admits configured runtime")
+    }
+
+    struct InteractiveToolExecutor;
+
+    impl ProviderToolCallExecutor for InteractiveToolExecutor {
+        fn handle_provider_output(
+            &mut self,
+            output: &ProviderOutputRecord,
+            context: &SessionEvidenceContext,
+            session_jsonl_path: &Path,
+            clock: &TurnCoordinatorClock,
+        ) -> Result<usize, String> {
+            if output.kind != crate::provider_dispatch::ProviderOutputKind::ToolCallRequest {
+                return Ok(0);
+            }
+            let request = SessionEvent {
+                schema: SESSION_EVENT_SCHEMA.to_string(),
+                event_kind: SessionEventKind::ToolCallRequested,
+                event_id: format!("{}_interactive_tool_request", clock.event_id_prefix),
+                occurred_at: clock.occurred_at.clone(),
+                carrier_session_id: context.carrier_session_id.clone(),
+                agent_id: context.agent_id.clone(),
+                site_id: context.site_id.clone(),
+                site_root: context.site_root.clone(),
+                payload: json!({
+                    "tool_name": output.payload["tool_name"],
+                    "arguments_summary": output.payload["arguments_summary"],
+                    "requesting_agent_id": context.agent_id,
+                    "interactive_tool_executor": "injected"
+                }),
+            };
+            append_session_event(session_jsonl_path, &request)?;
+            Ok(1)
+        }
+    }
+
     #[test]
     fn step_polls_drains_and_ingests_transcript() {
         let control_path = temp_path("control");
@@ -340,6 +427,56 @@ mod tests {
         assert_eq!(model.transcript_rows[0].text, "run startup sequence");
         assert_eq!(model.transcript_rows[1].actor_label, "agent-tui");
         assert_eq!(model.transcript_rows[1].text, "completed_without_provider");
+
+        remove_file(control_path).ok();
+        remove_file(session_path).ok();
+    }
+
+    #[test]
+    fn step_accepts_injected_provider_tool_call_executor() {
+        let control_path = temp_path("control");
+        let session_path = temp_path("session");
+        append(&control_path, CONTROL_FIXTURE);
+        append(&control_path, "\n");
+        let provider_adapter = scripted_interactive_provider_adapter(vec![
+            ProviderOutputRecord::text_delta("turn_1", "interactive hello", 1),
+            ProviderOutputRecord::tool_call_request("turn_1", "site_loop_run_once", "{}", 2),
+        ]);
+        let mut runtime = AgentTuiInteractiveRuntime::with_provider_adapter_tool_executor_and_state(
+            "sonar.resident",
+            "carrier_fixture_1",
+            &control_path,
+            &session_path,
+            context(),
+            Box::new(provider_adapter),
+            Box::new(InteractiveToolExecutor),
+            RuntimePostureState::disabled(),
+        );
+
+        let result = runtime
+            .run_step(&ComposerDraftState::default(), &clock())
+            .expect("interactive step succeeds");
+        assert_eq!(result.control_evidence_written, 1);
+        assert_eq!(result.completed_turn.unwrap().evidence_written, 6);
+        assert_eq!(result.transcript.total_items, 4);
+
+        let session_jsonl = read_to_string(&session_path).expect("session jsonl exists");
+        let events = session_jsonl
+            .lines()
+            .map(|line| parse_session_event(line).expect("event parses"))
+            .collect::<Vec<_>>();
+        assert_eq!(events.len(), 7);
+        assert_eq!(
+            events[3].event_kind,
+            SessionEventKind::ProviderTextDeltaRecorded
+        );
+        assert_eq!(
+            events[4].event_kind,
+            SessionEventKind::ProviderToolCallRequested
+        );
+        assert_eq!(events[5].event_kind, SessionEventKind::ToolCallRequested);
+        assert_eq!(events[5].payload["interactive_tool_executor"], "injected");
+        assert_eq!(events[6].event_kind, SessionEventKind::TurnCompleted);
 
         remove_file(control_path).ok();
         remove_file(session_path).ok();
