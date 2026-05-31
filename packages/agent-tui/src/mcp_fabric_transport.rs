@@ -39,8 +39,8 @@ pub struct McpFabricPreparedToolCall {
 
 #[derive(Debug, Deserialize)]
 struct CarrierConfigFile {
-    site_id: Option<String>,
-    carrier: Option<String>,
+    site_id: Option<Value>,
+    carrier: Option<Value>,
     #[serde(default, rename = "mcpServers")]
     mcp_servers: BTreeMap<String, RawMcpServer>,
 }
@@ -218,10 +218,13 @@ fn validate_config_shape(value: &Value) -> Result<(), String> {
 
 fn normalize_optional_config_field(
     field_name: &str,
-    value: Option<String>,
+    value: Option<Value>,
 ) -> Result<Option<String>, String> {
     let Some(value) = value else {
         return Ok(None);
+    };
+    let Some(value) = value.as_str() else {
+        return Err(format!("mcp_fabric_config_{field_name}_invalid"));
     };
     let value = value.trim().to_string();
     if value.is_empty() {
@@ -401,6 +404,26 @@ mod tests {
     }
 
     #[test]
+    fn rejects_non_string_top_level_site_id() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "site_id": 1,
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "tools": ["site_loop_status"]
+                }
+              }
+            }"#,
+        )
+        .expect_err("top-level site_id must be a string");
+
+        assert_eq!(error, "mcp_fabric_config_site_id_invalid");
+    }
+
+    #[test]
     fn rejects_blank_top_level_site_id() {
         let error = McpFabricTransportClient::from_json_str(
             "fixture.mcp.json",
@@ -418,6 +441,26 @@ mod tests {
         .expect_err("blank top-level site_id is invalid");
 
         assert_eq!(error, "mcp_fabric_config_site_id_invalid");
+    }
+
+    #[test]
+    fn rejects_non_string_top_level_carrier() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "carrier": 1,
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "tools": ["site_loop_status"]
+                }
+              }
+            }"#,
+        )
+        .expect_err("top-level carrier must be a string");
+
+        assert_eq!(error, "mcp_fabric_config_carrier_invalid");
     }
 
     #[test]
