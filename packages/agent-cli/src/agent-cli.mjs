@@ -2264,6 +2264,16 @@ function parseNaradaToolCall(content) {
   return null;
 }
 
+function isPotentialNaradaToolCallText(content) {
+  const text = stripAnsi(String(content ?? '')).trimStart();
+  if (!text) return false;
+  if (text.startsWith('```')) return /^```(?:json)?\s*\{?/i.test(text);
+  if (!text.startsWith('{')) return false;
+  const compactPrefix = text.replace(/\s+/g, '').slice(0, 48);
+  return '{"narada_tool_call"'.startsWith(compactPrefix)
+    || compactPrefix.startsWith('{"narada_tool_call"');
+}
+
 function extractJsonObject(text) {
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
@@ -2531,7 +2541,7 @@ function sendCodexExecJsonRequest(request, settings = {}) {
         const text = codexExecEventText(event);
         if (text) {
           content += text;
-          if (parseNaradaToolCall(text)) continue;
+          if (isPotentialNaradaToolCallText(content) || parseNaradaToolCall(content)) continue;
           if (settings.emit) {
             settings.emit('assistant_message_stream', { turn_id: settings.turn?.turnId ?? null, content: text });
           } else {
@@ -3317,6 +3327,7 @@ export {
   parseCodexExecJsonLine,
   parseCodexMcpResponse,
   parseNaradaToolCall,
+  isPotentialNaradaToolCallText,
   createTerminalStyle,
   formatDuration,
   formatHeaderRow,

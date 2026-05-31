@@ -46,6 +46,7 @@ import {
   parseAnthropicMessagesResponse,
   parseCodexExecJsonLine,
   parseNaradaToolCall,
+  isPotentialNaradaToolCallText,
   printAgentMessage,
   renderMarkdownForTerminal,
   rewriteSubmittedPromptForTest,
@@ -465,6 +466,9 @@ assert.deepEqual(parseNaradaToolCall('{"narada_tool_call":{"name":"agent_context
   name: 'agent_context_startup_sequence',
   arguments: {},
 });
+assert.equal(isPotentialNaradaToolCallText('{"narada_tool_call":{"name":"mcp_payload_create"'), true);
+assert.equal(isPotentialNaradaToolCallText('```json\n{"narada_tool_call":{"name":"mcp_payload_create"'), true);
+assert.equal(isPotentialNaradaToolCallText('Startup sequence completed.'), false);
 const codexMcpReplyRequest = buildCodexMcpRequest([
   { role: 'user', content: 'Continue.' },
 ], [], {
