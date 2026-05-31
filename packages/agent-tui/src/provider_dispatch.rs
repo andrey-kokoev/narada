@@ -36,6 +36,18 @@ pub struct ProviderDispatchRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProviderAdapterRequest {
+    pub turn_id: String,
+    pub input_event_id: String,
+    pub content_preview: String,
+    pub provider_runtime_status: String,
+    pub provider: Option<String>,
+    pub model: Option<String>,
+    pub thinking: Option<String>,
+    pub stream: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProviderOutputKind {
     TextDelta,
     ToolCallRequest,
@@ -78,6 +90,47 @@ pub struct ScriptedProviderAdapter {
 pub struct ProviderDispatchStub {
     runtime_config: ProviderRuntimeConfig,
     adapter_admission: ProviderAdapterAdmission,
+}
+
+impl ProviderAdapterRequest {
+    pub fn from_input(
+        input: &InputEvent,
+        turn_id: impl Into<String>,
+        runtime_config: &ProviderRuntimeConfig,
+    ) -> Self {
+        Self {
+            turn_id: turn_id.into(),
+            input_event_id: input.event_id.clone(),
+            content_preview: input.content.chars().take(120).collect::<String>(),
+            provider_runtime_status: runtime_config.status.as_str().to_string(),
+            provider: runtime_config.provider.clone(),
+            model: runtime_config.model.clone(),
+            thinking: runtime_config.thinking.clone(),
+            stream: runtime_config.stream,
+        }
+    }
+
+    pub fn dispatch_payload(
+        &self,
+        status: &ProviderDispatchStatus,
+        adapter_admission: &ProviderAdapterAdmission,
+    ) -> Value {
+        json!({
+            "turn_id": self.turn_id,
+            "input_event_id": self.input_event_id,
+            "provider_request_status": status.as_str(),
+            "provider_execution_enabled": adapter_admission.provider_execution_enabled,
+            "provider_runtime_status": self.provider_runtime_status,
+            "provider_adapter_admission_status": adapter_admission.status.as_str(),
+            "provider_adapter_kind": adapter_admission.adapter_kind.clone(),
+            "provider": self.provider.clone(),
+            "model": self.model.clone(),
+            "thinking": self.thinking.clone(),
+            "stream": self.stream,
+            "provider_adapter_refusal_reason": adapter_admission.refusal_reason.clone(),
+            "content_preview": self.content_preview
+        })
+    }
 }
 
 impl ProviderOutputRecord {
@@ -196,24 +249,11 @@ impl ScriptedProviderAdapter {
 impl ProviderAdapter for ScriptedProviderAdapter {
     fn dispatch_request(&self, input: &InputEvent, turn_id: &str) -> ProviderDispatchRecord {
         let status = ProviderDispatchStatus::Completed;
+        let request = ProviderAdapterRequest::from_input(input, turn_id, &self.runtime_config);
         ProviderDispatchRecord {
             status: status.clone(),
             provider_execution_enabled: self.adapter_admission.provider_execution_enabled,
-            payload: json!({
-                "turn_id": turn_id,
-                "input_event_id": input.event_id,
-                "provider_request_status": status.as_str(),
-                "provider_execution_enabled": self.adapter_admission.provider_execution_enabled,
-                "provider_runtime_status": self.runtime_config.status.as_str(),
-                "provider_adapter_admission_status": self.adapter_admission.status.as_str(),
-                "provider_adapter_kind": self.adapter_admission.adapter_kind.clone(),
-                "provider": self.runtime_config.provider.clone(),
-                "model": self.runtime_config.model.clone(),
-                "thinking": self.runtime_config.thinking.clone(),
-                "stream": self.runtime_config.stream,
-                "provider_adapter_refusal_reason": self.adapter_admission.refusal_reason.clone(),
-                "content_preview": input.content.chars().take(120).collect::<String>()
-            }),
+            payload: request.dispatch_payload(&status, &self.adapter_admission),
             outputs: self.outputs.clone(),
         }
     }
@@ -276,24 +316,11 @@ impl ProviderAdapter for ProviderDispatchStub {
     fn dispatch_request(&self, input: &InputEvent, turn_id: &str) -> ProviderDispatchRecord {
         let status = ProviderDispatchStatus::RecordedNotDispatched;
         let admission = &self.adapter_admission;
+        let request = ProviderAdapterRequest::from_input(input, turn_id, &self.runtime_config);
         ProviderDispatchRecord {
             status: status.clone(),
             provider_execution_enabled: admission.provider_execution_enabled,
-            payload: json!({
-                "turn_id": turn_id,
-                "input_event_id": input.event_id,
-                "provider_request_status": status.as_str(),
-                "provider_execution_enabled": admission.provider_execution_enabled,
-                "provider_runtime_status": self.runtime_config.status.as_str(),
-                "provider_adapter_admission_status": admission.status.as_str(),
-                "provider_adapter_kind": admission.adapter_kind.clone(),
-                "provider": self.runtime_config.provider.clone(),
-                "model": self.runtime_config.model.clone(),
-                "thinking": self.runtime_config.thinking.clone(),
-                "stream": self.runtime_config.stream,
-                "provider_adapter_refusal_reason": admission.refusal_reason.clone(),
-                "content_preview": input.content.chars().take(120).collect::<String>()
-            }),
+            payload: request.dispatch_payload(&status, admission),
             outputs: Vec::new(),
         }
     }
@@ -366,6 +393,44 @@ mod tests {
         );
         assert_eq!(tool.payload["provider_output_kind"], "tool_call_request");
         assert_eq!(tool.payload["tool_name"], "site_loop_run_once");
+    }
+
+    #[test]
+    fn provider_adapter_request_has_stable_dispatch_payload_shape() {
+        let input = parse_input_event(INPUT_FIXTURE).expect("input parses");
+        let runtime_config = ProviderRuntimeConfig::from_env_map(&BTreeMap::from([
+            (
+                "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION".to_string(),
+                "true".to_string(),
+            ),
+            (
+                "NARADA_INTELLIGENCE_PROVIDER".to_string(),
+                "codex-subscription".to_string(),
+            ),
+            ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
+            ("NARADA_AI_THINKING".to_string(), "medium".to_string()),
+        ]));
+        let admission = ProviderAdapterAdmission::from_runtime_config(&runtime_config, None);
+        let request = ProviderAdapterRequest::from_input(&input, "turn_1", &runtime_config);
+        let payload =
+            request.dispatch_payload(&ProviderDispatchStatus::RecordedNotDispatched, &admission);
+
+        assert_eq!(request.turn_id, "turn_1");
+        assert_eq!(request.input_event_id, input.event_id);
+        assert_eq!(request.provider_runtime_status, "configured");
+        assert_eq!(
+            payload["provider_request_status"],
+            "recorded_not_dispatched"
+        );
+        assert_eq!(payload["provider_runtime_status"], "configured");
+        assert_eq!(payload["provider"], "codex-subscription");
+        assert_eq!(payload["model"], "gpt-5.5");
+        assert_eq!(payload["thinking"], "medium");
+        assert_eq!(
+            payload["provider_adapter_admission_status"],
+            "configured_without_adapter"
+        );
+        assert_eq!(payload["provider_execution_enabled"], false);
     }
 
     #[test]
