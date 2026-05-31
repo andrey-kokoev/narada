@@ -68,6 +68,30 @@ pub enum SessionEventKind {
     CarrierDiagnosticRecorded,
 }
 
+pub const SESSION_EVENT_KINDS: &[SessionEventKind] = &[
+    SessionEventKind::InputQueuedForTurnBoundary,
+    SessionEventKind::InputAdmittedToTurn,
+    SessionEventKind::InputDroppedByOperator,
+    SessionEventKind::InputAbandonedOnSessionEnd,
+    SessionEventKind::InputCompleted,
+    SessionEventKind::SystemDirectiveHeld,
+    SessionEventKind::SystemDirectiveReleased,
+    SessionEventKind::DirectiveReceiptRecorded,
+    SessionEventKind::DirectiveCarrierAcceptedRecorded,
+    SessionEventKind::TurnStarted,
+    SessionEventKind::ProviderRequestRecorded,
+    SessionEventKind::ProviderTextDeltaRecorded,
+    SessionEventKind::ProviderToolCallRequested,
+    SessionEventKind::TurnCompleted,
+    SessionEventKind::TurnInterrupted,
+    SessionEventKind::TurnFailed,
+    SessionEventKind::InterruptRequested,
+    SessionEventKind::ToolCallRequested,
+    SessionEventKind::ToolResultReceived,
+    SessionEventKind::CarrierCommandExecuted,
+    SessionEventKind::CarrierDiagnosticRecorded,
+];
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct InputEvent {
     pub schema: String,
@@ -766,6 +790,99 @@ mod tests {
         );
     }
 
+    fn shared_session_event_fixture_by_kind() -> Vec<(SessionEventKind, &'static str)> {
+        vec![
+            (
+                SessionEventKind::InputQueuedForTurnBoundary,
+                "input-queued-session-event.json",
+            ),
+            (SessionEventKind::InputAdmittedToTurn, "session-event.json"),
+            (
+                SessionEventKind::InputDroppedByOperator,
+                "input-dropped-session-event.json",
+            ),
+            (
+                SessionEventKind::InputAbandonedOnSessionEnd,
+                "input-abandoned-session-event.json",
+            ),
+            (
+                SessionEventKind::InputCompleted,
+                "input-completed-session-event.json",
+            ),
+            (
+                SessionEventKind::SystemDirectiveHeld,
+                "system-directive-held-session-event.json",
+            ),
+            (
+                SessionEventKind::SystemDirectiveReleased,
+                "system-directive-released-session-event.json",
+            ),
+            (
+                SessionEventKind::DirectiveReceiptRecorded,
+                "directive-receipt-session-event.json",
+            ),
+            (
+                SessionEventKind::DirectiveCarrierAcceptedRecorded,
+                "directive-carrier-accepted-session-event.json",
+            ),
+            (
+                SessionEventKind::TurnStarted,
+                "turn-started-session-event.json",
+            ),
+            (
+                SessionEventKind::ProviderRequestRecorded,
+                "provider-request-session-event.json",
+            ),
+            (
+                SessionEventKind::ProviderTextDeltaRecorded,
+                "provider-text-delta-session-event.json",
+            ),
+            (
+                SessionEventKind::ProviderToolCallRequested,
+                "provider-tool-call-session-event.json",
+            ),
+            (
+                SessionEventKind::TurnCompleted,
+                "turn-terminal-session-event.json",
+            ),
+            (
+                SessionEventKind::TurnInterrupted,
+                "turn-interrupted-session-event.json",
+            ),
+            (
+                SessionEventKind::TurnFailed,
+                "turn-failed-session-event.json",
+            ),
+            (
+                SessionEventKind::InterruptRequested,
+                "interrupt-requested-session-event.json",
+            ),
+            (
+                SessionEventKind::ToolCallRequested,
+                "tool-call-session-event.json",
+            ),
+            (
+                SessionEventKind::ToolResultReceived,
+                "tool-result-session-event.json",
+            ),
+            (
+                SessionEventKind::CarrierCommandExecuted,
+                "carrier-command-session-event.json",
+            ),
+            (
+                SessionEventKind::CarrierDiagnosticRecorded,
+                "carrier-diagnostic-session-event.json",
+            ),
+        ]
+    }
+
+    fn read_shared_session_event_fixture(name: &str) -> String {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../carrier-protocol/fixtures")
+            .join(name);
+        std::fs::read_to_string(path).expect("shared session fixture reads")
+    }
+
     #[test]
     fn parses_shared_session_event_fixture() {
         let event = parse_session_event(include_str!(
@@ -774,6 +891,22 @@ mod tests {
         .expect("session fixture parses");
         assert_eq!(event.event_kind, SessionEventKind::InputAdmittedToTurn);
         assert_eq!(event.payload["input_event_id"], "input_fixture_1");
+    }
+
+    #[test]
+    fn shared_session_event_fixtures_cover_every_kind() {
+        let fixtures = shared_session_event_fixture_by_kind();
+        let fixture_kinds = fixtures
+            .iter()
+            .map(|(kind, _)| kind.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(fixture_kinds, SESSION_EVENT_KINDS);
+
+        for (kind, name) in fixtures {
+            let json = read_shared_session_event_fixture(name);
+            let event = parse_session_event(&json).expect("shared session fixture parses");
+            assert_eq!(event.event_kind, kind);
+        }
     }
 
     #[test]
