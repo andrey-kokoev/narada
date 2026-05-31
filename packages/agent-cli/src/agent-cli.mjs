@@ -18,6 +18,7 @@ import {
 import {
   createPayloadRef,
   createSessionEvent as createCarrierSessionEvent,
+  createTurnTerminalPayload,
   normalizeControlInputRecord,
   normalizeInputEvent as normalizeCarrierInputEvent,
 } from '../../carrier-protocol/src/carrier-protocol.mjs';
@@ -820,7 +821,14 @@ async function runConversationTurn(messages, tools, mcpServers, rl, options = {}
   const recordTurnTerminal = (eventKind, payload = {}) => {
     if (turnTerminalRecorded || !turn?.turnId) return;
     turnTerminalRecorded = true;
-    appendCarrierTurnEvent(eventKind, turn.turnId, payload);
+    appendCarrierTurnEvent(eventKind, turn.turnId, createTurnTerminalPayload({
+      turn_id: turn.turnId,
+      input_event_id: options.inputEventId,
+      provider_request_status: payload.provider_request_status ?? 'completed',
+      terminal_status: payload.terminal_status ?? terminalStatusForEventKind(eventKind),
+      provider_execution_enabled: payload.provider_execution_enabled ?? true,
+      error_summary: payload.error_summary,
+    }));
   };
   while (true) {
     if (turn?.interruptRequested) {
@@ -896,6 +904,13 @@ async function runConversationTurn(messages, tools, mcpServers, rl, options = {}
     recordTurnTerminal('turn_completed');
     return { terminal_state: 'completed' };
   }
+}
+
+function terminalStatusForEventKind(eventKind) {
+  if (eventKind === 'turn_completed') return 'completed';
+  if (eventKind === 'turn_interrupted') return 'interrupted';
+  if (eventKind === 'turn_failed') return 'failed';
+  return 'failed';
 }
 
 // ---------------------------------------------------------------------------
@@ -1167,9 +1182,9 @@ function extractOutputRef(content) {
 function payloadRefFromOutputRef(outputRef) {
   if (!outputRef || !String(outputRef).startsWith('mcp_output:')) return null;
   return createPayloadRef({
-    payload_ref: String(outputRef).replace(/^mcp_output:/, 'mcp_payload:'),
+    payload_ref: String(outputRef),
     reader_tool: 'mcp_output_show',
-    summary: 'tool result payload stored out of transcript',
+    summary: 'tool result output stored out of transcript',
   });
 }
 

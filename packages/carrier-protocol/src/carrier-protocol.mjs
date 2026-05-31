@@ -185,7 +185,13 @@ export function validatePayloadRef(ref) {
   const errors = [];
   if (!isObject(ref)) return ['payload_ref_not_object'];
   if (ref.schema !== PAYLOAD_REF_SCHEMA) errors.push(`invalid_schema:${String(ref.schema)}`);
-  if (typeof ref.payload_ref !== 'string' || !/^mcp_payload:[A-Za-z0-9_.:-]+@v\d+$/.test(ref.payload_ref)) errors.push('invalid_payload_ref');
+  if (typeof ref.payload_ref !== 'string') {
+    errors.push('invalid_payload_ref');
+  } else if (ref.reader_tool === 'mcp_output_show') {
+    if (!/^mcp_output:[A-Za-z0-9_.:-]+$/.test(ref.payload_ref)) errors.push('invalid_payload_ref');
+  } else if (!/^mcp_payload:[A-Za-z0-9_.:-]+@v\d+$/.test(ref.payload_ref)) {
+    errors.push('invalid_payload_ref');
+  }
   if (ref.reader_tool !== 'mcp_payload_read' && ref.reader_tool !== 'mcp_output_show') errors.push(`invalid_reader_tool:${String(ref.reader_tool)}`);
   if (typeof ref.summary !== 'string' || ref.summary.trim().length === 0) errors.push('invalid_summary');
   return errors;

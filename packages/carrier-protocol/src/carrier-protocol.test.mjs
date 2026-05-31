@@ -295,6 +295,11 @@ const payloadRef = createPayloadRef({ payload_ref: 'mcp_payload:payload_test@v1'
 assert.equal(payloadRef.schema, PAYLOAD_REF_SCHEMA);
 assert.deepEqual(validatePayloadRef(payloadRef), []);
 assert.doesNotThrow(() => assertValidPayloadRef(payloadRef));
+const outputRef = createPayloadRef({ payload_ref: 'mcp_output:o_test', reader_tool: 'mcp_output_show', summary: 'large tool output' });
+assert.equal(outputRef.schema, PAYLOAD_REF_SCHEMA);
+assert.deepEqual(validatePayloadRef(outputRef), []);
+assert.doesNotThrow(() => assertValidPayloadRef(outputRef));
+assert.match(thrownMessage(() => createPayloadRef({ payload_ref: 'mcp_output:o_test', summary: 'x' })), /invalid_payload_ref/);
 assert.match(thrownMessage(() => createPayloadRef({ payload_ref: 'bad', summary: 'x' })), /invalid_payload_ref/);
 const payloadPolicy = createPayloadPolicy({ max_inline_chars: 200, max_inline_bytes: 1024 });
 assert.equal(payloadPolicy.schema, PAYLOAD_POLICY_SCHEMA);
