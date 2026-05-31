@@ -99,7 +99,7 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - `--interactive-smoke-loop --max-steps <n>` passes fixture acceptance for queued operator input, held system directives, release, interrupt, malformed control JSONL, and transcript projection.
 - `--interactive-loop --max-steps <n>` has scripted terminal-frame acceptance that verifies no blank frame, stable layout rectangles, preserved composer draft, and clean terminal leave on exit/error.
 - Provider dispatch remains explicitly disabled unless a production provider adapter implementation is admitted with its own authority and evidence contract.
-- Site MCP access remains explicitly disabled unless a Rust MCP fabric client is admitted with policy-bound tool visibility.
+- Site MCP access remains explicitly disabled unless production Site MCP exposure is admitted with policy-bound tool visibility.
 - `agent-start` launch metadata names the runtime slice accurately: smoke step, smoke loop, or terminal interactive loop.
 - Production `agent-start -Runtime agent-tui` changes from `--interactive-step-once` only after the above checks are green and the launch packet records terminal rendering as admitted.
 
