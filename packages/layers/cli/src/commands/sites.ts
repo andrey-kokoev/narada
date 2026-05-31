@@ -8,7 +8,7 @@ import { lstat, mkdir, readFile, readdir, realpath, rm, symlink, writeFile } fro
 import { existsSync } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { basename, dirname, join, posix, resolve, win32 } from 'node:path';
+import { basename, delimiter, dirname, join, posix, resolve, win32 } from 'node:path';
 import { hostname } from 'node:os';
 import { promisify } from 'node:util';
 import { createHash, randomUUID } from 'node:crypto';
@@ -5589,13 +5589,23 @@ function resolveCliReadinessCoordinates(): {
   };
 }
 
+function pathExecutableCandidates(command: string): string[] {
+  if (process.platform !== 'win32') return [command];
+  if (/\.[A-Za-z0-9]+$/.test(command)) return [command];
+  const pathExt = (process.env.PATHEXT || '.COM;.EXE;.BAT;.CMD')
+    .split(';')
+    .map((extension) => extension.trim())
+    .filter(Boolean);
+  return [command, ...pathExt.map((extension) => `${command}${extension}`)];
+}
+
 async function commandAvailable(command: string): Promise<boolean> {
-  try {
-    await execFileAsync(command, ['--version'], { timeout: 1500, windowsHide: true });
-    return true;
-  } catch {
-    return false;
-  }
+  const paths = (process.env.PATH || '')
+    .split(delimiter)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  const candidates = pathExecutableCandidates(command);
+  return paths.some((pathEntry) => candidates.some((candidate) => existsSync(join(pathEntry, candidate))));
 }
 
 async function resolveWindowsToolCommand(name: string, commands: string[]): Promise<WindowsToolCommandResolution> {
@@ -5610,9 +5620,9 @@ async function resolveWindowsToolCommand(name: string, commands: string[]): Prom
     return { status: 'ambiguous', command: commands[0] ?? null, candidates: commands, probe: 'env:NARADA_WINDOWS_TOOL_*' };
   }
   const found = (await Promise.all(commands.map(async (command) => (await commandAvailable(command)) ? command : null))).filter((command): command is string => Boolean(command));
-  if (found.length === 0) return { status: 'missing', command: null, candidates: commands, probe: '--version' };
-  if (found.length > 1) return { status: 'ambiguous', command: found[0]!, candidates: found, probe: '--version' };
-  return { status: 'found', command: found[0]!, candidates: commands, probe: '--version' };
+  if (found.length === 0) return { status: 'missing', command: null, candidates: commands, probe: 'path_lookup' };
+  if (found.length > 1) return { status: 'ambiguous', command: found[0]!, candidates: found, probe: 'path_lookup' };
+  return { status: 'found', command: found[0]!, candidates: commands, probe: 'path_lookup' };
 }
 
 async function windowsToolCheck(args: {

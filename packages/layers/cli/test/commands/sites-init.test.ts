@@ -724,6 +724,28 @@ describe('sitesInitCommand', () => {
     });
   });
 
+  it('uses non-executing PATH lookup for Windows tool availability probes', async () => {
+    const originalPath = process.env.PATH;
+    process.env.COMPUTERNAME = 'DESKTOP-SUNROOM';
+    process.env.PATH = '';
+
+    try {
+      const result = await sitesBootstrapWindowsCommand({ format: 'json' }, createMockContext());
+
+      expect(result.exitCode).toBe(ExitCode.SUCCESS);
+      const data = result.result as { substrate_readiness: Array<{ name: string; command_resolution?: { status: string; probe: string } }> };
+      expect(data.substrate_readiness.find((check) => check.name === 'powershell_available')).toMatchObject({
+        command_resolution: { status: 'missing', probe: 'path_lookup' },
+      });
+    } finally {
+      if (originalPath === undefined) {
+        delete process.env.PATH;
+      } else {
+        process.env.PATH = originalPath;
+      }
+    }
+  });
+
   it('separates found command resolution from unknown semantic readiness', async () => {
     process.env.COMPUTERNAME = 'DESKTOP-SUNROOM';
     process.env.NARADA_WINDOWS_TOOL_WINDOWS_TERMINAL = 'present';
