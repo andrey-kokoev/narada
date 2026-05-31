@@ -508,7 +508,7 @@ function agentTuiPromotionChecklist() {
       id: 'terminal_interactive_loop_acceptance',
       status: 'partial',
       required_evidence: 'scripted terminal-frame acceptance covers no blank frame, stable layout, preserved composer draft, and clean leave',
-      current_evidence: 'TestBackend frame, lifecycle harness, and injected-loop acceptance exist; real-terminal acceptance remains pending',
+      current_evidence: 'TestBackend frame, lifecycle harness, injected-loop acceptance, terminal runtime config gates, and live-composer rendering acceptance exist; production real-terminal admission remains blocked on provider and MCP launch admission plus explicit operator terminal-mode promotion',
     },
     {
       id: 'carrier_command_acceptance',
@@ -681,6 +681,12 @@ function agentTuiTerminalRenderingGate() {
     admitted: false,
     gated_modes: ['--render-once', '--interactive-loop'],
     environment_gate: agentTuiTerminalRenderingEnvironmentGate(),
+    required_before_admission: [
+      'provider_adapter_admission',
+      'mcp_fabric_client_admission',
+      'explicit_terminal_mode_promotion',
+    ],
+    current_evidence: 'Renderer frame, lifecycle, injected interactive loop, live composer, and terminal runtime config acceptance are implemented and tested.',
     reason: 'Smoke step runs without alternate screen or interactive terminal handoff.',
     promotion_gate: 'agent_tui_terminal_rendering_promotion_gate',
   };

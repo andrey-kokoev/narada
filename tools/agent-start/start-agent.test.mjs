@@ -434,6 +434,12 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
     required_mode: 'interactive_loop',
     operator_override_admitted: false,
   });
+  assert.deepEqual(result.agent_tui_launch.terminal_rendering.required_before_admission, [
+    'provider_adapter_admission',
+    'mcp_fabric_client_admission',
+    'explicit_terminal_mode_promotion',
+  ]);
+  assert.match(result.agent_tui_launch.terminal_rendering.current_evidence, /live composer/);
   assert.match(result.agent_tui_launch.terminal_rendering.reason, /without alternate screen/);
   assert.equal(result.agent_tui_launch.terminal_rendering.promotion_gate, 'agent_tui_terminal_rendering_promotion_gate');
   assert.equal(result.agent_tui_launch.provider_execution_enabled, false);

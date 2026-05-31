@@ -112,7 +112,7 @@ Current launch metadata now distinguishes satisfied gates from remaining promoti
 - Satisfied: payload reference policy is enforced for large or sensitive provider/tool payloads at transcript boundaries.
 - Satisfied: launcher-registry Site rollout has accepted side-by-side `agent-cli` and bounded `agent-tui` evidence for all known Sites.
 - Partial: Rust tests pass through the documented VS DevCmd toolchain; plain-shell readiness remains a diagnostic preflight.
-- Partial: terminal-loop acceptance has scripted frame, lifecycle, injected-loop, and terminal runtime config coverage; real-terminal promotion is not admitted.
+- Partial: terminal-loop acceptance has scripted frame, lifecycle, injected-loop, live-composer rendering, and terminal runtime config coverage; real-terminal promotion is blocked on provider admission, MCP admission, and explicit terminal-mode promotion.
 - Partial: provider admission has disabled/refused/configured runtime posture, explicit adapter admission evidence, a scripted admitted adapter contract exercised through turn and runtime-step paths, streaming transcript accumulation, and provider-origin tool-call mediation; real production provider dispatch remains withheld.
 - Partial: MCP admission has config/fabric posture, policy visibility, request/response framing, supervised stdio execution, runtime-posture evidence, and launch gating; production Site MCP exposure remains withheld until live Site execution is admitted.
 
@@ -231,7 +231,7 @@ Promote the next blocked carrier capability, not more Site rollout evidence. The
 
 - Provider adapter admission: real production provider dispatch and token streaming over the admitted adapter contract.
 - MCP fabric launch admission: Rust-side Site MCP discovery, policy-bound visibility, request/response, evidence, and runtime-config executor construction exist; production Site MCP exposure remains withheld by launcher policy until explicitly admitted.
-- Terminal interactive promotion: production `agent-start -Runtime agent-tui` must move from bounded non-terminal smoke to admitted terminal rendering only after provider and MCP execution boundaries are explicit.
+- Terminal interactive promotion: production `agent-start -Runtime agent-tui` must move from bounded non-terminal smoke to admitted terminal rendering only after provider admission, MCP admission, and explicit terminal-mode promotion are recorded.
 
 ## Live Rollout Evidence Commands
 
