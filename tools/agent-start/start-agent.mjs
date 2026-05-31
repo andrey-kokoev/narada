@@ -501,8 +501,8 @@ function agentTuiPromotionChecklist() {
     {
       id: 'rust_tests_available',
       status: 'partial',
-      required_evidence: 'cargo test passes in CI or documented local Rust toolchain',
-      current_evidence: 'cargo test passes from the documented VS DevCmd toolchain path; plain-shell preflight remains diagnostic until link.exe and Windows SDK libs are loaded',
+      required_evidence: 'pnpm agent-tui:test passes in CI or documented local Rust toolchain',
+      current_evidence: 'pnpm agent-tui:test passes through the quiet documented VS DevCmd wrapper; plain-shell preflight remains diagnostic until link.exe and Windows SDK libs are loaded',
     },
     {
       id: 'terminal_interactive_loop_acceptance',

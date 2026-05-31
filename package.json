@@ -17,6 +17,8 @@
     "agent-tui:test:focused": "pwsh -NoProfile -File tools/agent-tui/test-agent-tui.ps1",
     "agent-tui:test": "pwsh -NoProfile -File tools/agent-tui/test-agent-tui.ps1 -Full",
     "agent-tui:test:verbose": "pwsh -NoProfile -File tools/agent-tui/test-agent-tui.ps1 -Full -VerboseOutput",
+    "agent-start:test": "node --test --test-reporter=dot tools/agent-start/start-agent.test.mjs",
+    "agent-start:test:verbose": "node --test tools/agent-start/start-agent.test.mjs",
     "test:control-plane": "pnpm --filter @narada2/control-plane test",
     "test:daemon": "pnpm --filter @narada2/daemon test",
     "typecheck": "pnpm -r typecheck",

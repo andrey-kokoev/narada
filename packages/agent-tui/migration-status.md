@@ -189,18 +189,16 @@ Quiet defaults:
 pnpm agent-tui:test:focused
 pnpm agent-tui:test
 pnpm --filter @narada2/carrier-protocol test
-node --test tools/agent-start/start-agent.test.mjs
+pnpm agent-start:test
 ```
 
 Verbose Rust output is intentionally explicit:
 
 ```powershell
 pnpm agent-tui:test:verbose
-```
-
+Plain non-developer shells may still report blocked:
 
 ```powershell
-cargo test
 node D:\code\narada\tools\agent-start\check-agent-tui-rust-toolchain.mjs
 ```
 
@@ -208,13 +206,13 @@ Reason: `link.exe` and Windows SDK libraries are available after `VsDevCmd.bat` 
 
 ## Rust Toolchain Recovery
 
-Use one of these operator paths before treating `cargo test` as meaningful for `agent-tui`:
+Use this diagnostic path before treating agent-tui test failures as implementation failures:
 
 ```powershell
 where.exe link
 ```
 
-If that does not find `link.exe`, install or modify Visual Studio Build Tools with the C++ build tools workload. If `link.exe` exists but `gdi32.lib` is missing, install or modify Visual Studio Build Tools to include a Windows SDK, then run from a Developer PowerShell or import the toolchain environment before testing.
+If that does not find `link.exe`, install or modify Visual Studio Build Tools with the C++ build tools workload. If `link.exe` exists but `gdi32.lib` is missing, install or modify Visual Studio Build Tools to include a Windows SDK.
 
 Readiness command:
 
@@ -224,13 +222,14 @@ node D:\code\narada\tools\agent-start\check-agent-tui-rust-toolchain.mjs
 
 Agent-start launch results expose the same preflight as `agent_tui_launch.rust_toolchain_readiness`.
 
-Expected verification after recovery:
+Expected quiet verification after recovery:
 
 ```powershell
-cmd /d /s /c "call ""C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat"" -arch=x64 -host_arch=x64 >nul && cd /d D:\code\narada\packages\agent-tui && cargo test"
+pnpm agent-tui:test
 ```
 
-If `cargo test` still fails after `VsDevCmd.bat` reports a ready toolchain, treat the new failure as an `agent-tui` implementation issue instead of a toolchain blocker.
+If `pnpm agent-tui:test` still fails after `VsDevCmd.bat` reports a ready toolchain, treat the new failure as an `agent-tui` implementation issue instead of a toolchain blocker.
+
 
 ## Next Step
 

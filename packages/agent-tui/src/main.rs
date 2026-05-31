@@ -124,7 +124,7 @@ fn run_rust_toolchain_check() -> i32 {
     );
     if !ready {
         println!("next_check: where.exe link");
-        println!("recovery: install or load Visual Studio Build Tools C++ workload, then rerun cargo test from Developer PowerShell");
+        println!("recovery: install or load Visual Studio Build Tools C++ workload, then rerun pnpm agent-tui:test from the repo root");
     }
 
     if ready {
