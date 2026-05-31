@@ -96,6 +96,9 @@ export function parseAgentTuiProviderAdapterContract(jsonText) {
   if (contract?.provider_execution_env_var !== 'NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION') {
     throw new Error('provider_adapter_contract_invalid:provider_execution_env_var');
   }
+  if (contract?.provider_adapter_kind_env_var !== 'NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND') {
+    throw new Error('provider_adapter_contract_invalid:provider_adapter_kind_env_var');
+  }
   if (contract?.scripted_provider_adapter_kind !== 'scripted_provider_adapter') {
     throw new Error('provider_adapter_contract_invalid:scripted_provider_adapter_kind');
   }

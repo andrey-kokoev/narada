@@ -1,6 +1,7 @@
 use crate::mcp_fabric_transport::McpFabricTransportClient;
 use crate::mcp_runtime_config::McpRuntimeConfig;
 use crate::provider_adapter_admission::ProviderAdapterAdmission;
+use crate::provider_adapter_contract::provider_adapter_contract;
 use crate::provider_runtime_config::ProviderRuntimeConfig;
 use crate::status_view_model::RuntimePostureState;
 use crate::terminal_runtime_config::TerminalRuntimeConfig;
@@ -29,7 +30,7 @@ impl RuntimeConfigSnapshot {
     ) -> Self {
         let provider = ProviderRuntimeConfig::from_env_map(env_map);
         let provider_adapter_kind = env_map
-            .get("NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND")
+            .get(&provider_adapter_contract().provider_adapter_kind_env_var)
             .map(String::as_str);
         let provider_adapter =
             ProviderAdapterAdmission::from_runtime_config(&provider, provider_adapter_kind);

@@ -87,6 +87,7 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - Agent-start launch metadata names the admitted bounded runtime slice, the shared terminal rendering gate for `--render-once` and `--interactive-loop`, the terminal rendering environment gate, and the unsatisfied promotion gate.
 - Agent-start launch metadata keeps provider execution disabled and records the implemented-but-withheld provider adapter contract plus evidence, streaming, and tool-call contracts required before production dispatch admission.
 - Rust provider runtime and adapter admission now share one `provider-adapters.json` contract reader instead of parsing the same contract independently.
+- Runtime config snapshot reads provider adapter-kind selection from the shared `provider-adapters.json` contract instead of hardcoding its environment key.
 - Agent-start launch metadata keeps Site MCP fabric access disabled for the bounded runtime slice and records the implemented-but-withheld Rust MCP bridge plus remaining live Site execution admission requirements.
 - Rust MCP runtime config reads `mcp-runtime.json` through an explicit contract module, matching the launch-slice and provider-adapter contract shape.
 - Agent-start uses named metadata builders for the shared `agent-tui` terminal, provider, and MCP promotion gates instead of inline ad hoc gate objects.

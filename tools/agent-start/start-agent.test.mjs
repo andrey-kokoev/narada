@@ -51,6 +51,7 @@ test('agent-tui provider adapter contract parser rejects invalid contracts', () 
     () => parseAgentTuiProviderAdapterContract(JSON.stringify({
       schema: 'narada.agent_tui.wrong_provider_contract.v0',
       provider_execution_env_var: 'NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION',
+      provider_adapter_kind_env_var: 'NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND',
       scripted_provider_adapter_kind: 'scripted_provider_adapter',
       production_provider_adapter_kind: 'codex_subscription_adapter',
       production_provider_adapter_implemented: false,
@@ -61,6 +62,7 @@ test('agent-tui provider adapter contract parser rejects invalid contracts', () 
     () => parseAgentTuiProviderAdapterContract(JSON.stringify({
       schema: 'narada.agent_tui.provider_adapter_contract.v0',
       provider_execution_env_var: 'NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION',
+      provider_adapter_kind_env_var: 'NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND',
       scripted_provider_adapter_kind: 'scripted_provider_adapter',
       production_provider_adapter_kind: 'codex_subscription_adapter',
       production_provider_adapter_implemented: true,

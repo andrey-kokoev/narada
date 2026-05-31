@@ -8,6 +8,7 @@ const PROVIDER_ADAPTER_CONTRACT_JSON: &str = include_str!("../contracts/provider
 pub struct ProviderAdapterContract {
     pub schema: String,
     pub provider_execution_env_var: String,
+    pub provider_adapter_kind_env_var: String,
     pub scripted_provider_adapter_kind: String,
     pub production_provider_adapter_kind: String,
     pub production_provider_adapter_implemented: bool,
@@ -30,6 +31,9 @@ pub fn parse_provider_adapter_contract(json: &str) -> Result<ProviderAdapterCont
     }
     if contract.provider_execution_env_var.trim() != "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION" {
         return Err("provider_adapter_contract_invalid:provider_execution_env_var".to_string());
+    }
+    if contract.provider_adapter_kind_env_var.trim() != "NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND" {
+        return Err("provider_adapter_contract_invalid:provider_adapter_kind_env_var".to_string());
     }
     if contract.scripted_provider_adapter_kind.trim() != "scripted_provider_adapter" {
         return Err("provider_adapter_contract_invalid:scripted_provider_adapter_kind".to_string());
@@ -60,6 +64,10 @@ mod tests {
             "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION"
         );
         assert_eq!(
+            contract.provider_adapter_kind_env_var,
+            "NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND"
+        );
+        assert_eq!(
             contract.scripted_provider_adapter_kind,
             "scripted_provider_adapter"
         );
@@ -78,14 +86,14 @@ mod tests {
         );
         assert_eq!(
             parse_provider_adapter_contract(
-                r#"{"schema":"narada.agent_tui.wrong_provider_adapter_contract.v0","provider_execution_env_var":"NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION","scripted_provider_adapter_kind":"scripted_provider_adapter","production_provider_adapter_kind":"codex_subscription_adapter","production_provider_adapter_implemented":false}"#,
+                r#"{"schema":"narada.agent_tui.wrong_provider_adapter_contract.v0","provider_execution_env_var":"NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION","provider_adapter_kind_env_var":"NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND","scripted_provider_adapter_kind":"scripted_provider_adapter","production_provider_adapter_kind":"codex_subscription_adapter","production_provider_adapter_implemented":false}"#,
             )
             .unwrap_err(),
             "provider_adapter_contract_invalid:schema"
         );
         assert_eq!(
             parse_provider_adapter_contract(
-                r#"{"schema":"narada.agent_tui.provider_adapter_contract.v0","provider_execution_env_var":"NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION","scripted_provider_adapter_kind":"scripted_provider_adapter","production_provider_adapter_kind":"codex_subscription_adapter","production_provider_adapter_implemented":true}"#,
+                r#"{"schema":"narada.agent_tui.provider_adapter_contract.v0","provider_execution_env_var":"NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION","provider_adapter_kind_env_var":"NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND","scripted_provider_adapter_kind":"scripted_provider_adapter","production_provider_adapter_kind":"codex_subscription_adapter","production_provider_adapter_implemented":true}"#,
             )
             .unwrap_err(),
             "provider_adapter_contract_invalid:production_provider_adapter_implemented"
