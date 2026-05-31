@@ -123,6 +123,18 @@ const carrierDiagnosticFixture = readFixture('carrier-diagnostic-session-event.j
 assert.deepEqual(validateSessionEvent(carrierDiagnosticFixture), []);
 assert.equal(carrierDiagnosticFixture.event_kind, 'carrier_diagnostic_recorded');
 assert.equal(carrierDiagnosticFixture.payload.level, 'warn');
+const directiveReceiptFixture = readFixture('directive-receipt-session-event.json');
+assert.deepEqual(validateSessionEvent(directiveReceiptFixture), []);
+assert.equal(directiveReceiptFixture.event_kind, 'directive_receipt_recorded');
+const directiveAcceptedFixture = readFixture('directive-carrier-accepted-session-event.json');
+assert.deepEqual(validateSessionEvent(directiveAcceptedFixture), []);
+assert.equal(directiveAcceptedFixture.event_kind, 'directive_carrier_accepted_recorded');
+const systemDirectiveHeldFixture = readFixture('system-directive-held-session-event.json');
+assert.deepEqual(validateSessionEvent(systemDirectiveHeldFixture), []);
+assert.equal(systemDirectiveHeldFixture.payload.held_reason, 'composer_nonempty');
+const systemDirectiveReleasedFixture = readFixture('system-directive-released-session-event.json');
+assert.deepEqual(validateSessionEvent(systemDirectiveReleasedFixture), []);
+assert.equal(systemDirectiveReleasedFixture.payload.released_at, '2026-05-30T00:00:13.000Z');
 assert.deepEqual(validatePayloadRef(readFixture('payload-ref.json')), []);
 assert.deepEqual(validatePayloadPolicy(readFixture('payload-policy.json')), []);
 

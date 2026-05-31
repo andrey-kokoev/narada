@@ -904,6 +904,49 @@ mod tests {
     }
 
     #[test]
+    fn parses_shared_directive_session_event_fixtures() {
+        let receipt = parse_session_event(include_str!(
+            "../../carrier-protocol/fixtures/directive-receipt-session-event.json"
+        ))
+        .expect("directive receipt session fixture parses");
+        assert_eq!(
+            receipt.event_kind,
+            SessionEventKind::DirectiveReceiptRecorded
+        );
+        assert_eq!(receipt.payload["directive_id"], "dir_fixture_1");
+
+        let accepted = parse_session_event(include_str!(
+            "../../carrier-protocol/fixtures/directive-carrier-accepted-session-event.json"
+        ))
+        .expect("directive accepted session fixture parses");
+        assert_eq!(
+            accepted.event_kind,
+            SessionEventKind::DirectiveCarrierAcceptedRecorded
+        );
+        assert_eq!(
+            accepted.payload["input_event_id"],
+            "input_directive_fixture_1"
+        );
+
+        let held = parse_session_event(include_str!(
+            "../../carrier-protocol/fixtures/system-directive-held-session-event.json"
+        ))
+        .expect("system directive held session fixture parses");
+        assert_eq!(held.event_kind, SessionEventKind::SystemDirectiveHeld);
+        assert_eq!(held.payload["held_reason"], "composer_nonempty");
+
+        let released = parse_session_event(include_str!(
+            "../../carrier-protocol/fixtures/system-directive-released-session-event.json"
+        ))
+        .expect("system directive released session fixture parses");
+        assert_eq!(
+            released.event_kind,
+            SessionEventKind::SystemDirectiveReleased
+        );
+        assert_eq!(released.payload["released_at"], "2026-05-30T00:00:13.000Z");
+    }
+
+    #[test]
     fn serializes_shared_session_event_fixture_as_jsonl_line() {
         let event = parse_session_event(include_str!(
             "../../carrier-protocol/fixtures/session-event.json"
