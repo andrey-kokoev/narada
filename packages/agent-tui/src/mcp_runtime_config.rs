@@ -52,6 +52,10 @@ impl McpRuntimeConfig {
             return Self::refused("missing_site_mcp_fabric");
         };
 
+        if !config_path_is_within_fabric(&config_path, &site_mcp_fabric) {
+            return Self::refused("mcp_config_outside_site_mcp_fabric");
+        }
+
         Self {
             status: McpRuntimeAdmissionStatus::Configured,
             mcp_fabric_access_enabled: true,
@@ -84,6 +88,25 @@ fn trimmed_nonempty(value: Option<&String>) -> Option<String> {
         .map(|value| value.trim())
         .filter(|value| !value.is_empty())
         .map(ToString::to_string)
+}
+
+fn config_path_is_within_fabric(config_path: &str, site_mcp_fabric: &str) -> bool {
+    let config_path = normalize_lexical_path(config_path);
+    let site_mcp_fabric = normalize_lexical_path(site_mcp_fabric);
+    config_path
+        .strip_prefix(&site_mcp_fabric)
+        .is_some_and(|suffix| suffix.starts_with('/') && suffix.len() > 1)
+}
+
+fn normalize_lexical_path(path: &str) -> String {
+    let mut normalized = path.trim().replace('\\', "/");
+    while normalized.ends_with('/') && normalized.len() > 1 {
+        normalized.pop();
+    }
+    if cfg!(windows) {
+        normalized = normalized.to_ascii_lowercase();
+    }
+    normalized
 }
 
 #[cfg(test)]
@@ -131,6 +154,25 @@ mod tests {
             missing_fabric.refusal_reason.as_deref(),
             Some("missing_site_mcp_fabric")
         );
+    }
+
+    #[test]
+    fn mcp_runtime_refuses_config_outside_site_mcp_fabric() {
+        let config = McpRuntimeConfig::from_env_map(&env(&[
+            ("NARADA_AGENT_TUI_ENABLE_MCP_FABRIC", "true"),
+            (
+                "NARADA_AGENT_TUI_MCP_CONFIG",
+                "D:/other/.ai/mcp/config.json",
+            ),
+            ("NARADA_SITE_MCP_FABRIC", "D:/site/.ai/mcp"),
+        ]));
+
+        assert_eq!(config.status, McpRuntimeAdmissionStatus::Refused);
+        assert_eq!(
+            config.refusal_reason.as_deref(),
+            Some("mcp_config_outside_site_mcp_fabric")
+        );
+        assert!(!config.mcp_fabric_access_enabled);
     }
 
     #[test]
