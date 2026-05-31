@@ -15,7 +15,7 @@ use narada_agent_tui::smoke_runner::{
 use narada_agent_tui::status_view_model::{ProviderRuntimeState, StatusViewInput};
 use narada_agent_tui::terminal_input_tick::CrosstermTerminalInputReader;
 use narada_agent_tui::terminal_lifecycle::TerminalSession;
-use narada_agent_tui::terminal_runtime_config::TerminalRuntimeConfig;
+use narada_agent_tui::terminal_runtime_config::{TerminalRuntimeConfig, TerminalRuntimeStatus};
 use narada_agent_tui::tui_render_loop::{
     run_injected_interactive_loop, AgentTuiLoopState, RuntimeClockInteractiveSource,
     TerminalInputTickSource,
@@ -356,6 +356,8 @@ fn build_smoke_step_config(args: &Args) -> Result<AgentTuiSmokeStepConfig, Strin
 }
 
 fn run_interactive_loop(args: Args) -> Result<(), String> {
+    let terminal_config = terminal_config_from_process_env();
+    assert_terminal_interactive_loop_admitted(&terminal_config)?;
     let max_steps = args.max_steps.expect("validated max steps");
     let mut runtime = build_interactive_runtime(&args)?;
     let mut clock = RuntimeClock::system_now()?;
@@ -377,6 +379,24 @@ fn run_interactive_loop(args: Args) -> Result<(), String> {
         max_steps,
     )?;
     terminal.leave()
+}
+
+fn assert_terminal_interactive_loop_admitted(config: &TerminalRuntimeConfig) -> Result<(), String> {
+    if config.status == TerminalRuntimeStatus::Configured
+        && config.terminal_rendering_enabled
+        && config.mode.as_deref() == Some("interactive_loop")
+    {
+        return Ok(());
+    }
+
+    let reason = config
+        .refusal_reason
+        .as_deref()
+        .unwrap_or("terminal_rendering_not_enabled");
+    Err(format!(
+        "terminal_interactive_loop_not_admitted:status={}:reason={reason}",
+        config.status.as_str()
+    ))
 }
 
 fn build_interactive_runtime(args: &Args) -> Result<AgentTuiInteractiveRuntime, String> {
