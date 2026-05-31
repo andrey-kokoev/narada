@@ -7,6 +7,7 @@ pub const SESSION_EVENT_SCHEMA: &str = "narada.carrier.session_event.v1";
 pub const PAYLOAD_REF_SCHEMA: &str = "narada.carrier.payload_ref.v1";
 pub const PAYLOAD_POLICY_SCHEMA: &str = "narada.carrier.payload_policy.v1";
 pub const PROVIDER_REQUEST_PAYLOAD_SCHEMA: &str = "narada.agent_tui.provider_request_payload.v0";
+pub const PROVIDER_OUTPUT_PAYLOAD_SCHEMA: &str = "narada.agent_tui.provider_output_payload.v0";
 pub const TURN_TERMINAL_PAYLOAD_SCHEMA: &str = "narada.agent_tui.turn_terminal_payload.v0";
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -324,8 +325,12 @@ fn validate_session_payload(kind: &SessionEventKind, payload: &Value) -> Result<
         SessionEventKind::CarrierCommandExecuted => require_payload_fields(payload, &["command"]),
         SessionEventKind::CarrierDiagnosticRecorded => validate_carrier_diagnostic_payload(payload),
         SessionEventKind::ProviderRequestRecorded => validate_provider_request_payload(payload),
-        SessionEventKind::ProviderTextDeltaRecorded
-        | SessionEventKind::ProviderToolCallRequested => Ok(()),
+        SessionEventKind::ProviderTextDeltaRecorded => {
+            validate_provider_output_payload("text_delta", payload)
+        }
+        SessionEventKind::ProviderToolCallRequested => {
+            validate_provider_output_payload("tool_call_request", payload)
+        }
     }
 }
 
@@ -374,6 +379,41 @@ fn validate_provider_request_payload(payload: &Value) -> Result<(), String> {
         require_optional_string(payload, field)?;
     }
     Ok(())
+}
+
+fn validate_provider_output_payload(expected_kind: &str, payload: &Value) -> Result<(), String> {
+    require_payload_fields(
+        payload,
+        &["schema", "turn_id", "provider_output_kind", "sequence"],
+    )?;
+    if payload.get("schema").and_then(Value::as_str) != Some(PROVIDER_OUTPUT_PAYLOAD_SCHEMA) {
+        return Err(format!(
+            "payload.invalid_schema:{}",
+            payload_value_string(payload, "schema")
+        ));
+    }
+    require_payload_nonempty_string(payload, "turn_id")?;
+    if payload.get("provider_output_kind").and_then(Value::as_str) != Some(expected_kind) {
+        return Err(format!(
+            "payload.invalid_provider_output_kind:{}",
+            payload_value_string(payload, "provider_output_kind")
+        ));
+    }
+    require_payload_nonnegative_integer(payload, "sequence")?;
+    match expected_kind {
+        "text_delta" => {
+            require_payload_string(payload, "text_delta")?;
+            validate_optional_payload_ref(payload, "text_delta_ref")
+        }
+        "tool_call_request" => {
+            require_payload_nonempty_string(payload, "tool_name")?;
+            require_payload_string(payload, "arguments_summary")?;
+            validate_optional_payload_ref(payload, "arguments_ref")
+        }
+        _ => Err(format!(
+            "payload.unsupported_provider_output_kind:{expected_kind}"
+        )),
+    }
 }
 
 fn validate_system_directive_held_payload(payload: &Value) -> Result<(), String> {
@@ -526,6 +566,13 @@ fn require_payload_nonempty_string(payload: &Value, field: &str) -> Result<(), S
 fn require_payload_nonnegative_number(payload: &Value, field: &str) -> Result<(), String> {
     match payload.get(field).and_then(Value::as_f64) {
         Some(value) if value >= 0.0 => Ok(()),
+        _ => Err(format!("payload.invalid_{field}")),
+    }
+}
+
+fn require_payload_nonnegative_integer(payload: &Value, field: &str) -> Result<(), String> {
+    match payload.get(field).and_then(Value::as_u64) {
+        Some(_) => Ok(()),
         _ => Err(format!("payload.invalid_{field}")),
     }
 }

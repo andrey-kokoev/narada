@@ -1,12 +1,12 @@
-use crate::carrier_protocol::{create_provider_request_payload, InputEvent, SessionEventKind};
+use crate::carrier_protocol::{
+    create_provider_request_payload, InputEvent, SessionEventKind, PROVIDER_OUTPUT_PAYLOAD_SCHEMA,
+};
 use crate::provider_adapter_admission::{ProviderAdapterAdmission, ProviderAdapterKind};
 use crate::provider_runtime_config::ProviderRuntimeConfig;
 use crate::rendering_boundary::{
     decide_payload_inline, default_payload_policy, InlinePayloadDecision,
 };
 use serde_json::{json, Value};
-
-pub const PROVIDER_OUTPUT_PAYLOAD_SCHEMA: &str = "narada.agent_tui.provider_output_payload.v0";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProviderDispatchStatus {

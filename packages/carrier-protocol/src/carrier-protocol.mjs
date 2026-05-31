@@ -4,6 +4,7 @@ export const SESSION_EVENT_SCHEMA = 'narada.carrier.session_event.v1';
 export const PAYLOAD_REF_SCHEMA = 'narada.carrier.payload_ref.v1';
 export const PAYLOAD_POLICY_SCHEMA = 'narada.carrier.payload_policy.v1';
 export const PROVIDER_REQUEST_PAYLOAD_SCHEMA = 'narada.agent_tui.provider_request_payload.v0';
+export const PROVIDER_OUTPUT_PAYLOAD_SCHEMA = 'narada.agent_tui.provider_output_payload.v0';
 export const TURN_TERMINAL_PAYLOAD_SCHEMA = 'narada.agent_tui.turn_terminal_payload.v0';
 
 export const SOURCE_KINDS = Object.freeze(['operator', 'system', 'agent', 'external']);
@@ -384,6 +385,8 @@ const SESSION_PAYLOAD_VALIDATORS = Object.freeze({
   directive_carrier_accepted_recorded: (payload) => requireFields(payload, ['input_event_id', 'directive_id']),
   turn_started: (payload) => requireFields(payload, ['input_event_id', 'turn_id']),
   provider_request_recorded: validateProviderRequestPayload,
+  provider_text_delta_recorded: (payload) => validateProviderOutputPayload('text_delta', payload),
+  provider_tool_call_requested: (payload) => validateProviderOutputPayload('tool_call_request', payload),
   turn_completed: (payload) => validateTurnTerminalPayload('turn_completed', payload),
   turn_interrupted: (payload) => validateTurnTerminalPayload('turn_interrupted', payload),
   turn_failed: (payload) => validateTurnTerminalPayload('turn_failed', payload),
@@ -484,6 +487,26 @@ function validateProviderRequestPayload(payload) {
   if (typeof payload.content_preview !== 'string') errors.push('payload.invalid_content_preview');
   for (const field of ['provider_adapter_kind', 'provider', 'model', 'thinking', 'provider_adapter_refusal_reason']) {
     if (payload[field] !== null && payload[field] !== undefined && typeof payload[field] !== 'string') errors.push(`payload.invalid_${field}`);
+  }
+  return errors;
+}
+
+function validateProviderOutputPayload(expectedKind, payload) {
+  const errors = requireFields(payload, ['schema', 'turn_id', 'provider_output_kind', 'sequence']);
+  if (errors.length > 0) return errors;
+  if (payload.schema !== PROVIDER_OUTPUT_PAYLOAD_SCHEMA) errors.push(`payload.invalid_schema:${String(payload.schema)}`);
+  if (typeof payload.turn_id !== 'string' || payload.turn_id.length === 0) errors.push('payload.invalid_turn_id');
+  if (payload.provider_output_kind !== expectedKind) errors.push(`payload.invalid_provider_output_kind:${String(payload.provider_output_kind)}`);
+  if (!Number.isInteger(payload.sequence) || payload.sequence < 0) errors.push('payload.invalid_sequence');
+  if (expectedKind === 'text_delta') {
+    if (typeof payload.text_delta !== 'string') errors.push('payload.invalid_text_delta');
+    errors.push(...validateOptionalPayloadRef(payload, 'text_delta_ref'));
+  } else if (expectedKind === 'tool_call_request') {
+    if (typeof payload.tool_name !== 'string' || payload.tool_name.length === 0) errors.push('payload.invalid_tool_name');
+    if (typeof payload.arguments_summary !== 'string') errors.push('payload.invalid_arguments_summary');
+    errors.push(...validateOptionalPayloadRef(payload, 'arguments_ref'));
+  } else {
+    errors.push(`payload.unsupported_provider_output_kind:${expectedKind}`);
   }
   return errors;
 }
