@@ -46,14 +46,14 @@ struct CarrierConfigFile {
 }
 #[derive(Debug, Deserialize)]
 struct RawMcpServer {
-    transport: Option<String>,
-    command: Option<String>,
+    transport: Option<Value>,
+    command: Option<Value>,
     args: Option<Value>,
     tools: Option<Value>,
     allowed_tools: Option<Value>,
     tool_names: Option<Value>,
-    surface_id: Option<String>,
-    target_site_root: Option<String>,
+    surface_id: Option<Value>,
+    target_site_root: Option<Value>,
 }
 
 impl McpFabricTransportClient {
@@ -156,11 +156,8 @@ impl McpFabricTransportServer {
         if name.is_empty() {
             return Err("mcp_fabric_server_name_invalid".to_string());
         }
-        let transport = raw
-            .transport
-            .unwrap_or_else(|| "stdio".to_string())
-            .trim()
-            .to_string();
+        let transport = normalize_optional_server_string(&name, "transport", raw.transport)?
+            .unwrap_or_else(|| "stdio".to_string());
         if transport.is_empty() {
             return Err(format!("mcp_fabric_transport_invalid:{name}"));
         }
@@ -169,11 +166,7 @@ impl McpFabricTransportServer {
                 "mcp_fabric_transport_unsupported:{name}:{transport}"
             ));
         }
-        let command = raw
-            .command
-            .ok_or_else(|| format!("mcp_fabric_server_command_missing:{name}"))?
-            .trim()
-            .to_string();
+        let command = normalize_required_server_string(&name, "command", raw.command)?;
         if command.is_empty() {
             return Err(format!("mcp_fabric_server_command_invalid:{name}"));
         }
@@ -190,9 +183,9 @@ impl McpFabricTransportServer {
             return Err(format!("mcp_fabric_server_tools_missing:{name}"));
         }
         let args = select_args(&name, raw.args)?;
-        let surface_id = normalize_optional_server_field(&name, "surface_id", raw.surface_id)?;
+        let surface_id = normalize_optional_server_string(&name, "surface_id", raw.surface_id)?;
         let target_site_root =
-            normalize_optional_server_field(&name, "target_site_root", raw.target_site_root)?;
+            normalize_optional_server_string(&name, "target_site_root", raw.target_site_root)?;
         Ok(Self {
             name,
             transport,
@@ -298,23 +291,39 @@ fn select_tool_list(
         })
         .collect()
 }
-fn normalize_optional_server_field(
+fn server_string_field_invalid_reason(server_name: &str, field_name: &str) -> String {
+    if field_name == "transport" {
+        return format!("mcp_fabric_transport_invalid:{server_name}");
+    }
+    format!("mcp_fabric_server_{field_name}_invalid:{server_name}")
+}
+
+fn normalize_required_server_string(
     server_name: &str,
     field_name: &str,
-    value: Option<String>,
+    value: Option<Value>,
+) -> Result<String, String> {
+    normalize_optional_server_string(server_name, field_name, value)?
+        .ok_or_else(|| format!("mcp_fabric_server_{field_name}_missing:{server_name}"))
+}
+
+fn normalize_optional_server_string(
+    server_name: &str,
+    field_name: &str,
+    value: Option<Value>,
 ) -> Result<Option<String>, String> {
     let Some(value) = value else {
         return Ok(None);
     };
+    let Some(value) = value.as_str() else {
+        return Err(server_string_field_invalid_reason(server_name, field_name));
+    };
     let value = value.trim().to_string();
     if value.is_empty() {
-        return Err(format!(
-            "mcp_fabric_server_{field_name}_invalid:{server_name}"
-        ));
+        return Err(server_string_field_invalid_reason(server_name, field_name));
     }
     Ok(Some(value))
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -561,6 +570,25 @@ mod tests {
     }
 
     #[test]
+    fn rejects_non_string_transport() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": 1,
+                  "command": "node",
+                  "tools": ["site_loop_status"]
+                }
+              }
+            }"#,
+        )
+        .expect_err("transport must be a string");
+
+        assert_eq!(error, "mcp_fabric_transport_invalid:sonar-site-loop");
+    }
+
+    #[test]
     fn rejects_blank_server_command() {
         let error = McpFabricTransportClient::from_json_str(
             "fixture.mcp.json",
@@ -575,6 +603,25 @@ mod tests {
             }"#,
         )
         .expect_err("blank command is invalid");
+
+        assert_eq!(error, "mcp_fabric_server_command_invalid:sonar-site-loop");
+    }
+
+    #[test]
+    fn rejects_non_string_server_command() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": 1,
+                  "tools": ["site_loop_status"]
+                }
+              }
+            }"#,
+        )
+        .expect_err("command must be a string");
 
         assert_eq!(error, "mcp_fabric_server_command_invalid:sonar-site-loop");
     }
@@ -724,6 +771,29 @@ mod tests {
         assert_eq!(
             error,
             "mcp_fabric_server_target_site_root_invalid:sonar-site-loop"
+        );
+    }
+
+    #[test]
+    fn rejects_non_string_optional_server_metadata() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "tools": ["site_loop_status"],
+                  "surface_id": 1
+                }
+              }
+            }"#,
+        )
+        .expect_err("optional server metadata must be strings");
+
+        assert_eq!(
+            error,
+            "mcp_fabric_server_surface_id_invalid:sonar-site-loop"
         );
     }
 
