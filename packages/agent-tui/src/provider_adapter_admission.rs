@@ -1,4 +1,6 @@
 use crate::provider_runtime_config::{ProviderRuntimeAdmissionStatus, ProviderRuntimeConfig};
+use serde::Deserialize;
+use std::sync::OnceLock;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProviderAdapterKind {
@@ -8,27 +10,81 @@ pub enum ProviderAdapterKind {
 
 impl ProviderAdapterKind {
     pub fn parse(value: &str) -> Result<Self, String> {
-        match value.trim() {
-            "scripted_provider_adapter" => Ok(Self::Scripted),
-            "codex_subscription_adapter" => Ok(Self::CodexSubscription),
-            other => Err(format!("unknown_provider_adapter:{other}")),
+        let value = value.trim();
+        if value == scripted_provider_adapter_kind() {
+            return Ok(Self::Scripted);
         }
+        if value == production_provider_adapter_kind() {
+            return Ok(Self::CodexSubscription);
+        }
+        Err(format!("unknown_provider_adapter:{value}"))
     }
 
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Scripted => "scripted_provider_adapter",
-            Self::CodexSubscription => "codex_subscription_adapter",
+            Self::Scripted => scripted_provider_adapter_kind(),
+            Self::CodexSubscription => production_provider_adapter_kind(),
         }
     }
 
     pub fn execution_implemented(&self) -> bool {
         match self {
             Self::Scripted => true,
-            Self::CodexSubscription => false,
+            Self::CodexSubscription => {
+                provider_adapter_contract().production_provider_adapter_implemented
+            }
         }
     }
 }
+
+const PROVIDER_ADAPTER_CONTRACT_JSON: &str = include_str!("../contracts/provider-adapters.json");
+
+#[derive(Debug, Deserialize)]
+struct ProviderAdapterContract {
+    scripted_provider_adapter_kind: String,
+    production_provider_adapter_kind: String,
+    production_provider_adapter_implemented: bool,
+}
+
+fn provider_adapter_contract() -> &'static ProviderAdapterContract {
+    static CONTRACT: OnceLock<ProviderAdapterContract> = OnceLock::new();
+    CONTRACT.get_or_init(|| {
+        parse_provider_adapter_contract(PROVIDER_ADAPTER_CONTRACT_JSON)
+            .expect("agent-tui provider adapter contract is valid")
+    })
+}
+
+pub fn scripted_provider_adapter_kind() -> &'static str {
+    provider_adapter_contract()
+        .scripted_provider_adapter_kind
+        .as_str()
+}
+
+pub fn production_provider_adapter_kind() -> &'static str {
+    provider_adapter_contract()
+        .production_provider_adapter_kind
+        .as_str()
+}
+
+fn parse_provider_adapter_contract(json: &str) -> Result<ProviderAdapterContract, String> {
+    let contract: ProviderAdapterContract = serde_json::from_str(json)
+        .map_err(|error| format!("provider_adapter_contract_parse_failed:{error}"))?;
+    if contract.scripted_provider_adapter_kind.trim() != "scripted_provider_adapter" {
+        return Err("provider_adapter_contract_invalid:scripted_provider_adapter_kind".to_string());
+    }
+    if contract.production_provider_adapter_kind.trim() != "codex_subscription_adapter" {
+        return Err(
+            "provider_adapter_contract_invalid:production_provider_adapter_kind".to_string(),
+        );
+    }
+    if contract.production_provider_adapter_implemented {
+        return Err(
+            "provider_adapter_contract_invalid:production_provider_adapter_implemented".to_string(),
+        );
+    }
+    Ok(contract)
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProviderAdapterAdmissionStatus {
     Disabled,
@@ -154,6 +210,21 @@ mod tests {
             .iter()
             .map(|(key, value)| (key.to_string(), value.to_string()))
             .collect()
+    }
+
+    #[test]
+    fn provider_adapter_contract_rejects_invalid_posture() {
+        assert_eq!(
+            parse_provider_adapter_contract("not json").unwrap_err(),
+            "provider_adapter_contract_parse_failed:expected ident at line 1 column 2"
+        );
+        assert_eq!(
+            parse_provider_adapter_contract(
+                r#"{"schema":"narada.agent_tui.provider_adapter_contract.v0","scripted_provider_adapter_kind":"scripted_provider_adapter","production_provider_adapter_kind":"codex_subscription_adapter","production_provider_adapter_implemented":true}"#
+            )
+            .unwrap_err(),
+            "provider_adapter_contract_invalid:production_provider_adapter_implemented"
+        );
     }
 
     #[test]

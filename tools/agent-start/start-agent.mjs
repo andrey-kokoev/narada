@@ -8,11 +8,15 @@ import { formatAgentStartResult } from '../../packages/agent-start-renderer/src/
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const defaultRootDir = join(__dirname, '..', '..');
+const require = createRequire(import.meta.url);
 const AGENT_TUI_MCP_RUNTIME_CONTRACT = parseAgentTuiMcpRuntimeContract(readFileSync(
   join(defaultRootDir, 'packages', 'agent-tui', 'contracts', 'mcp-runtime.json'),
   'utf8',
 ));
-const require = createRequire(import.meta.url);
+const AGENT_TUI_PROVIDER_ADAPTER_CONTRACT = parseAgentTuiProviderAdapterContract(readFileSync(
+  join(defaultRootDir, 'packages', 'agent-tui', 'contracts', 'provider-adapters.json'),
+  'utf8',
+));
 const RESULT_SCHEMA = 'narada.agent_start.result.v0';
 const DEFAULT_PC_SITE_ROOT = process.env.NARADA_PC_SITE_ROOT ?? 'C:/ProgramData/Narada/sites/pc/desktop-sunroom-2';
 const ADMITTED_AGENTS = new Set(['narada.architect', 'narada.builder', 'narada.builder2', 'narada.resident']);
@@ -64,6 +68,26 @@ export function parseAgentTuiMcpRuntimeContract(jsonText) {
   }
   return contract;
 }
+
+export function parseAgentTuiProviderAdapterContract(jsonText) {
+  let contract;
+  try {
+    contract = JSON.parse(jsonText);
+  } catch (error) {
+    throw new Error(`provider_adapter_contract_parse_failed:${error.message}`);
+  }
+  if (contract?.scripted_provider_adapter_kind !== 'scripted_provider_adapter') {
+    throw new Error('provider_adapter_contract_invalid:scripted_provider_adapter_kind');
+  }
+  if (contract?.production_provider_adapter_kind !== 'codex_subscription_adapter') {
+    throw new Error('provider_adapter_contract_invalid:production_provider_adapter_kind');
+  }
+  if (contract?.production_provider_adapter_implemented !== false) {
+    throw new Error('provider_adapter_contract_invalid:production_provider_adapter_implemented');
+  }
+  return contract;
+}
+
 function parseArgs(argv) {
   const result = {};
   let i = 0;
@@ -733,7 +757,10 @@ function agentTuiProviderExecutionGate() {
       'streaming_turn_output_contract',
       'tool_call_boundary_contract',
     ],
-    current_evidence: 'Runtime construction uses the provider adapter factory, provider request evidence records explicit streaming contract status, and scripted_provider_adapter is separated from unimplemented production adapters; the current factory returns a recording stub until a production adapter is implemented and admitted.',
+    scripted_provider_adapter_kind: AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.scripted_provider_adapter_kind,
+    production_provider_adapter_kind: AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.production_provider_adapter_kind,
+    production_provider_adapter_implemented: AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.production_provider_adapter_implemented,
+    current_evidence: 'Runtime construction uses the provider adapter factory, provider request evidence records explicit streaming contract status, and scripted_provider_adapter is separated from unimplemented production adapters through packages/agent-tui/contracts/provider-adapters.json; the current factory returns a recording stub until a production adapter is implemented and admitted.',
     reason: 'Smoke step records provider boundary evidence without dispatching provider work.',
   };
 }

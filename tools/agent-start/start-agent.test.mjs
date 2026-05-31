@@ -8,6 +8,7 @@ import {
   compactLaunchSummary,
   materializeAgentTuiLaunchFiles,
   parseAgentTuiMcpRuntimeContract,
+  parseAgentTuiProviderAdapterContract,
   readAgentStartEvent,
   writeCompactResult,
   writeClaudeCodeProcessAttempt,
@@ -26,6 +27,26 @@ const AGENT_TUI_MCP_RUNTIME_CONTRACT = parseAgentTuiMcpRuntimeContract(fs.readFi
   path.join(process.cwd(), 'packages', 'agent-tui', 'contracts', 'mcp-runtime.json'),
   'utf8',
 ));
+const AGENT_TUI_PROVIDER_ADAPTER_CONTRACT = parseAgentTuiProviderAdapterContract(fs.readFileSync(
+  path.join(process.cwd(), 'packages', 'agent-tui', 'contracts', 'provider-adapters.json'),
+  'utf8',
+));
+
+test('agent-tui provider adapter contract parser rejects invalid contracts', () => {
+  assert.throws(
+    () => parseAgentTuiProviderAdapterContract('{'),
+    /provider_adapter_contract_parse_failed/,
+  );
+  assert.throws(
+    () => parseAgentTuiProviderAdapterContract(JSON.stringify({
+      schema: 'narada.agent_tui.provider_adapter_contract.v0',
+      scripted_provider_adapter_kind: 'scripted_provider_adapter',
+      production_provider_adapter_kind: 'codex_subscription_adapter',
+      production_provider_adapter_implemented: true,
+    })),
+    /provider_adapter_contract_invalid:production_provider_adapter_implemented/,
+  );
+});
 
 test('agent-tui MCP runtime contract parser rejects invalid contracts', () => {
   assert.throws(
@@ -472,7 +493,10 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
     operator_override_admitted: false,
   });
   assert.equal(result.agent_tui_launch.provider_execution.promotion_gate, 'agent_tui_provider_adapter_promotion_gate');
-  assert.match(result.agent_tui_launch.provider_execution.current_evidence, /scripted_provider_adapter/);
+  assert.equal(result.agent_tui_launch.provider_execution.scripted_provider_adapter_kind, AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.scripted_provider_adapter_kind);
+  assert.equal(result.agent_tui_launch.provider_execution.production_provider_adapter_kind, AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.production_provider_adapter_kind);
+  assert.equal(result.agent_tui_launch.provider_execution.production_provider_adapter_implemented, false);
+  assert.match(result.agent_tui_launch.provider_execution.current_evidence, /provider-adapters.json/);
   assert.match(result.agent_tui_launch.provider_execution.current_evidence, /streaming contract status/);
   assert.match(result.agent_tui_launch.provider_execution.current_evidence, /provider adapter factory/);
   assert.deepEqual(result.agent_tui_launch.provider_execution.required_before_admission, [
