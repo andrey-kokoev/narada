@@ -120,14 +120,12 @@ test('agent-tui launch slice contract parser rejects invalid contracts', () => {
     /launch_slice_contract_parse_failed/,
   );
   assert.throws(
-    () => parseAgentTuiLaunchSliceContract(JSON.stringify({
-      schema: 'narada.agent_tui.launch_slice_contract.v0',
-      admitted_runtime_slice: 'terminal_interactive_loop',
-      carrier_flag: '--interactive-step-once',
-      tool_fabric_adapter_kind: 'narada-agent-tui-interactive-step',
-      capability_policy_smoke_step: 'bounded_non_terminal_control_jsonl',
-      terminal_mode: false,
-    })),
+    () => parseAgentTuiLaunchSliceContract(invalidContractJson(
+      AGENT_TUI_LAUNCH_SLICE_CONTRACT,
+      (contract) => {
+        contract.admitted_runtime_slice = 'terminal_interactive_loop';
+      },
+    )),
     /launch_slice_contract_invalid:admitted_runtime_slice/,
   );
 });
