@@ -230,7 +230,7 @@ If `cargo test` still fails after `VsDevCmd.bat` reports a ready toolchain, trea
 Promote the next blocked carrier capability, not more Site rollout evidence. The launcher-registry rollout gate is accepted for all known Sites. The remaining promotion gates are:
 
 - Provider adapter admission: real production provider dispatch and token streaming over the admitted adapter contract.
-- MCP fabric execution admission: Rust-side Site MCP discovery, policy-bound visibility, request/response, and evidence.
+- MCP fabric launch admission: Rust-side Site MCP discovery, policy-bound visibility, request/response, evidence, and runtime-config executor construction exist; production Site MCP exposure remains withheld by launcher policy until explicitly admitted.
 - Terminal interactive promotion: production `agent-start -Runtime agent-tui` must move from bounded non-terminal smoke to admitted terminal rendering only after provider and MCP execution boundaries are explicit.
 
 ## Live Rollout Evidence Commands

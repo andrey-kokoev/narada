@@ -463,7 +463,7 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   });
   assert.equal(result.agent_tui_launch.mcp_fabric_access.promotion_gate, 'agent_tui_rust_mcp_fabric_client_promotion_gate');
   assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'mcp_fabric_client_admission').status, 'partial');
-  assert.match(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'mcp_fabric_client_admission').current_evidence, /runtime session-evidence bridge/);
+  assert.match(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'mcp_fabric_client_admission').current_evidence, /runtime-config executor construction/);
   assert.deepEqual(result.agent_tui_launch.mcp_fabric_access.required_before_admission, [
     'rust_mcp_fabric_client_contract',
     'site_mcp_policy_visibility_contract',
@@ -471,7 +471,7 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
     'tool_call_evidence_contract',
   ]);
   assert.equal(result.agent_tui_launch.mcp_fabric_access.site_mcp_fabric, path.join(siteRoot, '.ai', 'mcp'));
-  assert.match(result.agent_tui_launch.mcp_fabric_access.current_evidence, /supervised stdio execution/);
+  assert.match(result.agent_tui_launch.mcp_fabric_access.current_evidence, /runtime-config executor construction/);
   assert.match(result.agent_tui_launch.mcp_fabric_access.reason, /withholds Site MCP tool exposure/);
   assert.equal(result.agent_tui_launch.site_rollout_acceptance.schema, 'narada.agent_tui.site_rollout_acceptance.v0');
   assert.equal(result.agent_tui_launch.site_rollout_acceptance.status, 'defined_not_executed');

@@ -541,7 +541,7 @@ function agentTuiPromotionChecklist() {
       id: 'mcp_fabric_client_admission',
       status: 'partial',
       required_evidence: 'Rust MCP fabric client, Site policy visibility, tool request/response, and tool evidence contracts',
-      current_evidence: 'Policy-bound visibility model, valid tool request/result evidence, carrier MCP config parsing, JSON-RPC tools/call framing, response classification, one-shot stdio process I/O, supervisor handshake/recovery contracts, runtime session-evidence bridge, provider tool-call bridge, TurnCoordinator bridge wiring, reusable per-server process executor, initialize/initialized execution, and preemptive timeout cancellation exist; live Site rollout remains pending',
+      current_evidence: 'Policy-bound visibility model, valid tool request/result evidence, carrier MCP config parsing, JSON-RPC tools/call framing, response classification, one-shot stdio process I/O, supervisor handshake/recovery contracts, runtime session-evidence bridge, provider tool-call bridge, TurnCoordinator/RuntimeStep/interactive runtime bridge wiring, reusable per-server process executor, initialize/initialized execution, runtime-config executor construction, and preemptive timeout cancellation exist; production Site MCP exposure remains withheld by launch admission',
     },
     {
       id: 'site_rollout_acceptance',
@@ -734,7 +734,7 @@ function agentTuiMcpFabricAccessGate(siteRoot) {
       'tool_call_evidence_contract',
     ],
     site_mcp_fabric: join(siteRoot, '.ai', 'mcp'),
-    current_evidence: 'Rust MCP config parsing, policy-bound visibility, JSON-RPC tools/call framing, supervised stdio execution, timeout recovery, and provider tool-call bridge are implemented and tested.',
+    current_evidence: 'Rust MCP config parsing, policy-bound visibility, JSON-RPC tools/call framing, supervised stdio execution, timeout recovery, provider tool-call bridge, and runtime-config executor construction are implemented and tested.',
     reason: 'Production smoke step still withholds Site MCP tool exposure until live Site MCP execution is admitted for the terminal runtime slice.',
   };
 }
