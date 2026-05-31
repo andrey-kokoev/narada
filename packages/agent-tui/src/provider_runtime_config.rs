@@ -48,15 +48,17 @@ impl ProviderRuntimeConfig {
     }
 
     pub fn from_env_map(env: &BTreeMap<String, String>) -> Self {
+        let contract = provider_adapter_contract();
         if !env_flag_enabled(env.get(provider_execution_env_var())) {
             return Self::disabled();
         }
 
-        let provider = trimmed_nonempty(env.get("NARADA_INTELLIGENCE_PROVIDER"));
-        let model = trimmed_nonempty(env.get("NARADA_AI_MODEL"));
-        let thinking = trimmed_nonempty(env.get("NARADA_AI_THINKING"));
+        let provider = trimmed_nonempty(env.get(&contract.intelligence_provider_env_var));
+        let model = trimmed_nonempty(env.get(&contract.ai_model_env_var));
+        let thinking = trimmed_nonempty(env.get(&contract.ai_thinking_env_var));
         let stream = !matches!(
-            env.get("NARADA_AI_STREAM").map(|value| value.trim().to_ascii_lowercase()),
+            env.get(&contract.ai_stream_env_var)
+                .map(|value| value.trim().to_ascii_lowercase()),
             Some(value) if matches!(value.as_str(), "0" | "false" | "off" | "no")
         );
 
@@ -66,7 +68,11 @@ impl ProviderRuntimeConfig {
         let Some(model) = model else {
             return Self::refused("missing_model");
         };
-        if !admitted_provider(&provider) {
+        if !contract
+            .admitted_providers
+            .iter()
+            .any(|admitted| admitted == &provider)
+        {
             return Self::refused(format!("provider_not_admitted:{provider}"));
         }
 
@@ -104,13 +110,6 @@ fn trimmed_nonempty(value: Option<&String>) -> Option<String> {
         .map(|value| value.trim())
         .filter(|value| !value.is_empty())
         .map(ToString::to_string)
-}
-
-fn admitted_provider(provider: &str) -> bool {
-    matches!(
-        provider,
-        "codex-subscription" | "openai-api" | "anthropic-api"
-    )
 }
 
 #[cfg(test)]

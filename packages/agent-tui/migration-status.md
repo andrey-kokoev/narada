@@ -88,6 +88,7 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - Agent-start launch metadata keeps provider execution disabled and records the implemented-but-withheld provider adapter contract plus evidence, streaming, and tool-call contracts required before production dispatch admission.
 - Rust provider runtime and adapter admission now share one `provider-adapters.json` contract reader instead of parsing the same contract independently.
 - Runtime config snapshot reads provider adapter-kind selection from the shared `provider-adapters.json` contract instead of hardcoding its environment key.
+- Rust provider runtime reads provider/model/thinking/stream environment keys and admitted provider IDs from `provider-adapters.json` instead of hardcoding them.
 - Agent-start launch metadata keeps Site MCP fabric access disabled for the bounded runtime slice and records the implemented-but-withheld Rust MCP bridge plus remaining live Site execution admission requirements.
 - Rust MCP runtime config reads `mcp-runtime.json` through an explicit contract module, matching the launch-slice and provider-adapter contract shape.
 - Rust MCP runtime config reads MCP config and Site MCP fabric environment keys from `mcp-runtime.json` instead of hardcoding them.

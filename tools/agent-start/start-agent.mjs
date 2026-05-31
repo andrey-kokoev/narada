@@ -105,6 +105,21 @@ export function parseAgentTuiProviderAdapterContract(jsonText) {
   if (contract?.provider_adapter_kind_env_var !== 'NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND') {
     throw new Error('provider_adapter_contract_invalid:provider_adapter_kind_env_var');
   }
+  if (contract?.intelligence_provider_env_var !== 'NARADA_INTELLIGENCE_PROVIDER') {
+    throw new Error('provider_adapter_contract_invalid:intelligence_provider_env_var');
+  }
+  if (contract?.ai_model_env_var !== 'NARADA_AI_MODEL') {
+    throw new Error('provider_adapter_contract_invalid:ai_model_env_var');
+  }
+  if (contract?.ai_thinking_env_var !== 'NARADA_AI_THINKING') {
+    throw new Error('provider_adapter_contract_invalid:ai_thinking_env_var');
+  }
+  if (contract?.ai_stream_env_var !== 'NARADA_AI_STREAM') {
+    throw new Error('provider_adapter_contract_invalid:ai_stream_env_var');
+  }
+  if (JSON.stringify(contract?.admitted_providers) !== JSON.stringify(['codex-subscription', 'openai-api', 'anthropic-api'])) {
+    throw new Error('provider_adapter_contract_invalid:admitted_providers');
+  }
   if (contract?.scripted_provider_adapter_kind !== 'scripted_provider_adapter') {
     throw new Error('provider_adapter_contract_invalid:scripted_provider_adapter_kind');
   }
