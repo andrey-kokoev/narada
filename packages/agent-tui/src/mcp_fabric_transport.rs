@@ -184,11 +184,19 @@ impl McpFabricTransportServer {
         if tools.is_empty() {
             return Err(format!("mcp_fabric_server_tools_missing:{name}"));
         }
+        let mut args = Vec::new();
+        for arg in raw.args.unwrap_or_default() {
+            let arg = arg.trim().to_string();
+            if arg.is_empty() {
+                return Err(format!("mcp_fabric_server_arg_invalid:{name}"));
+            }
+            args.push(arg);
+        }
         Ok(Self {
             name,
             transport,
             command,
-            args: raw.args.unwrap_or_default(),
+            args,
             tools,
             surface_id: raw.surface_id,
             target_site_root: raw.target_site_root,
@@ -349,6 +357,49 @@ mod tests {
         .expect("trimmed command config parses");
 
         assert_eq!(client.servers["sonar-site-loop"].command, "node");
+    }
+
+    #[test]
+    fn rejects_blank_server_arg() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "args": ["site-loop.mjs", " "],
+                  "tools": ["site_loop_status"]
+                }
+              }
+            }"#,
+        )
+        .expect_err("blank arg is invalid");
+
+        assert_eq!(error, "mcp_fabric_server_arg_invalid:sonar-site-loop");
+    }
+
+    #[test]
+    fn trims_server_args() {
+        let client = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "args": [" site-loop.mjs "],
+                  "tools": ["site_loop_status"]
+                }
+              }
+            }"#,
+        )
+        .expect("trimmed args config parses");
+
+        assert_eq!(
+            client.servers["sonar-site-loop"].args,
+            vec!["site-loop.mjs"]
+        );
     }
 
     #[test]
