@@ -50,7 +50,7 @@ const executionContextPayload = {
     { name: 'narada-andrey-task-lifecycle', transport: 'stdio' },
     { name: 'narada-andrey-inbox', transport: 'stdio' },
   ],
-  available_tools: ['shell', 'read_file', 'write_file', 'grep', 'agent'],
+  available_tools: ['shell', 'fs_read_file', 'fs_write_file', 'fs_grep_search', 'agent'],
   transport: 'stdio',
 };
 

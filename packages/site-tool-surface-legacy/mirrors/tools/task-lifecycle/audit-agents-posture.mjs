@@ -14,7 +14,7 @@ const checks = [
     evidence: [
       fileContains('AGENTS.md', ['MCP-only for script execution', 'mcp_only']),
       fileContains('tools/mcp-servers/shell/shell-mcp-server.mjs', ['capability_policy', 'direct_substrate_shell_access']),
-      fileExists('tools/mcp-servers/filesystem/filesystem-mcp-server.mjs'),
+      fileExists('tools/local-filesystem-mcp/main.mjs'),
       fileExists('tools/mcp-servers/test/test-mcp-server.mjs'),
     ],
   },
