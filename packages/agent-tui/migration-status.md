@@ -100,14 +100,16 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 
 ## Promotion Gate Gap Audit
 
-Current launch metadata now names the target-contract gaps that were previously implicit:
+Current launch metadata now distinguishes satisfied gates from remaining promotion blockers:
 
-- Carrier command acceptance: `/queue`, `/queue clear`, `/queue drop <index>`, and `//literal` slash input are not yet accepted as a complete carrier-local command surface.
-- Rendering and diagnostic boundary acceptance: provider stderr, MCP stderr, known-noise suppression, payload threshold policy, and resize behavior are not yet proven as mediated events that cannot corrupt transcript or composer.
-- Payload reference policy acceptance: large or sensitive tool/provider payloads do not yet have a deterministic session policy exposed through carrier metadata and enforced at transcript boundaries.
-- Provider adapter admission: real provider dispatch, streaming output, and provider-origin tool-call mediation remain unimplemented.
-- MCP fabric client admission: Rust-side Site MCP discovery, policy-bound visibility, request/response, and tool evidence remain unimplemented.
-- Site rollout acceptance: known Sites are now named in launch metadata with required side-by-side evidence, but have not yet run side by side on `agent-cli` and `agent-tui` with clean launch and recovery evidence.
+- Satisfied: carrier-local queue commands and literal slash input have parser, runtime coordinator, session evidence, and Rust tests.
+- Satisfied: rendering and diagnostic boundaries cover provider stderr, known-noise suppression, payload threshold policy, resize behavior, and stable renderer frames.
+- Satisfied: payload reference policy is enforced for large or sensitive provider/tool payloads at transcript boundaries.
+- Satisfied: launcher-registry Site rollout has accepted side-by-side `agent-cli` and bounded `agent-tui` evidence for all known Sites.
+- Partial: Rust tests pass through the documented VS DevCmd toolchain; plain-shell readiness remains a diagnostic preflight.
+- Partial: terminal-loop acceptance has scripted frame, lifecycle, and injected-loop coverage; real-terminal promotion is not admitted.
+- Partial: provider admission has disabled/refused/admitted posture, streaming transcript accumulation, and provider-origin tool-call mediation; real provider dispatch remains withheld.
+- Partial: MCP admission has config/fabric posture, policy visibility, request/response framing, supervised stdio execution, and launch gating; production Site MCP exposure remains withheld until live Site execution is admitted.
 
 ## Live Rollout Evidence
 
