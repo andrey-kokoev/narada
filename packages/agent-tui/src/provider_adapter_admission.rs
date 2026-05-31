@@ -58,12 +58,14 @@ impl ProviderAdapterAdmission {
                     .map(ToString::to_string);
                 if let Some(adapter_kind) = adapter_kind {
                     Self {
-                        status: ProviderAdapterAdmissionStatus::Admitted,
+                        status: ProviderAdapterAdmissionStatus::Refused,
                         provider: runtime_config.provider.clone(),
                         model: runtime_config.model.clone(),
-                        adapter_kind: Some(adapter_kind),
-                        provider_execution_enabled: true,
-                        refusal_reason: None,
+                        adapter_kind: Some(adapter_kind.clone()),
+                        provider_execution_enabled: false,
+                        refusal_reason: Some(format!(
+                            "provider_adapter_not_implemented:{adapter_kind}"
+                        )),
                     }
                 } else {
                     Self {
@@ -150,7 +152,7 @@ mod tests {
     }
 
     #[test]
-    fn configured_runtime_with_adapter_admits_execution_boundary() {
+    fn configured_runtime_with_adapter_kind_refuses_until_adapter_is_implemented() {
         let runtime_config = ProviderRuntimeConfig::from_env_map(&env(&[
             ("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true"),
             ("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription"),
@@ -161,13 +163,16 @@ mod tests {
             Some("codex_subscription_adapter"),
         );
 
-        assert_eq!(admission.status, ProviderAdapterAdmissionStatus::Admitted);
-        assert_eq!(admission.status.as_str(), "admitted");
-        assert!(admission.provider_execution_enabled);
+        assert_eq!(admission.status, ProviderAdapterAdmissionStatus::Refused);
+        assert_eq!(admission.status.as_str(), "refused");
+        assert!(!admission.provider_execution_enabled);
         assert_eq!(
             admission.adapter_kind.as_deref(),
             Some("codex_subscription_adapter")
         );
-        assert_eq!(admission.refusal_reason, None);
+        assert_eq!(
+            admission.refusal_reason.as_deref(),
+            Some("provider_adapter_not_implemented:codex_subscription_adapter")
+        );
     }
 }

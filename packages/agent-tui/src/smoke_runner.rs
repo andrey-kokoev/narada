@@ -3,6 +3,8 @@ use crate::input_queue::SessionEvidenceContext;
 use crate::interactive_runtime::{
     AgentTuiInteractiveRuntime, InteractiveStepClock, InteractiveStepResult,
 };
+use crate::provider_adapter_admission::ProviderAdapterAdmission;
+use crate::provider_dispatch::ProviderDispatchStub;
 use crate::provider_runtime_config::ProviderRuntimeConfig;
 use crate::runtime_clock::RuntimeClock;
 use crate::transcript_store::TranscriptIngestSummary;
@@ -32,14 +34,40 @@ impl AgentTuiSmokeSession {
         config: &AgentTuiSmokeStepConfig,
         provider_runtime_config: ProviderRuntimeConfig,
     ) -> Result<Self, String> {
+        let provider_adapter_admission =
+            ProviderAdapterAdmission::from_runtime_config(&provider_runtime_config, None);
+        Self::with_provider_runtime_config_and_adapter_admission(
+            config,
+            provider_runtime_config,
+            provider_adapter_admission,
+        )
+    }
+
+    pub fn with_provider_runtime_config_and_adapter_admission(
+        config: &AgentTuiSmokeStepConfig,
+        provider_runtime_config: ProviderRuntimeConfig,
+        provider_adapter_admission: ProviderAdapterAdmission,
+    ) -> Result<Self, String> {
+        let runtime_posture = crate::status_view_model::RuntimePostureState::from_runtime_configs(
+            &provider_runtime_config,
+            &provider_adapter_admission,
+            &crate::mcp_runtime_config::McpRuntimeConfig::disabled(),
+            &crate::terminal_runtime_config::TerminalRuntimeConfig::disabled(),
+        );
         Ok(Self {
-            runtime: AgentTuiInteractiveRuntime::with_provider_runtime_config(
+            runtime: AgentTuiInteractiveRuntime::with_provider_adapter_and_state(
                 config.identity.clone(),
                 config.session.clone(),
                 config.control_jsonl.clone(),
                 config.session_jsonl.clone(),
                 evidence_context(config),
-                provider_runtime_config,
+                Box::new(
+                    ProviderDispatchStub::with_runtime_config_and_adapter_admission(
+                        provider_runtime_config,
+                        provider_adapter_admission,
+                    ),
+                ),
+                runtime_posture,
             ),
             clock: RuntimeClock::system_now()?,
         })
@@ -73,6 +101,19 @@ pub fn run_interactive_smoke_step_with_provider_runtime_config(
 ) -> Result<InteractiveStepResult, String> {
     let mut session =
         AgentTuiSmokeSession::with_provider_runtime_config(config, provider_runtime_config)?;
+    session.run_step(config.composer_has_draft)
+}
+
+pub fn run_interactive_smoke_step_with_provider_runtime_config_and_adapter_admission(
+    config: &AgentTuiSmokeStepConfig,
+    provider_runtime_config: ProviderRuntimeConfig,
+    provider_adapter_admission: ProviderAdapterAdmission,
+) -> Result<InteractiveStepResult, String> {
+    let mut session = AgentTuiSmokeSession::with_provider_runtime_config_and_adapter_admission(
+        config,
+        provider_runtime_config,
+        provider_adapter_admission,
+    )?;
     session.run_step(config.composer_has_draft)
 }
 

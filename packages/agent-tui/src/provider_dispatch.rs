@@ -70,6 +70,7 @@ pub trait ProviderAdapter {
 #[derive(Debug, Clone)]
 pub struct ProviderDispatchStub {
     runtime_config: ProviderRuntimeConfig,
+    adapter_admission: ProviderAdapterAdmission,
 }
 
 impl ProviderOutputRecord {
@@ -172,13 +173,32 @@ fn inline_text_or_ref(text: &str, decision: InlinePayloadDecision) -> (String, V
 
 impl ProviderDispatchStub {
     pub fn disabled() -> Self {
+        let runtime_config = ProviderRuntimeConfig::disabled();
+        let adapter_admission =
+            ProviderAdapterAdmission::from_runtime_config(&runtime_config, None);
         Self {
-            runtime_config: ProviderRuntimeConfig::disabled(),
+            runtime_config,
+            adapter_admission,
         }
     }
 
     pub fn with_runtime_config(runtime_config: ProviderRuntimeConfig) -> Self {
-        Self { runtime_config }
+        let adapter_admission =
+            ProviderAdapterAdmission::from_runtime_config(&runtime_config, None);
+        Self {
+            runtime_config,
+            adapter_admission,
+        }
+    }
+
+    pub fn with_runtime_config_and_adapter_admission(
+        runtime_config: ProviderRuntimeConfig,
+        adapter_admission: ProviderAdapterAdmission,
+    ) -> Self {
+        Self {
+            runtime_config,
+            adapter_admission,
+        }
     }
 
     pub fn record_request(&self, input: &InputEvent, turn_id: &str) -> ProviderDispatchRecord {
@@ -195,7 +215,7 @@ impl Default for ProviderDispatchStub {
 impl ProviderAdapter for ProviderDispatchStub {
     fn dispatch_request(&self, input: &InputEvent, turn_id: &str) -> ProviderDispatchRecord {
         let status = ProviderDispatchStatus::RecordedNotDispatched;
-        let admission = ProviderAdapterAdmission::from_runtime_config(&self.runtime_config, None);
+        let admission = &self.adapter_admission;
         ProviderDispatchRecord {
             status: status.clone(),
             provider_execution_enabled: admission.provider_execution_enabled,
@@ -206,12 +226,12 @@ impl ProviderAdapter for ProviderDispatchStub {
                 "provider_execution_enabled": admission.provider_execution_enabled,
                 "provider_runtime_status": self.runtime_config.status.as_str(),
                 "provider_adapter_admission_status": admission.status.as_str(),
-                "provider_adapter_kind": admission.adapter_kind,
+                "provider_adapter_kind": admission.adapter_kind.clone(),
                 "provider": self.runtime_config.provider.clone(),
                 "model": self.runtime_config.model.clone(),
                 "thinking": self.runtime_config.thinking.clone(),
                 "stream": self.runtime_config.stream,
-                "provider_refusal_reason": admission.refusal_reason,
+                "provider_refusal_reason": admission.refusal_reason.clone(),
                 "content_preview": input.content.chars().take(120).collect::<String>()
             }),
             outputs: Vec::new(),

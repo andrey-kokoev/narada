@@ -4,12 +4,12 @@ use narada_agent_tui::input_queue::{SessionEvidenceContext, TurnState};
 use narada_agent_tui::interactive_runtime::AgentTuiInteractiveRuntime;
 use narada_agent_tui::layout_model::{LayoutConfig, TerminalSize};
 use narada_agent_tui::provider_dispatch::ProviderDispatchStub;
-use narada_agent_tui::provider_runtime_config::ProviderRuntimeConfig;
 use narada_agent_tui::runtime_clock::RuntimeClock;
 use narada_agent_tui::runtime_config_snapshot::RuntimeConfigSnapshot;
 use narada_agent_tui::runtime_step::RuntimeStep;
 use narada_agent_tui::smoke_runner::{
-    interactive_smoke_step_summary_lines, run_interactive_smoke_step_with_provider_runtime_config,
+    interactive_smoke_step_summary_lines,
+    run_interactive_smoke_step_with_provider_runtime_config_and_adapter_admission,
     AgentTuiSmokeSession, AgentTuiSmokeStepConfig,
 };
 use narada_agent_tui::status_view_model::StatusViewInput;
@@ -165,6 +165,7 @@ fn executable_candidates(name: &str) -> Vec<String> {
 fn print_scaffold(args: &Args) {
     let runtime_config = runtime_config_snapshot_from_process_env();
     let provider_config = &runtime_config.provider;
+    let provider_adapter = &runtime_config.provider_adapter;
     let mcp_config = &runtime_config.mcp;
     let terminal_config = &runtime_config.terminal;
     println!("narada-agent-tui scaffold");
@@ -204,6 +205,20 @@ fn print_scaffold(args: &Args) {
     if let Some(reason) = &provider_config.refusal_reason {
         println!("provider_refusal: {reason}");
     }
+    println!(
+        "provider_adapter_status: {}",
+        provider_adapter.status.as_str()
+    );
+    println!(
+        "provider_adapter_execution_enabled: {}",
+        provider_adapter.provider_execution_enabled
+    );
+    if let Some(adapter_kind) = &provider_adapter.adapter_kind {
+        println!("provider_adapter_kind: {adapter_kind}");
+    }
+    if let Some(reason) = &provider_adapter.refusal_reason {
+        println!("provider_adapter_refusal: {reason}");
+    }
     println!("mcp_status: {}", mcp_config.status.as_str());
     println!(
         "mcp_fabric_access_enabled: {}",
@@ -236,10 +251,6 @@ fn runtime_config_snapshot_from_process_env() -> RuntimeConfigSnapshot {
         .filter(|(key, _)| key.starts_with("NARADA_"))
         .collect::<BTreeMap<_, _>>();
     RuntimeConfigSnapshot::from_env_map(&env_map)
-}
-
-fn provider_config_from_process_env() -> ProviderRuntimeConfig {
-    runtime_config_snapshot_from_process_env().provider
 }
 
 fn terminal_config_from_process_env() -> TerminalRuntimeConfig {
@@ -305,16 +316,19 @@ fn run_render_once(args: Args) -> Result<(), String> {
 }
 fn run_interactive_step_once(args: Args) -> Result<(), String> {
     let config = build_smoke_step_config(&args)?;
+    let runtime_config = runtime_config_snapshot_from_process_env();
     let result = if args.persistent_smoke_session {
-        let mut session = AgentTuiSmokeSession::with_provider_runtime_config(
+        let mut session = AgentTuiSmokeSession::with_provider_runtime_config_and_adapter_admission(
             &config,
-            provider_config_from_process_env(),
+            runtime_config.provider,
+            runtime_config.provider_adapter,
         )?;
         session.run_step(config.composer_has_draft)?
     } else {
-        run_interactive_smoke_step_with_provider_runtime_config(
+        run_interactive_smoke_step_with_provider_runtime_config_and_adapter_admission(
             &config,
-            provider_config_from_process_env(),
+            runtime_config.provider,
+            runtime_config.provider_adapter,
         )?
     };
 
@@ -326,9 +340,11 @@ fn run_interactive_step_once(args: Args) -> Result<(), String> {
 fn run_interactive_smoke_loop(args: Args) -> Result<(), String> {
     let max_steps = args.max_steps.expect("validated max steps");
     let config = build_smoke_step_config(&args)?;
-    let mut session = AgentTuiSmokeSession::with_provider_runtime_config(
+    let runtime_config = runtime_config_snapshot_from_process_env();
+    let mut session = AgentTuiSmokeSession::with_provider_runtime_config_and_adapter_admission(
         &config,
-        provider_config_from_process_env(),
+        runtime_config.provider,
+        runtime_config.provider_adapter,
     )?;
 
     for step_index in 1..=max_steps {
@@ -418,15 +434,20 @@ fn build_interactive_runtime(args: &Args) -> Result<AgentTuiInteractiveRuntime, 
     let control_jsonl = args.control_jsonl.clone().expect("validated control jsonl");
     let session_jsonl = args.session_jsonl.clone().expect("validated session jsonl");
     let runtime_config = runtime_config_snapshot_from_process_env();
-    Ok(AgentTuiInteractiveRuntime::with_runtime_configs(
+    let runtime_posture = runtime_config.posture();
+    Ok(AgentTuiInteractiveRuntime::with_provider_adapter_and_state(
         identity,
         session,
         control_jsonl,
         session_jsonl,
         build_evidence_context(args),
-        runtime_config.provider,
-        runtime_config.mcp,
-        runtime_config.terminal,
+        Box::new(
+            ProviderDispatchStub::with_runtime_config_and_adapter_admission(
+                runtime_config.provider,
+                runtime_config.provider_adapter,
+            ),
+        ),
+        runtime_posture,
     ))
 }
 
@@ -471,13 +492,18 @@ fn build_runtime_step(args: &Args) -> Result<RuntimeStep, String> {
     let session_jsonl = args.session_jsonl.clone().expect("validated session jsonl");
     let context = build_evidence_context(args);
     let clock = RuntimeClock::system_now()?;
-    let provider_config = provider_config_from_process_env();
+    let runtime_config = runtime_config_snapshot_from_process_env();
     Ok(RuntimeStep::with_provider_adapter(
         control_jsonl,
         session_jsonl,
         context,
         clock,
-        Box::new(ProviderDispatchStub::with_runtime_config(provider_config)),
+        Box::new(
+            ProviderDispatchStub::with_runtime_config_and_adapter_admission(
+                runtime_config.provider,
+                runtime_config.provider_adapter,
+            ),
+        ),
     ))
 }
 

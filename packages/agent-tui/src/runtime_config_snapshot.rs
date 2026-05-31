@@ -16,7 +16,11 @@ pub struct RuntimeConfigSnapshot {
 impl RuntimeConfigSnapshot {
     pub fn from_env_map(env_map: &BTreeMap<String, String>) -> Self {
         let provider = ProviderRuntimeConfig::from_env_map(env_map);
-        let provider_adapter = ProviderAdapterAdmission::from_runtime_config(&provider, None);
+        let provider_adapter_kind = env_map
+            .get("NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND")
+            .map(String::as_str);
+        let provider_adapter =
+            ProviderAdapterAdmission::from_runtime_config(&provider, provider_adapter_kind);
         Self {
             provider,
             provider_adapter,
@@ -52,6 +56,10 @@ mod tests {
             ),
             ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
             (
+                "NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND".to_string(),
+                "codex_subscription_adapter".to_string(),
+            ),
+            (
                 "NARADA_AGENT_TUI_ENABLE_MCP_FABRIC".to_string(),
                 "true".to_string(),
             ),
@@ -80,9 +88,10 @@ mod tests {
             snapshot.provider.status.as_str(),
             "configured_not_implemented"
         );
+        assert_eq!(snapshot.provider_adapter.status.as_str(), "refused");
         assert_eq!(
-            snapshot.provider_adapter.status.as_str(),
-            "configured_without_adapter"
+            snapshot.provider_adapter.adapter_kind.as_deref(),
+            Some("codex_subscription_adapter")
         );
         assert_eq!(snapshot.mcp.status.as_str(), "configured");
         assert_eq!(snapshot.terminal.status.as_str(), "configured");
@@ -92,7 +101,7 @@ mod tests {
         );
         assert_eq!(
             posture.provider_adapter_state.as_str(),
-            "provider_adapter_configured_without_adapter"
+            "provider_adapter_refused"
         );
         assert_eq!(posture.mcp_state.as_str(), "mcp_configured");
         assert_eq!(posture.terminal_state.as_str(), "terminal_configured");
