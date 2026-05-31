@@ -535,7 +535,7 @@ function agentTuiPromotionChecklist() {
       id: 'provider_adapter_admission',
       status: 'partial',
       required_evidence: 'real provider adapter, provider boundary evidence, streaming output, and tool-call boundary contracts',
-      current_evidence: 'Provider boundary records disabled posture, ordered text deltas project as one agent message, and provider-origin tool-call bridge exists; real provider adapter remains withheld',
+      current_evidence: 'Provider boundary records disabled/refused/configured posture, centralized adapter construction preserves withheld dispatch, ordered text deltas project as one agent message, and provider-origin tool-call bridge exists; real provider adapter remains withheld',
     },
     {
       id: 'mcp_fabric_client_admission',
@@ -712,6 +712,7 @@ function agentTuiProviderExecutionGate() {
       'streaming_turn_output_contract',
       'tool_call_boundary_contract',
     ],
+    current_evidence: 'Runtime construction uses the provider adapter factory; the current factory returns a recording stub until a real adapter is admitted.',
     reason: 'Smoke step records provider boundary evidence without dispatching provider work.',
   };
 }
