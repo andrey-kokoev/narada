@@ -93,9 +93,10 @@ fn assert_configured_provider_posture_recorded(session_jsonl: &str) {
     assert!(session_jsonl.contains("\"provider_runtime_status\":\"configured_not_implemented\""));
     assert!(session_jsonl.contains("\"provider\":\"codex-subscription\""));
     assert!(session_jsonl.contains("\"model\":\"gpt-5.5\""));
-    assert!(
-        session_jsonl.contains("\"provider_refusal_reason\":\"provider_adapter_not_implemented\"")
-    );
+    assert!(session_jsonl
+        .contains("\"provider_adapter_admission_status\":\"configured_without_adapter\""));
+    assert!(session_jsonl.contains("\"provider_adapter_kind\":null"));
+    assert!(session_jsonl.contains("\"provider_refusal_reason\":\"provider_adapter_not_admitted\""));
 }
 
 #[test]

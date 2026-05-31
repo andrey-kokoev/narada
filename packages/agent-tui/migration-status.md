@@ -34,6 +34,7 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - Runtime coordinator for control polling, queue admission, carrier-local queue commands, literal slash input, composer submit, interrupt evidence, held release, and session evidence writing.
 - Turn coordinator with provider dispatch boundary recording and explicit `completed_without_provider` terminal evidence.
 - Provider dispatch trait plus stub adapter; real provider execution remains disabled.
+- Provider adapter admission boundary distinguishes disabled runtime, refused runtime, configured-without-adapter posture, and future admitted adapter execution.
 - Provider boundary acceptance verifies request and terminal evidence both record `recorded_not_dispatched` and `provider_execution_enabled=false`.
 - Provider request evidence carries provider runtime posture, configured provider/model when present, and refusal reason so disabled/configured-not-implemented turns are reconstructable from session JSONL.
 - Provider boundary acceptance verifies ordered provider text deltas project as one accumulated agent transcript message for the turn.
@@ -110,7 +111,7 @@ Current launch metadata now distinguishes satisfied gates from remaining promoti
 - Satisfied: launcher-registry Site rollout has accepted side-by-side `agent-cli` and bounded `agent-tui` evidence for all known Sites.
 - Partial: Rust tests pass through the documented VS DevCmd toolchain; plain-shell readiness remains a diagnostic preflight.
 - Partial: terminal-loop acceptance has scripted frame, lifecycle, injected-loop, and terminal runtime config coverage; real-terminal promotion is not admitted.
-- Partial: provider admission has disabled/refused/configured-not-implemented posture, streaming transcript accumulation, and provider-origin tool-call mediation; real provider dispatch remains withheld.
+- Partial: provider admission has disabled/refused/configured-not-implemented runtime posture, explicit adapter admission evidence, streaming transcript accumulation, and provider-origin tool-call mediation; real provider dispatch remains withheld.
 - Partial: MCP admission has config/fabric posture, policy visibility, request/response framing, supervised stdio execution, runtime-posture evidence, and launch gating; production Site MCP exposure remains withheld until live Site execution is admitted.
 
 ## Live Rollout Evidence

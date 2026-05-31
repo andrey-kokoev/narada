@@ -1,4 +1,5 @@
 use crate::carrier_protocol::{InputEvent, SessionEventKind};
+use crate::provider_adapter_admission::ProviderAdapterAdmission;
 use crate::provider_runtime_config::ProviderRuntimeConfig;
 use crate::rendering_boundary::{
     decide_payload_inline, default_payload_policy, InlinePayloadDecision,
@@ -194,20 +195,23 @@ impl Default for ProviderDispatchStub {
 impl ProviderAdapter for ProviderDispatchStub {
     fn dispatch_request(&self, input: &InputEvent, turn_id: &str) -> ProviderDispatchRecord {
         let status = ProviderDispatchStatus::RecordedNotDispatched;
+        let admission = ProviderAdapterAdmission::from_runtime_config(&self.runtime_config, None);
         ProviderDispatchRecord {
             status: status.clone(),
-            provider_execution_enabled: false,
+            provider_execution_enabled: admission.provider_execution_enabled,
             payload: json!({
                 "turn_id": turn_id,
                 "input_event_id": input.event_id,
                 "provider_request_status": status.as_str(),
-                "provider_execution_enabled": false,
+                "provider_execution_enabled": admission.provider_execution_enabled,
                 "provider_runtime_status": self.runtime_config.status.as_str(),
+                "provider_adapter_admission_status": admission.status.as_str(),
+                "provider_adapter_kind": admission.adapter_kind,
                 "provider": self.runtime_config.provider.clone(),
                 "model": self.runtime_config.model.clone(),
                 "thinking": self.runtime_config.thinking.clone(),
                 "stream": self.runtime_config.stream,
-                "provider_refusal_reason": self.runtime_config.refusal_reason.clone(),
+                "provider_refusal_reason": admission.refusal_reason,
                 "content_preview": input.content.chars().take(120).collect::<String>()
             }),
             outputs: Vec::new(),
@@ -301,6 +305,11 @@ mod tests {
         );
         assert_eq!(record.payload["provider_execution_enabled"], false);
         assert_eq!(record.payload["provider_runtime_status"], "disabled");
+        assert_eq!(
+            record.payload["provider_adapter_admission_status"],
+            "disabled"
+        );
+        assert_eq!(record.payload["provider_adapter_kind"], Value::Null);
         assert_eq!(record.payload["provider_refusal_reason"], Value::Null);
         assert!(record.outputs.is_empty());
     }
@@ -328,11 +337,16 @@ mod tests {
             record.payload["provider_runtime_status"],
             "configured_not_implemented"
         );
+        assert_eq!(
+            record.payload["provider_adapter_admission_status"],
+            "configured_without_adapter"
+        );
+        assert_eq!(record.payload["provider_adapter_kind"], Value::Null);
         assert_eq!(record.payload["provider"], "codex-subscription");
         assert_eq!(record.payload["model"], "gpt-5.5");
         assert_eq!(
             record.payload["provider_refusal_reason"],
-            "provider_adapter_not_implemented"
+            "provider_adapter_not_admitted"
         );
     }
 }
