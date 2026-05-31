@@ -525,7 +525,7 @@ mod tests {
         );
         assert_eq!(
             provider_request.payload["provider_adapter_kind"],
-            "scripted_provider_adapter"
+            provider_adapter_contract().scripted_provider_adapter_kind
         );
         assert_eq!(
             provider_request.payload["provider_adapter_refusal_reason"],

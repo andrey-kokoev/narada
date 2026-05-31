@@ -379,7 +379,7 @@ mod tests {
         );
         assert_eq!(
             provider_request.payload["provider_adapter_kind"],
-            "scripted_provider_adapter"
+            provider_adapter_contract().scripted_provider_adapter_kind
         );
         assert_eq!(
             parse_session_event(lines[3])
