@@ -149,6 +149,7 @@ mod tests {
         parse_session_event, SessionEvent, SessionEventKind, SESSION_EVENT_SCHEMA,
     };
     use crate::provider_adapter_admission::ProviderAdapterKind;
+    use crate::provider_adapter_contract::provider_adapter_contract;
     use crate::provider_dispatch::{ProviderOutputRecord, ScriptedProviderAdapter};
     use crate::provider_runtime_config::ProviderRuntimeConfig;
     use crate::session_jsonl::append_session_event;
@@ -206,17 +207,21 @@ mod tests {
     fn scripted_runtime_provider_adapter_with_outputs(
         outputs: Vec<ProviderOutputRecord>,
     ) -> ScriptedProviderAdapter {
+        let provider_contract = provider_adapter_contract();
         let runtime_config =
             ProviderRuntimeConfig::from_env_map(&std::collections::BTreeMap::from([
                 (
-                    "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION".to_string(),
+                    provider_contract.provider_execution_env_var.clone(),
                     "true".to_string(),
                 ),
                 (
-                    "NARADA_INTELLIGENCE_PROVIDER".to_string(),
+                    provider_contract.intelligence_provider_env_var.clone(),
                     "codex-subscription".to_string(),
                 ),
-                ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
+                (
+                    provider_contract.ai_model_env_var.clone(),
+                    "gpt-5.5".to_string(),
+                ),
             ]));
         ScriptedProviderAdapter::try_new(runtime_config, ProviderAdapterKind::Scripted, outputs)
             .expect("scripted runtime provider admits configured runtime")
