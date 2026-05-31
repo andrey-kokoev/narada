@@ -565,7 +565,7 @@ mod tests {
         ]));
         let dispatcher = ScriptedProviderAdapter::try_new(
             runtime_config,
-            ProviderAdapterKind::CodexSubscription,
+            ProviderAdapterKind::Scripted,
             vec![ProviderOutputRecord::text_delta("turn_1", "hello", 1)],
         )
         .expect("scripted adapter admits configured runtime");
@@ -582,7 +582,7 @@ mod tests {
         );
         assert_eq!(
             record.payload["provider_adapter_kind"],
-            "codex_subscription_adapter"
+            "scripted_provider_adapter"
         );
         assert_eq!(
             record.payload["provider_adapter_refusal_reason"],

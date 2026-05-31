@@ -400,7 +400,7 @@ mod tests {
             ]));
         ScriptedProviderAdapter::try_new(
             runtime_config,
-            ProviderAdapterKind::CodexSubscription,
+            ProviderAdapterKind::Scripted,
             vec![
                 ProviderOutputRecord::text_delta("turn_1", "hello", 1),
                 ProviderOutputRecord::tool_call_request("turn_1", "site_loop_run_once", "{}", 2),
@@ -521,7 +521,7 @@ mod tests {
         );
         assert_eq!(
             provider_request.payload["provider_adapter_kind"],
-            "codex_subscription_adapter"
+            "scripted_provider_adapter"
         );
         assert_eq!(
             provider_request.payload["provider_adapter_refusal_reason"],

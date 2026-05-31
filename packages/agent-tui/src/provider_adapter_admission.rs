@@ -2,12 +2,14 @@ use crate::provider_runtime_config::{ProviderRuntimeAdmissionStatus, ProviderRun
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProviderAdapterKind {
+    Scripted,
     CodexSubscription,
 }
 
 impl ProviderAdapterKind {
     pub fn parse(value: &str) -> Result<Self, String> {
         match value.trim() {
+            "scripted_provider_adapter" => Ok(Self::Scripted),
             "codex_subscription_adapter" => Ok(Self::CodexSubscription),
             other => Err(format!("unknown_provider_adapter:{other}")),
         }
@@ -15,11 +17,18 @@ impl ProviderAdapterKind {
 
     pub fn as_str(&self) -> &'static str {
         match self {
+            Self::Scripted => "scripted_provider_adapter",
             Self::CodexSubscription => "codex_subscription_adapter",
         }
     }
-}
 
+    pub fn execution_implemented(&self) -> bool {
+        match self {
+            Self::Scripted => true,
+            Self::CodexSubscription => false,
+        }
+    }
+}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProviderAdapterAdmissionStatus {
     Disabled,
@@ -56,6 +65,12 @@ impl ProviderAdapterAdmission {
     ) -> Result<Self, String> {
         if runtime_config.status != ProviderRuntimeAdmissionStatus::Configured {
             return Err("provider_runtime_not_configured".to_string());
+        }
+        if !adapter_kind.execution_implemented() {
+            return Err(format!(
+                "provider_adapter_not_implemented:{}",
+                adapter_kind.as_str()
+            ));
         }
         Ok(Self {
             status: ProviderAdapterAdmissionStatus::Admitted,
@@ -143,9 +158,17 @@ mod tests {
 
     #[test]
     fn parses_known_provider_adapter_kind() {
-        let kind = ProviderAdapterKind::parse(" codex_subscription_adapter ").expect("kind parses");
-        assert_eq!(kind, ProviderAdapterKind::CodexSubscription);
-        assert_eq!(kind.as_str(), "codex_subscription_adapter");
+        let scripted = ProviderAdapterKind::parse(" scripted_provider_adapter ")
+            .expect("scripted kind parses");
+        assert_eq!(scripted, ProviderAdapterKind::Scripted);
+        assert_eq!(scripted.as_str(), "scripted_provider_adapter");
+        assert!(scripted.execution_implemented());
+
+        let codex =
+            ProviderAdapterKind::parse(" codex_subscription_adapter ").expect("codex kind parses");
+        assert_eq!(codex, ProviderAdapterKind::CodexSubscription);
+        assert_eq!(codex.as_str(), "codex_subscription_adapter");
+        assert!(!codex.execution_implemented());
         assert_eq!(
             ProviderAdapterKind::parse("unknown_adapter").unwrap_err(),
             "unknown_provider_adapter:unknown_adapter"
@@ -229,7 +252,7 @@ mod tests {
     }
 
     #[test]
-    fn configured_runtime_with_adapter_kind_refuses_until_adapter_is_implemented() {
+    fn configured_runtime_with_production_adapter_kind_refuses_until_adapter_is_implemented() {
         let runtime_config = ProviderRuntimeConfig::from_env_map(&env(&[
             ("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true"),
             ("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription"),
@@ -254,18 +277,16 @@ mod tests {
     }
 
     #[test]
-    fn admitted_adapter_requires_configured_runtime_and_enables_execution() {
+    fn admitted_adapter_requires_configured_runtime_and_enables_scripted_execution_only() {
         let runtime_config = ProviderRuntimeConfig::from_env_map(&env(&[
             ("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true"),
             ("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription"),
             ("NARADA_AI_MODEL", "gpt-5.5"),
         ]));
 
-        let admission = ProviderAdapterAdmission::try_admit(
-            &runtime_config,
-            ProviderAdapterKind::CodexSubscription,
-        )
-        .expect("configured runtime admits explicit adapter");
+        let admission =
+            ProviderAdapterAdmission::try_admit(&runtime_config, ProviderAdapterKind::Scripted)
+                .expect("configured runtime admits scripted adapter");
 
         assert_eq!(admission.status, ProviderAdapterAdmissionStatus::Admitted);
         assert!(admission.provider_execution_enabled);
@@ -273,13 +294,21 @@ mod tests {
         assert_eq!(admission.model.as_deref(), Some("gpt-5.5"));
         assert_eq!(
             admission.adapter_kind.as_deref(),
-            Some("codex_subscription_adapter")
+            Some("scripted_provider_adapter")
         );
         assert_eq!(admission.refusal_reason, None);
+        assert_eq!(
+            ProviderAdapterAdmission::try_admit(
+                &runtime_config,
+                ProviderAdapterKind::CodexSubscription
+            )
+            .unwrap_err(),
+            "provider_adapter_not_implemented:codex_subscription_adapter"
+        );
 
         let disabled = ProviderRuntimeConfig::disabled();
         assert_eq!(
-            ProviderAdapterAdmission::try_admit(&disabled, ProviderAdapterKind::CodexSubscription,)
+            ProviderAdapterAdmission::try_admit(&disabled, ProviderAdapterKind::Scripted)
                 .unwrap_err(),
             "provider_runtime_not_configured"
         );

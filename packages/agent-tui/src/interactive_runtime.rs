@@ -351,12 +351,8 @@ mod tests {
             ),
             ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
         ]));
-        ScriptedProviderAdapter::try_new(
-            runtime_config,
-            ProviderAdapterKind::CodexSubscription,
-            outputs,
-        )
-        .expect("scripted interactive provider admits configured runtime")
+        ScriptedProviderAdapter::try_new(runtime_config, ProviderAdapterKind::Scripted, outputs)
+            .expect("scripted interactive provider admits configured runtime")
     }
 
     struct InteractiveToolExecutor;

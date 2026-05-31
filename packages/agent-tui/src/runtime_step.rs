@@ -217,12 +217,8 @@ mod tests {
                 ),
                 ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
             ]));
-        ScriptedProviderAdapter::try_new(
-            runtime_config,
-            ProviderAdapterKind::CodexSubscription,
-            outputs,
-        )
-        .expect("scripted runtime provider admits configured runtime")
+        ScriptedProviderAdapter::try_new(runtime_config, ProviderAdapterKind::Scripted, outputs)
+            .expect("scripted runtime provider admits configured runtime")
     }
 
     struct RuntimeStepToolExecutor;
@@ -377,7 +373,7 @@ mod tests {
         );
         assert_eq!(
             provider_request.payload["provider_adapter_kind"],
-            "codex_subscription_adapter"
+            "scripted_provider_adapter"
         );
         assert_eq!(
             parse_session_event(lines[3])
