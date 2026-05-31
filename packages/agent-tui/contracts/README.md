@@ -11,6 +11,13 @@ These files are authoritative where launcher metadata and Rust runtime evidence 
 - `provider-adapters.json`: provider execution environment gate, provider adapter kind names, and production implementation posture used by Rust provider runtime/admission and `agent-start` provider launch metadata.
 - `terminal-runtime.json`: terminal rendering environment gate and required interactive mode used by Rust terminal runtime config and `agent-start` terminal launch metadata.
 
+## Readers
+
+- `launch-slice.json`: Rust `src/launch_slice_contract.rs`; launcher parser `parseAgentTuiLaunchSliceContract`.
+- `mcp-runtime.json`: Rust `src/mcp_runtime_contract.rs`; launcher parser `parseAgentTuiMcpRuntimeContract`.
+- `provider-adapters.json`: Rust `src/provider_adapter_contract.rs`; launcher parser `parseAgentTuiProviderAdapterContract`.
+- `terminal-runtime.json`: Rust `src/terminal_runtime_contract.rs`; launcher parser `parseAgentTuiTerminalRuntimeContract`.
+
 ## Rules
 
 - Do not duplicate values from these files as independent constants in Rust or JavaScript launcher code.
