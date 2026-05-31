@@ -52,8 +52,8 @@ impl McpRuntimeConfig {
             return Self::disabled();
         }
 
-        let config_path = trimmed_nonempty(env.get("NARADA_AGENT_TUI_MCP_CONFIG"));
-        let site_mcp_fabric = trimmed_nonempty(env.get("NARADA_SITE_MCP_FABRIC"));
+        let config_path = trimmed_nonempty(env.get(mcp_config_env_var()));
+        let site_mcp_fabric = trimmed_nonempty(env.get(site_mcp_fabric_env_var()));
 
         let Some(config_path) = config_path else {
             return Self::refused("missing_mcp_config");
@@ -97,6 +97,14 @@ pub fn mcp_fabric_env_var() -> &'static str {
 
 pub fn config_path_policy() -> &'static str {
     mcp_runtime_contract().mcp_config_path_policy.as_str()
+}
+
+pub fn mcp_config_env_var() -> &'static str {
+    mcp_runtime_contract().mcp_config_env_var.as_str()
+}
+
+pub fn site_mcp_fabric_env_var() -> &'static str {
+    mcp_runtime_contract().site_mcp_fabric_env_var.as_str()
 }
 
 fn env_flag_enabled(value: Option<&String>) -> bool {

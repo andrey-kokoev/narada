@@ -77,6 +77,12 @@ export function parseAgentTuiMcpRuntimeContract(jsonText) {
   if (contract?.mcp_fabric_env_var !== 'NARADA_AGENT_TUI_ENABLE_MCP_FABRIC') {
     throw new Error('mcp_runtime_contract_invalid:mcp_fabric_env_var');
   }
+  if (contract?.mcp_config_env_var !== 'NARADA_AGENT_TUI_MCP_CONFIG') {
+    throw new Error('mcp_runtime_contract_invalid:mcp_config_env_var');
+  }
+  if (contract?.site_mcp_fabric_env_var !== 'NARADA_SITE_MCP_FABRIC') {
+    throw new Error('mcp_runtime_contract_invalid:site_mcp_fabric_env_var');
+  }
   if (contract?.mcp_config_path_policy !== 'inside_site_mcp_fabric_without_parent_traversal') {
     throw new Error('mcp_runtime_contract_invalid:mcp_config_path_policy');
   }
