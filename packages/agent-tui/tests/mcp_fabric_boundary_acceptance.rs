@@ -110,7 +110,7 @@ fn mcp_fabric_boundary_acceptance_records_tool_request_and_result_evidence() {
 fn mcp_fabric_boundary_acceptance_separates_mcp_from_provider_boundary() {
     let boundary = McpFabricBoundary::disabled_until_admitted();
 
-    assert_ne!(boundary.status.as_str(), "recorded_not_dispatched");
-    assert_ne!(boundary.tool_visibility, "provider_disabled");
+    assert_eq!(boundary.status.as_str(), "disabled");
+    assert_eq!(boundary.tool_visibility, "none");
     assert!(boundary.reason.contains("Site MCP fabric client"));
 }
