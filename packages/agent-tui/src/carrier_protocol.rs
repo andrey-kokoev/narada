@@ -149,6 +149,18 @@ pub struct PayloadPolicy {
     pub sensitive_payloads_require_ref: bool,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct SessionEventFixtureManifestEntry {
+    pub event_kind: String,
+    pub fixture: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct SessionEventFixtureManifest {
+    pub schema: String,
+    pub fixtures: Vec<SessionEventFixtureManifestEntry>,
+}
+
 pub fn parse_input_event(json: &str) -> Result<InputEvent, String> {
     let event: InputEvent = serde_json::from_str(json).map_err(|error| error.to_string())?;
     validate_input_event(&event)?;
@@ -177,6 +189,15 @@ pub fn parse_payload_policy(json: &str) -> Result<PayloadPolicy, String> {
     let policy: PayloadPolicy = serde_json::from_str(json).map_err(|error| error.to_string())?;
     validate_payload_policy(&policy)?;
     Ok(policy)
+}
+
+pub fn parse_session_event_fixture_manifest(
+    json: &str,
+) -> Result<SessionEventFixtureManifest, String> {
+    let manifest: SessionEventFixtureManifest =
+        serde_json::from_str(json).map_err(|error| error.to_string())?;
+    validate_session_event_fixture_manifest(&manifest)?;
+    Ok(manifest)
 }
 
 pub fn serialize_session_event(event: &SessionEvent) -> Result<String, String> {
@@ -714,6 +735,42 @@ fn validate_payload_policy(policy: &PayloadPolicy) -> Result<(), String> {
     Ok(())
 }
 
+pub fn validate_session_event_fixture_manifest(
+    manifest: &SessionEventFixtureManifest,
+) -> Result<(), String> {
+    if manifest.schema != SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA {
+        return Err(format!("invalid_schema:{}", manifest.schema));
+    }
+    let manifest_kinds = manifest
+        .fixtures
+        .iter()
+        .map(|entry| entry.event_kind.clone())
+        .collect::<Vec<_>>();
+    let protocol_kinds = SESSION_EVENT_KINDS
+        .iter()
+        .map(|kind| {
+            serde_json::to_value(kind)
+                .expect("session event kind serializes")
+                .as_str()
+                .expect("session event kind string")
+                .to_string()
+        })
+        .collect::<Vec<_>>();
+    if manifest_kinds != protocol_kinds {
+        return Err("fixtures.not_in_session_event_kind_order".to_string());
+    }
+    for (index, entry) in manifest.fixtures.iter().enumerate() {
+        if entry.fixture.is_empty()
+            || entry.fixture.contains('/')
+            || entry.fixture.contains('\\')
+            || !entry.fixture.ends_with(".json")
+        {
+            return Err(format!("fixtures.{index}.invalid_fixture"));
+        }
+    }
+    Ok(())
+}
+
 fn require_prefix(field: &str, value: &str, prefix: &str) -> Result<(), String> {
     if value.starts_with(prefix) {
         Ok(())
@@ -799,91 +856,45 @@ mod tests {
         std::fs::read_to_string(path).expect("shared session fixture reads")
     }
 
-    fn validate_shared_session_event_fixture_manifest(manifest: &Value) -> Result<(), String> {
-        if !manifest.is_object() {
-            return Err("session_event_fixture_manifest_not_object".to_string());
-        }
-        if manifest.get("schema").and_then(Value::as_str)
-            != Some(SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA)
-        {
-            return Err(format!(
-                "invalid_schema:{}",
-                manifest
-                    .get("schema")
-                    .map(Value::to_string)
-                    .unwrap_or_else(|| "undefined".to_string())
-            ));
-        }
-        let fixtures = manifest
-            .get("fixtures")
-            .and_then(Value::as_array)
-            .ok_or_else(|| "invalid_fixtures".to_string())?;
-        let manifest_kinds = fixtures
-            .iter()
-            .enumerate()
-            .map(|(index, entry)| {
-                entry
-                    .get("event_kind")
-                    .and_then(Value::as_str)
-                    .ok_or_else(|| format!("fixtures.{index}.invalid_event_kind"))
-                    .map(ToString::to_string)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        let protocol_kinds = SESSION_EVENT_KINDS
-            .iter()
-            .map(|kind| {
-                serde_json::to_value(kind)
-                    .expect("session event kind serializes")
-                    .as_str()
-                    .expect("session event kind string")
-                    .to_string()
-            })
-            .collect::<Vec<_>>();
-        if manifest_kinds != protocol_kinds {
-            return Err("fixtures.not_in_session_event_kind_order".to_string());
-        }
-        for (index, entry) in fixtures.iter().enumerate() {
-            let Some(fixture) = entry.get("fixture").and_then(Value::as_str) else {
-                return Err(format!("fixtures.{index}.invalid_fixture"));
-            };
-            if fixture.is_empty()
-                || fixture.contains('/')
-                || fixture.contains('\\')
-                || !fixture.ends_with(".json")
-            {
-                return Err(format!("fixtures.{index}.invalid_fixture"));
-            }
-        }
-        Ok(())
-    }
-
-    fn shared_session_event_fixture_manifest() -> Vec<Value> {
+    fn shared_session_event_fixture_manifest() -> SessionEventFixtureManifest {
         let manifest = read_shared_session_event_fixture("session-event-fixtures.json");
-        let manifest: Value =
-            serde_json::from_str(&manifest).expect("shared session fixture manifest parses");
-        validate_shared_session_event_fixture_manifest(&manifest)
-            .expect("shared session fixture manifest is valid");
-        manifest["fixtures"]
-            .as_array()
-            .expect("shared session fixture manifest entries")
-            .clone()
+        parse_session_event_fixture_manifest(&manifest)
+            .expect("shared session fixture manifest is valid")
     }
 
     #[test]
     fn rejects_invalid_shared_session_event_fixture_manifest() {
         assert_eq!(
-            validate_shared_session_event_fixture_manifest(&json!({
-                "schema": SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA,
-                "fixtures": [{ "event_kind": "missing", "fixture": "x.json" }]
-            })),
+            validate_session_event_fixture_manifest(&SessionEventFixtureManifest {
+                schema: SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA.to_string(),
+                fixtures: vec![SessionEventFixtureManifestEntry {
+                    event_kind: "missing".to_string(),
+                    fixture: "x.json".to_string(),
+                }],
+            }),
             Err("fixtures.not_in_session_event_kind_order".to_string())
         );
         assert_eq!(
-            validate_shared_session_event_fixture_manifest(&json!({
-                "schema": SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA,
-                "fixtures": [{ "event_kind": "input_queued_for_turn_boundary", "fixture": "nested/x.json" }]
-            })),
-            Err("fixtures.not_in_session_event_kind_order".to_string())
+            validate_session_event_fixture_manifest(&SessionEventFixtureManifest {
+                schema: SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA.to_string(),
+                fixtures: SESSION_EVENT_KINDS
+                    .iter()
+                    .enumerate()
+                    .map(|(index, kind)| SessionEventFixtureManifestEntry {
+                        event_kind: serde_json::to_value(kind)
+                            .expect("session event kind serializes")
+                            .as_str()
+                            .expect("session event kind string")
+                            .to_string(),
+                        fixture: if index == 0 {
+                            "nested/x.json".to_string()
+                        } else {
+                            format!("fixture-{index}.json")
+                        },
+                    })
+                    .collect(),
+            }),
+            Err("fixtures.0.invalid_fixture".to_string())
         );
     }
 
@@ -901,13 +912,9 @@ mod tests {
     fn shared_session_event_fixtures_cover_every_kind() {
         let manifest = shared_session_event_fixture_manifest();
         let manifest_kinds = manifest
+            .fixtures
             .iter()
-            .map(|entry| {
-                entry["event_kind"]
-                    .as_str()
-                    .expect("manifest event_kind string")
-                    .to_string()
-            })
+            .map(|entry| entry.event_kind.clone())
             .collect::<Vec<_>>();
         let protocol_kinds = SESSION_EVENT_KINDS
             .iter()
@@ -921,16 +928,12 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(manifest_kinds, protocol_kinds);
 
-        for entry in manifest {
-            let event_kind = entry["event_kind"]
-                .as_str()
-                .expect("manifest event_kind string");
-            let fixture_name = entry["fixture"].as_str().expect("manifest fixture string");
-            let json = read_shared_session_event_fixture(fixture_name);
+        for entry in manifest.fixtures {
+            let json = read_shared_session_event_fixture(&entry.fixture);
             let event = parse_session_event(&json).expect("shared session fixture parses");
             assert_eq!(
                 serde_json::to_value(&event.event_kind).expect("session event kind serializes"),
-                json!(event_kind)
+                json!(entry.event_kind)
             );
         }
     }
