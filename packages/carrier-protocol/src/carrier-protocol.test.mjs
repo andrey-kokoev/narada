@@ -115,6 +115,14 @@ const toolResultFixture = readFixture('tool-result-session-event.json');
 assert.deepEqual(validateSessionEvent(toolResultFixture), []);
 assert.equal(toolResultFixture.event_kind, 'tool_result_received');
 assert.equal(toolResultFixture.payload.status, 'ok');
+const carrierCommandFixture = readFixture('carrier-command-session-event.json');
+assert.deepEqual(validateSessionEvent(carrierCommandFixture), []);
+assert.equal(carrierCommandFixture.event_kind, 'carrier_command_executed');
+assert.equal(carrierCommandFixture.payload.command, 'queue_show');
+const carrierDiagnosticFixture = readFixture('carrier-diagnostic-session-event.json');
+assert.deepEqual(validateSessionEvent(carrierDiagnosticFixture), []);
+assert.equal(carrierDiagnosticFixture.event_kind, 'carrier_diagnostic_recorded');
+assert.equal(carrierDiagnosticFixture.payload.level, 'warn');
 assert.deepEqual(validatePayloadRef(readFixture('payload-ref.json')), []);
 assert.deepEqual(validatePayloadPolicy(readFixture('payload-policy.json')), []);
 

@@ -883,6 +883,27 @@ mod tests {
     }
 
     #[test]
+    fn parses_shared_carrier_internal_session_event_fixtures() {
+        let command = parse_session_event(include_str!(
+            "../../carrier-protocol/fixtures/carrier-command-session-event.json"
+        ))
+        .expect("carrier command session fixture parses");
+        assert_eq!(command.event_kind, SessionEventKind::CarrierCommandExecuted);
+        assert_eq!(command.payload["command"], "queue_show");
+
+        let diagnostic = parse_session_event(include_str!(
+            "../../carrier-protocol/fixtures/carrier-diagnostic-session-event.json"
+        ))
+        .expect("carrier diagnostic session fixture parses");
+        assert_eq!(
+            diagnostic.event_kind,
+            SessionEventKind::CarrierDiagnosticRecorded
+        );
+        assert_eq!(diagnostic.payload["level"], "warn");
+        assert_eq!(diagnostic.payload["suppression_count"], 3);
+    }
+
+    #[test]
     fn serializes_shared_session_event_fixture_as_jsonl_line() {
         let event = parse_session_event(include_str!(
             "../../carrier-protocol/fixtures/session-event.json"
