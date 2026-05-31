@@ -500,9 +500,9 @@ function agentTuiPromotionChecklist() {
   return [
     {
       id: 'rust_tests_available',
-      status: 'blocked',
+      status: 'partial',
       required_evidence: 'cargo test passes in CI or documented local Rust toolchain',
-      current_blocker: 'MSVC link.exe is not available in this shell',
+      current_evidence: 'cargo test passes from the documented VS DevCmd toolchain path; plain-shell preflight remains diagnostic until link.exe and Windows SDK libs are loaded',
     },
     {
       id: 'terminal_interactive_loop_acceptance',
@@ -512,26 +512,30 @@ function agentTuiPromotionChecklist() {
     },
     {
       id: 'carrier_command_acceptance',
-      status: 'not_started',
+      status: 'satisfied',
       required_evidence: '/queue, /queue clear, /queue drop <index>, and //literal slash input acceptance with session evidence for carrier-local mutations',
+      current_evidence: 'Carrier command parser, runtime coordinator evidence, and Rust unit tests cover queue show/clear/drop and literal slash submission',
       source_contract: 'target-functionality.md queue commands and literal slash input',
     },
     {
       id: 'rendering_diagnostic_boundary_acceptance',
-      status: 'not_started',
+      status: 'satisfied',
       required_evidence: 'provider stderr, MCP stderr, known-noise suppression, payload threshold policy, and resize behavior are mediated without corrupting transcript or composer',
+      current_evidence: 'Rendering boundary tests cover provider stderr, known-noise suppression, payload threshold policy, resize behavior, and stable renderer frames',
       source_contract: 'target-functionality.md rendering contract and carrier-protocol.md MCP/provider boundaries',
     },
     {
       id: 'payload_reference_policy_acceptance',
-      status: 'not_started',
+      status: 'satisfied',
       required_evidence: 'large or sensitive tool/provider payloads use deterministic payload references with recorded policy metadata',
+      current_evidence: 'Provider output constructors, transcript projection, and payload policy tests enforce payload refs for large or sensitive provider/tool payloads',
       source_contract: 'carrier-protocol.md payload references',
     },
     {
       id: 'provider_adapter_admission',
-      status: 'not_started',
+      status: 'partial',
       required_evidence: 'real provider adapter, provider boundary evidence, streaming output, and tool-call boundary contracts',
+      current_evidence: 'Provider boundary records disabled posture, ordered text deltas project as one agent message, and provider-origin tool-call bridge exists; real provider adapter remains withheld',
     },
     {
       id: 'mcp_fabric_client_admission',
@@ -541,9 +545,9 @@ function agentTuiPromotionChecklist() {
     },
     {
       id: 'site_rollout_acceptance',
-      status: 'partial',
+      status: 'satisfied',
       required_evidence: 'agent-tui launches cleanly side by side with agent-cli on known sites before default carrier promotion',
-      current_evidence: 'Launch metadata now names the live Site rollout matrix and required evidence; per-Site execution remains pending.',
+      current_evidence: 'All launcher-registry Sites have accepted side-by-side agent-cli and bounded agent-tui launch evidence in .narada/crew/agent-tui-rollout-acceptance/latest.json',
       source_contract: 'target-functionality.md migration policy',
     },
     {
@@ -689,7 +693,7 @@ function agentTuiProviderExecutionGate() {
 function agentTuiMcpFabricAccessGate(siteRoot) {
   return {
     status: 'not_admitted_for_runtime_slice',
-    client_contract: 'not_implemented',
+    client_contract: 'implemented_but_not_admitted_for_production_runtime_slice',
     tool_visibility_authority: 'withheld',
     promotion_gate: 'agent_tui_rust_mcp_fabric_client_promotion_gate',
     required_before_admission: [
@@ -699,7 +703,8 @@ function agentTuiMcpFabricAccessGate(siteRoot) {
       'tool_call_evidence_contract',
     ],
     site_mcp_fabric: join(siteRoot, '.ai', 'mcp'),
-    reason: 'Smoke step does not read Site MCP fabric or expose MCP tools to the carrier.',
+    current_evidence: 'Rust MCP config parsing, policy-bound visibility, JSON-RPC tools/call framing, supervised stdio execution, timeout recovery, and provider tool-call bridge are implemented and tested.',
+    reason: 'Production smoke step still withholds Site MCP tool exposure until live Site MCP execution is admitted for the terminal runtime slice.',
   };
 }
 

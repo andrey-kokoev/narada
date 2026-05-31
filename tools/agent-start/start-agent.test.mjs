@@ -401,13 +401,14 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
     'site_rollout_acceptance',
     'launch_metadata_runtime_slice',
   ]);
-  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'rust_tests_available').status, 'blocked');
+  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'rust_tests_available').status, 'partial');
   assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'terminal_interactive_loop_acceptance').status, 'partial');
-  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'carrier_command_acceptance').status, 'not_started');
-  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'rendering_diagnostic_boundary_acceptance').status, 'not_started');
-  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'payload_reference_policy_acceptance').status, 'not_started');
-  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'site_rollout_acceptance').status, 'partial');
-  assert.match(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'site_rollout_acceptance').current_evidence, /rollout matrix/);
+  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'carrier_command_acceptance').status, 'satisfied');
+  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'rendering_diagnostic_boundary_acceptance').status, 'satisfied');
+  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'payload_reference_policy_acceptance').status, 'satisfied');
+  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'provider_adapter_admission').status, 'partial');
+  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'site_rollout_acceptance').status, 'satisfied');
+  assert.match(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'site_rollout_acceptance').current_evidence, /All launcher-registry Sites/);
   assert.match(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'rendering_diagnostic_boundary_acceptance').source_contract, /rendering contract/);
   assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'launch_metadata_runtime_slice').status, 'satisfied');
   assert.match(result.agent_tui_launch.promotion_gate.reason, /bounded non-terminal smoke/);
@@ -429,11 +430,11 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   assert.match(result.agent_tui_launch.provider_execution.reason, /without dispatching provider work/);
   assert.equal(result.agent_tui_launch.mcp_fabric_access_enabled, false);
   assert.equal(result.agent_tui_launch.mcp_fabric_access.status, 'not_admitted_for_runtime_slice');
-  assert.equal(result.agent_tui_launch.mcp_fabric_access.client_contract, 'not_implemented');
+  assert.equal(result.agent_tui_launch.mcp_fabric_access.client_contract, 'implemented_but_not_admitted_for_production_runtime_slice');
   assert.equal(result.agent_tui_launch.mcp_fabric_access.tool_visibility_authority, 'withheld');
   assert.equal(result.agent_tui_launch.mcp_fabric_access.promotion_gate, 'agent_tui_rust_mcp_fabric_client_promotion_gate');
   assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'mcp_fabric_client_admission').status, 'partial');
-  assert.match(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'mcp_fabric_client_admission').current_evidence, /live Site rollout remains pending/);
+  assert.match(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'mcp_fabric_client_admission').current_evidence, /runtime session-evidence bridge/);
   assert.deepEqual(result.agent_tui_launch.mcp_fabric_access.required_before_admission, [
     'rust_mcp_fabric_client_contract',
     'site_mcp_policy_visibility_contract',
@@ -441,7 +442,8 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
     'tool_call_evidence_contract',
   ]);
   assert.equal(result.agent_tui_launch.mcp_fabric_access.site_mcp_fabric, path.join(siteRoot, '.ai', 'mcp'));
-  assert.match(result.agent_tui_launch.mcp_fabric_access.reason, /does not read Site MCP fabric/);
+  assert.match(result.agent_tui_launch.mcp_fabric_access.current_evidence, /supervised stdio execution/);
+  assert.match(result.agent_tui_launch.mcp_fabric_access.reason, /withholds Site MCP tool exposure/);
   assert.equal(result.agent_tui_launch.site_rollout_acceptance.schema, 'narada.agent_tui.site_rollout_acceptance.v0');
   assert.equal(result.agent_tui_launch.site_rollout_acceptance.status, 'defined_not_executed');
   assert.equal(result.agent_tui_launch.site_rollout_acceptance.default_promotion_allowed, false);
