@@ -52,7 +52,7 @@ fn provider_runtime_cli_acceptance_reports_refusal_when_enabled_without_model() 
 }
 
 #[test]
-fn provider_runtime_cli_acceptance_reports_admitted_explicit_provider_posture() {
+fn provider_runtime_cli_acceptance_reports_configured_without_execution_adapter() {
     let mut command = base_command();
     command
         .env("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true")
@@ -63,8 +63,9 @@ fn provider_runtime_cli_acceptance_reports_admitted_explicit_provider_posture() 
 
     let output = stdout(&mut command);
 
-    assert!(output.contains("provider_status: admitted"));
-    assert!(output.contains("provider_execution_enabled: true"));
+    assert!(output.contains("provider_status: configured_not_implemented"));
+    assert!(output.contains("provider_execution_enabled: false"));
+    assert!(output.contains("provider_refusal: provider_adapter_not_implemented"));
     assert!(output.contains("provider: codex-subscription"));
     assert!(output.contains("model: gpt-5.5"));
     assert!(output.contains("thinking: medium"));
