@@ -444,7 +444,7 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   assert.equal(result.agent_tui_launch.terminal_rendering.promotion_gate, 'agent_tui_terminal_rendering_promotion_gate');
   assert.equal(result.agent_tui_launch.provider_execution_enabled, false);
   assert.equal(result.agent_tui_launch.provider_execution.status, 'not_admitted_for_runtime_slice');
-  assert.equal(result.agent_tui_launch.provider_execution.adapter_contract, 'not_implemented');
+  assert.equal(result.agent_tui_launch.provider_execution.adapter_contract, 'implemented_but_not_admitted_for_production_runtime_slice');
   assert.equal(result.agent_tui_launch.provider_execution.dispatch_authority, 'withheld');
   assert.deepEqual(result.agent_tui_launch.provider_execution.environment_gate, {
     variable: 'NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION',

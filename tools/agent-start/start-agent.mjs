@@ -704,7 +704,7 @@ function agentTuiInteractiveLoopGate() {
 function agentTuiProviderExecutionGate() {
   return {
     status: 'not_admitted_for_runtime_slice',
-    adapter_contract: 'not_implemented',
+    adapter_contract: 'implemented_but_not_admitted_for_production_runtime_slice',
     dispatch_authority: 'withheld',
     environment_gate: {
       variable: 'NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION',
