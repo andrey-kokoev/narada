@@ -4,6 +4,7 @@ use narada_agent_tui::input_queue::{SessionEvidenceContext, TurnState};
 use narada_agent_tui::interactive_runtime::AgentTuiInteractiveRuntime;
 use narada_agent_tui::layout_model::{LayoutConfig, TerminalSize};
 use narada_agent_tui::provider_dispatch::ProviderDispatchStub;
+use narada_agent_tui::provider_tool_call_bridge::provider_tool_call_executor_from_mcp_runtime_config;
 use narada_agent_tui::runtime_clock::RuntimeClock;
 use narada_agent_tui::runtime_config_snapshot::RuntimeConfigSnapshot;
 use narada_agent_tui::runtime_step::RuntimeStep;
@@ -433,24 +434,32 @@ fn build_interactive_runtime(args: &Args) -> Result<AgentTuiInteractiveRuntime, 
     let session = args.session.clone().unwrap_or_default();
     let control_jsonl = args.control_jsonl.clone().expect("validated control jsonl");
     let session_jsonl = args.session_jsonl.clone().expect("validated session jsonl");
+    let context = build_evidence_context(args);
     let runtime_config = runtime_config_snapshot_from_process_env();
     let runtime_posture = runtime_config.posture();
-    Ok(AgentTuiInteractiveRuntime::with_provider_adapter_and_state(
-        identity,
-        session,
-        control_jsonl,
-        session_jsonl,
-        build_evidence_context(args),
-        Box::new(
-            ProviderDispatchStub::with_runtime_config_and_adapter_admission(
-                runtime_config.provider,
-                runtime_config.provider_adapter,
+    let provider_tool_call_executor = provider_tool_call_executor_from_mcp_runtime_config(
+        &session_jsonl,
+        context.clone(),
+        &runtime_config.mcp,
+    )?;
+    Ok(
+        AgentTuiInteractiveRuntime::with_provider_adapter_tool_executor_and_state(
+            identity,
+            session,
+            control_jsonl,
+            session_jsonl,
+            context,
+            Box::new(
+                ProviderDispatchStub::with_runtime_config_and_adapter_admission(
+                    runtime_config.provider,
+                    runtime_config.provider_adapter,
+                ),
             ),
+            provider_tool_call_executor,
+            runtime_posture,
         ),
-        runtime_posture,
-    ))
+    )
 }
-
 #[allow(dead_code)]
 fn build_interactive_app_view(
     runtime: &AgentTuiInteractiveRuntime,
@@ -486,14 +495,18 @@ fn print_runtime_step_summary(
     println!("transcript_duplicate: {}", result.transcript.duplicate);
     println!("transcript_total_items: {}", result.transcript.total_items);
 }
-
 fn build_runtime_step(args: &Args) -> Result<RuntimeStep, String> {
     let control_jsonl = args.control_jsonl.clone().expect("validated control jsonl");
     let session_jsonl = args.session_jsonl.clone().expect("validated session jsonl");
     let context = build_evidence_context(args);
     let clock = RuntimeClock::system_now()?;
     let runtime_config = runtime_config_snapshot_from_process_env();
-    Ok(RuntimeStep::with_provider_adapter(
+    let provider_tool_call_executor = provider_tool_call_executor_from_mcp_runtime_config(
+        &session_jsonl,
+        context.clone(),
+        &runtime_config.mcp,
+    )?;
+    Ok(RuntimeStep::with_provider_adapter_and_tool_executor(
         control_jsonl,
         session_jsonl,
         context,
@@ -504,9 +517,9 @@ fn build_runtime_step(args: &Args) -> Result<RuntimeStep, String> {
                 runtime_config.provider_adapter,
             ),
         ),
+        provider_tool_call_executor,
     ))
 }
-
 fn build_evidence_context(args: &Args) -> SessionEvidenceContext {
     let identity = args.identity.clone().unwrap_or_default();
     let session = args.session.clone().unwrap_or_default();

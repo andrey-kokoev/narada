@@ -2,12 +2,16 @@ use crate::carrier_protocol::PayloadRef;
 use crate::input_queue::SessionEvidenceContext;
 use crate::mcp_fabric_boundary::{McpFabricBoundary, McpToolRequest};
 use crate::mcp_fabric_transport::McpFabricTransportClient;
+use crate::mcp_reusable_process_executor::ReusableMcpProcessExecutor;
+use crate::mcp_runtime_config::{McpRuntimeAdmissionStatus, McpRuntimeConfig};
 use crate::mcp_runtime_execution::{
     McpRuntimeExecutionBridge, McpRuntimeExecutionClock, McpRuntimeExecutionResult,
     McpRuntimeToolExecutor,
 };
 use crate::provider_dispatch::{ProviderOutputKind, ProviderOutputRecord};
-use crate::turn_coordinator::{ProviderToolCallExecutor, TurnCoordinatorClock};
+use crate::turn_coordinator::{
+    NoopProviderToolCallExecutor, ProviderToolCallExecutor, TurnCoordinatorClock,
+};
 use serde_json::{json, Value};
 use std::path::Path;
 
@@ -77,6 +81,43 @@ impl<E: McpRuntimeToolExecutor> ProviderToolCallExecutor for SupervisedProviderT
                 .unwrap_or(0),
         })
     }
+}
+
+pub fn provider_tool_call_executor_from_mcp_runtime_config(
+    session_jsonl_path: impl AsRef<Path>,
+    evidence_context: SessionEvidenceContext,
+    mcp_runtime_config: &McpRuntimeConfig,
+) -> Result<Box<dyn ProviderToolCallExecutor>, String> {
+    if mcp_runtime_config.status != McpRuntimeAdmissionStatus::Configured
+        || !mcp_runtime_config.mcp_fabric_access_enabled
+    {
+        return Ok(Box::new(NoopProviderToolCallExecutor));
+    }
+    let config_path = mcp_runtime_config
+        .config_path
+        .as_deref()
+        .ok_or_else(|| "mcp_executor_config_missing_after_admission".to_string())?;
+    let site_mcp_fabric = mcp_runtime_config
+        .site_mcp_fabric
+        .as_deref()
+        .ok_or_else(|| "mcp_executor_fabric_missing_after_admission".to_string())?;
+    let fabric_client = McpFabricTransportClient::from_path(config_path)?;
+    let boundary =
+        fabric_client.admitted_boundary(site_mcp_fabric, format!("{config_path}:mcpServers"));
+    let mut runtime = McpRuntimeExecutionBridge::with_runtime_config(
+        session_jsonl_path.as_ref(),
+        evidence_context,
+        ReusableMcpProcessExecutor::default(),
+        mcp_runtime_config.clone(),
+    );
+    for server_name in fabric_client.servers.keys() {
+        runtime.mark_server_ready(server_name.clone());
+    }
+    Ok(Box::new(SupervisedProviderToolCallExecutor::new(
+        fabric_client,
+        boundary,
+        runtime,
+    )))
 }
 
 pub fn provider_output_to_mcp_request(
@@ -186,7 +227,7 @@ mod tests {
     use crate::mcp_fabric_boundary::{McpFabricBoundary, McpFabricPolicy, McpToolResult};
     use crate::mcp_runtime_execution::McpRuntimeToolExecutor;
     use crate::mcp_stdio_process::McpStdioProcessIoResult;
-    use std::fs::{read_to_string, remove_file};
+    use std::fs::{read_to_string, remove_file, write};
     use std::path::PathBuf;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -212,6 +253,14 @@ mod tests {
             .expect("clock works")
             .as_nanos();
         std::env::temp_dir().join(format!("narada-agent-tui-provider-tool-{unique}.jsonl"))
+    }
+
+    fn turn_clock() -> TurnCoordinatorClock {
+        TurnCoordinatorClock {
+            occurred_at: "2026-05-30T00:00:00.000Z".to_string(),
+            event_id_prefix: "session_event_provider_tool".to_string(),
+            turn_id_prefix: "turn".to_string(),
+        }
     }
 
     fn fabric_client() -> McpFabricTransportClient {
@@ -260,6 +309,75 @@ mod tests {
                 response_line: "{}".to_string(),
             })
         }
+    }
+
+    #[test]
+    fn executor_factory_returns_noop_when_mcp_is_not_configured() {
+        let path = temp_session_path();
+        let mut executor = provider_tool_call_executor_from_mcp_runtime_config(
+            &path,
+            context(),
+            &McpRuntimeConfig::disabled(),
+        )
+        .expect("disabled mcp returns no-op executor");
+        let written = executor
+            .handle_provider_output(
+                &ProviderOutputRecord::tool_call_request("turn_1", "site_loop_run_once", "{}", 1),
+                &context(),
+                &path,
+                &turn_clock(),
+            )
+            .expect("noop handles provider output");
+
+        assert_eq!(written, 0);
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn executor_factory_builds_supervised_executor_from_mcp_config() {
+        let session_path = temp_session_path();
+        let config_path = temp_session_path().with_extension("json");
+        write(
+            &config_path,
+            r#"{
+              "site_id":"narada-sonar",
+              "carrier":"agent-tui",
+              "mcpServers":{
+                "sonar-site-loop":{
+                  "transport":"stdio",
+                  "command":"node",
+                  "args":["site-loop.mjs"],
+                  "tools":["site_loop_run_once"]
+                }
+              }
+            }"#,
+        )
+        .expect("write mcp config");
+        let mcp_config = McpRuntimeConfig {
+            status: McpRuntimeAdmissionStatus::Configured,
+            mcp_fabric_access_enabled: true,
+            config_path: Some(config_path.display().to_string()),
+            site_mcp_fabric: Some("D:/code/narada.sonar/.ai/mcp".to_string()),
+            refusal_reason: None,
+        };
+        let mut executor = provider_tool_call_executor_from_mcp_runtime_config(
+            &session_path,
+            context(),
+            &mcp_config,
+        )
+        .expect("configured mcp builds executor");
+        let written = executor
+            .handle_provider_output(
+                &ProviderOutputRecord::text_delta("turn_1", "ignored", 1),
+                &context(),
+                &session_path,
+                &turn_clock(),
+            )
+            .expect("non-tool output is ignored without spawning");
+
+        assert_eq!(written, 0);
+        let _ = remove_file(config_path);
+        let _ = remove_file(session_path);
     }
 
     #[test]
