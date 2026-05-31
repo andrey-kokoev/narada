@@ -1,6 +1,5 @@
-use serde::Deserialize;
+use crate::mcp_runtime_contract::mcp_runtime_contract;
 use std::collections::BTreeMap;
-use std::sync::OnceLock;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum McpRuntimeAdmissionStatus {
@@ -92,44 +91,12 @@ impl McpRuntimeConfig {
     }
 }
 
-const MCP_RUNTIME_CONTRACT_JSON: &str = include_str!("../contracts/mcp-runtime.json");
-
-#[derive(Debug, Deserialize)]
-struct McpRuntimeContract {
-    schema: String,
-    mcp_fabric_env_var: String,
-    mcp_config_path_policy: String,
-}
-
 pub fn mcp_fabric_env_var() -> &'static str {
     mcp_runtime_contract().mcp_fabric_env_var.as_str()
 }
 
 pub fn config_path_policy() -> &'static str {
     mcp_runtime_contract().mcp_config_path_policy.as_str()
-}
-
-fn mcp_runtime_contract() -> &'static McpRuntimeContract {
-    static CONTRACT: OnceLock<McpRuntimeContract> = OnceLock::new();
-    CONTRACT.get_or_init(|| {
-        parse_mcp_runtime_contract(MCP_RUNTIME_CONTRACT_JSON)
-            .expect("agent-tui MCP runtime contract is valid")
-    })
-}
-
-fn parse_mcp_runtime_contract(json: &str) -> Result<McpRuntimeContract, String> {
-    let contract: McpRuntimeContract = serde_json::from_str(json)
-        .map_err(|error| format!("mcp_runtime_contract_parse_failed:{error}"))?;
-    if contract.schema.trim() != "narada.agent_tui.mcp_runtime_contract.v0" {
-        return Err("mcp_runtime_contract_invalid:schema".to_string());
-    }
-    if contract.mcp_fabric_env_var.trim() != "NARADA_AGENT_TUI_ENABLE_MCP_FABRIC" {
-        return Err("mcp_runtime_contract_invalid:mcp_fabric_env_var".to_string());
-    }
-    if contract.mcp_config_path_policy.trim() != "inside_site_mcp_fabric_without_parent_traversal" {
-        return Err("mcp_runtime_contract_invalid:mcp_config_path_policy".to_string());
-    }
-    Ok(contract)
 }
 
 fn env_flag_enabled(value: Option<&String>) -> bool {
@@ -181,46 +148,6 @@ mod tests {
             .iter()
             .map(|(key, value)| (key.to_string(), value.to_string()))
             .collect()
-    }
-
-    #[test]
-    fn mcp_runtime_contract_rejects_malformed_json() {
-        assert_eq!(
-            parse_mcp_runtime_contract("not json").unwrap_err(),
-            "mcp_runtime_contract_parse_failed:expected ident at line 1 column 2"
-        );
-    }
-
-    #[test]
-    fn mcp_runtime_contract_rejects_wrong_schema() {
-        assert_eq!(
-            parse_mcp_runtime_contract(
-                r#"{"schema":"narada.agent_tui.wrong_mcp_runtime_contract.v0","mcp_fabric_env_var":"NARADA_AGENT_TUI_ENABLE_MCP_FABRIC","mcp_config_path_policy":"inside_site_mcp_fabric_without_parent_traversal"}"#,
-            )
-            .unwrap_err(),
-            "mcp_runtime_contract_invalid:schema"
-        );
-    }
-
-    #[test]
-    fn mcp_runtime_contract_rejects_wrong_path_policy() {
-        assert_eq!(
-            parse_mcp_runtime_contract(
-                r#"{"schema":"narada.agent_tui.mcp_runtime_contract.v0","mcp_fabric_env_var":"NARADA_AGENT_TUI_ENABLE_MCP_FABRIC","mcp_config_path_policy":"prefix_only"}"#,
-            )
-            .unwrap_err(),
-            "mcp_runtime_contract_invalid:mcp_config_path_policy"
-        );
-    }
-
-    #[test]
-    fn mcp_runtime_contract_reads_path_policy() {
-        assert_eq!(
-            parse_mcp_runtime_contract(MCP_RUNTIME_CONTRACT_JSON)
-                .expect("contract parses")
-                .mcp_config_path_policy,
-            "inside_site_mcp_fabric_without_parent_traversal"
-        );
     }
 
     #[test]
