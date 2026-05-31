@@ -64,6 +64,7 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - Interactive render-loop state now owns a long-lived `TextareaComposer`; runtime and view APIs receive draft snapshots only at their existing boundaries.
 - Composer region rendering now uses the `tui-textarea` widget path, with an explicit live-composer render entry point available beside snapshot rendering.
 - Terminal interactive draw loop now calls the live-composer renderer so textarea cursor and viewport state are preserved during interactive rendering.
+- Terminal runtime config is explicit: terminal rendering remains disabled unless `NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING` is enabled with `NARADA_AGENT_TUI_TERMINAL_MODE=interactive_loop`; CLI acceptance verifies disabled, refused, and configured posture.
 - Terminal drawing has a backend-generic helper used by both real terminal sessions and scripted TestBackend frame acceptance.
 - `TerminalLifecycleHarness` records enter/draw/leave behavior for scripted terminal backends without binding tests to process stdout.
 - `TerminalSession` and `TerminalLifecycleHarness` are both admitted through the same `InteractiveTerminalFrame` contract, with scripted draw-through-contract acceptance.
@@ -107,7 +108,7 @@ Current launch metadata now distinguishes satisfied gates from remaining promoti
 - Satisfied: payload reference policy is enforced for large or sensitive provider/tool payloads at transcript boundaries.
 - Satisfied: launcher-registry Site rollout has accepted side-by-side `agent-cli` and bounded `agent-tui` evidence for all known Sites.
 - Partial: Rust tests pass through the documented VS DevCmd toolchain; plain-shell readiness remains a diagnostic preflight.
-- Partial: terminal-loop acceptance has scripted frame, lifecycle, and injected-loop coverage; real-terminal promotion is not admitted.
+- Partial: terminal-loop acceptance has scripted frame, lifecycle, injected-loop, and terminal runtime config coverage; real-terminal promotion is not admitted.
 - Partial: provider admission has disabled/refused/configured-not-implemented posture, streaming transcript accumulation, and provider-origin tool-call mediation; real provider dispatch remains withheld.
 - Partial: MCP admission has config/fabric posture, policy visibility, request/response framing, supervised stdio execution, and launch gating; production Site MCP exposure remains withheld until live Site execution is admitted.
 

@@ -14,6 +14,7 @@ use narada_agent_tui::smoke_runner::{
 use narada_agent_tui::status_view_model::{ProviderRuntimeState, StatusViewInput};
 use narada_agent_tui::terminal_input_tick::CrosstermTerminalInputReader;
 use narada_agent_tui::terminal_lifecycle::TerminalSession;
+use narada_agent_tui::terminal_runtime_config::TerminalRuntimeConfig;
 use narada_agent_tui::tui_render_loop::{
     run_injected_interactive_loop, AgentTuiLoopState, RuntimeClockInteractiveSource,
     TerminalInputTickSource,
@@ -163,6 +164,7 @@ fn executable_candidates(name: &str) -> Vec<String> {
 fn print_scaffold(args: &Args) {
     let provider_config = provider_config_from_process_env();
     let mcp_config = mcp_config_from_process_env();
+    let terminal_config = terminal_config_from_process_env();
     println!("narada-agent-tui scaffold");
     println!("identity: {}", args.identity.as_deref().unwrap_or(""));
     println!("session: {}", args.session.as_deref().unwrap_or(""));
@@ -214,6 +216,17 @@ fn print_scaffold(args: &Args) {
     if let Some(reason) = &mcp_config.refusal_reason {
         println!("mcp_refusal: {reason}");
     }
+    println!("terminal_status: {}", terminal_config.status.as_str());
+    println!(
+        "terminal_rendering_enabled: {}",
+        terminal_config.terminal_rendering_enabled
+    );
+    if let Some(mode) = &terminal_config.mode {
+        println!("terminal_mode: {mode}");
+    }
+    if let Some(reason) = &terminal_config.refusal_reason {
+        println!("terminal_refusal: {reason}");
+    }
 }
 
 fn provider_config_from_process_env() -> ProviderRuntimeConfig {
@@ -228,6 +241,13 @@ fn mcp_config_from_process_env() -> McpRuntimeConfig {
         .filter(|(key, _)| key.starts_with("NARADA_"))
         .collect::<BTreeMap<_, _>>();
     McpRuntimeConfig::from_env_map(&env_map)
+}
+
+fn terminal_config_from_process_env() -> TerminalRuntimeConfig {
+    let env_map = env::vars()
+        .filter(|(key, _)| key.starts_with("NARADA_"))
+        .collect::<BTreeMap<_, _>>();
+    TerminalRuntimeConfig::from_env_map(&env_map)
 }
 
 fn run_runtime_step_once(args: Args) -> Result<(), String> {

@@ -30,6 +30,7 @@ pub mod status_view_model;
 pub mod terminal_input;
 pub mod terminal_input_tick;
 pub mod terminal_lifecycle;
+pub mod terminal_runtime_config;
 pub mod textarea_composer;
 pub mod transcript_projection;
 pub mod transcript_store;
