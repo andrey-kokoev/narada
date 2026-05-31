@@ -33,7 +33,7 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - Input queue with idle admission, active-turn queueing, queue summary/drop/clear operations, system-directive hold until composer clear, and release evidence.
 - Runtime coordinator for control polling, queue admission, carrier-local queue commands, literal slash input, composer submit, interrupt evidence, held release, and session evidence writing.
 - Turn coordinator with provider dispatch boundary recording and explicit `completed_without_provider` terminal evidence.
-- Provider dispatch trait plus stub and scripted admitted adapters; real provider execution remains disabled outside explicit adapter admission.
+- Provider dispatch trait plus centralized adapter factory, stub, and scripted admitted adapters; real provider execution remains disabled outside explicit adapter admission.
 - Provider adapter admission boundary distinguishes disabled runtime, refused runtime, configured-without-adapter posture, explicit requested adapter kind via `NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND`, typed adapter-registry rejection for unknown adapter kinds, and admitted scripted adapter execution; known production adapters are refused as `provider_adapter_not_implemented:<kind>` until a concrete production adapter exists.
 - Provider boundary acceptance verifies request and terminal evidence both record `recorded_not_dispatched` and `provider_execution_enabled=false`.
 - Provider request evidence carries provider runtime posture, configured provider/model when present, and separate adapter refusal reason so disabled/configured turns are reconstructable from session JSONL.

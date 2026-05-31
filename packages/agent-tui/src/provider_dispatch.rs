@@ -219,6 +219,18 @@ impl ProviderAdapter for ScriptedProviderAdapter {
     }
 }
 
+pub fn provider_adapter_from_runtime_config(
+    runtime_config: ProviderRuntimeConfig,
+    adapter_admission: ProviderAdapterAdmission,
+) -> Box<dyn ProviderAdapter> {
+    Box::new(
+        ProviderDispatchStub::with_runtime_config_and_adapter_admission(
+            runtime_config,
+            adapter_admission,
+        ),
+    )
+}
+
 impl ProviderDispatchStub {
     pub fn disabled() -> Self {
         let runtime_config = ProviderRuntimeConfig::disabled();
@@ -416,6 +428,44 @@ mod tests {
             record.payload["provider_adapter_refusal_reason"],
             "provider_adapter_not_admitted"
         );
+    }
+
+    #[test]
+    fn provider_adapter_factory_preserves_withheld_dispatch_boundary() {
+        let input = parse_input_event(INPUT_FIXTURE).expect("input parses");
+        let runtime_config = ProviderRuntimeConfig::from_env_map(&BTreeMap::from([
+            (
+                "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION".to_string(),
+                "true".to_string(),
+            ),
+            (
+                "NARADA_INTELLIGENCE_PROVIDER".to_string(),
+                "codex-subscription".to_string(),
+            ),
+            ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
+        ]));
+        let adapter_admission = ProviderAdapterAdmission::from_runtime_config(
+            &runtime_config,
+            Some("codex_subscription_adapter"),
+        );
+        let adapter = provider_adapter_from_runtime_config(runtime_config, adapter_admission);
+        let record = adapter.dispatch_request(&input, "turn_1");
+
+        assert_eq!(record.status, ProviderDispatchStatus::RecordedNotDispatched);
+        assert!(!record.provider_execution_enabled);
+        assert_eq!(
+            record.payload["provider_adapter_admission_status"],
+            "refused"
+        );
+        assert_eq!(
+            record.payload["provider_adapter_kind"],
+            "codex_subscription_adapter"
+        );
+        assert_eq!(
+            record.payload["provider_adapter_refusal_reason"],
+            "provider_adapter_not_implemented:codex_subscription_adapter"
+        );
+        assert!(record.outputs.is_empty());
     }
 
     #[test]

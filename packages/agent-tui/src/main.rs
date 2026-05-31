@@ -3,7 +3,7 @@ use narada_agent_tui::composer_view_model::ComposerViewInput;
 use narada_agent_tui::input_queue::{SessionEvidenceContext, TurnState};
 use narada_agent_tui::interactive_runtime::AgentTuiInteractiveRuntime;
 use narada_agent_tui::layout_model::{LayoutConfig, TerminalSize};
-use narada_agent_tui::provider_dispatch::ProviderDispatchStub;
+use narada_agent_tui::provider_dispatch::provider_adapter_from_runtime_config;
 use narada_agent_tui::provider_tool_call_bridge::provider_tool_call_executor_from_mcp_runtime_config;
 use narada_agent_tui::runtime_clock::RuntimeClock;
 use narada_agent_tui::runtime_config_snapshot::RuntimeConfigSnapshot;
@@ -449,11 +449,9 @@ fn build_interactive_runtime(args: &Args) -> Result<AgentTuiInteractiveRuntime, 
             control_jsonl,
             session_jsonl,
             context,
-            Box::new(
-                ProviderDispatchStub::with_runtime_config_and_adapter_admission(
-                    runtime_config.provider,
-                    runtime_config.provider_adapter,
-                ),
+            provider_adapter_from_runtime_config(
+                runtime_config.provider,
+                runtime_config.provider_adapter,
             ),
             provider_tool_call_executor,
             runtime_posture,
@@ -511,11 +509,9 @@ fn build_runtime_step(args: &Args) -> Result<RuntimeStep, String> {
         session_jsonl,
         context,
         clock,
-        Box::new(
-            ProviderDispatchStub::with_runtime_config_and_adapter_admission(
-                runtime_config.provider,
-                runtime_config.provider_adapter,
-            ),
+        provider_adapter_from_runtime_config(
+            runtime_config.provider,
+            runtime_config.provider_adapter,
         ),
         provider_tool_call_executor,
     ))
