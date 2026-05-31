@@ -311,14 +311,10 @@ Before `agent-tui` can become the default carrier, it must match `agent-cli` for
 - directive receipt evidence
 - carrier heartbeat
 
-`agent-cli` compatibility must follow the protocol's compatibility and migration rules, including adapters and temporary dual-write only where explicitly needed.
-
-## Initial Implementation Boundary
-
 The first useful version should implement:
 
 - launch as `narada-agent-tui`
-- load one site MCP fabric
+- expose explicit MCP fabric configuration posture without granting live Site MCP execution by default
 - display transcript pane
 - display status line
 - display composer
@@ -326,8 +322,10 @@ The first useful version should implement:
 - queue working-time operator steering
 - inspect, drop, and clear queue
 - hold system directives while composer draft is nonempty
-- show agent/tool output without composer corruption
+- show mediated agent/tool output without composer corruption
 - preserve session JSONL compatibility
+
+Live Site MCP execution, real provider dispatch, and default terminal promotion are separate admission gates; configuring their inputs is not the same as admitting their execution.
 
 It may defer:
 
