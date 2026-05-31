@@ -6,6 +6,8 @@ use crate::rendering_boundary::{
 };
 use serde_json::{json, Value};
 
+pub const PROVIDER_REQUEST_PAYLOAD_SCHEMA: &str = "narada.agent_tui.provider_request_payload.v0";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProviderDispatchStatus {
     RecordedNotDispatched,
@@ -116,6 +118,7 @@ impl ProviderAdapterRequest {
         adapter_admission: &ProviderAdapterAdmission,
     ) -> Value {
         json!({
+            "schema": PROVIDER_REQUEST_PAYLOAD_SCHEMA,
             "turn_id": self.turn_id,
             "input_event_id": self.input_event_id,
             "provider_request_status": status.as_str(),
@@ -418,6 +421,7 @@ mod tests {
         assert_eq!(request.turn_id, "turn_1");
         assert_eq!(request.input_event_id, input.event_id);
         assert_eq!(request.provider_runtime_status, "configured");
+        assert_eq!(payload["schema"], PROVIDER_REQUEST_PAYLOAD_SCHEMA);
         assert_eq!(
             payload["provider_request_status"],
             "recorded_not_dispatched"
