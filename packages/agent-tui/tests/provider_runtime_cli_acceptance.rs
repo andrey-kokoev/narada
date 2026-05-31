@@ -93,6 +93,25 @@ fn provider_runtime_cli_acceptance_reports_configured_without_execution_adapter(
 }
 
 #[test]
+fn provider_runtime_cli_acceptance_reports_unknown_adapter_as_refused() {
+    let mut command = base_command();
+    command
+        .env("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true")
+        .env("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription")
+        .env("NARADA_AI_MODEL", "gpt-5.5")
+        .env("NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND", "unknown_adapter");
+
+    let output = stdout(&mut command);
+
+    assert!(output.contains("provider_status: configured_not_implemented"));
+    assert!(output.contains("provider_execution_enabled: false"));
+    assert!(output.contains("provider_adapter_status: refused"));
+    assert!(output.contains("provider_adapter_execution_enabled: false"));
+    assert!(output.contains("provider_adapter_kind: unknown_adapter"));
+    assert!(output.contains("provider_adapter_refusal: unknown_provider_adapter:unknown_adapter"));
+}
+
+#[test]
 fn provider_runtime_cli_acceptance_reports_requested_adapter_as_refused_until_implemented() {
     let mut command = base_command();
     command

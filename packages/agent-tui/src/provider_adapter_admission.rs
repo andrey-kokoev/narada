@@ -1,6 +1,26 @@
 use crate::provider_runtime_config::{ProviderRuntimeAdmissionStatus, ProviderRuntimeConfig};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ProviderAdapterKind {
+    CodexSubscription,
+}
+
+impl ProviderAdapterKind {
+    pub fn parse(value: &str) -> Result<Self, String> {
+        match value.trim() {
+            "codex_subscription_adapter" => Ok(Self::CodexSubscription),
+            other => Err(format!("unknown_provider_adapter:{other}")),
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::CodexSubscription => "codex_subscription_adapter",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProviderAdapterAdmissionStatus {
     Disabled,
     Refused,
@@ -54,18 +74,28 @@ impl ProviderAdapterAdmission {
             ProviderRuntimeAdmissionStatus::ConfiguredNotImplemented => {
                 let adapter_kind = adapter_kind
                     .map(str::trim)
-                    .filter(|value| !value.is_empty())
-                    .map(ToString::to_string);
+                    .filter(|value| !value.is_empty());
                 if let Some(adapter_kind) = adapter_kind {
-                    Self {
-                        status: ProviderAdapterAdmissionStatus::Refused,
-                        provider: runtime_config.provider.clone(),
-                        model: runtime_config.model.clone(),
-                        adapter_kind: Some(adapter_kind.clone()),
-                        provider_execution_enabled: false,
-                        refusal_reason: Some(format!(
-                            "provider_adapter_not_implemented:{adapter_kind}"
-                        )),
+                    match ProviderAdapterKind::parse(adapter_kind) {
+                        Ok(adapter_kind) => Self {
+                            status: ProviderAdapterAdmissionStatus::Refused,
+                            provider: runtime_config.provider.clone(),
+                            model: runtime_config.model.clone(),
+                            adapter_kind: Some(adapter_kind.as_str().to_string()),
+                            provider_execution_enabled: false,
+                            refusal_reason: Some(format!(
+                                "provider_adapter_not_implemented:{}",
+                                adapter_kind.as_str()
+                            )),
+                        },
+                        Err(reason) => Self {
+                            status: ProviderAdapterAdmissionStatus::Refused,
+                            provider: runtime_config.provider.clone(),
+                            model: runtime_config.model.clone(),
+                            adapter_kind: Some(adapter_kind.to_string()),
+                            provider_execution_enabled: false,
+                            refusal_reason: Some(reason),
+                        },
                     }
                 } else {
                     Self {
@@ -92,6 +122,17 @@ mod tests {
             .iter()
             .map(|(key, value)| (key.to_string(), value.to_string()))
             .collect()
+    }
+
+    #[test]
+    fn parses_known_provider_adapter_kind() {
+        let kind = ProviderAdapterKind::parse(" codex_subscription_adapter ").expect("kind parses");
+        assert_eq!(kind, ProviderAdapterKind::CodexSubscription);
+        assert_eq!(kind.as_str(), "codex_subscription_adapter");
+        assert_eq!(
+            ProviderAdapterKind::parse("unknown_adapter").unwrap_err(),
+            "unknown_provider_adapter:unknown_adapter"
+        );
     }
 
     #[test]
@@ -148,6 +189,25 @@ mod tests {
         assert_eq!(
             admission.refusal_reason.as_deref(),
             Some("provider_adapter_not_admitted")
+        );
+    }
+
+    #[test]
+    fn configured_runtime_with_unknown_adapter_kind_is_refused_as_unknown() {
+        let runtime_config = ProviderRuntimeConfig::from_env_map(&env(&[
+            ("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true"),
+            ("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription"),
+            ("NARADA_AI_MODEL", "gpt-5.5"),
+        ]));
+        let admission =
+            ProviderAdapterAdmission::from_runtime_config(&runtime_config, Some("unknown_adapter"));
+
+        assert_eq!(admission.status, ProviderAdapterAdmissionStatus::Refused);
+        assert!(!admission.provider_execution_enabled);
+        assert_eq!(admission.adapter_kind.as_deref(), Some("unknown_adapter"));
+        assert_eq!(
+            admission.refusal_reason.as_deref(),
+            Some("unknown_provider_adapter:unknown_adapter")
         );
     }
 

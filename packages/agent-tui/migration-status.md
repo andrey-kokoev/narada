@@ -34,7 +34,7 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - Runtime coordinator for control polling, queue admission, carrier-local queue commands, literal slash input, composer submit, interrupt evidence, held release, and session evidence writing.
 - Turn coordinator with provider dispatch boundary recording and explicit `completed_without_provider` terminal evidence.
 - Provider dispatch trait plus stub adapter; real provider execution remains disabled.
-- Provider adapter admission boundary distinguishes disabled runtime, refused runtime, configured-without-adapter posture, explicit requested adapter kind via `NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND`, and future admitted adapter execution; requested adapters are refused as `provider_adapter_not_implemented:<kind>` until a concrete adapter exists.
+- Provider adapter admission boundary distinguishes disabled runtime, refused runtime, configured-without-adapter posture, explicit requested adapter kind via `NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND`, typed adapter-registry rejection for unknown adapter kinds, and future admitted adapter execution; known requested adapters are refused as `provider_adapter_not_implemented:<kind>` until a concrete adapter exists.
 - Provider boundary acceptance verifies request and terminal evidence both record `recorded_not_dispatched` and `provider_execution_enabled=false`.
 - Provider request evidence carries provider runtime posture, configured provider/model when present, and refusal reason so disabled/configured-not-implemented turns are reconstructable from session JSONL.
 - Provider boundary acceptance verifies ordered provider text deltas project as one accumulated agent transcript message for the turn.
