@@ -99,7 +99,7 @@ mod tests {
             ),
             (
                 provider_contract.provider_adapter_kind_env_var.clone(),
-                "codex_subscription_adapter".to_string(),
+                provider_contract.production_provider_adapter_kind.clone(),
             ),
             (mcp_contract.mcp_fabric_env_var.clone(), "true".to_string()),
             (
@@ -127,7 +127,7 @@ mod tests {
         assert_eq!(snapshot.provider_adapter.status.as_str(), "refused");
         assert_eq!(
             snapshot.provider_adapter.adapter_kind.as_deref(),
-            Some("codex_subscription_adapter")
+            Some(provider_contract.production_provider_adapter_kind.as_str())
         );
         assert_eq!(snapshot.mcp.status.as_str(), "configured");
         assert_eq!(snapshot.terminal.status.as_str(), "configured");
