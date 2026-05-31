@@ -8,6 +8,8 @@ use crate::session_jsonl::append_session_event;
 use serde_json::json;
 use std::path::{Path, PathBuf};
 
+pub const TURN_TERMINAL_PAYLOAD_SCHEMA: &str = "narada.agent_tui.turn_terminal_payload.v0";
+
 pub trait ProviderToolCallExecutor {
     fn handle_provider_output(
         &mut self,
@@ -198,6 +200,7 @@ impl TurnCoordinator {
             kind,
             clock,
             json!({
+                "schema": TURN_TERMINAL_PAYLOAD_SCHEMA,
                 "turn_id": turn_id,
                 "input_event_id": input.event_id,
                 "provider_request_status": record.status.as_str(),
@@ -519,6 +522,7 @@ mod tests {
             SessionEventKind::ProviderToolCallRequested
         );
         assert_eq!(events[4].event_kind, SessionEventKind::TurnCompleted);
+        assert_eq!(events[4].payload["schema"], TURN_TERMINAL_PAYLOAD_SCHEMA);
         assert_eq!(events[4].payload["provider_execution_enabled"], true);
         assert_eq!(events[4].payload["terminal_status"], "completed");
 
@@ -596,6 +600,10 @@ mod tests {
             "recorded_not_dispatched"
         );
         assert_eq!(completed_event.event_kind, SessionEventKind::TurnCompleted);
+        assert_eq!(
+            completed_event.payload["schema"],
+            TURN_TERMINAL_PAYLOAD_SCHEMA
+        );
         assert_eq!(
             completed_event.payload["terminal_status"],
             "completed_without_provider"
