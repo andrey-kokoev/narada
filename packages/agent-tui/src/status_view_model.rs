@@ -245,6 +245,11 @@ fn turn_state_label(turn_state: TurnState) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::mcp_runtime_config::{
+        mcp_config_env_var, mcp_fabric_env_var, site_mcp_fabric_env_var,
+    };
+    use crate::provider_adapter_contract::provider_adapter_contract;
+    use crate::terminal_runtime_contract::terminal_runtime_contract;
 
     fn input() -> StatusViewInput {
         StatusViewInput {
@@ -257,6 +262,52 @@ mod tests {
             runtime_posture: RuntimePostureState::disabled(),
             last_error: None,
         }
+    }
+
+    fn provider_env(pairs: &[(&str, &str)]) -> std::collections::BTreeMap<String, String> {
+        let contract = provider_adapter_contract();
+        pairs
+            .iter()
+            .map(|(semantic_key, value)| {
+                let env_key = match *semantic_key {
+                    "execution_enabled" => &contract.provider_execution_env_var,
+                    "provider" => &contract.intelligence_provider_env_var,
+                    "model" => &contract.ai_model_env_var,
+                    unexpected => panic!("unknown provider env semantic key: {unexpected}"),
+                };
+                (env_key.clone(), value.to_string())
+            })
+            .collect()
+    }
+
+    fn mcp_env(pairs: &[(&str, &str)]) -> std::collections::BTreeMap<String, String> {
+        pairs
+            .iter()
+            .map(|(semantic_key, value)| {
+                let env_key = match *semantic_key {
+                    "fabric_enabled" => mcp_fabric_env_var(),
+                    "config" => mcp_config_env_var(),
+                    "fabric" => site_mcp_fabric_env_var(),
+                    unexpected => panic!("unknown MCP env semantic key: {unexpected}"),
+                };
+                (env_key.to_string(), value.to_string())
+            })
+            .collect()
+    }
+
+    fn terminal_env(pairs: &[(&str, &str)]) -> std::collections::BTreeMap<String, String> {
+        let contract = terminal_runtime_contract();
+        pairs
+            .iter()
+            .map(|(semantic_key, value)| {
+                let env_key = match *semantic_key {
+                    "rendering_enabled" => &contract.terminal_rendering_env_var,
+                    "mode" => &contract.terminal_mode_env_var,
+                    unexpected => panic!("unknown terminal env semantic key: {unexpected}"),
+                };
+                (env_key.clone(), value.to_string())
+            })
+            .collect()
     }
 
     #[test]
@@ -306,25 +357,17 @@ mod tests {
             ProviderRuntimeState::Disabled
         );
 
-        let configured = ProviderRuntimeConfig::from_env_map(&std::collections::BTreeMap::from([
-            (
-                "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION".to_string(),
-                "true".to_string(),
-            ),
-            (
-                "NARADA_INTELLIGENCE_PROVIDER".to_string(),
-                "codex-subscription".to_string(),
-            ),
-            ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
+        let configured = ProviderRuntimeConfig::from_env_map(&provider_env(&[
+            ("execution_enabled", "true"),
+            ("provider", "codex-subscription"),
+            ("model", "gpt-5.5"),
         ]));
         assert_eq!(
             ProviderRuntimeState::from_provider_runtime_config(&configured),
             ProviderRuntimeState::Configured
         );
-        let refused = ProviderRuntimeConfig::from_env_map(&std::collections::BTreeMap::from([(
-            "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION".to_string(),
-            "true".to_string(),
-        )]));
+        let refused =
+            ProviderRuntimeConfig::from_env_map(&provider_env(&[("execution_enabled", "true")]));
         assert_eq!(
             ProviderRuntimeState::from_provider_runtime_config(&refused),
             ProviderRuntimeState::Refused
@@ -339,29 +382,17 @@ mod tests {
             McpRuntimeState::Disabled
         );
 
-        let configured = McpRuntimeConfig::from_env_map(&std::collections::BTreeMap::from([
-            (
-                "NARADA_AGENT_TUI_ENABLE_MCP_FABRIC".to_string(),
-                "true".to_string(),
-            ),
-            (
-                "NARADA_AGENT_TUI_MCP_CONFIG".to_string(),
-                "D:/site/.ai/mcp/config.json".to_string(),
-            ),
-            (
-                "NARADA_SITE_MCP_FABRIC".to_string(),
-                "D:/site/.ai/mcp".to_string(),
-            ),
+        let configured = McpRuntimeConfig::from_env_map(&mcp_env(&[
+            ("fabric_enabled", "true"),
+            ("config", "D:/site/.ai/mcp/config.json"),
+            ("fabric", "D:/site/.ai/mcp"),
         ]));
         assert_eq!(
             McpRuntimeState::from_mcp_runtime_config(&configured),
             McpRuntimeState::Configured
         );
 
-        let refused = McpRuntimeConfig::from_env_map(&std::collections::BTreeMap::from([(
-            "NARADA_AGENT_TUI_ENABLE_MCP_FABRIC".to_string(),
-            "true".to_string(),
-        )]));
+        let refused = McpRuntimeConfig::from_env_map(&mcp_env(&[("fabric_enabled", "true")]));
         assert_eq!(
             McpRuntimeState::from_mcp_runtime_config(&refused),
             McpRuntimeState::Refused
@@ -376,25 +407,18 @@ mod tests {
             TerminalRuntimeState::Disabled
         );
 
-        let configured = TerminalRuntimeConfig::from_env_map(&std::collections::BTreeMap::from([
-            (
-                "NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING".to_string(),
-                "true".to_string(),
-            ),
-            (
-                "NARADA_AGENT_TUI_TERMINAL_MODE".to_string(),
-                "interactive_loop".to_string(),
-            ),
+        let terminal_contract = terminal_runtime_contract();
+        let configured = TerminalRuntimeConfig::from_env_map(&terminal_env(&[
+            ("rendering_enabled", "true"),
+            ("mode", terminal_contract.required_terminal_mode.as_str()),
         ]));
         assert_eq!(
             TerminalRuntimeState::from_terminal_runtime_config(&configured),
             TerminalRuntimeState::Configured
         );
 
-        let refused = TerminalRuntimeConfig::from_env_map(&std::collections::BTreeMap::from([(
-            "NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING".to_string(),
-            "true".to_string(),
-        )]));
+        let refused =
+            TerminalRuntimeConfig::from_env_map(&terminal_env(&[("rendering_enabled", "true")]));
         assert_eq!(
             TerminalRuntimeState::from_terminal_runtime_config(&refused),
             TerminalRuntimeState::Refused
@@ -403,40 +427,20 @@ mod tests {
 
     #[test]
     fn builds_runtime_posture_bundle_from_runtime_configs() {
-        let provider = ProviderRuntimeConfig::from_env_map(&std::collections::BTreeMap::from([
-            (
-                "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION".to_string(),
-                "true".to_string(),
-            ),
-            (
-                "NARADA_INTELLIGENCE_PROVIDER".to_string(),
-                "codex-subscription".to_string(),
-            ),
-            ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
+        let provider = ProviderRuntimeConfig::from_env_map(&provider_env(&[
+            ("execution_enabled", "true"),
+            ("provider", "codex-subscription"),
+            ("model", "gpt-5.5"),
         ]));
-        let mcp = McpRuntimeConfig::from_env_map(&std::collections::BTreeMap::from([
-            (
-                "NARADA_AGENT_TUI_ENABLE_MCP_FABRIC".to_string(),
-                "true".to_string(),
-            ),
-            (
-                "NARADA_AGENT_TUI_MCP_CONFIG".to_string(),
-                "D:/site/.ai/mcp/config.json".to_string(),
-            ),
-            (
-                "NARADA_SITE_MCP_FABRIC".to_string(),
-                "D:/site/.ai/mcp".to_string(),
-            ),
+        let mcp = McpRuntimeConfig::from_env_map(&mcp_env(&[
+            ("fabric_enabled", "true"),
+            ("config", "D:/site/.ai/mcp/config.json"),
+            ("fabric", "D:/site/.ai/mcp"),
         ]));
-        let terminal = TerminalRuntimeConfig::from_env_map(&std::collections::BTreeMap::from([
-            (
-                "NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING".to_string(),
-                "true".to_string(),
-            ),
-            (
-                "NARADA_AGENT_TUI_TERMINAL_MODE".to_string(),
-                "interactive_loop".to_string(),
-            ),
+        let terminal_contract = terminal_runtime_contract();
+        let terminal = TerminalRuntimeConfig::from_env_map(&terminal_env(&[
+            ("rendering_enabled", "true"),
+            ("mode", terminal_contract.required_terminal_mode.as_str()),
         ]));
 
         let provider_adapter = ProviderAdapterAdmission::from_runtime_config(&provider, None);
