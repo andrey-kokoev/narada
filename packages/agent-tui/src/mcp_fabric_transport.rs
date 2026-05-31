@@ -65,7 +65,10 @@ impl McpFabricTransportClient {
     }
 
     pub fn from_json_str(config_path: impl Into<String>, content: &str) -> Result<Self, String> {
-        let config: CarrierConfigFile = serde_json::from_str(content)
+        let value: Value = serde_json::from_str(content)
+            .map_err(|error| format!("mcp_fabric_config_parse_failed:{error}"))?;
+        validate_config_shape(&value)?;
+        let config: CarrierConfigFile = serde_json::from_value(value)
             .map_err(|error| format!("mcp_fabric_config_parse_failed:{error}"))?;
         let mut servers = BTreeMap::new();
         let mut tool_to_server = BTreeMap::new();
@@ -209,6 +212,18 @@ impl McpFabricTransportServer {
     }
 }
 
+fn validate_config_shape(value: &Value) -> Result<(), String> {
+    let Some(config) = value.as_object() else {
+        return Err("mcp_fabric_config_shape_invalid".to_string());
+    };
+    if let Some(mcp_servers) = config.get("mcpServers") {
+        if !mcp_servers.is_object() {
+            return Err("mcp_fabric_config_mcp_servers_invalid".to_string());
+        }
+    }
+    Ok(())
+}
+
 fn normalize_optional_config_field(
     field_name: &str,
     value: Option<String>,
@@ -322,6 +337,19 @@ mod tests {
                 .map(String::as_str),
             Some("sonar-site-loop")
         );
+    }
+
+    #[test]
+    fn rejects_non_object_mcp_servers() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": []
+            }"#,
+        )
+        .expect_err("mcpServers must be an object");
+
+        assert_eq!(error, "mcp_fabric_config_mcp_servers_invalid");
     }
 
     #[test]
