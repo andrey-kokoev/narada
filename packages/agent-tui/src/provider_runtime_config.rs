@@ -116,6 +116,14 @@ fn trimmed_nonempty(value: Option<&String>) -> Option<String> {
 mod tests {
     use super::*;
 
+    fn admitted_provider() -> &'static str {
+        provider_adapter_contract()
+            .admitted_providers
+            .first()
+            .expect("provider contract has at least one admitted provider")
+            .as_str()
+    }
+
     fn provider_runtime_env(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
         let contract = provider_adapter_contract();
         pairs
@@ -137,7 +145,7 @@ mod tests {
     #[test]
     fn provider_runtime_is_disabled_without_explicit_admission_flag() {
         let config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
-            ("provider", "codex-subscription"),
+            ("provider", admitted_provider()),
             ("model", "gpt-5.5"),
         ]));
 
@@ -164,7 +172,7 @@ mod tests {
 
         let missing_model = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
             ("execution_enabled", "true"),
-            ("provider", "codex-subscription"),
+            ("provider", admitted_provider()),
         ]));
         assert_eq!(
             missing_model.status,
@@ -195,7 +203,7 @@ mod tests {
     fn provider_runtime_configures_explicit_provider_model_without_admitting_execution() {
         let config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
             ("execution_enabled", "yes"),
-            ("provider", "codex-subscription"),
+            ("provider", admitted_provider()),
             ("model", "gpt-5.5"),
             ("thinking", "medium"),
             ("stream", "off"),
@@ -204,7 +212,7 @@ mod tests {
         assert_eq!(config.status, ProviderRuntimeAdmissionStatus::Configured);
         assert_eq!(config.status.as_str(), "configured");
         assert_eq!(config.refusal_reason, None);
-        assert_eq!(config.provider.as_deref(), Some("codex-subscription"));
+        assert_eq!(config.provider.as_deref(), Some(admitted_provider()));
         assert_eq!(config.model.as_deref(), Some("gpt-5.5"));
         assert_eq!(config.thinking.as_deref(), Some("medium"));
         assert!(!config.stream);
