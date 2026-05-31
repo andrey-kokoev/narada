@@ -848,6 +848,43 @@ mod tests {
     }
 
     #[test]
+    fn parses_shared_turn_terminal_variant_session_event_fixtures() {
+        let interrupted = parse_session_event(include_str!(
+            "../../carrier-protocol/fixtures/turn-interrupted-session-event.json"
+        ))
+        .expect("turn interrupted session fixture parses");
+        assert_eq!(interrupted.event_kind, SessionEventKind::TurnInterrupted);
+        assert_eq!(
+            interrupted.payload,
+            create_turn_terminal_payload(
+                "turn_fixture_1",
+                Some("input_fixture_1"),
+                "interrupted",
+                "interrupted",
+                true,
+                None,
+            )
+        );
+
+        let failed = parse_session_event(include_str!(
+            "../../carrier-protocol/fixtures/turn-failed-session-event.json"
+        ))
+        .expect("turn failed session fixture parses");
+        assert_eq!(failed.event_kind, SessionEventKind::TurnFailed);
+        assert_eq!(
+            failed.payload,
+            create_turn_terminal_payload(
+                "turn_fixture_1",
+                Some("input_fixture_1"),
+                "failed",
+                "failed",
+                true,
+                Some("provider dispatch failed"),
+            )
+        );
+    }
+
+    #[test]
     fn parses_shared_provider_payload_session_event_fixtures() {
         let provider_request = parse_session_event(include_str!(
             "../../carrier-protocol/fixtures/provider-request-session-event.json"

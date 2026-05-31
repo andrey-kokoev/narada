@@ -86,6 +86,25 @@ assert.deepEqual(turnTerminalFixture.payload, createTurnTerminalPayload({
   provider_request_status: 'recorded_not_dispatched',
   provider_execution_enabled: false,
 }));
+const turnInterruptedFixture = readFixture('turn-interrupted-session-event.json');
+assert.deepEqual(validateSessionEvent(turnInterruptedFixture), []);
+assert.deepEqual(turnInterruptedFixture.payload, createTurnTerminalPayload({
+  turn_id: 'turn_fixture_1',
+  input_event_id: 'input_fixture_1',
+  terminal_status: 'interrupted',
+  provider_request_status: 'interrupted',
+  provider_execution_enabled: true,
+}));
+const turnFailedFixture = readFixture('turn-failed-session-event.json');
+assert.deepEqual(validateSessionEvent(turnFailedFixture), []);
+assert.deepEqual(turnFailedFixture.payload, createTurnTerminalPayload({
+  turn_id: 'turn_fixture_1',
+  input_event_id: 'input_fixture_1',
+  terminal_status: 'failed',
+  provider_request_status: 'failed',
+  provider_execution_enabled: true,
+  error_summary: 'provider dispatch failed',
+}));
 const providerRequestFixture = readFixture('provider-request-session-event.json');
 assert.deepEqual(validateSessionEvent(providerRequestFixture), []);
 assert.deepEqual(providerRequestFixture.payload, createProviderRequestPayload({
