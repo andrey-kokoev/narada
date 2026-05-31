@@ -238,6 +238,7 @@ mod tests {
             server_name: "sonar-site-loop".to_string(),
             command: "node".to_string(),
             args: vec!["site-loop.mjs".to_string()],
+            env: std::collections::BTreeMap::new(),
             tool_name: "site_loop_run_once".to_string(),
             request_event: SessionEvent {
                 schema: SESSION_EVENT_SCHEMA.to_string(),

@@ -195,6 +195,7 @@ mod tests {
             server_name: server_name.to_string(),
             command: "node".to_string(),
             args: vec!["site-loop.mjs".to_string()],
+            env: std::collections::BTreeMap::new(),
             tool_name: "site_loop_run_once".to_string(),
             request_event: SessionEvent {
                 schema: crate::carrier_protocol::SESSION_EVENT_SCHEMA.to_string(),

@@ -287,6 +287,7 @@ impl ReusableMcpProcess {
     ) -> Result<Self, String> {
         let mut child = Command::new(&prepared.command)
             .args(&prepared.args)
+            .envs(&prepared.env)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -356,6 +357,7 @@ mod tests {
             server_name: server_name.to_string(),
             command: command.to_string(),
             args,
+            env: std::collections::BTreeMap::new(),
             tool_name: "site_loop_run_once".to_string(),
             request_event: SessionEvent {
                 schema: SESSION_EVENT_SCHEMA.to_string(),

@@ -22,6 +22,7 @@ pub struct McpFabricTransportServer {
     pub transport: String,
     pub command: String,
     pub args: Vec<String>,
+    pub env: BTreeMap<String, String>,
     pub tools: BTreeSet<String>,
     pub surface_id: Option<String>,
     pub target_site_root: Option<String>,
@@ -32,6 +33,7 @@ pub struct McpFabricPreparedToolCall {
     pub server_name: String,
     pub command: String,
     pub args: Vec<String>,
+    pub env: BTreeMap<String, String>,
     pub tool_name: String,
     pub request_event: SessionEvent,
     pub json_rpc: McpJsonRpcExchange,
@@ -49,6 +51,7 @@ struct RawMcpServer {
     transport: Option<Value>,
     command: Option<Value>,
     args: Option<Value>,
+    env: Option<Value>,
     tools: Option<Value>,
     allowed_tools: Option<Value>,
     tool_names: Option<Value>,
@@ -143,6 +146,7 @@ impl McpFabricTransportClient {
             server_name: server.name.clone(),
             command: server.command.clone(),
             args: server.args.clone(),
+            env: server.env.clone(),
             tool_name: request.tool_name.clone(),
             request_event,
             json_rpc,
@@ -183,6 +187,7 @@ impl McpFabricTransportServer {
             return Err(format!("mcp_fabric_server_tools_missing:{name}"));
         }
         let args = select_args(&name, raw.args)?;
+        let env = select_env(&name, raw.env)?;
         let surface_id = normalize_optional_server_string(&name, "surface_id", raw.surface_id)?;
         let target_site_root =
             normalize_optional_server_string(&name, "target_site_root", raw.target_site_root)?;
@@ -191,6 +196,7 @@ impl McpFabricTransportServer {
             transport,
             command,
             args,
+            env,
             tools,
             surface_id,
             target_site_root,
@@ -256,6 +262,29 @@ fn select_args(server_name: &str, args: Option<Value>) -> Result<Vec<String>, St
             Ok(arg)
         })
         .collect()
+}
+
+fn select_env(server_name: &str, env: Option<Value>) -> Result<BTreeMap<String, String>, String> {
+    let Some(value) = env else {
+        return Ok(BTreeMap::new());
+    };
+    let Some(values) = value.as_object() else {
+        return Err(format!("mcp_fabric_server_env_invalid:{server_name}"));
+    };
+    let mut env = BTreeMap::new();
+    for (key, value) in values {
+        let key = key.trim().to_string();
+        if key.is_empty() {
+            return Err(format!("mcp_fabric_server_env_key_invalid:{server_name}"));
+        }
+        let Some(value) = value.as_str() else {
+            return Err(format!(
+                "mcp_fabric_server_env_value_invalid:{server_name}:{key}"
+            ));
+        };
+        env.insert(key, value.to_string());
+    }
+    Ok(env)
 }
 
 fn select_tool_list(
@@ -342,6 +371,7 @@ mod tests {
               "transport": "stdio",
               "command": "node",
               "args": ["site-loop.mjs"],
+              "env": {"NARADA_SITE_ROOT": "D:/code/narada.sonar"},
               "tools": ["site_loop_run_once", "site_loop_status"],
               "surface_id": "sonar.site-loop",
               "target_site_root": "D:/code/narada.sonar"
@@ -780,6 +810,94 @@ mod tests {
     }
 
     #[test]
+    fn parses_server_env() {
+        let client = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "env": {"NARADA_SITE_ROOT": "D:/code/narada.sonar"},
+                  "tools": ["site_loop_status"]
+                }
+              }
+            }"#,
+        )
+        .expect("server env config parses");
+
+        assert_eq!(
+            client.servers["sonar-site-loop"]
+                .env
+                .get("NARADA_SITE_ROOT"),
+            Some(&"D:/code/narada.sonar".to_string())
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_server_env_shape() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "env": [],
+                  "tools": ["site_loop_status"]
+                }
+              }
+            }"#,
+        )
+        .expect_err("env must be an object");
+
+        assert_eq!(error, "mcp_fabric_server_env_invalid:sonar-site-loop");
+    }
+
+    #[test]
+    fn rejects_non_string_server_env_value() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "env": {"NARADA_SITE_ROOT": 1},
+                  "tools": ["site_loop_status"]
+                }
+              }
+            }"#,
+        )
+        .expect_err("env values must be strings");
+
+        assert_eq!(
+            error,
+            "mcp_fabric_server_env_value_invalid:sonar-site-loop:NARADA_SITE_ROOT"
+        );
+    }
+
+    #[test]
+    fn rejects_blank_server_env_key() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "env": {" ": "x"},
+                  "tools": ["site_loop_status"]
+                }
+              }
+            }"#,
+        )
+        .expect_err("env keys must be nonblank");
+
+        assert_eq!(error, "mcp_fabric_server_env_key_invalid:sonar-site-loop");
+    }
+
+    #[test]
     fn rejects_blank_surface_id() {
         let error = McpFabricTransportClient::from_json_str(
             "fixture.mcp.json",
@@ -1022,6 +1140,10 @@ mod tests {
         assert_eq!(call.server_name, "sonar-site-loop");
         assert_eq!(call.command, "node");
         assert_eq!(call.args, vec!["site-loop.mjs".to_string()]);
+        assert_eq!(
+            call.env.get("NARADA_SITE_ROOT"),
+            Some(&"D:/code/narada.sonar".to_string())
+        );
         assert_eq!(call.tool_name, "site_loop_run_once");
         assert_eq!(call.json_rpc.request.method, "tools/call");
         assert!(call.json_rpc.request_line.contains("\"id\":7"));
