@@ -175,11 +175,7 @@ impl McpFabricTransportServer {
         if command.is_empty() {
             return Err(format!("mcp_fabric_server_command_invalid:{name}"));
         }
-        let raw_tools = raw
-            .tools
-            .or(raw.allowed_tools)
-            .or(raw.tool_names)
-            .unwrap_or_default();
+        let raw_tools = select_tool_list(&name, raw.tools, raw.allowed_tools, raw.tool_names)?;
         let mut tools = BTreeSet::new();
         for tool in raw_tools {
             let tool = tool.trim().to_string();
@@ -226,6 +222,23 @@ fn normalize_optional_config_field(
         return Err(format!("mcp_fabric_config_{field_name}_invalid"));
     }
     Ok(Some(value))
+}
+
+fn select_tool_list(
+    server_name: &str,
+    tools: Option<Vec<String>>,
+    allowed_tools: Option<Vec<String>>,
+    tool_names: Option<Vec<String>>,
+) -> Result<Vec<String>, String> {
+    let configured_count = u8::from(tools.is_some())
+        + u8::from(allowed_tools.is_some())
+        + u8::from(tool_names.is_some());
+    if configured_count > 1 {
+        return Err(format!(
+            "mcp_fabric_server_tool_list_ambiguous:{server_name}"
+        ));
+    }
+    Ok(tools.or(allowed_tools).or(tool_names).unwrap_or_default())
 }
 
 fn normalize_optional_server_field(
@@ -612,6 +625,29 @@ mod tests {
         assert_eq!(
             server.target_site_root.as_deref(),
             Some("D:/code/narada.sonar")
+        );
+    }
+
+    #[test]
+    fn rejects_ambiguous_tool_list_fields() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "tools": ["site_loop_status"],
+                  "allowed_tools": ["site_loop_run_once"]
+                }
+              }
+            }"#,
+        )
+        .expect_err("ambiguous tool list fields are invalid");
+
+        assert_eq!(
+            error,
+            "mcp_fabric_server_tool_list_ambiguous:sonar-site-loop"
         );
     }
 
