@@ -1,10 +1,10 @@
 use std::sync::OnceLock;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 const TERMINAL_RUNTIME_CONTRACT_JSON: &str = include_str!("../contracts/terminal-runtime.json");
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TerminalRuntimeContract {
     pub schema: String,
     pub terminal_rendering_env_var: String,
@@ -43,6 +43,12 @@ pub fn parse_terminal_runtime_contract(json_text: &str) -> Result<TerminalRuntim
 mod tests {
     use super::*;
 
+    fn invalid_contract_json(mut mutate: impl FnMut(&mut TerminalRuntimeContract)) -> String {
+        let mut contract = terminal_runtime_contract().clone();
+        mutate(&mut contract);
+        serde_json::to_string(&contract).expect("test terminal runtime contract serializes")
+    }
+
     #[test]
     fn bundled_terminal_runtime_contract_is_valid() {
         let contract = terminal_runtime_contract();
@@ -64,14 +70,9 @@ mod tests {
             .unwrap_err()
             .starts_with("terminal_runtime_contract_parse_failed:"));
         assert_eq!(
-            parse_terminal_runtime_contract(
-                r#"{
-                    "schema":"narada.agent_tui.terminal_runtime_contract.v0",
-                    "terminal_rendering_env_var":"NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING",
-                    "terminal_mode_env_var":"NARADA_AGENT_TUI_TERMINAL_MODE",
-                    "required_terminal_mode":"render_once"
-                }"#,
-            )
+            parse_terminal_runtime_contract(&invalid_contract_json(|contract| {
+                contract.required_terminal_mode = "render_once".to_string();
+            }))
             .unwrap_err(),
             "terminal_runtime_contract_invalid:required_terminal_mode"
         );

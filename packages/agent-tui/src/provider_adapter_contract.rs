@@ -1,10 +1,10 @@
 use std::sync::OnceLock;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 const PROVIDER_ADAPTER_CONTRACT_JSON: &str = include_str!("../contracts/provider-adapters.json");
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ProviderAdapterContract {
     pub schema: String,
     pub provider_execution_env_var: String,
@@ -75,6 +75,12 @@ pub fn parse_provider_adapter_contract(json: &str) -> Result<ProviderAdapterCont
 mod tests {
     use super::*;
 
+    fn invalid_contract_json(mut mutate: impl FnMut(&mut ProviderAdapterContract)) -> String {
+        let mut contract = provider_adapter_contract().clone();
+        mutate(&mut contract);
+        serde_json::to_string(&contract).expect("test provider adapter contract serializes")
+    }
+
     #[test]
     fn bundled_provider_adapter_contract_is_valid() {
         let contract = provider_adapter_contract();
@@ -116,16 +122,16 @@ mod tests {
             "provider_adapter_contract_parse_failed:expected ident at line 1 column 2"
         );
         assert_eq!(
-            parse_provider_adapter_contract(
-                r#"{"schema":"narada.agent_tui.wrong_provider_adapter_contract.v0","provider_execution_env_var":"NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION","provider_adapter_kind_env_var":"NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND","intelligence_provider_env_var":"NARADA_INTELLIGENCE_PROVIDER","ai_model_env_var":"NARADA_AI_MODEL","ai_thinking_env_var":"NARADA_AI_THINKING","ai_stream_env_var":"NARADA_AI_STREAM","admitted_providers":["codex-subscription","openai-api","anthropic-api"],"scripted_provider_adapter_kind":"scripted_provider_adapter","production_provider_adapter_kind":"codex_subscription_adapter","production_provider_adapter_implemented":false}"#,
-            )
+            parse_provider_adapter_contract(&invalid_contract_json(|contract| {
+                contract.schema = "narada.agent_tui.wrong_provider_adapter_contract.v0".to_string();
+            }))
             .unwrap_err(),
             "provider_adapter_contract_invalid:schema"
         );
         assert_eq!(
-            parse_provider_adapter_contract(
-                r#"{"schema":"narada.agent_tui.provider_adapter_contract.v0","provider_execution_env_var":"NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION","provider_adapter_kind_env_var":"NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND","intelligence_provider_env_var":"NARADA_INTELLIGENCE_PROVIDER","ai_model_env_var":"NARADA_AI_MODEL","ai_thinking_env_var":"NARADA_AI_THINKING","ai_stream_env_var":"NARADA_AI_STREAM","admitted_providers":["codex-subscription","openai-api","anthropic-api"],"scripted_provider_adapter_kind":"scripted_provider_adapter","production_provider_adapter_kind":"codex_subscription_adapter","production_provider_adapter_implemented":true}"#,
-            )
+            parse_provider_adapter_contract(&invalid_contract_json(|contract| {
+                contract.production_provider_adapter_implemented = true;
+            }))
             .unwrap_err(),
             "provider_adapter_contract_invalid:production_provider_adapter_implemented"
         );
