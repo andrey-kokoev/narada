@@ -37,6 +37,7 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - Provider boundary acceptance verifies request and terminal evidence both record `recorded_not_dispatched` and `provider_execution_enabled=false`.
 - Provider boundary acceptance verifies ordered provider text deltas project as one accumulated agent transcript message for the turn.
 - Provider runtime admission config is explicit: provider execution remains disabled unless `NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION` is enabled and provider/model are admitted; scaffold output reports disabled/admitted/refused posture.
+- Agent-start launch env forces `NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION=false` for the bounded runtime slice and records that provider environment gate in launch metadata.
 - Rendering boundary model converts provider stderr, MCP stderr, known-noise suppression, terminal resize, and payload threshold decisions into mediated diagnostics or payload references instead of raw terminal writes.
 - Provider output constructors and transcript projection enforce payload references for oversized or sensitive provider text/tool arguments instead of inlining them into transcript rows.
 - MCP fabric boundary acceptance verifies disabled-by-default posture, policy-bound tool visibility after admission, and valid tool request/result evidence records.

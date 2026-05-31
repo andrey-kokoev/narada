@@ -366,6 +366,7 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   assert.equal(result.tool_fabric_adapter_kind, 'narada-agent-tui-interactive-step');
   assert.equal(result.capability_policy.smoke_step, 'bounded_non_terminal_control_jsonl');
   assert.equal(result.planned_environment.NARADA_AGENT_TUI_SESSION_DIR, result.agent_tui_session_dir);
+  assert.equal(result.planned_environment.NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION, 'false');
   assert.equal(result.agent_tui_session_dir.includes(`${path.sep}.narada${path.sep}crew${path.sep}nars-sessions${path.sep}`), true);
   assert.equal(result.agent_tui_launch.schema, 'narada.agent_start.agent_tui.v0');
   assert.equal(result.agent_tui_launch.transport, 'control_jsonl_session_jsonl');
@@ -420,6 +421,11 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   assert.equal(result.agent_tui_launch.provider_execution.status, 'not_admitted_for_runtime_slice');
   assert.equal(result.agent_tui_launch.provider_execution.adapter_contract, 'not_implemented');
   assert.equal(result.agent_tui_launch.provider_execution.dispatch_authority, 'withheld');
+  assert.deepEqual(result.agent_tui_launch.provider_execution.environment_gate, {
+    variable: 'NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION',
+    value: 'false',
+    operator_override_admitted: false,
+  });
   assert.equal(result.agent_tui_launch.provider_execution.promotion_gate, 'agent_tui_provider_adapter_promotion_gate');
   assert.deepEqual(result.agent_tui_launch.provider_execution.required_before_admission, [
     'real_provider_adapter_contract',

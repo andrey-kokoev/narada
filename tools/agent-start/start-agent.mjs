@@ -679,6 +679,11 @@ function agentTuiProviderExecutionGate() {
     status: 'not_admitted_for_runtime_slice',
     adapter_contract: 'not_implemented',
     dispatch_authority: 'withheld',
+    environment_gate: {
+      variable: 'NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION',
+      value: 'false',
+      operator_override_admitted: false,
+    },
     promotion_gate: 'agent_tui_provider_adapter_promotion_gate',
     required_before_admission: [
       'real_provider_adapter_contract',
@@ -1288,7 +1293,10 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     NARADA_AGENT_CONTEXT_DB: dbPath,
     NARADA_PC_SITE_ROOT: pcSiteRoot,
     ...(runtime === AGENT_RUNTIME_SERVER_RUNTIME ? { NARADA_AGENT_RUNTIME_SERVER_SESSION_DIR: agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id) } : {}),
-    ...(runtime === AGENT_TUI_RUNTIME ? { NARADA_AGENT_TUI_SESSION_DIR: agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id) } : {}),
+    ...(runtime === AGENT_TUI_RUNTIME ? {
+      NARADA_AGENT_TUI_SESSION_DIR: agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id),
+      NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION: 'false',
+    } : {}),
     ...(runtime === 'codex' ? { CODEX_HOME: codexHomePath(siteRoot, identity) } : {}),
   };
   const launchEnvironment = dryRun ? null : plannedEnvironment;
