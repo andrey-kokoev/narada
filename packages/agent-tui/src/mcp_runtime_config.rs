@@ -96,6 +96,7 @@ const MCP_RUNTIME_CONTRACT_JSON: &str = include_str!("../contracts/mcp-runtime.j
 
 #[derive(Debug, Deserialize)]
 struct McpRuntimeContract {
+    schema: String,
     mcp_fabric_env_var: String,
     mcp_config_path_policy: String,
 }
@@ -119,6 +120,9 @@ fn mcp_runtime_contract() -> &'static McpRuntimeContract {
 fn parse_mcp_runtime_contract(json: &str) -> Result<McpRuntimeContract, String> {
     let contract: McpRuntimeContract = serde_json::from_str(json)
         .map_err(|error| format!("mcp_runtime_contract_parse_failed:{error}"))?;
+    if contract.schema.trim() != "narada.agent_tui.mcp_runtime_contract.v0" {
+        return Err("mcp_runtime_contract_invalid:schema".to_string());
+    }
     if contract.mcp_fabric_env_var.trim() != "NARADA_AGENT_TUI_ENABLE_MCP_FABRIC" {
         return Err("mcp_runtime_contract_invalid:mcp_fabric_env_var".to_string());
     }
@@ -184,6 +188,17 @@ mod tests {
         assert_eq!(
             parse_mcp_runtime_contract("not json").unwrap_err(),
             "mcp_runtime_contract_parse_failed:expected ident at line 1 column 2"
+        );
+    }
+
+    #[test]
+    fn mcp_runtime_contract_rejects_wrong_schema() {
+        assert_eq!(
+            parse_mcp_runtime_contract(
+                r#"{"schema":"narada.agent_tui.wrong_mcp_runtime_contract.v0","mcp_fabric_env_var":"NARADA_AGENT_TUI_ENABLE_MCP_FABRIC","mcp_config_path_policy":"inside_site_mcp_fabric_without_parent_traversal"}"#,
+            )
+            .unwrap_err(),
+            "mcp_runtime_contract_invalid:schema"
         );
     }
 

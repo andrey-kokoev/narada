@@ -44,6 +44,16 @@ test('agent-tui provider adapter contract parser rejects invalid contracts', () 
   );
   assert.throws(
     () => parseAgentTuiProviderAdapterContract(JSON.stringify({
+      schema: 'narada.agent_tui.wrong_provider_contract.v0',
+      provider_execution_env_var: 'NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION',
+      scripted_provider_adapter_kind: 'scripted_provider_adapter',
+      production_provider_adapter_kind: 'codex_subscription_adapter',
+      production_provider_adapter_implemented: false,
+    })),
+    /provider_adapter_contract_invalid:schema/,
+  );
+  assert.throws(
+    () => parseAgentTuiProviderAdapterContract(JSON.stringify({
       schema: 'narada.agent_tui.provider_adapter_contract.v0',
       provider_execution_env_var: 'NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION',
       scripted_provider_adapter_kind: 'scripted_provider_adapter',
@@ -58,6 +68,14 @@ test('agent-tui MCP runtime contract parser rejects invalid contracts', () => {
   assert.throws(
     () => parseAgentTuiMcpRuntimeContract('{'),
     /mcp_runtime_contract_parse_failed/,
+  );
+  assert.throws(
+    () => parseAgentTuiMcpRuntimeContract(JSON.stringify({
+      schema: 'narada.agent_tui.wrong_mcp_runtime_contract.v0',
+      mcp_fabric_env_var: 'NARADA_AGENT_TUI_ENABLE_MCP_FABRIC',
+      mcp_config_path_policy: 'inside_site_mcp_fabric_without_parent_traversal',
+    })),
+    /mcp_runtime_contract_invalid:schema/,
   );
   assert.throws(
     () => parseAgentTuiMcpRuntimeContract(JSON.stringify({

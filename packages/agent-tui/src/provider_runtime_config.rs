@@ -7,6 +7,7 @@ const PROVIDER_ADAPTER_CONTRACT_JSON: &str = include_str!("../contracts/provider
 
 #[derive(Debug, Deserialize)]
 struct ProviderRuntimeContract {
+    schema: String,
     provider_execution_env_var: String,
 }
 
@@ -27,6 +28,9 @@ fn provider_execution_env_var() -> &'static str {
 fn parse_provider_runtime_contract(json: &str) -> Result<ProviderRuntimeContract, String> {
     let contract: ProviderRuntimeContract = serde_json::from_str(json)
         .map_err(|error| format!("provider_runtime_contract_parse_failed:{error}"))?;
+    if contract.schema.trim() != "narada.agent_tui.provider_adapter_contract.v0" {
+        return Err("provider_runtime_contract_invalid:schema".to_string());
+    }
     if contract.provider_execution_env_var.trim() != "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION" {
         return Err("provider_runtime_contract_invalid:provider_execution_env_var".to_string());
     }
@@ -153,13 +157,19 @@ mod tests {
     fn provider_runtime_contract_rejects_invalid_execution_env_var() {
         assert_eq!(
             parse_provider_runtime_contract(
+                r#"{"schema":"narada.agent_tui.wrong_provider_contract.v0","provider_execution_env_var":"NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION"}"#,
+            )
+            .unwrap_err(),
+            "provider_runtime_contract_invalid:schema"
+        );
+        assert_eq!(
+            parse_provider_runtime_contract(
                 r#"{"schema":"narada.agent_tui.provider_adapter_contract.v0","provider_execution_env_var":"NARADA_AGENT_TUI_PROVIDER"}"#,
             )
             .unwrap_err(),
             "provider_runtime_contract_invalid:provider_execution_env_var"
         );
     }
-
     #[test]
     fn provider_runtime_is_disabled_without_explicit_admission_flag() {
         let config = ProviderRuntimeConfig::from_env_map(&env(&[

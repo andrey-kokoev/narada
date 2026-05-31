@@ -67,6 +67,9 @@ export function parseAgentTuiMcpRuntimeContract(jsonText) {
   } catch (error) {
     throw new Error(`mcp_runtime_contract_parse_failed:${error.message}`);
   }
+  if (contract?.schema !== 'narada.agent_tui.mcp_runtime_contract.v0') {
+    throw new Error('mcp_runtime_contract_invalid:schema');
+  }
   if (contract?.mcp_fabric_env_var !== 'NARADA_AGENT_TUI_ENABLE_MCP_FABRIC') {
     throw new Error('mcp_runtime_contract_invalid:mcp_fabric_env_var');
   }
@@ -82,6 +85,9 @@ export function parseAgentTuiProviderAdapterContract(jsonText) {
     contract = JSON.parse(jsonText);
   } catch (error) {
     throw new Error(`provider_adapter_contract_parse_failed:${error.message}`);
+  }
+  if (contract?.schema !== 'narada.agent_tui.provider_adapter_contract.v0') {
+    throw new Error('provider_adapter_contract_invalid:schema');
   }
   if (contract?.provider_execution_env_var !== 'NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION') {
     throw new Error('provider_adapter_contract_invalid:provider_execution_env_var');
