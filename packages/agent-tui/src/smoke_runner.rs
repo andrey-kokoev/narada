@@ -3,7 +3,6 @@ use crate::input_queue::SessionEvidenceContext;
 use crate::interactive_runtime::{
     AgentTuiInteractiveRuntime, InteractiveStepClock, InteractiveStepResult,
 };
-use crate::provider_dispatch::ProviderDispatchStub;
 use crate::provider_runtime_config::ProviderRuntimeConfig;
 use crate::runtime_clock::RuntimeClock;
 use crate::transcript_store::TranscriptIngestSummary;
@@ -34,15 +33,13 @@ impl AgentTuiSmokeSession {
         provider_runtime_config: ProviderRuntimeConfig,
     ) -> Result<Self, String> {
         Ok(Self {
-            runtime: AgentTuiInteractiveRuntime::with_provider_adapter(
+            runtime: AgentTuiInteractiveRuntime::with_provider_runtime_config(
                 config.identity.clone(),
                 config.session.clone(),
                 config.control_jsonl.clone(),
                 config.session_jsonl.clone(),
                 evidence_context(config),
-                Box::new(ProviderDispatchStub::with_runtime_config(
-                    provider_runtime_config,
-                )),
+                provider_runtime_config,
             ),
             clock: RuntimeClock::system_now()?,
         })

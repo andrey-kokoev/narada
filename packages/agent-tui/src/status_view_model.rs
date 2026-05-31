@@ -1,8 +1,11 @@
 use crate::input_queue::TurnState;
+use crate::provider_runtime_config::{ProviderRuntimeAdmissionStatus, ProviderRuntimeConfig};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProviderRuntimeState {
     Disabled,
+    ConfiguredNotImplemented,
+    Refused,
     Idle,
     Working,
     Interrupted,
@@ -10,9 +13,21 @@ pub enum ProviderRuntimeState {
 }
 
 impl ProviderRuntimeState {
+    pub fn from_provider_runtime_config(config: &ProviderRuntimeConfig) -> Self {
+        match config.status {
+            ProviderRuntimeAdmissionStatus::Disabled => Self::Disabled,
+            ProviderRuntimeAdmissionStatus::ConfiguredNotImplemented => {
+                Self::ConfiguredNotImplemented
+            }
+            ProviderRuntimeAdmissionStatus::Refused => Self::Refused,
+        }
+    }
+
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Disabled => "provider_disabled",
+            Self::ConfiguredNotImplemented => "provider_configured_not_implemented",
+            Self::Refused => "provider_refused",
             Self::Idle => "provider_idle",
             Self::Working => "provider_working",
             Self::Interrupted => "provider_interrupted",
@@ -147,6 +162,40 @@ mod tests {
 
         assert_eq!(model.segments[7].value, "read failed");
         assert!(model.compact_line.ends_with("error=read failed"));
+    }
+
+    #[test]
+    fn maps_provider_runtime_config_to_provider_state() {
+        let disabled = ProviderRuntimeConfig::disabled();
+        assert_eq!(
+            ProviderRuntimeState::from_provider_runtime_config(&disabled),
+            ProviderRuntimeState::Disabled
+        );
+
+        let configured = ProviderRuntimeConfig::from_env_map(&std::collections::BTreeMap::from([
+            (
+                "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION".to_string(),
+                "true".to_string(),
+            ),
+            (
+                "NARADA_INTELLIGENCE_PROVIDER".to_string(),
+                "codex-subscription".to_string(),
+            ),
+            ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
+        ]));
+        assert_eq!(
+            ProviderRuntimeState::from_provider_runtime_config(&configured),
+            ProviderRuntimeState::ConfiguredNotImplemented
+        );
+
+        let refused = ProviderRuntimeConfig::from_env_map(&std::collections::BTreeMap::from([(
+            "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION".to_string(),
+            "true".to_string(),
+        )]));
+        assert_eq!(
+            ProviderRuntimeState::from_provider_runtime_config(&refused),
+            ProviderRuntimeState::Refused
+        );
     }
 
     #[test]

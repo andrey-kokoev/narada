@@ -4,6 +4,7 @@ use crate::composer_view_model::ComposerViewInput;
 use crate::input_queue::SessionEvidenceContext;
 use crate::layout_model::{LayoutConfig, TerminalSize};
 use crate::provider_dispatch::ProviderAdapter;
+use crate::provider_runtime_config::ProviderRuntimeConfig;
 use crate::runtime_coordinator::{RuntimeCoordinator, RuntimeCoordinatorClock};
 use crate::status_view_model::{ProviderRuntimeState, StatusViewInput};
 use crate::transcript_store::{TranscriptIngestSummary, TranscriptStore};
@@ -38,6 +39,7 @@ pub struct AgentTuiInteractiveRuntime {
     coordinator: RuntimeCoordinator,
     turns: TurnCoordinator,
     transcript: TranscriptStore,
+    provider_state: ProviderRuntimeState,
 }
 
 impl AgentTuiInteractiveRuntime {
@@ -48,13 +50,37 @@ impl AgentTuiInteractiveRuntime {
         session_jsonl_path: impl Into<PathBuf>,
         evidence_context: SessionEvidenceContext,
     ) -> Self {
-        Self::with_provider_adapter(
+        Self::with_provider_adapter_and_state(
             identity,
             session,
             control_jsonl_path,
             session_jsonl_path,
             evidence_context,
             Box::new(crate::provider_dispatch::ProviderDispatchStub::default()),
+            ProviderRuntimeState::Disabled,
+        )
+    }
+
+    pub fn with_provider_runtime_config(
+        identity: impl Into<String>,
+        session: impl Into<String>,
+        control_jsonl_path: impl Into<PathBuf>,
+        session_jsonl_path: impl Into<PathBuf>,
+        evidence_context: SessionEvidenceContext,
+        provider_runtime_config: ProviderRuntimeConfig,
+    ) -> Self {
+        Self::with_provider_adapter_and_state(
+            identity,
+            session,
+            control_jsonl_path,
+            session_jsonl_path,
+            evidence_context,
+            Box::new(
+                crate::provider_dispatch::ProviderDispatchStub::with_runtime_config(
+                    provider_runtime_config.clone(),
+                ),
+            ),
+            ProviderRuntimeState::from_provider_runtime_config(&provider_runtime_config),
         )
     }
 
@@ -65,6 +91,26 @@ impl AgentTuiInteractiveRuntime {
         session_jsonl_path: impl Into<PathBuf>,
         evidence_context: SessionEvidenceContext,
         provider_adapter: Box<dyn ProviderAdapter>,
+    ) -> Self {
+        Self::with_provider_adapter_and_state(
+            identity,
+            session,
+            control_jsonl_path,
+            session_jsonl_path,
+            evidence_context,
+            provider_adapter,
+            ProviderRuntimeState::Disabled,
+        )
+    }
+
+    pub fn with_provider_adapter_and_state(
+        identity: impl Into<String>,
+        session: impl Into<String>,
+        control_jsonl_path: impl Into<PathBuf>,
+        session_jsonl_path: impl Into<PathBuf>,
+        evidence_context: SessionEvidenceContext,
+        provider_adapter: Box<dyn ProviderAdapter>,
+        provider_state: ProviderRuntimeState,
     ) -> Self {
         let session_jsonl_path = session_jsonl_path.into();
         Self {
@@ -81,6 +127,7 @@ impl AgentTuiInteractiveRuntime {
                 provider_adapter,
             ),
             transcript: TranscriptStore::new(),
+            provider_state,
         }
     }
 
@@ -146,7 +193,7 @@ impl AgentTuiInteractiveRuntime {
                 queued_inputs: self.coordinator.queue().queued_count(),
                 held_system_directives: self.coordinator.queue().held_count(),
                 transcript_items: self.transcript.len(),
-                provider_state: ProviderRuntimeState::Disabled,
+                provider_state: self.provider_state.clone(),
                 last_error,
             },
             composer: ComposerViewInput {
@@ -172,6 +219,8 @@ impl From<crate::runtime_step::RuntimeStepClock> for InteractiveStepClock {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::provider_runtime_config::ProviderRuntimeConfig;
+    use std::collections::BTreeMap;
     use std::fs::{remove_file, OpenOptions};
     use std::io::Write;
     use std::path::Path;
@@ -257,6 +306,48 @@ mod tests {
         assert_eq!(model.transcript_rows[0].text, "run startup sequence");
         assert_eq!(model.transcript_rows[1].actor_label, "agent-tui");
         assert_eq!(model.transcript_rows[1].text, "completed_without_provider");
+
+        remove_file(control_path).ok();
+        remove_file(session_path).ok();
+    }
+
+    #[test]
+    fn build_view_reports_configured_not_implemented_provider_state() {
+        let control_path = temp_path("control");
+        let session_path = temp_path("session");
+        let provider_runtime_config = ProviderRuntimeConfig::from_env_map(&BTreeMap::from([
+            (
+                "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION".to_string(),
+                "true".to_string(),
+            ),
+            (
+                "NARADA_INTELLIGENCE_PROVIDER".to_string(),
+                "codex-subscription".to_string(),
+            ),
+            ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
+        ]));
+        let runtime = AgentTuiInteractiveRuntime::with_provider_runtime_config(
+            "sonar.resident",
+            "carrier_fixture_1",
+            &control_path,
+            &session_path,
+            context(),
+            provider_runtime_config,
+        );
+
+        let model = runtime.build_view(
+            TerminalSize {
+                width: 80,
+                height: 20,
+            },
+            &ComposerDraftState::default(),
+            None,
+        );
+
+        assert!(model
+            .status
+            .compact_line
+            .contains("provider=provider_configured_not_implemented"));
 
         remove_file(control_path).ok();
         remove_file(session_path).ok();

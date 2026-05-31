@@ -422,12 +422,13 @@ fn build_interactive_runtime(args: &Args) -> Result<AgentTuiInteractiveRuntime, 
     let session = args.session.clone().unwrap_or_default();
     let control_jsonl = args.control_jsonl.clone().expect("validated control jsonl");
     let session_jsonl = args.session_jsonl.clone().expect("validated session jsonl");
-    Ok(AgentTuiInteractiveRuntime::new(
+    Ok(AgentTuiInteractiveRuntime::with_provider_runtime_config(
         identity,
         session,
         control_jsonl,
         session_jsonl,
         build_evidence_context(args),
+        provider_config_from_process_env(),
     ))
 }
 
@@ -509,7 +510,9 @@ fn build_scaffold_app_view(args: &Args) -> Result<AppViewModel, String> {
             queued_inputs: 0,
             held_system_directives: 0,
             transcript_items: 0,
-            provider_state: ProviderRuntimeState::Disabled,
+            provider_state: ProviderRuntimeState::from_provider_runtime_config(
+                &provider_config_from_process_env(),
+            ),
             last_error: None,
         },
         composer: ComposerViewInput {
