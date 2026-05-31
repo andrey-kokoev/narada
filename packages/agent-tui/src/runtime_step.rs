@@ -5,7 +5,10 @@ use crate::runtime_coordinator::{
     RuntimeCoordinator, RuntimeCoordinatorClock, RuntimeCoordinatorPollResult,
 };
 use crate::transcript_store::{TranscriptIngestSummary, TranscriptStore};
-use crate::turn_coordinator::{CompletedTurn, TurnCoordinator, TurnCoordinatorClock};
+use crate::turn_coordinator::{
+    CompletedTurn, NoopProviderToolCallExecutor, ProviderToolCallExecutor, TurnCoordinator,
+    TurnCoordinatorClock,
+};
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
@@ -38,12 +41,13 @@ impl RuntimeStep {
         evidence_context: SessionEvidenceContext,
         clock: RuntimeClock,
     ) -> Self {
-        Self::with_provider_adapter(
+        Self::with_provider_adapter_and_tool_executor(
             control_jsonl_path,
             session_jsonl_path,
             evidence_context,
             clock,
             Box::new(ProviderDispatchStub::default()),
+            Box::new(NoopProviderToolCallExecutor),
         )
     }
 
@@ -54,6 +58,24 @@ impl RuntimeStep {
         clock: RuntimeClock,
         provider_adapter: Box<dyn ProviderAdapter>,
     ) -> Self {
+        Self::with_provider_adapter_and_tool_executor(
+            control_jsonl_path,
+            session_jsonl_path,
+            evidence_context,
+            clock,
+            provider_adapter,
+            Box::new(NoopProviderToolCallExecutor),
+        )
+    }
+
+    pub fn with_provider_adapter_and_tool_executor(
+        control_jsonl_path: impl Into<PathBuf>,
+        session_jsonl_path: impl Into<PathBuf>,
+        evidence_context: SessionEvidenceContext,
+        clock: RuntimeClock,
+        provider_adapter: Box<dyn ProviderAdapter>,
+        provider_tool_call_executor: Box<dyn ProviderToolCallExecutor>,
+    ) -> Self {
         let session_jsonl_path = session_jsonl_path.into();
         Self {
             runtime: RuntimeCoordinator::new(
@@ -61,10 +83,11 @@ impl RuntimeStep {
                 session_jsonl_path.clone(),
                 evidence_context.clone(),
             ),
-            turns: TurnCoordinator::with_provider_adapter(
+            turns: TurnCoordinator::with_provider_adapter_and_tool_executor(
                 session_jsonl_path,
                 evidence_context,
                 provider_adapter,
+                provider_tool_call_executor,
             ),
             transcript: TranscriptStore::new(),
             clock,
@@ -122,11 +145,16 @@ impl RuntimeStep {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::carrier_protocol::{parse_session_event, SessionEventKind};
+    use crate::carrier_protocol::{
+        parse_session_event, SessionEvent, SessionEventKind, SESSION_EVENT_SCHEMA,
+    };
     use crate::provider_adapter_admission::ProviderAdapterKind;
     use crate::provider_dispatch::{ProviderOutputRecord, ScriptedProviderAdapter};
     use crate::provider_runtime_config::ProviderRuntimeConfig;
+    use crate::session_jsonl::append_session_event;
     use crate::transcript_projection::{TranscriptActor, TranscriptItemKind};
+    use crate::turn_coordinator::TurnCoordinatorClock;
+    use serde_json::json;
     use std::fs::{read_to_string, remove_file, OpenOptions};
     use std::io::Write;
     use std::path::Path;
@@ -165,7 +193,18 @@ mod tests {
     fn runtime_clock() -> RuntimeClock {
         RuntimeClock::fixed("2026-05-30T00:00:02.000Z")
     }
+
     fn scripted_runtime_provider_adapter() -> ScriptedProviderAdapter {
+        scripted_runtime_provider_adapter_with_outputs(vec![ProviderOutputRecord::text_delta(
+            "turn_1",
+            "runtime hello",
+            1,
+        )])
+    }
+
+    fn scripted_runtime_provider_adapter_with_outputs(
+        outputs: Vec<ProviderOutputRecord>,
+    ) -> ScriptedProviderAdapter {
         let runtime_config =
             ProviderRuntimeConfig::from_env_map(&std::collections::BTreeMap::from([
                 (
@@ -181,13 +220,43 @@ mod tests {
         ScriptedProviderAdapter::try_new(
             runtime_config,
             ProviderAdapterKind::CodexSubscription,
-            vec![ProviderOutputRecord::text_delta(
-                "turn_1",
-                "runtime hello",
-                1,
-            )],
+            outputs,
         )
         .expect("scripted runtime provider admits configured runtime")
+    }
+
+    struct RuntimeStepToolExecutor;
+
+    impl ProviderToolCallExecutor for RuntimeStepToolExecutor {
+        fn handle_provider_output(
+            &mut self,
+            output: &ProviderOutputRecord,
+            context: &SessionEvidenceContext,
+            session_jsonl_path: &Path,
+            clock: &TurnCoordinatorClock,
+        ) -> Result<usize, String> {
+            if output.kind != crate::provider_dispatch::ProviderOutputKind::ToolCallRequest {
+                return Ok(0);
+            }
+            let request = SessionEvent {
+                schema: SESSION_EVENT_SCHEMA.to_string(),
+                event_kind: SessionEventKind::ToolCallRequested,
+                event_id: format!("{}_runtime_tool_request", clock.event_id_prefix),
+                occurred_at: clock.occurred_at.clone(),
+                carrier_session_id: context.carrier_session_id.clone(),
+                agent_id: context.agent_id.clone(),
+                site_id: context.site_id.clone(),
+                site_root: context.site_root.clone(),
+                payload: json!({
+                    "tool_name": output.payload["tool_name"],
+                    "arguments_summary": output.payload["arguments_summary"],
+                    "requesting_agent_id": context.agent_id,
+                    "runtime_step_tool_executor": "injected"
+                }),
+            };
+            append_session_event(session_jsonl_path, &request)?;
+            Ok(1)
+        }
     }
 
     #[test]
@@ -322,6 +391,51 @@ mod tests {
                 .payload["terminal_status"],
             "completed"
         );
+
+        remove_file(control_path).ok();
+        remove_file(session_path).ok();
+    }
+    #[test]
+    fn runtime_step_accepts_injected_provider_tool_call_executor() {
+        let control_path = temp_path("control");
+        let session_path = temp_path("session");
+        append(&control_path, CONTROL_FIXTURE);
+        append(&control_path, "\n");
+
+        let provider_adapter = scripted_runtime_provider_adapter_with_outputs(vec![
+            ProviderOutputRecord::text_delta("turn_1", "runtime hello", 1),
+            ProviderOutputRecord::tool_call_request("turn_1", "site_loop_run_once", "{}", 2),
+        ]);
+        let mut step = RuntimeStep::with_provider_adapter_and_tool_executor(
+            &control_path,
+            &session_path,
+            context(),
+            runtime_clock(),
+            Box::new(provider_adapter),
+            Box::new(RuntimeStepToolExecutor),
+        );
+
+        let result = step.run_once(false).expect("runtime step succeeds");
+        assert_eq!(result.completed_turn.unwrap().evidence_written, 6);
+        assert_eq!(result.transcript.total_items, 4);
+
+        let session_jsonl = read_to_string(&session_path).expect("session jsonl exists");
+        let events = session_jsonl
+            .lines()
+            .map(|line| parse_session_event(line).expect("event parses"))
+            .collect::<Vec<_>>();
+        assert_eq!(events.len(), 7);
+        assert_eq!(
+            events[3].event_kind,
+            SessionEventKind::ProviderTextDeltaRecorded
+        );
+        assert_eq!(
+            events[4].event_kind,
+            SessionEventKind::ProviderToolCallRequested
+        );
+        assert_eq!(events[5].event_kind, SessionEventKind::ToolCallRequested);
+        assert_eq!(events[5].payload["runtime_step_tool_executor"], "injected");
+        assert_eq!(events[6].event_kind, SessionEventKind::TurnCompleted);
 
         remove_file(control_path).ok();
         remove_file(session_path).ok();
