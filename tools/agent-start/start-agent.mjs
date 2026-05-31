@@ -741,7 +741,8 @@ function agentTuiMcpFabricAccessGate(siteRoot) {
       'tool_call_evidence_contract',
     ],
     site_mcp_fabric: join(siteRoot, '.ai', 'mcp'),
-    current_evidence: 'Rust MCP config parsing, policy-bound visibility, JSON-RPC tools/call framing, supervised stdio execution, timeout recovery, provider tool-call bridge, and runtime-config executor construction are implemented and tested.',
+    mcp_config_path_policy: 'inside_site_mcp_fabric_without_parent_traversal',
+    current_evidence: 'Rust MCP config parsing, policy-bound visibility, config path containment without parent traversal, JSON-RPC tools/call framing, supervised stdio execution, timeout recovery, provider tool-call bridge, and runtime-config executor construction are implemented and tested.',
     reason: 'Production smoke step still withholds Site MCP tool exposure until live Site MCP execution is admitted for the terminal runtime slice.',
   };
 }

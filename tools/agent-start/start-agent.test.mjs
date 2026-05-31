@@ -482,6 +482,8 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
     'tool_call_evidence_contract',
   ]);
   assert.equal(result.agent_tui_launch.mcp_fabric_access.site_mcp_fabric, path.join(siteRoot, '.ai', 'mcp'));
+  assert.equal(result.agent_tui_launch.mcp_fabric_access.mcp_config_path_policy, 'inside_site_mcp_fabric_without_parent_traversal');
+  assert.match(result.agent_tui_launch.mcp_fabric_access.current_evidence, /config path containment without parent traversal/);
   assert.match(result.agent_tui_launch.mcp_fabric_access.current_evidence, /runtime-config executor construction/);
   assert.match(result.agent_tui_launch.mcp_fabric_access.reason, /withholds Site MCP tool exposure/);
   assert.equal(result.agent_tui_launch.site_rollout_acceptance.schema, 'narada.agent_tui.site_rollout_acceptance.v0');
