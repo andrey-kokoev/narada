@@ -1,4 +1,37 @@
 use std::collections::BTreeMap;
+use std::sync::OnceLock;
+
+use serde::Deserialize;
+
+const PROVIDER_ADAPTER_CONTRACT_JSON: &str = include_str!("../contracts/provider-adapters.json");
+
+#[derive(Debug, Deserialize)]
+struct ProviderRuntimeContract {
+    provider_execution_env_var: String,
+}
+
+fn provider_runtime_contract() -> &'static ProviderRuntimeContract {
+    static CONTRACT: OnceLock<ProviderRuntimeContract> = OnceLock::new();
+    CONTRACT.get_or_init(|| {
+        parse_provider_runtime_contract(PROVIDER_ADAPTER_CONTRACT_JSON)
+            .expect("agent-tui provider runtime contract is valid")
+    })
+}
+
+fn provider_execution_env_var() -> &'static str {
+    provider_runtime_contract()
+        .provider_execution_env_var
+        .as_str()
+}
+
+fn parse_provider_runtime_contract(json: &str) -> Result<ProviderRuntimeContract, String> {
+    let contract: ProviderRuntimeContract = serde_json::from_str(json)
+        .map_err(|error| format!("provider_runtime_contract_parse_failed:{error}"))?;
+    if contract.provider_execution_env_var.trim() != "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION" {
+        return Err("provider_runtime_contract_invalid:provider_execution_env_var".to_string());
+    }
+    Ok(contract)
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProviderRuntimeAdmissionStatus {
@@ -40,7 +73,7 @@ impl ProviderRuntimeConfig {
     }
 
     pub fn from_env_map(env: &BTreeMap<String, String>) -> Self {
-        if !env_flag_enabled(env.get("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION")) {
+        if !env_flag_enabled(env.get(provider_execution_env_var())) {
             return Self::disabled();
         }
 
@@ -117,6 +150,17 @@ mod tests {
     }
 
     #[test]
+    fn provider_runtime_contract_rejects_invalid_execution_env_var() {
+        assert_eq!(
+            parse_provider_runtime_contract(
+                r#"{"schema":"narada.agent_tui.provider_adapter_contract.v0","provider_execution_env_var":"NARADA_AGENT_TUI_PROVIDER"}"#,
+            )
+            .unwrap_err(),
+            "provider_runtime_contract_invalid:provider_execution_env_var"
+        );
+    }
+
+    #[test]
     fn provider_runtime_is_disabled_without_explicit_admission_flag() {
         let config = ProviderRuntimeConfig::from_env_map(&env(&[
             ("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription"),
@@ -132,7 +176,7 @@ mod tests {
     #[test]
     fn provider_runtime_requires_provider_and_model_when_enabled() {
         let missing_provider = ProviderRuntimeConfig::from_env_map(&env(&[
-            ("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true"),
+            (provider_execution_env_var(), "true"),
             ("NARADA_AI_MODEL", "gpt-5.5"),
         ]));
         assert_eq!(
@@ -145,7 +189,7 @@ mod tests {
         );
 
         let missing_model = ProviderRuntimeConfig::from_env_map(&env(&[
-            ("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true"),
+            (provider_execution_env_var(), "true"),
             ("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription"),
         ]));
         assert_eq!(
@@ -161,7 +205,7 @@ mod tests {
     #[test]
     fn provider_runtime_rejects_unknown_provider() {
         let config = ProviderRuntimeConfig::from_env_map(&env(&[
-            ("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true"),
+            (provider_execution_env_var(), "true"),
             ("NARADA_INTELLIGENCE_PROVIDER", "unknown-provider"),
             ("NARADA_AI_MODEL", "gpt-5.5"),
         ]));
@@ -176,7 +220,7 @@ mod tests {
     #[test]
     fn provider_runtime_configures_explicit_provider_model_without_admitting_execution() {
         let config = ProviderRuntimeConfig::from_env_map(&env(&[
-            ("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "yes"),
+            (provider_execution_env_var(), "yes"),
             ("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription"),
             ("NARADA_AI_MODEL", "gpt-5.5"),
             ("NARADA_AI_THINKING", "medium"),

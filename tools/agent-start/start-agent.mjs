@@ -67,17 +67,24 @@ export function parseAgentTuiMcpRuntimeContract(jsonText) {
   } catch (error) {
     throw new Error(`mcp_runtime_contract_parse_failed:${error.message}`);
   }
+  if (contract?.mcp_fabric_env_var !== 'NARADA_AGENT_TUI_ENABLE_MCP_FABRIC') {
+    throw new Error('mcp_runtime_contract_invalid:mcp_fabric_env_var');
+  }
   if (contract?.mcp_config_path_policy !== 'inside_site_mcp_fabric_without_parent_traversal') {
     throw new Error('mcp_runtime_contract_invalid:mcp_config_path_policy');
   }
   return contract;
 }
+
 export function parseAgentTuiProviderAdapterContract(jsonText) {
   let contract;
   try {
     contract = JSON.parse(jsonText);
   } catch (error) {
     throw new Error(`provider_adapter_contract_parse_failed:${error.message}`);
+  }
+  if (contract?.provider_execution_env_var !== 'NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION') {
+    throw new Error('provider_adapter_contract_invalid:provider_execution_env_var');
   }
   if (contract?.scripted_provider_adapter_kind !== 'scripted_provider_adapter') {
     throw new Error('provider_adapter_contract_invalid:scripted_provider_adapter_kind');
@@ -771,7 +778,7 @@ function agentTuiProviderExecutionGate() {
     adapter_contract: 'implemented_but_not_admitted_for_production_runtime_slice',
     dispatch_authority: 'withheld',
     environment_gate: {
-      variable: 'NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION',
+      variable: AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.provider_execution_env_var,
       value: 'false',
       operator_override_admitted: false,
     },
@@ -796,7 +803,7 @@ function agentTuiMcpFabricAccessGate(siteRoot) {
     client_contract: 'implemented_but_not_admitted_for_production_runtime_slice',
     tool_visibility_authority: 'withheld',
     environment_gate: {
-      variable: 'NARADA_AGENT_TUI_ENABLE_MCP_FABRIC',
+      variable: AGENT_TUI_MCP_RUNTIME_CONTRACT.mcp_fabric_env_var,
       value: 'false',
       operator_override_admitted: false,
     },

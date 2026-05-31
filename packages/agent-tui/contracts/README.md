@@ -6,8 +6,8 @@ These files are authoritative where launcher metadata and Rust runtime evidence 
 
 ## Files
 
-- `mcp-runtime.json`: MCP runtime config path policy used by Rust MCP runtime config and `agent-start` MCP launch metadata.
-- `provider-adapters.json`: provider adapter kind names and production implementation posture used by Rust provider adapter admission and `agent-start` provider launch metadata.
+- `mcp-runtime.json`: MCP fabric environment gate and config path policy used by Rust MCP runtime config and `agent-start` MCP launch metadata.
+- `provider-adapters.json`: provider execution environment gate, provider adapter kind names, and production implementation posture used by Rust provider runtime/admission and `agent-start` provider launch metadata.
 - `terminal-runtime.json`: terminal rendering environment gate and required interactive mode used by Rust terminal runtime config and `agent-start` terminal launch metadata.
 
 ## Rules

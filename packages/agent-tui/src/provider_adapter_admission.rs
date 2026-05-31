@@ -41,6 +41,7 @@ const PROVIDER_ADAPTER_CONTRACT_JSON: &str = include_str!("../contracts/provider
 
 #[derive(Debug, Deserialize)]
 struct ProviderAdapterContract {
+    provider_execution_env_var: String,
     scripted_provider_adapter_kind: String,
     production_provider_adapter_kind: String,
     production_provider_adapter_implemented: bool,
@@ -69,6 +70,9 @@ pub fn production_provider_adapter_kind() -> &'static str {
 fn parse_provider_adapter_contract(json: &str) -> Result<ProviderAdapterContract, String> {
     let contract: ProviderAdapterContract = serde_json::from_str(json)
         .map_err(|error| format!("provider_adapter_contract_parse_failed:{error}"))?;
+    if contract.provider_execution_env_var.trim() != "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION" {
+        return Err("provider_adapter_contract_invalid:provider_execution_env_var".to_string());
+    }
     if contract.scripted_provider_adapter_kind.trim() != "scripted_provider_adapter" {
         return Err("provider_adapter_contract_invalid:scripted_provider_adapter_kind".to_string());
     }
@@ -220,13 +224,12 @@ mod tests {
         );
         assert_eq!(
             parse_provider_adapter_contract(
-                r#"{"schema":"narada.agent_tui.provider_adapter_contract.v0","scripted_provider_adapter_kind":"scripted_provider_adapter","production_provider_adapter_kind":"codex_subscription_adapter","production_provider_adapter_implemented":true}"#
+                r#"{"schema":"narada.agent_tui.provider_adapter_contract.v0","provider_execution_env_var":"NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION","scripted_provider_adapter_kind":"scripted_provider_adapter","production_provider_adapter_kind":"codex_subscription_adapter","production_provider_adapter_implemented":true}"#,
             )
             .unwrap_err(),
             "provider_adapter_contract_invalid:production_provider_adapter_implemented"
         );
     }
-
     #[test]
     fn parses_known_provider_adapter_kind() {
         let scripted = ProviderAdapterKind::parse(" scripted_provider_adapter ")

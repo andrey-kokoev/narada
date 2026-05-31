@@ -49,7 +49,7 @@ impl McpRuntimeConfig {
         env: &BTreeMap<String, String>,
         config_readiness: impl Fn(&str) -> Result<(), String>,
     ) -> Self {
-        if !env_flag_enabled(env.get("NARADA_AGENT_TUI_ENABLE_MCP_FABRIC")) {
+        if !env_flag_enabled(env.get(mcp_fabric_env_var())) {
             return Self::disabled();
         }
 
@@ -96,23 +96,32 @@ const MCP_RUNTIME_CONTRACT_JSON: &str = include_str!("../contracts/mcp-runtime.j
 
 #[derive(Debug, Deserialize)]
 struct McpRuntimeContract {
+    mcp_fabric_env_var: String,
     mcp_config_path_policy: String,
 }
 
+pub fn mcp_fabric_env_var() -> &'static str {
+    mcp_runtime_contract().mcp_fabric_env_var.as_str()
+}
+
 pub fn config_path_policy() -> &'static str {
+    mcp_runtime_contract().mcp_config_path_policy.as_str()
+}
+
+fn mcp_runtime_contract() -> &'static McpRuntimeContract {
     static CONTRACT: OnceLock<McpRuntimeContract> = OnceLock::new();
-    CONTRACT
-        .get_or_init(|| {
-            parse_mcp_runtime_contract(MCP_RUNTIME_CONTRACT_JSON)
-                .expect("agent-tui MCP runtime contract is valid")
-        })
-        .mcp_config_path_policy
-        .as_str()
+    CONTRACT.get_or_init(|| {
+        parse_mcp_runtime_contract(MCP_RUNTIME_CONTRACT_JSON)
+            .expect("agent-tui MCP runtime contract is valid")
+    })
 }
 
 fn parse_mcp_runtime_contract(json: &str) -> Result<McpRuntimeContract, String> {
     let contract: McpRuntimeContract = serde_json::from_str(json)
         .map_err(|error| format!("mcp_runtime_contract_parse_failed:{error}"))?;
+    if contract.mcp_fabric_env_var.trim() != "NARADA_AGENT_TUI_ENABLE_MCP_FABRIC" {
+        return Err("mcp_runtime_contract_invalid:mcp_fabric_env_var".to_string());
+    }
     if contract.mcp_config_path_policy.trim() != "inside_site_mcp_fabric_without_parent_traversal" {
         return Err("mcp_runtime_contract_invalid:mcp_config_path_policy".to_string());
     }
@@ -182,7 +191,7 @@ mod tests {
     fn mcp_runtime_contract_rejects_wrong_path_policy() {
         assert_eq!(
             parse_mcp_runtime_contract(
-                r#"{"schema":"narada.agent_tui.mcp_runtime_contract.v0","mcp_config_path_policy":"prefix_only"}"#
+                r#"{"schema":"narada.agent_tui.mcp_runtime_contract.v0","mcp_fabric_env_var":"NARADA_AGENT_TUI_ENABLE_MCP_FABRIC","mcp_config_path_policy":"prefix_only"}"#,
             )
             .unwrap_err(),
             "mcp_runtime_contract_invalid:mcp_config_path_policy"
@@ -215,7 +224,7 @@ mod tests {
     #[test]
     fn mcp_runtime_requires_config_and_fabric_when_enabled() {
         let missing_config = McpRuntimeConfig::from_env_map(&env(&[
-            ("NARADA_AGENT_TUI_ENABLE_MCP_FABRIC", "true"),
+            (mcp_fabric_env_var(), "true"),
             ("NARADA_SITE_MCP_FABRIC", "D:/site/.ai/mcp"),
         ]));
         assert_eq!(missing_config.status, McpRuntimeAdmissionStatus::Refused);
@@ -225,7 +234,7 @@ mod tests {
         );
 
         let missing_fabric = McpRuntimeConfig::from_env_map(&env(&[
-            ("NARADA_AGENT_TUI_ENABLE_MCP_FABRIC", "true"),
+            (mcp_fabric_env_var(), "true"),
             ("NARADA_AGENT_TUI_MCP_CONFIG", "D:/site/.ai/mcp/config.json"),
         ]));
         assert_eq!(missing_fabric.status, McpRuntimeAdmissionStatus::Refused);
@@ -238,7 +247,7 @@ mod tests {
     #[test]
     fn mcp_runtime_refuses_config_outside_site_mcp_fabric() {
         let config = McpRuntimeConfig::from_env_map(&env(&[
-            ("NARADA_AGENT_TUI_ENABLE_MCP_FABRIC", "true"),
+            (mcp_fabric_env_var(), "true"),
             (
                 "NARADA_AGENT_TUI_MCP_CONFIG",
                 "D:/other/.ai/mcp/config.json",
@@ -257,7 +266,7 @@ mod tests {
     #[test]
     fn mcp_runtime_refuses_parent_traversal_inside_site_mcp_fabric_prefix() {
         let config = McpRuntimeConfig::from_env_map(&env(&[
-            ("NARADA_AGENT_TUI_ENABLE_MCP_FABRIC", "true"),
+            (mcp_fabric_env_var(), "true"),
             (
                 "NARADA_AGENT_TUI_MCP_CONFIG",
                 "D:/site/.ai/mcp/../outside/config.json",
@@ -277,7 +286,7 @@ mod tests {
     fn mcp_runtime_refuses_unreadable_config_when_readiness_is_checked() {
         let config = McpRuntimeConfig::from_env_map_with_config_readiness(
             &env(&[
-                ("NARADA_AGENT_TUI_ENABLE_MCP_FABRIC", "true"),
+                (mcp_fabric_env_var(), "true"),
                 ("NARADA_AGENT_TUI_MCP_CONFIG", "D:/site/.ai/mcp/config.json"),
                 ("NARADA_SITE_MCP_FABRIC", "D:/site/.ai/mcp"),
             ]),
@@ -295,7 +304,7 @@ mod tests {
     #[test]
     fn mcp_runtime_configures_explicit_config_and_fabric() {
         let config = McpRuntimeConfig::from_env_map(&env(&[
-            ("NARADA_AGENT_TUI_ENABLE_MCP_FABRIC", "yes"),
+            (mcp_fabric_env_var(), "yes"),
             ("NARADA_AGENT_TUI_MCP_CONFIG", "D:/site/.ai/mcp/config.json"),
             ("NARADA_SITE_MCP_FABRIC", "D:/site/.ai/mcp"),
         ]));

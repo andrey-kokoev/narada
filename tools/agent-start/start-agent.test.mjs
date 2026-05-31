@@ -45,6 +45,7 @@ test('agent-tui provider adapter contract parser rejects invalid contracts', () 
   assert.throws(
     () => parseAgentTuiProviderAdapterContract(JSON.stringify({
       schema: 'narada.agent_tui.provider_adapter_contract.v0',
+      provider_execution_env_var: 'NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION',
       scripted_provider_adapter_kind: 'scripted_provider_adapter',
       production_provider_adapter_kind: 'codex_subscription_adapter',
       production_provider_adapter_implemented: true,
@@ -61,6 +62,7 @@ test('agent-tui MCP runtime contract parser rejects invalid contracts', () => {
   assert.throws(
     () => parseAgentTuiMcpRuntimeContract(JSON.stringify({
       schema: 'narada.agent_tui.mcp_runtime_contract.v0',
+      mcp_fabric_env_var: 'NARADA_AGENT_TUI_ENABLE_MCP_FABRIC',
       mcp_config_path_policy: 'inside_prefix_only',
     })),
     /mcp_runtime_contract_invalid:mcp_config_path_policy/,
@@ -508,7 +510,7 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   assert.equal(result.agent_tui_launch.provider_execution.adapter_contract, 'implemented_but_not_admitted_for_production_runtime_slice');
   assert.equal(result.agent_tui_launch.provider_execution.dispatch_authority, 'withheld');
   assert.deepEqual(result.agent_tui_launch.provider_execution.environment_gate, {
-    variable: 'NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION',
+    variable: AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.provider_execution_env_var,
     value: 'false',
     operator_override_admitted: false,
   });
@@ -531,7 +533,7 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   assert.equal(result.agent_tui_launch.mcp_fabric_access.client_contract, 'implemented_but_not_admitted_for_production_runtime_slice');
   assert.equal(result.agent_tui_launch.mcp_fabric_access.tool_visibility_authority, 'withheld');
   assert.deepEqual(result.agent_tui_launch.mcp_fabric_access.environment_gate, {
-    variable: 'NARADA_AGENT_TUI_ENABLE_MCP_FABRIC',
+    variable: AGENT_TUI_MCP_RUNTIME_CONTRACT.mcp_fabric_env_var,
     value: 'false',
     operator_override_admitted: false,
   });
