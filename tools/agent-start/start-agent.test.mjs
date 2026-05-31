@@ -424,6 +424,7 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'launch_metadata_runtime_slice').status, 'satisfied');
   assert.match(result.agent_tui_launch.promotion_gate.reason, /bounded non-terminal smoke/);
   assert.match(result.agent_tui_launch.promotion_gate.reason, /Rust tests/);
+  assert.match(result.agent_tui_launch.promotion_gate.reason, /explicit terminal-mode promotion/);
   assert.equal(result.agent_tui_launch.terminal_rendering.status, 'not_admitted_for_runtime_slice');
   assert.equal(result.agent_tui_launch.terminal_rendering.admitted, false);
   assert.deepEqual(result.agent_tui_launch.terminal_rendering.gated_modes, ['--render-once', '--interactive-loop']);

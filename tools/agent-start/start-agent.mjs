@@ -662,7 +662,7 @@ function agentTuiPromotionGate() {
   return {
     status: 'not_satisfied',
     checklist: agentTuiPromotionChecklist(),
-    reason: 'Production launch remains bounded non-terminal smoke until Rust tests, terminal-frame acceptance, provider admission, and MCP fabric admission pass.',
+    reason: 'Production launch remains bounded non-terminal smoke until Rust tests, terminal-frame acceptance, provider admission, MCP fabric admission, and explicit terminal-mode promotion pass.',
   };
 }
 function agentTuiTerminalRenderingEnvironmentGate() {
