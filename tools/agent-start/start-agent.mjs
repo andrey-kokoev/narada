@@ -534,8 +534,8 @@ function agentTuiPromotionChecklist() {
     {
       id: 'provider_adapter_admission',
       status: 'partial',
-      required_evidence: 'real provider adapter, provider boundary evidence, streaming output, and tool-call boundary contracts',
-      current_evidence: 'Provider boundary records disabled/refused/configured posture, centralized adapter construction preserves withheld dispatch, ordered text deltas project as one agent message, and provider-origin tool-call bridge exists; real provider adapter remains withheld',
+      required_evidence: 'production provider adapter implementation/admission, provider boundary evidence, streaming output, and tool-call boundary contracts',
+      current_evidence: 'Provider boundary records disabled/refused/configured posture, centralized adapter construction preserves withheld dispatch, ordered text deltas project as one agent message, and provider-origin tool-call bridge exists; production provider adapters remain unimplemented and unadmitted',
     },
     {
       id: 'mcp_fabric_client_admission',
@@ -713,7 +713,7 @@ function agentTuiProviderExecutionGate() {
     },
     promotion_gate: 'agent_tui_provider_adapter_promotion_gate',
     required_before_admission: [
-      'real_provider_adapter_contract',
+      'production_provider_adapter_implementation_and_admission',
       'provider_boundary_evidence_contract',
       'streaming_turn_output_contract',
       'tool_call_boundary_contract',

@@ -454,7 +454,7 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   assert.equal(result.agent_tui_launch.provider_execution.promotion_gate, 'agent_tui_provider_adapter_promotion_gate');
   assert.match(result.agent_tui_launch.provider_execution.current_evidence, /provider adapter factory/);
   assert.deepEqual(result.agent_tui_launch.provider_execution.required_before_admission, [
-    'real_provider_adapter_contract',
+    'production_provider_adapter_implementation_and_admission',
     'provider_boundary_evidence_contract',
     'streaming_turn_output_contract',
     'tool_call_boundary_contract',
