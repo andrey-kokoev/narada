@@ -225,6 +225,7 @@ fn print_scaffold(args: &Args) {
         "mcp_fabric_access_enabled: {}",
         mcp_config.mcp_fabric_access_enabled
     );
+    println!("mcp_config_path_policy: {}", mcp_config.config_path_policy);
     if let Some(config_path) = &mcp_config.config_path {
         println!("mcp_config: {config_path}");
     }

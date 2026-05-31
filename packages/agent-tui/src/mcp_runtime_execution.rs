@@ -150,6 +150,7 @@ impl<E: McpRuntimeToolExecutor> McpRuntimeExecutionBridge<E> {
         event.payload["mcp_runtime_status"] = json!(self.runtime_config.status.as_str());
         event.payload["mcp_fabric_access_enabled"] =
             json!(self.runtime_config.mcp_fabric_access_enabled);
+        event.payload["mcp_config_path_policy"] = json!(self.runtime_config.config_path_policy);
         event.payload["mcp_config"] = json!(self.runtime_config.config_path.clone());
         event.payload["site_mcp_fabric"] = json!(self.runtime_config.site_mcp_fabric.clone());
         event.payload["mcp_refusal_reason"] = json!(self.runtime_config.refusal_reason.clone());
@@ -180,6 +181,7 @@ impl<E: McpRuntimeToolExecutor> McpRuntimeExecutionBridge<E> {
                 "mcp_runtime_execution": "supervised_stdio",
                 "mcp_runtime_status": self.runtime_config.status.as_str(),
                 "mcp_fabric_access_enabled": self.runtime_config.mcp_fabric_access_enabled,
+                "mcp_config_path_policy": self.runtime_config.config_path_policy,
                 "mcp_config": self.runtime_config.config_path,
                 "site_mcp_fabric": self.runtime_config.site_mcp_fabric,
                 "mcp_refusal_reason": self.runtime_config.refusal_reason,
@@ -354,9 +356,17 @@ mod tests {
         assert_eq!(events[0].event_kind, SessionEventKind::ToolCallRequested);
         assert_eq!(events[0].payload["mcp_runtime_status"], "disabled");
         assert_eq!(events[0].payload["mcp_fabric_access_enabled"], false);
+        assert_eq!(
+            events[0].payload["mcp_config_path_policy"],
+            crate::mcp_runtime_config::CONFIG_PATH_POLICY
+        );
         assert_eq!(events[1].event_kind, SessionEventKind::ToolResultReceived);
         assert_eq!(events[1].payload["mcp_runtime_status"], "disabled");
         assert_eq!(events[1].payload["mcp_fabric_access_enabled"], false);
+        assert_eq!(
+            events[1].payload["mcp_config_path_policy"],
+            crate::mcp_runtime_config::CONFIG_PATH_POLICY
+        );
         let _ = remove_file(path);
     }
 
@@ -383,6 +393,10 @@ mod tests {
         assert_eq!(events[0].payload["mcp_runtime_status"], "configured");
         assert_eq!(events[0].payload["mcp_fabric_access_enabled"], true);
         assert_eq!(
+            events[0].payload["mcp_config_path_policy"],
+            crate::mcp_runtime_config::CONFIG_PATH_POLICY
+        );
+        assert_eq!(
             events[0].payload["mcp_config"],
             "D:/code/narada.sonar/.ai/mcp/agent-tui.json"
         );
@@ -392,6 +406,10 @@ mod tests {
         );
         assert_eq!(events[1].payload["mcp_runtime_status"], "configured");
         assert_eq!(events[1].payload["mcp_fabric_access_enabled"], true);
+        assert_eq!(
+            events[1].payload["mcp_config_path_policy"],
+            crate::mcp_runtime_config::CONFIG_PATH_POLICY
+        );
         let _ = remove_file(path);
     }
 

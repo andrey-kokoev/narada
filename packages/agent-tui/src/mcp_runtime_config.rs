@@ -21,6 +21,7 @@ impl McpRuntimeAdmissionStatus {
 pub struct McpRuntimeConfig {
     pub status: McpRuntimeAdmissionStatus,
     pub mcp_fabric_access_enabled: bool,
+    pub config_path_policy: &'static str,
     pub config_path: Option<String>,
     pub site_mcp_fabric: Option<String>,
     pub refusal_reason: Option<String>,
@@ -31,6 +32,7 @@ impl McpRuntimeConfig {
         Self {
             status: McpRuntimeAdmissionStatus::Disabled,
             mcp_fabric_access_enabled: false,
+            config_path_policy: CONFIG_PATH_POLICY,
             config_path: None,
             site_mcp_fabric: None,
             refusal_reason: None,
@@ -69,6 +71,7 @@ impl McpRuntimeConfig {
         Self {
             status: McpRuntimeAdmissionStatus::Configured,
             mcp_fabric_access_enabled: true,
+            config_path_policy: CONFIG_PATH_POLICY,
             config_path: Some(config_path),
             site_mcp_fabric: Some(site_mcp_fabric),
             refusal_reason: None,
@@ -79,12 +82,15 @@ impl McpRuntimeConfig {
         Self {
             status: McpRuntimeAdmissionStatus::Refused,
             mcp_fabric_access_enabled: false,
+            config_path_policy: CONFIG_PATH_POLICY,
             config_path: None,
             site_mcp_fabric: None,
             refusal_reason: Some(reason.into()),
         }
     }
 }
+
+pub const CONFIG_PATH_POLICY: &str = "inside_site_mcp_fabric_without_parent_traversal";
 
 fn env_flag_enabled(value: Option<&String>) -> bool {
     matches!(

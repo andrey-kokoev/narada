@@ -356,6 +356,7 @@ mod tests {
         let mcp_config = McpRuntimeConfig {
             status: McpRuntimeAdmissionStatus::Configured,
             mcp_fabric_access_enabled: true,
+            config_path_policy: crate::mcp_runtime_config::CONFIG_PATH_POLICY,
             config_path: Some(config_path.display().to_string()),
             site_mcp_fabric: Some("D:/code/narada.sonar/.ai/mcp".to_string()),
             refusal_reason: None,
