@@ -55,7 +55,7 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - MCP runtime config is explicit: Site MCP fabric remains disabled unless `NARADA_AGENT_TUI_ENABLE_MCP_FABRIC` is enabled; MCP config/fabric env reaches `configured` posture, while production exposure remains controlled by launch admission gates.
 - Agent-start launch env forces `NARADA_AGENT_TUI_ENABLE_MCP_FABRIC=false` for the bounded runtime slice and records that MCP environment gate in launch metadata.
 - Transcript projection and store for operator/system input, system directive hold/release, provider output placeholders, provider tool-call placeholders, and terminal turn status.
-- Layout, status, composer, transcript, and aggregate app view models, including one runtime posture bundle for disabled/refused/configured-not-implemented provider posture plus disabled/refused/configured MCP and terminal-rendering posture in status output.
+- Layout, status, composer, transcript, and aggregate app view models, including one runtime posture bundle for disabled/refused/configured-not-implemented provider posture plus disabled/refused/configured MCP and terminal-rendering posture in status output; process env is snapshotted once before deriving the combined posture.
 - Ratatui renderer for transcript/status/composer regions.
 - Renderer acceptance verifies nonblank buffer rendering, core region text, stable layout rectangles, and preserved composer draft in compact frames.
 - Terminal lifecycle state guard with clean leave semantics after normal exit and render-loop error.
