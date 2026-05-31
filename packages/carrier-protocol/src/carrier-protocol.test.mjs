@@ -63,7 +63,14 @@ assert.equal(CARRIER_PROTOCOL_SCHEMAS.input_event.schema, INPUT_EVENT_SCHEMA);
 assert.deepEqual(validateInputEvent(readFixture('input-event.json')), []);
 assert.deepEqual(validateControlInputRecord(readFixture('control-input-event.json')), []);
 assert.deepEqual(validateSessionEvent(readFixture('session-event.json')), []);
-assert.deepEqual(validateSessionEvent(readFixture('turn-terminal-session-event.json')), []);
+const turnTerminalFixture = readFixture('turn-terminal-session-event.json');
+assert.deepEqual(validateSessionEvent(turnTerminalFixture), []);
+assert.deepEqual(turnTerminalFixture.payload, createTurnTerminalPayload({
+  turn_id: 'turn_fixture_1',
+  terminal_status: 'completed_without_provider',
+  provider_request_status: 'recorded_not_dispatched',
+  provider_execution_enabled: false,
+}));
 assert.deepEqual(validatePayloadRef(readFixture('payload-ref.json')), []);
 assert.deepEqual(validatePayloadPolicy(readFixture('payload-policy.json')), []);
 

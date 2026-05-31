@@ -614,10 +614,16 @@ mod tests {
         ))
         .expect("turn terminal session fixture parses");
         assert_eq!(event.event_kind, SessionEventKind::TurnCompleted);
-        assert_eq!(event.payload["schema"], TURN_TERMINAL_PAYLOAD_SCHEMA);
         assert_eq!(
-            event.payload["terminal_status"],
-            "completed_without_provider"
+            event.payload,
+            create_turn_terminal_payload(
+                "turn_fixture_1",
+                None,
+                "recorded_not_dispatched",
+                "completed_without_provider",
+                false,
+                None,
+            )
         );
     }
 
