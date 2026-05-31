@@ -1,10 +1,11 @@
 use std::fs::{read_to_string, remove_file, write};
 use std::path::PathBuf;
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 const CONTROL_FIXTURE: &str =
     include_str!("../../carrier-protocol/fixtures/control-input-event.json");
+static TEMP_PATH_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn base_command() -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_narada-agent-tui"));
@@ -35,12 +36,10 @@ fn stdout(command: &mut Command) -> String {
 }
 
 fn temp_path(name: &str) -> PathBuf {
-    let unique = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("clock works")
-        .as_nanos();
+    let unique = TEMP_PATH_COUNTER.fetch_add(1, Ordering::Relaxed);
     std::env::temp_dir().join(format!(
-        "narada-agent-tui-provider-runtime-{name}-{unique}.jsonl"
+        "narada-agent-tui-provider-runtime-{name}-{}-{unique}.jsonl",
+        std::process::id()
     ))
 }
 

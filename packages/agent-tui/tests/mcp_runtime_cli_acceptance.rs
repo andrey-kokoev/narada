@@ -1,7 +1,9 @@
 use std::fs::{create_dir_all, remove_dir_all, write};
 use std::path::PathBuf;
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static TEMP_FABRIC_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn base_command() -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_narada-agent-tui"));
@@ -29,11 +31,11 @@ fn stdout(command: &mut Command) -> String {
 }
 
 fn temp_mcp_fabric() -> PathBuf {
-    let unique = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("clock works")
-        .as_nanos();
-    let fabric = std::env::temp_dir().join(format!("narada-agent-tui-mcp-{unique}"));
+    let unique = TEMP_FABRIC_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let fabric = std::env::temp_dir().join(format!(
+        "narada-agent-tui-mcp-{}-{unique}",
+        std::process::id()
+    ));
     create_dir_all(&fabric).expect("create temp fabric");
     fabric
 }
