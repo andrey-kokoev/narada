@@ -668,7 +668,7 @@ function agentTuiPromotionChecklist() {
       id: 'provider_adapter_admission',
       status: 'partial',
       required_evidence: 'production provider adapter implementation/admission, provider boundary evidence, streaming output, and tool-call boundary contracts',
-      current_evidence: 'Provider boundary records disabled/refused/configured posture, centralized adapter construction preserves withheld dispatch, provider request evidence records explicit streaming contract status, scripted_provider_adapter is separated from unimplemented production adapters, ordered text deltas project as one agent message, and provider-origin tool-call bridge exists; production provider adapters remain unimplemented and unadmitted',
+      current_evidence: `Provider boundary records disabled/refused/configured posture, centralized adapter construction preserves withheld dispatch, provider request evidence records explicit streaming contract status, ${AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.scripted_provider_adapter_kind} is separated from unimplemented production adapters, ordered text deltas project as one agent message, and provider-origin tool-call bridge exists; production provider adapters remain unimplemented and unadmitted`,
     },
     {
       id: 'mcp_fabric_client_admission',
@@ -854,7 +854,7 @@ function agentTuiProviderExecutionGate() {
     scripted_provider_adapter_kind: AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.scripted_provider_adapter_kind,
     production_provider_adapter_kind: AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.production_provider_adapter_kind,
     production_provider_adapter_implemented: AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.production_provider_adapter_implemented,
-    current_evidence: 'Runtime construction uses the provider adapter factory, provider request evidence records explicit streaming contract status, and scripted_provider_adapter is separated from unimplemented production adapters through packages/agent-tui/contracts/provider-adapters.json; the current factory returns a recording stub until a production adapter is implemented and admitted.',
+    current_evidence: `Runtime construction uses the provider adapter factory, provider request evidence records explicit streaming contract status, and ${AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.scripted_provider_adapter_kind} is separated from unimplemented production adapters through packages/agent-tui/contracts/provider-adapters.json; the current factory returns a recording stub until a production adapter is implemented and admitted.`,
     reason: 'Smoke step records provider boundary evidence without dispatching provider work.',
   };
 }
