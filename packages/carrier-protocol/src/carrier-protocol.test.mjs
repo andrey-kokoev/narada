@@ -23,6 +23,7 @@ import {
   createPayloadPolicy,
   createQueueLifecycleSessionEvent,
   createSessionEvent,
+  createTurnTerminalPayload,
   isTerminalTurnState,
   normalizeControlInputRecord,
   normalizeInputEvent,
@@ -180,16 +181,19 @@ assert.equal(sessionEvent.schema, SESSION_EVENT_SCHEMA);
 assert.doesNotThrow(() => assertValidSessionEvent(sessionEvent));
 assert.match(thrownMessage(() => createSessionEvent({ ...sessionEvent, event_kind: 'unknown' })), /invalid_event_kind/);
 assert.match(thrownMessage(() => createSessionEvent({ ...sessionBase, event_kind: 'input_admitted_to_turn', payload: {} })), /payload.missing_required_field:input_event_id/);
+const completedTurnPayload = createTurnTerminalPayload({
+  turn_id: 'turn_test',
+  input_event_id: input.event_id,
+  terminal_status: 'completed_without_provider',
+  provider_request_status: 'recorded_not_dispatched',
+  provider_execution_enabled: false,
+});
+assert.equal(completedTurnPayload.schema, TURN_TERMINAL_PAYLOAD_SCHEMA);
+assert.equal(completedTurnPayload.input_event_id, input.event_id);
 const completedTurn = createSessionEvent({
   ...sessionBase,
   event_kind: 'turn_completed',
-  payload: {
-    schema: TURN_TERMINAL_PAYLOAD_SCHEMA,
-    turn_id: 'turn_test',
-    terminal_status: 'completed_without_provider',
-    provider_request_status: 'recorded_not_dispatched',
-    provider_execution_enabled: false,
-  },
+  payload: completedTurnPayload,
 });
 assert.deepEqual(validateSessionEvent(completedTurn), []);
 assert.match(thrownMessage(() => createSessionEvent({

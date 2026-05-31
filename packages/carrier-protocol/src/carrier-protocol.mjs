@@ -445,6 +445,25 @@ function validateSystemDirectiveReleasedPayload(payload) {
   return errors;
 }
 
+export function createTurnTerminalPayload({
+  turn_id,
+  input_event_id = undefined,
+  provider_request_status,
+  terminal_status,
+  provider_execution_enabled,
+  error_summary = undefined,
+}) {
+  return {
+    schema: TURN_TERMINAL_PAYLOAD_SCHEMA,
+    turn_id,
+    ...(input_event_id === undefined ? {} : { input_event_id }),
+    provider_request_status,
+    terminal_status,
+    provider_execution_enabled,
+    ...(error_summary === undefined ? {} : { error_summary }),
+  };
+}
+
 function validateTurnTerminalPayload(kind, payload) {
   const errors = requireFields(payload, [
     'schema',
