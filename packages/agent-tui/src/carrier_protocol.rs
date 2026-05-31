@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 
 pub const INPUT_EVENT_SCHEMA: &str = "narada.carrier.input_event.v1";
 pub const CONTROL_INPUT_EVENT_SCHEMA: &str = "narada.carrier.control.input_event.v1";
@@ -226,6 +226,30 @@ fn validate_session_event(event: &SessionEvent) -> Result<(), String> {
         return Err("invalid_payload".to_string());
     }
     validate_session_payload(&event.event_kind, &event.payload)
+}
+
+pub fn create_turn_terminal_payload(
+    turn_id: &str,
+    input_event_id: Option<&str>,
+    provider_request_status: &str,
+    terminal_status: &str,
+    provider_execution_enabled: bool,
+    error_summary: Option<&str>,
+) -> Value {
+    let mut payload = json!({
+        "schema": TURN_TERMINAL_PAYLOAD_SCHEMA,
+        "turn_id": turn_id,
+        "provider_request_status": provider_request_status,
+        "terminal_status": terminal_status,
+        "provider_execution_enabled": provider_execution_enabled,
+    });
+    if let Some(input_event_id) = input_event_id {
+        payload["input_event_id"] = json!(input_event_id);
+    }
+    if let Some(error_summary) = error_summary {
+        payload["error_summary"] = json!(error_summary);
+    }
+    payload
 }
 
 fn validate_session_payload(kind: &SessionEventKind, payload: &Value) -> Result<(), String> {
@@ -729,17 +753,18 @@ mod tests {
             })
         )
         .is_ok());
-        assert!(validate_session_payload(
-            &SessionEventKind::TurnCompleted,
-            &json!({
-                "schema": TURN_TERMINAL_PAYLOAD_SCHEMA,
-                "turn_id": "turn_1",
-                "terminal_status": "completed_without_provider",
-                "provider_request_status": "recorded_not_dispatched",
-                "provider_execution_enabled": false
-            })
-        )
-        .is_ok());
+        let terminal_payload = create_turn_terminal_payload(
+            "turn_1",
+            Some("input_1"),
+            "recorded_not_dispatched",
+            "completed_without_provider",
+            false,
+            None,
+        );
+        assert_eq!(terminal_payload["input_event_id"], "input_1");
+        assert!(
+            validate_session_payload(&SessionEventKind::TurnCompleted, &terminal_payload).is_ok()
+        );
         assert_eq!(
             validate_session_payload(
                 &SessionEventKind::TurnCompleted,

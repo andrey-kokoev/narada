@@ -1,5 +1,5 @@
 use crate::carrier_protocol::{
-    InputEvent, SessionEvent, SessionEventKind, SESSION_EVENT_SCHEMA, TURN_TERMINAL_PAYLOAD_SCHEMA,
+    create_turn_terminal_payload, InputEvent, SessionEvent, SessionEventKind, SESSION_EVENT_SCHEMA,
 };
 use crate::input_queue::{InputQueue, SessionEvidenceContext, TurnState};
 use crate::provider_dispatch::{
@@ -196,18 +196,19 @@ impl TurnCoordinator {
         clock: &TurnCoordinatorClock,
     ) -> SessionEvent {
         let (kind, terminal_status) = provider_status_to_turn_terminal(&record.status);
-        let mut payload = json!({
-            "schema": TURN_TERMINAL_PAYLOAD_SCHEMA,
-            "turn_id": turn_id,
-            "input_event_id": input.event_id,
-            "provider_request_status": record.status.as_str(),
-            "terminal_status": terminal_status,
-            "provider_execution_enabled": record.provider_execution_enabled
-        });
-        if kind == SessionEventKind::TurnFailed {
-            payload["error_summary"] = json!(terminal_status);
-        }
-        self.session_event(kind, clock, payload)
+        let error_summary = (kind == SessionEventKind::TurnFailed).then_some(terminal_status);
+        self.session_event(
+            kind,
+            clock,
+            create_turn_terminal_payload(
+                turn_id,
+                Some(&input.event_id),
+                record.status.as_str(),
+                terminal_status,
+                record.provider_execution_enabled,
+                error_summary,
+            ),
+        )
     }
 
     fn session_event(
@@ -266,7 +267,9 @@ fn provider_status_to_turn_terminal(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::carrier_protocol::{parse_input_event, parse_session_event, DeliveryMode};
+    use crate::carrier_protocol::{
+        parse_input_event, parse_session_event, DeliveryMode, TURN_TERMINAL_PAYLOAD_SCHEMA,
+    };
     use crate::provider_adapter_admission::ProviderAdapterKind;
     use crate::provider_dispatch::{
         ProviderDispatchRecord, ProviderOutputRecord, ScriptedProviderAdapter,
