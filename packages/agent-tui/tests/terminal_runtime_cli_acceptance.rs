@@ -1,3 +1,4 @@
+use narada_agent_tui::terminal_runtime_contract::terminal_runtime_contract;
 use std::fs::{remove_file, write};
 use std::path::PathBuf;
 use std::process::Command;
@@ -8,6 +9,7 @@ const CONTROL_FIXTURE: &str =
 static TEMP_PATH_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 fn base_command() -> Command {
+    let contract = terminal_runtime_contract();
     let mut command = Command::new(env!("CARGO_BIN_EXE_narada-agent-tui"));
     command
         .arg("--identity")
@@ -16,9 +18,21 @@ fn base_command() -> Command {
         .arg("carrier_fixture_1")
         .arg("--site-root")
         .arg("D:/code/narada.sonar")
-        .env_remove("NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING")
-        .env_remove("NARADA_AGENT_TUI_TERMINAL_MODE");
+        .env_remove(&contract.terminal_rendering_env_var)
+        .env_remove(&contract.terminal_mode_env_var);
     command
+}
+
+fn enable_terminal_rendering(command: &mut Command) {
+    let contract = terminal_runtime_contract();
+    command.env(&contract.terminal_rendering_env_var, "true");
+}
+
+fn configure_terminal_mode(command: &mut Command, mode: &str) {
+    let contract = terminal_runtime_contract();
+    command
+        .env(&contract.terminal_rendering_env_var, "true")
+        .env(&contract.terminal_mode_env_var, mode);
 }
 
 fn stdout(command: &mut Command) -> String {
@@ -55,7 +69,7 @@ fn terminal_runtime_cli_acceptance_reports_disabled_by_default() {
 #[test]
 fn terminal_runtime_cli_acceptance_reports_refusal_when_enabled_without_mode() {
     let mut command = base_command();
-    command.env("NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING", "true");
+    enable_terminal_rendering(&mut command);
 
     let output = stdout(&mut command);
 
@@ -67,9 +81,7 @@ fn terminal_runtime_cli_acceptance_reports_refusal_when_enabled_without_mode() {
 #[test]
 fn terminal_runtime_cli_acceptance_reports_refusal_for_unsupported_mode() {
     let mut command = base_command();
-    command
-        .env("NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING", "true")
-        .env("NARADA_AGENT_TUI_TERMINAL_MODE", "render_once");
+    configure_terminal_mode(&mut command, "render_once");
 
     let output = stdout(&mut command);
 
@@ -81,9 +93,10 @@ fn terminal_runtime_cli_acceptance_reports_refusal_for_unsupported_mode() {
 #[test]
 fn terminal_runtime_cli_acceptance_reports_configured_interactive_loop() {
     let mut command = base_command();
-    command
-        .env("NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING", "true")
-        .env("NARADA_AGENT_TUI_TERMINAL_MODE", "interactive_loop");
+    configure_terminal_mode(
+        &mut command,
+        terminal_runtime_contract().required_terminal_mode.as_str(),
+    );
 
     let output = stdout(&mut command);
 
