@@ -50,6 +50,23 @@ pub struct ProviderAdapterAdmission {
 }
 
 impl ProviderAdapterAdmission {
+    pub fn try_admit(
+        runtime_config: &ProviderRuntimeConfig,
+        adapter_kind: ProviderAdapterKind,
+    ) -> Result<Self, String> {
+        if runtime_config.status != ProviderRuntimeAdmissionStatus::Configured {
+            return Err("provider_runtime_not_configured".to_string());
+        }
+        Ok(Self {
+            status: ProviderAdapterAdmissionStatus::Admitted,
+            provider: runtime_config.provider.clone(),
+            model: runtime_config.model.clone(),
+            adapter_kind: Some(adapter_kind.as_str().to_string()),
+            provider_execution_enabled: true,
+            refusal_reason: None,
+        })
+    }
+
     pub fn from_runtime_config(
         runtime_config: &ProviderRuntimeConfig,
         adapter_kind: Option<&str>,
@@ -233,6 +250,38 @@ mod tests {
         assert_eq!(
             admission.refusal_reason.as_deref(),
             Some("provider_adapter_not_implemented:codex_subscription_adapter")
+        );
+    }
+
+    #[test]
+    fn admitted_adapter_requires_configured_runtime_and_enables_execution() {
+        let runtime_config = ProviderRuntimeConfig::from_env_map(&env(&[
+            ("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true"),
+            ("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription"),
+            ("NARADA_AI_MODEL", "gpt-5.5"),
+        ]));
+
+        let admission = ProviderAdapterAdmission::try_admit(
+            &runtime_config,
+            ProviderAdapterKind::CodexSubscription,
+        )
+        .expect("configured runtime admits explicit adapter");
+
+        assert_eq!(admission.status, ProviderAdapterAdmissionStatus::Admitted);
+        assert!(admission.provider_execution_enabled);
+        assert_eq!(admission.provider.as_deref(), Some("codex-subscription"));
+        assert_eq!(admission.model.as_deref(), Some("gpt-5.5"));
+        assert_eq!(
+            admission.adapter_kind.as_deref(),
+            Some("codex_subscription_adapter")
+        );
+        assert_eq!(admission.refusal_reason, None);
+
+        let disabled = ProviderRuntimeConfig::disabled();
+        assert_eq!(
+            ProviderAdapterAdmission::try_admit(&disabled, ProviderAdapterKind::CodexSubscription,)
+                .unwrap_err(),
+            "provider_runtime_not_configured"
         );
     }
 }
