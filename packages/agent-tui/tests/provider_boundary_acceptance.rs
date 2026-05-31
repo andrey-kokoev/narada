@@ -1,5 +1,6 @@
 use narada_agent_tui::carrier_protocol::{
-    parse_input_event, parse_session_event, DeliveryMode, SessionEventKind,
+    create_provider_request_payload, parse_input_event, parse_session_event, DeliveryMode,
+    SessionEventKind,
 };
 use narada_agent_tui::input_queue::{InputQueue, SessionEvidenceContext};
 use narada_agent_tui::provider_dispatch::{
@@ -7,7 +8,6 @@ use narada_agent_tui::provider_dispatch::{
 };
 use narada_agent_tui::transcript_store::TranscriptStore;
 use narada_agent_tui::turn_coordinator::{TurnCoordinator, TurnCoordinatorClock};
-use serde_json::json;
 use std::fs::{read_to_string, remove_file};
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -50,12 +50,21 @@ impl ProviderAdapter for StreamingProviderAdapter {
         ProviderDispatchRecord {
             status: ProviderDispatchStatus::Completed,
             provider_execution_enabled: true,
-            payload: json!({
-                "turn_id": turn_id,
-                "input_event_id": input.event_id,
-                "provider_request_status": "completed",
-                "provider_execution_enabled": true
-            }),
+            payload: create_provider_request_payload(
+                turn_id,
+                &input.event_id,
+                "completed",
+                true,
+                "configured",
+                "admitted",
+                Some("scripted".to_string()),
+                Some("codex-subscription".to_string()),
+                Some("gpt-5.5".to_string()),
+                None,
+                true,
+                None,
+                &input.content,
+            ),
             outputs: vec![
                 ProviderOutputRecord::text_delta(turn_id, "Startup ", 1),
                 ProviderOutputRecord::text_delta(turn_id, "sequence ", 2),

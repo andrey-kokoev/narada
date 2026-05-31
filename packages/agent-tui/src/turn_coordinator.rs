@@ -268,7 +268,8 @@ fn provider_status_to_turn_terminal(
 mod tests {
     use super::*;
     use crate::carrier_protocol::{
-        parse_input_event, parse_session_event, DeliveryMode, TURN_TERMINAL_PAYLOAD_SCHEMA,
+        create_provider_request_payload, parse_input_event, parse_session_event, DeliveryMode,
+        TURN_TERMINAL_PAYLOAD_SCHEMA,
     };
     use crate::provider_adapter_admission::ProviderAdapterKind;
     use crate::provider_dispatch::{
@@ -313,12 +314,21 @@ mod tests {
             ProviderDispatchRecord {
                 status: ProviderDispatchStatus::RecordedNotDispatched,
                 provider_execution_enabled: false,
-                payload: json!({
-                    "turn_id": turn_id,
-                    "input_event_id": input.event_id,
-                    "provider_request_status": "test_adapter_recorded",
-                    "provider_execution_enabled": false
-                }),
+                payload: create_provider_request_payload(
+                    turn_id,
+                    &input.event_id,
+                    "test_adapter_recorded",
+                    false,
+                    "configured",
+                    "configured_without_adapter",
+                    None,
+                    None,
+                    None,
+                    None,
+                    false,
+                    Some("test_adapter_recorded".to_string()),
+                    &input.content,
+                ),
                 outputs: Vec::new(),
             }
         }

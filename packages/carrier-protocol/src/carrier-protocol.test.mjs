@@ -8,6 +8,7 @@ import {
   INPUT_EVENT_SCHEMA,
   PAYLOAD_REF_SCHEMA,
   PAYLOAD_POLICY_SCHEMA,
+  PROVIDER_REQUEST_PAYLOAD_SCHEMA,
   SESSION_EVENT_SCHEMA,
   TURN_TERMINAL_PAYLOAD_SCHEMA,
   assertValidControlInputRecord,
@@ -21,6 +22,7 @@ import {
   createInterruptRequestedSessionEvent,
   createPayloadRef,
   createPayloadPolicy,
+  createProviderRequestPayload,
   createQueueLifecycleSessionEvent,
   createSessionEvent,
   createTurnTerminalPayload,
@@ -188,6 +190,31 @@ assert.equal(sessionEvent.schema, SESSION_EVENT_SCHEMA);
 assert.doesNotThrow(() => assertValidSessionEvent(sessionEvent));
 assert.match(thrownMessage(() => createSessionEvent({ ...sessionEvent, event_kind: 'unknown' })), /invalid_event_kind/);
 assert.match(thrownMessage(() => createSessionEvent({ ...sessionBase, event_kind: 'input_admitted_to_turn', payload: {} })), /payload.missing_required_field:input_event_id/);
+const providerRequestPayload = createProviderRequestPayload({
+  turn_id: 'turn_test',
+  input_event_id: input.event_id,
+  provider_request_status: 'recorded_not_dispatched',
+  provider_execution_enabled: false,
+  provider_runtime_status: 'configured',
+  provider_adapter_admission_status: 'configured_without_adapter',
+  provider: 'codex-subscription',
+  model: 'gpt-5.5',
+  thinking: 'medium',
+  stream: true,
+  provider_adapter_refusal_reason: 'provider_adapter_not_configured',
+  content_preview: input.content,
+});
+assert.equal(providerRequestPayload.schema, PROVIDER_REQUEST_PAYLOAD_SCHEMA);
+assert.deepEqual(validateSessionEvent(createSessionEvent({
+  ...sessionBase,
+  event_kind: 'provider_request_recorded',
+  payload: providerRequestPayload,
+})), []);
+assert.match(thrownMessage(() => createSessionEvent({
+  ...sessionBase,
+  event_kind: 'provider_request_recorded',
+  payload: { ...providerRequestPayload, stream: 'yes' },
+})), /payload.invalid_stream/);
 const completedTurnPayload = createTurnTerminalPayload({
   turn_id: 'turn_test',
   input_event_id: input.event_id,

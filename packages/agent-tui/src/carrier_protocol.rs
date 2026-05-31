@@ -6,6 +6,7 @@ pub const CONTROL_INPUT_EVENT_SCHEMA: &str = "narada.carrier.control.input_event
 pub const SESSION_EVENT_SCHEMA: &str = "narada.carrier.session_event.v1";
 pub const PAYLOAD_REF_SCHEMA: &str = "narada.carrier.payload_ref.v1";
 pub const PAYLOAD_POLICY_SCHEMA: &str = "narada.carrier.payload_policy.v1";
+pub const PROVIDER_REQUEST_PAYLOAD_SCHEMA: &str = "narada.agent_tui.provider_request_payload.v0";
 pub const TURN_TERMINAL_PAYLOAD_SCHEMA: &str = "narada.agent_tui.turn_terminal_payload.v0";
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -228,6 +229,39 @@ fn validate_session_event(event: &SessionEvent) -> Result<(), String> {
     validate_session_payload(&event.event_kind, &event.payload)
 }
 
+pub fn create_provider_request_payload(
+    turn_id: &str,
+    input_event_id: &str,
+    provider_request_status: &str,
+    provider_execution_enabled: bool,
+    provider_runtime_status: &str,
+    provider_adapter_admission_status: &str,
+    provider_adapter_kind: Option<String>,
+    provider: Option<String>,
+    model: Option<String>,
+    thinking: Option<String>,
+    stream: bool,
+    provider_adapter_refusal_reason: Option<String>,
+    content_preview: &str,
+) -> Value {
+    json!({
+        "schema": PROVIDER_REQUEST_PAYLOAD_SCHEMA,
+        "turn_id": turn_id,
+        "input_event_id": input_event_id,
+        "provider_request_status": provider_request_status,
+        "provider_execution_enabled": provider_execution_enabled,
+        "provider_runtime_status": provider_runtime_status,
+        "provider_adapter_admission_status": provider_adapter_admission_status,
+        "provider_adapter_kind": provider_adapter_kind,
+        "provider": provider,
+        "model": model,
+        "thinking": thinking,
+        "stream": stream,
+        "provider_adapter_refusal_reason": provider_adapter_refusal_reason,
+        "content_preview": content_preview,
+    })
+}
+
 pub fn create_turn_terminal_payload(
     turn_id: &str,
     input_event_id: Option<&str>,
@@ -289,10 +323,57 @@ fn validate_session_payload(kind: &SessionEventKind, payload: &Value) -> Result<
         SessionEventKind::ToolResultReceived => validate_tool_result_payload(payload),
         SessionEventKind::CarrierCommandExecuted => require_payload_fields(payload, &["command"]),
         SessionEventKind::CarrierDiagnosticRecorded => validate_carrier_diagnostic_payload(payload),
-        SessionEventKind::ProviderRequestRecorded
-        | SessionEventKind::ProviderTextDeltaRecorded
+        SessionEventKind::ProviderRequestRecorded => validate_provider_request_payload(payload),
+        SessionEventKind::ProviderTextDeltaRecorded
         | SessionEventKind::ProviderToolCallRequested => Ok(()),
     }
+}
+
+fn validate_provider_request_payload(payload: &Value) -> Result<(), String> {
+    require_payload_fields(
+        payload,
+        &[
+            "schema",
+            "turn_id",
+            "input_event_id",
+            "provider_request_status",
+            "provider_execution_enabled",
+            "provider_runtime_status",
+            "provider_adapter_admission_status",
+            "stream",
+            "content_preview",
+        ],
+    )?;
+    if payload.get("schema").and_then(Value::as_str) != Some(PROVIDER_REQUEST_PAYLOAD_SCHEMA) {
+        return Err(format!(
+            "payload.invalid_schema:{}",
+            payload_value_string(payload, "schema")
+        ));
+    }
+    require_payload_nonempty_string(payload, "turn_id")?;
+    require_payload_nonempty_string(payload, "input_event_id")?;
+    require_payload_nonempty_string(payload, "provider_request_status")?;
+    require_payload_nonempty_string(payload, "provider_runtime_status")?;
+    require_payload_nonempty_string(payload, "provider_adapter_admission_status")?;
+    require_payload_string(payload, "content_preview")?;
+    match payload.get("provider_execution_enabled") {
+        Some(Value::Bool(_)) => {}
+        _ => return Err("payload.invalid_provider_execution_enabled".to_string()),
+    }
+    match payload.get("stream") {
+        Some(Value::Bool(_)) => {}
+        _ => return Err("payload.invalid_stream".to_string()),
+    }
+    for field in [
+        "provider_adapter_kind",
+        "provider",
+        "model",
+        "thinking",
+        "provider_adapter_refusal_reason",
+    ] {
+        require_optional_string(payload, field)?;
+    }
+    Ok(())
 }
 
 fn validate_system_directive_held_payload(payload: &Value) -> Result<(), String> {
@@ -474,6 +555,13 @@ fn require_optional_nonempty_string(payload: &Value, field: &str) -> Result<(), 
     match payload.get(field) {
         None => Ok(()),
         Some(Value::String(value)) if !value.is_empty() => Ok(()),
+        Some(_) => Err(format!("payload.invalid_{field}")),
+    }
+}
+
+fn require_optional_string(payload: &Value, field: &str) -> Result<(), String> {
+    match payload.get(field) {
+        None | Some(Value::Null) | Some(Value::String(_)) => Ok(()),
         Some(_) => Err(format!("payload.invalid_{field}")),
     }
 }

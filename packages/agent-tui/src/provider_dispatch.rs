@@ -1,4 +1,4 @@
-use crate::carrier_protocol::{InputEvent, SessionEventKind};
+use crate::carrier_protocol::{create_provider_request_payload, InputEvent, SessionEventKind};
 use crate::provider_adapter_admission::{ProviderAdapterAdmission, ProviderAdapterKind};
 use crate::provider_runtime_config::ProviderRuntimeConfig;
 use crate::rendering_boundary::{
@@ -6,7 +6,6 @@ use crate::rendering_boundary::{
 };
 use serde_json::{json, Value};
 
-pub const PROVIDER_REQUEST_PAYLOAD_SCHEMA: &str = "narada.agent_tui.provider_request_payload.v0";
 pub const PROVIDER_OUTPUT_PAYLOAD_SCHEMA: &str = "narada.agent_tui.provider_output_payload.v0";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -118,22 +117,21 @@ impl ProviderAdapterRequest {
         status: &ProviderDispatchStatus,
         adapter_admission: &ProviderAdapterAdmission,
     ) -> Value {
-        json!({
-            "schema": PROVIDER_REQUEST_PAYLOAD_SCHEMA,
-            "turn_id": self.turn_id,
-            "input_event_id": self.input_event_id,
-            "provider_request_status": status.as_str(),
-            "provider_execution_enabled": adapter_admission.provider_execution_enabled,
-            "provider_runtime_status": self.provider_runtime_status,
-            "provider_adapter_admission_status": adapter_admission.status.as_str(),
-            "provider_adapter_kind": adapter_admission.adapter_kind.clone(),
-            "provider": self.provider.clone(),
-            "model": self.model.clone(),
-            "thinking": self.thinking.clone(),
-            "stream": self.stream,
-            "provider_adapter_refusal_reason": adapter_admission.refusal_reason.clone(),
-            "content_preview": self.content_preview
-        })
+        create_provider_request_payload(
+            &self.turn_id,
+            &self.input_event_id,
+            status.as_str(),
+            adapter_admission.provider_execution_enabled,
+            &self.provider_runtime_status,
+            adapter_admission.status.as_str(),
+            adapter_admission.adapter_kind.clone(),
+            self.provider.clone(),
+            self.model.clone(),
+            self.thinking.clone(),
+            self.stream,
+            adapter_admission.refusal_reason.clone(),
+            &self.content_preview,
+        )
     }
 }
 
@@ -335,7 +333,7 @@ impl ProviderAdapter for ProviderDispatchStub {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::carrier_protocol::parse_input_event;
+    use crate::carrier_protocol::{parse_input_event, PROVIDER_REQUEST_PAYLOAD_SCHEMA};
     use std::collections::BTreeMap;
 
     const INPUT_FIXTURE: &str = include_str!("../../carrier-protocol/fixtures/input-event.json");

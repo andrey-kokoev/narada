@@ -3,6 +3,7 @@ export const CONTROL_INPUT_EVENT_SCHEMA = 'narada.carrier.control.input_event.v1
 export const SESSION_EVENT_SCHEMA = 'narada.carrier.session_event.v1';
 export const PAYLOAD_REF_SCHEMA = 'narada.carrier.payload_ref.v1';
 export const PAYLOAD_POLICY_SCHEMA = 'narada.carrier.payload_policy.v1';
+export const PROVIDER_REQUEST_PAYLOAD_SCHEMA = 'narada.agent_tui.provider_request_payload.v0';
 export const TURN_TERMINAL_PAYLOAD_SCHEMA = 'narada.agent_tui.turn_terminal_payload.v0';
 
 export const SOURCE_KINDS = Object.freeze(['operator', 'system', 'agent', 'external']);
@@ -382,6 +383,7 @@ const SESSION_PAYLOAD_VALIDATORS = Object.freeze({
   directive_receipt_recorded: (payload) => requireFields(payload, ['input_event_id', 'directive_id']),
   directive_carrier_accepted_recorded: (payload) => requireFields(payload, ['input_event_id', 'directive_id']),
   turn_started: (payload) => requireFields(payload, ['input_event_id', 'turn_id']),
+  provider_request_recorded: validateProviderRequestPayload,
   turn_completed: (payload) => validateTurnTerminalPayload('turn_completed', payload),
   turn_interrupted: (payload) => validateTurnTerminalPayload('turn_interrupted', payload),
   turn_failed: (payload) => validateTurnTerminalPayload('turn_failed', payload),
@@ -424,6 +426,65 @@ function validateToolResultPayload(payload) {
   if (typeof payload.duration_ms !== 'number' || payload.duration_ms < 0) errors.push('payload.invalid_duration_ms');
   if (typeof payload.result_summary !== 'string') errors.push('payload.invalid_result_summary');
   errors.push(...validateOptionalPayloadRef(payload, 'result_ref'));
+  return errors;
+}
+
+export function createProviderRequestPayload({
+  turn_id,
+  input_event_id,
+  provider_request_status,
+  provider_execution_enabled,
+  provider_runtime_status,
+  provider_adapter_admission_status,
+  provider_adapter_kind = null,
+  provider = null,
+  model = null,
+  thinking = null,
+  stream,
+  provider_adapter_refusal_reason = null,
+  content_preview,
+}) {
+  return {
+    schema: PROVIDER_REQUEST_PAYLOAD_SCHEMA,
+    turn_id,
+    input_event_id,
+    provider_request_status,
+    provider_execution_enabled,
+    provider_runtime_status,
+    provider_adapter_admission_status,
+    provider_adapter_kind,
+    provider,
+    model,
+    thinking,
+    stream,
+    provider_adapter_refusal_reason,
+    content_preview,
+  };
+}
+
+function validateProviderRequestPayload(payload) {
+  const errors = requireFields(payload, [
+    'schema',
+    'turn_id',
+    'input_event_id',
+    'provider_request_status',
+    'provider_execution_enabled',
+    'provider_runtime_status',
+    'provider_adapter_admission_status',
+    'stream',
+    'content_preview',
+  ]);
+  if (errors.length > 0) return errors;
+  if (payload.schema !== PROVIDER_REQUEST_PAYLOAD_SCHEMA) errors.push(`payload.invalid_schema:${String(payload.schema)}`);
+  for (const field of ['turn_id', 'input_event_id', 'provider_request_status', 'provider_runtime_status', 'provider_adapter_admission_status']) {
+    if (typeof payload[field] !== 'string' || payload[field].length === 0) errors.push(`payload.invalid_${field}`);
+  }
+  if (typeof payload.provider_execution_enabled !== 'boolean') errors.push('payload.invalid_provider_execution_enabled');
+  if (typeof payload.stream !== 'boolean') errors.push('payload.invalid_stream');
+  if (typeof payload.content_preview !== 'string') errors.push('payload.invalid_content_preview');
+  for (const field of ['provider_adapter_kind', 'provider', 'model', 'thinking', 'provider_adapter_refusal_reason']) {
+    if (payload[field] !== null && payload[field] !== undefined && typeof payload[field] !== 'string') errors.push(`payload.invalid_${field}`);
+  }
   return errors;
 }
 
