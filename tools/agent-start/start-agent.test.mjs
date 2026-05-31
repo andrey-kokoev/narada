@@ -368,6 +368,7 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   assert.equal(result.planned_environment.NARADA_AGENT_TUI_SESSION_DIR, result.agent_tui_session_dir);
   assert.equal(result.planned_environment.NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION, 'false');
   assert.equal(result.planned_environment.NARADA_AGENT_TUI_ENABLE_MCP_FABRIC, 'false');
+  assert.equal(result.planned_environment.NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING, 'false');
   assert.equal(result.agent_tui_session_dir.includes(`${path.sep}.narada${path.sep}crew${path.sep}nars-sessions${path.sep}`), true);
   assert.equal(result.agent_tui_launch.schema, 'narada.agent_start.agent_tui.v0');
   assert.equal(result.agent_tui_launch.transport, 'control_jsonl_session_jsonl');
@@ -390,6 +391,11 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   assert.equal(result.agent_tui_launch.interactive_loop.mode, 'interactive_loop');
   assert.equal(result.agent_tui_launch.interactive_loop.admitted, false);
   assert.equal(result.agent_tui_launch.interactive_loop.required_flag, '--interactive-loop');
+  assert.deepEqual(result.agent_tui_launch.interactive_loop.environment_gate, {
+    variable: 'NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING',
+    value: 'false',
+    operator_override_admitted: false,
+  });
   assert.equal(result.agent_tui_launch.interactive_loop.promotion_gate, 'agent_tui_terminal_interactive_loop_promotion_gate');
   assert.equal(result.agent_tui_launch.promotion_gate.status, 'not_satisfied');
   assert.deepEqual(result.agent_tui_launch.promotion_gate.checklist.map((item) => item.id), [

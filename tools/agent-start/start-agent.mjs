@@ -670,6 +670,11 @@ function agentTuiInteractiveLoopGate() {
     mode: 'interactive_loop',
     admitted: false,
     required_flag: '--interactive-loop',
+    environment_gate: {
+      variable: 'NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING',
+      value: 'false',
+      operator_override_admitted: false,
+    },
     promotion_gate: 'agent_tui_terminal_interactive_loop_promotion_gate',
   };
 }
@@ -1302,6 +1307,7 @@ function buildLaunchPlanFromArgs(args, options = {}) {
       NARADA_AGENT_TUI_SESSION_DIR: agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id),
       NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION: 'false',
       NARADA_AGENT_TUI_ENABLE_MCP_FABRIC: 'false',
+      NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING: 'false',
     } : {}),
     ...(runtime === 'codex' ? { CODEX_HOME: codexHomePath(siteRoot, identity) } : {}),
   };
