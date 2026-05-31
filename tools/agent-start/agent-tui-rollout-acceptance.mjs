@@ -2,13 +2,21 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { agentTuiSiteRolloutAcceptance, buildLaunchPlanFromArgs } from './start-agent.mjs';
+import {
+  agentTuiSiteRolloutAcceptance,
+  buildLaunchPlanFromArgs,
+  parseAgentTuiLaunchSliceContract,
+} from './start-agent.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const defaultRootDir = resolve(__dirname, '..', '..');
 const REPORT_SCHEMA = 'narada.agent_tui.site_rollout_acceptance_report.v0';
 const VALID_LAUNCH_STATUSES = new Set(['launching']);
 const VALID_SITE_SESSION_START_STATUSES = new Set(['materialized']);
+const AGENT_TUI_LAUNCH_SLICE_CONTRACT = parseAgentTuiLaunchSliceContract(readFileSync(
+  join(defaultRootDir, 'packages', 'agent-tui', 'contracts', 'launch-slice.json'),
+  'utf8',
+));
 
 function parseEqualsPair(value, errorName) {
   const separatorIndex = value.indexOf('=');
@@ -187,7 +195,7 @@ function validateEvidenceJson(path, expectedRuntime, expectedSiteRoot = null) {
     if (!['agent_tui_carrier', 'agent-tui'].includes(runtimeKind(record))) {
       return { status: 'invalid_runtime_kind', reason: 'agent_tui_runtime_kind_required' };
     }
-    if (isNaradaProperLaunchResult && record.agent_tui_launch?.admitted_runtime_slice !== 'bounded_non_terminal_interactive_step_once') {
+    if (isNaradaProperLaunchResult && record.agent_tui_launch?.admitted_runtime_slice !== AGENT_TUI_LAUNCH_SLICE_CONTRACT.admitted_runtime_slice) {
       return { status: 'invalid_runtime_slice', reason: 'agent_tui_bounded_smoke_slice_required' };
     }
   }
