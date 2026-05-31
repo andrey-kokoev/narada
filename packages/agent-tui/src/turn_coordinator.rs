@@ -264,7 +264,11 @@ fn provider_status_to_turn_terminal(
 mod tests {
     use super::*;
     use crate::carrier_protocol::{parse_input_event, parse_session_event, DeliveryMode};
-    use crate::provider_dispatch::{ProviderDispatchRecord, ProviderOutputRecord};
+    use crate::provider_adapter_admission::ProviderAdapterKind;
+    use crate::provider_dispatch::{
+        ProviderDispatchRecord, ProviderOutputRecord, ScriptedProviderAdapter,
+    };
+    use crate::provider_runtime_config::ProviderRuntimeConfig;
     use serde_json::json;
     use std::fs::{read_to_string, remove_file};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -364,25 +368,28 @@ mod tests {
         }
     }
 
-    struct OutputProviderAdapter;
-
-    impl ProviderAdapter for OutputProviderAdapter {
-        fn dispatch_request(&self, input: &InputEvent, turn_id: &str) -> ProviderDispatchRecord {
-            ProviderDispatchRecord {
-                status: ProviderDispatchStatus::Completed,
-                provider_execution_enabled: true,
-                payload: json!({
-                    "turn_id": turn_id,
-                    "input_event_id": input.event_id,
-                    "provider_request_status": "completed",
-                    "provider_execution_enabled": true
-                }),
-                outputs: vec![
-                    ProviderOutputRecord::text_delta(turn_id, "hello", 1),
-                    ProviderOutputRecord::tool_call_request(turn_id, "site_loop_run_once", "{}", 2),
-                ],
-            }
-        }
+    fn scripted_output_provider_adapter() -> ScriptedProviderAdapter {
+        let runtime_config =
+            ProviderRuntimeConfig::from_env_map(&std::collections::BTreeMap::from([
+                (
+                    "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION".to_string(),
+                    "true".to_string(),
+                ),
+                (
+                    "NARADA_INTELLIGENCE_PROVIDER".to_string(),
+                    "codex-subscription".to_string(),
+                ),
+                ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
+            ]));
+        ScriptedProviderAdapter::try_new(
+            runtime_config,
+            ProviderAdapterKind::CodexSubscription,
+            vec![
+                ProviderOutputRecord::text_delta("turn_1", "hello", 1),
+                ProviderOutputRecord::tool_call_request("turn_1", "site_loop_run_once", "{}", 2),
+            ],
+        )
+        .expect("scripted provider adapter admits configured runtime")
     }
 
     #[test]
@@ -466,7 +473,7 @@ mod tests {
         let mut coordinator = TurnCoordinator::with_provider_adapter(
             &path,
             context(),
-            Box::new(OutputProviderAdapter),
+            Box::new(scripted_output_provider_adapter()),
         );
 
         let completed = coordinator
@@ -510,7 +517,7 @@ mod tests {
         let mut coordinator = TurnCoordinator::with_provider_adapter_and_tool_executor(
             &path,
             context(),
-            Box::new(OutputProviderAdapter),
+            Box::new(scripted_output_provider_adapter()),
             Box::new(WritingProviderToolCallExecutor),
         );
 
