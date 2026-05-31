@@ -187,7 +187,7 @@ fn print_scaffold(args: &Args) {
     println!("provider_status: {}", provider_config.status.as_str());
     println!(
         "provider_execution_enabled: {}",
-        provider_config.provider_execution_enabled
+        provider_adapter.provider_execution_enabled
     );
     if let Some(provider) = &provider_config.provider {
         println!("provider: {provider}");

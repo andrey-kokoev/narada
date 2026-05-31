@@ -24,7 +24,6 @@ pub struct ProviderRuntimeConfig {
     pub model: Option<String>,
     pub thinking: Option<String>,
     pub stream: bool,
-    pub provider_execution_enabled: bool,
     pub refusal_reason: Option<String>,
 }
 
@@ -36,7 +35,6 @@ impl ProviderRuntimeConfig {
             model: None,
             thinking: None,
             stream: false,
-            provider_execution_enabled: false,
             refusal_reason: None,
         }
     }
@@ -70,7 +68,6 @@ impl ProviderRuntimeConfig {
             model: Some(model),
             thinking,
             stream,
-            provider_execution_enabled: false,
             refusal_reason: None,
         }
     }
@@ -82,7 +79,6 @@ impl ProviderRuntimeConfig {
             model: None,
             thinking: None,
             stream: false,
-            provider_execution_enabled: false,
             refusal_reason: Some(reason.into()),
         }
     }
@@ -129,7 +125,6 @@ mod tests {
 
         assert_eq!(config.status, ProviderRuntimeAdmissionStatus::Disabled);
         assert_eq!(config.status.as_str(), "disabled");
-        assert!(!config.provider_execution_enabled);
         assert_eq!(config.provider, None);
         assert_eq!(config.model, None);
     }
@@ -190,7 +185,6 @@ mod tests {
 
         assert_eq!(config.status, ProviderRuntimeAdmissionStatus::Configured);
         assert_eq!(config.status.as_str(), "configured");
-        assert!(!config.provider_execution_enabled);
         assert_eq!(config.refusal_reason, None);
         assert_eq!(config.provider.as_deref(), Some("codex-subscription"));
         assert_eq!(config.model.as_deref(), Some("gpt-5.5"));
