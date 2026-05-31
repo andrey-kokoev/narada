@@ -151,18 +151,26 @@ fn normalize_lexical_path(path: &str) -> String {
 mod tests {
     use super::*;
 
-    fn env(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
+    fn mcp_runtime_env(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
         pairs
             .iter()
-            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .map(|(semantic_key, value)| {
+                let env_key = match *semantic_key {
+                    "fabric_enabled" => mcp_fabric_env_var(),
+                    "config" => mcp_config_env_var(),
+                    "fabric" => site_mcp_fabric_env_var(),
+                    unexpected => panic!("unknown MCP runtime env semantic key: {unexpected}"),
+                };
+                (env_key.to_string(), value.to_string())
+            })
             .collect()
     }
 
     #[test]
     fn mcp_runtime_is_disabled_without_explicit_admission_flag() {
-        let config = McpRuntimeConfig::from_env_map(&env(&[
-            ("NARADA_AGENT_TUI_MCP_CONFIG", "D:/site/.ai/mcp/config.json"),
-            ("NARADA_SITE_MCP_FABRIC", "D:/site/.ai/mcp"),
+        let config = McpRuntimeConfig::from_env_map(&mcp_runtime_env(&[
+            ("config", "D:/site/.ai/mcp/config.json"),
+            ("fabric", "D:/site/.ai/mcp"),
         ]));
 
         assert_eq!(config.status, McpRuntimeAdmissionStatus::Disabled);
@@ -173,9 +181,9 @@ mod tests {
 
     #[test]
     fn mcp_runtime_requires_config_and_fabric_when_enabled() {
-        let missing_config = McpRuntimeConfig::from_env_map(&env(&[
-            (mcp_fabric_env_var(), "true"),
-            ("NARADA_SITE_MCP_FABRIC", "D:/site/.ai/mcp"),
+        let missing_config = McpRuntimeConfig::from_env_map(&mcp_runtime_env(&[
+            ("fabric_enabled", "true"),
+            ("fabric", "D:/site/.ai/mcp"),
         ]));
         assert_eq!(missing_config.status, McpRuntimeAdmissionStatus::Refused);
         assert_eq!(
@@ -183,9 +191,9 @@ mod tests {
             Some("missing_mcp_config")
         );
 
-        let missing_fabric = McpRuntimeConfig::from_env_map(&env(&[
-            (mcp_fabric_env_var(), "true"),
-            ("NARADA_AGENT_TUI_MCP_CONFIG", "D:/site/.ai/mcp/config.json"),
+        let missing_fabric = McpRuntimeConfig::from_env_map(&mcp_runtime_env(&[
+            ("fabric_enabled", "true"),
+            ("config", "D:/site/.ai/mcp/config.json"),
         ]));
         assert_eq!(missing_fabric.status, McpRuntimeAdmissionStatus::Refused);
         assert_eq!(
@@ -196,13 +204,10 @@ mod tests {
 
     #[test]
     fn mcp_runtime_refuses_config_outside_site_mcp_fabric() {
-        let config = McpRuntimeConfig::from_env_map(&env(&[
-            (mcp_fabric_env_var(), "true"),
-            (
-                "NARADA_AGENT_TUI_MCP_CONFIG",
-                "D:/other/.ai/mcp/config.json",
-            ),
-            ("NARADA_SITE_MCP_FABRIC", "D:/site/.ai/mcp"),
+        let config = McpRuntimeConfig::from_env_map(&mcp_runtime_env(&[
+            ("fabric_enabled", "true"),
+            ("config", "D:/other/.ai/mcp/config.json"),
+            ("fabric", "D:/site/.ai/mcp"),
         ]));
 
         assert_eq!(config.status, McpRuntimeAdmissionStatus::Refused);
@@ -215,13 +220,10 @@ mod tests {
 
     #[test]
     fn mcp_runtime_refuses_parent_traversal_inside_site_mcp_fabric_prefix() {
-        let config = McpRuntimeConfig::from_env_map(&env(&[
-            (mcp_fabric_env_var(), "true"),
-            (
-                "NARADA_AGENT_TUI_MCP_CONFIG",
-                "D:/site/.ai/mcp/../outside/config.json",
-            ),
-            ("NARADA_SITE_MCP_FABRIC", "D:/site/.ai/mcp"),
+        let config = McpRuntimeConfig::from_env_map(&mcp_runtime_env(&[
+            ("fabric_enabled", "true"),
+            ("config", "D:/site/.ai/mcp/../outside/config.json"),
+            ("fabric", "D:/site/.ai/mcp"),
         ]));
 
         assert_eq!(config.status, McpRuntimeAdmissionStatus::Refused);
@@ -235,10 +237,10 @@ mod tests {
     #[test]
     fn mcp_runtime_refuses_unreadable_config_when_readiness_is_checked() {
         let config = McpRuntimeConfig::from_env_map_with_config_readiness(
-            &env(&[
-                (mcp_fabric_env_var(), "true"),
-                ("NARADA_AGENT_TUI_MCP_CONFIG", "D:/site/.ai/mcp/config.json"),
-                ("NARADA_SITE_MCP_FABRIC", "D:/site/.ai/mcp"),
+            &mcp_runtime_env(&[
+                ("fabric_enabled", "true"),
+                ("config", "D:/site/.ai/mcp/config.json"),
+                ("fabric", "D:/site/.ai/mcp"),
             ]),
             |_| Err("mcp_config_unreadable".to_string()),
         );
@@ -253,10 +255,10 @@ mod tests {
 
     #[test]
     fn mcp_runtime_configures_explicit_config_and_fabric() {
-        let config = McpRuntimeConfig::from_env_map(&env(&[
-            (mcp_fabric_env_var(), "yes"),
-            ("NARADA_AGENT_TUI_MCP_CONFIG", "D:/site/.ai/mcp/config.json"),
-            ("NARADA_SITE_MCP_FABRIC", "D:/site/.ai/mcp"),
+        let config = McpRuntimeConfig::from_env_map(&mcp_runtime_env(&[
+            ("fabric_enabled", "yes"),
+            ("config", "D:/site/.ai/mcp/config.json"),
+            ("fabric", "D:/site/.ai/mcp"),
         ]));
 
         assert_eq!(config.status, McpRuntimeAdmissionStatus::Configured);
