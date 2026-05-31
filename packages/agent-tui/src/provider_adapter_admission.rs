@@ -1,6 +1,5 @@
+use crate::provider_adapter_contract::provider_adapter_contract;
 use crate::provider_runtime_config::{ProviderRuntimeAdmissionStatus, ProviderRuntimeConfig};
-use serde::Deserialize;
-use std::sync::OnceLock;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProviderAdapterKind {
@@ -37,25 +36,6 @@ impl ProviderAdapterKind {
     }
 }
 
-const PROVIDER_ADAPTER_CONTRACT_JSON: &str = include_str!("../contracts/provider-adapters.json");
-
-#[derive(Debug, Deserialize)]
-struct ProviderAdapterContract {
-    schema: String,
-    provider_execution_env_var: String,
-    scripted_provider_adapter_kind: String,
-    production_provider_adapter_kind: String,
-    production_provider_adapter_implemented: bool,
-}
-
-fn provider_adapter_contract() -> &'static ProviderAdapterContract {
-    static CONTRACT: OnceLock<ProviderAdapterContract> = OnceLock::new();
-    CONTRACT.get_or_init(|| {
-        parse_provider_adapter_contract(PROVIDER_ADAPTER_CONTRACT_JSON)
-            .expect("agent-tui provider adapter contract is valid")
-    })
-}
-
 pub fn scripted_provider_adapter_kind() -> &'static str {
     provider_adapter_contract()
         .scripted_provider_adapter_kind
@@ -66,31 +46,6 @@ pub fn production_provider_adapter_kind() -> &'static str {
     provider_adapter_contract()
         .production_provider_adapter_kind
         .as_str()
-}
-
-fn parse_provider_adapter_contract(json: &str) -> Result<ProviderAdapterContract, String> {
-    let contract: ProviderAdapterContract = serde_json::from_str(json)
-        .map_err(|error| format!("provider_adapter_contract_parse_failed:{error}"))?;
-    if contract.schema.trim() != "narada.agent_tui.provider_adapter_contract.v0" {
-        return Err("provider_adapter_contract_invalid:schema".to_string());
-    }
-    if contract.provider_execution_env_var.trim() != "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION" {
-        return Err("provider_adapter_contract_invalid:provider_execution_env_var".to_string());
-    }
-    if contract.scripted_provider_adapter_kind.trim() != "scripted_provider_adapter" {
-        return Err("provider_adapter_contract_invalid:scripted_provider_adapter_kind".to_string());
-    }
-    if contract.production_provider_adapter_kind.trim() != "codex_subscription_adapter" {
-        return Err(
-            "provider_adapter_contract_invalid:production_provider_adapter_kind".to_string(),
-        );
-    }
-    if contract.production_provider_adapter_implemented {
-        return Err(
-            "provider_adapter_contract_invalid:production_provider_adapter_implemented".to_string(),
-        );
-    }
-    Ok(contract)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -218,28 +173,6 @@ mod tests {
             .iter()
             .map(|(key, value)| (key.to_string(), value.to_string()))
             .collect()
-    }
-
-    #[test]
-    fn provider_adapter_contract_rejects_invalid_posture() {
-        assert_eq!(
-            parse_provider_adapter_contract("not json").unwrap_err(),
-            "provider_adapter_contract_parse_failed:expected ident at line 1 column 2"
-        );
-        assert_eq!(
-            parse_provider_adapter_contract(
-                r#"{"schema":"narada.agent_tui.wrong_provider_adapter_contract.v0","provider_execution_env_var":"NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION","scripted_provider_adapter_kind":"scripted_provider_adapter","production_provider_adapter_kind":"codex_subscription_adapter","production_provider_adapter_implemented":false}"#,
-            )
-            .unwrap_err(),
-            "provider_adapter_contract_invalid:schema"
-        );
-        assert_eq!(
-            parse_provider_adapter_contract(
-                r#"{"schema":"narada.agent_tui.provider_adapter_contract.v0","provider_execution_env_var":"NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION","scripted_provider_adapter_kind":"scripted_provider_adapter","production_provider_adapter_kind":"codex_subscription_adapter","production_provider_adapter_implemented":true}"#,
-            )
-            .unwrap_err(),
-            "provider_adapter_contract_invalid:production_provider_adapter_implemented"
-        );
     }
 
     #[test]
