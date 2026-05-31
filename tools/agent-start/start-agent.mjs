@@ -1465,9 +1465,9 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     ...(runtime === AGENT_RUNTIME_SERVER_RUNTIME ? { NARADA_AGENT_RUNTIME_SERVER_SESSION_DIR: agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id) } : {}),
     ...(runtime === AGENT_TUI_RUNTIME ? {
       NARADA_AGENT_TUI_SESSION_DIR: agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id),
-      NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION: 'false',
-      NARADA_AGENT_TUI_ENABLE_MCP_FABRIC: 'false',
-      NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING: 'false',
+      [AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.provider_execution_env_var]: 'false',
+      [AGENT_TUI_MCP_RUNTIME_CONTRACT.mcp_fabric_env_var]: 'false',
+      [AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_rendering_env_var]: 'false',
     } : {}),
     ...(runtime === 'codex' ? { CODEX_HOME: codexHomePath(siteRoot, identity) } : {}),
   };

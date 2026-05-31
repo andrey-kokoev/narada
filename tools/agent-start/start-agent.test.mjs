@@ -42,41 +42,33 @@ const AGENT_TUI_LAUNCH_SLICE_CONTRACT = parseAgentTuiLaunchSliceContract(fs.read
   'utf8',
 ));
 
+function invalidContractJson(contract, mutate) {
+  const copy = JSON.parse(JSON.stringify(contract));
+  mutate(copy);
+  return JSON.stringify(copy);
+}
+
 test('agent-tui provider adapter contract parser rejects invalid contracts', () => {
   assert.throws(
     () => parseAgentTuiProviderAdapterContract('{'),
     /provider_adapter_contract_parse_failed/,
   );
   assert.throws(
-    () => parseAgentTuiProviderAdapterContract(JSON.stringify({
-      schema: 'narada.agent_tui.wrong_provider_contract.v0',
-      provider_execution_env_var: 'NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION',
-      provider_adapter_kind_env_var: 'NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND',
-      intelligence_provider_env_var: 'NARADA_INTELLIGENCE_PROVIDER',
-      ai_model_env_var: 'NARADA_AI_MODEL',
-      ai_thinking_env_var: 'NARADA_AI_THINKING',
-      ai_stream_env_var: 'NARADA_AI_STREAM',
-      admitted_providers: ['codex-subscription', 'openai-api', 'anthropic-api'],
-      scripted_provider_adapter_kind: 'scripted_provider_adapter',
-      production_provider_adapter_kind: 'codex_subscription_adapter',
-      production_provider_adapter_implemented: false,
-    })),
+    () => parseAgentTuiProviderAdapterContract(invalidContractJson(
+      AGENT_TUI_PROVIDER_ADAPTER_CONTRACT,
+      (contract) => {
+        contract.schema = 'narada.agent_tui.wrong_provider_contract.v0';
+      },
+    )),
     /provider_adapter_contract_invalid:schema/,
   );
   assert.throws(
-    () => parseAgentTuiProviderAdapterContract(JSON.stringify({
-      schema: 'narada.agent_tui.provider_adapter_contract.v0',
-      provider_execution_env_var: 'NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION',
-      provider_adapter_kind_env_var: 'NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND',
-      intelligence_provider_env_var: 'NARADA_INTELLIGENCE_PROVIDER',
-      ai_model_env_var: 'NARADA_AI_MODEL',
-      ai_thinking_env_var: 'NARADA_AI_THINKING',
-      ai_stream_env_var: 'NARADA_AI_STREAM',
-      admitted_providers: ['codex-subscription', 'openai-api', 'anthropic-api'],
-      scripted_provider_adapter_kind: 'scripted_provider_adapter',
-      production_provider_adapter_kind: 'codex_subscription_adapter',
-      production_provider_adapter_implemented: true,
-    })),
+    () => parseAgentTuiProviderAdapterContract(invalidContractJson(
+      AGENT_TUI_PROVIDER_ADAPTER_CONTRACT,
+      (contract) => {
+        contract.production_provider_adapter_implemented = true;
+      },
+    )),
     /provider_adapter_contract_invalid:production_provider_adapter_implemented/,
   );
 });
@@ -87,23 +79,21 @@ test('agent-tui MCP runtime contract parser rejects invalid contracts', () => {
     /mcp_runtime_contract_parse_failed/,
   );
   assert.throws(
-    () => parseAgentTuiMcpRuntimeContract(JSON.stringify({
-      schema: 'narada.agent_tui.wrong_mcp_runtime_contract.v0',
-      mcp_fabric_env_var: 'NARADA_AGENT_TUI_ENABLE_MCP_FABRIC',
-      mcp_config_env_var: 'NARADA_AGENT_TUI_MCP_CONFIG',
-      site_mcp_fabric_env_var: 'NARADA_SITE_MCP_FABRIC',
-      mcp_config_path_policy: 'inside_site_mcp_fabric_without_parent_traversal',
-    })),
+    () => parseAgentTuiMcpRuntimeContract(invalidContractJson(
+      AGENT_TUI_MCP_RUNTIME_CONTRACT,
+      (contract) => {
+        contract.schema = 'narada.agent_tui.wrong_mcp_runtime_contract.v0';
+      },
+    )),
     /mcp_runtime_contract_invalid:schema/,
   );
   assert.throws(
-    () => parseAgentTuiMcpRuntimeContract(JSON.stringify({
-      schema: 'narada.agent_tui.mcp_runtime_contract.v0',
-      mcp_fabric_env_var: 'NARADA_AGENT_TUI_ENABLE_MCP_FABRIC',
-      mcp_config_env_var: 'NARADA_AGENT_TUI_MCP_CONFIG',
-      site_mcp_fabric_env_var: 'NARADA_SITE_MCP_FABRIC',
-      mcp_config_path_policy: 'inside_prefix_only',
-    })),
+    () => parseAgentTuiMcpRuntimeContract(invalidContractJson(
+      AGENT_TUI_MCP_RUNTIME_CONTRACT,
+      (contract) => {
+        contract.mcp_config_path_policy = 'inside_prefix_only';
+      },
+    )),
     /mcp_runtime_contract_invalid:mcp_config_path_policy/,
   );
 });
@@ -114,12 +104,12 @@ test('agent-tui terminal runtime contract parser rejects invalid contracts', () 
     /terminal_runtime_contract_parse_failed/,
   );
   assert.throws(
-    () => parseAgentTuiTerminalRuntimeContract(JSON.stringify({
-      schema: 'narada.agent_tui.terminal_runtime_contract.v0',
-      terminal_rendering_env_var: 'NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING',
-      terminal_mode_env_var: 'NARADA_AGENT_TUI_TERMINAL_MODE',
-      required_terminal_mode: 'render_once',
-    })),
+    () => parseAgentTuiTerminalRuntimeContract(invalidContractJson(
+      AGENT_TUI_TERMINAL_RUNTIME_CONTRACT,
+      (contract) => {
+        contract.required_terminal_mode = 'render_once';
+      },
+    )),
     /terminal_runtime_contract_invalid:required_terminal_mode/,
   );
 });
@@ -485,9 +475,9 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   assert.equal(result.tool_fabric_adapter_kind, AGENT_TUI_LAUNCH_SLICE_CONTRACT.tool_fabric_adapter_kind);
   assert.equal(result.capability_policy.smoke_step, AGENT_TUI_LAUNCH_SLICE_CONTRACT.capability_policy_smoke_step);
   assert.equal(result.planned_environment.NARADA_AGENT_TUI_SESSION_DIR, result.agent_tui_session_dir);
-  assert.equal(result.planned_environment.NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION, 'false');
-  assert.equal(result.planned_environment.NARADA_AGENT_TUI_ENABLE_MCP_FABRIC, 'false');
-  assert.equal(result.planned_environment.NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING, 'false');
+  assert.equal(result.planned_environment[AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.provider_execution_env_var], 'false');
+  assert.equal(result.planned_environment[AGENT_TUI_MCP_RUNTIME_CONTRACT.mcp_fabric_env_var], 'false');
+  assert.equal(result.planned_environment[AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_rendering_env_var], 'false');
   assert.equal(result.agent_tui_session_dir.includes(`${path.sep}.narada${path.sep}crew${path.sep}nars-sessions${path.sep}`), true);
   assert.equal(result.agent_tui_launch.schema, 'narada.agent_start.agent_tui.v0');
   assert.equal(result.agent_tui_launch.transport, 'control_jsonl_session_jsonl');
