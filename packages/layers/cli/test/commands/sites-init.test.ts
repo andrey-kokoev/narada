@@ -189,7 +189,7 @@ describe('sitesInitCommand', () => {
     expect(data.mutation_performed).toBe(false);
     expect(data.role).toBe('architect');
     expect(data.section_title).toBe('Architect Thread Bootstrap');
-    expect(data.agents_path).toBe('/tmp/linux-user/test-site/AGENTS.md');
+    expect(data.agents_path.replace(/\\/g, '/')).toMatch(/\/tmp\/linux-user\/test-site\/AGENTS\.md$/);
     expect(data.bootstrap_text).toContain('You are `architect`.');
     expect(data.bootstrap_text).toContain('Interpret Operator pressure into governed work packages.');
     expect(data.bootstrap_text).not.toContain('## Builder Thread Bootstrap');
@@ -268,7 +268,7 @@ describe('sitesInitCommand', () => {
     expect(data.mutation_performed).toBe(false);
     expect(data.role).toBe('builder');
     expect(data.site_id).toBe('project-site');
-    expect(data.site_root).toBe('/tmp/project/.narada');
+    expect(data.site_root.replace(/\\/g, '/')).toMatch(/\/tmp\/project\/\.narada$/);
     expect(data.bootstrap_text).toContain('You are `builder`.');
     expect(data.bootstrap_text).toContain('Execute approved local work packages');
     expect(data.bootstrap_text).not.toContain('You are `architect`.');
@@ -872,7 +872,7 @@ describe('sitesInitCommand', () => {
     const cli = data.substrate_readiness.find((check) => check.name === 'narada_cli_readiness');
     expect(cli).toBeDefined();
     expect(cli?.detail).toContain('package_root=');
-    expect(cli?.detail).toContain('packages/layers/cli/dist/main.js');
+    expect(cli?.detail).toMatch(/packages[\\/]layers[\\/]cli[\\/]dist[\\/]main\.js/);
     expect(cli?.detail).not.toContain(`${cwd}/packages/layers/cli/dist/main.js`);
     if (cli?.status === 'fail') {
       expect(cli.unblock_command).toBe('pnpm --filter @narada2/cli build && pnpm run narada:install-shim');
