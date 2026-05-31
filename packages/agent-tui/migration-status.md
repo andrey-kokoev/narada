@@ -213,7 +213,11 @@ If `cargo test` still fails after `VsDevCmd.bat` reports a ready toolchain, trea
 
 ## Next Step
 
-Collect bounded non-terminal `agent-tui` launch evidence for `narada-sonar` and `smart-scheduling`, then rewrite the rollout report with all four Sites. Do not use the workspace launcher for this smoke evidence; it is operator-surface orchestration and may open visible terminals.
+Promote the next blocked carrier capability, not more Site rollout evidence. The launcher-registry rollout gate is accepted for all known Sites. The remaining promotion gates are:
+
+- Provider adapter admission: real provider dispatch, token streaming, and provider-origin tool-call mediation.
+- MCP fabric execution admission: Rust-side Site MCP discovery, policy-bound visibility, request/response, and evidence.
+- Terminal interactive promotion: production `agent-start -Runtime agent-tui` must move from bounded non-terminal smoke to admitted terminal rendering only after provider and MCP execution boundaries are explicit.
 
 ## Live Rollout Evidence Commands
 
@@ -224,58 +228,4 @@ Set-Location D:\code\narada
 .\tools\agent-start\Collect-AgentTuiRolloutEvidence.ps1
 ```
 
-The script verifies the existing seed evidence paths, refreshes only the missing non-proper `agent-tui` smoke evidence by default, then rewrites the rollout acceptance report. Site roots and seed evidence paths are parameterized, so a moved checkout or newer baseline can be supplied without editing the script. `-RefreshAgentCli` is refused unless paired with `-AllowInteractiveAgentCliRefresh`, because `agent-cli` baseline collection can block at an operator prompt.
-
-Manual fallback commands are below. Run these from a shell that has the Rust linker environment loaded. Each `agent-tui` command is bounded by `--interactive-step-once` through the Site launcher and should exit after one smoke step.
-
-Narada proper:
-
-```powershell
-Set-Location D:\code\narada
-.\narada.ps1 agent-start -Agent narada.architect -Runtime agent-cli -Exec
-.\narada.ps1 agent-start -Agent narada.architect -Runtime agent-tui -Exec
-```
-
-Narada user Site:
-
-```powershell
-Set-Location C:\Users\Andrey\Narada
-.\narada-andrey.ps1 agent-start -Agent narada-andrey.resident -Runtime agent-cli -Exec
-.\narada-andrey.ps1 agent-start -Agent narada-andrey.resident -Runtime agent-tui -Exec
-```
-
-Narada Sonar:
-
-```powershell
-Set-Location D:\code\narada.sonar
-.\narada-sonar.ps1 agent-start -Agent sonar.resident -Runtime agent-cli -Exec
-.\narada-sonar.ps1 agent-start -Agent sonar.resident -Runtime agent-tui -Exec
-```
-
-Smart Scheduling:
-
-```powershell
-Set-Location D:\code\smart-scheduling
-.\narada-smart-scheduling.ps1 agent-start -Agent smart-scheduling.resident -Runtime agent-cli -Exec
-.\narada-smart-scheduling.ps1 agent-start -Agent smart-scheduling.resident -Runtime agent-tui -Exec
-```
-
-Then write the rollout report with the collected launch result paths:
-
-```powershell
-Set-Location D:\code\narada
-node tools\agent-start\agent-tui-rollout-acceptance.mjs `
-  --site-root D:\code\narada `
-  --known-site-root narada-andrey=C:\Users\Andrey\Narada `
-  --known-site-root narada-sonar=D:\code\narada.sonar `
-  --known-site-root smart-scheduling=D:\code\smart-scheduling\.narada `
-  --agent-cli-evidence narada-proper=D:\code\narada\.narada\crew\agent-start-results\agent_start_20260531_000417547_narada_architect.result.json `
-  --agent-tui-evidence narada-proper=D:\code\narada\.narada\crew\agent-start-results\agent_start_20260531_041426614_narada_architect.result.json `
-  --agent-cli-evidence narada-andrey=C:\Users\Andrey\Narada\.ai\runtime\agent-start-results\evt-2026-05-31_00-04-19_e5147cef.result.json `
-  --agent-tui-evidence narada-andrey=C:\Users\Andrey\Narada\.ai\runtime\agent-start-results\evt-2026-05-31_04-27-29_a23016ab.result.json `
-  --agent-cli-evidence narada-sonar=D:\code\narada.sonar\.ai\runtime\agent-start-results\evt-2026-05-31_00-04-25_28290811.result.json `
-  --agent-tui-evidence narada-sonar=<narada-sonar-agent-tui-launch-result.json> `
-  --agent-cli-evidence smart-scheduling=D:\code\smart-scheduling\.narada\.ai\runtime\agent-start-results\evt-2026-05-31_00-04-26_b975144f.result.json `
-  --agent-tui-evidence smart-scheduling=<smart-scheduling-agent-tui-launch-result.json> `
-  --write
-```
+The script verifies all launcher-registry Sites and rewrites the rollout acceptance report. Site roots and seed evidence paths are parameterized, so a moved checkout or newer baseline can be supplied without editing the script. `-RefreshAgentCli` is refused unless paired with `-AllowInteractiveAgentCliRefresh`, because `agent-cli` baseline collection can block at an operator prompt.
