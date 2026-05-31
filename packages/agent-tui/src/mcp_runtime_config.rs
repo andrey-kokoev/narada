@@ -103,9 +103,16 @@ fn trimmed_nonempty(value: Option<&String>) -> Option<String> {
 fn config_path_is_within_fabric(config_path: &str, site_mcp_fabric: &str) -> bool {
     let config_path = normalize_lexical_path(config_path);
     let site_mcp_fabric = normalize_lexical_path(site_mcp_fabric);
+    if path_has_parent_component(&config_path) || path_has_parent_component(&site_mcp_fabric) {
+        return false;
+    }
     config_path
         .strip_prefix(&site_mcp_fabric)
         .is_some_and(|suffix| suffix.starts_with('/') && suffix.len() > 1)
+}
+
+fn path_has_parent_component(path: &str) -> bool {
+    path.split('/').any(|component| component == "..")
 }
 
 fn normalize_lexical_path(path: &str) -> String {
@@ -173,6 +180,25 @@ mod tests {
             (
                 "NARADA_AGENT_TUI_MCP_CONFIG",
                 "D:/other/.ai/mcp/config.json",
+            ),
+            ("NARADA_SITE_MCP_FABRIC", "D:/site/.ai/mcp"),
+        ]));
+
+        assert_eq!(config.status, McpRuntimeAdmissionStatus::Refused);
+        assert_eq!(
+            config.refusal_reason.as_deref(),
+            Some("mcp_config_outside_site_mcp_fabric")
+        );
+        assert!(!config.mcp_fabric_access_enabled);
+    }
+
+    #[test]
+    fn mcp_runtime_refuses_parent_traversal_inside_site_mcp_fabric_prefix() {
+        let config = McpRuntimeConfig::from_env_map(&env(&[
+            ("NARADA_AGENT_TUI_ENABLE_MCP_FABRIC", "true"),
+            (
+                "NARADA_AGENT_TUI_MCP_CONFIG",
+                "D:/site/.ai/mcp/../outside/config.json",
             ),
             ("NARADA_SITE_MCP_FABRIC", "D:/site/.ai/mcp"),
         ]));

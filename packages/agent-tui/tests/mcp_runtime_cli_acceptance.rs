@@ -84,6 +84,24 @@ fn mcp_runtime_cli_acceptance_reports_refusal_for_config_outside_site_fabric() {
 }
 
 #[test]
+fn mcp_runtime_cli_acceptance_reports_refusal_for_parent_traversal_config_path() {
+    let fabric = temp_mcp_fabric();
+    let config_path = fabric.join("..").join("outside-agent-tui.json");
+    let mut command = base_command();
+    command
+        .env("NARADA_AGENT_TUI_ENABLE_MCP_FABRIC", "true")
+        .env("NARADA_AGENT_TUI_MCP_CONFIG", path_string(&config_path))
+        .env("NARADA_SITE_MCP_FABRIC", path_string(&fabric));
+
+    let output = stdout(&mut command);
+    remove_dir_all(&fabric).expect("remove temp fabric");
+
+    assert!(output.contains("mcp_status: refused"));
+    assert!(output.contains("mcp_fabric_access_enabled: false"));
+    assert!(output.contains("mcp_refusal: mcp_config_outside_site_mcp_fabric"));
+}
+
+#[test]
 fn mcp_runtime_cli_acceptance_reports_refusal_for_unreadable_mcp_config() {
     let fabric = temp_mcp_fabric();
     let config_path = fabric.join("missing-agent-tui.json");
