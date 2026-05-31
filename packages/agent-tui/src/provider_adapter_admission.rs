@@ -168,10 +168,19 @@ mod tests {
     use super::*;
     use std::collections::BTreeMap;
 
-    fn env(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
+    fn provider_runtime_env(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
+        let contract = provider_adapter_contract();
         pairs
             .iter()
-            .map(|(key, value)| (key.to_string(), value.to_string()))
+            .map(|(semantic_key, value)| {
+                let env_key = match *semantic_key {
+                    "execution_enabled" => &contract.provider_execution_env_var,
+                    "provider" => &contract.intelligence_provider_env_var,
+                    "model" => &contract.ai_model_env_var,
+                    unexpected => panic!("unknown provider runtime env semantic key: {unexpected}"),
+                };
+                (env_key.clone(), value.to_string())
+            })
             .collect()
     }
 
@@ -210,10 +219,10 @@ mod tests {
 
     #[test]
     fn refused_runtime_refuses_adapter_admission() {
-        let runtime_config = ProviderRuntimeConfig::from_env_map(&env(&[
-            ("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true"),
-            ("NARADA_INTELLIGENCE_PROVIDER", "unknown-provider"),
-            ("NARADA_AI_MODEL", "gpt-5.5"),
+        let runtime_config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
+            ("execution_enabled", "true"),
+            ("provider", "unknown-provider"),
+            ("model", "gpt-5.5"),
         ]));
         let admission = ProviderAdapterAdmission::from_runtime_config(
             &runtime_config,
@@ -230,10 +239,10 @@ mod tests {
 
     #[test]
     fn configured_runtime_without_adapter_is_not_execution_admitted() {
-        let runtime_config = ProviderRuntimeConfig::from_env_map(&env(&[
-            ("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true"),
-            ("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription"),
-            ("NARADA_AI_MODEL", "gpt-5.5"),
+        let runtime_config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
+            ("execution_enabled", "true"),
+            ("provider", "codex-subscription"),
+            ("model", "gpt-5.5"),
         ]));
         let admission = ProviderAdapterAdmission::from_runtime_config(&runtime_config, None);
 
@@ -253,10 +262,10 @@ mod tests {
 
     #[test]
     fn configured_runtime_with_unknown_adapter_kind_is_refused_as_unknown() {
-        let runtime_config = ProviderRuntimeConfig::from_env_map(&env(&[
-            ("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true"),
-            ("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription"),
-            ("NARADA_AI_MODEL", "gpt-5.5"),
+        let runtime_config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
+            ("execution_enabled", "true"),
+            ("provider", "codex-subscription"),
+            ("model", "gpt-5.5"),
         ]));
         let admission =
             ProviderAdapterAdmission::from_runtime_config(&runtime_config, Some("unknown_adapter"));
@@ -272,10 +281,10 @@ mod tests {
 
     #[test]
     fn configured_runtime_with_production_adapter_kind_refuses_until_adapter_is_implemented() {
-        let runtime_config = ProviderRuntimeConfig::from_env_map(&env(&[
-            ("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true"),
-            ("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription"),
-            ("NARADA_AI_MODEL", "gpt-5.5"),
+        let runtime_config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
+            ("execution_enabled", "true"),
+            ("provider", "codex-subscription"),
+            ("model", "gpt-5.5"),
         ]));
         let admission = ProviderAdapterAdmission::from_runtime_config(
             &runtime_config,
@@ -297,10 +306,10 @@ mod tests {
 
     #[test]
     fn admitted_adapter_requires_configured_runtime_and_enables_scripted_execution_only() {
-        let runtime_config = ProviderRuntimeConfig::from_env_map(&env(&[
-            ("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true"),
-            ("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription"),
-            ("NARADA_AI_MODEL", "gpt-5.5"),
+        let runtime_config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
+            ("execution_enabled", "true"),
+            ("provider", "codex-subscription"),
+            ("model", "gpt-5.5"),
         ]));
 
         let admission =
