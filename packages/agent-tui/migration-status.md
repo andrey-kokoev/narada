@@ -181,8 +181,6 @@ D:\code\thoughts\.narada\tools\agent-start\start-agent.mjs
 
 ## Current Verification
 
-## Current Verification
-
 Quiet defaults:
 
 ```powershell
@@ -196,6 +194,8 @@ Verbose Rust output is intentionally explicit:
 
 ```powershell
 pnpm agent-tui:test:verbose
+```
+
 Plain non-developer shells may still report blocked:
 
 ```powershell
