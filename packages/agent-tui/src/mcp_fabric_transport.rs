@@ -70,8 +70,12 @@ impl McpFabricTransportClient {
             .map_err(|error| format!("mcp_fabric_config_parse_failed:{error}"))?;
         let mut servers = BTreeMap::new();
         let mut tool_to_server = BTreeMap::new();
-        for (name, raw) in config.mcp_servers {
-            let server = McpFabricTransportServer::from_raw(name.clone(), raw)?;
+        for (raw_name, raw) in config.mcp_servers {
+            let server = McpFabricTransportServer::from_raw(raw_name, raw)?;
+            let name = server.name.clone();
+            if servers.contains_key(&name) {
+                return Err(format!("mcp_fabric_server_name_duplicate:{name}"));
+            }
             for tool in &server.tools {
                 if let Some(previous) = tool_to_server.insert(tool.clone(), name.clone()) {
                     return Err(format!(
@@ -146,6 +150,10 @@ impl McpFabricTransportClient {
 
 impl McpFabricTransportServer {
     fn from_raw(name: String, raw: RawMcpServer) -> Result<Self, String> {
+        let name = name.trim().to_string();
+        if name.is_empty() {
+            return Err("mcp_fabric_server_name_invalid".to_string());
+        }
         let transport = raw.transport.unwrap_or_else(|| "stdio".to_string());
         if transport != "stdio" {
             return Err(format!(
@@ -234,6 +242,75 @@ mod tests {
                 .map(String::as_str),
             Some("sonar-site-loop")
         );
+    }
+
+    #[test]
+    fn rejects_blank_server_name() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                " ": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "tools": ["site_loop_status"]
+                }
+              }
+            }"#,
+        )
+        .expect_err("blank server name is invalid");
+
+        assert_eq!(error, "mcp_fabric_server_name_invalid");
+    }
+
+    #[test]
+    fn trims_server_name() {
+        let client = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                " sonar-site-loop ": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "tools": ["site_loop_status"]
+                }
+              }
+            }"#,
+        )
+        .expect("trimmed server name config parses");
+
+        assert!(client.servers.contains_key("sonar-site-loop"));
+        assert_eq!(
+            client
+                .tool_to_server
+                .get("site_loop_status")
+                .map(String::as_str),
+            Some("sonar-site-loop")
+        );
+    }
+
+    #[test]
+    fn rejects_duplicate_normalized_server_name() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "tools": ["site_loop_status"]
+                },
+                " sonar-site-loop ": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "tools": ["site_loop_run_once"]
+                }
+              }
+            }"#,
+        )
+        .expect_err("duplicate normalized server name is invalid");
+
+        assert_eq!(error, "mcp_fabric_server_name_duplicate:sonar-site-loop");
     }
 
     #[test]
