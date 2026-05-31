@@ -151,6 +151,20 @@ thoughts-project agent-tui: D:\code\thoughts\.narada\.ai\runtime\agent-start-res
 
 Default promotion is no longer blocked on launcher-registry Site side-by-side rollout evidence. Provider execution, MCP fabric execution, and terminal promotion remain gated separately.
 
+## Site Launcher Propagation
+
+The following Site-local launcher copies are outside the Narada proper Git repository and therefore are not committed with this package. They were updated in place to admit the bounded `agent-tui` runtime slice and verified to carry the same SHA-256 hash:
+
+```text
+sha256: 3f25e2dbd6e65b47174af8b606fae3277a4882ecdcdc285702afe9ebdd532340
+
+C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Staccato\.narada\tools\agent-start\start-agent.mjs
+C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\!Revolution\.narada\tools\agent-start\start-agent.mjs
+C:\Users\Andrey\Vose Software BE\Timour Koupeev - MarketingAgent\.narada\tools\agent-start\start-agent.mjs
+C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Utz\.narada\tools\agent-start\start-agent.mjs
+D:\code\thoughts\.narada\tools\agent-start\start-agent.mjs
+```
+
 ## Current Verification
 
 Passing:
