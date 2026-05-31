@@ -417,7 +417,7 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'rendering_diagnostic_boundary_acceptance').status, 'satisfied');
   assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'payload_reference_policy_acceptance').status, 'satisfied');
   assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'provider_adapter_admission').status, 'partial');
-  assert.match(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'provider_adapter_admission').current_evidence, /centralized adapter construction/);
+  assert.match(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'provider_adapter_admission').current_evidence, /streaming contract status/);
   assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'site_rollout_acceptance').status, 'satisfied');
   assert.match(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'site_rollout_acceptance').current_evidence, /All launcher-registry Sites/);
   assert.match(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'rendering_diagnostic_boundary_acceptance').source_contract, /rendering contract/);
@@ -453,6 +453,7 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
     operator_override_admitted: false,
   });
   assert.equal(result.agent_tui_launch.provider_execution.promotion_gate, 'agent_tui_provider_adapter_promotion_gate');
+  assert.match(result.agent_tui_launch.provider_execution.current_evidence, /streaming contract status/);
   assert.match(result.agent_tui_launch.provider_execution.current_evidence, /provider adapter factory/);
   assert.deepEqual(result.agent_tui_launch.provider_execution.required_before_admission, [
     'production_provider_adapter_implementation_and_admission',
