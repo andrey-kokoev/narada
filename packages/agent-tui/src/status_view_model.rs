@@ -26,13 +26,13 @@ impl ProviderRuntimeState {
 
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Disabled => "provider_disabled",
-            Self::Configured => "provider_configured",
-            Self::Refused => "provider_refused",
-            Self::Idle => "provider_idle",
-            Self::Working => "provider_working",
-            Self::Interrupted => "provider_interrupted",
-            Self::Failed => "provider_failed",
+            Self::Disabled => "disabled",
+            Self::Configured => "configured",
+            Self::Refused => "refused",
+            Self::Idle => "idle",
+            Self::Working => "working",
+            Self::Interrupted => "interrupted",
+            Self::Failed => "failed",
         }
     }
 }
@@ -59,10 +59,10 @@ impl ProviderAdapterState {
 
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Disabled => "provider_adapter_disabled",
-            Self::ConfiguredWithoutAdapter => "provider_adapter_configured_without_adapter",
-            Self::Refused => "provider_adapter_refused",
-            Self::Admitted => "provider_adapter_admitted",
+            Self::Disabled => "disabled",
+            Self::ConfiguredWithoutAdapter => "configured_without_adapter",
+            Self::Refused => "refused",
+            Self::Admitted => "admitted",
         }
     }
 }
@@ -85,9 +85,9 @@ impl McpRuntimeState {
 
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Disabled => "mcp_disabled",
-            Self::Configured => "mcp_configured",
-            Self::Refused => "mcp_refused",
+            Self::Disabled => "disabled",
+            Self::Configured => "configured",
+            Self::Refused => "refused",
         }
     }
 }
@@ -110,9 +110,9 @@ impl TerminalRuntimeState {
 
     pub fn as_str(&self) -> &'static str {
         match self {
-            Self::Disabled => "terminal_disabled",
-            Self::Configured => "terminal_configured",
-            Self::Refused => "terminal_refused",
+            Self::Disabled => "disabled",
+            Self::Configured => "configured",
+            Self::Refused => "refused",
         }
     }
 }
@@ -269,10 +269,10 @@ mod tests {
         assert_eq!(model.segments[0].value, "sonar.resident");
         assert_eq!(model.segments[3].key, "queued_inputs");
         assert_eq!(model.segments[3].value, "2");
-        assert_eq!(model.segments[6].value, "provider_disabled");
-        assert_eq!(model.segments[7].value, "provider_adapter_disabled");
-        assert_eq!(model.segments[8].value, "mcp_disabled");
-        assert_eq!(model.segments[9].value, "terminal_disabled");
+        assert_eq!(model.segments[6].value, "disabled");
+        assert_eq!(model.segments[7].value, "disabled");
+        assert_eq!(model.segments[8].value, "disabled");
+        assert_eq!(model.segments[9].value, "disabled");
         assert_eq!(model.segments[10].key, "last_error");
         assert_eq!(model.segments[10].value, "none");
     }
@@ -283,7 +283,7 @@ mod tests {
 
         assert_eq!(
             model.compact_line,
-            "agent=sonar.resident | session=carrier_1 | turn=idle | queued=2 | held=1 | transcript=8 | provider=provider_disabled | provider_adapter=provider_adapter_disabled | mcp=mcp_disabled | terminal=terminal_disabled | error=none"
+            "agent=sonar.resident | session=carrier_1 | turn=idle | queued=2 | held=1 | transcript=8 | provider=disabled | provider_adapter=disabled | mcp=disabled | terminal=disabled | error=none"
         );
     }
 
@@ -468,7 +468,7 @@ mod tests {
         });
 
         assert_eq!(model.segments[2].value, "active");
-        assert_eq!(model.segments[6].value, "provider_working");
-        assert_eq!(model.segments[7].value, "provider_adapter_disabled");
+        assert_eq!(model.segments[6].value, "working");
+        assert_eq!(model.segments[7].value, "disabled");
     }
 }

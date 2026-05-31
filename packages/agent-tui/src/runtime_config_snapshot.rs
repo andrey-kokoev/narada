@@ -92,12 +92,9 @@ mod tests {
         );
         assert_eq!(snapshot.mcp.status.as_str(), "configured");
         assert_eq!(snapshot.terminal.status.as_str(), "configured");
-        assert_eq!(posture.provider_state.as_str(), "provider_configured");
-        assert_eq!(
-            posture.provider_adapter_state.as_str(),
-            "provider_adapter_refused"
-        );
-        assert_eq!(posture.mcp_state.as_str(), "mcp_configured");
-        assert_eq!(posture.terminal_state.as_str(), "terminal_configured");
+        assert_eq!(posture.provider_state.as_str(), "configured");
+        assert_eq!(posture.provider_adapter_state.as_str(), "refused");
+        assert_eq!(posture.mcp_state.as_str(), "configured");
+        assert_eq!(posture.terminal_state.as_str(), "configured");
     }
 }

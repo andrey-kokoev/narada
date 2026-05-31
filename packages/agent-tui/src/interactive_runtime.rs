@@ -404,15 +404,9 @@ mod tests {
             None,
         );
 
-        assert!(model
-            .status
-            .compact_line
-            .contains("provider=provider_configured"));
-        assert!(model.status.compact_line.contains("mcp=mcp_configured"));
-        assert!(model
-            .status
-            .compact_line
-            .contains("terminal=terminal_configured"));
+        assert!(model.status.compact_line.contains("provider=configured"));
+        assert!(model.status.compact_line.contains("mcp=configured"));
+        assert!(model.status.compact_line.contains("terminal=configured"));
 
         remove_file(control_path).ok();
         remove_file(session_path).ok();
