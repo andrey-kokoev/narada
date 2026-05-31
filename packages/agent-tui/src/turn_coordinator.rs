@@ -483,26 +483,44 @@ mod tests {
         assert_eq!(completed.evidence_written, 5);
 
         let session_jsonl = read_to_string(&path).expect("session jsonl exists");
-        let lines: Vec<&str> = session_jsonl.lines().collect();
-        assert_eq!(lines.len(), 5);
+        let events = session_jsonl
+            .lines()
+            .map(|line| parse_session_event(line).expect("event parses"))
+            .collect::<Vec<_>>();
+        assert_eq!(events.len(), 5);
+        let provider_request = &events[1];
         assert_eq!(
-            parse_session_event(lines[2])
-                .expect("text output parses")
-                .event_kind,
+            provider_request.payload["provider_request_status"],
+            "completed"
+        );
+        assert_eq!(provider_request.payload["provider_execution_enabled"], true);
+        assert_eq!(
+            provider_request.payload["provider_runtime_status"],
+            "configured"
+        );
+        assert_eq!(
+            provider_request.payload["provider_adapter_admission_status"],
+            "admitted"
+        );
+        assert_eq!(
+            provider_request.payload["provider_adapter_kind"],
+            "codex_subscription_adapter"
+        );
+        assert_eq!(
+            provider_request.payload["provider_adapter_refusal_reason"],
+            serde_json::Value::Null
+        );
+        assert_eq!(
+            events[2].event_kind,
             SessionEventKind::ProviderTextDeltaRecorded
         );
         assert_eq!(
-            parse_session_event(lines[3])
-                .expect("tool output parses")
-                .event_kind,
+            events[3].event_kind,
             SessionEventKind::ProviderToolCallRequested
         );
-        assert_eq!(
-            parse_session_event(lines[4])
-                .expect("terminal parses")
-                .event_kind,
-            SessionEventKind::TurnCompleted
-        );
+        assert_eq!(events[4].event_kind, SessionEventKind::TurnCompleted);
+        assert_eq!(events[4].payload["provider_execution_enabled"], true);
+        assert_eq!(events[4].payload["terminal_status"], "completed");
 
         remove_file(path).ok();
     }
