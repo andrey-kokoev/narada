@@ -23,6 +23,7 @@ pub struct McpFabricTransportServer {
     pub command: String,
     pub args: Vec<String>,
     pub env: BTreeMap<String, String>,
+    pub env_vars: Vec<String>,
     pub tools: BTreeSet<String>,
     pub surface_id: Option<String>,
     pub target_site_root: Option<String>,
@@ -52,6 +53,7 @@ struct RawMcpServer {
     command: Option<Value>,
     args: Option<Value>,
     env: Option<Value>,
+    env_vars: Option<Value>,
     tools: Option<Value>,
     allowed_tools: Option<Value>,
     tool_names: Option<Value>,
@@ -146,7 +148,7 @@ impl McpFabricTransportClient {
             server_name: server.name.clone(),
             command: server.command.clone(),
             args: server.args.clone(),
-            env: server.env.clone(),
+            env: materialize_server_env(server),
             tool_name: request.tool_name.clone(),
             request_event,
             json_rpc,
@@ -188,6 +190,7 @@ impl McpFabricTransportServer {
         }
         let args = select_args(&name, raw.args)?;
         let env = select_env(&name, raw.env)?;
+        let env_vars = select_env_vars(&name, raw.env_vars)?;
         let surface_id = normalize_optional_server_string(&name, "surface_id", raw.surface_id)?;
         let target_site_root =
             normalize_optional_server_string(&name, "target_site_root", raw.target_site_root)?;
@@ -197,6 +200,7 @@ impl McpFabricTransportServer {
             command,
             args,
             env,
+            env_vars,
             tools,
             surface_id,
             target_site_root,
@@ -264,6 +268,17 @@ fn select_args(server_name: &str, args: Option<Value>) -> Result<Vec<String>, St
         .collect()
 }
 
+fn materialize_server_env(server: &McpFabricTransportServer) -> BTreeMap<String, String> {
+    let mut env = BTreeMap::new();
+    for name in &server.env_vars {
+        if let Ok(value) = std::env::var(name) {
+            env.insert(name.clone(), value);
+        }
+    }
+    env.extend(server.env.clone());
+    env
+}
+
 fn select_env(server_name: &str, env: Option<Value>) -> Result<BTreeMap<String, String>, String> {
     let Some(value) = env else {
         return Ok(BTreeMap::new());
@@ -285,6 +300,27 @@ fn select_env(server_name: &str, env: Option<Value>) -> Result<BTreeMap<String, 
         env.insert(key, value.to_string());
     }
     Ok(env)
+}
+
+fn select_env_vars(server_name: &str, env_vars: Option<Value>) -> Result<Vec<String>, String> {
+    let Some(value) = env_vars else {
+        return Ok(Vec::new());
+    };
+    let Some(values) = value.as_array() else {
+        return Err(format!("mcp_fabric_server_env_vars_invalid:{server_name}"));
+    };
+    let mut names = Vec::new();
+    for value in values {
+        let Some(name) = value.as_str() else {
+            return Err(format!("mcp_fabric_server_env_var_invalid:{server_name}"));
+        };
+        let name = name.trim().to_string();
+        if name.is_empty() {
+            return Err(format!("mcp_fabric_server_env_var_invalid:{server_name}"));
+        }
+        names.push(name);
+    }
+    Ok(names)
 }
 
 fn select_tool_list(
@@ -372,6 +408,7 @@ mod tests {
               "command": "node",
               "args": ["site-loop.mjs"],
               "env": {"NARADA_SITE_ROOT": "D:/code/narada.sonar"},
+              "env_vars": ["NARADA_AGENT_ID"],
               "tools": ["site_loop_run_once", "site_loop_status"],
               "surface_id": "sonar.site-loop",
               "target_site_root": "D:/code/narada.sonar"
@@ -807,6 +844,69 @@ mod tests {
             client.servers["sonar-site-loop"].args,
             vec!["site-loop.mjs"]
         );
+    }
+
+    #[test]
+    fn parses_server_env_vars() {
+        let client = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "env_vars": ["NARADA_AGENT_ID"],
+                  "tools": ["site_loop_status"]
+                }
+              }
+            }"#,
+        )
+        .expect("server env_vars config parses");
+
+        assert_eq!(
+            client.servers["sonar-site-loop"].env_vars,
+            vec!["NARADA_AGENT_ID".to_string()]
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_server_env_vars_shape() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "env_vars": {},
+                  "tools": ["site_loop_status"]
+                }
+              }
+            }"#,
+        )
+        .expect_err("env_vars must be an array");
+
+        assert_eq!(error, "mcp_fabric_server_env_vars_invalid:sonar-site-loop");
+    }
+
+    #[test]
+    fn rejects_invalid_server_env_var() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "env_vars": [" "],
+                  "tools": ["site_loop_status"]
+                }
+              }
+            }"#,
+        )
+        .expect_err("env_vars must contain nonblank strings");
+
+        assert_eq!(error, "mcp_fabric_server_env_var_invalid:sonar-site-loop");
     }
 
     #[test]
