@@ -95,14 +95,25 @@ mod tests {
     use crate::carrier_protocol::{SessionEvent, SessionEventKind, SESSION_EVENT_SCHEMA};
     use crate::mcp_json_rpc::McpJsonRpcExchange;
     use serde_json::json;
+    use std::collections::BTreeMap;
+    use std::fs;
     use std::io::Cursor;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn prepared() -> McpFabricPreparedToolCall {
+        prepared_with_command("node", vec!["site-loop.mjs".to_string()], BTreeMap::new())
+    }
+
+    fn prepared_with_command(
+        command: &str,
+        args: Vec<String>,
+        env: BTreeMap<String, String>,
+    ) -> McpFabricPreparedToolCall {
         McpFabricPreparedToolCall {
             server_name: "sonar-site-loop".to_string(),
-            command: "node".to_string(),
-            args: vec!["site-loop.mjs".to_string()],
-            env: std::collections::BTreeMap::new(),
+            command: command.to_string(),
+            args,
+            env,
             tool_name: "site_loop_run_once".to_string(),
             request_event: SessionEvent {
                 schema: SESSION_EVENT_SCHEMA.to_string(),
@@ -147,6 +158,49 @@ mod tests {
         let written = String::from_utf8(writer).expect("writer contains utf8");
         assert!(written.contains("\"method\":\"tools/call\""));
         assert!(written.ends_with('\n'));
+    }
+
+    #[test]
+    fn spawned_process_receives_prepared_env() {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock works")
+            .as_nanos();
+        let script_path =
+            std::env::temp_dir().join(format!("narada-agent-tui-mcp-env-{unique}.mjs"));
+        fs::write(
+            &script_path,
+            r#"
+process.stdin.setEncoding('utf8');
+let input = '';
+let done = false;
+process.stdin.on('data', chunk => {
+  if (done) return;
+  input += chunk;
+  const newline = input.indexOf('\n');
+  if (newline === -1) return;
+  done = true;
+  const request = JSON.parse(input.slice(0, newline));
+  const value = process.env.NARADA_AGENT_TUI_TEST_ENV || '';
+  process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: request.id, result: { content: [{ type: 'text', text: value }] } }) + '\n');
+});
+"#,
+        )
+        .expect("write temp mcp script");
+        let mut env = BTreeMap::new();
+        env.insert(
+            "NARADA_AGENT_TUI_TEST_ENV".to_string(),
+            "env-value-from-prepared-call".to_string(),
+        );
+        let prepared = prepared_with_command("node", vec![script_path.display().to_string()], env);
+
+        let result = execute_prepared_tool_call_once(&prepared).expect("spawned exchange succeeds");
+        let _ = fs::remove_file(&script_path);
+
+        assert_eq!(result.tool_result.status, "ok");
+        assert!(result
+            .response_line
+            .contains("env-value-from-prepared-call"));
     }
 
     #[test]
