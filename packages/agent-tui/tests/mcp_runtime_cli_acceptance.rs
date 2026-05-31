@@ -163,6 +163,31 @@ fn mcp_runtime_cli_acceptance_reports_refusal_for_mcp_server_without_tools() {
 }
 
 #[test]
+fn mcp_runtime_cli_acceptance_reports_refusal_for_blank_mcp_tool_name() {
+    let fabric = temp_mcp_fabric();
+    let config_path = fabric.join("agent-tui.json");
+    write(
+        &config_path,
+        "{\"mcpServers\":{\"site\":{\"transport\":\"stdio\",\"command\":\"node\",\"tools\":[\" \" ]}}}",
+    )
+    .expect("write blank tool temp mcp config");
+    let mut command = base_command();
+    command
+        .env("NARADA_AGENT_TUI_ENABLE_MCP_FABRIC", "true")
+        .env("NARADA_AGENT_TUI_MCP_CONFIG", path_string(&config_path))
+        .env("NARADA_SITE_MCP_FABRIC", path_string(&fabric));
+
+    let output = stdout(&mut command);
+    remove_dir_all(&fabric).expect("remove temp fabric");
+
+    assert!(output.contains("mcp_status: refused"));
+    assert!(output.contains("mcp_fabric_access_enabled: false"));
+    assert!(
+        output.contains("mcp_refusal: mcp_config_invalid:mcp_fabric_server_tool_name_invalid:site")
+    );
+}
+
+#[test]
 fn mcp_runtime_cli_acceptance_reports_refusal_for_mcp_config_invalid_transport_shape() {
     let fabric = temp_mcp_fabric();
     let config_path = fabric.join("agent-tui.json");

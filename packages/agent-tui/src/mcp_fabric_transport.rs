@@ -155,13 +155,19 @@ impl McpFabricTransportServer {
         let command = raw
             .command
             .ok_or_else(|| format!("mcp_fabric_server_command_missing:{name}"))?;
-        let tools = raw
+        let raw_tools = raw
             .tools
             .or(raw.allowed_tools)
             .or(raw.tool_names)
-            .unwrap_or_default()
-            .into_iter()
-            .collect::<BTreeSet<_>>();
+            .unwrap_or_default();
+        let mut tools = BTreeSet::new();
+        for tool in raw_tools {
+            let tool = tool.trim().to_string();
+            if tool.is_empty() {
+                return Err(format!("mcp_fabric_server_tool_name_invalid:{name}"));
+            }
+            tools.insert(tool);
+        }
         if tools.is_empty() {
             return Err(format!("mcp_fabric_server_tools_missing:{name}"));
         }
@@ -241,6 +247,45 @@ mod tests {
         .expect_err("server without visible tools is invalid");
 
         assert_eq!(error, "mcp_fabric_server_tools_missing:sonar-site-loop");
+    }
+
+    #[test]
+    fn rejects_blank_visible_tool_name() {
+        let error = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "tools": ["site_loop_status", " "]
+                }
+              }
+            }"#,
+        )
+        .expect_err("blank visible tool name is invalid");
+
+        assert_eq!(error, "mcp_fabric_server_tool_name_invalid:sonar-site-loop");
+    }
+
+    #[test]
+    fn trims_visible_tool_names() {
+        let client = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "tools": [" site_loop_status "]
+                }
+              }
+            }"#,
+        )
+        .expect("trimmed tool config parses");
+
+        assert!(client.tool_to_server.contains_key("site_loop_status"));
+        assert!(!client.tool_to_server.contains_key(" site_loop_status "));
     }
 
     #[test]
