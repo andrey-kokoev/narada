@@ -1,4 +1,10 @@
+use std::fs::{read_to_string, remove_file, write};
+use std::path::PathBuf;
 use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+const CONTROL_FIXTURE: &str =
+    include_str!("../../carrier-protocol/fixtures/control-input-event.json");
 
 fn base_command() -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_narada-agent-tui"));
@@ -25,6 +31,16 @@ fn stdout(command: &mut Command) -> String {
         String::from_utf8_lossy(&output.stderr)
     );
     String::from_utf8(output.stdout).expect("stdout is utf8")
+}
+
+fn temp_path(name: &str) -> PathBuf {
+    let unique = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock works")
+        .as_nanos();
+    std::env::temp_dir().join(format!(
+        "narada-agent-tui-provider-runtime-{name}-{unique}.jsonl"
+    ))
 }
 
 #[test]
@@ -70,4 +86,37 @@ fn provider_runtime_cli_acceptance_reports_configured_without_execution_adapter(
     assert!(output.contains("model: gpt-5.5"));
     assert!(output.contains("thinking: medium"));
     assert!(output.contains("stream: off"));
+}
+
+#[test]
+fn provider_runtime_cli_acceptance_records_runtime_posture_in_turn_evidence() {
+    let control_path = temp_path("control");
+    let session_path = temp_path("session");
+    write(&control_path, format!("{CONTROL_FIXTURE}\n")).expect("control fixture writes");
+
+    let mut command = base_command();
+    command
+        .arg("--control-jsonl")
+        .arg(&control_path)
+        .arg("--session-jsonl")
+        .arg(&session_path)
+        .arg("--runtime-step-once")
+        .env("NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION", "true")
+        .env("NARADA_INTELLIGENCE_PROVIDER", "codex-subscription")
+        .env("NARADA_AI_MODEL", "gpt-5.5");
+
+    let output = stdout(&mut command);
+    assert!(output.contains("runtime_step_once: ok"));
+
+    let session_jsonl = read_to_string(&session_path).expect("session jsonl exists");
+    assert!(session_jsonl.contains("\"provider_request_status\":\"recorded_not_dispatched\""));
+    assert!(session_jsonl.contains("\"provider_runtime_status\":\"configured_not_implemented\""));
+    assert!(session_jsonl.contains("\"provider\":\"codex-subscription\""));
+    assert!(session_jsonl.contains("\"model\":\"gpt-5.5\""));
+    assert!(
+        session_jsonl.contains("\"provider_refusal_reason\":\"provider_adapter_not_implemented\"")
+    );
+
+    remove_file(control_path).ok();
+    remove_file(session_path).ok();
 }

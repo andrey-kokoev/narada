@@ -43,7 +43,7 @@ impl RuntimeStep {
             session_jsonl_path,
             evidence_context,
             clock,
-            Box::new(ProviderDispatchStub),
+            Box::new(ProviderDispatchStub::default()),
         )
     }
 

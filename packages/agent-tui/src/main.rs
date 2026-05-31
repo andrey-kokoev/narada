@@ -4,6 +4,7 @@ use narada_agent_tui::input_queue::{SessionEvidenceContext, TurnState};
 use narada_agent_tui::interactive_runtime::AgentTuiInteractiveRuntime;
 use narada_agent_tui::layout_model::{LayoutConfig, TerminalSize};
 use narada_agent_tui::mcp_runtime_config::McpRuntimeConfig;
+use narada_agent_tui::provider_dispatch::ProviderDispatchStub;
 use narada_agent_tui::provider_runtime_config::ProviderRuntimeConfig;
 use narada_agent_tui::runtime_clock::RuntimeClock;
 use narada_agent_tui::runtime_step::RuntimeStep;
@@ -433,11 +434,13 @@ fn build_runtime_step(args: &Args) -> Result<RuntimeStep, String> {
     let session_jsonl = args.session_jsonl.clone().expect("validated session jsonl");
     let context = build_evidence_context(args);
     let clock = RuntimeClock::system_now()?;
-    Ok(RuntimeStep::new(
+    let provider_config = provider_config_from_process_env();
+    Ok(RuntimeStep::with_provider_adapter(
         control_jsonl,
         session_jsonl,
         context,
         clock,
+        Box::new(ProviderDispatchStub::with_runtime_config(provider_config)),
     ))
 }
 

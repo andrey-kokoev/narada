@@ -64,7 +64,7 @@ impl TurnCoordinator {
         Self::with_provider_adapter(
             session_jsonl_path,
             evidence_context,
-            Box::new(ProviderDispatchStub),
+            Box::new(ProviderDispatchStub::default()),
         )
     }
 

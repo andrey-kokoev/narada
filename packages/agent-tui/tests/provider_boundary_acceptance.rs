@@ -110,6 +110,14 @@ fn provider_boundary_acceptance_records_disabled_provider_posture() {
         provider_request.payload["provider_execution_enabled"],
         false
     );
+    assert_eq!(
+        provider_request.payload["provider_runtime_status"],
+        "disabled"
+    );
+    assert_eq!(
+        provider_request.payload["provider_refusal_reason"],
+        serde_json::Value::Null
+    );
     assert_eq!(provider_request.payload["content_preview"], input.content);
 
     assert_eq!(terminal.event_kind, SessionEventKind::TurnCompleted);

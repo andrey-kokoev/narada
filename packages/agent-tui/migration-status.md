@@ -35,6 +35,7 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - Turn coordinator with provider dispatch boundary recording and explicit `completed_without_provider` terminal evidence.
 - Provider dispatch trait plus stub adapter; real provider execution remains disabled.
 - Provider boundary acceptance verifies request and terminal evidence both record `recorded_not_dispatched` and `provider_execution_enabled=false`.
+- Provider request evidence carries provider runtime posture, configured provider/model when present, and refusal reason so disabled/configured-not-implemented turns are reconstructable from session JSONL.
 - Provider boundary acceptance verifies ordered provider text deltas project as one accumulated agent transcript message for the turn.
 - Provider runtime config is explicit: provider execution remains disabled unless a real adapter is admitted; provider/model env can reach only `configured_not_implemented` posture while the adapter is absent.
 - Provider runtime CLI acceptance verifies the binary reports disabled-by-default, refused missing-model, and configured-but-not-implemented explicit provider/model/streaming posture.

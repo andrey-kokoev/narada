@@ -1,4 +1,5 @@
 use crate::carrier_protocol::{InputEvent, SessionEventKind};
+use crate::provider_runtime_config::ProviderRuntimeConfig;
 use crate::rendering_boundary::{
     decide_payload_inline, default_payload_policy, InlinePayloadDecision,
 };
@@ -65,8 +66,10 @@ pub trait ProviderAdapter {
     fn dispatch_request(&self, input: &InputEvent, turn_id: &str) -> ProviderDispatchRecord;
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct ProviderDispatchStub;
+#[derive(Debug, Clone)]
+pub struct ProviderDispatchStub {
+    runtime_config: ProviderRuntimeConfig,
+}
 
 impl ProviderOutputRecord {
     pub fn text_delta(turn_id: &str, delta: &str, sequence: u64) -> Self {
@@ -167,8 +170,24 @@ fn inline_text_or_ref(text: &str, decision: InlinePayloadDecision) -> (String, V
 }
 
 impl ProviderDispatchStub {
+    pub fn disabled() -> Self {
+        Self {
+            runtime_config: ProviderRuntimeConfig::disabled(),
+        }
+    }
+
+    pub fn with_runtime_config(runtime_config: ProviderRuntimeConfig) -> Self {
+        Self { runtime_config }
+    }
+
     pub fn record_request(&self, input: &InputEvent, turn_id: &str) -> ProviderDispatchRecord {
         self.dispatch_request(input, turn_id)
+    }
+}
+
+impl Default for ProviderDispatchStub {
+    fn default() -> Self {
+        Self::disabled()
     }
 }
 
@@ -183,6 +202,12 @@ impl ProviderAdapter for ProviderDispatchStub {
                 "input_event_id": input.event_id,
                 "provider_request_status": status.as_str(),
                 "provider_execution_enabled": false,
+                "provider_runtime_status": self.runtime_config.status.as_str(),
+                "provider": self.runtime_config.provider.clone(),
+                "model": self.runtime_config.model.clone(),
+                "thinking": self.runtime_config.thinking.clone(),
+                "stream": self.runtime_config.stream,
+                "provider_refusal_reason": self.runtime_config.refusal_reason.clone(),
                 "content_preview": input.content.chars().take(120).collect::<String>()
             }),
             outputs: Vec::new(),
@@ -194,6 +219,7 @@ impl ProviderAdapter for ProviderDispatchStub {
 mod tests {
     use super::*;
     use crate::carrier_protocol::parse_input_event;
+    use std::collections::BTreeMap;
 
     const INPUT_FIXTURE: &str = include_str!("../../carrier-protocol/fixtures/input-event.json");
 
@@ -261,7 +287,7 @@ mod tests {
     #[test]
     fn stub_records_provider_request_without_dispatch() {
         let input = parse_input_event(INPUT_FIXTURE).expect("input parses");
-        let dispatcher = ProviderDispatchStub;
+        let dispatcher = ProviderDispatchStub::default();
         let adapter: &dyn ProviderAdapter = &dispatcher;
         let record = adapter.dispatch_request(&input, "turn_1");
 
@@ -274,6 +300,39 @@ mod tests {
             "recorded_not_dispatched"
         );
         assert_eq!(record.payload["provider_execution_enabled"], false);
+        assert_eq!(record.payload["provider_runtime_status"], "disabled");
+        assert_eq!(record.payload["provider_refusal_reason"], Value::Null);
         assert!(record.outputs.is_empty());
+    }
+
+    #[test]
+    fn stub_records_configured_provider_runtime_refusal_without_dispatch() {
+        let input = parse_input_event(INPUT_FIXTURE).expect("input parses");
+        let runtime_config = ProviderRuntimeConfig::from_env_map(&BTreeMap::from([
+            (
+                "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION".to_string(),
+                "true".to_string(),
+            ),
+            (
+                "NARADA_INTELLIGENCE_PROVIDER".to_string(),
+                "codex-subscription".to_string(),
+            ),
+            ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
+        ]));
+        let dispatcher = ProviderDispatchStub::with_runtime_config(runtime_config);
+        let record = dispatcher.dispatch_request(&input, "turn_1");
+
+        assert_eq!(record.status, ProviderDispatchStatus::RecordedNotDispatched);
+        assert_eq!(record.provider_execution_enabled, false);
+        assert_eq!(
+            record.payload["provider_runtime_status"],
+            "configured_not_implemented"
+        );
+        assert_eq!(record.payload["provider"], "codex-subscription");
+        assert_eq!(record.payload["model"], "gpt-5.5");
+        assert_eq!(
+            record.payload["provider_refusal_reason"],
+            "provider_adapter_not_implemented"
+        );
     }
 }
