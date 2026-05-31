@@ -70,6 +70,7 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - Composer region rendering now uses the `tui-textarea` widget path, with an explicit live-composer render entry point available beside snapshot rendering.
 - Terminal interactive draw loop now calls the live-composer renderer so textarea cursor and viewport state are preserved during interactive rendering.
 - Terminal runtime config is explicit: terminal rendering remains disabled unless the environment gate in `packages/agent-tui/contracts/terminal-runtime.json` is enabled with its required terminal mode; Rust config and `agent-start` launch metadata read the same contract, CLI acceptance verifies disabled, refused, configured posture, and `--render-once`/`--interactive-loop` refusal while the gate is disabled.
+- Rust terminal runtime config reads `terminal-runtime.json` through an explicit contract module, matching the other shared carrier contracts.
 - Terminal drawing has a backend-generic helper used by both real terminal sessions and scripted TestBackend frame acceptance.
 - `TerminalLifecycleHarness` records enter/draw/leave behavior for scripted terminal backends without binding tests to process stdout.
 - `TerminalSession` and `TerminalLifecycleHarness` are both admitted through the same `InteractiveTerminalFrame` contract, with scripted draw-through-contract acceptance.

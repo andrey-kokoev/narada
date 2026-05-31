@@ -1,44 +1,6 @@
 use std::collections::BTreeMap;
-use std::sync::OnceLock;
 
-use serde::Deserialize;
-
-const TERMINAL_RUNTIME_CONTRACT_JSON: &str = include_str!("../contracts/terminal-runtime.json");
-
-#[derive(Debug, Clone, Deserialize)]
-struct TerminalRuntimeContract {
-    schema: String,
-    terminal_rendering_env_var: String,
-    terminal_mode_env_var: String,
-    required_terminal_mode: String,
-}
-
-static TERMINAL_RUNTIME_CONTRACT: OnceLock<TerminalRuntimeContract> = OnceLock::new();
-
-fn terminal_runtime_contract() -> &'static TerminalRuntimeContract {
-    TERMINAL_RUNTIME_CONTRACT.get_or_init(|| {
-        parse_terminal_runtime_contract(TERMINAL_RUNTIME_CONTRACT_JSON)
-            .expect("bundled terminal runtime contract must be valid")
-    })
-}
-
-fn parse_terminal_runtime_contract(json_text: &str) -> Result<TerminalRuntimeContract, String> {
-    let contract: TerminalRuntimeContract = serde_json::from_str(json_text)
-        .map_err(|error| format!("terminal_runtime_contract_parse_failed:{error}"))?;
-    if contract.schema != "narada.agent_tui.terminal_runtime_contract.v0" {
-        return Err("terminal_runtime_contract_invalid:schema".to_string());
-    }
-    if contract.terminal_rendering_env_var != "NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING" {
-        return Err("terminal_runtime_contract_invalid:terminal_rendering_env_var".to_string());
-    }
-    if contract.terminal_mode_env_var != "NARADA_AGENT_TUI_TERMINAL_MODE" {
-        return Err("terminal_runtime_contract_invalid:terminal_mode_env_var".to_string());
-    }
-    if contract.required_terminal_mode != "interactive_loop" {
-        return Err("terminal_runtime_contract_invalid:required_terminal_mode".to_string());
-    }
-    Ok(contract)
-}
+use crate::terminal_runtime_contract::terminal_runtime_contract;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TerminalRuntimeStatus {
@@ -195,25 +157,6 @@ mod tests {
         assert_eq!(
             config.mode.as_deref(),
             Some(contract.required_terminal_mode.as_str())
-        );
-    }
-
-    #[test]
-    fn terminal_runtime_contract_parser_rejects_invalid_contracts() {
-        assert!(parse_terminal_runtime_contract("{")
-            .unwrap_err()
-            .starts_with("terminal_runtime_contract_parse_failed:"));
-        assert_eq!(
-            parse_terminal_runtime_contract(
-                r#"{
-                    "schema":"narada.agent_tui.terminal_runtime_contract.v0",
-                    "terminal_rendering_env_var":"NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING",
-                    "terminal_mode_env_var":"NARADA_AGENT_TUI_TERMINAL_MODE",
-                    "required_terminal_mode":"render_once"
-                }"#,
-            )
-            .unwrap_err(),
-            "terminal_runtime_contract_invalid:required_terminal_mode"
         );
     }
 }
