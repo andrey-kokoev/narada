@@ -1,10 +1,10 @@
 use std::sync::OnceLock;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 const LAUNCH_SLICE_CONTRACT_JSON: &str = include_str!("../contracts/launch-slice.json");
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct LaunchSliceContract {
     pub schema: String,
     pub admitted_runtime_slice: String,
@@ -51,6 +51,12 @@ pub fn parse_launch_slice_contract(json_text: &str) -> Result<LaunchSliceContrac
 mod tests {
     use super::*;
 
+    fn invalid_contract_json(mut mutate: impl FnMut(&mut LaunchSliceContract)) -> String {
+        let mut contract = launch_slice_contract().clone();
+        mutate(&mut contract);
+        serde_json::to_string(&contract).expect("test launch slice contract serializes")
+    }
+
     #[test]
     fn bundled_launch_slice_contract_is_valid() {
         let contract = launch_slice_contract();
@@ -77,30 +83,16 @@ mod tests {
             .unwrap_err()
             .starts_with("launch_slice_contract_parse_failed:"));
         assert_eq!(
-            parse_launch_slice_contract(
-                r#"{
-                    "schema":"narada.agent_tui.launch_slice_contract.v0",
-                    "admitted_runtime_slice":"terminal_interactive_loop",
-                    "carrier_flag":"--interactive-step-once",
-                    "tool_fabric_adapter_kind":"narada-agent-tui-interactive-step",
-                    "capability_policy_smoke_step":"bounded_non_terminal_control_jsonl",
-                    "terminal_mode":false
-                }"#,
-            )
+            parse_launch_slice_contract(&invalid_contract_json(|contract| {
+                contract.admitted_runtime_slice = "terminal_interactive_loop".to_string();
+            }))
             .unwrap_err(),
             "launch_slice_contract_invalid:admitted_runtime_slice"
         );
         assert_eq!(
-            parse_launch_slice_contract(
-                r#"{
-                    "schema":"narada.agent_tui.launch_slice_contract.v0",
-                    "admitted_runtime_slice":"bounded_non_terminal_interactive_step_once",
-                    "carrier_flag":"--wrong-step",
-                    "tool_fabric_adapter_kind":"narada-agent-tui-interactive-step",
-                    "capability_policy_smoke_step":"bounded_non_terminal_control_jsonl",
-                    "terminal_mode":false
-                }"#,
-            )
+            parse_launch_slice_contract(&invalid_contract_json(|contract| {
+                contract.carrier_flag = "--wrong-step".to_string();
+            }))
             .unwrap_err(),
             "launch_slice_contract_invalid:carrier_flag"
         );
