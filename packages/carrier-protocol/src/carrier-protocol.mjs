@@ -3,6 +3,7 @@ export const CONTROL_INPUT_EVENT_SCHEMA = 'narada.carrier.control.input_event.v1
 export const SESSION_EVENT_SCHEMA = 'narada.carrier.session_event.v1';
 export const PAYLOAD_REF_SCHEMA = 'narada.carrier.payload_ref.v1';
 export const PAYLOAD_POLICY_SCHEMA = 'narada.carrier.payload_policy.v1';
+export const TURN_TERMINAL_PAYLOAD_SCHEMA = 'narada.agent_tui.turn_terminal_payload.v0';
 
 export const SOURCE_KINDS = Object.freeze(['operator', 'system', 'agent', 'external']);
 export const TRANSPORTS = Object.freeze([
@@ -381,9 +382,9 @@ const SESSION_PAYLOAD_VALIDATORS = Object.freeze({
   directive_receipt_recorded: (payload) => requireFields(payload, ['input_event_id', 'directive_id']),
   directive_carrier_accepted_recorded: (payload) => requireFields(payload, ['input_event_id', 'directive_id']),
   turn_started: (payload) => requireFields(payload, ['input_event_id', 'turn_id']),
-  turn_completed: (payload) => requireFields(payload, ['turn_id']),
-  turn_interrupted: (payload) => requireFields(payload, ['turn_id']),
-  turn_failed: (payload) => requireFields(payload, ['turn_id', 'error_summary']),
+  turn_completed: (payload) => validateTurnTerminalPayload('turn_completed', payload),
+  turn_interrupted: (payload) => validateTurnTerminalPayload('turn_interrupted', payload),
+  turn_failed: (payload) => validateTurnTerminalPayload('turn_failed', payload),
   interrupt_requested: (payload) => requireFields(payload, ['turn_id']),
   tool_call_requested: validateToolCallPayload,
   tool_result_received: validateToolResultPayload,
@@ -441,6 +442,31 @@ function validateSystemDirectiveReleasedPayload(payload) {
   if (errors.length > 0) return errors;
   if (!isRfc3339Utc(payload.released_at)) errors.push('payload.invalid_released_at');
   if (payload.directive_id !== undefined && (typeof payload.directive_id !== 'string' || payload.directive_id.length === 0)) errors.push('payload.invalid_directive_id');
+  return errors;
+}
+
+function validateTurnTerminalPayload(kind, payload) {
+  const errors = requireFields(payload, [
+    'schema',
+    'turn_id',
+    'terminal_status',
+    'provider_request_status',
+    'provider_execution_enabled',
+  ]);
+  if (errors.length > 0) return errors;
+  if (payload.schema !== TURN_TERMINAL_PAYLOAD_SCHEMA) errors.push(`payload.invalid_schema:${String(payload.schema)}`);
+  if (typeof payload.turn_id !== 'string' || payload.turn_id.length === 0) errors.push('payload.invalid_turn_id');
+  if (typeof payload.provider_request_status !== 'string' || payload.provider_request_status.length === 0) errors.push('payload.invalid_provider_request_status');
+  if (typeof payload.provider_execution_enabled !== 'boolean') errors.push('payload.invalid_provider_execution_enabled');
+  const validTerminalStatus = (
+    (kind === 'turn_completed' && ['completed', 'completed_after_dispatch', 'completed_without_provider'].includes(payload.terminal_status))
+    || (kind === 'turn_interrupted' && payload.terminal_status === 'interrupted')
+    || (kind === 'turn_failed' && payload.terminal_status === 'failed')
+  );
+  if (!validTerminalStatus) errors.push(`payload.invalid_terminal_status:${String(payload.terminal_status)}`);
+  if (kind === 'turn_failed' && (typeof payload.error_summary !== 'string' || payload.error_summary.length === 0)) {
+    errors.push('payload.invalid_error_summary');
+  }
   return errors;
 }
 
