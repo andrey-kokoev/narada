@@ -376,6 +376,14 @@ mod tests {
     }
 
     #[test]
+    fn rejects_non_object_config_root() {
+        let error = McpFabricTransportClient::from_json_str("fixture.mcp.json", r#"[]"#)
+            .expect_err("config root must be an object");
+
+        assert_eq!(error, "mcp_fabric_config_shape_invalid");
+    }
+
+    #[test]
     fn rejects_non_object_mcp_servers() {
         let error = McpFabricTransportClient::from_json_str(
             "fixture.mcp.json",
