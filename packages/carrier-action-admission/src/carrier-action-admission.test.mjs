@@ -39,7 +39,12 @@ assert.deepEqual(classifyCarrierActionRequest('task_lifecycle_claim', { task_num
   classifier_source: 'closed_name_fallback',
 });
 assert.equal(classifyCarrierActionRequest('startup_sequence', {}).decision, 'read_only_admitted');
-assert.equal(classifyCarrierActionRequest('read_file', {}).decision, 'read_only_admitted');
+assert.equal(classifyCarrierActionRequest('fs_read_file', {}).decision, 'read_only_admitted');
+assert.equal(classifyCarrierActionRequest('fs_glob_search', {}).decision, 'read_only_admitted');
+assert.equal(classifyCarrierActionRequest('fs_grep_search', {}).decision, 'read_only_admitted');
+assert.equal(classifyCarrierActionRequest('read_file', {}).decision, 'refused');
+assert.equal(classifyCarrierActionRequest('glob_search', {}).decision, 'refused');
+assert.equal(classifyCarrierActionRequest('grep_search', {}).decision, 'refused');
 assert.equal(classifyCarrierActionRequest('startup_sequence', {}, { toolAvailable: false }).reason, 'mcp_tool_not_available');
 assert.equal(classifyCarrierActionRequest('unknown_registry_read', {}, {
   toolMetadata: { read_only: true, source: 'surface_registry', reason: 'test_registry_read' },
@@ -53,7 +58,7 @@ assert.equal(classifyCarrierActionRequest('unknown_registry_task', {}, {
     reason: 'test_registry_task',
   },
 }).classifier_source, 'surface_registry');
-const registryUnlisted = classifyCarrierActionRequest('read_file', {}, {
+const registryUnlisted = classifyCarrierActionRequest('fs_read_file', {}, {
   toolMetadata: {
     source: 'surface_registry_unlisted',
     registry_metadata_authoritative: true,

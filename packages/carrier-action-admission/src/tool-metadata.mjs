@@ -2,9 +2,12 @@ import { existsSync, readFileSync } from 'node:fs';
 import { basename, join, normalize } from 'node:path';
 
 const FALLBACK_READ_ONLY_TOOLS = new Set([
-  'read_file',
-  'glob_search',
-  'grep_search',
+  'fs_read_file',
+  'fs_read_file_range',
+  'fs_stat',
+  'fs_glob_search',
+  'fs_grep_search',
+  'mcp_output_show',
   'read_media_file',
   'task_lifecycle_list',
   'task_lifecycle_show',
@@ -26,7 +29,6 @@ const FALLBACK_READ_ONLY_TOOLS = new Set([
   'agent_context_show_bootstrap',
   'inbox_doctor',
   'startup_sequence',
-  'mcp_output_show',
   'site_task_lifecycle.list_tasks',
   'site_task_lifecycle.get_task',
   'site_task_lifecycle.next_task',
