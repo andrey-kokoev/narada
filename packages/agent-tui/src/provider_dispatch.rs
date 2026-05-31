@@ -343,9 +343,27 @@ mod tests {
     use crate::carrier_protocol::{
         parse_input_event, PROVIDER_OUTPUT_PAYLOAD_SCHEMA, PROVIDER_REQUEST_PAYLOAD_SCHEMA,
     };
+    use crate::provider_adapter_contract::provider_adapter_contract;
     use std::collections::BTreeMap;
 
     const INPUT_FIXTURE: &str = include_str!("../../carrier-protocol/fixtures/input-event.json");
+
+    fn provider_runtime_env(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
+        let contract = provider_adapter_contract();
+        pairs
+            .iter()
+            .map(|(semantic_key, value)| {
+                let env_key = match *semantic_key {
+                    "execution_enabled" => &contract.provider_execution_env_var,
+                    "provider" => &contract.intelligence_provider_env_var,
+                    "model" => &contract.ai_model_env_var,
+                    "thinking" => &contract.ai_thinking_env_var,
+                    unexpected => panic!("unknown provider runtime env semantic key: {unexpected}"),
+                };
+                (env_key.clone(), value.to_string())
+            })
+            .collect()
+    }
 
     #[test]
     fn provider_dispatch_statuses_have_canonical_strings() {
@@ -413,17 +431,11 @@ mod tests {
     #[test]
     fn provider_adapter_request_has_stable_dispatch_payload_shape() {
         let input = parse_input_event(INPUT_FIXTURE).expect("input parses");
-        let runtime_config = ProviderRuntimeConfig::from_env_map(&BTreeMap::from([
-            (
-                "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION".to_string(),
-                "true".to_string(),
-            ),
-            (
-                "NARADA_INTELLIGENCE_PROVIDER".to_string(),
-                "codex-subscription".to_string(),
-            ),
-            ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
-            ("NARADA_AI_THINKING".to_string(), "medium".to_string()),
+        let runtime_config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
+            ("execution_enabled", "true"),
+            ("provider", "codex-subscription"),
+            ("model", "gpt-5.5"),
+            ("thinking", "medium"),
         ]));
         let admission = ProviderAdapterAdmission::from_runtime_config(&runtime_config, None);
         let request = ProviderAdapterRequest::from_input(&input, "turn_1", &runtime_config);
@@ -481,16 +493,10 @@ mod tests {
     #[test]
     fn stub_records_configured_provider_runtime_refusal_without_dispatch() {
         let input = parse_input_event(INPUT_FIXTURE).expect("input parses");
-        let runtime_config = ProviderRuntimeConfig::from_env_map(&BTreeMap::from([
-            (
-                "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION".to_string(),
-                "true".to_string(),
-            ),
-            (
-                "NARADA_INTELLIGENCE_PROVIDER".to_string(),
-                "codex-subscription".to_string(),
-            ),
-            ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
+        let runtime_config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
+            ("execution_enabled", "true"),
+            ("provider", "codex-subscription"),
+            ("model", "gpt-5.5"),
         ]));
         let dispatcher = ProviderDispatchStub::with_runtime_config(runtime_config);
         let record = dispatcher.dispatch_request(&input, "turn_1");
@@ -514,16 +520,10 @@ mod tests {
     #[test]
     fn provider_adapter_factory_preserves_withheld_dispatch_boundary() {
         let input = parse_input_event(INPUT_FIXTURE).expect("input parses");
-        let runtime_config = ProviderRuntimeConfig::from_env_map(&BTreeMap::from([
-            (
-                "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION".to_string(),
-                "true".to_string(),
-            ),
-            (
-                "NARADA_INTELLIGENCE_PROVIDER".to_string(),
-                "codex-subscription".to_string(),
-            ),
-            ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
+        let runtime_config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
+            ("execution_enabled", "true"),
+            ("provider", "codex-subscription"),
+            ("model", "gpt-5.5"),
         ]));
         let adapter_admission = ProviderAdapterAdmission::from_runtime_config(
             &runtime_config,
@@ -552,16 +552,10 @@ mod tests {
     #[test]
     fn scripted_adapter_records_admitted_completed_dispatch_with_outputs() {
         let input = parse_input_event(INPUT_FIXTURE).expect("input parses");
-        let runtime_config = ProviderRuntimeConfig::from_env_map(&BTreeMap::from([
-            (
-                "NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION".to_string(),
-                "true".to_string(),
-            ),
-            (
-                "NARADA_INTELLIGENCE_PROVIDER".to_string(),
-                "codex-subscription".to_string(),
-            ),
-            ("NARADA_AI_MODEL".to_string(), "gpt-5.5".to_string()),
+        let runtime_config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
+            ("execution_enabled", "true"),
+            ("provider", "codex-subscription"),
+            ("model", "gpt-5.5"),
         ]));
         let dispatcher = ScriptedProviderAdapter::try_new(
             runtime_config,
