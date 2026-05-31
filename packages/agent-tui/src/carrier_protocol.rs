@@ -797,6 +797,73 @@ mod tests {
     }
 
     #[test]
+    fn parses_shared_provider_payload_session_event_fixtures() {
+        let provider_request = parse_session_event(include_str!(
+            "../../carrier-protocol/fixtures/provider-request-session-event.json"
+        ))
+        .expect("provider request session fixture parses");
+        assert_eq!(
+            provider_request.event_kind,
+            SessionEventKind::ProviderRequestRecorded
+        );
+        assert_eq!(
+            provider_request.payload,
+            create_provider_request_payload(
+                "turn_fixture_1",
+                "input_fixture_1",
+                "recorded_not_dispatched",
+                false,
+                "configured",
+                "configured_without_adapter",
+                None,
+                Some("codex-subscription".to_string()),
+                Some("gpt-5.5".to_string()),
+                Some("medium".to_string()),
+                true,
+                Some("provider_adapter_not_configured".to_string()),
+                "run startup sequence",
+            )
+        );
+
+        let text_delta = parse_session_event(include_str!(
+            "../../carrier-protocol/fixtures/provider-text-delta-session-event.json"
+        ))
+        .expect("provider text delta session fixture parses");
+        assert_eq!(
+            text_delta.event_kind,
+            SessionEventKind::ProviderTextDeltaRecorded
+        );
+        assert_eq!(
+            text_delta.payload,
+            create_provider_text_delta_payload(
+                "turn_fixture_1",
+                1,
+                "Startup sequence completed.",
+                Value::Null,
+            )
+        );
+
+        let tool_call = parse_session_event(include_str!(
+            "../../carrier-protocol/fixtures/provider-tool-call-session-event.json"
+        ))
+        .expect("provider tool call session fixture parses");
+        assert_eq!(
+            tool_call.event_kind,
+            SessionEventKind::ProviderToolCallRequested
+        );
+        assert_eq!(
+            tool_call.payload,
+            create_provider_tool_call_payload(
+                "turn_fixture_1",
+                2,
+                "site_loop_run_once",
+                "{}",
+                Value::Null,
+            )
+        );
+    }
+
+    #[test]
     fn serializes_shared_session_event_fixture_as_jsonl_line() {
         let event = parse_session_event(include_str!(
             "../../carrier-protocol/fixtures/session-event.json"

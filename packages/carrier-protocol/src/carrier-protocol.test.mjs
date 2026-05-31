@@ -76,6 +76,37 @@ assert.deepEqual(turnTerminalFixture.payload, createTurnTerminalPayload({
   provider_request_status: 'recorded_not_dispatched',
   provider_execution_enabled: false,
 }));
+const providerRequestFixture = readFixture('provider-request-session-event.json');
+assert.deepEqual(validateSessionEvent(providerRequestFixture), []);
+assert.deepEqual(providerRequestFixture.payload, createProviderRequestPayload({
+  turn_id: 'turn_fixture_1',
+  input_event_id: 'input_fixture_1',
+  provider_request_status: 'recorded_not_dispatched',
+  provider_execution_enabled: false,
+  provider_runtime_status: 'configured',
+  provider_adapter_admission_status: 'configured_without_adapter',
+  provider: 'codex-subscription',
+  model: 'gpt-5.5',
+  thinking: 'medium',
+  stream: true,
+  provider_adapter_refusal_reason: 'provider_adapter_not_configured',
+  content_preview: 'run startup sequence',
+}));
+const providerTextDeltaFixture = readFixture('provider-text-delta-session-event.json');
+assert.deepEqual(validateSessionEvent(providerTextDeltaFixture), []);
+assert.deepEqual(providerTextDeltaFixture.payload, createProviderTextDeltaPayload({
+  turn_id: 'turn_fixture_1',
+  sequence: 1,
+  text_delta: 'Startup sequence completed.',
+}));
+const providerToolCallFixture = readFixture('provider-tool-call-session-event.json');
+assert.deepEqual(validateSessionEvent(providerToolCallFixture), []);
+assert.deepEqual(providerToolCallFixture.payload, createProviderToolCallPayload({
+  turn_id: 'turn_fixture_1',
+  sequence: 2,
+  tool_name: 'site_loop_run_once',
+  arguments_summary: '{}',
+}));
 assert.deepEqual(validatePayloadRef(readFixture('payload-ref.json')), []);
 assert.deepEqual(validatePayloadPolicy(readFixture('payload-policy.json')), []);
 
