@@ -4,7 +4,7 @@
 
 `agent-tui` is a Rust carrier prototype with a bounded runtime scaffold, control JSONL polling, queue admission, transcript projection, terminal rendering, and explicit provider-boundary evidence.
 
-It is not yet a provider-backed interactive carrier. Production `agent-start -Runtime agent-tui` must remain on the non-terminal smoke path until the promotion gate is satisfied.
+It is not yet a provider-backed interactive carrier. Production `agent-start -Runtime agent-tui` must remain on the bounded non-terminal runtime slice until the promotion gate is satisfied.
 
 ## Implemented In `@narada2/carrier-protocol`
 
@@ -91,7 +91,7 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 
 ## Promotion Gate
 
-`agent-tui` must stay on the non-terminal one-shot smoke launch path until all of these are true:
+`agent-tui` must stay on the bounded non-terminal runtime launch path until all of these are true:
 
 - Rust tests run in CI or a documented local toolchain with MSVC `link.exe` available.
 - `--interactive-smoke-loop --max-steps <n>` passes fixture acceptance for queued operator input, held system directives, release, interrupt, malformed control JSONL, and transcript projection.
