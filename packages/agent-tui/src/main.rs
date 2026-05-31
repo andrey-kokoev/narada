@@ -2,6 +2,7 @@ use narada_agent_tui::app_view_model::{build_app_view, AppViewInput, AppViewMode
 use narada_agent_tui::composer_view_model::ComposerViewInput;
 use narada_agent_tui::input_queue::{SessionEvidenceContext, TurnState};
 use narada_agent_tui::interactive_runtime::AgentTuiInteractiveRuntime;
+use narada_agent_tui::launch_slice_contract::launch_slice_contract;
 use narada_agent_tui::layout_model::{LayoutConfig, TerminalSize};
 use narada_agent_tui::provider_dispatch::provider_adapter_from_runtime_config;
 use narada_agent_tui::provider_tool_call_bridge::provider_tool_call_executor_from_mcp_runtime_config;
@@ -653,7 +654,9 @@ where
             }
             "--runtime-step-once" => parsed.runtime_step_once = true,
             "--runtime-loop" => parsed.runtime_loop = true,
-            "--interactive-step-once" => parsed.interactive_step_once = true,
+            flag if flag == launch_slice_contract().carrier_flag => {
+                parsed.interactive_step_once = true
+            }
             "--interactive-smoke-loop" => parsed.interactive_smoke_loop = true,
             "--interactive-loop" => parsed.interactive_loop = true,
             "--render-once" => parsed.render_once = true,

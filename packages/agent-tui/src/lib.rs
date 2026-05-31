@@ -7,6 +7,7 @@ pub mod control_jsonl;
 pub mod control_watcher;
 pub mod input_queue;
 pub mod interactive_runtime;
+pub mod launch_slice_contract;
 pub mod layout_model;
 pub mod mcp_fabric_boundary;
 pub mod mcp_fabric_transport;
