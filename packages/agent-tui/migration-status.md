@@ -24,6 +24,7 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 
 ## Implemented In `packages/agent-tui`
 
+- Contract index at `contracts/README.md` defines machine-readable runtime-admission contracts consumed by both Rust `agent-tui` and Narada proper launcher metadata.
 - Rust crate and library target: `narada-agent-tui` / `narada_agent_tui`.
 - CLI flags for identity, session, Site root, control/session JSONL, runtime step/loop, interactive step/loop, smoke loop, render once, Rust toolchain readiness check, and bounded max steps.
 - Rust protocol structs and validators for carrier protocol fixtures.

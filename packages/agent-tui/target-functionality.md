@@ -10,6 +10,8 @@ It replaces line-oriented terminal interaction problems in `agent-cli` without c
 
 Carrier event semantics are defined by `carrier-protocol.md` and executable validators in `@narada2/carrier-protocol`.
 
+Runtime-admission constants shared by the Rust carrier and Narada proper launcher metadata are indexed in `contracts/README.md` and stored as machine-readable JSON under `contracts/`.
+
 This document describes target functionality and UX. If this document conflicts with `carrier-protocol.md` or `@narada2/carrier-protocol`, the protocol contract wins for event schemas, lifecycle states, JSONL records, tool events, compatibility, and admission rules.
 
 ## Non-Goals
