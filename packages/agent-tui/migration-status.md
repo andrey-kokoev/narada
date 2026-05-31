@@ -65,7 +65,7 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - Interactive render-loop state now owns a long-lived `TextareaComposer`; runtime and view APIs receive draft snapshots only at their existing boundaries.
 - Composer region rendering now uses the `tui-textarea` widget path, with an explicit live-composer render entry point available beside snapshot rendering.
 - Terminal interactive draw loop now calls the live-composer renderer so textarea cursor and viewport state are preserved during interactive rendering.
-- Terminal runtime config is explicit: terminal rendering remains disabled unless `NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING` is enabled with `NARADA_AGENT_TUI_TERMINAL_MODE=interactive_loop`; CLI acceptance verifies disabled, refused, configured posture, and `--interactive-loop` refusal while the gate is disabled.
+- Terminal runtime config is explicit: terminal rendering remains disabled unless `NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING` is enabled with `NARADA_AGENT_TUI_TERMINAL_MODE=interactive_loop`; CLI acceptance verifies disabled, refused, configured posture, and `--render-once`/`--interactive-loop` refusal while the gate is disabled.
 - Terminal drawing has a backend-generic helper used by both real terminal sessions and scripted TestBackend frame acceptance.
 - `TerminalLifecycleHarness` records enter/draw/leave behavior for scripted terminal backends without binding tests to process stdout.
 - `TerminalSession` and `TerminalLifecycleHarness` are both admitted through the same `InteractiveTerminalFrame` contract, with scripted draw-through-contract acceptance.

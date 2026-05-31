@@ -301,6 +301,8 @@ fn run_runtime_loop(args: Args) -> Result<(), String> {
 }
 
 fn run_render_once(args: Args) -> Result<(), String> {
+    let terminal_config = terminal_config_from_process_env();
+    assert_terminal_rendering_admitted(&terminal_config, "render_once")?;
     let model = build_scaffold_app_view(&args)?;
     let mut session = TerminalSession::enter()?;
     session.draw_once(&model)?;
@@ -382,6 +384,13 @@ fn run_interactive_loop(args: Args) -> Result<(), String> {
 }
 
 fn assert_terminal_interactive_loop_admitted(config: &TerminalRuntimeConfig) -> Result<(), String> {
+    assert_terminal_rendering_admitted(config, "interactive_loop")
+}
+
+fn assert_terminal_rendering_admitted(
+    config: &TerminalRuntimeConfig,
+    requested_mode: &str,
+) -> Result<(), String> {
     if config.status == TerminalRuntimeStatus::Configured
         && config.terminal_rendering_enabled
         && config.mode.as_deref() == Some("interactive_loop")
@@ -394,7 +403,7 @@ fn assert_terminal_interactive_loop_admitted(config: &TerminalRuntimeConfig) -> 
         .as_deref()
         .unwrap_or("terminal_rendering_not_enabled");
     Err(format!(
-        "terminal_interactive_loop_not_admitted:status={}:reason={reason}",
+        "terminal_{requested_mode}_not_admitted:status={}:reason={reason}",
         config.status.as_str()
     ))
 }

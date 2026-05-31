@@ -94,6 +94,20 @@ fn terminal_runtime_cli_acceptance_reports_configured_interactive_loop() {
 }
 
 #[test]
+fn terminal_runtime_cli_acceptance_refuses_render_once_when_gate_disabled() {
+    let mut command = base_command();
+    command.arg("--render-once");
+
+    let output = run(&mut command);
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8(output.stderr).expect("stderr is utf8");
+    assert!(stderr.contains(
+        "terminal_render_once_not_admitted:status=disabled:reason=terminal_rendering_not_enabled"
+    ));
+}
+
+#[test]
 fn terminal_runtime_cli_acceptance_refuses_interactive_loop_when_gate_disabled() {
     let control_path = temp_path("control");
     let session_path = temp_path("session");
