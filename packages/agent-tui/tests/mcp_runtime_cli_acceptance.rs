@@ -740,9 +740,10 @@ fn mcp_runtime_cli_acceptance_reports_configured_explicit_mcp_posture() {
 
     assert!(output.contains("mcp_status: configured"));
     assert!(output.contains("mcp_fabric_access_enabled: true"));
-    assert!(
-        output.contains("mcp_config_path_policy: inside_site_mcp_fabric_without_parent_traversal")
-    );
+    assert!(output.contains(&format!(
+        "mcp_config_path_policy: {}",
+        narada_agent_tui::mcp_runtime_config::config_path_policy()
+    )));
     assert!(output.contains(&format!("mcp_config: {}", path_string(&config_path))));
     assert!(output.contains(&format!("site_mcp_fabric: {}", path_string(&fabric))));
 }

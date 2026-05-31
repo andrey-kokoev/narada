@@ -358,14 +358,14 @@ mod tests {
         assert_eq!(events[0].payload["mcp_fabric_access_enabled"], false);
         assert_eq!(
             events[0].payload["mcp_config_path_policy"],
-            crate::mcp_runtime_config::CONFIG_PATH_POLICY
+            crate::mcp_runtime_config::config_path_policy()
         );
         assert_eq!(events[1].event_kind, SessionEventKind::ToolResultReceived);
         assert_eq!(events[1].payload["mcp_runtime_status"], "disabled");
         assert_eq!(events[1].payload["mcp_fabric_access_enabled"], false);
         assert_eq!(
             events[1].payload["mcp_config_path_policy"],
-            crate::mcp_runtime_config::CONFIG_PATH_POLICY
+            crate::mcp_runtime_config::config_path_policy()
         );
         let _ = remove_file(path);
     }
@@ -394,7 +394,7 @@ mod tests {
         assert_eq!(events[0].payload["mcp_fabric_access_enabled"], true);
         assert_eq!(
             events[0].payload["mcp_config_path_policy"],
-            crate::mcp_runtime_config::CONFIG_PATH_POLICY
+            crate::mcp_runtime_config::config_path_policy()
         );
         assert_eq!(
             events[0].payload["mcp_config"],
@@ -408,7 +408,7 @@ mod tests {
         assert_eq!(events[1].payload["mcp_fabric_access_enabled"], true);
         assert_eq!(
             events[1].payload["mcp_config_path_policy"],
-            crate::mcp_runtime_config::CONFIG_PATH_POLICY
+            crate::mcp_runtime_config::config_path_policy()
         );
         let _ = remove_file(path);
     }

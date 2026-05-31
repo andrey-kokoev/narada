@@ -1,4 +1,6 @@
+use serde::Deserialize;
 use std::collections::BTreeMap;
+use std::sync::OnceLock;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum McpRuntimeAdmissionStatus {
@@ -32,7 +34,7 @@ impl McpRuntimeConfig {
         Self {
             status: McpRuntimeAdmissionStatus::Disabled,
             mcp_fabric_access_enabled: false,
-            config_path_policy: CONFIG_PATH_POLICY,
+            config_path_policy: config_path_policy(),
             config_path: None,
             site_mcp_fabric: None,
             refusal_reason: None,
@@ -71,7 +73,7 @@ impl McpRuntimeConfig {
         Self {
             status: McpRuntimeAdmissionStatus::Configured,
             mcp_fabric_access_enabled: true,
-            config_path_policy: CONFIG_PATH_POLICY,
+            config_path_policy: config_path_policy(),
             config_path: Some(config_path),
             site_mcp_fabric: Some(site_mcp_fabric),
             refusal_reason: None,
@@ -82,7 +84,7 @@ impl McpRuntimeConfig {
         Self {
             status: McpRuntimeAdmissionStatus::Refused,
             mcp_fabric_access_enabled: false,
-            config_path_policy: CONFIG_PATH_POLICY,
+            config_path_policy: config_path_policy(),
             config_path: None,
             site_mcp_fabric: None,
             refusal_reason: Some(reason.into()),
@@ -90,7 +92,23 @@ impl McpRuntimeConfig {
     }
 }
 
-pub const CONFIG_PATH_POLICY: &str = "inside_site_mcp_fabric_without_parent_traversal";
+const MCP_RUNTIME_CONTRACT_JSON: &str = include_str!("../contracts/mcp-runtime.json");
+
+#[derive(Debug, Deserialize)]
+struct McpRuntimeContract {
+    mcp_config_path_policy: String,
+}
+
+pub fn config_path_policy() -> &'static str {
+    static CONTRACT: OnceLock<McpRuntimeContract> = OnceLock::new();
+    CONTRACT
+        .get_or_init(|| {
+            serde_json::from_str(MCP_RUNTIME_CONTRACT_JSON)
+                .expect("agent-tui MCP runtime contract parses")
+        })
+        .mcp_config_path_policy
+        .as_str()
+}
 
 fn env_flag_enabled(value: Option<&String>) -> bool {
     matches!(

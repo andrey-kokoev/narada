@@ -8,6 +8,10 @@ import { formatAgentStartResult } from '../../packages/agent-start-renderer/src/
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const defaultRootDir = join(__dirname, '..', '..');
+const AGENT_TUI_MCP_RUNTIME_CONTRACT = JSON.parse(readFileSync(
+  join(defaultRootDir, 'packages', 'agent-tui', 'contracts', 'mcp-runtime.json'),
+  'utf8',
+));
 const require = createRequire(import.meta.url);
 const RESULT_SCHEMA = 'narada.agent_start.result.v0';
 const DEFAULT_PC_SITE_ROOT = process.env.NARADA_PC_SITE_ROOT ?? 'C:/ProgramData/Narada/sites/pc/desktop-sunroom-2';
@@ -741,7 +745,7 @@ function agentTuiMcpFabricAccessGate(siteRoot) {
       'tool_call_evidence_contract',
     ],
     site_mcp_fabric: join(siteRoot, '.ai', 'mcp'),
-    mcp_config_path_policy: 'inside_site_mcp_fabric_without_parent_traversal',
+    mcp_config_path_policy: AGENT_TUI_MCP_RUNTIME_CONTRACT.mcp_config_path_policy,
     current_evidence: 'Rust MCP config parsing, policy-bound visibility, config path containment without parent traversal, JSON-RPC tools/call framing, supervised stdio execution, timeout recovery, provider tool-call bridge, and runtime-config executor construction are implemented and tested.',
     reason: 'Production smoke step still withholds Site MCP tool exposure until live Site MCP execution is admitted for the terminal runtime slice.',
   };

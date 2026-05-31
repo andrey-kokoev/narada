@@ -21,6 +21,10 @@ import {
   validateEvidenceJson,
   writeReport as writeAgentTuiRolloutReport,
 } from './agent-tui-rollout-acceptance.mjs';
+const AGENT_TUI_MCP_RUNTIME_CONTRACT = JSON.parse(fs.readFileSync(
+  path.join(process.cwd(), 'packages', 'agent-tui', 'contracts', 'mcp-runtime.json'),
+  'utf8',
+));
 
 function tempSite() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'narada-agent-start-'));
@@ -482,7 +486,7 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
     'tool_call_evidence_contract',
   ]);
   assert.equal(result.agent_tui_launch.mcp_fabric_access.site_mcp_fabric, path.join(siteRoot, '.ai', 'mcp'));
-  assert.equal(result.agent_tui_launch.mcp_fabric_access.mcp_config_path_policy, 'inside_site_mcp_fabric_without_parent_traversal');
+  assert.equal(result.agent_tui_launch.mcp_fabric_access.mcp_config_path_policy, AGENT_TUI_MCP_RUNTIME_CONTRACT.mcp_config_path_policy);
   assert.match(result.agent_tui_launch.mcp_fabric_access.current_evidence, /config path containment without parent traversal/);
   assert.match(result.agent_tui_launch.mcp_fabric_access.current_evidence, /runtime-config executor construction/);
   assert.match(result.agent_tui_launch.mcp_fabric_access.reason, /withholds Site MCP tool exposure/);

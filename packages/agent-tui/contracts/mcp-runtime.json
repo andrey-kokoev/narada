@@ -1,0 +1,4 @@
+{
+  "schema": "narada.agent_tui.mcp_runtime_contract.v0",
+  "mcp_config_path_policy": "inside_site_mcp_fabric_without_parent_traversal"
+}
