@@ -1213,6 +1213,47 @@ mod tests {
     }
 
     #[test]
+    fn prepares_tool_call_with_inherited_env_and_explicit_override() {
+        let client = McpFabricTransportClient::from_json_str(
+            "fixture.mcp.json",
+            r#"{
+              "mcpServers": {
+                "sonar-site-loop": {
+                  "transport": "stdio",
+                  "command": "node",
+                  "env": {"PATH": "explicit-path"},
+                  "env_vars": ["PATH"],
+                  "tools": ["site_loop_status"]
+                }
+              }
+            }"#,
+        )
+        .expect("config parses");
+        let boundary = client.admitted_boundary(
+            "D:/code/narada.sonar/.ai/mcp",
+            "fixture.mcp.json:mcpServers",
+        );
+        let call = client
+            .prepare_tool_call(
+                &boundary,
+                &McpToolRequest {
+                    tool_name: "site_loop_status".to_string(),
+                    arguments_summary: "{}".to_string(),
+                    arguments_ref: None,
+                    requesting_agent_id: "sonar.resident".to_string(),
+                },
+                serde_json::json!({}),
+                7,
+                &context(),
+                "session_event_tool_request_1",
+                "2026-05-30T00:00:00.000Z",
+            )
+            .expect("tool call prepared");
+
+        assert_eq!(call.env.get("PATH"), Some(&"explicit-path".to_string()));
+    }
+
+    #[test]
     fn prepares_tool_call_without_spawning_transport() {
         let client = McpFabricTransportClient::from_json_str("fixture.mcp.json", config_json())
             .expect("config parses");
