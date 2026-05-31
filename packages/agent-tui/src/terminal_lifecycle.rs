@@ -258,7 +258,9 @@ mod tests {
     use crate::composer_view_model::ComposerViewInput;
     use crate::input_queue::TurnState;
     use crate::layout_model::{LayoutConfig, TerminalSize};
-    use crate::status_view_model::{McpRuntimeState, ProviderRuntimeState, StatusViewInput};
+    use crate::status_view_model::{
+        McpRuntimeState, ProviderRuntimeState, StatusViewInput, TerminalRuntimeState,
+    };
     use crate::transcript_projection::{TranscriptActor, TranscriptItem, TranscriptItemKind};
     use ratatui::backend::TestBackend;
 
@@ -356,6 +358,7 @@ mod tests {
                 transcript_items: 1,
                 provider_state: ProviderRuntimeState::Working,
                 mcp_state: McpRuntimeState::Configured,
+                terminal_state: TerminalRuntimeState::Configured,
                 last_error: None,
             },
             composer: ComposerViewInput {

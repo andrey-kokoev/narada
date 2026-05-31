@@ -3,7 +3,9 @@ use narada_agent_tui::composer_view_model::ComposerViewInput;
 use narada_agent_tui::input_queue::TurnState;
 use narada_agent_tui::layout_model::{LayoutConfig, Rect, TerminalSize};
 use narada_agent_tui::ratatui_renderer::render_app_to_buffer;
-use narada_agent_tui::status_view_model::{McpRuntimeState, ProviderRuntimeState, StatusViewInput};
+use narada_agent_tui::status_view_model::{
+    McpRuntimeState, ProviderRuntimeState, StatusViewInput, TerminalRuntimeState,
+};
 use narada_agent_tui::transcript_projection::{
     TranscriptActor, TranscriptItem, TranscriptItemKind,
 };
@@ -41,6 +43,7 @@ fn acceptance_view(width: u16, height: u16) -> narada_agent_tui::app_view_model:
             transcript_items: 2,
             provider_state: ProviderRuntimeState::Disabled,
             mcp_state: McpRuntimeState::Disabled,
+            terminal_state: TerminalRuntimeState::Disabled,
             last_error: None,
         },
         composer: ComposerViewInput {

@@ -34,7 +34,7 @@ pub fn build_app_view(input: &AppViewInput) -> AppViewModel {
 mod tests {
     use super::*;
     use crate::input_queue::TurnState;
-    use crate::status_view_model::{McpRuntimeState, ProviderRuntimeState};
+    use crate::status_view_model::{McpRuntimeState, ProviderRuntimeState, TerminalRuntimeState};
     use crate::transcript_projection::{TranscriptActor, TranscriptItemKind};
 
     fn input() -> AppViewInput {
@@ -61,6 +61,7 @@ mod tests {
                 transcript_items: 1,
                 provider_state: ProviderRuntimeState::Disabled,
                 mcp_state: McpRuntimeState::Disabled,
+                terminal_state: TerminalRuntimeState::Disabled,
                 last_error: None,
             },
             composer: ComposerViewInput {
@@ -81,7 +82,7 @@ mod tests {
         assert_eq!(model.layout.composer.height, 3);
         assert_eq!(model.transcript_rows.len(), 1);
         assert_eq!(model.transcript_rows[0].actor_label, "operator");
-        assert_eq!(model.status.compact_line, "agent=sonar.resident | session=carrier_1 | turn=idle | queued=0 | held=0 | transcript=1 | provider=provider_disabled | mcp=mcp_disabled | error=none");
+        assert_eq!(model.status.compact_line, "agent=sonar.resident | session=carrier_1 | turn=idle | queued=0 | held=0 | transcript=1 | provider=provider_disabled | mcp=mcp_disabled | terminal=terminal_disabled | error=none");
         assert_eq!(model.composer.prompt_label, "operator -> sonar.resident>");
     }
 
