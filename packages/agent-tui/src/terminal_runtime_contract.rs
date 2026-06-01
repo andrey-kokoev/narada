@@ -3,6 +3,10 @@ use std::sync::OnceLock;
 use serde::{Deserialize, Serialize};
 
 const TERMINAL_RUNTIME_CONTRACT_JSON: &str = include_str!("../contracts/terminal-runtime.json");
+const EXPECTED_SCHEMA: &str = "narada.agent_tui.terminal_runtime_contract.v0";
+const EXPECTED_TERMINAL_RENDERING_ENV_VAR: &str = "NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING";
+const EXPECTED_TERMINAL_MODE_ENV_VAR: &str = "NARADA_AGENT_TUI_TERMINAL_MODE";
+const EXPECTED_REQUIRED_TERMINAL_MODE: &str = "interactive_loop";
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TerminalRuntimeContract {
@@ -24,16 +28,16 @@ pub fn terminal_runtime_contract() -> &'static TerminalRuntimeContract {
 pub fn parse_terminal_runtime_contract(json_text: &str) -> Result<TerminalRuntimeContract, String> {
     let contract: TerminalRuntimeContract = serde_json::from_str(json_text)
         .map_err(|error| format!("terminal_runtime_contract_parse_failed:{error}"))?;
-    if contract.schema != "narada.agent_tui.terminal_runtime_contract.v0" {
+    if contract.schema != EXPECTED_SCHEMA {
         return Err("terminal_runtime_contract_invalid:schema".to_string());
     }
-    if contract.terminal_rendering_env_var != "NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING" {
+    if contract.terminal_rendering_env_var != EXPECTED_TERMINAL_RENDERING_ENV_VAR {
         return Err("terminal_runtime_contract_invalid:terminal_rendering_env_var".to_string());
     }
-    if contract.terminal_mode_env_var != "NARADA_AGENT_TUI_TERMINAL_MODE" {
+    if contract.terminal_mode_env_var != EXPECTED_TERMINAL_MODE_ENV_VAR {
         return Err("terminal_runtime_contract_invalid:terminal_mode_env_var".to_string());
     }
-    if contract.required_terminal_mode != "interactive_loop" {
+    if contract.required_terminal_mode != EXPECTED_REQUIRED_TERMINAL_MODE {
         return Err("terminal_runtime_contract_invalid:required_terminal_mode".to_string());
     }
     Ok(contract)
@@ -55,13 +59,16 @@ mod tests {
 
         assert_eq!(
             contract.terminal_rendering_env_var,
-            "NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING"
+            EXPECTED_TERMINAL_RENDERING_ENV_VAR
         );
         assert_eq!(
             contract.terminal_mode_env_var,
-            "NARADA_AGENT_TUI_TERMINAL_MODE"
+            EXPECTED_TERMINAL_MODE_ENV_VAR
         );
-        assert_eq!(contract.required_terminal_mode, "interactive_loop");
+        assert_eq!(
+            contract.required_terminal_mode,
+            EXPECTED_REQUIRED_TERMINAL_MODE
+        );
     }
 
     #[test]
