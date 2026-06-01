@@ -168,6 +168,14 @@ mod tests {
     use super::*;
     use std::collections::BTreeMap;
 
+    fn admitted_provider() -> &'static str {
+        provider_adapter_contract()
+            .admitted_providers
+            .first()
+            .expect("provider contract has at least one admitted provider")
+            .as_str()
+    }
+
     fn provider_runtime_env(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
         let contract = provider_adapter_contract();
         pairs
@@ -241,7 +249,7 @@ mod tests {
     fn configured_runtime_without_adapter_is_not_execution_admitted() {
         let runtime_config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
             ("execution_enabled", "true"),
-            ("provider", "codex-subscription"),
+            ("provider", admitted_provider()),
             ("model", "gpt-5.5"),
         ]));
         let admission = ProviderAdapterAdmission::from_runtime_config(&runtime_config, None);
@@ -251,7 +259,7 @@ mod tests {
             ProviderAdapterAdmissionStatus::ConfiguredWithoutAdapter
         );
         assert_eq!(admission.status.as_str(), "configured_without_adapter");
-        assert_eq!(admission.provider.as_deref(), Some("codex-subscription"));
+        assert_eq!(admission.provider.as_deref(), Some(admitted_provider()));
         assert_eq!(admission.model.as_deref(), Some("gpt-5.5"));
         assert!(!admission.provider_execution_enabled);
         assert_eq!(
@@ -264,7 +272,7 @@ mod tests {
     fn configured_runtime_with_unknown_adapter_kind_is_refused_as_unknown() {
         let runtime_config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
             ("execution_enabled", "true"),
-            ("provider", "codex-subscription"),
+            ("provider", admitted_provider()),
             ("model", "gpt-5.5"),
         ]));
         let admission =
@@ -283,7 +291,7 @@ mod tests {
     fn configured_runtime_with_production_adapter_kind_refuses_until_adapter_is_implemented() {
         let runtime_config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
             ("execution_enabled", "true"),
-            ("provider", "codex-subscription"),
+            ("provider", admitted_provider()),
             ("model", "gpt-5.5"),
         ]));
         let admission = ProviderAdapterAdmission::from_runtime_config(
@@ -312,7 +320,7 @@ mod tests {
     fn admitted_adapter_requires_configured_runtime_and_enables_scripted_execution_only() {
         let runtime_config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
             ("execution_enabled", "true"),
-            ("provider", "codex-subscription"),
+            ("provider", admitted_provider()),
             ("model", "gpt-5.5"),
         ]));
 
@@ -322,7 +330,7 @@ mod tests {
 
         assert_eq!(admission.status, ProviderAdapterAdmissionStatus::Admitted);
         assert!(admission.provider_execution_enabled);
-        assert_eq!(admission.provider.as_deref(), Some("codex-subscription"));
+        assert_eq!(admission.provider.as_deref(), Some(admitted_provider()));
         assert_eq!(
             admission.adapter_kind.as_deref(),
             Some(scripted_provider_adapter_kind())
