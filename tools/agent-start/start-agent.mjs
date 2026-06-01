@@ -34,6 +34,14 @@ const AGENT_TUI_TERMINAL_RUNTIME_CONTRACT_EXPECTED = Object.freeze({
   terminal_mode_env_var: 'NARADA_AGENT_TUI_TERMINAL_MODE',
   required_terminal_mode: 'interactive_loop',
 });
+const AGENT_TUI_LAUNCH_SLICE_CONTRACT_EXPECTED = Object.freeze({
+  schema: 'narada.agent_tui.launch_slice_contract.v0',
+  admitted_runtime_slice: 'bounded_non_terminal_interactive_step_once',
+  carrier_flag: '--interactive-step-once',
+  tool_fabric_adapter_kind: 'narada-agent-tui-interactive-step',
+  capability_policy_smoke_step: 'bounded_non_terminal_control_jsonl',
+  terminal_mode: false,
+});
 const AGENT_TUI_MCP_RUNTIME_CONTRACT = parseAgentTuiMcpRuntimeContract(readFileSync(
   join(defaultRootDir, 'packages', 'agent-tui', 'contracts', 'mcp-runtime.json'),
   'utf8',
@@ -158,7 +166,6 @@ export function parseAgentTuiProviderAdapterContract(jsonText) {
   }
   return contract;
 }
-
 export function parseAgentTuiTerminalRuntimeContract(jsonText) {
   let contract;
   try {
@@ -189,22 +196,23 @@ export function parseAgentTuiLaunchSliceContract(jsonText) {
   } catch (error) {
     throw new Error(`launch_slice_contract_parse_failed:${error.message}`);
   }
-  if (contract?.schema !== 'narada.agent_tui.launch_slice_contract.v0') {
+  const expected = AGENT_TUI_LAUNCH_SLICE_CONTRACT_EXPECTED;
+  if (contract?.schema !== expected.schema) {
     throw new Error('launch_slice_contract_invalid:schema');
   }
-  if (contract?.admitted_runtime_slice !== 'bounded_non_terminal_interactive_step_once') {
+  if (contract?.admitted_runtime_slice !== expected.admitted_runtime_slice) {
     throw new Error('launch_slice_contract_invalid:admitted_runtime_slice');
   }
-  if (contract?.carrier_flag !== '--interactive-step-once') {
+  if (contract?.carrier_flag !== expected.carrier_flag) {
     throw new Error('launch_slice_contract_invalid:carrier_flag');
   }
-  if (contract?.tool_fabric_adapter_kind !== 'narada-agent-tui-interactive-step') {
+  if (contract?.tool_fabric_adapter_kind !== expected.tool_fabric_adapter_kind) {
     throw new Error('launch_slice_contract_invalid:tool_fabric_adapter_kind');
   }
-  if (contract?.capability_policy_smoke_step !== 'bounded_non_terminal_control_jsonl') {
+  if (contract?.capability_policy_smoke_step !== expected.capability_policy_smoke_step) {
     throw new Error('launch_slice_contract_invalid:capability_policy_smoke_step');
   }
-  if (contract?.terminal_mode !== false) {
+  if (contract?.terminal_mode !== expected.terminal_mode) {
     throw new Error('launch_slice_contract_invalid:terminal_mode');
   }
   return contract;
