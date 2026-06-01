@@ -348,6 +348,14 @@ mod tests {
 
     const INPUT_FIXTURE: &str = include_str!("../../carrier-protocol/fixtures/input-event.json");
 
+    fn admitted_provider() -> &'static str {
+        provider_adapter_contract()
+            .admitted_providers
+            .first()
+            .expect("provider contract has at least one admitted provider")
+            .as_str()
+    }
+
     fn provider_runtime_env(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
         let contract = provider_adapter_contract();
         pairs
@@ -433,7 +441,7 @@ mod tests {
         let input = parse_input_event(INPUT_FIXTURE).expect("input parses");
         let runtime_config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
             ("execution_enabled", "true"),
-            ("provider", "codex-subscription"),
+            ("provider", admitted_provider()),
             ("model", "gpt-5.5"),
             ("thinking", "medium"),
         ]));
@@ -451,7 +459,7 @@ mod tests {
             "recorded_not_dispatched"
         );
         assert_eq!(payload["provider_runtime_status"], "configured");
-        assert_eq!(payload["provider"], "codex-subscription");
+        assert_eq!(payload["provider"], admitted_provider());
         assert_eq!(payload["model"], "gpt-5.5");
         assert_eq!(payload["thinking"], "medium");
         assert_eq!(
@@ -495,7 +503,7 @@ mod tests {
         let input = parse_input_event(INPUT_FIXTURE).expect("input parses");
         let runtime_config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
             ("execution_enabled", "true"),
-            ("provider", "codex-subscription"),
+            ("provider", admitted_provider()),
             ("model", "gpt-5.5"),
         ]));
         let dispatcher = ProviderDispatchStub::with_runtime_config(runtime_config);
@@ -509,7 +517,7 @@ mod tests {
             "configured_without_adapter"
         );
         assert_eq!(record.payload["provider_adapter_kind"], Value::Null);
-        assert_eq!(record.payload["provider"], "codex-subscription");
+        assert_eq!(record.payload["provider"], admitted_provider());
         assert_eq!(record.payload["model"], "gpt-5.5");
         assert_eq!(
             record.payload["provider_adapter_refusal_reason"],
@@ -522,7 +530,7 @@ mod tests {
         let input = parse_input_event(INPUT_FIXTURE).expect("input parses");
         let runtime_config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
             ("execution_enabled", "true"),
-            ("provider", "codex-subscription"),
+            ("provider", admitted_provider()),
             ("model", "gpt-5.5"),
         ]));
         let adapter_admission = ProviderAdapterAdmission::from_runtime_config(
@@ -560,7 +568,7 @@ mod tests {
         let input = parse_input_event(INPUT_FIXTURE).expect("input parses");
         let runtime_config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
             ("execution_enabled", "true"),
-            ("provider", "codex-subscription"),
+            ("provider", admitted_provider()),
             ("model", "gpt-5.5"),
         ]));
         let dispatcher = ScriptedProviderAdapter::try_new(
