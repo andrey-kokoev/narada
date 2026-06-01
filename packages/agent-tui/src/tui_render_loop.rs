@@ -214,13 +214,13 @@ mod tests {
     use super::*;
     use crate::carrier_protocol::{parse_session_event, SessionEventKind};
     use crate::input_queue::{SessionEvidenceContext, TurnState};
-    use crate::transcript_store::TranscriptStore;
     use crate::terminal_input_tick::TerminalInputReader;
+    use crate::transcript_store::TranscriptStore;
     use crate::turn_coordinator::TurnCoordinatorClock;
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
     use std::collections::VecDeque;
-    use std::io;
     use std::fs::{read_to_string, remove_file, OpenOptions};
+    use std::io;
     use std::io::Write;
     use std::path::{Path, PathBuf};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -908,6 +908,64 @@ mod tests {
             .last()
             .expect("final status exists")
             .contains("error=control_jsonl_parse_errors:1"));
+
+        remove_file(control_path).ok();
+        remove_file(session_path).ok();
+    }
+
+    #[test]
+    fn injected_interactive_loop_recovers_from_malformed_control_jsonl() {
+        let control_path = temp_path("control-malformed-recovery");
+        let session_path = temp_path("session-malformed-recovery");
+        append(&control_path, "{not valid json}\n");
+        let mut runtime = runtime_for_paths(&control_path, &session_path);
+        let mut state = AgentTuiLoopState::default();
+        let mut terminal = FakeTerminalFrame::new();
+        let mut input = appending_input_source(
+            control_path.clone(),
+            [
+                TerminalInputTickOutcome::NoInput,
+                TerminalInputTickOutcome::NoInput,
+                TerminalInputTickOutcome::DraftEffect(ComposerDraftEffect::ExitRequested),
+            ],
+        );
+        let mut clock = clock_source();
+
+        let summary = run_injected_interactive_loop(
+            &mut runtime,
+            &mut state,
+            &mut terminal,
+            &mut input,
+            &mut clock,
+            10,
+        )
+        .expect("interactive loop recovers from malformed control jsonl");
+
+        assert_eq!(summary.steps_attempted, 3);
+        assert!(summary.exited_by_input);
+        assert!(input.appended);
+        assert_eq!(
+            state.last_error.as_deref(),
+            Some("control_jsonl_parse_errors:1")
+        );
+        assert!(terminal
+            .status_lines
+            .iter()
+            .any(|line| line.contains("error=control_jsonl_parse_errors:1")));
+
+        let session_jsonl = read_to_string(&session_path).expect("session jsonl exists");
+        assert!(session_jsonl.contains("\"source_kind\":\"system\""));
+        assert!(session_jsonl.contains("run startup sequence"));
+        assert!(session_jsonl.contains("\"provider_request_status\":\"recorded_not_dispatched\""));
+
+        let mut transcript = TranscriptStore::new();
+        transcript
+            .ingest_jsonl_file_summary(&session_path)
+            .expect("session transcript ingests");
+        assert!(transcript
+            .items()
+            .iter()
+            .any(|item| item.actor.as_str() == "system" && item.text == "run startup sequence"));
 
         remove_file(control_path).ok();
         remove_file(session_path).ok();

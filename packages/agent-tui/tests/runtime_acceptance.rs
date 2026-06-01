@@ -263,3 +263,53 @@ fn persistent_smoke_session_reports_malformed_control_without_transcript_rows() 
     remove_file(control_path).ok();
     remove_file(session_path).ok();
 }
+
+#[test]
+fn persistent_smoke_session_recovers_after_malformed_control_line() {
+    let control_path = temp_path("malformed-recovery-control");
+    let session_path = temp_path("malformed-recovery-session");
+    append(&control_path, "{not valid json}\n");
+
+    let mut session = AgentTuiSmokeSession::new(&smoke_config(
+        control_path.clone(),
+        session_path.clone(),
+        false,
+    ))
+    .expect("smoke session initializes");
+
+    let malformed = session
+        .run_step(false)
+        .expect("malformed control smoke step succeeds");
+    assert_eq!(malformed.parse_errors, 1);
+    assert!(malformed.completed_turn.is_none());
+
+    append(&control_path, CONTROL_FIXTURE);
+    append(&control_path, "\n");
+
+    let recovered = session
+        .run_step(false)
+        .expect("valid control after malformed line succeeds");
+    assert_eq!(recovered.control_evidence_written, 1);
+    assert_eq!(recovered.parse_errors, 0);
+    assert!(recovered.completed_turn.is_some());
+
+    let session_jsonl = read_to_string(&session_path).expect("session jsonl exists");
+    assert!(session_jsonl.contains("\"source_kind\":\"system\""));
+    assert!(session_jsonl.contains("run startup sequence"));
+    assert!(session_jsonl.contains("\"provider_request_status\":\"recorded_not_dispatched\""));
+    assert!(!session_jsonl.contains("\"event_kind\":\"provider_tool_call_requested\""));
+    assert!(!session_jsonl.contains("\"event_kind\":\"tool_call_requested\""));
+    assert!(!session_jsonl.contains("\"event_kind\":\"tool_result_received\""));
+
+    let mut transcript = TranscriptStore::new();
+    transcript
+        .ingest_jsonl_file_summary(&session_path)
+        .expect("session transcript ingests");
+    assert_eq!(transcript.items()[0].actor.as_str(), "system");
+    assert_eq!(transcript.items()[0].text, "run startup sequence");
+    assert_eq!(transcript.items()[1].actor.as_str(), "agent-tui");
+    assert_eq!(transcript.items()[1].text, "completed_without_provider");
+
+    remove_file(control_path).ok();
+    remove_file(session_path).ok();
+}
