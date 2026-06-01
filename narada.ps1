@@ -2,14 +2,15 @@ param(
   [Parameter(Position = 0)]
   [ValidateSet("agent-start")]
   [string]$Command = "agent-start",
-
   [Alias("AgentId")]
   [string]$Agent = "narada.architect",
   [string]$Runtime = "codex",
   [switch]$Exec,
   [switch]$DryRun,
   [switch]$Json,
-  [switch]$EnableNativeShell
+  [switch]$EnableNativeShell,
+  [switch]$AgentTuiInteractiveLoop,
+  [int]$AgentTuiMaxSteps
 )
 
 $ErrorActionPreference = "Stop"
@@ -27,6 +28,8 @@ if ($Command -eq "agent-start") {
   if ($DryRun) { $flags += "--dry-run" }
   if ($Json) { $flags += "--json" }
   if ($EnableNativeShell) { $flags += "--enable-native-shell" }
+  if ($AgentTuiInteractiveLoop) { $flags += "--agent-tui-interactive-loop" }
+  if ($AgentTuiMaxSteps -gt 0) { $flags += @("--agent-tui-max-steps", [string]$AgentTuiMaxSteps) }
   $env:NARADA_AGENT_ID = $Agent
   & node $agentStart @flags
   exit $LASTEXITCODE

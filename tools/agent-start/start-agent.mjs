@@ -232,7 +232,8 @@ function parseArgs(argv) {
     else if (arg === '--dry-run') result.dry_run = true;
     else if (arg === '--exec') result.exec = true;
     else if (arg === '--enable-native-shell') result.enable_native_shell = true;
-    else if (arg === '--startup-task') result.startup_task_number = parsePositiveInteger(argv[++i], '--startup-task');
+    else if (arg === '--agent-tui-interactive-loop') result.agent_tui_interactive_loop = true;
+    else if (arg === '--agent-tui-max-steps') result.agent_tui_max_steps = parsePositiveInteger(argv[++i], '--agent-tui-max-steps');
     else throw new Error(`unsupported_argument:${arg}`);
   }
   return result;
@@ -649,8 +650,11 @@ function agentCliArgs({ siteRoot, startupEvidence }) {
   ];
 }
 
-function agentTuiArgs({ siteRoot, startupEvidence }) {
+function agentTuiArgs({ siteRoot, startupEvidence, interactiveLoop = false, maxSteps = null }) {
   const sessionDir = agentRuntimeServerSessionDir(siteRoot, startupEvidence.carrierSessionId);
+  const runtimeModeArgs = interactiveLoop
+    ? ['--interactive-loop', '--max-steps', String(maxSteps ?? 100000)]
+    : [AGENT_TUI_LAUNCH_SLICE_CONTRACT.carrier_flag];
   return [
     'run',
     '--manifest-path', join(siteRoot, 'packages', 'agent-tui', 'Cargo.toml'),
@@ -661,7 +665,7 @@ function agentTuiArgs({ siteRoot, startupEvidence }) {
     '--site-root', siteRoot,
     '--control-jsonl', join(sessionDir, 'control.jsonl'),
     '--session-jsonl', join(sessionDir, 'session.jsonl'),
-    AGENT_TUI_LAUNCH_SLICE_CONTRACT.carrier_flag,
+    ...runtimeModeArgs,
   ];
 }
 
@@ -834,39 +838,44 @@ function agentTuiPromotionGate() {
     reason: 'Production launch remains bounded non-terminal smoke until Rust tests, terminal-frame acceptance, provider admission, MCP fabric admission, and explicit terminal-mode promotion pass.',
   };
 }
-function agentTuiTerminalRenderingEnvironmentGate() {
+
+function agentTuiTerminalRenderingEnvironmentGate({ admitted = false } = {}) {
   return {
     variable: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_rendering_env_var,
-    value: 'false',
+    value: admitted ? 'true' : 'false',
     mode_variable: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_mode_env_var,
     required_mode: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.required_terminal_mode,
-    operator_override_admitted: false,
+    ...(admitted ? { mode_value: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.required_terminal_mode } : {}),
+    operator_override_admitted: admitted,
   };
 }
 
-function agentTuiTerminalRenderingGate() {
+function agentTuiTerminalRenderingGate({ admitted = false } = {}) {
   return {
-    status: 'not_admitted_for_runtime_slice',
-    admitted: false,
+    status: admitted ? 'admitted_for_explicit_terminal_loop' : 'not_admitted_for_runtime_slice',
+    admitted,
     gated_modes: ['--render-once', '--interactive-loop'],
-    environment_gate: agentTuiTerminalRenderingEnvironmentGate(),
-    required_before_admission: [
+    environment_gate: agentTuiTerminalRenderingEnvironmentGate({ admitted }),
+    required_before_admission: admitted ? [] : [
       'provider_adapter_admission',
       'mcp_fabric_client_admission',
       'explicit_terminal_mode_promotion',
     ],
     current_evidence: 'Renderer frame, lifecycle, injected interactive loop, live composer, and terminal runtime config acceptance are implemented and tested.',
-    reason: 'Smoke step runs without alternate screen or interactive terminal handoff.',
+    reason: admitted
+      ? 'Explicit operator launch requested gated terminal interactive loop; provider execution and MCP fabric remain separately withheld.'
+      : 'Smoke step runs without alternate screen or interactive terminal handoff.',
     promotion_gate: 'agent_tui_terminal_rendering_promotion_gate',
   };
 }
 
-function agentTuiInteractiveLoopGate() {
+function agentTuiInteractiveLoopGate({ admitted = false, maxSteps = null } = {}) {
   return {
     mode: 'interactive_loop',
-    admitted: false,
+    admitted,
     required_flag: '--interactive-loop',
-    environment_gate: agentTuiTerminalRenderingEnvironmentGate(),
+    max_steps: admitted ? maxSteps : null,
+    environment_gate: agentTuiTerminalRenderingEnvironmentGate({ admitted }),
     promotion_gate: 'agent_tui_terminal_interactive_loop_promotion_gate',
   };
 }
@@ -937,8 +946,7 @@ function agentTuiRustToolchainReadiness(siteRoot) {
 function naradaNativeArgs() {
   return [];
 }
-
-function runtimeArgsFor({ runtime, siteRoot, startupEvidence, enableNativeShell = false }) {
+function runtimeArgsFor({ runtime, siteRoot, startupEvidence, enableNativeShell = false, agentTuiInteractiveLoop = false, agentTuiMaxSteps = null }) {
   if (runtime === 'codex') {
     return codexArgs({ siteRoot, startupEvidence, enableNativeShell });
   }
@@ -955,7 +963,7 @@ function runtimeArgsFor({ runtime, siteRoot, startupEvidence, enableNativeShell 
     return agentRuntimeServerArgs({ siteRoot, startupEvidence });
   }
   if (runtime === AGENT_TUI_RUNTIME) {
-    return agentTuiArgs({ siteRoot, startupEvidence });
+    return agentTuiArgs({ siteRoot, startupEvidence, interactiveLoop: agentTuiInteractiveLoop, maxSteps: agentTuiMaxSteps });
   }
   throw new Error(`runtime_not_admitted:${runtime}`);
 }
@@ -1459,11 +1467,19 @@ function buildLaunchPlanFromArgs(args, options = {}) {
   const exec = args.exec === true;
   const enableNativeShell = args.enable_native_shell === true;
   const startupTaskNumber = args.startup_task_number ?? null;
+  const agentTuiInteractiveLoop = args.agent_tui_interactive_loop === true;
+  const agentTuiMaxSteps = args.agent_tui_max_steps ?? null;
   if (!ADMITTED_RUNTIMES.has(requestedRuntime)) throw new Error(`runtime_not_admitted:${requestedRuntime}`);
   if (!ADMITTED_AGENTS.has(identity)) throw new Error(`agent_not_admitted:${identity}`);
   if (!ADMITTED_RUNTIMES.has(runtime)) throw new Error(`runtime_not_admitted:${runtime}`);
   if (startupTaskNumber !== null && (!Number.isInteger(startupTaskNumber) || startupTaskNumber <= 0)) {
     throw new Error('startup_task_number_invalid');
+  }
+  if (agentTuiInteractiveLoop && runtime !== AGENT_TUI_RUNTIME) {
+    throw new Error('agent_tui_interactive_loop_requires_agent_tui_runtime');
+  }
+  if (agentTuiMaxSteps !== null && (!Number.isInteger(agentTuiMaxSteps) || agentTuiMaxSteps <= 0)) {
+    throw new Error('agent_tui_max_steps_invalid');
   }
   const siteRoot = options.siteRoot ?? defaultRootDir;
   const claudeCodePolicy = runtime === 'claude-code' ? readClaudeCodeExecutionPolicy(siteRoot) : null;
@@ -1484,7 +1500,14 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     carrierSessionId: session.carrier_session_id,
     agentContextDb: dbPath,
   };
-  const runtimeArgs = runtimeArgsFor({ runtime, siteRoot, startupEvidence, enableNativeShell });
+  const runtimeArgs = runtimeArgsFor({
+    runtime,
+    siteRoot,
+    startupEvidence,
+    enableNativeShell,
+    agentTuiInteractiveLoop,
+    agentTuiMaxSteps,
+  });
   const runtimeUsesAgentCliMcp = runtime === 'agent-cli' || runtime === AGENT_RUNTIME_SERVER_RUNTIME;
   const runtimeUsesAgentTuiScaffold = runtime === AGENT_TUI_RUNTIME;
   const codexConfig = runtime === 'codex'
@@ -1503,7 +1526,10 @@ function buildLaunchPlanFromArgs(args, options = {}) {
       NARADA_AGENT_TUI_SESSION_DIR: agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id),
       [AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.provider_execution_env_var]: 'false',
       [AGENT_TUI_MCP_RUNTIME_CONTRACT.mcp_fabric_env_var]: 'false',
-      [AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_rendering_env_var]: 'false',
+      [AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_rendering_env_var]: agentTuiInteractiveLoop ? 'true' : 'false',
+      ...(agentTuiInteractiveLoop ? {
+        [AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_mode_env_var]: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.required_terminal_mode,
+      } : {}),
     } : {}),
     ...(runtime === 'codex' ? { CODEX_HOME: codexHomePath(siteRoot, identity) } : {}),
   };
@@ -1650,21 +1676,21 @@ function buildLaunchPlanFromArgs(args, options = {}) {
           status: exec && !dryRun ? 'ready_to_spawn' : 'planned',
           command: runtimeCommand(runtime),
           argv: runtimeArgs,
-          transport: 'control_jsonl_session_jsonl',
-          carrier_relation: 'non_terminal_agent_tui_smoke_step',
+          transport: agentTuiInteractiveLoop ? 'interactive_terminal_control_jsonl_session_jsonl' : 'control_jsonl_session_jsonl',
+          carrier_relation: agentTuiInteractiveLoop ? 'terminal_agent_tui_interactive_loop' : 'non_terminal_agent_tui_smoke_step',
           session_dir: agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id),
           session_path: join(agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id), 'session.jsonl'),
-          admitted_runtime_slice: AGENT_TUI_LAUNCH_SLICE_CONTRACT.admitted_runtime_slice,
+          admitted_runtime_slice: agentTuiInteractiveLoop ? 'explicit_terminal_interactive_loop' : AGENT_TUI_LAUNCH_SLICE_CONTRACT.admitted_runtime_slice,
           control_path: join(agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id), 'control.jsonl'),
           rust_toolchain_readiness: agentTuiRustToolchainReadiness(siteRoot),
-          smoke_step: {
+          smoke_step: agentTuiInteractiveLoop ? null : {
             mode: 'interactive_step_once',
             terminal_mode: AGENT_TUI_LAUNCH_SLICE_CONTRACT.terminal_mode,
           },
-          interactive_loop: agentTuiInteractiveLoopGate(),
+          interactive_loop: agentTuiInteractiveLoopGate({ admitted: agentTuiInteractiveLoop, maxSteps: agentTuiMaxSteps ?? 100000 }),
           promotion_gate: agentTuiPromotionGate(),
-          tui_rendering_enabled: false,
-          terminal_rendering: agentTuiTerminalRenderingGate(),
+          tui_rendering_enabled: agentTuiInteractiveLoop,
+          terminal_rendering: agentTuiTerminalRenderingGate({ admitted: agentTuiInteractiveLoop }),
           provider_execution_enabled: false,
           provider_execution: agentTuiProviderExecutionGate(),
           mcp_fabric_access_enabled: false,

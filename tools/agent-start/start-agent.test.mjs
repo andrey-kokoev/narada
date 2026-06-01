@@ -633,6 +633,41 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   assert.match(result.mcp_tool_approval.note, /bounded non-terminal smoke step/);
 });
 
+test('agent-tui explicit terminal loop launch admits terminal rendering only', () => {
+  const siteRoot = tempSite();
+  const pcSiteRoot = tempPcSite();
+  const { result } = buildLaunchPlanFromArgs({
+    identity: 'narada.resident',
+    runtime: 'agent-tui',
+    exec: true,
+    dry_run: true,
+    agent_tui_interactive_loop: true,
+    agent_tui_max_steps: 17,
+  }, { siteRoot, pcSiteRoot, now: '2026-05-30T12:04:30.000Z' });
+
+  assert.equal(result.agent_tui_launch.carrier_relation, 'terminal_agent_tui_interactive_loop');
+  assert.equal(result.agent_tui_launch.transport, 'interactive_terminal_control_jsonl_session_jsonl');
+  assert.equal(result.agent_tui_launch.tui_rendering_enabled, true);
+  assert.equal(result.agent_tui_launch.provider_execution_enabled, false);
+  assert.equal(result.agent_tui_launch.mcp_fabric_access_enabled, false);
+  assert.equal(result.agent_tui_launch.interactive_loop.admitted, true);
+  assert.equal(result.agent_tui_launch.interactive_loop.max_steps, 17);
+  assert.equal(result.agent_tui_launch.terminal_rendering.admitted, true);
+  assert.deepEqual(result.agent_tui_launch.terminal_rendering.environment_gate, {
+    variable: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_rendering_env_var,
+    value: 'true',
+    mode_variable: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_mode_env_var,
+    required_mode: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.required_terminal_mode,
+    mode_value: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.required_terminal_mode,
+    operator_override_admitted: true,
+  });
+  assert.equal(result.planned_environment[AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_rendering_env_var], 'true');
+  assert.equal(result.planned_environment[AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_mode_env_var], AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.required_terminal_mode);
+  assert.equal(result.runtime_args.includes('--interactive-loop'), true);
+  assert.equal(result.runtime_args.includes('--max-steps'), true);
+  assert.equal(result.runtime_args.includes('17'), true);
+  assert.equal(result.runtime_args.includes(AGENT_TUI_LAUNCH_SLICE_CONTRACT.carrier_flag), false);
+});
 test('agent-tui exec materializes session and control files before runtime spawn', () => {
   const siteRoot = tempSite();
   const pcSiteRoot = tempPcSite();
