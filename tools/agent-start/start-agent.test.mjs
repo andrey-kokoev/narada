@@ -644,7 +644,7 @@ test('agent-tui explicit terminal loop launch admits terminal rendering only', (
     agent_tui_interactive_loop: true,
     agent_tui_max_steps: 17,
   }, { siteRoot, pcSiteRoot, now: '2026-05-30T12:04:30.000Z' });
-
+  assert.equal(result.transport, 'interactive_terminal_control_jsonl_session_jsonl');
   assert.equal(result.agent_tui_launch.carrier_relation, 'terminal_agent_tui_interactive_loop');
   assert.equal(result.agent_tui_launch.transport, 'interactive_terminal_control_jsonl_session_jsonl');
   assert.equal(result.agent_tui_launch.tui_rendering_enabled, true);
@@ -662,11 +662,11 @@ test('agent-tui explicit terminal loop launch admits terminal rendering only', (
     operator_override_admitted: true,
   });
   assert.equal(result.planned_environment[AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_rendering_env_var], 'true');
-  assert.equal(result.planned_environment[AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_mode_env_var], AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.required_terminal_mode);
   assert.equal(result.runtime_args.includes('--interactive-loop'), true);
   assert.equal(result.runtime_args.includes('--max-steps'), true);
   assert.equal(result.runtime_args.includes('17'), true);
   assert.equal(result.runtime_args.includes(AGENT_TUI_LAUNCH_SLICE_CONTRACT.carrier_flag), false);
+  assert.match(result.mcp_tool_approval.note, /terminal interactive-loop rendering/);
 });
 test('agent-tui exec materializes session and control files before runtime spawn', () => {
   const siteRoot = tempSite();

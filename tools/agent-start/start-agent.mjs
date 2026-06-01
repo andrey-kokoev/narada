@@ -8,6 +8,7 @@ import { formatAgentStartResult } from '../../packages/agent-start-renderer/src/
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const defaultRootDir = join(__dirname, '..', '..');
+const require = createRequire(import.meta.url);
 const AGENT_TUI_MCP_RUNTIME_CONTRACT_EXPECTED = Object.freeze({
   schema: 'narada.agent_tui.mcp_runtime_contract.v0',
   mcp_fabric_env_var: 'NARADA_AGENT_TUI_ENABLE_MCP_FABRIC',
@@ -1334,7 +1335,7 @@ function startupCommand() {
   };
 }
 
-function mcpToolApprovalNote(runtime, enableNativeShell) {
+function mcpToolApprovalNote(runtime, enableNativeShell, { agentTuiInteractiveLoop = false } = {}) {
   if (runtime === 'codex') {
     return enableNativeShell
       ? 'Approves only the Narada proper target-local MCP server bound to this launch site root. Native Codex shell_tool was explicitly left enabled by break-glass launcher flag. narada-andrey User Site MCP servers are not approved for this Narada proper carrier.'
@@ -1353,7 +1354,9 @@ function mcpToolApprovalNote(runtime, enableNativeShell) {
     return 'Agent Runtime Server reads only the target Site .ai/mcp fabric through its own MCP client. User Site MCP servers are not injected, and model-selected tool calls remain requests rather than authority.';
   }
   if (runtime === AGENT_TUI_RUNTIME) {
-    return 'Agent TUI is admitted here as a bounded non-terminal smoke step. It reads control JSONL and writes session JSONL; full terminal rendering and Site MCP execution remain separate future admissions.';
+    return agentTuiInteractiveLoop
+      ? 'Agent TUI is explicitly admitted here for terminal interactive-loop rendering. It reads control JSONL and writes session JSONL; provider execution and Site MCP execution remain separately withheld.'
+      : 'Agent TUI is admitted here as a bounded non-terminal smoke step. It reads control JSONL and writes session JSONL; full terminal rendering and Site MCP execution remain separate future admissions.';
   }
   throw new Error(`runtime_not_admitted:${runtime}`);
 }
@@ -1572,7 +1575,11 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     runtime_kind: runtimeKind(runtime),
     runtime_substrate_kind: runtime,
     runtime_args: runtimeArgs,
-    transport: runtime === AGENT_RUNTIME_SERVER_RUNTIME ? 'jsonl_stdio' : (runtime === AGENT_TUI_RUNTIME ? 'control_jsonl_session_jsonl' : null),
+    transport: runtime === AGENT_RUNTIME_SERVER_RUNTIME
+      ? 'jsonl_stdio'
+      : (runtime === AGENT_TUI_RUNTIME
+        ? (agentTuiInteractiveLoop ? 'interactive_terminal_control_jsonl_session_jsonl' : 'control_jsonl_session_jsonl')
+        : null),
     agent_cli_session_dir: runtime === 'agent-cli' ? agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id) : null,
     agent_runtime_server_session_dir: runtime === AGENT_RUNTIME_SERVER_RUNTIME ? agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id) : null,
     agent_tui_session_dir: runtime === AGENT_TUI_RUNTIME ? agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id) : null,
@@ -1707,7 +1714,7 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     mcp_tool_approval: mcpToolApprovalPacket({
       approved: NARADA_PROPER_APPROVED_MCP_SERVERS,
       withheld: NARADA_PROPER_WITHHELD_MCP_SERVERS,
-      note: mcpToolApprovalNote(runtime, enableNativeShell),
+      note: mcpToolApprovalNote(runtime, enableNativeShell, { agentTuiInteractiveLoop }),
     }),
     planned_environment: plannedEnvironment,
     launch_environment: launchEnvironment,
