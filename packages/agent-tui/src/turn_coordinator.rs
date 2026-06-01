@@ -395,7 +395,7 @@ mod tests {
                 ),
                 (
                     provider_contract.intelligence_provider_env_var.clone(),
-                    "codex-subscription".to_string(),
+                    provider_contract.admitted_providers[0].clone(),
                 ),
                 (
                     provider_contract.ai_model_env_var.clone(),

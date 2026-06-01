@@ -264,6 +264,14 @@ mod tests {
         }
     }
 
+    fn admitted_provider() -> &'static str {
+        provider_adapter_contract()
+            .admitted_providers
+            .first()
+            .expect("provider contract has at least one admitted provider")
+            .as_str()
+    }
+
     fn provider_env(pairs: &[(&str, &str)]) -> std::collections::BTreeMap<String, String> {
         let contract = provider_adapter_contract();
         pairs
@@ -359,7 +367,7 @@ mod tests {
 
         let configured = ProviderRuntimeConfig::from_env_map(&provider_env(&[
             ("execution_enabled", "true"),
-            ("provider", "codex-subscription"),
+            ("provider", admitted_provider()),
             ("model", "gpt-5.5"),
         ]));
         assert_eq!(
@@ -429,7 +437,7 @@ mod tests {
     fn builds_runtime_posture_bundle_from_runtime_configs() {
         let provider = ProviderRuntimeConfig::from_env_map(&provider_env(&[
             ("execution_enabled", "true"),
-            ("provider", "codex-subscription"),
+            ("provider", admitted_provider()),
             ("model", "gpt-5.5"),
         ]));
         let mcp = McpRuntimeConfig::from_env_map(&mcp_env(&[
