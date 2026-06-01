@@ -212,10 +212,12 @@ fn apply_draft_effect<B: ComposerAdmissionBridge>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::carrier_protocol::{parse_session_event, SessionEventKind};
     use crate::input_queue::{SessionEvidenceContext, TurnState};
+    use crate::transcript_store::TranscriptStore;
     use crate::turn_coordinator::TurnCoordinatorClock;
     use std::collections::VecDeque;
-    use std::fs::{remove_file, OpenOptions};
+    use std::fs::{read_to_string, remove_file, OpenOptions};
     use std::io::Write;
     use std::path::{Path, PathBuf};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -307,6 +309,26 @@ mod tests {
         }
     }
 
+    #[derive(Debug)]
+    struct AppendingInputSource {
+        outcomes: VecDeque<TerminalInputTickOutcome>,
+        control_path: PathBuf,
+        appended: bool,
+    }
+
+    impl InteractiveInputSource for AppendingInputSource {
+        fn read_tick(&mut self, _composer: &mut TextareaComposer) -> TerminalInputTickOutcome {
+            if !self.appended && self.outcomes.len() == 2 {
+                append(&self.control_path, CONTROL_FIXTURE.trim_end());
+                append(&self.control_path, "\n");
+                self.appended = true;
+            }
+            self.outcomes
+                .pop_front()
+                .unwrap_or(TerminalInputTickOutcome::NoInput)
+        }
+    }
+
     struct FakeClockSource {
         index: u64,
     }
@@ -372,6 +394,17 @@ mod tests {
     ) -> FakeInputSource {
         FakeInputSource {
             outcomes: VecDeque::from_iter(outcomes),
+        }
+    }
+
+    fn appending_input_source(
+        control_path: PathBuf,
+        outcomes: impl IntoIterator<Item = TerminalInputTickOutcome>,
+    ) -> AppendingInputSource {
+        AppendingInputSource {
+            outcomes: VecDeque::from_iter(outcomes),
+            control_path,
+            appended: false,
         }
     }
 
@@ -599,6 +632,87 @@ mod tests {
             .last()
             .expect("final status exists")
             .contains("queued=1"));
+
+        remove_file(control_path).ok();
+        remove_file(session_path).ok();
+    }
+
+    #[test]
+    fn injected_interactive_loop_accepts_operator_submit_and_later_control_input() {
+        let control_path = temp_path("control-live-input");
+        let session_path = temp_path("session-live-input");
+        append(&control_path, "");
+        let mut runtime = runtime_for_paths(&control_path, &session_path);
+        let mut state = AgentTuiLoopState::default();
+        let mut terminal = FakeTerminalFrame::new();
+        let mut input = appending_input_source(
+            control_path.clone(),
+            [
+                TerminalInputTickOutcome::DraftEffect(ComposerDraftEffect::SubmitRequested {
+                    text: "hello from live tui".to_string(),
+                }),
+                TerminalInputTickOutcome::NoInput,
+                TerminalInputTickOutcome::DraftEffect(ComposerDraftEffect::ExitRequested),
+            ],
+        );
+        let mut clock = clock_source();
+
+        let summary = run_injected_interactive_loop(
+            &mut runtime,
+            &mut state,
+            &mut terminal,
+            &mut input,
+            &mut clock,
+            10,
+        )
+        .expect("interactive loop admits terminal and control inputs");
+
+        assert_eq!(summary.steps_attempted, 3);
+        assert!(summary.exited_by_input);
+        assert!(summary.final_drawn);
+        assert!(input.appended);
+
+        let session_jsonl = read_to_string(&session_path).expect("session jsonl exists");
+        assert!(session_jsonl.contains("\"source_kind\":\"operator\""));
+        assert!(session_jsonl.contains("\"transport\":\"interactive_terminal\""));
+        assert!(session_jsonl.contains("hello from live tui"));
+        assert!(session_jsonl.contains("\"source_kind\":\"system\""));
+        assert!(session_jsonl.contains("run startup sequence"));
+        assert!(session_jsonl.contains("\"provider_request_status\":\"recorded_not_dispatched\""));
+
+        let events = session_jsonl
+            .lines()
+            .map(|line| parse_session_event(line).expect("session event parses"))
+            .collect::<Vec<_>>();
+        assert!(!events.iter().any(|event| matches!(
+            event.event_kind,
+            SessionEventKind::ProviderToolCallRequested
+                | SessionEventKind::ToolCallRequested
+                | SessionEventKind::ToolResultReceived
+        )));
+
+        let mut transcript = TranscriptStore::new();
+        transcript
+            .ingest_jsonl_file_summary(&session_path)
+            .expect("session transcript ingests");
+        let projected = transcript
+            .items()
+            .iter()
+            .map(|item| (item.actor.as_str().to_string(), item.text.clone()))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            projected[0],
+            ("operator".to_string(), "hello from live tui".to_string())
+        );
+        let operator_index = projected
+            .iter()
+            .position(|item| item == &("operator".to_string(), "hello from live tui".to_string()))
+            .expect("operator input projected");
+        let system_index = projected
+            .iter()
+            .position(|item| item == &("system".to_string(), "run startup sequence".to_string()))
+            .expect("system input projected");
+        assert!(operator_index < system_index);
 
         remove_file(control_path).ok();
         remove_file(session_path).ok();
