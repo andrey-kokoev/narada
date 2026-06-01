@@ -863,6 +863,14 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    fn admitted_provider() -> String {
+        crate::provider_adapter_contract::provider_adapter_contract()
+            .admitted_providers
+            .first()
+            .expect("provider contract has at least one admitted provider")
+            .clone()
+    }
+
     #[test]
     fn parses_shared_input_event_fixture() {
         let event = parse_input_event(include_str!(
@@ -1116,7 +1124,7 @@ mod tests {
                 "configured",
                 "configured_without_adapter",
                 None,
-                Some("codex-subscription".to_string()),
+                Some(admitted_provider()),
                 Some("gpt-5.5".to_string()),
                 Some("medium".to_string()),
                 true,
