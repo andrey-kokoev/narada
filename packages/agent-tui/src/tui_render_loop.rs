@@ -215,8 +215,11 @@ mod tests {
     use crate::carrier_protocol::{parse_session_event, SessionEventKind};
     use crate::input_queue::{SessionEvidenceContext, TurnState};
     use crate::transcript_store::TranscriptStore;
+    use crate::terminal_input_tick::TerminalInputReader;
     use crate::turn_coordinator::TurnCoordinatorClock;
+    use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
     use std::collections::VecDeque;
+    use std::io;
     use std::fs::{read_to_string, remove_file, OpenOptions};
     use std::io::Write;
     use std::path::{Path, PathBuf};
@@ -329,6 +332,23 @@ mod tests {
         }
     }
 
+    #[derive(Debug, Default)]
+    struct FakeTerminalInputReader {
+        events: VecDeque<Event>,
+    }
+
+    impl TerminalInputReader for FakeTerminalInputReader {
+        fn poll_input(&mut self, _wait: Duration) -> io::Result<bool> {
+            Ok(!self.events.is_empty())
+        }
+
+        fn read_input(&mut self) -> io::Result<Event> {
+            self.events
+                .pop_front()
+                .ok_or_else(|| io::Error::new(io::ErrorKind::UnexpectedEof, "no event"))
+        }
+    }
+
     struct FakeClockSource {
         index: u64,
     }
@@ -406,6 +426,21 @@ mod tests {
             control_path,
             appended: false,
         }
+    }
+
+    fn terminal_reader(events: impl IntoIterator<Item = Event>) -> FakeTerminalInputReader {
+        FakeTerminalInputReader {
+            events: VecDeque::from_iter(events),
+        }
+    }
+
+    fn key_event(code: KeyCode, modifiers: KeyModifiers) -> Event {
+        Event::Key(KeyEvent {
+            code,
+            modifiers,
+            kind: KeyEventKind::Press,
+            state: KeyEventState::NONE,
+        })
     }
 
     fn clock_source() -> FakeClockSource {
@@ -632,6 +667,58 @@ mod tests {
             .last()
             .expect("final status exists")
             .contains("queued=1"));
+
+        remove_file(control_path).ok();
+        remove_file(session_path).ok();
+    }
+
+    #[test]
+    fn injected_interactive_loop_accepts_real_terminal_key_events() {
+        let control_path = temp_path("control-key-events");
+        let session_path = temp_path("session-key-events");
+        append(&control_path, "");
+        let mut runtime = runtime_for_paths(&control_path, &session_path);
+        let mut state = AgentTuiLoopState::default();
+        let mut terminal = FakeTerminalFrame::new();
+        let mut reader = terminal_reader([
+            key_event(KeyCode::Char('h'), KeyModifiers::NONE),
+            key_event(KeyCode::Char('i'), KeyModifiers::NONE),
+            key_event(KeyCode::Enter, KeyModifiers::NONE),
+            key_event(KeyCode::Char('c'), KeyModifiers::CONTROL),
+        ]);
+        let mut input = TerminalInputTickSource {
+            reader: &mut reader,
+            wait: Duration::from_millis(0),
+        };
+        let mut clock = clock_source();
+
+        let summary = run_injected_interactive_loop(
+            &mut runtime,
+            &mut state,
+            &mut terminal,
+            &mut input,
+            &mut clock,
+            10,
+        )
+        .expect("interactive loop accepts terminal key events");
+
+        assert_eq!(summary.steps_attempted, 4);
+        assert!(summary.exited_by_input);
+        assert!(summary.final_drawn);
+        assert_eq!(state.draft_text(), "");
+
+        let session_jsonl = read_to_string(&session_path).expect("session jsonl exists");
+        assert!(session_jsonl.contains("\"source_kind\":\"operator\""));
+        assert!(session_jsonl.contains("\"transport\":\"interactive_terminal\""));
+        assert!(session_jsonl.contains("hi"));
+        assert!(session_jsonl.contains("\"provider_request_status\":\"recorded_not_dispatched\""));
+
+        let mut transcript = TranscriptStore::new();
+        transcript
+            .ingest_jsonl_file_summary(&session_path)
+            .expect("session transcript ingests");
+        assert_eq!(transcript.items()[0].actor.as_str(), "operator");
+        assert_eq!(transcript.items()[0].text, "hi");
 
         remove_file(control_path).ok();
         remove_file(session_path).ok();
