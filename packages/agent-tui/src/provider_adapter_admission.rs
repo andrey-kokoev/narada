@@ -176,6 +176,12 @@ mod tests {
             .as_str()
     }
 
+    const UNKNOWN_PROVIDER_FIXTURE: &str = "unknown-provider";
+
+    fn unknown_provider_refusal() -> String {
+        format!("provider_not_admitted:{UNKNOWN_PROVIDER_FIXTURE}")
+    }
+
     fn provider_runtime_env(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
         let contract = provider_adapter_contract();
         pairs
@@ -229,7 +235,7 @@ mod tests {
     fn refused_runtime_refuses_adapter_admission() {
         let runtime_config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
             ("execution_enabled", "true"),
-            ("provider", "unknown-provider"),
+            ("provider", UNKNOWN_PROVIDER_FIXTURE),
             ("model", "gpt-5.5"),
         ]));
         let admission = ProviderAdapterAdmission::from_runtime_config(
@@ -241,7 +247,7 @@ mod tests {
         assert!(!admission.provider_execution_enabled);
         assert_eq!(
             admission.refusal_reason.as_deref(),
-            Some("provider_not_admitted:unknown-provider")
+            Some(unknown_provider_refusal().as_str())
         );
     }
 
