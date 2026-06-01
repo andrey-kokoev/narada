@@ -8,6 +8,14 @@ const CONTROL_FIXTURE: &str =
     include_str!("../../carrier-protocol/fixtures/control-input-event.json");
 static TEMP_PATH_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+fn admitted_provider() -> &'static str {
+    provider_adapter_contract()
+        .admitted_providers
+        .first()
+        .expect("provider contract has at least one admitted provider")
+        .as_str()
+}
+
 fn base_command() -> Command {
     let contract = provider_adapter_contract();
     let mut command = Command::new(env!("CARGO_BIN_EXE_narada-agent-tui"));
@@ -68,7 +76,7 @@ fn provider_runtime_cli_acceptance_reports_disabled_by_default() {
     assert!(output.contains("provider_status: disabled"));
     assert!(output.contains("provider_execution_enabled: false"));
     assert!(output.contains("stream: off"));
-    assert!(!output.contains("provider: codex-subscription"));
+    assert!(!output.contains(&format!("provider: {}", admitted_provider())));
 }
 
 #[test]
@@ -78,7 +86,7 @@ fn provider_runtime_cli_acceptance_reports_refusal_when_enabled_without_model() 
         &mut command,
         &[
             ("execution_enabled", "true"),
-            ("provider", "codex-subscription"),
+            ("provider", admitted_provider()),
         ],
     );
 
@@ -96,7 +104,7 @@ fn provider_runtime_cli_acceptance_reports_configured_without_execution_adapter(
         &mut command,
         &[
             ("execution_enabled", "true"),
-            ("provider", "codex-subscription"),
+            ("provider", admitted_provider()),
             ("model", "gpt-5.5"),
             ("thinking", "medium"),
             ("stream", "false"),
@@ -111,7 +119,7 @@ fn provider_runtime_cli_acceptance_reports_configured_without_execution_adapter(
     assert!(output.contains("provider_adapter_status: configured_without_adapter"));
     assert!(output.contains("provider_adapter_execution_enabled: false"));
     assert!(output.contains("provider_adapter_refusal: provider_adapter_not_admitted"));
-    assert!(output.contains("provider: codex-subscription"));
+    assert!(output.contains(&format!("provider: {}", admitted_provider())));
     assert!(output.contains("model: gpt-5.5"));
     assert!(output.contains("thinking: medium"));
     assert!(output.contains("stream: off"));
@@ -124,7 +132,7 @@ fn provider_runtime_cli_acceptance_reports_unknown_adapter_as_refused() {
         &mut command,
         &[
             ("execution_enabled", "true"),
-            ("provider", "codex-subscription"),
+            ("provider", admitted_provider()),
             ("model", "gpt-5.5"),
             ("adapter_kind", "unknown_adapter"),
         ],
@@ -148,7 +156,7 @@ fn provider_runtime_cli_acceptance_reports_requested_adapter_as_refused_until_im
         &mut command,
         &[
             ("execution_enabled", "true"),
-            ("provider", "codex-subscription"),
+            ("provider", admitted_provider()),
             ("model", "gpt-5.5"),
             (
                 "adapter_kind",
@@ -191,7 +199,7 @@ fn assert_configured_provider_posture_recorded_with_adapter(
 ) {
     assert!(session_jsonl.contains("\"provider_request_status\":\"recorded_not_dispatched\""));
     assert!(session_jsonl.contains("\"provider_runtime_status\":\"configured\""));
-    assert!(session_jsonl.contains("\"provider\":\"codex-subscription\""));
+    assert!(session_jsonl.contains(&format!("\"provider\":\"{}\"", admitted_provider())));
     assert!(session_jsonl.contains("\"model\":\"gpt-5.5\""));
     assert!(session_jsonl.contains(&format!(
         "\"provider_adapter_admission_status\":\"{adapter_status}\""
@@ -219,7 +227,7 @@ fn provider_runtime_cli_acceptance_records_runtime_posture_in_runtime_step_evide
         &mut command,
         &[
             ("execution_enabled", "true"),
-            ("provider", "codex-subscription"),
+            ("provider", admitted_provider()),
             ("model", "gpt-5.5"),
         ],
     );
@@ -252,7 +260,7 @@ fn provider_runtime_cli_acceptance_records_requested_adapter_refusal_in_runtime_
         &mut command,
         &[
             ("execution_enabled", "true"),
-            ("provider", "codex-subscription"),
+            ("provider", admitted_provider()),
             ("model", "gpt-5.5"),
             (
                 "adapter_kind",
@@ -301,7 +309,7 @@ fn provider_runtime_cli_acceptance_records_runtime_posture_in_interactive_step_e
         &mut command,
         &[
             ("execution_enabled", "true"),
-            ("provider", "codex-subscription"),
+            ("provider", admitted_provider()),
             ("model", "gpt-5.5"),
         ],
     );

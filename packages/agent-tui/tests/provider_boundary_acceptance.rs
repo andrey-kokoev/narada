@@ -3,6 +3,7 @@ use narada_agent_tui::carrier_protocol::{
     SessionEventKind,
 };
 use narada_agent_tui::input_queue::{InputQueue, SessionEvidenceContext};
+use narada_agent_tui::provider_adapter_contract::provider_adapter_contract;
 use narada_agent_tui::provider_dispatch::{
     ProviderAdapter, ProviderDispatchRecord, ProviderDispatchStatus, ProviderOutputRecord,
 };
@@ -14,6 +15,14 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 const INPUT_FIXTURE: &str = include_str!("../../carrier-protocol/fixtures/input-event.json");
 static TEMP_PATH_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+fn admitted_provider() -> String {
+    provider_adapter_contract()
+        .admitted_providers
+        .first()
+        .expect("provider contract has at least one admitted provider")
+        .clone()
+}
 
 fn temp_session_path() -> PathBuf {
     let unique = TEMP_PATH_COUNTER.fetch_add(1, Ordering::Relaxed);
@@ -59,7 +68,7 @@ impl ProviderAdapter for StreamingProviderAdapter {
                 "configured",
                 "admitted",
                 Some("scripted".to_string()),
-                Some("codex-subscription".to_string()),
+                Some(admitted_provider()),
                 Some("gpt-5.5".to_string()),
                 None,
                 true,
