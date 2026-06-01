@@ -8,7 +8,32 @@ import { formatAgentStartResult } from '../../packages/agent-start-renderer/src/
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const defaultRootDir = join(__dirname, '..', '..');
-const require = createRequire(import.meta.url);
+const AGENT_TUI_MCP_RUNTIME_CONTRACT_EXPECTED = Object.freeze({
+  schema: 'narada.agent_tui.mcp_runtime_contract.v0',
+  mcp_fabric_env_var: 'NARADA_AGENT_TUI_ENABLE_MCP_FABRIC',
+  mcp_config_env_var: 'NARADA_AGENT_TUI_MCP_CONFIG',
+  site_mcp_fabric_env_var: 'NARADA_SITE_MCP_FABRIC',
+  mcp_config_path_policy: 'inside_site_mcp_fabric_without_parent_traversal',
+});
+const AGENT_TUI_PROVIDER_ADAPTER_CONTRACT_EXPECTED = Object.freeze({
+  schema: 'narada.agent_tui.provider_adapter_contract.v0',
+  provider_execution_env_var: 'NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION',
+  provider_adapter_kind_env_var: 'NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND',
+  intelligence_provider_env_var: 'NARADA_INTELLIGENCE_PROVIDER',
+  ai_model_env_var: 'NARADA_AI_MODEL',
+  ai_thinking_env_var: 'NARADA_AI_THINKING',
+  ai_stream_env_var: 'NARADA_AI_STREAM',
+  admitted_providers: Object.freeze(['codex-subscription', 'openai-api', 'anthropic-api']),
+  scripted_provider_adapter_kind: 'scripted_provider_adapter',
+  production_provider_adapter_kind: 'codex_subscription_adapter',
+  production_provider_adapter_implemented: false,
+});
+const AGENT_TUI_TERMINAL_RUNTIME_CONTRACT_EXPECTED = Object.freeze({
+  schema: 'narada.agent_tui.terminal_runtime_contract.v0',
+  terminal_rendering_env_var: 'NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING',
+  terminal_mode_env_var: 'NARADA_AGENT_TUI_TERMINAL_MODE',
+  required_terminal_mode: 'interactive_loop',
+});
 const AGENT_TUI_MCP_RUNTIME_CONTRACT = parseAgentTuiMcpRuntimeContract(readFileSync(
   join(defaultRootDir, 'packages', 'agent-tui', 'contracts', 'mcp-runtime.json'),
   'utf8',
@@ -71,19 +96,20 @@ export function parseAgentTuiMcpRuntimeContract(jsonText) {
   } catch (error) {
     throw new Error(`mcp_runtime_contract_parse_failed:${error.message}`);
   }
-  if (contract?.schema !== 'narada.agent_tui.mcp_runtime_contract.v0') {
+  const expected = AGENT_TUI_MCP_RUNTIME_CONTRACT_EXPECTED;
+  if (contract?.schema !== expected.schema) {
     throw new Error('mcp_runtime_contract_invalid:schema');
   }
-  if (contract?.mcp_fabric_env_var !== 'NARADA_AGENT_TUI_ENABLE_MCP_FABRIC') {
+  if (contract?.mcp_fabric_env_var !== expected.mcp_fabric_env_var) {
     throw new Error('mcp_runtime_contract_invalid:mcp_fabric_env_var');
   }
-  if (contract?.mcp_config_env_var !== 'NARADA_AGENT_TUI_MCP_CONFIG') {
+  if (contract?.mcp_config_env_var !== expected.mcp_config_env_var) {
     throw new Error('mcp_runtime_contract_invalid:mcp_config_env_var');
   }
-  if (contract?.site_mcp_fabric_env_var !== 'NARADA_SITE_MCP_FABRIC') {
+  if (contract?.site_mcp_fabric_env_var !== expected.site_mcp_fabric_env_var) {
     throw new Error('mcp_runtime_contract_invalid:site_mcp_fabric_env_var');
   }
-  if (contract?.mcp_config_path_policy !== 'inside_site_mcp_fabric_without_parent_traversal') {
+  if (contract?.mcp_config_path_policy !== expected.mcp_config_path_policy) {
     throw new Error('mcp_runtime_contract_invalid:mcp_config_path_policy');
   }
   return contract;
@@ -96,37 +122,38 @@ export function parseAgentTuiProviderAdapterContract(jsonText) {
   } catch (error) {
     throw new Error(`provider_adapter_contract_parse_failed:${error.message}`);
   }
-  if (contract?.schema !== 'narada.agent_tui.provider_adapter_contract.v0') {
+  const expected = AGENT_TUI_PROVIDER_ADAPTER_CONTRACT_EXPECTED;
+  if (contract?.schema !== expected.schema) {
     throw new Error('provider_adapter_contract_invalid:schema');
   }
-  if (contract?.provider_execution_env_var !== 'NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION') {
+  if (contract?.provider_execution_env_var !== expected.provider_execution_env_var) {
     throw new Error('provider_adapter_contract_invalid:provider_execution_env_var');
   }
-  if (contract?.provider_adapter_kind_env_var !== 'NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND') {
+  if (contract?.provider_adapter_kind_env_var !== expected.provider_adapter_kind_env_var) {
     throw new Error('provider_adapter_contract_invalid:provider_adapter_kind_env_var');
   }
-  if (contract?.intelligence_provider_env_var !== 'NARADA_INTELLIGENCE_PROVIDER') {
+  if (contract?.intelligence_provider_env_var !== expected.intelligence_provider_env_var) {
     throw new Error('provider_adapter_contract_invalid:intelligence_provider_env_var');
   }
-  if (contract?.ai_model_env_var !== 'NARADA_AI_MODEL') {
+  if (contract?.ai_model_env_var !== expected.ai_model_env_var) {
     throw new Error('provider_adapter_contract_invalid:ai_model_env_var');
   }
-  if (contract?.ai_thinking_env_var !== 'NARADA_AI_THINKING') {
+  if (contract?.ai_thinking_env_var !== expected.ai_thinking_env_var) {
     throw new Error('provider_adapter_contract_invalid:ai_thinking_env_var');
   }
-  if (contract?.ai_stream_env_var !== 'NARADA_AI_STREAM') {
+  if (contract?.ai_stream_env_var !== expected.ai_stream_env_var) {
     throw new Error('provider_adapter_contract_invalid:ai_stream_env_var');
   }
-  if (JSON.stringify(contract?.admitted_providers) !== JSON.stringify(['codex-subscription', 'openai-api', 'anthropic-api'])) {
+  if (JSON.stringify(contract?.admitted_providers) !== JSON.stringify(expected.admitted_providers)) {
     throw new Error('provider_adapter_contract_invalid:admitted_providers');
   }
-  if (contract?.scripted_provider_adapter_kind !== 'scripted_provider_adapter') {
+  if (contract?.scripted_provider_adapter_kind !== expected.scripted_provider_adapter_kind) {
     throw new Error('provider_adapter_contract_invalid:scripted_provider_adapter_kind');
   }
-  if (contract?.production_provider_adapter_kind !== 'codex_subscription_adapter') {
+  if (contract?.production_provider_adapter_kind !== expected.production_provider_adapter_kind) {
     throw new Error('provider_adapter_contract_invalid:production_provider_adapter_kind');
   }
-  if (contract?.production_provider_adapter_implemented !== false) {
+  if (contract?.production_provider_adapter_implemented !== expected.production_provider_adapter_implemented) {
     throw new Error('provider_adapter_contract_invalid:production_provider_adapter_implemented');
   }
   return contract;
@@ -139,16 +166,17 @@ export function parseAgentTuiTerminalRuntimeContract(jsonText) {
   } catch (error) {
     throw new Error(`terminal_runtime_contract_parse_failed:${error.message}`);
   }
-  if (contract?.schema !== 'narada.agent_tui.terminal_runtime_contract.v0') {
+  const expected = AGENT_TUI_TERMINAL_RUNTIME_CONTRACT_EXPECTED;
+  if (contract?.schema !== expected.schema) {
     throw new Error('terminal_runtime_contract_invalid:schema');
   }
-  if (contract?.terminal_rendering_env_var !== 'NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING') {
+  if (contract?.terminal_rendering_env_var !== expected.terminal_rendering_env_var) {
     throw new Error('terminal_runtime_contract_invalid:terminal_rendering_env_var');
   }
-  if (contract?.terminal_mode_env_var !== 'NARADA_AGENT_TUI_TERMINAL_MODE') {
+  if (contract?.terminal_mode_env_var !== expected.terminal_mode_env_var) {
     throw new Error('terminal_runtime_contract_invalid:terminal_mode_env_var');
   }
-  if (contract?.required_terminal_mode !== 'interactive_loop') {
+  if (contract?.required_terminal_mode !== expected.required_terminal_mode) {
     throw new Error('terminal_runtime_contract_invalid:required_terminal_mode');
   }
   return contract;
