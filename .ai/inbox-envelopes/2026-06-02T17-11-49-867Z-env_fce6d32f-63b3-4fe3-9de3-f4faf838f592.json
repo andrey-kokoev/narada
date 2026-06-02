@@ -1,0 +1,33 @@
+{
+  "envelope_id": "env_fce6d32f-63b3-4fe3-9de3-f4faf838f592",
+  "received_at": "2026-06-02T17:11:49.867Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "task:1514:execution-observation:2026-06-02"
+  },
+  "target_locus": "local_site",
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada.architect"
+  },
+  "payload": {
+    "title": "Task 1514 executed: task-lifecycle-kernel TypeScript migration task family created",
+    "summary": "Executed task 1514 by creating and verifying the ordered task family for migrating packages/task-lifecycle-kernel from .mjs to TypeScript and splitting large files. The currently exposed MCP facade did not provide a governed task close/report command, so this observation records completion evidence without mutating task lifecycle closure state.",
+    "evidence": [
+      "Task 1514 was materialized and claimed for narada.architect: 20260602-1514-architect-define-builder-task-chapter-for-task-lifecycle-ker.",
+      "Builder task 1515 was created and claimed for narada.builder: inventory task-lifecycle-kernel MJS-to-TypeScript migration surface.",
+      "Builder task 1516 was created and claimed for narada.builder: convert task-lifecycle-kernel source from .mjs to TypeScript.",
+      "Builder task 1517 was created and claimed for narada.builder: split large task-lifecycle-kernel code files by responsibility.",
+      "Builder task 1518 was created and claimed for narada.builder: verify task-lifecycle-kernel TypeScript migration and update package docs.",
+      "Architect review task 1519 was created and claimed for narada.architect: review task-lifecycle-kernel TypeScript migration and file split.",
+      "Read-back through narada_task_read confirmed tasks 1514-1519 are visible with expected titles, statuses, and assignments."
+    ],
+    "proposal": [
+      "When a governed task close/report MCP surface is available, close task 1514 with this observation and task read-back evidence.",
+      "Builder execution should start at task 1515 and proceed through 1518 before architect review task 1519."
+    ],
+    "recommendation": "Treat task 1514 substantive work as complete; lifecycle closure remains pending only because the closure/reporting MCP surface is unavailable in this session."
+  },
+  "status": "received"
+}

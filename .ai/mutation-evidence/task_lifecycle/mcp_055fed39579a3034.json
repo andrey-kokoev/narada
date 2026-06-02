@@ -1,0 +1,22 @@
+{
+  "schema": "narada.site_task_lifecycle.mcp_mutation_evidence.v0",
+  "command": "site_task_lifecycle.admit_task",
+  "authority_class": "mcp_adapter_bound_task_lifecycle_mutation",
+  "packageExecutedSqliteMutation": false,
+  "sourceStateImported": false,
+  "taskId": "20260602-task-lifecycle-kernel-ts-chapter-builder-03-split-large-files",
+  "siteId": "narada-proper",
+  "sourceRef": "operator:user_chat:2026-06-02:task-lifecycle-kernel-ts-migration-chapter",
+  "eventId": "mcp-task-admission-c4769253d5fa6b01",
+  "dbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+  "recordedAt": "2026-06-02T17:09:38.086Z",
+  "admittedBy": "narada.architect",
+  "readback": [
+    {
+      "task_id": "20260602-task-lifecycle-kernel-ts-chapter-builder-03-split-large-files",
+      "status": "admitted",
+      "source_site": "narada-proper",
+      "source_ref": "operator:user_chat:2026-06-02:task-lifecycle-kernel-ts-migration-chapter"
+    }
+  ]
+}

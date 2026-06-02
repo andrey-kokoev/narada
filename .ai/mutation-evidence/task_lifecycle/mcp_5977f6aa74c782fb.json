@@ -1,0 +1,25 @@
+{
+  "schema": "narada.site_task_lifecycle.mcp_mutation_evidence.v0",
+  "command": "site_task_lifecycle.materialize_task",
+  "authority_class": "mcp_adapter_bound_task_lifecycle_mutation",
+  "packageExecutedSqliteMutation": false,
+  "sourceStateImported": false,
+  "taskId": "20260602-task-lifecycle-kernel-ts-chapter-builder-04-verify-docs",
+  "siteId": "narada-proper",
+  "sourceRef": "operator:user_chat:2026-06-02:task-lifecycle-kernel-ts-migration-chapter",
+  "eventId": "mcp-task-materialized-1e4395380d2a31ae",
+  "dbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+  "recordedAt": "2026-06-02T17:10:27.989Z",
+  "materializedBy": "narada.architect",
+  "materializedTaskId": "20260602-1518-builder-verify-task-lifecycle-kernel-typescript-migration-an",
+  "materializedTaskNumber": 1518,
+  "claimFor": "narada.builder",
+  "readback": [
+    {
+      "task_id": "20260602-task-lifecycle-kernel-ts-chapter-builder-04-verify-docs",
+      "status": "materialized",
+      "source_site": "narada-proper",
+      "source_ref": "operator:user_chat:2026-06-02:task-lifecycle-kernel-ts-migration-chapter"
+    }
+  ]
+}

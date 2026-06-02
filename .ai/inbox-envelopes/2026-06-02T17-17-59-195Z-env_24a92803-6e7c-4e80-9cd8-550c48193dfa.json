@@ -1,0 +1,30 @@
+{
+  "envelope_id": "env_24a92803-6e7c-4e80-9cd8-550c48193dfa",
+  "received_at": "2026-06-02T17:17:59.195Z",
+  "source": {
+    "kind": "agent_report",
+    "ref": "task:1515:execution-blocker:2026-06-02"
+  },
+  "target_locus": "local_site",
+  "kind": "observation",
+  "authority": {
+    "level": "agent_reported",
+    "principal": "narada.builder"
+  },
+  "payload": {
+    "title": "Task 1515 blocked: no governed shell or file-inspection surface exposed in carrier",
+    "summary": "Attempted to execute task 1515 inventory for packages/task-lifecycle-kernel, but the current carrier exposes Narada task/inbox/read surfaces without a governed shell executor or local file-inspection tool. EE-MCP doctor reports the old WSL-to-Windows shell adapter is superseded by Windows-native Narada proper and raw Windows shell shortcuts are forbidden for that adapter.",
+    "evidence": [
+      "Task 1515 read-back confirms status claimed for narada.builder and actionable required work: inventory packages/task-lifecycle-kernel before migration.",
+      "tool_search for command/shell/filesystem surfaces returned Narada task, inbox, directive, doctrine, checkpoint, and GitHub tools, but no local command runner or filesystem reader.",
+      "narada_ee_mcp_doctor returned status superseded_by_windows_native, configured false, raw_windows_shell_forbidden true, and no repair_command.",
+      "Because no file inspection path is exposed, the package inventory cannot be performed in this session without an additional governed command/filesystem capability."
+    ],
+    "proposal": [
+      "Expose or hydrate a Windows-native governed shell/file-inspection MCP surface for this carrier, then resume task 1515.",
+      "After the surface is available, inspect packages/task-lifecycle-kernel for .mjs entrypoints, package scripts/bin surfaces, tests/fixtures, generated artifacts, oversized files, import/export topology, and runtime compatibility constraints."
+    ],
+    "recommendation": "Keep task 1515 claimed but execution-blocked until a governed local inspection capability is available."
+  },
+  "status": "received"
+}

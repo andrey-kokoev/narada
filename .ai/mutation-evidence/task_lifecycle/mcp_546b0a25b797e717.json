@@ -1,0 +1,25 @@
+{
+  "schema": "narada.site_task_lifecycle.mcp_mutation_evidence.v0",
+  "command": "site_task_lifecycle.materialize_task",
+  "authority_class": "mcp_adapter_bound_task_lifecycle_mutation",
+  "packageExecutedSqliteMutation": false,
+  "sourceStateImported": false,
+  "taskId": "20260602-task-lifecycle-kernel-ts-chapter-architect-review",
+  "siteId": "narada-proper",
+  "sourceRef": "operator:user_chat:2026-06-02:task-lifecycle-kernel-ts-migration-chapter",
+  "eventId": "mcp-task-materialized-edf76358f3658a75",
+  "dbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+  "recordedAt": "2026-06-02T17:10:35.805Z",
+  "materializedBy": "narada.architect",
+  "materializedTaskId": "20260602-1519-architect-review-task-lifecycle-kernel-typescript-migration-",
+  "materializedTaskNumber": 1519,
+  "claimFor": "narada.architect",
+  "readback": [
+    {
+      "task_id": "20260602-task-lifecycle-kernel-ts-chapter-architect-review",
+      "status": "materialized",
+      "source_site": "narada-proper",
+      "source_ref": "operator:user_chat:2026-06-02:task-lifecycle-kernel-ts-migration-chapter"
+    }
+  ]
+}
