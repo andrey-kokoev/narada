@@ -4453,16 +4453,17 @@ function hydrateAutoAckConfigForSurface(entry, taskLifecycleNext) {
     };
   }
   if (entry?.surface_id === 'task-lifecycle-mcp.local'
-    || entry?.server_entrypoint === 'tools/task-lifecycle/task-mcp-server.mjs') {
+    || entry?.server_entrypoint === 'task-lifecycle-mcp'
+    || entry?.server_entrypoint === 'node_modules/@narada2/task-lifecycle-mcp/src/task-lifecycle/task-mcp-server.mjs') {
     if (taskLifecycleNext?.status !== 'ok') return null;
     const taskToolNames = taskLifecycleTools().map((tool) => tool.name).sort();
     return {
       serverName: 'narada-task-lifecycle-mcp',
       targetSurface: 'task-lifecycle-mcp.local',
-      targetEntrypoint: 'tools/task-lifecycle/task-mcp-server.mjs',
+      targetEntrypoint: 'task-lifecycle-mcp',
       restartRequestPath: join(siteRoot, '.ai', 'tmp', 'task-lifecycle-restart-request.json'),
       baselinePath: join(siteRoot, '.ai', 'tmp', 'task-lifecycle-mcp-baseline.json'),
-      watchedPaths: ['tools/task-lifecycle', 'tools/mcp-freshness-service.mjs'],
+      watchedPaths: ['node_modules/@narada2/task-lifecycle-mcp/src', 'node_modules/@narada2/mcp-transport'],
       expectedTools: taskToolNames,
       registeredTools: taskToolNames,
       note: 'Task-lifecycle MCP restart auto-acknowledged during startup hydration after post-request boot evidence.',
@@ -5256,10 +5257,11 @@ function buildCapabilityPolicySummary(capabilityPolicy) {
 function callTaskLifecycleNextMcp({ agentId, limit, lastWorkboardCheckAt }) {
   const server = resolveTaskLifecycleMcpServer();
   if (!server) {
-    const serverPath = join(siteRoot, 'tools', 'task-lifecycle', 'task-mcp-server.mjs');
+    const packageBinName = process.platform === 'win32' ? 'task-lifecycle-mcp.cmd' : 'task-lifecycle-mcp';
+    const packageBinPath = join(siteRoot, 'node_modules', '.bin', packageBinName);
     return {
       status: 'unavailable',
-      message: `task_lifecycle_mcp_server_not_found: ${serverPath}`,
+      message: `task_lifecycle_mcp_server_not_found: ${packageBinPath}`,
     };
   }
 
@@ -5347,13 +5349,14 @@ function callTaskLifecycleNextMcp({ agentId, limit, lastWorkboardCheckAt }) {
 }
 
 function resolveTaskLifecycleMcpServer() {
-  const localServerPath = join(siteRoot, 'tools', 'task-lifecycle', 'task-mcp-server.mjs');
-  if (existsSync(localServerPath)) {
+  const packageBinName = process.platform === 'win32' ? 'task-lifecycle-mcp.cmd' : 'task-lifecycle-mcp';
+  const packageBinPath = join(siteRoot, 'node_modules', '.bin', packageBinName);
+  if (existsSync(packageBinPath)) {
     return {
-      command: process.execPath,
-      args: [localServerPath, '--site-root', siteRoot],
-      server_path: localServerPath,
-      source: 'site_local_tools_tree',
+      command: packageBinPath,
+      args: ['--site-root', siteRoot],
+      server_path: packageBinPath,
+      source: 'site_package_task_lifecycle_mcp_bin',
     };
   }
 
@@ -5387,26 +5390,21 @@ function taskLifecycleServerFromMcpConfig(configPath) {
 
   for (const candidate of taskLifecycleMcpConfigCandidates(config)) {
     const args = Array.isArray(candidate?.args) ? candidate.args.map((arg) => String(arg)) : [];
-    const serverArg = args.find((arg) => /(^|[\\/])task-mcp-server\.mjs$/i.test(arg.replace(/\\/g, '/')));
-    if (!serverArg) continue;
-
-    const serverPath = isAbsolute(serverArg) ? serverArg : resolve(siteRoot, serverArg);
-    if (!existsSync(serverPath)) continue;
-
     const command = typeof candidate.command === 'string' && candidate.command.trim()
       ? candidate.command
       : process.execPath;
-    return {
-      command,
-      args,
-      server_path: serverPath,
-      source: 'configured_mcp_projection',
-      config_path: configPath,
-    };
+    const serverArg = args.find((arg) => /(^|[\\/])task-mcp-server\.mjs$/i.test(arg.replace(/\\/g, '/')));
+    if (serverArg) {
+      const serverPath = isAbsolute(serverArg) ? serverArg : resolve(siteRoot, serverArg);
+      if (!existsSync(serverPath)) continue;
+      return { command, args, server_path: serverPath, source: 'configured_mcp_projection', config_path: configPath };
+    }
+    if (String(command).toLowerCase().includes('task-lifecycle-mcp')) {
+      return { command, args, server_path: command, source: 'configured_mcp_projection', config_path: configPath };
+    }
   }
   return null;
 }
-
 function taskLifecycleMcpConfigCandidates(config) {
   if (!config || typeof config !== 'object' || Array.isArray(config)) return [];
   const candidates = [];

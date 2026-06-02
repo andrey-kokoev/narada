@@ -3,36 +3,54 @@ param(
   [ValidateSet("agent-start")]
   [string]$Command = "agent-start",
   [Alias("AgentId")]
-  [string]$Agent = "narada.architect",
+  [string]$Agent,
   [string]$Runtime = "codex",
   [switch]$Exec,
   [switch]$DryRun,
   [switch]$Json,
   [switch]$EnableNativeShell,
   [switch]$AgentTuiInteractiveLoop,
-  [int]$AgentTuiMaxSteps
+  [switch]$AgentTuiProviderExecution,
+  [switch]$AgentTuiMcpFabric,
+  [int]$AgentTuiMaxSteps,
+  [string]$AgentTuiStartingDirective,
+  [string]$AgentTuiStartingDirectiveFile
 )
 
 $ErrorActionPreference = "Stop"
 
-$siteRoot = $PSScriptRoot
-$agentStart = Join-Path $siteRoot "tools\agent-start\start-agent.mjs"
+if ($Command -ne "agent-start") {
+  throw "unsupported_command: $Command"
+}
+
+$siteRoot = if ($env:NARADA_LAUNCH_REGISTRY_SITE_ROOT) { $env:NARADA_LAUNCH_REGISTRY_SITE_ROOT } else { $PSScriptRoot }
+$naradaProperRoot = if ($env:NARADA_PROPER_ROOT) { $env:NARADA_PROPER_ROOT } else { "D:\code\narada" }
+$agentStart = Join-Path $naradaProperRoot "packages\agent-start\bin\narada-agent-start.mjs"
 if (-not (Test-Path -LiteralPath $agentStart)) {
-  throw "agent_start_carrier_missing: $agentStart"
+  throw "packaged_agent_start_missing: $agentStart"
 }
 
-if ($Command -eq "agent-start") {
-  $flags = @($Agent)
-  if ($Runtime) { $flags += @("--runtime", $Runtime) }
-  if ($Exec) { $flags += "--exec" }
-  if ($DryRun) { $flags += "--dry-run" }
-  if ($Json) { $flags += "--json" }
-  if ($EnableNativeShell) { $flags += "--enable-native-shell" }
-  if ($AgentTuiInteractiveLoop) { $flags += "--agent-tui-interactive-loop" }
-  if ($AgentTuiMaxSteps -gt 0) { $flags += @("--agent-tui-max-steps", [string]$AgentTuiMaxSteps) }
-  $env:NARADA_AGENT_ID = $Agent
-  & node $agentStart @flags
-  exit $LASTEXITCODE
+if (-not $Agent) {
+  $siteName = Split-Path -Leaf $siteRoot
+  $Agent = "$siteName.architect"
 }
 
-throw "unsupported_command: $Command"
+$flags = @($Agent, "--target-site-root", $siteRoot, "--site-root", $siteRoot, "--launch-source", "$($MyInvocation.MyCommand.Name) agent-start")
+if ($Runtime) { $flags += @("--runtime", $Runtime) }
+if ($Exec) { $flags += "--exec" }
+if ($DryRun) { $flags += "--dry-run" }
+if ($Json) { $flags += "--json" }
+if ($EnableNativeShell) { $flags += "--enable-native-shell" }
+if ($AgentTuiInteractiveLoop) { $flags += "--agent-tui-interactive-loop" }
+if ($AgentTuiProviderExecution) { $flags += "--agent-tui-provider-execution" }
+if ($AgentTuiMcpFabric) { $flags += "--agent-tui-mcp-fabric" }
+if ($AgentTuiMaxSteps -gt 0) { $flags += @("--agent-tui-max-steps", [string]$AgentTuiMaxSteps) }
+if ($AgentTuiStartingDirective) { $flags += @("--agent-tui-starting-directive", $AgentTuiStartingDirective) }
+if ($AgentTuiStartingDirectiveFile) { $flags += @("--agent-tui-starting-directive-file", $AgentTuiStartingDirectiveFile) }
+
+$env:NARADA_AGENT_ID = $Agent
+$env:NARADA_TARGET_SITE_ROOT = $siteRoot
+$env:NARADA_LAUNCH_REGISTRY_SITE_ROOT = $siteRoot
+& node $agentStart @flags
+exit $LASTEXITCODE
+

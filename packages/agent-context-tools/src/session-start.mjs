@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { synthesizeBootstrap } from '../agent-start/synthesize-bootstrap.mjs';
+import { synthesizeBootstrap } from '@narada2/agent-start-bootstrap';
 import { isCodexSessionId } from './codex-session-evidence.mjs';
 
 const MIGRATIONS = [

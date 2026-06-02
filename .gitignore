@@ -27,6 +27,9 @@ config.json
 .crew/agent-shortcuts/
 .narada/crew/agent-start-events/
 .narada/crew/agent-start-results/
+.narada/crew/agent-tui-live-turn-acceptance/
+.narada/crew/agent-tui-live-turn-*.json
+.narada/crew/agent-tui-live-turn-*.txt
 .narada/crew/codex-home/
 .narada/crew/nars-sessions/
 packages/*/target/
