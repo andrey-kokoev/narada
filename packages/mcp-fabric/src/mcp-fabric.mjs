@@ -129,6 +129,7 @@ export function projectFabricForCodex(fabric) {
     command: server.command,
     args: server.args,
     env_vars: mergeUnique([...(server.env_vars ?? []), ...envVars]),
+    ...(server.startup_timeout_sec ? { startup_timeout_sec: server.startup_timeout_sec } : {}),
   }));
 }
 
@@ -208,6 +209,7 @@ function normalizeServerConfig(serverName, rawServer, siteRoot) {
     ...(rawServer.surface_id ? { surface_id: String(rawServer.surface_id) } : {}),
     ...(rawServer.target_site_root ? { target_site_root: String(rawServer.target_site_root).replaceAll('{site_root}', portableSiteRoot) } : {}),
     ...(rawServer.authority_posture ? { authority_posture: String(rawServer.authority_posture) } : {}),
+    ...(Number.isFinite(Number(rawServer.startup_timeout_sec)) ? { startup_timeout_sec: Number(rawServer.startup_timeout_sec) } : {}),
   };
 }
 

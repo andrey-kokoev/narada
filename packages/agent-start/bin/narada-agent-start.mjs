@@ -866,6 +866,10 @@ function codexMcpDefinitionArgs(servers) {
     `mcp_servers.${server.name}.args=${codexTomlArray(server.args)}`,
     '-c',
     `mcp_servers.${server.name}.env_vars=${codexTomlArray(server.env_vars)}`,
+    ...(server.startup_timeout_sec ? [
+      '-c',
+      `mcp_servers.${server.name}.startup_timeout_sec=${Number(server.startup_timeout_sec)}`,
+    ] : []),
   ]);
 }
 
