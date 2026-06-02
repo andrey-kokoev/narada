@@ -2592,15 +2592,15 @@ const SHARED_SITE_PACKAGES = [
   },
   {
     package_name: '@narada2/mcp-transport',
-    source_locus: fileURLToPath(new URL('../../../../../packages/mcp-transport', import.meta.url)),
+    source_locus: fileURLToPath(new URL('../../../../../../mcp-surfaces/packages/mcp-transport', import.meta.url)),
   },
   {
-    package_name: '@narada2/task-lifecycle-kernel',
-    source_locus: fileURLToPath(new URL('../../../../../packages/task-lifecycle-kernel', import.meta.url)),
+    package_name: '@narada2/task-governance-core',
+    source_locus: fileURLToPath(new URL('../../../../../../narada-core/packages/task-governance-core', import.meta.url)),
   },
   {
-    package_name: '@narada2/task-governance',
-    source_locus: fileURLToPath(new URL('../../../../../packages/task-governance', import.meta.url)),
+    package_name: '@narada2/task-lifecycle-mcp',
+    source_locus: fileURLToPath(new URL('../../../../../../mcp-surfaces/packages/task-lifecycle-mcp', import.meta.url)),
   },
 ] as const;
 const NARADA_PROPER_ROOT = resolve(fileURLToPath(new URL('../../../../..', import.meta.url)));
@@ -3039,13 +3039,6 @@ async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<str
     fileUrl: new URL('../../../../../packages/site-common-tools/compat/mcp-payload-file.legacy-site.mjs', import.meta.url),
   });
   await addCanonicalHash({
-    path: 'tools/task-lifecycle/task-mcp-server.mjs',
-    packageName: '@narada2/task-lifecycle-tools',
-    version: '0.1.0',
-    surface: 'task-lifecycle',
-    fileUrl: new URL('../../../../../packages/task-lifecycle-tools/compat/task-mcp-server.legacy-site.mjs', import.meta.url),
-  });
-  await addCanonicalHash({
     path: 'tools/typed-mcp/inbox-mcp-server.mjs',
     packageName: '@narada2/typed-mcp-surface',
     version: '0.1.0',
@@ -3067,18 +3060,18 @@ async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<str
     packageSrcUrl: new URL('../../../../../packages/agent-context-tools/src', import.meta.url),
   });
   await addCanonicalPackageTree({
-    packageName: '@narada2/task-lifecycle-tools',
+    packageName: '@narada2/task-lifecycle-mcp',
     version: '0.1.0',
     surface: 'task-lifecycle',
-    relativeToolRoot: 'tools/task-lifecycle',
-    packageSrcUrl: new URL('../../../../../packages/task-lifecycle-tools/src', import.meta.url),
+    relativeToolRoot: 'tools/task-lifecycle-mcp',
+    packageSrcUrl: new URL('../../../../../../mcp-surfaces/packages/task-lifecycle-mcp/src', import.meta.url),
   });
   await addCanonicalPackageTree({
     packageName: '@narada2/local-filesystem-mcp',
     version: '0.1.0',
     surface: 'local-filesystem',
     relativeToolRoot: 'tools/local-filesystem-mcp',
-    packageSrcUrl: new URL('../../../../../packages/local-filesystem-mcp/src', import.meta.url),
+    packageSrcUrl: new URL('../../../../../../mcp-surfaces/packages/local-filesystem-mcp/src', import.meta.url),
   });
   await addCanonicalPackageTree({
     packageName: '@narada2/site-common-tools',

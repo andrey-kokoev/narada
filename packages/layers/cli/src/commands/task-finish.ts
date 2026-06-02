@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { FinishTaskServiceOptions, finishTaskService } from '@narada2/task-governance/task-finish-service';
+import { FinishTaskServiceOptions, finishTaskService } from '@narada2/task-governance-core/task-finish-service';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { type TaskLifecycleStore } from '../lib/task-lifecycle-store.js';

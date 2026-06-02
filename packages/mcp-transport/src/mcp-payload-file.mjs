@@ -66,9 +66,12 @@ export function resolveToolPayloadArgs({
 
   if (payloadRef) {
     const revision = readPayloadRevision({ siteRoot, ref: payloadRef, maxBytes, payloadDir });
+    const companionArgs = withoutPayloadTransport(input);
     const resolvedArgs = payloadRefMode === 'payload_field' && hasPayloadRefCompanionArgs(input)
-      ? { ...withoutPayloadTransport(input), payload: revision.payload }
-      : revision.payload;
+      ? { ...companionArgs, payload: revision.payload }
+      : payloadRefMode === 'merge_args'
+        ? { ...asRecord(revision.payload), ...companionArgs }
+        : revision.payload;
     return {
       args: resolvedArgs,
       payloadSource: {

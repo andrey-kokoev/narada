@@ -139,8 +139,8 @@ export function taskLifecycleDomainTools(): TaskLifecycleTool[] {
       since: stringSchema('ISO timestamp start. Defaults to 24 hours ago.'),
       until: stringSchema('ISO timestamp end. Defaults to now.'),
     })),
-    tool('task_lifecycle_submit_report', 'Readable alias for task_lifecycle_finish. For claimed tasks, submit a finish report without verdict using summary plus changed_files or no_files_changed; verdict is only for review-state tasks. Use payload_ref for long summaries/evidence.', finishSchema()),
-    tool('task_lifecycle_finish', 'Finish a claimed task by submitting a report without verdict using summary plus changed_files or no_files_changed. Review verdicts are only valid for in_review tasks. Use payload_ref for long summaries/evidence.', finishSchema()),
+    tool('task_lifecycle_submit_report', 'Readable alias for task_lifecycle_finish. For claimed tasks, submit a finish report without verdict using summary plus changed_files or no_files_changed. Review verdicts belong on task_lifecycle_review. Use payload_ref only for long companion fields; top-level task_number and agent_id remain authoritative.', finishSchema()),
+    tool('task_lifecycle_finish', 'Finish a claimed task by submitting a report without verdict using summary plus changed_files or no_files_changed. Review verdicts belong on task_lifecycle_review. Use payload_ref only for long companion fields; top-level task_number and agent_id remain authoritative.', finishSchema()),
     tool('task_lifecycle_close', 'Close a task. Requires the task to be in a closable state.', objectSchema({
       task_number: numberSchema('Task number to close.'),
       agent_id: stringSchema('Agent id closing the task.'),
@@ -311,12 +311,13 @@ function finishSchema(): JsonSchema {
     agent_id: stringSchema('Agent id finishing the task.'),
     summary: stringSchema('Finish summary.'),
     directive_id: stringSchema('Optional first-class directive id that caused this report. Prefer this structured field over summary tokens.'),
-    verdict: enumStringSchema(['accepted', 'accepted_with_notes', 'rejected'], 'Review-state verdict only. Omit for claimed-state finish/report submission; claimed tasks should use summary plus changed_files or no_files_changed.'),
+    verdict: stringSchema('Review-state verdict only: accepted, accepted_with_notes, or rejected. Omit for claimed-state finish/report submission; claimed tasks should use summary plus changed_files or no_files_changed. Invalid values are reported by the finish handler.'),
     reviewer: stringSchema('Optional admitted reviewer agent id or unique reviewer role alias for the generated review obligation.'),
     changed_files: arraySchema(stringSchema('Repo-relative changed file path.'), 'Explicit changed-file evidence for this finish report.'),
     no_files_changed: booleanSchema('Explicitly declare that this finish legitimately changed no files.'),
     recovery_truthfulness: { type: 'object', description: 'Required for serious-failure recovery finish/report claims. Fields: known_facts, inferences, uncertainty, changed, not_changed, remaining_work, evidence_limits, capa_open_status, state. terminal_corrected additionally requires repository_durability / commit-push state plus no open residual work.', additionalProperties: true },
     self_certification: { type: 'object', description: 'Required for architect-failure/deception/trust same-subject terminal correction claims. Fields: target_category, subject_principal, requires_independent_review, misleading_completion_answer, allowed_pending_state, plus independent_review_ref/reviewer_eligibility_ref or operator_acceptance_ref for terminal same-subject correction.', additionalProperties: true },
+    payload_ref: stringSchema('Optional immutable payload ref carrying long finish/report companion fields such as summary, changed_files, recovery_truthfulness, or self_certification. Payload fields are merged with top-level arguments; top-level task_number and agent_id win.'),
   }, ['task_number', 'agent_id']);
 }
 

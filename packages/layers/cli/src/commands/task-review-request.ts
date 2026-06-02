@@ -5,8 +5,8 @@ import {
   listReportsForTask,
   loadRoster,
   type WorkResultReport,
-} from '@narada2/task-governance/task-governance';
-import { resolveReviewTargetFromRoster, resolveDefaultReviewerFromRoster } from '@narada2/task-governance/task-review-authority';
+} from '@narada2/task-governance-core/task-governance';
+import { resolveReviewTargetFromRoster, resolveDefaultReviewerFromRoster } from '@narada2/task-governance-core/task-review-authority';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import {

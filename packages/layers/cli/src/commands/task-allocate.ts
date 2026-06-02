@@ -5,7 +5,7 @@
  */
 
 import { resolve } from 'node:path';
-import { allocateTaskNumbersService } from '@narada2/task-governance/task-allocate-service';
+import { allocateTaskNumbersService } from '@narada2/task-governance-core/task-allocate-service';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 

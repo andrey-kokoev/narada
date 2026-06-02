@@ -9,7 +9,7 @@ import { resolve } from 'node:path';
 import {
   releaseTaskService,
   VALID_RELEASE_REASONS,
-} from '@narada2/task-governance/task-assignment-lifecycle-service';
+} from '@narada2/task-governance-core/task-assignment-lifecycle-service';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import {

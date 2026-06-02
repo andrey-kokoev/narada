@@ -1,11 +1,11 @@
 /**
  * Governed task close CLI adapter.
  *
- * Domain transition logic lives in @narada2/task-governance.
+ * Domain transition logic lives in @narada2/task-governance-core.
  */
 
 import { resolve } from 'node:path';
-import { closeTaskService } from '@narada2/task-governance/task-close-service';
+import { closeTaskService } from '@narada2/task-governance-core/task-close-service';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import type { TaskClosureMode, TaskLifecycleStore } from '../lib/task-lifecycle-store.js';

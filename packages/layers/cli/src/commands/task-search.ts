@@ -5,7 +5,7 @@
  */
 
 import { resolve } from 'node:path';
-import { searchTasksService } from '@narada2/task-governance/task-search-service';
+import { searchTasksService } from '@narada2/task-governance-core/task-search-service';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult } from '../lib/cli-output.js';
 

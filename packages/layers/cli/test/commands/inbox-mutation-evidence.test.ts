@@ -7,7 +7,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { validateMutationEvidenceRecord, type MutationEvidenceRecord } from '@narada2/task-governance/mutation-evidence';
+import { validateMutationEvidenceRecord, type MutationEvidenceRecord } from '@narada2/task-governance-core/mutation-evidence';
 import {
   inboxExportCommand,
   inboxImportCommand,

@@ -4,7 +4,7 @@ import {
   buildMutationEvidenceRecord,
   validateMutationEvidenceRecord,
   type MutationEvidenceRecord,
-} from '@narada2/task-governance/mutation-evidence';
+} from '@narada2/task-governance-core/mutation-evidence';
 import { SqliteInboxStore, type InboxEnvelope } from '@narada2/control-plane';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';

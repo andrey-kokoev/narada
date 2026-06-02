@@ -1,1 +1,1 @@
-export * from '@narada2/task-governance/task-governance';
+export * from '@narada2/task-governance-core/task-governance';

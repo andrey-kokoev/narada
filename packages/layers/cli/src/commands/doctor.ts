@@ -7,7 +7,7 @@ import { createFormatter } from '../lib/formatter.js';
 import { inspectAuthorityClonePosture } from '../lib/narada-proper-authority.js';
 import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig, loadCharterEnv, loadEnvFile } from '@narada2/control-plane';
 import { CodexCharterRunner, MockCharterRunner, KimiCliCharterRunner, getRecoveryGuidance } from '@narada2/charters';
-import { selectSqliteRuntime } from '@narada2/task-governance/sqlite-runtime';
+import { selectSqliteRuntime } from '@narada2/task-governance-core/sqlite-runtime';
 
 export interface DoctorOptions {
   config?: string;

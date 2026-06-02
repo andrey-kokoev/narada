@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { type TaskLifecycleStore } from '../lib/task-lifecycle-store.js';
-import { reviewTaskService, type ReviewTaskServiceOptions, type ReviewTaskServiceResponse } from '@narada2/task-governance/task-review-service';
+import { reviewTaskService, type ReviewTaskServiceOptions, type ReviewTaskServiceResponse } from '@narada2/task-governance-core/task-review-service';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import {

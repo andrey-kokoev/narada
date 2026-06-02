@@ -4,7 +4,7 @@ import {
   buildMutationEvidenceRecord,
   serializeMutationEvidenceRecord,
   type MutationEvidenceAuthorityClass,
-} from '@narada2/task-governance/mutation-evidence';
+} from '@narada2/task-governance-core/mutation-evidence';
 import {
   findTaskFile,
   readTaskFile,

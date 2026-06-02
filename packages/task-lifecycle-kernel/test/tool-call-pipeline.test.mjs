@@ -32,6 +32,23 @@ function makeCaller(overrides = {}) {
           additionalProperties: false,
         },
       },
+      {
+        name: 'task_lifecycle_finish',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            task_number: { type: 'number' },
+            agent_id: { type: 'string' },
+            summary: { type: 'string' },
+            verdict: { type: 'string' },
+            changed_files: { type: 'array', items: { type: 'string' } },
+            no_files_changed: { type: 'boolean' },
+            payload_ref: { type: 'string' },
+          },
+          required: ['task_number', 'agent_id'],
+          additionalProperties: false,
+        },
+      },
     ],
     siteRoot: 'D:/code/site-a',
     dispatchTool,
@@ -104,4 +121,59 @@ test('tool caller refreshes and retries once after store errors', async () => {
   const result = await caller({ name: 'legacy_claim', arguments: { task_number: 7, agent_id: 'a' } });
   assert.deepEqual(result, { status: 'ok', attempts: 2 });
   assert.equal(refreshed, true);
+});
+
+test('tool caller requests payload merge mode for non-create tools', async () => {
+  let observedPayloadRefMode = null;
+  const { caller } = makeCaller({
+    resolveToolPayloadArgs: ({ args, payloadRefMode }) => {
+      observedPayloadRefMode = payloadRefMode;
+      return {
+        args: {
+          summary: 'Payload summary.',
+          changed_files: ['docs/report.md'],
+          ...args,
+        },
+        payloadSource: { ref: args.payload_ref },
+      };
+    },
+  });
+
+  const result = await caller({
+    name: 'task_lifecycle_finish',
+    arguments: {
+      task_number: 350,
+      agent_id: 'sonar.architect',
+      payload_ref: 'mcp_payload:report_payload@v1',
+    },
+  });
+
+  assert.equal(observedPayloadRefMode, 'merge_args');
+  assert.equal(result.name, 'task_lifecycle_finish');
+  assert.deepEqual(result.args, {
+    summary: 'Payload summary.',
+    changed_files: ['docs/report.md'],
+    task_number: 350,
+    agent_id: 'sonar.architect',
+    payload_ref: 'mcp_payload:report_payload@v1',
+  });
+});
+
+test('tool caller reports review/report surface mismatch before schema validation', async () => {
+  const { caller, calls } = makeCaller();
+
+  const result = await caller({
+    name: 'task_lifecycle_finish',
+    arguments: {
+      task_number: 350,
+      agent_id: 'sonar.architect',
+      verdict: 'rejected',
+      findings: [{ severity: 'blocking', description: 'Rejected in review.' }],
+    },
+  });
+
+  assert.deepEqual(calls, []);
+  assert.equal(result.isError, true);
+  assert.equal(result.payload.error, 'wrong_task_lifecycle_surface_for_review');
+  assert.equal(result.payload.correct_tool, 'task_lifecycle_review');
 });

@@ -6,7 +6,7 @@
  */
 
 import { resolve } from 'node:path';
-import { claimTaskService } from '@narada2/task-governance/task-assignment-lifecycle-service';
+import { claimTaskService } from '@narada2/task-governance-core/task-assignment-lifecycle-service';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import {

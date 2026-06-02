@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import {
   buildMutationEvidenceRecord,
   serializeMutationEvidenceRecord,
-} from '@narada2/task-governance/mutation-evidence';
+} from '@narada2/task-governance-core/mutation-evidence';
 import { SqliteInboxStore, type InboxEnvelope } from '@narada2/control-plane';
 import { mutationEvidenceReconcileCommand } from '../../src/commands/mutation-evidence.js';
 import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';

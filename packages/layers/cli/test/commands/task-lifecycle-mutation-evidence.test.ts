@@ -7,7 +7,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { readdirSync, readFileSync, writeFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { validateMutationEvidenceRecord, type MutationEvidenceRecord } from '@narada2/task-governance/mutation-evidence';
+import { validateMutationEvidenceRecord, type MutationEvidenceRecord } from '@narada2/task-governance-core/mutation-evidence';
 import { taskClaimCommand } from '../../src/commands/task-claim.js';
 import { taskReportCommand } from '../../src/commands/task-report.js';
 import { taskFinishCommand } from '../../src/commands/task-finish.js';
@@ -159,7 +159,7 @@ describe('task lifecycle mutation evidence', () => {
       posture: process.env.NARADA_STALE_DIST_POSTURE,
     };
     process.env.NARADA_STALE_DIST_ACCEPTED = '1';
-    process.env.NARADA_STALE_DIST_SOURCE_PATHS = '@narada2/task-governance:/repo/packages/task-governance/src/task-close-service.ts\n@narada2/cli:/repo/packages/layers/cli/src/commands/task-close.ts';
+    process.env.NARADA_STALE_DIST_SOURCE_PATHS = '@narada2/task-governance-core:/repo/packages/task-governance/src/task-close-service.ts\n@narada2/cli:/repo/packages/layers/cli/src/commands/task-close.ts';
     process.env.NARADA_STALE_DIST_COMMAND = 'narada task claim 999';
     process.env.NARADA_STALE_DIST_COMMAND_CLASS = 'authority_mutation';
     process.env.NARADA_STALE_DIST_ACCEPTANCE_REASON = 'operator accepted stale governance for recovery';
@@ -182,7 +182,7 @@ describe('task lifecycle mutation evidence', () => {
         acceptance_reason: 'operator accepted stale governance for recovery',
         freshness_posture: 'stale_dist_authority_mutation_admitted_by_policy',
         source_paths: [
-          '@narada2/task-governance:/repo/packages/task-governance/src/task-close-service.ts',
+          '@narada2/task-governance-core:/repo/packages/task-governance/src/task-close-service.ts',
           '@narada2/cli:/repo/packages/layers/cli/src/commands/task-close.ts',
         ],
       });

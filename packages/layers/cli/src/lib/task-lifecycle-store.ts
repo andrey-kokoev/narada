@@ -1,1 +1,1 @@
-export * from '@narada2/task-governance/task-lifecycle-store';
+export * from '@narada2/task-governance-core/task-lifecycle-store';

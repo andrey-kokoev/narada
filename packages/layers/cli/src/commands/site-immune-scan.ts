@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { validateMutationEvidenceRecord } from '@narada2/task-governance/mutation-evidence';
+import { validateMutationEvidenceRecord } from '@narada2/task-governance-core/mutation-evidence';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 

@@ -36,8 +36,12 @@ export function createTaskLifecycleToolCaller({
       toolName: canonicalName,
       args,
       allowedTools: registeredToolNames,
+      payloadRefMode: 'merge_args',
     });
     const effectiveArgs = payloadResolution.args;
+
+    const surfaceMismatch = detectReviewSurfaceMismatch(canonicalName, effectiveArgs);
+    if (surfaceMismatch) return jsonToolResult(surfaceMismatch, true);
 
     const toolDef = tools.find((tool) => tool.name === canonicalName);
     if (toolDef?.inputSchema) {
@@ -69,6 +73,25 @@ export function createTaskLifecycleToolCaller({
 export function isStoreError(error) {
   const msg = error instanceof Error ? error.message : String(error);
   return /database|sqlite|SQLITE|disk I\/O|malformed|not a database/i.test(msg);
+}
+
+function detectReviewSurfaceMismatch(canonicalName, args) {
+  if (canonicalName !== 'task_lifecycle_finish') return null;
+  const verdict = stringField(args, 'verdict');
+  if (!['accepted', 'accepted_with_notes', 'rejected'].includes(verdict)) return null;
+  const hasFindings = Object.prototype.hasOwnProperty.call(asRecord(args), 'findings');
+  const changedFiles = Array.isArray(args.changed_files) && args.changed_files.length > 0;
+  const noFilesChanged = booleanField(args, 'no_files_changed') === true;
+  const hasFinishEvidence = Boolean(stringField(args, 'summary')) && (changedFiles || noFilesChanged);
+  if (!hasFindings && hasFinishEvidence) return null;
+  return {
+    status: 'error',
+    error: 'wrong_task_lifecycle_surface_for_review',
+    schema: 'narada.task.mcp.surface_mismatch.v0',
+    attempted_tool: 'task_lifecycle_finish',
+    correct_tool: 'task_lifecycle_review',
+    remediation: 'Call task_lifecycle_review with task_number, agent_id, verdict, and optional findings. Use task_lifecycle_finish or task_lifecycle_submit_report only for finish/report evidence.',
+  };
 }
 
 export function buildLifecycleTargetLocusStatus({ siteRoot, env = process.env }) {

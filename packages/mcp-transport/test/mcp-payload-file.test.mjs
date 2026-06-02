@@ -9,6 +9,7 @@ import {
   outputShow,
   payloadCreate,
   payloadShow,
+  resolveToolPayloadArgs,
 } from '../src/mcp-payload-file.mjs';
 
 const exactly200 = 'x'.repeat(200);
@@ -78,6 +79,48 @@ try {
   const createdPayloadEnvelope = JSON.parse(createdPayloadResult.content[0].text);
   assert.match(createdPayloadEnvelope.payload_ref, /^mcp_payload:/);
   assert.ok(createdPayloadResult.content[0].text.length <= 200);
+
+  const reportPayload = payloadCreate({
+    siteRoot: tempRoot,
+    args: {
+      payload: {
+        task_number: 999,
+        agent_id: 'payload.agent',
+        summary: 'Long report summary from payload.',
+        changed_files: ['docs/report.md'],
+      },
+    },
+  });
+  const mergedReport = resolveToolPayloadArgs({
+    siteRoot: tempRoot,
+    toolName: 'task_lifecycle_finish',
+    args: {
+      task_number: 350,
+      agent_id: 'sonar.architect',
+      payload_ref: reportPayload.ref,
+    },
+    allowedTools: ['task_lifecycle_finish'],
+    payloadRefMode: 'merge_args',
+  });
+  assert.deepEqual(mergedReport.args, {
+    task_number: 350,
+    agent_id: 'sonar.architect',
+    summary: 'Long report summary from payload.',
+    changed_files: ['docs/report.md'],
+  });
+
+  const replacedReport = resolveToolPayloadArgs({
+    siteRoot: tempRoot,
+    toolName: 'task_lifecycle_create',
+    args: {
+      task_number: 350,
+      agent_id: 'sonar.architect',
+      payload_ref: reportPayload.ref,
+    },
+    allowedTools: ['task_lifecycle_create'],
+  });
+  assert.equal(replacedReport.args.task_number, 999);
+  assert.equal(replacedReport.args.agent_id, 'payload.agent');
 } finally {
   rmSync(tempRoot, { recursive: true, force: true });
 }

@@ -50,6 +50,9 @@ export function createTaskLifecycleEvidenceReviewHandlers(context) {
     evaluatePostTransitionFollowups,
     findTaskFile,
     readTaskFile,
+    testResultArtifactGate,
+    validateFollowUpLedger,
+    ensureStaticRosterAgentInSql,
   } = context;
 
   async function dispatchEvidenceReviewTool(canonicalName, args, dispatchContext = {}) {
@@ -159,6 +162,19 @@ export function createTaskLifecycleEvidenceReviewHandlers(context) {
       const selfCertification = objectField(args, 'self_certification');
       if (!taskNumber) throw new Error('task_number_required');
       if (!agentId) throw new Error('agent_id_required');
+      const validReviewVerdicts = ['accepted', 'accepted_with_notes', 'rejected'];
+      if (verdict && !validReviewVerdicts.includes(verdict)) {
+        return jsonToolResult({
+          status: 'error',
+          error: 'invalid_finish_verdict',
+          schema: 'narada.task.mcp.finish.invalid_verdict.v0',
+          task_number: taskNumber,
+          completion_mode: 'report',
+          invalid_verdict: verdict,
+          valid_review_verdicts: validReviewVerdicts,
+          remediation: 'For claimed-state finish/report submission, call this tool without verdict and provide summary plus changed_files or no_files_changed. Use accepted, accepted_with_notes, or rejected only for review-state tasks.',
+        }, true);
+      }
       if (changedFiles && noFilesChanged) {
         return jsonToolResult({
           status: 'error',

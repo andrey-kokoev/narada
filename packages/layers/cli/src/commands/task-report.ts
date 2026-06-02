@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { reportTaskService, type ReportTaskServiceResponse, type ReportTaskServiceOptions } from '@narada2/task-governance/task-report-service';
+import { reportTaskService, type ReportTaskServiceResponse, type ReportTaskServiceOptions } from '@narada2/task-governance-core/task-report-service';
 import {
   recallAcceptedLearning,
   formatGuidanceForHumans,

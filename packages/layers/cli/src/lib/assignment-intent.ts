@@ -1,1 +1,1 @@
-export * from '@narada2/task-governance/assignment-intent';
+export * from '@narada2/task-governance-core/assignment-intent';

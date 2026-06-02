@@ -8,7 +8,7 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SqliteInboxStore } from '@narada2/control-plane';
-import { claimTaskService, continueTaskService, releaseTaskService } from '@narada2/task-governance/task-assignment-lifecycle-service';
+import { claimTaskService, continueTaskService, releaseTaskService } from '@narada2/task-governance-core/task-assignment-lifecycle-service';
 import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import { taskCloseCommand } from '../../src/commands/task-close.js';
 import { taskEvidenceAdmitCommand } from '../../src/commands/task-evidence.js';

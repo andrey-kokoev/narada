@@ -5,7 +5,7 @@ import {
   findTaskFile,
   listReportsForTask,
   type WorkResultReport,
-} from '@narada2/task-governance/task-governance';
+} from '@narada2/task-governance-core/task-governance';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 
