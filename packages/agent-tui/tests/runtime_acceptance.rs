@@ -1,9 +1,9 @@
-use narada_agent_tui::carrier_protocol::{parse_session_event, SessionEventKind};
+use narada_agent_tui::carrier_protocol::{SessionEventKind, parse_session_event};
 use narada_agent_tui::smoke_runner::{
-    run_interactive_smoke_step, AgentTuiSmokeSession, AgentTuiSmokeStepConfig,
+    AgentTuiSmokeSession, AgentTuiSmokeStepConfig, run_interactive_smoke_step,
 };
 use narada_agent_tui::transcript_store::TranscriptStore;
-use std::fs::{read_to_string, remove_file, OpenOptions};
+use std::fs::{OpenOptions, read_to_string, remove_file};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -119,13 +119,10 @@ fn persistent_smoke_session_holds_system_directive_until_composer_clear() {
         .ingest_jsonl_file_summary(&session_path)
         .expect("session transcript ingests");
     assert_eq!(transcript.items().len(), 4);
-    assert_eq!(
-        transcript.items()[0].text,
-        "system directive held input_fixture_system_1"
-    );
+    assert_eq!(transcript.items()[0].text, "held input_fixture_system_1");
     assert_eq!(
         transcript.items()[1].text,
-        "system directive released input_fixture_system_1"
+        "released input_fixture_system_1"
     );
     assert_eq!(transcript.items()[2].text, "run startup sequence");
     assert_eq!(transcript.items()[3].text, "completed_without_provider");

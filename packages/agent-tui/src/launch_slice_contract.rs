@@ -4,11 +4,12 @@ use serde::{Deserialize, Serialize};
 
 const LAUNCH_SLICE_CONTRACT_JSON: &str = include_str!("../contracts/launch-slice.json");
 const EXPECTED_SCHEMA: &str = "narada.agent_tui.launch_slice_contract.v0";
-const EXPECTED_ADMITTED_RUNTIME_SLICE: &str = "bounded_non_terminal_interactive_step_once";
-const EXPECTED_CARRIER_FLAG: &str = "--interactive-step-once";
-const EXPECTED_TOOL_FABRIC_ADAPTER_KIND: &str = "narada-agent-tui-interactive-step";
-const EXPECTED_CAPABILITY_POLICY_SMOKE_STEP: &str = "bounded_non_terminal_control_jsonl";
-const EXPECTED_TERMINAL_MODE: bool = false;
+const EXPECTED_ADMITTED_RUNTIME_SLICE: &str = "terminal_interactive_loop";
+const EXPECTED_CARRIER_FLAG: &str = "--interactive-loop";
+const EXPECTED_TOOL_FABRIC_ADAPTER_KIND: &str = "narada-agent-tui-terminal-interactive-loop";
+const EXPECTED_CAPABILITY_POLICY_TERMINAL_SESSION: &str =
+    "interactive_terminal_control_jsonl_session_jsonl";
+const EXPECTED_TERMINAL_MODE: bool = true;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct LaunchSliceContract {
@@ -16,7 +17,7 @@ pub struct LaunchSliceContract {
     pub admitted_runtime_slice: String,
     pub carrier_flag: String,
     pub tool_fabric_adapter_kind: String,
-    pub capability_policy_smoke_step: String,
+    pub capability_policy_terminal_session: String,
     pub terminal_mode: bool,
 }
 
@@ -44,8 +45,8 @@ pub fn parse_launch_slice_contract(json_text: &str) -> Result<LaunchSliceContrac
     if contract.tool_fabric_adapter_kind != EXPECTED_TOOL_FABRIC_ADAPTER_KIND {
         return Err("launch_slice_contract_invalid:tool_fabric_adapter_kind".to_string());
     }
-    if contract.capability_policy_smoke_step != EXPECTED_CAPABILITY_POLICY_SMOKE_STEP {
-        return Err("launch_slice_contract_invalid:capability_policy_smoke_step".to_string());
+    if contract.capability_policy_terminal_session != EXPECTED_CAPABILITY_POLICY_TERMINAL_SESSION {
+        return Err("launch_slice_contract_invalid:capability_policy_terminal_session".to_string());
     }
     if contract.terminal_mode != EXPECTED_TERMINAL_MODE {
         return Err("launch_slice_contract_invalid:terminal_mode".to_string());
@@ -77,20 +78,23 @@ mod tests {
             EXPECTED_TOOL_FABRIC_ADAPTER_KIND
         );
         assert_eq!(
-            contract.capability_policy_smoke_step,
-            EXPECTED_CAPABILITY_POLICY_SMOKE_STEP
+            contract.capability_policy_terminal_session,
+            EXPECTED_CAPABILITY_POLICY_TERMINAL_SESSION
         );
         assert_eq!(contract.terminal_mode, EXPECTED_TERMINAL_MODE);
     }
 
     #[test]
     fn launch_slice_contract_parser_rejects_invalid_contracts() {
-        assert!(parse_launch_slice_contract("{")
-            .unwrap_err()
-            .starts_with("launch_slice_contract_parse_failed:"));
+        assert!(
+            parse_launch_slice_contract("{")
+                .unwrap_err()
+                .starts_with("launch_slice_contract_parse_failed:")
+        );
         assert_eq!(
             parse_launch_slice_contract(&invalid_contract_json(|contract| {
-                contract.admitted_runtime_slice = "terminal_interactive_loop".to_string();
+                contract.admitted_runtime_slice =
+                    "bounded_non_terminal_interactive_step_once".to_string();
             }))
             .unwrap_err(),
             "launch_slice_contract_invalid:admitted_runtime_slice"

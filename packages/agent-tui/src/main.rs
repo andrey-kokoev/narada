@@ -1,4 +1,4 @@
-use narada_agent_tui::app_view_model::{build_app_view, AppViewInput, AppViewModel};
+use narada_agent_tui::app_view_model::{AppViewInput, AppViewModel, build_app_view};
 use narada_agent_tui::composer_view_model::ComposerViewInput;
 use narada_agent_tui::input_queue::{SessionEvidenceContext, TurnState};
 use narada_agent_tui::interactive_runtime::AgentTuiInteractiveRuntime;
@@ -10,17 +10,16 @@ use narada_agent_tui::runtime_clock::RuntimeClock;
 use narada_agent_tui::runtime_config_snapshot::RuntimeConfigSnapshot;
 use narada_agent_tui::runtime_step::RuntimeStep;
 use narada_agent_tui::smoke_runner::{
-    interactive_smoke_step_summary_lines,
+    AgentTuiSmokeSession, AgentTuiSmokeStepConfig, interactive_smoke_step_summary_lines,
     run_interactive_smoke_step_with_provider_runtime_config_and_adapter_admission,
-    AgentTuiSmokeSession, AgentTuiSmokeStepConfig,
 };
 use narada_agent_tui::status_view_model::StatusViewInput;
 use narada_agent_tui::terminal_input_tick::CrosstermTerminalInputReader;
 use narada_agent_tui::terminal_lifecycle::TerminalSession;
-use narada_agent_tui::terminal_runtime_config::{TerminalRuntimeConfig, TerminalRuntimeStatus};
+use narada_agent_tui::terminal_runtime_config::TerminalRuntimeConfig;
 use narada_agent_tui::tui_render_loop::{
-    run_injected_interactive_loop, AgentTuiLoopState, RuntimeClockInteractiveSource,
-    TerminalInputTickSource,
+    AgentTuiLoopState, RuntimeClockInteractiveSource, TerminalInputTickSource,
+    run_injected_interactive_loop,
 };
 use std::collections::BTreeMap;
 use std::env;
@@ -125,14 +124,12 @@ fn run_rust_toolchain_check() -> i32 {
     );
     if !ready {
         println!("next_check: where.exe link");
-        println!("recovery: install or load Visual Studio Build Tools C++ workload, then rerun pnpm agent-tui:test from the repo root");
+        println!(
+            "recovery: install or load Visual Studio Build Tools C++ workload, then rerun pnpm agent-tui:test from the repo root"
+        );
     }
 
-    if ready {
-        0
-    } else {
-        1
-    }
+    if ready { 0 } else { 1 }
 }
 
 fn find_executable(name: &str) -> Option<PathBuf> {
@@ -256,8 +253,14 @@ fn runtime_config_snapshot_from_process_env() -> RuntimeConfigSnapshot {
     RuntimeConfigSnapshot::from_process_env_map(&env_map)
 }
 
-fn terminal_config_from_process_env() -> TerminalRuntimeConfig {
-    runtime_config_snapshot_from_process_env().terminal
+fn runtime_config_snapshot_for_explicit_terminal_mode(mode: &str) -> RuntimeConfigSnapshot {
+    let mut snapshot = runtime_config_snapshot_from_process_env();
+    snapshot.terminal = TerminalRuntimeConfig::configured_for_explicit_terminal_mode(mode);
+    snapshot
+}
+
+fn terminal_config_for_explicit_terminal_mode(mode: &str) -> TerminalRuntimeConfig {
+    runtime_config_snapshot_for_explicit_terminal_mode(mode).terminal
 }
 
 fn run_runtime_step_once(args: Args) -> Result<(), String> {
@@ -310,9 +313,9 @@ fn run_runtime_loop(args: Args) -> Result<(), String> {
 }
 
 fn run_render_once(args: Args) -> Result<(), String> {
-    let terminal_config = terminal_config_from_process_env();
+    let terminal_config = terminal_config_for_explicit_terminal_mode("render_once");
     assert_terminal_rendering_admitted(&terminal_config, "render_once")?;
-    let model = build_scaffold_app_view(&args)?;
+    let model = build_scaffold_app_view_with_terminal_mode(&args, "render_once")?;
     let mut session = TerminalSession::enter()?;
     session.draw_once(&model)?;
     session.leave()
@@ -381,7 +384,7 @@ fn build_smoke_step_config(args: &Args) -> Result<AgentTuiSmokeStepConfig, Strin
 }
 
 fn run_interactive_loop(args: Args) -> Result<(), String> {
-    let terminal_config = terminal_config_from_process_env();
+    let terminal_config = terminal_config_for_explicit_terminal_mode("interactive_loop");
     assert_terminal_interactive_loop_admitted(&terminal_config)?;
     let max_steps = args.max_steps.expect("validated max steps");
     let mut runtime = build_interactive_runtime(&args)?;
@@ -414,21 +417,24 @@ fn assert_terminal_rendering_admitted(
     config: &TerminalRuntimeConfig,
     requested_mode: &str,
 ) -> Result<(), String> {
-    if config.status == TerminalRuntimeStatus::Configured
-        && config.terminal_rendering_enabled
-        && config.mode.as_deref() == Some("interactive_loop")
-    {
-        return Ok(());
+    if !config.terminal_rendering_enabled {
+        let reason = config
+            .refusal_reason
+            .as_deref()
+            .unwrap_or("terminal_rendering_not_enabled");
+        return Err(format!(
+            "terminal_{requested_mode}_not_admitted:status={}:reason={reason}",
+            config.status.as_str()
+        ));
     }
-
-    let reason = config
-        .refusal_reason
-        .as_deref()
-        .unwrap_or("terminal_rendering_not_enabled");
-    Err(format!(
-        "terminal_{requested_mode}_not_admitted:status={}:reason={reason}",
-        config.status.as_str()
-    ))
+    if config.mode.as_deref() != Some(requested_mode) {
+        return Err(format!(
+            "terminal_{requested_mode}_not_admitted:status={}:reason=wrong_terminal_mode:{}",
+            config.status.as_str(),
+            config.mode.as_deref().unwrap_or("none")
+        ));
+    }
+    Ok(())
 }
 
 fn build_interactive_runtime(args: &Args) -> Result<AgentTuiInteractiveRuntime, String> {
@@ -437,7 +443,7 @@ fn build_interactive_runtime(args: &Args) -> Result<AgentTuiInteractiveRuntime, 
     let control_jsonl = args.control_jsonl.clone().expect("validated control jsonl");
     let session_jsonl = args.session_jsonl.clone().expect("validated session jsonl");
     let context = build_evidence_context(args);
-    let runtime_config = runtime_config_snapshot_from_process_env();
+    let runtime_config = runtime_config_snapshot_for_explicit_terminal_mode("interactive_loop");
     let runtime_posture = runtime_config.posture();
     let provider_tool_call_executor = provider_tool_call_executor_from_mcp_runtime_config(
         &session_jsonl,
@@ -531,10 +537,22 @@ fn build_evidence_context(args: &Args) -> SessionEvidenceContext {
     }
 }
 
-fn build_scaffold_app_view(args: &Args) -> Result<AppViewModel, String> {
+fn build_scaffold_app_view_with_terminal_mode(
+    args: &Args,
+    mode: &str,
+) -> Result<AppViewModel, String> {
+    build_scaffold_app_view_with_runtime_config(
+        args,
+        runtime_config_snapshot_for_explicit_terminal_mode(mode),
+    )
+}
+
+fn build_scaffold_app_view_with_runtime_config(
+    args: &Args,
+    runtime_config: RuntimeConfigSnapshot,
+) -> Result<AppViewModel, String> {
     let identity = args.identity.clone().unwrap_or_default();
     let session = args.session.clone().unwrap_or_default();
-    let runtime_config = runtime_config_snapshot_from_process_env();
     Ok(build_app_view(&AppViewInput {
         terminal_size: current_terminal_size()?,
         layout_config: LayoutConfig::default(),
@@ -543,8 +561,11 @@ fn build_scaffold_app_view(args: &Args) -> Result<AppViewModel, String> {
             identity: identity.clone(),
             session,
             turn_state: TurnState::Idle,
+            active_phase: None,
+            active_turn_age: None,
             queued_inputs: 0,
             held_system_directives: 0,
+            oldest_held_age: None,
             transcript_items: 0,
             runtime_posture: runtime_config.posture(),
             last_error: None,
@@ -575,7 +596,7 @@ fn derive_site_id(identity: &str) -> String {
 fn print_help() {
     let launch_slice_flag = launch_slice_contract().carrier_flag.as_str();
     println!(
-        "narada-agent-tui {VERSION}\n\nUsage:\n  narada-agent-tui --identity <agent-id> --session <carrier-session-id> --site-root <path> [--control-jsonl <path>] [--session-jsonl <path>] [--runtime-step-once | --runtime-loop --max-steps <n> | {launch_slice_flag} | --interactive-smoke-loop --max-steps <n> | --interactive-loop --max-steps <n> | --render-once]\n\nOptions:\n  --identity <agent-id>          Agent identity, e.g. sonar.resident\n  --session <carrier-session>    Carrier session id\n  --site-root <path>             Narada site root\n  --control-jsonl <path>         Optional carrier control JSONL path\n  --session-jsonl <path>         Optional carrier session JSONL path\n  --runtime-step-once            Run one non-UI runtime pass and exit\n  --runtime-loop                 Run bounded non-UI runtime passes and exit\n  {launch_slice_flag:<29} Run one interactive runtime pass without entering TUI mode\n  --interactive-smoke-loop       Run bounded persistent smoke passes without entering TUI mode\n  --interactive-loop             Run bounded TUI draw/input passes and exit\n  --max-steps <n>                Required positive step count for loop modes\n  --render-once                  Enter TUI mode, draw one scaffold frame, and exit\n  --composer-has-draft           Hold composer-clear system directives during runtime pass\n  --persistent-smoke-session     Use reusable smoke session path for interactive smoke step\n  --check-rust-toolchain         Check cargo and MSVC link.exe readiness for Rust tests\n  --version                      Print version\n  --help                         Show help\n\nStatus:\n  Interactive TUI scaffold has control JSONL polling, input queuing, transcript projection, provider-boundary evidence, and a gated MCP fabric bridge. Real provider dispatch and production MCP exposure remain withheld until their admission gates pass."
+        "narada-agent-tui {VERSION}\n\nUsage:\n  narada-agent-tui --identity <agent-id> --session <carrier-session-id> --site-root <path> [--control-jsonl <path>] [--session-jsonl <path>] [--runtime-step-once | --runtime-loop --max-steps <n> | --interactive-step-once | --interactive-smoke-loop --max-steps <n> | {launch_slice_flag} --max-steps <n> | --render-once]\n\nOptions:\n  --identity <agent-id>          Agent identity, e.g. sonar.resident\n  --session <carrier-session>    Carrier session id\n  --site-root <path>             Narada site root\n  --control-jsonl <path>         Optional carrier control JSONL path\n  --session-jsonl <path>         Optional carrier session JSONL path\n  --runtime-step-once            Run one non-UI runtime pass and exit\n  --runtime-loop                 Run bounded non-UI runtime passes and exit\n  {launch_slice_flag:<29} Run one interactive runtime pass without entering TUI mode\n  --interactive-smoke-loop       Run bounded persistent smoke passes without entering TUI mode\n  --interactive-loop             Run bounded TUI draw/input passes and exit\n  --max-steps <n>                Required positive step count for loop modes\n  --render-once                  Enter TUI mode, draw one scaffold frame, and exit\n  --composer-has-draft           Hold composer-clear system directives during runtime pass\n  --persistent-smoke-session     Use reusable smoke session path for interactive smoke step\n  --check-rust-toolchain         Check cargo and MSVC link.exe readiness for Rust tests\n  --version                      Print version\n  --help                         Show help\n\nStatus:\n  Interactive TUI scaffold has control JSONL polling, input queuing, transcript projection, provider-boundary evidence, and a gated MCP fabric bridge. Real provider dispatch and production MCP exposure remain withheld until their admission gates pass."
     );
 }
 fn validate_launch_args(args: &Args) -> Result<(), String> {
@@ -627,10 +648,7 @@ fn validate_launch_args(args: &Args) -> Result<(), String> {
         return Err("--max-steps requires a loop mode".to_string());
     }
     if args.persistent_smoke_session && !args.interactive_step_once {
-        return Err(format!(
-            "--persistent-smoke-session requires {}",
-            launch_slice_contract().carrier_flag
-        ));
+        return Err("--persistent-smoke-session requires --interactive-step-once".to_string());
     }
     Ok(())
 }
@@ -658,11 +676,9 @@ where
             }
             "--runtime-step-once" => parsed.runtime_step_once = true,
             "--runtime-loop" => parsed.runtime_loop = true,
-            flag if flag == launch_slice_contract().carrier_flag => {
-                parsed.interactive_step_once = true
-            }
+            "--interactive-step-once" => parsed.interactive_step_once = true,
             "--interactive-smoke-loop" => parsed.interactive_smoke_loop = true,
-            "--interactive-loop" => parsed.interactive_loop = true,
+            flag if flag == launch_slice_contract().carrier_flag => parsed.interactive_loop = true,
             "--render-once" => parsed.render_once = true,
             "--max-steps" => {
                 let value = require_value(&mut iter, "--max-steps")?;
@@ -762,7 +778,7 @@ mod tests {
             "control.jsonl",
             "--session-jsonl",
             "session.jsonl",
-            launch_slice_contract().carrier_flag.as_str(),
+            "--interactive-step-once",
         ])
         .expect("args parse");
 
@@ -782,7 +798,7 @@ mod tests {
             "control.jsonl",
             "--session-jsonl",
             "session.jsonl",
-            launch_slice_contract().carrier_flag.as_str(),
+            "--interactive-step-once",
             "--persistent-smoke-session",
         ])
         .expect("args parse");
@@ -913,10 +929,7 @@ mod tests {
         let err = validate_launch_args(&args).expect_err("invalid persistent smoke args");
         assert_eq!(
             err,
-            format!(
-                "--persistent-smoke-session requires {}",
-                launch_slice_contract().carrier_flag
-            )
+            "--persistent-smoke-session requires --interactive-step-once"
         );
     }
 

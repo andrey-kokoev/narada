@@ -4,3 +4,5 @@ packages:
   - 'packages/verticals/*'
   - 'packages/domains/*'
   - 'packages/sites/*'
+  - '../narada-core/packages/*'
+  - '../mcp-surfaces/packages/task-lifecycle-mcp'

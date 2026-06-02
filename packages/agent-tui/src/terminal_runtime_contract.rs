@@ -73,9 +73,11 @@ mod tests {
 
     #[test]
     fn terminal_runtime_contract_parser_rejects_invalid_contracts() {
-        assert!(parse_terminal_runtime_contract("{")
-            .unwrap_err()
-            .starts_with("terminal_runtime_contract_parse_failed:"));
+        assert!(
+            parse_terminal_runtime_contract("{")
+                .unwrap_err()
+                .starts_with("terminal_runtime_contract_parse_failed:")
+        );
         assert_eq!(
             parse_terminal_runtime_contract(&invalid_contract_json(|contract| {
                 contract.required_terminal_mode = "render_once".to_string();

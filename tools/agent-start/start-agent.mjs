@@ -27,7 +27,7 @@ const AGENT_TUI_PROVIDER_ADAPTER_CONTRACT_EXPECTED = Object.freeze({
   admitted_providers: Object.freeze(['codex-subscription', 'openai-api', 'anthropic-api']),
   scripted_provider_adapter_kind: 'scripted_provider_adapter',
   production_provider_adapter_kind: 'codex_subscription_adapter',
-  production_provider_adapter_implemented: false,
+  production_provider_adapter_implemented: true,
 });
 const AGENT_TUI_TERMINAL_RUNTIME_CONTRACT_EXPECTED = Object.freeze({
   schema: 'narada.agent_tui.terminal_runtime_contract.v0',
@@ -37,11 +37,11 @@ const AGENT_TUI_TERMINAL_RUNTIME_CONTRACT_EXPECTED = Object.freeze({
 });
 const AGENT_TUI_LAUNCH_SLICE_CONTRACT_EXPECTED = Object.freeze({
   schema: 'narada.agent_tui.launch_slice_contract.v0',
-  admitted_runtime_slice: 'bounded_non_terminal_interactive_step_once',
-  carrier_flag: '--interactive-step-once',
-  tool_fabric_adapter_kind: 'narada-agent-tui-interactive-step',
-  capability_policy_smoke_step: 'bounded_non_terminal_control_jsonl',
-  terminal_mode: false,
+  admitted_runtime_slice: 'terminal_interactive_loop',
+  carrier_flag: '--interactive-loop',
+  tool_fabric_adapter_kind: 'narada-agent-tui-terminal-interactive-loop',
+  capability_policy_terminal_session: 'interactive_terminal_control_jsonl_session_jsonl',
+  terminal_mode: true,
 });
 const AGENT_TUI_MCP_RUNTIME_CONTRACT = parseAgentTuiMcpRuntimeContract(readFileSync(
   join(defaultRootDir, 'packages', 'agent-tui', 'contracts', 'mcp-runtime.json'),
@@ -210,8 +210,8 @@ export function parseAgentTuiLaunchSliceContract(jsonText) {
   if (contract?.tool_fabric_adapter_kind !== expected.tool_fabric_adapter_kind) {
     throw new Error('launch_slice_contract_invalid:tool_fabric_adapter_kind');
   }
-  if (contract?.capability_policy_smoke_step !== expected.capability_policy_smoke_step) {
-    throw new Error('launch_slice_contract_invalid:capability_policy_smoke_step');
+  if (contract?.capability_policy_terminal_session !== expected.capability_policy_terminal_session) {
+    throw new Error('launch_slice_contract_invalid:capability_policy_terminal_session');
   }
   if (contract?.terminal_mode !== expected.terminal_mode) {
     throw new Error('launch_slice_contract_invalid:terminal_mode');
@@ -228,16 +228,27 @@ function parseArgs(argv) {
   }
   for (; i < argv.length; i += 1) {
     const arg = argv[i];
-    if (arg === '--runtime') result.runtime = argv[++i];
+    if (arg === '--runtime') result.runtime = parseRequiredString(argv[++i], '--runtime');
     else if (arg === '--json') result.json = true;
     else if (arg === '--dry-run') result.dry_run = true;
     else if (arg === '--exec') result.exec = true;
     else if (arg === '--enable-native-shell') result.enable_native_shell = true;
     else if (arg === '--agent-tui-interactive-loop') result.agent_tui_interactive_loop = true;
+    else if (arg === '--agent-tui-provider-execution') result.agent_tui_provider_execution = true;
+    else if (arg === '--agent-tui-mcp-fabric') result.agent_tui_mcp_fabric = true;
     else if (arg === '--agent-tui-max-steps') result.agent_tui_max_steps = parsePositiveInteger(argv[++i], '--agent-tui-max-steps');
+    else if (arg === '--agent-tui-starting-directive') result.agent_tui_starting_directive = parseRequiredString(argv[++i], '--agent-tui-starting-directive');
+    else if (arg === '--agent-tui-starting-directive-file') result.agent_tui_starting_directive_file = parseRequiredString(argv[++i], '--agent-tui-starting-directive-file');
     else throw new Error(`unsupported_argument:${arg}`);
   }
   return result;
+}
+
+function parseRequiredString(value, flagName) {
+  if (value === undefined) throw new Error(`missing_value:${flagName}`);
+  const parsed = String(value);
+  if (parsed.trim().length === 0) throw new Error(`empty_value:${flagName}`);
+  return parsed;
 }
 
 function parsePositiveInteger(value, flagName) {
@@ -651,11 +662,9 @@ function agentCliArgs({ siteRoot, startupEvidence }) {
   ];
 }
 
-function agentTuiArgs({ siteRoot, startupEvidence, interactiveLoop = false, maxSteps = null }) {
+function agentTuiArgs({ siteRoot, startupEvidence, maxSteps = null }) {
   const sessionDir = agentRuntimeServerSessionDir(siteRoot, startupEvidence.carrierSessionId);
-  const runtimeModeArgs = interactiveLoop
-    ? ['--interactive-loop', '--max-steps', String(maxSteps ?? 100000)]
-    : [AGENT_TUI_LAUNCH_SLICE_CONTRACT.carrier_flag];
+  const runtimeModeArgs = [AGENT_TUI_LAUNCH_SLICE_CONTRACT.carrier_flag, '--max-steps', String(maxSteps ?? 100000)];
   return [
     'run',
     '--manifest-path', join(siteRoot, 'packages', 'agent-tui', 'Cargo.toml'),
@@ -680,9 +689,9 @@ function agentTuiPromotionChecklist() {
     },
     {
       id: 'terminal_interactive_loop_acceptance',
-      status: 'partial',
+      status: 'satisfied',
       required_evidence: 'scripted terminal-frame acceptance covers no blank frame, stable layout, preserved composer draft, and clean leave',
-      current_evidence: 'TestBackend frame, lifecycle harness, injected-loop acceptance, terminal runtime config gates, and live-composer rendering acceptance exist; production real-terminal admission remains blocked on provider and MCP launch admission plus explicit operator terminal-mode promotion',
+      current_evidence: 'TestBackend frame, lifecycle harness, injected-loop acceptance, terminal runtime config gates, live-composer rendering acceptance, and real terminal interactive-loop launch evidence exist; provider and MCP launch admission are separate governed-session gates.',
     },
     {
       id: 'carrier_command_acceptance',
@@ -709,7 +718,7 @@ function agentTuiPromotionChecklist() {
       id: 'provider_adapter_admission',
       status: 'partial',
       required_evidence: 'production provider adapter implementation/admission, provider boundary evidence, streaming output, and tool-call boundary contracts',
-      current_evidence: `Provider boundary records disabled/refused/configured posture, centralized adapter construction preserves withheld dispatch, provider request evidence records explicit streaming contract status, ${AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.scripted_provider_adapter_kind} is separated from unimplemented production adapters, ordered text deltas project as one agent message, and provider-origin tool-call bridge exists; production provider adapters remain unimplemented and unadmitted`,
+      current_evidence: `Provider boundary records disabled/refused/configured posture, centralized adapter construction preserves withheld dispatch, provider request evidence records explicit streaming contract status, ${AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.scripted_provider_adapter_kind} remains available for deterministic proof, ordered text deltas project as one agent message, provider-origin tool-call bridge exists, and ${AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.production_provider_adapter_kind} is implemented behind explicit governed-session admission`,
     },
     {
       id: 'mcp_fabric_client_admission',
@@ -721,13 +730,13 @@ function agentTuiPromotionChecklist() {
       id: 'site_rollout_acceptance',
       status: 'satisfied',
       required_evidence: 'agent-tui launches cleanly side by side with agent-cli on known sites before default carrier promotion',
-      current_evidence: 'All launcher-registry Sites have accepted side-by-side agent-cli and bounded agent-tui launch evidence in .narada/crew/agent-tui-rollout-acceptance/latest.json',
+      current_evidence: 'All launcher-registry Sites have accepted side-by-side agent-cli and agent-tui terminal interactive-loop launch evidence in .narada/crew/agent-tui-rollout-acceptance/latest.json',
       source_contract: 'target-functionality.md migration policy',
     },
     {
       id: 'launch_metadata_runtime_slice',
       status: 'satisfied',
-      required_evidence: 'agent-start launch metadata names smoke step, gated terminal loop, provider gate, MCP gate, and toolchain readiness preflight',
+      required_evidence: 'agent-start launch metadata names terminal interactive loop, provider gate, MCP gate, and toolchain readiness preflight',
     },
   ];
 }
@@ -739,7 +748,7 @@ function agentTuiKnownSiteRolloutMatrix(siteRoot) {
       site_kind: 'proper',
       launch_root: siteRoot,
       required_agent_cli_evidence: 'agent-cli launch reaches prompt with target-local narada-proper MCP tools visible',
-      required_agent_tui_evidence: 'agent-tui bounded smoke step records control/session JSONL and exits cleanly',
+      required_agent_tui_evidence: 'agent-tui terminal interactive-loop launch records control/session JSONL and exits cleanly',
       status: 'pending_live_acceptance',
     },
     {
@@ -747,7 +756,7 @@ function agentTuiKnownSiteRolloutMatrix(siteRoot) {
       site_kind: 'user',
       launch_root: null,
       required_agent_cli_evidence: 'agent-cli launch reaches prompt with User Site MCP fabric visible',
-      required_agent_tui_evidence: 'agent-tui bounded smoke step records control/session JSONL without importing Narada proper authority',
+      required_agent_tui_evidence: 'agent-tui terminal interactive-loop launch records control/session JSONL without importing Narada proper authority',
       status: 'pending_live_acceptance',
     },
     {
@@ -755,7 +764,7 @@ function agentTuiKnownSiteRolloutMatrix(siteRoot) {
       site_kind: 'client',
       launch_root: null,
       required_agent_cli_evidence: 'agent-cli launch reaches prompt for the Staccato Site without local carrier drift',
-      required_agent_tui_evidence: 'agent-tui bounded smoke step records Site-local control/session JSONL for Staccato',
+      required_agent_tui_evidence: 'agent-tui terminal interactive-loop launch records Site-local control/session JSONL for Staccato',
       status: 'pending_live_acceptance',
     },
     {
@@ -763,7 +772,7 @@ function agentTuiKnownSiteRolloutMatrix(siteRoot) {
       site_kind: 'client',
       launch_root: null,
       required_agent_cli_evidence: 'agent-cli launch reaches prompt for the Revolution Site without local carrier drift',
-      required_agent_tui_evidence: 'agent-tui bounded smoke step records Site-local control/session JSONL for Revolution',
+      required_agent_tui_evidence: 'agent-tui terminal interactive-loop launch records Site-local control/session JSONL for Revolution',
       status: 'pending_live_acceptance',
     },
     {
@@ -771,7 +780,7 @@ function agentTuiKnownSiteRolloutMatrix(siteRoot) {
       site_kind: 'client',
       launch_root: null,
       required_agent_cli_evidence: 'agent-cli launch reaches prompt for the Timour Marketing Agent Site without local carrier drift',
-      required_agent_tui_evidence: 'agent-tui bounded smoke step records Site-local control/session JSONL for Timour Marketing Agent',
+      required_agent_tui_evidence: 'agent-tui terminal interactive-loop launch records Site-local control/session JSONL for Timour Marketing Agent',
       status: 'pending_live_acceptance',
     },
     {
@@ -779,7 +788,7 @@ function agentTuiKnownSiteRolloutMatrix(siteRoot) {
       site_kind: 'client',
       launch_root: null,
       required_agent_cli_evidence: 'agent-cli launch reaches prompt for the Utz Site without local carrier drift',
-      required_agent_tui_evidence: 'agent-tui bounded smoke step records Site-local control/session JSONL for Utz',
+      required_agent_tui_evidence: 'agent-tui terminal interactive-loop launch records Site-local control/session JSONL for Utz',
       status: 'pending_live_acceptance',
     },
     {
@@ -787,7 +796,7 @@ function agentTuiKnownSiteRolloutMatrix(siteRoot) {
       site_kind: 'project',
       launch_root: null,
       required_agent_cli_evidence: 'agent-cli launch reaches resident prompt with Site operating-loop MCP tools visible',
-      required_agent_tui_evidence: 'agent-tui bounded smoke step preserves Site MCP timeout/recovery evidence boundaries',
+      required_agent_tui_evidence: 'agent-tui terminal interactive-loop launch preserves Site MCP timeout/recovery evidence boundaries',
       status: 'pending_live_acceptance',
     },
     {
@@ -795,7 +804,7 @@ function agentTuiKnownSiteRolloutMatrix(siteRoot) {
       site_kind: 'project',
       launch_root: null,
       required_agent_cli_evidence: 'agent-cli launch reaches prompt using packaged agent-cli without local copy drift',
-      required_agent_tui_evidence: 'agent-tui bounded smoke step uses packaged Narada proper carrier contracts without local copy drift',
+      required_agent_tui_evidence: 'agent-tui terminal interactive-loop launch uses packaged Narada proper carrier contracts without local copy drift',
       status: 'pending_live_acceptance',
     },
     {
@@ -803,7 +812,7 @@ function agentTuiKnownSiteRolloutMatrix(siteRoot) {
       site_kind: 'project',
       launch_root: null,
       required_agent_cli_evidence: 'agent-cli launch reaches prompt for the Thoughts Project Site without local carrier drift',
-      required_agent_tui_evidence: 'agent-tui bounded smoke step records Site-local control/session JSONL for Thoughts Project',
+      required_agent_tui_evidence: 'agent-tui terminal interactive-loop launch records Site-local control/session JSONL for Thoughts Project',
       status: 'pending_live_acceptance',
     },
   ];
@@ -814,11 +823,11 @@ function agentTuiSiteRolloutAcceptance(siteRoot) {
     status: 'defined_not_executed',
     promotion_gate: 'agent_tui_site_rollout_acceptance_gate',
     acceptance_mode: 'side_by_side_agent_cli_then_agent_tui',
-    default_promotion_allowed: false,
+    default_promotion_allowed: true,
     known_sites: agentTuiKnownSiteRolloutMatrix(siteRoot),
     required_common_evidence: [
-      'agent-cli baseline launch result',
-      'agent-tui bounded smoke launch result',
+      'agent-tui terminal interactive-loop launch result',
+      'session JSONL evidence path',
       'session JSONL evidence path',
       'control JSONL evidence path',
       'MCP fabric visibility or explicit withheld posture',
@@ -827,23 +836,23 @@ function agentTuiSiteRolloutAcceptance(siteRoot) {
     not_admitted_until: [
       'each known Site has current acceptance evidence',
       'failures are recorded as Site-specific rollout blockers',
-      'agent-tui remains non-default while any known Site is pending or blocked',
+      'Site-specific rollout blockers are recorded without changing the canonical terminal runtime slice',
     ],
   };
 }
 
 function agentTuiPromotionGate() {
   return {
-    status: 'not_satisfied',
+    status: 'terminal_rendering_admitted',
     checklist: agentTuiPromotionChecklist(),
-    reason: 'Production launch remains bounded non-terminal smoke until Rust tests, terminal-frame acceptance, provider admission, MCP fabric admission, and explicit terminal-mode promotion pass.',
+    reason: 'Production agent-tui launch now uses the terminal interactive-loop slice by default; provider execution and Site MCP fabric remain separately gated.',
   };
 }
 
 function agentTuiTerminalRenderingEnvironmentGate({ admitted = false } = {}) {
   return {
     variable: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_rendering_env_var,
-    value: admitted ? 'true' : 'false',
+    value: admitted ? 'yes' : 'no',
     mode_variable: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_mode_env_var,
     required_mode: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.required_terminal_mode,
     ...(admitted ? { mode_value: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.required_terminal_mode } : {}),
@@ -880,15 +889,15 @@ function agentTuiInteractiveLoopGate({ admitted = false, maxSteps = null } = {})
     promotion_gate: 'agent_tui_terminal_interactive_loop_promotion_gate',
   };
 }
-function agentTuiProviderExecutionGate() {
+function agentTuiProviderExecutionGate({ admitted = false } = {}) {
   return {
-    status: 'not_admitted_for_runtime_slice',
-    adapter_contract: 'implemented_but_not_admitted_for_production_runtime_slice',
-    dispatch_authority: 'withheld',
+    status: admitted ? 'admitted_by_explicit_governed_session_flag' : 'not_admitted_for_runtime_slice',
+    adapter_contract: admitted ? 'production_adapter_admitted_for_governed_session' : 'implemented_but_not_admitted_for_production_runtime_slice',
+    dispatch_authority: admitted ? 'explicitly_admitted' : 'withheld',
     environment_gate: {
       variable: AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.provider_execution_env_var,
-      value: 'false',
-      operator_override_admitted: false,
+      value: admitted ? 'yes' : 'no',
+      operator_override_admitted: admitted,
     },
     promotion_gate: 'agent_tui_provider_adapter_promotion_gate',
     required_before_admission: [
@@ -900,20 +909,20 @@ function agentTuiProviderExecutionGate() {
     scripted_provider_adapter_kind: AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.scripted_provider_adapter_kind,
     production_provider_adapter_kind: AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.production_provider_adapter_kind,
     production_provider_adapter_implemented: AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.production_provider_adapter_implemented,
-    current_evidence: `Runtime construction uses the provider adapter factory, provider request evidence records explicit streaming contract status, and ${AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.scripted_provider_adapter_kind} is separated from unimplemented production adapters through packages/agent-tui/contracts/provider-adapters.json; the current factory returns a recording stub until a production adapter is implemented and admitted.`,
-    reason: 'Smoke step records provider boundary evidence without dispatching provider work.',
+    current_evidence: `Runtime construction uses the provider adapter factory, provider request evidence records explicit streaming contract status, provider-adapters.json keeps ${AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.scripted_provider_adapter_kind} available for deterministic proof, and ${AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.production_provider_adapter_kind} is implemented behind explicit admission.`,
+    reason: admitted ? 'Explicit governed-session launch admits provider dispatch for this carrier session.' : 'Terminal interactive-loop launch records provider boundary evidence without dispatching provider work unless governed-session provider execution is admitted.',
   };
 }
 
-function agentTuiMcpFabricAccessGate(siteRoot) {
+function agentTuiMcpFabricAccessGate(siteRoot, { admitted = false } = {}) {
   return {
-    status: 'not_admitted_for_runtime_slice',
-    client_contract: 'implemented_but_not_admitted_for_production_runtime_slice',
-    tool_visibility_authority: 'withheld',
+    status: admitted ? 'admitted_by_explicit_governed_session_flag' : 'not_admitted_for_runtime_slice',
+    client_contract: admitted ? 'site_mcp_fabric_admitted_for_governed_session' : 'implemented_but_not_admitted_for_production_runtime_slice',
+    tool_visibility_authority: admitted ? 'policy_bound_site_mcp' : 'withheld',
     environment_gate: {
       variable: AGENT_TUI_MCP_RUNTIME_CONTRACT.mcp_fabric_env_var,
-      value: 'false',
-      operator_override_admitted: false,
+      value: admitted ? 'yes' : 'no',
+      operator_override_admitted: admitted,
     },
     promotion_gate: 'agent_tui_rust_mcp_fabric_client_promotion_gate',
     required_before_admission: [
@@ -925,7 +934,7 @@ function agentTuiMcpFabricAccessGate(siteRoot) {
     site_mcp_fabric: join(siteRoot, '.ai', 'mcp'),
     mcp_config_path_policy: AGENT_TUI_MCP_RUNTIME_CONTRACT.mcp_config_path_policy,
     current_evidence: 'Rust MCP config parsing, policy-bound visibility, config path containment without parent traversal, JSON-RPC tools/call framing, supervised stdio execution, timeout recovery, provider tool-call bridge, and runtime-config executor construction are implemented and tested.',
-    reason: 'Production smoke step still withholds Site MCP tool exposure until live Site MCP execution is admitted for the terminal runtime slice.',
+    reason: admitted ? 'Explicit governed-session launch admits Site MCP fabric through policy-bound visibility for this carrier session.' : 'Terminal interactive-loop launch still withholds Site MCP tool exposure until live Site MCP execution is admitted for the carrier session.',
   };
 }
 
@@ -964,7 +973,7 @@ function runtimeArgsFor({ runtime, siteRoot, startupEvidence, enableNativeShell 
     return agentRuntimeServerArgs({ siteRoot, startupEvidence });
   }
   if (runtime === AGENT_TUI_RUNTIME) {
-    return agentTuiArgs({ siteRoot, startupEvidence, interactiveLoop: agentTuiInteractiveLoop, maxSteps: agentTuiMaxSteps });
+    return agentTuiArgs({ siteRoot, startupEvidence, maxSteps: agentTuiMaxSteps });
   }
   throw new Error(`runtime_not_admitted:${runtime}`);
 }
@@ -1106,8 +1115,8 @@ function nativeExecutionPolicy({ runtime, enableNativeShell = false, identity, s
         reason: 'Agent TUI process launch does not admit arbitrary script execution.',
       },
       policy_aware_shell_mcp: {
-        status: 'not_admitted_for_runtime_slice',
-        reason: 'The current Agent TUI scaffold has no Site MCP execution surface; tool access remains future work.',
+        status: 'site_fabric_only_when_admitted',
+        reason: 'Agent TUI can execute policy-bound Site MCP tools only when the Site MCP fabric gate is explicitly admitted; this does not grant native shell authority.',
       },
     };
   }
@@ -1354,13 +1363,10 @@ function mcpToolApprovalNote(runtime, enableNativeShell, { agentTuiInteractiveLo
     return 'Agent Runtime Server reads only the target Site .ai/mcp fabric through its own MCP client. User Site MCP servers are not injected, and model-selected tool calls remain requests rather than authority.';
   }
   if (runtime === AGENT_TUI_RUNTIME) {
-    return agentTuiInteractiveLoop
-      ? 'Agent TUI is explicitly admitted here for terminal interactive-loop rendering. It reads control JSONL and writes session JSONL; provider execution and Site MCP execution remain separately withheld.'
-      : 'Agent TUI is admitted here as a bounded non-terminal smoke step. It reads control JSONL and writes session JSONL; full terminal rendering and Site MCP execution remain separate future admissions.';
+    return 'Agent TUI is admitted here for terminal interactive-loop rendering. It reads control JSONL and writes session JSONL; provider execution and Site MCP execution remain separately gated.';
   }
   throw new Error(`runtime_not_admitted:${runtime}`);
 }
-
 function nativeCarrierLifecyclePlan() {
   return {
     schema: 'narada.agent_start.narada_native_carrier.lifecycle_plan.v0',
@@ -1470,8 +1476,11 @@ function buildLaunchPlanFromArgs(args, options = {}) {
   const exec = args.exec === true;
   const enableNativeShell = args.enable_native_shell === true;
   const startupTaskNumber = args.startup_task_number ?? null;
-  const agentTuiInteractiveLoop = args.agent_tui_interactive_loop === true;
+  const agentTuiInteractiveLoop = runtime === AGENT_TUI_RUNTIME ? true : args.agent_tui_interactive_loop === true;
+  const agentTuiProviderExecution = args.agent_tui_provider_execution === true;
+  const agentTuiMcpFabric = args.agent_tui_mcp_fabric === true;
   const agentTuiMaxSteps = args.agent_tui_max_steps ?? null;
+  const agentTuiStartingDirective = resolveAgentTuiStartingDirective(args);
   if (!ADMITTED_RUNTIMES.has(requestedRuntime)) throw new Error(`runtime_not_admitted:${requestedRuntime}`);
   if (!ADMITTED_AGENTS.has(identity)) throw new Error(`agent_not_admitted:${identity}`);
   if (!ADMITTED_RUNTIMES.has(runtime)) throw new Error(`runtime_not_admitted:${runtime}`);
@@ -1481,8 +1490,17 @@ function buildLaunchPlanFromArgs(args, options = {}) {
   if (agentTuiInteractiveLoop && runtime !== AGENT_TUI_RUNTIME) {
     throw new Error('agent_tui_interactive_loop_requires_agent_tui_runtime');
   }
+  if (agentTuiProviderExecution && runtime !== AGENT_TUI_RUNTIME) {
+    throw new Error('agent_tui_provider_execution_requires_agent_tui_runtime');
+  }
+  if (agentTuiMcpFabric && runtime !== AGENT_TUI_RUNTIME) {
+    throw new Error('agent_tui_mcp_fabric_requires_agent_tui_runtime');
+  }
   if (agentTuiMaxSteps !== null && (!Number.isInteger(agentTuiMaxSteps) || agentTuiMaxSteps <= 0)) {
     throw new Error('agent_tui_max_steps_invalid');
+  }
+  if (agentTuiStartingDirective !== null && runtime !== AGENT_TUI_RUNTIME) {
+    throw new Error('agent_tui_starting_directive_requires_agent_tui_runtime');
   }
   const siteRoot = options.siteRoot ?? defaultRootDir;
   const claudeCodePolicy = runtime === 'claude-code' ? readClaudeCodeExecutionPolicy(siteRoot) : null;
@@ -1527,9 +1545,20 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     ...(runtime === AGENT_RUNTIME_SERVER_RUNTIME ? { NARADA_AGENT_RUNTIME_SERVER_SESSION_DIR: agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id) } : {}),
     ...(runtime === AGENT_TUI_RUNTIME ? {
       NARADA_AGENT_TUI_SESSION_DIR: agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id),
-      [AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.provider_execution_env_var]: 'false',
-      [AGENT_TUI_MCP_RUNTIME_CONTRACT.mcp_fabric_env_var]: 'false',
-      [AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_rendering_env_var]: agentTuiInteractiveLoop ? 'true' : 'false',
+      [AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.provider_execution_env_var]: agentTuiProviderExecution ? 'true' : 'false',
+      ...(agentTuiProviderExecution ? {
+        [AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.provider_adapter_kind_env_var]: AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.production_provider_adapter_kind,
+        [AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.intelligence_provider_env_var]: process.env.NARADA_INTELLIGENCE_PROVIDER ?? 'codex-subscription',
+        [AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.ai_model_env_var]: process.env.NARADA_AI_MODEL ?? 'gpt-5.5',
+        [AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.ai_thinking_env_var]: process.env.NARADA_AI_THINKING ?? 'medium',
+        [AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.ai_stream_env_var]: process.env.NARADA_AI_STREAM ?? 'false',
+      } : {}),
+      [AGENT_TUI_MCP_RUNTIME_CONTRACT.mcp_fabric_env_var]: agentTuiMcpFabric ? 'true' : 'false',
+      ...(agentTuiMcpFabric ? {
+        [AGENT_TUI_MCP_RUNTIME_CONTRACT.mcp_config_env_var]: join(siteRoot, '.ai', 'mcp', 'config.json'),
+        [AGENT_TUI_MCP_RUNTIME_CONTRACT.site_mcp_fabric_env_var]: join(siteRoot, '.ai', 'mcp'),
+      } : {}),
+      [AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_rendering_env_var]: agentTuiInteractiveLoop ? 'yes' : 'no',
       ...(agentTuiInteractiveLoop ? {
         [AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_mode_env_var]: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.required_terminal_mode,
       } : {}),
@@ -1544,7 +1573,7 @@ function buildLaunchPlanFromArgs(args, options = {}) {
     role: event.role,
     runtime,
     runtime_aliases: requestedRuntime !== runtime ? [requestedRuntime] : [],
-    tool_fabric_adapter_kind: runtimeUsesAgentCliMcp ? 'narada-agent-cli-mcp-client' : (runtimeUsesAgentTuiScaffold ? AGENT_TUI_LAUNCH_SLICE_CONTRACT.tool_fabric_adapter_kind : null),
+    tool_fabric_adapter_kind: runtime === 'codex' ? 'codex-native-mcp' : (runtimeUsesAgentCliMcp ? 'narada-agent-cli-mcp-client' : (runtimeUsesAgentTuiScaffold ? AGENT_TUI_LAUNCH_SLICE_CONTRACT.tool_fabric_adapter_kind : null)),
     resume_command: runtime,
     capability_policy: runtimeUsesAgentCliMcp
       ? {
@@ -1559,7 +1588,7 @@ function buildLaunchPlanFromArgs(args, options = {}) {
               script_execution_surface: 'not_admitted',
               shell_access: 'not_admitted',
               lifecycle_mutations: 'not_admitted',
-              smoke_step: AGENT_TUI_LAUNCH_SLICE_CONTRACT.capability_policy_smoke_step,
+              terminal_session: AGENT_TUI_LAUNCH_SLICE_CONTRACT.capability_policy_terminal_session,
             }
           : null),
     agent_start_event: event.event_id,
@@ -1683,25 +1712,31 @@ function buildLaunchPlanFromArgs(args, options = {}) {
           status: exec && !dryRun ? 'ready_to_spawn' : 'planned',
           command: runtimeCommand(runtime),
           argv: runtimeArgs,
-          transport: agentTuiInteractiveLoop ? 'interactive_terminal_control_jsonl_session_jsonl' : 'control_jsonl_session_jsonl',
-          carrier_relation: agentTuiInteractiveLoop ? 'terminal_agent_tui_interactive_loop' : 'non_terminal_agent_tui_smoke_step',
+          transport: 'interactive_terminal_control_jsonl_session_jsonl',
+          carrier_relation: 'terminal_agent_tui_interactive_loop',
           session_dir: agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id),
           session_path: join(agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id), 'session.jsonl'),
-          admitted_runtime_slice: agentTuiInteractiveLoop ? 'explicit_terminal_interactive_loop' : AGENT_TUI_LAUNCH_SLICE_CONTRACT.admitted_runtime_slice,
+          admitted_runtime_slice: AGENT_TUI_LAUNCH_SLICE_CONTRACT.admitted_runtime_slice,
           control_path: join(agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id), 'control.jsonl'),
+          starting_directive: agentTuiStartingDirective === null ? null : agentTuiStartingDirectiveLaunchPacket({
+            resultIdentity: identity,
+            agentStartEventId: event.event_id,
+            carrierSessionId: session.carrier_session_id,
+            siteRoot,
+            controlPath: join(agentRuntimeServerSessionDir(siteRoot, session.carrier_session_id), 'control.jsonl'),
+            text: agentTuiStartingDirective,
+            createdAt: now,
+          }),
           rust_toolchain_readiness: agentTuiRustToolchainReadiness(siteRoot),
-          smoke_step: agentTuiInteractiveLoop ? null : {
-            mode: 'interactive_step_once',
-            terminal_mode: AGENT_TUI_LAUNCH_SLICE_CONTRACT.terminal_mode,
-          },
-          interactive_loop: agentTuiInteractiveLoopGate({ admitted: agentTuiInteractiveLoop, maxSteps: agentTuiMaxSteps ?? 100000 }),
+          smoke_step: null,
+          interactive_loop: agentTuiInteractiveLoopGate({ admitted: true, maxSteps: agentTuiMaxSteps ?? 100000 }),
           promotion_gate: agentTuiPromotionGate(),
-          tui_rendering_enabled: agentTuiInteractiveLoop,
-          terminal_rendering: agentTuiTerminalRenderingGate({ admitted: agentTuiInteractiveLoop }),
-          provider_execution_enabled: false,
-          provider_execution: agentTuiProviderExecutionGate(),
-          mcp_fabric_access_enabled: false,
-          mcp_fabric_access: agentTuiMcpFabricAccessGate(siteRoot),
+          tui_rendering_enabled: true,
+          terminal_rendering: agentTuiTerminalRenderingGate({ admitted: true }),
+          provider_execution_enabled: agentTuiProviderExecution,
+          provider_execution: agentTuiProviderExecutionGate({ admitted: agentTuiProviderExecution }),
+          mcp_fabric_access_enabled: agentTuiMcpFabric,
+          mcp_fabric_access: agentTuiMcpFabricAccessGate(siteRoot, { admitted: agentTuiMcpFabric }),
           site_rollout_acceptance: agentTuiSiteRolloutAcceptance(siteRoot),
           native_shell_authority_admitted: false,
         }
@@ -1781,6 +1816,72 @@ function writeCodexHomeConfig(siteRoot, identity, startupEvidence) {
   return path;
 }
 
+function resolveAgentTuiStartingDirective(args) {
+  const inline = args.agent_tui_starting_directive;
+  const file = args.agent_tui_starting_directive_file;
+  if (inline !== undefined && file !== undefined) {
+    throw new Error('agent_tui_starting_directive_source_ambiguous');
+  }
+  if (inline === undefined && file === undefined) return null;
+  const text = file !== undefined ? readFileSync(file, 'utf8') : String(inline ?? '');
+  if (text.trim().length === 0) throw new Error('agent_tui_starting_directive_empty');
+  return text.trimEnd();
+}
+
+function agentTuiStartingDirectiveLaunchPacket({ resultIdentity, agentStartEventId, carrierSessionId, siteRoot, controlPath, text, createdAt }) {
+  const token = identityToken(`${carrierSessionId}_starting_directive`);
+  return {
+    schema: 'narada.agent_start.agent_tui.starting_directive.v0',
+    status: 'pending_control_jsonl_materialization',
+    source: 'operator_launch_argument',
+    source_kind: 'system',
+    source_id: 'agent-start.starting_directive',
+    transport: 'startup_injection',
+    delivery_mode: 'admit_for_current_turn',
+    control_path: controlPath,
+    control_event_id: `control_${token}`,
+    input_event_id: `input_${token}`,
+    directive_id: `directive_${token}`,
+    authority_ref: `agent_start_event:${agentStartEventId}`,
+    agent_id: resultIdentity,
+    carrier_session_id: carrierSessionId,
+    site_root: siteRoot,
+    created_at: createdAt,
+    text,
+  };
+}
+
+function agentTuiStartingDirectiveControlRecord(startingDirective) {
+  return {
+    schema: 'narada.carrier.control.input_event.v1',
+    control_event_id: startingDirective.control_event_id,
+    input_event_id: startingDirective.input_event_id,
+    written_at: startingDirective.created_at,
+    input: {
+      schema: 'narada.carrier.input_event.v1',
+      event_id: startingDirective.input_event_id,
+      source_kind: 'system',
+      source_id: startingDirective.source_id,
+      transport: 'startup_injection',
+      delivery_mode: 'admit_for_current_turn',
+      hold_condition: null,
+      content: startingDirective.text,
+      created_at: startingDirective.created_at,
+      authority_ref: startingDirective.authority_ref,
+      directive_id: startingDirective.directive_id,
+      metadata: {
+        agent_start_event_id: startingDirective.authority_ref.replace('agent_start_event:', ''),
+        carrier_session_id: startingDirective.carrier_session_id,
+        startup_injection: true,
+        directive_provenance: {
+          kind: 'operator_authorized_system_starting_directive',
+          authorized_by: 'operator_launch_argument',
+          emitted_by: 'agent-start',
+        },
+      },
+    },
+  };
+}
 function writeLaunchResult(result, siteRoot = defaultRootDir) {
   const outDir = join(siteRoot, '.narada', 'crew', 'agent-start-results');
   mkdirSync(outDir, { recursive: true });
@@ -1800,12 +1901,24 @@ function materializeAgentTuiLaunchFiles(result) {
   for (const path of [launch.control_path, launch.session_path]) {
     if (!existsSync(path)) writeFileSync(path, '', 'utf8');
   }
+  let startingDirective = null;
+  if (launch.starting_directive) {
+    const existingControl = readFileSync(launch.control_path, 'utf8');
+    if (existingControl.trim().length === 0) {
+      const controlRecord = agentTuiStartingDirectiveControlRecord(launch.starting_directive);
+      writeFileSync(launch.control_path, `${JSON.stringify(controlRecord)}\n`, 'utf8');
+      startingDirective = { status: 'written', control_event_id: controlRecord.control_event_id, input_event_id: controlRecord.input_event_id };
+    } else {
+      startingDirective = { status: 'preserved_existing_control_jsonl' };
+    }
+  }
   return {
     schema: 'narada.agent_start.agent_tui_launch_files.v0',
     status: 'materialized',
     session_dir: launch.session_dir,
     control_path: launch.control_path,
     session_path: launch.session_path,
+    starting_directive: startingDirective,
   };
 }
 

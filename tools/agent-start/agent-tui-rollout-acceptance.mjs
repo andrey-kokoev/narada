@@ -196,7 +196,7 @@ function validateEvidenceJson(path, expectedRuntime, expectedSiteRoot = null) {
       return { status: 'invalid_runtime_kind', reason: 'agent_tui_runtime_kind_required' };
     }
     if (isNaradaProperLaunchResult && record.agent_tui_launch?.admitted_runtime_slice !== AGENT_TUI_LAUNCH_SLICE_CONTRACT.admitted_runtime_slice) {
-      return { status: 'invalid_runtime_slice', reason: 'agent_tui_bounded_smoke_slice_required' };
+      return { status: 'invalid_runtime_slice', reason: 'agent_tui_terminal_interactive_loop_slice_required' };
     }
   }
   if (isNaradaProperLaunchResult) {

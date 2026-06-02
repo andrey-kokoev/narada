@@ -31,8 +31,8 @@ pub fn build_composer_view(input: &ComposerViewInput) -> ComposerViewModel {
         TurnState::Active => "Enter queues note".to_string(),
     };
     let interrupt_hint = match input.turn_state {
-        TurnState::Idle => "Esc clears draft".to_string(),
-        TurnState::Active => "Esc interrupts active turn".to_string(),
+        TurnState::Idle => "Esc interrupt".to_string(),
+        TurnState::Active => "Esc interrupt".to_string(),
     };
 
     ComposerViewModel {
@@ -82,7 +82,7 @@ mod tests {
 
         assert_eq!(model.prompt_label, "operator -> sonar.resident>");
         assert_eq!(model.submit_hint, "Enter submits turn");
-        assert_eq!(model.interrupt_hint, "Esc clears draft");
+        assert_eq!(model.interrupt_hint, "Esc interrupt");
         assert_eq!(model.draft_text, "run startup sequence");
         assert!(!model.draft_is_empty);
     }
@@ -93,7 +93,7 @@ mod tests {
 
         assert_eq!(model.prompt_label, "operator note -> sonar.resident>");
         assert_eq!(model.submit_hint, "Enter queues note");
-        assert_eq!(model.interrupt_hint, "Esc interrupts active turn");
+        assert_eq!(model.interrupt_hint, "Esc interrupt");
     }
 
     #[test]

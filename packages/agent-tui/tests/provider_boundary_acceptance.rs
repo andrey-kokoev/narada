@@ -1,11 +1,12 @@
 use narada_agent_tui::carrier_protocol::{
-    create_provider_request_payload, parse_input_event, parse_session_event, DeliveryMode,
-    SessionEventKind,
+    DeliveryMode, SessionEventKind, create_provider_request_payload, parse_input_event,
+    parse_session_event,
 };
 use narada_agent_tui::input_queue::{InputQueue, SessionEvidenceContext};
 use narada_agent_tui::provider_adapter_contract::provider_adapter_contract;
 use narada_agent_tui::provider_dispatch::{
-    ProviderAdapter, ProviderDispatchRecord, ProviderDispatchStatus, ProviderOutputRecord,
+    ProviderAdapter, ProviderCancellationToken, ProviderDispatchRecord, ProviderDispatchStatus,
+    ProviderOutputRecord,
 };
 use narada_agent_tui::transcript_store::TranscriptStore;
 use narada_agent_tui::turn_coordinator::{TurnCoordinator, TurnCoordinatorClock};
@@ -56,6 +57,7 @@ impl ProviderAdapter for StreamingProviderAdapter {
         &self,
         input: &narada_agent_tui::carrier_protocol::InputEvent,
         turn_id: &str,
+        _cancellation: &ProviderCancellationToken,
     ) -> ProviderDispatchRecord {
         ProviderDispatchRecord {
             status: ProviderDispatchStatus::Completed,

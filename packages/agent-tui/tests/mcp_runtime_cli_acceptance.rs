@@ -772,8 +772,10 @@ fn mcp_runtime_cli_acceptance_reports_refusal_for_ambiguous_tool_list_fields() {
 
     assert!(output.contains("mcp_status: refused"));
     assert!(output.contains("mcp_fabric_access_enabled: false"));
-    assert!(output
-        .contains("mcp_refusal: mcp_config_invalid:mcp_fabric_server_tool_list_ambiguous:site"));
+    assert!(
+        output
+            .contains("mcp_refusal: mcp_config_invalid:mcp_fabric_server_tool_list_ambiguous:site")
+    );
 }
 
 #[test]
@@ -833,7 +835,9 @@ fn mcp_runtime_cli_acceptance_reports_refusal_for_mcp_server_without_tools() {
 
     assert!(output.contains("mcp_status: refused"));
     assert!(output.contains("mcp_fabric_access_enabled: false"));
-    assert!(output.contains("mcp_refusal: mcp_config_invalid:mcp_fabric_server_tools_missing:site"));
+    assert!(
+        output.contains("mcp_refusal: mcp_config_invalid:mcp_fabric_server_tools_missing:site")
+    );
 }
 
 #[test]
@@ -893,8 +897,10 @@ fn mcp_runtime_cli_acceptance_reports_refusal_for_mcp_config_invalid_transport_s
 
     assert!(output.contains("mcp_status: refused"));
     assert!(output.contains("mcp_fabric_access_enabled: false"));
-    assert!(output
-        .contains("mcp_refusal: mcp_config_invalid:mcp_fabric_transport_unsupported:site:http"));
+    assert!(
+        output
+            .contains("mcp_refusal: mcp_config_invalid:mcp_fabric_transport_unsupported:site:http")
+    );
 }
 
 #[test]

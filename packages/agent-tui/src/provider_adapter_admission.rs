@@ -128,6 +128,14 @@ impl ProviderAdapterAdmission {
                     .filter(|value| !value.is_empty());
                 if let Some(adapter_kind) = adapter_kind {
                     match ProviderAdapterKind::parse(adapter_kind) {
+                        Ok(adapter_kind) if adapter_kind.execution_implemented() => Self {
+                            status: ProviderAdapterAdmissionStatus::Admitted,
+                            provider: runtime_config.provider.clone(),
+                            model: runtime_config.model.clone(),
+                            adapter_kind: Some(adapter_kind.as_str().to_string()),
+                            provider_execution_enabled: true,
+                            refusal_reason: None,
+                        },
                         Ok(adapter_kind) => Self {
                             status: ProviderAdapterAdmissionStatus::Refused,
                             provider: runtime_config.provider.clone(),
@@ -210,7 +218,7 @@ mod tests {
         let codex = ProviderAdapterKind::parse(&codex_input).expect("codex kind parses");
         assert_eq!(codex, ProviderAdapterKind::CodexSubscription);
         assert_eq!(codex.as_str(), production_provider_adapter_kind());
-        assert!(!codex.execution_implemented());
+        assert!(codex.execution_implemented());
         assert_eq!(
             ProviderAdapterKind::parse("unknown_adapter").unwrap_err(),
             "unknown_provider_adapter:unknown_adapter"
@@ -294,7 +302,7 @@ mod tests {
     }
 
     #[test]
-    fn configured_runtime_with_production_adapter_kind_refuses_until_adapter_is_implemented() {
+    fn configured_runtime_with_production_adapter_kind_is_admitted_when_implemented() {
         let runtime_config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
             ("execution_enabled", "true"),
             ("provider", admitted_provider()),
@@ -305,25 +313,19 @@ mod tests {
             Some(production_provider_adapter_kind()),
         );
 
-        assert_eq!(admission.status, ProviderAdapterAdmissionStatus::Refused);
-        assert_eq!(admission.status.as_str(), "refused");
-        assert!(!admission.provider_execution_enabled);
+        assert_eq!(admission.status, ProviderAdapterAdmissionStatus::Admitted);
+        assert_eq!(admission.status.as_str(), "admitted");
+        assert!(admission.provider_execution_enabled);
         assert_eq!(
             admission.adapter_kind.as_deref(),
             Some(production_provider_adapter_kind())
         );
-        let production_refusal = format!(
-            "provider_adapter_not_implemented:{}",
-            production_provider_adapter_kind()
-        );
-        assert_eq!(
-            admission.refusal_reason.as_deref(),
-            Some(production_refusal.as_str())
-        );
+        assert_eq!(admission.refusal_reason, None);
     }
 
     #[test]
-    fn admitted_adapter_requires_configured_runtime_and_enables_scripted_execution_only() {
+    fn admitted_adapter_requires_configured_runtime_and_enables_scripted_and_production_execution()
+    {
         let runtime_config = ProviderRuntimeConfig::from_env_map(&provider_runtime_env(&[
             ("execution_enabled", "true"),
             ("provider", admitted_provider()),
@@ -342,16 +344,19 @@ mod tests {
             Some(scripted_provider_adapter_kind())
         );
         assert_eq!(admission.refusal_reason, None);
+        let codex_admission = ProviderAdapterAdmission::try_admit(
+            &runtime_config,
+            ProviderAdapterKind::CodexSubscription,
+        )
+        .expect("configured runtime admits production codex adapter");
         assert_eq!(
-            ProviderAdapterAdmission::try_admit(
-                &runtime_config,
-                ProviderAdapterKind::CodexSubscription
-            )
-            .unwrap_err(),
-            format!(
-                "provider_adapter_not_implemented:{}",
-                production_provider_adapter_kind()
-            )
+            codex_admission.status,
+            ProviderAdapterAdmissionStatus::Admitted
+        );
+        assert!(codex_admission.provider_execution_enabled);
+        assert_eq!(
+            codex_admission.adapter_kind.as_deref(),
+            Some(production_provider_adapter_kind())
         );
         let disabled = ProviderRuntimeConfig::disabled();
         assert_eq!(

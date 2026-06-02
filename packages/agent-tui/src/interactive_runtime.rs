@@ -1,15 +1,18 @@
-use crate::app_view_model::{build_app_view, AppViewInput, AppViewModel};
+use crate::app_view_model::{AppViewInput, AppViewModel, build_app_view};
 use crate::composer_draft::ComposerDraftState;
 use crate::composer_view_model::ComposerViewInput;
-use crate::input_queue::SessionEvidenceContext;
+use crate::input_queue::{SessionEvidenceContext, TurnState, elapsed_label_between};
 use crate::layout_model::{LayoutConfig, TerminalSize};
 use crate::mcp_runtime_config::McpRuntimeConfig;
 use crate::provider_adapter_admission::ProviderAdapterAdmission;
 use crate::provider_dispatch::ProviderAdapter;
 use crate::provider_runtime_config::ProviderRuntimeConfig;
-use crate::runtime_coordinator::{RuntimeCoordinator, RuntimeCoordinatorClock};
-use crate::status_view_model::{RuntimePostureState, StatusViewInput};
+use crate::runtime_coordinator::{
+    RuntimeCoordinator, RuntimeCoordinatorClock, RuntimeOperatorSubmitResult,
+};
+use crate::status_view_model::{ProviderRuntimeState, RuntimePostureState, StatusViewInput};
 use crate::terminal_runtime_config::TerminalRuntimeConfig;
+use crate::transcript_projection::{TranscriptItem, TranscriptItemKind};
 use crate::transcript_store::{TranscriptIngestSummary, TranscriptStore};
 use crate::turn_coordinator::{
     NoopProviderToolCallExecutor, ProviderToolCallExecutor, TurnCoordinator, TurnCoordinatorClock,
@@ -191,6 +194,14 @@ impl AgentTuiInteractiveRuntime {
         &mut self.coordinator
     }
 
+    pub fn record_interrupt_and_cancel_active_turn(
+        &mut self,
+        clock: &RuntimeCoordinatorClock,
+    ) -> Result<bool, String> {
+        self.coordinator.record_composer_interrupt(clock)?;
+        Ok(self.turns.request_active_turn_cancel())
+    }
+
     pub fn run_step(
         &mut self,
         draft: &ComposerDraftState,
@@ -227,9 +238,65 @@ impl AgentTuiInteractiveRuntime {
         })
     }
 
+    pub fn run_background_step(
+        &mut self,
+        draft: &ComposerDraftState,
+        clock: &InteractiveStepClock,
+    ) -> Result<InteractiveStepResult, String> {
+        let composer_has_draft = !draft.text.trim().is_empty();
+        let poll = self
+            .coordinator
+            .poll_once(composer_has_draft, &clock.input)?;
+        let released_held = if composer_has_draft {
+            0
+        } else {
+            self.coordinator
+                .release_held_when_composer_clear(&clock.input)?
+        };
+        let completed_turn = self
+            .turns
+            .run_one_ready_turn_background_tick(self.coordinator.queue_mut(), &clock.turn)?
+            .map(|turn| CompletedTurnSummary {
+                turn_id: turn.turn_id,
+                input_event_id: turn.input_event_id,
+                evidence_written: turn.evidence_written,
+            });
+        let transcript = self
+            .transcript
+            .ingest_jsonl_file_summary(self.coordinator.session_jsonl_path())?;
+
+        Ok(InteractiveStepResult {
+            control_evidence_written: poll.evidence_written,
+            parse_errors: poll.parse_errors.len(),
+            released_held,
+            completed_turn,
+            transcript,
+        })
+    }
+
     pub fn ingest_transcript(&mut self) -> Result<TranscriptIngestSummary, String> {
         self.transcript
             .ingest_jsonl_file_summary(self.coordinator.session_jsonl_path())
+    }
+
+    pub fn clear_transcript_projection(&mut self) {
+        self.transcript.clear_projection();
+    }
+
+    pub fn apply_operator_submit_result(
+        &mut self,
+        result: &RuntimeOperatorSubmitResult,
+    ) -> Result<(), String> {
+        match result {
+            RuntimeOperatorSubmitResult::ModelChanged { value } => {
+                self.turns.set_provider_model(Some(value.clone()));
+            }
+            RuntimeOperatorSubmitResult::ThinkingChanged { value } => {
+                self.turns.set_provider_thinking(Some(value.clone()));
+            }
+            _ => {}
+        }
+        Ok(())
     }
 
     pub fn build_view(
@@ -238,6 +305,20 @@ impl AgentTuiInteractiveRuntime {
         draft: &ComposerDraftState,
         last_error: Option<String>,
     ) -> AppViewModel {
+        self.build_view_at(terminal_size, draft, last_error, None)
+    }
+
+    pub fn build_view_at(
+        &self,
+        terminal_size: TerminalSize,
+        draft: &ComposerDraftState,
+        last_error: Option<String>,
+        now: Option<&str>,
+    ) -> AppViewModel {
+        let mut runtime_posture = self.runtime_posture.clone();
+        if self.coordinator.queue().turn_state() == crate::input_queue::TurnState::Active {
+            runtime_posture.provider_state = ProviderRuntimeState::Working;
+        }
         build_app_view(&AppViewInput {
             terminal_size,
             layout_config: LayoutConfig::default(),
@@ -246,10 +327,22 @@ impl AgentTuiInteractiveRuntime {
                 identity: self.identity.clone(),
                 session: self.session.clone(),
                 turn_state: self.coordinator.queue().turn_state(),
+                active_phase: now.and_then(|now| {
+                    active_tool_call_phase(self.transcript.items(), now).or_else(|| {
+                        active_provider_phase(
+                            self.coordinator.queue().turn_state(),
+                            self.coordinator.queue().active_turn_age_label(now),
+                        )
+                    })
+                }),
+                active_turn_age: now
+                    .and_then(|now| self.coordinator.queue().active_turn_age_label(now)),
                 queued_inputs: self.coordinator.queue().queued_count(),
                 held_system_directives: self.coordinator.queue().held_count(),
+                oldest_held_age: now
+                    .and_then(|now| self.coordinator.queue().oldest_held_age_label(now)),
                 transcript_items: self.transcript.len(),
-                runtime_posture: self.runtime_posture.clone(),
+                runtime_posture,
                 last_error,
             },
             composer: ComposerViewInput {
@@ -261,6 +354,40 @@ impl AgentTuiInteractiveRuntime {
             },
         })
     }
+}
+
+fn active_tool_call_phase(items: &[TranscriptItem], now: &str) -> Option<String> {
+    let latest_tool_request = items.iter().rev().find(|item| {
+        matches!(
+            item.kind,
+            TranscriptItemKind::ProviderToolCallRequest | TranscriptItemKind::ToolResultReceived
+        )
+    })?;
+    if latest_tool_request.kind != TranscriptItemKind::ProviderToolCallRequest {
+        return None;
+    }
+    let tool_name = latest_tool_request.text.split('(').next()?.trim();
+    if tool_name.is_empty() {
+        return None;
+    }
+    let age = latest_tool_request
+        .occurred_at
+        .as_deref()
+        .and_then(|started_at| elapsed_label_between(started_at, now));
+    Some(match age {
+        Some(age) => format!("calling {tool_name} {age}"),
+        None => format!("calling {tool_name}"),
+    })
+}
+
+fn active_provider_phase(turn_state: TurnState, active_turn_age: Option<String>) -> Option<String> {
+    if turn_state != TurnState::Active {
+        return None;
+    }
+    Some(match active_turn_age {
+        Some(age) => format!("thinking {age}"),
+        None => "thinking".to_string(),
+    })
 }
 
 impl From<crate::runtime_step::RuntimeStepClock> for InteractiveStepClock {
@@ -276,10 +403,10 @@ impl From<crate::runtime_step::RuntimeStepClock> for InteractiveStepClock {
 mod tests {
     use super::*;
     use crate::carrier_protocol::{
-        parse_session_event, SessionEvent, SessionEventKind, SESSION_EVENT_SCHEMA,
+        SESSION_EVENT_SCHEMA, SessionEvent, SessionEventKind, parse_session_event,
     };
     use crate::mcp_runtime_config::{
-        mcp_config_env_var, mcp_fabric_env_var, site_mcp_fabric_env_var, McpRuntimeConfig,
+        McpRuntimeConfig, mcp_config_env_var, mcp_fabric_env_var, site_mcp_fabric_env_var,
     };
     use crate::provider_adapter_admission::ProviderAdapterKind;
     use crate::provider_adapter_contract::provider_adapter_contract;
@@ -290,7 +417,7 @@ mod tests {
     use crate::terminal_runtime_contract::terminal_runtime_contract;
     use serde_json::json;
     use std::collections::BTreeMap;
-    use std::fs::{read_to_string, remove_file, OpenOptions};
+    use std::fs::{OpenOptions, read_to_string, remove_file};
     use std::io::Write;
     use std::path::Path;
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -360,6 +487,66 @@ mod tests {
         ]));
         ScriptedProviderAdapter::try_new(runtime_config, ProviderAdapterKind::Scripted, outputs)
             .expect("scripted interactive provider admits configured runtime")
+    }
+
+    #[test]
+    fn slash_model_and_thinking_apply_to_later_provider_turn() {
+        let control_path = temp_path("control");
+        let session_path = temp_path("session");
+        append(&control_path, "");
+        let provider_adapter =
+            scripted_interactive_provider_adapter(vec![ProviderOutputRecord::text_delta(
+                "turn_1", "ack", 1,
+            )]);
+        let mut runtime = AgentTuiInteractiveRuntime::with_provider_adapter(
+            "sonar.resident",
+            "carrier_fixture_1",
+            &control_path,
+            &session_path,
+            context(),
+            Box::new(provider_adapter),
+        );
+        let clock = clock();
+
+        let model_result = runtime
+            .coordinator_mut()
+            .handle_operator_submit("/model gpt-5.5-mini".to_string(), &clock.input)
+            .expect("model command handled");
+        runtime
+            .apply_operator_submit_result(&model_result)
+            .expect("model command applied");
+        let thinking_result = runtime
+            .coordinator_mut()
+            .handle_operator_submit("/thinking high".to_string(), &clock.input)
+            .expect("thinking command handled");
+        runtime
+            .apply_operator_submit_result(&thinking_result)
+            .expect("thinking command applied");
+        runtime
+            .coordinator_mut()
+            .handle_operator_submit("run startup sequence".to_string(), &clock.input)
+            .expect("operator input admitted");
+
+        runtime
+            .run_step(&ComposerDraftState::default(), &clock)
+            .expect("interactive step succeeds")
+            .completed_turn
+            .expect("turn completed");
+
+        let session_jsonl = read_to_string(&session_path).expect("session jsonl exists");
+        let events = session_jsonl
+            .lines()
+            .map(|line| parse_session_event(line).expect("event parses"))
+            .collect::<Vec<_>>();
+        let provider_request = events
+            .iter()
+            .find(|event| event.event_kind == SessionEventKind::ProviderRequestRecorded)
+            .expect("provider request recorded");
+        assert_eq!(provider_request.payload["model"], "gpt-5.5-mini");
+        assert_eq!(provider_request.payload["thinking"], "high");
+
+        remove_file(control_path).ok();
+        remove_file(session_path).ok();
     }
 
     struct InteractiveToolExecutor;
@@ -486,6 +673,65 @@ mod tests {
     }
 
     #[test]
+    fn active_tool_call_phase_reports_latest_unresolved_tool_age() {
+        let items = vec![TranscriptItem {
+            kind: TranscriptItemKind::ProviderToolCallRequest,
+            actor: crate::transcript_projection::TranscriptActor::AgentTui,
+            turn_id: "turn_1".to_string(),
+            text: "site_loop_run_once({})".to_string(),
+            sequence: Some(1),
+            projection_key: None,
+            occurred_at: Some("2026-05-30T00:00:00.000Z".to_string()),
+        }];
+
+        assert_eq!(
+            active_tool_call_phase(&items, "2026-05-30T00:00:08.000Z"),
+            Some("calling site_loop_run_once 8s".to_string())
+        );
+    }
+
+    #[test]
+    fn active_provider_phase_reports_thinking_when_no_tool_call_is_active() {
+        assert_eq!(
+            active_provider_phase(TurnState::Active, Some("1m 47s".to_string())),
+            Some("thinking 1m 47s".to_string())
+        );
+        assert_eq!(
+            active_provider_phase(TurnState::Idle, Some("1m".to_string())),
+            None
+        );
+    }
+
+    #[test]
+    fn active_tool_call_phase_clears_after_tool_result() {
+        let items = vec![
+            TranscriptItem {
+                kind: TranscriptItemKind::ProviderToolCallRequest,
+                actor: crate::transcript_projection::TranscriptActor::AgentTui,
+                turn_id: "turn_1".to_string(),
+                text: "site_loop_run_once({})".to_string(),
+                sequence: Some(1),
+                projection_key: None,
+                occurred_at: Some("2026-05-30T00:00:00.000Z".to_string()),
+            },
+            TranscriptItem {
+                kind: TranscriptItemKind::ToolResultReceived,
+                actor: crate::transcript_projection::TranscriptActor::AgentTui,
+                turn_id: "turn_1".to_string(),
+                text: "ok site_loop_run_once in 8ms".to_string(),
+                sequence: None,
+                projection_key: None,
+                occurred_at: Some("2026-05-30T00:00:08.000Z".to_string()),
+            },
+        ];
+
+        assert_eq!(
+            active_tool_call_phase(&items, "2026-05-30T00:00:09.000Z"),
+            None
+        );
+    }
+
+    #[test]
     fn build_view_reports_configured_provider_mcp_and_terminal_state() {
         let control_path = temp_path("control");
         let session_path = temp_path("session");
@@ -546,9 +792,9 @@ mod tests {
             None,
         );
 
-        assert!(model.status.compact_line.contains("provider=configured"));
-        assert!(model.status.compact_line.contains("mcp=configured"));
-        assert!(model.status.compact_line.contains("terminal=configured"));
+        assert!(model.status.compact_line.contains("provider configured"));
+        assert!(model.status.compact_line.contains("mcp configured"));
+        assert!(model.status.compact_line.contains("terminal configured"));
 
         remove_file(control_path).ok();
         remove_file(session_path).ok();

@@ -4,11 +4,11 @@ use crate::textarea_composer::TextareaComposer;
 use crate::tui_render_loop::InteractiveTerminalFrame;
 use crossterm::execute;
 use crossterm::terminal::{
-    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+    EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
-use ratatui::backend::{Backend, CrosstermBackend};
 use ratatui::Terminal;
-use std::io::{stdout, Stdout};
+use ratatui::backend::{Backend, CrosstermBackend};
+use std::io::{Stdout, stdout};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TerminalLifecycleState {
@@ -253,7 +253,7 @@ impl Drop for TerminalSession {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app_view_model::{build_app_view, AppViewInput};
+    use crate::app_view_model::{AppViewInput, build_app_view};
     use crate::composer_draft::ComposerDraftState;
     use crate::composer_view_model::ComposerViewInput;
     use crate::input_queue::TurnState;
@@ -261,6 +261,7 @@ mod tests {
     use crate::status_view_model::{ProviderRuntimeState, RuntimePostureState, StatusViewInput};
     use crate::transcript_projection::{TranscriptActor, TranscriptItem, TranscriptItemKind};
     use ratatui::backend::TestBackend;
+    use ratatui::style::{Color, Modifier};
 
     fn buffer_text(buffer: &ratatui::buffer::Buffer) -> String {
         let area = buffer.area;
@@ -272,6 +273,33 @@ mod tests {
             output.push('\n');
         }
         output
+    }
+
+    fn find_text_position(buffer: &ratatui::buffer::Buffer, needle: &str) -> Option<(u16, u16)> {
+        let area = buffer.area;
+        for y in area.y..area.y + area.height {
+            let mut line = String::new();
+            for x in area.x..area.x + area.width {
+                line.push_str(buffer[(x, y)].symbol());
+            }
+            if let Some(index) = line.find(needle) {
+                let column = line[..index].chars().count() as u16;
+                return Some((area.x + column, y));
+            }
+        }
+        None
+    }
+
+    fn assert_cell_style(
+        buffer: &ratatui::buffer::Buffer,
+        x: u16,
+        y: u16,
+        fg: Color,
+        modifier: Modifier,
+    ) {
+        let cell = &buffer[(x, y)];
+        assert_eq!(cell.fg, fg);
+        assert!(cell.modifier.contains(modifier));
     }
 
     #[test]
@@ -346,13 +374,17 @@ mod tests {
                 text: "working".to_string(),
                 sequence: None,
                 projection_key: None,
+                occurred_at: Some("2026-05-30T00:00:00.000Z".to_string()),
             }],
             status: StatusViewInput {
                 identity: "sonar.resident".to_string(),
                 session: "carrier_1".to_string(),
                 turn_state: TurnState::Active,
+                active_phase: None,
+                active_turn_age: Some("1m 12s".to_string()),
                 queued_inputs: 1,
                 held_system_directives: 0,
+                oldest_held_age: None,
                 transcript_items: 1,
                 runtime_posture: RuntimePostureState {
                     provider_state: ProviderRuntimeState::Working,
@@ -384,10 +416,132 @@ mod tests {
 
         let text = buffer_text(terminal.backend().buffer());
         assert!(text.contains("Transcript"));
-        assert!(text.contains("Composer: operator note -> sonar.resident>"));
+        assert!(text.contains("operator note -> sonar.resident>"));
+        assert!(!text.contains("Composer:"));
         assert!(text.contains("live steering note"));
-        assert!(text.contains("turn=active"));
+        assert!(text.contains("thinking"));
         assert!(!text.contains("stale snapshot"));
+    }
+
+    #[test]
+    fn lifecycle_harness_preserves_polished_transcript_styles_through_terminal_draw() {
+        let model = build_app_view(&AppViewInput {
+            terminal_size: TerminalSize {
+                width: 120,
+                height: 16,
+            },
+            layout_config: LayoutConfig::default(),
+            transcript_items: vec![
+                TranscriptItem {
+                    kind: TranscriptItemKind::InputAdmitted,
+                    actor: TranscriptActor::Operator,
+                    turn_id: "turn_1".to_string(),
+                    text: "run startup sequence".to_string(),
+                    sequence: None,
+                    projection_key: None,
+                    occurred_at: Some("2026-05-30T00:00:00.000Z".to_string()),
+                },
+                TranscriptItem {
+                    kind: TranscriptItemKind::ToolResultReceived,
+                    actor: TranscriptActor::AgentTui,
+                    turn_id: "turn_1".to_string(),
+                    text: "ok site_loop_run_once in 12ms".to_string(),
+                    sequence: None,
+                    projection_key: None,
+                    occurred_at: Some("2026-05-30T00:00:01.000Z".to_string()),
+                },
+            ],
+            status: StatusViewInput {
+                identity: "sonar.resident".to_string(),
+                session: "carrier_1".to_string(),
+                turn_state: TurnState::Idle,
+                active_phase: None,
+                active_turn_age: None,
+                queued_inputs: 0,
+                held_system_directives: 0,
+                oldest_held_age: None,
+                transcript_items: 2,
+                runtime_posture: RuntimePostureState::disabled(),
+                last_error: None,
+            },
+            composer: ComposerViewInput {
+                identity: "sonar.resident".to_string(),
+                draft_text: String::new(),
+                turn_state: TurnState::Idle,
+                queued_operator_notes: 0,
+                held_system_directives: 0,
+            },
+        });
+        let composer = TextareaComposer::from_draft(&ComposerDraftState {
+            text: "operator draft".to_string(),
+        });
+        let backend = TestBackend::new(120, 16);
+        let terminal = Terminal::new(backend).expect("test terminal creates");
+        let mut harness = TerminalLifecycleHarness::enter_from_terminal(terminal)
+            .expect("harness enters terminal lifecycle");
+
+        harness
+            .draw_once_with_composer(&model, &composer)
+            .expect("harness draws polished frame");
+
+        let buffer = harness.backend().buffer();
+        let text = buffer_text(buffer);
+        assert!(text.contains("operator -> sonar.resident: run startup sequence"));
+        assert!(!text.contains("operator -> sonar.resident:\n  run startup sequence"));
+        assert!(text.contains(
+            "agent-tui -> sonar.resident: ok site_loop_run_once in 12ms  2026-05-30Z00:00"
+        ));
+        assert!(text.contains("operator -> sonar.resident>"));
+        assert!(text.contains("operator draft"));
+
+        let (operator_x, operator_y) = find_text_position(buffer, "operator -> sonar.resident:")
+            .expect("operator transcript label is visible");
+        let (agent_tui_x, agent_tui_y) = find_text_position(buffer, "agent-tui -> sonar.resident:")
+            .expect("tool result label is visible");
+        let (result_x, _) = find_text_position(buffer, "ok site_loop_run_once in 12ms")
+            .expect("tool result body is visible");
+        let tool_line_prefix = "agent-tui -> sonar.resident: ok site_loop_run_once in 12ms  ";
+        let (tool_line_x, timestamp_y) = find_text_position(
+            buffer,
+            "agent-tui -> sonar.resident: ok site_loop_run_once in 12ms  2026-05-30Z00:00",
+        )
+        .expect("inline tool timestamp is visible on tool result row");
+        let timestamp_x = tool_line_x + tool_line_prefix.chars().count() as u16;
+        let (composer_x, composer_y) = find_text_position(buffer, "operator -> sonar.resident>")
+            .expect("composer prompt is visible");
+        let agent_target_x = operator_x + "operator -> ".chars().count() as u16;
+        let tool_target_x = agent_tui_x + "agent-tui -> ".chars().count() as u16;
+        let timestamp_time_x = timestamp_x + "2026-05-30Z".chars().count() as u16;
+
+        assert_cell_style(buffer, operator_x, operator_y, Color::Green, Modifier::BOLD);
+        assert_cell_style(
+            buffer,
+            agent_target_x,
+            operator_y,
+            Color::Cyan,
+            Modifier::BOLD,
+        );
+        assert_cell_style(
+            buffer,
+            agent_tui_x,
+            agent_tui_y,
+            Color::Magenta,
+            Modifier::BOLD,
+        );
+        assert_cell_style(
+            buffer,
+            tool_target_x,
+            agent_tui_y,
+            Color::Cyan,
+            Modifier::BOLD,
+        );
+        assert_eq!(buffer[(result_x, agent_tui_y)].fg, Color::Green);
+        assert_eq!(timestamp_y, agent_tui_y);
+        assert_eq!(buffer[(timestamp_x, timestamp_y)].fg, Color::DarkGray);
+        assert_eq!(buffer[(timestamp_time_x, timestamp_y)].fg, Color::Gray);
+        assert_cell_style(buffer, composer_x, composer_y, Color::Green, Modifier::BOLD);
+
+        harness.leave().expect("harness leaves cleanly");
     }
 
     fn draw_through_terminal_frame_contract<T: InteractiveTerminalFrame>(
@@ -420,7 +574,8 @@ mod tests {
 
         let text = buffer_text(harness.backend().buffer());
         assert!(text.contains("live harness note"));
-        assert!(text.contains("Composer: operator note -> sonar.resident>"));
+        assert!(text.contains("operator note -> sonar.resident>"));
+        assert!(!text.contains("Composer:"));
 
         harness.leave().expect("harness leaves cleanly");
     }
@@ -451,7 +606,8 @@ mod tests {
         );
         let text = buffer_text(harness.backend().buffer());
         assert!(text.contains("contract note"));
-        assert!(text.contains("Composer: operator note -> sonar.resident>"));
+        assert!(text.contains("operator note -> sonar.resident>"));
+        assert!(!text.contains("Composer:"));
 
         harness.leave().expect("harness leaves cleanly");
     }

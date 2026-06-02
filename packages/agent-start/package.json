@@ -1,0 +1,19 @@
+{
+  "name": "@narada2/agent-start",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "narada-agent-start": "./bin/narada-agent-start.mjs",
+    "narada-agent-start-verify-launchers": "./bin/verify-registered-site-launchers.mjs"
+  },
+  "exports": {
+    ".": "./bin/narada-agent-start.mjs",
+    "./verify-registered-site-launchers": "./bin/verify-registered-site-launchers.mjs",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --check bin/narada-agent-start.mjs && node --check bin/verify-registered-site-launchers.mjs",
+    "verify": "node bin/verify-registered-site-launchers.mjs"
+  }
+}

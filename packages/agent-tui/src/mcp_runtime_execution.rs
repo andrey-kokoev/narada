@@ -1,8 +1,8 @@
-use crate::carrier_protocol::{SessionEvent, SessionEventKind, SESSION_EVENT_SCHEMA};
+use crate::carrier_protocol::{SESSION_EVENT_SCHEMA, SessionEvent, SessionEventKind};
 use crate::input_queue::SessionEvidenceContext;
 use crate::mcp_fabric_transport::McpFabricPreparedToolCall;
 use crate::mcp_process_supervisor::{
-    recovery_diagnostic_event, refuse_call_until_ready, McpProcessSupervisorState,
+    McpProcessSupervisorState, recovery_diagnostic_event, refuse_call_until_ready,
 };
 use crate::mcp_runtime_config::McpRuntimeConfig;
 use crate::mcp_stdio_process::McpStdioProcessIoResult;
@@ -11,7 +11,7 @@ use serde_json::json;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-pub trait McpRuntimeToolExecutor {
+pub trait McpRuntimeToolExecutor: Send {
     fn execute_tool_call(
         &mut self,
         prepared: &McpFabricPreparedToolCall,
@@ -174,6 +174,7 @@ impl<E: McpRuntimeToolExecutor> McpRuntimeExecutionBridge<E> {
             payload: json!({
                 "server_name": io_result.server_name,
                 "tool_name": io_result.tool_result.tool_name,
+                "turn_id": io_result.request_turn_id,
                 "status": io_result.tool_result.status,
                 "duration_ms": io_result.tool_result.duration_ms,
                 "result_summary": io_result.tool_result.result_summary,
@@ -203,7 +204,7 @@ impl<E: McpRuntimeToolExecutor> McpRuntimeExecutionBridge<E> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::carrier_protocol::{parse_session_event, SessionEventKind, SESSION_EVENT_SCHEMA};
+    use crate::carrier_protocol::{SESSION_EVENT_SCHEMA, SessionEventKind, parse_session_event};
     use crate::mcp_fabric_boundary::McpToolResult;
     use crate::mcp_fabric_transport::McpFabricPreparedToolCall;
     use crate::mcp_json_rpc::McpJsonRpcExchange;
@@ -297,6 +298,12 @@ mod tests {
         ) -> Result<McpStdioProcessIoResult, String> {
             Ok(McpStdioProcessIoResult {
                 server_name: prepared.server_name.clone(),
+                request_turn_id: prepared
+                    .request_event
+                    .payload
+                    .get("turn_id")
+                    .and_then(|value| value.as_str())
+                    .map(ToString::to_string),
                 tool_result: McpToolResult {
                     tool_name: prepared.tool_name.clone(),
                     status: "ok".to_string(),

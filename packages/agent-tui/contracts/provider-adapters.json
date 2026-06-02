@@ -13,5 +13,5 @@
   ],
   "scripted_provider_adapter_kind": "scripted_provider_adapter",
   "production_provider_adapter_kind": "codex_subscription_adapter",
-  "production_provider_adapter_implemented": false
+  "production_provider_adapter_implemented": true
 }

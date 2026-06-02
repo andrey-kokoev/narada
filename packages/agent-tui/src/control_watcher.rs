@@ -1,4 +1,4 @@
-use crate::control_jsonl::{parse_control_jsonl, ControlJsonlEntry, ControlJsonlError};
+use crate::control_jsonl::{ControlJsonlEntry, ControlJsonlError, parse_control_jsonl};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
@@ -122,7 +122,7 @@ pub fn poll_control_jsonl_path(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::{remove_file, OpenOptions};
+    use std::fs::{OpenOptions, remove_file};
     use std::io::Write;
     use std::time::{SystemTime, UNIX_EPOCH};
 

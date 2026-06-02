@@ -75,7 +75,7 @@ pub fn parse_provider_adapter_contract(json: &str) -> Result<ProviderAdapterCont
             "provider_adapter_contract_invalid:production_provider_adapter_kind".to_string(),
         );
     }
-    if contract.production_provider_adapter_implemented {
+    if !contract.production_provider_adapter_implemented {
         return Err(
             "provider_adapter_contract_invalid:production_provider_adapter_implemented".to_string(),
         );
@@ -121,7 +121,7 @@ mod tests {
             contract.production_provider_adapter_kind,
             EXPECTED_PRODUCTION_PROVIDER_ADAPTER_KIND
         );
-        assert!(!contract.production_provider_adapter_implemented);
+        assert!(contract.production_provider_adapter_implemented);
     }
 
     #[test]
@@ -139,7 +139,7 @@ mod tests {
         );
         assert_eq!(
             parse_provider_adapter_contract(&invalid_contract_json(|contract| {
-                contract.production_provider_adapter_implemented = true;
+                contract.production_provider_adapter_implemented = false;
             }))
             .unwrap_err(),
             "provider_adapter_contract_invalid:production_provider_adapter_implemented"

@@ -1,4 +1,4 @@
-use crate::carrier_protocol::{serialize_session_event, SessionEvent};
+use crate::carrier_protocol::{SessionEvent, serialize_session_event};
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::Path;

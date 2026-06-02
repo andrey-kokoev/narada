@@ -66,7 +66,7 @@ test('agent-tui provider adapter contract parser rejects invalid contracts', () 
     () => parseAgentTuiProviderAdapterContract(invalidContractJson(
       AGENT_TUI_PROVIDER_ADAPTER_CONTRACT,
       (contract) => {
-        contract.production_provider_adapter_implemented = true;
+        contract.production_provider_adapter_implemented = false;
       },
     )),
     /provider_adapter_contract_invalid:production_provider_adapter_implemented/,
@@ -123,7 +123,7 @@ test('agent-tui launch slice contract parser rejects invalid contracts', () => {
     () => parseAgentTuiLaunchSliceContract(invalidContractJson(
       AGENT_TUI_LAUNCH_SLICE_CONTRACT,
       (contract) => {
-        contract.admitted_runtime_slice = 'terminal_interactive_loop';
+        contract.admitted_runtime_slice = 'bounded_non_terminal_interactive_step_once';
       },
     )),
     /launch_slice_contract_invalid:admitted_runtime_slice/,
@@ -456,7 +456,7 @@ test('legacy nars runtime input canonicalizes to agent-runtime-server', () => {
   assert.equal(result.agent_runtime_server_launch.transport, 'jsonl_stdio');
 });
 
-test('agent-tui launch reports bounded non-terminal interactive smoke step', () => {
+test('agent-tui launch defaults to admitted terminal interactive loop', () => {
   const siteRoot = tempSite();
   const pcSiteRoot = tempPcSite();
   const { result } = buildLaunchPlanFromArgs({
@@ -469,168 +469,43 @@ test('agent-tui launch reports bounded non-terminal interactive smoke step', () 
   assert.equal(result.runtime, 'agent-tui');
   assert.equal(result.runtime_kind, 'agent_tui_carrier');
   assert.equal(result.runtime_substrate_kind, 'agent-tui');
-  assert.equal(result.transport, 'control_jsonl_session_jsonl');
+  assert.equal(result.transport, 'interactive_terminal_control_jsonl_session_jsonl');
   assert.equal(result.tool_fabric_adapter_kind, AGENT_TUI_LAUNCH_SLICE_CONTRACT.tool_fabric_adapter_kind);
-  assert.equal(result.capability_policy.smoke_step, AGENT_TUI_LAUNCH_SLICE_CONTRACT.capability_policy_smoke_step);
+  assert.equal(result.capability_policy.terminal_session, AGENT_TUI_LAUNCH_SLICE_CONTRACT.capability_policy_terminal_session);
   assert.equal(result.planned_environment.NARADA_AGENT_TUI_SESSION_DIR, result.agent_tui_session_dir);
   assert.equal(result.planned_environment[AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.provider_execution_env_var], 'false');
   assert.equal(result.planned_environment[AGENT_TUI_MCP_RUNTIME_CONTRACT.mcp_fabric_env_var], 'false');
-  assert.equal(result.planned_environment[AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_rendering_env_var], 'false');
-  assert.equal(result.agent_tui_session_dir.includes(`${path.sep}.narada${path.sep}crew${path.sep}nars-sessions${path.sep}`), true);
+  assert.equal(result.planned_environment[AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_rendering_env_var], 'yes');
+  assert.equal(result.planned_environment[AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_mode_env_var], AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.required_terminal_mode);
   assert.equal(result.agent_tui_launch.schema, 'narada.agent_start.agent_tui.v0');
-  assert.equal(result.agent_tui_launch.transport, 'control_jsonl_session_jsonl');
+  assert.equal(result.agent_tui_launch.transport, 'interactive_terminal_control_jsonl_session_jsonl');
+  assert.equal(result.agent_tui_launch.carrier_relation, 'terminal_agent_tui_interactive_loop');
   assert.equal(result.agent_tui_launch.session_dir, result.agent_tui_session_dir);
   assert.equal(result.agent_tui_launch.session_path, path.join(result.agent_tui_session_dir, 'session.jsonl'));
   assert.equal(result.agent_tui_launch.control_path, path.join(result.agent_tui_session_dir, 'control.jsonl'));
+  assert.equal(result.agent_tui_launch.starting_directive, null);
   assert.equal(result.agent_tui_launch.admitted_runtime_slice, AGENT_TUI_LAUNCH_SLICE_CONTRACT.admitted_runtime_slice);
-  assert.equal(result.agent_tui_launch.rust_toolchain_readiness.schema, 'narada.agent_tui.rust_toolchain_readiness.command.v0');
-  assert.equal(result.agent_tui_launch.rust_toolchain_readiness.status, 'operator_preflight_available');
-  assert.equal(result.agent_tui_launch.rust_toolchain_readiness.command, 'node');
-  assert.deepEqual(result.agent_tui_launch.rust_toolchain_readiness.argv, [
-    path.join(siteRoot, 'tools', 'agent-start', 'check-agent-tui-rust-toolchain.mjs'),
-  ]);
-  assert.equal(result.agent_tui_launch.rust_toolchain_readiness.working_directory, siteRoot);
-  assert.equal(result.agent_tui_launch.rust_toolchain_readiness.expected_blocker, 'missing_msvc_link_exe_or_windows_sdk_lib_not_loaded');
-  assert.equal(result.agent_tui_launch.rust_toolchain_readiness.success_exit_code, 0);
-  assert.equal(result.agent_tui_launch.rust_toolchain_readiness.blocked_exit_code, 1);
-  assert.equal(result.agent_tui_launch.smoke_step.terminal_mode, AGENT_TUI_LAUNCH_SLICE_CONTRACT.terminal_mode);
+  assert.equal(result.agent_tui_launch.smoke_step, null);
   assert.equal(result.agent_tui_launch.interactive_loop.mode, 'interactive_loop');
-  assert.equal(result.agent_tui_launch.interactive_loop.admitted, false);
-  assert.equal(result.agent_tui_launch.interactive_loop.required_flag, '--interactive-loop');
-  assert.deepEqual(result.agent_tui_launch.interactive_loop.environment_gate, {
-    variable: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_rendering_env_var,
-    value: 'false',
-    mode_variable: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_mode_env_var,
-    required_mode: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.required_terminal_mode,
-    operator_override_admitted: false,
-  });
-  assert.equal(result.agent_tui_launch.interactive_loop.promotion_gate, 'agent_tui_terminal_interactive_loop_promotion_gate');
-  assert.equal(result.agent_tui_launch.promotion_gate.status, 'not_satisfied');
-  assert.deepEqual(result.agent_tui_launch.promotion_gate.checklist.map((item) => item.id), [
-    'rust_tests_available',
-    'terminal_interactive_loop_acceptance',
-    'carrier_command_acceptance',
-    'rendering_diagnostic_boundary_acceptance',
-    'payload_reference_policy_acceptance',
-    'provider_adapter_admission',
-    'mcp_fabric_client_admission',
-    'site_rollout_acceptance',
-    'launch_metadata_runtime_slice',
-  ]);
-  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'rust_tests_available').status, 'partial');
-  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'terminal_interactive_loop_acceptance').status, 'partial');
-  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'carrier_command_acceptance').status, 'satisfied');
-  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'rendering_diagnostic_boundary_acceptance').status, 'satisfied');
-  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'payload_reference_policy_acceptance').status, 'satisfied');
-  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'provider_adapter_admission').status, 'partial');
-  assert.match(
-    result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'provider_adapter_admission').current_evidence,
-    new RegExp(AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.scripted_provider_adapter_kind),
-  );
-  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'site_rollout_acceptance').status, 'satisfied');
-  assert.match(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'site_rollout_acceptance').current_evidence, /All launcher-registry Sites/);
-  assert.match(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'rendering_diagnostic_boundary_acceptance').source_contract, /rendering contract/);
-  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'launch_metadata_runtime_slice').status, 'satisfied');
-  assert.match(result.agent_tui_launch.promotion_gate.reason, /bounded non-terminal smoke/);
-  assert.match(result.agent_tui_launch.promotion_gate.reason, /Rust tests/);
-  assert.match(result.agent_tui_launch.promotion_gate.reason, /explicit terminal-mode promotion/);
-  assert.equal(result.agent_tui_launch.terminal_rendering.status, 'not_admitted_for_runtime_slice');
-  assert.equal(result.agent_tui_launch.terminal_rendering.admitted, false);
-  assert.deepEqual(result.agent_tui_launch.terminal_rendering.gated_modes, ['--render-once', '--interactive-loop']);
-  assert.deepEqual(result.agent_tui_launch.terminal_rendering.environment_gate, {
-    variable: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_rendering_env_var,
-    value: 'false',
-    mode_variable: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_mode_env_var,
-    required_mode: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.required_terminal_mode,
-    operator_override_admitted: false,
-  });
-  assert.deepEqual(result.agent_tui_launch.terminal_rendering.required_before_admission, [
-    'provider_adapter_admission',
-    'mcp_fabric_client_admission',
-    'explicit_terminal_mode_promotion',
-  ]);
-  assert.match(result.agent_tui_launch.terminal_rendering.current_evidence, /live composer/);
-  assert.match(result.agent_tui_launch.terminal_rendering.reason, /without alternate screen/);
-  assert.equal(result.agent_tui_launch.terminal_rendering.promotion_gate, 'agent_tui_terminal_rendering_promotion_gate');
+  assert.equal(result.agent_tui_launch.interactive_loop.admitted, true);
+  assert.equal(result.agent_tui_launch.interactive_loop.max_steps, 100000);
+  assert.equal(result.agent_tui_launch.terminal_rendering.status, 'admitted_for_explicit_terminal_loop');
+  assert.equal(result.agent_tui_launch.terminal_rendering.admitted, true);
+  assert.equal(result.agent_tui_launch.tui_rendering_enabled, true);
   assert.equal(result.agent_tui_launch.provider_execution_enabled, false);
-  assert.equal(result.agent_tui_launch.provider_execution.status, 'not_admitted_for_runtime_slice');
-  assert.equal(result.agent_tui_launch.provider_execution.adapter_contract, 'implemented_but_not_admitted_for_production_runtime_slice');
-  assert.equal(result.agent_tui_launch.provider_execution.dispatch_authority, 'withheld');
-  assert.deepEqual(result.agent_tui_launch.provider_execution.environment_gate, {
-    variable: AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.provider_execution_env_var,
-    value: 'false',
-    operator_override_admitted: false,
-  });
-  assert.equal(result.agent_tui_launch.provider_execution.promotion_gate, 'agent_tui_provider_adapter_promotion_gate');
-  assert.equal(result.agent_tui_launch.provider_execution.scripted_provider_adapter_kind, AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.scripted_provider_adapter_kind);
-  assert.equal(result.agent_tui_launch.provider_execution.production_provider_adapter_kind, AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.production_provider_adapter_kind);
-  assert.equal(result.agent_tui_launch.provider_execution.production_provider_adapter_implemented, false);
-  assert.match(result.agent_tui_launch.provider_execution.current_evidence, /provider-adapters.json/);
-  assert.match(result.agent_tui_launch.provider_execution.current_evidence, /streaming contract status/);
-  assert.match(result.agent_tui_launch.provider_execution.current_evidence, /provider adapter factory/);
-  assert.deepEqual(result.agent_tui_launch.provider_execution.required_before_admission, [
-    'production_provider_adapter_implementation_and_admission',
-    'provider_boundary_evidence_contract',
-    'streaming_turn_output_contract',
-    'tool_call_boundary_contract',
-  ]);
-  assert.match(result.agent_tui_launch.provider_execution.reason, /without dispatching provider work/);
   assert.equal(result.agent_tui_launch.mcp_fabric_access_enabled, false);
-  assert.equal(result.agent_tui_launch.mcp_fabric_access.status, 'not_admitted_for_runtime_slice');
-  assert.equal(result.agent_tui_launch.mcp_fabric_access.client_contract, 'implemented_but_not_admitted_for_production_runtime_slice');
-  assert.equal(result.agent_tui_launch.mcp_fabric_access.tool_visibility_authority, 'withheld');
-  assert.deepEqual(result.agent_tui_launch.mcp_fabric_access.environment_gate, {
-    variable: AGENT_TUI_MCP_RUNTIME_CONTRACT.mcp_fabric_env_var,
-    value: 'false',
-    operator_override_admitted: false,
-  });
-  assert.equal(result.agent_tui_launch.mcp_fabric_access.promotion_gate, 'agent_tui_rust_mcp_fabric_client_promotion_gate');
-  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'mcp_fabric_client_admission').status, 'partial');
-  assert.match(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'mcp_fabric_client_admission').current_evidence, /runtime-config executor construction/);
-  assert.deepEqual(result.agent_tui_launch.mcp_fabric_access.required_before_admission, [
-    'production_site_mcp_exposure_admission',
-    'site_mcp_policy_visibility_contract',
-    'tool_call_request_response_contract',
-    'tool_call_evidence_contract',
-  ]);
-  assert.equal(result.agent_tui_launch.mcp_fabric_access.site_mcp_fabric, path.join(siteRoot, '.ai', 'mcp'));
-  assert.equal(result.agent_tui_launch.mcp_fabric_access.mcp_config_path_policy, AGENT_TUI_MCP_RUNTIME_CONTRACT.mcp_config_path_policy);
-  assert.match(result.agent_tui_launch.mcp_fabric_access.current_evidence, /config path containment without parent traversal/);
-  assert.match(result.agent_tui_launch.mcp_fabric_access.current_evidence, /runtime-config executor construction/);
-  assert.match(result.agent_tui_launch.mcp_fabric_access.reason, /withholds Site MCP tool exposure/);
-  assert.equal(result.agent_tui_launch.site_rollout_acceptance.schema, 'narada.agent_tui.site_rollout_acceptance.v0');
-  assert.equal(result.agent_tui_launch.site_rollout_acceptance.status, 'defined_not_executed');
-  assert.equal(result.agent_tui_launch.site_rollout_acceptance.default_promotion_allowed, false);
-  assert.deepEqual(result.agent_tui_launch.site_rollout_acceptance.known_sites.map((site) => site.site_id), [
-    'narada-proper',
-    'narada-andrey',
-    'narada-staccato',
-    'narada-revolution',
-    'narada-timour-marketing-agent',
-    'narada-utz',
-    'narada-sonar',
-    'smart-scheduling',
-    'thoughts-project',
-  ]);
-  assert.equal(result.agent_tui_launch.site_rollout_acceptance.known_sites[0].launch_root, siteRoot);
-  assert.ok(result.agent_tui_launch.site_rollout_acceptance.required_common_evidence.includes('agent-cli baseline launch result'));
-  assert.ok(result.agent_tui_launch.site_rollout_acceptance.not_admitted_until.includes('agent-tui remains non-default while any known Site is pending or blocked'));
-  assert.equal(result.runtime_args[0], 'run');
-  assert.equal(result.runtime_args.includes('--manifest-path'), true);
-  assert.equal(result.runtime_args.includes(path.join(siteRoot, 'packages', 'agent-tui', 'Cargo.toml')), true);
-  assert.equal(result.runtime_args.includes(AGENT_TUI_LAUNCH_SLICE_CONTRACT.carrier_flag), true);
-  assert.equal(result.runtime_args.includes('--interactive-smoke-loop'), false);
-  assert.equal(result.runtime_args.includes('--persistent-smoke-session'), false);
-  assert.equal(result.runtime_args.includes('--runtime-loop'), false);
-  assert.equal(result.runtime_args.includes('--max-steps'), false);
-  assert.equal(result.runtime_args.includes('1'), false);
-  assert.equal(result.runtime_args.includes(result.agent_tui_launch.control_path), true);
-  assert.equal(result.runtime_args.includes('--session-jsonl'), true);
-  assert.equal(result.runtime_args.includes(result.agent_tui_launch.session_path), true);
+  assert.equal(result.agent_tui_launch.promotion_gate.status, 'terminal_rendering_admitted');
+  assert.equal(result.agent_tui_launch.promotion_gate.checklist.find((item) => item.id === 'terminal_interactive_loop_acceptance').status, 'satisfied');
+  assert.match(result.agent_tui_launch.promotion_gate.reason, /terminal interactive-loop slice by default/);
+  assert.equal(result.agent_tui_launch.site_rollout_acceptance.default_promotion_allowed, true);
+  assert.equal(result.runtime_args.includes('--interactive-loop'), true);
+  assert.equal(result.runtime_args.includes('--max-steps'), true);
+  assert.equal(result.runtime_args.includes('100000'), true);
+  assert.equal(result.runtime_args.includes('--interactive-step-once'), false);
   assert.match(result.exec_command, /^cargo run /);
   assert.equal(result.native_execution_policy.native_shell.status, 'not_admitted_for_runtime_slice');
-  assert.equal(result.native_execution_policy.policy_aware_shell_mcp.status, 'not_admitted_for_runtime_slice');
-  assert.match(result.mcp_tool_approval.note, /bounded non-terminal smoke step/);
+  assert.equal(result.native_execution_policy.policy_aware_shell_mcp.status, 'site_fabric_only_when_admitted');
+  assert.match(result.mcp_tool_approval.note, /terminal interactive-loop rendering/);
 });
 
 test('agent-tui explicit terminal loop launch admits terminal rendering only', () => {
@@ -655,19 +530,49 @@ test('agent-tui explicit terminal loop launch admits terminal rendering only', (
   assert.equal(result.agent_tui_launch.terminal_rendering.admitted, true);
   assert.deepEqual(result.agent_tui_launch.terminal_rendering.environment_gate, {
     variable: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_rendering_env_var,
-    value: 'true',
+    value: 'yes',
     mode_variable: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_mode_env_var,
     required_mode: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.required_terminal_mode,
     mode_value: AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.required_terminal_mode,
     operator_override_admitted: true,
   });
-  assert.equal(result.planned_environment[AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_rendering_env_var], 'true');
+  assert.equal(result.planned_environment[AGENT_TUI_TERMINAL_RUNTIME_CONTRACT.terminal_rendering_env_var], 'yes');
   assert.equal(result.runtime_args.includes('--interactive-loop'), true);
   assert.equal(result.runtime_args.includes('--max-steps'), true);
   assert.equal(result.runtime_args.includes('17'), true);
-  assert.equal(result.runtime_args.includes(AGENT_TUI_LAUNCH_SLICE_CONTRACT.carrier_flag), false);
+  assert.equal(result.runtime_args.includes('--interactive-step-once'), false);
   assert.match(result.mcp_tool_approval.note, /terminal interactive-loop rendering/);
 });
+
+test('agent-tui governed session flags admit provider and MCP fabric explicitly', () => {
+  const siteRoot = tempSite();
+  const pcSiteRoot = tempPcSite();
+  const { result } = buildLaunchPlanFromArgs({
+    identity: 'narada.resident',
+    runtime: 'agent-tui',
+    exec: true,
+    dry_run: true,
+    agent_tui_interactive_loop: true,
+    agent_tui_provider_execution: true,
+    agent_tui_mcp_fabric: true,
+    agent_tui_max_steps: 23,
+  }, { siteRoot, pcSiteRoot, now: '2026-05-30T12:04:45.000Z' });
+
+  assert.equal(result.agent_tui_launch.provider_execution_enabled, true);
+  assert.equal(result.agent_tui_launch.provider_execution.status, 'admitted_by_explicit_governed_session_flag');
+  assert.equal(result.agent_tui_launch.provider_execution.dispatch_authority, 'explicitly_admitted');
+  assert.equal(result.agent_tui_launch.mcp_fabric_access_enabled, true);
+  assert.equal(result.agent_tui_launch.mcp_fabric_access.status, 'admitted_by_explicit_governed_session_flag');
+  assert.equal(result.agent_tui_launch.mcp_fabric_access.tool_visibility_authority, 'policy_bound_site_mcp');
+  assert.equal(result.planned_environment[AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.provider_execution_env_var], 'true');
+  assert.equal(result.planned_environment.NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND, AGENT_TUI_PROVIDER_ADAPTER_CONTRACT.production_provider_adapter_kind);
+  assert.equal(result.planned_environment.NARADA_INTELLIGENCE_PROVIDER, 'codex-subscription');
+  assert.equal(result.planned_environment.NARADA_AI_MODEL, 'gpt-5.5');
+  assert.equal(result.planned_environment[AGENT_TUI_MCP_RUNTIME_CONTRACT.mcp_fabric_env_var], 'true');
+  assert.equal(result.planned_environment[AGENT_TUI_MCP_RUNTIME_CONTRACT.mcp_config_env_var], path.join(siteRoot, '.ai', 'mcp', 'config.json'));
+  assert.equal(result.planned_environment[AGENT_TUI_MCP_RUNTIME_CONTRACT.site_mcp_fabric_env_var], path.join(siteRoot, '.ai', 'mcp'));
+});
+
 test('agent-tui exec materializes session and control files before runtime spawn', () => {
   const siteRoot = tempSite();
   const pcSiteRoot = tempPcSite();
@@ -690,6 +595,41 @@ test('agent-tui exec materializes session and control files before runtime spawn
   fs.writeFileSync(result.agent_tui_launch.control_path, '{"kind":"test"}\n', 'utf8');
   materializeAgentTuiLaunchFiles(result);
   assert.equal(fs.readFileSync(result.agent_tui_launch.control_path, 'utf8'), '{"kind":"test"}\n');
+});
+
+test('agent-tui starting directive is preseeded into control JSONL before spawn', () => {
+  const siteRoot = tempSite();
+  const pcSiteRoot = tempPcSite();
+  const directive = 'Run one governed live work turn and write result evidence to .narada/crew/agent-tui-live-turn-result.json.';
+  const { result } = buildLaunchPlanFromArgs({
+    identity: 'narada.resident',
+    runtime: 'agent-tui',
+    exec: true,
+    dry_run: false,
+    agent_tui_starting_directive: directive,
+  }, { siteRoot, pcSiteRoot, now: '2026-05-30T12:05:30.000Z' });
+
+  assert.equal(result.agent_tui_launch.starting_directive.schema, 'narada.agent_start.agent_tui.starting_directive.v0');
+  assert.equal(result.agent_tui_launch.starting_directive.text, directive);
+  assert.equal(result.agent_tui_launch.starting_directive.source_kind, 'system');
+  assert.equal(result.agent_tui_launch.starting_directive.transport, 'startup_injection');
+
+  const materialized = materializeAgentTuiLaunchFiles(result);
+  assert.equal(materialized.starting_directive.status, 'written');
+  const lines = fs.readFileSync(result.agent_tui_launch.control_path, 'utf8').trim().split('\n');
+  assert.equal(lines.length, 1);
+  const control = JSON.parse(lines[0]);
+  assert.equal(control.schema, 'narada.carrier.control.input_event.v1');
+  assert.equal(control.input.source_kind, 'system');
+  assert.equal(control.input.transport, 'startup_injection');
+  assert.equal(control.input.delivery_mode, 'admit_for_current_turn');
+  assert.equal(control.input.content, directive);
+  assert.equal(control.input.authority_ref, `agent_start_event:${result.agent_start_event}`);
+  assert.equal(control.input.metadata.startup_injection, true);
+  assert.equal(control.input.metadata.directive_provenance.kind, 'operator_authorized_system_starting_directive');
+
+  materializeAgentTuiLaunchFiles(result);
+  assert.equal(fs.readFileSync(result.agent_tui_launch.control_path, 'utf8').trim().split('\n').length, 1);
 });
 
 test('agent-cli launch reports interactive runtime and Site-local session paths', () => {
@@ -721,7 +661,6 @@ test('agent-cli launch reports interactive runtime and Site-local session paths'
   assert.equal(result.runtime_args.includes(result.carrier_session_id), true);
   assert.equal(result.native_execution_policy.native_shell.status, 'not_admitted_for_runtime_slice');
 });
-
 test('agent-tui rollout acceptance command reports known Site blockers without launching carriers', () => {
   const siteRoot = tempSite();
   const report = buildAgentTuiRolloutAcceptanceReport({

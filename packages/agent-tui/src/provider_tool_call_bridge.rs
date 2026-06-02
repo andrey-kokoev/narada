@@ -12,7 +12,7 @@ use crate::provider_dispatch::{ProviderOutputKind, ProviderOutputRecord};
 use crate::turn_coordinator::{
     NoopProviderToolCallExecutor, ProviderToolCallExecutor, TurnCoordinatorClock,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::path::Path;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,7 +58,7 @@ impl<E: McpRuntimeToolExecutor> ProviderToolCallExecutor for SupervisedProviderT
     ) -> Result<usize, String> {
         let runtime_clock = McpRuntimeExecutionClock {
             occurred_at: clock.occurred_at.clone(),
-            event_id_prefix: clock.event_id_prefix.clone(),
+            event_id_prefix: format!("{}_provider_tool", clock.event_id_prefix),
         };
         let result = execute_provider_tool_output(
             output,
@@ -167,18 +167,24 @@ pub fn execute_provider_tool_output<E: McpRuntimeToolExecutor>(
             mcp_result: None,
         });
     };
-    let prepared = fabric_client.prepare_tool_call(
+    let provider_turn_id = output
+        .payload
+        .get("turn_id")
+        .and_then(|value| value.as_str())
+        .map(ToString::to_string);
+    let request = resolve_provider_tool_alias(request, boundary);
+    let mut prepared = fabric_client.prepare_tool_call(
         boundary,
         &request,
         arguments,
         sequence,
         evidence_context,
-        format!(
-            "{}_provider_tool_request_{}",
-            clock.event_id_prefix, sequence
-        ),
+        format!("{}_request_{}", clock.event_id_prefix, sequence),
         clock.occurred_at.clone(),
     )?;
+    if let Some(turn_id) = provider_turn_id {
+        prepared.request_event.payload["turn_id"] = json!(turn_id);
+    }
     let tool_name = prepared.tool_name.clone();
     let result = runtime.execute_prepared_tool_call(&prepared, clock)?;
     Ok(ProviderToolCallBridgeResult {
@@ -186,6 +192,30 @@ pub fn execute_provider_tool_output<E: McpRuntimeToolExecutor>(
         tool_name: Some(tool_name),
         mcp_result: Some(result),
     })
+}
+
+fn resolve_provider_tool_alias(
+    request: McpToolRequest,
+    boundary: &McpFabricBoundary,
+) -> McpToolRequest {
+    if boundary.assert_tool_access(&request.tool_name).is_ok() {
+        return request;
+    }
+    let aliases: &[&str] = match request.tool_name.as_str() {
+        "startup_sequence" | "agent_context_startup_sequence" => {
+            &["startup_sequence", "agent_context_startup_sequence"]
+        }
+        _ => &[],
+    };
+    for alias in aliases {
+        if boundary.assert_tool_access(alias).is_ok() {
+            return McpToolRequest {
+                tool_name: (*alias).to_string(),
+                ..request
+            };
+        }
+    }
+    request
 }
 
 fn required_string(payload: &Value, field: &str) -> Result<String, String> {
@@ -290,6 +320,14 @@ mod tests {
         ))
     }
 
+    fn narada_proper_startup_boundary() -> McpFabricBoundary {
+        McpFabricBoundary::admitted(McpFabricPolicy::from_allowed_tools(
+            "D:/code/narada/.ai/mcp",
+            "fixture.mcp.json:mcpServers",
+            ["agent_context_startup_sequence"],
+        ))
+    }
+
     struct SuccessfulExecutor;
 
     impl McpRuntimeToolExecutor for SuccessfulExecutor {
@@ -299,6 +337,12 @@ mod tests {
         ) -> Result<McpStdioProcessIoResult, String> {
             Ok(McpStdioProcessIoResult {
                 server_name: prepared.server_name.clone(),
+                request_turn_id: prepared
+                    .request_event
+                    .payload
+                    .get("turn_id")
+                    .and_then(|value| value.as_str())
+                    .map(ToString::to_string),
                 tool_result: McpToolResult {
                     tool_name: prepared.tool_name.clone(),
                     status: "ok".to_string(),
@@ -406,6 +450,20 @@ mod tests {
     }
 
     #[test]
+    fn resolves_generic_startup_sequence_to_visible_site_alias() {
+        let request = McpToolRequest {
+            tool_name: "startup_sequence".to_string(),
+            arguments_summary: "{}".to_string(),
+            arguments_ref: None,
+            requesting_agent_id: "narada.architect".to_string(),
+        };
+
+        let resolved = resolve_provider_tool_alias(request, &narada_proper_startup_boundary());
+
+        assert_eq!(resolved.tool_name, "agent_context_startup_sequence");
+    }
+
+    #[test]
     fn rejects_non_json_inline_arguments() {
         let output =
             ProviderOutputRecord::tool_call_request("turn_1", "site_loop_run_once", "not-json", 2);
@@ -443,7 +501,51 @@ mod tests {
             .map(|line| crate::carrier_protocol::parse_session_event(line).unwrap())
             .collect::<Vec<_>>();
         assert_eq!(events[0].event_kind, SessionEventKind::ToolCallRequested);
+        assert_eq!(events[0].payload["turn_id"], "turn_1");
         assert_eq!(events[1].event_kind, SessionEventKind::ToolResultReceived);
+        assert_eq!(events[1].payload["turn_id"], "turn_1");
+        let _ = remove_file(path);
+    }
+
+    #[test]
+    fn supervised_executor_namespaces_provider_tool_event_ids_away_from_turn_events() {
+        let path = temp_session_path();
+        let mut runtime = McpRuntimeExecutionBridge::new(&path, context(), SuccessfulExecutor);
+        runtime.mark_server_ready("sonar-site-loop");
+        let mut executor =
+            SupervisedProviderToolCallExecutor::new(fabric_client(), boundary(), runtime);
+        let output = ProviderOutputRecord::tool_call_request(
+            "turn_step241_1",
+            "site_loop_run_once",
+            "{}",
+            1,
+        );
+        let turn_clock = TurnCoordinatorClock {
+            occurred_at: "2026-06-02T02:16:32.180Z".to_string(),
+            event_id_prefix: "session_event_turn_step241".to_string(),
+            turn_id_prefix: "turn_step241".to_string(),
+        };
+
+        let written = executor
+            .handle_provider_output(&output, &context(), &path, &turn_clock)
+            .expect("provider tool output writes evidence");
+
+        assert_eq!(written, 2);
+        let contents = read_to_string(&path).expect("session jsonl exists");
+        let events = contents
+            .lines()
+            .map(|line| crate::carrier_protocol::parse_session_event(line).unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            events[0].event_id,
+            "session_event_turn_step241_provider_tool_request_1"
+        );
+        assert_eq!(
+            events[1].event_id,
+            "session_event_turn_step241_provider_tool_1"
+        );
+        assert_ne!(events[1].event_id, "session_event_turn_step241_1");
+        assert_eq!(events[1].payload["turn_id"], "turn_step241_1");
         let _ = remove_file(path);
     }
 }

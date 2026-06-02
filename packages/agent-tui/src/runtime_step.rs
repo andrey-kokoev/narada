@@ -146,7 +146,7 @@ impl RuntimeStep {
 mod tests {
     use super::*;
     use crate::carrier_protocol::{
-        parse_session_event, SessionEvent, SessionEventKind, SESSION_EVENT_SCHEMA,
+        SESSION_EVENT_SCHEMA, SessionEvent, SessionEventKind, parse_session_event,
     };
     use crate::provider_adapter_admission::ProviderAdapterKind;
     use crate::provider_adapter_contract::provider_adapter_contract;
@@ -156,7 +156,7 @@ mod tests {
     use crate::transcript_projection::{TranscriptActor, TranscriptItemKind};
     use crate::turn_coordinator::TurnCoordinatorClock;
     use serde_json::json;
-    use std::fs::{read_to_string, remove_file, OpenOptions};
+    use std::fs::{OpenOptions, read_to_string, remove_file};
     use std::io::Write;
     use std::path::Path;
     use std::sync::atomic::{AtomicU64, Ordering};

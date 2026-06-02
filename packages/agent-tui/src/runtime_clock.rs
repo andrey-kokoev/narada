@@ -6,6 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[derive(Debug, Clone)]
 pub struct RuntimeClock {
     occurred_at: String,
+    refresh_occurred_at_per_step: bool,
     step_index: u64,
     input_event_prefix: String,
     turn_event_prefix: String,
@@ -18,14 +19,15 @@ impl RuntimeClock {
     }
 
     pub fn system_now() -> Result<Self, String> {
-        Ok(Self::with_occurred_at(system_time_utc_millis(
-            SystemTime::now(),
-        )?))
+        let mut clock = Self::with_occurred_at(system_time_utc_millis(SystemTime::now())?);
+        clock.refresh_occurred_at_per_step = true;
+        Ok(clock)
     }
 
     fn with_occurred_at(occurred_at: impl Into<String>) -> Self {
         Self {
             occurred_at: occurred_at.into(),
+            refresh_occurred_at_per_step: false,
             step_index: 1,
             input_event_prefix: "session_event_runtime".to_string(),
             turn_event_prefix: "session_event_turn".to_string(),
@@ -34,6 +36,11 @@ impl RuntimeClock {
     }
 
     pub fn next_step_clock(&mut self) -> RuntimeStepClock {
+        if self.refresh_occurred_at_per_step {
+            if let Ok(occurred_at) = system_time_utc_millis(SystemTime::now()) {
+                self.occurred_at = occurred_at;
+            }
+        }
         let index = self.step_index;
         self.step_index += 1;
         RuntimeStepClock {
@@ -123,5 +130,16 @@ mod tests {
         let step = clock.next_step_clock();
         assert_eq!(step.input.occurred_at.len(), 24);
         assert!(step.input.occurred_at.ends_with('Z'));
+    }
+
+    #[test]
+    fn refreshing_clock_updates_timestamp_for_each_step() {
+        let mut clock = RuntimeClock::with_occurred_at("1970-01-01T00:00:00.000Z");
+        clock.refresh_occurred_at_per_step = true;
+
+        let step = clock.next_step_clock();
+
+        assert_ne!(step.input.occurred_at, "1970-01-01T00:00:00.000Z");
+        assert_eq!(step.input.occurred_at, step.turn.occurred_at);
     }
 }

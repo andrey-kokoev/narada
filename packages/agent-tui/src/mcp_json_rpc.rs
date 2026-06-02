@@ -1,6 +1,6 @@
 use crate::mcp_fabric_boundary::{McpToolRequest, McpToolResult};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct JsonRpcRequest {
@@ -163,10 +163,12 @@ mod tests {
 
         assert_eq!(initialize.method, "initialize");
         assert_eq!(initialize.id, 1);
-        assert!(initialize
-            .to_jsonl()
-            .unwrap()
-            .contains("\"protocolVersion\""));
+        assert!(
+            initialize
+                .to_jsonl()
+                .unwrap()
+                .contains("\"protocolVersion\"")
+        );
         assert_eq!(initialized.method, "notifications/initialized");
         assert_eq!(initialized.id, 0);
     }
@@ -179,9 +181,11 @@ mod tests {
         assert_eq!(exchange.request.method, "tools/call");
         assert!(exchange.request_line.ends_with('\n'));
         assert!(exchange.request_line.contains("\"jsonrpc\":\"2.0\""));
-        assert!(exchange
-            .request_line
-            .contains("\"name\":\"site_loop_run_once\""));
+        assert!(
+            exchange
+                .request_line
+                .contains("\"name\":\"site_loop_run_once\"")
+        );
     }
 
     #[test]

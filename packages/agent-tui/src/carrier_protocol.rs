@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 pub const INPUT_EVENT_SCHEMA: &str = "narada.carrier.input_event.v1";
 pub const CONTROL_INPUT_EVENT_SCHEMA: &str = "narada.carrier.control.input_event.v1";
@@ -923,9 +923,11 @@ mod tests {
             invalid_kind_errors[0],
             "fixtures.0.invalid_event_kind:missing"
         );
-        assert!(invalid_kind_errors
-            .iter()
-            .any(|error| error == "fixtures.missing_event_kind:input_queued_for_turn_boundary"));
+        assert!(
+            invalid_kind_errors
+                .iter()
+                .any(|error| error == "fixtures.missing_event_kind:input_queued_for_turn_boundary")
+        );
         assert_eq!(
             validate_session_event_fixture_manifest(&invalid_kind),
             Err(invalid_kind_errors.join(","))
@@ -1377,16 +1379,18 @@ mod tests {
             ),
             Err("payload.missing_required_field:turn_id".to_string())
         );
-        assert!(validate_session_payload(
-            &SessionEventKind::SystemDirectiveHeld,
-            &json!({
-                "input_event_id": "input_1",
-                "held_at": "2026-05-30T00:00:02.000Z",
-                "held_reason": "composer_nonempty",
-                "original_delivery_mode": "admit_for_current_turn"
-            })
-        )
-        .is_ok());
+        assert!(
+            validate_session_payload(
+                &SessionEventKind::SystemDirectiveHeld,
+                &json!({
+                    "input_event_id": "input_1",
+                    "held_at": "2026-05-30T00:00:02.000Z",
+                    "held_reason": "composer_nonempty",
+                    "original_delivery_mode": "admit_for_current_turn"
+                })
+            )
+            .is_ok()
+        );
         let terminal_payload = create_turn_terminal_payload(
             "turn_1",
             Some("input_1"),

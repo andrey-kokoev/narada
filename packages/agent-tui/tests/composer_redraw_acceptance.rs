@@ -1,16 +1,17 @@
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
-use narada_agent_tui::app_view_model::{build_app_view, AppViewInput};
+use narada_agent_tui::app_view_model::{AppViewInput, build_app_view};
 use narada_agent_tui::composer_view_model::ComposerViewInput;
 use narada_agent_tui::input_queue::TurnState;
 use narada_agent_tui::layout_model::{LayoutConfig, TerminalSize};
 use narada_agent_tui::ratatui_renderer::render_app_to_buffer;
 use narada_agent_tui::status_view_model::{RuntimePostureState, StatusViewInput};
 use narada_agent_tui::terminal_input_tick::{
-    run_textarea_composer_input_tick, TerminalInputReader,
+    TerminalInputReader, run_textarea_composer_input_tick,
 };
 use narada_agent_tui::textarea_composer::TextareaComposer;
+use narada_agent_tui::transcript_projection::TranscriptItem;
 use narada_agent_tui::tui_render_loop::{
-    apply_input_tick_outcome, AgentTuiLoopState, ComposerAdmissionBridge, RenderLoopAction,
+    AgentTuiLoopState, ComposerAdmissionBridge, RenderLoopAction, apply_input_tick_outcome,
 };
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect as TuiRect;
@@ -25,9 +26,9 @@ struct FakeBridge {
 }
 
 impl ComposerAdmissionBridge for FakeBridge {
-    fn submit_operator_text(&mut self, text: String) -> Result<(), String> {
+    fn submit_operator_text(&mut self, text: String) -> Result<Option<TranscriptItem>, String> {
         self.submitted.push(text);
-        Ok(())
+        Ok(None)
     }
 
     fn request_interrupt(&mut self) -> Result<(), String> {
@@ -85,8 +86,11 @@ fn render_draft_text(draft_text: String) -> String {
             identity: "sonar.resident".to_string(),
             session: "carrier_fixture_1".to_string(),
             turn_state: TurnState::Idle,
+            active_phase: None,
+            active_turn_age: None,
             queued_inputs: 0,
             held_system_directives: 0,
+            oldest_held_age: None,
             transcript_items: 0,
             runtime_posture: RuntimePostureState::disabled(),
             last_error: None,
@@ -167,6 +171,6 @@ fn composer_redraw_acceptance_submit_clears_draft_and_uses_bridge_once() {
 
     assert_eq!(action, RenderLoopAction::Redraw);
     assert_eq!(state.draft_text(), "");
-    assert_eq!(bridge.submitted, vec!["run startup sequence".to_string()]);
+    assert_eq!(bridge.submitted, vec![" run startup sequence ".to_string()]);
     assert!(render_draft_text(state.draft_text()).contains("operator -> sonar.resident>"));
 }

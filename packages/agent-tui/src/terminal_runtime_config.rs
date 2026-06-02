@@ -37,6 +37,15 @@ impl TerminalRuntimeConfig {
         }
     }
 
+    pub fn configured_for_explicit_terminal_mode(mode: impl Into<String>) -> Self {
+        Self {
+            status: TerminalRuntimeStatus::Configured,
+            terminal_rendering_enabled: true,
+            mode: Some(mode.into()),
+            refusal_reason: None,
+        }
+    }
+
     pub fn from_env_map(env: &BTreeMap<String, String>) -> Self {
         let contract = terminal_runtime_contract();
         if !env_flag_enabled(env.get(&contract.terminal_rendering_env_var)) {
@@ -158,5 +167,15 @@ mod tests {
             config.mode.as_deref(),
             Some(contract.required_terminal_mode.as_str())
         );
+    }
+
+    #[test]
+    fn explicit_terminal_mode_configures_terminal_without_env_gate() {
+        let config = TerminalRuntimeConfig::configured_for_explicit_terminal_mode("render_once");
+
+        assert_eq!(config.status, TerminalRuntimeStatus::Configured);
+        assert!(config.terminal_rendering_enabled);
+        assert_eq!(config.mode.as_deref(), Some("render_once"));
+        assert_eq!(config.refusal_reason, None);
     }
 }

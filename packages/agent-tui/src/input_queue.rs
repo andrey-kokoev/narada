@@ -1,8 +1,8 @@
 use crate::carrier_protocol::{
-    ControlInputEvent, DeliveryMode, HoldCondition, InputEvent, SessionEvent, SessionEventKind,
-    SourceKind, SESSION_EVENT_SCHEMA,
+    ControlInputEvent, DeliveryMode, HoldCondition, InputEvent, SESSION_EVENT_SCHEMA, SessionEvent,
+    SessionEventKind, SourceKind,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::VecDeque;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -45,12 +45,14 @@ pub struct QueuedInputSummary {
     pub index: usize,
     pub input_event_id: String,
     pub source_kind: SourceKind,
+    pub created_at: String,
     pub content_preview: String,
 }
 
 #[derive(Debug, Default)]
 pub struct InputQueue {
     turn_state: TurnState,
+    active_started_at: Option<String>,
     ready_for_current_turn: VecDeque<InputEvent>,
     queued_for_turn_boundary: VecDeque<InputEvent>,
     held_for_composer_clear: VecDeque<InputEvent>,
@@ -72,7 +74,28 @@ impl InputQueue {
     }
 
     pub fn set_turn_state(&mut self, state: TurnState) {
+        if state == TurnState::Idle {
+            self.active_started_at = None;
+        }
         self.turn_state = state;
+    }
+
+    pub fn set_turn_active_at(&mut self, started_at: impl Into<String>) {
+        self.turn_state = TurnState::Active;
+        self.active_started_at = Some(started_at.into());
+    }
+
+    pub fn set_turn_idle(&mut self) {
+        self.turn_state = TurnState::Idle;
+        self.active_started_at = None;
+    }
+
+    pub fn active_turn_age_label(&self, now: &str) -> Option<String> {
+        if self.turn_state != TurnState::Active {
+            return None;
+        }
+        let started_at = self.active_started_at.as_deref()?;
+        elapsed_label_between(started_at, now)
     }
 
     pub fn queued_count(&self) -> usize {
@@ -87,6 +110,7 @@ impl InputQueue {
                 index: index + 1,
                 input_event_id: input.event_id.clone(),
                 source_kind: input.source_kind.clone(),
+                created_at: input.created_at.clone(),
                 content_preview: input.content.lines().next().unwrap_or_default().to_string(),
             })
             .collect()
@@ -115,6 +139,11 @@ impl InputQueue {
 
     pub fn held_count(&self) -> usize {
         self.held_for_composer_clear.len()
+    }
+
+    pub fn oldest_held_age_label(&self, now: &str) -> Option<String> {
+        let created_at = self.held_for_composer_clear.front()?.created_at.as_str();
+        elapsed_label_between(created_at, now)
     }
 
     pub fn admit_control_event(
@@ -253,6 +282,67 @@ impl QueuedInputRelease {
     }
 }
 
+pub(crate) fn elapsed_label_between(start: &str, end: &str) -> Option<String> {
+    let elapsed = timestamp_elapsed_seconds(start, end)?;
+    Some(format_elapsed_seconds(elapsed))
+}
+
+fn timestamp_elapsed_seconds(start: &str, end: &str) -> Option<u64> {
+    let start = parse_utc_timestamp_seconds(start)?;
+    let end = parse_utc_timestamp_seconds(end)?;
+    Some(end.saturating_sub(start))
+}
+
+fn parse_utc_timestamp_seconds(value: &str) -> Option<u64> {
+    if value.len() < 20 || !value.ends_with('Z') {
+        return None;
+    }
+    let year = value.get(0..4)?.parse::<i64>().ok()?;
+    let month = value.get(5..7)?.parse::<i64>().ok()?;
+    let day = value.get(8..10)?.parse::<i64>().ok()?;
+    let hour = value.get(11..13)?.parse::<i64>().ok()?;
+    let minute = value.get(14..16)?.parse::<i64>().ok()?;
+    let second = value.get(17..19)?.parse::<i64>().ok()?;
+    if !(1..=12).contains(&month)
+        || !(1..=31).contains(&day)
+        || !(0..=23).contains(&hour)
+        || !(0..=59).contains(&minute)
+        || !(0..=60).contains(&second)
+    {
+        return None;
+    }
+    let days = days_from_civil(year, month, day)?;
+    let seconds = days * 86_400 + hour * 3_600 + minute * 60 + second;
+    u64::try_from(seconds).ok()
+}
+
+fn days_from_civil(year: i64, month: i64, day: i64) -> Option<i64> {
+    let year = year - if month <= 2 { 1 } else { 0 };
+    let era = if year >= 0 { year } else { year - 399 } / 400;
+    let yoe = year - era * 400;
+    let month_prime = month + if month > 2 { -3 } else { 9 };
+    let doy = (153 * month_prime + 2) / 5 + day - 1;
+    if !(0..=365).contains(&doy) {
+        return None;
+    }
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    Some(era * 146_097 + doe - 719_468)
+}
+
+fn format_elapsed_seconds(seconds: u64) -> String {
+    if seconds < 60 {
+        return format!("{seconds}s");
+    }
+    let minutes = seconds / 60;
+    let remaining_seconds = seconds % 60;
+    if minutes < 60 {
+        return format!("{minutes}m {remaining_seconds}s");
+    }
+    let hours = minutes / 60;
+    let remaining_minutes = minutes % 60;
+    format!("{hours}h {remaining_minutes}m")
+}
+
 fn insert_optional_directive_id(payload: &mut Value, directive_id: &Option<String>) {
     if let (Some(map), Some(directive_id)) = (payload.as_object_mut(), directive_id) {
         map.insert(
@@ -332,6 +422,23 @@ mod tests {
     }
 
     #[test]
+    fn reports_active_turn_age_when_started_at_is_known() {
+        let mut queue = InputQueue::new();
+
+        queue.set_turn_active_at("2026-05-30T00:00:00.000Z");
+
+        assert_eq!(
+            queue.active_turn_age_label("2026-05-30T00:01:12.000Z"),
+            Some("1m 12s".to_string())
+        );
+        queue.set_turn_idle();
+        assert_eq!(
+            queue.active_turn_age_label("2026-05-30T00:01:13.000Z"),
+            None
+        );
+    }
+
+    #[test]
     fn holds_system_directive_until_composer_is_clear() {
         let event = parse_control_input_event(CONTROL_FIXTURE).expect("control fixture parses");
         assert_eq!(event.input.source_kind, SourceKind::System);
@@ -350,6 +457,20 @@ mod tests {
         assert_eq!(queue.held_count(), 0);
         assert_eq!(queue.queued_count(), 1);
         assert!(queue.next_ready_input().is_some());
+    }
+
+    #[test]
+    fn reports_oldest_held_system_directive_age() {
+        let mut event = parse_control_input_event(CONTROL_FIXTURE).expect("control fixture parses");
+        event.input.created_at = "2026-05-30T00:00:00.000Z".to_string();
+        let mut queue = InputQueue::new();
+
+        let _decision = queue.admit_control_event(event, true);
+
+        assert_eq!(
+            queue.oldest_held_age_label("2026-05-30T00:01:14.000Z"),
+            Some("1m 14s".to_string())
+        );
     }
 
     #[test]

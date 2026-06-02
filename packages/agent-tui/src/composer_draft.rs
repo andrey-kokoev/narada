@@ -23,6 +23,14 @@ pub fn reduce_composer_draft(
             state.text.push(value);
             ComposerDraftEffect::DraftChanged
         }
+        TerminalInputIntent::InsertText(value) => {
+            if value.is_empty() {
+                ComposerDraftEffect::None
+            } else {
+                state.text.push_str(&value);
+                ComposerDraftEffect::DraftChanged
+            }
+        }
         TerminalInputIntent::Backspace => {
             if state.text.pop().is_some() {
                 ComposerDraftEffect::DraftChanged
@@ -30,6 +38,13 @@ pub fn reduce_composer_draft(
                 ComposerDraftEffect::None
             }
         }
+        TerminalInputIntent::Delete
+        | TerminalInputIntent::MoveLeft
+        | TerminalInputIntent::MoveRight
+        | TerminalInputIntent::MoveHome
+        | TerminalInputIntent::MoveEnd
+        | TerminalInputIntent::ScrollTranscriptUp
+        | TerminalInputIntent::ScrollTranscriptDown => ComposerDraftEffect::None,
         TerminalInputIntent::Submit => {
             let text = state.text.trim().to_string();
             if text.is_empty() {
@@ -39,14 +54,7 @@ pub fn reduce_composer_draft(
                 ComposerDraftEffect::SubmitRequested { text }
             }
         }
-        TerminalInputIntent::InterruptOrClear => {
-            if state.text.is_empty() {
-                ComposerDraftEffect::ClearOrInterruptRequested
-            } else {
-                state.text.clear();
-                ComposerDraftEffect::DraftChanged
-            }
-        }
+        TerminalInputIntent::InterruptOrClear => ComposerDraftEffect::ClearOrInterruptRequested,
         TerminalInputIntent::Exit => ComposerDraftEffect::ExitRequested,
         TerminalInputIntent::Ignored => ComposerDraftEffect::None,
     }
@@ -74,6 +82,27 @@ mod tests {
             reduce_composer_draft(&mut state, TerminalInputIntent::Backspace),
             ComposerDraftEffect::None
         );
+    }
+
+    #[test]
+    fn inserts_multiline_text_exactly() {
+        let mut state = ComposerDraftState {
+            text: "prefix ".to_string(),
+        };
+
+        assert_eq!(
+            reduce_composer_draft(
+                &mut state,
+                TerminalInputIntent::InsertText("first line\nsecond line".to_string())
+            ),
+            ComposerDraftEffect::DraftChanged
+        );
+        assert_eq!(state.text, "prefix first line\nsecond line");
+        assert_eq!(
+            reduce_composer_draft(&mut state, TerminalInputIntent::InsertText(String::new())),
+            ComposerDraftEffect::None
+        );
+        assert_eq!(state.text, "prefix first line\nsecond line");
     }
 
     #[test]
@@ -105,20 +134,16 @@ mod tests {
     }
 
     #[test]
-    fn escape_clears_draft_before_interrupting() {
+    fn escape_requests_interrupt_without_clearing_draft() {
         let mut state = ComposerDraftState {
             text: "draft".to_string(),
         };
 
         assert_eq!(
             reduce_composer_draft(&mut state, TerminalInputIntent::InterruptOrClear),
-            ComposerDraftEffect::DraftChanged
-        );
-        assert_eq!(state.text, "");
-        assert_eq!(
-            reduce_composer_draft(&mut state, TerminalInputIntent::InterruptOrClear),
             ComposerDraftEffect::ClearOrInterruptRequested
         );
+        assert_eq!(state.text, "draft");
     }
 
     #[test]

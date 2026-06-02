@@ -1,16 +1,18 @@
 use crate::carrier_protocol::{
-    create_turn_terminal_payload, InputEvent, SessionEvent, SessionEventKind, SESSION_EVENT_SCHEMA,
+    InputEvent, SESSION_EVENT_SCHEMA, SessionEvent, SessionEventKind, create_turn_terminal_payload,
 };
-use crate::input_queue::{InputQueue, SessionEvidenceContext, TurnState};
+use crate::input_queue::{InputQueue, SessionEvidenceContext};
 use crate::provider_dispatch::{
-    ProviderAdapter, ProviderDispatchRecord, ProviderDispatchStatus, ProviderDispatchStub,
-    ProviderOutputRecord,
+    ProviderAdapter, ProviderCancellationToken, ProviderDispatchRecord, ProviderDispatchStatus,
+    ProviderDispatchStub, ProviderOutputRecord, ProviderOutputSink,
 };
 use crate::session_jsonl::append_session_event;
 use serde_json::json;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{self, Receiver, TryRecvError};
+use std::thread;
 
-pub trait ProviderToolCallExecutor {
+pub trait ProviderToolCallExecutor: Send {
     fn handle_provider_output(
         &mut self,
         output: &ProviderOutputRecord,
@@ -52,10 +54,25 @@ pub struct CompletedTurn {
 pub struct TurnCoordinator {
     evidence_context: SessionEvidenceContext,
     session_jsonl_path: PathBuf,
+    provider_adapter: Option<Box<dyn ProviderAdapter>>,
+    provider_tool_call_executor: Option<Box<dyn ProviderToolCallExecutor>>,
+    active_worker: Option<ActiveTurnWorker>,
+    pending_session_model: Option<Option<String>>,
+    pending_session_thinking: Option<Option<String>>,
+    next_event_index: u64,
+    next_turn_index: u64,
+}
+
+struct TurnWorkerResult {
     provider_adapter: Box<dyn ProviderAdapter>,
     provider_tool_call_executor: Box<dyn ProviderToolCallExecutor>,
     next_event_index: u64,
-    next_turn_index: u64,
+    result: Result<CompletedTurn, String>,
+}
+
+struct ActiveTurnWorker {
+    receiver: Receiver<TurnWorkerResult>,
+    cancellation: ProviderCancellationToken,
 }
 
 impl TurnCoordinator {
@@ -92,8 +109,11 @@ impl TurnCoordinator {
         Self {
             evidence_context,
             session_jsonl_path: session_jsonl_path.into(),
-            provider_adapter,
-            provider_tool_call_executor,
+            provider_adapter: Some(provider_adapter),
+            provider_tool_call_executor: Some(provider_tool_call_executor),
+            active_worker: None,
+            pending_session_model: None,
+            pending_session_thinking: None,
             next_event_index: 1,
             next_turn_index: 1,
         }
@@ -101,6 +121,36 @@ impl TurnCoordinator {
 
     pub fn session_jsonl_path(&self) -> &Path {
         &self.session_jsonl_path
+    }
+
+    pub fn set_provider_model(&mut self, model: Option<String>) {
+        if let Some(provider_adapter) = self.provider_adapter.as_mut() {
+            provider_adapter.set_session_model(model);
+            self.pending_session_model = None;
+        } else {
+            self.pending_session_model = Some(model);
+        }
+    }
+
+    pub fn set_provider_thinking(&mut self, thinking: Option<String>) {
+        if let Some(provider_adapter) = self.provider_adapter.as_mut() {
+            provider_adapter.set_session_thinking(thinking);
+            self.pending_session_thinking = None;
+        } else {
+            self.pending_session_thinking = Some(thinking);
+        }
+    }
+
+    fn apply_pending_provider_settings(&mut self) {
+        let Some(provider_adapter) = self.provider_adapter.as_mut() else {
+            return;
+        };
+        if let Some(model) = self.pending_session_model.take() {
+            provider_adapter.set_session_model(model);
+        }
+        if let Some(thinking) = self.pending_session_thinking.take() {
+            provider_adapter.set_session_thinking(thinking);
+        }
     }
 
     pub fn run_one_ready_turn(
@@ -112,12 +162,17 @@ impl TurnCoordinator {
             return Ok(None);
         };
 
-        queue.set_turn_state(TurnState::Active);
+        queue.set_turn_active_at(clock.occurred_at.clone());
         let turn_id = self.next_turn_id(clock);
         let start = self.turn_started_event(&input, &turn_id, clock);
         self.write_evidence(&start)?;
 
-        let provider_record = self.provider_adapter.dispatch_request(&input, &turn_id);
+        let provider_adapter = self
+            .provider_adapter
+            .as_ref()
+            .ok_or_else(|| "turn_provider_adapter_unavailable".to_string())?;
+        let provider_record =
+            provider_adapter.dispatch_request(&input, &turn_id, &ProviderCancellationToken::new());
         let provider_request = self.provider_request_recorded_event(&provider_record, clock);
         self.write_evidence(&provider_request)?;
         let mut output_evidence_count = 0;
@@ -125,7 +180,11 @@ impl TurnCoordinator {
             let output_event = self.provider_output_event(output, clock);
             self.write_evidence(&output_event)?;
             output_evidence_count += 1;
-            output_evidence_count += self.provider_tool_call_executor.handle_provider_output(
+            let provider_tool_call_executor = self
+                .provider_tool_call_executor
+                .as_mut()
+                .ok_or_else(|| "turn_provider_tool_call_executor_unavailable".to_string())?;
+            output_evidence_count += provider_tool_call_executor.handle_provider_output(
                 output,
                 &self.evidence_context,
                 &self.session_jsonl_path,
@@ -133,7 +192,7 @@ impl TurnCoordinator {
             )?;
         }
 
-        queue.set_turn_state(TurnState::Idle);
+        queue.set_turn_idle();
         let terminal = self.turn_terminal_event(&input, &turn_id, &provider_record, clock);
         self.write_evidence(&terminal)?;
 
@@ -142,6 +201,85 @@ impl TurnCoordinator {
             input_event_id: input.event_id,
             evidence_written: 3 + output_evidence_count,
         }))
+    }
+
+    pub fn run_one_ready_turn_background_tick(
+        &mut self,
+        queue: &mut InputQueue,
+        clock: &TurnCoordinatorClock,
+    ) -> Result<Option<CompletedTurn>, String> {
+        if let Some(active_worker) = self.active_worker.take() {
+            match active_worker.receiver.try_recv() {
+                Ok(worker_result) => {
+                    self.provider_adapter = Some(worker_result.provider_adapter);
+                    self.apply_pending_provider_settings();
+                    self.provider_tool_call_executor =
+                        Some(worker_result.provider_tool_call_executor);
+                    self.next_event_index = worker_result.next_event_index;
+                    queue.set_turn_idle();
+                    return worker_result.result.map(Some);
+                }
+                Err(TryRecvError::Empty) => {
+                    self.active_worker = Some(active_worker);
+                    return Ok(None);
+                }
+                Err(TryRecvError::Disconnected) => {
+                    queue.set_turn_idle();
+                    return Err("turn_worker_disconnected".to_string());
+                }
+            }
+        }
+
+        let Some(input) = queue.next_ready_input() else {
+            return Ok(None);
+        };
+        queue.set_turn_active_at(clock.occurred_at.clone());
+        let turn_id = self.next_turn_id(clock);
+        let start = self.turn_started_event(&input, &turn_id, clock);
+        self.write_evidence(&start)?;
+
+        let provider_adapter = self
+            .provider_adapter
+            .take()
+            .ok_or_else(|| "turn_provider_adapter_unavailable".to_string())?;
+        let provider_tool_call_executor = self
+            .provider_tool_call_executor
+            .take()
+            .ok_or_else(|| "turn_provider_tool_call_executor_unavailable".to_string())?;
+        let context = self.evidence_context.clone();
+        let session_jsonl_path = self.session_jsonl_path.clone();
+        let worker_clock = clock.clone();
+        let worker_next_event_index = self.next_event_index;
+        let cancellation = ProviderCancellationToken::new();
+        let worker_cancellation = cancellation.clone();
+        let (sender, receiver) = mpsc::channel();
+        thread::spawn(move || {
+            let result = run_turn_worker(
+                provider_adapter,
+                provider_tool_call_executor,
+                context,
+                session_jsonl_path,
+                input,
+                turn_id,
+                worker_clock,
+                worker_next_event_index,
+                worker_cancellation,
+            );
+            let _ = sender.send(result);
+        });
+        self.active_worker = Some(ActiveTurnWorker {
+            receiver,
+            cancellation,
+        });
+        Ok(None)
+    }
+
+    pub fn request_active_turn_cancel(&mut self) -> bool {
+        let Some(active_worker) = &self.active_worker else {
+            return false;
+        };
+        active_worker.cancellation.cancel();
+        true
     }
 
     fn turn_started_event(
@@ -196,7 +334,7 @@ impl TurnCoordinator {
         clock: &TurnCoordinatorClock,
     ) -> SessionEvent {
         let (kind, terminal_status) = provider_status_to_turn_terminal(&record.status);
-        let error_summary = (kind == SessionEventKind::TurnFailed).then_some(terminal_status);
+        let error_summary = provider_terminal_error_summary(&kind, terminal_status, record);
         self.session_event(
             kind,
             clock,
@@ -206,7 +344,7 @@ impl TurnCoordinator {
                 record.status.as_str(),
                 terminal_status,
                 record.provider_execution_enabled,
-                error_summary,
+                error_summary.as_deref(),
             ),
         )
     }
@@ -217,23 +355,13 @@ impl TurnCoordinator {
         clock: &TurnCoordinatorClock,
         payload: serde_json::Value,
     ) -> SessionEvent {
-        SessionEvent {
-            schema: SESSION_EVENT_SCHEMA.to_string(),
-            event_kind: kind,
-            event_id: self.next_event_id(clock),
-            occurred_at: clock.occurred_at.clone(),
-            carrier_session_id: self.evidence_context.carrier_session_id.clone(),
-            agent_id: self.evidence_context.agent_id.clone(),
-            site_id: self.evidence_context.site_id.clone(),
-            site_root: self.evidence_context.site_root.clone(),
+        session_event_with_index(
+            &self.evidence_context,
+            kind,
+            clock,
             payload,
-        }
-    }
-
-    fn next_event_id(&mut self, clock: &TurnCoordinatorClock) -> String {
-        let id = format!("{}_{}", clock.event_id_prefix, self.next_event_index);
-        self.next_event_index += 1;
-        id
+            &mut self.next_event_index,
+        )
     }
 
     fn next_turn_id(&mut self, clock: &TurnCoordinatorClock) -> String {
@@ -244,6 +372,183 @@ impl TurnCoordinator {
 
     fn write_evidence(&self, event: &SessionEvent) -> Result<(), String> {
         append_session_event(&self.session_jsonl_path, event)
+    }
+}
+
+fn run_turn_worker(
+    mut provider_adapter: Box<dyn ProviderAdapter>,
+    mut provider_tool_call_executor: Box<dyn ProviderToolCallExecutor>,
+    evidence_context: SessionEvidenceContext,
+    session_jsonl_path: PathBuf,
+    input: InputEvent,
+    turn_id: String,
+    clock: TurnCoordinatorClock,
+    mut next_event_index: u64,
+    cancellation: ProviderCancellationToken,
+) -> TurnWorkerResult {
+    let result = run_turn_worker_inner(
+        provider_adapter.as_mut(),
+        provider_tool_call_executor.as_mut(),
+        &evidence_context,
+        &session_jsonl_path,
+        input,
+        turn_id,
+        &clock,
+        &mut next_event_index,
+        &cancellation,
+    );
+    TurnWorkerResult {
+        provider_adapter,
+        provider_tool_call_executor,
+        next_event_index,
+        result,
+    }
+}
+
+fn run_turn_worker_inner(
+    provider_adapter: &mut dyn ProviderAdapter,
+    provider_tool_call_executor: &mut dyn ProviderToolCallExecutor,
+    evidence_context: &SessionEvidenceContext,
+    session_jsonl_path: &Path,
+    input: InputEvent,
+    turn_id: String,
+    clock: &TurnCoordinatorClock,
+    next_event_index: &mut u64,
+    cancellation: &ProviderCancellationToken,
+) -> Result<CompletedTurn, String> {
+    let provider_request_written =
+        if let Some(start_record) = provider_adapter.dispatch_start_record(&input, &turn_id) {
+            let provider_request = session_event_with_index(
+                evidence_context,
+                SessionEventKind::ProviderRequestRecorded,
+                clock,
+                start_record.payload.clone(),
+                next_event_index,
+            );
+            append_session_event(session_jsonl_path, &provider_request)?;
+            true
+        } else {
+            false
+        };
+
+    let mut streaming_sink = TurnProviderOutputSink {
+        evidence_context,
+        session_jsonl_path,
+        clock,
+        next_event_index,
+        provider_tool_call_executor,
+        evidence_written: 0,
+    };
+    let provider_record = provider_adapter.dispatch_request_streaming(
+        &input,
+        &turn_id,
+        cancellation,
+        &mut streaming_sink,
+    );
+    let mut output_evidence_count = streaming_sink.evidence_written;
+    drop(streaming_sink);
+    if !provider_request_written {
+        let provider_request = session_event_with_index(
+            evidence_context,
+            SessionEventKind::ProviderRequestRecorded,
+            clock,
+            provider_record.payload.clone(),
+            next_event_index,
+        );
+        append_session_event(session_jsonl_path, &provider_request)?;
+    }
+    for output in &provider_record.outputs {
+        let output_event = session_event_with_index(
+            evidence_context,
+            output.kind.session_event_kind(),
+            clock,
+            output.payload.clone(),
+            next_event_index,
+        );
+        append_session_event(session_jsonl_path, &output_event)?;
+        output_evidence_count += 1;
+        output_evidence_count += provider_tool_call_executor.handle_provider_output(
+            output,
+            evidence_context,
+            session_jsonl_path,
+            clock,
+        )?;
+    }
+    let (terminal_kind, terminal_status) =
+        provider_status_to_turn_terminal(&provider_record.status);
+    let error_summary =
+        provider_terminal_error_summary(&terminal_kind, terminal_status, &provider_record);
+    let terminal = session_event_with_index(
+        evidence_context,
+        terminal_kind,
+        clock,
+        create_turn_terminal_payload(
+            &turn_id,
+            Some(&input.event_id),
+            provider_record.status.as_str(),
+            terminal_status,
+            provider_record.provider_execution_enabled,
+            error_summary.as_deref(),
+        ),
+        next_event_index,
+    );
+    append_session_event(session_jsonl_path, &terminal)?;
+    Ok(CompletedTurn {
+        turn_id,
+        input_event_id: input.event_id,
+        evidence_written: 3 + output_evidence_count,
+    })
+}
+
+struct TurnProviderOutputSink<'a> {
+    evidence_context: &'a SessionEvidenceContext,
+    session_jsonl_path: &'a Path,
+    clock: &'a TurnCoordinatorClock,
+    next_event_index: &'a mut u64,
+    provider_tool_call_executor: &'a mut dyn ProviderToolCallExecutor,
+    evidence_written: usize,
+}
+
+impl ProviderOutputSink for TurnProviderOutputSink<'_> {
+    fn emit_provider_output(&mut self, output: ProviderOutputRecord) -> Result<(), String> {
+        let output_event = session_event_with_index(
+            self.evidence_context,
+            output.kind.session_event_kind(),
+            self.clock,
+            output.payload.clone(),
+            self.next_event_index,
+        );
+        append_session_event(self.session_jsonl_path, &output_event)?;
+        self.evidence_written += 1;
+        self.evidence_written += self.provider_tool_call_executor.handle_provider_output(
+            &output,
+            self.evidence_context,
+            self.session_jsonl_path,
+            self.clock,
+        )?;
+        Ok(())
+    }
+}
+
+fn session_event_with_index(
+    context: &SessionEvidenceContext,
+    kind: SessionEventKind,
+    clock: &TurnCoordinatorClock,
+    payload: serde_json::Value,
+    next_event_index: &mut u64,
+) -> SessionEvent {
+    let event_id = format!("{}_{}", clock.event_id_prefix, *next_event_index);
+    *next_event_index += 1;
+    SessionEvent {
+        schema: SESSION_EVENT_SCHEMA.to_string(),
+        event_kind: kind,
+        event_id,
+        occurred_at: clock.occurred_at.clone(),
+        carrier_session_id: context.carrier_session_id.clone(),
+        agent_id: context.agent_id.clone(),
+        site_id: context.site_id.clone(),
+        site_root: context.site_root.clone(),
+        payload,
     }
 }
 
@@ -264,22 +569,45 @@ fn provider_status_to_turn_terminal(
     }
 }
 
+fn provider_terminal_error_summary(
+    terminal_kind: &SessionEventKind,
+    terminal_status: &str,
+    record: &ProviderDispatchRecord,
+) -> Option<String> {
+    match terminal_kind {
+        SessionEventKind::TurnFailed | SessionEventKind::TurnInterrupted => record
+            .payload
+            .get("error_summary")
+            .and_then(|value| value.as_str())
+            .filter(|summary| !summary.trim().is_empty())
+            .map(str::to_string)
+            .or_else(|| {
+                (*terminal_kind == SessionEventKind::TurnFailed)
+                    .then(|| terminal_status.to_string())
+            }),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::carrier_protocol::{
-        create_provider_request_payload, parse_input_event, parse_session_event, DeliveryMode,
-        TURN_TERMINAL_PAYLOAD_SCHEMA,
+        DeliveryMode, TURN_TERMINAL_PAYLOAD_SCHEMA, create_provider_request_payload,
+        parse_input_event, parse_session_event,
     };
+    use crate::input_queue::TurnState;
     use crate::provider_adapter_admission::ProviderAdapterKind;
     use crate::provider_adapter_contract::provider_adapter_contract;
     use crate::provider_dispatch::{
-        ProviderDispatchRecord, ProviderOutputRecord, ScriptedProviderAdapter,
+        ProviderDispatchRecord, ProviderOutputRecord, ProviderOutputSink, ScriptedProviderAdapter,
     };
     use crate::provider_runtime_config::ProviderRuntimeConfig;
     use serde_json::json;
     use std::fs::{read_to_string, remove_file};
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     const INPUT_FIXTURE: &str = include_str!("../../carrier-protocol/fixtures/input-event.json");
 
@@ -311,7 +639,12 @@ mod tests {
     struct RecordingProviderAdapter;
 
     impl ProviderAdapter for RecordingProviderAdapter {
-        fn dispatch_request(&self, input: &InputEvent, turn_id: &str) -> ProviderDispatchRecord {
+        fn dispatch_request(
+            &self,
+            input: &InputEvent,
+            turn_id: &str,
+            _cancellation: &ProviderCancellationToken,
+        ) -> ProviderDispatchRecord {
             ProviderDispatchRecord {
                 status: ProviderDispatchStatus::RecordedNotDispatched,
                 provider_execution_enabled: false,
@@ -333,6 +666,143 @@ mod tests {
                 ),
                 outputs: Vec::new(),
             }
+        }
+    }
+
+    struct BlockingProviderAdapter {
+        release: mpsc::Receiver<()>,
+    }
+
+    impl ProviderAdapter for BlockingProviderAdapter {
+        fn dispatch_request(
+            &self,
+            input: &InputEvent,
+            turn_id: &str,
+            cancellation: &ProviderCancellationToken,
+        ) -> ProviderDispatchRecord {
+            while !cancellation.is_cancelled() {
+                if self.release.try_recv().is_ok() {
+                    break;
+                }
+                thread::sleep(Duration::from_millis(5));
+            }
+            if cancellation.is_cancelled() {
+                let mut payload = create_provider_request_payload(
+                    turn_id,
+                    &input.event_id,
+                    "interrupted",
+                    true,
+                    "configured",
+                    "admitted",
+                    Some("test_blocking_adapter".to_string()),
+                    None,
+                    None,
+                    None,
+                    false,
+                    "single_provider_output_batch",
+                    None,
+                    &input.content,
+                );
+                payload["error_summary"] = json!("provider_cancelled");
+                return ProviderDispatchRecord {
+                    status: ProviderDispatchStatus::Interrupted,
+                    provider_execution_enabled: true,
+                    payload,
+                    outputs: Vec::new(),
+                };
+            }
+            ProviderDispatchRecord {
+                status: ProviderDispatchStatus::RecordedNotDispatched,
+                provider_execution_enabled: false,
+                payload: create_provider_request_payload(
+                    turn_id,
+                    &input.event_id,
+                    "test_blocking_adapter_recorded",
+                    false,
+                    "configured",
+                    "configured_without_adapter",
+                    None,
+                    None,
+                    None,
+                    None,
+                    false,
+                    "not_requested",
+                    Some("test_blocking_adapter_recorded".to_string()),
+                    &input.content,
+                ),
+                outputs: Vec::new(),
+            }
+        }
+    }
+
+    struct StreamingBlockingProviderAdapter {
+        first_emitted: mpsc::Sender<()>,
+        release: mpsc::Receiver<()>,
+    }
+
+    impl ProviderAdapter for StreamingBlockingProviderAdapter {
+        fn dispatch_start_record(
+            &self,
+            input: &InputEvent,
+            turn_id: &str,
+        ) -> Option<ProviderDispatchRecord> {
+            let mut record = completed_streaming_record(input, turn_id);
+            record.status = ProviderDispatchStatus::Dispatched;
+            record.payload["provider_request_status"] = json!("dispatched");
+            Some(record)
+        }
+
+        fn dispatch_request(
+            &self,
+            input: &InputEvent,
+            turn_id: &str,
+            _cancellation: &ProviderCancellationToken,
+        ) -> ProviderDispatchRecord {
+            completed_streaming_record(input, turn_id)
+        }
+
+        fn dispatch_request_streaming(
+            &self,
+            input: &InputEvent,
+            turn_id: &str,
+            _cancellation: &ProviderCancellationToken,
+            sink: &mut dyn ProviderOutputSink,
+        ) -> ProviderDispatchRecord {
+            sink.emit_provider_output(ProviderOutputRecord::text_delta(turn_id, "hello", 1))
+                .expect("first streaming delta writes");
+            self.first_emitted
+                .send(())
+                .expect("streaming test observes first delta");
+            self.release
+                .recv()
+                .expect("streaming test releases provider");
+            sink.emit_provider_output(ProviderOutputRecord::text_delta(turn_id, " world", 2))
+                .expect("second streaming delta writes");
+            completed_streaming_record(input, turn_id)
+        }
+    }
+
+    fn completed_streaming_record(input: &InputEvent, turn_id: &str) -> ProviderDispatchRecord {
+        ProviderDispatchRecord {
+            status: ProviderDispatchStatus::Completed,
+            provider_execution_enabled: true,
+            payload: create_provider_request_payload(
+                turn_id,
+                &input.event_id,
+                "completed",
+                true,
+                "configured",
+                "admitted",
+                Some("test_streaming_adapter".to_string()),
+                None,
+                None,
+                None,
+                true,
+                "streaming_text_delta_events",
+                None,
+                &input.content,
+            ),
+            outputs: Vec::new(),
         }
     }
 
@@ -485,6 +955,175 @@ mod tests {
     }
 
     #[test]
+    fn background_turn_keeps_queue_active_without_blocking_operator_admission() {
+        let path = temp_session_path();
+        let mut first = parse_input_event(INPUT_FIXTURE).expect("input parses");
+        first.delivery_mode = DeliveryMode::AdmitAfterActiveTurn;
+        let mut queue = InputQueue::new();
+        queue.admit_input_event(first, false);
+        let (release_sender, release_receiver) = mpsc::channel();
+        let mut coordinator = TurnCoordinator::with_provider_adapter(
+            &path,
+            context(),
+            Box::new(BlockingProviderAdapter {
+                release: release_receiver,
+            }),
+        );
+
+        let first_tick = coordinator
+            .run_one_ready_turn_background_tick(&mut queue, &clock())
+            .expect("background turn starts");
+        assert!(first_tick.is_none());
+        assert_eq!(queue.turn_state(), TurnState::Active);
+
+        let mut second = parse_input_event(INPUT_FIXTURE).expect("input parses");
+        second.event_id = "input_operator_queued_while_worker_active".to_string();
+        let decision = queue.admit_input_event(second, false);
+        assert!(matches!(
+            decision,
+            crate::input_queue::AdmissionDecision::QueueForTurnBoundary { .. }
+        ));
+        assert_eq!(queue.queued_count(), 1);
+
+        release_sender.send(()).expect("release worker");
+        let mut completed = None;
+        for _ in 0..100 {
+            completed = coordinator
+                .run_one_ready_turn_background_tick(&mut queue, &clock())
+                .expect("background turn polls");
+            if completed.is_some() {
+                break;
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+
+        assert!(completed.is_some());
+        assert_eq!(queue.turn_state(), TurnState::Idle);
+        assert_eq!(queue.queued_count(), 1);
+
+        remove_file(path).ok();
+    }
+
+    #[test]
+    fn cancelling_background_turn_writes_interrupted_terminal_and_releases_queue() {
+        let path = temp_session_path();
+        let mut first = parse_input_event(INPUT_FIXTURE).expect("input parses");
+        first.delivery_mode = DeliveryMode::AdmitAfterActiveTurn;
+        let mut queue = InputQueue::new();
+        queue.admit_input_event(first, false);
+        let (_release_sender, release_receiver) = mpsc::channel();
+        let mut coordinator = TurnCoordinator::with_provider_adapter(
+            &path,
+            context(),
+            Box::new(BlockingProviderAdapter {
+                release: release_receiver,
+            }),
+        );
+
+        coordinator
+            .run_one_ready_turn_background_tick(&mut queue, &clock())
+            .expect("background turn starts");
+        assert_eq!(queue.turn_state(), TurnState::Active);
+        assert!(coordinator.request_active_turn_cancel());
+
+        let mut completed = None;
+        for _ in 0..100 {
+            completed = coordinator
+                .run_one_ready_turn_background_tick(&mut queue, &clock())
+                .expect("background turn polls");
+            if completed.is_some() {
+                break;
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+
+        assert!(completed.is_some());
+        assert_eq!(queue.turn_state(), TurnState::Idle);
+
+        let session_jsonl = read_to_string(&path).expect("session jsonl exists");
+        let events = session_jsonl
+            .lines()
+            .map(|line| parse_session_event(line).expect("event parses"))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            events.last().expect("terminal event exists").event_kind,
+            SessionEventKind::TurnInterrupted
+        );
+        assert_eq!(
+            events.last().expect("terminal event exists").payload["terminal_status"],
+            "interrupted"
+        );
+        assert_eq!(
+            events.last().expect("terminal event exists").payload["error_summary"],
+            "provider_cancelled"
+        );
+        assert!(!session_jsonl.contains("provider dispatch interrupted: provider_cancelled"));
+
+        remove_file(path).ok();
+    }
+
+    #[test]
+    fn background_turn_writes_streaming_provider_delta_before_turn_completion() {
+        let path = temp_session_path();
+        let mut first = parse_input_event(INPUT_FIXTURE).expect("input parses");
+        first.delivery_mode = DeliveryMode::AdmitAfterActiveTurn;
+        let mut queue = InputQueue::new();
+        queue.admit_input_event(first, false);
+        let (first_emitted_sender, first_emitted_receiver) = mpsc::channel();
+        let (release_sender, release_receiver) = mpsc::channel();
+        let mut coordinator = TurnCoordinator::with_provider_adapter(
+            &path,
+            context(),
+            Box::new(StreamingBlockingProviderAdapter {
+                first_emitted: first_emitted_sender,
+                release: release_receiver,
+            }),
+        );
+
+        coordinator
+            .run_one_ready_turn_background_tick(&mut queue, &clock())
+            .expect("background streaming turn starts");
+        assert_eq!(queue.turn_state(), TurnState::Active);
+        first_emitted_receiver
+            .recv_timeout(Duration::from_secs(1))
+            .expect("first streaming delta emitted before release");
+
+        let partial_session_jsonl = read_to_string(&path).expect("session jsonl exists");
+        assert!(partial_session_jsonl.contains("\"text_delta\":\"hello\""));
+        assert!(partial_session_jsonl.contains("\"provider_request_status\":\"dispatched\""));
+        assert!(
+            partial_session_jsonl
+                .find("\"provider_request_status\":\"dispatched\"")
+                .expect("provider request recorded before streaming output")
+                < partial_session_jsonl
+                    .find("\"text_delta\":\"hello\"")
+                    .expect("streaming output recorded")
+        );
+        assert!(!partial_session_jsonl.contains("\"terminal_status\":\"completed\""));
+
+        release_sender.send(()).expect("release provider");
+        let mut completed = None;
+        for _ in 0..100 {
+            completed = coordinator
+                .run_one_ready_turn_background_tick(&mut queue, &clock())
+                .expect("background streaming turn polls");
+            if completed.is_some() {
+                break;
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+
+        assert!(completed.is_some());
+        assert_eq!(queue.turn_state(), TurnState::Idle);
+        let session_jsonl = read_to_string(&path).expect("session jsonl exists");
+        assert!(session_jsonl.contains("\"text_delta\":\"hello\""));
+        assert!(session_jsonl.contains("\"text_delta\":\" world\""));
+        assert!(session_jsonl.contains("\"terminal_status\":\"completed\""));
+
+        remove_file(path).ok();
+    }
+
+    #[test]
     fn writes_buffered_provider_outputs_before_terminal_event() {
         let path = temp_session_path();
         let mut input = parse_input_event(INPUT_FIXTURE).expect("input parses");
@@ -543,6 +1182,38 @@ mod tests {
         assert_eq!(events[4].payload["schema"], TURN_TERMINAL_PAYLOAD_SCHEMA);
         assert_eq!(events[4].payload["provider_execution_enabled"], true);
         assert_eq!(events[4].payload["terminal_status"], "completed");
+
+        remove_file(path).ok();
+    }
+
+    #[test]
+    fn provider_session_settings_apply_to_next_provider_request() {
+        let path = temp_session_path();
+        let mut input = parse_input_event(INPUT_FIXTURE).expect("input parses");
+        input.delivery_mode = DeliveryMode::AdmitAfterActiveTurn;
+        let mut queue = InputQueue::new();
+        queue.admit_input_event(input, false);
+        let mut coordinator = TurnCoordinator::with_provider_adapter(
+            &path,
+            context(),
+            Box::new(scripted_output_provider_adapter()),
+        );
+        coordinator.set_provider_model(Some("gpt-5.5-mini".to_string()));
+        coordinator.set_provider_thinking(Some("high".to_string()));
+
+        coordinator
+            .run_one_ready_turn(&mut queue, &clock())
+            .expect("turn run succeeds")
+            .expect("turn completed");
+
+        let session_jsonl = read_to_string(&path).expect("session jsonl exists");
+        let events = session_jsonl
+            .lines()
+            .map(|line| parse_session_event(line).expect("event parses"))
+            .collect::<Vec<_>>();
+        let provider_request = &events[1];
+        assert_eq!(provider_request.payload["model"], "gpt-5.5-mini");
+        assert_eq!(provider_request.payload["thinking"], "high");
 
         remove_file(path).ok();
     }

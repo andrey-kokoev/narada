@@ -1,4 +1,4 @@
-use narada_agent_tui::carrier_protocol::{parse_session_event, SessionEventKind};
+use narada_agent_tui::carrier_protocol::{SessionEventKind, parse_session_event};
 use narada_agent_tui::mcp_fabric_boundary::{
     McpFabricAccessStatus, McpFabricBoundary, McpFabricPolicy, McpToolRequest, McpToolResult,
 };

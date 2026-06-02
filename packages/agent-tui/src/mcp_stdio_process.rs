@@ -8,6 +8,7 @@ use std::time::Instant;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct McpStdioProcessIoResult {
     pub server_name: String,
+    pub request_turn_id: Option<String>,
     pub tool_result: McpToolResult,
     pub response_line: String,
 }
@@ -50,6 +51,12 @@ where
     let tool_result = response.into_tool_result(prepared.tool_name.clone(), duration_ms);
     Ok(McpStdioProcessIoResult {
         server_name: prepared.server_name.clone(),
+        request_turn_id: prepared
+            .request_event
+            .payload
+            .get("turn_id")
+            .and_then(|value| value.as_str())
+            .map(ToString::to_string),
         tool_result,
         response_line,
     })
@@ -92,7 +99,7 @@ pub fn execute_prepared_tool_call_once(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::carrier_protocol::{SessionEvent, SessionEventKind, SESSION_EVENT_SCHEMA};
+    use crate::carrier_protocol::{SESSION_EVENT_SCHEMA, SessionEvent, SessionEventKind};
     use crate::mcp_json_rpc::McpJsonRpcExchange;
     use serde_json::json;
     use std::collections::BTreeMap;
@@ -198,9 +205,11 @@ process.stdin.on('data', chunk => {
         let _ = fs::remove_file(&script_path);
 
         assert_eq!(result.tool_result.status, "ok");
-        assert!(result
-            .response_line
-            .contains("env-value-from-prepared-call"));
+        assert!(
+            result
+                .response_line
+                .contains("env-value-from-prepared-call")
+        );
     }
 
     #[test]

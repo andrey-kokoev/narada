@@ -1,4 +1,4 @@
-use crate::carrier_protocol::{parse_control_input_event, ControlInputEvent};
+use crate::carrier_protocol::{ControlInputEvent, parse_control_input_event};
 
 #[derive(Debug)]
 pub struct ControlJsonlEntry {

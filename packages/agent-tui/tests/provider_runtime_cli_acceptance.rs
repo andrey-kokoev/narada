@@ -149,7 +149,7 @@ fn provider_runtime_cli_acceptance_reports_unknown_adapter_as_refused() {
 }
 
 #[test]
-fn provider_runtime_cli_acceptance_reports_requested_adapter_as_refused_until_implemented() {
+fn provider_runtime_cli_acceptance_reports_requested_adapter_as_admitted_when_implemented() {
     let mut command = base_command();
     let contract = provider_adapter_contract();
     with_provider_env(
@@ -166,20 +166,15 @@ fn provider_runtime_cli_acceptance_reports_requested_adapter_as_refused_until_im
     );
 
     let output = stdout(&mut command);
-    let refusal = format!(
-        "provider_adapter_refusal: provider_adapter_not_implemented:{}",
-        contract.production_provider_adapter_kind
-    );
 
     assert!(output.contains("provider_status: configured"));
-    assert!(output.contains("provider_adapter_status: refused"));
-    assert!(output.contains("provider_adapter_execution_enabled: false"));
-    assert!(output.contains("provider_adapter_status: refused"));
+    assert!(output.contains("provider_adapter_status: admitted"));
+    assert!(output.contains("provider_adapter_execution_enabled: true"));
     assert!(output.contains(&format!(
         "provider_adapter_kind: {}",
         contract.production_provider_adapter_kind
     )));
-    assert!(output.contains(&refusal));
+    assert!(!output.contains("provider_adapter_refusal:"));
 }
 
 fn assert_configured_provider_posture_recorded(session_jsonl: &str) {
@@ -243,7 +238,7 @@ fn provider_runtime_cli_acceptance_records_runtime_posture_in_runtime_step_evide
 }
 
 #[test]
-fn provider_runtime_cli_acceptance_records_requested_adapter_refusal_in_runtime_step_evidence() {
+fn provider_runtime_cli_acceptance_records_production_adapter_admission_in_runtime_step_evidence() {
     let control_path = temp_path("control");
     let session_path = temp_path("session");
     write(&control_path, format!("{CONTROL_FIXTURE}\n")).expect("control fixture writes");
@@ -268,6 +263,10 @@ fn provider_runtime_cli_acceptance_records_requested_adapter_refusal_in_runtime_
             ),
         ],
     );
+    command.env(
+        "NARADA_AGENT_TUI_CODEX_COMMAND",
+        "definitely-missing-codex-fixture",
+    );
 
     let output = stdout(&mut command);
     assert!(output.contains("runtime_step_once: ok"));
@@ -276,17 +275,12 @@ fn provider_runtime_cli_acceptance_records_requested_adapter_refusal_in_runtime_
         "\"provider_adapter_kind\":\"{}\"",
         contract.production_provider_adapter_kind
     );
-    let refusal_reason = format!(
-        "provider_adapter_not_implemented:{}",
-        contract.production_provider_adapter_kind
-    );
     let session_jsonl = read_to_string(&session_path).expect("session jsonl exists");
-    assert_configured_provider_posture_recorded_with_adapter(
-        &session_jsonl,
-        "refused",
-        &adapter_kind_fragment,
-        &refusal_reason,
-    );
+    assert!(session_jsonl.contains("\"provider_request_status\":\"failed\""));
+    assert!(session_jsonl.contains("\"provider_execution_enabled\":true"));
+    assert!(session_jsonl.contains("\"provider_adapter_admission_status\":\"admitted\""));
+    assert!(session_jsonl.contains(&adapter_kind_fragment));
+    assert!(session_jsonl.contains("provider dispatch failed:"));
 
     remove_file(control_path).ok();
     remove_file(session_path).ok();

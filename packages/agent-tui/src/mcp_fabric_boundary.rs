@@ -1,4 +1,4 @@
-use crate::carrier_protocol::{PayloadRef, SessionEvent, SessionEventKind, SESSION_EVENT_SCHEMA};
+use crate::carrier_protocol::{PayloadRef, SESSION_EVENT_SCHEMA, SessionEvent, SessionEventKind};
 use crate::input_queue::SessionEvidenceContext;
 use serde_json::json;
 use std::collections::BTreeSet;
@@ -220,9 +220,11 @@ mod tests {
 
         assert_eq!(boundary.status.as_str(), "disabled");
         assert_eq!(boundary.tool_visibility, "none");
-        assert!(boundary
-            .reason
-            .contains("no admitted Site MCP fabric client"));
+        assert!(
+            boundary
+                .reason
+                .contains("no admitted Site MCP fabric client")
+        );
     }
 
     #[test]

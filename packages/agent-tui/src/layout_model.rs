@@ -31,7 +31,7 @@ impl Default for LayoutConfig {
         Self {
             min_transcript_height: 1,
             status_height: 1,
-            composer_height: 3,
+            composer_height: 4,
         }
     }
 }
@@ -95,14 +95,14 @@ mod tests {
                 x: 0,
                 y: 0,
                 width: 120,
-                height: 36,
+                height: 35,
             }
         );
         assert_eq!(
             layout.status,
             Rect {
                 x: 0,
-                y: 36,
+                y: 35,
                 width: 120,
                 height: 1,
             }
@@ -111,9 +111,9 @@ mod tests {
             layout.composer,
             Rect {
                 x: 0,
-                y: 37,
+                y: 36,
                 width: 120,
-                height: 3,
+                height: 4,
             }
         );
     }

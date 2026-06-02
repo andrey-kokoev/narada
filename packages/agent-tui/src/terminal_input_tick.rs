@@ -1,7 +1,7 @@
 use crate::composer_draft::{ComposerDraftEffect, ComposerDraftState};
-use crate::terminal_input::decode_key_event;
+use crate::terminal_input::{TerminalInputIntent, decode_key_event};
 use crate::textarea_composer::TextareaComposer;
-use crossterm::event::{poll, read, Event};
+use crossterm::event::{Event, poll, read};
 use std::io;
 use std::time::Duration;
 
@@ -9,6 +9,8 @@ use std::time::Duration;
 pub enum TerminalInputTickOutcome {
     NoInput,
     DraftEffect(ComposerDraftEffect),
+    ScrollTranscriptUp,
+    ScrollTranscriptDown,
     NonKeyEventIgnored,
     ReadFailed(String),
 }
@@ -65,8 +67,17 @@ pub fn run_textarea_composer_input_tick_with_wait<R: TerminalInputReader>(
         Ok(false) => TerminalInputTickOutcome::NoInput,
         Err(error) => TerminalInputTickOutcome::ReadFailed(error.to_string()),
         Ok(true) => match reader.read_input() {
-            Ok(Event::Key(key_event)) => TerminalInputTickOutcome::DraftEffect(
-                composer.apply_intent(decode_key_event(key_event)),
+            Ok(Event::Key(key_event)) => match decode_key_event(key_event) {
+                TerminalInputIntent::ScrollTranscriptUp => {
+                    TerminalInputTickOutcome::ScrollTranscriptUp
+                }
+                TerminalInputIntent::ScrollTranscriptDown => {
+                    TerminalInputTickOutcome::ScrollTranscriptDown
+                }
+                intent => TerminalInputTickOutcome::DraftEffect(composer.apply_intent(intent)),
+            },
+            Ok(Event::Paste(text)) => TerminalInputTickOutcome::DraftEffect(
+                composer.apply_intent(TerminalInputIntent::InsertText(text)),
             ),
             Ok(_) => TerminalInputTickOutcome::NonKeyEventIgnored,
             Err(error) => TerminalInputTickOutcome::ReadFailed(error.to_string()),
@@ -160,6 +171,52 @@ mod tests {
             TerminalInputTickOutcome::DraftEffect(ComposerDraftEffect::DraftChanged)
         );
         assert_eq!(draft.text, "x");
+    }
+
+    #[test]
+    fn reports_transcript_scroll_keys_without_mutating_composer() {
+        let mut reader = FakeReader {
+            poll_result: Ok(true),
+            read_result: Some(Ok(key_event(KeyCode::PageUp, KeyModifiers::NONE))),
+            observed_wait: None,
+        };
+        let mut composer = TextareaComposer::from_draft(&ComposerDraftState {
+            text: "draft".to_string(),
+        });
+
+        assert_eq!(
+            run_textarea_composer_input_tick(&mut reader, &mut composer),
+            TerminalInputTickOutcome::ScrollTranscriptUp
+        );
+        assert_eq!(composer.text(), "draft");
+
+        let mut reader = FakeReader {
+            poll_result: Ok(true),
+            read_result: Some(Ok(key_event(KeyCode::PageDown, KeyModifiers::NONE))),
+            observed_wait: None,
+        };
+
+        assert_eq!(
+            run_textarea_composer_input_tick(&mut reader, &mut composer),
+            TerminalInputTickOutcome::ScrollTranscriptDown
+        );
+        assert_eq!(composer.text(), "draft");
+    }
+
+    #[test]
+    fn applies_paste_event_to_textarea_composer() {
+        let mut reader = FakeReader {
+            poll_result: Ok(true),
+            read_result: Some(Ok(Event::Paste("first line\nsecond line".to_string()))),
+            observed_wait: None,
+        };
+        let mut composer = TextareaComposer::default();
+
+        assert_eq!(
+            run_textarea_composer_input_tick(&mut reader, &mut composer),
+            TerminalInputTickOutcome::DraftEffect(ComposerDraftEffect::DraftChanged)
+        );
+        assert_eq!(composer.text(), "first line\nsecond line");
     }
 
     #[test]

@@ -3,6 +3,8 @@ use crate::carrier_protocol::{SessionEvent, SessionEventKind};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TranscriptActor {
     Operator,
+    OperatorSteering,
+    OperatorDirective,
     System,
     Agent,
     AgentTui,
@@ -13,6 +15,8 @@ impl TranscriptActor {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Operator => "operator",
+            Self::OperatorSteering => "operator steering",
+            Self::OperatorDirective => "operator directive",
             Self::System => "system",
             Self::Agent => "agent",
             Self::AgentTui => "agent-tui",
@@ -28,6 +32,7 @@ pub enum TranscriptItemKind {
     SystemDirectiveReleased,
     ProviderTextDelta,
     ProviderToolCallRequest,
+    ToolResultReceived,
     TurnTerminalStatus,
 }
 
@@ -39,6 +44,7 @@ pub struct TranscriptItem {
     pub text: String,
     pub sequence: Option<u64>,
     pub projection_key: Option<String>,
+    pub occurred_at: Option<String>,
 }
 
 pub fn project_session_event(event: &SessionEvent) -> Option<TranscriptItem> {
@@ -49,13 +55,14 @@ pub fn project_session_event(event: &SessionEvent) -> Option<TranscriptItem> {
         SessionEventKind::SystemDirectiveReleased => project_system_directive_released(event),
         SessionEventKind::ProviderTextDeltaRecorded => project_provider_text_delta(event),
         SessionEventKind::ProviderToolCallRequested => project_provider_tool_call_request(event),
+        SessionEventKind::ToolResultReceived => project_tool_result_received(event),
         SessionEventKind::TurnCompleted
         | SessionEventKind::TurnFailed
         | SessionEventKind::TurnInterrupted => project_turn_terminal(event),
+        SessionEventKind::CarrierDiagnosticRecorded => project_carrier_diagnostic(event),
         _ => None,
     }
 }
-
 fn project_input_admitted(event: &SessionEvent) -> Option<TranscriptItem> {
     let input_event_id = event.payload.get("input_event_id")?.as_str()?;
     let source_kind = event
@@ -63,7 +70,7 @@ fn project_input_admitted(event: &SessionEvent) -> Option<TranscriptItem> {
         .get("source_kind")
         .and_then(|value| value.as_str())
         .unwrap_or("operator");
-    let actor = actor_from_source_kind(source_kind);
+    let actor = actor_from_input_payload(source_kind, event);
     let text = event
         .payload
         .get("content_preview")
@@ -77,6 +84,7 @@ fn project_input_admitted(event: &SessionEvent) -> Option<TranscriptItem> {
         text,
         sequence: None,
         projection_key: Some(format!("input:{input_event_id}")),
+        occurred_at: Some(event.occurred_at.clone()),
     })
 }
 
@@ -84,7 +92,7 @@ fn project_turn_started(event: &SessionEvent) -> Option<TranscriptItem> {
     let turn_id = event.payload.get("turn_id")?.as_str()?.to_string();
     let input_event_id = event.payload.get("input_event_id")?.as_str()?;
     let source_kind = event.payload.get("source_kind")?.as_str()?;
-    let actor = actor_from_source_kind(source_kind);
+    let actor = actor_from_input_payload(source_kind, event);
     let text = event
         .payload
         .get("content_preview")
@@ -104,7 +112,18 @@ fn project_turn_started(event: &SessionEvent) -> Option<TranscriptItem> {
         text,
         sequence: None,
         projection_key: Some(format!("input:{input_event_id}")),
+        occurred_at: Some(event.occurred_at.clone()),
     })
+}
+
+fn actor_from_input_payload(source_kind: &str, event: &SessionEvent) -> TranscriptActor {
+    if source_kind == "operator" && is_operator_directive_payload(event) {
+        return TranscriptActor::OperatorDirective;
+    }
+    if source_kind == "operator" && is_operator_steering_payload(event) {
+        return TranscriptActor::OperatorSteering;
+    }
+    actor_from_source_kind(source_kind)
 }
 
 fn actor_from_source_kind(source_kind: &str) -> TranscriptActor {
@@ -116,15 +135,42 @@ fn actor_from_source_kind(source_kind: &str) -> TranscriptActor {
     }
 }
 
+fn is_operator_directive_payload(event: &SessionEvent) -> bool {
+    event
+        .payload
+        .get("directive_id")
+        .and_then(|value| value.as_str())
+        .is_some()
+        || event
+            .payload
+            .get("authority_ref")
+            .and_then(|value| value.as_str())
+            .is_some()
+        || event
+            .payload
+            .get("metadata")
+            .and_then(|value| value.get("directive_provenance"))
+            .is_some()
+}
+
+fn is_operator_steering_payload(event: &SessionEvent) -> bool {
+    event
+        .payload
+        .get("delivery_mode")
+        .and_then(|value| value.as_str())
+        == Some("admit_after_active_turn")
+}
+
 fn project_system_directive_held(event: &SessionEvent) -> Option<TranscriptItem> {
     let input_event_id = event.payload.get("input_event_id")?.as_str()?;
     Some(TranscriptItem {
         kind: TranscriptItemKind::SystemDirectiveHeld,
         actor: TranscriptActor::System,
         turn_id: String::new(),
-        text: format!("system directive held {input_event_id}"),
+        text: format!("held {input_event_id}"),
         sequence: None,
         projection_key: None,
+        occurred_at: Some(event.occurred_at.clone()),
     })
 }
 
@@ -134,9 +180,10 @@ fn project_system_directive_released(event: &SessionEvent) -> Option<TranscriptI
         kind: TranscriptItemKind::SystemDirectiveReleased,
         actor: TranscriptActor::System,
         turn_id: String::new(),
-        text: format!("system directive released {input_event_id}"),
+        text: format!("released {input_event_id}"),
         sequence: None,
         projection_key: None,
+        occurred_at: Some(event.occurred_at.clone()),
     })
 }
 
@@ -147,6 +194,7 @@ fn project_provider_text_delta(event: &SessionEvent) -> Option<TranscriptItem> {
             .payload
             .get("text_delta")
             .and_then(|value| value.as_str())
+            .filter(|value| !value.trim().is_empty())
             .map(|value| value.to_string())
     })?;
     Some(TranscriptItem {
@@ -159,6 +207,7 @@ fn project_provider_text_delta(event: &SessionEvent) -> Option<TranscriptItem> {
             .get("sequence")
             .and_then(|value| value.as_u64()),
         projection_key: None,
+        occurred_at: Some(event.occurred_at.clone()),
     })
 }
 
@@ -183,7 +232,55 @@ fn project_provider_tool_call_request(event: &SessionEvent) -> Option<Transcript
             .get("sequence")
             .and_then(|value| value.as_u64()),
         projection_key: None,
+        occurred_at: Some(event.occurred_at.clone()),
     })
+}
+
+fn project_tool_result_received(event: &SessionEvent) -> Option<TranscriptItem> {
+    let tool_name = event.payload.get("tool_name")?.as_str()?;
+    let status = event.payload.get("status")?.as_str()?;
+    let duration_ms = event
+        .payload
+        .get("duration_ms")
+        .and_then(|value| value.as_u64())
+        .unwrap_or(0);
+    let result_summary = payload_ref_summary(event, "result_ref").unwrap_or_else(|| {
+        event
+            .payload
+            .get("result_summary")
+            .and_then(|value| value.as_str())
+            .unwrap_or("")
+            .to_string()
+    });
+    Some(TranscriptItem {
+        kind: TranscriptItemKind::ToolResultReceived,
+        actor: TranscriptActor::AgentTui,
+        turn_id: event
+            .payload
+            .get("turn_id")
+            .and_then(|value| value.as_str())
+            .unwrap_or("")
+            .to_string(),
+        text: tool_result_text(status, tool_name, duration_ms, &result_summary),
+        sequence: None,
+        projection_key: None,
+        occurred_at: Some(event.occurred_at.clone()),
+    })
+}
+
+fn tool_result_text(
+    status: &str,
+    tool_name: &str,
+    duration_ms: u64,
+    result_summary: &str,
+) -> String {
+    let base = format!("{status} {tool_name} in {duration_ms}ms");
+    let summary = result_summary.trim();
+    if summary.is_empty() {
+        base
+    } else {
+        format!("{base} · {summary}")
+    }
 }
 
 fn payload_ref_summary(event: &SessionEvent, field: &str) -> Option<String> {
@@ -208,20 +305,80 @@ fn project_turn_terminal(event: &SessionEvent) -> Option<TranscriptItem> {
             SessionEventKind::TurnInterrupted => "interrupted",
             _ => "terminal",
         });
+    let text = if event.event_kind == SessionEventKind::TurnInterrupted {
+        event
+            .payload
+            .get("error_summary")
+            .and_then(|value| value.as_str())
+            .filter(|summary| !summary.trim().is_empty())
+            .map(|summary| format!("{terminal_status} · {summary}"))
+            .unwrap_or_else(|| terminal_status.to_string())
+    } else {
+        terminal_status.to_string()
+    };
     Some(TranscriptItem {
         kind: TranscriptItemKind::TurnTerminalStatus,
         actor: TranscriptActor::AgentTui,
         turn_id,
-        text: terminal_status.to_string(),
+        text,
         sequence: None,
         projection_key: None,
+        occurred_at: Some(event.occurred_at.clone()),
     })
+}
+
+fn project_carrier_diagnostic(event: &SessionEvent) -> Option<TranscriptItem> {
+    let source = event
+        .payload
+        .get("source")
+        .and_then(|value| value.as_str())
+        .map(humanize_token)
+        .unwrap_or_else(|| "carrier diagnostic".to_string());
+    let level = event
+        .payload
+        .get("level")
+        .and_then(|value| value.as_str())
+        .unwrap_or("info");
+    let text = if source == "known noise suppression" {
+        let policy = event
+            .payload
+            .get("suppression_policy")
+            .and_then(|value| value.as_str())
+            .map(humanize_token)
+            .unwrap_or_else(|| "unknown policy".to_string());
+        let count = event
+            .payload
+            .get("suppression_count")
+            .and_then(|value| value.as_u64())
+            .unwrap_or(0);
+        format!("diagnostic {level} {source} · policy {policy} · suppressed {count}")
+    } else {
+        format!("diagnostic {level} {source} · mediated")
+    };
+    Some(TranscriptItem {
+        kind: TranscriptItemKind::TurnTerminalStatus,
+        actor: TranscriptActor::AgentTui,
+        turn_id: event
+            .payload
+            .get("turn_id")
+            .and_then(|value| value.as_str())
+            .unwrap_or("")
+            .to_string(),
+        text,
+        sequence: None,
+        projection_key: Some(format!("diagnostic:{}", event.event_id)),
+        occurred_at: Some(event.occurred_at.clone()),
+    })
+}
+
+fn humanize_token(value: &str) -> String {
+    value.replace('_', " ")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::carrier_protocol::{SessionEvent, SESSION_EVENT_SCHEMA};
+    use crate::carrier_protocol::{SESSION_EVENT_SCHEMA, SessionEvent};
     use serde_json::json;
 
     fn event(event_kind: SessionEventKind, payload: serde_json::Value) -> SessionEvent {
@@ -280,6 +437,49 @@ mod tests {
     }
 
     #[test]
+    fn projects_operator_directive_input_separately_from_ordinary_operator_input() {
+        let item = project_session_event(&event(
+            SessionEventKind::InputAdmittedToTurn,
+            json!({
+                "input_event_id": "input_directive_1",
+                "source_kind": "operator",
+                "source_id": "operator",
+                "transport": "control_jsonl",
+                "content_preview": "Always include active directives.",
+                "directive_id": "dir_operator_1",
+                "authority_ref": "operator_explicit_directive"
+            }),
+        ))
+        .expect("projection exists");
+
+        assert_eq!(item.kind, TranscriptItemKind::InputAdmitted);
+        assert_eq!(item.actor, TranscriptActor::OperatorDirective);
+        assert_eq!(item.actor.as_str(), "operator directive");
+        assert_eq!(item.text, "Always include active directives.");
+    }
+
+    #[test]
+    fn projects_operator_steering_input_separately_from_ordinary_operator_input() {
+        let item = project_session_event(&event(
+            SessionEventKind::InputAdmittedToTurn,
+            json!({
+                "input_event_id": "input_steering_1",
+                "source_kind": "operator",
+                "source_id": "operator",
+                "transport": "interactive_terminal",
+                "delivery_mode": "admit_after_active_turn",
+                "content_preview": "check the mailbox after this turn"
+            }),
+        ))
+        .expect("projection exists");
+
+        assert_eq!(item.kind, TranscriptItemKind::InputAdmitted);
+        assert_eq!(item.actor, TranscriptActor::OperatorSteering);
+        assert_eq!(item.actor.as_str(), "operator steering");
+        assert_eq!(item.text, "check the mailbox after this turn");
+    }
+
+    #[test]
     fn projects_system_turn_started_to_input_transcript_item() {
         let item = project_session_event(&event(
             SessionEventKind::TurnStarted,
@@ -307,7 +507,7 @@ mod tests {
         .expect("held projection exists");
         assert_eq!(held.kind, TranscriptItemKind::SystemDirectiveHeld);
         assert_eq!(held.actor, TranscriptActor::System);
-        assert_eq!(held.text, "system directive held input_held");
+        assert_eq!(held.text, "held input_held");
 
         let released = project_session_event(&event(
             SessionEventKind::SystemDirectiveReleased,
@@ -316,7 +516,7 @@ mod tests {
         .expect("released projection exists");
         assert_eq!(released.kind, TranscriptItemKind::SystemDirectiveReleased);
         assert_eq!(released.actor, TranscriptActor::System);
-        assert_eq!(released.text, "system directive released input_held");
+        assert_eq!(released.text, "released input_held");
     }
 
     #[test]
@@ -337,6 +537,20 @@ mod tests {
         assert_eq!(item.turn_id, "turn_1");
         assert_eq!(item.sequence, Some(1));
         assert_eq!(item.text, "hello");
+    }
+
+    #[test]
+    fn skips_blank_provider_text_delta_without_rendering_empty_agent_blocks() {
+        let blank = project_session_event(&event(
+            SessionEventKind::ProviderTextDeltaRecorded,
+            json!({
+                "turn_id": "turn_1",
+                "sequence": 1,
+                "text_delta": "  \n\t  "
+            }),
+        ));
+
+        assert_eq!(blank, None);
     }
 
     #[test]
@@ -410,6 +624,47 @@ mod tests {
     }
 
     #[test]
+    fn projects_tool_result_received_to_agent_tui_transcript_item() {
+        let item = project_session_event(&event(
+            SessionEventKind::ToolResultReceived,
+            json!({
+                "tool_name": "site_loop_run_once",
+                "status": "ok",
+                "duration_ms": 12,
+                "result_summary": "success",
+                "result_ref": null
+            }),
+        ))
+        .expect("projection exists");
+
+        assert_eq!(item.kind, TranscriptItemKind::ToolResultReceived);
+        assert_eq!(item.actor, TranscriptActor::AgentTui);
+        assert_eq!(item.text, "ok site_loop_run_once in 12ms · success");
+        assert_eq!(
+            item.occurred_at.as_deref(),
+            Some("2026-05-30T00:00:00.000Z")
+        );
+    }
+
+    #[test]
+    fn projects_tool_result_without_empty_summary_separator() {
+        let item = project_session_event(&event(
+            SessionEventKind::ToolResultReceived,
+            json!({
+                "tool_name": "site_loop_run_once",
+                "status": "ok",
+                "duration_ms": 12,
+                "result_summary": "   ",
+                "result_ref": null
+            }),
+        ))
+        .expect("projection exists");
+
+        assert_eq!(item.text, "ok site_loop_run_once in 12ms");
+        assert!(!item.text.contains(" ·"));
+    }
+
+    #[test]
     fn projects_terminal_turn_status() {
         let item = project_session_event(&event(
             SessionEventKind::TurnFailed,
@@ -424,6 +679,48 @@ mod tests {
         assert_eq!(item.actor, TranscriptActor::AgentTui);
         assert_eq!(item.turn_id, "turn_1");
         assert_eq!(item.text, "failed");
+    }
+
+    #[test]
+    fn projects_carrier_diagnostic_without_raw_stderr_message() {
+        let item = project_session_event(&event(
+            SessionEventKind::CarrierDiagnosticRecorded,
+            json!({
+                "source": "provider_stderr",
+                "level": "warn",
+                "message": "raw provider stderr line that must not render directly",
+                "rendering_boundary": "mediated_diagnostic_event",
+                "terminal_write": false
+            }),
+        ))
+        .expect("diagnostic projection exists");
+
+        assert_eq!(item.kind, TranscriptItemKind::TurnTerminalStatus);
+        assert_eq!(item.actor, TranscriptActor::AgentTui);
+        assert_eq!(item.text, "diagnostic warn provider stderr · mediated");
+        assert!(!item.text.contains("raw provider stderr line"));
+    }
+
+    #[test]
+    fn projects_known_noise_suppression_policy_and_count() {
+        let item = project_session_event(&event(
+            SessionEventKind::CarrierDiagnosticRecorded,
+            json!({
+                "source": "known_noise_suppression",
+                "level": "info",
+                "message": "known noise suppressed before transcript rendering",
+                "suppression_policy": "sqlite_experimental_warning",
+                "suppression_count": 3,
+                "rendering_boundary": "mediated_diagnostic_event",
+                "terminal_write": false
+            }),
+        ))
+        .expect("diagnostic projection exists");
+
+        assert_eq!(
+            item.text,
+            "diagnostic info known noise suppression · policy sqlite experimental warning · suppressed 3"
+        );
     }
 
     #[test]

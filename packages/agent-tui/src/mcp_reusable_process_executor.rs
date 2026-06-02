@@ -2,13 +2,13 @@ use crate::mcp_fabric_transport::McpFabricPreparedToolCall;
 use crate::mcp_json_rpc::JsonRpcResponse;
 use crate::mcp_process_supervisor::handshake_plan;
 use crate::mcp_runtime_execution::McpRuntimeToolExecutor;
-use crate::mcp_stdio_process::{exchange_prepared_tool_call, McpStdioProcessIoResult};
+use crate::mcp_stdio_process::{McpStdioProcessIoResult, exchange_prepared_tool_call};
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc,
+    atomic::{AtomicBool, Ordering},
 };
 use std::thread;
 use std::time::{Duration, Instant};
@@ -187,7 +187,9 @@ impl TimeoutCancellationGuard {
             thread::sleep(Duration::from_millis(timeout_ms));
             if !completed_for_thread.load(Ordering::SeqCst) {
                 terminate_process(process_id);
-                eprintln!("mcp_reusable_process_timeout_cancelled:{server_name}:{process_id}:{timeout_ms}");
+                eprintln!(
+                    "mcp_reusable_process_timeout_cancelled:{server_name}:{process_id}:{timeout_ms}"
+                );
             }
         });
         Self { completed }
@@ -347,7 +349,7 @@ impl ReusableMcpProcess {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::carrier_protocol::{SessionEvent, SessionEventKind, SESSION_EVENT_SCHEMA};
+    use crate::carrier_protocol::{SESSION_EVENT_SCHEMA, SessionEvent, SessionEventKind};
     use crate::mcp_json_rpc::McpJsonRpcExchange;
     use serde_json::json;
     use std::io::Cursor;

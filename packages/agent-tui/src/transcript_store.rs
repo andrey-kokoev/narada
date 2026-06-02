@@ -1,5 +1,5 @@
-use crate::carrier_protocol::{parse_session_event, SessionEvent};
-use crate::transcript_projection::{project_session_event, TranscriptItem, TranscriptItemKind};
+use crate::carrier_protocol::{SessionEvent, parse_session_event};
+use crate::transcript_projection::{TranscriptItem, TranscriptItemKind, project_session_event};
 use std::collections::HashSet;
 use std::fs::read_to_string;
 use std::path::Path;
@@ -51,6 +51,10 @@ impl TranscriptStore {
 
     pub fn is_empty(&self) -> bool {
         self.items.is_empty()
+    }
+
+    pub fn clear_projection(&mut self) {
+        self.items.clear();
     }
 
     pub fn ingest_event(&mut self, event: &SessionEvent) -> TranscriptIngestResult {
@@ -149,7 +153,7 @@ impl TranscriptStore {
 mod tests {
     use super::*;
     use crate::carrier_protocol::{
-        SessionEvent, SessionEventKind, SESSION_EVENT_SCHEMA, TURN_TERMINAL_PAYLOAD_SCHEMA,
+        SESSION_EVENT_SCHEMA, SessionEvent, SessionEventKind, TURN_TERMINAL_PAYLOAD_SCHEMA,
     };
     use crate::transcript_projection::{TranscriptActor, TranscriptItemKind};
     use serde_json::json;
@@ -331,6 +335,76 @@ mod tests {
             TranscriptIngestResult::Duplicate
         );
         assert_eq!(store.len(), 1);
+    }
+
+    #[test]
+    fn projects_provider_requested_tool_result_when_event_ids_are_unique() {
+        let mut store = TranscriptStore::new();
+
+        assert_eq!(
+            store.ingest_event(&event(
+                "session_event_turn_step241_1",
+                SessionEventKind::TurnStarted,
+                json!({
+                    "turn_id": "turn_step241_1",
+                    "input_event_id": "input_operator_composer_1",
+                    "source_kind": "operator",
+                    "content_preview": "run startup sequence"
+                }),
+            )),
+            TranscriptIngestResult::Projected
+        );
+        assert_eq!(
+            store.ingest_event(&event(
+                "session_event_turn_step241_3",
+                SessionEventKind::ProviderToolCallRequested,
+                json!({
+                    "turn_id": "turn_step241_1",
+                    "sequence": 1,
+                    "tool_name": "startup_sequence",
+                    "arguments_summary": "{}"
+                }),
+            )),
+            TranscriptIngestResult::Projected
+        );
+        assert_eq!(
+            store.ingest_event(&event(
+                "session_event_turn_step241_provider_tool_1",
+                SessionEventKind::ToolResultReceived,
+                json!({
+                    "turn_id": "turn_step241_1",
+                    "tool_name": "startup_sequence",
+                    "status": "ok",
+                    "duration_ms": 10,
+                    "result_summary": "content_items=1"
+                }),
+            )),
+            TranscriptIngestResult::Projected
+        );
+        assert_eq!(
+            store.ingest_event(&event(
+                "session_event_turn_step241_4",
+                SessionEventKind::TurnCompleted,
+                json!({
+                    "schema": TURN_TERMINAL_PAYLOAD_SCHEMA,
+                    "turn_id": "turn_step241_1",
+                    "terminal_status": "completed",
+                    "provider_request_status": "completed",
+                    "provider_execution_enabled": true
+                }),
+            )),
+            TranscriptIngestResult::Projected
+        );
+
+        let rendered = store
+            .items()
+            .iter()
+            .map(|item| item.text.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(rendered[0], "run startup sequence");
+        assert_eq!(rendered[1], "startup_sequence({})");
+        assert_eq!(rendered[2], "ok startup_sequence in 10ms · content_items=1");
+        assert_eq!(rendered[3], "completed");
     }
 
     #[test]

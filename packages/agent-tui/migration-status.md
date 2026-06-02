@@ -2,9 +2,9 @@
 
 ## Status
 
-`agent-tui` is a Rust carrier prototype with a bounded runtime scaffold, control JSONL polling, queue admission, transcript projection, terminal rendering, and explicit provider-boundary evidence.
+`agent-tui` is a Rust carrier prototype with a bounded runtime scaffold, control JSONL polling, queue admission, transcript projection, terminal rendering, explicit provider-boundary evidence, and a governed-session provider/MCP admission path.
 
-It is not yet a provider-backed interactive carrier. Production `agent-start -Runtime agent-tui` must remain on the bounded non-terminal runtime slice until the promotion gate is satisfied.
+It is now admitted as the `agent-start -Runtime agent-tui` terminal interactive-loop carrier slice. Provider execution and Site MCP execution remain separately gated; terminal rendering no longer depends on the old bounded non-terminal launch slice.
 
 ## Implemented In `@narada2/carrier-protocol`
 
@@ -33,17 +33,23 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - Append-only session JSONL writer.
 - Input queue with idle admission, active-turn queueing, queue summary/drop/clear operations, system-directive hold until composer clear, and release evidence.
 - Runtime coordinator for control polling, queue admission, carrier-local queue commands, literal slash input, composer submit, interrupt evidence, held release, and session evidence writing.
-- Turn coordinator with provider dispatch boundary recording and carrier-validated, schema-marked explicit `completed_without_provider` terminal evidence built through shared Rust/TypeScript payload factories.
-- Provider dispatch trait plus carrier-validated, schema-marked provider request/output payload contracts built through shared Rust/TypeScript factories, centralized adapter factory, stub, and scripted admitted adapters; real provider execution remains disabled outside explicit adapter admission.
-- Provider adapter admission boundary distinguishes disabled runtime, refused runtime, configured-without-adapter posture, explicit requested adapter kind via `NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND`, typed adapter-registry rejection for unknown adapter kinds, admitted scripted adapter execution, and known-but-unimplemented production adapter refusal as `provider_adapter_not_implemented:<kind>` from `packages/agent-tui/contracts/provider-adapters.json`; the provider execution environment gate is read from the same contract by Rust runtime config and `agent-start` launch metadata.
+- Interactive TUI loop keeps drawing and admitting input while provider/MCP turn work runs in a background worker; operator submits during active turns remain queued and visible.
+- Turn coordinator with provider dispatch boundary recording, background worker execution for interactive TUI turns, and carrier-validated, schema-marked explicit `completed_without_provider` terminal evidence built through shared Rust/TypeScript payload factories.
+- Provider dispatch trait plus carrier-validated, schema-marked provider request/output payload contracts built through shared Rust/TypeScript factories, centralized adapter factory, stub, scripted admitted adapter, and explicit governed-session `codex_subscription_adapter`; real provider execution remains disabled outside explicit adapter admission.
+- Provider adapter admission boundary distinguishes disabled runtime, refused runtime, configured-without-adapter posture, explicit requested adapter kind via `NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND`, typed adapter-registry rejection for unknown adapter kinds, admitted scripted adapter execution, and admitted production adapter execution behind the `packages/agent-tui/contracts/provider-adapters.json` implementation flag; the provider execution environment gate is read from the same contract by Rust runtime config and `agent-start` launch metadata.
 - Provider boundary acceptance verifies request and terminal evidence both record `recorded_not_dispatched` and `provider_execution_enabled=false`.
 - Provider request evidence carries provider runtime posture, configured provider/model when present, explicit streaming contract status, and separate adapter refusal reason so disabled/configured turns are reconstructable from session JSONL.
+- Provider dispatch now sends the full admitted input content to the provider adapter; preview truncation remains only an evidence/rendering concern, not the provider prompt.
 - Provider boundary acceptance verifies ordered provider text deltas project as one accumulated agent transcript message for the turn.
-- Provider runtime config is explicit: provider/model env reaches `configured` runtime posture without carrying execution authority; adapter admission separately records configured-without-adapter, unknown-adapter, known-unimplemented adapter refusal, and explicit admitted scripted execution.
-- Provider runtime CLI acceptance verifies the binary reports disabled-by-default, refused missing-model, configured provider/model/streaming posture, configured-without-adapter posture, unknown adapter refusal, and known-unimplemented adapter refusal; runtime-step and interactive-step evidence both carry separate runtime and adapter posture.
-- Agent-start launch env forces `NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION=false` for the bounded runtime slice and records that provider environment gate in launch metadata.
-- Rendering boundary model converts provider stderr, MCP stderr, known-noise suppression, terminal resize, and payload threshold decisions into mediated diagnostics or payload references instead of raw terminal writes.
+- Provider runtime config is explicit: provider/model env reaches `configured` runtime posture without carrying execution authority; adapter admission separately records configured-without-adapter, unknown-adapter refusal, explicit admitted scripted execution, and explicit admitted production execution.
+- Provider runtime CLI acceptance verifies the binary reports disabled-by-default, refused missing-model, configured provider/model/streaming posture, configured-without-adapter posture, unknown adapter refusal, and production adapter admission; runtime-step and interactive-step evidence both carry separate runtime and adapter posture.
+- Agent-start can preseed an operator-authorized system starting directive into `agent-tui` control JSONL via `--agent-tui-starting-directive` or `--agent-tui-starting-directive-file`, before the runtime process is spawned.
+- Narada proper has an `agent-tui` Site MCP fabric config at `.ai/mcp/config.json` exposing the filesystem MCP `write_file` tool for governed result artifacts.
+- `tools/agent-start/agent-tui-live-turn-acceptance.mjs` productizes the live provider-plus-MCP proof: it writes a starting directive, launches `agent-tui` with explicit provider and MCP admission, captures runtime output to a log, validates the session event chain, validates the written result artifact, and writes compact proof JSON.
+- Agent-start launch env keeps `NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION=false` by default and switches it to `true` only when explicit governed-session provider execution is requested.
+- Rendering boundary model converts provider stderr, MCP stderr, known-noise suppression, terminal resize, and payload threshold decisions into mediated diagnostics or payload references instead of raw terminal writes; mediated diagnostic rows omit the raw diagnostic marker, render severity as semantic state, align wrapped diagnostic detail under the detail column, and carrier terminal-state rows render completed states as positive scan data.
 - Provider output constructors and transcript projection enforce payload references for oversized or sensitive provider text/tool arguments instead of inlining them into transcript rows.
+- Live provider streaming is implemented for provider adapters that emit incremental JSON-line text deltas: the Codex-subscription adapter drains stdout while the provider process is still active, writes provider text-delta session evidence through the turn worker sink, keeps the TUI responsive during the active turn, and preserves buffered fallback behavior for non-streaming provider output.
 - MCP fabric boundary acceptance verifies disabled-by-default posture, policy-bound tool visibility after admission, and valid tool request/result evidence records.
 - MCP fabric transport parses carrier MCP config, validates the config root, `mcpServers` map, and server record shapes, normalizes nonblank top-level string metadata and server string metadata, validates nonblank stdio transport values, server env maps, and inherited env var names with CLI acceptance, derives policy-bound visibility from one unambiguous configured nonblank array tool list, resolves tools to nonblank stdio server launch commands, nonblank string args, explicit server env values, and selected inherited env values with explicit-env override precedence, and prepares evidenced JSON-RPC `tools/call` requests for supervised stdio execution.
 - MCP JSON-RPC contract builds newline-delimited `tools/call` requests, parses success/error responses, and classifies responses into MCP tool result evidence summaries.
@@ -58,10 +64,39 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - Agent-start MCP gate metadata now records the Rust MCP bridge as implemented but withheld from the production runtime slice until live Site MCP execution is admitted.
 - MCP runtime config is explicit: Site MCP fabric remains disabled unless the environment gate in `packages/agent-tui/contracts/mcp-runtime.json` is enabled; process launch MCP config/fabric env reaches `configured` posture only when the MCP config path is inside the declared Site MCP fabric root without parent traversal, readable, parseable by the Rust MCP fabric transport client, and declares at least one valid server with at least one visible tool; scaffold output, MCP tool evidence, and agent-start metadata record the config path policy from the same contract, while production exposure remains controlled by launch admission gates.
 - Agent-start launch env forces `NARADA_AGENT_TUI_ENABLE_MCP_FABRIC=false` for the bounded runtime slice and records that MCP environment gate in launch metadata.
-- Transcript projection and store for operator/system input, system directive hold/release, provider output placeholders, provider tool-call placeholders, and terminal turn status.
+- Transcript projection and store for operator/system input, system directive hold/release, provider output placeholders, provider tool-call placeholders, and terminal turn status; blank provider text deltas are suppressed before rendering so empty agent blocks do not appear in the transcript.
 - Layout, status, composer, transcript, and aggregate app view models, including one runtime posture bundle for disabled/refused/configured provider posture, explicit provider-adapter admission posture, plus disabled/refused/configured MCP and terminal-rendering posture in status output; process env is snapshotted through the library runtime config snapshot boundary before deriving the combined posture.
 - Ratatui renderer for transcript/status/composer regions.
 - Renderer acceptance verifies nonblank buffer rendering, core region text, stable layout rectangles, and preserved composer draft in compact frames.
+- Status rendering and compact status view-model text humanize runtime posture tokens before display, hide non-actionable zero/none counters, report transcript count from visible transcript rows after projection filtering, color status keys separately from values, split active/calling phase values into phase/tool/duration scan spans, split typing/queued operator directive and note phrases into participant/mode/count spans, keep provider adapter posture adjacent to provider posture, style session IDs and transcript counters as neutral scan data, prioritize active errors before runtime posture details, render a muted fill instead of an empty strip when too narrow for any segment, and report terminal-rendering admission refusals with copyable PowerShell environment setup.
+- Participant label colors distinguish operator, agent, system, operator directive, carrier/tool runtime, and provider roles at render time; composite directive labels split participant identity from directive mode (`operator` plus `directive`, `system` plus `directive`), long standalone participant labels truncate with a muted ellipsis instead of hard terminal clipping while preserving participant colors, carrier-local queue feedback colors embedded participant names, queued states, durations, and wrapped queue continuations instead of flattening them to muted carrier text, system/operator-directive/provider bodies use role color without bold, technical provider tokens remain code-styled, and directive status bodies render state plus identifier as semantic scan data with wrapped detail aligned under the detail column.
+- Transcript body rendering normalizes terminal-control characters before wrapping, trims boundary-only blank rows, preserves internal paragraph spacing, keeps exactly one blank separator line between transcript blocks, truncates overlong timestamp rows with a muted ellipsis, and pins the participant label when tailing an oversized latest block, preventing accidental extra blank lines before timestamps or participant labels while preserving speaker context.
+- Transcript scroll state is carrier-local: PageUp/PageDown change the rendered transcript offset without mutating composer draft text, queue state, or session JSONL truth, the app view model and renderer both expose the non-tail scroll offset, the renderer trims artificial separator rows at scrolled viewport boundaries, shows a muted context marker instead of an empty pane when a scrolled slice contains only separators, and composer content is preserved while showing an older transcript window.
+- Active-turn composer mode is visibly distinct from idle operator input: the prompt keeps `operator` as the green participant identity while styling `note` as a warning/action mode before the agent target label, active-turn draft text uses the same warning/action styling instead of ordinary operator-input green, long composer prompt labels truncate with a muted ellipsis while preserving participant colors, nonzero queued-note and held-directive affordances render as whole tokens in the composer title with status/count colors or a muted omission marker when width is tight, and whitespace-only drafts are treated as empty in status just as they are for input admission and system-directive holds.
+- Wrapped carrier-mediated tool request/result rows align continuation text and timestamp text under the first payload column and preserve payload styling on continuations instead of falling back to muted carrier text; when a narrow transcript cannot fit a directional tool label plus useful payload, the label stays visible and payload/timestamp move under the standard body indent; tool-result status prefixes such as `ok`/`failed` render with their following separator as semantic state before the code-styled tool payload, semantic result summaries such as `success`/`error` render as positive or negative scan data, and tool-call argument text is not misread as result status.
+- Status rendering truncates overlong high-priority segments in place with a muted ellipsis while preserving value-span colors, so active work/error context remains visible in narrow terminals without flattening phase/tool/duration styling; when a terminal is too tight to show a clean ellipsis, omitted lower-priority segments are dropped instead of leaving orphan separators or single-dot fragments.
+- Transcript body rendering aligns wrapped key/value continuations under the value column, wrapped diff continuations under the diff payload column, and wrapped PowerShell command continuations under the command column; it keeps a muted blockquote marker on wrapped blockquote continuations, and styles list markers, list indentation, wrapped continuation indentation, and Markdown table pipes/fragments as muted structure while keeping list item, continuation, and table cell text in normal body color.
+- Short standalone colon-terminated body lines and Markdown headings render as bold cyan section headings, with wrapped Markdown heading continuations aligned under heading text and kept in heading style without repeating the raw marker.
+- Fenced code blocks render with a muted `code: <language>` header, omit raw closing fence lines, keep code contents styled as code, preserve literal inline marker characters while wrapping fenced code, and place the timestamp immediately after the code content without an extra fence/blank row.
+- Inline code renders as styled code content without showing raw backtick delimiters, including when a narrow transcript wraps the inline-code span across multiple rows.
+- Simple bold emphasis renders as bold body text without showing raw `**` delimiters.
+- Simple italic emphasis renders as italic body text without showing raw `*` delimiters, while list-marker handling remains separate.
+- Blockquote markers render as muted transcript structure while quoted content keeps normal body and inline-code styling.
+- Marked transcript lines keep list/blockquote structure even when their content ends with `:`, instead of being promoted to section headings.
+- Markdown heading markers render as muted structure while heading text uses the transcript heading style.
+- Top-level key-value summary lines render keys, colon separators, technical values, comma-separated identifier lists, semantic status values, and boolean/null values as distinct visual roles while avoiding indented path/prose false positives.
+- Lettered choice markers such as `A. ` render as muted structure, and the `(*) ` recommended marker renders as highlighted structure instead of accidental italic markup.
+- PowerShell prompt lines render the prompt/path prefix as muted shell structure and the submitted command as code-styled content.
+- Transcript timestamp text keeps the `YYYY-MM-DDZHH:mm` layout and offsets while styling date/separator and time as distinct scan targets; inline ISO, Narada timestamp, and compact duration tokens render as code-styled spans.
+- Plain Windows paths inside transcript prose render as code-styled spans, with trailing sentence punctuation kept outside the path style.
+- Unbackticked Narada/runtime identifiers in prose, such as `narada-proper`, `authority_locus`, and `facade_only`, render as code-styled spans while ordinary hyphenated prose remains body text.
+- Plain URL, email-address, slash-command, command-flag, and technical tool-call tokens render as code-styled spans, while Windows path detection requires a drive-letter boundary so `https://` is not split as a false path.
+- Markdown link and image-link delimiters render as muted structure while the label remains body-styled and the URL remains code-styled.
+- Wrapped list and blockquote body lines align continuation text under the item or quote content column instead of under the marker.
+- Markdown task-list checkboxes render as distinct state markers: unchecked muted, checked positive, and wrapped task items align continuation text under the task content column.
+- Markdown horizontal rule lines render as muted separators instead of ordinary body text.
+- Diff-like addition and deletion lines render their leading marker as positive or negative while preserving normal bullet-list behavior.
+- Markdown table row pipes render as muted structure while cell contents keep normal inline styling; table separator rows render fully muted.
 - Terminal lifecycle state guard with clean leave semantics after normal exit and render-loop error.
 - Terminal input decoding, input tick reduction, composer draft reducer, and render-loop action reducer.
 - `tui-textarea` dependency and `TextareaComposer` adapter scaffold with the same submit, clear, interrupt, and draft-state effects as the current reducer.
@@ -69,7 +104,7 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - Interactive render-loop state now owns a long-lived `TextareaComposer`; runtime and view APIs receive draft snapshots only at their existing boundaries.
 - Composer region rendering now uses the `tui-textarea` widget path, with an explicit live-composer render entry point available beside snapshot rendering.
 - Terminal interactive draw loop now calls the live-composer renderer so textarea cursor and viewport state are preserved during interactive rendering.
-- Terminal runtime config is explicit: terminal rendering remains disabled unless the environment gate in `packages/agent-tui/contracts/terminal-runtime.json` is enabled with its required terminal mode; Rust config and `agent-start` launch metadata read the same contract, CLI acceptance verifies disabled, refused, configured posture, and `--render-once`/`--interactive-loop` refusal while the gate is disabled.
+- Terminal runtime config remains explicit for scaffold/status reporting, but terminal entry is admitted by explicit CLI mode: `--render-once` and `--interactive-loop` no longer require the hidden environment gate. CLI acceptance still verifies disabled, refused, and configured terminal posture reporting from `packages/agent-tui/contracts/terminal-runtime.json`, plus direct `--interactive-loop` admission without the env gate.
 - Rust terminal runtime config reads `terminal-runtime.json` through an explicit contract module, matching the other shared carrier contracts.
 - Terminal drawing has a backend-generic helper used by both real terminal sessions and scripted TestBackend frame acceptance.
 - `TerminalLifecycleHarness` records enter/draw/leave behavior for scripted terminal backends without binding tests to process stdout.
@@ -77,14 +112,14 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - Interactive loop body is extracted behind injectable terminal, input, and clock seams; production `--interactive-loop` now uses the same driver as scripted acceptance.
 - Injected-loop acceptance covers active-turn operator submit queuing, exit input handling, input read failure surfacing, malformed control JSONL surfacing, and final draw evidence.
 - Injected-loop test fixtures now use shared constructors for runtime paths, terminal frame capture, input outcomes, and deterministic clocks.
-- Buffer-level live-composer rendering acceptance covers active-turn prompt text, visible live draft content, queued-note status, and stale snapshot exclusion.
+- Buffer-level live-composer rendering acceptance covers active-turn prompt text, visible live draft content, multiline draft color, queued-note status, and stale snapshot exclusion.
 - Composer redraw acceptance verifies key ticks preserve draft text across redraws, backspace updates rendered text, and submit clears draft while admitting operator text through the bridge once.
 - Interactive runtime module that owns polling, held release, one-turn drain, transcript ingestion, and view assembly.
 - Smoke runner API: `AgentTuiSmokeSession`, `run_interactive_smoke_step`, and `interactive_smoke_step_summary_lines`.
 - Smoke acceptance covers canonical system directive delivery, held directive release, queued operator FIFO ordering, interrupt evidence, malformed control JSONL, and provider-boundary transcript rows.
-- Narada proper `agent-start` admits `agent-tui` as a distinct runtime but launches only the bounded non-terminal slice defined in `packages/agent-tui/contracts/launch-slice.json` by default.
-- Rust `agent-tui` reads the same launch-slice contract for its admitted bounded carrier flag instead of keeping an independent CLI constant.
-- Agent-start launch metadata names the admitted bounded runtime slice, the shared terminal rendering gate for `--render-once` and `--interactive-loop`, the terminal rendering environment gate, and the unsatisfied promotion gate.
+- Narada proper `agent-start` admits `agent-tui` as a distinct runtime and launches the terminal interactive-loop slice defined in `packages/agent-tui/contracts/launch-slice.json` by default.
+- Rust `agent-tui` reads the same launch-slice contract for its admitted terminal interactive-loop carrier flag instead of keeping an independent CLI constant.
+- Agent-start launch metadata names the admitted terminal runtime slice, the terminal rendering environment gate, and the separate provider/MCP governed-session gates.
 - Agent-start launch metadata keeps provider execution disabled and records the implemented-but-withheld provider adapter contract plus evidence, streaming, and tool-call contracts required before production dispatch admission.
 - Rust provider runtime and adapter admission now share one `provider-adapters.json` contract reader instead of parsing the same contract independently.
 - Runtime config snapshot reads provider adapter-kind selection from the shared `provider-adapters.json` contract instead of hardcoding its environment key.
@@ -95,22 +130,20 @@ It is not yet a provider-backed interactive carrier. Production `agent-start -Ru
 - Agent-start uses named metadata builders for the shared `agent-tui` terminal, provider, and MCP promotion gates instead of inline ad hoc gate objects.
 - Agent-start promotion metadata includes a machine-readable checklist for Rust test availability, terminal-loop acceptance, carrier command acceptance, rendering/diagnostic boundary acceptance, payload-reference policy, provider adapter admission, MCP fabric client admission, Site rollout acceptance, and launch metadata runtime slice evidence; completed checklist items are marked satisfied instead of retained as stale rollout blockers.
 - Agent-start launch metadata includes a concrete `site_rollout_acceptance` matrix for all launcher-registry Narada Sites, with per-Site side-by-side agent-cli/agent-tui evidence requirements and default promotion blocked until acceptance is current.
-- `tools/agent-start/agent-tui-rollout-acceptance.mjs` builds a non-launching rollout acceptance report from the launch metadata, accepts explicit `--known-site-root site=path` root resolution, accepts per-Site `--agent-cli-evidence site=path` and `--agent-tui-evidence site=path`, validates evidence as complete live authoritative `narada.agent_start.result.v0` launch packets for the expected runtime, `launching` status, `dry_run=false`, `exec=true`, authoritative agent-start and carrier-session records, event/session IDs, carrier-specific session/control paths, bounded `agent-tui` smoke slice, and matching Site root, marks a Site accepted only when both evidence paths are valid for that Site, names unresolved or missing Site roots and missing, incomplete, or invalid side-by-side evidence, and can write `.narada/crew/agent-tui-rollout-acceptance/latest.json`.
+- `tools/agent-start/agent-tui-rollout-acceptance.mjs` builds a non-launching rollout acceptance report from the launch metadata, accepts explicit `--known-site-root site=path` root resolution, accepts per-Site `--agent-cli-evidence site=path` and `--agent-tui-evidence site=path`, validates evidence as complete live authoritative `narada.agent_start.result.v0` launch packets for the expected runtime, `launching` status, `dry_run=false`, `exec=true`, authoritative agent-start and carrier-session records, event/session IDs, carrier-specific session/control paths, terminal `agent-tui` interactive-loop slice, and matching Site root, marks a Site accepted only when both evidence paths are valid for that Site, names unresolved or missing Site roots and missing, incomplete, or invalid side-by-side evidence, and can write `.narada/crew/agent-tui-rollout-acceptance/latest.json`.
 - Agent-start launch metadata exposes the `agent-tui` Rust toolchain readiness preflight command, expected blocker, and exit-code semantics.
 - Agent-start tests assert production launch does not opt into `--interactive-smoke-loop`, `--persistent-smoke-session`, legacy `--runtime-loop`, or `--max-steps`.
 
 ## Promotion Gate
 
-`agent-tui` must stay on the bounded non-terminal runtime launch path until all of these are true:
+`agent-tui` now uses the terminal interactive-loop launch path for `agent-start -Runtime agent-tui`. The remaining promotion gates are not about terminal rendering admission; they govern what the terminal carrier may execute once running:
 
 - Rust tests run in CI or a documented local toolchain with MSVC `link.exe` available.
-- `--interactive-smoke-loop --max-steps <n>` passes fixture acceptance for queued operator input, held system directives, release, interrupt, malformed control JSONL, and transcript projection.
+- `--interactive-step-once` and `--interactive-smoke-loop --max-steps <n>` remain regression harnesses for queued operator input, held system directives, release, interrupt, malformed control JSONL, and transcript projection.
 - `--interactive-loop --max-steps <n>` has scripted terminal-frame acceptance that verifies no blank frame, stable layout rectangles, preserved composer draft, and clean terminal leave on exit/error.
 - Provider dispatch remains explicitly disabled unless a production provider adapter implementation is admitted with its own authority and evidence contract.
 - Site MCP access remains explicitly disabled unless production Site MCP exposure is admitted with policy-bound tool visibility.
-- `agent-start` launch metadata names the runtime slice accurately: smoke step, smoke loop, or terminal interactive loop.
-- Production `agent-start -Runtime agent-tui` changes from `--interactive-step-once` only after the above checks are green and the launch packet records terminal rendering as admitted.
-
+- `agent-start` launch metadata names the runtime slice accurately as terminal interactive loop and records provider/MCP gates separately.
 ## Promotion Gate Gap Audit
 
 Current launch metadata now distinguishes satisfied gates from remaining promotion blockers:
@@ -121,8 +154,40 @@ Current launch metadata now distinguishes satisfied gates from remaining promoti
 - Satisfied: launcher-registry Site rollout has accepted side-by-side `agent-cli` and bounded `agent-tui` evidence for all known Sites.
 - Partial: Rust tests pass through the documented VS DevCmd toolchain; plain-shell readiness remains a diagnostic preflight.
 - Partial: terminal-loop acceptance has scripted frame, lifecycle, injected-loop, live-composer rendering, and terminal runtime config coverage; real-terminal promotion is blocked on provider admission, MCP admission, and explicit terminal-mode promotion.
-- Partial: provider admission has disabled/refused/configured runtime posture, explicit adapter admission evidence, a scripted admitted adapter contract exercised through turn and runtime-step paths, streaming transcript accumulation, and provider-origin tool-call mediation; real production provider dispatch remains withheld.
+- Partial: provider admission has disabled/refused/configured runtime posture, explicit adapter admission evidence, a scripted admitted adapter contract exercised through turn and runtime-step paths, live JSON-line provider text streaming through the Codex-subscription adapter, streaming transcript accumulation, provider-origin tool-call mediation, cancellation, and provider process-tree termination; broad real-terminal production promotion remains withheld.
 - Partial: MCP admission has config/fabric posture, policy visibility, request/response framing, supervised stdio execution, runtime-posture evidence, and launch gating; production Site MCP exposure remains withheld until live Site execution is admitted.
+
+## Live Turn Acceptance
+
+`tools/agent-start/agent-tui-live-turn-acceptance.mjs` is the deterministic live-turn acceptance runner for the governed provider plus MCP path. It launches `narada.resident` through `agent-start -Runtime agent-tui`, preloads a starting directive, admits provider execution and Site MCP fabric explicitly, asks the provider to emit one `write_file` tool call, bounds the live subprocess with `--timeout-ms`, and validates the resulting session evidence chain.
+
+The acceptance proof is compact by default; runtime stdout/stderr are captured in a log file instead of flooding the terminal.
+
+```powershell
+pnpm agent-tui:live-turn-acceptance
+```
+
+Focused validator tests do not call the live provider:
+
+```powershell
+pnpm agent-tui:live-turn-acceptance:test
+```
+
+Latest live proof:
+
+```text
+D:\code\narada\.narada\crew\agent-tui-live-turn-acceptance\latest.json
+```
+
+The proof must show:
+
+- `status: passed`
+- process exit code `0`
+- result artifact schema `narada.agent_tui.live_turn_result.v0`
+- session events `input_admitted_to_turn`, `provider_request_recorded`, `provider_tool_call_requested`, `tool_call_requested`, `tool_result_received`, and `turn_completed`
+- `tool_result_received` status `ok`, tool `write_file`, and `mcp_runtime_execution: supervised_stdio`
+
+Current verified proof: `D:\code\narada\.narada\crew\agent-tui-live-turn-acceptance\latest.json` generated at `2026-06-01T03:59:51.935Z`.
 
 ## Live Rollout Evidence
 
@@ -243,9 +308,17 @@ If `pnpm agent-tui:test` still fails after `VsDevCmd.bat` reports a ready toolch
 
 Promote the next blocked carrier capability, not more Site rollout evidence. The launcher-registry rollout gate is accepted for all known Sites. The remaining promotion gates are:
 
-- Provider adapter admission: real production provider dispatch and token streaming over the admitted adapter contract.
+- Provider adapter admission: real production provider dispatch now has live JSON-line text streaming over the admitted Codex-subscription adapter contract; remaining work is real-terminal promotion evidence against the live provider, not more buffered dispatch scaffolding.
 - MCP fabric launch admission: Rust-side Site MCP discovery, policy-bound visibility, request/response, evidence, and runtime-config executor construction exist; production Site MCP exposure remains withheld by launcher policy until explicitly admitted.
-- Terminal interactive promotion: production `agent-start -Runtime agent-tui` must move from bounded non-terminal smoke to admitted terminal rendering only after provider admission, MCP admission, and explicit terminal-mode promotion are recorded.
+- Terminal interactive launch is admitted: production `agent-start -Runtime agent-tui` now uses terminal rendering by default; remaining work is live provider/MCP execution admission inside that terminal carrier.
+- Compact status text now has one shared contract in `status_view_model`: app aggregate lines and renderer width accounting use the same visibility, humanization, draft-count, and scroll-count formatting rules.
+- System-originated admitted input now renders as `system directive:` instead of `system -> <agent>:` so transcript provenance matches agent-cli and does not imply operator-style routing.
+- Tool-result projection suppresses the ` · ` summary separator when no nonblank result summary exists, preventing dangling punctuation before timestamps.
+- Timestamp compaction now renders only strict UTC RFC3339-shaped values as `YYYY-MM-DDZHH:mm`; malformed or non-UTC timestamps are left out instead of being partially styled as authoritative UI time.
+- Admitted working-time operator input now preserves `delivery_mode` in session evidence and renders as `operator steering -> <agent>:` with a distinct steering color instead of collapsing into ordinary operator input or operator directives.
+- Carrier terminal transcript rows humanize protocol tokens for display, so `completed_without_provider` evidence renders as `completed without provider` while retaining positive carrier-status styling.
+- Carrier diagnostic transcript rows omit the redundant rendered `diagnostic` body prefix; the `agent-tui:` label carries the carrier context and the body starts with the styled severity.
+- Carrier queue summary rows now style the `queue` label with the carrier color instead of muting it as generic body text, while queue counts and entry states remain warning scan data.
 
 ## Live Rollout Evidence Commands
 

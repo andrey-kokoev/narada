@@ -1,9 +1,9 @@
 use crate::carrier_protocol::{
-    PayloadPolicy, PayloadRef, SessionEvent, SessionEventKind, PAYLOAD_POLICY_SCHEMA,
-    PAYLOAD_REF_SCHEMA, SESSION_EVENT_SCHEMA,
+    PAYLOAD_POLICY_SCHEMA, PAYLOAD_REF_SCHEMA, PayloadPolicy, PayloadRef, SESSION_EVENT_SCHEMA,
+    SessionEvent, SessionEventKind,
 };
 use crate::input_queue::SessionEvidenceContext;
-use crate::layout_model::{compute_layout, AgentTuiLayout, LayoutConfig, TerminalSize};
+use crate::layout_model::{AgentTuiLayout, LayoutConfig, TerminalSize, compute_layout};
 use serde_json::json;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
