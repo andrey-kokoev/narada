@@ -9,6 +9,19 @@ import { formatAgentStartResult } from '../../packages/agent-start-renderer/src/
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const defaultRootDir = join(__dirname, '..', '..');
 const require = createRequire(import.meta.url);
+
+function resolveNaradaPackageRoot(packageName, envVarName) {
+  const envPath = process.env[envVarName];
+  if (envPath) return envPath;
+  try {
+    return dirname(require.resolve(`${packageName}/package.json`));
+  } catch {
+    throw new Error(`narada_package_not_resolvable:${packageName}; set ${envVarName} or install the package`);
+  }
+}
+
+const AGENT_CLI_PACKAGE_ROOT = resolveNaradaPackageRoot('@narada2/agent-cli', 'NARADA_AGENT_CLI_ROOT');
+const AGENT_TUI_PACKAGE_ROOT = resolveNaradaPackageRoot('@narada2/agent-tui', 'NARADA_AGENT_TUI_ROOT');
 const AGENT_TUI_MCP_RUNTIME_CONTRACT_EXPECTED = Object.freeze({
   schema: 'narada.agent_tui.mcp_runtime_contract.v0',
   mcp_fabric_env_var: 'NARADA_AGENT_TUI_ENABLE_MCP_FABRIC',
@@ -44,19 +57,19 @@ const AGENT_TUI_LAUNCH_SLICE_CONTRACT_EXPECTED = Object.freeze({
   terminal_mode: true,
 });
 const AGENT_TUI_MCP_RUNTIME_CONTRACT = parseAgentTuiMcpRuntimeContract(readFileSync(
-  join(defaultRootDir, 'packages', 'agent-tui', 'contracts', 'mcp-runtime.json'),
+  join(AGENT_TUI_PACKAGE_ROOT, 'contracts', 'mcp-runtime.json'),
   'utf8',
 ));
 const AGENT_TUI_PROVIDER_ADAPTER_CONTRACT = parseAgentTuiProviderAdapterContract(readFileSync(
-  join(defaultRootDir, 'packages', 'agent-tui', 'contracts', 'provider-adapters.json'),
+  join(AGENT_TUI_PACKAGE_ROOT, 'contracts', 'provider-adapters.json'),
   'utf8',
 ));
 const AGENT_TUI_TERMINAL_RUNTIME_CONTRACT = parseAgentTuiTerminalRuntimeContract(readFileSync(
-  join(defaultRootDir, 'packages', 'agent-tui', 'contracts', 'terminal-runtime.json'),
+  join(AGENT_TUI_PACKAGE_ROOT, 'contracts', 'terminal-runtime.json'),
   'utf8',
 ));
 const AGENT_TUI_LAUNCH_SLICE_CONTRACT = parseAgentTuiLaunchSliceContract(readFileSync(
-  join(defaultRootDir, 'packages', 'agent-tui', 'contracts', 'launch-slice.json'),
+  join(AGENT_TUI_PACKAGE_ROOT, 'contracts', 'launch-slice.json'),
   'utf8',
 ));
 const RESULT_SCHEMA = 'narada.agent_start.result.v0';
@@ -637,7 +650,7 @@ function agentRuntimeServerSessionDir(siteRoot, carrierSessionId) {
 }
 
 function agentRuntimeServerEntrypoint(siteRoot) {
-  return join(siteRoot, 'packages', 'agent-cli', 'bin', 'agent-runtime-server.mjs');
+  return join(AGENT_CLI_PACKAGE_ROOT, 'bin', 'agent-runtime-server.mjs');
 }
 
 function agentRuntimeServerArgs({ siteRoot, startupEvidence }) {
@@ -649,7 +662,7 @@ function agentRuntimeServerArgs({ siteRoot, startupEvidence }) {
 }
 
 function agentCliEntrypoint(siteRoot) {
-  return join(siteRoot, 'packages', 'agent-cli', 'bin', 'narada-agent-cli.mjs');
+  return join(AGENT_CLI_PACKAGE_ROOT, 'bin', 'narada-agent-cli.mjs');
 }
 
 function agentCliArgs({ siteRoot, startupEvidence }) {
@@ -667,7 +680,7 @@ function agentTuiArgs({ siteRoot, startupEvidence, maxSteps = null }) {
   const runtimeModeArgs = [AGENT_TUI_LAUNCH_SLICE_CONTRACT.carrier_flag, '--max-steps', String(maxSteps ?? 100000)];
   return [
     'run',
-    '--manifest-path', join(siteRoot, 'packages', 'agent-tui', 'Cargo.toml'),
+    '--manifest-path', join(AGENT_TUI_PACKAGE_ROOT, 'Cargo.toml'),
     '--bin', 'narada-agent-tui',
     '--',
     '--identity', startupEvidence.agentId,

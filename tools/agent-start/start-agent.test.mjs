@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import {
   buildLaunchPlanFromArgs,
   compactLaunchSummary,
@@ -25,20 +26,23 @@ import {
   validateEvidenceJson,
   writeReport as writeAgentTuiRolloutReport,
 } from './agent-tui-rollout-acceptance.mjs';
+const require = createRequire(import.meta.url);
+const AGENT_CLI_PACKAGE_ROOT = path.dirname(require.resolve('@narada2/agent-cli/package.json'));
+const AGENT_TUI_PACKAGE_ROOT = path.dirname(require.resolve('@narada2/agent-tui/package.json'));
 const AGENT_TUI_MCP_RUNTIME_CONTRACT = parseAgentTuiMcpRuntimeContract(fs.readFileSync(
-  path.join(process.cwd(), 'packages', 'agent-tui', 'contracts', 'mcp-runtime.json'),
+  path.join(AGENT_TUI_PACKAGE_ROOT, 'contracts', 'mcp-runtime.json'),
   'utf8',
 ));
 const AGENT_TUI_PROVIDER_ADAPTER_CONTRACT = parseAgentTuiProviderAdapterContract(fs.readFileSync(
-  path.join(process.cwd(), 'packages', 'agent-tui', 'contracts', 'provider-adapters.json'),
+  path.join(AGENT_TUI_PACKAGE_ROOT, 'contracts', 'provider-adapters.json'),
   'utf8',
 ));
 const AGENT_TUI_TERMINAL_RUNTIME_CONTRACT = parseAgentTuiTerminalRuntimeContract(fs.readFileSync(
-  path.join(process.cwd(), 'packages', 'agent-tui', 'contracts', 'terminal-runtime.json'),
+  path.join(AGENT_TUI_PACKAGE_ROOT, 'contracts', 'terminal-runtime.json'),
   'utf8',
 ));
 const AGENT_TUI_LAUNCH_SLICE_CONTRACT = parseAgentTuiLaunchSliceContract(fs.readFileSync(
-  path.join(process.cwd(), 'packages', 'agent-tui', 'contracts', 'launch-slice.json'),
+  path.join(AGENT_TUI_PACKAGE_ROOT, 'contracts', 'launch-slice.json'),
   'utf8',
 ));
 
@@ -834,7 +838,7 @@ test('agent-tui rollout acceptance admits Site launcher session-start evidence f
       NARADA_CARRIER_SESSION_ID: 'carrier_20260531000426_a1bbafaa0f22',
     },
     runtime_args: [
-      'D:\\code\\narada\\packages\\agent-cli\\bin\\narada-agent-cli.mjs',
+      path.join(AGENT_CLI_PACKAGE_ROOT, 'bin', 'narada-agent-cli.mjs'),
       '--identity',
       'sonar.resident',
       '--session',

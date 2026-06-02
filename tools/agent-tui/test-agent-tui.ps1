@@ -8,7 +8,13 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $RepoRoot = Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..')
-$CrateRoot = Join-Path $RepoRoot 'packages\agent-tui'
+$CrateRoot = if ($env:NARADA_AGENT_TUI_ROOT) { $env:NARADA_AGENT_TUI_ROOT } else {
+  $node = Get-Command node -ErrorAction SilentlyContinue
+  if (-not $node) { throw 'node_required_to_resolve_agent_tui_package' }
+  $resolved = & $node.Source -e "const { dirname } = require('node:path'); console.log(dirname(require.resolve('@narada2/agent-tui/package.json')));"
+  if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($resolved)) { throw 'agent_tui_package_not_resolvable' }
+  [string]$resolved
+}
 $VsDevCmd = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat'
 
 if (-not (Test-Path -LiteralPath $VsDevCmd)) {

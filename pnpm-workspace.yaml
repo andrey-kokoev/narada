@@ -6,3 +6,5 @@ packages:
   - 'packages/sites/*'
   - '../narada-core/packages/*'
   - '../mcp-surfaces/packages/task-lifecycle-mcp'
+  - '../agent-cli'
+  - '../agent-tui'

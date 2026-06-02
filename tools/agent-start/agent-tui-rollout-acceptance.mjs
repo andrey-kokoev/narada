@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import {
   agentTuiSiteRolloutAcceptance,
   buildLaunchPlanFromArgs,
@@ -10,11 +11,13 @@ import {
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const defaultRootDir = resolve(__dirname, '..', '..');
+const require = createRequire(import.meta.url);
+const AGENT_TUI_PACKAGE_ROOT = dirname(require.resolve('@narada2/agent-tui/package.json'));
 const REPORT_SCHEMA = 'narada.agent_tui.site_rollout_acceptance_report.v0';
 const VALID_LAUNCH_STATUSES = new Set(['launching']);
 const VALID_SITE_SESSION_START_STATUSES = new Set(['materialized']);
 const AGENT_TUI_LAUNCH_SLICE_CONTRACT = parseAgentTuiLaunchSliceContract(readFileSync(
-  join(defaultRootDir, 'packages', 'agent-tui', 'contracts', 'launch-slice.json'),
+  join(AGENT_TUI_PACKAGE_ROOT, 'contracts', 'launch-slice.json'),
   'utf8',
 ));
 
