@@ -145,7 +145,7 @@ Esc behavior:
 
 - Esc requests active-turn interruption only.
 - Esc does not clear draft text.
-- Esc does not clear queued steering.
+- Esc does not clear queued operator steering.
 - Esc does not mutate tasks, directives, MCP state, or queue state.
 
 Slash commands remain local carrier commands unless explicitly submitted as agent input. `//text` submits `/text` to the agent; `/text` remains a local command.
@@ -178,6 +178,7 @@ Ordinary working-time input is operator steering, not an operator directive.
 - `/queue` shows queued items with index, source, age, and first-line preview.
 - `/queue clear` clears queued operator steering after explicit command semantics.
 - `/queue drop <index>` removes one queued item.
+- `/stats [args]` shows local Codex transcript statistics using the operator-local `narada-tools` checkout or PATH binary. It is scoped to Codex transcript storage and is not gated to Codex runtime sessions.
 
 Queue commands execute immediately as carrier-local UI mutations, even while the agent is working.
 
@@ -209,7 +210,7 @@ The status line is ephemeral and must use operational language.
 
 Examples:
 
-- `thinking 1m 12s | draft 34 chars | queued steering 2 | Esc interrupt`
+- `thinking 1m 12s | draft 34 chars | queued operator steering 2 | Esc interrupt`
 - `calling site_loop_run_once 8s | held system directives 1 | oldest 22s`
 - `interrupt requested | waiting for provider`
 
@@ -345,10 +346,11 @@ The carrier is not acceptable until these scenarios pass:
 - Agent streams output while operator types; typed draft remains intact.
 - Agent calls a tool while operator types; transcript and composer stay separated.
 - Enter during working queues steering and does not create a durable transcript block immediately.
-- Queued steering is delivered after the current turn and appears in transcript at delivery time.
-- `/queue` shows queued steering content.
-- `/queue clear` clears queued steering.
+- Queued operator steering is delivered after the current turn and appears in transcript at delivery time.
+- `/queue` shows queued operator steering content.
+- `/queue clear` clears queued operator steering.
 - `/queue drop <index>` removes the chosen item.
+- `/stats [args]` shows local Codex transcript statistics.
 - `//help` submits `/help` to the agent.
 - Esc interrupts current work without clearing draft or queue.
 - System directive arriving during nonempty draft is held and visible in status.

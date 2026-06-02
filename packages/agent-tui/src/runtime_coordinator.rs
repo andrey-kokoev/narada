@@ -1,7 +1,7 @@
-use crate::carrier_command::{parse_operator_submit, CarrierCommand, OperatorSubmit};
+use crate::carrier_command::{CarrierCommand, OperatorSubmit, parse_operator_submit};
 use crate::carrier_protocol::{
-    DeliveryMode, InputEvent, SessionEvent, SessionEventKind, SourceKind, Transport,
-    INPUT_EVENT_SCHEMA, SESSION_EVENT_SCHEMA,
+    DeliveryMode, INPUT_EVENT_SCHEMA, InputEvent, SESSION_EVENT_SCHEMA, SessionEvent,
+    SessionEventKind, SourceKind, Transport,
 };
 use crate::control_jsonl::ControlJsonlError;
 use crate::control_watcher::ControlJsonlWatcher;
@@ -11,6 +11,7 @@ use crate::input_queue::{
 use crate::session_jsonl::append_session_event;
 use serde_json::json;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 #[derive(Debug, Clone)]
 pub struct RuntimeCoordinatorClock {
@@ -30,6 +31,39 @@ pub struct RuntimeCoordinatorPollResult {
 pub enum RuntimeOperatorSubmitResult {
     Empty,
     AgentInput(AdmissionDecision),
+    HelpShown,
+    StatusShown {
+        identity: String,
+        session: String,
+        model: Option<String>,
+        thinking: Option<String>,
+        queued: usize,
+        held: usize,
+        turn_state: String,
+    },
+    StatsShown {
+        output: String,
+    },
+    ModelShown {
+        value: Option<String>,
+    },
+    ModelChanged {
+        value: String,
+    },
+    ThinkingShown {
+        value: Option<String>,
+    },
+    ThinkingChanged {
+        value: String,
+    },
+    ThinkingRejected {
+        value: String,
+    },
+    ClearDisplay,
+    Exit,
+    UnknownCommand {
+        command: String,
+    },
     QueueShown {
         queued: Vec<QueuedInputSummary>,
     },
@@ -49,6 +83,81 @@ pub struct RuntimeCoordinator {
     evidence_context: SessionEvidenceContext,
     session_jsonl_path: PathBuf,
     next_evidence_index: u64,
+    session_model: Option<String>,
+    session_thinking: Option<String>,
+}
+
+fn run_codex_transcript_stats(value: Option<&str>) -> String {
+    let extra_args = shell_like_words(value.unwrap_or_default());
+    let args = if extra_args.is_empty() {
+        vec!["--top".to_string(), "10".to_string()]
+    } else {
+        extra_args
+    };
+    let configured_root = std::env::var("NARADA_TOOLS_ROOT").ok();
+    let default_root = if cfg!(windows) {
+        "D:/code/narada-tools"
+    } else {
+        "/home/andrey/src/narada-tools"
+    };
+    let tools_root = configured_root.as_deref().unwrap_or(default_root);
+    let script_path = PathBuf::from(tools_root)
+        .join("packages")
+        .join("codex-transcript-stats")
+        .join("src")
+        .join("codex-transcript-stats.mjs");
+
+    let mut command = if script_path.exists() {
+        let node = std::env::var("NARADA_NODE").unwrap_or_else(|_| "node".to_string());
+        let mut command = Command::new(node);
+        command.arg(&script_path);
+        command
+    } else {
+        Command::new("codex-transcript-stats")
+    };
+    command.args(&args);
+    if PathBuf::from(tools_root).exists() {
+        command.current_dir(tools_root);
+    }
+    match command.output() {
+        Ok(output) if output.status.success() => {
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            [stdout, stderr]
+                .into_iter()
+                .filter(|part| !part.is_empty())
+                .collect::<Vec<_>>()
+                .join("\n")
+        }
+        Ok(output) => {
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            let body = [stdout, stderr]
+                .into_iter()
+                .filter(|part| !part.is_empty())
+                .collect::<Vec<_>>()
+                .join("\n");
+            format!(
+                "Codex transcript stats failed with exit {}.{}{}",
+                output.status,
+                if body.is_empty() { "" } else { "\n" },
+                body
+            )
+        }
+        Err(error) => format!(
+            "Codex transcript stats unavailable. Expected tool at {} or codex-transcript-stats on PATH.\nError: {}",
+            script_path.display(),
+            error
+        ),
+    }
+}
+
+fn shell_like_words(value: &str) -> Vec<String> {
+    value
+        .split_whitespace()
+        .map(|part| part.trim_matches('"').trim_matches('\'').to_string())
+        .filter(|part| !part.is_empty())
+        .collect()
 }
 
 impl RuntimeCoordinator {
@@ -63,6 +172,12 @@ impl RuntimeCoordinator {
             evidence_context,
             session_jsonl_path: session_jsonl_path.into(),
             next_evidence_index: 1,
+            session_model: std::env::var("NARADA_AI_MODEL")
+                .ok()
+                .filter(|value| !value.trim().is_empty()),
+            session_thinking: std::env::var("NARADA_AI_THINKING")
+                .ok()
+                .filter(|value| !value.trim().is_empty()),
         }
     }
 
@@ -159,6 +274,77 @@ impl RuntimeCoordinator {
         clock: &RuntimeCoordinatorClock,
     ) -> Result<RuntimeOperatorSubmitResult, String> {
         match command {
+            CarrierCommand::Help => {
+                self.write_carrier_command_evidence("/help", clock, json!({}))?;
+                Ok(RuntimeOperatorSubmitResult::HelpShown)
+            }
+            CarrierCommand::Status => {
+                self.write_carrier_command_evidence("/status", clock, json!({}))?;
+                Ok(RuntimeOperatorSubmitResult::StatusShown {
+                    identity: self.evidence_context.agent_id.clone(),
+                    session: self.evidence_context.carrier_session_id.clone(),
+                    model: self.session_model.clone(),
+                    thinking: self.session_thinking.clone(),
+                    queued: self.queue.queued_count(),
+                    held: self.queue.held_count(),
+                    turn_state: format!("{:?}", self.queue.turn_state()).to_ascii_lowercase(),
+                })
+            }
+            CarrierCommand::Stats { value } => {
+                let output = run_codex_transcript_stats(value.as_deref());
+                self.write_carrier_command_evidence(
+                    "/stats",
+                    clock,
+                    json!({ "arguments": value, "runtime_scope": "codex_transcript_store" }),
+                )?;
+                Ok(RuntimeOperatorSubmitResult::StatsShown { output })
+            }
+            CarrierCommand::Model { value } => match value {
+                Some(value) => {
+                    self.session_model = Some(value.clone());
+                    self.write_carrier_command_evidence(
+                        "/model",
+                        clock,
+                        json!({ "value": value }),
+                    )?;
+                    Ok(RuntimeOperatorSubmitResult::ModelChanged { value })
+                }
+                None => {
+                    self.write_carrier_command_evidence("/model", clock, json!({}))?;
+                    Ok(RuntimeOperatorSubmitResult::ModelShown {
+                        value: self.session_model.clone(),
+                    })
+                }
+            },
+            CarrierCommand::Thinking { value } => match value {
+                Some(value) if matches!(value.as_str(), "none" | "low" | "medium" | "high") => {
+                    self.session_thinking = Some(value.clone());
+                    self.write_carrier_command_evidence(
+                        "/thinking",
+                        clock,
+                        json!({ "value": value }),
+                    )?;
+                    Ok(RuntimeOperatorSubmitResult::ThinkingChanged { value })
+                }
+                Some(value) => Ok(RuntimeOperatorSubmitResult::ThinkingRejected { value }),
+                None => {
+                    self.write_carrier_command_evidence("/thinking", clock, json!({}))?;
+                    Ok(RuntimeOperatorSubmitResult::ThinkingShown {
+                        value: self.session_thinking.clone(),
+                    })
+                }
+            },
+            CarrierCommand::Clear => {
+                self.write_carrier_command_evidence("/clear", clock, json!({}))?;
+                Ok(RuntimeOperatorSubmitResult::ClearDisplay)
+            }
+            CarrierCommand::Exit => {
+                self.write_carrier_command_evidence("/exit", clock, json!({}))?;
+                Ok(RuntimeOperatorSubmitResult::Exit)
+            }
+            CarrierCommand::Unknown { command } => {
+                Ok(RuntimeOperatorSubmitResult::UnknownCommand { command })
+            }
             CarrierCommand::QueueShow => Ok(RuntimeOperatorSubmitResult::QueueShown {
                 queued: self.queue.queued_summaries(),
             }),
@@ -243,14 +429,26 @@ impl RuntimeCoordinator {
         clock: &RuntimeCoordinatorClock,
     ) -> SessionEvent {
         let mut event = self.evidence_for_decision(decision, clock);
-        if matches!(decision, AdmissionDecision::AdmitNow { .. }) {
-            event.payload = json!({
+        if matches!(
+            decision,
+            AdmissionDecision::AdmitNow { .. } | AdmissionDecision::QueueForTurnBoundary { .. }
+        ) {
+            let mut payload = json!({
                 "input_event_id": input.event_id,
                 "source_kind": input.source_kind,
                 "source_id": input.source_id,
                 "transport": input.transport,
-                "content_preview": input.content
+                "delivery_mode": input.delivery_mode,
+                "hold_condition": input.hold_condition,
+                "content_preview": input.content,
+                "authority_ref": input.authority_ref,
+                "directive_id": input.directive_id,
+                "metadata": input.metadata
             });
+            if matches!(decision, AdmissionDecision::QueueForTurnBoundary { .. }) {
+                payload["queue_state"] = json!("queued_for_turn_boundary");
+            }
+            event.payload = payload;
         }
         event
     }
@@ -334,7 +532,7 @@ impl RuntimeCoordinator {
 mod tests {
     use super::*;
     use crate::carrier_protocol::parse_session_event;
-    use std::fs::{read_to_string, remove_file, OpenOptions};
+    use std::fs::{OpenOptions, read_to_string, remove_file};
     use std::io::Write;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -461,6 +659,27 @@ mod tests {
 
         let session_jsonl = read_to_string(&session_path).expect("session jsonl exists");
         assert_eq!(session_jsonl.lines().count(), 1);
+        let queued_event = parse_session_event(
+            session_jsonl
+                .lines()
+                .next()
+                .expect("queued evidence line exists"),
+        )
+        .expect("queued evidence parses");
+        assert_eq!(
+            queued_event.event_kind,
+            SessionEventKind::InputQueuedForTurnBoundary
+        );
+        assert_eq!(
+            queued_event.payload["queue_state"],
+            "queued_for_turn_boundary"
+        );
+        assert_eq!(queued_event.payload["source_kind"], "operator");
+        assert_eq!(
+            queued_event.payload["delivery_mode"],
+            "admit_for_current_turn"
+        );
+        assert_eq!(queued_event.payload["content_preview"], "queued note");
 
         remove_file(control_path).ok();
         remove_file(session_path).ok();
@@ -539,6 +758,39 @@ mod tests {
             "input_operator_composer_2"
         );
         assert_eq!(dropped.payload["drop_reason"], "queue_drop");
+
+        remove_file(control_path).ok();
+        remove_file(session_path).ok();
+    }
+
+    #[test]
+    fn status_reports_current_model_and_thinking() {
+        let control_path = temp_path("control");
+        let session_path = temp_path("session");
+        let mut coordinator = RuntimeCoordinator::new(&control_path, &session_path, context());
+
+        coordinator
+            .handle_operator_submit("/model gpt-5.5-mini", &clock())
+            .expect("model command succeeds");
+        coordinator
+            .handle_operator_submit("/thinking high", &clock())
+            .expect("thinking command succeeds");
+        let result = coordinator
+            .handle_operator_submit("/status", &clock())
+            .expect("status command succeeds");
+
+        assert_eq!(
+            result,
+            RuntimeOperatorSubmitResult::StatusShown {
+                identity: "sonar.resident".to_string(),
+                session: "carrier_fixture_1".to_string(),
+                model: Some("gpt-5.5-mini".to_string()),
+                thinking: Some("high".to_string()),
+                queued: 0,
+                held: 0,
+                turn_state: "idle".to_string(),
+            }
+        );
 
         remove_file(control_path).ok();
         remove_file(session_path).ok();

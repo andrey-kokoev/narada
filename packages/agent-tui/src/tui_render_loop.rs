@@ -1,13 +1,16 @@
 use crate::app_view_model::AppViewModel;
 use crate::composer_draft::{ComposerDraftEffect, ComposerDraftState};
+use crate::input_queue::{QueuedInputSummary, elapsed_label_between};
 use crate::interactive_runtime::{AgentTuiInteractiveRuntime, InteractiveStepClock};
 use crate::layout_model::TerminalSize;
 use crate::runtime_clock::RuntimeClock;
-use crate::runtime_coordinator::{RuntimeCoordinator, RuntimeCoordinatorClock};
+use crate::runtime_coordinator::{RuntimeCoordinatorClock, RuntimeOperatorSubmitResult};
 use crate::terminal_input_tick::{
-    run_textarea_composer_input_tick_with_wait, TerminalInputReader, TerminalInputTickOutcome,
+    TerminalInputReader, TerminalInputTickOutcome, run_textarea_composer_input_tick_with_wait,
 };
 use crate::textarea_composer::TextareaComposer;
+use crate::transcript_projection::{TranscriptActor, TranscriptItem, TranscriptItemKind};
+use crate::transcript_view_model::build_transcript_rows;
 use std::time::Duration;
 
 #[derive(Debug, Clone, Default)]
@@ -15,6 +18,8 @@ pub struct AgentTuiLoopState {
     pub composer: TextareaComposer,
     pub should_exit: bool,
     pub last_error: Option<String>,
+    pub local_transcript_items: Vec<TranscriptItem>,
+    pub transcript_scroll_offset: usize,
 }
 
 impl AgentTuiLoopState {
@@ -39,12 +44,15 @@ pub enum RenderLoopAction {
 }
 
 pub trait ComposerAdmissionBridge {
-    fn submit_operator_text(&mut self, text: String) -> Result<(), String>;
+    fn submit_operator_text(&mut self, text: String) -> Result<Option<TranscriptItem>, String>;
+    fn clear_transcript_projection(&mut self) -> Result<(), String> {
+        Ok(())
+    }
     fn request_interrupt(&mut self) -> Result<(), String>;
 }
 
 pub struct RuntimeCoordinatorComposerBridge<'a> {
-    pub coordinator: &'a mut RuntimeCoordinator,
+    pub runtime: &'a mut AgentTuiInteractiveRuntime,
     pub clock: RuntimeCoordinatorClock,
 }
 
@@ -94,14 +102,27 @@ impl InteractiveClockSource for RuntimeClockInteractiveSource<'_> {
 }
 
 impl ComposerAdmissionBridge for RuntimeCoordinatorComposerBridge<'_> {
-    fn submit_operator_text(&mut self, text: String) -> Result<(), String> {
-        self.coordinator
-            .handle_operator_submit(text, &self.clock)
-            .map(|_| ())
+    fn submit_operator_text(&mut self, text: String) -> Result<Option<TranscriptItem>, String> {
+        let result = self
+            .runtime
+            .coordinator_mut()
+            .handle_operator_submit(text, &self.clock)?;
+        self.runtime.apply_operator_submit_result(&result)?;
+        Ok(queue_command_feedback_item(
+            &result,
+            &self.clock.occurred_at,
+        ))
+    }
+
+    fn clear_transcript_projection(&mut self) -> Result<(), String> {
+        self.runtime.clear_transcript_projection();
+        Ok(())
     }
 
     fn request_interrupt(&mut self) -> Result<(), String> {
-        self.coordinator.record_composer_interrupt(&self.clock)
+        self.runtime
+            .record_interrupt_and_cancel_active_turn(&self.clock)
+            .map(|_| ())
     }
 }
 
@@ -124,37 +145,51 @@ where
     for _ in 0..max_steps {
         steps_attempted += 1;
         let step_clock = clock.next_interactive_step_clock();
-        let step_result = runtime.run_step(&loop_state.draft_state(), &step_clock)?;
-        if step_result.parse_errors > 0 {
-            loop_state.last_error = Some(format!(
-                "control_jsonl_parse_errors:{}",
-                step_result.parse_errors
-            ));
-        }
-        let model = runtime.build_view(
+        let step_result = runtime.run_background_step(&loop_state.draft_state(), &step_clock)?;
+        apply_step_result_to_loop_state(loop_state, &step_result);
+
+        let model = build_loop_view(
+            runtime,
+            loop_state,
             terminal.terminal_size()?,
-            &loop_state.draft_state(),
-            loop_state.last_error.clone(),
+            Some(step_clock.input.occurred_at.as_str()),
         );
         terminal.draw_frame(&model, &loop_state.composer)?;
 
         let outcome = input.read_tick(&mut loop_state.composer);
         let mut bridge = RuntimeCoordinatorComposerBridge {
-            coordinator: runtime.coordinator_mut(),
-            clock: step_clock.input,
+            runtime,
+            clock: step_clock.input.clone(),
         };
         let action = apply_input_tick_outcome(loop_state, &mut bridge, outcome);
         if action == RenderLoopAction::Exit || loop_state.should_exit {
             exited_by_input = true;
             break;
         }
+        if action == RenderLoopAction::Redraw {
+            runtime.ingest_transcript()?;
+            let model = build_loop_view(
+                runtime,
+                loop_state,
+                terminal.terminal_size()?,
+                Some(step_clock.input.occurred_at.as_str()),
+            );
+            terminal.draw_frame(&model, &loop_state.composer)?;
+        }
+
+        let step_result = runtime.run_background_step(&loop_state.draft_state(), &step_clock)?;
+        apply_step_result_to_loop_state(loop_state, &step_result);
     }
 
+    let step_clock = clock.next_interactive_step_clock();
+    let step_result = runtime.run_background_step(&loop_state.draft_state(), &step_clock)?;
+    apply_step_result_to_loop_state(loop_state, &step_result);
     runtime.ingest_transcript()?;
-    let model = runtime.build_view(
+    let model = build_loop_view(
+        runtime,
+        loop_state,
         terminal.terminal_size()?,
-        &loop_state.draft_state(),
-        loop_state.last_error.clone(),
+        Some(step_clock.input.occurred_at.as_str()),
     );
     terminal.draw_frame(&model, &loop_state.composer)?;
 
@@ -163,6 +198,18 @@ where
         exited_by_input,
         final_drawn: true,
     })
+}
+
+fn apply_step_result_to_loop_state(
+    loop_state: &mut AgentTuiLoopState,
+    step_result: &crate::interactive_runtime::InteractiveStepResult,
+) {
+    if step_result.parse_errors > 0 {
+        loop_state.last_error = Some(format!(
+            "control_jsonl_parse_errors:{}",
+            step_result.parse_errors
+        ));
+    }
 }
 
 pub fn apply_input_tick_outcome<B: ComposerAdmissionBridge>(
@@ -174,11 +221,25 @@ pub fn apply_input_tick_outcome<B: ComposerAdmissionBridge>(
         TerminalInputTickOutcome::NoInput | TerminalInputTickOutcome::NonKeyEventIgnored => {
             RenderLoopAction::None
         }
+        TerminalInputTickOutcome::ScrollTranscriptUp => {
+            state.transcript_scroll_offset = state.transcript_scroll_offset.saturating_add(8);
+            RenderLoopAction::Redraw
+        }
+        TerminalInputTickOutcome::ScrollTranscriptDown => {
+            state.transcript_scroll_offset = state.transcript_scroll_offset.saturating_sub(8);
+            RenderLoopAction::Redraw
+        }
         TerminalInputTickOutcome::ReadFailed(error) => {
             state.last_error = Some(error);
             RenderLoopAction::Redraw
         }
-        TerminalInputTickOutcome::DraftEffect(effect) => apply_draft_effect(state, bridge, effect),
+        TerminalInputTickOutcome::DraftEffect(effect) => {
+            let action = apply_draft_effect(state, bridge, effect);
+            if action == RenderLoopAction::Redraw {
+                state.transcript_scroll_offset = 0;
+            }
+            action
+        }
     }
 }
 
@@ -191,8 +252,25 @@ fn apply_draft_effect<B: ComposerAdmissionBridge>(
         ComposerDraftEffect::None => RenderLoopAction::None,
         ComposerDraftEffect::DraftChanged => RenderLoopAction::Redraw,
         ComposerDraftEffect::SubmitRequested { text } => {
-            if let Err(error) = bridge.submit_operator_text(text) {
-                state.last_error = Some(error);
+            let trimmed = text.trim();
+            if trimmed.eq_ignore_ascii_case("/exit") || trimmed.eq_ignore_ascii_case("/quit") {
+                state.should_exit = true;
+                return RenderLoopAction::Exit;
+            }
+            if trimmed.eq_ignore_ascii_case("/clear") {
+                match bridge.clear_transcript_projection() {
+                    Ok(()) => {
+                        state.local_transcript_items.clear();
+                        state.transcript_scroll_offset = 0;
+                    }
+                    Err(error) => state.last_error = Some(error),
+                }
+                return RenderLoopAction::Redraw;
+            }
+            match bridge.submit_operator_text(text) {
+                Ok(Some(item)) => state.local_transcript_items.push(item),
+                Ok(None) => {}
+                Err(error) => state.last_error = Some(error),
             }
             RenderLoopAction::Redraw
         }
@@ -209,21 +287,177 @@ fn apply_draft_effect<B: ComposerAdmissionBridge>(
     }
 }
 
+fn build_loop_view(
+    runtime: &AgentTuiInteractiveRuntime,
+    state: &AgentTuiLoopState,
+    terminal_size: TerminalSize,
+    now: Option<&str>,
+) -> AppViewModel {
+    let mut model = runtime.build_view_at(
+        terminal_size,
+        &state.draft_state(),
+        state.last_error.clone(),
+        now,
+    );
+    if !state.local_transcript_items.is_empty() {
+        model
+            .transcript_rows
+            .extend(build_transcript_rows(&state.local_transcript_items));
+    }
+    model.set_transcript_scroll_offset(state.transcript_scroll_offset);
+    model
+}
+
+fn queue_command_feedback_item(
+    result: &RuntimeOperatorSubmitResult,
+    occurred_at: &str,
+) -> Option<TranscriptItem> {
+    let text = match result {
+        RuntimeOperatorSubmitResult::HelpShown => help_text(),
+        RuntimeOperatorSubmitResult::StatusShown {
+            identity,
+            session,
+            model,
+            thinking,
+            queued,
+            held,
+            turn_state,
+        } => format!(
+            "Identity     {identity}\nSession      {session}\nModel        {}\nThinking     {}\nTurn         {turn_state}\nQueued       {queued}\nHeld         {held}",
+            model.clone().unwrap_or_else(|| "unset".to_string()),
+            thinking.clone().unwrap_or_else(|| "unset".to_string())
+        ),
+        RuntimeOperatorSubmitResult::StatsShown { output } => output.clone(),
+        RuntimeOperatorSubmitResult::ModelShown { value } => {
+            format!(
+                "Current model: {}",
+                value.clone().unwrap_or_else(|| "unset".to_string())
+            )
+        }
+        RuntimeOperatorSubmitResult::ModelChanged { value } => format!("Model set to {value}"),
+        RuntimeOperatorSubmitResult::ThinkingShown { value } => {
+            format!(
+                "Current thinking: {}",
+                value.clone().unwrap_or_else(|| "unset".to_string())
+            )
+        }
+        RuntimeOperatorSubmitResult::ThinkingChanged { value } => {
+            format!("Thinking set to {value}")
+        }
+        RuntimeOperatorSubmitResult::ThinkingRejected { value: _ } => {
+            "Usage: /thinking none|low|medium|high".to_string()
+        }
+        RuntimeOperatorSubmitResult::ClearDisplay => "cleared".to_string(),
+        RuntimeOperatorSubmitResult::Exit => "exiting".to_string(),
+        RuntimeOperatorSubmitResult::UnknownCommand { command } => {
+            format!("Unknown command: {command}. Type /help.")
+        }
+        RuntimeOperatorSubmitResult::QueueShown { queued } => {
+            queue_shown_text(&queued, occurred_at)
+        }
+        RuntimeOperatorSubmitResult::QueueCleared { dropped } => {
+            format!("queue cleared {dropped} {}", item_label(*dropped))
+        }
+        RuntimeOperatorSubmitResult::QueueDrop {
+            index,
+            dropped_input_event_id,
+        } => match dropped_input_event_id {
+            Some(input_event_id) => format!("queue dropped {index}: {input_event_id}"),
+            None => format!("queue drop {index}: not found"),
+        },
+        RuntimeOperatorSubmitResult::Empty | RuntimeOperatorSubmitResult::AgentInput(_) => {
+            return None;
+        }
+    };
+    Some(TranscriptItem {
+        kind: TranscriptItemKind::TurnTerminalStatus,
+        actor: TranscriptActor::AgentTui,
+        turn_id: String::new(),
+        text,
+        sequence: None,
+        projection_key: None,
+        occurred_at: Some(occurred_at.to_string()),
+    })
+}
+
+fn help_text() -> String {
+    [
+        "Commands",
+        "",
+        "/help                 Show commands",
+        "/status               Show session state",
+        "/stats [args]         Show local Codex transcript statistics",
+        "/model <name>         Set model for later turns",
+        "/thinking <level>     none, low, medium, high",
+        "/queue                Show queued carrier input",
+        "/queue clear          Clear queued operator steering",
+        "/queue drop <index>   Drop one queued operator steering item",
+        "/clear                Clear terminal display",
+        "/exit                 Save and quit",
+    ]
+    .join("\n")
+}
+
+fn queue_shown_text(queued: &[QueuedInputSummary], occurred_at: &str) -> String {
+    if queued.is_empty() {
+        return "queue empty".to_string();
+    }
+    let mut lines = vec![format!(
+        "queue: {} {}",
+        queued.len(),
+        item_label(queued.len())
+    )];
+    for item in queued {
+        let age = elapsed_label_between(&item.created_at, occurred_at)
+            .unwrap_or_else(|| "age unknown".to_string());
+        lines.push(format!(
+            "{}. {} · {} · {}",
+            item.index,
+            source_kind_label(&item.source_kind),
+            age,
+            item.content_preview
+        ));
+    }
+    lines.join("\n")
+}
+
+fn source_kind_label(source_kind: &crate::carrier_protocol::SourceKind) -> &'static str {
+    match source_kind {
+        crate::carrier_protocol::SourceKind::Operator => "operator",
+        crate::carrier_protocol::SourceKind::System => "system",
+        crate::carrier_protocol::SourceKind::Agent => "agent",
+        crate::carrier_protocol::SourceKind::External => "external",
+    }
+}
+
+fn item_label(count: usize) -> &'static str {
+    if count == 1 { "item" } else { "items" }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::carrier_protocol::{parse_session_event, SessionEventKind};
+    use crate::carrier_protocol::{
+        InputEvent, SessionEventKind, SourceKind, create_provider_request_payload,
+        parse_session_event,
+    };
     use crate::input_queue::{SessionEvidenceContext, TurnState};
+    use crate::provider_dispatch::{
+        ProviderAdapter, ProviderCancellationToken, ProviderDispatchRecord, ProviderDispatchStatus,
+    };
     use crate::terminal_input_tick::TerminalInputReader;
     use crate::transcript_store::TranscriptStore;
     use crate::turn_coordinator::TurnCoordinatorClock;
     use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
+    use serde_json::json;
     use std::collections::VecDeque;
-    use std::fs::{read_to_string, remove_file, OpenOptions};
+    use std::fs::{OpenOptions, read_to_string, remove_file};
     use std::io;
     use std::io::Write;
     use std::path::{Path, PathBuf};
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     const CONTROL_FIXTURE: &str =
         include_str!("../../carrier-protocol/fixtures/control-input-event.json");
@@ -232,16 +466,22 @@ mod tests {
     struct FakeBridge {
         submitted: Vec<String>,
         interrupts: usize,
+        clears: usize,
         fail_submit: bool,
         fail_interrupt: bool,
     }
 
     impl ComposerAdmissionBridge for FakeBridge {
-        fn submit_operator_text(&mut self, text: String) -> Result<(), String> {
+        fn submit_operator_text(&mut self, text: String) -> Result<Option<TranscriptItem>, String> {
             if self.fail_submit {
                 return Err("submit failed".to_string());
             }
             self.submitted.push(text);
+            Ok(None)
+        }
+
+        fn clear_transcript_projection(&mut self) -> Result<(), String> {
+            self.clears += 1;
             Ok(())
         }
 
@@ -254,14 +494,84 @@ mod tests {
         }
     }
 
+    struct CancellableProviderAdapter {
+        release: mpsc::Receiver<()>,
+    }
+
+    impl ProviderAdapter for CancellableProviderAdapter {
+        fn dispatch_request(
+            &self,
+            input: &InputEvent,
+            turn_id: &str,
+            cancellation: &ProviderCancellationToken,
+        ) -> ProviderDispatchRecord {
+            while !cancellation.is_cancelled() {
+                if self.release.try_recv().is_ok() {
+                    break;
+                }
+                thread::sleep(Duration::from_millis(5));
+            }
+            if cancellation.is_cancelled() {
+                let mut payload = create_provider_request_payload(
+                    turn_id,
+                    &input.event_id,
+                    "interrupted",
+                    true,
+                    "configured",
+                    "admitted",
+                    Some("test_cancellable_adapter".to_string()),
+                    None,
+                    None,
+                    None,
+                    false,
+                    "single_provider_output_batch",
+                    None,
+                    &input.content,
+                );
+                payload["error_summary"] = json!("provider_cancelled");
+                return ProviderDispatchRecord {
+                    status: ProviderDispatchStatus::Interrupted,
+                    provider_execution_enabled: true,
+                    payload,
+                    outputs: Vec::new(),
+                };
+            }
+            ProviderDispatchRecord {
+                status: ProviderDispatchStatus::Completed,
+                provider_execution_enabled: true,
+                payload: create_provider_request_payload(
+                    turn_id,
+                    &input.event_id,
+                    "completed",
+                    true,
+                    "configured",
+                    "admitted",
+                    Some("test_cancellable_adapter".to_string()),
+                    None,
+                    None,
+                    None,
+                    false,
+                    "single_provider_output_batch",
+                    None,
+                    &input.content,
+                ),
+                outputs: Vec::new(),
+            }
+        }
+    }
+
     #[derive(Debug)]
     struct FakeTerminalFrame {
         size: TerminalSize,
+        size_sequence: VecDeque<TerminalSize>,
         draw_count: usize,
         prompt_labels: Vec<String>,
         composer_texts: Vec<String>,
         status_lines: Vec<String>,
         transcript_counts: Vec<usize>,
+        transcript_texts: Vec<String>,
+        transcript_scroll_offsets: Vec<usize>,
+        layout_snapshots: Vec<(u16, u16, u16, u16)>,
     }
 
     impl FakeTerminalFrame {
@@ -271,17 +581,31 @@ mod tests {
                     width: 80,
                     height: 12,
                 },
+                size_sequence: VecDeque::new(),
                 draw_count: 0,
                 prompt_labels: Vec::new(),
                 composer_texts: Vec::new(),
                 status_lines: Vec::new(),
                 transcript_counts: Vec::new(),
+                transcript_texts: Vec::new(),
+                transcript_scroll_offsets: Vec::new(),
+                layout_snapshots: Vec::new(),
+            }
+        }
+
+        fn resizing(sizes: impl IntoIterator<Item = TerminalSize>) -> Self {
+            Self {
+                size_sequence: VecDeque::from_iter(sizes),
+                ..Self::new()
             }
         }
     }
 
     impl InteractiveTerminalFrame for FakeTerminalFrame {
         fn terminal_size(&mut self) -> Result<TerminalSize, String> {
+            if let Some(size) = self.size_sequence.pop_front() {
+                self.size = size;
+            }
             Ok(self.size)
         }
 
@@ -295,6 +619,22 @@ mod tests {
             self.composer_texts.push(composer.text());
             self.status_lines.push(model.status.compact_line.clone());
             self.transcript_counts.push(model.transcript_rows.len());
+            self.transcript_scroll_offsets
+                .push(model.transcript_scroll_offset);
+            self.transcript_texts.push(
+                model
+                    .transcript_rows
+                    .iter()
+                    .map(|row| row.text.as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            );
+            self.layout_snapshots.push((
+                model.layout.transcript.height,
+                model.layout.status.y,
+                model.layout.composer.y,
+                model.layout.composer.height,
+            ));
             Ok(())
         }
     }
@@ -483,8 +823,40 @@ mod tests {
     }
 
     #[test]
-    fn redraws_for_draft_changes_and_read_errors() {
+    fn scrolls_transcript_without_mutating_composer_or_bridge() {
         let mut state = AgentTuiLoopState::default();
+        let mut bridge = FakeBridge::default();
+
+        assert_eq!(
+            apply_input_tick_outcome(
+                &mut state,
+                &mut bridge,
+                TerminalInputTickOutcome::ScrollTranscriptUp
+            ),
+            RenderLoopAction::Redraw
+        );
+        assert_eq!(state.transcript_scroll_offset, 8);
+        assert_eq!(state.draft_text(), "");
+        assert!(bridge.submitted.is_empty());
+        assert_eq!(bridge.interrupts, 0);
+
+        assert_eq!(
+            apply_input_tick_outcome(
+                &mut state,
+                &mut bridge,
+                TerminalInputTickOutcome::ScrollTranscriptDown
+            ),
+            RenderLoopAction::Redraw
+        );
+        assert_eq!(state.transcript_scroll_offset, 0);
+    }
+
+    #[test]
+    fn redraws_for_draft_changes_and_read_errors() {
+        let mut state = AgentTuiLoopState {
+            transcript_scroll_offset: 8,
+            ..AgentTuiLoopState::default()
+        };
         let mut bridge = FakeBridge::default();
 
         assert_eq!(
@@ -495,6 +867,7 @@ mod tests {
             ),
             RenderLoopAction::Redraw
         );
+        assert_eq!(state.transcript_scroll_offset, 0);
         assert_eq!(
             apply_input_tick_outcome(
                 &mut state,
@@ -526,6 +899,112 @@ mod tests {
     }
 
     #[test]
+    fn stats_feedback_renders_command_output() {
+        let item = queue_command_feedback_item(
+            &RuntimeOperatorSubmitResult::StatsShown {
+                output: "Codex transcript stats\nScanned: 1 rollout files".to_string(),
+            },
+            "2026-05-30T18:39:10.000Z",
+        )
+        .expect("stats command renders local feedback");
+
+        assert_eq!(item.actor, TranscriptActor::AgentTui);
+        assert!(item.text.contains("Codex transcript stats"));
+        assert!(item.text.contains("Scanned: 1 rollout files"));
+    }
+
+    #[test]
+    fn status_feedback_includes_model_and_thinking() {
+        let item = queue_command_feedback_item(
+            &RuntimeOperatorSubmitResult::StatusShown {
+                identity: "sonar.resident".to_string(),
+                session: "carrier_fixture_1".to_string(),
+                model: Some("gpt-5.5-mini".to_string()),
+                thinking: Some("high".to_string()),
+                queued: 0,
+                held: 0,
+                turn_state: "idle".to_string(),
+            },
+            "2026-05-30T18:39:10.000Z",
+        )
+        .expect("status command renders local feedback");
+
+        assert!(item.text.contains("Model        gpt-5.5-mini"));
+        assert!(item.text.contains("Thinking     high"));
+    }
+
+    #[test]
+    fn queue_feedback_formats_index_source_age_and_preview() {
+        let item = queue_command_feedback_item(
+            &RuntimeOperatorSubmitResult::QueueShown {
+                queued: vec![QueuedInputSummary {
+                    index: 1,
+                    input_event_id: "input_fixture_1".to_string(),
+                    source_kind: SourceKind::Operator,
+                    created_at: "2026-05-30T18:38:00.000Z".to_string(),
+                    content_preview: "queued note".to_string(),
+                }],
+            },
+            "2026-05-30T18:39:10.000Z",
+        )
+        .expect("queue command renders local feedback");
+
+        assert_eq!(item.actor, TranscriptActor::AgentTui);
+        assert_eq!(item.kind, TranscriptItemKind::TurnTerminalStatus);
+        assert_eq!(
+            item.occurred_at.as_deref(),
+            Some("2026-05-30T18:39:10.000Z")
+        );
+        assert_eq!(
+            item.text,
+            "queue: 1 item\n1. operator · 1m 10s · queued note"
+        );
+    }
+
+    #[test]
+    fn submit_pushes_local_queue_feedback_when_bridge_returns_item() {
+        struct QueueFeedbackBridge;
+
+        impl ComposerAdmissionBridge for QueueFeedbackBridge {
+            fn submit_operator_text(
+                &mut self,
+                _text: String,
+            ) -> Result<Option<TranscriptItem>, String> {
+                Ok(Some(TranscriptItem {
+                    kind: TranscriptItemKind::TurnTerminalStatus,
+                    actor: TranscriptActor::AgentTui,
+                    turn_id: String::new(),
+                    text: "queue empty".to_string(),
+                    sequence: None,
+                    projection_key: None,
+                    occurred_at: Some("2026-05-30T18:39:10.000Z".to_string()),
+                }))
+            }
+
+            fn request_interrupt(&mut self) -> Result<(), String> {
+                Ok(())
+            }
+        }
+
+        let mut state = AgentTuiLoopState::default();
+        let mut bridge = QueueFeedbackBridge;
+
+        assert_eq!(
+            apply_input_tick_outcome(
+                &mut state,
+                &mut bridge,
+                TerminalInputTickOutcome::DraftEffect(ComposerDraftEffect::SubmitRequested {
+                    text: "/queue".to_string()
+                })
+            ),
+            RenderLoopAction::Redraw
+        );
+
+        assert_eq!(state.local_transcript_items.len(), 1);
+        assert_eq!(state.local_transcript_items[0].text, "queue empty");
+    }
+
+    #[test]
     fn requests_interrupt_through_bridge() {
         let mut state = AgentTuiLoopState::default();
         let mut bridge = FakeBridge::default();
@@ -541,6 +1020,36 @@ mod tests {
             RenderLoopAction::Redraw
         );
         assert_eq!(bridge.interrupts, 1);
+    }
+
+    #[test]
+    fn slash_clear_clears_projected_and_local_transcript() {
+        let mut state = AgentTuiLoopState::default();
+        state.transcript_scroll_offset = 3;
+        state.local_transcript_items.push(TranscriptItem {
+            kind: TranscriptItemKind::TurnTerminalStatus,
+            actor: TranscriptActor::AgentTui,
+            turn_id: String::new(),
+            text: "status".to_string(),
+            sequence: None,
+            projection_key: None,
+            occurred_at: None,
+        });
+        let mut bridge = FakeBridge::default();
+
+        assert_eq!(
+            apply_input_tick_outcome(
+                &mut state,
+                &mut bridge,
+                TerminalInputTickOutcome::DraftEffect(ComposerDraftEffect::SubmitRequested {
+                    text: "/clear".to_string()
+                })
+            ),
+            RenderLoopAction::Redraw
+        );
+        assert_eq!(bridge.clears, 1);
+        assert!(state.local_transcript_items.is_empty());
+        assert_eq!(state.transcript_scroll_offset, 0);
     }
 
     #[test]
@@ -612,12 +1121,62 @@ mod tests {
         assert!(summary.final_drawn);
         assert_eq!(terminal.draw_count, 2);
         assert_eq!(terminal.composer_texts, vec!["live note", "live note"]);
-        assert!(terminal
-            .prompt_labels
-            .iter()
-            .all(|label| label == "operator -> sonar.resident>"));
+        assert!(
+            terminal
+                .prompt_labels
+                .iter()
+                .all(|label| label == "operator -> sonar.resident>")
+        );
         assert!(terminal.transcript_counts[0] >= 1);
         assert!(terminal.transcript_counts[1] >= 1);
+
+        remove_file(control_path).ok();
+        remove_file(session_path).ok();
+    }
+
+    #[test]
+    fn injected_interactive_loop_preserves_draft_and_recomputes_layout_across_resize() {
+        let control_path = temp_path("control-resize");
+        let session_path = temp_path("session-resize");
+        append(&control_path, "");
+        let mut runtime = runtime_for_paths(&control_path, &session_path);
+        let mut state = AgentTuiLoopState {
+            composer: TextareaComposer::from_draft(&ComposerDraftState {
+                text: "resize draft".to_string(),
+            }),
+            ..AgentTuiLoopState::default()
+        };
+        let mut terminal = FakeTerminalFrame::resizing([
+            TerminalSize {
+                width: 100,
+                height: 24,
+            },
+            TerminalSize {
+                width: 60,
+                height: 8,
+            },
+        ]);
+        let mut input = input_source([TerminalInputTickOutcome::NoInput]);
+        let mut clock = clock_source();
+
+        let summary = run_injected_interactive_loop(
+            &mut runtime,
+            &mut state,
+            &mut terminal,
+            &mut input,
+            &mut clock,
+            1,
+        )
+        .expect("interactive loop survives resize");
+
+        assert_eq!(summary.steps_attempted, 1);
+        assert_eq!(terminal.draw_count, 2);
+        assert_eq!(
+            terminal.composer_texts,
+            vec!["resize draft", "resize draft"]
+        );
+        assert_eq!(terminal.layout_snapshots[0], (19, 19, 20, 4));
+        assert_eq!(terminal.layout_snapshots[1], (3, 3, 4, 4));
 
         remove_file(control_path).ok();
         remove_file(session_path).ok();
@@ -654,19 +1213,219 @@ mod tests {
 
         assert_eq!(summary.steps_attempted, 1);
         assert!(!summary.exited_by_input);
-        assert_eq!(terminal.draw_count, 2);
+        assert_eq!(terminal.draw_count, 3);
         assert_eq!(
             terminal.prompt_labels,
             vec![
                 "operator note -> sonar.resident>".to_string(),
+                "operator note -> sonar.resident>".to_string(),
                 "operator note -> sonar.resident>".to_string()
             ]
         );
-        assert!(terminal
-            .status_lines
-            .last()
-            .expect("final status exists")
-            .contains("queued=1"));
+        assert!(
+            terminal
+                .status_lines
+                .last()
+                .expect("final status exists")
+                .contains("queued operator steering 1")
+        );
+        assert!(
+            !terminal
+                .transcript_texts
+                .iter()
+                .any(|text| text.contains("queued operator note"))
+        );
+
+        remove_file(control_path).ok();
+        remove_file(session_path).ok();
+    }
+
+    #[test]
+    fn injected_interactive_loop_queues_operator_steering_while_provider_worker_is_active() {
+        let control_path = temp_path("control-active-provider-submit");
+        let session_path = temp_path("session-active-provider-submit");
+        append(&control_path, CONTROL_FIXTURE.trim_end());
+        append(&control_path, "\n");
+        let (release_sender, release_receiver) = mpsc::channel();
+        let mut runtime = AgentTuiInteractiveRuntime::with_provider_adapter(
+            "sonar.resident",
+            "carrier_fixture_1",
+            &control_path,
+            &session_path,
+            context(),
+            Box::new(CancellableProviderAdapter {
+                release: release_receiver,
+            }),
+        );
+        let mut state = AgentTuiLoopState::default();
+        let mut terminal = FakeTerminalFrame::new();
+        let mut input = input_source([TerminalInputTickOutcome::DraftEffect(
+            ComposerDraftEffect::SubmitRequested {
+                text: "check mailbox after this turn".to_string(),
+            },
+        )]);
+        let mut clock = clock_source();
+
+        let summary = run_injected_interactive_loop(
+            &mut runtime,
+            &mut state,
+            &mut terminal,
+            &mut input,
+            &mut clock,
+            1,
+        )
+        .expect("interactive loop queues submit while provider is active");
+
+        assert_eq!(summary.steps_attempted, 1);
+        assert!(!summary.exited_by_input);
+        assert_eq!(terminal.draw_count, 3);
+        assert!(
+            terminal
+                .prompt_labels
+                .iter()
+                .all(|label| label == "operator note -> sonar.resident>")
+        );
+        assert!(
+            terminal
+                .status_lines
+                .iter()
+                .any(|line| { line.contains("thinking") && line.contains("provider working") })
+        );
+        assert!(terminal.status_lines.iter().any(|line| {
+            line.contains("queued operator steering 1") && line.contains("provider working")
+        }));
+        assert!(
+            !terminal
+                .transcript_texts
+                .iter()
+                .any(|text| text.contains("check mailbox after this turn"))
+        );
+        let session_jsonl = read_to_string(&session_path).expect("session jsonl exists");
+        assert!(session_jsonl.contains("\"queue_state\":\"queued_for_turn_boundary\""));
+        assert!(session_jsonl.contains("\"delivery_mode\":\"admit_for_current_turn\""));
+        assert!(session_jsonl.contains("\"content_preview\":\"check mailbox after this turn\""));
+
+        release_sender.send(()).expect("release active provider");
+        for _ in 0..100 {
+            if runtime
+                .run_background_step(&state.draft_state(), &clock.next_interactive_step_clock())
+                .expect("background step polls released provider")
+                .completed_turn
+                .is_some()
+            {
+                break;
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+
+        remove_file(control_path).ok();
+        remove_file(session_path).ok();
+    }
+
+    #[test]
+    fn interrupt_request_preserves_composer_draft() {
+        let control_path = temp_path("control-interrupt-preserve-draft");
+        let session_path = temp_path("session-interrupt-preserve-draft");
+        append(&control_path, "");
+        let mut runtime = runtime_for_paths(&control_path, &session_path);
+        runtime
+            .coordinator_mut()
+            .queue_mut()
+            .set_turn_state(TurnState::Active);
+        let mut state = AgentTuiLoopState {
+            composer: TextareaComposer::from_draft(&ComposerDraftState {
+                text: "keep this note".to_string(),
+            }),
+            ..AgentTuiLoopState::default()
+        };
+        let mut terminal = FakeTerminalFrame::new();
+        let mut input = input_source([TerminalInputTickOutcome::DraftEffect(
+            ComposerDraftEffect::ClearOrInterruptRequested,
+        )]);
+        let mut clock = clock_source();
+
+        let summary = run_injected_interactive_loop(
+            &mut runtime,
+            &mut state,
+            &mut terminal,
+            &mut input,
+            &mut clock,
+            1,
+        )
+        .expect("interactive loop preserves draft on interrupt");
+
+        assert_eq!(summary.steps_attempted, 1);
+        assert_eq!(state.draft_text(), "keep this note");
+        assert!(
+            terminal
+                .composer_texts
+                .iter()
+                .any(|text| text == "keep this note")
+        );
+        let session_jsonl = read_to_string(&session_path).expect("session jsonl exists");
+        assert!(session_jsonl.contains("\"event_kind\":\"interrupt_requested\""));
+
+        remove_file(control_path).ok();
+        remove_file(session_path).ok();
+    }
+
+    #[test]
+    fn injected_interactive_loop_interrupt_cancels_active_provider_turn() {
+        let control_path = temp_path("control-interrupt-provider");
+        let session_path = temp_path("session-interrupt-provider");
+        append(&control_path, CONTROL_FIXTURE.trim_end());
+        append(&control_path, "\n");
+        let (_release_sender, release_receiver) = mpsc::channel();
+        let mut runtime = AgentTuiInteractiveRuntime::with_provider_adapter(
+            "sonar.resident",
+            "carrier_fixture_1",
+            &control_path,
+            &session_path,
+            context(),
+            Box::new(CancellableProviderAdapter {
+                release: release_receiver,
+            }),
+        );
+        let mut state = AgentTuiLoopState::default();
+        let mut terminal = FakeTerminalFrame::new();
+        let mut input = input_source([
+            TerminalInputTickOutcome::DraftEffect(ComposerDraftEffect::ClearOrInterruptRequested),
+            TerminalInputTickOutcome::NoInput,
+            TerminalInputTickOutcome::NoInput,
+            TerminalInputTickOutcome::DraftEffect(ComposerDraftEffect::ExitRequested),
+        ]);
+        let mut clock = clock_source();
+
+        let summary = run_injected_interactive_loop(
+            &mut runtime,
+            &mut state,
+            &mut terminal,
+            &mut input,
+            &mut clock,
+            10,
+        )
+        .expect("interactive loop cancels active provider");
+
+        assert!(summary.exited_by_input);
+        let mut session_jsonl = String::new();
+        for _ in 0..100 {
+            session_jsonl = read_to_string(&session_path).expect("session jsonl exists");
+            if session_jsonl.contains("\"event_kind\":\"turn_interrupted\"") {
+                break;
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+        let events = session_jsonl
+            .lines()
+            .map(|line| parse_session_event(line).expect("event parses"))
+            .collect::<Vec<_>>();
+        let interrupted = events
+            .iter()
+            .find(|event| event.event_kind == SessionEventKind::TurnInterrupted)
+            .expect("interrupted terminal event exists");
+        assert_eq!(interrupted.payload["terminal_status"], "interrupted");
+        assert_eq!(interrupted.payload["error_summary"], "provider_cancelled");
+        assert!(!session_jsonl.contains("provider dispatch interrupted: provider_cancelled"));
 
         remove_file(control_path).ok();
         remove_file(session_path).ok();
@@ -864,12 +1623,14 @@ mod tests {
         assert_eq!(summary.steps_attempted, 1);
         assert!(!summary.exited_by_input);
         assert_eq!(state.last_error.as_deref(), Some("read failed"));
-        assert_eq!(terminal.draw_count, 2);
-        assert!(terminal
-            .status_lines
-            .last()
-            .expect("final status exists")
-            .contains("error=read failed"));
+        assert_eq!(terminal.draw_count, 3);
+        assert!(
+            terminal
+                .status_lines
+                .last()
+                .expect("final status exists")
+                .contains("error read failed")
+        );
 
         remove_file(control_path).ok();
         remove_file(session_path).ok();
@@ -903,11 +1664,13 @@ mod tests {
             Some("control_jsonl_parse_errors:1")
         );
         assert_eq!(terminal.draw_count, 2);
-        assert!(terminal
-            .status_lines
-            .last()
-            .expect("final status exists")
-            .contains("error=control_jsonl_parse_errors:1"));
+        assert!(
+            terminal
+                .status_lines
+                .last()
+                .expect("final status exists")
+                .contains("error control jsonl parse errors:1")
+        );
 
         remove_file(control_path).ok();
         remove_file(session_path).ok();
@@ -948,10 +1711,12 @@ mod tests {
             state.last_error.as_deref(),
             Some("control_jsonl_parse_errors:1")
         );
-        assert!(terminal
-            .status_lines
-            .iter()
-            .any(|line| line.contains("error=control_jsonl_parse_errors:1")));
+        assert!(
+            terminal
+                .status_lines
+                .iter()
+                .any(|line| line.contains("error control jsonl parse errors:1"))
+        );
 
         let session_jsonl = read_to_string(&session_path).expect("session jsonl exists");
         assert!(session_jsonl.contains("\"source_kind\":\"system\""));
@@ -962,10 +1727,12 @@ mod tests {
         transcript
             .ingest_jsonl_file_summary(&session_path)
             .expect("session transcript ingests");
-        assert!(transcript
-            .items()
-            .iter()
-            .any(|item| item.actor.as_str() == "system" && item.text == "run startup sequence"));
+        assert!(
+            transcript
+                .items()
+                .iter()
+                .any(|item| item.actor.as_str() == "system" && item.text == "run startup sequence")
+        );
 
         remove_file(control_path).ok();
         remove_file(session_path).ok();

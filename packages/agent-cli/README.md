@@ -57,13 +57,14 @@ Interactive CLI accepts:
 
 - `/help`
 - `/status`
+- `/stats [args]`
 - `/model <model-name>`
 - `/thinking none|low|medium|high`
 - `/clear`
 - `/exit`
 
 The interactive prompt is `operator -> <agent>` followed by `>` while waiting for input. After submission, the visible transcript line is rewritten as `operator -> <agent>: <message>`, making the operator the speaker and the agent identity the target.
-Slash command output is rendered as `agent-cli:` because it comes from the carrier CLI, not the agent model.
+Slash command output is rendered as `agent-cli:` because it comes from the carrier CLI, not the agent model. `/stats` invokes the local Codex transcript statistics tool (`NARADA_TOOLS_ROOT` or `D:/code/narada-tools`) and is scoped to Codex transcript storage rather than gated to Codex runtime sessions.
 Programmatic inputs can be marked with `--operator-directive` or `--system-directive`; in interactive display they render as `operator directive -> <agent>:` or `system directive:` with distinct label colors.
 Interactive mode does not schedule startup system directives by default. Use `--enable-startup-system-directive` to schedule the default `run startup sequence` directive after 10 seconds, or `--startup-system-directive <text>` and `--startup-system-directive-delay-ms <ms>` to opt in with custom content/timing. `NARADA_AGENT_CLI_STARTUP_SYSTEM_DIRECTIVE_ENABLE=1` provides the same opt-in as an environment default.
 Tool mediation renders as `<agent> -> agent-cli:` for requested tool calls and `agent-cli -> <agent>:` for returned results.

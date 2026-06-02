@@ -33,6 +33,7 @@ import {
   formatToolResultContent,
   handleInteractiveControlLine,
   handleSlashCommand,
+  runCodexTranscriptStats,
   inputRecordDisplayLabel,
   normalizeDisplayTerms,
   normalizeInputEvent,
@@ -549,6 +550,18 @@ assert.equal(codexExecEventText(event), 'hello');
 assert.equal(await handleSlashCommand('/help', { mcpServers: {}, allTools: [] }), 'handled');
 assert.equal(await handleSlashCommand('/bad', { mcpServers: {}, allTools: [] }), 'handled');
 assert.equal(await handleSlashCommand('plain message', { mcpServers: {}, allTools: [] }), 'none');
+const printedStatsMessages = [];
+console.log = (value = '') => { printedStatsMessages.push(stripAnsiForTest(String(value))); };
+try {
+  assert.equal(await handleSlashCommand('/stats --date 2026-06-01 --top 3', {
+    mcpServers: {},
+    allTools: [],
+    statsRunner: (value) => ({ status: 'ok', message: `stats args: ${value}` }),
+  }), 'handled');
+} finally {
+  console.log = originalConsoleLog;
+}
+assert.equal(printedStatsMessages.some((message) => message.includes('stats args: --date 2026-06-01 --top 3')), true);
 assert.equal(await handleSlashCommand('/exit', { mcpServers: {}, allTools: [] }), 'exit');
 const slashQueue = createInputQueue({ drain: async () => ({ terminal_state: 'completed' }) });
 await slashQueue.enqueue(normalizeInputEvent({ content: 'first steering', source: 'operator_steering' }, { transport: 'terminal' }));

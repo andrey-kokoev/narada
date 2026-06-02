@@ -4,7 +4,7 @@ import { createInterface } from 'node:readline';
 import { StringDecoder } from 'node:string_decoder';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync, readdirSync, statSync } from 'node:fs';
 import { resolve, join } from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { request as httpsRequest } from 'node:https';
 import { request as httpRequest } from 'node:http';
 import { pathToFileURL } from 'node:url';
@@ -141,6 +141,28 @@ function buildChildProcessEnv(extra = {}, baseEnv = process.env) {
 function environmentBlockLength(env) {
   return Object.entries(env).reduce((total, [key, value]) => total + key.length + String(value ?? '').length + 2, 1);
 }
+
+function terminateChildProcessTree(child, { forceAfterMs = 1500 } = {}) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  if (process.platform === 'win32' && child.pid) {
+    try {
+      const killer = spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
+        windowsHide: true,
+        stdio: 'ignore',
+      });
+      killer.on('error', () => {});
+      killer.unref?.();
+    } catch {}
+    return;
+  }
+  try { child.kill('SIGTERM'); } catch {}
+  setTimeout(() => {
+    if (!child.killed && child.exitCode === null && child.signalCode === null) {
+      try { child.kill('SIGKILL'); } catch {}
+    }
+  }, forceAfterMs).unref?.();
+}
+
 const terminalStyle = createTerminalStyle({
   enabled: options.color ?? parseColorEnv(process.env.NARADA_AGENT_CLI_COLOR, process.stdout.isTTY && !SERVER_MODE),
 });
@@ -377,7 +399,7 @@ function recordCarrierDiagnostic(level, message, extra = {}) {
   }));
 }
 
-async function handleSlashCommand(input, { mcpServers, allTools, inputQueue = null }) {
+async function handleSlashCommand(input, { mcpServers, allTools, inputQueue = null, statsRunner = runCodexTranscriptStats }) {
   const trimmed = String(input ?? '').trim();
   if (!trimmed) return 'none';
   if (trimmed.toLowerCase() === 'exit' || trimmed.toLowerCase() === '/exit' || trimmed.toLowerCase() === '/quit') {
@@ -395,6 +417,7 @@ async function handleSlashCommand(input, { mcpServers, allTools, inputQueue = nu
       '',
       '/help                 Show commands',
       '/status               Show session state',
+      '/stats [args]         Show local Codex transcript statistics',
       '/model <name>         Set model for later turns',
       '/thinking <level>     none, low, medium, high',
       '/queue                Show queued carrier input',
@@ -423,6 +446,17 @@ async function handleSlashCommand(input, { mcpServers, allTools, inputQueue = nu
   if (command === '/clear') {
     clearTerminalDisplay();
     appendSession(SESSION_PATH, sessionEventEntry('session_command', { command: '/clear' }));
+    return 'handled';
+  }
+  if (command === '/stats') {
+    const result = statsRunner(value);
+    printCliMessage(result.message);
+    appendSession(SESSION_PATH, sessionEventEntry('session_command', {
+      command: '/stats',
+      arguments: value,
+      status: result.status,
+      runtime_scope: 'codex_transcript_store',
+    }));
     return 'handled';
   }
   if (command === '/status') {
@@ -466,6 +500,56 @@ async function handleSlashCommand(input, { mcpServers, allTools, inputQueue = nu
   }
   printCliMessage(`Unknown command: ${command}. Type /help.`);
   return 'handled';
+}
+
+function runCodexTranscriptStats(value = '') {
+  const extraArgs = shellLikeWords(value);
+  const defaultArgs = extraArgs.length === 0 ? ['--top', '10'] : extraArgs;
+  const configuredRoot = process.env.NARADA_TOOLS_ROOT;
+  const defaultRoot = process.platform === 'win32' ? 'D:/code/narada-tools' : '/home/andrey/src/narada-tools';
+  const candidateRoot = configuredRoot || defaultRoot;
+  const scriptPath = join(candidateRoot, 'packages', 'codex-transcript-stats', 'src', 'codex-transcript-stats.mjs');
+  const command = existsSync(scriptPath) ? process.execPath : 'codex-transcript-stats';
+  const args = existsSync(scriptPath) ? [scriptPath, ...defaultArgs] : defaultArgs;
+  const cwd = existsSync(candidateRoot) ? candidateRoot : process.cwd();
+  const result = spawnSync(command, args, {
+    cwd,
+    encoding: 'utf8',
+    windowsHide: true,
+    maxBuffer: 8 * 1024 * 1024,
+    env: process.env,
+  });
+  if (result.error) {
+    return {
+      status: 'unavailable',
+      message: [
+        'Codex transcript stats unavailable.',
+        `Expected tool at ${scriptPath} or codex-transcript-stats on PATH.`,
+        `Error: ${result.error.message}`,
+      ].join('\n'),
+    };
+  }
+  const output = [result.stdout, result.stderr].filter((part) => String(part ?? '').trim()).join('\n').trim();
+  if (result.status !== 0) {
+    return {
+      status: 'failed',
+      message: [`Codex transcript stats failed with exit ${result.status}.`, output].filter(Boolean).join('\n'),
+    };
+  }
+  return {
+    status: 'ok',
+    message: output || 'Codex transcript stats produced no output.',
+  };
+}
+
+function shellLikeWords(value) {
+  const words = [];
+  const pattern = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  let match;
+  while ((match = pattern.exec(String(value ?? ''))) !== null) {
+    words.push(match[1] ?? match[2] ?? match[3] ?? '');
+  }
+  return words;
 }
 
 function handleQueueCommand(value, inputQueue) {
@@ -2420,6 +2504,10 @@ function parseAnthropicMessagesResponse(response) {
 function sendProviderRequest({ url, body, headers }, settings = {}) {
   const serializedBody = JSON.stringify(body);
   return new Promise((resolve, reject) => {
+    if (settings.abortSignal?.aborted) {
+      reject(new Error('agent_cli_interrupt_requested'));
+      return;
+    }
     const isHttps = url.protocol === 'https:';
     const req = (isHttps ? httpsRequest : httpRequest)(
       {
@@ -2427,10 +2515,10 @@ function sendProviderRequest({ url, body, headers }, settings = {}) {
         port: url.port || (isHttps ? 443 : 80),
         path: url.pathname + url.search,
         method: 'POST',
+        signal: settings.abortSignal,
         headers: {
           ...headers,
           'Content-Length': Buffer.byteLength(serializedBody),
-          signal: settings.abortSignal,
         },
       },
       (res) => {
@@ -2514,12 +2602,7 @@ function sendCodexExecJsonRequest(request, settings = {}) {
     let aborted = false;
     const abortChild = () => {
       aborted = true;
-      try { child.kill('SIGTERM'); } catch {}
-      setTimeout(() => {
-        if (!child.killed) {
-          try { child.kill('SIGKILL'); } catch {}
-        }
-      }, 1500).unref?.();
+      terminateChildProcessTree(child);
     };
     if (settings.abortSignal?.aborted) abortChild();
     settings.abortSignal?.addEventListener('abort', abortChild, { once: true });
@@ -2596,12 +2679,7 @@ function sendCodexExecJsonBufferedRequest(request, settings = {}) {
     let aborted = false;
     const abortChild = () => {
       aborted = true;
-      try { child.kill('SIGTERM'); } catch {}
-      setTimeout(() => {
-        if (!child.killed) {
-          try { child.kill('SIGKILL'); } catch {}
-        }
-      }, 1500).unref?.();
+      terminateChildProcessTree(child);
     };
     if (settings.abortSignal?.aborted) abortChild();
     settings.abortSignal?.addEventListener('abort', abortChild, { once: true });
@@ -2727,6 +2805,17 @@ function sendCodexMcpRequest(request, settings = {}) {
     let buffer = '';
     let stderr = '';
     const pending = new Map();
+    let aborted = false;
+    const abortChild = () => {
+      aborted = true;
+      for (const pendingRequest of pending.values()) {
+        pendingRequest.reject(new Error('agent_cli_interrupt_requested'));
+      }
+      pending.clear();
+      terminateChildProcessTree(child);
+    };
+    if (settings.abortSignal?.aborted) abortChild();
+    settings.abortSignal?.addEventListener('abort', abortChild, { once: true });
 
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
@@ -2751,6 +2840,10 @@ function sendCodexMcpRequest(request, settings = {}) {
     child.on('error', reject);
 
     const send = (payload, timeoutMs = 120000) => new Promise((resolveRequest, rejectRequest) => {
+      if (aborted || settings.abortSignal?.aborted) {
+        rejectRequest(new Error('agent_cli_interrupt_requested'));
+        return;
+      }
       pending.set(payload.id, { resolve: resolveRequest, reject: rejectRequest });
       child.stdin.write(`${JSON.stringify(payload)}\n`);
       setTimeout(() => {
@@ -2758,7 +2851,7 @@ function sendCodexMcpRequest(request, settings = {}) {
           pending.delete(payload.id);
           rejectRequest(new Error(`Codex MCP request timeout after ${timeoutMs}ms`));
         }
-      }, timeoutMs);
+      }, timeoutMs).unref?.();
     });
 
     (async () => {
@@ -2794,8 +2887,9 @@ function sendCodexMcpRequest(request, settings = {}) {
     })().catch((error) => {
       reject(new Error(`${error.message}${stderr.trim() ? `; ${stderr.trim().slice(0, 1000)}` : ''}`));
     }).finally(() => {
+      settings.abortSignal?.removeEventListener?.('abort', abortChild);
       child.stdin.end();
-      child.kill();
+      terminateChildProcessTree(child);
     });
   });
 }
@@ -3311,6 +3405,7 @@ export {
   executeMcpTool,
   handleInteractiveControlLine,
   handleSlashCommand,
+  runCodexTranscriptStats,
   createInputQueue,
   normalizeInputEvent,
   normalizeProviderSupportState,
