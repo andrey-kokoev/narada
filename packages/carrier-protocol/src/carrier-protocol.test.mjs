@@ -18,6 +18,7 @@ import {
   assertValidInputEvent,
   assertValidPayloadRef,
   assertValidSessionEvent,
+  classifyCarrierInputIntent,
   classifyInputAdmission,
   createCarrierDiagnosticSessionEvent,
   createControlInputRecord,
@@ -31,10 +32,12 @@ import {
   createQueueLifecycleSessionEvent,
   createSessionEvent,
   createTurnTerminalPayload,
+  isStartupNudge,
   isTerminalTurnState,
   normalizeControlInputRecord,
   normalizeInputEvent,
   normalizeLegacyInputRecord,
+  startupCommandFromLaunchPacket,
   validateControlInputRecord,
   validateInputEvent,
   validatePayloadRef,
@@ -133,7 +136,7 @@ assert.deepEqual(providerRequestFixture.payload, createProviderRequestPayload({
   stream: true,
   provider_streaming_contract: 'requested_but_not_dispatched',
   provider_adapter_refusal_reason: 'provider_adapter_not_configured',
-  content_preview: 'run startup sequence',
+  content_preview: 'inspect the workboard',
 }));
 const providerTextDeltaFixture = readFixture('provider-text-delta-session-event.json');
 assert.deepEqual(validateSessionEvent(providerTextDeltaFixture), []);
@@ -211,6 +214,23 @@ assert.equal(input.hold_condition, null);
 assert.deepEqual(validateInputEvent(input), []);
 assert.doesNotThrow(() => assertValidInputEvent(input));
 assert.equal(createInputEvent({ ...baseInput, event_id: undefined }).event_id.startsWith('input_'), true);
+assert.equal(isStartupNudge('run startup sequence'), true);
+assert.equal(isStartupNudge('please start up'), true);
+assert.equal(isStartupNudge('inspect startup files'), false);
+assert.deepEqual(startupCommandFromLaunchPacket({}), { name: 'agent_context_startup_sequence', arguments: {} });
+assert.deepEqual(startupCommandFromLaunchPacket({ startup_command: { name: 'startup_sequence', arguments: {} } }), { name: 'startup_sequence', arguments: {} });
+assert.deepEqual(classifyCarrierInputIntent(input, {
+  startup_command: { name: 'agent_context_startup_sequence', arguments: {} },
+}), {
+  intent: 'startup_command',
+  provider_dispatch_allowed: false,
+  command: { name: 'agent_context_startup_sequence', arguments: {} },
+  rule: 'startup_nudge_uses_launch_packet_mcp_affordance',
+});
+assert.deepEqual(classifyCarrierInputIntent(createInputEvent({ ...baseInput, event_id: 'input_provider', content: 'fix the dashboard' })), {
+  intent: 'provider_turn',
+  provider_dispatch_allowed: true,
+});
 
 assert.match(thrownMessage(() => createInputEvent({ ...baseInput, created_at: '2026-05-30' })), /invalid_created_at/);
 assert.match(thrownMessage(() => createInputEvent({ ...baseInput, metadata: [] })), /invalid_metadata/);

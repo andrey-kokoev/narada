@@ -4,16 +4,18 @@
   "type": "module",
   "private": true,
   "bin": {
-    "narada-agent-start": "./bin/narada-agent-start.mjs",
+    "narada-agent-start": "./src/narada-agent-start.ts",
     "narada-agent-start-verify-launchers": "./bin/verify-registered-site-launchers.mjs"
   },
   "exports": {
-    ".": "./bin/narada-agent-start.mjs",
+    ".": "./src/narada-agent-start.ts",
     "./verify-registered-site-launchers": "./bin/verify-registered-site-launchers.mjs",
     "./package.json": "./package.json"
   },
   "scripts": {
-    "test": "node --check bin/narada-agent-start.mjs && node --check bin/verify-registered-site-launchers.mjs",
-    "verify": "node bin/verify-registered-site-launchers.mjs"
+    "test": "node --import tsx src/narada-agent-start.ts narada.architect --site-root ../.. --target-site-root ../.. --runtime agent-cli --dry-run --json && node --check bin/verify-registered-site-launchers.mjs && node --test test/launcher-registry-contract.test.mjs test/option-contract.test.mjs",
+    "test:launcher-contract": "node --test test/launcher-registry-contract.test.mjs",
+    "verify": "node bin/verify-registered-site-launchers.mjs",
+    "test:option-contract": "node --test test/option-contract.test.mjs"
   }
 }

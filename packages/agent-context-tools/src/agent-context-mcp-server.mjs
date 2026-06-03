@@ -13,8 +13,10 @@
  *   agent_context_start_session   — validate and materialize an agent session start
  *   agent_context_list_sessions   — query agent_start_events for operational visibility
  *   agent_context_hydrate_current — single-command startup hydration for bound sessions
- *   startup_sequence              — operator-facing startup hydration command
+ *   agent_context_startup_sequence — canonical operator-facing startup hydration command
+ *   startup_sequence              — legacy operator-facing startup hydration alias
  *   agent_context_lifecycle_history — read recent lifecycle transition ledger rows
+
  *   agent_context_lifecycle_show  — read one lifecycle transition ledger row
  *   agent_context_restart         — request/status for external stdio MCP restart
  *
@@ -98,7 +100,8 @@ const SERVER_VERSION = '0.0.2';
 const SERVER_BOOTED_AT = new Date().toISOString();
 
 const EXPECTED_TOOL_GROUPS = {
-  core: ['agent_context_doctor', 'agent_context_whoami', 'agent_context_hydrate_current', 'startup_sequence', 'agent_context_restart', 'agent_context_pause'],
+  core: ['agent_context_doctor', 'agent_context_whoami', 'agent_context_hydrate_current', 'agent_context_startup_sequence', 'startup_sequence', 'agent_context_restart', 'agent_context_pause'],
+
   isn: ['agent_context_isn_create', 'agent_context_isn_list', 'agent_context_isn_show', 'agent_context_isn_transition'],
   movement_trace: ['agent_context_is_movement_trace_record', 'agent_context_is_movement_trace_list', 'agent_context_is_movement_trace_show'],
 };
@@ -319,10 +322,16 @@ const TOOLS = [
     inputSchema: startupSequenceInputSchema(),
   },
   {
-    name: 'startup_sequence',
-    description: 'Operator-facing startup hydration command. Delegates to the current agent_context_hydrate_current startup behavior.',
+    name: 'agent_context_startup_sequence',
+    description: 'Canonical operator-facing startup hydration command. Delegates to the current agent_context_hydrate_current startup behavior.',
     inputSchema: startupSequenceInputSchema(),
   },
+  {
+    name: 'startup_sequence',
+    description: 'Legacy operator-facing startup hydration alias. Delegates to the current agent_context_hydrate_current startup behavior.',
+    inputSchema: startupSequenceInputSchema(),
+  },
+
   {
     name: 'agent_context_lifecycle_history',
     description: 'Read recent append-only lifecycle transition ledger rows for an agent. Read-only projection over agent-context SQLite.',
@@ -912,8 +921,15 @@ function migrateCheckpointsToHistory(database) {
   }
 }
 
+let mcpOutputMode = 'line';
+
 function writeMcpFrame(response) {
-  process.stdout.write(JSON.stringify(response) + '\n');
+  const body = JSON.stringify(response);
+  if (mcpOutputMode === 'framed') {
+    process.stdout.write(`Content-Length: ${Buffer.byteLength(body, 'utf8')}\r\n\r\n${body}`);
+    return;
+  }
+  process.stdout.write(body + '\n');
 }
 
 function sendResponse(request, result) {
@@ -1044,7 +1060,9 @@ async function handleRequest(request) {
         result = agentContextVerifyCodexExactResume(toolArgs);
         break;
       case 'agent_context_hydrate_current':
+      case 'agent_context_startup_sequence':
       case 'startup_sequence':
+
         result = agentContextHydrateCurrent(toolArgs);
         break;
       case 'agent_context_lifecycle_history':
@@ -6137,24 +6155,47 @@ process.stdin.on('data', (chunk) => {
   buffer += chunk;
 
   while (true) {
+    if (/^Content-Length:/i.test(buffer)) {
+      const headerEnd = buffer.indexOf('\r\n\r\n');
+      if (headerEnd < 0) break;
+      const header = buffer.slice(0, headerEnd);
+      const match = header.match(/Content-Length:\s*(\d+)/i);
+      if (!match) {
+        writeMcpFrame({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'missing Content-Length' } });
+        buffer = buffer.slice(headerEnd + 4);
+        continue;
+      }
+      const length = Number(match[1]);
+      const bodyStart = headerEnd + 4;
+      if (buffer.length < bodyStart + length) break;
+      const body = buffer.slice(bodyStart, bodyStart + length);
+      buffer = buffer.slice(bodyStart + length);
+      mcpOutputMode = 'framed';
+      dispatchMcpRequest(body);
+      continue;
+    }
+
     const newlineIndex = buffer.indexOf('\n');
     if (newlineIndex < 0) break;
 
     const line = buffer.slice(0, newlineIndex).trim();
     buffer = buffer.slice(newlineIndex + 1);
     if (!line) continue;
-
-    try {
-      const request = JSON.parse(line);
-      handleRequest(request).catch((error) => {
-        writeMcpFrame({ jsonrpc: '2.0', id: request.id ?? null, error: { code: -32603, message: error.message } });
-      });
-    } catch (error) {
-      writeMcpFrame({ jsonrpc: '2.0', id: null, error: { code: -32700, message: error.message } });
-    }
+    mcpOutputMode = 'line';
+    dispatchMcpRequest(line);
   }
 });
 
+function dispatchMcpRequest(raw) {
+  try {
+    const request = JSON.parse(raw);
+    handleRequest(request).catch((error) => {
+      writeMcpFrame({ jsonrpc: '2.0', id: request.id ?? null, error: { code: -32603, message: error.message } });
+    });
+  } catch (error) {
+    writeMcpFrame({ jsonrpc: '2.0', id: null, error: { code: -32700, message: error.message } });
+  }
+}
 process.stdin.on('end', () => {
   if (db) db.close();
 });

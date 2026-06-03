@@ -5,17 +5,22 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const defaultRegistry = 'C:/Users/Andrey/Narada/config/launch/agents.psd1';
-const registryPath = argValue('--registry') ?? defaultRegistry;
-const naradaProperRoot = process.env.NARADA_PROPER_ROOT ?? resolve(__dirname, '..', '..', '..');
-const packagedLauncher = join(naradaProperRoot, 'packages', 'agent-start', 'bin', 'narada-agent-start.mjs');
-const startNaradaAgent = argValue('--start-agent') ?? 'C:/Users/Andrey/Narada/Start-NaradaAgent.ps1';
-const runtimePolicy = argValue('--runtime-policy') ?? 'default-and-agent-tui';
+const registryPath = requiredArg('--registry');
+const naradaProperRoot = resolve(__dirname, '..', '..', '..');
+const packagedLauncher = join(naradaProperRoot, 'packages', 'agent-start', 'src', 'narada-agent-start.ts');
+const startNaradaAgent = requiredArg('--start-agent');
+const runtimePolicy = requiredArg('--runtime-policy');
 
 function argValue(name) {
   const index = process.argv.indexOf(name);
   if (index < 0) return null;
   return process.argv[index + 1] ?? null;
+}
+
+function requiredArg(name) {
+  const value = argValue(name);
+  if (!value) throw new Error(`required_arg_missing: ${name}`);
+  return value;
 }
 
 function fail(reason, details = {}) {
@@ -62,7 +67,7 @@ function dryRunLaunch(record, runtime) {
     '-NoProfile',
     '-File', startNaradaAgent,
     '-NaradaRoot', record.NaradaRoot,
-    '-SiteRoot', record.SiteRoot ?? record.NaradaRoot,
+    '-SiteRoot', record.SiteRoot,
     '-Agent', record.Agent,
     '-Runtime', runtime,
     '-LauncherPath', launcherPath,
@@ -70,7 +75,7 @@ function dryRunLaunch(record, runtime) {
   ];
   if (record.WorkspaceRoot) args.push('-WorkspaceRoot', record.WorkspaceRoot);
   const result = spawnSync('pwsh', args, {
-    cwd: record.WorkspaceRoot ?? record.NaradaRoot,
+    cwd: record.WorkspaceRoot,
     encoding: 'utf8',
     env: {
       ...process.env,
@@ -100,9 +105,8 @@ function expectedAdapter(runtime) {
 }
 
 function validateLaunch(record, runtime, launch) {
-  const failures = [];
-  const expectedSiteRoot = record.SiteRoot ?? record.NaradaRoot;
-  const expectedWorkspaceRoot = record.WorkspaceRoot ?? record.NaradaRoot;
+  const expectedSiteRoot = record.SiteRoot;
+  const expectedWorkspaceRoot = record.WorkspaceRoot;
   const env = launch.required_environment ?? {};
   const adapter = expectedAdapter(runtime);
 
@@ -135,8 +139,8 @@ function scanLauncherShape(record) {
   if (!launcherPath) return [{ reason: 'launcher_missing_from_registry' }];
   if (!existsSync(launcherPath)) return [{ reason: 'launcher_file_missing', launcher_path: launcherPath }];
   const launcherText = readFileSync(launcherPath, 'utf8').replace(/^\uFEFF/, '');
-  const delegates = launcherText.includes('packages\\agent-start\\bin\\narada-agent-start.mjs')
-    || launcherText.includes('packages/agent-start/bin/narada-agent-start.mjs');
+  const delegates = launcherText.includes('packages\\agent-start\\src\\narada-agent-start.ts')
+    || launcherText.includes('packages/agent-start/src/narada-agent-start.ts');
   if (!delegates) failures.push({ reason: 'launcher_does_not_delegate_to_packaged_agent_start', launcher_path: launcherPath });
   const stalePattern = /tools[\\/]agent-start[\\/]start-agent\.mjs|interactive-step-once|narada-agent-tui-interactive-step|bounded_smoke_step_only/;
   if (stalePattern.test(launcherText)) failures.push({ reason: 'launcher_contains_stale_agent_start_logic_or_step_mode', launcher_path: launcherPath });
@@ -156,8 +160,12 @@ const failures = [];
 
 for (const record of records) {
   for (const shapeFailure of scanLauncherShape(record)) failures.push({ agent: record.Agent, ...shapeFailure });
+  for (const field of ['Runtime', 'SiteRoot', 'WorkspaceRoot']) {
+    if (!record[field]) failures.push({ agent: record.Agent, reason: 'registry_required_field_missing', field });
+  }
+  if (!record.Runtime || !record.SiteRoot || !record.WorkspaceRoot) continue;
 
-  const defaultRuntime = record.Runtime ?? 'codex';
+  const defaultRuntime = record.Runtime;
   const defaultDryRun = dryRunLaunch(record, defaultRuntime);
   if (defaultDryRun.status !== 0) {
     failures.push({ agent: record.Agent, runtime: defaultRuntime, reason: 'dry_run_process_failed', status: defaultDryRun.status, error: defaultDryRun.error, stderr: defaultDryRun.stderr.trim(), stdout: defaultDryRun.stdout.trim() });

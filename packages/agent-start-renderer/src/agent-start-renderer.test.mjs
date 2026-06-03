@@ -20,7 +20,8 @@ test('formats agent-start preamble with redacted API keys and startup sequence',
       NARADA_AGENT_ID: 'site.builder',
       NARADA_AI_API_KEY: 'secret',
     },
-    startup_sequence: [{ tool: 'startup_sequence', arguments: {} }],
+    startup_command: { name: 'agent_context_startup_sequence', arguments: {}, display: 'agent_context_startup_sequence({})' },
+    startup_sequence: [{ tool: 'agent_context_startup_sequence', arguments: {} }],
     exec: true,
     launch_result_path: 'x.result.json',
   }, { colorEnabled: false });
@@ -29,7 +30,8 @@ test('formats agent-start preamble with redacted API keys and startup sequence',
   assert.match(text, /identity: site\.builder/);
   assert.match(text, /NARADA_AI_API_KEY=<set>/);
   assert.doesNotMatch(text, /secret/);
-  assert.match(text, /startup_sequence \{\}/);
+  assert.match(text, /startup_command: agent_context_startup_sequence\(\{\}\)/);
+  assert.match(text, /agent_context_startup_sequence \{\}/);
   assert.match(text, /agent_start_result_end: evt_1/);
 });
 

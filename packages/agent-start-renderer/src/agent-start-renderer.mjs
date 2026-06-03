@@ -64,6 +64,12 @@ export function formatAgentStartResult(result, options = {}) {
     lines.push(`  ${key(`${envKey}=`, colorEnabled)}${value(displayValue, colorEnabled)}`);
   }
 
+  if (result.startup_command) {
+    const startupArgs = result.startup_command.arguments ?? {};
+    const startupDisplay = result.startup_command.display ?? `${result.startup_command.name}(${JSON.stringify(startupArgs)})`;
+    lines.push(line('startup_command', startupDisplay, colorEnabled));
+  }
+
   lines.push(header('startup_sequence:', colorEnabled));
   for (const step of result.startup_sequence ?? []) {
     lines.push(`  ${value(step.tool, colorEnabled)} ${color(ansi.dim, JSON.stringify(step.arguments), colorEnabled)}`);

@@ -7,6 +7,8 @@ export const PROVIDER_REQUEST_PAYLOAD_SCHEMA = 'narada.agent_tui.provider_reques
 export const PROVIDER_OUTPUT_PAYLOAD_SCHEMA = 'narada.agent_tui.provider_output_payload.v0';
 export const TURN_TERMINAL_PAYLOAD_SCHEMA = 'narada.agent_tui.turn_terminal_payload.v0';
 export const SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA = 'narada.carrier.session_event_fixture_manifest.v1';
+export const CANONICAL_STARTUP_COMMAND_NAME = 'agent_context_startup_sequence';
+export const LEGACY_STARTUP_COMMAND_NAME = 'startup_sequence';
 
 export const SOURCE_KINDS = Object.freeze(['operator', 'system', 'agent', 'external']);
 export const TRANSPORTS = Object.freeze([
@@ -60,6 +62,7 @@ const ID_PREFIXES = Object.freeze({
   session_event: 'session_event_',
   payload: 'payload_',
 });
+const STARTUP_NUDGE_PATTERN = /^(?:please\s+)?(?:run|do|start|execute)?\s*(?:the\s+)?(?:startup|start\s+up)(?:\s+sequence)?\s*$/iu;
 
 export const CARRIER_PROTOCOL_SCHEMAS = Object.freeze({
   input_event: Object.freeze({
@@ -138,6 +141,35 @@ export function createPayloadId() {
 export function normalizeTransport(transport) {
   if (typeof transport !== 'string') return transport;
   return LEGACY_TRANSPORT_ALIASES[transport] ?? transport;
+}
+
+export function isStartupNudge(content) {
+  return typeof content === 'string' && STARTUP_NUDGE_PATTERN.test(content.trim());
+}
+
+export function startupCommandFromLaunchPacket(launchPacket = {}) {
+  const command = isObject(launchPacket.startup_command) ? launchPacket.startup_command : null;
+  const name = typeof command?.name === 'string' && command.name.length > 0
+    ? command.name
+    : CANONICAL_STARTUP_COMMAND_NAME;
+  const args = isObject(command?.arguments) ? command.arguments : {};
+  return { name, arguments: args };
+}
+
+export function classifyCarrierInputIntent(event, launchPacket = {}) {
+  const normalized = normalizeInputEvent(event);
+  if (isStartupNudge(normalized.content)) {
+    return {
+      intent: 'startup_command',
+      provider_dispatch_allowed: false,
+      command: startupCommandFromLaunchPacket(launchPacket),
+      rule: 'startup_nudge_uses_launch_packet_mcp_affordance',
+    };
+  }
+  return {
+    intent: 'provider_turn',
+    provider_dispatch_allowed: true,
+  };
 }
 
 export function createPayloadRef({ payload_ref, reader_tool = 'mcp_payload_read', summary }) {

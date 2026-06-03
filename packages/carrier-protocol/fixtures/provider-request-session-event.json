@@ -22,6 +22,6 @@
     "stream": true,
     "provider_streaming_contract": "requested_but_not_dispatched",
     "provider_adapter_refusal_reason": "provider_adapter_not_configured",
-    "content_preview": "run startup sequence"
+    "content_preview": "inspect the workboard"
   }
 }

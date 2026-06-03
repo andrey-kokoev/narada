@@ -733,7 +733,7 @@ function buildDryRunResult({ siteRoot, identity, runtime, dbPath, cwd, rosterChe
 
 function buildStartupSequence(identity, eventId) {
   return [
-    { tool: 'startup_sequence', arguments: {} },
+    { tool: 'agent_context_startup_sequence', arguments: {} },
   ];
 }
 
