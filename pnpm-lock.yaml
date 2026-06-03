@@ -447,8 +447,6 @@ importers:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@20.19.39)
 
-  packages/site-tool-surface-legacy: {}
-
   packages/sites/cloudflare:
     dependencies:
       '@narada2/charters':

@@ -19,7 +19,6 @@
           "class": {
             "enum": [
               "canonical_package",
-              "legacy_package_mirror",
               "generated_wrapper",
               "site_owned",
               "test_surface",

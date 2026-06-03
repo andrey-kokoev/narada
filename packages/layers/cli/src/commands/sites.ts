@@ -3187,7 +3187,6 @@ const SHARED_SITE_PACKAGES = [
   },
 ] as const;
 const NARADA_PROPER_ROOT = resolve(fileURLToPath(new URL('../../../../..', import.meta.url)));
-let legacyToolSurfaceEntries: Map<string, Record<string, unknown>> | null = null;
 let canonicalToolSurfaceEntries: Map<string, Record<string, unknown>> | null = null;
 
 function addCheck(
@@ -3493,23 +3492,6 @@ function canonicalEntryMatches(entry: Record<string, unknown> | undefined, hash:
   return entry.hash === hash || (Array.isArray(entry.hashes) && entry.hashes.includes(hash));
 }
 
-async function loadLegacyToolSurfaceEntries(): Promise<Map<string, Record<string, unknown>>> {
-  if (legacyToolSurfaceEntries) return legacyToolSurfaceEntries;
-  const manifestPath = fileURLToPath(new URL('../../../../../packages/site-tool-surface-legacy/manifest.json', import.meta.url));
-  const entries = new Map<string, Record<string, unknown>>();
-  if (existsSync(manifestPath)) {
-    const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as { files?: Array<Record<string, unknown>> };
-    for (const file of manifest.files ?? []) {
-      const pathValue = String(file.path ?? '').replace(/\\/g, '/');
-      if (pathValue) {
-        entries.set(pathValue, file);
-      }
-    }
-  }
-  legacyToolSurfaceEntries = entries;
-  return entries;
-}
-
 async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<string, unknown>>> {
   if (canonicalToolSurfaceEntries) return canonicalToolSurfaceEntries;
   const entries = new Map<string, Record<string, unknown>>();
@@ -3724,33 +3706,6 @@ async function desiredToolSurfaceEntry(siteRoot: string, filePath: string): Prom
       allowed_root_refs: allowedRootRefs,
     };
   }
-  const legacyEntry = (await loadLegacyToolSurfaceEntries()).get(relativePath);
-  if (legacyEntry && legacyEntry.hash === hash) {
-    return {
-      path: relativePath,
-      class: 'legacy_package_mirror',
-      owner: 'narada-proper',
-      surface: legacyEntry.surface ?? 'legacy-tool-surface',
-      package: '@narada2/site-tool-surface-legacy',
-      version: '0.0.0',
-      hash,
-      allowed_root_refs: allowedRootRefs,
-    };
-  }
-  if (legacyEntry) {
-    return {
-      path: relativePath,
-      class: 'site_variant',
-      owner: 'site',
-      surface: legacyEntry.surface ?? 'site-tools',
-      package: '',
-      version: '',
-      hash,
-      reason: 'site-local variant of a historical Narada proper mirror; not byte-identical to a packaged surface',
-      review_at: '2026-06-30',
-      allowed_root_refs: allowedRootRefs,
-    };
-  }
   const surface = relativePath.startsWith('tools/agent-start/')
     ? 'agent-start'
     : relativePath.startsWith('tools/task-lifecycle/')
@@ -3759,9 +3714,11 @@ async function desiredToolSurfaceEntry(siteRoot: string, filePath: string): Prom
         ? 'typed-mcp'
         : relativePath.startsWith('tools/operator-surface-carriers/')
           ? 'operator-surface'
-          : relativePath.startsWith('tools/window-surface-overlay/')
-            ? 'window-surface-overlay'
-            : 'site-tools';
+          : relativePath.startsWith('tools/operator-surface/')
+            ? 'operator-surface'
+            : relativePath.startsWith('tools/window-surface-overlay/')
+              ? 'window-surface-overlay'
+              : 'site-tools';
   return {
     path: relativePath,
     class: 'site_owned',
@@ -3770,12 +3727,11 @@ async function desiredToolSurfaceEntry(siteRoot: string, filePath: string): Prom
     package: '',
     version: '',
     hash,
-    reason: 'transitional site-owned executable pending package cutover review',
+    reason: 'site-owned executable pending package cutover review',
     review_at: '2026-06-30',
     allowed_root_refs: allowedRootRefs,
   };
 }
-
 async function buildToolSurfaceManifest(siteRoot: string): Promise<Record<string, unknown>> {
   const toolRoot = join(siteRoot, 'tools');
   const files = (await listFilesRecursive(toolRoot)).filter(isExecutableToolPath);
@@ -3789,7 +3745,6 @@ async function buildToolSurfaceManifest(siteRoot: string): Promise<Record<string
     entries,
   };
 }
-
 async function readSiteToolSurfaceManifest(siteRoot: string): Promise<{
   manifestPath: string;
   manifest: { entries?: Array<Record<string, unknown>> } | null;
@@ -3940,7 +3895,7 @@ async function addSiteToolSurfaceChecks(checks: SiteDoctorCheck[], siteRoot: str
       : `${missing.length} executable tool surface(s) are undeclared: ${missing.slice(0, 5).join(', ')}${missing.length > 5 ? ', ...' : ''}`,
   );
 
-  const validClasses = new Set(['canonical_package', 'legacy_package_mirror', 'generated_wrapper', 'site_owned', 'site_variant', 'retired_refusal', 'runtime_state', 'test_surface']);
+  const validClasses = new Set(['canonical_package', 'generated_wrapper', 'site_owned', 'site_variant', 'retired_refusal', 'runtime_state', 'test_surface']);
   const invalidClasses = entries.filter((entry) => !validClasses.has(String(entry.class ?? '')));
   addCheck(
     checks,

@@ -5,7 +5,6 @@ Narada Sites may hold state and declarations. Reusable executable logic should b
 ## Classes
 
 - `canonical_package`: implementation lives in a Narada package and is invoked through the package contract.
-- `legacy_package_mirror`: Site-local copy matches `@narada2/site-tool-surface-legacy` by path and hash; this is quarantine evidence, not a canonical API contract.
 - `generated_wrapper`: Site-local wrapper generated from a package template, with version/hash evidence.
 - `site_owned`: executable logic intentionally owned by this Site.
 - `test_surface`: executable tests and conformance checks. These are governed evidence, not runtime tool authority.
@@ -38,7 +37,7 @@ The user-site duplicate audit groups manifest entries by content hash and fails 
 
 The exception ledger is transitional evidence, not permission to keep copied toolsets indefinitely. It exists to make the remaining cutover work concrete and auditable while package-owned replacements are introduced.
 
-Copied legacy runtime tools that have not yet been split into domain packages are mirrored by `@narada2/site-tool-surface-legacy`. Site manifests may classify a local copy as `legacy_package_mirror` only when its path and content hash match the package mirror manifest. This removes duplicate-authority debt without pretending the Site owns the copied implementation or that the mirror is a canonical runtime API.
+Copied runtime tools are no longer admitted through a legacy mirror package. A Site-local executable is coherent only as `canonical_package`, `generated_wrapper`, `retired_refusal`, `test_surface`, `runtime_state`, or explicitly reviewed `site_owned`/`site_variant` work.
 
 Tests are classified as `test_surface`, not `site_owned`, so repeated tests do not create runtime tool authority debt.
 
