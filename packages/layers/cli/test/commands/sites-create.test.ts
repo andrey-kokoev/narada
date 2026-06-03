@@ -7,7 +7,12 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { sitesCreateCommand, sitesCreatePresetsCommand, sitesLiveCarrierCommand } from '../../src/commands/sites.js';
+import {
+  createSiteConfigForCapabilitySelection,
+  sitesCreateCommand,
+  sitesCreatePresetsCommand,
+  sitesLiveCarrierCommand,
+} from '../../src/commands/sites.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
@@ -155,6 +160,112 @@ describe('sitesCreateCommand', () => {
     }));
     expect(plan.evidence.source_state_imported).toBe(false);
     expect(plan.evidence.package_selection_grants_live_capability).toBe(false);
+  });
+
+  it('builds descriptor-only create-site config from interactive capability choices', async () => {
+    const config = createSiteConfigForCapabilitySelection({
+      siteId: 'interactive-site',
+      root: 'D:\\Sites\\interactive-site',
+      siteKind: 'project',
+      authorityLocus: 'project',
+      capabilities: ['task_lifecycle', 'agent_context_memory', 'canonical_inbox'],
+      mode: 'dry_run',
+    });
+
+    expect(config).toMatchObject({
+      schema: 'narada.create_site.options.v0',
+      mode: 'dry_run',
+      preset: 'minimal',
+      template_catalog: {
+        template_id: 'narada-proper.templates.site.interactive-capability-selection.v0',
+        template_components: [
+          '@narada2/site-task-lifecycle',
+          '@narada2/agent-context-memory',
+          '@narada2/site-inbox',
+        ],
+      },
+      site: {
+        site_id: 'interactive-site',
+        site_root: 'D:\\Sites\\interactive-site',
+      },
+      storage: { intent: 'descriptor_only' },
+      mcp: { intent: 'descriptor_only', surfaces: ['site_task_lifecycle', 'agent_context_memory'] },
+      capabilities: {
+        policy: 'declare_required',
+        required: ['task_lifecycle', 'agent_context_memory', 'canonical_inbox'],
+        denied: ['source_task_db_import', 'source_checkpoint_import', 'source_inbox_history_import'],
+      },
+      inbox: { enable: 'canonical_envelope_intake' },
+      task_lifecycle: { enable: 'descriptor_only', package: '@narada2/site-task-lifecycle' },
+      agent_context: { enable: 'descriptor_only', package: '@narada2/agent-context-memory' },
+    });
+    expect(config.evidence).toMatchObject({
+      selected_interactively: true,
+      template_refs: [
+        'narada-proper.templates.site.interactive-capability-selection.v0',
+        'package:@narada2/site-task-lifecycle',
+        'package:@narada2/agent-context-memory',
+        'package:@narada2/site-inbox',
+      ],
+    });
+  });
+
+  it('plans interactive capability-selected Sites without granting live capabilities', async () => {
+    const dir = tempDir();
+    const configPath = join(dir, 'interactive-create-site.json');
+    writeFileSync(configPath, JSON.stringify(createSiteConfigForCapabilitySelection({
+      siteId: 'interactive-site',
+      root: 'D:\\Sites\\interactive-site',
+      siteKind: 'project',
+      authorityLocus: 'project',
+      capabilities: ['task_lifecycle', 'agent_context_memory', 'canonical_inbox'],
+      mode: 'dry_run',
+    }), null, 2));
+
+    const result = await sitesCreateCommand({
+      config: configPath,
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const plan = result.result as {
+      selected_template: { template_id: string; template_components: string[] };
+      package_descriptors: Array<{ package_name: string; posture: string }>;
+      required_local_admissions: Array<{ admission: string; status: string }>;
+      planned_files: Array<{ path: string; mutation: string }>;
+      evidence: { package_selection_grants_live_capability: boolean; source_state_imported: boolean };
+      non_claims: string[];
+    };
+    expect(plan.selected_template).toEqual({
+      template_id: 'narada-proper.templates.site.interactive-capability-selection.v0',
+      template_components: [
+        '@narada2/site-task-lifecycle',
+        '@narada2/agent-context-memory',
+        '@narada2/site-inbox',
+      ],
+    });
+    expect(plan.package_descriptors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ package_name: '@narada2/site-task-lifecycle', posture: 'descriptor_only' }),
+      expect.objectContaining({ package_name: '@narada2/agent-context-memory', posture: 'descriptor_only' }),
+      expect.objectContaining({ package_name: '@narada2/site-inbox', posture: 'descriptor_only' }),
+    ]));
+    expect(plan.required_local_admissions).toEqual(expect.arrayContaining([
+      { admission: 'task_lifecycle_db_init_and_mutation', status: 'separate_admission_required' },
+      { admission: 'agent_context_storage_and_hydration', status: 'separate_admission_required' },
+      { admission: 'site_inbox_local_substrate_and_publication', status: 'separate_admission_required' },
+      { admission: 'package_descriptor_selection', status: 'included_in_dry_run' },
+    ]));
+    expect(plan.planned_files).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'D:\\Sites\\interactive-site\\.narada\\capabilities\\capability-policy.json' }),
+      expect.objectContaining({ path: 'D:\\Sites\\interactive-site\\.narada\\mcp\\descriptors\\site_task_lifecycle.json' }),
+      expect.objectContaining({ path: 'D:\\Sites\\interactive-site\\.narada\\mcp\\descriptors\\agent_context_memory.json' }),
+    ]));
+    expect(plan.evidence).toMatchObject({
+      package_selection_grants_live_capability: false,
+      source_state_imported: false,
+    });
+    expect(plan.non_claims).toContain('capability or secret grants');
   });
 
   it('reports missing shorthand coordinates without reading a config file', async () => {

@@ -12,6 +12,7 @@ import { basename, delimiter, dirname, join, posix, resolve, win32 } from 'node:
 import { hostname } from 'node:os';
 import { promisify } from 'node:util';
 import { createHash, randomUUID } from 'node:crypto';
+import * as p from '@clack/prompts';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
@@ -49,6 +50,7 @@ export interface SitesTaskLifecycleInitOptions extends SitesOptions {
 
 export interface SitesCreateOptions extends SitesOptions {
   config?: string;
+  interactive?: boolean;
   preset?: string;
   siteId?: string;
   root?: string;
@@ -118,6 +120,45 @@ interface CreateSiteConfig {
   operator_surface?: Record<string, unknown>;
   windows_pwsh?: Record<string, unknown>;
   evidence?: Record<string, unknown>;
+}
+
+export const CREATE_SITE_CAPABILITY_CHOICES = [
+  {
+    id: 'task_lifecycle',
+    label: 'Task lifecycle',
+    hint: 'Descriptor package for task DB setup, task admission writes, and MCP registration planning.',
+  },
+  {
+    id: 'agent_context_memory',
+    label: 'Agent context memory',
+    hint: 'Descriptor package for agent memory storage, hydration, checkpoints, and MCP registration planning.',
+  },
+  {
+    id: 'canonical_inbox',
+    label: 'Canonical inbox',
+    hint: 'Descriptor package for envelope intake and portable artifact admission.',
+  },
+  {
+    id: 'site_config_awareness',
+    label: 'Site config awareness',
+    hint: 'Descriptor package for known-site registry and probe planning.',
+  },
+  {
+    id: 'site_lift_adoption',
+    label: 'Site lift adoption',
+    hint: 'Descriptor package for adoption plans and nonportable state refusal.',
+  },
+] as const;
+
+export type CreateSiteCapabilityChoiceId = typeof CREATE_SITE_CAPABILITY_CHOICES[number]['id'];
+
+export interface CreateSiteCapabilitySelectionInput {
+  siteId: string;
+  root: string;
+  siteKind: string;
+  authorityLocus: string;
+  capabilities: CreateSiteCapabilityChoiceId[];
+  mode: string;
 }
 
 interface CreateSiteRefusal {
@@ -808,7 +849,18 @@ export async function sitesCreateCommand(
   options: SitesCreateOptions,
   context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const shorthand = buildCreateSiteConfigFromShorthand(options);
+  const interactive = options.interactive ? await promptCreateSiteConfig(options) : null;
+  if (interactive && 'cancelled' in interactive) {
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: {
+        schema: 'narada.create_site.interactive.v0',
+        status: 'cancelled',
+      },
+    };
+  }
+  const interactiveConfig = interactive && 'config' in interactive ? interactive.config : null;
+  const shorthand = interactiveConfig ?? buildCreateSiteConfigFromShorthand(options);
   if (!options.config && !shorthand) {
     return {
       exitCode: ExitCode.INVALID_CONFIG,
@@ -822,11 +874,11 @@ export async function sitesCreateCommand(
   let config: CreateSiteConfig;
   let configPath: string;
   try {
-    if (options.config) {
+    if (options.config && !interactiveConfig) {
       configPath = resolve(options.config);
       config = JSON.parse(await readFile(configPath, 'utf8')) as CreateSiteConfig;
     } else {
-      configPath = '<inline:create-site-options>';
+      configPath = interactiveConfig ? '<interactive:create-site-options>' : '<inline:create-site-options>';
       config = shorthand!;
     }
   } catch (error) {
@@ -963,6 +1015,63 @@ function buildCreateSiteConfigFromShorthand(options: SitesCreateOptions): Create
   });
 }
 
+export function createSiteConfigForCapabilitySelection(input: CreateSiteCapabilitySelectionInput): CreateSiteConfig {
+  const capabilitySet = new Set(input.capabilities);
+  const packages = packagesForCreateSiteCapabilities(capabilitySet);
+  const required = requiredCapabilitiesForCreateSiteCapabilities(capabilitySet);
+  const denied = deniedCapabilitiesForCreateSiteCapabilities(capabilitySet);
+  const mcpSurfaces = mcpSurfacesForCreateSiteCapabilities(capabilitySet);
+  const preset = presetForCreateSiteCapabilities(capabilitySet);
+  const templateComponents = packages.map((pkg) => String(pkg.name));
+
+  const config: CreateSiteConfig = {
+    schema: 'narada.create_site.options.v0',
+    mode: input.mode,
+    preset,
+    template_catalog: {
+      template_id: templateIdForCapabilitySelection(preset, capabilitySet),
+      template_components: templateComponents,
+    },
+    site: {
+      site_id: input.siteId,
+      site_kind: input.siteKind,
+      authority_locus: input.authorityLocus,
+      site_root: input.root,
+      workspace_root: input.root,
+      substrate: 'windows-native',
+      execution_surface: 'windows_native',
+      sync_posture: 'hybrid_capable_plain_folder',
+    },
+    packages,
+    identity: emptyCreateSiteIdentity(),
+    storage: capabilitySet.has('task_lifecycle') || capabilitySet.has('agent_context_memory')
+      ? { intent: 'descriptor_only', driver_preference: 'sqlite3-cli', mutation_mode: 'none' }
+      : { intent: 'none' },
+    mcp: mcpSurfaces.length > 0 ? { intent: 'descriptor_only', surfaces: mcpSurfaces } : { intent: 'none', surfaces: [] },
+    capabilities: required.length > 0
+      ? { policy: 'declare_required', required, denied }
+      : { policy: 'none', required: [], denied: [] },
+    inbox: capabilitySet.has('task_lifecycle') || capabilitySet.has('canonical_inbox')
+      ? { enable: 'canonical_envelope_intake' }
+      : { enable: 'drop_only' },
+    task_lifecycle: capabilitySet.has('task_lifecycle')
+      ? { enable: 'descriptor_only', package: '@narada2/site-task-lifecycle' }
+      : { enable: false },
+    agent_context: capabilitySet.has('agent_context_memory')
+      ? { enable: 'descriptor_only', package: '@narada2/agent-context-memory' }
+      : { enable: false },
+    operator_surface: { intent: 'none' },
+    windows_pwsh: { profile: 'emit_example', path_style: 'windows' },
+    evidence: {
+      template_refs: [templateIdForCapabilitySelection(preset, capabilitySet), ...templateComponents.map((component) => `package:${component}`)],
+      refused_imports: [],
+      selected_interactively: true,
+    },
+  };
+
+  return config;
+}
+
 function createSiteConfigForPreset(input: {
   preset: string;
   siteId: string;
@@ -1026,6 +1135,65 @@ function createSiteConfigForPreset(input: {
     config.inbox = { enable: 'canonical_envelope_intake' };
   }
   return config;
+}
+
+function presetForCreateSiteCapabilities(capabilities: Set<CreateSiteCapabilityChoiceId>): string {
+  if (capabilities.size === 0) return 'minimal';
+  if (capabilities.size === 1 && capabilities.has('task_lifecycle')) return 'task-lifecycle';
+  if (capabilities.size === 1 && capabilities.has('agent_context_memory')) return 'agent-memory';
+  if (
+    capabilities.size === 3
+    && capabilities.has('canonical_inbox')
+    && capabilities.has('site_config_awareness')
+    && capabilities.has('site_lift_adoption')
+  ) {
+    return 'site-machinery';
+  }
+  return 'minimal';
+}
+
+function templateIdForCapabilitySelection(preset: string, capabilities: Set<CreateSiteCapabilityChoiceId>): string {
+  if (preset !== 'minimal' || capabilities.size === 0) {
+    return `narada-proper.templates.site.${preset}.v0`;
+  }
+  return 'narada-proper.templates.site.interactive-capability-selection.v0';
+}
+
+function packagesForCreateSiteCapabilities(capabilities: Set<CreateSiteCapabilityChoiceId>): Array<Record<string, unknown>> {
+  const packages: Array<Record<string, unknown>> = [];
+  if (capabilities.has('task_lifecycle')) packages.push({ name: '@narada2/site-task-lifecycle' });
+  if (capabilities.has('agent_context_memory')) packages.push({ name: '@narada2/agent-context-memory' });
+  if (capabilities.has('canonical_inbox')) packages.push({ name: '@narada2/site-inbox' });
+  if (capabilities.has('site_config_awareness')) packages.push({ name: '@narada2/site-config' });
+  if (capabilities.has('site_lift_adoption')) packages.push({ name: '@narada2/site-lift' });
+  return packages;
+}
+
+function requiredCapabilitiesForCreateSiteCapabilities(capabilities: Set<CreateSiteCapabilityChoiceId>): string[] {
+  const required: string[] = [];
+  if (capabilities.has('task_lifecycle')) required.push('task_lifecycle');
+  if (capabilities.has('agent_context_memory')) required.push('agent_context_memory');
+  if (capabilities.has('canonical_inbox')) required.push('canonical_inbox');
+  if (capabilities.has('site_config_awareness')) required.push('site_config_awareness');
+  if (capabilities.has('site_lift_adoption')) required.push('site_lift_adoption');
+  return required;
+}
+
+function deniedCapabilitiesForCreateSiteCapabilities(capabilities: Set<CreateSiteCapabilityChoiceId>): string[] {
+  const denied = new Set<string>();
+  if (capabilities.has('task_lifecycle')) denied.add('source_task_db_import');
+  if (capabilities.has('agent_context_memory')) denied.add('source_checkpoint_import');
+  if (capabilities.has('canonical_inbox')) denied.add('source_inbox_history_import');
+  if (capabilities.has('site_config_awareness')) denied.add('cross_site_config_mutation');
+  if (capabilities.has('site_lift_adoption')) denied.add('source_site_runtime_import');
+  return [...denied];
+}
+
+function mcpSurfacesForCreateSiteCapabilities(capabilities: Set<CreateSiteCapabilityChoiceId>): string[] {
+  const surfaces: string[] = [];
+  if (capabilities.has('task_lifecycle')) surfaces.push('site_task_lifecycle');
+  if (capabilities.has('agent_context_memory')) surfaces.push('agent_context_memory');
+  return surfaces;
 }
 
 function packagesForCreateSitePreset(preset: string): Array<Record<string, unknown>> {
@@ -1285,6 +1453,91 @@ export async function sitesLiveCarrierCommand(
       },
     };
   }
+}
+
+async function promptCreateSiteConfig(options: SitesCreateOptions): Promise<{ cancelled: true } | { config: CreateSiteConfig }> {
+  p.intro('Narada Site creation');
+
+  const siteId = await p.text({
+    message: 'Site id:',
+    placeholder: 'client-project-alpha',
+    defaultValue: options.siteId,
+    validate(value) {
+      if (!String(value).trim()) return 'Site id is required';
+    },
+  });
+  if (p.isCancel(siteId)) {
+    p.cancel('Site creation cancelled.');
+    return { cancelled: true };
+  }
+
+  const root = await p.text({
+    message: 'Site root:',
+    placeholder: `./${siteId}`,
+    defaultValue: options.root ?? `./${siteId}`,
+    validate(value) {
+      if (!String(value).trim()) return 'Site root is required';
+    },
+  });
+  if (p.isCancel(root)) {
+    p.cancel('Site creation cancelled.');
+    return { cancelled: true };
+  }
+
+  const siteKind = await p.select({
+    message: 'Site kind:',
+    initialValue: options.siteKind ?? 'project',
+    options: [
+      { value: 'project', label: 'Project' },
+      { value: 'user', label: 'User' },
+      { value: 'service', label: 'Service' },
+    ],
+  });
+  if (p.isCancel(siteKind)) {
+    p.cancel('Site creation cancelled.');
+    return { cancelled: true };
+  }
+
+  const authorityLocus = await p.select({
+    message: 'Authority locus:',
+    initialValue: options.authorityLocus ?? 'project',
+    options: [
+      { value: 'project', label: 'Project' },
+      { value: 'user', label: 'User' },
+      { value: 'organization', label: 'Organization' },
+      { value: 'pc', label: 'PC profile' },
+    ],
+  });
+  if (p.isCancel(authorityLocus)) {
+    p.cancel('Site creation cancelled.');
+    return { cancelled: true };
+  }
+
+  const capabilities = await p.multiselect({
+    message: 'Descriptor capabilities to include:',
+    required: false,
+    options: CREATE_SITE_CAPABILITY_CHOICES.map((choice) => ({
+      value: choice.id,
+      label: choice.label,
+      hint: choice.hint,
+    })),
+  });
+  if (p.isCancel(capabilities)) {
+    p.cancel('Site creation cancelled.');
+    return { cancelled: true };
+  }
+
+  p.outro(options.dryRun ? 'Site dry-run plan ready.' : 'Site creation options collected.');
+  return {
+    config: createSiteConfigForCapabilitySelection({
+      siteId: String(siteId).trim(),
+      root: String(root).trim(),
+      siteKind: String(siteKind),
+      authorityLocus: String(authorityLocus),
+      capabilities: capabilities as CreateSiteCapabilityChoiceId[],
+      mode: options.dryRun ? 'dry_run' : 'execute',
+    }),
+  };
 }
 
 function siteLiveCarrierToolPath(): string {
@@ -1578,6 +1831,23 @@ function buildCreateSitePlannedFiles(
   }
   if (config.agent_context?.enable) {
     files.push({ path: `${siteRoot}\\.ai\\agent-context-memory-admission.json`, purpose: 'Agent context local admission manifest', mutation: 'requires_separate_admission' });
+  }
+  const mcpSurfaces = arrayField(config.mcp?.surfaces);
+  if (config.mcp?.intent === 'descriptor_only') {
+    for (const surface of mcpSurfaces) {
+      files.push({
+        path: `${siteRoot}\\.narada\\mcp\\descriptors\\${surface}.json`,
+        purpose: `${surface} MCP descriptor`,
+        mutation: 'descriptor_materialization_only',
+      });
+    }
+  }
+  if (config.capabilities?.policy === 'declare_required') {
+    files.push({
+      path: `${siteRoot}\\.narada\\capabilities\\capability-policy.json`,
+      purpose: 'Descriptor-only capability policy declaration',
+      mutation: 'descriptor_materialization_only',
+    });
   }
   for (const descriptor of packageDescriptors.filter((entry) => entry.posture === 'descriptor_only')) {
     const safeName = descriptor.package_name.replace('@narada2/', '').replace(/[^a-z0-9_.-]/gi, '-');

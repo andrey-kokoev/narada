@@ -56,6 +56,28 @@ Interactive mode will prompt for:
 - Folders to sync
 - Test connection before saving
 
+### `sites create` - Create a Narada Site
+
+```bash
+# Interactive Site creation wizard
+narada sites create --interactive --dry-run
+
+# Create from a named preset
+narada sites create --preset task-lifecycle --site-id <id> --root <path>
+
+# List available presets
+narada sites create-presets
+```
+
+Interactive Site creation will prompt for:
+- Site id
+- Site root
+- Site kind
+- Authority locus
+- Descriptor capabilities to include
+
+Selected capabilities are descriptor-only. Package/template selection does not grant live capability, storage, MCP registration, or secret authority; those require separate admission.
+
 ### `sync` - Run Synchronization
 
 ```bash

@@ -42,6 +42,7 @@ export function registerSitesCommands(program: Command): void {
     .command('create')
     .description('Plan greenfield Narada Site creation from Narada proper templates/catalog')
     .option('--config <path>', 'Create-site config JSON')
+    .option('-i, --interactive', 'Prompt for Site coordinates and descriptor capabilities', false)
     .option('--preset <preset>', 'Greenfield template preset: minimal, agent-memory, task-lifecycle, or site-machinery')
     .option('--site-id <id>', 'Site id for shorthand create-site planning')
     .option('--root <path>', 'Site root for shorthand create-site planning')
@@ -56,6 +57,7 @@ export function registerSitesCommands(program: Command): void {
     .action(async (opts: Record<string, unknown>) => {
       const result = await sitesCreateCommand({
         config: opts.config as string | undefined,
+        interactive: opts.interactive as boolean | undefined,
         preset: opts.preset as string | undefined,
         siteId: opts.siteId as string | undefined,
         root: opts.root as string | undefined,
