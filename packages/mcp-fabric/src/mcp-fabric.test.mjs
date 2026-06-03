@@ -2,11 +2,48 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import {
+  McpFabricError,
   loadSiteMcpFabric,
   mcpServerNames,
   projectServerEnvironment,
+  renderMcpFabricDoctorTable,
+  runMcpFabricDoctor,
 } from './mcp-fabric.mjs';
+
+const missingSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-missing-'));
+try {
+  assert.throws(
+    () => loadSiteMcpFabric(missingSite, { required: true }),
+    (error) => {
+      assert.equal(error instanceof McpFabricError, true);
+      assert.equal(error.code, 'mcp_fabric_missing');
+      assert.equal(error.details.siteRoot, missingSite);
+      assert.equal(error.details.mcpDir, join(missingSite, '.ai', 'mcp'));
+      return true;
+    },
+  );
+} finally {
+  rmSync(missingSite, { recursive: true, force: true });
+}
+
+const emptySite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-empty-'));
+mkdirSync(join(emptySite, '.ai', 'mcp'), { recursive: true });
+try {
+  assert.throws(
+    () => loadSiteMcpFabric(emptySite, { required: true }),
+    (error) => {
+      assert.equal(error instanceof McpFabricError, true);
+      assert.equal(error.code, 'mcp_fabric_empty');
+      assert.deepEqual(error.details.files, []);
+      return true;
+    },
+  );
+} finally {
+  rmSync(emptySite, { recursive: true, force: true });
+}
 
 const siteRoot = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-'));
 mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
@@ -98,5 +135,91 @@ assert.throws(
   /MCP fabric does not match registry/,
 );
 rmSync(legacyRegistrySite, { recursive: true, force: true });
+
+const windowsPathSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-windows-paths-'));
+mkdirSync(join(windowsPathSite, '.ai', 'mcp'), { recursive: true });
+writeFileSync(join(windowsPathSite, '.ai', 'mcp', 'windows-mcp.json'), `${JSON.stringify({
+  mcpServers: {
+    windows: {
+      command: 'node',
+      args: ['D:\\code\\narada.sonar\\tools\\server.mjs', '{site_root}\\tools\\fixture.mjs'],
+      target_site_root: '{site_root}\\subdir',
+    },
+  },
+}, null, 2)}\n`, 'utf8');
+
+const windowsFabric = loadSiteMcpFabric(windowsPathSite, { required: true });
+assert.equal(windowsFabric.servers.windows.args[0], 'D:/code/narada.sonar/tools/server.mjs');
+assert.equal(windowsFabric.servers.windows.args[1], `${windowsPathSite.replaceAll('\\', '/')}/tools/fixture.mjs`);
+assert.equal(windowsFabric.servers.windows.target_site_root, `${windowsPathSite.replaceAll('\\', '/')}/subdir`);
+rmSync(windowsPathSite, { recursive: true, force: true });
+
+const doctorSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-doctor-'));
+mkdirSync(join(doctorSite, '.ai', 'mcp'), { recursive: true });
+const doctorServerPath = join(doctorSite, 'doctor-server.mjs');
+writeFileSync(doctorServerPath, `
+import readline from 'node:readline';
+const rl = readline.createInterface({ input: process.stdin });
+rl.on('line', (line) => {
+  const request = JSON.parse(line);
+  if (request.method === 'initialize') {
+    console.log(JSON.stringify({ jsonrpc: '2.0', id: request.id, result: { protocolVersion: '2024-11-05' } }));
+    return;
+  }
+  if (request.method === 'tools/list') {
+    console.log(JSON.stringify({ jsonrpc: '2.0', id: request.id, result: { tools: [
+      { name: 'fixture_read', description: 'read', inputSchema: { type: 'object', properties: {} } },
+      { name: 'fixture_write', description: 'write', inputSchema: { type: 'object', properties: {} } }
+    ] } }));
+  }
+});
+`, 'utf8');
+writeFileSync(join(doctorSite, '.ai', 'mcp', 'doctor-mcp.json'), `${JSON.stringify({
+  mcpServers: {
+    doctor: {
+      command: 'node',
+      args: [doctorServerPath],
+    },
+  },
+}, null, 2)}\n`, 'utf8');
+const doctorReport = await runMcpFabricDoctor(doctorSite, { timeoutMs: 1000 });
+assert.equal(doctorReport.status, 'ok');
+assert.equal(doctorReport.rows[0].file, 'doctor-mcp.json');
+assert.equal(doctorReport.rows[0].server, 'doctor');
+assert.equal(doctorReport.rows[0].path_normalization, 'ok');
+assert.equal(doctorReport.rows[0].initialize_status, 'ok');
+assert.equal(doctorReport.rows[0].tools_list_count, 2);
+const doctorTable = renderMcpFabricDoctorTable(doctorReport);
+assert.match(doctorTable, /file\s+server\s+command\s+paths\s+init\s+tools\s+first diagnostic/);
+assert.match(doctorTable, /doctor-mcp\.json\s+doctor/);
+const doctorCli = spawnSync(process.execPath, [
+  fileURLToPath(new URL('./mcp-fabric.mjs', import.meta.url)),
+  '--site-root',
+  doctorSite,
+  '--timeout-ms',
+  '1000',
+], { encoding: 'utf8' });
+assert.equal(doctorCli.status, 0, doctorCli.stderr);
+assert.match(doctorCli.stdout, /file\s+server\s+command\s+paths\s+init\s+tools\s+first diagnostic/);
+assert.match(doctorCli.stdout, /doctor-mcp\.json\s+doctor/);
+rmSync(doctorSite, { recursive: true, force: true });
+
+const failingDoctorSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-doctor-fail-'));
+mkdirSync(join(failingDoctorSite, '.ai', 'mcp'), { recursive: true });
+const failingServerPath = join(failingDoctorSite, 'failing-server.mjs');
+writeFileSync(failingServerPath, 'setInterval(() => {}, 1000);\\n', 'utf8');
+writeFileSync(join(failingDoctorSite, '.ai', 'mcp', 'failing-mcp.json'), `${JSON.stringify({
+  mcpServers: {
+    failing: {
+      command: 'node',
+      args: [failingServerPath],
+    },
+  },
+}, null, 2)}\n`, 'utf8');
+const failingReport = await runMcpFabricDoctor(failingDoctorSite, { timeoutMs: 25 });
+assert.equal(failingReport.status, 'failed');
+assert.equal(failingReport.rows[0].initialize_status, 'timeout');
+assert.match(failingReport.rows[0].first_diagnostic, /initialize_timeout/);
+rmSync(failingDoctorSite, { recursive: true, force: true });
 
 console.log('mcp-fabric tests PASSED.');

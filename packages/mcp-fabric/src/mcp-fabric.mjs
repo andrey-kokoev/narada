@@ -1,5 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, join, normalize } from 'node:path';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { loadMcpSurfaceRegistry, registrySurfaces, siteControlRoot } from '../../carrier-action-admission/src/tool-metadata.mjs';
 
 export class McpFabricError extends Error {
@@ -165,6 +167,254 @@ export function mcpServerNames(fabric) {
   return Object.keys(fabric.servers).sort((a, b) => a.localeCompare(b));
 }
 
+export async function runMcpFabricDoctor(siteRoot, options = {}) {
+  const timeoutMs = Math.max(1, Number(options.timeoutMs ?? 5000));
+  let fabric;
+  try {
+    fabric = loadSiteMcpFabric(siteRoot, {
+      required: options.required ?? true,
+      validateRegistry: options.validateRegistry ?? 'diagnostic',
+    });
+  } catch (error) {
+    return {
+      schema: 'narada.mcp.fabric.doctor.v1',
+      status: 'failed',
+      site_root: siteRoot,
+      rows: [],
+      diagnostics: [doctorDiagnostic(error, 'fabric_load')],
+    };
+  }
+
+  const rows = [];
+  for (const [serverName, server] of Object.entries(fabric.servers)) {
+    rows.push(await probeMcpServer({
+      siteRoot,
+      serverName,
+      server,
+      sourceFile: fabric.sources?.[serverName] ?? null,
+      timeoutMs,
+      env: options.env ?? process.env,
+    }));
+  }
+
+  return {
+    schema: 'narada.mcp.fabric.doctor.v1',
+    status: rows.every((row) => row.initialize_status === 'ok' && row.tools_list_status === 'ok') ? 'ok' : 'failed',
+    site_root: siteRoot,
+    mcp_dir: fabric.mcp_dir,
+    files: fabric.files,
+    registry_validation: fabric.registry_validation ?? null,
+    rows,
+    diagnostics: [],
+  };
+}
+
+export function renderMcpFabricDoctorTable(report) {
+  const rows = report.rows ?? [];
+  const tableRows = rows.length > 0
+    ? rows.map((row) => [
+        row.file ?? '-',
+        row.server,
+        row.command,
+        row.path_normalization,
+        row.initialize_status,
+        String(row.tools_list_count ?? '-'),
+        row.first_diagnostic ?? '-',
+      ])
+    : [['-', '-', '-', '-', 'failed', '-', report.diagnostics?.[0]?.message ?? 'no MCP servers']];
+  return renderTable([
+    'file',
+    'server',
+    'command',
+    'paths',
+    'init',
+    'tools',
+    'first diagnostic',
+  ], tableRows);
+}
+
+async function probeMcpServer({ siteRoot, serverName, server, sourceFile, timeoutMs, env }) {
+  const diagnostics = [];
+  const stdoutPollution = [];
+  const stderrLines = [];
+  const commandSummary = summarizeCommand(server);
+  const pathNormalization = serverPathNormalization(server);
+  let initializeStatus = 'not_run';
+  let toolsListStatus = 'not_run';
+  let toolsListCount = null;
+  let proc = null;
+
+  try {
+    proc = spawn(server.command, server.args ?? [], {
+      cwd: siteRoot,
+      windowsHide: true,
+      env: {
+        ...process.env,
+        ...projectServerEnvironment(server, env),
+      },
+    });
+
+    let buffer = '';
+    const pending = new Map();
+    proc.stdout.setEncoding('utf8');
+    proc.stderr.setEncoding('utf8');
+    proc.stdout.on('data', (chunk) => {
+      buffer += chunk;
+      const lines = buffer.split(/\r?\n/);
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const message = JSON.parse(line);
+          if (message.id != null && pending.has(message.id)) {
+            const request = pending.get(message.id);
+            clearTimeout(request.timeout);
+            pending.delete(message.id);
+            request.resolve(message);
+          }
+        } catch {
+          stdoutPollution.push(line.slice(0, 200));
+        }
+      }
+    });
+    proc.stderr.on('data', (chunk) => {
+      for (const line of String(chunk).split(/\r?\n/).map((entry) => entry.trim()).filter(Boolean)) {
+        if (shouldSuppressMcpDoctorStderr(line)) continue;
+        stderrLines.push(line.slice(0, 200));
+      }
+    });
+
+    const init = await sendMcpDoctorRequest(proc, pending, {
+      jsonrpc: '2.0',
+      id: 'doctor-initialize',
+      method: 'initialize',
+      params: { protocolVersion: '2024-11-05' },
+    }, timeoutMs, 'initialize_timeout');
+    initializeStatus = init.error ? 'error' : 'ok';
+    if (init.error) diagnostics.push({ code: 'initialize_error', message: init.error.message ?? JSON.stringify(init.error) });
+
+    if (initializeStatus === 'ok') {
+      const tools = await sendMcpDoctorRequest(proc, pending, {
+        jsonrpc: '2.0',
+        id: 'doctor-tools-list',
+        method: 'tools/list',
+        params: {},
+      }, timeoutMs, 'tools_list_timeout');
+      toolsListStatus = tools.error ? 'error' : 'ok';
+      if (tools.error) {
+        diagnostics.push({ code: 'tools_list_error', message: tools.error.message ?? JSON.stringify(tools.error) });
+      } else {
+        toolsListCount = Array.isArray(tools.result?.tools) ? tools.result.tools.length : 0;
+      }
+    }
+
+    if (stdoutPollution.length > 0) {
+      diagnostics.push({ code: 'stdout_pollution', message: stdoutPollution[0] });
+    }
+    if (stderrLines.length > 0) {
+      diagnostics.push({ code: 'stderr', message: stderrLines[0] });
+    }
+  } catch (error) {
+    const diagnostic = doctorDiagnostic(error, initializeStatus === 'not_run' ? 'initialize' : 'tools_list');
+    diagnostics.push(diagnostic);
+    if (diagnostic.code === 'initialize_timeout') initializeStatus = 'timeout';
+    else if (diagnostic.code === 'tools_list_timeout') toolsListStatus = 'timeout';
+    else if (initializeStatus === 'not_run') initializeStatus = 'error';
+    else toolsListStatus = 'error';
+  } finally {
+    await stopDoctorProcess(proc);
+  }
+
+  return {
+    file: sourceFile,
+    server: serverName,
+    command: commandSummary,
+    path_normalization: pathNormalization,
+    initialize_status: initializeStatus,
+    tools_list_status: toolsListStatus,
+    tools_list_count: toolsListCount,
+    first_diagnostic: diagnostics[0] ? `${diagnostics[0].code}: ${diagnostics[0].message}` : null,
+    diagnostics,
+  };
+}
+
+function sendMcpDoctorRequest(proc, pending, request, timeoutMs, timeoutCode) {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      pending.delete(request.id);
+      const error = new Error(`${timeoutCode}: ${request.method} timed out after ${timeoutMs}ms`);
+      error.code = timeoutCode;
+      reject(error);
+    }, timeoutMs);
+    pending.set(request.id, { resolve, timeout });
+    proc.stdin.write(`${JSON.stringify(request)}\n`);
+  });
+}
+
+function serverPathNormalization(server) {
+  const values = [...(server.args ?? []), server.target_site_root ?? ''].filter(Boolean);
+  return values.some((value) => String(value).includes('\\')) ? 'backslash_remaining' : 'ok';
+}
+
+function summarizeCommand(server) {
+  return [basename(String(server.command ?? '')), ...(server.args ?? []).map(summarizeCommandArg)].join(' ');
+}
+
+function summarizeCommandArg(arg) {
+  const value = String(arg);
+  if (value.startsWith('--')) return value;
+  if (value.includes('/') || value.includes('\\')) return basename(value);
+  return value;
+}
+
+function doctorDiagnostic(error, phase) {
+  return {
+    code: error?.code ?? 'mcp_fabric_doctor_failed',
+    message: error instanceof Error ? error.message : String(error),
+    phase,
+    details: error?.details ?? {},
+  };
+}
+
+function stopDoctorProcess(proc) {
+  if (!proc || proc.exitCode !== null || proc.signalCode !== null) return Promise.resolve();
+  return new Promise((resolveStop) => {
+    const timeout = setTimeout(resolveStop, 1000);
+    proc.once('exit', () => {
+      clearTimeout(timeout);
+      resolveStop();
+    });
+    proc.kill();
+  });
+}
+
+function renderTable(headers, rows) {
+  const maxWidths = [24, 30, 72, 8, 8, 7, 72];
+  const formattedRows = rows.map((row) => row.map((cell, index) => formatTableCell(cell, maxWidths[index])));
+  const formattedHeaders = headers.map((header, index) => formatTableCell(header, maxWidths[index]));
+  const widths = formattedHeaders.map((header, index) => Math.max(
+    header.length,
+    ...formattedRows.map((row) => String(row[index] ?? '').length),
+  ));
+  const renderRow = (row) => row.map((cell, index) => String(cell ?? '').padEnd(widths[index])).join('  ');
+  return [
+    renderRow(formattedHeaders),
+    renderRow(widths.map((width) => '-'.repeat(width))),
+    ...formattedRows.map(renderRow),
+  ].join('\n');
+}
+
+function formatTableCell(value, maxWidth = 80) {
+  const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+  if (text.length <= maxWidth) return text;
+  return `${text.slice(0, Math.max(0, maxWidth - 1))}…`;
+}
+
+function shouldSuppressMcpDoctorStderr(message) {
+  return message.includes('ExperimentalWarning: SQLite is an experimental feature')
+    || message.includes('Use `node --trace-warnings ...` to show where the warning was created');
+}
+
 function emptyFabric(siteRoot, mcpDir) {
   return {
     schema: 'narada.mcp.fabric.loaded.v1',
@@ -198,7 +448,7 @@ function normalizeServerConfig(serverName, rawServer, siteRoot) {
   const command = normalizeCommand(rawServer.command);
   const portableSiteRoot = siteRoot.replaceAll('\\', '/');
   const args = Array.isArray(rawServer.args)
-    ? rawServer.args.map((arg) => String(arg).replaceAll('{site_root}', portableSiteRoot))
+    ? rawServer.args.map((arg) => normalizePortablePathText(String(arg).replaceAll('{site_root}', portableSiteRoot)))
     : [];
   return {
     transport: 'stdio',
@@ -207,7 +457,7 @@ function normalizeServerConfig(serverName, rawServer, siteRoot) {
     env: objectStringValues(rawServer.env),
     env_vars: Array.isArray(rawServer.env_vars) ? rawServer.env_vars.map(String) : [],
     ...(rawServer.surface_id ? { surface_id: String(rawServer.surface_id) } : {}),
-    ...(rawServer.target_site_root ? { target_site_root: String(rawServer.target_site_root).replaceAll('{site_root}', portableSiteRoot) } : {}),
+    ...(rawServer.target_site_root ? { target_site_root: normalizePortablePathText(String(rawServer.target_site_root).replaceAll('{site_root}', portableSiteRoot)) } : {}),
     ...(rawServer.authority_posture ? { authority_posture: String(rawServer.authority_posture) } : {}),
     ...(Number.isFinite(Number(rawServer.startup_timeout_sec)) ? { startup_timeout_sec: Number(rawServer.startup_timeout_sec) } : {}),
   };
@@ -252,6 +502,10 @@ function normalizeCommand(command) {
   return String(command ?? '');
 }
 
+function normalizePortablePathText(value) {
+  return value.replaceAll('\\', '/');
+}
+
 function objectStringValues(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, String(entry)]));
@@ -269,4 +523,43 @@ function sortDeep(value) {
   if (Array.isArray(value)) return value.map(sortDeep);
   if (!value || typeof value !== 'object') return value;
   return Object.fromEntries(Object.keys(value).sort((a, b) => a.localeCompare(b)).map((key) => [key, sortDeep(value[key])]));
+}
+
+if (isMainModule()) {
+  const cliArgs = parseDoctorCliArgs(process.argv.slice(2));
+  runMcpFabricDoctor(cliArgs.siteRoot ?? process.cwd(), {
+    timeoutMs: cliArgs.timeoutMs,
+    required: true,
+  }).then((report) => {
+    if (cliArgs.json) {
+      process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+    } else {
+      process.stdout.write(`${renderMcpFabricDoctorTable(report)}\n`);
+    }
+    process.exit(report.status === 'ok' ? 0 : 1);
+  }).catch((error) => {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.exit(1);
+  });
+}
+
+function isMainModule() {
+  return process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+}
+
+function parseDoctorCliArgs(argv) {
+  const parsed = { siteRoot: null, timeoutMs: 5000, json: false };
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === '--json') {
+      parsed.json = true;
+    } else if (arg === '--site-root' && argv[i + 1]) {
+      parsed.siteRoot = argv[i + 1];
+      i += 1;
+    } else if (arg === '--timeout-ms' && argv[i + 1]) {
+      parsed.timeoutMs = Number(argv[i + 1]);
+      i += 1;
+    }
+  }
+  return parsed;
 }
