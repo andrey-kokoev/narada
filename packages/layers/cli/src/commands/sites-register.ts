@@ -43,7 +43,7 @@ export function registerSitesCommands(program: Command): void {
     .description('Plan greenfield Narada Site creation from Narada proper templates/catalog')
     .option('--config <path>', 'Create-site config JSON')
     .option('-i, --interactive', 'Prompt for Site coordinates and descriptor capabilities', false)
-    .option('--preset <preset>', 'Greenfield template preset: minimal, agent-memory, task-lifecycle, or site-machinery')
+    .option('--preset <preset>', 'Greenfield template preset: minimal, agent-site-core, agent-memory, task-lifecycle, or site-machinery')
     .option('--site-id <id>', 'Site id for shorthand create-site planning')
     .option('--root <path>', 'Site root for shorthand create-site planning')
     .option('--site-kind <kind>', 'Site kind for shorthand create-site planning', 'project')

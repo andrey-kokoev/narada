@@ -1,4 +1,4 @@
-export const CREATE_SITE_SUPPORTED_PRESETS = ['minimal', 'agent-memory', 'task-lifecycle', 'site-machinery'] as const;
+export const CREATE_SITE_SUPPORTED_PRESETS = ['minimal', 'agent-site-core', 'agent-memory', 'task-lifecycle', 'site-machinery'] as const;
 
 export type CreateSiteSupportedPreset = typeof CREATE_SITE_SUPPORTED_PRESETS[number];
 

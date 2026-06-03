@@ -163,6 +163,7 @@ export interface CreateSiteCapabilitySelectionInput {
 
 type CreateSiteInteractivePresetChoice =
   | 'minimal'
+  | 'agent-site-core'
   | 'task-lifecycle'
   | 'agent-memory'
   | 'site-machinery'
@@ -912,7 +913,7 @@ export async function sitesCreateCommand(
 
   const plan = buildCreateSiteDryRunPlan(config, configPath);
   if (options.dryRun && options.executeLive) {
-    return {
+    return formatCreateSiteEnvelope({
       exitCode: ExitCode.INVALID_CONFIG,
       result: {
         ...plan,
@@ -925,11 +926,11 @@ export async function sitesCreateCommand(
           },
         ],
       },
-    };
+    }, (options.format ?? 'auto') as CliFormat);
   }
   if (!options.dryRun) {
     if (interactiveConfig && !interactiveExecute) {
-      return {
+      return formatCreateSiteEnvelope({
         exitCode: plan.refusals.length === 0 ? ExitCode.SUCCESS : ExitCode.INVALID_CONFIG,
         result: {
           ...plan,
@@ -942,11 +943,14 @@ export async function sitesCreateCommand(
             `To create the Site skeleton immediately, rerun non-interactively with --preset ${config.preset ?? 'minimal'} --site-id ${config.site?.site_id ?? '<id>'} --root ${config.site?.site_root ?? '<path>'}.`,
           ],
         },
-      };
+      }, (options.format ?? 'auto') as CliFormat);
     }
     const created = await executeMinimalCreateSite(config, plan, configPath);
-    if (!options.executeLive || created.exitCode !== ExitCode.SUCCESS) return created;
-    return executeCreateSiteLiveCarriers(config, created, options, context);
+    if (!options.executeLive || created.exitCode !== ExitCode.SUCCESS) {
+      return formatCreateSiteEnvelope(created, (options.format ?? 'auto') as CliFormat);
+    }
+    const live = await executeCreateSiteLiveCarriers(config, created, options, context);
+    return formatCreateSiteEnvelope(live, (options.format ?? 'auto') as CliFormat);
   }
 
   if (options.outputPlan) {
@@ -960,21 +964,160 @@ export async function sitesCreateCommand(
     await writeFile(outputPlanPath, `${JSON.stringify(plan, null, 2)}\n`, 'utf8');
   }
 
-  return {
+  return formatCreateSiteEnvelope({
     exitCode: plan.refusals.length === 0 ? ExitCode.SUCCESS : ExitCode.INVALID_CONFIG,
     result: plan,
+  }, (options.format ?? 'auto') as CliFormat);
+}
+
+function formatCreateSiteEnvelope(
+  envelope: { exitCode: ExitCode; result: unknown },
+  format: CliFormat,
+): { exitCode: ExitCode; result: unknown } {
+  if (!envelope.result || typeof envelope.result !== 'object') return envelope;
+  const result = envelope.result as Record<string, unknown>;
+  const schema = String(result.schema ?? '');
+  if (schema !== 'narada.create_site.dry_run_plan.v0' && schema !== 'narada.create_site.execution_result.v0') {
+    return envelope;
+  }
+  return {
+    ...envelope,
+    result: formattedResult(result, formatCreateSiteHumanSummary(result), format),
+  };
+}
+
+function formatCreateSiteHumanSummary(result: Record<string, unknown>): string[] {
+  const schema = String(result.schema ?? '');
+  const site = result.site && typeof result.site === 'object' ? result.site as Record<string, unknown> : {};
+  const selectedTemplate = result.selected_template && typeof result.selected_template === 'object'
+    ? result.selected_template as Record<string, unknown>
+    : {};
+  const siteId = String(site.site_id ?? '<id>');
+  const siteRoot = String(site.site_root ?? '<path>');
+  const preset = String(result.selected_preset ?? 'agent-site-core');
+  const status = String(result.status ?? 'ok');
+  const components = arrayField(selectedTemplate.template_components).map(String);
+  const plannedFiles = arrayField(result.planned_files);
+  const createdFiles = arrayField(result.created_files);
+  const admissions = arrayField(result.required_local_admissions)
+    .map((entry) => entry && typeof entry === 'object' ? String((entry as Record<string, unknown>).admission ?? '') : '')
+    .filter((entry) => entry.length > 0);
+  const refusals = arrayField(result.refusals);
+  const title = schema === 'narada.create_site.execution_result.v0'
+    ? (status === 'created' ? 'Narada Site created' : 'Narada Site creation result')
+    : 'Narada Site creation plan';
+  const lines = [
+    title,
+    `Status: ${status}`,
+    `Preset: ${preset}`,
+    `Site: ${siteId}`,
+    `Root: ${siteRoot}`,
+  ];
+  if (components.length > 0) lines.push(`Descriptor packages: ${components.join(', ')}`);
+  if (plannedFiles.length > 0) lines.push(`Planned files: ${plannedFiles.length}`);
+  if (createdFiles.length > 0) lines.push(`Created files: ${createdFiles.length}`);
+  if (admissions.length > 0) lines.push(`Separate admissions: ${admissions.join(', ')}`);
+  if (refusals.length > 0) lines.push(`Refusals: ${refusals.length}`);
+  lines.push(
+    'Boundary: descriptor/package selection does not grant live capability, import source runtime state, or mutate private MCP/profile config outside target Site artifacts.',
+  );
+  if (schema === 'narada.create_site.dry_run_plan.v0' && status === 'planned') {
+    lines.push(`Create: narada sites create --site-id ${siteId} --root ${siteRoot}`);
+  }
+  lines.push('Use --format json for the full plan/result.');
+  return lines;
+}
+
+interface CreateSitePresetCatalogEntry {
+  preset: string;
+  label: string;
+  recommended: boolean;
+  use_when: string;
+  includes: string[];
+  does_not_include: string[];
+  template_id: string;
+  exposure_class: string;
+  package_components: string[];
+  descriptor_components: unknown[];
+  operational_commands: { dry_run: string; skeleton: string; live: string | null };
+  admission_boundary: {
+    package_selection_grants_live_capability: boolean;
+    source_state_imported: boolean;
+    live_execution_requires_explicit_authority: boolean;
+  };
+}
+
+interface CreateSitePresetsCatalogResult {
+  schema: 'narada.create_site.presets.v0';
+  status: 'ok';
+  recommended_preset: 'agent-site-core';
+  default_interactive_preset: 'agent-site-core';
+  presets: CreateSitePresetCatalogEntry[];
+  non_claims: string[];
+}
+
+function createSitePresetCatalogMetadata(preset: string): {
+  label: string;
+  recommended: boolean;
+  use_when: string;
+  includes: string[];
+  does_not_include: string[];
+} {
+  if (preset === 'agent-site-core') {
+    return {
+      label: 'Agent Site core',
+      recommended: true,
+      use_when: 'Create a useful agent-facing Site baseline with task lifecycle, agent memory, and canonical inbox descriptors.',
+      includes: ['task_lifecycle', 'agent_context_memory', 'canonical_inbox'],
+      does_not_include: ['site_config_awareness', 'site_lift_adoption', 'live capability grants', 'source runtime import'],
+    };
+  }
+  if (preset === 'task-lifecycle') {
+    return {
+      label: 'Task lifecycle only',
+      recommended: false,
+      use_when: 'Create only the task lifecycle descriptor slice.',
+      includes: ['task_lifecycle'],
+      does_not_include: ['agent_context_memory', 'canonical_inbox', 'site_config_awareness', 'site_lift_adoption', 'live capability grants'],
+    };
+  }
+  if (preset === 'agent-memory') {
+    return {
+      label: 'Agent memory only',
+      recommended: false,
+      use_when: 'Create only the agent context memory descriptor slice.',
+      includes: ['agent_context_memory'],
+      does_not_include: ['task_lifecycle', 'canonical_inbox', 'site_config_awareness', 'site_lift_adoption', 'live capability grants'],
+    };
+  }
+  if (preset === 'site-machinery') {
+    return {
+      label: 'Inbox/config/lift',
+      recommended: false,
+      use_when: 'Create the narrower inbox, known-Site config, and lift/adoption descriptor bundle.',
+      includes: ['canonical_inbox', 'site_config_awareness', 'site_lift_adoption'],
+      does_not_include: ['task_lifecycle', 'agent_context_memory', 'live capability grants', 'source runtime import'],
+    };
+  }
+  return {
+    label: 'Minimal skeleton',
+    recommended: false,
+    use_when: 'Create a bare Site skeleton without descriptor packages.',
+    includes: [],
+    does_not_include: ['task_lifecycle', 'agent_context_memory', 'canonical_inbox', 'site_config_awareness', 'site_lift_adoption', 'live capability grants'],
   };
 }
 
 export async function sitesCreatePresetsCommand(
-  _options: SitesOptions,
+  options: SitesOptions,
   _context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const presets = CREATE_SITE_SUPPORTED_PRESETS.map((preset) => {
+  const presets = CREATE_SITE_SUPPORTED_PRESETS.map((preset): CreateSitePresetCatalogEntry => {
     const packages = packagesForCreateSitePreset(preset);
     const descriptors = expandCreateSitePackageDescriptorsFromPackages(packages);
     return {
       preset,
+      ...createSitePresetCatalogMetadata(preset),
       template_id: `narada-proper.templates.site.${preset}.v0`,
       exposure_class: preset === 'minimal' ? 'mutating_guarded' : 'descriptor_only',
       package_components: packages.map((pkg) => String(pkg.name)),
@@ -987,7 +1130,7 @@ export async function sitesCreatePresetsCommand(
       operational_commands: {
         dry_run: `narada sites create --preset ${preset} --site-id <id> --root <path> --dry-run --format json`,
         skeleton: `narada sites create --preset ${preset} --site-id <id> --root <path> --format json`,
-        live: ['task-lifecycle', 'agent-memory', 'site-machinery'].includes(preset)
+        live: ['agent-site-core', 'task-lifecycle', 'agent-memory', 'site-machinery'].includes(preset)
           ? `narada sites create --preset ${preset} --site-id <id> --root <path> --execute-live --live-authority-basis <basis> --format json`
           : null,
       },
@@ -998,26 +1141,58 @@ export async function sitesCreatePresetsCommand(
       },
     };
   });
+  const catalog: CreateSitePresetsCatalogResult = {
+    schema: 'narada.create_site.presets.v0',
+    status: 'ok',
+    recommended_preset: 'agent-site-core',
+    default_interactive_preset: 'agent-site-core',
+    presets,
+    non_claims: [
+      'source Site import/migration/lift',
+      'implicit capability grants',
+      'private MCP client config mutation',
+      'real Windows profile mutation outside target Site artifacts',
+      'PC/operator-surface mutation',
+    ],
+  };
   return {
     exitCode: ExitCode.SUCCESS,
-    result: {
-      schema: 'narada.create_site.presets.v0',
-      status: 'ok',
-      presets,
-      non_claims: [
-        'source Site import/migration/lift',
-        'implicit capability grants',
-        'private MCP client config mutation',
-        'real Windows profile mutation outside target Site artifacts',
-        'PC/operator-surface mutation',
-      ],
-    },
+    result: formattedResult(catalog, formatCreateSitePresetsHuman(catalog), (options.format ?? 'auto') as CliFormat),
   };
+}
+
+function formatCreateSitePresetsHuman(catalog: CreateSitePresetsCatalogResult): string[] {
+  const recommended = catalog.presets.find((preset) => preset.preset === catalog.recommended_preset);
+  const lines = [
+    'Narada create-site presets',
+    `Recommended/default: ${catalog.recommended_preset}${recommended ? ` - ${recommended.label}` : ''}`,
+  ];
+  if (recommended) {
+    lines.push(`Use when: ${recommended.use_when}`);
+  }
+  lines.push(
+    'Quick start: narada sites create --site-id <id> --root <path>',
+    '',
+    'Presets:',
+  );
+  for (const preset of catalog.presets) {
+    const marker = preset.recommended ? ' (recommended)' : '';
+    const includes = preset.includes.length > 0 ? preset.includes.join(', ') : 'none';
+    lines.push(`- ${preset.preset}${marker}: ${preset.label}`);
+    lines.push(`  Includes: ${includes}`);
+    lines.push(`  Use when: ${preset.use_when}`);
+  }
+  lines.push(
+    '',
+    'Boundary: package/template selection does not grant live capability, import source runtime state, mutate private MCP client config, or mutate real Windows profile state outside target Site artifacts.',
+    'Use --format json for descriptor details and live-carrier commands.',
+  );
+  return lines;
 }
 
 function buildCreateSiteConfigFromShorthand(options: SitesCreateOptions): CreateSiteConfig | null {
   if (!options.preset && !options.siteId && !options.root) return null;
-  const preset = options.preset ?? 'minimal';
+  const preset = options.preset ?? 'agent-site-core';
   if (!options.siteId || !options.root) return {
     schema: 'narada.create_site.options.v0',
     mode: options.dryRun ? 'dry_run' : 'execute',
@@ -1149,7 +1324,18 @@ function createSiteConfigForPreset(input: {
       refused_imports: [],
     },
   };
-  if (input.preset === 'task-lifecycle') {
+  if (input.preset === 'agent-site-core') {
+    config.storage = { intent: 'descriptor_only', driver_preference: 'sqlite3-cli', mutation_mode: 'none' };
+    config.mcp = { intent: 'descriptor_only', surfaces: ['site_task_lifecycle', 'agent_context_memory'] };
+    config.capabilities = {
+      policy: 'declare_required',
+      required: ['task_lifecycle', 'agent_context_memory', 'canonical_inbox'],
+      denied: ['source_task_db_import', 'source_checkpoint_import', 'source_inbox_history_import'],
+    };
+    config.inbox = { enable: 'canonical_envelope_intake' };
+    config.task_lifecycle = { enable: 'descriptor_only', package: '@narada2/site-task-lifecycle' };
+    config.agent_context = { enable: 'descriptor_only', package: '@narada2/agent-context-memory' };
+  } else if (input.preset === 'task-lifecycle') {
     config.storage = { intent: 'descriptor_only', driver_preference: 'sqlite3-cli', mutation_mode: 'none' };
     config.mcp = { intent: 'descriptor_only', surfaces: ['site_task_lifecycle'] };
     config.capabilities = { policy: 'declare_required', required: ['task_lifecycle'], denied: ['source_task_db_import'] };
@@ -1175,6 +1361,14 @@ function presetForCreateSiteCapabilities(capabilities: Set<CreateSiteCapabilityC
   if (capabilities.size === 0) return 'minimal';
   if (capabilities.size === 1 && capabilities.has('task_lifecycle')) return 'task-lifecycle';
   if (capabilities.size === 1 && capabilities.has('agent_context_memory')) return 'agent-memory';
+  if (
+    capabilities.size === 3
+    && capabilities.has('task_lifecycle')
+    && capabilities.has('agent_context_memory')
+    && capabilities.has('canonical_inbox')
+  ) {
+    return 'agent-site-core';
+  }
   if (
     capabilities.size === 3
     && capabilities.has('canonical_inbox')
@@ -1231,6 +1425,13 @@ function mcpSurfacesForCreateSiteCapabilities(capabilities: Set<CreateSiteCapabi
 }
 
 function packagesForCreateSitePreset(preset: string): Array<Record<string, unknown>> {
+  if (preset === 'agent-site-core') {
+    return [
+      { name: '@narada2/site-task-lifecycle' },
+      { name: '@narada2/agent-context-memory' },
+      { name: '@narada2/site-inbox' },
+    ];
+  }
   if (preset === 'task-lifecycle') return [{ name: '@narada2/site-task-lifecycle' }];
   if (preset === 'agent-memory') return [{ name: '@narada2/agent-context-memory' }];
   if (preset === 'site-machinery') {
@@ -1507,12 +1708,13 @@ async function promptCreateSiteConfig(options: SitesCreateOptions): Promise<{ ca
 
   const presetChoice = await p.select({
     message: 'Starting point:',
-    initialValue: options.preset ?? 'minimal',
+    initialValue: options.preset ?? 'agent-site-core',
     options: [
+      { value: 'agent-site-core', label: 'Agent Site core', hint: 'Task lifecycle, agent memory, and canonical inbox descriptors.' },
       { value: 'minimal', label: 'Minimal', hint: 'Site skeleton only.' },
       { value: 'task-lifecycle', label: 'Task lifecycle', hint: 'Task lifecycle descriptors.' },
       { value: 'agent-memory', label: 'Agent memory', hint: 'Agent context memory descriptors.' },
-      { value: 'site-machinery', label: 'Site machinery', hint: 'Inbox, site config, and lift/adoption descriptors.' },
+      { value: 'site-machinery', label: 'Inbox/config/lift', hint: 'Canonical inbox, site config, and lift/adoption descriptors.' },
       { value: 'custom', label: 'Custom', hint: 'Choose descriptor capabilities one by one.' },
     ],
   });
@@ -1621,6 +1823,7 @@ async function promptCreateSiteConfig(options: SitesCreateOptions): Promise<{ ca
 }
 
 function capabilitiesForInteractivePresetChoice(choice: CreateSiteInteractivePresetChoice): CreateSiteCapabilityChoiceId[] {
+  if (choice === 'agent-site-core') return ['task_lifecycle', 'agent_context_memory', 'canonical_inbox'];
   if (choice === 'task-lifecycle') return ['task_lifecycle'];
   if (choice === 'agent-memory') return ['agent_context_memory'];
   if (choice === 'site-machinery') return ['canonical_inbox', 'site_config_awareness', 'site_lift_adoption'];

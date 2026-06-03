@@ -94,8 +94,15 @@ describe('sitesCreateCommand', () => {
     const output = result.result as {
       schema: string;
       status: string;
+      recommended_preset: string;
+      default_interactive_preset: string;
       presets: Array<{
         preset: string;
+        label: string;
+        recommended: boolean;
+        use_when: string;
+        includes: string[];
+        does_not_include: string[];
         package_components: string[];
         operational_commands: { dry_run: string; skeleton: string; live: string | null };
         admission_boundary: { source_state_imported: boolean; package_selection_grants_live_capability: boolean };
@@ -104,12 +111,29 @@ describe('sitesCreateCommand', () => {
     };
     expect(output.schema).toBe('narada.create_site.presets.v0');
     expect(output.status).toBe('ok');
+    expect(output.recommended_preset).toBe('agent-site-core');
+    expect(output.default_interactive_preset).toBe('agent-site-core');
     expect(output.presets.map((preset) => preset.preset)).toEqual([
       'minimal',
+      'agent-site-core',
       'agent-memory',
       'task-lifecycle',
       'site-machinery',
     ]);
+    expect(output.presets.filter((preset) => preset.recommended).map((preset) => preset.preset)).toEqual(['agent-site-core']);
+    expect(output.presets).toContainEqual(expect.objectContaining({
+      preset: 'agent-site-core',
+      label: 'Agent Site core',
+      recommended: true,
+      use_when: expect.stringContaining('useful agent-facing Site baseline'),
+      includes: ['task_lifecycle', 'agent_context_memory', 'canonical_inbox'],
+      does_not_include: expect.arrayContaining(['site_config_awareness', 'site_lift_adoption', 'live capability grants']),
+      package_components: [
+        '@narada2/site-task-lifecycle',
+        '@narada2/agent-context-memory',
+        '@narada2/site-inbox',
+      ],
+    }));
     expect(output.presets).toContainEqual(expect.objectContaining({
       preset: 'site-machinery',
       package_components: [
@@ -118,6 +142,8 @@ describe('sitesCreateCommand', () => {
         '@narada2/site-lift',
       ],
     }));
+    expect(output.presets.find((preset) => preset.preset === 'agent-site-core')?.operational_commands.live)
+      .toBe('narada sites create --preset agent-site-core --site-id <id> --root <path> --execute-live --live-authority-basis <basis> --format json');
     expect(output.presets.find((preset) => preset.preset === 'task-lifecycle')?.operational_commands.live)
       .toContain('--execute-live');
     expect(output.presets.find((preset) => preset.preset === 'agent-memory')?.operational_commands.live)
@@ -127,6 +153,20 @@ describe('sitesCreateCommand', () => {
     expect(output.presets.every((preset) => preset.admission_boundary.source_state_imported === false)).toBe(true);
     expect(output.presets.every((preset) => preset.admission_boundary.package_selection_grants_live_capability === false)).toBe(true);
     expect(output.non_claims).toContain('source Site import/migration/lift');
+  });
+
+  it('renders create-site presets as concise human guidance by default', async () => {
+    const result = await sitesCreatePresetsCommand({ format: 'human' }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const output = result.result as {
+      recommended_preset: string;
+      _formatted: string;
+    };
+    expect(output.recommended_preset).toBe('agent-site-core');
+    expect(output._formatted).toContain('Recommended/default: agent-site-core - Agent Site core');
+    expect(output._formatted).toContain('Quick start: narada sites create --site-id <id> --root <path>');
+    expect(output._formatted).toContain('Boundary: package/template selection does not grant live capability');
   });
 
   it('emits a descriptor-only minimal Site dry-run plan', async () => {
@@ -206,9 +246,9 @@ describe('sitesCreateCommand', () => {
     expect(config).toMatchObject({
       schema: 'narada.create_site.options.v0',
       mode: 'dry_run',
-      preset: 'minimal',
+      preset: 'agent-site-core',
       template_catalog: {
-        template_id: 'narada-proper.templates.site.interactive-capability-selection.v0',
+        template_id: 'narada-proper.templates.site.agent-site-core.v0',
         template_components: [
           '@narada2/site-task-lifecycle',
           '@narada2/agent-context-memory',
@@ -233,7 +273,7 @@ describe('sitesCreateCommand', () => {
     expect(config.evidence).toMatchObject({
       selected_interactively: true,
       template_refs: [
-        'narada-proper.templates.site.interactive-capability-selection.v0',
+        'narada-proper.templates.site.agent-site-core.v0',
         'package:@narada2/site-task-lifecycle',
         'package:@narada2/agent-context-memory',
         'package:@narada2/site-inbox',
@@ -269,7 +309,7 @@ describe('sitesCreateCommand', () => {
       non_claims: string[];
     };
     expect(plan.selected_template).toEqual({
-      template_id: 'narada-proper.templates.site.interactive-capability-selection.v0',
+      template_id: 'narada-proper.templates.site.agent-site-core.v0',
       template_components: [
         '@narada2/site-task-lifecycle',
         '@narada2/agent-context-memory',
@@ -401,6 +441,90 @@ describe('sitesCreateCommand', () => {
     ]));
   });
 
+  it('renders shorthand dry-run as a concise human plan', async () => {
+    const result = await sitesCreateCommand({
+      siteId: 'human-plan-site',
+      root: 'D:\\Sites\\human-plan-site',
+      siteKind: 'project',
+      authorityLocus: 'project',
+      dryRun: true,
+      format: 'human',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const plan = result.result as {
+      selected_preset: string;
+      _formatted: string;
+    };
+    expect(plan.selected_preset).toBe('agent-site-core');
+    expect(plan._formatted).toContain('Narada Site creation plan');
+    expect(plan._formatted).toContain('Preset: agent-site-core');
+    expect(plan._formatted).toContain('Create: narada sites create --site-id human-plan-site --root D:\\Sites\\human-plan-site');
+    expect(plan._formatted).toContain('Use --format json for the full plan/result.');
+  });
+
+  it('defaults shorthand flags to the useful agent Site core baseline', async () => {
+    const result = await sitesCreateCommand({
+      siteId: 'agent-core-default-site',
+      root: 'D:\\Sites\\agent-core-default-site',
+      siteKind: 'project',
+      authorityLocus: 'project',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const plan = result.result as {
+      selected_preset: string;
+      selected_template: { template_id: string; template_components: string[] };
+    };
+    expect(plan.selected_preset).toBe('agent-site-core');
+    expect(plan.selected_template.template_components).toEqual([
+      '@narada2/site-task-lifecycle',
+      '@narada2/agent-context-memory',
+      '@narada2/site-inbox',
+    ]);
+  });
+
+  it('plans an agent Site core from explicit shorthand preset flags as the useful baseline', async () => {
+    const result = await sitesCreateCommand({
+      preset: 'agent-site-core',
+      siteId: 'agent-core-site',
+      root: 'D:\\Sites\\agent-core-site',
+      siteKind: 'project',
+      authorityLocus: 'project',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const plan = result.result as {
+      selected_preset: string;
+      selected_template: { template_id: string; template_components: string[] };
+      required_local_admissions: Array<{ admission: string; status: string }>;
+      planned_files: Array<{ path: string }>;
+    };
+    expect(plan.selected_preset).toBe('agent-site-core');
+    expect(plan.selected_template).toEqual({
+      template_id: 'narada-proper.templates.site.agent-site-core.v0',
+      template_components: [
+        '@narada2/site-task-lifecycle',
+        '@narada2/agent-context-memory',
+        '@narada2/site-inbox',
+      ],
+    });
+    expect(plan.required_local_admissions).toEqual(expect.arrayContaining([
+      { admission: 'task_lifecycle_db_init_and_mutation', status: 'separate_admission_required' },
+      { admission: 'agent_context_storage_and_hydration', status: 'separate_admission_required' },
+      { admission: 'site_inbox_local_substrate_and_publication', status: 'separate_admission_required' },
+    ]));
+    expect(plan.planned_files).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: 'D:\\Sites\\agent-core-site\\.narada\\mcp\\descriptors\\site_task_lifecycle.json' }),
+      expect.objectContaining({ path: 'D:\\Sites\\agent-core-site\\.narada\\mcp\\descriptors\\agent_context_memory.json' }),
+      expect.objectContaining({ path: 'D:\\Sites\\agent-core-site\\.narada\\capabilities\\capability-policy.json' }),
+    ]));
+  });
+
   it('creates a minimal greenfield Site skeleton from shorthand flags', async () => {
     const dir = tempDir();
     const siteRoot = join(dir, 'shorthand-minimal-site');
@@ -477,6 +601,72 @@ describe('sitesCreateCommand', () => {
     expect(configProjection.origin.lineage_event_ref).toBe(siteSeed.origin.lineage_event_ref);
     expect(output.non_claims).toContain('DB init execution');
     expect(output.non_claims).toContain('MCP registration execution');
+  });
+
+  it('renders shorthand create as a concise human result', async () => {
+    const dir = tempDir();
+    const siteRoot = join(dir, 'human-created-agent-core-site');
+
+    const result = await sitesCreateCommand({
+      siteId: 'human-created-agent-core-site',
+      root: siteRoot,
+      siteKind: 'project',
+      authorityLocus: 'project',
+      format: 'human',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const output = result.result as {
+      status: string;
+      selected_preset: string;
+      _formatted: string;
+    };
+    expect(output.status).toBe('created');
+    expect(output.selected_preset).toBe('agent-site-core');
+    expect(output._formatted).toContain('Narada Site created');
+    expect(output._formatted).toContain('Preset: agent-site-core');
+    expect(output._formatted).toContain('Created files:');
+    expect(output._formatted).toContain('Boundary: descriptor/package selection does not grant live capability');
+  });
+
+  it('creates the useful agent Site core skeleton when shorthand omits preset', async () => {
+    const dir = tempDir();
+    const siteRoot = join(dir, 'default-agent-core-site');
+
+    const result = await sitesCreateCommand({
+      siteId: 'default-agent-core-site',
+      root: siteRoot,
+      siteKind: 'project',
+      authorityLocus: 'project',
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const output = result.result as {
+      status: string;
+      created_files: Array<{ path: string }>;
+      evidence: { source_state_imported: boolean; package_selection_grants_live_capability: boolean };
+      non_claims: string[];
+    };
+    expect(output.status).toBe('created');
+    expect(output.evidence.source_state_imported).toBe(false);
+    expect(output.evidence.package_selection_grants_live_capability).toBe(false);
+    expect(output.created_files.map((file) => file.path)).toEqual(expect.arrayContaining([
+      join(siteRoot, '.narada', 'admission', 'package-slices', 'site-task-lifecycle.json'),
+      join(siteRoot, '.narada', 'admission', 'package-slices', 'agent-context-memory.json'),
+      join(siteRoot, '.narada', 'admission', 'package-slices', 'site-inbox.json'),
+      join(siteRoot, '.narada', 'mcp', 'descriptors', 'site_task_lifecycle.json'),
+      join(siteRoot, '.narada', 'mcp', 'descriptors', 'agent_context_memory.json'),
+      join(siteRoot, '.narada', 'capabilities', 'capability-policy.json'),
+    ]));
+    const capabilityPolicy = JSON.parse(readFileSync(join(siteRoot, '.narada', 'capabilities', 'capability-policy.json'), 'utf8')) as {
+      required: string[];
+      live_grants_admitted: boolean;
+    };
+    expect(capabilityPolicy.required).toEqual(['task_lifecycle', 'agent_context_memory', 'canonical_inbox']);
+    expect(capabilityPolicy.live_grants_admitted).toBe(false);
+    expect(existsSync(join(siteRoot, '.ai'))).toBe(false);
+    expect(output.non_claims).toContain('package slice live execution');
   });
 
   it('materializes site-machinery descriptor slices from shorthand execution', async () => {
@@ -998,6 +1188,48 @@ describe('sitesCreateCommand', () => {
     expect(existsSync(join(siteRoot, '.narada/hydration/hydration-manifest.json'))).toBe(true);
     expect(existsSync(join(siteRoot, '.narada/capabilities/mcp-registration.json'))).toBe(true);
     expect(existsSync(join(siteRoot, '.narada/profile/windows-profile-binding.json'))).toBe(true);
+    expect(existsSync(join(siteRoot, '.ai'))).toBe(false);
+  });
+
+  it('can create an agent Site core and run admitted useful baseline live carriers from shorthand flags', async () => {
+    const dir = tempDir();
+    const siteRoot = join(dir, 'agent-core-live-site');
+
+    const result = await sitesCreateCommand({
+      preset: 'agent-site-core',
+      siteId: 'agent-core-live-site',
+      root: siteRoot,
+      siteKind: 'project',
+      authorityLocus: 'project',
+      format: 'json',
+      executeLive: true,
+      liveAuthorityBasis: 'test_agent_site_core_live_authority',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const output = result.result as {
+      status: string;
+      live_carriers: Array<{ carrier_id: string; status: string }>;
+      evidence: { live_carrier_execution_completed: boolean; source_state_imported: boolean };
+      non_claims: string[];
+    };
+    expect(output.status).toBe('created_live_carriers_applied');
+    expect(output.live_carriers.map((carrier) => carrier.carrier_id)).toEqual([
+      'site_local_db_init',
+      'site_local_storage_hydration',
+      'agent_context_memory_local_storage',
+      'site_inbox_local_substrate',
+      'site_mcp_registration_transport',
+      'windows_profile_site_binding',
+    ]);
+    expect(output.live_carriers.every((carrier) => carrier.status === 'applied')).toBe(true);
+    expect(output.evidence.live_carrier_execution_completed).toBe(true);
+    expect(output.evidence.source_state_imported).toBe(false);
+    expect(existsSync(join(siteRoot, '.narada/agent-context-memory/memory-store.json'))).toBe(true);
+    expect(existsSync(join(siteRoot, '.narada/inbox/index.json'))).toBe(true);
+    expect(existsSync(join(siteRoot, '.narada/capabilities/mcp-registration.json'))).toBe(true);
+    expect(output.non_claims).toContain('private MCP client config mutation');
+    expect(output.non_claims).toContain('real Windows profile mutation outside the target Site');
     expect(existsSync(join(siteRoot, '.ai'))).toBe(false);
   });
 

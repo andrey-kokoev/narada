@@ -62,8 +62,11 @@ Interactive mode will prompt for:
 # Interactive Site creation wizard
 narada sites create --interactive
 
-# Create from a named preset
-narada sites create --preset task-lifecycle --site-id <id> --root <path>
+# Create from the useful agent-facing baseline
+narada sites create --site-id <id> --root <path>
+
+# Or name the baseline explicitly
+narada sites create --preset agent-site-core --site-id <id> --root <path>
 
 # List available presets
 narada sites create-presets
@@ -71,12 +74,14 @@ narada sites create-presets
 
 Interactive Site creation will prompt for:
 - Preview-only or create-after-confirmation mode
-- Starting point: minimal, task lifecycle, agent memory, site machinery, or custom
+- Starting point: agent Site core, minimal, task lifecycle, agent memory, inbox/config/lift, or custom
 - Site id
 - Site root
 - Site kind
 - Authority locus
 - Descriptor capabilities to include, when using custom mode
+
+`agent-site-core` is the recommended useful baseline: task lifecycle, agent context memory, and canonical inbox descriptors. `site-machinery` remains the narrower inbox/config/lift descriptor bundle. `sites create-presets --format json` marks the recommended/default interactive preset and describes what each preset includes and excludes.
 
 Selected capabilities are descriptor-only. Package/template selection does not grant live capability, storage, MCP registration, or secret authority; those require separate admission.
 
