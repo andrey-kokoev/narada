@@ -161,6 +161,13 @@ export interface CreateSiteCapabilitySelectionInput {
   mode: string;
 }
 
+type CreateSiteInteractivePresetChoice =
+  | 'minimal'
+  | 'task-lifecycle'
+  | 'agent-memory'
+  | 'site-machinery'
+  | 'custom';
+
 interface CreateSiteRefusal {
   code: string;
   message: string;
@@ -849,6 +856,16 @@ export async function sitesCreateCommand(
   options: SitesCreateOptions,
   context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
+  if (options.interactive && options.config) {
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: {
+        status: 'error',
+        error: 'interactive_conflicts_with_config',
+        message: 'sites create --interactive cannot be combined with --config; use the wizard or provide a config file, not both.',
+      },
+    };
+  }
   const interactive = options.interactive ? await promptCreateSiteConfig(options) : null;
   if (interactive && 'cancelled' in interactive) {
     return {
@@ -860,6 +877,7 @@ export async function sitesCreateCommand(
     };
   }
   const interactiveConfig = interactive && 'config' in interactive ? interactive.config : null;
+  const interactiveExecute = interactive && 'config' in interactive ? interactive.execute : false;
   const shorthand = interactiveConfig ?? buildCreateSiteConfigFromShorthand(options);
   if (!options.config && !shorthand) {
     return {
@@ -910,6 +928,22 @@ export async function sitesCreateCommand(
     };
   }
   if (!options.dryRun) {
+    if (interactiveConfig && !interactiveExecute) {
+      return {
+        exitCode: plan.refusals.length === 0 ? ExitCode.SUCCESS : ExitCode.INVALID_CONFIG,
+        result: {
+          ...plan,
+          evidence: {
+            ...plan.evidence,
+            interactive_preview_default: true,
+          },
+          next_steps: [
+            `Review the plan, then rerun with --execute-live only after separate admissions are ready if live carriers are needed.`,
+            `To create the Site skeleton immediately, rerun non-interactively with --preset ${config.preset ?? 'minimal'} --site-id ${config.site?.site_id ?? '<id>'} --root ${config.site?.site_root ?? '<path>'}.`,
+          ],
+        },
+      };
+    }
     const created = await executeMinimalCreateSite(config, plan, configPath);
     if (!options.executeLive || created.exitCode !== ExitCode.SUCCESS) return created;
     return executeCreateSiteLiveCarriers(config, created, options, context);
@@ -1455,8 +1489,37 @@ export async function sitesLiveCarrierCommand(
   }
 }
 
-async function promptCreateSiteConfig(options: SitesCreateOptions): Promise<{ cancelled: true } | { config: CreateSiteConfig }> {
+async function promptCreateSiteConfig(options: SitesCreateOptions): Promise<{ cancelled: true } | { config: CreateSiteConfig; execute: boolean }> {
   p.intro('Narada Site creation');
+
+  const mode = options.dryRun ? 'preview' : await p.select({
+    message: 'Creation mode:',
+    initialValue: 'preview',
+    options: [
+      { value: 'preview', label: 'Preview only', hint: 'Recommended. Show the plan without writing files.' },
+      { value: 'create', label: 'Create after confirmation', hint: 'Write the Site skeleton after the summary confirmation.' },
+    ],
+  });
+  if (p.isCancel(mode)) {
+    p.cancel('Site creation cancelled.');
+    return { cancelled: true };
+  }
+
+  const presetChoice = await p.select({
+    message: 'Starting point:',
+    initialValue: options.preset ?? 'minimal',
+    options: [
+      { value: 'minimal', label: 'Minimal', hint: 'Site skeleton only.' },
+      { value: 'task-lifecycle', label: 'Task lifecycle', hint: 'Task lifecycle descriptors.' },
+      { value: 'agent-memory', label: 'Agent memory', hint: 'Agent context memory descriptors.' },
+      { value: 'site-machinery', label: 'Site machinery', hint: 'Inbox, site config, and lift/adoption descriptors.' },
+      { value: 'custom', label: 'Custom', hint: 'Choose descriptor capabilities one by one.' },
+    ],
+  });
+  if (p.isCancel(presetChoice)) {
+    p.cancel('Site creation cancelled.');
+    return { cancelled: true };
+  }
 
   const siteId = await p.text({
     message: 'Site id:',
@@ -1513,31 +1576,78 @@ async function promptCreateSiteConfig(options: SitesCreateOptions): Promise<{ ca
     return { cancelled: true };
   }
 
-  const capabilities = await p.multiselect({
-    message: 'Descriptor capabilities to include:',
-    required: false,
-    options: CREATE_SITE_CAPABILITY_CHOICES.map((choice) => ({
-      value: choice.id,
-      label: choice.label,
-      hint: choice.hint,
-    })),
+  let capabilities = capabilitiesForInteractivePresetChoice(String(presetChoice) as CreateSiteInteractivePresetChoice);
+  if (presetChoice === 'custom') {
+    const customCapabilities = await p.multiselect({
+      message: 'Capability descriptors to include:',
+      required: false,
+      options: CREATE_SITE_CAPABILITY_CHOICES.map((choice) => ({
+        value: choice.id,
+        label: choice.label,
+        hint: choice.hint,
+      })),
+    });
+    if (p.isCancel(customCapabilities)) {
+      p.cancel('Site creation cancelled.');
+      return { cancelled: true };
+    }
+    capabilities = customCapabilities as CreateSiteCapabilityChoiceId[];
+  }
+
+  const config = createSiteConfigForCapabilitySelection({
+    siteId: String(siteId).trim(),
+    root: String(root).trim(),
+    siteKind: String(siteKind),
+    authorityLocus: String(authorityLocus),
+    capabilities,
+    mode: mode === 'create' ? 'execute' : 'dry_run',
   });
-  if (p.isCancel(capabilities)) {
+
+  p.note(formatCreateSiteInteractiveSummary(config, capabilities, mode === 'create'), 'Review');
+  const confirmed = await p.confirm({
+    message: mode === 'create' ? 'Create this Site skeleton now?' : 'Generate this preview plan?',
+    initialValue: mode !== 'create',
+  });
+  if (p.isCancel(confirmed) || !confirmed) {
     p.cancel('Site creation cancelled.');
     return { cancelled: true };
   }
 
-  p.outro(options.dryRun ? 'Site dry-run plan ready.' : 'Site creation options collected.');
+  p.outro(mode === 'create' ? 'Creating Site skeleton.' : 'Generating preview plan.');
   return {
-    config: createSiteConfigForCapabilitySelection({
-      siteId: String(siteId).trim(),
-      root: String(root).trim(),
-      siteKind: String(siteKind),
-      authorityLocus: String(authorityLocus),
-      capabilities: capabilities as CreateSiteCapabilityChoiceId[],
-      mode: options.dryRun ? 'dry_run' : 'execute',
-    }),
+    config,
+    execute: mode === 'create',
   };
+}
+
+function capabilitiesForInteractivePresetChoice(choice: CreateSiteInteractivePresetChoice): CreateSiteCapabilityChoiceId[] {
+  if (choice === 'task-lifecycle') return ['task_lifecycle'];
+  if (choice === 'agent-memory') return ['agent_context_memory'];
+  if (choice === 'site-machinery') return ['canonical_inbox', 'site_config_awareness', 'site_lift_adoption'];
+  return [];
+}
+
+function formatCreateSiteInteractiveSummary(
+  config: CreateSiteConfig,
+  capabilities: CreateSiteCapabilityChoiceId[],
+  execute: boolean,
+): string {
+  const labelsById = new Map(CREATE_SITE_CAPABILITY_CHOICES.map((choice) => [choice.id, choice.label]));
+  const selected = capabilities.length === 0
+    ? 'None (minimal Site skeleton)'
+    : capabilities.map((capability) => labelsById.get(capability) ?? capability).join(', ');
+  return [
+    `Mode: ${execute ? 'create after confirmation' : 'preview only'}`,
+    `Site id: ${config.site?.site_id ?? '<missing>'}`,
+    `Root: ${config.site?.site_root ?? '<missing>'}`,
+    `Site kind: ${config.site?.site_kind ?? '<missing>'}`,
+    `Authority locus: ${config.site?.authority_locus ?? '<missing>'}`,
+    `Capability descriptors: ${selected}`,
+    '',
+    'Non-grants:',
+    '- Package/template selection does not grant live capability.',
+    '- Storage mutation, MCP registration, profile writes, and secrets require separate admission.',
+  ].join('\n');
 }
 
 function siteLiveCarrierToolPath(): string {

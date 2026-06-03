@@ -60,7 +60,7 @@ Interactive mode will prompt for:
 
 ```bash
 # Interactive Site creation wizard
-narada sites create --interactive --dry-run
+narada sites create --interactive
 
 # Create from a named preset
 narada sites create --preset task-lifecycle --site-id <id> --root <path>
@@ -70,11 +70,13 @@ narada sites create-presets
 ```
 
 Interactive Site creation will prompt for:
+- Preview-only or create-after-confirmation mode
+- Starting point: minimal, task lifecycle, agent memory, site machinery, or custom
 - Site id
 - Site root
 - Site kind
 - Authority locus
-- Descriptor capabilities to include
+- Descriptor capabilities to include, when using custom mode
 
 Selected capabilities are descriptor-only. Package/template selection does not grant live capability, storage, MCP registration, or secret authority; those require separate admission.
 

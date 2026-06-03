@@ -3,6 +3,29 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
 
+const promptMock = vi.hoisted(() => ({
+  selectResponses: [] as unknown[],
+  textResponses: [] as unknown[],
+  multiselectResponses: [] as unknown[],
+  confirmResponses: [] as unknown[],
+  intro: vi.fn(),
+  outro: vi.fn(),
+  note: vi.fn(),
+  cancel: vi.fn(),
+}));
+
+vi.mock('@clack/prompts', () => ({
+  intro: promptMock.intro,
+  outro: promptMock.outro,
+  note: promptMock.note,
+  cancel: promptMock.cancel,
+  isCancel: (value: unknown) => value === Symbol.for('clack:cancel'),
+  select: vi.fn(async () => promptMock.selectResponses.shift()),
+  text: vi.fn(async () => promptMock.textResponses.shift()),
+  multiselect: vi.fn(async () => promptMock.multiselectResponses.shift()),
+  confirm: vi.fn(async () => promptMock.confirmResponses.shift()),
+}));
+
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -53,6 +76,14 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
+  promptMock.selectResponses.length = 0;
+  promptMock.textResponses.length = 0;
+  promptMock.multiselectResponses.length = 0;
+  promptMock.confirmResponses.length = 0;
+  promptMock.intro.mockClear();
+  promptMock.outro.mockClear();
+  promptMock.note.mockClear();
+  promptMock.cancel.mockClear();
 });
 
 describe('sitesCreateCommand', () => {
@@ -266,6 +297,95 @@ describe('sitesCreateCommand', () => {
       source_state_imported: false,
     });
     expect(plan.non_claims).toContain('capability or secret grants');
+  });
+
+  it('refuses ambiguous interactive and config inputs', async () => {
+    const result = await sitesCreateCommand({
+      config: fixturePath('create-site-minimal.json'),
+      interactive: true,
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.result).toMatchObject({
+      status: 'error',
+      error: 'interactive_conflicts_with_config',
+    });
+    expect(promptMock.intro).not.toHaveBeenCalled();
+  });
+
+  it('runs the interactive custom capability flow as preview by default', async () => {
+    promptMock.selectResponses.push('preview', 'custom', 'project', 'project');
+    promptMock.textResponses.push('ux-site', 'D:\\Sites\\ux-site');
+    promptMock.multiselectResponses.push(['task_lifecycle', 'site_config_awareness']);
+    promptMock.confirmResponses.push(true);
+
+    const result = await sitesCreateCommand({
+      interactive: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const plan = result.result as {
+      schema: string;
+      config_path: string;
+      selected_template: { template_id: string; template_components: string[] };
+      package_descriptors: Array<{ package_name: string }>;
+      evidence: { interactive_preview_default: boolean; dry_run_only: boolean; package_selection_grants_live_capability: boolean };
+      non_claims: string[];
+    };
+    expect(plan.schema).toBe('narada.create_site.dry_run_plan.v0');
+    expect(plan.config_path).toBe('<interactive:create-site-options>');
+    expect(plan.selected_template).toEqual({
+      template_id: 'narada-proper.templates.site.interactive-capability-selection.v0',
+      template_components: ['@narada2/site-task-lifecycle', '@narada2/site-config'],
+    });
+    expect(plan.package_descriptors).toEqual(expect.arrayContaining([
+      expect.objectContaining({ package_name: '@narada2/site-task-lifecycle' }),
+      expect.objectContaining({ package_name: '@narada2/site-config' }),
+    ]));
+    expect(plan.evidence).toMatchObject({
+      interactive_preview_default: true,
+      dry_run_only: true,
+      package_selection_grants_live_capability: false,
+    });
+    expect(plan.non_claims).toContain('capability or secret grants');
+    expect(promptMock.note).toHaveBeenCalledWith(expect.stringContaining('Capability descriptors: Task lifecycle, Site config awareness'), 'Review');
+  });
+
+  it('creates a Site skeleton only after interactive confirmation', async () => {
+    const dir = tempDir();
+    const siteRoot = join(dir, 'interactive-confirmed-site');
+    promptMock.selectResponses.push('create', 'task-lifecycle', 'project', 'project');
+    promptMock.textResponses.push('interactive-confirmed-site', siteRoot);
+    promptMock.confirmResponses.push(true);
+
+    const result = await sitesCreateCommand({
+      interactive: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    const output = result.result as {
+      schema: string;
+      status: string;
+      config_path: string;
+      evidence: { filesystem_creation_completed: boolean; package_selection_grants_live_capability: boolean };
+      created_files: Array<{ path: string }>;
+    };
+    expect(output.schema).toBe('narada.create_site.execution_result.v0');
+    expect(output.status).toBe('created');
+    expect(output.config_path).toBe('<interactive:create-site-options>');
+    expect(output.evidence).toMatchObject({
+      filesystem_creation_completed: true,
+      package_selection_grants_live_capability: false,
+    });
+    expect(output.created_files.map((file) => file.path)).toEqual(expect.arrayContaining([
+      join(siteRoot, 'config.json'),
+      join(siteRoot, '.narada', 'capabilities', 'capability-policy.json'),
+      join(siteRoot, '.narada', 'admission', 'package-slices', 'site-task-lifecycle.json'),
+    ]));
   });
 
   it('reports missing shorthand coordinates without reading a config file', async () => {
