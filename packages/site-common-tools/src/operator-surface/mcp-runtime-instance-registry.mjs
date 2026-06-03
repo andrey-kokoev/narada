@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { siteControlRoot } from '../site-layout.mjs';
 import {
   buildDeprecatedNaradaAndreyShim,
   DEPRECATED_NARADA_ANDREY_SITE,
@@ -20,7 +21,7 @@ export function buildMcpRuntimeRegistryStatus({
 } = {}) {
   const root = resolve(siteRoot ?? process.cwd());
   const pcRoot = resolve(pcSiteRoot ?? 'C:/ProgramData/Narada/sites/pc/desktop-sunroom-2');
-  const declarationPath = join(root, '.narada', 'capabilities', 'mcp-surfaces.json');
+  const declarationPath = join(siteControlRoot(root), 'capabilities', 'mcp-surfaces.json');
   const registryPath = join(pcRoot, 'runtime', 'mcp-runtime-instances.json');
   const declarations = readJson(declarationPath);
   const runtimeRegistry = readOptionalJson(registryPath);

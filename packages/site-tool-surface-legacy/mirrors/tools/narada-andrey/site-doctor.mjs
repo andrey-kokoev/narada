@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join, resolve } from 'path';
 import { spawnSync } from 'child_process';
 import { validateAgentExecutionPolicy } from '../site-config/agent-execution-policy.mjs';
+import { taskLifecycleReadinessPaths } from '../../../../site-common-tools/src/task-lifecycle-mcp-resolution.mjs';
 
 const args = parseArgs(process.argv.slice(2));
 const siteRoot = resolve(args.siteRoot ?? process.cwd());
@@ -99,12 +100,17 @@ function gitWorktree() {
 
 function taskLifecycleReadiness() {
   const db = join(siteRoot, '.ai', 'task-lifecycle.db');
-  const server = join(siteRoot, 'tools', 'task-lifecycle', 'task-mcp-server.mjs');
-  return check('task_lifecycle_readiness', 'Task lifecycle DB and MCP server', 'blocking', existsSync(db) && existsSync(server) ? 'pass' : 'fail', {
+  const readiness = taskLifecycleReadinessPaths(siteRoot);
+  const server = readiness.resolved_server;
+  return check('task_lifecycle_readiness', 'Task lifecycle DB and MCP server', 'blocking', existsSync(db) && server ? 'pass' : 'fail', {
     db_path: db,
     db_exists: existsSync(db),
-    server_path: server,
-    server_exists: existsSync(server),
+    server_path: server?.server_path ?? readiness.local_server_path,
+    server_exists: Boolean(server),
+    local_server_path: readiness.local_server_path,
+    package_bin_path: readiness.package_bin_path,
+    configured_server_path: readiness.configured_server_path,
+    resolution_source: server?.source ?? null,
   });
 }
 

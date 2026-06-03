@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { basename, join, normalize } from 'node:path';
+import { basename, join } from 'node:path';
+import { siteControlRoot } from '../../site-common-tools/src/site-layout.mjs';
 
 const FALLBACK_READ_ONLY_TOOLS = new Set([
   'fs_read_file',
@@ -282,13 +283,6 @@ function inferAuthorityOwner(toolName) {
 
 function stringOrNull(value) {
   return typeof value === 'string' && value.length > 0 ? value : null;
-}
-
-function siteControlRoot(siteRoot) {
-  const normalized = normalize(siteRoot);
-  return basename(normalized).toLowerCase() === '.narada'
-    ? normalized
-    : join(normalized, '.narada');
 }
 
 function registrySurfaces(registry) {

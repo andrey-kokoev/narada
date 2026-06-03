@@ -1,7 +1,7 @@
 {
   "schema": "narada.site_tool_surface_legacy_package.v1",
   "package": "@narada2/site-tool-surface-legacy",
-  "generated_at": "2026-05-29T11:45:36.1982244-05:00",
+  "generated_at": "2026-06-03T15:45:24.820Z",
   "mirror_root": "mirrors",
   "files": [
     {
@@ -22,10 +22,10 @@
     },
     {
       "path": "tools/agent-context/agent-context-mcp-server.mjs",
-      "hash": "15b345d629f7ef5c37478dce2051f5a9ccad9a7ea11afd5d2d7f1c347324a8f1",
+      "hash": "a54d93c904f7e834fc2d095e331dcdb507e534bd767e1f8209484c760ca56c20",
       "surface": "site-tools",
-      "source_site": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\Utz\\.narada",
-      "source_path": "C:\\Users\\Andrey\\OneDrive - Global Maxima LLC\\!Business\\!Clients\\Utz\\.narada\\tools\\agent-context\\agent-context-mcp-server.mjs",
+      "source_site": "D:\\code\\narada",
+      "source_path": "D:\\code\\narada\\packages\\agent-context-tools\\src\\agent-context-mcp-server.mjs",
       "duplicate_site_count": 2
     },
     {
@@ -446,10 +446,10 @@
     },
     {
       "path": "tools/narada-andrey/site-doctor.mjs",
-      "hash": "535fe9a1e384a833effd1bea8b07665cc3b4c64616d8eafe0eabcb95f579c7c2",
+      "hash": "fca57692be24e3d0aeee1f9c82c87ff4e09276fb0433ecf73ae4a936ee9125f8",
       "surface": "site-tools",
-      "source_site": "C:\\Users\\Andrey\\Narada",
-      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\narada-andrey\\site-doctor.mjs",
+      "source_site": "D:\\code\\narada",
+      "source_path": "D:\\code\\narada\\packages\\site-common-tools\\src\\narada-andrey\\site-doctor.mjs",
       "duplicate_site_count": 4
     },
     {
@@ -942,10 +942,10 @@
     },
     {
       "path": "tools/operator-surface/mcp-runtime-instance-registry.mjs",
-      "hash": "d5256a90058c9d97dc114dc4f918769e4863512cb0573813febc16fb3f18a11f",
+      "hash": "afe254c5f787fcffaa0baa84865fbd167a07ced2bcc18e6a23524b45fe1f9b1b",
       "surface": "site-tools",
-      "source_site": "C:\\Users\\Andrey\\Narada",
-      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\operator-surface\\mcp-runtime-instance-registry.mjs",
+      "source_site": "D:\\code\\narada",
+      "source_path": "D:\\code\\narada\\packages\\site-common-tools\\src\\operator-surface\\mcp-runtime-instance-registry.mjs",
       "duplicate_site_count": 3
     },
     {
@@ -1006,10 +1006,10 @@
     },
     {
       "path": "tools/site-config/agent-execution-policy.mjs",
-      "hash": "eb44188d7191e501c99acf6b6e7bbe8345ce95640992ebba3a728a937ff65ec1",
+      "hash": "4709e98b426c3ac57954b24542cd2c3db54585df71b00655ea2c0df2fe499ad6",
       "surface": "site-tools",
-      "source_site": "C:\\Users\\Andrey\\Narada",
-      "source_path": "C:\\Users\\Andrey\\Narada\\tools\\site-config\\agent-execution-policy.mjs",
+      "source_site": "D:\\code\\narada",
+      "source_path": "D:\\code\\narada\\packages\\site-common-tools\\src\\site-config\\agent-execution-policy.mjs",
       "duplicate_site_count": 4
     },
     {
@@ -1852,5 +1852,6 @@
       "source_path": "C:\\Users\\Andrey\\Narada\\tools\\window-surface-overlay\\Stop-WindowSurfaceOverlay.ps1",
       "duplicate_site_count": 4
     }
-  ]
+  ],
+  "generated_by": "packages/site-tool-surface-legacy/scripts/sync-selected-mirrors.mjs"
 }

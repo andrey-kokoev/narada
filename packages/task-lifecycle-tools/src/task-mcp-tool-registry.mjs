@@ -55,7 +55,7 @@ export const TASK_LIFECYCLE_TOOL_ALIASES = {
   task_mcp_replay_test_evidence: 'task_lifecycle_replay_test_evidence',
 };
 
-import { listCommandTools, listPayloadTools } from '../mcp-payload-file.mjs';
+import { listCommandTools, listPayloadTools } from '../../site-common-tools/compat/mcp-payload-file.legacy-site.mjs';
 
 export function taskLifecycleTools() {
   return [

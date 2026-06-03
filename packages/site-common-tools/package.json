@@ -3,7 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./task-lifecycle-mcp-resolution": "./src/task-lifecycle-mcp-resolution.mjs"
+  },
   "scripts": {
-    "test": "node --test src/site-common-tools.test.mjs"
+    "test": "node --test src/site-common-tools.test.mjs src/task-lifecycle-mcp-resolution.test.mjs"
   }
 }

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { supportedGenericCommandSchemas } from './generic-command-registry.mjs';
+import { supportedGenericCommandSchemas } from '../src/generic-command-registry.mjs';
 
 const DEFAULT_MAX_BYTES = 256 * 1024;
 const DEFAULT_OUTPUT_MAX_BYTES = 10 * 1024 * 1024;

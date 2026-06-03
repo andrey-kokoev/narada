@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { siteControlRoot } from '../../../../site-common-tools/src/site-layout.mjs';
 
 const REQUIRED_NON_GRANTS = [
   'native_shell',
@@ -15,7 +16,8 @@ const REQUIRED_NON_GRANTS = [
 export function validateAgentExecutionPolicy(siteRoot, config = null, registry = null) {
   const root = resolve(siteRoot);
   const loadedConfig = config ?? readJson(join(root, 'config.json'));
-  const loadedRegistry = registry ?? readJson(join(root, '.narada', 'capabilities', 'mcp-surfaces.json'));
+  const registryPath = join(siteControlRoot(root), 'capabilities', 'mcp-surfaces.json');
+  const loadedRegistry = registry ?? readJson(registryPath);
   const policy = loadedConfig?.structural_config?.agent_execution_policy;
   const errors = [];
   const residuals = [];

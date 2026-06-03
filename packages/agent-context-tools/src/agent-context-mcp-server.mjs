@@ -28,8 +28,8 @@
  */
 
 import Database from 'better-sqlite3';
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
-import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -55,7 +55,7 @@ import {
   payloadValidate,
   resultShow,
   resolveToolPayloadArgs,
-} from '../mcp-payload-file.mjs';
+} from '../../site-common-tools/compat/mcp-payload-file.legacy-site.mjs';
 import {
   acknowledgeMcpRestartRequest,
   buildMcpFreshnessStatus,
@@ -63,7 +63,7 @@ import {
   reconcileNoRequestMcpFreshnessMarker,
   writeMcpRestartRequest,
   writeMcpRuntimeInstanceObservation,
-} from '../mcp-freshness-service.mjs';
+} from '../../site-common-tools/src/mcp-freshness-service.mjs';
 import { discoverCodexSessionEvidence, extractCodexSessionEvidencePacket, verifyCodexExactResume } from './codex-session-evidence.mjs';
 import {
   buildRoleBindingProjection,
@@ -84,12 +84,13 @@ import {
   loadRehydrationOnboardingCard,
   showSiteEvolutionOrientation,
 } from './site-evolution-orientation.mjs';
-import { buildMcpRuntimeRegistryStatus } from '../operator-surface/mcp-runtime-instance-registry.mjs';
+import { buildMcpRuntimeRegistryStatus } from '../../site-common-tools/src/operator-surface/mcp-runtime-instance-registry.mjs';
 import {
   NARADA_PC_SITE_LOCUS,
   NARADA_USER_SITE_LOCUS,
-} from '../site-locus-shim.mjs';
-import { taskLifecycleTools } from '../task-lifecycle/task-mcp-tool-registry.mjs';
+} from '../../site-common-tools/src/site-locus-shim.mjs';
+import { taskLifecycleTools } from '../../task-lifecycle-tools/src/task-mcp-tool-registry.mjs';
+import { resolveTaskLifecycleMcpServer as resolveTaskLifecycleMcpServerForSite } from '../../site-common-tools/src/task-lifecycle-mcp-resolution.mjs';
 
 const PROTOCOL_VERSION = '2024-11-05';
 const SERVER_NAME = 'narada-andrey-agent-context-mcp';
@@ -4454,6 +4455,8 @@ function hydrateAutoAckConfigForSurface(entry, taskLifecycleNext) {
   }
   if (entry?.surface_id === 'task-lifecycle-mcp.local'
     || entry?.server_entrypoint === 'task-lifecycle-mcp'
+    || entry?.server_entrypoint === 'tools/task-lifecycle/task-mcp-server.mjs'
+    || entry?.server_entrypoint === 'node_modules/@narada2/task-lifecycle-mcp/dist/src/task-lifecycle/task-mcp-server.js'
     || entry?.server_entrypoint === 'node_modules/@narada2/task-lifecycle-mcp/src/task-lifecycle/task-mcp-server.mjs') {
     if (taskLifecycleNext?.status !== 'ok') return null;
     const taskToolNames = taskLifecycleTools().map((tool) => tool.name).sort();
@@ -4463,7 +4466,7 @@ function hydrateAutoAckConfigForSurface(entry, taskLifecycleNext) {
       targetEntrypoint: 'task-lifecycle-mcp',
       restartRequestPath: join(siteRoot, '.ai', 'tmp', 'task-lifecycle-restart-request.json'),
       baselinePath: join(siteRoot, '.ai', 'tmp', 'task-lifecycle-mcp-baseline.json'),
-      watchedPaths: ['node_modules/@narada2/task-lifecycle-mcp/src', 'node_modules/@narada2/mcp-transport'],
+      watchedPaths: ['node_modules/@narada2/task-lifecycle-mcp/dist/src', 'node_modules/@narada2/task-lifecycle-mcp/src', 'node_modules/@narada2/mcp-transport', 'tools/task-lifecycle'],
       expectedTools: taskToolNames,
       registeredTools: taskToolNames,
       note: 'Task-lifecycle MCP restart auto-acknowledged during startup hydration after post-request boot evidence.',
@@ -5349,80 +5352,9 @@ function callTaskLifecycleNextMcp({ agentId, limit, lastWorkboardCheckAt }) {
 }
 
 function resolveTaskLifecycleMcpServer() {
-  const packageBinName = process.platform === 'win32' ? 'task-lifecycle-mcp.cmd' : 'task-lifecycle-mcp';
-  const packageBinPath = join(siteRoot, 'node_modules', '.bin', packageBinName);
-  if (existsSync(packageBinPath)) {
-    return {
-      command: packageBinPath,
-      args: ['--site-root', siteRoot],
-      server_path: packageBinPath,
-      source: 'site_package_task_lifecycle_mcp_bin',
-    };
-  }
-
-  const mcpDir = join(siteRoot, '.ai', 'mcp');
-  if (!existsSync(mcpDir)) return null;
-
-  let entries = [];
-  try {
-    entries = readdirSync(mcpDir, { withFileTypes: true })
-      .filter((entry) => entry.isFile() && /task-lifecycle.*mcp\.json$/i.test(entry.name))
-      .map((entry) => join(mcpDir, entry.name))
-      .sort();
-  } catch {
-    return null;
-  }
-
-  for (const configPath of entries) {
-    const server = taskLifecycleServerFromMcpConfig(configPath);
-    if (server) return server;
-  }
-  return null;
+  return resolveTaskLifecycleMcpServerForSite(siteRoot);
 }
 
-function taskLifecycleServerFromMcpConfig(configPath) {
-  let config = null;
-  try {
-    config = JSON.parse(readFileSync(configPath, 'utf8'));
-  } catch {
-    return null;
-  }
-
-  for (const candidate of taskLifecycleMcpConfigCandidates(config)) {
-    const args = Array.isArray(candidate?.args) ? candidate.args.map((arg) => String(arg)) : [];
-    const command = typeof candidate.command === 'string' && candidate.command.trim()
-      ? candidate.command
-      : process.execPath;
-    const serverArg = args.find((arg) => /(^|[\\/])task-mcp-server\.mjs$/i.test(arg.replace(/\\/g, '/')));
-    if (serverArg) {
-      const serverPath = isAbsolute(serverArg) ? serverArg : resolve(siteRoot, serverArg);
-      if (!existsSync(serverPath)) continue;
-      return { command, args, server_path: serverPath, source: 'configured_mcp_projection', config_path: configPath };
-    }
-    if (String(command).toLowerCase().includes('task-lifecycle-mcp')) {
-      return { command, args, server_path: command, source: 'configured_mcp_projection', config_path: configPath };
-    }
-  }
-  return null;
-}
-function taskLifecycleMcpConfigCandidates(config) {
-  if (!config || typeof config !== 'object' || Array.isArray(config)) return [];
-  const candidates = [];
-  if (typeof config.command === 'string' || Array.isArray(config.args)) candidates.push(config);
-  for (const collection of [config.mcpServers, config.mcp_servers, config.servers]) {
-    if (!collection || typeof collection !== 'object') continue;
-    if (Array.isArray(collection)) {
-      candidates.push(...collection.filter((entry) => entry && typeof entry === 'object'));
-    } else {
-      candidates.push(...Object.values(collection).filter((entry) => entry && typeof entry === 'object'));
-    }
-  }
-  return candidates.filter((entry) => {
-    const name = String(entry.name ?? entry.server_name ?? basename(String(entry.id ?? ''))).toLowerCase();
-    const args = Array.isArray(entry.args) ? entry.args.join(' ').toLowerCase() : '';
-    return name.includes('task-lifecycle') || args.includes('task-lifecycle');
-  });
-}
 
 function resolveTaskLifecycleNextToolPayload(payload) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return payload;

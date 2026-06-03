@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "scripts": {
+    "sync:mirrors": "node scripts/sync-selected-mirrors.mjs"
+  },
   "exports": {
     "./manifest": "./manifest.json"
   }
