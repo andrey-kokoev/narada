@@ -1,9 +1,1 @@
-export enum ExitCode {
-  SUCCESS = 0,
-  GENERAL_ERROR = 1,
-  INVALID_CONFIG = 2,
-  SYNC_RETRYABLE = 3,
-  SYNC_FATAL = 4,
-  INTEGRITY_ISSUES = 5,
-  LOCK_TIMEOUT = 6,
-}
+export * from '@narada2/task-governance-core/exit-codes';

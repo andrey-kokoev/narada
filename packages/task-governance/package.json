@@ -1,7 +1,7 @@
 {
   "name": "@narada2/task-governance",
   "version": "0.1.0",
-  "description": "Narada task governance domain package",
+  "description": "Narada compatibility facade for the neutral task governance core package",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -18,9 +18,17 @@
       "types": "./dist/evidence-admission.d.ts",
       "import": "./dist/evidence-admission.js"
     },
+    "./exit-codes": {
+      "types": "./dist/exit-codes.d.ts",
+      "import": "./dist/exit-codes.js"
+    },
     "./task-governance": {
       "types": "./dist/task-governance.d.ts",
       "import": "./dist/task-governance.js"
+    },
+    "./prototype-closure": {
+      "types": "./dist/prototype-closure.d.ts",
+      "import": "./dist/prototype-closure.js"
     },
     "./task-close-service": {
       "types": "./dist/task-close-service.d.ts",
@@ -89,6 +97,10 @@
     "./sqlite-runtime": {
       "types": "./dist/sqlite-runtime.d.ts",
       "import": "./dist/sqlite-runtime.js"
+    },
+    "./sqlite-database": {
+      "types": "./dist/sqlite-database.d.ts",
+      "import": "./dist/sqlite-database.js"
     }
   },
   "scripts": {
@@ -101,6 +113,7 @@
     "test:governance": "vitest run test/lib/task-governance.test.ts --pool=forks --no-file-parallelism --maxWorkers=1 --minWorkers=1 --testTimeout=120000 --hookTimeout=120000"
   },
   "dependencies": {
+    "@narada2/task-governance-core": "link:../../../narada-core/packages/task-governance-core",
     "@narada2/control-plane": "workspace:*",
     "@narada2/intent-zones": "workspace:*"
   },
