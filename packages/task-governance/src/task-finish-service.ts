@@ -570,7 +570,6 @@ export async function finishTaskService(
       const reportResult = await reportTaskService({
         taskNumber,
         agent: agentId,
-        reviewer: options.reviewer,
         summary: options.summary,
         directiveId: options.directiveId,
         changedFiles: options.changedFiles,
