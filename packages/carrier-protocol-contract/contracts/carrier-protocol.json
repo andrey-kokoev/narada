@@ -1,0 +1,35 @@
+{
+  "schema": "narada.carrier.protocol_contract.v1",
+  "schemas": {
+    "input_event": "narada.carrier.input_event.v1",
+    "control_input_event": "narada.carrier.control.input_event.v1",
+    "session_event": "narada.carrier.session_event.v1",
+    "payload_ref": "narada.carrier.payload_ref.v1",
+    "payload_policy": "narada.carrier.payload_policy.v1",
+    "provider_request_payload": "narada.agent_tui.provider_request_payload.v0",
+    "provider_output_payload": "narada.agent_tui.provider_output_payload.v0",
+    "turn_terminal_payload": "narada.agent_tui.turn_terminal_payload.v0",
+    "session_event_fixture_manifest": "narada.carrier.session_event_fixture_manifest.v1"
+  },
+  "id_prefixes": {
+    "input_event": "input_",
+    "control_event": "control_",
+    "session_event": "session_event_"
+  },
+  "diagnostic": {
+    "levels": ["debug", "info", "warn", "error"],
+    "warning_level": "warn",
+    "info_level": "info"
+  },
+  "turn_terminal_status": {
+    "completed": ["completed", "completed_after_dispatch", "completed_without_provider"],
+    "interrupted": ["interrupted"],
+    "failed": ["failed"]
+  },
+  "terminal_state": {
+    "values": ["completed", "interrupted", "failed"]
+  },
+  "delivery_mode": {
+    "values": ["admit_for_current_turn", "admit_after_active_turn"]
+  }
+}

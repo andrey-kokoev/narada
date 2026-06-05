@@ -1,0 +1,43 @@
+{
+  "schema": "narada.carrier.transcript_rendering_classifiers.v1",
+  "turn_state": {
+    "active": "active",
+    "active_display": "thinking",
+    "thinking_prefix": "thinking ",
+    "calling_prefix": "calling ",
+    "suppressed_markers": ["idle", "active"],
+    "positive_values": ["active", "working"],
+    "positive_prefixes": ["active ", "calling "],
+    "negative_values": ["failed", "interrupted"],
+    "duration_phases": ["thinking", "calling"],
+    "operator_activity_actions": ["typing", "queued"],
+    "operator_activity_actor": "operator"
+  },
+  "terminal_status": {
+    "positive": ["completed", "completed_without_provider"]
+  },
+  "tool_result": {
+    "positive_prefixes": ["ok", "success"],
+    "negative_prefixes": ["failed", "error", "refused"],
+    "positive_summaries": ["ok", "success", "completed"],
+    "negative_summaries": ["failed", "failure", "error", "refused", "interrupted"]
+  },
+  "semantic_status_value": {
+    "positive": ["ok", "success", "succeeded", "passed", "ready", "aligned", "true", "yes"],
+    "negative": ["failed", "failure", "error", "refused", "missing"],
+    "warning": ["warning", "warn", "blocked", "partial", "stale", "pending"],
+    "muted": ["false", "no", "none", "null"]
+  },
+  "runtime_status": {
+    "positive": ["configured", "admitted", "idle", "working"],
+    "warning_prefixes": ["configured_"],
+    "negative_prefixes": ["refused", "failed", "error"],
+    "muted": ["disabled", "none"]
+  },
+  "diagnostic": {
+    "prefix": "diagnostic ",
+    "warning_severities": ["warn", "warning"],
+    "negative_severities": ["error", "failed", "failure"],
+    "positive_severities": ["ok", "success"]
+  }
+}

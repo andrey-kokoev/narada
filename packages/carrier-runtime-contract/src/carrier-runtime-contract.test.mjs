@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   loadLaunchSliceContract,
   loadMcpRuntimeContract,
+  loadRuntimeBooleanValuesContract,
   loadRuntimeSubstrateKindsContract,
   loadTerminalRuntimeContract,
 } from './carrier-runtime-contract.mjs';
@@ -37,4 +38,11 @@ test('runtime substrate contract admits carrier substrates and codex isolation b
   assert.equal(contract.admitted_runtime_substrate_kinds.includes('agent-tui'), true);
   assert.equal(contract.codex_context_isolation.runtime_substrate_kind, 'codex');
   assert.equal(contract.codex_context_isolation.forbidden_resume_modes.includes('codex resume --last'), true);
+});
+
+test('runtime boolean values contract defines shared env flag vocabulary', () => {
+  const contract = loadRuntimeBooleanValuesContract();
+  assert.equal(contract.schema, 'narada.carrier.runtime_boolean_values.v1');
+  assert.deepEqual(contract.truthy, ['1', 'true', 'on', 'yes']);
+  assert.deepEqual(contract.falsey, ['0', 'false', 'off', 'no']);
 });

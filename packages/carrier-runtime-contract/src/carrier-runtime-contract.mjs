@@ -15,3 +15,7 @@ export function loadTerminalRuntimeContract(url = new URL('../contracts/terminal
 export function loadRuntimeSubstrateKindsContract(url = new URL('../contracts/runtime-substrate-kinds.json', import.meta.url)) {
   return Object.freeze(JSON.parse(readFileSync(url, 'utf-8')));
 }
+
+export function loadRuntimeBooleanValuesContract(url = new URL('../contracts/boolean-values.json', import.meta.url)) {
+  return Object.freeze(JSON.parse(readFileSync(url, 'utf-8')));
+}

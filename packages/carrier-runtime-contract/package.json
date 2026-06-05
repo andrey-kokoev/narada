@@ -8,7 +8,8 @@
     "./launch-slice": "./contracts/launch-slice.json",
     "./mcp-runtime": "./contracts/mcp-runtime.json",
     "./terminal-runtime": "./contracts/terminal-runtime.json",
-    "./runtime-substrate-kinds": "./contracts/runtime-substrate-kinds.json"
+    "./runtime-substrate-kinds": "./contracts/runtime-substrate-kinds.json",
+    "./boolean-values": "./contracts/boolean-values.json"
   },
   "scripts": {
     "test": "node --test src/carrier-runtime-contract.test.mjs",

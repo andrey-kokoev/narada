@@ -1,0 +1,14 @@
+{
+  "name": "@narada2/carrier-routing-contract",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/carrier-routing-contract.mjs",
+    "./operator-routing": "./contracts/operator-routing.json"
+  },
+  "scripts": {
+    "test": "node --test src/carrier-routing-contract.test.mjs",
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/carrier-routing-contract.mjs"
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "schema": "narada.carrier.runtime_boolean_values.v1",
+  "truthy": ["1", "true", "on", "yes"],
+  "falsey": ["0", "false", "off", "no"]
+}

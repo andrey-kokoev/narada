@@ -1,0 +1,14 @@
+{
+  "name": "@narada2/mcp-protocol-contract",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/mcp-protocol-contract.mjs",
+    "./json-rpc": "./contracts/json-rpc.json"
+  },
+  "scripts": {
+    "test": "node --test src/mcp-protocol-contract.test.mjs",
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/mcp-protocol-contract.mjs"
+  }
+}

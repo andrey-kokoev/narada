@@ -1,0 +1,14 @@
+{
+  "name": "@narada2/carrier-rendering-contract",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/carrier-rendering-contract.mjs",
+    "./transcript-classifiers": "./contracts/transcript-classifiers.json"
+  },
+  "scripts": {
+    "test": "node --test src/carrier-rendering-contract.test.mjs",
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/carrier-rendering-contract.mjs"
+  }
+}

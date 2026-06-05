@@ -1,0 +1,43 @@
+{
+  "schema": "narada.carrier.operator_routing_contract.v1",
+  "direct_tool_routes": [
+    {
+      "id": "startup_sequence",
+      "phrases": ["run startup sequence", "startup sequence"],
+      "tool_name": "agent_context_startup_sequence",
+      "arguments": {}
+    }
+  ],
+  "reader_routes": [
+    {
+      "id": "mcp_output_reader",
+      "phrases": [
+        "mcp_output_show",
+        "output reader",
+        "startup output reader",
+        "read startup output",
+        "read the startup output",
+        "read the output ref"
+      ],
+      "ref_prefix": "mcp_output:",
+      "tool_name": "mcp_output_show",
+      "arguments": {
+        "output_limit": 10000
+      }
+    }
+  ],
+  "tool_call_envelope": {
+    "field": "narada_tool_call",
+    "fenced_json_admitted": true
+  },
+  "tool_alias_groups": [
+    {
+      "id": "startup_sequence",
+      "tools": ["agent_context_startup_sequence", "startup_sequence"]
+    },
+    {
+      "id": "mcp_payload_reader",
+      "tools": ["mcp_payload_show", "mcp_payload_read"]
+    }
+  ]
+}
