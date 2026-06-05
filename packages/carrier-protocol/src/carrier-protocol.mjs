@@ -173,7 +173,7 @@ export function classifyCarrierInputIntent(event, launchPacket = {}) {
   };
 }
 
-export function createPayloadRef({ payload_ref, reader_tool = 'mcp_payload_read', summary }) {
+export function createPayloadRef({ payload_ref, reader_tool = 'mcp_payload_show', summary }) {
   const ref = {
     schema: PAYLOAD_REF_SCHEMA,
     payload_ref: payload_ref ?? `mcp_payload:${createPayloadId()}@v1`,
@@ -225,7 +225,7 @@ export function validatePayloadRef(ref) {
   } else if (!/^mcp_payload:[A-Za-z0-9_.:-]+@v\d+$/.test(ref.payload_ref)) {
     errors.push('invalid_payload_ref');
   }
-  if (ref.reader_tool !== 'mcp_payload_read' && ref.reader_tool !== 'mcp_output_show') errors.push(`invalid_reader_tool:${String(ref.reader_tool)}`);
+  if (ref.reader_tool !== 'mcp_payload_read' && ref.reader_tool !== 'mcp_payload_show' && ref.reader_tool !== 'mcp_output_show') errors.push(`invalid_reader_tool:${String(ref.reader_tool)}`);
   if (typeof ref.summary !== 'string' || ref.summary.trim().length === 0) errors.push('invalid_summary');
   return errors;
 }

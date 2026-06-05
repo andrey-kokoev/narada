@@ -266,7 +266,7 @@ function resolveToolFabricAdapter(runtimeName) {
       tool_fabric_source: 'control_jsonl_session_jsonl',
       runtime_substrate_kind: runtimeName,
       adapter_entrypoint: 'package:@narada2/agent-tui#narada-agent-tui',
-      expected_tools: [],
+      expected_tools: ['agent_context_startup_sequence', 'mcp_output_show', 'task_lifecycle_next'],
       states: ['runtime_known', 'adapter_selected', 'terminal_loop_carrier', 'launch_ready'],
     };
   }

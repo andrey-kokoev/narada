@@ -171,7 +171,10 @@ assert.deepEqual(splitOutputReaderProjection.mcpServers.agent_context.tools, [
   'agent_context_startup_sequence',
   'mcp_output_show',
 ]);
-assert.deepEqual(splitOutputReaderProjection.mcpServers.task_lifecycle.tools, ['task_lifecycle_next']);
+assert.deepEqual(splitOutputReaderProjection.mcpServers.task_lifecycle.tools, [
+  'mcp_output_show',
+  'task_lifecycle_next',
+]);
 rmSync(splitOutputReaderSite, { recursive: true, force: true });
 
 const rawToolSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-raw-tools-'));

@@ -147,6 +147,9 @@ test('agent-tui materializes provider env without requiring ambient provider env
   assert.equal(env.NARADA_INTELLIGENCE_PROVIDER, 'codex-subscription');
   assert.equal(env.NARADA_AI_BASE_URL, 'codex://local-subscription');
   assert.equal(env.NARADA_AI_MODEL, 'gpt-5.5');
+  assert.equal(output.tool_fabric_adapter.expected_tools.includes('agent_context_startup_sequence'), true);
+  assert.equal(output.tool_fabric_adapter.expected_tools.includes('mcp_output_show'), true);
+  assert.equal(output.tool_fabric_adapter.expected_tools.includes('task_lifecycle_next'), true);
   assert.equal(output.runtime_args.includes('--max-steps'), true);
   assert.equal(output.runtime_args.includes('42'), true);
   const manifestPath = output.runtime_args[output.runtime_args.indexOf('--manifest-path') + 1];

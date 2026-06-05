@@ -314,8 +314,11 @@ assert.equal(normalizedLegacyControl.input.content, 'legacy');
 
 const payloadRef = createPayloadRef({ payload_ref: 'mcp_payload:payload_test@v1', summary: 'large result' });
 assert.equal(payloadRef.schema, PAYLOAD_REF_SCHEMA);
+assert.equal(payloadRef.reader_tool, 'mcp_payload_show');
 assert.deepEqual(validatePayloadRef(payloadRef), []);
 assert.doesNotThrow(() => assertValidPayloadRef(payloadRef));
+const legacyPayloadRef = createPayloadRef({ payload_ref: 'mcp_payload:payload_legacy@v1', reader_tool: 'mcp_payload_read', summary: 'legacy payload' });
+assert.deepEqual(validatePayloadRef(legacyPayloadRef), []);
 const outputRef = createPayloadRef({ payload_ref: 'mcp_output:o_test', reader_tool: 'mcp_output_show', summary: 'large tool output' });
 assert.equal(outputRef.schema, PAYLOAD_REF_SCHEMA);
 assert.deepEqual(validatePayloadRef(outputRef), []);

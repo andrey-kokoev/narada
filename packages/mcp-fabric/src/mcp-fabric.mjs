@@ -134,9 +134,8 @@ export function projectFabricForCodex(fabric) {
 
 export function projectFabricForAgentTui(fabric, envValues) {
   const mcpServers = {};
-  const outputReaderOwner = selectAgentTuiOutputReaderOwner(fabric);
   for (const [name, server] of Object.entries(fabric.servers)) {
-    const tools = agentTuiToolNames(server).filter((tool) => tool !== 'mcp_output_show' || name === outputReaderOwner);
+    const tools = agentTuiToolNames(server);
     if (tools.length === 0) continue;
     mcpServers[name] = {
       command: server.command,
@@ -149,14 +148,6 @@ export function projectFabricForAgentTui(fabric, envValues) {
     };
   }
   return { mcpServers };
-}
-
-function selectAgentTuiOutputReaderOwner(fabric) {
-  const candidates = Object.entries(fabric.servers)
-    .filter(([, server]) => agentTuiToolNames(server).includes('mcp_output_show'));
-  if (candidates.length === 0) return null;
-  const startupOwner = candidates.find(([, server]) => agentTuiToolNames(server).includes('agent_context_startup_sequence'));
-  return (startupOwner ?? candidates[0])[0];
 }
 
 export function projectFabricForClaudeCode(fabric, envValues) {
