@@ -1,14 +1,68 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from 'node:fs';
-import { basename, join, normalize, resolve } from 'node:path';
+import { basename, join, normalize, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { registrySurfaces, siteControlRoot } from '../carrier-action-admission/tool-metadata.mjs';
-import { loadSiteMcpFabric } from './mcp-fabric.mjs';
+import { registrySurfaces, siteControlRoot } from '../../packages/carrier-action-admission/src/tool-metadata.mjs';
+import { loadSiteMcpFabric, projectFabricForAgentTui } from '../../packages/mcp-fabric/src/mcp-fabric.mjs';
 
 const DEFAULT_LAUNCH_REGISTRY = 'C:/Users/Andrey/Narada/config/launch/agents.psd1';
 
 function registryPathForSite(siteRoot) {
   return join(siteControlRoot(siteRoot), 'capabilities', 'mcp-surfaces.json');
+}
+
+function auditAgentTuiProjection(siteRoot, fabric) {
+  if (!fabric) {
+    return {
+      status: 'not_checked',
+      reason: 'fabric_not_loaded',
+    };
+  }
+  const siteMcpFabricRoot = join(siteRoot, '.ai', 'mcp');
+  const sessionScopedConfigPath = join(siteMcpFabricRoot, 'agent-tui', 'carrier_audit', 'mcp-config.json');
+  const staleGlobalConfigPath = join(siteMcpFabricRoot, 'agent-tui', 'mcp-config.json');
+  const projection = projectFabricForAgentTui(fabric, {
+    NARADA_AGENT_ID: 'narada.audit',
+    NARADA_CARRIER_SESSION_ID: 'carrier_audit',
+    NARADA_SITE_ROOT: siteRoot,
+  });
+  const projectedServers = Object.entries(projection.mcpServers ?? {}).map(([name, server]) => ({
+    name,
+    tool_count: Array.isArray(server.tools) ? server.tools.length : 0,
+    tools: Array.isArray(server.tools) ? server.tools : [],
+  }));
+  const projectedTools = new Set(projectedServers.flatMap((server) => server.tools));
+  const agentContextProjected = projectedServers.some((server) => {
+    return server.tools.some((tool) => String(tool).startsWith('agent_context_')) || server.tools.includes('startup_sequence');
+  });
+  const missingStartupTools = agentContextProjected
+    ? ['agent_context_startup_sequence', 'startup_sequence', 'mcp_output_show'].filter((tool) => !projectedTools.has(tool))
+    : [];
+  const staleGlobalConfigPresent = existsSync(staleGlobalConfigPath);
+  const configPathInsideFabric = sessionScopedConfigPath.startsWith(`${siteMcpFabricRoot}${sep}`);
+  const failureCodes = [];
+  if (staleGlobalConfigPresent) failureCodes.push('agent_tui_stale_global_config_present');
+  if (!configPathInsideFabric) failureCodes.push('agent_tui_config_path_outside_site_mcp_fabric');
+  if (Object.keys(fabric.servers ?? {}).length > 0 && projectedServers.length === 0) failureCodes.push('agent_tui_no_admitted_projected_servers');
+  if (projectedServers.some((server) => server.tool_count === 0)) failureCodes.push('agent_tui_projected_server_without_tools');
+  if (missingStartupTools.length > 0) failureCodes.push('agent_tui_agent_context_startup_tools_missing');
+
+  return {
+    schema: 'narada.agent_tui.mcp_projection_audit.v1',
+    status: failureCodes.length === 0 ? 'ok' : 'fail',
+    failure_codes: failureCodes,
+    site_mcp_fabric_root: siteMcpFabricRoot,
+    session_scoped_config_path_example: sessionScopedConfigPath,
+    config_path_policy: 'inside_site_mcp_fabric_without_parent_traversal_session_scoped',
+    stale_global_config_path: staleGlobalConfigPath,
+    stale_global_config_present: staleGlobalConfigPresent,
+    projected_server_count: projectedServers.length,
+    projected_servers: projectedServers,
+    agent_context_projected: agentContextProjected,
+    required_startup_tools: agentContextProjected ? ['agent_context_startup_sequence', 'startup_sequence', 'mcp_output_show'] : [],
+    missing_startup_tools: missingStartupTools,
+    mutation_performed: false,
+  };
 }
 
 function mcpDirForSite(siteRoot) {
@@ -121,6 +175,7 @@ function auditSiteFabric(siteRoot, source = {}) {
   const liveUnboundServers = serverSummaries
     .filter((server) => !server.registry_metadata_authoritative)
     .map((server) => server.name);
+  const agentTui = auditAgentTuiProjection(normalizedSiteRoot, fabric);
   const recommendation = siteRecommendation({
     registry,
     tolerantLoad,
@@ -143,6 +198,7 @@ function auditSiteFabric(siteRoot, source = {}) {
     authoritative_server_count: serverSummaries.filter((server) => server.registry_metadata_authoritative).length,
     live_unbound_servers: liveUnboundServers,
     stale_registry_surfaces: strictValidation.missing ?? [],
+    agent_tui: agentTui,
     servers: serverSummaries,
     recommendation,
     mutation_performed: false,
@@ -315,6 +371,7 @@ const isEntrypoint = process.argv[1]
 
 export {
   auditLauncherKnownSites,
+  auditAgentTuiProjection,
   auditSiteFabric,
   effectiveSiteRoot,
   agentBlocks,

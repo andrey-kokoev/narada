@@ -75,18 +75,24 @@ function inferredToolContract(serverName) {
     return {
       read_only_tools: [
         'agent_context_doctor',
+        'agent_context_whoami',
         'agent_context_hydrate_current',
-        'agent_context_read_current',
-        'mcp_output_show',
+        'agent_context_startup_sequence',
         'startup_sequence',
+        'agent_context_rehydrate',
+        'agent_context_list_sessions',
       ],
-      mutating_tools: [],
+      mutating_tools: [
+        'agent_context_start_session',
+        'agent_context_checkpoint',
+      ],
       refused_tools: [],
     };
   }
   if (lowerName.includes('task-lifecycle')) {
     return {
       read_only_tools: [
+        'mcp_output_show',
         'task_lifecycle_audit',
         'task_lifecycle_inspect',
         'task_lifecycle_list',

@@ -34,6 +34,14 @@ function runCoherenceGate({ launchRegistryPath = DEFAULT_LAUNCH_REGISTRY } = {})
         live_unbound_servers: site.live_unbound_servers,
       });
     }
+    if (site.agent_tui?.status !== 'ok') {
+      failures.push({
+        code: 'agent_tui_mcp_projection_not_coherent',
+        site_root: site.site_root,
+        agent_tui_status: site.agent_tui?.status ?? 'missing',
+        failure_codes: site.agent_tui?.failure_codes ?? [],
+      });
+    }
   }
 
   const codexNativeShellEnabled = carrierMatrix.launch_registry_summary?.native_shell_enabled_counts?.codex ?? 0;

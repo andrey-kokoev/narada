@@ -8,6 +8,7 @@ import {
   McpFabricError,
   loadSiteMcpFabric,
   mcpServerNames,
+  projectFabricForAgentTui,
   projectServerEnvironment,
   renderMcpFabricDoctorTable,
   runMcpFabricDoctor,
@@ -60,6 +61,11 @@ writeFileSync(join(siteRoot, '.ai', 'mcp', 'fixture-mcp.json'), `${JSON.stringif
       target_site_root: '{site_root}',
       authority_posture: 'facade_only',
     },
+    empty_authority: {
+      command: 'node',
+      args: ['{site_root}/tools/empty.mjs'],
+      surface_id: 'empty.surface',
+    },
   },
 }, null, 2)}\n`, 'utf8');
 writeFileSync(join(siteRoot, '.narada', 'capabilities', 'mcp-surfaces.json'), `${JSON.stringify({
@@ -72,11 +78,19 @@ writeFileSync(join(siteRoot, '.narada', 'capabilities', 'mcp-surfaces.json'), `$
       mutating_tools: ['task_lifecycle_claim'],
       refused_tools: ['fixture_refused'],
     },
+  }, {
+    surface_id: 'empty.surface',
+    client_config: { generated_path: '.ai/mcp/fixture-mcp.json' },
+    tool_contract: {
+      read_only_tools: [],
+      mutating_tools: [],
+      refused_tools: [],
+    },
   }],
 }, null, 2)}\n`, 'utf8');
 
 const fabric = loadSiteMcpFabric(siteRoot, { required: true });
-assert.deepEqual(mcpServerNames(fabric), ['fixture']);
+assert.deepEqual(mcpServerNames(fabric), ['empty_authority', 'fixture']);
 assert.equal(fabric.registry_validation.status, 'ok');
 assert.equal(fabric.servers.fixture.command, process.execPath);
 assert.equal(fabric.servers.fixture.args[0].includes(siteRoot.replaceAll('\\', '/')), true);
@@ -91,8 +105,66 @@ assert.equal(fabric.servers.fixture.registry_tools.fixture_read.read_only, true)
 assert.equal(fabric.servers.fixture.registry_tools.task_lifecycle_claim.family, 'task_lifecycle_mutation');
 assert.equal(fabric.servers.fixture.registry_tools.fixture_refused.refused, true);
 assert.equal(fabric.servers.fixture.registry_metadata_authoritative, true);
+const agentTuiProjection = projectFabricForAgentTui(fabric, { NARADA_AGENT_ID: 'narada.test' });
+assert.deepEqual(Object.keys(agentTuiProjection.mcpServers), ['fixture']);
+assert.deepEqual(agentTuiProjection.mcpServers.fixture.tools, ['fixture_read', 'task_lifecycle_claim']);
+assert.equal(agentTuiProjection.mcpServers.fixture.env.NARADA_AGENT_ID, 'narada.test');
 
 rmSync(siteRoot, { recursive: true, force: true });
+
+const startupAliasSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-startup-alias-'));
+mkdirSync(join(startupAliasSite, '.ai', 'mcp'), { recursive: true });
+mkdirSync(join(startupAliasSite, '.narada', 'capabilities'), { recursive: true });
+writeFileSync(join(startupAliasSite, '.ai', 'mcp', 'agent-context-mcp.json'), `${JSON.stringify({
+  mcpServers: {
+    agent_context: {
+      command: 'node',
+      args: ['server.mjs'],
+      surface_id: 'agent-context-mcp.local',
+    },
+  },
+}, null, 2)}\n`, 'utf8');
+writeFileSync(join(startupAliasSite, '.narada', 'capabilities', 'mcp-surfaces.json'), `${JSON.stringify({
+  schema: 'narada.site.capabilities.mcp_surfaces.v1',
+  surfaces: [{
+    surface_id: 'agent-context-mcp.local',
+    client_config: { generated_path: '.ai/mcp/agent-context-mcp.json' },
+    tool_contract: {
+      read_only_tools: ['startup_sequence', 'mcp_output_show'],
+      mutating_tools: [],
+      refused_tools: [],
+    },
+  }],
+}, null, 2)}\n`, 'utf8');
+const startupAliasFabric = loadSiteMcpFabric(startupAliasSite, { required: true });
+const startupAliasProjection = projectFabricForAgentTui(startupAliasFabric, {});
+assert.deepEqual(startupAliasProjection.mcpServers.agent_context.tools, [
+  'agent_context_startup_sequence',
+  'mcp_output_show',
+  'startup_sequence',
+]);
+rmSync(startupAliasSite, { recursive: true, force: true });
+
+const rawToolSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-raw-tools-'));
+mkdirSync(join(rawToolSite, '.ai', 'mcp'), { recursive: true });
+writeFileSync(join(rawToolSite, '.ai', 'mcp', 'raw-tools-mcp.json'), `${JSON.stringify({
+  mcpServers: {
+    raw_tools: {
+      command: 'node',
+      args: ['server.mjs'],
+      tools: ['raw_read', 'raw_write'],
+    },
+    no_tools: {
+      command: 'node',
+      args: ['empty.mjs'],
+    },
+  },
+}, null, 2)}\n`, 'utf8');
+const rawToolFabric = loadSiteMcpFabric(rawToolSite, { required: true });
+const rawToolProjection = projectFabricForAgentTui(rawToolFabric, {});
+assert.deepEqual(Object.keys(rawToolProjection.mcpServers), ['raw_tools']);
+assert.deepEqual(rawToolProjection.mcpServers.raw_tools.tools, ['raw_read', 'raw_write']);
+rmSync(rawToolSite, { recursive: true, force: true });
 
 const legacyRegistrySite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-legacy-registry-'));
 mkdirSync(join(legacyRegistrySite, '.ai', 'mcp'), { recursive: true });
@@ -136,6 +208,39 @@ assert.throws(
 );
 rmSync(legacyRegistrySite, { recursive: true, force: true });
 
+const namedServerSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-server-name-'));
+mkdirSync(join(namedServerSite, '.ai', 'mcp'), { recursive: true });
+mkdirSync(join(namedServerSite, '.narada', 'capabilities'), { recursive: true });
+writeFileSync(join(namedServerSite, '.ai', 'mcp', 'multi-server-mcp.json'), `${JSON.stringify({
+  mcpServers: {
+    one: { command: 'node', args: ['one.mjs'] },
+    two: { command: 'node', args: ['two.mjs'] },
+  },
+}, null, 2)}\n`, 'utf8');
+writeFileSync(join(namedServerSite, '.narada', 'capabilities', 'mcp-surfaces.json'), `${JSON.stringify({
+  schema: 'narada.site.capabilities.mcp_surfaces.v1',
+  surfaces: [
+    {
+      surface_id: 'surface.one',
+      server_name: 'one',
+      client_config: { generated_path: '.ai/mcp/multi-server-mcp.json' },
+      tool_contract: { read_only_tools: ['one_read'] },
+    },
+    {
+      surface_id: 'surface.two',
+      server_name: 'two',
+      client_config: { generated_path: '.ai/mcp/multi-server-mcp.json' },
+      tool_contract: { read_only_tools: ['two_read'] },
+    },
+  ],
+}, null, 2)}\n`, 'utf8');
+const namedServerFabric = loadSiteMcpFabric(namedServerSite, { required: true });
+assert.equal(namedServerFabric.servers.one.registry_tools.one_read.read_only, true);
+assert.equal(namedServerFabric.servers.one.registry_tools.two_read, undefined);
+assert.equal(namedServerFabric.servers.two.registry_tools.two_read.read_only, true);
+assert.equal(namedServerFabric.servers.two.registry_tools.one_read, undefined);
+rmSync(namedServerSite, { recursive: true, force: true });
+
 const windowsPathSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-windows-paths-'));
 mkdirSync(join(windowsPathSite, '.ai', 'mcp'), { recursive: true });
 writeFileSync(join(windowsPathSite, '.ai', 'mcp', 'windows-mcp.json'), `${JSON.stringify({
@@ -153,6 +258,16 @@ assert.equal(windowsFabric.servers.windows.args[0], 'D:/code/narada.sonar/tools/
 assert.equal(windowsFabric.servers.windows.args[1], `${windowsPathSite.replaceAll('\\', '/')}/tools/fixture.mjs`);
 assert.equal(windowsFabric.servers.windows.target_site_root, `${windowsPathSite.replaceAll('\\', '/')}/subdir`);
 rmSync(windowsPathSite, { recursive: true, force: true });
+
+const missingEntrypointSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-missing-entry-'));
+mkdirSync(join(missingEntrypointSite, '.ai', 'mcp'), { recursive: true });
+writeFileSync(join(missingEntrypointSite, '.ai', 'mcp', 'missing-mcp.json'), `${JSON.stringify({
+  mcpServers: { missing: { command: 'node', args: ['missing-server.mjs'] } },
+}, null, 2)}\n`, 'utf8');
+const missingReport = await runMcpFabricDoctor(missingEntrypointSite, { timeoutMs: 1000 });
+assert.equal(missingReport.status, 'failed');
+assert.equal(missingReport.rows[0].diagnostics[0].code, 'entry_missing');
+rmSync(missingEntrypointSite, { recursive: true, force: true });
 
 const doctorSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-doctor-'));
 mkdirSync(join(doctorSite, '.ai', 'mcp'), { recursive: true });

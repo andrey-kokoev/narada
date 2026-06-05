@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { basename, join, normalize } from 'node:path';
+import { basename, isAbsolute, join, normalize, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { loadMcpSurfaceRegistry, registrySurfaces, siteControlRoot } from '../../carrier-action-admission/src/tool-metadata.mjs';
@@ -69,11 +69,12 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
     const surfaceTools = server.surface_id ? surfaceRegistry.tools_by_surface_id[server.surface_id] ?? null : null;
     const generatedFileTools = sourceFile ? surfaceRegistry.tools_by_generated_file[sourceFile] ?? null : null;
     const serverNameTools = surfaceRegistry.tools_by_server_name?.[serverName] ?? null;
-    server.registry_tools = {
-      ...(serverNameTools ?? {}),
-      ...(surfaceTools ?? {}),
-      ...(generatedFileTools ?? {}),
-    };
+    server.registry_tools = serverNameTools
+      ? { ...serverNameTools }
+      : {
+          ...(generatedFileTools ?? {}),
+          ...(surfaceTools ?? {}),
+        };
     server.registry_source = surfaceRegistry.status === 'loaded' ? surfaceRegistry.path : null;
     server.registry_metadata_authoritative = surfaceRegistry.status === 'loaded' && (!!serverNameTools || !!surfaceTools || !!generatedFileTools);
   }
@@ -133,6 +134,24 @@ export function projectFabricForCodex(fabric) {
     env_vars: mergeUnique([...(server.env_vars ?? []), ...envVars]),
     ...(server.startup_timeout_sec ? { startup_timeout_sec: server.startup_timeout_sec } : {}),
   }));
+}
+
+export function projectFabricForAgentTui(fabric, envValues) {
+  const mcpServers = {};
+  for (const [name, server] of Object.entries(fabric.servers)) {
+    const tools = agentTuiToolNames(server);
+    if (tools.length === 0) continue;
+    mcpServers[name] = {
+      command: server.command,
+      args: server.args,
+      env: {
+        ...projectServerEnvironment(server),
+        ...envValues,
+      },
+      tools,
+    };
+  }
+  return { mcpServers };
 }
 
 export function projectFabricForClaudeCode(fabric, envValues) {
@@ -243,6 +262,11 @@ async function probeMcpServer({ siteRoot, serverName, server, sourceFile, timeou
   let toolsListStatus = 'not_run';
   let toolsListCount = null;
   let proc = null;
+  const entrypoint = resolveServerEntrypoint(server, siteRoot);
+  if (entrypoint && !existsSync(entrypoint.path)) {
+    diagnostics.push({ code: "entry_missing", message: entrypoint.path, phase: "preflight", details: entrypoint });
+    return { file: sourceFile, server: serverName, command: commandSummary, path_normalization: pathNormalization, initialize_status: "not_run", tools_list_status: "not_run", tools_list_count: null, first_diagnostic: `${diagnostics[0].code}: ${diagnostics[0].message}`, diagnostics };
+  }
 
   try {
     proc = spawn(server.command, server.args ?? [], {
@@ -351,6 +375,17 @@ function sendMcpDoctorRequest(proc, pending, request, timeoutMs, timeoutCode) {
   });
 }
 
+function resolveServerEntrypoint(server, siteRoot) {
+  const command = String(server.command ?? "");
+  const args = server.args ?? [];
+  const nodeCommand = /(^|[\\/])node(\.exe)?$/i.test(command);
+  const scriptArg = nodeCommand ? args.find((arg) => /\.(mjs|js|cjs)$/i.test(String(arg))) : null;
+  const candidate = scriptArg ?? (isAbsolute(command) ? command : null);
+  if (!candidate) return null;
+  const path = isAbsolute(candidate) ? candidate : resolve(siteRoot, candidate);
+  return { path, source: scriptArg ? "args" : "command" };
+}
+
 function serverPathNormalization(server) {
   const values = [...(server.args ?? []), server.target_site_root ?? ''].filter(Boolean);
   return values.some((value) => String(value).includes('\\')) ? 'backslash_remaining' : 'ok';
@@ -456,6 +491,7 @@ function normalizeServerConfig(serverName, rawServer, siteRoot) {
     args,
     env: objectStringValues(rawServer.env),
     env_vars: Array.isArray(rawServer.env_vars) ? rawServer.env_vars.map(String) : [],
+    ...rawServerToolList(rawServer),
     ...(rawServer.surface_id ? { surface_id: String(rawServer.surface_id) } : {}),
     ...(rawServer.target_site_root ? { target_site_root: normalizePortablePathText(String(rawServer.target_site_root).replaceAll('{site_root}', portableSiteRoot)) } : {}),
     ...(rawServer.authority_posture ? { authority_posture: String(rawServer.authority_posture) } : {}),
@@ -509,6 +545,44 @@ function normalizePortablePathText(value) {
 function objectStringValues(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, String(entry)]));
+}
+
+function agentTuiToolNames(server) {
+  if (server.registry_metadata_authoritative === true) {
+    return expandAgentContextStartupAliases(server, mergeUnique(Object.values(server.registry_tools ?? {})
+      .filter((tool) => tool && tool.refused !== true)
+      .map((tool) => tool.name)));
+  }
+  return expandAgentContextStartupAliases(server, mergeUnique([
+    ...(server.tools ?? []),
+    ...(server.allowed_tools ?? []),
+    ...(server.tool_names ?? []),
+  ]));
+}
+
+function expandAgentContextStartupAliases(server, tools) {
+  if (!isAgentContextSurface(server)) return tools;
+  const toolSet = new Set(tools);
+  if (toolSet.has('startup_sequence') || toolSet.has('agent_context_startup_sequence')) {
+    toolSet.add('agent_context_startup_sequence');
+    toolSet.add('startup_sequence');
+  }
+  return mergeUnique([...toolSet]);
+}
+
+function isAgentContextSurface(server) {
+  if (String(server.surface_id ?? '') === 'agent-context-mcp.local') return true;
+  const registryToolNames = Object.keys(server.registry_tools ?? {});
+  return registryToolNames.some((tool) => tool.startsWith('agent_context_'));
+}
+
+function rawServerToolList(rawServer) {
+  const tools = mergeUnique([
+    ...(Array.isArray(rawServer.tools) ? rawServer.tools : []),
+    ...(Array.isArray(rawServer.allowed_tools) ? rawServer.allowed_tools : []),
+    ...(Array.isArray(rawServer.tool_names) ? rawServer.tool_names : []),
+  ]);
+  return tools.length > 0 ? { tools } : {};
 }
 
 function mergeUnique(values) {

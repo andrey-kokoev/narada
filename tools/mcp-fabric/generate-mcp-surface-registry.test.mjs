@@ -41,10 +41,12 @@ assert.equal(registry.surfaces.every((surface) => surface.tool_contract.read_onl
 assert.equal(registry.surfaces.every((surface) => surface.authority_boundary.grants_tool_authority === false), true);
 assert.deepEqual(inferredToolContract('fixture-agent-context').read_only_tools, [
   'agent_context_doctor',
+  'agent_context_whoami',
   'agent_context_hydrate_current',
-  'agent_context_read_current',
-  'mcp_output_show',
+  'agent_context_startup_sequence',
   'startup_sequence',
+  'agent_context_rehydrate',
+  'agent_context_list_sessions',
 ]);
 assert.equal(inferredToolContract('fixture-task-lifecycle').read_only_tools.includes('task_lifecycle_next'), true);
 assert.equal(deriveSiteId(siteRoot), 'client-site');

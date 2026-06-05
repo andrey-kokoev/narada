@@ -27,7 +27,7 @@ import { grantEffectiveStatus, readCapabilityRegistry } from './lib/capability-c
 import { ExitCode } from './lib/exit-codes.js';
 import type { CommandSideEffectClass } from './lib/command-execution-intent.js';
 import { readRoutingRegistry, resolveRouteSelection, type RouteAddressRecord } from './lib/routing-addressing-registry.js';
-import { readMcpPayloadRef } from './payload-output.js';
+import { readMcpOutputRef, readMcpPayloadRef } from './payload-output.js';
 
 type JsonRpcId = string | number | null;
 
@@ -155,6 +155,22 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
     description: 'Run the canonical startup sequence: launcher/site identity hydration plus advisory checkpoint continuity.',
     inputSchema: objectSchema({
       target: targetSchema(),
+    }),
+  },
+  {
+    name: 'startup_sequence',
+    description: 'Legacy alias for agent_context_startup_sequence.',
+    inputSchema: objectSchema({
+      target: targetSchema(),
+    }),
+  },
+  {
+    name: 'mcp_output_show',
+    description: 'Read a Narada proper mcp_output ref emitted by this MCP server.',
+    inputSchema: objectSchema({
+      ref: stringSchema('Output ref, e.g. mcp_output:<sha256>.'),
+      output_ref: stringSchema('Compatibility alias for ref. Prefer ref.'),
+      output_limit: numberSchema('Maximum characters of stored output to inline. Defaults to 10000.'),
     }),
   },
   {
@@ -620,7 +636,10 @@ async function callTool(params: unknown, siteContext: McpSiteContext, options: M
     case 'agent_context_hydrate_current':
       return jsonToolResult(attachTraversal(buildAgentContextHydrateCurrent(traversal.target_site, siteContext), traversal));
     case 'agent_context_startup_sequence':
+    case 'startup_sequence':
       return jsonToolResult(attachTraversal(buildAgentContextStartupSequence(traversal.target_site, siteContext), traversal));
+    case 'mcp_output_show':
+      return jsonToolResult(attachTraversal(showMcpOutputRef(traversal.target_site, args), traversal));
     case 'narada_mcp_fabric_context':
       return jsonToolResult({
         status: 'success',
@@ -1692,6 +1711,29 @@ function buildAgentContextStartupSequence(siteContext: McpSiteContext, sourceCon
     runtimeHydrationExecuted: false,
     sourceStateImported: false,
     packageExecutedSqliteMutation: false,
+  };
+}
+
+function showMcpOutputRef(siteContext: McpSiteContext, args: Record<string, unknown>): Record<string, unknown> {
+  const ref = stringField(args, 'ref') ?? stringField(args, 'output_ref');
+  if (!ref) throw new Error('mcp_output_show_requires_ref');
+  const output = readMcpOutputRef({ siteRoot: siteContext.site_root }, ref);
+  const outputText = JSON.stringify(output, null, 2);
+  const limit = Math.max(0, Math.min(numberField(args, 'output_limit') ?? 10000, 100000));
+  const offset = Math.max(0, Math.floor(numberField(args, 'offset') ?? 0));
+  const outputTextPage = outputText.slice(offset, offset + limit);
+  const nextOffset = offset + limit < outputText.length ? offset + limit : null;
+  return {
+    schema: 'narada.mcp_output_show.v1',
+    status: 'ok',
+    ref,
+    output_ref: ref,
+    offset,
+    output_limit: limit,
+    next_offset: nextOffset,
+    output_truncated: nextOffset !== null,
+    full_output_char_length: outputText.length,
+    output_text: outputTextPage,
   };
 }
 

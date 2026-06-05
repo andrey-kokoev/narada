@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 
@@ -140,7 +140,10 @@ test('agent-tui materializes provider env without requiring ambient provider env
   const output = runOk(['--runtime', 'agent-tui', '--agent-tui-max-steps', '42']);
   const env = output.required_environment;
   assert.equal(env.NARADA_AGENT_TUI_ENABLE_MCP_FABRIC, 'yes');
-  assert.equal(env.NARADA_AGENT_TUI_MCP_CONFIG, join(naradaProperRoot, '.ai', 'runtime', 'agent-tui', 'mcp-config.json'));
+  assert.equal(env.NARADA_SITE_MCP_FABRIC, join(naradaProperRoot, '.ai', 'mcp'));
+  assert.equal(env.NARADA_AGENT_TUI_MCP_CONFIG, join(env.NARADA_SITE_MCP_FABRIC, 'agent-tui', env.NARADA_CARRIER_SESSION_ID, 'mcp-config.json'));
+  assert.equal(env.NARADA_AGENT_TUI_MCP_CONFIG.startsWith(`${env.NARADA_SITE_MCP_FABRIC}${sep}`), true);
+  assert.equal(env.NARADA_AGENT_TUI_MCP_CONFIG.includes(`${sep}agent-tui${sep}carrier_`), true);
   assert.equal(env.NARADA_INTELLIGENCE_PROVIDER, 'codex-subscription');
   assert.equal(env.NARADA_AI_BASE_URL, 'codex://local-subscription');
   assert.equal(env.NARADA_AI_MODEL, 'gpt-5.5');

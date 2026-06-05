@@ -48,7 +48,6 @@ const FALLBACK_READ_ONLY_TOOLS = new Set([
   'narada_inbox_show',
   'narada_ee_mcp_doctor',
   'agent_context_hydrate_current',
-  'agent_context_read_current',
   'site_ops_doctor',
 ]);
 

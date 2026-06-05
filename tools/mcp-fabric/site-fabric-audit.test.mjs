@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
+  auditAgentTuiProjection,
   agentBlocks,
   auditLauncherKnownSites,
   auditSiteFabric,
@@ -43,6 +44,45 @@ assert.equal(projectAudit.strict_validation.status, 'ok');
 assert.equal(projectAudit.mcp_server_count, 1);
 assert.equal(projectAudit.authoritative_server_count, 1);
 assert.equal(projectAudit.recommendation, 'ok');
+assert.equal(projectAudit.agent_tui.status, 'ok');
+assert.equal(projectAudit.agent_tui.projected_server_count, 1);
+assert.equal(projectAudit.agent_tui.stale_global_config_present, false);
+
+const agentContextSite = join(workspace, 'agent-context-site');
+mkdirSync(join(agentContextSite, '.ai', 'mcp'), { recursive: true });
+mkdirSync(join(agentContextSite, '.narada', 'capabilities'), { recursive: true });
+writeFileSync(join(agentContextSite, '.ai', 'mcp', 'agent-context-mcp.json'), `${JSON.stringify({
+  mcpServers: {
+    agent_context: {
+      command: 'node',
+      args: ['server.mjs'],
+      surface_id: 'agent-context-mcp.local',
+    },
+  },
+}, null, 2)}\n`, 'utf8');
+writeFileSync(join(agentContextSite, '.narada', 'capabilities', 'mcp-surfaces.json'), `${JSON.stringify({
+  schema: 'narada.site.capabilities.mcp_surfaces.v1',
+  surfaces: [{
+    surface_id: 'agent-context-mcp.local',
+    client_config: { generated_path: '.ai/mcp/agent-context-mcp.json' },
+    tool_contract: { read_only_tools: ['startup_sequence', 'mcp_output_show'], mutating_tools: [] },
+  }],
+}, null, 2)}\n`, 'utf8');
+const agentContextAudit = auditSiteFabric(agentContextSite);
+assert.equal(agentContextAudit.agent_tui.status, 'ok');
+assert.deepEqual(agentContextAudit.agent_tui.missing_startup_tools, []);
+assert.deepEqual(agentContextAudit.agent_tui.projected_servers[0].tools, [
+  'agent_context_startup_sequence',
+  'mcp_output_show',
+  'startup_sequence',
+]);
+mkdirSync(join(agentContextSite, '.ai', 'mcp', 'agent-tui'), { recursive: true });
+writeFileSync(join(agentContextSite, '.ai', 'mcp', 'agent-tui', 'mcp-config.json'), '{}\n', 'utf8');
+const staleAgentTuiAudit = auditAgentTuiProjection(agentContextSite, agentContextAudit.servers ? null : null);
+assert.equal(staleAgentTuiAudit.status, 'not_checked');
+const staleSiteAudit = auditSiteFabric(agentContextSite);
+assert.equal(staleSiteAudit.agent_tui.status, 'fail');
+assert.equal(staleSiteAudit.agent_tui.failure_codes.includes('agent_tui_stale_global_config_present'), true);
 
 const dotNaradaSite = join(workspace, 'dot-site', '.narada');
 mkdirSync(join(dotNaradaSite, '.ai', 'mcp'), { recursive: true });

@@ -75,6 +75,7 @@ const EXPOSED_TOOL_NAMES = [
   'agent_context_memory.read_checkpoint_summary',
   'agent_context_memory.record_checkpoint',
   'agent_context_startup_sequence',
+  'mcp_output_show',
   'inbox_stage_submission_workflow',
   'inbox_submit_observation',
   'inbox_submit_typed_envelope',
@@ -99,6 +100,7 @@ const EXPOSED_TOOL_NAMES = [
   'site_task_lifecycle.materialize_task',
   'site_task_lifecycle.plan_init',
   'site_task_lifecycle.read_task',
+  'startup_sequence',
 ].sort();
 
 export const NARADA_PROPER_MCP_SURFACE_REGISTRY: NaradaProperMcpSurfaceRecord[] = [
@@ -125,6 +127,7 @@ export const NARADA_PROPER_MCP_SURFACE_REGISTRY: NaradaProperMcpSurfaceRecord[] 
         'agent_context_doctrinal_grounding',
         'agent_context_hydrate_current',
         'agent_context_startup_sequence',
+        'mcp_output_show',
         'agent_context_memory.plan_hydration',
         'agent_context_memory.read_checkpoint_summary',
         'narada_ee_mcp_doctor',
@@ -138,6 +141,7 @@ export const NARADA_PROPER_MCP_SURFACE_REGISTRY: NaradaProperMcpSurfaceRecord[] 
         'narada_task_read',
         'site_task_lifecycle.plan_init',
         'site_task_lifecycle.read_task',
+        'startup_sequence',
       ],
       mutating_tools: [
         'agent_context_memory.record_checkpoint',

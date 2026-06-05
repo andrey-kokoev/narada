@@ -483,7 +483,7 @@ function intelligenceProviderEnvironment(providerResolution) {
 }
 
 function materializeAgentTuiMcpConfig() {
-  const configDir = join(sessionSiteRoot, '.ai', 'runtime', 'agent-tui');
+  const configDir = join(sessionSiteRoot, '.ai', 'mcp', 'agent-tui', carrierSessionRegistration.carrier_session_id);
   const configPath = join(configDir, 'mcp-config.json');
   const config = projectFabricForAgentTui(mcpFabric, mcpEnvironmentValues());
   const serialized = JSON.stringify(config, null, 2) + '\n';

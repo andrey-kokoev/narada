@@ -29,6 +29,7 @@ const FALLBACK_READ_ONLY_TOOLS = new Set([
   'agent_context_show_event',
   'agent_context_show_bootstrap',
   'inbox_doctor',
+  'agent_context_startup_sequence',
   'startup_sequence',
   'site_task_lifecycle.list_tasks',
   'site_task_lifecycle.get_task',
@@ -49,7 +50,6 @@ const FALLBACK_READ_ONLY_TOOLS = new Set([
   'narada_inbox_show',
   'narada_ee_mcp_doctor',
   'agent_context_hydrate_current',
-  'agent_context_read_current',
   'site_ops_doctor',
 ]);
 
@@ -293,6 +293,12 @@ function registrySurfaces(registry) {
 
 function registryServerNames(surface) {
   const names = new Set();
+  const explicitServerName = stringOrNull(surface?.server_name);
+  if (explicitServerName) names.add(explicitServerName);
+  const displayName = stringOrNull(surface?.display_name);
+  if (displayName) names.add(displayName);
+  const clientConfigServerName = stringOrNull(surface?.client_config?.server_name);
+  if (clientConfigServerName) names.add(clientConfigServerName);
   const pkg = stringOrNull(surface?.package);
   if (pkg) {
     const packageBase = pkg.split('/').pop();

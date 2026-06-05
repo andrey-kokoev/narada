@@ -20,6 +20,9 @@
       "tools": [
         "narada_site_context",
         "agent_context_hydrate_current",
+        "agent_context_startup_sequence",
+        "startup_sequence",
+        "mcp_output_show",
         "narada_mcp_fabric_context",
         "site_task_lifecycle.plan_init",
         "site_task_lifecycle.admit_task",
@@ -38,6 +41,9 @@
       "registered_live_tools": [
         "narada_site_context",
         "agent_context_hydrate_current",
+        "agent_context_startup_sequence",
+        "startup_sequence",
+        "mcp_output_show",
         "narada_mcp_fabric_context",
         "site_task_lifecycle.plan_init",
         "site_task_lifecycle.admit_task",
@@ -105,6 +111,41 @@
       ],
       "live_smoke_evidence": ".narada/audit/task-1253-agent-context-memory-live-smoke-audit.json",
       "evidence": ".narada/admission/decisions/task-1252-agent-context-memory-live-first-slice-admission.md"
+    },
+    {
+      "surface_id": "narada-proper.surface.filesystem-mcp.v1",
+      "status": "live_agent_facing_read_only",
+      "path": "D:/code/mcp-surfaces/packages/local-filesystem-mcp/dist/src/main.js",
+      "package": "@narada2/local-filesystem-mcp",
+      "transport": "stdio",
+      "server_name": "narada-proper-filesystem",
+      "mutation_posture": "read_only_filesystem_discovery",
+      "client_config": {
+        "generated_path": ".ai/mcp/config.json",
+        "generated_file": "config.json",
+        "server_name": "narada-proper-filesystem"
+      },
+      "tool_contract": {
+        "read_only_tools": [
+          "fs_read_file",
+          "fs_glob_search",
+          "fs_grep_search",
+          "fs_stat",
+          "mcp_output_show",
+          "fs_read_file_range"
+        ],
+        "mutating_tools": [],
+        "refused_tools": []
+      },
+      "registered_live_tools": [
+        "fs_read_file",
+        "fs_glob_search",
+        "fs_grep_search",
+        "fs_stat",
+        "mcp_output_show",
+        "fs_read_file_range"
+      ],
+      "evidence": ".ai/mcp/config.json"
     }
   ],
   "candidate_mcp_surfaces": [
