@@ -1,0 +1,87 @@
+{
+  "schema": "narada.carrier.command_contract.v1",
+  "commands": [
+    {
+      "name": "help",
+      "primary": "/help",
+      "aliases": [],
+      "effect": "show_commands",
+      "help": "Show commands"
+    },
+    {
+      "name": "status",
+      "primary": "/status",
+      "aliases": [],
+      "effect": "show_session_state",
+      "help": "Show session state"
+    },
+    {
+      "name": "stats",
+      "primary": "/stats",
+      "aliases": [],
+      "argument": "args",
+      "effect": "show_local_codex_transcript_statistics",
+      "help": "Show local Codex transcript statistics"
+    },
+    {
+      "name": "model",
+      "primary": "/model",
+      "aliases": [],
+      "argument": "name",
+      "effect": "set_model_for_later_turns",
+      "help": "Set model for later turns"
+    },
+    {
+      "name": "thinking",
+      "primary": "/thinking",
+      "aliases": [],
+      "argument": "none|low|medium|high",
+      "effect": "set_thinking_level_for_later_turns",
+      "help": "Set thinking level for later turns"
+    },
+    {
+      "name": "tool_output",
+      "primary": "/tool-output",
+      "aliases": ["/tool-outputs"],
+      "argument": "on|off|toggle|status",
+      "effect": "configure_displayed_tool_call_outputs",
+      "help": "Toggle displayed tool call outputs"
+    },
+    {
+      "name": "queue_show",
+      "primary": "/queue",
+      "aliases": [],
+      "effect": "show_queued_carrier_input",
+      "help": "Show queued carrier input"
+    },
+    {
+      "name": "queue_clear",
+      "primary": "/queue clear",
+      "aliases": [],
+      "effect": "clear_queued_operator_steering",
+      "help": "Clear queued operator steering"
+    },
+    {
+      "name": "queue_drop",
+      "primary": "/queue drop <index>",
+      "aliases": [],
+      "argument": "index",
+      "effect": "drop_queued_operator_steering_item",
+      "help": "Drop one queued operator steering item"
+    },
+    {
+      "name": "clear",
+      "primary": "/clear",
+      "aliases": [],
+      "effect": "clear_terminal_display",
+      "help": "Clear terminal display"
+    },
+    {
+      "name": "exit",
+      "primary": "/exit",
+      "aliases": ["/quit", "exit"],
+      "effect": "save_and_quit",
+      "help": "Save and quit"
+    }
+  ]
+}

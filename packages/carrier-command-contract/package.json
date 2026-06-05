@@ -1,0 +1,14 @@
+{
+  "name": "@narada2/carrier-command-contract",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/carrier-command-contract.mjs",
+    "./commands": "./contracts/commands.json"
+  },
+  "scripts": {
+    "test": "node --test src/carrier-command-contract.test.mjs",
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/carrier-command-contract.mjs"
+  }
+}

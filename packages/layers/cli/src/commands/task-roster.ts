@@ -296,22 +296,6 @@ export async function taskRosterAssignCommand(
       }
 
       await saveAssignment(cwd, record);
-
-      const assignmentStore = openTaskLifecycleStore(cwd);
-      try {
-        assignmentStore.insertAssignment({
-          assignment_id: admission.intent.assignment_id ?? `assign-${taskFile.taskId}-${options.agent}-${Date.now()}`,
-          task_id: taskFile.taskId,
-          agent_id: options.agent,
-          claimed_at: now,
-          released_at: null,
-          release_reason: null,
-          intent: 'primary',
-        });
-      } finally {
-        assignmentStore.db.close();
-      }
-
       if (admission.shouldClaim) {
         const updatedFrontMatter: TaskFrontMatter = { ...frontMatter, status: 'claimed' };
         await writeTaskFile(taskFile.path, updatedFrontMatter, body);

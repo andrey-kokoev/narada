@@ -82,6 +82,15 @@ for (const entry of sessionEventFixtureManifest.fixtures) {
   assert.equal(fixture.event_kind, entry.event_kind);
   assert.deepEqual(validateSessionEvent(fixture), []);
 }
+const transcriptProjectionCases = readFixture('transcript-projection-cases.json');
+assert.equal(transcriptProjectionCases.schema, 'narada.carrier.transcript_projection_cases.v1');
+for (const entry of transcriptProjectionCases.cases) {
+  assert.equal(typeof entry.fixture, 'string');
+  assert.deepEqual(validateSessionEvent(readFixture(entry.fixture)), [], entry.name);
+  assert.equal(typeof entry.expected_kind, 'string');
+  assert.equal(typeof entry.expected_actor, 'string');
+  assert.equal(typeof entry.expected_text, 'string');
+}
 assert.deepEqual(validateInputEvent(readFixture('input-event.json')), []);
 assert.deepEqual(validateControlInputRecord(readFixture('control-input-event.json')), []);
 for (const fixtureName of [

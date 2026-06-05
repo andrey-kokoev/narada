@@ -8,6 +8,7 @@ import { createWorkbenchServer, workbenchDiagnoseCommand } from '../../src/comma
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 
 function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
@@ -30,23 +31,44 @@ function writeRoster(tempDir: string, agents: Array<{
   task?: number | null;
   updated_at?: string;
 }>) {
+  const now = new Date().toISOString();
+  const rosterAgents = agents.map((a) => ({
+    agent_id: a.agent_id,
+    role: 'agent',
+    capabilities: [],
+    first_seen_at: now,
+    last_active_at: now,
+    status: a.status ?? 'idle',
+    task: a.task ?? null,
+    updated_at: a.updated_at ?? now,
+  }));
   writeFileSync(
     join(tempDir, '.ai', 'agents', 'roster.json'),
     JSON.stringify({
       version: 1,
-      updated_at: new Date().toISOString(),
-      agents: agents.map((a) => ({
-        agent_id: a.agent_id,
-        role: 'agent',
-        capabilities: [],
-        first_seen_at: new Date().toISOString(),
-        last_active_at: new Date().toISOString(),
-        status: a.status ?? 'idle',
-        task: a.task ?? null,
-        updated_at: a.updated_at ?? new Date().toISOString(),
-      })),
+      updated_at: now,
+      agents: rosterAgents,
     }, null, 2),
   );
+
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    for (const agent of rosterAgents) {
+      store.upsertRosterEntry({
+        agent_id: agent.agent_id,
+        role: agent.role,
+        capabilities_json: JSON.stringify(agent.capabilities),
+        first_seen_at: agent.first_seen_at,
+        last_active_at: agent.last_active_at,
+        status: agent.status,
+        task_number: agent.task,
+        last_done: null,
+        updated_at: agent.updated_at,
+      });
+    }
+  } finally {
+    store.db.close();
+  }
 }
 
 function writePolicy(tempDir: string, policy: Record<string, unknown>) {
@@ -86,6 +108,7 @@ function writePolicy(tempDir: string, policy: Record<string, unknown>) {
     JSON.stringify({ ...defaultPolicy, ...policy }, null, 2),
   );
 }
+
 
 async function httpGet(url: string, headers?: Record<string, string>): Promise<{ status: number; body: unknown }> {
   const response = await fetch(url, { headers });
@@ -162,11 +185,13 @@ describe('workbench server', () => {
       await server.stop();
     });
 
-    it('returns 500 when roster is missing', async () => {
+    it('returns an empty roster when no agents exist', async () => {
       const server = await createWorkbenchServer({ port: 0, host: '127.0.0.1', cwd: tempDir });
       const url = await server.start();
-      const { status } = await httpGet(`${url}/api/roster`);
-      expect(status).toBe(500);
+      const { status, body } = await httpGet(`${url}/api/roster`);
+      expect(status).toBe(200);
+      const roster = (body as { roster: { agents: unknown[] } }).roster;
+      expect(roster.agents).toEqual([]);
       await server.stop();
     });
   });
@@ -203,10 +228,32 @@ describe('workbench server', () => {
 
   describe('GET /api/assignments', () => {
     it('returns all assignments', async () => {
-      writeFileSync(
-        join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', 'task-526.json'),
-        JSON.stringify({ task_id: 'task-526', assignments: [{ agent_id: 'a1', claimed_at: '2026-04-24T10:00:00Z' }] }),
-      );
+      const store = openTaskLifecycleStore(tempDir);
+      try {
+        store.upsertLifecycle({
+          task_id: 'task-526',
+          task_number: 526,
+          status: 'claimed',
+          governed_by: null,
+          closed_at: null,
+          closed_by: null,
+          reopened_at: null,
+          reopened_by: null,
+          continuation_packet_json: null,
+          updated_at: '2026-04-24T10:00:00.000Z',
+        });
+        store.insertAssignment({
+          assignment_id: 'assign-task-526-a1',
+          task_id: 'task-526',
+          agent_id: 'a1',
+          claimed_at: '2026-04-24T10:00:00Z',
+          released_at: null,
+          release_reason: null,
+          intent: 'primary',
+        });
+      } finally {
+        store.db.close();
+      }
 
       const server = await createWorkbenchServer({ port: 0, host: '127.0.0.1', cwd: tempDir });
       const url = await server.start();

@@ -64,8 +64,8 @@ const LIFECYCLE_VOCABULARY = [
   'claimed',
   'needs_continuation',
   'in_review',
-  'deferred',
   'blocked',
+  'deferred',
   'closed',
   'confirmed',
 ];

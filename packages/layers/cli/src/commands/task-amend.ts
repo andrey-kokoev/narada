@@ -166,6 +166,7 @@ export async function taskAmendCommand(
   // ── Closed-task guard ──
 
   if (status === 'closed' || status === 'confirmed') {
+    store.db.close();
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: {

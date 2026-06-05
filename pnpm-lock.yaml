@@ -528,6 +528,9 @@ importers:
       '@narada2/intent-zones':
         specifier: workspace:*
         version: link:../intent-zones
+      '@narada2/task-governance-core':
+        specifier: link:../../../narada-core/packages/task-governance-core
+        version: link:../../../narada-core/packages/task-governance-core
     devDependencies:
       '@types/node':
         specifier: ^20.10.0

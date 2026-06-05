@@ -1205,7 +1205,7 @@ async function writeOperatorSurfaceSendEvent(cwd: string, event: Record<string, 
   await mkdir(dir, { recursive: true });
   const path = join(dir, `${String(event.event_id)}.json`);
   await writeFile(path, `${JSON.stringify(event, null, 2)}\n`, 'utf8');
-  return path;
+  return normalizeArtifactPath(path);
 }
 
 async function writeOperatorSurfaceDeliveryPromise(cwd: string, promise: Record<string, unknown>): Promise<string> {
@@ -1213,11 +1213,19 @@ async function writeOperatorSurfaceDeliveryPromise(cwd: string, promise: Record<
   await mkdir(dir, { recursive: true });
   const path = join(dir, `${String(promise.promise_id)}.json`);
   await writeFile(path, `${JSON.stringify(promise, null, 2)}\n`, 'utf8');
-  return path;
+  return normalizeArtifactPath(path);
 }
 
 function operatorSurfaceSendQueueDir(cwd: string): string {
   return join(resolve(cwd), '.ai', 'operator-surface-send-queue');
+}
+
+function normalizeArtifactPath(path: string): string {
+  return path.replace(/\\/g, '/');
+}
+
+function operatorSurfaceIdentityArtifactPath(cwd: string): string {
+  return normalizeArtifactPath(operatorSurfaceIdentityPath(cwd));
 }
 
 function safeArtifactSegment(value: string | null | undefined): string {
@@ -1233,7 +1241,6 @@ async function readJsonRecord(path: string): Promise<Record<string, unknown> | n
     throw error;
   }
 }
-
 function isSendLeaseStale(lease: Record<string, unknown>, nowMs: number): boolean {
   const expiresAt = typeof lease.expires_at === 'string' ? Date.parse(lease.expires_at) : Number.NaN;
   return Number.isFinite(expiresAt) && expiresAt <= nowMs;
@@ -1277,7 +1284,6 @@ async function admitOperatorSurfaceSendSerialization(cwd: string, args: {
       },
     };
     const queueArtifact = join(dir, `${queued.queue_id}.json`);
-    await writeFile(queueArtifact, `${JSON.stringify(queued, null, 2)}\n`, 'utf8');
     return {
       admitted: false,
       status: 'queued',
@@ -1285,10 +1291,10 @@ async function admitOperatorSurfaceSendSerialization(cwd: string, args: {
       runtime_locus: args.runtimeLocus,
       critical_section: 'focus_clipboard_type_submit',
       requested_at: now,
-      queue_artifact: queueArtifact,
-      active_lease_artifact: activePath,
+      queue_artifact: normalizeArtifactPath(queueArtifact),
+      active_lease_artifact: normalizeArtifactPath(activePath),
       active_send: active,
-      ordering: queued.ordering,
+      ordering: { ...queued.ordering, active_lease_artifact: normalizeArtifactPath(activePath) },
     };
   }
   if (active) {
@@ -1303,7 +1309,7 @@ async function admitOperatorSurfaceSendSerialization(cwd: string, args: {
     };
     await writeFile(recoveryArtifact, `${JSON.stringify(staleRecovery, null, 2)}\n`, 'utf8');
     await rm(activePath, { force: true });
-    staleRecovery = { ...staleRecovery, recovery_artifact: recoveryArtifact };
+    staleRecovery = { ...staleRecovery, recovery_artifact: normalizeArtifactPath(recoveryArtifact) };
   }
   const lease = {
     event_id: args.eventId,
@@ -1336,10 +1342,10 @@ async function admitOperatorSurfaceSendSerialization(cwd: string, args: {
     runtime_locus: args.runtimeLocus,
     critical_section: 'focus_clipboard_type_submit',
     started_at: now,
-    active_lease_artifact: activePath,
+    active_lease_artifact: normalizeArtifactPath(activePath),
     active_send: lease,
     stale_recovery: staleRecovery,
-    ordering: lease.ordering,
+    ordering: { ...lease.ordering, active_lease_artifact: normalizeArtifactPath(activePath) },
   };
 }
 
@@ -3168,7 +3174,7 @@ export async function operatorSurfaceBindFocusedCommand(
         ambient_foreground_refused: true,
         admitted_at: now,
         authority_split: {
-          durable_identity_authority: operatorSurfaceIdentityPath(cwd),
+          durable_identity_authority: operatorSurfaceIdentityArtifactPath(cwd),
           volatile_handle_authority: binding.runtime_locus,
         },
       },
@@ -3184,7 +3190,7 @@ export async function operatorSurfaceBindFocusedCommand(
       mutation_performed: false,
       runtime_binding_mutated: false,
       authority_split: {
-        durable_identity_authority: operatorSurfaceIdentityPath(cwd),
+        durable_identity_authority: operatorSurfaceIdentityArtifactPath(cwd),
         volatile_handle_authority: options.runtimeLocus ?? 'owning_runtime_locus_required',
       },
       handoff: known ? bindFocusedHandoff(identity, options.runtimeLocus ?? null) : null,

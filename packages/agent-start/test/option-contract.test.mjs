@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -14,6 +14,9 @@ const naradaProperRoot = resolve(packageRoot, '..', '..');
 const launcherPath = join(packageRoot, 'src', 'narada-agent-start.ts');
 const tsxLoaderPath = pathToFileURL(require.resolve('tsx')).href;
 const identity = 'narada.architect';
+const sharedRuntimeContract = JSON.parse(readFileSync(resolve(naradaProperRoot, 'packages', 'carrier-runtime-contract', 'contracts', 'runtime-substrate-kinds.json'), 'utf8'));
+const sharedProviderContract = JSON.parse(readFileSync(resolve(naradaProperRoot, 'packages', 'carrier-provider-contract', 'contracts', 'provider-registry.json'), 'utf8'));
+const sharedProviderAdapterContract = JSON.parse(readFileSync(resolve(naradaProperRoot, 'packages', 'carrier-provider-contract', 'contracts', 'provider-adapters.json'), 'utf8'));
 const baseArgs = [
   '--import',
   tsxLoaderPath,
@@ -55,6 +58,17 @@ function agentTuiEnv() {
     NARADA_AI_API_KEY: 'test-key',
   };
 }
+
+test('launcher option contract consumes shared carrier runtime and provider contracts', () => {
+  assert.equal(sharedRuntimeContract.schema, 'narada.runtime_substrate_kind.v1');
+  assert.equal(sharedRuntimeContract.admitted_runtime_substrate_kinds.includes('codex'), true);
+  assert.equal(sharedRuntimeContract.admitted_runtime_substrate_kinds.includes('agent-cli'), true);
+  assert.equal(sharedRuntimeContract.admitted_runtime_substrate_kinds.includes('agent-tui'), true);
+  assert.equal(sharedRuntimeContract.codex_context_isolation.forbidden_resume_modes.includes('codex resume --last'), true);
+  assert.equal(sharedProviderContract.providers['codex-subscription'].adapter_kind, 'codex-mcp-server');
+  assert.equal(sharedProviderContract.providers['codex-subscription'].support_state, 'verified_supported');
+  assert.equal(sharedProviderAdapterContract.production_provider_adapter_kind, 'codex_subscription_adapter');
+});
 
 test('db option materializes the requested agent-context db path', () => {
   const dbPath = join(naradaProperRoot, '.ai', 'state', 'option-contract-agent-context.sqlite');

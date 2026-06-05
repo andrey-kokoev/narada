@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Database } from '@narada2/control-plane';
 import { openTaskLifecycleStore, SqliteTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
-import { loadAssignment, saveRoster } from '../../src/lib/task-governance.js';
+import { loadAssignment, loadRoster, saveRoster } from '../../src/lib/task-governance.js';
 
 function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
@@ -589,7 +589,6 @@ describe('task close operator', () => {
     expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
     expect((result.result as { error: string }).error).toContain('not found');
   });
-
   it('sets governed_by on closure', async () => {
     writeTask(
       tempDir,
@@ -612,12 +611,12 @@ describe('task close operator', () => {
 
   it('reports invalid for already-closed task without governed provenance (raw mutation)', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-111-test.md'),
-      `---\ntask_id: 111\nstatus: closed\n---\n\n# Task 111: Test\n\n## Acceptance Criteria\n- [x] Criterion A\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-611-test.md'),
+      `---\ntask_id: 611\nstatus: closed\n---\n\n# Task 611: Test\n\n## Acceptance Criteria\n- [x] Criterion A\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
     );
 
     const result = await taskCloseCommand({
-      taskNumber: '111',
+      taskNumber: '611',
       by: 'operator-1',
       cwd: tempDir,
       format: 'json',
@@ -801,7 +800,6 @@ describe('task close operator', () => {
       expect(lifecycle!.closed_at).toMatch(/^\d{4}-/);
     });
   });
-
   it('reconciles roster: clears active assignment on close', async () => {
     writeTask(
       tempDir,
@@ -809,19 +807,22 @@ describe('task close operator', () => {
       'in_review',
       '## Execution Notes\nDone.\n\n## Verification\nOK.\n',
     );
-
-    // Create roster with agent assigned to task 300
-    mkdirSync(join(tempDir, '.ai', 'agents'), { recursive: true });
-    writeFileSync(
-      join(tempDir, '.ai', 'agents', 'roster.json'),
-      JSON.stringify({
-        version: 1,
-        updated_at: '2026-01-01T00:00:00Z',
-        agents: [
-          { agent_id: 'agent-a', role: 'implementer', capabilities: [], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z', status: 'working', task: 300 },
-        ],
-      }, null, 2),
-    );
+    await saveRoster(tempDir, {
+      version: 2,
+      schema: 'https://narada.dev/schemas/agent-roster/v2',
+      updated_at: '2026-01-01T00:00:00Z',
+      agents: [
+        {
+          agent_id: 'agent-a',
+          role: 'implementer',
+          capabilities: [],
+          first_seen_at: '2026-01-01T00:00:00Z',
+          last_active_at: '2026-01-01T00:00:00Z',
+          status: 'working',
+          task: 300,
+        },
+      ],
+    });
 
     const result = await taskCloseCommand({
       taskNumber: '300',
@@ -835,15 +836,13 @@ describe('task close operator', () => {
     expect(r.roster_reconciled).toBe(true);
     expect(r.reconciled_agent_id).toBe('agent-a');
 
-    const rosterRaw = readFileSync(join(tempDir, '.ai', 'agents', 'roster.json'), 'utf8');
-    const roster = JSON.parse(rosterRaw) as { agents: Array<{ agent_id: string; status: string; task: number | null; last_done: number | null }> };
+    const roster = await loadRoster(tempDir) as { agents: Array<{ agent_id: string; status: string; task: number | null; last_done: number | null }> };
     const agent = roster.agents.find((a) => a.agent_id === 'agent-a');
     expect(agent).toBeDefined();
     expect(agent!.status).toBe('done');
     expect(agent!.task).toBeNull();
     expect(agent!.last_done).toBe(300);
   });
-
   it('closes task without roster when no active assignment exists', async () => {
     writeTask(
       tempDir,
@@ -962,22 +961,14 @@ describe('task close operator', () => {
         continuation_packet_json: null,
         updated_at: '2026-01-01T00:00:00.000Z',
       });
-      store.upsertAssignmentRecord({
+      store.insertAssignment({
+        assignment_id: 'assign-20260420-302-test-agent-a',
         task_id: '20260420-302-test',
-        record_json: JSON.stringify({
-          task_id: '20260420-302-test',
-          assignments: [
-            {
-              agent_id: 'agent-a',
-              claimed_at: '2026-01-01T00:00:00Z',
-              claim_context: null,
-              released_at: null,
-              release_reason: null,
-              intent: 'primary',
-            },
-          ],
-        }),
-        updated_at: '2026-01-01T00:00:00.000Z',
+        agent_id: 'agent-a',
+        claimed_at: '2026-01-01T00:00:00Z',
+        released_at: null,
+        release_reason: null,
+        intent: 'primary',
       });
     } finally {
       store.db.close();

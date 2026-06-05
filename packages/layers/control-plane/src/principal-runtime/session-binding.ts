@@ -8,7 +8,7 @@
  */
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 /** A binding between a Narada principal and a Kimi CLI session */
 export interface KimiSessionBinding {
@@ -158,8 +158,7 @@ export class JsonPrincipalSessionBindingRegistry extends InMemoryPrincipalSessio
 
   private async persist(): Promise<void> {
     try {
-      const dir = this.filepath.split("/").slice(0, -1).join("/");
-      await mkdir(dir, { recursive: true });
+      await mkdir(dirname(this.filepath), { recursive: true });
       const snapshot: PrincipalSessionBindingSnapshot = {
         bindings: this.listBindings(),
         updated_at: new Date().toISOString(),

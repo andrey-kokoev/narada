@@ -1,0 +1,65 @@
+{
+  "schema": "narada.carrier_action_admission.classification_cases.v1",
+  "cases": [
+    {
+      "name": "startup_read_only",
+      "tool_name": "agent_context_startup_sequence",
+      "arguments": {},
+      "expected_decision": "read_only_admitted",
+      "expected_reason": "closed_name_fallback_read_only_tool"
+    },
+    {
+      "name": "legacy_startup_alias_refused",
+      "tool_name": "startup_sequence",
+      "arguments": {},
+      "expected_decision": "refused",
+      "expected_reason": "unknown_non_read_only_tool_family"
+    },
+    {
+      "name": "task_lifecycle_mutation_routed",
+      "tool_name": "task_lifecycle_claim",
+      "arguments": { "task_number": 1228 },
+      "expected_decision": "routed",
+      "expected_reason": "task_lifecycle_mutation_requires_canonical_task_authority",
+      "expected_family": "task_lifecycle_mutation"
+    },
+    {
+      "name": "secret_payload_refused",
+      "tool_name": "task_lifecycle_claim",
+      "arguments": { "env": { "API_TOKEN": "sk-testsecretvalue123456" } },
+      "expected_decision": "refused",
+      "expected_reason": "secret_or_credential_bearing_request",
+      "expected_family": "credential_access",
+      "expected_secret_findings": ["env.API_TOKEN"]
+    }
+  ],
+  "tui_boundary_cases": [
+    {
+      "name": "visible_read_tool_allowed",
+      "allowed_tools": ["agent_context_startup_sequence"],
+      "tool_name": "agent_context_startup_sequence",
+      "expected_access": "ok"
+    },
+    {
+      "name": "legacy_startup_alias_hidden",
+      "allowed_tools": ["agent_context_startup_sequence"],
+      "tool_name": "startup_sequence",
+      "expected_access": "mcp_tool_not_visible"
+    }
+  ],
+  "payload_cases": [
+    {
+      "name": "sensitive_payload_requires_ref",
+      "content": "sk-testsecretvalue123456",
+      "sensitive": true,
+      "expected_decision": "requires_ref",
+      "expected_reader_tool": "mcp_payload_show"
+    },
+    {
+      "name": "small_public_payload_is_inline",
+      "content": "public status",
+      "sensitive": false,
+      "expected_decision": "inline"
+    }
+  ]
+}

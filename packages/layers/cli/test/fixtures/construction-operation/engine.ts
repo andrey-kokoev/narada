@@ -119,28 +119,19 @@ export async function loadFixtureRoster(cwd: string): Promise<FixtureAgent[]> {
 }
 
 export async function loadFixtureAssignments(cwd: string): Promise<FixtureAssignment[]> {
-  const assignments: FixtureAssignment[] = [];
   try {
     const store = openTaskLifecycleStore(cwd);
     try {
-      const rows = store.db
-        .prepare('select task_id, record_json from task_assignment_records')
-        .all() as Array<{ task_id: string; record_json: string }>;
-      for (const row of rows) {
-        const record = JSON.parse(row.record_json) as { task_id: string; assignments: FixtureAssignment[] };
-        for (const a of record.assignments) {
-          assignments.push({ ...a, task_id: record.task_id });
-        }
-      }
+      return (store.db
+        .prepare('select task_id, agent_id, claimed_at, released_at, release_reason from task_assignments order by claimed_at asc')
+        .all() as FixtureAssignment[]);
     } finally {
       store.db.close();
     }
   } catch {
     return [];
   }
-  return assignments;
 }
-
 export async function loadFixturePrincipalRuntimes(
   cwd: string,
 ): Promise<FixturePrincipalRuntime[]> {
@@ -726,6 +717,14 @@ export const GROUND_TRUTH = new Map<number, string>([
 ]);
 
 // ── Data setup helpers ──
+function taskNumberFromTaskId(taskId: string): number {
+  const match = taskId.match(/-(\d+)-/);
+  return match ? Number(match[1]) : 0;
+}
+
+function timestampForFixture(agent?: FixtureAgent & { first_seen_at?: string; last_active_at?: string; updated_at?: string }): string {
+  return agent?.last_active_at ?? agent?.updated_at ?? agent?.first_seen_at ?? '2026-04-20T00:00:00.000Z';
+}
 
 export async function setupFixtureData(cwd: string): Promise<void> {
   const tasksDir = join(cwd, '.ai', 'do-not-open', 'tasks');
@@ -771,21 +770,21 @@ export async function setupFixtureData(cwd: string): Promise<void> {
     await writeFile(join(tasksDir, `${task.taskId}.md`), lines.join('\n') + '\n');
   }
 
-  // Write roster authority to SQLite
   {
     const store = openTaskLifecycleStore(cwd);
     try {
       for (const agent of SYNTHETIC_ROSTER) {
+        const timestamp = timestampForFixture(agent);
         store.upsertRosterEntry({
           agent_id: agent.agent_id,
           role: agent.role,
           capabilities_json: JSON.stringify(agent.capabilities ?? []),
-          first_seen_at: agent.first_seen_at,
-          last_active_at: agent.last_active_at,
+          first_seen_at: timestamp,
+          last_active_at: timestamp,
           status: agent.status ?? 'idle',
-          task_number: agent.task ?? null,
-          last_done: agent.last_done ?? null,
-          updated_at: agent.updated_at ?? agent.last_active_at,
+          task_number: agent.current_task ?? null,
+          last_done: null,
+          updated_at: timestamp,
         });
       }
     } finally {
@@ -801,19 +800,44 @@ export async function setupFixtureData(cwd: string): Promise<void> {
 
   // Write assignment records
   const byTask = new Map<string, FixtureAssignment[]>();
-  for (const a of SYNTHETIC_ASSIGNMENTS) {
-    const list = byTask.get(a.task_id) ?? [];
-    list.push(a);
-    byTask.set(a.task_id, list);
+  for (const assignment of SYNTHETIC_ASSIGNMENTS) {
+    const list = byTask.get(assignment.task_id) ?? [];
+    list.push(assignment);
+    byTask.set(assignment.task_id, list);
   }
   {
     const store = openTaskLifecycleStore(cwd);
     try {
+      const lifecycleTasks = new Map<string, FixtureTask>();
+      for (const task of SYNTHETIC_TASKS) lifecycleTasks.set(task.taskId, task);
       for (const [taskId, assignmentsForTask] of byTask) {
-        store.upsertAssignmentRecord({
+        const fixtureTask = lifecycleTasks.get(taskId);
+        const completed = assignmentsForTask.find((assignment) => assignment.release_reason === 'completed');
+        store.upsertLifecycle({
           task_id: taskId,
-          record_json: JSON.stringify({ task_id: taskId, assignments: assignmentsForTask }),
+          task_number: fixtureTask?.taskNumber ?? taskNumberFromTaskId(taskId),
+          status: fixtureTask?.status ?? (assignmentsForTask.some((assignment) => assignment.released_at === null) ? 'claimed' : 'closed'),
+          governed_by: null,
+          closed_at: completed?.released_at ?? null,
+          closed_by: completed?.agent_id ?? null,
+          closure_mode: null,
+          relative_priority: 0,
+          priority_reason: null,
+          reopened_at: null,
+          reopened_by: null,
+          continuation_packet_json: null,
           updated_at: new Date().toISOString(),
+        });
+        assignmentsForTask.forEach((assignment, index) => {
+          store.insertAssignment({
+            assignment_id: `fixture-${taskId}-${assignment.agent_id}-${index}`,
+            task_id: taskId,
+            agent_id: assignment.agent_id,
+            claimed_at: assignment.claimed_at,
+            released_at: assignment.released_at,
+            release_reason: assignment.release_reason,
+            intent: 'primary',
+          });
         });
       }
     } finally {

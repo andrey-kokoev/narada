@@ -345,12 +345,14 @@ export async function chapterCommissionCommand(
   const writtenFiles: string[] = [chapterPath];
   try {
     store.db.exec('begin immediate;');
-    for (const expected of numbers) {
-      const allocated = store.allocateTaskNumber();
-      if (allocated !== expected) {
-        throw new Error(`Task number allocation drift: expected ${expected}, allocated ${allocated}`);
-      }
+    const currentAllocated = store.getLastAllocated();
+    const expectedNumbers = Array.from({ length: numbers.length }, (_, index) => currentAllocated + index + 1);
+    if (expectedNumbers.some((expected, index) => expected !== numbers[index])) {
+      throw new Error(`Task number allocation drift: expected ${numbers.join(', ')}, current sequence yields ${expectedNumbers.join(', ')}`);
     }
+    store.db
+      .prepare('update task_number_sequence set last_allocated = ? where singleton = 1')
+      .run(to);
     for (let index = 0; index < specs.length; index += 1) {
       await atomicWriteFile(plannedTasks[index]!.file_path, renderTaskFile(specs[index]!));
       writtenFiles.push(plannedTasks[index]!.file_path);

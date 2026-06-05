@@ -13,9 +13,7 @@ import { resolve } from 'node:path';
 import {
   findTaskFile,
   readTaskFile,
-  loadRoster,
   checkDependencies,
-  type TaskAssignmentRecord,
 } from '../lib/task-governance.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
@@ -24,6 +22,7 @@ import type {
   TaskLifecycleStore,
   TaskStatus,
   DispatchPacketRow,
+  TaskAssignmentRow,
 } from '../lib/task-lifecycle-store.js';
 import { JsonPrincipalSessionBindingRegistry } from '@narada2/control-plane';
 
@@ -54,17 +53,12 @@ function makePacketId(taskId: string, assignmentId: string, sequence: number): s
   return `disp_${taskId}_${assignmentId}_${sequence}`;
 }
 
-async function loadAssignmentRecord(
-  cwd: string,
+async function loadActiveAssignment(
+  _cwd: string,
   taskId: string,
   store: TaskLifecycleStore,
-): Promise<TaskAssignmentRecord | null> {
-  const stored = store.getAssignmentRecord(taskId);
-  if (stored) {
-    return JSON.parse(stored.record_json) as TaskAssignmentRecord;
-  }
-  const { loadAssignment } = await import('../lib/task-governance.js');
-  return loadAssignment(cwd, taskId);
+): Promise<TaskAssignmentRow | undefined> {
+  return store.getActiveAssignment(taskId);
 }
 
 /**
@@ -77,27 +71,20 @@ async function isTaskVisible(
   agentId: string,
   store: TaskLifecycleStore,
 ): Promise<{ visible: boolean; reason?: string }> {
-  // 1. Assignment exists and is unreleased for this agent
-  const assignmentRecord = await loadAssignmentRecord(cwd, taskId, store);
-  if (!assignmentRecord) {
-    return { visible: false, reason: 'No assignment record' };
-  }
-  const activeAssignment = assignmentRecord.assignments.find((a) => a.released_at === null);
+  const activeAssignment = await loadActiveAssignment(cwd, taskId, store);
   if (!activeAssignment) {
-    return { visible: false, reason: 'No active assignment' };
+    return { visible: false, reason: 'No assignment record' };
   }
   if (activeAssignment.agent_id !== agentId) {
     return { visible: false, reason: 'Assigned to a different agent' };
   }
 
-  // 2. Task status is claimed or needs_continuation
   const lifecycle = store.getLifecycle(taskId);
   const status = lifecycle?.status ?? 'opened';
   if (status !== 'claimed' && status !== 'needs_continuation') {
     return { visible: false, reason: `Task status is ${status}` };
   }
 
-  // 3. Dependencies satisfied
   const { frontMatter } = await readTaskFile(
     (await findTaskFile(cwd, String(taskNumber)))!.path,
   );
@@ -107,10 +94,7 @@ async function isTaskVisible(
     return { visible: false, reason: `Blocked by dependencies: ${blockedBy.join(', ')}` };
   }
 
-  // 4. No active dispatch packet for this assignment
-  const activePacket = store.getActiveDispatchPacketForAssignment(activeAssignment.claimed_at);
-  // For v0, we use claimed_at as a proxy for assignment_id since assignments are still JSON
-  // TODO: migrate assignments to SQLite (Task 564 follow-up)
+  const activePacket = store.getActiveDispatchPacketForAssignment(activeAssignment.assignment_id);
   if (activePacket) {
     return { visible: false, reason: 'Already picked up' };
   }
@@ -133,19 +117,7 @@ async function doQueue(
     };
   }
 
-  // Verify agent exists in roster
-  let roster;
-  try {
-    roster = await loadRoster(cwd);
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    return {
-      exitCode: ExitCode.GENERAL_ERROR,
-      result: { status: 'error', error: `Failed to load agent roster: ${msg}` },
-    };
-  }
-
-  const agent = roster.agents.find((a) => a.agent_id === agentId);
+  const agent = store.getRosterEntry(agentId);
   if (!agent) {
     return {
       exitCode: ExitCode.INVALID_CONFIG,
@@ -153,8 +125,6 @@ async function doQueue(
     };
   }
 
-  // Find all tasks assigned to this agent
-  // For v0, scan filesystem for tasks with active assignments
   const { readdir } = await import('node:fs/promises');
   const { join } = await import('node:path');
   const tasksDir = join(cwd, '.ai', 'do-not-open', 'tasks');
@@ -182,8 +152,7 @@ async function doQueue(
     const taskNumber = numMatch ? Number(numMatch[1]) : null;
     if (taskNumber === null) continue;
 
-    const assignmentRecord = await loadAssignmentRecord(cwd, taskFile.taskId, store);
-    const activeAssignment = assignmentRecord?.assignments.find((a) => a.released_at === null);
+    const activeAssignment = await loadActiveAssignment(cwd, taskFile.taskId, store);
     if (!activeAssignment || activeAssignment.agent_id !== agentId) continue;
 
     const lifecycle = store.getLifecycle(taskFile.taskId);
@@ -231,6 +200,7 @@ async function doQueue(
   };
 }
 
+
 async function doPickup(
   options: TaskDispatchOptions,
   store: TaskLifecycleStore,
@@ -261,20 +231,11 @@ async function doPickup(
     };
   }
 
-  // Load assignment record
-  const assignmentRecord = await loadAssignmentRecord(cwd, taskFile.taskId, store);
-  if (!assignmentRecord) {
-    return {
-      exitCode: ExitCode.GENERAL_ERROR,
-      result: { status: 'error', error: 'No assignment record for this task' },
-    };
-  }
-
-  const activeAssignment = assignmentRecord.assignments.find((a) => a.released_at === null);
+  const activeAssignment = await loadActiveAssignment(cwd, taskFile.taskId, store);
   if (!activeAssignment) {
     return {
       exitCode: ExitCode.GENERAL_ERROR,
-      result: { status: 'error', error: 'No active assignment for this task' },
+      result: { status: 'error', error: 'No assignment record for this task' },
     };
   }
   if (activeAssignment.agent_id !== agentId) {
@@ -287,9 +248,7 @@ async function doPickup(
     };
   }
 
-  // Check for active dispatch packet
-  // For v0, use claimed_at as assignment_id proxy
-  const existingPacket = store.getActiveDispatchPacketForAssignment(activeAssignment.claimed_at);
+  const existingPacket = store.getActiveDispatchPacketForAssignment(activeAssignment.assignment_id);
   if (existingPacket) {
     return {
       exitCode: ExitCode.GENERAL_ERROR,
@@ -300,7 +259,6 @@ async function doPickup(
     };
   }
 
-  // Check task status
   const lifecycle = store.getLifecycle(taskFile.taskId);
   const status = lifecycle?.status ?? 'opened';
   if (status !== 'claimed' && status !== 'needs_continuation') {
@@ -310,7 +268,6 @@ async function doPickup(
     };
   }
 
-  // Check dependencies
   const { frontMatter } = await readTaskFile(taskFile.path);
   const dependsOn = frontMatter.depends_on as number[] | undefined;
   const { blockedBy, details } = await checkDependencies(cwd, dependsOn, store);
@@ -325,7 +282,6 @@ async function doPickup(
     };
   }
 
-  // Resolve principal session binding for targeting
   let targetSessionId: string | null = null;
   let targetSessionTitle: string | null = null;
   try {
@@ -339,14 +295,12 @@ async function doPickup(
     }
   } catch {
     // Binding registry is advisory; missing or unreadable bindings are OK.
-    // Dispatch falls back to --continue or fresh session at execution time.
   }
 
-  // Create dispatch packet
   const packet: DispatchPacketRow = {
-    packet_id: makePacketId(taskFile.taskId, activeAssignment.claimed_at, 1),
+    packet_id: makePacketId(taskFile.taskId, activeAssignment.assignment_id, 1),
     task_id: taskFile.taskId,
-    assignment_id: activeAssignment.claimed_at,
+    assignment_id: activeAssignment.assignment_id,
     agent_id: agentId,
     picked_up_at: nowIso(),
     lease_expires_at: leaseExpiryIso(DEFAULT_LEASE_MINUTES),

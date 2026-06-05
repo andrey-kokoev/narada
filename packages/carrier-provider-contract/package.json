@@ -1,0 +1,16 @@
+{
+  "name": "@narada2/carrier-provider-contract",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/carrier-provider-contract.mjs",
+    "./provider-registry": "./contracts/provider-registry.json",
+    "./provider-adapters": "./contracts/provider-adapters.json",
+    "./narada-tool-call-envelope": "./contracts/narada-tool-call-envelope.json"
+  },
+  "scripts": {
+    "test": "node --test src/carrier-provider-contract.test.mjs",
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/carrier-provider-contract.mjs"
+  }
+}

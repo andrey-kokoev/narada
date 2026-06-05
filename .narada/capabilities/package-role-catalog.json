@@ -41,170 +41,391 @@
     {
       "package": "@narada2/agent-context-memory",
       "path": "packages/agent-context-memory",
-      "roles": ["descriptor_contract"],
+      "roles": [
+        "descriptor_contract"
+      ],
       "posture": "descriptor_only_no_live_storage_mutation"
     },
     {
-      "package": "@narada2/crew-startup-shortcut",
-      "path": "packages/crew-startup-shortcut",
-      "roles": ["descriptor_contract"],
-      "posture": "launch_intents_templates_only_no_process_start"
+      "package": "@narada2/agent-context-tools",
+      "path": "packages/agent-context-tools",
+      "roles": [
+        "mcp_boundary",
+        "runtime_authority"
+      ],
+      "posture": "agent_context_mcp_tools_runtime"
+    },
+    {
+      "package": "@narada2/agent-start",
+      "path": "packages/agent-start",
+      "roles": [
+        "cli_exposure",
+        "runtime_authority"
+      ],
+      "posture": "agent_start_operator_surface_runtime"
+    },
+    {
+      "package": "@narada2/agent-start-bootstrap",
+      "path": "packages/agent-start-bootstrap",
+      "roles": [
+        "runtime_authority",
+        "descriptor_contract"
+      ],
+      "posture": "agent_start_bootstrap_generator"
+    },
+    {
+      "package": "@narada2/agent-start-renderer",
+      "path": "packages/agent-start-renderer",
+      "roles": [
+        "descriptor_contract"
+      ],
+      "posture": "agent_start_renderer_templates"
+    },
+    {
+      "package": "@narada2/carrier-action-admission",
+      "path": "packages/carrier-action-admission",
+      "roles": [
+        "mcp_boundary",
+        "descriptor_contract"
+      ],
+      "posture": "carrier_action_admission_contracts"
+    },
+    {
+      "package": "@narada2/carrier-protocol",
+      "path": "packages/carrier-protocol",
+      "roles": [
+        "domain_model",
+        "descriptor_contract"
+      ],
+      "posture": "carrier_protocol_contracts"
     },
     {
       "package": "@narada2/charters",
       "path": "packages/domains/charters",
-      "roles": ["domain_model"],
+      "roles": [
+        "domain_model"
+      ],
       "posture": "domain_contracts"
-    },
-    {
-      "package": "@narada2/intent-zones",
-      "path": "packages/intent-zones",
-      "roles": ["domain_model", "descriptor_contract"],
-      "posture": "intent_admission_contracts"
     },
     {
       "package": "@narada2/cli",
       "path": "packages/layers/cli",
-      "roles": ["cli_exposure", "runtime_authority"],
+      "roles": [
+        "cli_exposure",
+        "runtime_authority"
+      ],
       "posture": "governed_command_surface"
-    },
-    {
-      "package": "@narada2/control-plane",
-      "path": "packages/layers/control-plane",
-      "roles": ["runtime_authority"],
-      "posture": "kernel_control_plane_runtime"
-    },
-    {
-      "package": "@narada2/daemon",
-      "path": "packages/layers/daemon",
-      "roles": ["runtime_authority"],
-      "posture": "runtime_daemon"
-    },
-    {
-      "package": "@narada2/mcp-shell-windows",
-      "path": "packages/mcp-shell-windows",
-      "roles": ["mcp_boundary", "descriptor_contract"],
-      "posture": "boundary_policy_no_shell_grant"
-    },
-    {
-      "package": "@narada2/mcp-surface-carrier-supervisor",
-      "path": "packages/mcp-surface-carrier-supervisor",
-      "roles": ["mcp_boundary", "descriptor_contract"],
-      "posture": "status_lifecycle_no_process_restart"
-    },
-    {
-      "package": "@narada2/mcp-test-windows",
-      "path": "packages/mcp-test-windows",
-      "roles": ["mcp_boundary", "descriptor_contract"],
-      "posture": "test_contract_no_source_result_import"
-    },
-    {
-      "package": "@narada2/narada-proper-mcp",
-      "path": "packages/narada-proper-mcp",
-      "roles": ["mcp_boundary", "runtime_authority"],
-      "posture": "target_local_agent_facing_mcp_surface"
-    },
-    {
-      "package": "@narada2/ops-kit",
-      "path": "packages/ops-kit",
-      "roles": ["ops_fixture", "domain_model"],
-      "posture": "fixture_and_ops_model"
-    },
-    {
-      "package": "@narada2/site-config",
-      "path": "packages/site-config",
-      "roles": ["descriptor_contract"],
-      "posture": "site_config_descriptors_no_live_registry_mutation"
-    },
-    {
-      "package": "@narada2/site-inbox",
-      "path": "packages/site-inbox",
-      "roles": ["descriptor_contract"],
-      "posture": "inbox_contracts_no_source_inbox_import"
-    },
-    {
-      "package": "@narada2/site-lift",
-      "path": "packages/site-lift",
-      "roles": ["descriptor_contract"],
-      "posture": "adoption_metadata_no_file_copy_or_live_authority"
-    },
-    {
-      "package": "@narada2/site-task-lifecycle",
-      "path": "packages/site-task-lifecycle",
-      "roles": ["descriptor_contract"],
-      "posture": "adapter_interface_only_no_sqlite_dependency"
     },
     {
       "package": "@narada2/cloudflare-site",
       "path": "packages/sites/cloudflare",
-      "roles": ["platform_template"],
+      "roles": [
+        "platform_template"
+      ],
       "posture": "cloudflare_site_materialization_template"
+    },
+    {
+      "package": "@narada2/control-plane",
+      "path": "packages/layers/control-plane",
+      "roles": [
+        "runtime_authority"
+      ],
+      "posture": "kernel_control_plane_runtime"
+    },
+    {
+      "package": "@narada2/crew-startup-shortcut",
+      "path": "packages/crew-startup-shortcut",
+      "roles": [
+        "descriptor_contract"
+      ],
+      "posture": "launch_intents_templates_only_no_process_start"
+    },
+    {
+      "package": "@narada2/daemon",
+      "path": "packages/layers/daemon",
+      "roles": [
+        "runtime_authority"
+      ],
+      "posture": "runtime_daemon"
+    },
+    {
+      "package": "@narada2/intent-zones",
+      "path": "packages/intent-zones",
+      "roles": [
+        "domain_model",
+        "descriptor_contract"
+      ],
+      "posture": "intent_admission_contracts"
     },
     {
       "package": "@narada2/linux-site",
       "path": "packages/sites/linux",
-      "roles": ["platform_template", "runtime_authority"],
+      "roles": [
+        "platform_template",
+        "runtime_authority"
+      ],
       "posture": "linux_site_runtime"
     },
     {
       "package": "@narada2/macos-site",
       "path": "packages/sites/macos",
-      "roles": ["platform_template"],
+      "roles": [
+        "platform_template"
+      ],
       "posture": "macos_site_template"
-    },
-    {
-      "package": "@narada2/windows-site",
-      "path": "packages/sites/windows",
-      "roles": ["platform_template"],
-      "posture": "windows_site_template"
-    },
-    {
-      "package": "@narada2/task-governance",
-      "path": "packages/task-governance",
-      "roles": ["runtime_authority", "domain_model"],
-      "posture": "task_governance_lifecycle_authority"
     },
     {
       "package": "@narada2/mailbox",
       "path": "packages/verticals/mailbox",
-      "roles": ["vertical"],
+      "roles": [
+        "vertical"
+      ],
       "posture": "mailbox_vertical"
+    },
+    {
+      "package": "@narada2/mcp-fabric",
+      "path": "packages/mcp-fabric",
+      "roles": [
+        "mcp_boundary",
+        "runtime_authority"
+      ],
+      "posture": "mcp_fabric_runtime_boundary"
+    },
+    {
+      "package": "@narada2/mcp-shell-windows",
+      "path": "packages/mcp-shell-windows",
+      "roles": [
+        "mcp_boundary",
+        "descriptor_contract"
+      ],
+      "posture": "boundary_policy_no_shell_grant"
+    },
+    {
+      "package": "@narada2/mcp-surface-carrier-supervisor",
+      "path": "packages/mcp-surface-carrier-supervisor",
+      "roles": [
+        "mcp_boundary",
+        "descriptor_contract"
+      ],
+      "posture": "status_lifecycle_no_process_restart"
+    },
+    {
+      "package": "@narada2/mcp-test-windows",
+      "path": "packages/mcp-test-windows",
+      "roles": [
+        "mcp_boundary",
+        "descriptor_contract"
+      ],
+      "posture": "test_contract_no_source_result_import"
+    },
+    {
+      "package": "@narada2/mcp-transport",
+      "path": "packages/mcp-transport",
+      "roles": [
+        "mcp_boundary",
+        "runtime_authority"
+      ],
+      "posture": "mcp_transport_runtime_boundary"
+    },
+    {
+      "package": "@narada2/narada-proper-mcp",
+      "path": "packages/narada-proper-mcp",
+      "roles": [
+        "mcp_boundary",
+        "runtime_authority"
+      ],
+      "posture": "target_local_agent_facing_mcp_surface"
+    },
+    {
+      "package": "@narada2/operator-surface-carriers",
+      "path": "packages/operator-surface-carriers",
+      "roles": [
+        "platform_template",
+        "descriptor_contract"
+      ],
+      "posture": "operator_surface_carrier_templates"
+    },
+    {
+      "package": "@narada2/ops-kit",
+      "path": "packages/ops-kit",
+      "roles": [
+        "ops_fixture",
+        "domain_model"
+      ],
+      "posture": "fixture_and_ops_model"
     },
     {
       "package": "@narada2/search",
       "path": "packages/verticals/search",
-      "roles": ["vertical"],
+      "roles": [
+        "vertical"
+      ],
       "posture": "search_vertical"
+    },
+    {
+      "package": "@narada2/site-common-tools",
+      "path": "packages/site-common-tools",
+      "roles": [
+        "mcp_boundary",
+        "runtime_authority"
+      ],
+      "posture": "site_common_tools_runtime_surface"
+    },
+    {
+      "package": "@narada2/site-config",
+      "path": "packages/site-config",
+      "roles": [
+        "descriptor_contract"
+      ],
+      "posture": "site_config_descriptors_no_live_registry_mutation"
+    },
+    {
+      "package": "@narada2/site-inbox",
+      "path": "packages/site-inbox",
+      "roles": [
+        "descriptor_contract"
+      ],
+      "posture": "inbox_contracts_no_source_inbox_import"
+    },
+    {
+      "package": "@narada2/site-lift",
+      "path": "packages/site-lift",
+      "roles": [
+        "descriptor_contract"
+      ],
+      "posture": "adoption_metadata_no_file_copy_or_live_authority"
+    },
+    {
+      "package": "@narada2/site-operating-loop",
+      "path": "packages/site-operating-loop",
+      "roles": [
+        "runtime_authority",
+        "domain_model"
+      ],
+      "posture": "site_operating_loop_runtime"
+    },
+    {
+      "package": "@narada2/site-operational-dashboard",
+      "path": "packages/site-operational-dashboard",
+      "roles": [
+        "cli_exposure",
+        "runtime_authority"
+      ],
+      "posture": "site_operational_dashboard_surface"
+    },
+    {
+      "package": "@narada2/site-registry-cloudflare",
+      "path": "packages/site-registry-cloudflare",
+      "roles": [
+        "runtime_authority",
+        "platform_template"
+      ],
+      "posture": "cloudflare_site_registry_runtime"
+    },
+    {
+      "package": "@narada2/site-task-lifecycle",
+      "path": "packages/site-task-lifecycle",
+      "roles": [
+        "descriptor_contract"
+      ],
+      "posture": "adapter_interface_only_no_sqlite_dependency"
+    },
+    {
+      "package": "@narada2/task-governance",
+      "path": "packages/task-governance",
+      "roles": [
+        "runtime_authority",
+        "domain_model"
+      ],
+      "posture": "task_governance_lifecycle_authority"
+    },
+    {
+      "package": "@narada2/task-lifecycle-kernel",
+      "path": "packages/task-lifecycle-kernel",
+      "roles": [
+        "runtime_authority",
+        "domain_model"
+      ],
+      "posture": "task_lifecycle_kernel_runtime"
+    },
+    {
+      "package": "@narada2/task-lifecycle-tools",
+      "path": "packages/task-lifecycle-tools",
+      "roles": [
+        "cli_exposure",
+        "runtime_authority"
+      ],
+      "posture": "task_lifecycle_tool_surface"
+    },
+    {
+      "package": "@narada2/typed-mcp-surface",
+      "path": "packages/typed-mcp-surface",
+      "roles": [
+        "mcp_boundary",
+        "descriptor_contract"
+      ],
+      "posture": "typed_mcp_surface_contracts"
+    },
+    {
+      "package": "@narada2/window-surface-overlay",
+      "path": "packages/window-surface-overlay",
+      "roles": [
+        "platform_template",
+        "runtime_authority"
+      ],
+      "posture": "window_surface_overlay_runtime"
     },
     {
       "package": "@narada2/windows-komorebi-yasb-kit",
       "path": "packages/windows-komorebi-yasb-kit",
-      "roles": ["platform_template", "descriptor_contract"],
+      "roles": [
+        "platform_template",
+        "descriptor_contract"
+      ],
       "posture": "windows_desktop_template_no_pc_runtime_import"
     },
     {
       "package": "@narada2/windows-machinery-capability-exchange",
       "path": "packages/windows-machinery-capability-exchange",
-      "roles": ["descriptor_contract"],
+      "roles": [
+        "descriptor_contract"
+      ],
       "posture": "capability_exchange_descriptors_no_live_grants"
     },
     {
       "package": "@narada2/windows-operator-surface",
       "path": "packages/windows-operator-surface",
-      "roles": ["platform_template", "descriptor_contract"],
+      "roles": [
+        "platform_template",
+        "descriptor_contract"
+      ],
       "posture": "operator_surface_contracts_no_runtime_copy"
     },
     {
       "package": "@narada2/windows-osl",
       "path": "packages/windows-osl",
-      "roles": ["platform_template", "descriptor_contract"],
+      "roles": [
+        "platform_template",
+        "descriptor_contract"
+      ],
       "posture": "operator_surface_layout_descriptors"
     },
     {
       "package": "@narada2/windows-pc-site-template",
       "path": "packages/windows-pc-site-template",
-      "roles": ["platform_template", "descriptor_contract"],
+      "roles": [
+        "platform_template",
+        "descriptor_contract"
+      ],
       "posture": "pc_site_template_no_pc_locus_import"
+    },
+    {
+      "package": "@narada2/windows-site",
+      "path": "packages/sites/windows",
+      "roles": [
+        "platform_template"
+      ],
+      "posture": "windows_site_template"
     }
   ],
   "descriptor_package_guard": {

@@ -30,14 +30,19 @@ export interface BridgeUpdateResult {
   warning?: string;
 }
 
+function resolveStateDirPath(value: string): string {
+  if (value.startsWith('/') && !value.startsWith('//')) return value;
+  return resolve(value);
+}
+
 export function resolvePrincipalStateDir(options?: {
   cwd?: string;
   principalStateDir?: string;
 }): string {
-  if (options?.principalStateDir) return resolve(options.principalStateDir);
+  if (options?.principalStateDir) return resolveStateDirPath(options.principalStateDir);
   if (process.env.NARADA_PRINCIPAL_STATE_DIR)
-    return resolve(process.env.NARADA_PRINCIPAL_STATE_DIR);
-  return resolve(options?.cwd ?? process.cwd());
+    return resolveStateDirPath(process.env.NARADA_PRINCIPAL_STATE_DIR);
+  return resolveStateDirPath(options?.cwd ?? process.cwd());
 }
 
 function isSilentEvent(event: TaskGovernanceEvent): boolean {

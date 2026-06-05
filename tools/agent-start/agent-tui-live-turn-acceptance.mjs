@@ -210,8 +210,10 @@ function writeProof(report, outputPath = null) {
 }
 
 function defaultSpawnAgentStart({ siteRoot, identity, maxSteps, directivePath, timeoutMs, normalLaunchDefaults = false }) {
-  const startAgentPath = join(DEFAULT_NARADA_PROPER_ROOT, 'packages', 'agent-start', 'bin', 'narada-agent-start.mjs');
+  const startAgentPath = join(DEFAULT_NARADA_PROPER_ROOT, 'packages', 'agent-start', 'src', 'narada-agent-start.ts');
   const launcherArgs = [
+    '--import',
+    'tsx',
     startAgentPath,
     identity,
     '--target-site-root',

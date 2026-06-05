@@ -2107,8 +2107,22 @@ describe('operator-surface commands', () => {
       crossDesktopAuthority: 'operator:cross-desktop-approved:1193',
       format: 'json',
     }, createMockContext());
+
+    const admittedCwd = await tempRepo();
+    await admitIdentity(admittedCwd);
+    await writeBindings(admittedCwd, [{
+      binding_id: 'bind-desktop-authorized',
+      identity_id: 'narada-proper-builder',
+      runtime_locus: 'pc-site',
+      handle: 'hwnd:123',
+      transport: 'operator_surface_input',
+      submit_strategy: 'operator_confirmed_submit',
+      input_capabilities: ['focus', 'type_text'],
+      desktop_id: 'desktop-target',
+      status: 'active',
+    }]);
     const admitted = await operatorSurfaceSendCommand({
-      cwd,
+      cwd: admittedCwd,
       identity: 'narada-proper-builder',
       text: 'summon',
       execute: true,
@@ -2184,8 +2198,8 @@ describe('operator-surface commands', () => {
       status: 'error',
       reason: 'no_binding',
       requested_address: 'narada-proper-builder',
-      current_site: 'narada-proper',
-      target_site: 'narada-proper',
+      current_site: 'narada',
+      target_site: 'narada',
       message_route: {
         binding_status: 'unbound',
       },
@@ -2264,8 +2278,8 @@ describe('operator-surface commands', () => {
     expect(send.result).toMatchObject({
       reason: 'no_binding',
       requested_address: 'narada-proper-builder',
-      current_site: 'narada-proper',
-      target_site: 'narada-proper',
+      current_site: 'narada',
+      target_site: 'narada',
       message_route: {
         binding_status: 'labeled_unbound',
       },
@@ -2305,8 +2319,8 @@ describe('operator-surface commands', () => {
       reason: 'no_binding',
       identity: 'narada-proper-observer',
       requested_address: 'observer',
-      current_site: 'narada-proper',
-      target_site: 'narada-proper',
+      current_site: 'narada',
+      target_site: 'narada',
       identity_resolution: {
         requested_identity: 'observer',
         resolved_identity: 'narada-proper-observer',
@@ -2377,8 +2391,8 @@ describe('operator-surface commands', () => {
       reason: 'identity_not_admitted',
       identity: 'observer',
       requested_address: 'observer',
-      current_site: 'narada-proper',
-      target_site: 'narada-proper',
+      current_site: 'narada',
+      target_site: 'narada',
       unblock_command: 'narada operator-surface agent instantiate --site <site-id-or-root> --role observer --agent-kind codex_cli --by <principal>',
     });
   });

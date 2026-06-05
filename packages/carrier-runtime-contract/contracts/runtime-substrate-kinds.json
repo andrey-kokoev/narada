@@ -1,0 +1,22 @@
+{
+  "schema": "narada.runtime_substrate_kind.v1",
+  "admitted_runtime_substrate_kinds": [
+    "kimi",
+    "codex",
+    "agent-cli",
+    "pi",
+    "claude-code",
+    "agent-tui"
+  ],
+  "codex_context_isolation": {
+    "runtime": "codex",
+    "runtime_substrate_kind": "codex",
+    "fresh_launch_planned_code": "codex_fresh_launch_planned",
+    "fresh_launcher_bound_code": "codex_fresh_launcher_bound",
+    "forbidden_resume_modes": [
+      "codex resume --last",
+      "ambient picker selection",
+      "manual session selection as authority"
+    ]
+  }
+}

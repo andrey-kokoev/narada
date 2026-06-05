@@ -33,7 +33,7 @@ semantics.
 
 `C:\Users\Andrey\Narada` is the operator/user-site control surface. It may contain launchers, registry configuration, and operator affordances, but it delegates carrier execution to Narada proper's packaged `narada-agent-cli`.
 
-Site-local `start-agent.mjs` files are compatibility shims. They may resolve site-local roster and MCP fabric, but `agent-cli` provider metadata and the executable carrier path are owned by Narada proper package exports/bins.
+Site-local `start-agent.mjs` files are no longer admitted compatibility shims. Agent startup authority is the packaged `@narada2/agent-start` TypeScript entrypoint, reached through the site PowerShell surface or package bin metadata.
 
 ## Wrapper Contract
 

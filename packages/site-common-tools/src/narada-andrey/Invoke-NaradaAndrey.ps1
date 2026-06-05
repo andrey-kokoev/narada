@@ -575,21 +575,17 @@ if ($Command -eq "agent-sessions") {
 }
 
 if ($Command -eq "agent-start") {
-    $script = Join-Path $UserSiteRoot "tools\agent-start\start-agent.mjs"
-    if (-not (Test-Path -LiteralPath $script)) { throw "agent_start_script_missing: $script" }
-    $flags = @($Agent, "--pc-site-root", $PcSiteRoot, "--launch-source", "narada-andrey.ps1 agent-start")
-    if ($Runtime) { $flags += @("--runtime", $Runtime) }
-    if ($IntelligenceProvider) { $flags += @("--intelligence-provider", $IntelligenceProvider) }
-    if ($TargetSiteId) { $flags += @("--target-site-id", $TargetSiteId) }
-    if ($TargetSiteRoot) { $flags += @("--target-site-root", $TargetSiteRoot) }
-    if ($Json) { $flags += "--json" }
-    if ($AdmitSession) { $flags += "--admit-session" }
-    if ($ShowAdmission) { $flags += @("--show-admission", $ShowAdmission) }
-    if ($Exec) { $flags += "--exec" }
-    if ($EnableNativeShell) { $flags += "--enable-native-shell" }
-    if ($DryRun) { $flags += "--dry-run" }
+    $script = Join-Path $UserSiteRoot "narada.ps1"
+    if (-not (Test-Path -LiteralPath $script)) { throw "agent_start_surface_missing: $script" }
+    $flags = @("agent-start")
+    if ($Agent) { $flags += @("-Agent", $Agent) }
+    if ($Runtime) { $flags += @("-Runtime", $Runtime) }
+    if ($Json) { $flags += "-Json" }
+    if ($Exec) { $flags += "-Exec" }
+    if ($EnableNativeShell) { $flags += "-EnableNativeShell" }
+    if ($DryRun) { $flags += "-DryRun" }
     $env:NARADA_AGENT_ID = $Agent
-    & $node $script @flags
+    & $script @flags
     return
 }
 

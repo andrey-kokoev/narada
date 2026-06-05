@@ -13,10 +13,14 @@ vi.mock('node:fs/promises', async () => {
 
 // Reset memfs volume before each test
 import { beforeEach } from 'vitest';
+import { tmpdir } from 'node:os';
 import { vol } from 'memfs';
+
+process.env.NARADA_GIT_BINARY ??= 'git';
 
 beforeEach(() => {
   vol.reset();
   vol.mkdirSync('/tmp', { recursive: true });
   vol.mkdirSync('/test', { recursive: true });
+  vol.mkdirSync(tmpdir().replace(/\\/g, '/'), { recursive: true });
 });

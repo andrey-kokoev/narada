@@ -8,7 +8,7 @@
  */
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type {
   PrincipalRuntime,
   PrincipalRuntimeSnapshot,
@@ -197,8 +197,7 @@ export class JsonPrincipalRuntimeRegistry implements PrincipalRuntimeRegistry {
 
   private async persist(): Promise<void> {
     try {
-      const dir = this.filepath.split("/").slice(0, -1).join("/");
-      await mkdir(dir, { recursive: true });
+      await mkdir(dirname(this.filepath), { recursive: true });
       const data = this.inMemory.snapshot();
       await writeFile(this.filepath, JSON.stringify(data, null, 2) + "\n", "utf8");
     } catch {

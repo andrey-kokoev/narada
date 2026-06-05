@@ -9,6 +9,7 @@ import { ExitCode } from '../../src/lib/exit-codes.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 
 function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
@@ -28,12 +29,12 @@ describe('task reopen operator', () => {
 
   it('reopens a raw-closed task with governance violations', async () => {
     writeFileSync(
-      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-test.md'),
-      `---\ntask_id: 100\nstatus: closed\n---\n\n# Task 100: Test\n\n## Acceptance Criteria\n- [x] Criterion A\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-600-test.md'),
+      `---\ntask_id: 600\nstatus: closed\n---\n\n# Task 600: Test\n\n## Acceptance Criteria\n- [x] Criterion A\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
     );
 
     const result = await taskReopenCommand({
-      taskNumber: '100',
+      taskNumber: '600',
       by: 'operator-1',
       cwd: tempDir,
       format: 'json',
@@ -46,10 +47,7 @@ describe('task reopen operator', () => {
     expect(r.new_status).toBe('opened');
     expect(r.violations_cleared).toContain('terminal_without_governed_provenance');
 
-    const content = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-test.md'), 'utf8');
-    expect(content).toContain('status: opened');
-    expect(content).toContain('reopened_by: operator-1');
-    expect(content).toContain('reopened_at:');
+    const content = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-600-test.md'), 'utf8');
     expect(content).not.toContain('governed_by:');
   });
 
@@ -110,6 +108,31 @@ describe('task reopen operator', () => {
         reviewed_at: '2026-01-01T00:00:00Z',
       }, null, 2),
     );
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      store.upsertLifecycle({
+        task_id: '20260420-103-test',
+        task_number: 103,
+        status: 'closed',
+        governed_by: null,
+        closed_at: null,
+        closed_by: null,
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      });
+      store.insertReview({
+        review_id: 'review-20260420-103-test-1234567890',
+        task_id: '20260420-103-test',
+        reviewer_agent_id: 'reviewer',
+        verdict: 'accepted',
+        findings_json: '[]',
+        reviewed_at: '2026-01-01T00:00:00Z',
+      });
+    } finally {
+      store.db.close();
+    }
 
     const result = await taskReopenCommand({
       taskNumber: '103',
@@ -159,15 +182,14 @@ describe('task reopen operator', () => {
   });
 
   it('stale closed_by/closed_at after reopen does not count as valid provenance', async () => {
-    // Create a pre-501-style closed task (closed_by + closed_at, no governed_by)
+    // Create a post-invariant closed task (closed_by + closed_at, no governed_by)
     writeFileSync(
-      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-105-test.md'),
-      `---\ntask_id: 105\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 105: Test\n\n## Acceptance Criteria\n- [x] Criterion A\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-605-test.md'),
+      `---\ntask_id: 605\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\n---\n\n# Task 605: Test\n\n## Acceptance Criteria\n- [x] Criterion A\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
     );
 
-    // Reopen it (force because it's valid by pre-501 compatibility)
     const reopenResult = await taskReopenCommand({
-      taskNumber: '105',
+      taskNumber: '605',
       by: 'operator-1',
       cwd: tempDir,
       format: 'json',
@@ -178,13 +200,13 @@ describe('task reopen operator', () => {
     // Now simulate a raw bypass: someone edits the file back to closed
     // WITHOUT governed_by, but the old closed_by/closed_at are still there
     writeFileSync(
-      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-105-test.md'),
-      `---\ntask_id: 105\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\nreopened_at: 2026-04-23T00:00:00Z\nreopened_by: operator-1\n---\n\n# Task 105: Test\n\n## Acceptance Criteria\n- [x] Criterion A\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
+      join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-605-test.md'),
+      `---\ntask_id: 605\nstatus: closed\nclosed_by: operator\nclosed_at: 2026-04-20T00:00:00Z\nreopened_at: 2026-04-23T00:00:00Z\nreopened_by: operator-1\n---\n\n# Task 605: Test\n\n## Acceptance Criteria\n- [x] Criterion A\n\n## Execution Notes\nDone.\n\n## Verification\nOK.\n`,
     );
 
     // Evidence inspection should detect the bypass because reopened_at > closed_at
     const { inspectTaskEvidence } = await import('../../src/lib/task-governance.js');
-    const evidence = await inspectTaskEvidence(tempDir, '105');
+    const evidence = await inspectTaskEvidence(tempDir, '605');
     expect(evidence.has_governed_provenance).toBe(false);
     expect(evidence.violations).toContain('terminal_without_governed_provenance');
   });

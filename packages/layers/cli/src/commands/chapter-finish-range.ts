@@ -70,6 +70,7 @@ export async function chapterFinishRangeCommand(
       taskNumber: String(task.taskNumber),
       agent: options.agent,
       summary: `${options.summaryPrefix ?? 'Completed chapter task'} ${task.taskNumber}.`,
+      verification: JSON.stringify([{ command: 'narada task finish --prove-criteria', result: 'criteria proof recorded by chapter finish-range' }]),
       proveCriteria: true,
       close: true,
       cwd,

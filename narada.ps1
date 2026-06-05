@@ -4,7 +4,7 @@ param(
   [string]$Command = "agent-start",
   [Alias("AgentId")]
   [string]$Agent,
-  [string]$Runtime = "codex",
+  [string]$Runtime = "agent-cli",
   [switch]$Exec,
   [switch]$DryRun,
   [switch]$Json,
@@ -24,8 +24,8 @@ if ($Command -ne "agent-start") {
 }
 
 $siteRoot = if ($env:NARADA_LAUNCH_REGISTRY_SITE_ROOT) { $env:NARADA_LAUNCH_REGISTRY_SITE_ROOT } else { $PSScriptRoot }
-$naradaProperRoot = if ($env:NARADA_PROPER_ROOT) { $env:NARADA_PROPER_ROOT } else { "D:\code\narada" }
-$agentStart = Join-Path $naradaProperRoot "packages\agent-start\bin\narada-agent-start.mjs"
+$naradaProperRoot = $PSScriptRoot
+$agentStart = Join-Path $naradaProperRoot "packages\agent-start\src\narada-agent-start.ts"
 if (-not (Test-Path -LiteralPath $agentStart)) {
   throw "packaged_agent_start_missing: $agentStart"
 }
@@ -51,6 +51,7 @@ if ($AgentTuiStartingDirectiveFile) { $flags += @("--agent-tui-starting-directiv
 $env:NARADA_AGENT_ID = $Agent
 $env:NARADA_TARGET_SITE_ROOT = $siteRoot
 $env:NARADA_LAUNCH_REGISTRY_SITE_ROOT = $siteRoot
-& node $agentStart @flags
+$tsxLoader = "file:///D:/code/narada/node_modules/.pnpm/tsx@4.21.0/node_modules/tsx/dist/loader.mjs"
+& node --import $tsxLoader $agentStart @flags
 exit $LASTEXITCODE
 

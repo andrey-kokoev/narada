@@ -8,6 +8,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { claimTaskService } from '@narada2/task-governance-core/task-assignment-lifecycle-service';
+import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import { loadAssignment } from '../../src/lib/task-governance.js';
 import { taskReleaseCommand } from '../../src/commands/task-release.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
@@ -33,6 +34,23 @@ function setupRepo(tempDir: string): void {
     join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
     '---\ntask_id: 999\nstatus: opened\n---\n\n# Task 999: Test Task\n',
   );
+
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    store.upsertRosterEntry({
+      agent_id: 'test-agent',
+      role: 'implementer',
+      capabilities_json: JSON.stringify(['claim']),
+      first_seen_at: '2026-01-01T00:00:00Z',
+      last_active_at: '2026-01-01T00:00:00Z',
+      status: 'idle',
+      task_number: null,
+      last_done: null,
+      updated_at: '2026-01-01T00:00:00Z',
+    });
+  } finally {
+    store.db.close();
+  }
 }
 
 describe('task release command', () => {

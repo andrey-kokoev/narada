@@ -44,7 +44,7 @@ describe('command-run CEIZ surface', () => {
     });
 
     const result = await commandRunCommand({
-      argv: JSON.stringify(['/usr/bin/printf', 'x'.repeat(3000)]),
+      argv: JSON.stringify([process.execPath, '-e', "process.stdout.write('x'.repeat(3000))"]),
       taskNumber: 100,
       agent: 'a1',
       requester: 'a1',
@@ -67,10 +67,9 @@ describe('command-run CEIZ surface', () => {
     expect(run).not.toHaveProperty('stderr');
     store.db.close();
   });
-
   it('inspect full exposes metadata, not raw unbounded streams', async () => {
     const runResult = await commandRunCommand({
-      argv: JSON.stringify(['/usr/bin/printf', 'hello']),
+      argv: JSON.stringify([process.execPath, '-e', "process.stdout.write('hello')"]),
       cwd: tempDir,
       format: 'json',
     });
@@ -92,7 +91,7 @@ describe('command-run CEIZ surface', () => {
 
   it('list returns bounded summaries without admitted excerpts', async () => {
     await commandRunCommand({
-      argv: JSON.stringify(['/usr/bin/printf', 'hello']),
+      argv: JSON.stringify([process.execPath, '-e', "process.stdout.write('hello')"]),
       agent: 'a1',
       cwd: tempDir,
       format: 'json',
@@ -136,7 +135,7 @@ describe('command-run CEIZ surface', () => {
   it('rejects preset combined with an ad hoc command', async () => {
     const result = await commandRunCommand({
       preset: 'task-graph-json',
-      argv: JSON.stringify(['/usr/bin/printf', 'hello']),
+      argv: JSON.stringify([process.execPath, '-e', "process.stdout.write('hello')"]),
       cwd: tempDir,
       format: 'json',
     });

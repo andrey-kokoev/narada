@@ -56,6 +56,17 @@ describe('task reconcile operator', () => {
         last_done: null,
         updated_at: '2026-04-25T00:00:00Z',
       });
+      store.upsertRosterEntry({
+        agent_id: 'reviewer-a1',
+        role: 'reviewer',
+        capabilities_json: JSON.stringify(['review']),
+        first_seen_at: '2026-04-25T00:00:00Z',
+        last_active_at: '2026-04-25T00:00:00Z',
+        status: 'idle',
+        task_number: null,
+        last_done: null,
+        updated_at: '2026-04-25T00:00:00Z',
+      });
       store.upsertLifecycle({
         task_id: '20260425-655-drift',
         task_number: 655,
@@ -416,6 +427,8 @@ describe('task reconcile operator', () => {
 
     expect((await taskClaimCommand({ cwd: tempDir, taskNumber: '656', agent: 'a1', format: 'json' })).exitCode)
       .toBe(ExitCode.SUCCESS);
+    expect((await taskEvidenceProveCriteriaCommand({ cwd: tempDir, taskNumber: '656', by: 'a1', unboundRationale: 'Focused reconcile test proof.', format: 'json' })).exitCode)
+      .toBe(ExitCode.SUCCESS);
     expect((await taskReportCommand({
       cwd: tempDir,
       taskNumber: '656',
@@ -424,8 +437,6 @@ describe('task reconcile operator', () => {
       verification: JSON.stringify([{ command: 'pnpm test:focused', result: 'passed' }]),
       format: 'json',
     })).exitCode).toBe(ExitCode.SUCCESS);
-    expect((await taskEvidenceProveCriteriaCommand({ cwd: tempDir, taskNumber: '656', by: 'a1', unboundRationale: 'Focused reconcile test proof.', format: 'json' })).exitCode)
-      .toBe(ExitCode.SUCCESS);
     expect((await taskEvidenceAdmitCommand({ cwd: tempDir, taskNumber: '656', by: 'a1', format: 'json' })).exitCode)
       .toBe(ExitCode.SUCCESS);
     expect((await taskCloseCommand({ cwd: tempDir, taskNumber: '656', by: 'a1', mode: 'operator_direct', format: 'json' })).exitCode)

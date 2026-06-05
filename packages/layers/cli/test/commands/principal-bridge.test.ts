@@ -14,6 +14,7 @@ import { taskReviewCommand } from '../../src/commands/task-review.js';
 import { taskReleaseCommand } from '../../src/commands/task-release.js';
 import { principalSyncFromTasksCommand } from '../../src/commands/principal-sync-from-tasks.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
+import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -41,6 +42,28 @@ function setupRepo(tempDir: string) {
     join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
     '---\ntask_id: 999\nstatus: opened\n---\n\n# Task 999: Test Task\n\n## Verification\nTests pass.\n',
   );
+
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    for (const entry of [
+      { agent_id: 'test-agent', role: 'implementer', capabilities: ['claim'] },
+      { agent_id: 'reviewer-agent', role: 'reviewer', capabilities: ['claim'] },
+    ]) {
+      store.upsertRosterEntry({
+        agent_id: entry.agent_id,
+        role: entry.role,
+        capabilities_json: JSON.stringify(entry.capabilities),
+        first_seen_at: '2026-01-01T00:00:00Z',
+        last_active_at: '2026-01-01T00:00:00Z',
+        status: 'idle',
+        task_number: null,
+        last_done: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      });
+    }
+  } finally {
+    store.db.close();
+  }
 }
 
 function createPrincipalRuntime(
@@ -280,10 +303,10 @@ describe('task command bridge integration', () => {
     });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    expect(result.result).toMatchObject({ status: 'success', new_status: 'in_review' });
+    expect(result.result).toMatchObject({ status: 'success', new_status: 'closed' });
   });
 
-  it('task review succeeds even when PR update fails (no runtime)', async () => {
+  it('task review refuses an already closed report even when PR update fails (no runtime)', async () => {
     await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
     await taskReportCommand({ taskNumber: '999', agent: 'test-agent', summary: 'Test', cwd: tempDir, format: 'json' });
 
@@ -296,8 +319,9 @@ describe('task command bridge integration', () => {
       principalStateDir: tempDir,
     });
 
-    expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    expect(result.result).toMatchObject({ status: 'success', new_status: 'closed' });
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.result).toMatchObject({ status: 'error' });
+    expect((result.result as { error: string }).error).toContain('cannot be reviewed');
   });
 
   it('task claim without --update-principal-runtime does not touch PR', async () => {
@@ -386,13 +410,39 @@ describe('principal sync-from-tasks', () => {
         ],
       }, null, 2) + '\n',
     );
+    const taskRaw = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', `20260420-${taskId}-test.md`), 'utf8');
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      store.upsertLifecycle({
+        task_id: taskId,
+        task_number: Number(taskId),
+        status: taskRaw.includes('status: in_review') ? 'in_review' : 'claimed',
+        governed_by: null,
+        closed_at: null,
+        closed_by: null,
+        reopened_at: null,
+        reopened_by: null,
+        continuation_packet_json: null,
+        updated_at: claimedAt,
+      });
+      store.insertAssignment({
+        assignment_id: `assign-${taskId}-${agentId}`,
+        task_id: taskId,
+        agent_id: agentId,
+        claimed_at: claimedAt,
+        released_at: null,
+        release_reason: null,
+        intent: 'primary',
+      });
+    } finally {
+      store.db.close();
+    }
   }
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'narada-sync-test-'));
     setupRepo(tempDir);
   });
-
   afterEach(() => {
     rmSync(tempDir, { recursive: true, force: true });
   });

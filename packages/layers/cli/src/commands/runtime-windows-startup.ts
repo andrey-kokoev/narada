@@ -71,6 +71,11 @@ function processAlive(pidPath: string): boolean | null {
   }
 }
 
+
+function psSingleQuoted(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`;
+}
+
 export function buildWindowsStartupPlan(options: Required<Pick<RuntimeWindowsStartupOptions, 'site' | 'operation' | 'mode'>> & Pick<RuntimeWindowsStartupOptions, 'credentialRef' | 'by'>): Record<string, unknown> {
   const siteRoot = resolve(options.site);
   const operation = options.operation;
@@ -82,7 +87,7 @@ export function buildWindowsStartupPlan(options: Required<Pick<RuntimeWindowsSta
     '-NoProfile',
     '-ExecutionPolicy Bypass',
     '-Command',
-    `"Set-Location ${JSON.stringify(siteRoot)}; narada cycle --site-root ${JSON.stringify(siteRoot)} --site ${JSON.stringify(operation)}"`,
+    `"Set-Location ${psSingleQuoted(siteRoot)}; narada cycle --site-root ${psSingleQuoted(siteRoot)} --site ${psSingleQuoted(operation)}"`,
   ].join(' ');
   return {
     plan_kind: 'windows_startup_runtime',

@@ -6,6 +6,7 @@ vi.unmock('node:fs/promises');
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { taskGraphCommand } from '../../src/commands/task-graph.js';
 import { observationInspectCommand } from '../../src/commands/observation.js';
+import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -28,6 +29,37 @@ function writeRoster(tempDir: string, agents: Array<{ agent_id: string; task?: n
     join(tempDir, '.ai', 'agents', 'roster.json'),
     JSON.stringify({ version: 1, updated_at: new Date().toISOString(), agents }, null, 2),
   );
+}
+
+function seedActiveAssignment(tempDir: string, taskId: string, taskNumber: number, agentId: string) {
+  const now = new Date().toISOString();
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    store.upsertLifecycle({
+      task_id: taskId,
+      task_number: taskNumber,
+      status: 'claimed',
+      governed_by: agentId,
+      closed_at: null,
+      closed_by: null,
+      closure_mode: null,
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      updated_at: now,
+    });
+    store.insertAssignment({
+      assignment_id: `${taskId}-${agentId}-${now}`,
+      task_id: taskId,
+      agent_id: agentId,
+      claimed_at: now,
+      released_at: null,
+      release_reason: null,
+      intent: 'primary',
+    });
+  } finally {
+    store.db.close();
+  }
 }
 
 describe('task graph inspection operator', () => {
@@ -128,6 +160,7 @@ describe('task graph inspection operator', () => {
       { agent_id: 'a6', task: 101 },
       { agent_id: 'a7', task: null },
     ]);
+    seedActiveAssignment(tempDir, '20260420-101-beta', 101, 'a6');
 
     const result = await taskGraphCommand({ cwd: tempDir, format: 'json' });
     expect(result.exitCode).toBe(ExitCode.SUCCESS);

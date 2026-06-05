@@ -144,13 +144,15 @@ const targetSiteId = args.target_site_id ?? process.env.NARADA_TARGET_SITE_ID ??
 const targetSiteRoot = args.target_site_root ?? process.env.NARADA_TARGET_SITE_ROOT ?? null;
 const sessionSiteRoot = targetSiteRoot ?? rootDir;
 const dbPath = args.db ?? join(sessionSiteRoot, '.ai', 'state', 'agent-context.sqlite');
-const RUNTIME_CONTRACT_SCHEMA = 'narada.runtime_substrate_kind.v1';
+const require = createRequire(import.meta.url);
+const RUNTIME_SUBSTRATE_KINDS_PACKET = Object.freeze(JSON.parse(readFileSync(resolveNaradaPackageExport('@narada2/carrier-runtime-contract', './runtime-substrate-kinds'), 'utf8')));
+const RUNTIME_CONTRACT_SCHEMA = RUNTIME_SUBSTRATE_KINDS_PACKET.schema;
 const AGENT_TUI_RUNTIME = 'agent-tui';
 const AGENT_TUI_TERMINAL_RENDERING_ENV = 'NARADA_AGENT_TUI_ENABLE_TERMINAL_RENDERING';
 const AGENT_TUI_TERMINAL_MODE_ENV = 'NARADA_AGENT_TUI_TERMINAL_MODE';
 const AGENT_TUI_TERMINAL_MODE = 'interactive_loop';
 const AGENT_TUI_INTERACTIVE_LOOP_MAX_STEPS = '100000';
-const ADMITTED_RUNTIME_SUBSTRATE_KINDS = Object.freeze(['kimi', 'codex', 'agent-cli', 'pi', 'claude-code', AGENT_TUI_RUNTIME]);
+const ADMITTED_RUNTIME_SUBSTRATE_KINDS = Object.freeze(RUNTIME_SUBSTRATE_KINDS_PACKET.admitted_runtime_substrate_kinds);
 const TOOL_FABRIC_ADAPTER_CONTRACT_SCHEMA = 'narada.tool_fabric_adapter_kind.v1';
 const INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA = 'narada.intelligence_provider.v1';
 const ADMITTED_TOOL_FABRIC_ADAPTER_KINDS = Object.freeze([
@@ -161,7 +163,6 @@ const ADMITTED_TOOL_FABRIC_ADAPTER_KINDS = Object.freeze([
   'claude-code-native-mcp',
   'ambient-carrier-tools',
 ]);
-const require = createRequire(import.meta.url);
 function naradaPackageDirectoryName(packageName) {
   const parts = String(packageName).split('/');
   return parts[parts.length - 1];
@@ -201,7 +202,7 @@ function resolveNaradaPackageBin(packageName, binName) {
   }
   return join(naradaPackageRoot(packageName), target);
 }
-const INTELLIGENCE_PROVIDER_METADATA_PATH = process.env.NARADA_INTELLIGENCE_PROVIDER_METADATA_PATH ?? resolveNaradaPackageExport('@narada2/agent-cli', './intelligence-providers');
+const INTELLIGENCE_PROVIDER_METADATA_PATH = process.env.NARADA_INTELLIGENCE_PROVIDER_METADATA_PATH ?? resolveNaradaPackageExport('@narada2/carrier-provider-contract', './provider-registry');
 const INTELLIGENCE_PROVIDER_METADATA_PACKET = Object.freeze(JSON.parse(readFileSync(INTELLIGENCE_PROVIDER_METADATA_PATH, 'utf8')));
 const INTELLIGENCE_PROVIDER_METADATA = Object.freeze(INTELLIGENCE_PROVIDER_METADATA_PACKET.providers);
 const ADMITTED_INTELLIGENCE_PROVIDERS = Object.freeze(Object.keys(INTELLIGENCE_PROVIDER_METADATA));

@@ -1,0 +1,30 @@
+{
+  "schema": "narada.carrier.transcript_projection_cases.v1",
+  "cases": [
+    {
+      "name": "provider_text_delta_projects_as_agent_text",
+      "fixture": "provider-text-delta-session-event.json",
+      "expected_kind": "ProviderTextDelta",
+      "expected_actor": "agent",
+      "expected_turn_id": "turn_fixture_1",
+      "expected_text": "Startup sequence completed.",
+      "expected_sequence": 1
+    },
+    {
+      "name": "tool_result_projects_as_carrier_tool_result",
+      "fixture": "tool-result-session-event.json",
+      "expected_kind": "ToolResultReceived",
+      "expected_actor": "agent-tui",
+      "expected_turn_id": "",
+      "expected_text": "ok site_loop_run_once in 12ms · ok"
+    },
+    {
+      "name": "turn_terminal_projects_terminal_status",
+      "fixture": "turn-terminal-session-event.json",
+      "expected_kind": "TurnTerminalStatus",
+      "expected_actor": "agent-tui",
+      "expected_turn_id": "turn_fixture_1",
+      "expected_text": "completed_without_provider"
+    }
+  ]
+}

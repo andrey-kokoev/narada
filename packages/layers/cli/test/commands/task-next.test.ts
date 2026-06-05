@@ -96,7 +96,7 @@ describe('task-next surfaces', () => {
       expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
       expect(result.result).toMatchObject({
         status: 'error',
-        reason: 'agent_not_found',
+        reason: 'agent_not_in_roster',
         agent: 'architect',
         agent_id: 'architect',
         action: 'peek_next',
@@ -121,7 +121,7 @@ describe('task-next surfaces', () => {
     it('returns the next opened task without claiming it', async () => {
       writeFileSync(
         join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-test.md'),
-        '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n\n## Goal\nDo something.\n',
+        '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n\n## Goal\nDo something.\n\n## Acceptance Criteria\n- [x] Done\n',
       );
 
       const result = await taskPeekNextCommand({ agent: 'a1', cwd: tempDir, format: 'json' });
@@ -150,11 +150,11 @@ describe('task-next surfaces', () => {
     it('respects dependency gating', async () => {
       writeFileSync(
         join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-dep.md'),
-        '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100 (dependency)\n',
+        '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100 (dependency)\n\n## Acceptance Criteria\n- [x] Dependency done\n',
       );
       writeFileSync(
         join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-200-test.md'),
-        '---\ntask_id: 200\nstatus: opened\ndepends_on:\n  - 100\n---\n\n# Task 200\n',
+        '---\ntask_id: 200\nstatus: opened\ndepends_on:\n  - 100\n---\n\n# Task 200\n\n## Acceptance Criteria\n- [x] Dependent done\n',
       );
 
       const result = await taskPeekNextCommand({ agent: 'a1', cwd: tempDir, format: 'json' });
@@ -168,7 +168,7 @@ describe('task-next surfaces', () => {
     it('skips tasks already claimed by another agent', async () => {
       writeFileSync(
         join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-test.md'),
-        '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n',
+        '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n\n## Acceptance Criteria\n- [x] Done\n',
       );
       const claim = await taskPullNextCommand({ agent: 'a2', cwd: tempDir, format: 'json' });
       expect(claim.exitCode).toBe(ExitCode.SUCCESS);
@@ -185,7 +185,7 @@ describe('task-next surfaces', () => {
       expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
       expect(result.result).toMatchObject({
         status: 'error',
-        reason: 'agent_not_found',
+        reason: 'agent_not_in_roster',
         agent: 'architect',
         agent_id: 'architect',
         action: 'pull_next',
@@ -196,7 +196,7 @@ describe('task-next surfaces', () => {
     it('claims the next admissible task', async () => {
       writeFileSync(
         join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-test.md'),
-        '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n\n## Goal\nDo something.\n',
+        '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n\n## Goal\nDo something.\n\n## Acceptance Criteria\n- [x] Done\n',
       );
 
       const result = await taskPullNextCommand({ agent: 'a1', cwd: tempDir, format: 'json' });
@@ -219,7 +219,7 @@ describe('task-next surfaces', () => {
     it('does not double-claim the same task', async () => {
       writeFileSync(
         join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-test.md'),
-        '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n',
+        '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n\n## Acceptance Criteria\n- [x] Done\n',
       );
 
       const r1 = await taskPullNextCommand({ agent: 'a1', cwd: tempDir, format: 'json' });
@@ -251,7 +251,7 @@ describe('task-next surfaces', () => {
       expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
       expect(result.result).toMatchObject({
         status: 'error',
-        reason: 'agent_not_found',
+        reason: 'agent_not_in_roster',
         agent: 'architect',
         agent_id: 'architect',
         action: 'work_next',
@@ -262,7 +262,7 @@ describe('task-next surfaces', () => {
     it('returns packet for already-assigned task', async () => {
       writeFileSync(
         join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-test.md'),
-        '---\ntask_id: 100\nstatus: claimed\n---\n\n# Task 100\n\n## Goal\nDo something.\n\n## Required Work\n1. Step one.\n',
+        '---\ntask_id: 100\nstatus: claimed\n---\n\n# Task 100\n\n## Goal\nDo something.\n\n## Required Work\n1. Step one.\n\n## Acceptance Criteria\n- [x] Done\n',
       );
       writeFileSync(
         join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-100-test.json'),
@@ -277,7 +277,45 @@ describe('task-next surfaces', () => {
       roster.agents[0].status = 'working';
       roster.agents[0].task = 100;
       writeFileSync(join(tempDir, '.ai', 'agents', 'roster.json'), JSON.stringify(roster, null, 2));
-
+      writeFileSync(join(tempDir, '.ai', 'agents', 'roster.json'), JSON.stringify(roster, null, 2));
+      const store = openTaskLifecycleStore(tempDir);
+      try {
+        store.upsertLifecycle({
+          task_id: '20260420-100-test',
+          task_number: 100,
+          status: 'claimed',
+          governed_by: null,
+          closed_at: null,
+          closed_by: null,
+          closure_mode: null,
+          reopened_at: null,
+          reopened_by: null,
+          continuation_packet_json: null,
+          updated_at: '2026-01-01T00:00:00Z',
+        });
+        store.insertAssignment({
+          assignment_id: 'fixture-100-a1',
+          task_id: '20260420-100-test',
+          agent_id: 'a1',
+          claimed_at: '2026-01-01T00:00:00Z',
+          released_at: null,
+          release_reason: null,
+          intent: 'primary',
+        });
+        store.upsertRosterEntry({
+          agent_id: 'a1',
+          role: 'implementer',
+          capabilities_json: JSON.stringify(['claim', 'execute']),
+          first_seen_at: '2026-01-01T00:00:00Z',
+          last_active_at: '2026-01-01T00:00:00Z',
+          status: 'working',
+          task_number: 100,
+          last_done: null,
+          updated_at: '2026-01-01T00:00:00Z',
+        });
+      } finally {
+        store.db.close();
+      }
       const result = await taskWorkNextCommand({ agent: 'a1', cwd: tempDir, format: 'json' });
       expect(result.exitCode).toBe(ExitCode.SUCCESS);
       const data = result.result as { status: string; packet: { task_number: number; pulled: boolean } };
@@ -292,7 +330,7 @@ describe('task-next surfaces', () => {
     it('blocks already-assigned task whose Required Work is a placeholder', async () => {
       writeFileSync(
         join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-1133-placeholder.md'),
-        '---\ntask_id: 1133\nstatus: claimed\n---\n\n# Task 1133\n\n## Goal\nDo something.\n\n## Required Work\n1. TBD\n',
+        '---\ntask_id: 1133\nstatus: claimed\n---\n\n# Task 1133\n\n## Goal\nDo something.\n\n## Required Work\n1. TBD\n\n## Acceptance Criteria\n- [x] Placeholder identified\n',
       );
       writeFileSync(
         join(tempDir, '.ai', 'do-not-open', 'tasks', 'tasks', 'assignments', '20260420-1133-placeholder.json'),
@@ -342,7 +380,7 @@ describe('task-next surfaces', () => {
     it('pulls next and returns packet when no current task', async () => {
       writeFileSync(
         join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-test.md'),
-        '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n\n## Goal\nDo something.\n',
+        '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n\n## Goal\nDo something.\n\n## Acceptance Criteria\n- [x] Done\n',
       );
 
       const result = await taskWorkNextCommand({ agent: 'a1', cwd: tempDir, format: 'json' });
@@ -471,7 +509,7 @@ describe('task-next surfaces', () => {
     it('does not auto-close or conflate execution with completion', async () => {
       writeFileSync(
         join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-100-test.md'),
-        '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n',
+        '---\ntask_id: 100\nstatus: opened\n---\n\n# Task 100\n\n## Acceptance Criteria\n- [x] Done\n',
       );
 
       const result = await taskWorkNextCommand({ agent: 'a1', cwd: tempDir, format: 'json' });

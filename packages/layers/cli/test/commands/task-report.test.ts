@@ -164,23 +164,22 @@ describe('task report operator', () => {
     expect(result.result).toMatchObject({
       status: 'success',
       agent_id: 'test-agent',
-      new_status: 'in_review',
+      new_status: 'closed',
+      ready_for_review: false,
+      obligation_id: null,
     });
 
     expect(result.result).not.toHaveProperty('guidance');
 
-    // Task file updated to in_review
+    // Task file updated to closed
     const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
-    expect(taskContent).toContain('status: in_review');
+    expect(taskContent).toContain('status: closed');
 
     // Authoritative report record created
     const reportRecords = listReportRecords(tempDir);
     expect(reportRecords).toHaveLength(1);
     const obligations = listOpenTaskObligations(tempDir);
-    expect(obligations).toHaveLength(1);
-    expect(obligations[0]!.target_ref).not.toBe('unrouted');
-    expect(obligations[0]!.target_agent_id).toBeNull();
-    expect(obligations[0]!.target_role).toBe('builder');
+    expect(obligations).toHaveLength(0);
 
     const report = JSON.parse(reportRecords[0]!.report_json);
     expect(report.task_id).toBe('20260420-999-test-task');
@@ -208,7 +207,7 @@ describe('task report operator', () => {
     }
   });
 
-  it('creates a directed review obligation for an exact reviewer identity', async () => {
+  it('ignores report-time reviewer identity and closes the completed task', async () => {
     await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
 
     const result = await taskReportCommand({
@@ -225,32 +224,12 @@ describe('task report operator', () => {
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({
       status: 'success',
-      review_target: {
-        requested: 'architect',
-        target_agent_id: 'architect',
-        target_role: 'architect',
-        resolution: 'agent_id',
-        review_authority: {
-          authority_kind: 'typed_composition',
-        },
-      },
+      new_status: 'closed',
+      ready_for_review: false,
+      obligation_id: null,
     });
-    expect((result.result as { obligation_id?: string }).obligation_id).toMatch(/^obl_review_/);
-
     const obligations = listDirectedObligations(tempDir, 'architect', 'architect');
-    expect(obligations).toHaveLength(1);
-    expect(obligations[0]).toMatchObject({
-      source_kind: 'task_report',
-      source_agent_id: 'test-agent',
-      target_agent_id: 'architect',
-      target_role: 'architect',
-      kind: 'review_request',
-      status: 'open',
-      task_number: 999,
-    });
-    expect(JSON.parse(obligations[0]!.consumption_rule_json)).toMatchObject({
-      consume_on: expect.arrayContaining(['task_review', 'task_defer', 'delegation', 'rejection', 'completion']),
-    });
+    expect(obligations).toHaveLength(0);
   });
 
   it('normalizes role-targeted directed obligations to a null target_ref and rejects duplicated role refs at the schema boundary', async () => {
@@ -371,7 +350,7 @@ describe('task report operator', () => {
     expect(evidence.verification).toEqual([{ command: 'pnpm test', result: 'passed' }]);
   });
 
-  it('creates a role-targeted review obligation for a reviewer role alias', async () => {
+  it('ignores report-time reviewer role alias and closes the completed task', async () => {
     await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
 
     const result = await taskReportCommand({
@@ -388,17 +367,14 @@ describe('task report operator', () => {
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({
       status: 'success',
-      review_target: {
-        requested: 'reviewer',
-        target_agent_id: null,
-        target_role: 'reviewer',
-        resolution: 'role_alias',
-      },
+      new_status: 'closed',
+      ready_for_review: false,
+      obligation_id: null,
     });
-    expect(listDirectedObligations(tempDir, 'missing-agent', 'reviewer')).toHaveLength(1);
+    expect(listDirectedObligations(tempDir, 'missing-agent', 'reviewer')).toHaveLength(0);
   });
 
-  it('creates a review obligation for a non-operator role composed with review capability', async () => {
+  it('ignores report-time composed reviewer and closes the completed task', async () => {
     await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
 
     const result = await taskReportCommand({
@@ -415,20 +391,14 @@ describe('task report operator', () => {
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({
       status: 'success',
-      review_target: {
-        requested: 'implementer-reviewer',
-        target_agent_id: 'implementer-reviewer',
-        target_role: 'implementer',
-        review_authority: {
-          authority_kind: 'typed_composition',
-          accepted_capabilities: ['review'],
-        },
-      },
+      new_status: 'closed',
+      ready_for_review: false,
+      obligation_id: null,
     });
-    expect(listDirectedObligations(tempDir, 'implementer-reviewer', 'implementer')).toHaveLength(1);
+    expect(listDirectedObligations(tempDir, 'implementer-reviewer', 'implementer')).toHaveLength(0);
   });
 
-  it('does not create a report-time review obligation for a target task review would refuse', async () => {
+  it('ignores report-time reviewer that task review would refuse', async () => {
     await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
 
     const result = await taskReportCommand({
@@ -442,18 +412,17 @@ describe('task report operator', () => {
       format: 'json',
     });
 
-    expect(result.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({
-      status: 'error',
-      review_authority_repair: {
-        reason: 'review_authority_not_admitted',
-      },
+      status: 'success',
+      new_status: 'closed',
+      ready_for_review: false,
+      obligation_id: null,
     });
-    expect((result.result as { error: string }).error).toContain('task review would refuse');
     expect(listDirectedObligations(tempDir, 'other-agent', 'implementer')).toHaveLength(0);
   });
 
-  it('refuses report instead of creating an unrouted review obligation when no reviewer resolves', async () => {
+  it('closes report instead of creating an unrouted review obligation when no reviewer resolves', async () => {
     writeFileSync(
       join(tempDir, '.ai', 'agents', 'roster.json'),
       JSON.stringify({
@@ -483,19 +452,18 @@ describe('task report operator', () => {
       format: 'json',
     });
 
-    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result).toMatchObject({
-      status: 'error',
-      review_authority_repair: {
-        reason: 'missing_reviewer_identity',
-      },
+      status: 'success',
+      new_status: 'closed',
+      ready_for_review: false,
+      obligation_id: null,
     });
-    expect((result.result as { error: string }).error).toContain('Unrouted review obligations are not admitted');
-    expect(listReportRecords(tempDir)).toHaveLength(0);
+    expect(listReportRecords(tempDir)).toHaveLength(1);
     expect(listOpenTaskObligations(tempDir)).toHaveLength(0);
   });
 
-  it('refuses report before review obligation when task evidence remains scaffolded or unchecked', async () => {
+  it('reports needs_continuation before any review obligation when task evidence remains scaffolded or unchecked', async () => {
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
       [
@@ -532,14 +500,21 @@ describe('task report operator', () => {
       format: 'json',
     });
 
-    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
-    expect((result.result as { error: string }).error).toContain('evidence is incomplete');
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'success',
+      new_status: 'needs_continuation',
+      report_status: 'blocked',
+      ready_for_review: false,
+      obligation_id: null,
+      evidence_posture: 'reported_with_incomplete_task_evidence',
+    });
     expect((result.result as { evidence_blockers: string[] }).evidence_blockers).toEqual([
       'Acceptance Criteria contains unchecked checklist items.',
       'Execution Notes still contains scaffold placeholder text.',
       'Verification still contains scaffold placeholder text.',
     ]);
-    expect(listReportRecords(tempDir)).toHaveLength(0);
+    expect(listReportRecords(tempDir)).toHaveLength(1);
     expect(listOpenTaskObligations(tempDir)).toHaveLength(0);
   });
 
@@ -756,6 +731,16 @@ describe('task report operator', () => {
     assignment.assignments[0].released_at = null;
     assignment.assignments[0].release_reason = null;
     saveAssignmentRecord(tempDir, assignment);
+    saveAssignmentRecord(tempDir, assignment);
+    const sameAssignmentStore = openTaskLifecycleStore(tempDir);
+    try {
+      sameAssignmentStore.db
+        .prepare('update task_assignments set released_at = null, release_reason = null where task_id = ?')
+        .run('20260420-999-test-task');
+      sameAssignmentStore.updateStatus('20260420-999-test-task', 'claimed', 'test-agent');
+    } finally {
+      sameAssignmentStore.db.close();
+    }
     writeFileSync(
       join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'),
       '---\ntask_id: 999\nstatus: claimed\n---\n\n# Task 999: Test Task\n',
@@ -811,7 +796,21 @@ describe('task report operator', () => {
         release_reason: null,
       }],
     });
-
+    const newAssignmentStore = openTaskLifecycleStore(tempDir);
+    try {
+      newAssignmentStore.updateStatus('20260420-999-test-task', 'claimed', 'test-agent');
+      newAssignmentStore.insertAssignment({
+        assignment_id: `20260420-999-test-task-${newClaimedAt}`,
+        task_id: '20260420-999-test-task',
+        agent_id: 'test-agent',
+        claimed_at: newClaimedAt,
+        released_at: null,
+        release_reason: null,
+        intent: 'primary',
+      });
+    } finally {
+      newAssignmentStore.db.close();
+    }
     // Second report — different assignment_id due to new claimed_at
     const secondResult = await taskReportCommand({
       taskNumber: '999',

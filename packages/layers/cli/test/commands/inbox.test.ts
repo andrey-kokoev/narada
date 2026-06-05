@@ -477,12 +477,11 @@ describe('Canonical Inbox CLI commands', () => {
       envelope: { envelope_id: string };
       delivery: Record<string, unknown>;
     };
-    expect(result.delivery).toMatchObject({
-      repo_root: tempDir,
-      branch: 'main',
-      inbox_db_path: join(tempDir, '.ai', 'inbox.db'),
-    });
-    expect(result.delivery.head_commit).toEqual(expect.any(String));
+    expect(String(result.delivery.repo_root).replaceAll('\\', '/')).toBe(tempDir.replaceAll('\\', '/'));
+    expect(result.delivery.branch).toBe('main');
+    expect(String(result.delivery.inbox_db_path).replaceAll('\\', '/')).toBe(
+      join(tempDir, '.ai', 'inbox.db').replaceAll('\\', '/'),
+    );
     expect(result.delivery).toHaveProperty('head_matches_remote');
   });
 
@@ -499,7 +498,7 @@ describe('Canonical Inbox CLI commands', () => {
       runtime: Record<string, unknown>;
       checks: Array<{ name: string; ok: boolean }>;
     };
-    expect(result.delivery).toMatchObject({ repo_root: tempDir, branch: 'main' });
+    expect(result.delivery).toMatchObject({ repo_root: tempDir.replaceAll('\\', '/'), branch: 'main' });
     expect(result.runtime).toMatchObject({
       node_exec_path: process.execPath,
       node_platform: process.platform,

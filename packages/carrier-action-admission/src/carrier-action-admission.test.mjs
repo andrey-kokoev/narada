@@ -19,6 +19,16 @@ function tempSite(prefix = 'narada-action-admission-') {
   return mkdtempSync(join(tmpdir(), prefix));
 }
 
+const classificationCases = JSON.parse(readFileSync(new URL('../fixtures/classification-cases.json', import.meta.url), 'utf8'));
+assert.equal(classificationCases.schema, 'narada.carrier_action_admission.classification_cases.v1');
+for (const entry of classificationCases.cases) {
+  const classification = classifyCarrierActionRequest(entry.tool_name, entry.arguments ?? {});
+  assert.equal(classification.decision, entry.expected_decision, entry.name);
+  assert.equal(classification.reason, entry.expected_reason, entry.name);
+  if (entry.expected_family) assert.equal(classification.family, entry.expected_family, entry.name);
+  if (entry.expected_secret_findings) assert.deepEqual(classification.secret_findings, entry.expected_secret_findings, entry.name);
+}
+
 const workspaceRoot = tempSite();
 const naradaRoot = join(workspaceRoot, '.narada');
 assert.equal(siteEvidenceRoot(workspaceRoot), naradaRoot);

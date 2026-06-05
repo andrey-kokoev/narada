@@ -141,7 +141,7 @@ export async function taskHandoffCommand(
   const result = {
     status: 'success',
     packet,
-    artifact_path: artifactPath ? relative(cwd, artifactPath) : null,
+    artifact_path: artifactPath ? relative(cwd, artifactPath).split('\\').join('/') : null,
     inbox_envelope_id: inboxEnvelope?.envelope_id ?? null,
     route_kind: inboxEnvelope ? 'observation' : null,
   };

@@ -30,6 +30,22 @@ describe('chapter finish-range operator', () => {
         last_active_at: '2026-01-01T00:00:00Z',
       }],
     }));
+    const store = openTaskLifecycleStore(tempDir);
+    try {
+      store.upsertRosterEntry({
+        agent_id: 'a2',
+        role: 'implementer',
+        capabilities_json: JSON.stringify(['claim']),
+        first_seen_at: '2026-01-01T00:00:00Z',
+        last_active_at: '2026-01-01T00:00:00Z',
+        status: 'idle',
+        task_number: null,
+        last_done: null,
+        updated_at: '2026-01-01T00:00:00Z',
+      });
+    } finally {
+      store.db.close();
+    }
     for (const n of [701, 702]) {
       writeFileSync(
         join(tempDir, '.ai', 'do-not-open', 'tasks', `20260425-${n}-range-task.md`),

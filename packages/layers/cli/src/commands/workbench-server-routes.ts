@@ -159,17 +159,29 @@ async function listAllAssignments(cwd: string): Promise<TaskAssignmentRecord[]> 
   const store = openTaskLifecycleStore(cwd);
   try {
     const rows = store.db
-      .prepare(`select record_json from task_assignment_records order by updated_at desc`)
-      .all() as Array<{ record_json: string }>;
-    const assignments: TaskAssignmentRecord[] = [];
+      .prepare(`select * from task_assignments order by claimed_at desc`)
+      .all() as Array<{
+        task_id: string;
+        agent_id: string;
+        claimed_at: string;
+        released_at: string | null;
+        release_reason: TaskAssignmentRecord['assignments'][number]['release_reason'];
+        intent?: TaskAssignmentRecord['assignments'][number]['intent'];
+      }>;
+    const byTask = new Map<string, TaskAssignmentRecord>();
     for (const row of rows) {
-      try {
-        assignments.push(JSON.parse(row.record_json) as TaskAssignmentRecord);
-      } catch {
-        // Skip malformed assignment records
-      }
+      const record = byTask.get(row.task_id) ?? { task_id: row.task_id, assignments: [], continuations: [] };
+      record.assignments.push({
+        agent_id: row.agent_id,
+        claimed_at: row.claimed_at,
+        claim_context: null,
+        released_at: row.released_at,
+        release_reason: row.release_reason,
+        intent: row.intent,
+      });
+      byTask.set(row.task_id, record);
     }
-    return assignments;
+    return Array.from(byTask.values());
   } finally {
     try { store.db.close(); } catch { /* ignore */ }
   }
@@ -197,6 +209,7 @@ async function listAllReviews(cwd: string): Promise<ReviewRecord[]> {
   reviews.sort((a, b) => a.reviewed_at.localeCompare(b.reviewed_at));
   return reviews;
 }
+
 
 export function createWorkbenchRoutes(ctx: WorkbenchRouteContext): RouteHandler[] {
   return [

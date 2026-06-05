@@ -5,7 +5,7 @@
  */
 
 import { existsSync, readdirSync } from 'node:fs';
-import { join, dirname, basename, relative } from 'node:path';
+import { basename, isAbsolute, join, relative } from 'node:path';
 
 export interface Suggestion {
   command: string;
@@ -14,14 +14,18 @@ export interface Suggestion {
   explanation: string;
   mappedFiles: string[];
 }
+function slashPath(path: string): string {
+  return path.replaceAll('\\', '/');
+}
 
 /**
  * Try to find a test file that mirrors a source file path.
  */
 function findMirroredTest(sourcePath: string): string | null {
-  // packages/layers/cli/src/commands/foo.ts → packages/layers/cli/test/commands/foo.test.ts
-  if (sourcePath.includes('/src/')) {
-    const testPath = sourcePath.replace('/src/', '/test/').replace(/\.ts$/, '.test.ts');
+  const normalized = slashPath(sourcePath);
+  // packages/layers/cli/src/commands/foo.ts -> packages/layers/cli/test/commands/foo.test.ts
+  if (normalized.includes('/src/')) {
+    const testPath = normalized.replace('/src/', '/test/').replace(/\.ts$/, '.test.ts');
     if (existsSync(testPath)) return testPath;
   }
   return null;
@@ -31,8 +35,8 @@ function findMirroredTest(sourcePath: string): string | null {
  * Map a single source file to its most likely test.
  */
 function mapSingleFile(sourcePath: string, cwd: string): Suggestion | null {
-  const absolute = sourcePath.startsWith('/') ? sourcePath : join(cwd, sourcePath);
-  const rel = relative(cwd, absolute);
+  const absolute = isAbsolute(sourcePath) ? sourcePath : join(cwd, sourcePath);
+  const rel = slashPath(relative(cwd, absolute));
 
   // Docs / task-only changes → verify only
   if (
@@ -52,7 +56,7 @@ function mapSingleFile(sourcePath: string, cwd: string): Suggestion | null {
 
   const mirrored = findMirroredTest(absolute);
   if (mirrored) {
-    const testRel = relative(cwd, mirrored);
+    const testRel = slashPath(relative(cwd, mirrored));
     // Determine package for the pnpm --filter command
     const pkgMatch = rel.match(/^packages\/layers\/([^/]+)\//);
     const filter = pkgMatch ? `--filter @narada2/${pkgMatch[1]} ` : '';
@@ -73,7 +77,7 @@ function mapSingleFile(sourcePath: string, cwd: string): Suggestion | null {
     // Try to find exactly one matching test file
     const candidates = findTestCandidates(testDir, name);
     if (candidates.length === 1) {
-      const testRel = relative(cwd, candidates[0]);
+      const testRel = slashPath(relative(cwd, candidates[0]));
       return {
         command: `pnpm --filter @narada2/control-plane exec vitest run ${testRel}`,
         scope: 'single-file',

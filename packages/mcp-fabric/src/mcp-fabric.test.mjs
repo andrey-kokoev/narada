@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -13,6 +13,10 @@ import {
   renderMcpFabricDoctorTable,
   runMcpFabricDoctor,
 } from './mcp-fabric.mjs';
+
+const carrierClientFixture = JSON.parse(readFileSync(new URL('../fixtures/agent-tui-carrier-client-config.json', import.meta.url), 'utf8'));
+assert.equal(carrierClientFixture.schema, 'narada.mcp.carrier_client_config.v0');
+assert.deepEqual(carrierClientFixture.mcpServers['sonar-site-loop'].tools, ['site_loop_run_once', 'site_loop_status']);
 
 const missingSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-missing-'));
 try {

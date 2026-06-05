@@ -66,22 +66,14 @@ function writeAssignment(store: SqliteTaskLifecycleStore, fileTaskId: string, ag
       updated_at: '2026-04-24T10:00:00.000Z',
     });
   }
-  store.upsertAssignmentRecord({
+  store.insertAssignment({
+    assignment_id: `assign-${fileTaskId}-${agentId}`,
     task_id: fileTaskId,
-    record_json: JSON.stringify({
-      task_id: fileTaskId,
-      assignments: [
-        {
-          agent_id: agentId,
-          claimed_at: '2026-04-24T10:00:00.000Z',
-          claim_context: null,
-          released_at: null,
-          release_reason: null,
-          intent: 'primary',
-        },
-      ],
-    }),
-    updated_at: '2026-04-24T10:00:00.000Z',
+    agent_id: agentId,
+    claimed_at: '2026-04-24T10:00:00.000Z',
+    released_at: null,
+    release_reason: null,
+    intent: 'primary',
   });
 }
 
@@ -89,20 +81,39 @@ function createStore(tempDir: string): SqliteTaskLifecycleStore {
   const db = new Database(':memory:');
   const store = new SqliteTaskLifecycleStore({ db });
   store.initSchema();
+  store.upsertRosterEntry({
+    agent_id: 'alpha',
+    role: 'implementer',
+    capabilities_json: JSON.stringify(['claim']),
+    first_seen_at: '2026-01-01T00:00:00Z',
+    last_active_at: '2026-01-01T00:00:00Z',
+    status: 'idle',
+    task_number: null,
+    last_done: null,
+    updated_at: '2026-01-01T00:00:00Z',
+  });
   return store;
 }
 
 describe('task dispatch surface', () => {
   let tempDir: string;
   let store: SqliteTaskLifecycleStore;
+  let previousPrincipalStateDir: string | undefined;
 
   beforeEach(() => {
+    previousPrincipalStateDir = process.env.NARADA_PRINCIPAL_STATE_DIR;
     tempDir = mkdtempSync(join(tmpdir(), 'narada-dispatch-test-'));
+    process.env.NARADA_PRINCIPAL_STATE_DIR = tempDir;
     setupRepo(tempDir);
     store = createStore(tempDir);
   });
 
   afterEach(() => {
+    if (previousPrincipalStateDir === undefined) {
+      delete process.env.NARADA_PRINCIPAL_STATE_DIR;
+    } else {
+      process.env.NARADA_PRINCIPAL_STATE_DIR = previousPrincipalStateDir;
+    }
     store.db.close();
     rmSync(tempDir, { recursive: true, force: true });
   });
@@ -171,7 +182,7 @@ describe('task dispatch surface', () => {
       store.insertDispatchPacket({
         packet_id: 'disp_100_2026-04-24T10:00:00.000Z_1',
         task_id: '20260420-100-test',
-        assignment_id: '2026-04-24T10:00:00.000Z',
+        assignment_id: 'assign-20260420-100-test-alpha',
         agent_id: 'alpha',
         picked_up_at: '2026-04-24T10:00:00.000Z',
         lease_expires_at: '2026-04-24T10:30:00.000Z',
@@ -293,7 +304,7 @@ describe('task dispatch surface', () => {
       store.insertDispatchPacket({
         packet_id: 'disp_100_2026-04-24T10:00:00.000Z_1',
         task_id: '20260420-100-test',
-        assignment_id: '2026-04-24T10:00:00.000Z',
+        assignment_id: 'assign-20260420-100-test-alpha',
         agent_id: 'alpha',
         picked_up_at: '2026-04-24T10:00:00.000Z',
         lease_expires_at: '2026-04-24T10:30:00.000Z',

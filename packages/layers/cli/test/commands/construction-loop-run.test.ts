@@ -15,6 +15,7 @@ import { ExitCode } from '../../src/lib/exit-codes.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 
 function setupRepo(tempDir: string) {
   mkdirSync(join(tempDir, '.ai', 'do-not-open', 'tasks'), { recursive: true });
@@ -23,35 +24,55 @@ function setupRepo(tempDir: string) {
 }
 
 function writeTask(tempDir: string, filename: string, frontMatter: string, title: string, extraBody = '') {
+  const body = extraBody || '\n\n## Acceptance Criteria\n- [x] Ready\n';
   writeFileSync(
     join(tempDir, '.ai', 'do-not-open', 'tasks', filename),
-    `---\n${frontMatter}---\n\n# ${title}\n${extraBody}`,
+    `---\n${frontMatter}---\n\n# ${title}\n${body}`,
   );
 }
-
 function writeRoster(tempDir: string, agents: Array<{
   agent_id: string;
   status?: string;
   task?: number | null;
   updated_at?: string;
 }>) {
+  const now = new Date().toISOString();
+  const rosterAgents = agents.map((a) => ({
+    agent_id: a.agent_id,
+    role: 'agent',
+    capabilities: [],
+    first_seen_at: now,
+    last_active_at: a.updated_at ?? now,
+    status: a.status ?? 'idle',
+    task: a.task ?? null,
+    updated_at: a.updated_at ?? now,
+  }));
   writeFileSync(
     join(tempDir, '.ai', 'agents', 'roster.json'),
     JSON.stringify({
       version: 1,
-      updated_at: new Date().toISOString(),
-      agents: agents.map((a) => ({
-        agent_id: a.agent_id,
-        role: 'agent',
-        capabilities: [],
-        first_seen_at: new Date().toISOString(),
-        last_active_at: new Date().toISOString(),
-        status: a.status ?? 'idle',
-        task: a.task ?? null,
-        updated_at: a.updated_at ?? new Date().toISOString(),
-      })),
+      updated_at: now,
+      agents: rosterAgents,
     }, null, 2),
   );
+  const store = openTaskLifecycleStore(tempDir);
+  try {
+    for (const agent of rosterAgents) {
+      store.upsertRosterEntry({
+        agent_id: agent.agent_id,
+        role: agent.role,
+        capabilities_json: JSON.stringify(agent.capabilities),
+        first_seen_at: agent.first_seen_at,
+        last_active_at: agent.last_active_at,
+        status: agent.status,
+        task_number: agent.task,
+        last_done: null,
+        updated_at: agent.updated_at,
+      });
+    }
+  } finally {
+    store.db.close();
+  }
 }
 
 function writePolicy(tempDir: string, overrides: Record<string, unknown> = {}) {

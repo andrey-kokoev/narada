@@ -917,7 +917,10 @@ export async function inboxWorkNextCommand(options: InboxWorkNextOptions): Promi
           after: inboxEnvelopeToEvidenceState(store.get(primary.envelope_id)),
           result: { status: 'success', envelope: primary },
         });
-        if (evidence?.path) ownedRoutingArtifacts.push(relative(options.cwd ?? process.cwd(), evidence.path));
+        const mutationEvidencePath = evidence?.path
+          ? normalizeRelativePath(relative(options.cwd ?? process.cwd(), evidence.path))
+          : null;
+        if (mutationEvidencePath) ownedRoutingArtifacts.push(mutationEvidencePath);
         sideEffects.push({
           surface: 'inbox',
           mutation: 'claim',
@@ -929,10 +932,10 @@ export async function inboxWorkNextCommand(options: InboxWorkNextOptions): Promi
             after: primary,
             actor: options.by,
             command: 'inbox work-next claim',
-            evidenceArtifact: evidence?.path ? relative(options.cwd ?? process.cwd(), evidence.path) : null,
+            evidenceArtifact: mutationEvidencePath,
           }),
           handled_by: options.by,
-          mutation_evidence_path: evidence?.path ? relative(options.cwd ?? process.cwd(), evidence.path) : null,
+          mutation_evidence_path: mutationEvidencePath,
         });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -1202,7 +1205,7 @@ export async function inboxPromoteCommand(options: InboxPromoteOptions): Promise
           after: envelope,
           actor: options.by,
           command: 'inbox promote archive',
-          evidenceArtifact: evidence?.path ? relative(cwd, evidence.path) : null,
+          evidenceArtifact: evidence?.path ? normalizeRelativePath(relative(cwd, evidence.path)) : null,
         });
         return okResult(
           {

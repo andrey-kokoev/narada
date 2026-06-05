@@ -106,22 +106,23 @@ function setupRepo(tempDir: string) {
         updated_at: '2026-04-20T10:00:00.000Z',
       });
     }
-    store.upsertAssignmentRecord({
-      task_id: '20260420-100-claimed-task',
-      record_json: JSON.stringify({
-        task_id: '20260420-100-claimed-task',
-        assignments: [
-          {
-            agent_id: 'alpha',
-            claimed_at: '2026-04-20T10:00:00Z',
-            claim_context: null,
-            released_at: null,
-            release_reason: null,
-          },
-        ],
-      }),
-      updated_at: '2026-04-20T10:00:00.000Z',
-    });
+    for (const entry of [
+      { agent_id: 'alpha', role: 'implementer', capabilities: ['typescript'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z', status: 'working', task_number: 100, last_done: null },
+      { agent_id: 'beta', role: 'implementer', capabilities: ['testing'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z', status: 'done', task_number: null, last_done: null },
+      { agent_id: 'gamma', role: 'reviewer', capabilities: ['architecture'], first_seen_at: '2026-01-01T00:00:00Z', last_active_at: '2026-01-01T00:00:00Z', status: 'done', task_number: null, last_done: null },
+    ]) {
+      store.upsertRosterEntry({
+        agent_id: entry.agent_id,
+        role: entry.role,
+        capabilities_json: JSON.stringify(entry.capabilities),
+        first_seen_at: entry.first_seen_at,
+        last_active_at: entry.last_active_at,
+        status: entry.status,
+        task_number: entry.task_number,
+        last_done: entry.last_done,
+        updated_at: '2026-04-20T10:00:00.000Z',
+      });
+    }
     store.insertAssignment({
       assignment_id: 'assign-100-alpha',
       task_id: '20260420-100-claimed-task',
@@ -131,21 +132,14 @@ function setupRepo(tempDir: string) {
       release_reason: null,
       intent: 'primary',
     });
-    store.upsertAssignmentRecord({
+    store.insertAssignment({
+      assignment_id: 'assign-101-alpha-completed',
       task_id: '20260420-101-needs-continuation',
-      record_json: JSON.stringify({
-        task_id: '20260420-101-needs-continuation',
-        assignments: [
-          {
-            agent_id: 'alpha',
-            claimed_at: '2026-04-20T10:00:00Z',
-            claim_context: null,
-            released_at: '2026-04-20T12:00:00Z',
-            release_reason: 'completed',
-          },
-        ],
-      }),
-      updated_at: '2026-04-20T12:00:00.000Z',
+      agent_id: 'alpha',
+      claimed_at: '2026-04-20T10:00:00Z',
+      released_at: '2026-04-20T12:00:00Z',
+      release_reason: 'completed',
+      intent: 'primary',
     });
   } finally {
     store.db.close();
@@ -393,7 +387,7 @@ describe('task continue operator', () => {
       format: 'json',
     });
 
-    const roster = JSON.parse(readFileSync(join(tempDir, '.ai', 'agents', 'roster.json'), 'utf8'));
+    const roster = await loadRoster(tempDir);
     const beta = roster.agents.find((a: { agent_id: string }) => a.agent_id === 'beta');
     const alpha = roster.agents.find((a: { agent_id: string }) => a.agent_id === 'alpha');
     expect(alpha.status).toBe('working');

@@ -32,9 +32,8 @@ if ($LASTEXITCODE -ne 0) { throw "launch_request_verification_failed" }
 $requestVerify = $requestVerifyJson | ConvertFrom-Json
 if ($requestVerify.status -ne "verified") { throw "launch_request_not_verified:$($requestVerify.status)" }
 
-$agentStart = Join-Path $resolvedSiteRoot "tools\agent-start\start-agent.mjs"
-if (-not (Test-Path -LiteralPath $agentStart)) { throw "agent_start_carrier_missing:$agentStart" }
 $pwshSurface = Join-Path $resolvedSiteRoot "narada.ps1"
+$agentStart = $pwshSurface
 if (-not (Test-Path -LiteralPath $pwshSurface)) { throw "narada_pwsh_surface_missing:$pwshSurface" }
 $startedAt = (Get-Date).ToUniversalTime().ToString("o")
 $evidence = [ordered]@{

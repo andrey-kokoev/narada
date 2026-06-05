@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/carrier-action-admission.mjs",
     "./tool-metadata": "./src/tool-metadata.mjs",
-    "./evidence-reader": "./src/evidence-reader.mjs"
+    "./evidence-reader": "./src/evidence-reader.mjs",
+    "./classification-cases": "./fixtures/classification-cases.json"
   },
   "scripts": {
     "test": "node --test src/carrier-action-admission.test.mjs",

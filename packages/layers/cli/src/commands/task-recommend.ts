@@ -379,16 +379,19 @@ export async function taskRecommendCommand(
       // Store may not exist yet; fallback to markdown-only reads
     }
 
-    let recommendation = await generateRecommendations({
-      cwd,
-      agentFilter,
-      taskFilter,
-      limit,
-      architectId: options.architect,
-      store,
-    });
-
-    if (store) store.db.close();
+    let recommendation: TaskRecommendation;
+    try {
+      recommendation = await generateRecommendations({
+        cwd,
+        agentFilter,
+        taskFilter,
+        limit,
+        architectId: options.architect,
+        store,
+      });
+    } finally {
+      if (store) store.db.close();
+    }
 
     const { guidance } = await recallAcceptedLearning({
       cwd,

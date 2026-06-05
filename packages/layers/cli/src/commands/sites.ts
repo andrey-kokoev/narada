@@ -3944,6 +3944,34 @@ async function addSiteToolSurfaceChecks(checks: SiteDoctorCheck[], siteRoot: str
   );
 }
 
+function looksLikeMcpSurfaceReference(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  const normalized = value.toLowerCase().replace(/\\/g, '/');
+  return normalized.includes('mcp') || normalized.includes('server_entrypoint');
+}
+
+async function declaredMcpSurfaceReferences(siteRoot: string): Promise<string[]> {
+  const references = new Set<string>();
+  const manifest = await readSiteToolSurfaceManifest(siteRoot);
+  const entries = Array.isArray(manifest.manifest?.entries) ? manifest.manifest.entries : [];
+  for (const entry of entries) {
+    const values = [entry.path, entry.surface, entry.package, entry.package_name, entry.server_entrypoint];
+    if (values.some(looksLikeMcpSurfaceReference)) {
+      references.add(String(entry.path ?? entry.surface ?? entry.package ?? 'declared-mcp-surface'));
+    }
+  }
+
+  const toolsRoot = join(siteRoot, 'tools');
+  const toolFiles = (await listFilesRecursive(toolsRoot)).filter(isExecutableToolPath);
+  for (const file of toolFiles) {
+    const relative = slashRelative(siteRoot, file);
+    if (looksLikeMcpSurfaceReference(relative)) {
+      references.add(relative);
+    }
+  }
+  return [...references].sort();
+}
+
 async function addMcpFreshnessChecks(checks: SiteDoctorCheck[], siteRoot: string): Promise<void> {
   const tmpRoot = join(siteRoot, '.ai', 'tmp');
   const legacyBaseline = join(tmpRoot, 'mcp-baseline.json');
@@ -3952,8 +3980,11 @@ async function addMcpFreshnessChecks(checks: SiteDoctorCheck[], siteRoot: string
   const restartEvidence = join(tmpRoot, 'mcp-restart-evidence');
 
   const baselineFiles = (await listFilesRecursive(perSurfaceBaselines)).filter((file) => file.endsWith('.json'));
+  const mcpSurfaceRefs = await declaredMcpSurfaceReferences(siteRoot);
   if (baselineFiles.length > 0) {
     addCheck(checks, 'mcp_freshness_markers', 'pass', `${baselineFiles.length} per-surface MCP baseline marker(s) present`);
+  } else if (mcpSurfaceRefs.length === 0) {
+    addCheck(checks, 'mcp_freshness_markers', 'pass', 'No declared MCP-backed Site-local tool surfaces require freshness markers');
   } else if (existsSync(legacyBaseline)) {
     addCheck(
       checks,
@@ -3963,7 +3994,13 @@ async function addMcpFreshnessChecks(checks: SiteDoctorCheck[], siteRoot: string
       'Migrate to .ai/tmp/mcp-baselines/<surface-key>.json keyed by canonical_site_root + surface_id + server_entrypoint.',
     );
   } else {
-    addCheck(checks, 'mcp_freshness_markers', 'warn', 'No per-surface MCP baseline markers found');
+    addCheck(
+      checks,
+      'mcp_freshness_markers',
+      'warn',
+      `${mcpSurfaceRefs.length} MCP-backed Site-local surface(s) lack per-surface baseline markers`,
+      'Create .ai/tmp/mcp-baselines/<surface-key>.json for each admitted MCP surface before treating it as fresh.',
+    );
   }
 
   const requestFiles = (await listFilesRecursive(restartRequests)).filter((file) => file.endsWith('.json'));
@@ -3984,11 +4021,13 @@ async function addMcpFreshnessChecks(checks: SiteDoctorCheck[], siteRoot: string
   );
 }
 
+
 export async function sitesReconcileAgentCliWrapperCommand(
   options: SitesReconcileAgentCliWrapperOptions,
   _context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const inputRoot = resolve(options.root ?? '.');
+
   const siteRoot = containedSiteRootFromInput(inputRoot);
   const wrapper = await inspectAgentCliWrapper(siteRoot);
   const template = await loadAgentCliWrapperTemplate();

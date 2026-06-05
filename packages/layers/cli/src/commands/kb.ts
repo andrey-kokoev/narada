@@ -40,7 +40,6 @@ interface KbEntry {
   related_runbooks: string[];
   body_excerpt: string;
 }
-
 const KB_ROOTS = ['kb', '.narada/kb', 'knowledge', 'runbooks', 'docs/runbooks'];
 const METADATA_FIELDS = ['lookup_aliases', 'symptoms', 'systems', 'failure_modes', 'related_runbooks'] as const;
 
@@ -48,6 +47,9 @@ function normalize(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+function normalizeRelativePath(value: string): string {
+  return value.split('\\').join('/');
+}
 function asStringArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
   if (typeof value === 'string' && value.trim()) return [value.trim()];
@@ -79,7 +81,7 @@ async function readKbEntries(cwd: string): Promise<KbEntry[]> {
     const { frontMatter, body } = parseFrontMatter(raw);
     const title = /^#\s+(.+)$/m.exec(body)?.[1]?.trim() ?? relative(root, file);
     entries.push({
-      path: relative(root, file),
+      path: normalizeRelativePath(relative(root, file)),
       title,
       lookup_aliases: asStringArray(frontMatter.lookup_aliases),
       symptoms: asStringArray(frontMatter.symptoms),
@@ -164,10 +166,10 @@ export async function kbAliasAddCommand(options: KbAliasAddOptions): Promise<{ e
     result: formattedResult({
       status: 'success',
       mutation_performed: true,
-      file: relative(cwd, file),
+      file: normalizeRelativePath(relative(cwd, file)),
       metadata: Object.fromEntries(METADATA_FIELDS.map((field) => [field, frontMatter[field]])),
       next_search_command: `narada kb search --query ${JSON.stringify([...(options.alias ?? []), ...(options.symptom ?? [])][0] ?? '')}`,
-    }, [`Updated KB metadata: ${relative(cwd, file)}`], options.format ?? 'auto'),
+    }, [`Updated KB metadata: ${normalizeRelativePath(relative(cwd, file))}`], options.format ?? 'auto'),
   };
 }
 

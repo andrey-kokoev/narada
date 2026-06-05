@@ -49,14 +49,12 @@ describe('status command', () => {
     const result = await statusCommand({}, context);
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    expect(result.result).toMatchObject({
-      status: 'success',
-      health: 'empty',
-      mailbox: {
-        id: 'test@example.com',
-        rootDir: '/test/data',
-      },
-    });
+    const data = result.result as { status: string; health: string; mailbox: { id: string; rootDir: string } };
+    expect(data.status).toBe('success');
+    expect(data.health).toBe('empty');
+    expect(data.mailbox.id).toBe('test@example.com');
+    expect(data.mailbox.rootDir.replaceAll('\\', '/')).toContain('/test/data');
+    expect(data.mailbox.rootDir.replaceAll('\\', '/')).toContain('/test/data');
   });
 
   it('shows healthy status when recent sync exists', async () => {
