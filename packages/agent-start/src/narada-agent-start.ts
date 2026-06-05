@@ -103,14 +103,6 @@ function identityToken(identity) {
   return String(identity).replace(/[^A-Za-z0-9]+/g, '_');
 }
 
-function requiredEnvironmentValue(name) {
-  const value = process.env[name];
-  if (value === undefined || value === '') {
-    throw new Error(`required_environment_missing: ${name}`);
-  }
-  return value;
-}
-
 const args = parseArgs(process.argv.slice(2));
 const identity = args.identity;
 const rootDir = args.site_root ?? args.target_site_root ?? process.env.NARADA_LAUNCH_REGISTRY_SITE_ROOT ?? process.env.NARADA_TARGET_SITE_ROOT ?? process.cwd();
@@ -179,6 +171,8 @@ function naradaPackageRoot(packageName) {
   try {
     return dirname(require.resolve(`${packageName}/package.json`));
   } catch {
+    const siblingRoot = join(dirname(NARADA_PROPER_ROOT), naradaPackageDirectoryName(packageName));
+    if (existsSync(join(siblingRoot, 'package.json'))) return siblingRoot;
     return join(NARADA_PROPER_ROOT, 'packages', naradaPackageDirectoryName(packageName));
   }
 }
@@ -503,15 +497,13 @@ function materializeAgentTuiMcpConfig() {
 function agentTuiTerminalEnvironment() {
   if (runtime !== AGENT_TUI_RUNTIME) return {};
   const mcpConfigPath = materializeAgentTuiMcpConfig();
+  const providerEnv = intelligenceProviderEnvironment({ intelligence_provider: DEFAULT_AGENT_CLI_INTELLIGENCE_PROVIDER });
   return {
     [AGENT_TUI_TERMINAL_RENDERING_ENV]: 'yes',
     [AGENT_TUI_TERMINAL_MODE_ENV]: AGENT_TUI_TERMINAL_MODE,
     NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION: 'true',
     NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND: 'codex_subscription_adapter',
-    NARADA_INTELLIGENCE_PROVIDER: requiredEnvironmentValue('NARADA_INTELLIGENCE_PROVIDER'),
-    NARADA_AI_BASE_URL: requiredEnvironmentValue('NARADA_AI_BASE_URL'),
-    NARADA_AI_MODEL: requiredEnvironmentValue('NARADA_AI_MODEL'),
-    NARADA_AI_API_KEY: requiredEnvironmentValue('NARADA_AI_API_KEY'),
+    ...providerEnv,
     NARADA_AGENT_TUI_ENABLE_MCP_FABRIC: 'yes',
     NARADA_AGENT_TUI_MCP_CONFIG: mcpConfigPath,
     NARADA_SITE_MCP_FABRIC: join(sessionSiteRoot, '.ai', 'mcp'),
@@ -664,7 +656,7 @@ function resolveRuntimeCommand(runtimeName) {
     return process.execPath;
   }
   if (runtimeName === 'agent-cli') {
-    return process.platform === 'win32' ? 'pwsh' : process.execPath;
+    return process.execPath;
   }
   if (runtimeName === 'pi') {
     return stableNodeCommand();
@@ -1003,7 +995,7 @@ function buildSpawnArgs(runtime, identity, capabilityPolicy = {}, providerResolu
     return [
       'run',
       '--manifest-path',
-      join(NARADA_PROPER_ROOT, 'packages', 'agent-tui', 'Cargo.toml'),
+      join(naradaPackageRoot('@narada2/agent-tui'), 'Cargo.toml'),
       '--bin',
       'narada-agent-tui',
       '--',
@@ -1236,6 +1228,8 @@ const requiredEnvironment = {
     NARADA_CLAUDE_CODE_COMMAND: process.env.NARADA_CLAUDE_CODE_COMMAND ?? DEFAULT_CLAUDE_CODE_COMMAND,
     NARADA_CLAUDE_CODE_MODEL: process.env.NARADA_CLAUDE_CODE_MODEL ?? DEFAULT_CLAUDE_CODE_MODEL,
   } : {}),
+  NARADA_AGENT_ID: identity,
+  NARADA_AGENT_START_EVENT_ID: startResult.agent_start_event,
   NARADA_SITE_ROOT: environmentSiteRoot,
   NARADA_WORKSPACE_ROOT: workspaceRoot,
   NARADA_AGENT_CONTEXT_DB: dbPath,
@@ -1287,7 +1281,7 @@ const output = {
   intelligence_provider_resolution: intelligenceProviderResolution,
   required_environment: requiredEnvironment,
   would_set_environment: startResult.would_set_environment
-    ? { ...startResult.would_set_environment, ...carrierEnvironment, ...intelligenceProviderEnv, ...agentTuiEnvironment, ...(runtime === 'pi' ? { NARADA_PI_COMMAND: process.env.NARADA_PI_COMMAND ?? 'pi', NARADA_PI_PROVIDER: process.env.NARADA_PI_PROVIDER ?? DEFAULT_PI_PROVIDER, NARADA_PI_MODEL: process.env.NARADA_PI_MODEL ?? DEFAULT_PI_MODEL } : {}), ...(runtime === 'claude-code' ? { NARADA_CLAUDE_CODE_COMMAND: process.env.NARADA_CLAUDE_CODE_COMMAND ?? DEFAULT_CLAUDE_CODE_COMMAND, NARADA_CLAUDE_CODE_MODEL: process.env.NARADA_CLAUDE_CODE_MODEL ?? DEFAULT_CLAUDE_CODE_MODEL } : {}), NARADA_SITE_ROOT: environmentSiteRoot,
+    ? { ...startResult.would_set_environment, ...carrierEnvironment, ...intelligenceProviderEnv, ...agentTuiEnvironment, ...(runtime === 'pi' ? { NARADA_PI_COMMAND: process.env.NARADA_PI_COMMAND ?? 'pi', NARADA_PI_PROVIDER: process.env.NARADA_PI_PROVIDER ?? DEFAULT_PI_PROVIDER, NARADA_PI_MODEL: process.env.NARADA_PI_MODEL ?? DEFAULT_PI_MODEL } : {}), ...(runtime === 'claude-code' ? { NARADA_CLAUDE_CODE_COMMAND: process.env.NARADA_CLAUDE_CODE_COMMAND ?? DEFAULT_CLAUDE_CODE_COMMAND, NARADA_CLAUDE_CODE_MODEL: process.env.NARADA_CLAUDE_CODE_MODEL ?? DEFAULT_CLAUDE_CODE_MODEL } : {}), NARADA_AGENT_ID: identity, NARADA_AGENT_START_EVENT_ID: startResult.agent_start_event, NARADA_SITE_ROOT: environmentSiteRoot,
   NARADA_WORKSPACE_ROOT: workspaceRoot, NARADA_AGENT_CONTEXT_DB: dbPath }
     : startResult.would_set_environment,
   carrier_session: carrierSessionRegistration,

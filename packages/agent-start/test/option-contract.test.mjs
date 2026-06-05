@@ -81,6 +81,13 @@ test('agent-cli accepts explicit intelligence provider and materializes provider
   assert.equal(output.required_environment.NARADA_AI_MODEL, 'gpt-5.5');
 });
 
+test('agent-cli exec launches package bin through node, not PowerShell', () => {
+  const output = runOk(['--runtime', 'agent-cli', '--exec']);
+  assert.equal(output.exec_command.startsWith(process.execPath), true);
+  assert.equal(output.exec_command.includes('pwsh'), false);
+  assert.equal(output.runtime_args[0].endsWith('narada-agent-cli.mjs'), true);
+});
+
 test('non-agent-cli runtime refuses explicit intelligence provider selection', () => {
   const result = runFailed(['--runtime', 'codex', '--intelligence-provider', 'codex-subscription'], {
     NARADA_CODEX_CLI_SCRIPT: launcherPath,
@@ -112,6 +119,10 @@ test('codex resolves CLI script from PATH and disables native shell by default',
   });
   assert.equal(output.tool_fabric_adapter.expected_tools.includes('agent_context_startup_sequence'), true);
   assert.equal(output.tool_fabric_adapter.expected_tools.includes('startup_sequence'), true);
+  assert.equal(output.required_environment.NARADA_AGENT_ID, identity);
+  assert.equal(output.required_environment.NARADA_AGENT_START_EVENT_ID, output.agent_start_event);
+  assert.equal(output.would_set_environment.NARADA_AGENT_ID, identity);
+  assert.equal(output.would_set_environment.NARADA_AGENT_START_EVENT_ID, output.agent_start_event);
   assert.equal(output.runtime_args.includes('shell_tool'), true);
   if (process.platform === 'win32') assert.equal(output.runtime_args[0], fakeCodexScript);
 
@@ -125,13 +136,19 @@ test('enable native shell removes codex shell disable argument', () => {
   assert.equal(output.runtime_args.includes('apps'), true);
 });
 
-test('agent-tui materializes required env from explicit ambient provider env', () => {
-  const output = runOk(['--runtime', 'agent-tui', '--agent-tui-max-steps', '42'], agentTuiEnv());
+test('agent-tui materializes provider env without requiring ambient provider env', () => {
+  const output = runOk(['--runtime', 'agent-tui', '--agent-tui-max-steps', '42']);
   const env = output.required_environment;
   assert.equal(env.NARADA_AGENT_TUI_ENABLE_MCP_FABRIC, 'yes');
   assert.equal(env.NARADA_AGENT_TUI_MCP_CONFIG, join(naradaProperRoot, '.ai', 'runtime', 'agent-tui', 'mcp-config.json'));
+  assert.equal(env.NARADA_INTELLIGENCE_PROVIDER, 'codex-subscription');
+  assert.equal(env.NARADA_AI_BASE_URL, 'codex://local-subscription');
+  assert.equal(env.NARADA_AI_MODEL, 'gpt-5.5');
   assert.equal(output.runtime_args.includes('--max-steps'), true);
   assert.equal(output.runtime_args.includes('42'), true);
+  const manifestPath = output.runtime_args[output.runtime_args.indexOf('--manifest-path') + 1];
+  assert.equal(manifestPath.endsWith(join('agent-tui', 'Cargo.toml')), true);
+  assert.notEqual(manifestPath, join(naradaProperRoot, 'packages', 'agent-tui', 'Cargo.toml'));
   assert.equal(existsSync(env.NARADA_AGENT_TUI_MCP_CONFIG), false, 'dry-run must not write generated agent-tui config');
 });
 
