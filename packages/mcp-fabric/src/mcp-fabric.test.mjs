@@ -112,6 +112,7 @@ assert.equal(fabric.servers.fixture.registry_metadata_authoritative, true);
 const agentTuiProjection = projectFabricForAgentTui(fabric, { NARADA_AGENT_ID: 'narada.test' });
 assert.deepEqual(Object.keys(agentTuiProjection.mcpServers), ['fixture']);
 assert.deepEqual(agentTuiProjection.mcpServers.fixture.tools, ['fixture_read', 'task_lifecycle_claim']);
+assert.equal(agentTuiProjection.mcpServers.fixture.target_site_root, siteRoot.replaceAll('\\', '/'));
 assert.equal(agentTuiProjection.mcpServers.fixture.env.NARADA_AGENT_ID, 'narada.test');
 
 rmSync(siteRoot, { recursive: true, force: true });
@@ -142,6 +143,7 @@ writeFileSync(join(startupAliasSite, '.narada', 'capabilities', 'mcp-surfaces.js
 }, null, 2)}\n`, 'utf8');
 const startupAliasFabric = loadSiteMcpFabric(startupAliasSite, { required: true });
 const startupAliasProjection = projectFabricForAgentTui(startupAliasFabric, {});
+assert.equal(startupAliasProjection.mcpServers.agent_context.target_site_root, startupAliasSite.replaceAll('\\', '/'));
 assert.deepEqual(startupAliasProjection.mcpServers.agent_context.tools, [
   'agent_context_startup_sequence',
   'mcp_output_show',

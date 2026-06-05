@@ -140,6 +140,7 @@ export function projectFabricForAgentTui(fabric, envValues) {
     mcpServers[name] = {
       command: server.command,
       args: server.args,
+      ...(server.target_site_root ? { target_site_root: server.target_site_root } : {}),
       env: {
         ...projectServerEnvironment(server),
         ...envValues,
@@ -478,6 +479,9 @@ function normalizeServerConfig(serverName, rawServer, siteRoot) {
   if (transport !== 'stdio') return null;
   const command = normalizeCommand(rawServer.command);
   const portableSiteRoot = siteRoot.replaceAll('\\', '/');
+  const targetSiteRoot = rawServer.target_site_root
+    ? String(rawServer.target_site_root).replaceAll('{site_root}', portableSiteRoot)
+    : portableSiteRoot;
   const args = Array.isArray(rawServer.args)
     ? rawServer.args.map((arg) => normalizePortablePathText(String(arg).replaceAll('{site_root}', portableSiteRoot)))
     : [];
@@ -489,7 +493,7 @@ function normalizeServerConfig(serverName, rawServer, siteRoot) {
     env_vars: Array.isArray(rawServer.env_vars) ? rawServer.env_vars.map(String) : [],
     ...rawServerToolList(rawServer),
     ...(rawServer.surface_id ? { surface_id: String(rawServer.surface_id) } : {}),
-    ...(rawServer.target_site_root ? { target_site_root: normalizePortablePathText(String(rawServer.target_site_root).replaceAll('{site_root}', portableSiteRoot)) } : {}),
+    target_site_root: normalizePortablePathText(targetSiteRoot),
     ...(rawServer.authority_posture ? { authority_posture: String(rawServer.authority_posture) } : {}),
     ...(Number.isFinite(Number(rawServer.startup_timeout_sec)) ? { startup_timeout_sec: Number(rawServer.startup_timeout_sec) } : {}),
   };
