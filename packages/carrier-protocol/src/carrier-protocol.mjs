@@ -149,9 +149,10 @@ export function isStartupNudge(content) {
 
 export function startupCommandFromLaunchPacket(launchPacket = {}) {
   const command = isObject(launchPacket.startup_command) ? launchPacket.startup_command : null;
-  const name = typeof command?.name === 'string' && command.name.length > 0
+  const rawName = typeof command?.name === 'string' && command.name.length > 0
     ? command.name
     : CANONICAL_STARTUP_COMMAND_NAME;
+  const name = rawName === 'startup_sequence' ? CANONICAL_STARTUP_COMMAND_NAME : rawName;
   const args = isObject(command?.arguments) ? command.arguments : {};
   return { name, arguments: args };
 }

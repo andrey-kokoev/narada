@@ -243,7 +243,7 @@ function resolveToolFabricAdapter(runtimeName) {
       tool_fabric_source: source,
       runtime_substrate_kind: runtimeName,
       adapter_entrypoint: null,
-      expected_tools: ['agent_context_startup_sequence', 'startup_sequence', 'mcp_output_show', 'task_lifecycle_next'],
+      expected_tools: ['agent_context_startup_sequence', 'mcp_output_show', 'task_lifecycle_next'],
       states: ['runtime_known', 'adapter_selected', 'source_declared', 'launch_ready'],
     };
   }
@@ -254,7 +254,7 @@ function resolveToolFabricAdapter(runtimeName) {
       tool_fabric_source: source,
       runtime_substrate_kind: runtimeName,
       adapter_entrypoint: 'package:@narada2/agent-cli#narada-agent-cli',
-      expected_tools: ['agent_context_startup_sequence', 'startup_sequence', 'mcp_output_show', 'task_lifecycle_next'],
+      expected_tools: ['agent_context_startup_sequence', 'mcp_output_show', 'task_lifecycle_next'],
       states: ['runtime_known', 'adapter_selected', 'source_declared', 'launch_ready'],
     };
 
@@ -277,7 +277,7 @@ function resolveToolFabricAdapter(runtimeName) {
       tool_fabric_source: source,
       runtime_substrate_kind: runtimeName,
       adapter_entrypoint: '.pi/extensions/narada-mcp-bridge.ts',
-      expected_tools: ['agent_context_startup_sequence', 'startup_sequence', 'mcp_output_show', 'task_lifecycle_next', 'task_lifecycle_un_defer'],
+      expected_tools: ['agent_context_startup_sequence', 'mcp_output_show', 'task_lifecycle_next', 'task_lifecycle_un_defer'],
       states: ['runtime_known', 'adapter_selected', 'source_declared', 'narada_owned_extension_bridge', 'launch_ready'],
       admission_basis: 'Narada-owned Pi extension bridges Site-local .ai/mcp tools into Pi; MCP servers remain Site-local authority surfaces.',
     };
@@ -289,7 +289,7 @@ function resolveToolFabricAdapter(runtimeName) {
       tool_fabric_source: source,
       runtime_substrate_kind: runtimeName,
       adapter_entrypoint: 'claude --mcp-config',
-      expected_tools: ['agent_context_startup_sequence', 'startup_sequence', 'mcp_output_show', 'task_lifecycle_next', 'task_lifecycle_un_defer'],
+      expected_tools: ['agent_context_startup_sequence', 'mcp_output_show', 'task_lifecycle_next', 'task_lifecycle_un_defer'],
       states: ['runtime_known', 'adapter_selected', 'source_declared', 'native_mcp_config_required', 'launch_ready'],
     };
   }
@@ -1027,7 +1027,7 @@ function buildSpawnArgs(runtime, identity, capabilityPolicy = {}, providerResolu
       '--extension',
       join(rootDir, '.pi', 'extensions', 'narada-mcp-bridge.ts'),
       '--append-system-prompt',
-      `You are ${identity}. The human is Operator. This session was launched by Narada agent-start. Narada tools are attached through the Narada-owned Pi MCP bridge generated from the Site-local .ai/mcp fabric. Use agent_context_startup_sequence first; startup_sequence is only a legacy alias. Treat operator startup nudges as this MCP startup affordance, not shell or file discovery. If the startup MCP tool is unavailable, report the missing MCP capability. When a Narada tool returns reader_tool=mcp_output_show, call mcp_output_show with the returned output_ref before deciding next work.`,
+      `You are ${identity}. The human is Operator. This session was launched by Narada agent-start. Narada tools are attached through the Narada-owned Pi MCP bridge generated from the Site-local .ai/mcp fabric. Use agent_context_startup_sequence first. Treat operator startup nudges as this MCP startup affordance, not shell or file discovery. If the startup MCP tool is unavailable, report the missing MCP capability. When a Narada tool returns reader_tool=mcp_output_show, call mcp_output_show with the returned output_ref before deciding next work.`,
     ];
   }
 
@@ -1049,7 +1049,7 @@ function buildSpawnArgs(runtime, identity, capabilityPolicy = {}, providerResolu
       '--mcp-config',
       JSON.stringify(claudeCodeMcpConfig()),
       '--append-system-prompt',
-      `You are ${identity}. The human is Operator. This session was launched by Narada agent-start. Narada tools are attached through Claude Code native MCP config generated from the Site MCP fabric. Use agent_context_startup_sequence first; startup_sequence is only a legacy alias. Treat operator startup nudges as this MCP startup affordance, not shell or file discovery. If the startup MCP tool is unavailable, report the missing MCP capability. When a Narada tool returns reader_tool=mcp_output_show, call mcp_output_show with the returned output_ref before deciding next work.`,
+      `You are ${identity}. The human is Operator. This session was launched by Narada agent-start. Narada tools are attached through Claude Code native MCP config generated from the Site MCP fabric. Use agent_context_startup_sequence first. Treat operator startup nudges as this MCP startup affordance, not shell or file discovery. If the startup MCP tool is unavailable, report the missing MCP capability. When a Narada tool returns reader_tool=mcp_output_show, call mcp_output_show with the returned output_ref before deciding next work.`,
     ];
   }
 

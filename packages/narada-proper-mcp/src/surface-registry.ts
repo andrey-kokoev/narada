@@ -100,7 +100,6 @@ const EXPOSED_TOOL_NAMES = [
   'site_task_lifecycle.materialize_task',
   'site_task_lifecycle.plan_init',
   'site_task_lifecycle.read_task',
-  'startup_sequence',
 ].sort();
 
 export const NARADA_PROPER_MCP_SURFACE_REGISTRY: NaradaProperMcpSurfaceRecord[] = [
@@ -141,7 +140,6 @@ export const NARADA_PROPER_MCP_SURFACE_REGISTRY: NaradaProperMcpSurfaceRecord[] 
         'narada_task_read',
         'site_task_lifecycle.plan_init',
         'site_task_lifecycle.read_task',
-        'startup_sequence',
       ],
       mutating_tools: [
         'agent_context_memory.record_checkpoint',

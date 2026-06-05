@@ -326,11 +326,6 @@ const TOOLS = [
     description: 'Canonical operator-facing startup hydration command. Delegates to the current agent_context_hydrate_current startup behavior.',
     inputSchema: startupSequenceInputSchema(),
   },
-  {
-    name: 'startup_sequence',
-    description: 'Legacy operator-facing startup hydration alias. Delegates to the current agent_context_hydrate_current startup behavior.',
-    inputSchema: startupSequenceInputSchema(),
-  },
 
   {
     name: 'agent_context_lifecycle_history',
@@ -1061,8 +1056,6 @@ async function handleRequest(request) {
         break;
       case 'agent_context_hydrate_current':
       case 'agent_context_startup_sequence':
-      case 'startup_sequence':
-
         result = agentContextHydrateCurrent(toolArgs);
         break;
       case 'agent_context_lifecycle_history':

@@ -78,7 +78,6 @@ function inferredToolContract(serverName) {
         'agent_context_whoami',
         'agent_context_hydrate_current',
         'agent_context_startup_sequence',
-        'startup_sequence',
         'agent_context_rehydrate',
         'agent_context_list_sessions',
       ],

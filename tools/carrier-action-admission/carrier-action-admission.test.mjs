@@ -38,14 +38,15 @@ assert.deepEqual(classifyCarrierActionRequest('task_lifecycle_claim', { task_num
   secret_findings: [],
   classifier_source: 'closed_name_fallback',
 });
-assert.equal(classifyCarrierActionRequest('startup_sequence', {}).decision, 'read_only_admitted');
+assert.equal(classifyCarrierActionRequest('agent_context_startup_sequence', {}).decision, 'read_only_admitted');
+assert.equal(classifyCarrierActionRequest('startup_sequence', {}).decision, 'refused');
 assert.equal(classifyCarrierActionRequest('fs_read_file', {}).decision, 'read_only_admitted');
 assert.equal(classifyCarrierActionRequest('fs_glob_search', {}).decision, 'read_only_admitted');
 assert.equal(classifyCarrierActionRequest('fs_grep_search', {}).decision, 'read_only_admitted');
 assert.equal(classifyCarrierActionRequest('read_file', {}).decision, 'refused');
 assert.equal(classifyCarrierActionRequest('glob_search', {}).decision, 'refused');
 assert.equal(classifyCarrierActionRequest('grep_search', {}).decision, 'refused');
-assert.equal(classifyCarrierActionRequest('startup_sequence', {}, { toolAvailable: false }).reason, 'mcp_tool_not_available');
+assert.equal(classifyCarrierActionRequest('agent_context_startup_sequence', {}, { toolAvailable: false }).reason, 'mcp_tool_not_available');
 assert.equal(classifyCarrierActionRequest('unknown_registry_read', {}, {
   toolMetadata: { read_only: true, source: 'surface_registry', reason: 'test_registry_read' },
 }).decision, 'read_only_admitted');
@@ -172,7 +173,7 @@ const readOnlyWrite = createAndWriteCarrierActionAdmission({
   carrierSessionId: 'carrier_4',
   turnId: 'turn_4',
   toolCallId: 'call_4',
-  toolName: 'startup_sequence',
+  toolName: 'agent_context_startup_sequence',
   args: {},
   siteRoot: workspaceRoot,
 });

@@ -30,7 +30,6 @@ const FALLBACK_READ_ONLY_TOOLS = new Set([
   'agent_context_show_bootstrap',
   'inbox_doctor',
   'agent_context_startup_sequence',
-  'startup_sequence',
   'site_task_lifecycle.list_tasks',
   'site_task_lifecycle.get_task',
   'site_task_lifecycle.next_task',

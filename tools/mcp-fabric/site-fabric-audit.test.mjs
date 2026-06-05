@@ -65,7 +65,7 @@ writeFileSync(join(agentContextSite, '.narada', 'capabilities', 'mcp-surfaces.js
   surfaces: [{
     surface_id: 'agent-context-mcp.local',
     client_config: { generated_path: '.ai/mcp/agent-context-mcp.json' },
-    tool_contract: { read_only_tools: ['startup_sequence', 'mcp_output_show'], mutating_tools: [] },
+    tool_contract: { read_only_tools: ['agent_context_startup_sequence', 'mcp_output_show'], mutating_tools: [] },
   }],
 }, null, 2)}\n`, 'utf8');
 const agentContextAudit = auditSiteFabric(agentContextSite);
@@ -74,7 +74,6 @@ assert.deepEqual(agentContextAudit.agent_tui.missing_startup_tools, []);
 assert.deepEqual(agentContextAudit.agent_tui.projected_servers[0].tools, [
   'agent_context_startup_sequence',
   'mcp_output_show',
-  'startup_sequence',
 ]);
 mkdirSync(join(agentContextSite, '.ai', 'mcp', 'agent-tui'), { recursive: true });
 writeFileSync(join(agentContextSite, '.ai', 'mcp', 'agent-tui', 'mcp-config.json'), '{}\n', 'utf8');

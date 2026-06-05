@@ -158,13 +158,6 @@ export const NARADA_MCP_TOOLS: McpTool[] = [
     }),
   },
   {
-    name: 'startup_sequence',
-    description: 'Legacy alias for agent_context_startup_sequence.',
-    inputSchema: objectSchema({
-      target: targetSchema(),
-    }),
-  },
-  {
     name: 'mcp_output_show',
     description: 'Read a Narada proper mcp_output ref emitted by this MCP server.',
     inputSchema: objectSchema({
@@ -636,7 +629,6 @@ async function callTool(params: unknown, siteContext: McpSiteContext, options: M
     case 'agent_context_hydrate_current':
       return jsonToolResult(attachTraversal(buildAgentContextHydrateCurrent(traversal.target_site, siteContext), traversal));
     case 'agent_context_startup_sequence':
-    case 'startup_sequence':
       return jsonToolResult(attachTraversal(buildAgentContextStartupSequence(traversal.target_site, siteContext), traversal));
     case 'mcp_output_show':
       return jsonToolResult(attachTraversal(showMcpOutputRef(traversal.target_site, args), traversal));

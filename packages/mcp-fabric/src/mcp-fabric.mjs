@@ -565,7 +565,7 @@ function expandAgentContextStartupAliases(server, tools) {
   const toolSet = new Set(tools);
   if (toolSet.has('startup_sequence') || toolSet.has('agent_context_startup_sequence')) {
     toolSet.add('agent_context_startup_sequence');
-    toolSet.add('startup_sequence');
+    toolSet.delete('startup_sequence');
   }
   return mergeUnique([...toolSet]);
 }

@@ -33,10 +33,10 @@ function auditAgentTuiProjection(siteRoot, fabric) {
   }));
   const projectedTools = new Set(projectedServers.flatMap((server) => server.tools));
   const agentContextProjected = projectedServers.some((server) => {
-    return server.tools.some((tool) => String(tool).startsWith('agent_context_')) || server.tools.includes('startup_sequence');
+    return server.tools.some((tool) => String(tool).startsWith('agent_context_'));
   });
   const missingStartupTools = agentContextProjected
-    ? ['agent_context_startup_sequence', 'startup_sequence', 'mcp_output_show'].filter((tool) => !projectedTools.has(tool))
+    ? ['agent_context_startup_sequence', 'mcp_output_show'].filter((tool) => !projectedTools.has(tool))
     : [];
   const staleGlobalConfigPresent = existsSync(staleGlobalConfigPath);
   const configPathInsideFabric = sessionScopedConfigPath.startsWith(`${siteMcpFabricRoot}${sep}`);
@@ -59,7 +59,7 @@ function auditAgentTuiProjection(siteRoot, fabric) {
     projected_server_count: projectedServers.length,
     projected_servers: projectedServers,
     agent_context_projected: agentContextProjected,
-    required_startup_tools: agentContextProjected ? ['agent_context_startup_sequence', 'startup_sequence', 'mcp_output_show'] : [],
+    required_startup_tools: agentContextProjected ? ['agent_context_startup_sequence', 'mcp_output_show'] : [],
     missing_startup_tools: missingStartupTools,
     mutation_performed: false,
   };

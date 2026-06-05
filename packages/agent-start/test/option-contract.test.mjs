@@ -118,7 +118,7 @@ test('codex resolves CLI script from PATH and disables native shell by default',
     display: 'agent_context_startup_sequence({})',
   });
   assert.equal(output.tool_fabric_adapter.expected_tools.includes('agent_context_startup_sequence'), true);
-  assert.equal(output.tool_fabric_adapter.expected_tools.includes('startup_sequence'), true);
+  assert.equal(output.tool_fabric_adapter.expected_tools.includes('startup_sequence'), false);
   assert.equal(output.required_environment.NARADA_AGENT_ID, identity);
   assert.equal(output.required_environment.NARADA_AGENT_START_EVENT_ID, output.agent_start_event);
   assert.equal(output.would_set_environment.NARADA_AGENT_ID, identity);

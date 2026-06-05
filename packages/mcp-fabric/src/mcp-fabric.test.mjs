@@ -130,7 +130,7 @@ writeFileSync(join(startupAliasSite, '.narada', 'capabilities', 'mcp-surfaces.js
     surface_id: 'agent-context-mcp.local',
     client_config: { generated_path: '.ai/mcp/agent-context-mcp.json' },
     tool_contract: {
-      read_only_tools: ['startup_sequence', 'mcp_output_show'],
+      read_only_tools: ['agent_context_startup_sequence', 'mcp_output_show'],
       mutating_tools: [],
       refused_tools: [],
     },
@@ -141,7 +141,6 @@ const startupAliasProjection = projectFabricForAgentTui(startupAliasFabric, {});
 assert.deepEqual(startupAliasProjection.mcpServers.agent_context.tools, [
   'agent_context_startup_sequence',
   'mcp_output_show',
-  'startup_sequence',
 ]);
 rmSync(startupAliasSite, { recursive: true, force: true });
 
