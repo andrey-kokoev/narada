@@ -69,14 +69,10 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
     const surfaceTools = server.surface_id ? surfaceRegistry.tools_by_surface_id[server.surface_id] ?? null : null;
     const generatedFileTools = sourceFile ? surfaceRegistry.tools_by_generated_file[sourceFile] ?? null : null;
     const serverNameTools = surfaceRegistry.tools_by_server_name?.[serverName] ?? null;
-    server.registry_tools = serverNameTools
-      ? { ...serverNameTools }
-      : {
-          ...(generatedFileTools ?? {}),
-          ...(surfaceTools ?? {}),
-        };
+    const registryTools = serverNameTools ?? surfaceTools ?? generatedFileTools ?? null;
+    server.registry_tools = registryTools ? { ...registryTools } : {};
     server.registry_source = surfaceRegistry.status === 'loaded' ? surfaceRegistry.path : null;
-    server.registry_metadata_authoritative = surfaceRegistry.status === 'loaded' && (!!serverNameTools || !!surfaceTools || !!generatedFileTools);
+    server.registry_metadata_authoritative = surfaceRegistry.status === 'loaded' && !!registryTools;
   }
 
   if (required && skipped.length > 0) {
@@ -138,8 +134,9 @@ export function projectFabricForCodex(fabric) {
 
 export function projectFabricForAgentTui(fabric, envValues) {
   const mcpServers = {};
+  const outputReaderOwner = selectAgentTuiOutputReaderOwner(fabric);
   for (const [name, server] of Object.entries(fabric.servers)) {
-    const tools = agentTuiToolNames(server);
+    const tools = agentTuiToolNames(server).filter((tool) => tool !== 'mcp_output_show' || name === outputReaderOwner);
     if (tools.length === 0) continue;
     mcpServers[name] = {
       command: server.command,
@@ -152,6 +149,14 @@ export function projectFabricForAgentTui(fabric, envValues) {
     };
   }
   return { mcpServers };
+}
+
+function selectAgentTuiOutputReaderOwner(fabric) {
+  const candidates = Object.entries(fabric.servers)
+    .filter(([, server]) => agentTuiToolNames(server).includes('mcp_output_show'));
+  if (candidates.length === 0) return null;
+  const startupOwner = candidates.find(([, server]) => agentTuiToolNames(server).includes('agent_context_startup_sequence'));
+  return (startupOwner ?? candidates[0])[0];
 }
 
 export function projectFabricForClaudeCode(fabric, envValues) {

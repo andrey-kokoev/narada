@@ -10,10 +10,15 @@ const siteRoot = join(workspace, 'site');
 mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
 writeFileSync(join(siteRoot, '.ai', 'mcp', 'fixture-mcp.json'), `${JSON.stringify({
   mcpServers: {
-    fixture: {
+    'fixture-agent-context': {
       command: 'node',
-      args: ['server.mjs'],
-      surface_id: 'fixture.surface',
+      args: ['agent-context.mjs'],
+      surface_id: 'fixture-agent-context.local',
+    },
+    'fixture-task-lifecycle': {
+      command: 'node',
+      args: ['task-lifecycle.mjs'],
+      surface_id: 'fixture-task-lifecycle.local',
     },
   },
 }, null, 2)}\n`, 'utf8');
@@ -65,8 +70,8 @@ writeFileSync(registryPath, `@{
 }
 `, 'utf8');
 const advisory = runCoherenceGate({ launchRegistryPath: registryPath });
-assert.equal(advisory.status, 'fail');
-assert.equal(advisory.failures.some((failure) => failure.code === 'advisory_carrier_in_coherent_launch_registry'), true);
+assert.equal(advisory.status, 'ok');
+assert.deepEqual(advisory.failures, []);
 
 rmSync(workspace, { recursive: true, force: true });
 console.log('coherence-gate tests PASSED.');

@@ -31,6 +31,10 @@ function auditAgentTuiProjection(siteRoot, fabric) {
     tool_count: Array.isArray(server.tools) ? server.tools.length : 0,
     tools: Array.isArray(server.tools) ? server.tools : [],
   }));
+  const toolOwners = projectedToolOwners(projectedServers);
+  const duplicateProjectedTools = Object.entries(toolOwners)
+    .filter(([, owners]) => owners.length > 1)
+    .map(([tool, owners]) => ({ tool, owners }));
   const projectedTools = new Set(projectedServers.flatMap((server) => server.tools));
   const agentContextProjected = projectedServers.some((server) => {
     return server.tools.some((tool) => String(tool).startsWith('agent_context_'));
@@ -38,6 +42,9 @@ function auditAgentTuiProjection(siteRoot, fabric) {
   const missingStartupTools = agentContextProjected
     ? ['agent_context_startup_sequence', 'mcp_output_show'].filter((tool) => !projectedTools.has(tool))
     : [];
+  const startupToolOwners = toolOwners.agent_context_startup_sequence ?? [];
+  const outputReaderOwners = toolOwners.mcp_output_show ?? [];
+  const outputReaderSingular = outputReaderOwners.length === 1;
   const staleGlobalConfigPresent = existsSync(staleGlobalConfigPath);
   const configPathInsideFabric = sessionScopedConfigPath.startsWith(`${siteMcpFabricRoot}${sep}`);
   const failureCodes = [];
@@ -45,7 +52,9 @@ function auditAgentTuiProjection(siteRoot, fabric) {
   if (!configPathInsideFabric) failureCodes.push('agent_tui_config_path_outside_site_mcp_fabric');
   if (Object.keys(fabric.servers ?? {}).length > 0 && projectedServers.length === 0) failureCodes.push('agent_tui_no_admitted_projected_servers');
   if (projectedServers.some((server) => server.tool_count === 0)) failureCodes.push('agent_tui_projected_server_without_tools');
+  if (duplicateProjectedTools.length > 0) failureCodes.push('agent_tui_duplicate_projected_tool_names');
   if (missingStartupTools.length > 0) failureCodes.push('agent_tui_agent_context_startup_tools_missing');
+  if (agentContextProjected && missingStartupTools.length === 0 && !outputReaderSingular) failureCodes.push('agent_tui_output_reader_not_singular');
 
   return {
     schema: 'narada.agent_tui.mcp_projection_audit.v1',
@@ -58,11 +67,27 @@ function auditAgentTuiProjection(siteRoot, fabric) {
     stale_global_config_present: staleGlobalConfigPresent,
     projected_server_count: projectedServers.length,
     projected_servers: projectedServers,
+    duplicate_projected_tools: duplicateProjectedTools,
     agent_context_projected: agentContextProjected,
     required_startup_tools: agentContextProjected ? ['agent_context_startup_sequence', 'mcp_output_show'] : [],
     missing_startup_tools: missingStartupTools,
+    startup_tool_server: startupToolOwners[0] ?? null,
+    output_reader_server: outputReaderOwners[0] ?? null,
+    output_reader_singular: agentContextProjected ? outputReaderSingular : null,
     mutation_performed: false,
   };
+}
+
+function projectedToolOwners(projectedServers) {
+  const owners = {};
+  for (const server of projectedServers) {
+    for (const tool of server.tools) {
+      const name = String(tool);
+      owners[name] ??= [];
+      owners[name].push(server.name);
+    }
+  }
+  return owners;
 }
 
 function mcpDirForSite(siteRoot) {

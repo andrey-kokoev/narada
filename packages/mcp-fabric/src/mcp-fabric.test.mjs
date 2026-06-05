@@ -144,6 +144,36 @@ assert.deepEqual(startupAliasProjection.mcpServers.agent_context.tools, [
 ]);
 rmSync(startupAliasSite, { recursive: true, force: true });
 
+const splitOutputReaderSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-split-output-reader-'));
+mkdirSync(join(splitOutputReaderSite, '.ai', 'mcp'), { recursive: true });
+mkdirSync(join(splitOutputReaderSite, '.narada', 'capabilities'), { recursive: true });
+writeFileSync(join(splitOutputReaderSite, '.ai', 'mcp', 'split-output-reader-mcp.json'), `${JSON.stringify({
+  mcpServers: {
+    agent_context: { command: 'node', args: ['agent-context.mjs'], surface_id: 'agent-context.surface' },
+    task_lifecycle: { command: 'node', args: ['task-lifecycle.mjs'], surface_id: 'task-lifecycle.surface' },
+  },
+}, null, 2)}\n`, 'utf8');
+writeFileSync(join(splitOutputReaderSite, '.narada', 'capabilities', 'mcp-surfaces.json'), `${JSON.stringify({
+  schema: 'narada.site.capabilities.mcp_surfaces.v1',
+  surfaces: [{
+    surface_id: 'agent-context.surface',
+    client_config: { generated_path: '.ai/mcp/split-output-reader-mcp.json' },
+    tool_contract: { read_only_tools: ['agent_context_startup_sequence', 'mcp_output_show'] },
+  }, {
+    surface_id: 'task-lifecycle.surface',
+    client_config: { generated_path: '.ai/mcp/split-output-reader-mcp.json' },
+    tool_contract: { read_only_tools: ['mcp_output_show', 'task_lifecycle_next'] },
+  }],
+}, null, 2)}\n`, 'utf8');
+const splitOutputReaderFabric = loadSiteMcpFabric(splitOutputReaderSite, { required: true });
+const splitOutputReaderProjection = projectFabricForAgentTui(splitOutputReaderFabric, {});
+assert.deepEqual(splitOutputReaderProjection.mcpServers.agent_context.tools, [
+  'agent_context_startup_sequence',
+  'mcp_output_show',
+]);
+assert.deepEqual(splitOutputReaderProjection.mcpServers.task_lifecycle.tools, ['task_lifecycle_next']);
+rmSync(splitOutputReaderSite, { recursive: true, force: true });
+
 const rawToolSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-raw-tools-'));
 mkdirSync(join(rawToolSite, '.ai', 'mcp'), { recursive: true });
 writeFileSync(join(rawToolSite, '.ai', 'mcp', 'raw-tools-mcp.json'), `${JSON.stringify({

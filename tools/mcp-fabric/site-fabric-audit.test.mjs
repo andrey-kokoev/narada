@@ -71,6 +71,10 @@ writeFileSync(join(agentContextSite, '.narada', 'capabilities', 'mcp-surfaces.js
 const agentContextAudit = auditSiteFabric(agentContextSite);
 assert.equal(agentContextAudit.agent_tui.status, 'ok');
 assert.deepEqual(agentContextAudit.agent_tui.missing_startup_tools, []);
+assert.equal(agentContextAudit.agent_tui.output_reader_singular, true);
+assert.equal(agentContextAudit.agent_tui.startup_tool_server, 'agent_context');
+assert.equal(agentContextAudit.agent_tui.output_reader_server, 'agent_context');
+assert.deepEqual(agentContextAudit.agent_tui.duplicate_projected_tools, []);
 assert.deepEqual(agentContextAudit.agent_tui.projected_servers[0].tools, [
   'agent_context_startup_sequence',
   'mcp_output_show',
@@ -82,6 +86,59 @@ assert.equal(staleAgentTuiAudit.status, 'not_checked');
 const staleSiteAudit = auditSiteFabric(agentContextSite);
 assert.equal(staleSiteAudit.agent_tui.status, 'fail');
 assert.equal(staleSiteAudit.agent_tui.failure_codes.includes('agent_tui_stale_global_config_present'), true);
+
+const splitStartupSite = join(workspace, 'split-startup-site');
+mkdirSync(join(splitStartupSite, '.ai', 'mcp'), { recursive: true });
+mkdirSync(join(splitStartupSite, '.narada', 'capabilities'), { recursive: true });
+writeFileSync(join(splitStartupSite, '.ai', 'mcp', 'split-mcp.json'), `${JSON.stringify({
+  mcpServers: {
+    agent_context: { command: 'node', args: ['agent-context.mjs'], surface_id: 'agent-context-mcp.local' },
+    output_reader: { command: 'node', args: ['output-reader.mjs'], surface_id: 'output-reader-mcp.local' },
+  },
+}, null, 2)}\n`, 'utf8');
+writeFileSync(join(splitStartupSite, '.narada', 'capabilities', 'mcp-surfaces.json'), `${JSON.stringify({
+  schema: 'narada.site.capabilities.mcp_surfaces.v1',
+  surfaces: [{
+    surface_id: 'agent-context-mcp.local',
+    client_config: { generated_path: '.ai/mcp/split-mcp.json' },
+    tool_contract: { read_only_tools: ['agent_context_startup_sequence'], mutating_tools: [] },
+  }, {
+    surface_id: 'output-reader-mcp.local',
+    client_config: { generated_path: '.ai/mcp/split-mcp.json' },
+    tool_contract: { read_only_tools: ['mcp_output_show'], mutating_tools: [] },
+  }],
+}, null, 2)}\n`, 'utf8');
+const splitStartupAudit = auditSiteFabric(splitStartupSite);
+assert.equal(splitStartupAudit.agent_tui.status, 'ok');
+assert.equal(splitStartupAudit.agent_tui.output_reader_singular, true);
+assert.equal(splitStartupAudit.agent_tui.startup_tool_server, 'agent_context');
+assert.equal(splitStartupAudit.agent_tui.output_reader_server, 'output_reader');
+
+const duplicateToolSite = join(workspace, 'duplicate-tool-site');
+mkdirSync(join(duplicateToolSite, '.ai', 'mcp'), { recursive: true });
+mkdirSync(join(duplicateToolSite, '.narada', 'capabilities'), { recursive: true });
+writeFileSync(join(duplicateToolSite, '.ai', 'mcp', 'duplicate-mcp.json'), `${JSON.stringify({
+  mcpServers: {
+    first: { command: 'node', args: ['first.mjs'], surface_id: 'first.surface' },
+    second: { command: 'node', args: ['second.mjs'], surface_id: 'second.surface' },
+  },
+}, null, 2)}\n`, 'utf8');
+writeFileSync(join(duplicateToolSite, '.narada', 'capabilities', 'mcp-surfaces.json'), `${JSON.stringify({
+  schema: 'narada.site.capabilities.mcp_surfaces.v1',
+  surfaces: [{
+    surface_id: 'first.surface',
+    client_config: { generated_path: '.ai/mcp/duplicate-mcp.json' },
+    tool_contract: { read_only_tools: ['shared_read'], mutating_tools: [] },
+  }, {
+    surface_id: 'second.surface',
+    client_config: { generated_path: '.ai/mcp/duplicate-mcp.json' },
+    tool_contract: { read_only_tools: ['shared_read'], mutating_tools: [] },
+  }],
+}, null, 2)}\n`, 'utf8');
+const duplicateToolAudit = auditSiteFabric(duplicateToolSite);
+assert.equal(duplicateToolAudit.agent_tui.status, 'fail');
+assert.equal(duplicateToolAudit.agent_tui.failure_codes.includes('agent_tui_duplicate_projected_tool_names'), true);
+assert.deepEqual(duplicateToolAudit.agent_tui.duplicate_projected_tools, [{ tool: 'shared_read', owners: ['first', 'second'] }]);
 
 const dotNaradaSite = join(workspace, 'dot-site', '.narada');
 mkdirSync(join(dotNaradaSite, '.ai', 'mcp'), { recursive: true });
