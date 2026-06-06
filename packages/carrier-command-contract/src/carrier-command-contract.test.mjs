@@ -45,4 +45,7 @@ test('command contract exposes carrier command vocabulary', () => {
     '/quit',
     'exit',
   ]);
+  const goal = commandRecords(contract).find((command) => command.name === 'goal');
+  assert.equal(goal.argument, 'text|pause|resume|clear');
+  assert.equal(goal.effect, 'show_set_pause_resume_or_clear_carrier_goal');
 });
