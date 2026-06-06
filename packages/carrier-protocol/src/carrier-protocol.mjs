@@ -11,6 +11,14 @@ export const CANONICAL_STARTUP_COMMAND_NAME = 'agent_context_startup_sequence';
 export const LEGACY_STARTUP_COMMAND_NAME = 'startup_sequence';
 
 export const SOURCE_KINDS = Object.freeze(['operator', 'system', 'agent', 'external']);
+export const OBSERVER_VISIBILITIES = Object.freeze(['record_only', 'operator_visible', 'agent_visible', 'conversation_visible']);
+export const OBSERVER_CONFIDENCES = Object.freeze(['low', 'medium', 'high']);
+export const PAYLOAD_REF_READER_TOOLS = Object.freeze([
+  'mcp_payload_read',
+  'mcp_payload_show',
+  'mcp_output_show',
+  'carrier_host_command_output_read',
+]);
 export const TRANSPORTS = Object.freeze([
   'interactive_terminal',
   'control_jsonl',
@@ -51,8 +59,29 @@ export const SESSION_EVENT_KINDS = Object.freeze([
   'interrupt_requested',
   'tool_call_requested',
   'tool_result_received',
+  'observer_observation_recorded',
+  'observer_interjection_proposed',
+  'observer_interjection_admitted',
+  'observer_interjection_suppressed',
+  'carrier_host_command_requested',
+  'carrier_host_command_admitted',
+  'carrier_host_command_rejected',
+  'carrier_host_command_started',
+  'carrier_host_command_completed',
+  'carrier_host_command_failed',
   'carrier_command_executed',
   'carrier_diagnostic_recorded',
+]);
+export const CARRIER_CONTROL_METHODS = Object.freeze([
+  'session.status',
+  'session.close',
+  'conversation.interrupt',
+  'conversation.send',
+  'system_directive.deliver',
+  'carrier.input.deliver',
+  'observers.status',
+  'observer.mute',
+  'observer.unmute',
 ]);
 
 const RFC3339_UTC_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
@@ -98,6 +127,53 @@ function hasOwn(value, key) {
 
 function isObject(value) {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+export function classifyCarrierControlRequest(request = {}) {
+  if (!isObject(request)) {
+    return {
+      request_id: null,
+      method: null,
+      method_kind: 'invalid',
+      concurrent_allowed: false,
+      allowed_when_closed: false,
+      error: {
+        code: 'invalid_request',
+        message: 'Carrier control request must be an object.',
+      },
+    };
+  }
+  const nativeControlInput = request.schema === CONTROL_INPUT_EVENT_SCHEMA;
+  const method = nativeControlInput ? 'carrier.input.deliver' : request.method;
+  const requestId = request.id ?? request.control_event_id ?? null;
+  const base = {
+    request_id: requestId,
+    method,
+    concurrent_allowed: false,
+    allowed_when_closed: false,
+    native_control_input: nativeControlInput,
+    observer_action: null,
+    error: null,
+  };
+  if (nativeControlInput || method === 'carrier.input.deliver') {
+    return { ...base, method_kind: 'carrier_input_deliver' };
+  }
+  if (method === 'session.status') return { ...base, method_kind: 'session_status', allowed_when_closed: true };
+  if (method === 'session.close') return { ...base, method_kind: 'session_close', allowed_when_closed: true };
+  if (method === 'conversation.interrupt') return { ...base, method_kind: 'conversation_interrupt', concurrent_allowed: true };
+  if (method === 'conversation.send') return { ...base, method_kind: 'conversation_send' };
+  if (method === 'system_directive.deliver') return { ...base, method_kind: 'system_directive_deliver' };
+  if (method === 'observers.status') return { ...base, method_kind: 'observers_status' };
+  if (method === 'observer.mute') return { ...base, method_kind: 'observer_set_muted', observer_action: 'mute' };
+  if (method === 'observer.unmute') return { ...base, method_kind: 'observer_set_muted', observer_action: 'unmute' };
+  return {
+    ...base,
+    method_kind: 'unsupported',
+    error: {
+      code: 'unsupported_method',
+      message: `Unsupported method: ${method}`,
+    },
+  };
 }
 
 function nowIso() {
@@ -225,7 +301,7 @@ export function validatePayloadRef(ref) {
   } else if (!/^mcp_payload:[A-Za-z0-9_.:-]+@v\d+$/.test(ref.payload_ref)) {
     errors.push('invalid_payload_ref');
   }
-  if (ref.reader_tool !== 'mcp_payload_read' && ref.reader_tool !== 'mcp_payload_show' && ref.reader_tool !== 'mcp_output_show') errors.push(`invalid_reader_tool:${String(ref.reader_tool)}`);
+  if (!enumIncludes(PAYLOAD_REF_READER_TOOLS, ref.reader_tool)) errors.push(`invalid_reader_tool:${String(ref.reader_tool)}`);
   if (typeof ref.summary !== 'string' || ref.summary.trim().length === 0) errors.push('invalid_summary');
   return errors;
 }
@@ -331,7 +407,18 @@ export function validateInputEvent(event) {
   if (!isRfc3339Utc(event.created_at)) errors.push('invalid_created_at');
   if (event.authority_ref !== null && event.authority_ref !== undefined && typeof event.authority_ref !== 'string') errors.push('invalid_authority_ref');
   if (event.metadata !== undefined && !isObject(event.metadata)) errors.push('invalid_metadata');
-  if (event.source_kind === 'agent' && event.metadata?.agent_control_input !== true) errors.push('agent_source_requires_agent_control_input_metadata');
+  if (event.metadata?.observer !== undefined && event.source_kind !== 'agent') {
+    errors.push('observer_metadata_requires_agent_source');
+  }
+  if (event.source_kind === 'agent') {
+    if (event.metadata?.observer !== undefined) {
+      if (!isObserverSourceId(event.source_id)) errors.push('observer.source_id_not_observer');
+      if (event.metadata?.agent_control_input === true) errors.push('observer.cannot_be_agent_control_input');
+      errors.push(...validateObserverMetadata(event.metadata.observer).map((error) => `observer.${error}`));
+    } else if (event.metadata?.agent_control_input !== true) {
+      errors.push('agent_source_requires_agent_control_input_metadata');
+    }
+  }
   if (event.source_kind === 'external' && !event.metadata?.admitted_by) errors.push('external_source_requires_admitted_by_metadata');
   if (event.directive_id !== null && event.directive_id !== undefined) {
     if (typeof event.directive_id !== 'string' || event.directive_id.length === 0) errors.push('invalid_directive_id');
@@ -345,6 +432,263 @@ export function validateInputEvent(event) {
     }
   }
   return errors;
+}
+
+export function validateObserverMetadata(observer) {
+  const errors = [];
+  if (observer === undefined) return ['missing_metadata'];
+  if (!isObject(observer)) return ['metadata_not_object'];
+  if (observer.role !== 'observer') errors.push(`invalid_role:${String(observer.role)}`);
+  if (typeof observer.rule_id !== 'string' || observer.rule_id.length === 0) errors.push('invalid_rule_id');
+  if (!enumIncludes(OBSERVER_VISIBILITIES, observer.visibility)) errors.push(`invalid_visibility:${String(observer.visibility)}`);
+  if (observer.confidence !== undefined && !enumIncludes(OBSERVER_CONFIDENCES, observer.confidence)) errors.push(`invalid_confidence:${String(observer.confidence)}`);
+  if (observer.impersonates_operator === true || observer.impersonates_system === true || observer.impersonates_agent === true) errors.push('observer_impersonation_forbidden');
+  return errors;
+}
+
+export function observerMetadata(input = {}) {
+  return input?.metadata?.observer ?? null;
+}
+
+export function observerVisibility(input = {}) {
+  const visibility = observerMetadata(input)?.visibility;
+  return enumIncludes(OBSERVER_VISIBILITIES, visibility) ? visibility : 'operator_visible';
+}
+
+export function isObserverInputEvent(input = {}) {
+  return Boolean(observerMetadata(input));
+}
+
+export function observerPayload(input = {}, extra = {}) {
+  const metadata = observerMetadata(input) ?? {};
+  return {
+    observer_id: input.source_id ?? 'narada.observer',
+    rule_id: metadata.rule_id ?? 'manual-observer-interjection',
+    visibility: observerVisibility(input),
+    ...(metadata.confidence ? { confidence: metadata.confidence } : {}),
+    content: String(input.content ?? '').trim(),
+    ...(input.event_id ? { input_event_id: input.event_id } : {}),
+    ...extra,
+  };
+}
+
+export function classifyCarrierObserverInput(input = {}, { observerMuted = false } = {}) {
+  const isObserver = isObserverInputEvent(input);
+  const visibility = observerVisibility(input);
+  const visibleToOperator = isObserver && (visibility === 'operator_visible' || visibility === 'conversation_visible');
+  const dispatchToAgent = isObserver && (visibility === 'agent_visible' || visibility === 'conversation_visible');
+  const interjection = isObserver && visibility !== 'record_only';
+  const suppressed = interjection && observerMuted === true;
+  return {
+    is_observer: isObserver,
+    visibility,
+    observer_muted: observerMuted === true,
+    suppressed,
+    suppression_reason: suppressed ? 'observer_muted' : null,
+    visible_to_operator: visibleToOperator && !suppressed,
+    dispatch_to_agent: dispatchToAgent && !suppressed,
+    creates_turn: !isObserver || dispatchToAgent && !suppressed,
+    completes_without_provider: isObserver && (!dispatchToAgent || suppressed),
+    handle_outside_turn: isObserver && (suppressed || !dispatchToAgent),
+    payload: isObserver ? observerPayload(input, suppressed ? { suppression_reason: 'observer_muted' } : {}) : null,
+  };
+}
+
+export function classifyCarrierInputAdmission(input = {}, state = {}) {
+  const inputAdmission = classifyInputAdmission(input, state);
+  const event = inputAdmission.event;
+  const observer = classifyCarrierObserverInput(event, { observerMuted: state.observerMuted === true });
+  const inputEventId = event?.event_id ?? null;
+  const queueEvents = [];
+  const admissionEvents = [];
+  const visibleEvents = [];
+  let terminalState = null;
+  if (inputAdmission.action === 'queue' && inputAdmission.queue_state === 'queued_for_turn_boundary') {
+    queueEvents.push({
+      event_kind: 'input_queued_for_turn_boundary',
+      payload: {
+        input_event_id: inputEventId,
+        queue_state: inputAdmission.queue_state,
+      },
+    });
+  }
+  if (observer.is_observer) {
+    admissionEvents.push({
+      event_kind: 'observer_observation_recorded',
+      payload: observerPayload(event),
+    });
+    if (observer.visibility !== 'record_only') {
+      admissionEvents.push({
+        event_kind: 'observer_interjection_proposed',
+        payload: observerPayload(event),
+      });
+    }
+    if (inputAdmission.action === 'admit') {
+      if (observer.suppressed) {
+        admissionEvents.push({
+          event_kind: 'observer_interjection_suppressed',
+          payload: observer.payload,
+        });
+        terminalState = 'completed_without_provider';
+      } else if (observer.visibility !== 'record_only') {
+        admissionEvents.push({
+          event_kind: 'observer_interjection_admitted',
+          payload: observer.payload,
+        });
+      }
+      if (observer.visible_to_operator) {
+        visibleEvents.push({
+          event_kind: 'observer_interjection_visible',
+          payload: observer.payload,
+        });
+      }
+      if (observer.completes_without_provider) terminalState = 'completed_without_provider';
+    }
+  }
+  if (inputAdmission.action === 'admit' && observer.creates_turn) {
+    admissionEvents.push({
+      event_kind: 'input_admitted_to_turn',
+      payload: {
+        input_event_id: inputEventId,
+      },
+    });
+  }
+  return {
+    input_event_id: inputEventId,
+    source_kind: event?.source_kind ?? null,
+    source_id: event?.source_id ?? null,
+    admission_action: inputAdmission.action,
+    admission_reason: inputAdmission.reason,
+    queue_state: inputAdmission.queue_state ?? null,
+    is_observer: observer.is_observer,
+    visibility: observer.is_observer ? observer.visibility : null,
+    suppressed: observer.suppressed,
+    suppression_reason: observer.suppression_reason,
+    visible_to_operator: observer.visible_to_operator,
+    dispatch_to_provider: observer.dispatch_to_agent,
+    creates_turn: inputAdmission.action === 'admit' && observer.creates_turn,
+    complete_without_provider: inputAdmission.action === 'admit' && observer.completes_without_provider,
+    terminal_state: terminalState,
+    queue_events: queueEvents,
+    admission_events: admissionEvents,
+    visible_events: visibleEvents,
+    event,
+  };
+}
+
+export function classifyCarrierInputQueueAdmission(input = {}, state = {}) {
+  const admission = classifyCarrierInputAdmission(input, state);
+  const queueEvents = [...admission.queue_events];
+  const shouldRecordTurnBoundaryQueue = admission.event?.delivery_mode === 'admit_after_active_turn';
+  const alreadyRecordedTurnBoundaryQueue = queueEvents.some((event) => (
+    event.event_kind === 'input_queued_for_turn_boundary'
+      && event.payload?.input_event_id === admission.input_event_id
+  ));
+  if (shouldRecordTurnBoundaryQueue && !alreadyRecordedTurnBoundaryQueue) {
+    queueEvents.push({
+      event_kind: 'input_queued_for_turn_boundary',
+      payload: {
+        input_event_id: admission.input_event_id,
+        queue_state: 'queued_for_turn_boundary',
+      },
+    });
+  }
+  return {
+    ...admission,
+    queue_action: 'enqueue',
+    queue_state: shouldRecordTurnBoundaryQueue ? 'queued_for_turn_boundary' : admission.queue_state,
+    queue_events: queueEvents,
+  };
+}
+
+export function classifyCarrierInputHold(input = {}, state = {}) {
+  const metadata = isObject(input.metadata) ? input.metadata : {};
+  const directiveProvenance = isObject(metadata.directive_provenance) ? metadata.directive_provenance : {};
+  const isSystemDirective = input.source_kind === 'system'
+    || input.source === 'system_directive'
+    || metadata.legacy_source === 'system_directive'
+    || directiveProvenance.kind === 'system_directive';
+  const inputEventId = input.event_id ?? null;
+  const directiveId = input.directive_id ?? null;
+  const occurredAt = state.occurredAt ?? nowIso();
+  const shouldHold = isSystemDirective
+    && Boolean(state.composerHasDraft)
+    && (input.hold_condition === 'composer_clear_required' || input.source === 'system_directive' || metadata.legacy_source === 'system_directive');
+  if (state.release === true) {
+    if (!isSystemDirective || state.alreadyHeld !== true) {
+      return {
+        input_event_id: inputEventId,
+        is_system_directive: isSystemDirective,
+        hold_action: 'none',
+        hold_reason: null,
+        should_defer: false,
+        hold_events: [],
+        release_events: [],
+        events: [],
+        event: input,
+      };
+    }
+    const releaseEvent = {
+      event_kind: 'system_directive_released',
+      payload: {
+        input_event_id: inputEventId,
+        ...(directiveId ? { directive_id: directiveId } : {}),
+        released_at: occurredAt,
+      },
+    };
+    return {
+      input_event_id: inputEventId,
+      is_system_directive: isSystemDirective,
+      hold_action: 'release',
+      hold_reason: null,
+      should_defer: false,
+      hold_events: [],
+      release_events: [releaseEvent],
+      events: [releaseEvent],
+      event: input,
+    };
+  }
+  if (!shouldHold || state.alreadyHeld === true) {
+    return {
+      input_event_id: inputEventId,
+      is_system_directive: isSystemDirective,
+      hold_action: shouldHold ? 'hold' : 'none',
+      hold_reason: shouldHold ? 'composer_nonempty' : null,
+      should_defer: shouldHold,
+      hold_events: [],
+      release_events: [],
+      events: [],
+      event: input,
+    };
+  }
+  const holdEvent = {
+    event_kind: 'system_directive_held',
+    payload: {
+      input_event_id: inputEventId,
+      ...(directiveId ? { directive_id: directiveId } : {}),
+      held_at: occurredAt,
+      held_reason: 'composer_nonempty',
+      original_delivery_mode: input.delivery_mode ?? null,
+    },
+  };
+  return {
+    input_event_id: inputEventId,
+    is_system_directive: isSystemDirective,
+    hold_action: 'hold',
+    hold_reason: 'composer_nonempty',
+    should_defer: true,
+    hold_events: [holdEvent],
+    release_events: [],
+    events: [holdEvent],
+    event: input,
+  };
+}
+
+function isObserverSourceId(sourceId) {
+  if (typeof sourceId !== 'string') return false;
+  return sourceId === 'narada.observer'
+    || sourceId.startsWith('narada.observer.')
+    || sourceId.endsWith('.observer');
 }
 
 export function assertValidInputEvent(event) {
@@ -482,6 +826,10 @@ const SESSION_PAYLOAD_VALIDATORS = Object.freeze({
   interrupt_requested: (payload) => requireFields(payload, ['turn_id']),
   tool_call_requested: validateToolCallPayload,
   tool_result_received: validateToolResultPayload,
+  observer_observation_recorded: validateObserverPayload,
+  observer_interjection_proposed: validateObserverPayload,
+  observer_interjection_admitted: validateObserverPayload,
+  observer_interjection_suppressed: validateObserverPayload,
   carrier_command_executed: (payload) => requireFields(payload, ['command']),
   carrier_diagnostic_recorded: validateCarrierDiagnosticPayload,
 });
@@ -518,6 +866,19 @@ function validateToolResultPayload(payload) {
   if (typeof payload.duration_ms !== 'number' || payload.duration_ms < 0) errors.push('payload.invalid_duration_ms');
   if (typeof payload.result_summary !== 'string') errors.push('payload.invalid_result_summary');
   errors.push(...validateOptionalPayloadRef(payload, 'result_ref'));
+  return errors;
+}
+
+function validateObserverPayload(payload) {
+  const errors = requireFields(payload, ['observer_id', 'rule_id', 'visibility', 'content']);
+  if (errors.length > 0) return errors;
+  if (typeof payload.observer_id !== 'string' || payload.observer_id.length === 0) errors.push('payload.invalid_observer_id');
+  if (typeof payload.rule_id !== 'string' || payload.rule_id.length === 0) errors.push('payload.invalid_rule_id');
+  if (!enumIncludes(OBSERVER_VISIBILITIES, payload.visibility)) errors.push(`payload.invalid_visibility:${String(payload.visibility)}`);
+  if (payload.confidence !== undefined && !enumIncludes(OBSERVER_CONFIDENCES, payload.confidence)) errors.push(`payload.invalid_confidence:${String(payload.confidence)}`);
+  if (typeof payload.content !== 'string' || payload.content.length === 0) errors.push('payload.invalid_content');
+  if (payload.input_event_id !== undefined && (typeof payload.input_event_id !== 'string' || !payload.input_event_id.startsWith('input_'))) errors.push('payload.invalid_input_event_id');
+  if (payload.suppression_reason !== undefined && (typeof payload.suppression_reason !== 'string' || payload.suppression_reason.length === 0)) errors.push('payload.invalid_suppression_reason');
   return errors;
 }
 

@@ -35,6 +35,8 @@ Use **harness** only in informal explanatory prose, and only where the surroundi
 
 An **Agent Carrier** is the governed runtime harness that embodies one durable Agent in one bounded Session.
 
+Use [`Carrier Taxonomy`](carrier-taxonomy.md) when distinguishing `Carrier`, `CarrierKind`, `CarrierHost`, `CarrierTransport`, `CarrierProtocol`, `CarrierRuntimeContract`, `CarrierSurface`, and `ControlChannel`.
+
 It answers:
 
 ```text
@@ -184,6 +186,7 @@ Do not implement a Narada-native carrier as a User Site preference first. User S
 
 ## Relationship To Existing Concepts
 
+- [`Carrier Taxonomy`](carrier-taxonomy.md) defines the layered vocabulary for carrier kind, host, transport, protocol, runtime contract, surface, and control channel.
 - [`Runtime Identity Binding`](runtime-identity-binding.md) binds volatile runtime handles to durable identity evidence; Agent Carrier defines the harness that may produce such handles.
 - [`Narada Agent Runtime Server`](narada-agent-runtime-server.md) defines the machine-addressable, multi-turn carrier posture for automation-driven local intelligence sessions.
 - [`Carrier Action Admission Boundary`](carrier-action-admission-boundary.md) defines the carrier-to-authority conversion boundary for requested tool calls, commands, sends, publications, and other effectful work.

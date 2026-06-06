@@ -1,0 +1,201 @@
+{
+  "schema": "narada.carrier.input_pipeline_cases.v1",
+  "cases": [
+    {
+      "name": "manual_operator_admitted",
+      "input": {
+        "schema": "narada.carrier.input_event.v1",
+        "event_id": "input_pipeline_operator_1",
+        "source_kind": "operator",
+        "source_id": "operator",
+        "transport": "interactive_terminal",
+        "delivery_mode": "admit_for_current_turn",
+        "hold_condition": null,
+        "content": "inspect the current state",
+        "created_at": "2026-05-30T00:00:00.000Z",
+        "authority_ref": null,
+        "directive_id": null,
+        "metadata": {}
+      },
+      "state": {
+        "activeTurn": false,
+        "composerHasDraft": false,
+        "observerMuted": false
+      },
+      "expected": {
+        "admission_action": "admit",
+        "creates_turn": true,
+        "complete_without_provider": false,
+        "dispatch_to_provider": false,
+        "queue_event_kinds": [],
+        "admission_event_kinds": ["input_admitted_to_turn"],
+        "hold_action": "none",
+        "should_defer": false
+      }
+    },
+    {
+      "name": "operator_steering_idle_records_turn_boundary_queue",
+      "input": {
+        "schema": "narada.carrier.input_event.v1",
+        "event_id": "input_pipeline_steering_1",
+        "source_kind": "operator",
+        "source_id": "operator",
+        "transport": "interactive_terminal",
+        "delivery_mode": "admit_after_active_turn",
+        "hold_condition": null,
+        "content": "also check the queue semantics",
+        "created_at": "2026-05-30T00:00:01.000Z",
+        "authority_ref": null,
+        "directive_id": null,
+        "metadata": {
+          "legacy_source": "operator_steering"
+        }
+      },
+      "state": {
+        "activeTurn": false,
+        "composerHasDraft": false,
+        "observerMuted": false
+      },
+      "expected": {
+        "admission_action": "admit",
+        "queue_state": "queued_for_turn_boundary",
+        "creates_turn": true,
+        "complete_without_provider": false,
+        "dispatch_to_provider": false,
+        "queue_event_kinds": ["input_queued_for_turn_boundary"],
+        "admission_event_kinds": ["input_admitted_to_turn"],
+        "hold_action": "none",
+        "should_defer": false
+      }
+    },
+    {
+      "name": "operator_visible_observer_completes_without_provider",
+      "input": {
+        "schema": "narada.carrier.input_event.v1",
+        "event_id": "input_pipeline_observer_operator_1",
+        "source_kind": "agent",
+        "source_id": "narada.observer",
+        "transport": "control_jsonl",
+        "delivery_mode": "admit_after_active_turn",
+        "hold_condition": null,
+        "content": "Ask what evidence is missing.",
+        "created_at": "2026-05-30T00:00:02.000Z",
+        "authority_ref": null,
+        "directive_id": null,
+        "metadata": {
+          "observer": {
+            "role": "observer",
+            "rule_id": "hesitation-source-check",
+            "visibility": "operator_visible",
+            "confidence": "medium"
+          }
+        }
+      },
+      "state": {
+        "activeTurn": false,
+        "composerHasDraft": false,
+        "observerMuted": false
+      },
+      "expected": {
+        "admission_action": "admit",
+        "queue_state": "queued_for_turn_boundary",
+        "creates_turn": false,
+        "complete_without_provider": true,
+        "dispatch_to_provider": false,
+        "visible_to_operator": true,
+        "queue_event_kinds": ["input_queued_for_turn_boundary"],
+        "admission_event_kinds": [
+          "observer_observation_recorded",
+          "observer_interjection_proposed",
+          "observer_interjection_admitted"
+        ],
+        "visible_event_kinds": ["observer_interjection_visible"],
+        "hold_action": "none",
+        "should_defer": false
+      }
+    },
+    {
+      "name": "muted_conversation_observer_suppressed",
+      "input": {
+        "schema": "narada.carrier.input_event.v1",
+        "event_id": "input_pipeline_observer_muted_1",
+        "source_kind": "agent",
+        "source_id": "narada.observer",
+        "transport": "control_jsonl",
+        "delivery_mode": "admit_after_active_turn",
+        "hold_condition": null,
+        "content": "Conversation-visible observer note.",
+        "created_at": "2026-05-30T00:00:03.000Z",
+        "authority_ref": null,
+        "directive_id": null,
+        "metadata": {
+          "observer": {
+            "role": "observer",
+            "rule_id": "conversation-check",
+            "visibility": "conversation_visible"
+          }
+        }
+      },
+      "state": {
+        "activeTurn": false,
+        "composerHasDraft": false,
+        "observerMuted": true
+      },
+      "expected": {
+        "admission_action": "admit",
+        "queue_state": "queued_for_turn_boundary",
+        "creates_turn": false,
+        "complete_without_provider": true,
+        "dispatch_to_provider": false,
+        "visible_to_operator": false,
+        "suppression_reason": "observer_muted",
+        "queue_event_kinds": ["input_queued_for_turn_boundary"],
+        "admission_event_kinds": [
+          "observer_observation_recorded",
+          "observer_interjection_proposed",
+          "observer_interjection_suppressed"
+        ],
+        "visible_event_kinds": [],
+        "hold_action": "none",
+        "should_defer": false
+      }
+    },
+    {
+      "name": "system_directive_held_by_nonempty_composer",
+      "input": {
+        "schema": "narada.carrier.input_event.v1",
+        "event_id": "input_pipeline_system_held_1",
+        "source_kind": "system",
+        "source_id": "narada-proper.system.directive_emitter",
+        "transport": "control_jsonl",
+        "delivery_mode": "admit_for_current_turn",
+        "hold_condition": "composer_clear_required",
+        "content": "run startup sequence",
+        "created_at": "2026-05-30T00:00:04.000Z",
+        "authority_ref": "auth_pipeline_system",
+        "directive_id": "dir_pipeline_system",
+        "metadata": {
+          "directive_provenance": {
+            "kind": "system_directive"
+          }
+        }
+      },
+      "state": {
+        "activeTurn": false,
+        "composerHasDraft": true,
+        "observerMuted": false
+      },
+      "expected": {
+        "admission_action": "hold",
+        "creates_turn": false,
+        "complete_without_provider": false,
+        "dispatch_to_provider": false,
+        "queue_event_kinds": [],
+        "admission_event_kinds": [],
+        "hold_action": "hold",
+        "hold_event_kinds": ["system_directive_held"],
+        "should_defer": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "schema": "narada.carrier.session_event.v1",
+  "event_kind": "carrier_host_command_rejected",
+  "event_id": "session_event_carrier_host_command_rejected_fixture_1",
+  "occurred_at": "2026-05-30T00:00:32.000Z",
+  "carrier_session_id": "carrier_fixture_1",
+  "agent_id": "sonar.resident",
+  "site_id": "narada-sonar",
+  "site_root": "D:/code/narada.sonar",
+  "payload": {
+    "command_id": "host_command_fixture_2",
+    "command_text": "",
+    "command_summary": "",
+    "redaction_applied": false,
+    "working_directory": "D:/code/narada.sonar",
+    "execution_surface": "carrier_host_shell",
+    "admission_action": "reject",
+    "admission_reason": "empty_host_command",
+    "terminal_state": "rejected"
+  }
+}

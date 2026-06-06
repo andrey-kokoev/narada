@@ -10,6 +10,8 @@ import {
   PAYLOAD_POLICY_SCHEMA,
   PROVIDER_REQUEST_PAYLOAD_SCHEMA,
   PROVIDER_OUTPUT_PAYLOAD_SCHEMA,
+  OBSERVER_VISIBILITIES,
+  PAYLOAD_REF_READER_TOOLS,
   SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA,
   SESSION_EVENT_KINDS,
   SESSION_EVENT_SCHEMA,
@@ -18,6 +20,10 @@ import {
   assertValidInputEvent,
   assertValidPayloadRef,
   assertValidSessionEvent,
+  classifyCarrierControlRequest,
+  classifyCarrierInputAdmission,
+  classifyCarrierInputHold,
+  classifyCarrierInputQueueAdmission,
   classifyCarrierInputIntent,
   classifyInputAdmission,
   createCarrierDiagnosticSessionEvent,
@@ -34,9 +40,11 @@ import {
   createTurnTerminalPayload,
   isStartupNudge,
   isTerminalTurnState,
+  classifyCarrierObserverInput,
   normalizeControlInputRecord,
   normalizeInputEvent,
   normalizeLegacyInputRecord,
+  observerPayload,
   startupCommandFromLaunchPacket,
   validateControlInputRecord,
   validateInputEvent,
@@ -60,6 +68,10 @@ function readFixture(name) {
   return JSON.parse(readFileSync(path, 'utf8'));
 }
 
+function hasOwn(value, key) {
+  return Object.prototype.hasOwnProperty.call(value, key);
+}
+
 const baseInput = {
   event_id: 'input_test_1',
   source_kind: 'operator',
@@ -71,9 +83,60 @@ const baseInput = {
 };
 
 const sessionEventFixtureManifest = readFixture('session-event-fixtures.json');
+const inputPipelineCases = readFixture('carrier-input-pipeline-cases.json');
 
 assert.equal(CARRIER_PROTOCOL_SCHEMAS.input_event.schema, INPUT_EVENT_SCHEMA);
 assert.equal(CARRIER_PROTOCOL_SCHEMAS.session_event_fixture_manifest.schema, SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA);
+assert.deepEqual(OBSERVER_VISIBILITIES, ['record_only', 'operator_visible', 'agent_visible', 'conversation_visible']);
+assert.deepEqual(PAYLOAD_REF_READER_TOOLS, ['mcp_payload_read', 'mcp_payload_show', 'mcp_output_show', 'carrier_host_command_output_read']);
+assert.deepEqual(classifyCarrierControlRequest({ id: 'status-1', method: 'session.status' }), {
+  request_id: 'status-1',
+  method: 'session.status',
+  concurrent_allowed: false,
+  allowed_when_closed: true,
+  native_control_input: false,
+  observer_action: null,
+  error: null,
+  method_kind: 'session_status',
+});
+assert.equal(classifyCarrierControlRequest({ id: 'interrupt-1', method: 'conversation.interrupt' }).method_kind, 'conversation_interrupt');
+assert.equal(classifyCarrierControlRequest({ id: 'interrupt-1', method: 'conversation.interrupt' }).concurrent_allowed, true);
+assert.deepEqual(classifyCarrierControlRequest({ id: 'observer-mute-1', method: 'observer.mute' }), {
+  request_id: 'observer-mute-1',
+  method: 'observer.mute',
+  concurrent_allowed: false,
+  allowed_when_closed: false,
+  native_control_input: false,
+  observer_action: 'mute',
+  error: null,
+  method_kind: 'observer_set_muted',
+});
+assert.deepEqual(classifyCarrierControlRequest({
+  schema: CONTROL_INPUT_EVENT_SCHEMA,
+  control_event_id: 'control_1',
+}), {
+  request_id: 'control_1',
+  method: 'carrier.input.deliver',
+  concurrent_allowed: false,
+  allowed_when_closed: false,
+  native_control_input: true,
+  observer_action: null,
+  error: null,
+  method_kind: 'carrier_input_deliver',
+});
+assert.deepEqual(classifyCarrierControlRequest({ id: 'bad-1', method: 'bad.method' }), {
+  request_id: 'bad-1',
+  method: 'bad.method',
+  concurrent_allowed: false,
+  allowed_when_closed: false,
+  native_control_input: false,
+  observer_action: null,
+  error: {
+    code: 'unsupported_method',
+    message: 'Unsupported method: bad.method',
+  },
+  method_kind: 'unsupported',
+});
 assert.deepEqual(validateSessionEventFixtureManifest(sessionEventFixtureManifest), []);
 assert.deepEqual(sessionEventFixtureManifest.fixtures.map((entry) => entry.event_kind), SESSION_EVENT_KINDS);
 for (const entry of sessionEventFixtureManifest.fixtures) {
@@ -90,6 +153,25 @@ for (const entry of transcriptProjectionCases.cases) {
   assert.equal(typeof entry.expected_kind, 'string');
   assert.equal(typeof entry.expected_actor, 'string');
   assert.equal(typeof entry.expected_text, 'string');
+}
+assert.equal(inputPipelineCases.schema, 'narada.carrier.input_pipeline_cases.v1');
+for (const entry of inputPipelineCases.cases) {
+  const input = normalizeInputEvent(entry.input);
+  const queueAdmission = classifyCarrierInputQueueAdmission(input, entry.state);
+  const hold = classifyCarrierInputHold(input, entry.state);
+  assert.equal(queueAdmission.admission_action, entry.expected.admission_action, entry.name);
+  if (hasOwn(entry.expected, 'queue_state')) assert.equal(queueAdmission.queue_state, entry.expected.queue_state, entry.name);
+  assert.equal(queueAdmission.creates_turn, entry.expected.creates_turn, entry.name);
+  assert.equal(queueAdmission.complete_without_provider, entry.expected.complete_without_provider, entry.name);
+  assert.equal(queueAdmission.dispatch_to_provider, entry.expected.dispatch_to_provider, entry.name);
+  if (hasOwn(entry.expected, 'visible_to_operator')) assert.equal(queueAdmission.visible_to_operator, entry.expected.visible_to_operator, entry.name);
+  if (hasOwn(entry.expected, 'suppression_reason')) assert.equal(queueAdmission.suppression_reason, entry.expected.suppression_reason, entry.name);
+  assert.deepEqual(queueAdmission.queue_events.map((event) => event.event_kind), entry.expected.queue_event_kinds, entry.name);
+  assert.deepEqual(queueAdmission.admission_events.map((event) => event.event_kind), entry.expected.admission_event_kinds, entry.name);
+  assert.deepEqual(queueAdmission.visible_events.map((event) => event.event_kind), entry.expected.visible_event_kinds ?? [], entry.name);
+  assert.equal(hold.hold_action, entry.expected.hold_action, entry.name);
+  assert.equal(hold.should_defer, entry.expected.should_defer, entry.name);
+  assert.deepEqual(hold.hold_events.map((event) => event.event_kind), entry.expected.hold_event_kinds ?? [], entry.name);
 }
 assert.deepEqual(validateInputEvent(readFixture('input-event.json')), []);
 assert.deepEqual(validateControlInputRecord(readFixture('control-input-event.json')), []);
@@ -213,6 +295,16 @@ assert.deepEqual(validateSessionEventFixtureManifest({ schema: SESSION_EVENT_FIX
   'fixtures.missing_event_kind:interrupt_requested',
   'fixtures.missing_event_kind:tool_call_requested',
   'fixtures.missing_event_kind:tool_result_received',
+  'fixtures.missing_event_kind:observer_observation_recorded',
+  'fixtures.missing_event_kind:observer_interjection_proposed',
+  'fixtures.missing_event_kind:observer_interjection_admitted',
+  'fixtures.missing_event_kind:observer_interjection_suppressed',
+  'fixtures.missing_event_kind:carrier_host_command_requested',
+  'fixtures.missing_event_kind:carrier_host_command_admitted',
+  'fixtures.missing_event_kind:carrier_host_command_rejected',
+  'fixtures.missing_event_kind:carrier_host_command_started',
+  'fixtures.missing_event_kind:carrier_host_command_completed',
+  'fixtures.missing_event_kind:carrier_host_command_failed',
   'fixtures.missing_event_kind:carrier_command_executed',
   'fixtures.missing_event_kind:carrier_diagnostic_recorded',
 ]);
@@ -286,6 +378,60 @@ assert.deepEqual(
   classifyInputAdmission(heldSystem, { activeTurn: false, composerHasDraft: false }),
   { action: 'admit', reason: 'no_active_turn', event: heldSystem },
 );
+assert.deepEqual(classifyCarrierInputHold(heldSystem, {
+  composerHasDraft: true,
+  occurredAt: '2026-05-30T00:00:01.000Z',
+}), {
+  input_event_id: 'input_test_system',
+  is_system_directive: true,
+  hold_action: 'hold',
+  hold_reason: 'composer_nonempty',
+  should_defer: true,
+  hold_events: [{
+    event_kind: 'system_directive_held',
+    payload: {
+      input_event_id: 'input_test_system',
+      directive_id: 'dir_test',
+      held_at: '2026-05-30T00:00:01.000Z',
+      held_reason: 'composer_nonempty',
+      original_delivery_mode: 'admit_for_current_turn',
+    },
+  }],
+  release_events: [],
+  events: [{
+    event_kind: 'system_directive_held',
+    payload: {
+      input_event_id: 'input_test_system',
+      directive_id: 'dir_test',
+      held_at: '2026-05-30T00:00:01.000Z',
+      held_reason: 'composer_nonempty',
+      original_delivery_mode: 'admit_for_current_turn',
+    },
+  }],
+  event: heldSystem,
+});
+assert.equal(classifyCarrierInputHold(heldSystem, { composerHasDraft: false }).hold_action, 'none');
+assert.equal(classifyCarrierInputHold(baseInput, { composerHasDraft: true }).hold_action, 'none');
+assert.deepEqual(classifyCarrierInputHold(heldSystem, {
+  release: true,
+  alreadyHeld: true,
+  occurredAt: '2026-05-30T00:00:02.000Z',
+}).release_events, [{
+  event_kind: 'system_directive_released',
+  payload: {
+    input_event_id: 'input_test_system',
+    directive_id: 'dir_test',
+    released_at: '2026-05-30T00:00:02.000Z',
+  },
+}]);
+const admittedOperator = classifyCarrierInputAdmission(baseInput, { activeTurn: false });
+assert.equal(admittedOperator.is_observer, false);
+assert.equal(admittedOperator.creates_turn, true);
+assert.equal(admittedOperator.dispatch_to_provider, false);
+assert.deepEqual(admittedOperator.admission_events, [{
+  event_kind: 'input_admitted_to_turn',
+  payload: { input_event_id: 'input_test_1' },
+}]);
 
 assert.match(thrownMessage(() => createInputEvent({ ...baseInput, event_id: 'input_bad_directive', directive_id: 'dir_bad' })), /directive_id_incompatible_with_source/);
 assert.match(thrownMessage(() => createInputEvent({ ...baseInput, event_id: 'input_bad_operator_directive', directive_id: 'dir_bad', authority_ref: 'auth' })), /directive_id_incompatible_with_source/);
@@ -299,6 +445,208 @@ assert.doesNotThrow(() => createInputEvent({
 
 assert.match(thrownMessage(() => createInputEvent({ ...baseInput, event_id: 'input_agent_bad', source_kind: 'agent', source_id: 'sonar.resident' })), /agent_source_requires_agent_control_input_metadata/);
 assert.doesNotThrow(() => createInputEvent({ ...baseInput, event_id: 'input_agent_ok', source_kind: 'agent', source_id: 'sonar.resident', metadata: { agent_control_input: true } }));
+const observerInput = createInputEvent({
+  ...baseInput,
+  event_id: 'input_observer_ok',
+  source_kind: 'agent',
+  source_id: 'narada.observer',
+  delivery_mode: 'admit_after_active_turn',
+  metadata: {
+    observer: {
+      role: 'observer',
+      rule_id: 'hesitation-source-check',
+      visibility: 'operator_visible',
+      confidence: 'medium',
+    },
+  },
+});
+assert.equal(observerInput.metadata.observer.visibility, 'operator_visible');
+assert.deepEqual(classifyCarrierObserverInput(observerInput), {
+  is_observer: true,
+  visibility: 'operator_visible',
+  observer_muted: false,
+  suppressed: false,
+  suppression_reason: null,
+  visible_to_operator: true,
+  dispatch_to_agent: false,
+  creates_turn: false,
+  completes_without_provider: true,
+  handle_outside_turn: true,
+  payload: observerPayload(observerInput),
+});
+const operatorVisibleAdmission = classifyCarrierInputAdmission(observerInput, { activeTurn: false });
+assert.equal(operatorVisibleAdmission.creates_turn, false);
+assert.equal(operatorVisibleAdmission.complete_without_provider, true);
+assert.deepEqual(operatorVisibleAdmission.visible_events, [{
+  event_kind: 'observer_interjection_visible',
+  payload: observerPayload(observerInput),
+}]);
+assert.equal(operatorVisibleAdmission.admission_events.some((event) => event.event_kind === 'observer_interjection_admitted'), true);
+const recordOnlyObserverInput = createInputEvent({
+  ...baseInput,
+  event_id: 'input_observer_record_only',
+  source_kind: 'agent',
+  source_id: 'narada.observer',
+  delivery_mode: 'admit_after_active_turn',
+  metadata: {
+    observer: {
+      role: 'observer',
+      rule_id: 'record-only-check',
+      visibility: 'record_only',
+    },
+  },
+});
+const recordOnlyAdmission = classifyCarrierInputAdmission(recordOnlyObserverInput, { activeTurn: false });
+assert.equal(recordOnlyAdmission.creates_turn, false);
+assert.equal(recordOnlyAdmission.complete_without_provider, true);
+assert.deepEqual(recordOnlyAdmission.visible_events, []);
+assert.deepEqual(recordOnlyAdmission.admission_events.map((event) => event.event_kind), ['observer_observation_recorded']);
+const agentObserverInput = createInputEvent({
+  ...baseInput,
+  event_id: 'input_observer_agent_visible',
+  source_kind: 'agent',
+  source_id: 'narada.observer',
+  delivery_mode: 'admit_after_active_turn',
+  metadata: {
+    observer: {
+      role: 'observer',
+      rule_id: 'agent-visible-check',
+      visibility: 'agent_visible',
+    },
+  },
+});
+const agentVisibleAdmission = classifyCarrierInputAdmission(agentObserverInput, { activeTurn: false });
+assert.equal(agentVisibleAdmission.creates_turn, true);
+assert.equal(agentVisibleAdmission.dispatch_to_provider, true);
+assert.deepEqual(agentVisibleAdmission.visible_events, []);
+assert.equal(agentVisibleAdmission.admission_events.some((event) => event.event_kind === 'input_admitted_to_turn'), true);
+const conversationObserverInput = createInputEvent({
+  ...baseInput,
+  event_id: 'input_observer_conversation',
+  source_kind: 'agent',
+  source_id: 'narada.observer',
+  delivery_mode: 'admit_after_active_turn',
+  metadata: {
+    observer: {
+      role: 'observer',
+      rule_id: 'conversation-visible-check',
+      visibility: 'conversation_visible',
+    },
+  },
+});
+assert.equal(classifyCarrierObserverInput(conversationObserverInput).creates_turn, true);
+assert.equal(classifyCarrierObserverInput(conversationObserverInput).dispatch_to_agent, true);
+assert.equal(classifyCarrierObserverInput(conversationObserverInput).visible_to_operator, true);
+const conversationVisibleAdmission = classifyCarrierInputAdmission(conversationObserverInput, { activeTurn: false });
+assert.equal(conversationVisibleAdmission.creates_turn, true);
+assert.equal(conversationVisibleAdmission.dispatch_to_provider, true);
+assert.deepEqual(conversationVisibleAdmission.visible_events, [{
+  event_kind: 'observer_interjection_visible',
+  payload: observerPayload(conversationObserverInput),
+}]);
+assert.deepEqual(classifyCarrierObserverInput(conversationObserverInput, { observerMuted: true }), {
+  is_observer: true,
+  visibility: 'conversation_visible',
+  observer_muted: true,
+  suppressed: true,
+  suppression_reason: 'observer_muted',
+  visible_to_operator: false,
+  dispatch_to_agent: false,
+  creates_turn: false,
+  completes_without_provider: true,
+  handle_outside_turn: true,
+  payload: observerPayload(conversationObserverInput, { suppression_reason: 'observer_muted' }),
+});
+const mutedAdmission = classifyCarrierInputAdmission(conversationObserverInput, { activeTurn: false, observerMuted: true });
+assert.equal(mutedAdmission.creates_turn, false);
+assert.equal(mutedAdmission.dispatch_to_provider, false);
+assert.equal(mutedAdmission.complete_without_provider, true);
+assert.equal(mutedAdmission.suppression_reason, 'observer_muted');
+assert.deepEqual(mutedAdmission.visible_events, []);
+assert.equal(mutedAdmission.admission_events.some((event) => event.event_kind === 'observer_interjection_suppressed'), true);
+const queuedSteeringAdmission = classifyCarrierInputQueueAdmission(steering, { activeTurn: true });
+assert.equal(queuedSteeringAdmission.admission_action, 'queue');
+assert.equal(queuedSteeringAdmission.queue_action, 'enqueue');
+assert.equal(queuedSteeringAdmission.queue_state, 'queued_for_turn_boundary');
+assert.deepEqual(queuedSteeringAdmission.queue_events, [{
+  event_kind: 'input_queued_for_turn_boundary',
+  payload: {
+    input_event_id: steering.event_id,
+    queue_state: 'queued_for_turn_boundary',
+  },
+}]);
+const idleSteeringQueueAdmission = classifyCarrierInputQueueAdmission(steering, { activeTurn: false });
+assert.equal(idleSteeringQueueAdmission.admission_action, 'admit');
+assert.equal(idleSteeringQueueAdmission.queue_action, 'enqueue');
+assert.equal(idleSteeringQueueAdmission.queue_state, 'queued_for_turn_boundary');
+assert.deepEqual(idleSteeringQueueAdmission.queue_events, [{
+  event_kind: 'input_queued_for_turn_boundary',
+  payload: {
+    input_event_id: steering.event_id,
+    queue_state: 'queued_for_turn_boundary',
+  },
+}]);
+assert.deepEqual(
+  idleSteeringQueueAdmission.admission_events.map((event) => event.event_kind),
+  ['input_admitted_to_turn'],
+);
+assert.equal(classifyCarrierObserverInput({ ...baseInput, metadata: {} }).is_observer, false);
+assert.equal(classifyCarrierObserverInput({ ...baseInput, metadata: {} }).creates_turn, true);
+assert.match(thrownMessage(() => createInputEvent({
+  ...baseInput,
+  event_id: 'input_observer_source_bad',
+  source_kind: 'agent',
+  source_id: 'sonar.resident',
+  metadata: {
+    observer: {
+      role: 'observer',
+      rule_id: 'hesitation-source-check',
+      visibility: 'operator_visible',
+    },
+  },
+})), /observer.source_id_not_observer/);
+assert.match(thrownMessage(() => createInputEvent({
+  ...baseInput,
+  event_id: 'input_observer_agent_control_bad',
+  source_kind: 'agent',
+  source_id: 'narada.observer',
+  metadata: {
+    agent_control_input: true,
+    observer: {
+      role: 'observer',
+      rule_id: 'hesitation-source-check',
+      visibility: 'operator_visible',
+    },
+  },
+})), /observer.cannot_be_agent_control_input/);
+assert.match(thrownMessage(() => createInputEvent({
+  ...baseInput,
+  event_id: 'input_observer_operator_bad',
+  source_kind: 'operator',
+  source_id: 'operator',
+  metadata: {
+    observer: {
+      role: 'observer',
+      rule_id: 'hesitation-source-check',
+      visibility: 'operator_visible',
+    },
+  },
+})), /observer_metadata_requires_agent_source/);
+assert.match(thrownMessage(() => createInputEvent({
+  ...baseInput,
+  event_id: 'input_observer_impersonation_bad',
+  source_kind: 'agent',
+  source_id: 'narada.observer',
+  metadata: {
+    observer: {
+      role: 'observer',
+      rule_id: 'hidden-system-injection',
+      visibility: 'agent_visible',
+      confidence: 'high',
+      impersonates_system: true,
+    },
+  },
+})), /observer.observer_impersonation_forbidden/);
 assert.match(thrownMessage(() => createInputEvent({ ...baseInput, event_id: 'input_external_bad', source_kind: 'external', source_id: 'mailbox:x' })), /external_source_requires_admitted_by_metadata/);
 assert.doesNotThrow(() => createInputEvent({ ...baseInput, event_id: 'input_external_ok', source_kind: 'external', source_id: 'mailbox:x', metadata: { admitted_by: 'narada-proper.system.mailbox_adapter' } }));
 

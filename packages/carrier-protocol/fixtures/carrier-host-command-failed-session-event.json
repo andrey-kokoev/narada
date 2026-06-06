@@ -1,0 +1,23 @@
+{
+  "schema": "narada.carrier.session_event.v1",
+  "event_kind": "carrier_host_command_failed",
+  "event_id": "session_event_carrier_host_command_failed_fixture_1",
+  "occurred_at": "2026-05-30T00:00:35.000Z",
+  "carrier_session_id": "carrier_fixture_1",
+  "agent_id": "sonar.resident",
+  "site_id": "narada-sonar",
+  "site_root": "D:/code/narada.sonar",
+  "payload": {
+    "command_id": "host_command_fixture_3",
+    "command_text": "exit 7",
+    "command_summary": "exit 7",
+    "redaction_applied": false,
+    "working_directory": "D:/code/narada.sonar",
+    "exit_code": 7,
+    "terminal_state": "failed",
+    "duration_ms": 13,
+    "output_truncated": false,
+    "stdout": "",
+    "stderr": ""
+  }
+}

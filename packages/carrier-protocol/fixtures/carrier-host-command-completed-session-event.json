@@ -1,0 +1,23 @@
+{
+  "schema": "narada.carrier.session_event.v1",
+  "event_kind": "carrier_host_command_completed",
+  "event_id": "session_event_carrier_host_command_completed_fixture_1",
+  "occurred_at": "2026-05-30T00:00:34.000Z",
+  "carrier_session_id": "carrier_fixture_1",
+  "agent_id": "sonar.resident",
+  "site_id": "narada-sonar",
+  "site_root": "D:/code/narada.sonar",
+  "payload": {
+    "command_id": "host_command_fixture_1",
+    "command_text": "git status",
+    "command_summary": "git status",
+    "redaction_applied": false,
+    "working_directory": "D:/code/narada.sonar",
+    "exit_code": 0,
+    "terminal_state": "completed",
+    "duration_ms": 42,
+    "output_truncated": false,
+    "stdout": "On branch main\n",
+    "stderr": ""
+  }
+}

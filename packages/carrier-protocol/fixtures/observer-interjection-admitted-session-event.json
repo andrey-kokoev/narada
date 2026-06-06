@@ -1,0 +1,18 @@
+{
+  "schema": "narada.carrier.session_event.v1",
+  "event_kind": "observer_interjection_admitted",
+  "event_id": "session_event_observer_admitted_fixture",
+  "occurred_at": "2026-05-30T00:00:20.000Z",
+  "carrier_session_id": "carrier_fixture",
+  "agent_id": "sonar.architect",
+  "site_id": "narada-sonar",
+  "site_root": "D:/code/narada.sonar",
+  "payload": {
+    "observer_id": "narada.observer",
+    "rule_id": "hesitation-source-check",
+    "visibility": "agent_visible",
+    "confidence": "medium",
+    "input_event_id": "input_observer_fixture",
+    "content": "Please name the evidence gap before proceeding."
+  }
+}

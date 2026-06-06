@@ -16,6 +16,14 @@
       "help": "Show session state"
     },
     {
+      "name": "goal",
+      "primary": "/goal",
+      "aliases": [],
+      "argument": "text|clear",
+      "effect": "show_or_set_carrier_goal",
+      "help": "Show or set carrier session goal"
+    },
+    {
       "name": "stats",
       "primary": "/stats",
       "aliases": [],
@@ -54,6 +62,27 @@
       "argument": "filter",
       "effect": "show_discovered_mcp_tools",
       "help": "Show discovered MCP tools and input schemas"
+    },
+    {
+      "name": "observers",
+      "primary": "/observers",
+      "aliases": [],
+      "effect": "show_observer_posture",
+      "help": "Show observer posture"
+    },
+    {
+      "name": "observer_mute",
+      "primary": "/observer mute",
+      "aliases": [],
+      "effect": "mute_visible_observer_interjections",
+      "help": "Mute visible observer interjections"
+    },
+    {
+      "name": "observer_unmute",
+      "primary": "/observer unmute",
+      "aliases": [],
+      "effect": "unmute_visible_observer_interjections",
+      "help": "Unmute visible observer interjections"
     },
     {
       "name": "queue_show",

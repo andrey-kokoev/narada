@@ -31,5 +31,47 @@
   },
   "delivery_mode": {
     "values": ["admit_for_current_turn", "admit_after_active_turn"]
+  },
+  "observer_visibility": {
+    "values": ["record_only", "operator_visible", "agent_visible", "conversation_visible"],
+    "default": "operator_visible"
+  },
+  "queue_state": {
+    "values": ["queued_for_turn_boundary", "admitted_to_turn", "dropped_by_operator", "abandoned_on_session_end"]
+  },
+  "input_admission_action": {
+    "values": ["admit", "queue", "hold", "reject"]
+  },
+  "input_hold_action": {
+    "values": ["hold", "release", "none"]
+  },
+  "observer_suppression_reason": {
+    "values": ["observer_muted"]
+  },
+  "payload_ref_reader_tool": {
+    "values": ["mcp_payload_read", "mcp_payload_show", "mcp_output_show", "carrier_host_command_output_read"]
+  },
+  "input_pipeline_event_kind": {
+    "queue": ["input_queued_for_turn_boundary"],
+    "admission": [
+      "observer_observation_recorded",
+      "observer_interjection_proposed",
+      "observer_interjection_admitted",
+      "observer_interjection_suppressed",
+      "input_admitted_to_turn"
+    ],
+    "visible": ["observer_interjection_visible"],
+    "hold": ["system_directive_held"],
+    "release": ["system_directive_released"]
+  },
+  "carrier_host_command_event_kind": {
+    "values": [
+      "carrier_host_command_requested",
+      "carrier_host_command_admitted",
+      "carrier_host_command_rejected",
+      "carrier_host_command_started",
+      "carrier_host_command_completed",
+      "carrier_host_command_failed"
+    ]
   }
 }

@@ -1,0 +1,17 @@
+{
+  "schema": "narada.carrier.session_event.v1",
+  "event_kind": "observer_observation_recorded",
+  "event_id": "session_event_observer_observation_fixture",
+  "occurred_at": "2026-05-30T00:00:18.000Z",
+  "carrier_session_id": "carrier_fixture",
+  "agent_id": "sonar.architect",
+  "site_id": "narada-sonar",
+  "site_root": "D:/code/narada.sonar",
+  "payload": {
+    "observer_id": "narada.observer",
+    "rule_id": "hesitation-source-check",
+    "visibility": "record_only",
+    "confidence": "medium",
+    "content": "Agent expressed uncertainty without naming an evidence source."
+  }
+}

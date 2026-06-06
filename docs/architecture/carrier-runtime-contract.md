@@ -12,6 +12,8 @@ When those semantics live inside each surface, behavior drifts. One carrier may 
 
 Narada should have one shared carrier runtime contract consumed by all admitted carriers and carrier surfaces.
 
+Use [`Carrier Taxonomy`](../concepts/carrier-taxonomy.md) for the vocabulary boundary between `Carrier`, `CarrierKind`, `CarrierHost`, `CarrierTransport`, `CarrierProtocol`, `CarrierRuntimeContract`, `CarrierSurface`, and `ControlChannel`.
+
 The shared contract defines:
 
 1. Carrier protocol and session event schema
@@ -24,12 +26,15 @@ The shared contract defines:
 8. Runtime launch, heartbeat, session identity, and carrier paths
 9. Transcript/session persistence rules
 10. Command vocabulary and command semantic effects
+11. Conversation observer visibility and interjection semantics
 
 ## Ownership Boundary
 
 Shared packages own runtime meaning and policy.
 
 Carrier surfaces own presentation and transport details.
+
+Carrier hosts own deployment/runtime constraints such as local processes, Cloudflare Workers, Durable Objects, containers, process supervision, and storage bindings. Host posture must not redefine carrier runtime semantics.
 
 `agent-cli` owns line-oriented terminal presentation, stdin/stdout behavior, and CLI formatting.
 
@@ -38,6 +43,44 @@ Carrier surfaces own presentation and transport details.
 Codex-as-carrier owns Codex-specific process/API adaptation and stream parsing.
 
 No surface should independently define carrier authority, MCP visibility, provider admission, payload ref semantics, command effects, session protocol, or runtime identity.
+
+Conversation observer behavior follows the same boundary: shared contracts define observer source metadata, visibility, admission, and evidence semantics; each carrier owns only its presentation and transport mechanics. See [`Conversation Observer`](../concepts/conversation-observer.md).
+
+## Carrier Input Pipeline
+
+Carrier input handling is a shared semantic pipeline. Carriers may differ in how input arrives and how results are rendered, but they should not redefine the meaning of admission, queueing, observer visibility, or provider dispatch.
+
+The shared pipeline stages are:
+
+1. Control request classification
+
+   `classifyCarrierControlRequest(...)` classifies upstream control requests such as session status, interrupt, conversation send, carrier input delivery, observer status, and observer mute/unmute. This stage answers what kind of control action was requested and whether it may run concurrently or after session close.
+
+2. Input normalization
+
+   Control, legacy, manual, and transport-specific records normalize into `narada.carrier.input_event.v1`. Normalization assigns source kind, source id, transport, delivery mode, hold condition, authority references, directive ids, and observer metadata before later stages reason about the input.
+
+3. Observer classification
+
+   `classifyCarrierObserverInput(...)` classifies observer input visibility and effect. It determines whether the input is an observer observation, whether it is `record_only`, `operator_visible`, `agent_visible`, or `conversation_visible`, whether it is suppressed by mute state, whether it is visible to the Operator, and whether it may be dispatched to the active agent provider context.
+
+4. Composer hold classification
+
+   `classifyCarrierInputHold(...)` classifies whether a system directive must be held because the carrier composer is active with a non-empty draft. The carrier surface detects composer state; the shared contract determines the `system_directive_held` and `system_directive_released` lifecycle evidence.
+
+5. Input admission
+
+   `classifyCarrierInputAdmission(...)` composes base input admission with observer classification. It decides whether the input creates a provider turn, completes without provider dispatch, emits observer observation/proposal/admission/suppression evidence, or emits `input_admitted_to_turn`.
+
+6. Queue admission
+
+   `classifyCarrierInputQueueAdmission(...)` adds carrier queue lifecycle evidence. It records the shared rule that `admit_after_active_turn` input emits `input_queued_for_turn_boundary` when it enters the carrier queue, including the idle case where the same input may be admitted immediately on drain.
+
+7. Completion
+
+   Carrier runtimes record `input_completed` with the terminal state produced by the admitted work. Observer inputs that are record-only, operator-visible only, or muted complete without provider dispatch. Agent-visible and conversation-visible observer inputs create ordinary provider turns, queueing for the next turn boundary when another turn is active.
+
+Shared packages own the stages above. Carrier surfaces own queue storage, rendering, composer behavior, transport mechanics, and provider adapter execution, but they should consume the shared classifiers instead of copying these decisions locally.
 
 ## Contract Invariants
 
@@ -50,6 +93,7 @@ A carrier is compatible only if these invariants hold:
 5. The same provider/carrier configuration resolves to the same admitted or refused state in every carrier.
 6. The same command text resolves to the same command effect in every carrier.
 7. The same launch/session identity data produces the same heartbeat and session metadata in every carrier.
+8. The same carrier input event produces the same observer visibility, queue lifecycle evidence, turn admission, provider dispatch decision, and completion posture in every carrier.
 
 ## Package Shape
 

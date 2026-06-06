@@ -78,6 +78,46 @@
       "fixture": "tool-result-session-event.json"
     },
     {
+      "event_kind": "observer_observation_recorded",
+      "fixture": "observer-observation-session-event.json"
+    },
+    {
+      "event_kind": "observer_interjection_proposed",
+      "fixture": "observer-interjection-proposed-session-event.json"
+    },
+    {
+      "event_kind": "observer_interjection_admitted",
+      "fixture": "observer-interjection-admitted-session-event.json"
+    },
+    {
+      "event_kind": "observer_interjection_suppressed",
+      "fixture": "observer-interjection-suppressed-session-event.json"
+    },
+    {
+      "event_kind": "carrier_host_command_requested",
+      "fixture": "carrier-host-command-requested-session-event.json"
+    },
+    {
+      "event_kind": "carrier_host_command_admitted",
+      "fixture": "carrier-host-command-admitted-session-event.json"
+    },
+    {
+      "event_kind": "carrier_host_command_rejected",
+      "fixture": "carrier-host-command-rejected-session-event.json"
+    },
+    {
+      "event_kind": "carrier_host_command_started",
+      "fixture": "carrier-host-command-started-session-event.json"
+    },
+    {
+      "event_kind": "carrier_host_command_completed",
+      "fixture": "carrier-host-command-completed-session-event.json"
+    },
+    {
+      "event_kind": "carrier_host_command_failed",
+      "fixture": "carrier-host-command-failed-session-event.json"
+    },
+    {
       "event_kind": "carrier_command_executed",
       "fixture": "carrier-command-session-event.json"
     },
