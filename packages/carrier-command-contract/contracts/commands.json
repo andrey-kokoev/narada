@@ -48,6 +48,14 @@
       "help": "Toggle displayed tool call outputs"
     },
     {
+      "name": "tools",
+      "primary": "/tools",
+      "aliases": ["/tool"],
+      "argument": "filter",
+      "effect": "show_discovered_mcp_tools",
+      "help": "Show discovered MCP tools and input schemas"
+    },
+    {
       "name": "queue_show",
       "primary": "/queue",
       "aliases": [],
