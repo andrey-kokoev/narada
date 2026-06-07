@@ -908,6 +908,14 @@ export function renderCloudflareCarrierConsole() {
     .task { border: 1px solid #d9dcd3; border-radius: 6px; padding: 9px; background: #fff; }
     .task strong { display: block; font-size: 13px; color: #1f4e48; overflow-wrap: anywhere; }
     .task span { display: block; margin-top: 4px; font-size: 12px; color: #686d75; overflow-wrap: anywhere; }
+    .product-panel { margin-top: 16px; border-top: 1px solid #d7d7ce; padding-top: 14px; }
+    .product-panel h2 { margin: 0 0 10px; font-size: 15px; letter-spacing: 0; }
+    .overview { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 12px 14px; border-bottom: 1px solid #d7d7ce; background: #faf9f4; }
+    .overview-block { min-width: 0; border: 1px solid #d9dcd3; border-radius: 6px; padding: 10px; background: #fff; }
+    .overview-block h3 { margin: 0 0 8px; font-size: 13px; letter-spacing: 0; color: #1f4e48; }
+    .overview-block ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+    .overview-block li { font-size: 12px; color: #343941; overflow-wrap: anywhere; }
+    .overview-block b { color: #686d75; }
     .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px; border-bottom: 1px solid #d7d7ce; }
     .toolbar h2 { margin: 0; font-size: 16px; letter-spacing: 0; }
     .events { overflow: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
@@ -936,10 +944,18 @@ export function renderCloudflareCarrierConsole() {
         <button id="refresh" class="secondary">Refresh</button>
       </div>
       <div class="status">
+        <div class="metric"><b>Site</b><span id="siteStatus">unknown</span></div>
+        <div class="metric"><b>Role</b><span id="membershipRole">unknown</span></div>
+        <div class="metric"><b>Sessions</b><span id="sessionCount">0</span></div>
+        <div class="metric"><b>Authority</b><span id="authorityCount">0</span></div>
         <div class="metric"><b>Provider</b><span id="provider">unknown</span></div>
         <div class="metric"><b>Effects</b><span id="effects">unknown</span></div>
         <div class="metric"><b>Events</b><span id="eventCount">0</span></div>
         <div class="metric"><b>Cursor</b><span id="cursor">0</span></div>
+      </div>
+      <div class="product-panel">
+        <h2>Site Product</h2>
+        <div class="actions"><button id="readSite" class="secondary">Read Site</button></div>
       </div>
       <div class="task-panel">
         <h2>Task State</h2>
@@ -953,6 +969,12 @@ export function renderCloudflareCarrierConsole() {
       <div class="toolbar">
         <h2>Session Events</h2>
         <button id="read" class="secondary">Read Events</button>
+      </div>
+      <div id="productOverview" class="overview">
+        <div class="overview-block"><h3>Site</h3><ul><li class="empty">No site loaded.</li></ul></div>
+        <div class="overview-block"><h3>Sessions</h3><ul><li class="empty">No sessions loaded.</li></ul></div>
+        <div class="overview-block"><h3>Authority Events</h3><ul><li class="empty">No authority events loaded.</li></ul></div>
+        <div class="overview-block"><h3>Carrier Evidence</h3><ul><li class="empty">No carrier evidence loaded.</li></ul></div>
       </div>
       <div id="events" class="events"><div class="empty">Start or resume a session to read carrier events.</div></div>
       <div class="composer">
@@ -989,6 +1011,7 @@ export function renderCloudflareCarrierConsole() {
         }, { request_id: 'console_start_' + carrierSessionId });
       },
       status() { return this.request('session.status'); },
+      readSite() { return this.request('site.read', { site_id: el('siteId').value.trim(), carrier_event_limit: 20, session_limit: 10 }); },
       readEvents() { return this.request('session.events.read', { after_sequence: state.afterSequence }); },
       command(command, args = []) { return this.request('carrier.command.execute', { command, args }, { request_id: 'console_command_' + Date.now() }); },
       deliver(content) {
@@ -997,9 +1020,12 @@ export function renderCloudflareCarrierConsole() {
       },
     };
     window.naradaCloudflareCarrierClient = api;
+    function eventKey(event) {
+      return (event.carrier_session_id || el('sessionId').value.trim()) + ':' + event.sequence;
+    }
     function appendEvents(events = []) {
       for (const event of events) {
-        if (state.events.some((existing) => existing.sequence === event.sequence)) continue;
+        if (state.events.some((existing) => eventKey(existing) === eventKey(event))) continue;
         state.events.push(event);
         state.afterSequence = Math.max(state.afterSequence, Number(event.sequence || 0));
       }
@@ -1020,6 +1046,54 @@ export function renderCloudflareCarrierConsole() {
         node.append(title, meta);
         return node;
       }));
+    }
+    function listItem(label, value) {
+      const li = document.createElement('li');
+      const key = document.createElement('b');
+      key.textContent = label + ': ';
+      li.append(key, document.createTextNode(value == null || value === '' ? 'none' : String(value)));
+      return li;
+    }
+    function renderListBlock(title, items) {
+      const block = document.createElement('div');
+      block.className = 'overview-block';
+      const heading = document.createElement('h3');
+      heading.textContent = title;
+      const list = document.createElement('ul');
+      if (items.length === 0) {
+        const empty = document.createElement('li');
+        empty.className = 'empty';
+        empty.textContent = 'None loaded.';
+        list.append(empty);
+      } else {
+        list.append(...items);
+      }
+      block.append(heading, list);
+      return block;
+    }
+    function renderSiteProduct(product) {
+      el('siteStatus').textContent = product.site?.status || 'unknown';
+      el('membershipRole').textContent = product.membership?.role || 'none';
+      el('sessionCount').textContent = String((product.sessions || []).length);
+      el('authorityCount').textContent = String((product.authority_events || []).length);
+      renderTasks(product.tasks || []);
+      const siteItems = [
+        listItem('site_id', product.site?.site_id),
+        listItem('display_name', product.site?.display_name),
+        listItem('principal', product.reader_principal?.email || product.reader_principal?.principal_id),
+      ];
+      const sessionItems = (product.sessions || []).map((session) => listItem(session.carrier_session_id, session.binding_status || session.agent_id));
+      const authorityItems = (product.authority_events || []).map((event) => listItem(event.event_kind, event.reason || event.action));
+      const evidenceItems = (product.carrier_evidence || []).map((entry) => {
+        const kinds = (entry.events || []).slice(0, 5).map((event) => event.event_kind).join(', ');
+        return listItem(entry.carrier_session_id, kinds || entry.error || 'no events');
+      });
+      el('productOverview').replaceChildren(
+        renderListBlock('Site', siteItems),
+        renderListBlock('Sessions', sessionItems),
+        renderListBlock('Authority Events', authorityItems),
+        renderListBlock('Carrier Evidence', evidenceItems),
+      );
     }
     function evidencePayload(event) {
       const payload = event.payload || {};
@@ -1048,7 +1122,7 @@ export function renderCloudflareCarrierConsole() {
         const node = document.createElement('article');
         node.className = 'event';
         const title = document.createElement('strong');
-        title.textContent = '#' + event.sequence + ' ' + event.event_kind;
+        title.textContent = (event.carrier_session_id ? event.carrier_session_id + ' ' : '') + '#' + event.sequence + ' ' + event.event_kind;
         const pre = document.createElement('pre');
         pre.textContent = JSON.stringify(evidencePayload(event), null, 2);
         node.append(title, pre);
@@ -1069,6 +1143,7 @@ export function renderCloudflareCarrierConsole() {
     }
     el('start').addEventListener('click', () => run(async () => { const body = await api.start(); appendEvents([body.event].filter(Boolean)); await refreshStatus(); }));
     el('refresh').addEventListener('click', () => run(refreshStatus));
+    el('readSite').addEventListener('click', () => run(async () => { const body = await api.readSite(); renderSiteProduct(body); appendEvents((body.carrier_evidence || []).flatMap((entry) => entry.events || [])); }));
     el('read').addEventListener('click', () => run(async () => { const body = await api.readEvents(); appendEvents(body.events || []); await refreshStatus(); }));
     el('createTask').addEventListener('click', () => run(async () => { const title = el('taskTitle').value.trim(); if (!title) return; const body = await api.command('/task', ['create', ...title.split(/\\s+/)]); appendEvents(body.events || []); el('taskTitle').value = ''; await refreshStatus(); }));
     el('send').addEventListener('click', () => run(async () => { const content = el('input').value.trim(); if (!content) return; const body = await api.deliver(content); appendEvents(body.events || []); el('input').value = ''; await refreshStatus(); }));

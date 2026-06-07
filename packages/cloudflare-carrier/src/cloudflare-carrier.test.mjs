@@ -395,7 +395,14 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Bearer token/);
   assert.match(html, /Provider/);
   assert.match(html, /Effects/);
+  assert.match(html, /Site Product/);
+  assert.match(html, /Product Overview|productOverview/);
+  assert.match(html, /Sessions/);
+  assert.match(html, /Authority Events/);
+  assert.match(html, /Carrier Evidence/);
   assert.match(html, /Task State/);
+  assert.match(html, /site\.read/);
+  assert.match(html, /readSite/);
   assert.match(html, /createTask/);
 });
 
