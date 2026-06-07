@@ -9,6 +9,7 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
+import { createSiteContinuityExchangePacket } from "@narada2/site-continuity";
 import {
   SiteRegistry,
   openRegistryDb,
@@ -16,6 +17,7 @@ import {
   resolveRegistryDbPathByLocus,
   resolveSitesBaseDir,
 } from "../../src/registry.js";
+import { createWindowsSiteContinuityReadModel } from "../../src/site-observation.js";
 import type { RegisteredSite, RegistryAuditRecord } from "../../src/registry.js";
 
 describe("resolveRegistryDbPath", () => {
@@ -492,6 +494,47 @@ describe("SiteRegistry", () => {
 
     it("returns empty array for site with no audit records", () => {
       expect(registry.getAuditRecordsForSite("no-audit")).toEqual([]);
+    });
+  });
+
+  describe("importContinuityPacket / listContinuityPackets", () => {
+    it("stores admitted continuity exchange packets", () => {
+      const continuity = createWindowsSiteContinuityReadModel({
+        site_id: "site-continuity",
+        generated_at: "2026-06-07T21:30:00.000Z",
+      });
+
+      const result = registry.importContinuityPacket(continuity.exchange_packet, {
+        importedAt: "2026-06-07T21:31:00.000Z",
+      });
+
+      expect(result.ok).toBe(true);
+      expect(result.status).toBe("imported");
+      expect(result.decision.action).toBe("projection_only");
+
+      const packets = registry.listContinuityPackets("site-continuity");
+      expect(packets).toHaveLength(1);
+      expect(packets[0]!.siteId).toBe("site-continuity");
+      expect(packets[0]!.sourceEmbodimentKind).toBe("local_windows");
+      expect(packets[0]!.targetEmbodimentKind).toBe("cloudflare_carrier");
+      expect(packets[0]!.admissionAction).toBe("projection_only");
+    });
+
+    it("refuses packets carrying executable mutation requests", () => {
+      const continuity = createWindowsSiteContinuityReadModel({ site_id: "site-continuity-refused" });
+      const packet = createSiteContinuityExchangePacket({
+        binding: continuity.binding,
+        source_embodiment_kind: "cloudflare_carrier",
+        target_embodiment_kind: "local_windows",
+        executable_mutation_requests: [{ mutation_class: "local_repository_filesystem_mutation" }],
+      });
+
+      const result = registry.importContinuityPacket(packet);
+
+      expect(result.ok).toBe(false);
+      expect(result.status).toBe("refused");
+      expect(result.decision.reason).toBe("site_continuity_exchange_packet_executable_mutation_refused");
+      expect(registry.listContinuityPackets("site-continuity-refused")).toEqual([]);
     });
   });
 });

@@ -8,6 +8,7 @@
   "ai_stream_env_var": "NARADA_AI_STREAM",
   "admitted_providers": [
     "codex-subscription",
+    "kimi-api",
     "openai-api",
     "anthropic-api"
   ],

@@ -99,9 +99,9 @@ function assertLauncherFileShape(records, sourceLabel) {
 function dryRunEnv(runtime) {
   if (runtime === 'codex') return { NARADA_CODEX_CLI_SCRIPT: packagedLauncherPath };
   if (runtime === 'agent-tui') return {
-    NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
-    NARADA_AI_BASE_URL: 'codex://local-subscription',
-    NARADA_AI_MODEL: 'gpt-5.5',
+    NARADA_INTELLIGENCE_PROVIDER: 'kimi-api',
+    NARADA_AI_BASE_URL: 'https://api.moonshot.ai',
+    NARADA_AI_MODEL: 'kimi-k2.6',
     NARADA_AI_API_KEY: 'test-key',
   };
   return {};

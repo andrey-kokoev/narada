@@ -96,6 +96,8 @@ export {
   SiteRegistry,
   type RegisteredSite,
   type RegistryAuditRecord,
+  type SiteContinuityPacketImportResult,
+  type SiteContinuityPacketRecord,
   resolveRegistryDbPath,
   resolveRegistryDbPathByLocus,
   resolveSitesBaseDir,
@@ -128,11 +130,14 @@ export {
 } from "./credentials.js";
 
 export {
+  createWindowsSiteContinuityReadModel,
   type SiteObservationApi,
   type StuckWorkItem,
   type PendingOutboundCommand,
   type PendingDraft,
   type CredentialRequirement,
+  type WindowsSiteContinuityInput,
+  type WindowsSiteContinuityReadModel,
 } from "./site-observation.js";
 
 export {

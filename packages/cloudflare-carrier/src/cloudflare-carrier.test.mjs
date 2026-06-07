@@ -318,6 +318,9 @@ test('worker validates session.start site binding through configured Cloudflare 
   assert.equal(startBody.event.payload.site_binding_evidence.schema, 'narada.cloudflare_site_registry.v1');
   assert.equal(startBody.event.payload.site_binding_evidence.action, 'admit');
   assert.equal(startBody.event.payload.site_binding_evidence.site_id, 'site_fixture');
+  assert.equal(startBody.event.payload.site_authority_decision.action, 'admit');
+  assert.equal(startBody.event.payload.site_authority_decision.mutation_class, 'hosted_carrier_session_events');
+  assert.equal(startBody.event.payload.site_authority_decision.authority_locus_kind, 'cloudflare_carrier_session_event_store');
   assert.equal(siteDb.dump().carrierSessions[0].carrier_session_id, 'carrier_session_cloudflare_fixture');
 });
 
@@ -380,6 +383,62 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(body.carrier_evidence[0].carrier_session_id, 'carrier_session_cloudflare_fixture');
   assert.equal(body.carrier_evidence[0].events.some((event) => event.event_kind === 'carrier_session_started'), true);
   assert.equal(body.reader_principal.email, 'admin@system');
+  assert.equal(body.site_authority.map.schema, 'narada.site_authority_map.v1');
+  assert.equal(body.site_authority.map.site_id, 'site_fixture');
+  const membershipDecision = body.site_authority.decisions.find((decision) => decision.mutation_class === 'hosted_site_membership');
+  assert.equal(membershipDecision.action, 'admit');
+  assert.equal(membershipDecision.authority_locus_kind, 'cloudflare_site_registry');
+  const localFilesystemDecision = body.site_authority.decisions.find((decision) => decision.mutation_class === 'local_repository_filesystem_mutation');
+  assert.equal(localFilesystemDecision.action, 'refuse');
+  assert.equal(localFilesystemDecision.reason, 'site_authority_embodiment_not_authoritative');
+  assert.equal(body.site_continuity.binding.schema, 'narada.site_continuity_binding.v1');
+  assert.equal(body.site_continuity.binding.site_id, 'site_fixture');
+  const identityContinuity = body.site_continuity.decisions.find((decision) => decision.exchange_class === 'site_identity_binding');
+  assert.equal(identityContinuity.action, 'admit');
+  assert.equal(identityContinuity.relation_kind, 'same_site_embodiment');
+  assert.equal(body.site_continuity.exchange_packet.schema, 'narada.site_continuity_exchange_packet.v1');
+  assert.equal(body.site_continuity.exchange_packet.source_embodiment_kind, 'cloudflare_carrier');
+  assert.equal(body.site_continuity.exchange_packet.target_embodiment_kind, 'local_windows');
+  assert.equal(body.site_continuity.exchange_packet_admission.action, 'projection_only');
+  const mutationExecutionContinuity = body.site_continuity.decisions.find((decision) => decision.exchange_class === 'cross_embodiment_mutation_execution');
+  assert.equal(mutationExecutionContinuity.action, 'refuse');
+  assert.equal(mutationExecutionContinuity.reason, 'site_continuity_cross_embodiment_mutation_execution_refused');
+
+  const packetPut = await worker.fetch(jsonRequest({
+    operation: 'site.continuity.packet.put',
+    request_id: 'request_site_read_continuity_packet_put',
+    params: { site_id: 'site_fixture', packet: body.site_continuity.exchange_packet },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(packetPut.status, 200);
+  const packetPutBody = await packetPut.json();
+  assert.equal(packetPutBody.status, 'imported');
+  assert.equal(packetPutBody.site_continuity_packet_admission.action, 'projection_only');
+
+  const refusedPacketPut = await worker.fetch(jsonRequest({
+    operation: 'site.continuity.packet.put',
+    request_id: 'request_site_read_continuity_packet_refused',
+    params: {
+      site_id: 'site_fixture',
+      packet: {
+        ...body.site_continuity.exchange_packet,
+        executable_mutation_requests: [{ mutation_class: 'local_repository_filesystem_mutation' }],
+      },
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(refusedPacketPut.status, 403);
+  const refusedPacketPutBody = await refusedPacketPut.json();
+  assert.equal(refusedPacketPutBody.status, 'refused');
+  assert.equal(refusedPacketPutBody.site_continuity_packet_admission.reason, 'site_continuity_exchange_packet_executable_mutation_refused');
+
+  const readAfterPacketPut = await worker.fetch(jsonRequest({
+    operation: 'site.read',
+    request_id: 'request_site_read_after_continuity_packet_put',
+    params: { site_id: 'site_fixture', carrier_event_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(readAfterPacketPut.status, 200);
+  const readAfterPacketPutBody = await readAfterPacketPut.json();
+  assert.equal(readAfterPacketPutBody.site_continuity_packets.length, 1);
+  assert.equal(readAfterPacketPutBody.site_continuity_packets[0].admission_action, 'projection_only');
 });
 
 test('worker serves minimal authenticated web console shell', async () => {
@@ -408,6 +467,12 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Memberships/);
   assert.match(html, /Sessions/);
   assert.match(html, /Authority Events/);
+  assert.match(html, /Authority Routing/);
+  assert.match(html, /authorityRouteSummary/);
+  assert.match(html, /site_authority/);
+  assert.match(html, /Site Continuity/);
+  assert.match(html, /continuitySummary/);
+  assert.match(html, /site_continuity/);
   assert.match(html, /Carrier Evidence/);
   assert.match(html, /Task State/);
   assert.match(html, /site\.read/);
@@ -452,6 +517,8 @@ test('worker site.membership.put admits owner and exposes membership through sit
   assert.equal(putBody.membership.principal_id, 'microsoft:tenant:operator');
   assert.equal(putBody.membership.role, 'viewer');
   assert.equal(putBody.principal.email, 'admin@system');
+  assert.equal(putBody.site_authority_decision.action, 'admit');
+  assert.equal(putBody.site_authority_decision.authority_locus_kind, 'cloudflare_site_registry');
 
   const read = await worker.fetch(jsonRequest({
     operation: 'site.read',
@@ -656,6 +723,8 @@ test('configured Cloudflare task tools admit command-triggered task create updat
   const createSummary = JSON.parse(createResult.payload.result_summary);
   assert.equal(createSummary.task.title, 'ship Cloudflare task adapter');
   assert.equal(createSummary.task.status, 'open');
+  assert.equal(createSummary.site_authority_decision.action, 'admit');
+  assert.equal(createSummary.site_authority_decision.mutation_class, 'task_artifact_mutation');
 
   const updated = await worker.fetch(jsonRequest(commandRequest('/task', ['update', 'cloudflare-task-1', 'done', 'verified'], {
     request_id: 'request_task_update_command',
@@ -669,6 +738,7 @@ test('configured Cloudflare task tools admit command-triggered task create updat
   const updateSummary = JSON.parse(updateResult.payload.result_summary);
   assert.equal(updateSummary.task.status, 'done');
   assert.equal(updateSummary.task.note, 'verified');
+  assert.equal(updateSummary.site_authority_decision.action, 'admit');
 
   const status = await worker.fetch(jsonRequest({
     operation: 'session.status',
@@ -749,6 +819,8 @@ test('provider tool call can create a Cloudflare Narada task through admitted ta
   assert.equal(toolResult.payload.effect_scope, 'cloudflare-narada-task:write:create');
   const resultSummary = JSON.parse(toolResult.payload.result_summary);
   assert.equal(resultSummary.task.title, 'provider created task');
+  assert.equal(resultSummary.site_authority_decision.action, 'admit');
+  assert.equal(resultSummary.site_authority_decision.authority_locus_kind, 'declared_task_artifact_authority');
 
   const status = await worker.fetch(jsonRequest({
     operation: 'session.status',
@@ -1535,6 +1607,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     carrierSessions: clone(initial.carrierSessions ?? []),
     authorityEvents: clone(initial.authorityEvents ?? []),
     operatorSessions: clone(initial.operatorSessions ?? []),
+    continuityPackets: clone(initial.continuityPackets ?? []),
   };
   return {
     prepare(sql) {
@@ -1571,6 +1644,9 @@ function fakeD1SiteRegistryStatement(state, sql) {
       } else if (normalized.startsWith('insert into cloudflare_operator_sessions')) {
         const [operator_session_id, principal_id, auth_type, issuer, tenant_id, subject, object_id, email, display_name, created_at, expires_at, revoked_at] = bindings;
         state.operatorSessions.push({ operator_session_id, principal_id, auth_type, issuer, tenant_id, subject, object_id, email, display_name, created_at, expires_at, revoked_at });
+      } else if (normalized.startsWith('insert into cloudflare_site_continuity_packets')) {
+        const [packet_id, site_id, relation_id, source_embodiment_kind, target_embodiment_kind, admission_action, admission_reason, packet_json, imported_by_principal_id, imported_at] = bindings;
+        state.continuityPackets.push({ packet_id, site_id, relation_id, source_embodiment_kind, target_embodiment_kind, admission_action, admission_reason, packet_json, imported_by_principal_id, imported_at });
       }
       return { success: true };
     },
@@ -1621,6 +1697,16 @@ function fakeD1SiteRegistryStatement(state, sql) {
       if (normalized.includes('from cloudflare_site_settings')) {
         const [siteId] = bindings;
         return { results: state.settings.filter((entry) => entry.site_id === siteId).map((entry) => clone(entry)) };
+      }
+      if (normalized.includes('from cloudflare_site_continuity_packets')) {
+        const [siteId, limit] = bindings;
+        return {
+          results: state.continuityPackets
+            .filter((entry) => entry.site_id === siteId)
+            .sort((left, right) => right.imported_at.localeCompare(left.imported_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
       }
       if (normalized.includes('from cloudflare_site_memberships')) {
         const [siteId, limit] = bindings;

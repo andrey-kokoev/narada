@@ -43,6 +43,7 @@ test('provider adapter contract lists admitted carrier providers', () => {
   assert.equal(contract.schema, 'narada.agent_tui.provider_adapter_contract.v0');
   assert.deepEqual(admittedProviderNames(contract), [
     'codex-subscription',
+    'kimi-api',
     'openai-api',
     'anthropic-api',
   ]);

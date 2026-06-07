@@ -55,6 +55,12 @@ assert.match(consoleHtml, /site\.membership\.put/);
 assert.match(consoleHtml, /Last Authority/);
 assert.match(consoleHtml, /authoritySummary/);
 assert.match(consoleHtml, /renderLastAuthority/);
+assert.match(consoleHtml, /Authority Routing/);
+assert.match(consoleHtml, /authorityRouteSummary/);
+assert.match(consoleHtml, /site_authority/);
+assert.match(consoleHtml, /Site Continuity/);
+assert.match(consoleHtml, /continuitySummary/);
+assert.match(consoleHtml, /site_continuity/);
 assert.match(consoleHtml, /Task State/);
 
 const apiClientStartResponse = await worker.fetch(jsonRequest({

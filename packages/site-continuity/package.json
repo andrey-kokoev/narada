@@ -1,0 +1,17 @@
+{
+  "name": "@narada2/site-continuity",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "types": "./src/site-continuity.d.ts",
+  "exports": {
+    ".": {
+      "types": "./src/site-continuity.d.ts",
+      "default": "./src/site-continuity.mjs"
+    },
+    "./fixture-cases": "./fixtures/site-continuity-cases.json"
+  },
+  "scripts": {
+    "test": "node --test src/site-continuity.test.mjs"
+  }
+}

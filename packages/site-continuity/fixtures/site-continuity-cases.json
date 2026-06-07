@@ -1,0 +1,75 @@
+{
+  "schema": "narada.site_continuity_cases.v1",
+  "cases": [
+    {
+      "name": "local and cloudflare admit same site identity binding",
+      "request": {
+        "site_id": "site_fixture",
+        "exchange_class": "site_identity_binding",
+        "source_embodiment_kind": "local_windows",
+        "target_embodiment_kind": "cloudflare_carrier"
+      },
+      "expected": {
+        "action": "admit",
+        "reason": "site_continuity_same_site_binding_admitted",
+        "relation_kind": "same_site_embodiment"
+      }
+    },
+    {
+      "name": "cloudflare publishes authority map as projection only",
+      "request": {
+        "site_id": "site_fixture",
+        "exchange_class": "authority_map_projection",
+        "source_embodiment_kind": "cloudflare_carrier",
+        "target_embodiment_kind": "local_windows"
+      },
+      "expected": {
+        "action": "projection_only",
+        "reason": "site_continuity_authority_map_projection_only",
+        "relation_kind": "same_site_embodiment"
+      }
+    },
+    {
+      "name": "local publishes mutation evidence as evidence only",
+      "request": {
+        "site_id": "site_fixture",
+        "exchange_class": "mutation_evidence_reference",
+        "source_embodiment_kind": "local_windows",
+        "target_embodiment_kind": "cloudflare_carrier"
+      },
+      "expected": {
+        "action": "evidence_only",
+        "reason": "site_continuity_mutation_evidence_reference_only",
+        "relation_kind": "same_site_embodiment"
+      }
+    },
+    {
+      "name": "cross embodiment mutation execution is refused",
+      "request": {
+        "site_id": "site_fixture",
+        "exchange_class": "cross_embodiment_mutation_execution",
+        "source_embodiment_kind": "cloudflare_carrier",
+        "target_embodiment_kind": "local_windows"
+      },
+      "expected": {
+        "action": "refuse",
+        "reason": "site_continuity_cross_embodiment_mutation_execution_refused",
+        "relation_kind": "same_site_embodiment"
+      }
+    },
+    {
+      "name": "site id mismatch is refused",
+      "request": {
+        "site_id": "other_site",
+        "exchange_class": "read_model_projection",
+        "source_embodiment_kind": "cloudflare_carrier",
+        "target_embodiment_kind": "local_windows"
+      },
+      "expected": {
+        "action": "refuse",
+        "reason": "site_continuity_site_id_mismatch",
+        "relation_kind": "same_site_embodiment"
+      }
+    }
+  ]
+}

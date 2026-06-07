@@ -7,9 +7,9 @@ const workerUrl = option('--url') ?? process.env.CLOUDFLARE_CARRIER_URL;
 if (!workerUrl) {
   throw new Error('live_smoke_requires_--url_or_CLOUDFLARE_CARRIER_URL');
 }
-const bearerToken = option('--token') ?? process.env.CLOUDFLARE_CARRIER_TOKEN;
+const bearerToken = await resolveBearerToken();
 if (!bearerToken) {
-  throw new Error('live_smoke_requires_--token_or_CLOUDFLARE_CARRIER_TOKEN');
+  throw new Error('live_smoke_requires_--token_or_--token-file_or_CLOUDFLARE_CARRIER_TOKEN');
 }
 
 const sessionSuffix = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
@@ -306,7 +306,7 @@ async function post(body) {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      authorization: `Bearer ${bearerToken}`,
+      authorization: `Bearer ${bearerToken.value}`,
     },
     body: JSON.stringify(body),
   });
@@ -329,4 +329,13 @@ function apiUrl() {
 
 function withTrailingSlash(value) {
   return String(value).endsWith('/') ? value : `${value}/`;
+}
+
+async function resolveBearerToken() {
+  const flagToken = option('--token');
+  if (flagToken) return { value: flagToken, source: 'flag:--token' };
+  const tokenFile = option('--token-file') ?? process.env.CLOUDFLARE_CARRIER_TOKEN_FILE ?? null;
+  if (tokenFile) return { value: readFileSync(tokenFile, 'utf8').trim(), source: 'token-file' };
+  if (process.env.CLOUDFLARE_CARRIER_TOKEN) return { value: process.env.CLOUDFLARE_CARRIER_TOKEN, source: 'env:CLOUDFLARE_CARRIER_TOKEN' };
+  return null;
 }

@@ -1,7 +1,7 @@
 {
   "schema": "narada.carrier.provider_registry.v1",
   "description": "Authoritative provider metadata for carrier provider resolution, launcher projection, docs, and drift tests.",
-  "default_provider": "codex-subscription",
+  "default_provider": "kimi-api",
   "support_states": [
     "declared",
     "admitted_unsupported",

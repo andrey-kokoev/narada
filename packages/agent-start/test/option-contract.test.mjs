@@ -52,9 +52,9 @@ function runFailed(extraArgs = [], extraEnv = {}) {
 
 function agentTuiEnv() {
   return {
-    NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
-    NARADA_AI_BASE_URL: 'codex://local-subscription',
-    NARADA_AI_MODEL: 'gpt-5.5',
+    NARADA_INTELLIGENCE_PROVIDER: 'kimi-api',
+    NARADA_AI_BASE_URL: 'https://api.moonshot.ai',
+    NARADA_AI_MODEL: 'kimi-k2.6',
     NARADA_AI_API_KEY: 'test-key',
   };
 }
@@ -158,9 +158,9 @@ test('agent-tui materializes provider env without requiring ambient provider env
   assert.equal(env.NARADA_AGENT_TUI_MCP_CONFIG, join(env.NARADA_SITE_MCP_FABRIC, 'agent-tui', env.NARADA_CARRIER_SESSION_ID, 'mcp-config.json'));
   assert.equal(env.NARADA_AGENT_TUI_MCP_CONFIG.startsWith(`${env.NARADA_SITE_MCP_FABRIC}${sep}`), true);
   assert.equal(env.NARADA_AGENT_TUI_MCP_CONFIG.includes(`${sep}agent-tui${sep}carrier_`), true);
-  assert.equal(env.NARADA_INTELLIGENCE_PROVIDER, 'codex-subscription');
-  assert.equal(env.NARADA_AI_BASE_URL, 'codex://local-subscription');
-  assert.equal(env.NARADA_AI_MODEL, 'gpt-5.5');
+  assert.equal(env.NARADA_INTELLIGENCE_PROVIDER, 'kimi-api');
+  assert.equal(env.NARADA_AI_BASE_URL, 'https://api.moonshot.ai');
+  assert.equal(env.NARADA_AI_MODEL, 'kimi-k2.6');
   assert.equal(output.tool_fabric_adapter.expected_tools.includes('agent_context_startup_sequence'), true);
   assert.equal(output.tool_fabric_adapter.expected_tools.includes('mcp_output_show'), true);
   assert.equal(output.tool_fabric_adapter.expected_tools.includes('task_lifecycle_next'), true);

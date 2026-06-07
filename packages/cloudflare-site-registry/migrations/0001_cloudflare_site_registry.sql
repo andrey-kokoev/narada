@@ -61,3 +61,19 @@ CREATE TABLE IF NOT EXISTS cloudflare_site_authority_events (
 
 CREATE INDEX IF NOT EXISTS cloudflare_site_authority_events_site_idx
   ON cloudflare_site_authority_events(site_id, recorded_at);
+
+CREATE TABLE IF NOT EXISTS cloudflare_site_continuity_packets (
+  packet_id TEXT PRIMARY KEY,
+  site_id TEXT NOT NULL,
+  relation_id TEXT,
+  source_embodiment_kind TEXT NOT NULL,
+  target_embodiment_kind TEXT NOT NULL,
+  admission_action TEXT NOT NULL,
+  admission_reason TEXT NOT NULL,
+  packet_json TEXT NOT NULL,
+  imported_by_principal_id TEXT NOT NULL,
+  imported_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS cloudflare_site_continuity_packets_site_idx
+  ON cloudflare_site_continuity_packets(site_id, imported_at);

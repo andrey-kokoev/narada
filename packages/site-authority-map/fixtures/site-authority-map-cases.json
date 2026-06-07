@@ -1,0 +1,77 @@
+{
+  "schema": "narada.site_authority_map_cases.v1",
+  "cases": [
+    {
+      "name": "cloudflare admits hosted site membership",
+      "request": {
+        "mutation_class": "hosted_site_membership",
+        "embodiment_kind": "cloudflare_carrier"
+      },
+      "expected": {
+        "action": "admit",
+        "reason": "site_authority_locus_admitted",
+        "authority_locus_kind": "cloudflare_site_registry"
+      }
+    },
+    {
+      "name": "cloudflare admits task artifact mutation when declared task authority is cloudflare",
+      "request": {
+        "mutation_class": "task_artifact_mutation",
+        "embodiment_kind": "cloudflare_carrier"
+      },
+      "expected": {
+        "action": "admit",
+        "reason": "site_authority_locus_admitted",
+        "authority_locus_kind": "declared_task_artifact_authority"
+      }
+    },
+    {
+      "name": "cloudflare refuses local repository mutation",
+      "request": {
+        "mutation_class": "local_repository_filesystem_mutation",
+        "embodiment_kind": "cloudflare_carrier"
+      },
+      "expected": {
+        "action": "refuse",
+        "reason": "site_authority_embodiment_not_authoritative",
+        "authority_locus_kind": "local_site_filesystem_authority"
+      }
+    },
+    {
+      "name": "local windows admits local repository mutation",
+      "request": {
+        "mutation_class": "local_repository_filesystem_mutation",
+        "embodiment_kind": "local_windows"
+      },
+      "expected": {
+        "action": "admit",
+        "reason": "site_authority_locus_admitted",
+        "authority_locus_kind": "local_site_filesystem_authority"
+      }
+    },
+    {
+      "name": "read model is projection only",
+      "request": {
+        "mutation_class": "read_model_projection",
+        "embodiment_kind": "cloudflare_carrier"
+      },
+      "expected": {
+        "action": "projection_only",
+        "reason": "site_authority_projection_only",
+        "authority_locus_kind": "derived_projection_store"
+      }
+    },
+    {
+      "name": "unknown mutation class is refused as unresolved",
+      "request": {
+        "mutation_class": "unknown_future_mutation",
+        "embodiment_kind": "cloudflare_carrier"
+      },
+      "expected": {
+        "action": "refuse",
+        "reason": "site_authority_locus_unresolved",
+        "authority_locus_kind": null
+      }
+    }
+  ]
+}

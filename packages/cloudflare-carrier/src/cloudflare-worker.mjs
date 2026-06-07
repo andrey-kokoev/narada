@@ -1,6 +1,22 @@
 import { CloudflareCarrierSession } from './cloudflare-carrier.mjs';
 import { classifyToolEffectAdmission } from '../../carrier-protocol/src/carrier-protocol.mjs';
 import { createCloudflareSiteRegistryAdapter } from '../../cloudflare-site-registry/src/cloudflare-site-registry.mjs';
+import {
+  SITE_AUTHORITY_ACTIONS,
+  SITE_EMBODIMENT_KINDS,
+  SITE_MUTATION_CLASSES,
+  classifySiteAuthorityRequest,
+  createCloudflareSiteAuthorityMap,
+} from '../../site-authority-map/src/site-authority-map.mjs';
+import {
+  SITE_CONTINUITY_EMBODIMENT_KINDS,
+  SITE_CONTINUITY_EXCHANGE_CLASSES,
+  classifySiteContinuityExchangePacket,
+  classifySiteContinuityExchange,
+  createSiteContinuityExchangePacket,
+  createSiteContinuityPacketId,
+  createSiteContinuityBinding,
+} from '../../site-continuity/src/site-continuity.mjs';
 
 const SNAPSHOT_KEY = 'cloudflare_carrier_session_snapshot_v1';
 const DEFAULT_WORKERS_AI_MODEL = '@cf/meta/llama-3.1-8b-instruct';
@@ -188,6 +204,89 @@ export class CloudflareCarrierDurableObject {
   }
 }
 
+async function importCloudflareContinuityPacket(env = {}, packet, { imported_by_principal_id = 'unknown-principal' } = {}) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return { ok: false, code: 'missing_site_registry_binding' };
+  const decision = classifySiteContinuityExchangePacket(packet);
+  if (decision.action === SITE_AUTHORITY_ACTIONS.REFUSE || decision.action === 'refuse') {
+    return { ok: false, status: 'refused', site_continuity_packet_admission: decision };
+  }
+  if (!packet?.site_id) {
+    return { ok: false, status: 'refused', site_continuity_packet_admission: { ...decision, action: 'refuse', reason: 'site_continuity_packet_site_id_missing' } };
+  }
+  await ensureCloudflareContinuityPacketSchema(db);
+  const importedAt = new Date().toISOString();
+  const packetId = packet.packet_id ?? createSiteContinuityPacketId(packet);
+  await db.prepare(`INSERT INTO cloudflare_site_continuity_packets (
+    packet_id, site_id, relation_id, source_embodiment_kind, target_embodiment_kind,
+    admission_action, admission_reason, packet_json, imported_by_principal_id, imported_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT(packet_id) DO UPDATE SET
+    admission_action = excluded.admission_action,
+    admission_reason = excluded.admission_reason,
+    packet_json = excluded.packet_json,
+    imported_by_principal_id = excluded.imported_by_principal_id,
+    imported_at = excluded.imported_at`).bind(
+    packetId,
+    packet.site_id,
+    packet.relation_id ?? null,
+    packet.source_embodiment_kind,
+    packet.target_embodiment_kind,
+    decision.action,
+    decision.reason,
+    JSON.stringify(packet),
+    imported_by_principal_id,
+    importedAt,
+  ).run();
+  return {
+    ok: true,
+    status: 'imported',
+    site_continuity_packet_admission: decision,
+    packet_record: {
+      packet_id: packetId,
+      site_id: packet.site_id,
+      relation_id: packet.relation_id ?? null,
+      source_embodiment_kind: packet.source_embodiment_kind,
+      target_embodiment_kind: packet.target_embodiment_kind,
+      admission_action: decision.action,
+      admission_reason: decision.reason,
+      imported_at: importedAt,
+    },
+  };
+}
+
+async function listCloudflareContinuityPackets(env = {}, siteId, limit = 100) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function' || !siteId) return [];
+  await ensureCloudflareContinuityPacketSchema(db);
+  const result = await db.prepare(`SELECT packet_id, site_id, relation_id, source_embodiment_kind, target_embodiment_kind,
+    admission_action, admission_reason, imported_by_principal_id, imported_at
+    FROM cloudflare_site_continuity_packets WHERE site_id = ? ORDER BY imported_at DESC LIMIT ?`).bind(siteId, boundedContinuityPacketReadLimit(limit)).all();
+  return result.results ?? [];
+}
+
+function boundedContinuityPacketReadLimit(value = 100) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 100;
+  return Math.max(1, Math.min(500, Math.trunc(numeric)));
+}
+
+async function ensureCloudflareContinuityPacketSchema(db) {
+  await db.prepare(`CREATE TABLE IF NOT EXISTS cloudflare_site_continuity_packets (
+    packet_id TEXT PRIMARY KEY,
+    site_id TEXT NOT NULL,
+    relation_id TEXT,
+    source_embodiment_kind TEXT NOT NULL,
+    target_embodiment_kind TEXT NOT NULL,
+    admission_action TEXT NOT NULL,
+    admission_reason TEXT NOT NULL,
+    packet_json TEXT NOT NULL,
+    imported_by_principal_id TEXT NOT NULL,
+    imported_at TEXT NOT NULL
+  )`).run();
+  await db.prepare('CREATE INDEX IF NOT EXISTS cloudflare_site_continuity_packets_site_idx ON cloudflare_site_continuity_packets(site_id, imported_at)').run();
+}
+
 async function validateCarrierSiteBindingForRequest(body, principal, env = {}) {
   if (body?.operation !== 'session.start') return null;
   const registry = createCloudflareSiteRegistryAdapter(env);
@@ -201,6 +300,13 @@ async function validateCarrierSiteBindingForRequest(body, principal, env = {}) {
     principal,
     request_id: body.request_id,
   });
+}
+
+function validateCarrierSessionAuthorityForRequest(body, env = {}) {
+  if (!mutatesSession(body?.operation)) return null;
+  const params = body.params ?? {};
+  const siteId = params.site_id ?? body.site_id ?? 'unknown-site';
+  return classifyCloudflareSiteAuthority(env, siteId, SITE_MUTATION_CLASSES.HOSTED_CARRIER_SESSION_EVENTS).decision;
 }
 
 export default {
@@ -248,12 +354,22 @@ async function handleCarrierApiRequest(request, env) {
         site_registry_reason: registryAdmission.reason ?? registryAdmission.code,
       }, body.operation, auth.principal), 403);
     }
-    const routedBody = registryAdmission?.evidence
+    const sessionAuthorityDecision = validateCarrierSessionAuthorityForRequest(body, env);
+    if (sessionAuthorityDecision && sessionAuthorityDecision.action !== SITE_AUTHORITY_ACTIONS.ADMIT) {
+      return jsonResponse(withPrincipalEvidence({
+        ok: false,
+        code: 'site_authority_route_denied',
+        operation: body.operation,
+        site_authority_decision: sessionAuthorityDecision,
+      }, body.operation, auth.principal), 403);
+    }
+    const routedBody = (registryAdmission?.evidence || sessionAuthorityDecision)
       ? {
           ...body,
           params: {
             ...(body.params ?? {}),
-            site_binding_evidence: registryAdmission.evidence,
+            ...(registryAdmission?.evidence ? { site_binding_evidence: registryAdmission.evidence } : {}),
+            ...(sessionAuthorityDecision ? { site_authority_decision: sessionAuthorityDecision } : {}),
           },
         }
       : body;
@@ -269,25 +385,152 @@ async function handleCarrierApiRequest(request, env) {
 }
 
 function isSiteProductOperation(operation) {
-  return ['site.create', 'site.read', 'site.list', 'site.settings.put', 'site.membership.put'].includes(operation);
+  return ['site.create', 'site.read', 'site.list', 'site.settings.put', 'site.membership.put', 'site.continuity.packet.put'].includes(operation);
+}
+
+function cloudflareSiteAuthorityMap(env = {}, siteId = 'unknown-site') {
+  return createCloudflareSiteAuthorityMap({
+    site_id: siteId,
+    cloudflare_carrier_authority_locus: env.CLOUDFLARE_CARRIER_AUTHORITY_LOCUS ?? 'cloudflare-carrier',
+    local_windows_authority_locus: env.NARADA_LOCAL_WINDOWS_AUTHORITY_LOCUS ?? 'local-windows-site-authority',
+    task_artifact_authority_locus: env.CLOUDFLARE_CARRIER_TASK_AUTHORITY_LOCUS ?? 'cloudflare-carrier-task-store',
+  });
+}
+
+function classifyCloudflareSiteAuthority(env = {}, siteId = 'unknown-site', mutationClass) {
+  const map = cloudflareSiteAuthorityMap(env, siteId);
+  const decision = classifySiteAuthorityRequest(map, {
+    mutation_class: mutationClass,
+    embodiment_kind: SITE_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER,
+  });
+  return { map, decision };
+}
+
+function cloudflareSiteAuthorityReadModel(env = {}, siteId = 'unknown-site') {
+  const map = cloudflareSiteAuthorityMap(env, siteId);
+  return {
+    map,
+    decisions: map.entries.map((entry) => classifySiteAuthorityRequest(map, {
+      mutation_class: entry.mutation_class,
+      embodiment_kind: SITE_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER,
+    })),
+  };
+}
+
+function cloudflareSiteContinuityReadModel(env = {}, siteId = 'unknown-site') {
+  const binding = createSiteContinuityBinding({
+    site_id: siteId,
+    local_windows_site_ref: env.NARADA_LOCAL_WINDOWS_SITE_REF ?? 'local-windows-site',
+    cloudflare_site_ref: env.CLOUDFLARE_SITE_REF ?? 'cloudflare-site',
+    local_windows_authority_locus: env.NARADA_LOCAL_WINDOWS_AUTHORITY_LOCUS ?? 'local-windows-site-authority',
+    cloudflare_authority_locus: env.CLOUDFLARE_CARRIER_AUTHORITY_LOCUS ?? 'cloudflare-carrier',
+    authority_map_ref: env.CLOUDFLARE_SITE_AUTHORITY_MAP_REF ?? 'site-authority-map:v1',
+  });
+  const fromCloudflareToLocal = {
+    source_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER,
+    target_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS,
+    site_id: siteId,
+  };
+  const fromLocalToCloudflare = {
+    source_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS,
+    target_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER,
+    site_id: siteId,
+  };
+  const decisions = [
+      classifySiteContinuityExchange(binding, {
+        ...fromLocalToCloudflare,
+        exchange_class: SITE_CONTINUITY_EXCHANGE_CLASSES.SITE_IDENTITY_BINDING,
+      }),
+      classifySiteContinuityExchange(binding, {
+        ...fromCloudflareToLocal,
+        exchange_class: SITE_CONTINUITY_EXCHANGE_CLASSES.AUTHORITY_MAP_PROJECTION,
+      }),
+      classifySiteContinuityExchange(binding, {
+        ...fromCloudflareToLocal,
+        exchange_class: SITE_CONTINUITY_EXCHANGE_CLASSES.READ_MODEL_PROJECTION,
+      }),
+      classifySiteContinuityExchange(binding, {
+        ...fromLocalToCloudflare,
+        exchange_class: SITE_CONTINUITY_EXCHANGE_CLASSES.MUTATION_EVIDENCE_REFERENCE,
+      }),
+      classifySiteContinuityExchange(binding, {
+        ...fromCloudflareToLocal,
+        exchange_class: SITE_CONTINUITY_EXCHANGE_CLASSES.CROSS_EMBODIMENT_MUTATION_EXECUTION,
+      }),
+    ];
+  const exchangePacket = createSiteContinuityExchangePacket({
+    binding,
+    source_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER,
+    target_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS,
+    decisions,
+    projections: [{
+      projection_class: SITE_CONTINUITY_EXCHANGE_CLASSES.READ_MODEL_PROJECTION,
+      source_cursor: 'cloudflare-site-read',
+      summary: 'Cloudflare Site continuity read-model projection',
+    }],
+    evidence_refs: [],
+  });
+  return {
+    binding,
+    decisions,
+    exchange_packet: exchangePacket,
+    exchange_packet_admission: classifySiteContinuityExchangePacket(exchangePacket),
+  };
+}
+
+function siteAuthorityDeniedBody(decision, operation) {
+  return {
+    ok: false,
+    code: 'site_authority_route_denied',
+    operation,
+    site_authority_decision: decision,
+  };
 }
 
 async function handleSiteProductApiRequest(body, principal, env = {}) {
   const registry = createCloudflareSiteRegistryAdapter(env);
   if (!registry) return { status: 500, body: { ok: false, code: 'missing_site_registry_binding' } };
+  const params = body.params ?? {};
+  const requestedSiteId = params.site_id ?? body.site_id ?? 'unknown-site';
+  if (body.operation === 'site.continuity.packet.put') {
+    const packet = params.packet ?? body.packet ?? null;
+    const packetSiteId = packet?.site_id ?? requestedSiteId;
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: packetSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const result = await importCloudflareContinuityPacket(env, packet, { imported_by_principal_id: principal?.principal_id ?? 'unknown-principal' });
+    return { status: result.ok ? 200 : 403, body: result };
+  }
+  if (body.operation === 'site.membership.put') {
+    const { decision } = classifyCloudflareSiteAuthority(env, requestedSiteId, SITE_MUTATION_CLASSES.HOSTED_SITE_MEMBERSHIP);
+    if (decision.action !== SITE_AUTHORITY_ACTIONS.ADMIT) {
+      return { status: 403, body: siteAuthorityDeniedBody(decision, body.operation) };
+    }
+  }
   const response = await registry.handle({ ...body, principal });
   if (!response.ok) return { status: response.code === 'site_authority_denied' ? 403 : 400, body: response };
-  if (body.operation !== 'site.read') return { status: 200, body: response };
-  const params = body.params ?? {};
+  if (body.operation !== 'site.read') {
+    if (body.operation === 'site.membership.put') {
+      const siteId = response.site?.site_id ?? requestedSiteId;
+      const { decision } = classifyCloudflareSiteAuthority(env, siteId, SITE_MUTATION_CLASSES.HOSTED_SITE_MEMBERSHIP);
+      return { status: 200, body: { ...response, site_authority_decision: decision } };
+    }
+    return { status: 200, body: response };
+  }
   const siteId = response.site?.site_id ?? params.site_id;
   const tasks = await listSiteTasks(env, siteId);
+  const continuityPackets = await listCloudflareContinuityPackets(env, siteId);
   const carrierEvidence = await readCarrierEvidenceForSiteSessions(env, response.sessions ?? [], principal, params);
+  const siteAuthority = cloudflareSiteAuthorityReadModel(env, siteId);
+  const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
   return {
     status: 200,
     body: {
       ...response,
       tasks,
+      site_continuity_packets: continuityPackets,
       carrier_evidence: carrierEvidence,
+      site_authority: siteAuthority,
+      site_continuity: siteContinuity,
     },
   };
 }
@@ -772,6 +1015,16 @@ export function createCloudflareToolEffectAdapter(env = {}) {
         };
       }
       if (admission.tool_name === 'cloudflare_carrier_task_create') {
+        const { decision: siteAuthorityDecision } = classifyCloudflareSiteAuthority(config, context.site_id, SITE_MUTATION_CLASSES.TASK_ARTIFACT_MUTATION);
+        if (siteAuthorityDecision.action !== SITE_AUTHORITY_ACTIONS.ADMIT) {
+          return {
+            status: 'denied',
+            admission_action: 'deny',
+            admission_reason: 'tool_effect_authority_denied',
+            result_summary: JSON.stringify({ reason: 'site_authority_route_denied', site_authority_decision: siteAuthorityDecision }),
+            result_ref: null,
+          };
+        }
         const args = parseToolArguments(toolCall.arguments_summary);
         const task = await context.taskStore?.create({
           title: args.title,
@@ -785,11 +1038,21 @@ export function createCloudflareToolEffectAdapter(env = {}) {
           capability_ref: CLOUDFLARE_TASK_CREATE_CAPABILITY_REF,
           effect_scope: CLOUDFLARE_TASK_CREATE_EFFECT_SCOPE,
           authority_ref: authority.authority_ref,
-          result_summary: JSON.stringify({ task, task_count: (await context.taskStore?.list?.())?.length ?? null }),
+          result_summary: JSON.stringify({ task, task_count: (await context.taskStore?.list?.())?.length ?? null, site_authority_decision: siteAuthorityDecision }),
           result_ref: null,
         };
       }
       if (admission.tool_name === 'cloudflare_carrier_task_update') {
+        const { decision: siteAuthorityDecision } = classifyCloudflareSiteAuthority(config, context.site_id, SITE_MUTATION_CLASSES.TASK_ARTIFACT_MUTATION);
+        if (siteAuthorityDecision.action !== SITE_AUTHORITY_ACTIONS.ADMIT) {
+          return {
+            status: 'denied',
+            admission_action: 'deny',
+            admission_reason: 'tool_effect_authority_denied',
+            result_summary: JSON.stringify({ reason: 'site_authority_route_denied', site_authority_decision: siteAuthorityDecision }),
+            result_ref: null,
+          };
+        }
         const args = parseToolArguments(toolCall.arguments_summary);
         const task = await context.taskStore?.update({
           task_id: args.task_id,
@@ -803,7 +1066,7 @@ export function createCloudflareToolEffectAdapter(env = {}) {
           capability_ref: CLOUDFLARE_TASK_UPDATE_CAPABILITY_REF,
           effect_scope: CLOUDFLARE_TASK_UPDATE_EFFECT_SCOPE,
           authority_ref: authority.authority_ref,
-          result_summary: JSON.stringify({ task, task_count: (await context.taskStore?.list?.())?.length ?? null }),
+          result_summary: JSON.stringify({ task, task_count: (await context.taskStore?.list?.())?.length ?? null, site_authority_decision: siteAuthorityDecision }),
           result_ref: null,
         };
       }
@@ -1071,7 +1334,7 @@ export function authenticateCarrierRequest(request, env = {}) {
   const token = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '');
   if (!token) return { ok: false, code: 'unauthorized', status: 401 };
 
-  if (token === (env.SERVICE_TOKEN ?? env.CLOUDFLARE_CARRIER_SERVICE_TOKEN)) {
+  if (token === (env.CLOUDFLARE_CARRIER_SERVICE_TOKEN ?? env.SERVICE_TOKEN)) {
     return {
       ok: true,
       principal: {
@@ -1082,7 +1345,7 @@ export function authenticateCarrierRequest(request, env = {}) {
     };
   }
 
-  if (token === (env.ADMIN_BEARER_TOKEN ?? env.CLOUDFLARE_CARRIER_ADMIN_TOKEN)) {
+  if (token === (env.CLOUDFLARE_CARRIER_ADMIN_TOKEN ?? env.ADMIN_BEARER_TOKEN)) {
     return {
       ok: true,
       principal: {
@@ -1339,6 +1602,7 @@ export function renderCloudflareCarrierConsole() {
         <div class="overview-block"><h3>Memberships</h3><ul><li class="empty">No memberships loaded.</li></ul></div>
         <div class="overview-block"><h3>Sessions</h3><ul><li class="empty">No sessions loaded.</li></ul></div>
         <div class="overview-block"><h3>Authority Events</h3><ul><li class="empty">No authority events loaded.</li></ul></div>
+        <div class="overview-block"><h3>Authority Routing</h3><ul><li class="empty">No authority routing loaded.</li></ul></div>
         <div class="overview-block"><h3>Carrier Evidence</h3><ul><li class="empty">No carrier evidence loaded.</li></ul></div>
       </div>
       <div id="events" class="events"><div class="empty">Start or resume a session to read carrier events.</div></div>
@@ -1478,6 +1742,22 @@ export function renderCloudflareCarrierConsole() {
       block.append(heading, list);
       return block;
     }
+    function authorityRouteSummary(decision) {
+      return [
+        'action=' + (decision.action || 'unknown'),
+        'reason=' + (decision.reason || 'none'),
+        'locus=' + (decision.authority_locus || 'unresolved'),
+        'kind=' + (decision.authority_locus_kind || 'unknown'),
+      ].join(' | ');
+    }
+    function continuitySummary(decision) {
+      return [
+        'action=' + (decision.action || 'unknown'),
+        'reason=' + (decision.reason || 'none'),
+        'source=' + (decision.source_embodiment_kind || 'unknown'),
+        'target=' + (decision.target_embodiment_kind || 'unknown'),
+      ].join(' | ');
+    }
     function renderSiteProduct(product) {
       el('siteStatus').textContent = product.site?.status || 'unknown';
       el('membershipRole').textContent = product.membership?.role || 'none';
@@ -1492,6 +1772,8 @@ export function renderCloudflareCarrierConsole() {
       const membershipItems = (product.memberships || []).map((membership) => listItem(membership.principal_id, membership.role + ' / ' + membership.status));
       const sessionItems = (product.sessions || []).map((session) => listItem(session.carrier_session_id, session.binding_status || session.agent_id));
       const authorityItems = (product.authority_events || []).map((event) => listItem(event.event_kind, authoritySummary(event)));
+      const authorityRoutingItems = (product.site_authority?.decisions || []).map((decision) => listItem(decision.mutation_class, authorityRouteSummary(decision)));
+      const continuityItems = (product.site_continuity?.decisions || []).map((decision) => listItem(decision.exchange_class, continuitySummary(decision)));
       const evidenceItems = (product.carrier_evidence || []).map((entry) => {
         const kinds = (entry.events || []).slice(0, 5).map((event) => event.event_kind).join(', ');
         return listItem(entry.carrier_session_id, kinds || entry.error || 'no events');
@@ -1501,6 +1783,8 @@ export function renderCloudflareCarrierConsole() {
         renderListBlock('Memberships', membershipItems),
         renderListBlock('Sessions', sessionItems),
         renderListBlock('Authority Events', authorityItems),
+        renderListBlock('Authority Routing', authorityRoutingItems),
+        renderListBlock('Site Continuity', continuityItems),
         renderListBlock('Carrier Evidence', evidenceItems),
       );
       renderLastAuthority((product.authority_events || [])[0]);

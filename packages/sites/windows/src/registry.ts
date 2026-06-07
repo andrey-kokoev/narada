@@ -13,9 +13,34 @@ import { readdirSync, existsSync, readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import type { Database } from "better-sqlite3";
 import type { WindowsAuthorityLocus, WindowsSiteVariant, SiteVariant } from "./types.js";
+import {
+  classifySiteContinuityExchangePacket,
+  createSiteContinuityPacketId,
+  type SiteContinuityDecision,
+  type SiteContinuityExchangePacket,
+} from "@narada2/site-continuity";
 
 function getPathLib(variant: WindowsSiteVariant) {
   return variant === "native" ? win32 : posix;
+}
+
+export interface SiteContinuityPacketRecord {
+  packetId: string;
+  siteId: string;
+  relationId: string | null;
+  sourceEmbodimentKind: string;
+  targetEmbodimentKind: string;
+  admissionAction: string;
+  admissionReason: string;
+  packetJson: string;
+  importedAt: string;
+}
+
+export interface SiteContinuityPacketImportResult {
+  ok: boolean;
+  status: "imported" | "refused";
+  decision: SiteContinuityDecision;
+  packetRecord?: SiteContinuityPacketRecord;
 }
 
 // ---------------------------------------------------------------------------
@@ -192,6 +217,20 @@ export class SiteRegistry {
 
       CREATE INDEX IF NOT EXISTS idx_registry_audit_site_id ON registry_audit_log(site_id);
       CREATE INDEX IF NOT EXISTS idx_registry_audit_routed_at ON registry_audit_log(routed_at);
+
+      CREATE TABLE IF NOT EXISTS site_continuity_packets (
+        packet_id TEXT PRIMARY KEY,
+        site_id TEXT NOT NULL,
+        relation_id TEXT,
+        source_embodiment_kind TEXT NOT NULL,
+        target_embodiment_kind TEXT NOT NULL,
+        admission_action TEXT NOT NULL,
+        admission_reason TEXT NOT NULL,
+        packet_json TEXT NOT NULL,
+        imported_at TEXT NOT NULL
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_site_continuity_packets_site_id ON site_continuity_packets(site_id, imported_at);
     `);
   }
 
@@ -509,6 +548,95 @@ export class SiteRegistry {
       routedAt: row.routed_at,
       siteResponseStatus: row.site_response_status as RegistryAuditRecord["siteResponseStatus"],
       siteResponseDetail: row.site_response_detail,
+    }));
+  }
+
+  importContinuityPacket(packet: SiteContinuityExchangePacket, options: { importedAt?: string } = {}): SiteContinuityPacketImportResult {
+    const decision = classifySiteContinuityExchangePacket(packet);
+    if (decision.action === "refuse") {
+      return { ok: false, status: "refused", decision };
+    }
+
+    const siteId = packet.site_id;
+    if (!siteId) {
+      return { ok: false, status: "refused", decision: { ...decision, action: "refuse", reason: "site_continuity_packet_site_id_missing" } };
+    }
+
+    const importedAt = options.importedAt ?? new Date().toISOString();
+    const packetId = packet.packet_id ?? createSiteContinuityPacketId(packet);
+    const packetJson = JSON.stringify(packet);
+
+    this.db
+      .prepare(
+        `INSERT INTO site_continuity_packets (
+          packet_id, site_id, relation_id, source_embodiment_kind, target_embodiment_kind,
+          admission_action, admission_reason, packet_json, imported_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(packet_id) DO UPDATE SET
+          admission_action = excluded.admission_action,
+          admission_reason = excluded.admission_reason,
+          packet_json = excluded.packet_json,
+          imported_at = excluded.imported_at`,
+      )
+      .run(
+        packetId,
+        siteId,
+        packet.relation_id ?? null,
+        packet.source_embodiment_kind,
+        packet.target_embodiment_kind,
+        decision.action,
+        decision.reason,
+        packetJson,
+        importedAt,
+      );
+
+    return {
+      ok: true,
+      status: "imported",
+      decision,
+      packetRecord: {
+        packetId,
+        siteId,
+        relationId: packet.relation_id ?? null,
+        sourceEmbodimentKind: packet.source_embodiment_kind,
+        targetEmbodimentKind: packet.target_embodiment_kind,
+        admissionAction: decision.action,
+        admissionReason: decision.reason,
+        packetJson,
+        importedAt,
+      },
+    };
+  }
+
+  listContinuityPackets(siteId: string, limit = 100): SiteContinuityPacketRecord[] {
+    const rows = this.db
+      .prepare(
+        `SELECT packet_id, site_id, relation_id, source_embodiment_kind, target_embodiment_kind,
+          admission_action, admission_reason, packet_json, imported_at
+         FROM site_continuity_packets WHERE site_id = ? ORDER BY imported_at DESC LIMIT ?`,
+      )
+      .all(siteId, limit) as Array<{
+      packet_id: string;
+      site_id: string;
+      relation_id: string | null;
+      source_embodiment_kind: string;
+      target_embodiment_kind: string;
+      admission_action: string;
+      admission_reason: string;
+      packet_json: string;
+      imported_at: string;
+    }>;
+
+    return rows.map((row) => ({
+      packetId: row.packet_id,
+      siteId: row.site_id,
+      relationId: row.relation_id,
+      sourceEmbodimentKind: row.source_embodiment_kind,
+      targetEmbodimentKind: row.target_embodiment_kind,
+      admissionAction: row.admission_action,
+      admissionReason: row.admission_reason,
+      packetJson: row.packet_json,
+      importedAt: row.imported_at,
     }));
   }
 

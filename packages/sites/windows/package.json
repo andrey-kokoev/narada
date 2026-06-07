@@ -17,11 +17,13 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
+    "continuity:windows": "node scripts/windows-site-continuity-sync.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@narada2/control-plane": "workspace:*"
+    "@narada2/control-plane": "workspace:*",
+    "@narada2/site-continuity": "workspace:*"
   },
   "devDependencies": {
     "better-sqlite3": "^12.9.0",

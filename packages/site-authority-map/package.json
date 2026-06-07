@@ -1,0 +1,13 @@
+{
+  "name": "@narada2/site-authority-map",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/site-authority-map.mjs",
+    "./fixture-cases": "./fixtures/site-authority-map-cases.json"
+  },
+  "scripts": {
+    "test": "node --test src/site-authority-map.test.mjs"
+  }
+}
