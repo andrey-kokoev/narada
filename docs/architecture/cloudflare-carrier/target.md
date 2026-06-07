@@ -294,6 +294,38 @@ The carrier may enforce policy and mediate effects, but durable mutation authori
 
 Cloudflare secrets and bindings are host capabilities. They are not carrier permissions by themselves. Any effectful use must cross the appropriate carrier admission boundary and emit evidence.
 
+## Synchronized Site Embodiments
+
+A Cloudflare carrier may be one embodiment of a Narada Site that is also embodied locally, such as through a Windows CLI, TUI, daemon, filesystem tree, or repository clone. This is allowed only when synchronization is treated as projection or transport, not as authority.
+
+The target shape is synchronized Site embodiments with explicit mutation authority routing:
+
+```text
+local Windows embodiment
+cloudflare embodiment
+other carrier or dashboard embodiments
+-> mutation class
+-> declared authority locus
+-> admitted mutation
+-> evidence and confirmation
+```
+
+Multiple embodiments may inspect, present, propose, forward, cache, or rebuild projections for the same Site. They must not independently admit the same durable mutation merely because they can reach a local store, Worker binding, API route, or synchronized file tree.
+
+Each mutation class needs one declared authority locus before execution. A first production topology may split authority by mutation class, for example:
+
+| Mutation class | Possible authority locus | Cloudflare posture |
+| --- | --- | --- |
+| Hosted carrier session events | Cloudflare Durable Object or event store for that carrier session | Admit and append session evidence. |
+| Hosted Site membership | Governed Site registry for the hosted Site | Admit membership changes through authenticated operator authority. |
+| Local repository or filesystem mutation | Local Site authority on the operator machine | Refuse locally or forward through a governed local ingress. |
+| Task or artifact mutation | Declared task/artifact authority for the Site | Admit only when that authority is Cloudflare; otherwise forward or refuse. |
+| Read models and dashboards | Derived projection store | Rebuild or display only; no mutation authority. |
+
+Authority may migrate between local and Cloudflare embodiments only through an explicit migration operation that records source authority, target authority, mutation classes affected, cutoff point, and confirmation evidence. A temporary dual-write or sync period is not authority migration unless one locus remains the sole admission authority for each mutation class.
+
+If a Cloudflare console, local Windows command, or other embodiment cannot resolve the authority locus for a mutating request, it must refuse or run in proposal/inspection mode. It must not silently choose the current embodiment as authority.
+
 ## Security and Binding
 
 The carrier must authenticate control callers before routing mutating requests. Authentication proves caller identity; it does not by itself prove authority for a requested carrier effect.
