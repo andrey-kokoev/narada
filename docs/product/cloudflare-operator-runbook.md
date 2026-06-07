@@ -19,6 +19,14 @@ CLOUDFLARE_CARRIER_TOKEN_FILE=D:\tmp\narada-cloudflare-carrier-service-token.txt
 
 The token value stays in the token file and in the deployed Worker secret. The runbook command reports the credential source, not token material.
 
+The service token proves service authority and live substrate readiness. It does not prove that a human operator is logged in. To hard-check the current Microsoft operator session, provide a local cookie file containing either the full `Cookie:` header, the `narada_operator_session=...` pair, or just the raw cookie value:
+
+```powershell
+pnpm cloudflare:operator:check -- --operator-cookie-file D:\tmp\narada-cloudflare-operator-cookie.txt --require-operator-session
+```
+
+Without `--operator-cookie-file`, the command still verifies that the Microsoft login surface is reachable and reports `human_operator_login_ready` as `surface_only`.
+
 To bootstrap the ignored `.env` from explicit local flags:
 
 ```powershell
@@ -34,13 +42,15 @@ pnpm cloudflare:operator:check -- --url <worker-url> --token-file <path> --write
 | Console surface | Worker root serves the Narada Cloudflare Carrier console and browser API client. |
 | Microsoft login surface | Console exposes the Microsoft login route. |
 | Credential posture | The local ignored `.env` points to a readable token file. |
+| Human operator session | When `--operator-cookie-file` is supplied, `/auth/session` reconstructs a `microsoft_oidc` principal from the signed browser cookie. |
+| Human operator membership | When `--operator-cookie-file` is supplied, cookie-authenticated `site.read` proves active Site membership for that principal. |
 | Live carrier runtime | `smoke:live` starts a session, admits input, dispatches Workers AI, and records terminal carrier evidence. |
 | Tool effect boundary | Cloudflare task create/update tools are admitted through the configured Cloudflare effect boundary. |
 | Site product read | `site.read` returns site/product state and membership visibility. |
 | Continuity loop | Windows and Cloudflare exchange site-continuity packets through the productized loop. |
 | Idempotence | The continuity loop runs twice and the local packet ledger remains at one packet for the Cloudflare-to-Windows direction. |
 
-The final JSON report includes `console_url` and `microsoft_login_url`. Those are the operator entry points after the gate passes.
+The final JSON report includes `service_principal_ready`, `human_operator_login_ready`, `human_operator_membership_ready`, `console_url`, and `microsoft_login_url`. The service fields prove automation and substrate readiness. The human fields prove operator entry only when the cookie-backed session check is supplied.
 
 ## Boundary
 
