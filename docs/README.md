@@ -24,6 +24,7 @@ User-facing product proofs, onboarding, operator loop, and runbooks. These are t
 - [`site-bootstrap-contract.md`](product/site-bootstrap-contract.md) — Canonical Site first-run path (realization/runtime locus setup)
 - [`site-qualification-policy.md`](product/site-qualification-policy.md) — Site-level role/principal qualification and requalification policy
 - [`site-continuity-across-embodiments.md`](product/site-continuity-across-embodiments.md) — Same-Site continuity between local Windows and Cloudflare embodiments without authority transfer
+- [`cloudflare-operator-runbook.md`](product/cloudflare-operator-runbook.md) — Single operator command path to verify and enter the live Cloudflare embodiment
 - [`first-operation-proof.md`](product/first-operation-proof.md) — Canonical mailbox operation product proof
 - [`operator-loop.md`](product/operator-loop.md) — Minimal operator rhythm for live operations
 - [`runbook.md`](product/runbook.md) — Troubleshooting, setup, and lifecycle runbook
