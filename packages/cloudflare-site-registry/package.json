@@ -1,0 +1,14 @@
+{
+  "name": "@narada2/cloudflare-site-registry",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/cloudflare-site-registry.mjs"
+  },
+  "scripts": {
+    "test": "node --test test/cloudflare-site-registry.test.mjs",
+    "deploy:check": "node --test test/cloudflare-site-registry.test.mjs",
+    "ship": "pnpm test && pnpm deploy:check"
+  }
+}

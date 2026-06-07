@@ -290,6 +290,51 @@ test('worker export routes requests by carrier session durable object binding', 
   assert.equal(statusBody.reader_principal.email, 'admin@system');
 });
 
+test('worker validates session.start site binding through configured Cloudflare site registry', async () => {
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{
+      site_id: 'site_fixture',
+      site_ref: 'site://fixture',
+      display_name: 'Fixture Site',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+      created_by_principal_id: 'admin',
+    }],
+    memberships: [{
+      site_id: 'site_fixture',
+      principal_id: 'admin',
+      role: 'owner',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+  });
+  const namespace = fakeDurableObjectNamespace();
+  const env = authEnv(namespace, { CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+  const start = await worker.fetch(jsonRequest(startRequest({ request_id: 'request_registry_bound_start' }), { token: 'test-admin-token' }), env);
+  assert.equal(start.status, 200);
+  const startBody = await start.json();
+  assert.equal(startBody.event.payload.site_binding_evidence.schema, 'narada.cloudflare_site_registry.v1');
+  assert.equal(startBody.event.payload.site_binding_evidence.action, 'admit');
+  assert.equal(startBody.event.payload.site_binding_evidence.site_id, 'site_fixture');
+  assert.equal(siteDb.dump().carrierSessions[0].carrier_session_id, 'carrier_session_cloudflare_fixture');
+});
+
+test('worker rejects session.start when configured site registry denies binding', async () => {
+  const siteDb = fakeD1SiteRegistryDatabase();
+  const namespace = fakeDurableObjectNamespace();
+  const env = authEnv(namespace, { CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+  const start = await worker.fetch(jsonRequest(startRequest({ request_id: 'request_registry_denied_start' }), { token: 'test-admin-token' }), env);
+  assert.equal(start.status, 403);
+  const startBody = await start.json();
+  assert.equal(startBody.code, 'carrier_site_binding_denied');
+  assert.equal(startBody.site_registry_code, 'site_not_found');
+  assert.equal(startBody.principal.email, 'admin@system');
+  assert.equal(siteDb.dump().authorityEvents[0].event_kind, 'carrier_site_binding_rejected');
+  assert.equal(siteDb.dump().authorityEvents[0].action, 'deny');
+});
+
 test('worker serves minimal authenticated web console shell', async () => {
   const namespace = fakeDurableObjectNamespace();
   const env = authEnv(namespace);
@@ -1249,6 +1294,65 @@ function fakeD1TaskDatabase() {
     rows,
     prepare(sql) {
       return fakeD1Statement(rows, String(sql));
+    },
+  };
+}
+
+function fakeD1SiteRegistryDatabase(initial = {}) {
+  const state = {
+    sites: clone(initial.sites ?? []),
+    memberships: clone(initial.memberships ?? []),
+    settings: clone(initial.settings ?? []),
+    carrierSessions: clone(initial.carrierSessions ?? []),
+    authorityEvents: clone(initial.authorityEvents ?? []),
+  };
+  return {
+    prepare(sql) {
+      return fakeD1SiteRegistryStatement(state, String(sql));
+    },
+    dump() {
+      return clone(state);
+    },
+  };
+}
+
+function fakeD1SiteRegistryStatement(state, sql) {
+  const normalized = sql.replace(/\s+/g, ' ').trim().toLowerCase();
+  let bindings = [];
+  return {
+    bind(...values) {
+      bindings = values;
+      return this;
+    },
+    async run() {
+      if (normalized.startsWith('insert into cloudflare_site_carrier_sessions')) {
+        const [carrier_session_id, site_id, agent_id, bound_by_principal_id, binding_status, created_at, updated_at] = bindings;
+        if (!state.carrierSessions.some((entry) => entry.carrier_session_id === carrier_session_id)) {
+          state.carrierSessions.push({ carrier_session_id, site_id, agent_id, bound_by_principal_id, binding_status, created_at, updated_at });
+        }
+      } else if (normalized.startsWith('insert into cloudflare_site_authority_events')) {
+        const [event_id, event_kind, site_id, carrier_session_id, principal_id, action, reason, evidence_json, recorded_at] = bindings;
+        state.authorityEvents.push({ event_id, event_kind, site_id, carrier_session_id, principal_id, action, reason, evidence_json, recorded_at });
+      }
+      return { success: true };
+    },
+    async first() {
+      if (normalized.includes('from cloudflare_sites where site_id = ?')) {
+        const [siteId] = bindings;
+        return clone(state.sites.find((site) => site.site_id === siteId));
+      }
+      if (normalized.includes('from cloudflare_site_memberships where site_id = ? and principal_id = ?')) {
+        const [siteId, principalId] = bindings;
+        return clone(state.memberships.find((membership) => membership.site_id === siteId && membership.principal_id === principalId));
+      }
+      if (normalized.includes('from cloudflare_site_carrier_sessions where carrier_session_id = ?')) {
+        const [carrierSessionId] = bindings;
+        return clone(state.carrierSessions.find((entry) => entry.carrier_session_id === carrierSessionId));
+      }
+      return null;
+    },
+    async all() {
+      return { results: [] };
     },
   };
 }

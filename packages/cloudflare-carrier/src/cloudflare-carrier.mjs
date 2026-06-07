@@ -267,6 +267,7 @@ export class CloudflareCarrierSession {
       runtime_contract_version: this.state.runtime_contract_version,
       principal: request.principal ?? null,
       site_ref: this.state.site_ref,
+      site_binding_evidence: request.params?.site_binding_evidence ?? null,
     };
     const event = this.#appendEvent('carrier_session_started', payload);
     return { ok: true, operation: 'session.start', carrier_session_id: this.state.carrier_session_id, event };

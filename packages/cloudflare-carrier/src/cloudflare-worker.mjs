@@ -1,5 +1,6 @@
 import { CloudflareCarrierSession } from './cloudflare-carrier.mjs';
 import { classifyToolEffectAdmission } from '../../carrier-protocol/src/carrier-protocol.mjs';
+import { createCloudflareSiteRegistryAdapter } from '../../cloudflare-site-registry/src/cloudflare-site-registry.mjs';
 
 const SNAPSHOT_KEY = 'cloudflare_carrier_session_snapshot_v1';
 const DEFAULT_WORKERS_AI_MODEL = '@cf/meta/llama-3.1-8b-instruct';
@@ -182,6 +183,21 @@ export class CloudflareCarrierDurableObject {
   }
 }
 
+async function validateCarrierSiteBindingForRequest(body, principal, env = {}) {
+  if (body?.operation !== 'session.start') return null;
+  const registry = createCloudflareSiteRegistryAdapter(env);
+  if (!registry) return null;
+  const params = body.params ?? {};
+  return registry.validateCarrierSiteBinding({
+    site_id: params.site_id,
+    site_ref: params.site_ref ?? params.site_root,
+    carrier_session_id: params.carrier_session_id ?? body.carrier_session_id,
+    agent_id: params.agent_id,
+    principal,
+    request_id: body.request_id,
+  });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -211,11 +227,29 @@ async function handleCarrierApiRequest(request, env) {
     if (!env?.CLOUDFLARE_CARRIER_SESSIONS) {
       return jsonResponse({ ok: false, code: 'missing_durable_object_binding' }, 500);
     }
+    const registryAdmission = await validateCarrierSiteBindingForRequest(body, auth.principal, env);
+    if (registryAdmission?.ok === false) {
+      return jsonResponse(withPrincipalEvidence({
+        ok: false,
+        code: 'carrier_site_binding_denied',
+        site_registry_code: registryAdmission.code,
+        site_registry_reason: registryAdmission.reason ?? registryAdmission.code,
+      }, body.operation, auth.principal), 403);
+    }
+    const routedBody = registryAdmission?.evidence
+      ? {
+          ...body,
+          params: {
+            ...(body.params ?? {}),
+            site_binding_evidence: registryAdmission.evidence,
+          },
+        }
+      : body;
     const id = env.CLOUDFLARE_CARRIER_SESSIONS.idFromName(carrierSessionId);
     const authenticatedRequest = new Request(request.url, {
       method: request.method,
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ...body, principal: auth.principal }),
+      body: JSON.stringify({ ...routedBody, principal: auth.principal }),
     });
     const durableResponse = await env.CLOUDFLARE_CARRIER_SESSIONS.get(id).fetch(authenticatedRequest);
     const responseBody = await durableResponse.json();
