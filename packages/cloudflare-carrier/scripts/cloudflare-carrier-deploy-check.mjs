@@ -11,12 +11,15 @@ assert.match(configText, /^compatibility_date = "\d{4}-\d{2}-\d{2}"$/m);
 assert.match(configText, /^name = "CLOUDFLARE_CARRIER_SESSIONS"$/m);
 assert.match(configText, /^class_name = "CloudflareCarrierDurableObject"$/m);
 assert.match(configText, /^new_sqlite_classes = \["CloudflareCarrierDurableObject"\]$/m);
+assert.match(configText, /^binding = "AI"$/m);
 assert.equal(configText.includes('account_id'), false);
 
-const namespace = fakeDurableObjectNamespace();
+const durableEnv = { AI: fakeAiBinding('Deploy check Cloudflare AI response.') };
+const namespace = fakeDurableObjectNamespace(durableEnv);
 const env = {
   CLOUDFLARE_CARRIER_SESSIONS: namespace,
   ADMIN_BEARER_TOKEN: 'deploy-check-admin-token',
+  ...durableEnv,
 };
 const startResponse = await worker.fetch(jsonRequest({
   operation: 'session.start',
@@ -51,7 +54,7 @@ const statusResponse = await worker.fetch(jsonRequest({
 const status = await statusResponse.json();
 assert.equal(status.goal.text, 'prove cloudflare carrier boundary');
 assert.equal(status.carrier_host, 'cloudflare-durable-object');
-assert.equal(status.provider_adapter_posture, 'refused');
+assert.equal(status.provider_adapter_posture, 'cloudflare-workers-ai');
 assert.equal(status.reader_principal.email, 'admin@system');
 
 process.stdout.write(`${JSON.stringify({
@@ -61,6 +64,7 @@ process.stdout.write(`${JSON.stringify({
   durable_object_binding: 'CLOUDFLARE_CARRIER_SESSIONS',
   auth_boundary_checked: true,
   principal_evidence_checked: true,
+  workers_ai_binding_checked: true,
   worker_route_checked: true,
   durable_snapshot_reload_checked: true,
   live_deploy_performed: false,
@@ -77,7 +81,7 @@ function jsonRequest(body) {
   });
 }
 
-function fakeDurableObjectNamespace() {
+function fakeDurableObjectNamespace(durableEnv = {}) {
   const objects = new Map();
   return {
     idFromName(name) {
@@ -88,12 +92,20 @@ function fakeDurableObjectNamespace() {
         const storage = fakeStorage();
         objects.set(id, {
           async fetch(request) {
-            const object = new CloudflareCarrierDurableObject({ storage });
+            const object = new CloudflareCarrierDurableObject({ storage }, durableEnv);
             return object.fetch(request);
           },
         });
       }
       return objects.get(id);
+    },
+  };
+}
+
+function fakeAiBinding(response) {
+  return {
+    async run() {
+      return { response };
     },
   };
 }

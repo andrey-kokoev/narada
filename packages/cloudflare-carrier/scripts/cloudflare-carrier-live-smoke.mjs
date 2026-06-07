@@ -67,25 +67,30 @@ assert.equal(inputDelivery.http_status, 200);
 assert.equal(inputDelivery.body.ok, true);
 assert.equal(inputDelivery.body.principal.email, 'admin@system');
 assert.equal(inputDelivery.body.input_event_id, providerRefusalInput.event_id);
-assert.equal(inputDelivery.body.terminal_state, 'failed');
+assert.equal(inputDelivery.body.terminal_state, 'completed');
 assert.deepEqual(inputDelivery.body.events.map((event) => event.event_kind), [
   'input_admitted_to_turn',
   'turn_started',
   'provider_request_recorded',
-  'turn_failed',
+  'provider_text_delta_recorded',
+  'turn_completed',
   'input_completed',
 ]);
 const providerRequest = inputDelivery.body.events.find((event) => event.event_kind === 'provider_request_recorded');
-assert.equal(providerRequest.payload.provider_request_status, 'refused');
-assert.equal(providerRequest.payload.provider_execution_enabled, false);
-assert.equal(providerRequest.payload.provider_runtime_status, 'unavailable');
-assert.equal(providerRequest.payload.provider_adapter_admission_status, 'rejected');
-const turnFailed = inputDelivery.body.events.find((event) => event.event_kind === 'turn_failed');
-assert.equal(turnFailed.payload.provider_request_status, 'refused');
-assert.equal(turnFailed.payload.terminal_status, 'failed');
+assert.equal(providerRequest.payload.provider_request_status, 'dispatched');
+assert.equal(providerRequest.payload.provider_execution_enabled, true);
+assert.equal(providerRequest.payload.provider_runtime_status, 'available');
+assert.equal(providerRequest.payload.provider_adapter_admission_status, 'admitted');
+assert.equal(providerRequest.payload.provider_adapter_kind, 'cloudflare-workers-ai');
+const providerOutput = inputDelivery.body.events.find((event) => event.event_kind === 'provider_text_delta_recorded');
+assert.equal(typeof providerOutput.payload.text_delta, 'string');
+assert.ok(providerOutput.payload.text_delta.length > 0);
+const turnCompleted = inputDelivery.body.events.find((event) => event.event_kind === 'turn_completed');
+assert.equal(turnCompleted.payload.provider_request_status, 'completed');
+assert.equal(turnCompleted.payload.terminal_status, 'completed');
 const inputCompleted = inputDelivery.body.events.find((event) => event.event_kind === 'input_completed');
 assert.equal(inputCompleted.payload.input_event_id, providerRefusalInput.event_id);
-assert.equal(inputCompleted.payload.terminal_state, 'failed');
+assert.equal(inputCompleted.payload.terminal_state, 'completed');
 
 const status = await post({
   operation: 'session.status',
@@ -96,10 +101,10 @@ assert.equal(status.body.ok, true);
 assert.equal(status.body.carrier_session_id, carrierSessionId);
 assert.equal(status.body.agent_id, agentId);
 assert.equal(status.body.carrier_host, 'cloudflare-durable-object');
-assert.equal(status.body.provider_adapter_posture, 'refused');
+assert.equal(status.body.provider_adapter_posture, 'cloudflare-workers-ai');
 assert.equal(status.body.reader_principal.email, 'admin@system');
 assert.deepEqual(status.body.goal, { text: expectedGoal, state: 'active' });
-assert.equal(status.body.next_event_sequence, 8);
+assert.equal(status.body.next_event_sequence, 9);
 
 const events = await post({
   operation: 'session.events.read',
@@ -112,17 +117,18 @@ const events = await post({
 assert.equal(events.http_status, 200);
 assert.equal(events.body.ok, true);
 assert.equal(events.body.reader_principal.email, 'admin@system');
-assert.deepEqual(events.body.events.map((event) => event.sequence), [1, 2, 3, 4, 5, 6, 7]);
+assert.deepEqual(events.body.events.map((event) => event.sequence), [1, 2, 3, 4, 5, 6, 7, 8]);
 assert.deepEqual(events.body.events.map((event) => event.event_kind), [
   'carrier_session_started',
   'carrier_command_executed',
   'input_admitted_to_turn',
   'turn_started',
   'provider_request_recorded',
-  'turn_failed',
+  'provider_text_delta_recorded',
+  'turn_completed',
   'input_completed',
 ]);
-assert.equal(events.body.next_cursor, 7);
+assert.equal(events.body.next_cursor, 8);
 
 process.stdout.write(`${JSON.stringify({
   schema: 'narada.cloudflare_carrier.live_smoke.v1',
@@ -139,7 +145,8 @@ process.stdout.write(`${JSON.stringify({
   input_terminal_state: inputDelivery.body.terminal_state,
   provider_request_status: providerRequest.payload.provider_request_status,
   provider_execution_enabled: providerRequest.payload.provider_execution_enabled,
-  turn_terminal_status: turnFailed.payload.terminal_status,
+  provider_text_preview: providerOutput.payload.text_delta.slice(0, 120),
+  turn_terminal_status: turnCompleted.payload.terminal_status,
   event_kinds: events.body.events.map((event) => event.event_kind),
   sequences: events.body.events.map((event) => event.sequence),
   next_cursor: events.body.next_cursor,

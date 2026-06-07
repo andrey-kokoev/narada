@@ -6,6 +6,9 @@ workers_dev = true
 [observability]
 enabled = true
 
+[ai]
+binding = "AI"
+
 [[durable_objects.bindings]]
 name = "CLOUDFLARE_CARRIER_SESSIONS"
 class_name = "CloudflareCarrierDurableObject"

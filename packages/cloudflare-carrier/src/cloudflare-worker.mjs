@@ -1,6 +1,7 @@
 import { CloudflareCarrierSession } from './cloudflare-carrier.mjs';
 
 const SNAPSHOT_KEY = 'cloudflare_carrier_session_snapshot_v1';
+const DEFAULT_WORKERS_AI_MODEL = '@cf/meta/llama-3.1-8b-instruct';
 
 export class CloudflareCarrierDurableObject {
   constructor(state, env = {}) {
@@ -21,7 +22,7 @@ export class CloudflareCarrierDurableObject {
   async handle(request) {
     const session = await this.#loadOrCreateSession(request);
     if (!session) return { ok: false, code: 'carrier_session_not_found' };
-    const response = session.handle(request);
+    const response = await session.handle(request);
     if (mutatesSession(request.operation)) await this.#storeSnapshot(session);
     return response;
   }
@@ -29,8 +30,9 @@ export class CloudflareCarrierDurableObject {
   async #loadOrCreateSession(request) {
     if (this.session) return this.session;
     const snapshot = await this.state.storage.get(SNAPSHOT_KEY);
+    const providerAdapter = createCloudflareAiProviderAdapter(this.env);
     if (snapshot) {
-      this.session = CloudflareCarrierSession.fromSnapshot(snapshot);
+      this.session = CloudflareCarrierSession.fromSnapshot(snapshot, { providerAdapter });
       return this.session;
     }
     if (request.operation !== 'session.start') return null;
@@ -41,6 +43,7 @@ export class CloudflareCarrierDurableObject {
       site_id: params.site_id,
       site_root: params.site_root ?? params.site_ref,
       site_ref: params.site_ref,
+      providerAdapter,
     });
     return this.session;
   }
@@ -75,6 +78,42 @@ export default {
     return jsonResponse(withPrincipalEvidence(responseBody, body.operation, auth.principal), durableResponse.status);
   },
 };
+
+export function createCloudflareAiProviderAdapter(env = {}) {
+  if (!env.AI || typeof env.AI.run !== 'function') return null;
+  const model = env.CLOUDFLARE_CARRIER_AI_MODEL ?? env.AI_MODEL ?? DEFAULT_WORKERS_AI_MODEL;
+  const timeoutMs = clampInteger(env.CLOUDFLARE_CARRIER_AI_TIMEOUT_MS, 1000, 30000, 15000);
+  const maxRetries = clampInteger(env.CLOUDFLARE_CARRIER_AI_MAX_RETRIES, 0, 3, 1);
+  return {
+    posture: 'cloudflare-workers-ai',
+    adapter_kind: 'cloudflare-workers-ai',
+    provider: 'cloudflare-workers-ai',
+    model,
+    async run({ input }) {
+      let lastError = null;
+      for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+        try {
+          const result = await withTimeout(env.AI.run(model, {
+            messages: [
+              {
+                role: 'system',
+                content: 'You are Narada running inside a Cloudflare carrier. Answer the operator input concisely.',
+              },
+              {
+                role: 'user',
+                content: input.content,
+              },
+            ],
+          }), timeoutMs);
+          return { text: extractWorkersAiText(result) };
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      throw lastError ?? new Error('cloudflare_workers_ai_provider_failed');
+    },
+  };
+}
 
 export function authenticateCarrierRequest(request, env = {}) {
   const configured = Boolean(env.SERVICE_TOKEN || env.ADMIN_BEARER_TOKEN || env.CLOUDFLARE_CARRIER_SERVICE_TOKEN || env.CLOUDFLARE_CARRIER_ADMIN_TOKEN);
@@ -134,4 +173,27 @@ function withPrincipalEvidence(body, operation, principal) {
   if (operation === 'session.status') return { ...body, reader_principal: principal };
   if (operation === 'session.events.read') return { ...body, reader_principal: principal };
   return { ...body, principal };
+}
+
+function clampInteger(value, min, max, fallback) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) return fallback;
+  return Math.max(min, Math.min(max, parsed));
+}
+
+function withTimeout(promise, timeoutMs) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('cloudflare_workers_ai_provider_timeout')), timeoutMs);
+    }),
+  ]);
+}
+
+function extractWorkersAiText(result) {
+  if (typeof result === 'string') return result;
+  if (typeof result?.response === 'string') return result.response;
+  if (typeof result?.result?.response === 'string') return result.result.response;
+  if (Array.isArray(result?.response)) return result.response.map(String).join('\n');
+  return JSON.stringify(result);
 }

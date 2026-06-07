@@ -279,6 +279,38 @@ test('worker export routes requests by carrier session durable object binding', 
   assert.equal(statusBody.reader_principal.email, 'admin@system');
 });
 
+test('worker provider adapter completes turns through Cloudflare AI binding', async () => {
+  const durableEnv = { AI: fakeAiBinding('Cloudflare AI response from test.') };
+  const namespace = fakeDurableObjectNamespace(durableEnv);
+  const env = authEnv(namespace, durableEnv);
+  await worker.fetch(jsonRequest(startRequest({ request_id: 'request_start_ai' }), { token: 'test-admin-token' }), env);
+  const input = {
+    ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,
+    event_id: 'input_ai_worker_1',
+    content: 'Run a Cloudflare AI provider turn.',
+  };
+
+  const response = await worker.fetch(jsonRequest(inputRequest(input, { request_id: 'request_ai_provider' }), { token: 'test-admin-token' }), env);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.terminal_state, 'completed');
+  assert.deepEqual(eventKinds(body), [
+    'input_admitted_to_turn',
+    'turn_started',
+    'provider_request_recorded',
+    'provider_text_delta_recorded',
+    'turn_completed',
+    'input_completed',
+  ]);
+  const providerRequest = body.events.find((event) => event.event_kind === 'provider_request_recorded');
+  assert.equal(providerRequest.payload.provider_execution_enabled, true);
+  assert.equal(providerRequest.payload.provider_adapter_kind, 'cloudflare-workers-ai');
+  assert.equal(providerRequest.payload.provider_request_status, 'dispatched');
+  const output = body.events.find((event) => event.event_kind === 'provider_text_delta_recorded');
+  assert.equal(output.payload.text_delta, 'Cloudflare AI response from test.');
+  assertValidEvents(body);
+});
+
 test('worker export rejects unauthenticated and invalid bearer requests', async () => {
   const namespace = fakeDurableObjectNamespace();
   const env = authEnv(namespace);
@@ -342,7 +374,7 @@ function fakeStorage() {
   };
 }
 
-function fakeDurableObjectNamespace() {
+function fakeDurableObjectNamespace(durableEnv = {}) {
   const objects = new Map();
   return {
     idFromName(name) {
@@ -353,7 +385,7 @@ function fakeDurableObjectNamespace() {
         const storage = fakeStorage();
         objects.set(id, {
           async fetch(request) {
-            return new CloudflareCarrierDurableObject({ storage }).fetch(request);
+            return new CloudflareCarrierDurableObject({ storage }, durableEnv).fetch(request);
           },
         });
       }
@@ -362,11 +394,20 @@ function fakeDurableObjectNamespace() {
   };
 }
 
-function authEnv(namespace) {
+function authEnv(namespace, extra = {}) {
   return {
     CLOUDFLARE_CARRIER_SESSIONS: namespace,
     ADMIN_BEARER_TOKEN: 'test-admin-token',
     SERVICE_TOKEN: 'test-service-token',
+    ...extra,
+  };
+}
+
+function fakeAiBinding(response) {
+  return {
+    async run() {
+      return { response };
+    },
   };
 }
 

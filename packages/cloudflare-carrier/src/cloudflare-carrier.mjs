@@ -80,10 +80,12 @@ export class CloudflareCarrierSession {
     site_root = `cloudflare://${site_id}`,
     site_ref = null,
     now = () => new Date().toISOString(),
+    providerAdapter = null,
   }) {
     if (!carrier_session_id) throw new Error('cloudflare_carrier_session_requires_id');
     if (!agent_id) throw new Error('cloudflare_carrier_session_requires_agent_id');
     this.now = now;
+    this.providerAdapter = providerAdapter;
     this.state = {
       carrier_session_id,
       agent_id,
@@ -102,7 +104,7 @@ export class CloudflareCarrierSession {
       queue: [],
       active_turn: null,
       closed: false,
-      provider_posture: 'refused',
+      provider_posture: providerAdapter?.posture ?? 'refused',
       host_command_targets: ['diagnostic_read', 'runtime_metadata_read'],
       processed_requests: new Map(),
     };
@@ -114,6 +116,7 @@ export class CloudflareCarrierSession {
     if (!SUPPORTED_OPERATIONS.has(operation)) return { ok: false, code: 'unsupported_operation', operation };
     const previousPrincipal = this.currentPrincipal;
     this.currentPrincipal = request?.principal ?? null;
+    let restoreNow = true;
     try {
     if (MUTATING_OPERATIONS.has(operation)) {
       const idempotencyKey = request?.request_id ?? request?.event_id ?? request?.params?.event_id;
@@ -121,12 +124,21 @@ export class CloudflareCarrierSession {
         return clone(this.state.processed_requests.get(idempotencyKey));
       }
       const response = this.#handleFresh(request);
+      if (isPromiseLike(response)) {
+        restoreNow = false;
+        return response.then((resolved) => {
+          if (idempotencyKey) this.state.processed_requests.set(idempotencyKey, clone(resolved));
+          return resolved;
+        }).finally(() => {
+          this.currentPrincipal = previousPrincipal;
+        });
+      }
       if (idempotencyKey) this.state.processed_requests.set(idempotencyKey, clone(response));
       return response;
     }
     return this.#handleFresh(request);
     } finally {
-      this.currentPrincipal = previousPrincipal;
+      if (restoreNow) this.currentPrincipal = previousPrincipal;
     }
   }
 
@@ -176,7 +188,7 @@ export class CloudflareCarrierSession {
     };
   }
 
-  static fromSnapshot(snapshot, { now = () => new Date().toISOString() } = {}) {
+  static fromSnapshot(snapshot, { now = () => new Date().toISOString(), providerAdapter = null } = {}) {
     const session = new CloudflareCarrierSession({
       carrier_session_id: snapshot.state.carrier_session_id,
       agent_id: snapshot.state.agent_id,
@@ -184,9 +196,11 @@ export class CloudflareCarrierSession {
       site_root: snapshot.state.site_root,
       site_ref: snapshot.state.site_ref,
       now,
+      providerAdapter,
     });
     session.state = {
       ...clone(snapshot.state),
+      provider_posture: providerAdapter?.posture ?? snapshot.state.provider_posture,
       processed_requests: new Map((snapshot.processed_requests ?? []).map(([key, value]) => [key, clone(value)])),
     };
     session.events = (snapshot.events ?? []).map((event) => clone(event));
@@ -267,8 +281,19 @@ export class CloudflareCarrierSession {
     }
 
     const terminal = admission.creates_turn
-      ? this.#recordProviderRefusal(input, events)
+      ? this.#recordProviderTurn(input, events)
       : 'completed_without_provider';
+    if (isPromiseLike(terminal)) {
+      return terminal.then((terminalState) => ({
+        ok: true,
+        operation: 'carrier.input.deliver',
+        input_event_id: input.event_id,
+        terminal_state: terminalState,
+        admitted: true,
+        queued: false,
+        events,
+      }));
+    }
     if (!admission.creates_turn) {
       events.push(this.#appendEvent('input_completed', {
         input_event_id: input.event_id,
@@ -276,6 +301,76 @@ export class CloudflareCarrierSession {
       }));
     }
     return { ok: true, operation: 'carrier.input.deliver', input_event_id: input.event_id, terminal_state: terminal, admitted: true, queued: false, events };
+  }
+
+  #recordProviderTurn(input, events) {
+    if (!this.providerAdapter) return this.#recordProviderRefusal(input, events);
+    return this.#recordProviderExecution(input, events);
+  }
+
+  async #recordProviderExecution(input, events) {
+    const turnId = `turn_${input.event_id}`;
+    this.state.active_turn = { turn_id: turnId, input_event_id: input.event_id, state: 'active' };
+    events.push(this.#appendEvent('turn_started', { turn_id: turnId, input_event_id: input.event_id }));
+    events.push(this.#appendEvent('provider_request_recorded', {
+      schema: 'narada.agent_tui.provider_request_payload.v0',
+      turn_id: turnId,
+      input_event_id: input.event_id,
+      provider_request_status: 'dispatched',
+      provider_execution_enabled: true,
+      provider_runtime_status: 'available',
+      provider_adapter_admission_status: 'admitted',
+      provider_adapter_kind: this.providerAdapter.adapter_kind,
+      provider: this.providerAdapter.provider,
+      model: this.providerAdapter.model,
+      thinking: null,
+      stream: false,
+      provider_streaming_contract: 'none',
+      provider_adapter_refusal_reason: null,
+      content_preview: input.content,
+    }));
+    try {
+      const result = await this.providerAdapter.run({ input, turn_id: turnId });
+      const text = String(result.text ?? '').trim();
+      events.push(this.#appendEvent('provider_text_delta_recorded', {
+        schema: 'narada.agent_tui.provider_output_payload.v0',
+        turn_id: turnId,
+        provider_output_kind: 'text_delta',
+        sequence: 1,
+        text_delta: text,
+        text_delta_ref: null,
+      }));
+      events.push(this.#appendEvent('turn_completed', {
+        schema: 'narada.agent_tui.turn_terminal_payload.v0',
+        turn_id: turnId,
+        input_event_id: input.event_id,
+        provider_request_status: 'completed',
+        terminal_status: 'completed',
+        provider_execution_enabled: true,
+      }));
+      events.push(this.#appendEvent('input_completed', {
+        input_event_id: input.event_id,
+        terminal_state: 'completed',
+      }));
+      this.state.active_turn = null;
+      return 'completed';
+    } catch (error) {
+      events.push(this.#appendEvent('turn_failed', {
+        schema: 'narada.agent_tui.turn_terminal_payload.v0',
+        turn_id: turnId,
+        input_event_id: input.event_id,
+        provider_request_status: 'failed',
+        terminal_status: 'failed',
+        provider_execution_enabled: true,
+        error_summary: providerErrorSummary(error),
+      }));
+      events.push(this.#appendEvent('input_completed', {
+        input_event_id: input.event_id,
+        terminal_state: 'failed',
+      }));
+      this.state.active_turn = null;
+      return 'failed';
+    }
   }
 
   #recordProviderRefusal(input, events) {
@@ -458,6 +553,15 @@ function assertNoSecretValues(value) {
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function isPromiseLike(value) {
+  return value && typeof value.then === 'function';
+}
+
+function providerErrorSummary(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.slice(0, 240) || 'cloudflare_workers_ai_provider_failed';
 }
 
 export function classifyCloudflareCarrierControl(request = {}) {
