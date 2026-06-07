@@ -9,6 +9,14 @@ enabled = true
 [ai]
 binding = "AI"
 
+[vars]
+CLOUDFLARE_CARRIER_ENABLE_TASK_TOOLS = "1"
+
+[[d1_databases]]
+binding = "CLOUDFLARE_CARRIER_TASK_DB"
+database_name = "narada-cloudflare-carrier-tasks"
+database_id = "e852bd91-e17d-4bd6-b841-f60ae5ef1c8d"
+
 [[durable_objects.bindings]]
 name = "CLOUDFLARE_CARRIER_SESSIONS"
 class_name = "CloudflareCarrierDurableObject"

@@ -290,6 +290,223 @@ test('worker export routes requests by carrier session durable object binding', 
   assert.equal(statusBody.reader_principal.email, 'admin@system');
 });
 
+test('worker serves minimal authenticated web console shell', async () => {
+  const namespace = fakeDurableObjectNamespace();
+  const env = authEnv(namespace);
+  const response = await worker.fetch(new Request('https://carrier.test/'), env);
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type'), /text\/html/);
+  const html = await response.text();
+  assert.match(html, /Narada Cloudflare Carrier/);
+  assert.match(html, /naradaCloudflareCarrierClient/);
+  assert.match(html, /\/api\/carrier/);
+  assert.match(html, /Bearer token/);
+  assert.match(html, /Provider/);
+  assert.match(html, /Effects/);
+  assert.match(html, /Task State/);
+  assert.match(html, /createTask/);
+});
+
+test('worker browser API alias starts resumes sends input and reads evidence events', async () => {
+  const durableEnv = {
+    AI: fakeAiBinding('Console provider response.'),
+    CLOUDFLARE_CARRIER_ENABLE_RUNTIME_TOOL_READS: '1',
+  };
+  const namespace = fakeDurableObjectNamespace(durableEnv);
+  const env = authEnv(namespace, durableEnv);
+  const start = await worker.fetch(jsonRequest(startRequest({ request_id: 'request_console_start' }), {
+    token: 'test-admin-token',
+    path: '/api/carrier',
+  }), env);
+  assert.equal(start.status, 200);
+  const startBody = await start.json();
+  assert.equal(startBody.event.event_kind, 'carrier_session_started');
+
+  const resumed = await worker.fetch(jsonRequest(startRequest({ request_id: 'request_console_start' }), {
+    token: 'test-admin-token',
+    path: '/api/carrier',
+  }), env);
+  assert.equal(resumed.status, 200);
+  const resumedBody = await resumed.json();
+  assert.equal(resumedBody.carrier_session_id, 'carrier_session_cloudflare_fixture');
+
+  const input = {
+    ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,
+    event_id: 'input_console_api_1',
+    content: 'Render this through the Cloudflare console API.',
+  };
+  const delivered = await worker.fetch(jsonRequest(inputRequest(input, { request_id: 'request_console_input' }), {
+    token: 'test-admin-token',
+    path: '/api/carrier',
+  }), env);
+  assert.equal(delivered.status, 200);
+  const deliveredBody = await delivered.json();
+  assert.deepEqual(eventKinds(deliveredBody), [
+    'input_admitted_to_turn',
+    'turn_started',
+    'provider_request_recorded',
+    'provider_text_delta_recorded',
+    'turn_completed',
+    'input_completed',
+  ]);
+
+  const read = await worker.fetch(jsonRequest({
+    operation: 'session.events.read',
+    carrier_session_id: 'carrier_session_cloudflare_fixture',
+    params: { after_sequence: 0 },
+  }, {
+    token: 'test-admin-token',
+    path: '/api/carrier',
+  }), env);
+  assert.equal(read.status, 200);
+  const readBody = await read.json();
+  assert.equal(readBody.reader_principal.email, 'admin@system');
+  assert.equal(readBody.events[0].event_kind, 'carrier_session_started');
+  assert.ok(readBody.events.some((event) => event.event_kind === 'provider_request_recorded'));
+  const providerEvent = readBody.events.find((event) => event.event_kind === 'provider_request_recorded');
+  assert.equal(providerEvent.payload.provider_adapter_kind, 'cloudflare-workers-ai');
+  assert.equal(providerEvent.payload.provider_request_status, 'dispatched');
+
+  const status = await worker.fetch(jsonRequest({
+    operation: 'session.status',
+    carrier_session_id: 'carrier_session_cloudflare_fixture',
+  }, {
+    token: 'test-admin-token',
+    path: '/api/carrier',
+  }), env);
+  const statusBody = await status.json();
+  assert.equal(statusBody.provider_adapter_posture, 'cloudflare-workers-ai');
+  assert.equal(statusBody.tool_effect_posture, 'configured');
+  assert.deepEqual(statusBody.tool_effect_supported_tools, ['cloudflare_carrier_runtime_metadata_read']);
+});
+
+test('configured Cloudflare task tools admit command-triggered task create update and persisted readback', async () => {
+  const durableEnv = { CLOUDFLARE_CARRIER_ENABLE_TASK_TOOLS: '1', CLOUDFLARE_CARRIER_TASK_DB: fakeD1TaskDatabase() };
+  const namespace = fakeDurableObjectNamespace(durableEnv);
+  const env = authEnv(namespace, durableEnv);
+  await worker.fetch(jsonRequest(startRequest({ request_id: 'request_start_task_command' }), { token: 'test-admin-token' }), env);
+
+  const created = await worker.fetch(jsonRequest(commandRequest('/task', ['create', 'ship', 'Cloudflare', 'task', 'adapter'], {
+    request_id: 'request_task_create_command',
+  }), { token: 'test-admin-token' }), env);
+  assert.equal(created.status, 200);
+  const createdBody = await created.json();
+  assert.deepEqual(eventKinds(createdBody), ['tool_call_requested', 'tool_result_received']);
+  const createResult = createdBody.events.find((event) => event.event_kind === 'tool_result_received');
+  assert.equal(createResult.payload.status, 'ok', createResult.payload.result_summary);
+  assert.equal(createResult.payload.admission_action, 'admit');
+  assert.equal(createResult.payload.admission_reason, 'write_tool_effect_admitted');
+  assert.equal(createResult.payload.capability_ref, 'cloudflare-carrier:capability/task-create:v1');
+  assert.equal(createResult.payload.effect_scope, 'cloudflare-narada-task:write:create');
+  assert.equal(createResult.payload.authority_ref, 'principal:admin');
+  assert.equal(createResult.payload.result_ref, null);
+  const createSummary = JSON.parse(createResult.payload.result_summary);
+  assert.equal(createSummary.task.title, 'ship Cloudflare task adapter');
+  assert.equal(createSummary.task.status, 'open');
+
+  const updated = await worker.fetch(jsonRequest(commandRequest('/task', ['update', 'cloudflare-task-1', 'done', 'verified'], {
+    request_id: 'request_task_update_command',
+  }), { token: 'test-admin-token' }), env);
+  assert.equal(updated.status, 200);
+  const updatedBody = await updated.json();
+  const updateResult = updatedBody.events.find((event) => event.event_kind === 'tool_result_received');
+  assert.equal(updateResult.payload.status, 'ok');
+  assert.equal(updateResult.payload.capability_ref, 'cloudflare-carrier:capability/task-update:v1');
+  assert.equal(updateResult.payload.effect_scope, 'cloudflare-narada-task:write:update');
+  const updateSummary = JSON.parse(updateResult.payload.result_summary);
+  assert.equal(updateSummary.task.status, 'done');
+  assert.equal(updateSummary.task.note, 'verified');
+
+  const status = await worker.fetch(jsonRequest({
+    operation: 'session.status',
+    carrier_session_id: 'carrier_session_cloudflare_fixture',
+  }, { token: 'test-admin-token' }), env);
+  const statusBody = await status.json();
+  assert.equal(statusBody.tool_effect_posture, 'configured');
+  assert.deepEqual(statusBody.tool_effect_supported_tools, [
+    'cloudflare_carrier_task_create',
+    'cloudflare_carrier_task_update',
+    'cloudflare_carrier_task_list',
+  ]);
+  assert.equal(statusBody.tasks.length, 1);
+  assert.equal(statusBody.tasks[0].task_id, 'cloudflare-task-1');
+  assert.equal(statusBody.tasks[0].status, 'done');
+
+  const persisted = await worker.fetch(jsonRequest({
+    operation: 'session.events.read',
+    carrier_session_id: 'carrier_session_cloudflare_fixture',
+    params: { after_sequence: 0 },
+  }, { token: 'test-admin-token' }), env);
+  const persistedBody = await persisted.json();
+  assert.deepEqual(persistedBody.events.map((event) => event.event_kind), [
+    'carrier_session_started',
+    'tool_call_requested',
+    'tool_result_received',
+    'tool_call_requested',
+    'tool_result_received',
+  ]);
+  assertValidEvents(persistedBody);
+});
+
+test('provider tool call can create a Cloudflare Narada task through admitted task effect', async () => {
+  const durableEnv = {
+    AI: fakeAiBinding([
+      {
+        response: 'Creating a task.',
+        tool_calls: [{
+          tool_name: 'cloudflare_carrier_task_create',
+          arguments_summary: JSON.stringify({ title: 'provider created task' }),
+          arguments_ref: null,
+        }],
+      },
+      { response: 'Task created.' },
+    ]),
+    CLOUDFLARE_CARRIER_ENABLE_TASK_TOOLS: '1',
+    CLOUDFLARE_CARRIER_TASK_DB: fakeD1TaskDatabase(),
+  };
+  const namespace = fakeDurableObjectNamespace(durableEnv);
+  const env = authEnv(namespace, durableEnv);
+  await worker.fetch(jsonRequest(startRequest({ request_id: 'request_start_provider_task' }), { token: 'test-admin-token' }), env);
+  const input = {
+    ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,
+    event_id: 'input_provider_task_worker_1',
+    content: 'Create a Narada task for provider tool coverage.',
+  };
+
+  const response = await worker.fetch(jsonRequest(inputRequest(input, { request_id: 'request_provider_task' }), { token: 'test-admin-token' }), env);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.deepEqual(eventKinds(body), [
+    'input_admitted_to_turn',
+    'turn_started',
+    'provider_request_recorded',
+    'provider_text_delta_recorded',
+    'provider_tool_call_requested',
+    'tool_call_requested',
+    'tool_result_received',
+    'provider_request_recorded',
+    'provider_text_delta_recorded',
+    'turn_completed',
+    'input_completed',
+  ]);
+  const toolResult = body.events.find((event) => event.event_kind === 'tool_result_received');
+  assert.equal(toolResult.payload.status, 'ok', toolResult.payload.result_summary);
+  assert.equal(toolResult.payload.admission_action, 'admit');
+  assert.equal(toolResult.payload.capability_ref, 'cloudflare-carrier:capability/task-create:v1');
+  assert.equal(toolResult.payload.effect_scope, 'cloudflare-narada-task:write:create');
+  const resultSummary = JSON.parse(toolResult.payload.result_summary);
+  assert.equal(resultSummary.task.title, 'provider created task');
+
+  const status = await worker.fetch(jsonRequest({
+    operation: 'session.status',
+    carrier_session_id: 'carrier_session_cloudflare_fixture',
+  }, { token: 'test-admin-token' }), env);
+  const statusBody = await status.json();
+  assert.equal(statusBody.tasks.length, 1);
+  assert.equal(statusBody.tasks[0].title, 'provider created task');
+  assertValidEvents(body);
+});
+
 test('worker provider adapter completes turns through Cloudflare AI binding', async () => {
   const durableEnv = { AI: fakeAiBinding('Cloudflare AI response from test.') };
   const namespace = fakeDurableObjectNamespace(durableEnv);
@@ -1026,10 +1243,76 @@ function fakeKvBinding(values = {}) {
   };
 }
 
-function jsonRequest(body, { token = null } = {}) {
+function fakeD1TaskDatabase() {
+  const rows = [];
+  return {
+    rows,
+    prepare(sql) {
+      return fakeD1Statement(rows, String(sql));
+    },
+  };
+}
+
+function fakeD1Statement(rows, sql) {
+  const normalized = sql.replace(/\s+/g, ' ').trim().toLowerCase();
+  let bindings = [];
+  return {
+    bind(...values) {
+      bindings = values;
+      return this;
+    },
+    async run() {
+      if (normalized.startsWith('insert into narada_tasks')) {
+        const [site_id, task_id, task_number, title, description, status, source, note, created_at, updated_at, carrier_session_id, agent_id, site_root] = bindings;
+        rows.push({ site_id, task_id, task_number, title, description, status, source, note, created_at, updated_at, carrier_session_id, agent_id, site_root });
+      } else if (normalized.startsWith('update narada_tasks set')) {
+        const [status, note, updated_at, siteId, taskId] = bindings;
+        const row = rows.find((entry) => entry.site_id === siteId && entry.task_id === taskId);
+        if (row) Object.assign(row, { status, note, updated_at });
+      }
+      return { success: true };
+    },
+    async first() {
+      if (normalized.startsWith('select coalesce(max(task_number)')) {
+        const [siteId] = bindings;
+        const max = rows.filter((entry) => entry.site_id === siteId).reduce((value, entry) => Math.max(value, Number(entry.task_number)), 0);
+        return { next_task_number: max + 1 };
+      }
+      if (normalized.includes('where site_id = ? and task_id = ?')) {
+        const [siteId, taskId] = bindings;
+        const row = rows.find((entry) => entry.site_id === siteId && entry.task_id === taskId);
+        return row ? clone(row) : null;
+      }
+      if (normalized.includes('where site_id = ? and task_number = ?')) {
+        const [siteId, taskNumber] = bindings;
+        const row = rows.find((entry) => entry.site_id === siteId && Number(entry.task_number) === Number(taskNumber));
+        return row ? clone(row) : null;
+      }
+      return null;
+    },
+    async all() {
+      if (normalized.includes('where site_id = ? order by task_number')) {
+        const [siteId] = bindings;
+        return {
+          results: rows
+            .filter((entry) => entry.site_id === siteId)
+            .sort((left, right) => Number(left.task_number) - Number(right.task_number))
+            .map((entry) => clone(entry)),
+        };
+      }
+      return { results: [] };
+    },
+  };
+}
+
+function clone(value) {
+  return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+}
+
+function jsonRequest(body, { token = null, path = '/control' } = {}) {
   const headers = { 'content-type': 'application/json' };
   if (token) headers.authorization = `Bearer ${token}`;
-  return new Request('https://carrier.test/control', {
+  return new Request(`https://carrier.test${path}`, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),

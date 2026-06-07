@@ -15,6 +15,9 @@ assert.match(configText, /^name = "CLOUDFLARE_CARRIER_SESSIONS"$/m);
 assert.match(configText, /^class_name = "CloudflareCarrierDurableObject"$/m);
 assert.match(configText, /^new_sqlite_classes = \["CloudflareCarrierDurableObject"\]$/m);
 assert.match(configText, /^binding = "AI"$/m);
+assert.match(configText, /^CLOUDFLARE_CARRIER_ENABLE_TASK_TOOLS = "1"$/m);
+assert.match(configText, /^binding = "CLOUDFLARE_CARRIER_TASK_DB"$/m);
+assert.match(configText, /^database_name = "narada-cloudflare-carrier-tasks"$/m);
 assert.equal(configText.includes('account_id'), false);
 assert.equal(classifyCloudflareToolEffectAdmission({ tool_name: 'cloudflare_carrier_runtime_metadata_read' }).action, 'deny');
 assert.equal(classifyCloudflareToolEffectAdmission({ tool_name: 'cloudflare_carrier_runtime_metadata_read' }, { runtimeReadsEnabled: true }).action, 'admit');
@@ -37,6 +40,100 @@ const env = {
   ADMIN_BEARER_TOKEN: 'deploy-check-admin-token',
   ...durableEnv,
 };
+const consoleResponse = await worker.fetch(new Request('https://carrier.deploy-check.example/'), env);
+assert.equal(consoleResponse.status, 200);
+assert.match(consoleResponse.headers.get('content-type'), /text\/html/);
+const consoleHtml = await consoleResponse.text();
+assert.match(consoleHtml, /Narada Cloudflare Carrier/);
+assert.match(consoleHtml, /naradaCloudflareCarrierClient/);
+assert.match(consoleHtml, /\/api\/carrier/);
+assert.match(consoleHtml, /Task State/);
+
+const apiClientStartResponse = await worker.fetch(jsonRequest({
+  operation: 'session.start',
+  request_id: 'deploy_check_api_client_start',
+  params: {
+    carrier_session_id: 'carrier_session_deploy_check_api_client',
+    agent_id: 'narada.deploy.check.api_client',
+    site_id: 'site_deploy_check_api_client',
+    site_root: 'cloudflare://site_deploy_check_api_client',
+  },
+}, { path: '/api/carrier' }), env);
+assert.equal(apiClientStartResponse.status, 200);
+const apiClientStart = await apiClientStartResponse.json();
+assert.equal(apiClientStart.event.event_kind, 'carrier_session_started');
+assert.equal(apiClientStart.principal.email, 'admin@system');
+
+const apiClientStatusResponse = await worker.fetch(jsonRequest({
+  operation: 'session.status',
+  carrier_session_id: 'carrier_session_deploy_check_api_client',
+}, { path: '/api/carrier' }), env);
+assert.equal(apiClientStatusResponse.status, 200);
+const apiClientStatus = await apiClientStatusResponse.json();
+assert.equal(apiClientStatus.carrier_session_id, 'carrier_session_deploy_check_api_client');
+assert.equal(apiClientStatus.reader_principal.email, 'admin@system');
+
+const taskDb = fakeD1TaskDatabase();
+const taskDurableEnv = {
+  CLOUDFLARE_CARRIER_ENABLE_TASK_TOOLS: '1',
+  CLOUDFLARE_CARRIER_TASK_DB: taskDb,
+};
+const taskEnv = {
+  CLOUDFLARE_CARRIER_SESSIONS: fakeDurableObjectNamespace(taskDurableEnv),
+  ADMIN_BEARER_TOKEN: 'deploy-check-admin-token',
+  ...taskDurableEnv,
+};
+await worker.fetch(jsonRequest({
+  operation: 'session.start',
+  request_id: 'deploy_check_task_start',
+  params: {
+    carrier_session_id: 'carrier_session_deploy_check_task',
+    agent_id: 'narada.deploy.check.task',
+    site_id: 'site_deploy_check_task',
+    site_root: 'cloudflare://site_deploy_check_task',
+  },
+}), taskEnv);
+const taskCreateResponse = await worker.fetch(jsonRequest({
+  operation: 'carrier.command.execute',
+  request_id: 'deploy_check_task_create',
+  carrier_session_id: 'carrier_session_deploy_check_task',
+  params: {
+    command: '/task',
+    args: ['create', 'deploy', 'checked', 'task'],
+  },
+}), taskEnv);
+assert.equal(taskCreateResponse.status, 200);
+const taskCreate = await taskCreateResponse.json();
+const taskCreateResult = taskCreate.events.find((event) => event.event_kind === 'tool_result_received');
+assert.equal(taskCreateResult.payload.status, 'ok');
+assert.equal(taskCreateResult.payload.admission_action, 'admit');
+assert.equal(taskCreateResult.payload.capability_ref, 'cloudflare-carrier:capability/task-create:v1');
+assert.equal(taskCreateResult.payload.effect_scope, 'cloudflare-narada-task:write:create');
+assert.equal(JSON.parse(taskCreateResult.payload.result_summary).task.title, 'deploy checked task');
+const taskUpdateResponse = await worker.fetch(jsonRequest({
+  operation: 'carrier.command.execute',
+  request_id: 'deploy_check_task_update',
+  carrier_session_id: 'carrier_session_deploy_check_task',
+  params: {
+    command: '/task',
+    args: ['update', 'cloudflare-task-1', 'done', 'deploy-check'],
+  },
+}), taskEnv);
+assert.equal(taskUpdateResponse.status, 200);
+const taskStatusResponse = await worker.fetch(jsonRequest({
+  operation: 'session.status',
+  carrier_session_id: 'carrier_session_deploy_check_task',
+}), taskEnv);
+const taskStatus = await taskStatusResponse.json();
+assert.equal(taskStatus.tasks.length, 1);
+assert.equal(taskStatus.tasks[0].status, 'done');
+assert.equal(taskStatus.tasks[0].note, 'deploy-check');
+assert.deepEqual(taskStatus.tool_effect_supported_tools, [
+  'cloudflare_carrier_task_create',
+  'cloudflare_carrier_task_update',
+  'cloudflare_carrier_task_list',
+]);
+
 const startResponse = await worker.fetch(jsonRequest({
   operation: 'session.start',
   request_id: 'deploy_check_start',
@@ -457,13 +554,17 @@ process.stdout.write(`${JSON.stringify({
   configured_kv_write_tool_effect_boundary_checked: true,
   configured_kv_write_failed_tool_effect_boundary_checked: true,
   thrown_tool_effect_adapter_failure_checked: true,
+  console_surface_checked: true,
+  api_client_route_checked: true,
+  task_tool_effect_boundary_checked: true,
+  d1_task_state_persistence_checked: true,
   worker_route_checked: true,
   durable_snapshot_reload_checked: true,
   live_deploy_performed: false,
 }, null, 2)}\n`);
 
-function jsonRequest(body) {
-  return new Request('https://carrier.deploy-check.example/control', {
+function jsonRequest(body, { path = '/control' } = {}) {
+  return new Request(`https://carrier.deploy-check.example${path}`, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -518,6 +619,78 @@ function fakeKvBinding(values = {}) {
     },
     dump() {
       return { ...state };
+    },
+  };
+}
+
+function fakeD1TaskDatabase() {
+  const rows = [];
+  return {
+    prepare(sql) {
+      return fakeD1Statement(rows, sql);
+    },
+  };
+}
+
+function fakeD1Statement(rows, sql) {
+  let bound = [];
+  return {
+    bind(...values) {
+      bound = values;
+      return this;
+    },
+    async run() {
+      if (/^INSERT INTO narada_tasks/i.test(sql)) {
+        const [siteId, taskId, taskNumber, title, description, status, source, note, createdAt, updatedAt, carrierSessionId, agentId, siteRoot] = bound;
+        rows.push({
+          site_id: siteId,
+          task_id: taskId,
+          task_number: taskNumber,
+          title,
+          description,
+          status,
+          source,
+          note,
+          created_at: createdAt,
+          updated_at: updatedAt,
+          carrier_session_id: carrierSessionId,
+          agent_id: agentId,
+          site_root: siteRoot,
+        });
+      }
+      if (/^UPDATE narada_tasks SET/i.test(sql)) {
+        const [status, note, updatedAt, siteId, taskId] = bound;
+        const row = rows.find((entry) => entry.site_id === siteId && entry.task_id === taskId);
+        if (row) Object.assign(row, { status, note, updated_at: updatedAt });
+      }
+      return { success: true };
+    },
+    async first() {
+      if (/SELECT COALESCE\(MAX\(task_number\)/i.test(sql)) {
+        const [siteId] = bound;
+        const max = rows
+          .filter((row) => row.site_id === siteId)
+          .reduce((value, row) => Math.max(value, Number(row.task_number)), 0);
+        return { next_task_number: max + 1 };
+      }
+      if (/WHERE site_id = \? AND task_id = \?/i.test(sql)) {
+        const [siteId, taskId] = bound;
+        return clone(rows.find((row) => row.site_id === siteId && row.task_id === taskId));
+      }
+      if (/WHERE site_id = \? AND task_number = \?/i.test(sql)) {
+        const [siteId, taskNumber] = bound;
+        return clone(rows.find((row) => row.site_id === siteId && Number(row.task_number) === Number(taskNumber)));
+      }
+      return null;
+    },
+    async all() {
+      const [siteId] = bound;
+      return {
+        results: rows
+          .filter((row) => row.site_id === siteId)
+          .sort((left, right) => Number(left.task_number) - Number(right.task_number))
+          .map(clone),
+      };
     },
   };
 }

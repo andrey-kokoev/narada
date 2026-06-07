@@ -87,12 +87,14 @@ export class CloudflareCarrierSession {
     now = () => new Date().toISOString(),
     providerAdapter = null,
     toolEffectAdapter = null,
+    taskStoreAdapter = null,
   }) {
     if (!carrier_session_id) throw new Error('cloudflare_carrier_session_requires_id');
     if (!agent_id) throw new Error('cloudflare_carrier_session_requires_agent_id');
     this.now = now;
     this.providerAdapter = providerAdapter;
     this.toolEffectAdapter = toolEffectAdapter;
+    this.taskStoreAdapter = taskStoreAdapter;
     this.toolEffectPosture = toolEffectPosture(toolEffectAdapter);
     this.state = {
       carrier_session_id,
@@ -155,6 +157,12 @@ export class CloudflareCarrierSession {
   }
 
   status() {
+    const tasks = this.#taskSnapshot();
+    if (isPromiseLike(tasks)) return tasks.then((resolvedTasks) => this.#statusWithTasks(resolvedTasks));
+    return this.#statusWithTasks(tasks);
+  }
+
+  #statusWithTasks(tasks) {
     return {
       ok: true,
       carrier_session_id: this.state.carrier_session_id,
@@ -177,6 +185,7 @@ export class CloudflareCarrierSession {
       observer_interjections_muted: this.state.observer_interjections_muted,
       queue_count: this.state.queue.length,
       active_turn: this.state.active_turn,
+      tasks,
       closed: this.state.closed,
       next_event_sequence: this.state.next_event_sequence,
     };
@@ -204,7 +213,7 @@ export class CloudflareCarrierSession {
     };
   }
 
-  static fromSnapshot(snapshot, { now = () => new Date().toISOString(), providerAdapter = null, toolEffectAdapter = null } = {}) {
+  static fromSnapshot(snapshot, { now = () => new Date().toISOString(), providerAdapter = null, toolEffectAdapter = null, taskStoreAdapter = null } = {}) {
     const session = new CloudflareCarrierSession({
       carrier_session_id: snapshot.state.carrier_session_id,
       agent_id: snapshot.state.agent_id,
@@ -214,6 +223,7 @@ export class CloudflareCarrierSession {
       now,
       providerAdapter,
       toolEffectAdapter,
+      taskStoreAdapter,
     });
     session.state = {
       ...clone(snapshot.state),
@@ -439,37 +449,42 @@ export class CloudflareCarrierSession {
         arguments_summary: toolCall.arguments_summary,
         arguments_ref: toolCall.arguments_ref,
       })));
-      events.push(this.#appendEvent('tool_call_requested', createToolCallPayload({
-        tool_name: toolCall.tool_name,
-        arguments_summary: toolCall.arguments_summary,
-        arguments_ref: toolCall.arguments_ref,
-        requesting_agent_id: this.state.agent_id,
-      })));
-      const startedAt = Date.now();
-      const result = await executeToolEffect(this.toolEffectAdapter, toolCall, {
-        carrier_session_id: this.state.carrier_session_id,
-        agent_id: this.state.agent_id,
-        site_id: this.state.site_id,
-        turn_id: turnId,
-        principal: this.currentPrincipal ?? null,
-      });
-      const payload = createToolResultPayload({
-        tool_name: toolCall.tool_name,
-        status: result.status,
-        admission_action: result.admission_action,
-        admission_reason: result.admission_reason,
-        capability_ref: result.capability_ref,
-        effect_scope: result.effect_scope,
-        authority_ref: result.authority_ref,
-        duration_ms: Math.max(0, Date.now() - startedAt),
-        result_summary: result.result_summary,
-        result_ref: result.result_ref ?? null,
-      });
+      const payload = await this.#executeToolEffectAndRecordResult(toolCall, events, { turn_id: turnId });
       events.push(this.#appendEvent('tool_result_received', payload));
       toolResults.push(payload);
       sequence += 1;
     }
     return { toolResults, nextSequence: sequence };
+  }
+
+  async #executeToolEffectAndRecordResult(toolCall, events, { turn_id = null } = {}) {
+    events.push(this.#appendEvent('tool_call_requested', createToolCallPayload({
+      tool_name: toolCall.tool_name,
+      arguments_summary: toolCall.arguments_summary,
+      arguments_ref: toolCall.arguments_ref,
+      requesting_agent_id: this.state.agent_id,
+    })));
+    const startedAt = Date.now();
+    const result = await executeToolEffect(this.toolEffectAdapter, toolCall, {
+      carrier_session_id: this.state.carrier_session_id,
+      agent_id: this.state.agent_id,
+      site_id: this.state.site_id,
+      turn_id,
+      principal: this.currentPrincipal ?? null,
+      taskStore: this.#taskStore(),
+    });
+    return createToolResultPayload({
+      tool_name: toolCall.tool_name,
+      status: result.status,
+      admission_action: result.admission_action,
+      admission_reason: result.admission_reason,
+      capability_ref: result.capability_ref,
+      effect_scope: result.effect_scope,
+      authority_ref: result.authority_ref,
+      duration_ms: Math.max(0, Date.now() - startedAt),
+      result_summary: result.result_summary,
+      result_ref: result.result_ref ?? null,
+    });
   }
 
   #recordProviderRefusal(input, events) {
@@ -526,6 +541,13 @@ export class CloudflareCarrierSession {
       this.state.observer_interjections_muted = false;
       return this.#simpleCommand(command, { observer_interjections_muted: false });
     }
+    if (command === '/task' || command === 'task') return this.#taskCommand(command, args);
+    if (command === '/tasks' || command === 'tasks') {
+      const tasks = this.#taskSnapshot();
+      return isPromiseLike(tasks)
+        ? tasks.then((resolvedTasks) => this.#simpleCommand(command, { tasks: resolvedTasks }))
+        : this.#simpleCommand(command, { tasks });
+    }
     if (command === '/queue' || command === 'queue.show') return this.#simpleCommand(command, { queue_count: this.state.queue.length });
     if (command === 'host.command' || command === '/host') return this.#hostCommand(params, request);
     return this.#simpleCommand(command, { command_status: 'unsupported', terminal_state: 'rejected' }, false);
@@ -540,6 +562,55 @@ export class CloudflareCarrierSession {
     else if (verb === 'resume') this.state.goal = { ...this.state.goal, state: this.state.goal.text ? 'active' : 'unset' };
     else this.state.goal = { text: words.join(' '), state: 'active' };
     return this.#simpleCommand(command, { goal: clone(this.state.goal), principal: request.principal ?? null });
+  }
+
+  async #taskCommand(command, args) {
+    const words = Array.isArray(args) ? args.map(String) : String(args ?? '').split(/\s+/).filter(Boolean);
+    const verb = words[0] ?? 'list';
+    if (verb === 'list' || verb === 'show') return this.#simpleCommand(command, { tasks: await this.#taskSnapshot() });
+    const events = [];
+    if (verb === 'create') {
+      const title = words.slice(1).join(' ').trim();
+      const toolCall = {
+        tool_name: 'cloudflare_carrier_task_create',
+        arguments_summary: JSON.stringify({ title }),
+        arguments_ref: null,
+      };
+      const payload = await this.#executeToolEffectAndRecordResult(toolCall, events, { turn_id: null });
+      events.push(this.#appendEvent('tool_result_received', payload));
+      return { ok: payload.status !== 'denied', operation: 'carrier.command.execute', command, terminal_state: payload.status === 'ok' ? 'completed' : 'rejected', events };
+    }
+    if (verb === 'update') {
+      const taskId = words[1];
+      const status = words[2];
+      const note = words.slice(3).join(' ').trim();
+      const toolCall = {
+        tool_name: 'cloudflare_carrier_task_update',
+        arguments_summary: JSON.stringify({ task_id: taskId, status, note }),
+        arguments_ref: null,
+      };
+      const payload = await this.#executeToolEffectAndRecordResult(toolCall, events, { turn_id: null });
+      events.push(this.#appendEvent('tool_result_received', payload));
+      return { ok: payload.status !== 'denied', operation: 'carrier.command.execute', command, terminal_state: payload.status === 'ok' ? 'completed' : 'rejected', events };
+    }
+    return this.#simpleCommand(command, { command_status: 'unsupported_task_command', terminal_state: 'rejected' }, false);
+  }
+
+  #taskStore() {
+    if (!this.taskStoreAdapter || typeof this.taskStoreAdapter.forSession !== 'function') return null;
+    return this.taskStoreAdapter.forSession({
+      carrier_session_id: this.state.carrier_session_id,
+      agent_id: this.state.agent_id,
+      site_id: this.state.site_id,
+      site_root: this.state.site_root,
+      now: this.now,
+    });
+  }
+
+  #taskSnapshot() {
+    const store = this.#taskStore();
+    if (!store || typeof store.list !== 'function') return [];
+    return Promise.resolve(store.list()).then((tasks) => clone(tasks));
   }
 
   #hostCommand(params, request) {
@@ -566,6 +637,7 @@ export class CloudflareCarrierSession {
       started_at: this.now(),
       ...hostCommandPayload({ target, command_text, principal: request.principal ?? null }),
     });
+    const status = this.status();
     const completed = this.#appendEvent('carrier_host_command_completed', {
       command_id: `host_${requested.sequence}`,
       command_text,
@@ -576,7 +648,7 @@ export class CloudflareCarrierSession {
       terminal_state: 'completed',
       duration_ms: 0,
       output_truncated: false,
-      stdout: JSON.stringify(this.status()),
+      stdout: JSON.stringify(isPromiseLike(status) ? { ...this.state, tasks: [] } : status),
       stderr: '',
     });
     return { ok: true, operation: 'carrier.command.execute', command: 'host.command', terminal_state: 'completed', events: [requested, admitted, started, completed] };

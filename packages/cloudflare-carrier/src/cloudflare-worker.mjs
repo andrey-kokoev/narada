@@ -9,6 +9,12 @@ const CLOUDFLARE_KV_GET_CAPABILITY_REF = 'cloudflare-carrier:capability/kv-get:v
 const CLOUDFLARE_KV_GET_EFFECT_SCOPE = 'cloudflare-kv:read-only:get';
 const CLOUDFLARE_KV_PUT_CAPABILITY_REF = 'cloudflare-carrier:capability/kv-put:v1';
 const CLOUDFLARE_KV_PUT_EFFECT_SCOPE = 'cloudflare-kv:write:put';
+const CLOUDFLARE_TASK_CREATE_CAPABILITY_REF = 'cloudflare-carrier:capability/task-create:v1';
+const CLOUDFLARE_TASK_CREATE_EFFECT_SCOPE = 'cloudflare-narada-task:write:create';
+const CLOUDFLARE_TASK_UPDATE_CAPABILITY_REF = 'cloudflare-carrier:capability/task-update:v1';
+const CLOUDFLARE_TASK_UPDATE_EFFECT_SCOPE = 'cloudflare-narada-task:write:update';
+const CLOUDFLARE_TASK_LIST_CAPABILITY_REF = 'cloudflare-carrier:capability/task-list:v1';
+const CLOUDFLARE_TASK_LIST_EFFECT_SCOPE = 'cloudflare-narada-task:read:list';
 const CLOUDFLARE_RUNTIME_METADATA_READ_CAPABILITY = Object.freeze({
   capability_ref: CLOUDFLARE_RUNTIME_METADATA_READ_CAPABILITY_REF,
   effect_scope: CLOUDFLARE_RUNTIME_METADATA_READ_EFFECT_SCOPE,
@@ -29,12 +35,69 @@ const CLOUDFLARE_KV_PUT_TOOL_DEFINITION = Object.freeze({
     additionalProperties: false,
   }),
 });
+const CLOUDFLARE_TASK_CREATE_TOOL_DEFINITION = Object.freeze({
+  name: 'cloudflare_carrier_task_create',
+  description: 'Create a Narada task in the active Cloudflare carrier session task store.',
+  parameters: Object.freeze({
+    type: 'object',
+    properties: Object.freeze({
+      title: Object.freeze({ type: 'string' }),
+      description: Object.freeze({ type: 'string' }),
+    }),
+    required: Object.freeze(['title']),
+    additionalProperties: false,
+  }),
+});
+const CLOUDFLARE_TASK_UPDATE_TOOL_DEFINITION = Object.freeze({
+  name: 'cloudflare_carrier_task_update',
+  description: 'Update status or note for a Narada task in the active Cloudflare carrier session task store.',
+  parameters: Object.freeze({
+    type: 'object',
+    properties: Object.freeze({
+      task_id: Object.freeze({ type: 'string' }),
+      status: Object.freeze({ type: 'string' }),
+      note: Object.freeze({ type: 'string' }),
+    }),
+    required: Object.freeze(['task_id']),
+    additionalProperties: false,
+  }),
+});
+const CLOUDFLARE_TASK_LIST_TOOL_DEFINITION = Object.freeze({
+  name: 'cloudflare_carrier_task_list',
+  description: 'List Narada tasks in the active Cloudflare carrier session task store.',
+  parameters: Object.freeze({
+    type: 'object',
+    properties: Object.freeze({}),
+    additionalProperties: false,
+  }),
+});
 const CLOUDFLARE_KV_GET_CAPABILITY = Object.freeze({
   capability_ref: CLOUDFLARE_KV_GET_CAPABILITY_REF,
   effect_scope: CLOUDFLARE_KV_GET_EFFECT_SCOPE,
   tool_name: 'cloudflare_carrier_kv_get',
   access: 'read_only',
   substrate: 'cloudflare-kv',
+});
+const CLOUDFLARE_TASK_CREATE_CAPABILITY = Object.freeze({
+  capability_ref: CLOUDFLARE_TASK_CREATE_CAPABILITY_REF,
+  effect_scope: CLOUDFLARE_TASK_CREATE_EFFECT_SCOPE,
+  tool_name: 'cloudflare_carrier_task_create',
+  access: 'write',
+  substrate: 'cloudflare-d1-task-store',
+});
+const CLOUDFLARE_TASK_UPDATE_CAPABILITY = Object.freeze({
+  capability_ref: CLOUDFLARE_TASK_UPDATE_CAPABILITY_REF,
+  effect_scope: CLOUDFLARE_TASK_UPDATE_EFFECT_SCOPE,
+  tool_name: 'cloudflare_carrier_task_update',
+  access: 'write',
+  substrate: 'cloudflare-d1-task-store',
+});
+const CLOUDFLARE_TASK_LIST_CAPABILITY = Object.freeze({
+  capability_ref: CLOUDFLARE_TASK_LIST_CAPABILITY_REF,
+  effect_scope: CLOUDFLARE_TASK_LIST_EFFECT_SCOPE,
+  tool_name: 'cloudflare_carrier_task_list',
+  access: 'read_only',
+  substrate: 'cloudflare-d1-task-store',
 });
 const CLOUDFLARE_KV_PUT_CAPABILITY = Object.freeze({
   capability_ref: CLOUDFLARE_KV_PUT_CAPABILITY_REF,
@@ -94,8 +157,9 @@ export class CloudflareCarrierDurableObject {
     const snapshot = await this.state.storage.get(SNAPSHOT_KEY);
     const providerAdapter = createCloudflareAiProviderAdapter(this.env);
     const toolEffectAdapter = createCloudflareToolEffectAdapter(this.env);
+    const taskStoreAdapter = createCloudflareD1TaskStoreAdapter(this.env);
     if (snapshot) {
-      this.session = CloudflareCarrierSession.fromSnapshot(snapshot, { providerAdapter, toolEffectAdapter });
+      this.session = CloudflareCarrierSession.fromSnapshot(snapshot, { providerAdapter, toolEffectAdapter, taskStoreAdapter });
       return this.session;
     }
     if (request.operation !== 'session.start') return null;
@@ -108,6 +172,7 @@ export class CloudflareCarrierDurableObject {
       site_ref: params.site_ref,
       providerAdapter,
       toolEffectAdapter,
+      taskStoreAdapter,
     });
     return this.session;
   }
@@ -119,9 +184,24 @@ export class CloudflareCarrierDurableObject {
 
 export default {
   async fetch(request, env) {
+    const url = new URL(request.url);
+    if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/console')) {
+      return htmlResponse(renderCloudflareCarrierConsole());
+    }
+    if (request.method === 'GET' && url.pathname === '/health') {
+      return jsonResponse({ ok: true, carrier_kind: 'cloudflare-carrier', product_surface: 'web-console' });
+    }
     if (request.method !== 'POST') {
       return jsonResponse({ ok: false, code: 'method_not_allowed' }, 405);
     }
+    if (url.pathname !== '/' && url.pathname !== '/api/carrier' && url.pathname !== '/control') {
+      return jsonResponse({ ok: false, code: 'not_found' }, 404);
+    }
+    return handleCarrierApiRequest(request, env);
+  },
+};
+
+async function handleCarrierApiRequest(request, env) {
     const auth = authenticateCarrierRequest(request, env);
     if (!auth.ok) return jsonResponse({ ok: false, code: auth.code }, auth.status);
 
@@ -140,8 +220,7 @@ export default {
     const durableResponse = await env.CLOUDFLARE_CARRIER_SESSIONS.get(id).fetch(authenticatedRequest);
     const responseBody = await durableResponse.json();
     return jsonResponse(withPrincipalEvidence(responseBody, body.operation, auth.principal), durableResponse.status);
-  },
-};
+}
 
 export function createCloudflareAiProviderAdapter(env = {}) {
   if (!env.AI || typeof env.AI.run !== 'function') return null;
@@ -221,7 +300,11 @@ function cloudflareToolEffectConfig(env = {}) {
     || env.CLOUDFLARE_CARRIER_ENABLE_KV_TOOL_READS === true;
   const kvWritesEnabled = env.CLOUDFLARE_CARRIER_ENABLE_KV_TOOL_WRITES === '1'
     || env.CLOUDFLARE_CARRIER_ENABLE_KV_TOOL_WRITES === true;
+  const taskToolsEnabled = env.CLOUDFLARE_CARRIER_ENABLE_TASK_TOOLS === '1'
+    || env.CLOUDFLARE_CARRIER_ENABLE_TASK_TOOLS === true;
   const kvBinding = env.CLOUDFLARE_CARRIER_KV ?? env.NARADA_CARRIER_KV ?? null;
+  const taskDb = env.CLOUDFLARE_CARRIER_TASK_DB ?? env.NARADA_TASK_DB ?? null;
+  const d1TasksConfigured = taskToolsEnabled && taskDb && typeof taskDb.prepare === 'function';
   const tools = [];
   const capabilities = [];
   const toolDefinitions = [];
@@ -240,11 +323,26 @@ function cloudflareToolEffectConfig(env = {}) {
     capabilities.push({ ...CLOUDFLARE_KV_PUT_CAPABILITY });
     toolDefinitions.push(CLOUDFLARE_KV_PUT_TOOL_DEFINITION);
   }
+  if (d1TasksConfigured) {
+    tools.push('cloudflare_carrier_task_create', 'cloudflare_carrier_task_update', 'cloudflare_carrier_task_list');
+    capabilities.push(
+      { ...CLOUDFLARE_TASK_CREATE_CAPABILITY },
+      { ...CLOUDFLARE_TASK_UPDATE_CAPABILITY },
+      { ...CLOUDFLARE_TASK_LIST_CAPABILITY },
+    );
+    toolDefinitions.push(
+      CLOUDFLARE_TASK_CREATE_TOOL_DEFINITION,
+      CLOUDFLARE_TASK_UPDATE_TOOL_DEFINITION,
+      CLOUDFLARE_TASK_LIST_TOOL_DEFINITION,
+    );
+  }
   return {
     configured: tools.length > 0,
     runtimeReadsEnabled,
     kvReadsEnabled: kvReadsEnabled && Boolean(kvBinding && typeof kvBinding.get === 'function'),
     kvWritesEnabled: kvWritesEnabled && Boolean(kvBinding && typeof kvBinding.put === 'function'),
+    taskToolsEnabled: d1TasksConfigured,
+    taskDb,
     kvBinding,
     supported_tools: tools,
     capabilities,
@@ -312,6 +410,55 @@ export function createCloudflareToolEffectAdapter(env = {}) {
           result_ref: null,
         };
       }
+      if (admission.tool_name === 'cloudflare_carrier_task_create') {
+        const args = parseToolArguments(toolCall.arguments_summary);
+        const task = await context.taskStore?.create({
+          title: args.title,
+          description: args.description,
+          source: 'cloudflare-carrier-task-effect',
+        });
+        return {
+          status: 'ok',
+          admission_action: admission.action,
+          admission_reason: admission.reason,
+          capability_ref: CLOUDFLARE_TASK_CREATE_CAPABILITY_REF,
+          effect_scope: CLOUDFLARE_TASK_CREATE_EFFECT_SCOPE,
+          authority_ref: authority.authority_ref,
+          result_summary: JSON.stringify({ task, task_count: (await context.taskStore?.list?.())?.length ?? null }),
+          result_ref: null,
+        };
+      }
+      if (admission.tool_name === 'cloudflare_carrier_task_update') {
+        const args = parseToolArguments(toolCall.arguments_summary);
+        const task = await context.taskStore?.update({
+          task_id: args.task_id,
+          status: args.status,
+          note: args.note,
+        });
+        return {
+          status: 'ok',
+          admission_action: admission.action,
+          admission_reason: admission.reason,
+          capability_ref: CLOUDFLARE_TASK_UPDATE_CAPABILITY_REF,
+          effect_scope: CLOUDFLARE_TASK_UPDATE_EFFECT_SCOPE,
+          authority_ref: authority.authority_ref,
+          result_summary: JSON.stringify({ task, task_count: (await context.taskStore?.list?.())?.length ?? null }),
+          result_ref: null,
+        };
+      }
+      if (admission.tool_name === 'cloudflare_carrier_task_list') {
+        const tasks = await context.taskStore?.list?.() ?? [];
+        return {
+          status: 'ok',
+          admission_action: admission.action,
+          admission_reason: admission.reason,
+          capability_ref: CLOUDFLARE_TASK_LIST_CAPABILITY_REF,
+          effect_scope: CLOUDFLARE_TASK_LIST_EFFECT_SCOPE,
+          authority_ref: authority.authority_ref,
+          result_summary: JSON.stringify({ tasks, task_count: tasks.length }),
+          result_ref: null,
+        };
+      }
       if (admission.tool_name === 'cloudflare_carrier_kv_get') {
         const args = parseToolArguments(toolCall.arguments_summary);
         const key = typeof args.key === 'string' ? args.key.trim() : '';
@@ -363,6 +510,146 @@ export function createCloudflareToolEffectAdapter(env = {}) {
   };
 }
 
+export function createCloudflareD1TaskStoreAdapter(env = {}) {
+  const db = env.CLOUDFLARE_CARRIER_TASK_DB ?? env.NARADA_TASK_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return null;
+  return {
+    posture: 'cloudflare-d1',
+    adapter_kind: 'cloudflare-d1-task-store',
+    forSession(context = {}) {
+      return createD1SessionTaskStore(db, context);
+    },
+  };
+}
+
+function createD1SessionTaskStore(db, context = {}) {
+  const siteId = String(context.site_id ?? 'unknown-site');
+  const siteRoot = context.site_root ?? `cloudflare://${siteId}`;
+  const now = typeof context.now === 'function' ? context.now : () => new Date().toISOString();
+  let initialized = false;
+  async function ensureSchema() {
+    if (initialized) return;
+    await db.prepare(`CREATE TABLE IF NOT EXISTS narada_tasks (
+      site_id TEXT NOT NULL,
+      task_id TEXT NOT NULL,
+      task_number INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      status TEXT NOT NULL,
+      source TEXT NOT NULL,
+      note TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      carrier_session_id TEXT,
+      agent_id TEXT,
+      site_root TEXT,
+      PRIMARY KEY (site_id, task_id)
+    )`).run();
+    await db.prepare('CREATE INDEX IF NOT EXISTS narada_tasks_site_number_idx ON narada_tasks(site_id, task_number)').run();
+    initialized = true;
+  }
+  async function nextTaskNumber() {
+    await ensureSchema();
+    const row = await db.prepare('SELECT COALESCE(MAX(task_number), 0) + 1 AS next_task_number FROM narada_tasks WHERE site_id = ?')
+      .bind(siteId)
+      .first();
+    return Number(row?.next_task_number ?? 1);
+  }
+  return {
+    async create({ title, description = null, status = 'open', source = 'carrier' }) {
+      const trimmedTitle = String(title ?? '').trim();
+      if (!trimmedTitle) throw new Error('cloudflare_task_create_requires_title');
+      const taskNumber = await nextTaskNumber();
+      const timestamp = now();
+      const task = {
+        site_id: siteId,
+        task_id: `cloudflare-task-${taskNumber}`,
+        task_number: taskNumber,
+        title: trimmedTitle,
+        description: description ? String(description) : null,
+        status: String(status ?? 'open'),
+        source: String(source ?? 'carrier'),
+        note: null,
+        created_at: timestamp,
+        updated_at: timestamp,
+        carrier_session_id: context.carrier_session_id ?? null,
+        agent_id: context.agent_id ?? null,
+        site_root: siteRoot,
+      };
+      await ensureSchema();
+      await db.prepare(`INSERT INTO narada_tasks (
+        site_id, task_id, task_number, title, description, status, source, note,
+        created_at, updated_at, carrier_session_id, agent_id, site_root
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
+        task.site_id,
+        task.task_id,
+        task.task_number,
+        task.title,
+        task.description,
+        task.status,
+        task.source,
+        task.note,
+        task.created_at,
+        task.updated_at,
+        task.carrier_session_id,
+        task.agent_id,
+        task.site_root,
+      ).run();
+      return publicTask(task);
+    },
+    async update({ task_id, status = null, note = null }) {
+      await ensureSchema();
+      const taskId = String(task_id ?? '').trim();
+      const existing = await findTask(db, siteId, taskId);
+      if (!existing) throw new Error('cloudflare_task_not_found');
+      const updated = {
+        ...existing,
+        status: status ? String(status) : existing.status,
+        note: note ? String(note) : existing.note,
+        updated_at: now(),
+      };
+      await db.prepare('UPDATE narada_tasks SET status = ?, note = ?, updated_at = ? WHERE site_id = ? AND task_id = ?')
+        .bind(updated.status, updated.note, updated.updated_at, siteId, updated.task_id)
+        .run();
+      return publicTask(updated);
+    },
+    async list() {
+      await ensureSchema();
+      const result = await db.prepare('SELECT * FROM narada_tasks WHERE site_id = ? ORDER BY task_number ASC')
+        .bind(siteId)
+        .all();
+      return (result.results ?? []).map(publicTask);
+    },
+  };
+}
+
+async function findTask(db, siteId, taskIdOrNumber) {
+  const byId = await db.prepare('SELECT * FROM narada_tasks WHERE site_id = ? AND task_id = ?')
+    .bind(siteId, taskIdOrNumber)
+    .first();
+  if (byId) return byId;
+  const numeric = Number(taskIdOrNumber);
+  if (!Number.isInteger(numeric)) return null;
+  return db.prepare('SELECT * FROM narada_tasks WHERE site_id = ? AND task_number = ?')
+    .bind(siteId, numeric)
+    .first();
+}
+
+function publicTask(task) {
+  return {
+    task_id: String(task.task_id),
+    task_number: Number(task.task_number),
+    title: String(task.title),
+    description: task.description ?? null,
+    status: String(task.status),
+    source: String(task.source),
+    created_at: String(task.created_at),
+    updated_at: String(task.updated_at),
+    note: task.note ?? null,
+    site_id: task.site_id ?? null,
+  };
+}
+
 function classifyToolEffectAuthority(principal, toolName) {
   const principalId = String(principal?.principal_id ?? principal?.user_id ?? 'anonymous');
   const controlledActions = Array.isArray(principal?.controlled_actions) ? principal.controlled_actions.map(String) : [];
@@ -381,6 +668,9 @@ function capabilityForTool(toolName) {
   if (toolName === 'cloudflare_carrier_runtime_metadata_read') return CLOUDFLARE_RUNTIME_METADATA_READ_CAPABILITY;
   if (toolName === 'cloudflare_carrier_kv_get') return CLOUDFLARE_KV_GET_CAPABILITY;
   if (toolName === 'cloudflare_carrier_kv_put') return CLOUDFLARE_KV_PUT_CAPABILITY;
+  if (toolName === 'cloudflare_carrier_task_create') return CLOUDFLARE_TASK_CREATE_CAPABILITY;
+  if (toolName === 'cloudflare_carrier_task_update') return CLOUDFLARE_TASK_UPDATE_CAPABILITY;
+  if (toolName === 'cloudflare_carrier_task_list') return CLOUDFLARE_TASK_LIST_CAPABILITY;
   return null;
 }
 
@@ -393,11 +683,13 @@ export function classifyCloudflareToolEffectAdmission(toolCall = {}, state = {})
     : state.runtimeReadsEnabled
       ? ['cloudflare_carrier_runtime_metadata_read']
       : [];
+  const writesTask = toolName === 'cloudflare_carrier_task_create' || toolName === 'cloudflare_carrier_task_update';
+  const writesKv = toolName === 'cloudflare_carrier_kv_put';
   return classifyToolEffectAdmission(toolCall, {
     adapterConfigured: state.adapterConfigured ?? state.configured ?? state.runtimeReadsEnabled ?? false,
     admissionRequired: state.admissionRequired === true,
     supportedTools,
-    admitReason: toolName === 'cloudflare_carrier_kv_put' ? 'write_tool_effect_admitted' : 'read_only_tool_effect_admitted',
+    admitReason: writesKv || writesTask ? 'write_tool_effect_admitted' : 'read_only_tool_effect_admitted',
   });
 }
 
@@ -462,6 +754,220 @@ function jsonResponse(body, status = 200) {
     status,
     headers: { 'content-type': 'application/json' },
   });
+}
+
+function htmlResponse(body, status = 200) {
+  return new Response(body, {
+    status,
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store',
+    },
+  });
+}
+
+export function renderCloudflareCarrierConsole() {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Narada Cloudflare Carrier</title>
+  <style>
+    :root { color-scheme: light dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f7f5ef; color: #1e2024; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: linear-gradient(180deg, #fbfaf6 0%, #eef2f1 100%); }
+    header { padding: 24px clamp(16px, 4vw, 48px) 12px; border-bottom: 1px solid #d7d7ce; background: rgba(255,255,255,.74); backdrop-filter: blur(10px); }
+    h1 { margin: 0; font-size: 24px; line-height: 1.2; letter-spacing: 0; }
+    header p { margin: 6px 0 0; color: #5c626b; font-size: 14px; }
+    main { display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); gap: 16px; padding: 16px clamp(16px, 4vw, 48px) 32px; }
+    section, aside { background: rgba(255,255,255,.86); border: 1px solid #d7d7ce; border-radius: 8px; }
+    aside { padding: 16px; align-self: start; }
+    section { min-height: calc(100vh - 150px); display: grid; grid-template-rows: auto minmax(220px, 1fr) auto; overflow: hidden; }
+    label { display: block; margin: 0 0 12px; font-size: 12px; font-weight: 700; color: #343941; }
+    input, textarea { width: 100%; margin-top: 6px; padding: 10px 12px; border: 1px solid #c5c7bf; border-radius: 6px; background: #fff; color: #1e2024; font: inherit; }
+    textarea { min-height: 92px; resize: vertical; }
+    button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 8px 12px; border: 1px solid #1f6f62; border-radius: 6px; background: #1f6f62; color: #fff; font-weight: 700; cursor: pointer; }
+    button.secondary { background: #fff; color: #1f6f62; }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+    .status { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+    .metric { border: 1px solid #d7d7ce; border-radius: 6px; padding: 10px; background: #faf9f4; min-width: 0; }
+    .metric b { display: block; font-size: 11px; color: #686d75; }
+    .metric span { display: block; margin-top: 4px; overflow-wrap: anywhere; }
+    .task-panel { margin-top: 16px; border-top: 1px solid #d7d7ce; padding-top: 14px; }
+    .task-panel h2 { margin: 0 0 10px; font-size: 15px; letter-spacing: 0; }
+    .tasks { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+    .task { border: 1px solid #d9dcd3; border-radius: 6px; padding: 9px; background: #fff; }
+    .task strong { display: block; font-size: 13px; color: #1f4e48; overflow-wrap: anywhere; }
+    .task span { display: block; margin-top: 4px; font-size: 12px; color: #686d75; overflow-wrap: anywhere; }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px; border-bottom: 1px solid #d7d7ce; }
+    .toolbar h2 { margin: 0; font-size: 16px; letter-spacing: 0; }
+    .events { overflow: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+    .event { border: 1px solid #d9dcd3; border-radius: 8px; padding: 10px; background: #fff; }
+    .event strong { display: block; color: #1f4e48; font-size: 13px; overflow-wrap: anywhere; }
+    .event pre { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; color: #343941; }
+    .composer { padding: 12px 14px; border-top: 1px solid #d7d7ce; }
+    .error { margin-top: 12px; color: #a5361f; font-size: 13px; overflow-wrap: anywhere; }
+    .empty { color: #686d75; font-size: 14px; padding: 24px 4px; }
+    @media (max-width: 840px) { main { grid-template-columns: 1fr; } section { min-height: 560px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Narada Cloudflare Carrier</h1>
+    <p>Authenticated operator console for Worker-hosted sessions, inputs, events, and carrier evidence.</p>
+  </header>
+  <main>
+    <aside>
+      <label>Bearer token<input id="token" type="password" autocomplete="current-password" placeholder="Cloudflare carrier token"></label>
+      <label>Session ID<input id="sessionId" value="narada-cloudflare-console"></label>
+      <label>Agent ID<input id="agentId" value="narada.cloudflare.agent"></label>
+      <label>Site ID<input id="siteId" value="cloudflare-console"></label>
+      <div class="actions">
+        <button id="start">Start / Resume</button>
+        <button id="refresh" class="secondary">Refresh</button>
+      </div>
+      <div class="status">
+        <div class="metric"><b>Provider</b><span id="provider">unknown</span></div>
+        <div class="metric"><b>Effects</b><span id="effects">unknown</span></div>
+        <div class="metric"><b>Events</b><span id="eventCount">0</span></div>
+        <div class="metric"><b>Cursor</b><span id="cursor">0</span></div>
+      </div>
+      <div class="task-panel">
+        <h2>Task State</h2>
+        <label>New task<input id="taskTitle" placeholder="Task title"></label>
+        <div class="actions"><button id="createTask" class="secondary">Create Task</button></div>
+        <div id="tasks" class="tasks"><div class="empty">No tasks loaded.</div></div>
+      </div>
+      <div id="error" class="error" role="status"></div>
+    </aside>
+    <section>
+      <div class="toolbar">
+        <h2>Session Events</h2>
+        <button id="read" class="secondary">Read Events</button>
+      </div>
+      <div id="events" class="events"><div class="empty">Start or resume a session to read carrier events.</div></div>
+      <div class="composer">
+        <label>Input<textarea id="input" placeholder="Send an operator input to the Cloudflare carrier"></textarea></label>
+        <div class="actions"><button id="send">Send Input</button></div>
+      </div>
+    </section>
+  </main>
+  <script type="module">
+    const state = { events: [], afterSequence: 0 };
+    const el = (id) => document.getElementById(id);
+    const api = {
+      async request(operation, params = {}, extra = {}) {
+        const carrierSessionId = el('sessionId').value.trim();
+        const token = el('token').value.trim();
+        if (!token) throw new Error('Bearer token is required.');
+        const response = await fetch('/api/carrier', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token },
+          body: JSON.stringify({ operation, carrier_session_id: carrierSessionId, params, ...extra }),
+        });
+        const body = await response.json();
+        if (!response.ok || body.ok === false) throw new Error(body.code || body.error || response.statusText);
+        return body;
+      },
+      start() {
+        const carrierSessionId = el('sessionId').value.trim();
+        return this.request('session.start', {
+          carrier_session_id: carrierSessionId,
+          agent_id: el('agentId').value.trim(),
+          site_id: el('siteId').value.trim(),
+          site_root: 'cloudflare://' + el('siteId').value.trim(),
+          site_ref: 'site://' + el('siteId').value.trim(),
+        }, { request_id: 'console_start_' + carrierSessionId });
+      },
+      status() { return this.request('session.status'); },
+      readEvents() { return this.request('session.events.read', { after_sequence: state.afterSequence }); },
+      command(command, args = []) { return this.request('carrier.command.execute', { command, args }, { request_id: 'console_command_' + Date.now() }); },
+      deliver(content) {
+        const eventId = 'console_input_' + Date.now();
+        return this.request('carrier.input.deliver', { input: { event_id: eventId, input_id: eventId, input_kind: 'operator_message', source: 'operator', visibility: 'operator_visible', content } }, { request_id: 'request_' + eventId });
+      },
+    };
+    window.naradaCloudflareCarrierClient = api;
+    function appendEvents(events = []) {
+      for (const event of events) {
+        if (state.events.some((existing) => existing.sequence === event.sequence)) continue;
+        state.events.push(event);
+        state.afterSequence = Math.max(state.afterSequence, Number(event.sequence || 0));
+      }
+      renderEvents();
+    }
+    function renderTasks(tasks = []) {
+      if (tasks.length === 0) {
+        el('tasks').innerHTML = '<div class="empty">No tasks yet.</div>';
+        return;
+      }
+      el('tasks').replaceChildren(...tasks.map((task) => {
+        const node = document.createElement('article');
+        node.className = 'task';
+        const title = document.createElement('strong');
+        title.textContent = task.task_id + ' ' + task.title;
+        const meta = document.createElement('span');
+        meta.textContent = task.status + (task.note ? ' - ' + task.note : '');
+        node.append(title, meta);
+        return node;
+      }));
+    }
+    function evidencePayload(event) {
+      const payload = event.payload || {};
+      const evidence = {
+        provider: payload.provider_adapter_kind || payload.provider_request_status || payload.provider_execution_enabled,
+        tool_name: payload.tool_name,
+        status: payload.status,
+        admission_action: payload.admission_action,
+        admission_reason: payload.admission_reason,
+        capability_ref: payload.capability_ref,
+        effect_scope: payload.effect_scope,
+        authority_ref: payload.authority_ref,
+        result_summary: payload.result_summary,
+        text_delta: payload.text_delta,
+      };
+      return Object.fromEntries(Object.entries(evidence).filter(([, value]) => value !== undefined));
+    }
+    function renderEvents() {
+      el('eventCount').textContent = String(state.events.length);
+      el('cursor').textContent = String(state.afterSequence);
+      if (state.events.length === 0) {
+        el('events').innerHTML = '<div class="empty">No events read yet.</div>';
+        return;
+      }
+      el('events').replaceChildren(...state.events.map((event) => {
+        const node = document.createElement('article');
+        node.className = 'event';
+        const title = document.createElement('strong');
+        title.textContent = '#' + event.sequence + ' ' + event.event_kind;
+        const pre = document.createElement('pre');
+        pre.textContent = JSON.stringify(evidencePayload(event), null, 2);
+        node.append(title, pre);
+        return node;
+      }));
+      el('events').scrollTop = el('events').scrollHeight;
+    }
+    async function refreshStatus() {
+      const status = await api.status();
+      el('provider').textContent = status.provider_adapter_posture || status.provider_adapter_kind || 'unknown';
+      el('effects').textContent = status.tool_effect_posture || 'unknown';
+      renderTasks(status.tasks || []);
+      return status;
+    }
+    async function run(action) {
+      el('error').textContent = '';
+      try { await action(); } catch (error) { el('error').textContent = error.message; }
+    }
+    el('start').addEventListener('click', () => run(async () => { const body = await api.start(); appendEvents([body.event].filter(Boolean)); await refreshStatus(); }));
+    el('refresh').addEventListener('click', () => run(refreshStatus));
+    el('read').addEventListener('click', () => run(async () => { const body = await api.readEvents(); appendEvents(body.events || []); await refreshStatus(); }));
+    el('createTask').addEventListener('click', () => run(async () => { const title = el('taskTitle').value.trim(); if (!title) return; const body = await api.command('/task', ['create', ...title.split(/\\s+/)]); appendEvents(body.events || []); el('taskTitle').value = ''; await refreshStatus(); }));
+    el('send').addEventListener('click', () => run(async () => { const content = el('input').value.trim(); if (!content) return; const body = await api.deliver(content); appendEvents(body.events || []); el('input').value = ''; await refreshStatus(); }));
+  </script>
+</body>
+</html>`;
 }
 
 function withPrincipalEvidence(body, operation, principal) {

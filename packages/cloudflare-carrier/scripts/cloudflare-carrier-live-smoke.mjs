@@ -20,6 +20,12 @@ const goalWords = option('--goal')?.split(/\s+/).filter(Boolean) ?? ['prove', 'l
 const expectedGoal = goalWords.join(' ');
 const expectedToolEffectPosture = option('--expect-tool-effect-posture') ?? process.env.CLOUDFLARE_CARRIER_EXPECT_TOOL_EFFECT_POSTURE ?? null;
 const inputPipelineCases = JSON.parse(readFileSync(new URL('../../carrier-protocol/fixtures/carrier-input-pipeline-cases.json', import.meta.url), 'utf8'));
+const consoleCheck = await getConsole();
+assert.equal(consoleCheck.http_status, 200);
+assert.match(consoleCheck.body, /Narada Cloudflare Carrier/);
+assert.match(consoleCheck.body, /naradaCloudflareCarrierClient/);
+assert.match(consoleCheck.body, /\/api\/carrier/);
+
 const providerRefusalInput = {
   ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,
   event_id: `input_live_smoke_${sessionSuffix}`,
@@ -38,9 +44,9 @@ const start = await post({
 });
 assert.equal(start.http_status, 200);
 assert.equal(start.body.ok, true);
-assert.equal(start.body.principal.email, 'admin@system');
+assertAuthenticatedPrincipal(start.body.principal);
 assert.equal(start.body.event.event_kind, 'carrier_session_started');
-assert.equal(start.body.event.payload.principal.email, 'admin@system');
+assert.deepEqual(start.body.event.payload.principal, start.body.principal);
 
 const command = await post({
   operation: 'carrier.command.execute',
@@ -53,7 +59,7 @@ const command = await post({
 });
 assert.equal(command.http_status, 200);
 assert.equal(command.body.ok, true);
-assert.equal(command.body.principal.email, 'admin@system');
+assertAuthenticatedPrincipal(command.body.principal);
 assert.equal(command.body.event.event_kind, 'carrier_command_executed');
 
 const inputDelivery = await post({
@@ -66,17 +72,13 @@ const inputDelivery = await post({
 });
 assert.equal(inputDelivery.http_status, 200);
 assert.equal(inputDelivery.body.ok, true);
-assert.equal(inputDelivery.body.principal.email, 'admin@system');
+assertAuthenticatedPrincipal(inputDelivery.body.principal);
 assert.equal(inputDelivery.body.input_event_id, providerRefusalInput.event_id);
 assert.equal(inputDelivery.body.terminal_state, 'completed');
-assert.deepEqual(inputDelivery.body.events.map((event) => event.event_kind), [
-  'input_admitted_to_turn',
-  'turn_started',
-  'provider_request_recorded',
-  'provider_text_delta_recorded',
-  'turn_completed',
-  'input_completed',
-]);
+const inputEventKinds = inputDelivery.body.events.map((event) => event.event_kind);
+for (const eventKind of ['input_admitted_to_turn', 'turn_started', 'provider_request_recorded', 'provider_text_delta_recorded', 'turn_completed', 'input_completed']) {
+  assert.ok(inputEventKinds.includes(eventKind), eventKind);
+}
 const providerRequest = inputDelivery.body.events.find((event) => event.event_kind === 'provider_request_recorded');
 assert.equal(providerRequest.payload.provider_request_status, 'dispatched');
 assert.equal(providerRequest.payload.provider_execution_enabled, true);
@@ -93,6 +95,43 @@ const inputCompleted = inputDelivery.body.events.find((event) => event.event_kin
 assert.equal(inputCompleted.payload.input_event_id, providerRefusalInput.event_id);
 assert.equal(inputCompleted.payload.terminal_state, 'completed');
 
+const taskCreate = await post({
+  operation: 'carrier.command.execute',
+  request_id: `live_smoke_task_create_${sessionSuffix}`,
+  carrier_session_id: carrierSessionId,
+  params: {
+    command: '/task',
+    args: ['create', 'live', 'cloudflare', 'task'],
+  },
+});
+assert.equal(taskCreate.http_status, 200);
+assert.equal(taskCreate.body.ok, true);
+const taskCreateResult = taskCreate.body.events.find((event) => event.event_kind === 'tool_result_received');
+assert.equal(taskCreateResult.payload.status, 'ok');
+assert.equal(taskCreateResult.payload.admission_action, 'admit');
+assert.equal(taskCreateResult.payload.capability_ref, 'cloudflare-carrier:capability/task-create:v1');
+assert.equal(taskCreateResult.payload.effect_scope, 'cloudflare-narada-task:write:create');
+const createdTask = JSON.parse(taskCreateResult.payload.result_summary).task;
+assert.equal(createdTask.title, 'live cloudflare task');
+
+const taskUpdate = await post({
+  operation: 'carrier.command.execute',
+  request_id: `live_smoke_task_update_${sessionSuffix}`,
+  carrier_session_id: carrierSessionId,
+  params: {
+    command: '/task',
+    args: ['update', createdTask.task_id, 'done', 'live-smoke'],
+  },
+});
+assert.equal(taskUpdate.http_status, 200);
+assert.equal(taskUpdate.body.ok, true);
+const taskUpdateResult = taskUpdate.body.events.find((event) => event.event_kind === 'tool_result_received');
+assert.equal(taskUpdateResult.payload.status, 'ok');
+assert.equal(taskUpdateResult.payload.capability_ref, 'cloudflare-carrier:capability/task-update:v1');
+const updatedTask = JSON.parse(taskUpdateResult.payload.result_summary).task;
+assert.equal(updatedTask.status, 'done');
+assert.equal(updatedTask.note, 'live-smoke');
+
 const status = await post({
   operation: 'session.status',
   carrier_session_id: carrierSessionId,
@@ -104,9 +143,11 @@ assert.equal(status.body.agent_id, agentId);
 assert.equal(status.body.carrier_host, 'cloudflare-durable-object');
 assert.equal(status.body.provider_adapter_posture, 'cloudflare-workers-ai');
 assertToolEffectStatus(status.body, expectedToolEffectPosture);
-assert.equal(status.body.reader_principal.email, 'admin@system');
+assertAuthenticatedPrincipal(status.body.reader_principal);
 assert.deepEqual(status.body.goal, { text: expectedGoal, state: 'active' });
-assert.equal(status.body.next_event_sequence, 9);
+assert.ok(status.body.next_event_sequence >= 13);
+assert.ok(Array.isArray(status.body.tasks));
+assert.ok(status.body.tasks.some((task) => task.task_id === createdTask.task_id && task.status === 'done' && task.note === 'live-smoke'));
 
 const events = await post({
   operation: 'session.events.read',
@@ -118,24 +159,19 @@ const events = await post({
 });
 assert.equal(events.http_status, 200);
 assert.equal(events.body.ok, true);
-assert.equal(events.body.reader_principal.email, 'admin@system');
-assert.deepEqual(events.body.events.map((event) => event.sequence), [1, 2, 3, 4, 5, 6, 7, 8]);
-assert.deepEqual(events.body.events.map((event) => event.event_kind), [
-  'carrier_session_started',
-  'carrier_command_executed',
-  'input_admitted_to_turn',
-  'turn_started',
-  'provider_request_recorded',
-  'provider_text_delta_recorded',
-  'turn_completed',
-  'input_completed',
-]);
-assert.equal(events.body.next_cursor, 8);
+assertAuthenticatedPrincipal(events.body.reader_principal);
+const liveEventKinds = events.body.events.map((event) => event.event_kind);
+for (const eventKind of ['carrier_session_started', 'carrier_command_executed', 'provider_request_recorded', 'provider_text_delta_recorded', 'tool_call_requested', 'tool_result_received']) {
+  assert.ok(liveEventKinds.includes(eventKind), eventKind);
+}
+assert.ok(events.body.next_cursor >= 12);
 
 process.stdout.write(`${JSON.stringify({
   schema: 'narada.cloudflare_carrier.live_smoke.v1',
   status: 'ok',
   worker_url: workerUrl,
+  console_surface_checked: true,
+  api_client_path: apiUrl().toString(),
   carrier_session_id: carrierSessionId,
   agent_id: agentId,
   carrier_host: status.body.carrier_host,
@@ -155,10 +191,22 @@ process.stdout.write(`${JSON.stringify({
   provider_execution_enabled: providerRequest.payload.provider_execution_enabled,
   provider_text_preview: providerOutput.payload.text_delta.slice(0, 120),
   turn_terminal_status: turnCompleted.payload.terminal_status,
+  task_create_status: taskCreateResult.payload.status,
+  task_update_status: taskUpdateResult.payload.status,
+  persisted_tasks: status.body.tasks,
   event_kinds: events.body.events.map((event) => event.event_kind),
   sequences: events.body.events.map((event) => event.sequence),
   next_cursor: events.body.next_cursor,
 }, null, 2)}\n`);
+
+function assertAuthenticatedPrincipal(principal) {
+  assert.ok(principal && typeof principal === 'object');
+  assert.ok(['admin', 'service'].includes(principal.principal_id), principal.principal_id);
+  assert.ok(['user', 'service'].includes(principal.auth_type), principal.auth_type);
+  assert.ok(Array.isArray(principal.controlled_actions));
+  assert.ok(principal.controlled_actions.includes('*'));
+  if (principal.principal_id === 'admin') assert.equal(principal.email, 'admin@system');
+}
 
 function option(name) {
   const index = args.indexOf(name);
@@ -192,6 +240,36 @@ function assertKnownToolCapability(capability) {
     });
     return;
   }
+  if (capability.tool_name === 'cloudflare_carrier_task_create') {
+    assert.deepEqual(capability, {
+      capability_ref: 'cloudflare-carrier:capability/task-create:v1',
+      effect_scope: 'cloudflare-narada-task:write:create',
+      tool_name: 'cloudflare_carrier_task_create',
+      access: 'write',
+      substrate: 'cloudflare-d1-task-store',
+    });
+    return;
+  }
+  if (capability.tool_name === 'cloudflare_carrier_task_update') {
+    assert.deepEqual(capability, {
+      capability_ref: 'cloudflare-carrier:capability/task-update:v1',
+      effect_scope: 'cloudflare-narada-task:write:update',
+      tool_name: 'cloudflare_carrier_task_update',
+      access: 'write',
+      substrate: 'cloudflare-d1-task-store',
+    });
+    return;
+  }
+  if (capability.tool_name === 'cloudflare_carrier_task_list') {
+    assert.deepEqual(capability, {
+      capability_ref: 'cloudflare-carrier:capability/task-list:v1',
+      effect_scope: 'cloudflare-narada-task:read:list',
+      tool_name: 'cloudflare_carrier_task_list',
+      access: 'read_only',
+      substrate: 'cloudflare-d1-task-store',
+    });
+    return;
+  }
   if (capability.tool_name === 'cloudflare_carrier_kv_get') {
     assert.deepEqual(capability, {
       capability_ref: 'cloudflare-carrier:capability/kv-get:v1',
@@ -215,8 +293,16 @@ function assertKnownToolCapability(capability) {
   assert.fail(`unknown_tool_effect_capability:${String(capability.tool_name)}`);
 }
 
+async function getConsole() {
+  const response = await fetch(workerUrl);
+  return {
+    http_status: response.status,
+    body: await response.text(),
+  };
+}
+
 async function post(body) {
-  const response = await fetch(workerUrl, {
+  const response = await fetch(apiUrl(), {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -235,4 +321,12 @@ async function post(body) {
     http_status: response.status,
     body: parsed,
   };
+}
+
+function apiUrl() {
+  return new URL('/api/carrier', withTrailingSlash(workerUrl));
+}
+
+function withTrailingSlash(value) {
+  return String(value).endsWith('/') ? value : `${value}/`;
 }

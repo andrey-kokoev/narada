@@ -21,6 +21,26 @@ Important Worker exports:
 - `createCloudflareToolEffectAdapter`
 - `classifyCloudflareToolEffectAdmission`
 
+## Worker Product Surface
+
+The deployed Worker serves a minimal authenticated operator console at:
+
+- `GET /`
+- `GET /console`
+
+The console is intentionally Worker-native HTML and browser JavaScript, so no separate asset build or static hosting step is required. It lets an operator provide a bearer token, start or resume a carrier session, send carrier input, read session events, inspect provider/tool/effect evidence from event payloads, and view or create Cloudflare-backed Narada tasks.
+
+Browser and API clients can call the carrier JSON API at:
+
+- `POST /api/carrier`
+
+The existing compatibility routes remain available:
+
+- `POST /`
+- `POST /control`
+
+All JSON API routes require the same bearer auth and accept the same operation envelope, including `session.start`, `session.status`, `carrier.input.deliver`, `carrier.command.execute`, `carrier.interrupt`, `session.events.read`, and `session.close`.
+
 ## Tool / Effect Boundary
 
 Provider tool-call output is not effect execution.
@@ -52,7 +72,15 @@ Set `CLOUDFLARE_CARRIER_ENABLE_KV_TOOL_WRITES=1` and provide a KV binding with `
 
 - `cloudflare_carrier_kv_put`
 
-Unsupported tools remain denied with `unsupported_tool_effect`; the requested tool name remains visible in the tool result payload. Tool results also carry structured `admission_action` and `admission_reason` fields when the boundary admits or denies the effect. Admitted runtime metadata, KV get, and KV put effects carry `capability_ref`, `effect_scope`, and `authority_ref` evidence. If a principal lacks matching `controlled_actions`, the carrier records `tool_effect_authority_denied`.
+Set `CLOUDFLARE_CARRIER_ENABLE_TASK_TOOLS=1` and provide a D1 binding named `CLOUDFLARE_CARRIER_TASK_DB` or `NARADA_TASK_DB` to admit Cloudflare D1-backed Narada task effects:
+
+- `cloudflare_carrier_task_create`
+- `cloudflare_carrier_task_update`
+- `cloudflare_carrier_task_list`
+
+Task tools store task lifecycle state in Cloudflare D1, scoped by `site_id`, outside the Durable Object session snapshot. The `/task create <title>` and `/task update <task-id> <status> [note]` commands trigger the same admitted task effect boundary as provider tool calls, and `session.status` reads the current D1-backed `tasks` model for console rendering and persisted readback.
+
+Unsupported tools remain denied with `unsupported_tool_effect`; the requested tool name remains visible in the tool result payload. Tool results also carry structured `admission_action` and `admission_reason` fields when the boundary admits or denies the effect. Admitted runtime metadata, KV, and task effects carry `capability_ref`, `effect_scope`, and `authority_ref` evidence. If a principal lacks matching `controlled_actions`, the carrier records `tool_effect_authority_denied`.
 
 `session.status` exposes the current posture:
 
@@ -118,12 +146,14 @@ pnpm --filter @narada2/cloudflare-carrier ship
 
 - Wrangler config shape;
 - Durable Object binding;
+- D1 task database binding;
 - Workers AI binding;
 - auth and principal evidence;
 - Durable Object routing and snapshot reload;
 - tool/effect admission classifier behavior;
 - deny-by-default tool/effect result evidence;
 - configured tool/effect admission for `cloudflare_carrier_runtime_metadata_read`, `cloudflare_carrier_kv_get`, and `cloudflare_carrier_kv_put`;
+- configured task effect admission for `cloudflare_carrier_task_create`, `cloudflare_carrier_task_update`, and D1-backed `session.status` task readback;
 - configured KV write execution failure after admission, proving admitted `failed` result evidence is distinct from boundary denial;
 - thrown tool-effect adapter failures, proving pre-admission boundary execution failures are still recorded as `tool_result_received` with `status: failed`.
 
@@ -141,4 +171,4 @@ To require a specific live tool/effect posture:
 pnpm --filter @narada2/cloudflare-carrier smoke:live -- --url <worker-url> --token <token> --expect-tool-effect-posture unconfigured
 ```
 
-Use `configured` when the Worker was deployed with a configured tool/effect adapter. Live smoke checks deployed posture, capabilities, routing, auth, provider execution, and event reads against a real Workers AI response. It does not force deterministic tool-effect outcomes because live provider tool selection is model-dependent; deterministic denied, admitted-ok, and admitted-failed tool/effect outcomes are covered by `deploy:check`. The live token is not stored by this package. Rotate or set the Worker secret before running live smoke from a fresh shell.
+Use `configured` when the Worker was deployed with a configured tool/effect adapter. Live smoke checks the deployed console, `/api/carrier` API client path, posture, capabilities, routing, auth, provider execution, task create/update, persisted task readback, and event reads against a real Workers AI response. It does not force deterministic provider-selected tool-effect outcomes because live provider tool selection is model-dependent; deterministic denied, admitted-ok, and admitted-failed tool/effect outcomes are covered by `deploy:check`. The live token is not stored by this package. Rotate or set the Worker secret before running live smoke from a fresh shell.
