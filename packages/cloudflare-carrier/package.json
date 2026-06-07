@@ -12,6 +12,7 @@
     "deploy:check": "node scripts/cloudflare-carrier-deploy-check.mjs",
     "deploy:dry-run": "wrangler deploy --dry-run --config wrangler.toml",
     "deploy:live": "wrangler deploy --config wrangler.toml",
+    "smoke:live": "node scripts/cloudflare-carrier-live-smoke.mjs",
     "ship": "pnpm test && pnpm deploy:check && pnpm deploy:dry-run"
   },
   "dependencies": {
