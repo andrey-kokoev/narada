@@ -136,7 +136,7 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     return { ok: true, action: 'created', site: publicSite(site), membership: publicMembership(membership) };
   }
 
-  async function readSite({ site_id, principal } = {}) {
+  async function readSite({ site_id, principal, include_sessions = true, include_authority_events = true, limit = 100 } = {}) {
     await ensureSchema();
     const siteId = normalizeSiteId(site_id);
     if (!siteId) return { ok: false, code: 'invalid_site_id' };
@@ -144,7 +144,15 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     if (!site) return { ok: false, code: 'site_not_found', site_id: siteId };
     const membership = await findMembership(siteId, normalizePrincipal(principal).principal_id);
     if (!membership || membership.status !== 'active') return { ok: false, code: 'site_authority_denied', site_id: siteId };
-    return { ok: true, site: publicSite(site), membership: publicMembership(membership), settings: await listSettings(siteId) };
+    const boundedLimit = boundedReadLimit(limit);
+    return {
+      ok: true,
+      site: publicSite(site),
+      membership: publicMembership(membership),
+      settings: await listSettings(siteId),
+      sessions: include_sessions ? await listCarrierSessionBindings(siteId, boundedLimit) : [],
+      authority_events: include_authority_events ? await listAuthorityEvents(siteId, boundedLimit) : [],
+    };
   }
 
   async function listSites({ principal } = {}) {
@@ -280,6 +288,22 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     return db.prepare('SELECT * FROM cloudflare_site_carrier_sessions WHERE carrier_session_id = ?').bind(carrierSessionId).first();
   }
 
+  async function listCarrierSessionBindings(siteId, limit = 100) {
+    const result = await db.prepare(`SELECT * FROM cloudflare_site_carrier_sessions
+      WHERE site_id = ?
+      ORDER BY created_at DESC
+      LIMIT ?`).bind(siteId, boundedReadLimit(limit)).all();
+    return (result.results ?? []).map(publicCarrierSessionBinding);
+  }
+
+  async function listAuthorityEvents(siteId, limit = 100) {
+    const result = await db.prepare(`SELECT * FROM cloudflare_site_authority_events
+      WHERE site_id = ?
+      ORDER BY recorded_at DESC
+      LIMIT ?`).bind(siteId, boundedReadLimit(limit)).all();
+    return (result.results ?? []).map(publicAuthorityEvent);
+  }
+
   async function listSettings(siteId) {
     const result = await db.prepare('SELECT setting_key, value_json FROM cloudflare_site_settings WHERE site_id = ? ORDER BY setting_key ASC').bind(siteId).all();
     return Object.fromEntries((result.results ?? []).map((row) => [row.setting_key, parseJson(row.value_json)]));
@@ -313,6 +337,8 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     listSites,
     putSiteSetting,
     validateCarrierSiteBinding,
+    listCarrierSessionBindings,
+    listAuthorityEvents,
   };
 }
 
@@ -354,6 +380,40 @@ function publicMembership(membership) {
     created_at: String(membership.created_at),
     updated_at: String(membership.updated_at),
   };
+}
+
+function publicCarrierSessionBinding(binding) {
+  if (!binding) return null;
+  return {
+    carrier_session_id: String(binding.carrier_session_id),
+    site_id: String(binding.site_id),
+    agent_id: String(binding.agent_id),
+    bound_by_principal_id: String(binding.bound_by_principal_id),
+    binding_status: String(binding.binding_status),
+    created_at: String(binding.created_at),
+    updated_at: String(binding.updated_at),
+  };
+}
+
+function publicAuthorityEvent(event) {
+  if (!event) return null;
+  return {
+    event_id: String(event.event_id),
+    event_kind: String(event.event_kind),
+    site_id: event.site_id ?? null,
+    carrier_session_id: event.carrier_session_id ?? null,
+    principal_id: String(event.principal_id),
+    action: String(event.action),
+    reason: event.reason ?? null,
+    evidence: parseJson(event.evidence_json),
+    recorded_at: String(event.recorded_at),
+  };
+}
+
+function boundedReadLimit(value) {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed)) return 100;
+  return Math.max(0, Math.min(parsed, 500));
 }
 
 function parseJson(value) {

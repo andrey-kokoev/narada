@@ -335,6 +335,53 @@ test('worker rejects session.start when configured site registry denies binding'
   assert.equal(siteDb.dump().authorityEvents[0].action, 'deny');
 });
 
+test('worker site.read composes site sessions tasks authority events and carrier evidence', async () => {
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{
+      site_id: 'site_fixture',
+      site_ref: 'site://fixture',
+      display_name: 'Fixture Site',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+      created_by_principal_id: 'admin',
+    }],
+    memberships: [{
+      site_id: 'site_fixture',
+      principal_id: 'admin',
+      role: 'owner',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+  });
+  const taskDb = fakeD1TaskDatabase();
+  const durableEnv = { CLOUDFLARE_CARRIER_ENABLE_TASK_TOOLS: '1', CLOUDFLARE_CARRIER_TASK_DB: taskDb };
+  const namespace = fakeDurableObjectNamespace(durableEnv);
+  const env = authEnv(namespace, { CLOUDFLARE_SITE_REGISTRY_DB: siteDb, CLOUDFLARE_CARRIER_TASK_DB: taskDb });
+
+  const start = await worker.fetch(jsonRequest(startRequest({ request_id: 'request_site_read_start' }), { token: 'test-admin-token' }), env);
+  assert.equal(start.status, 200);
+  const taskCreate = await worker.fetch(jsonRequest(commandRequest('/task', ['create', 'site', 'read', 'task'], { request_id: 'request_site_read_task_create' }), { token: 'test-admin-token' }), env);
+  assert.equal(taskCreate.status, 200);
+
+  const read = await worker.fetch(jsonRequest({
+    operation: 'site.read',
+    request_id: 'request_site_read_overview',
+    params: { site_id: 'site_fixture', carrier_event_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(read.status, 200);
+  const body = await read.json();
+  assert.equal(body.site.site_id, 'site_fixture');
+  assert.equal(body.membership.role, 'owner');
+  assert.equal(body.sessions[0].carrier_session_id, 'carrier_session_cloudflare_fixture');
+  assert.equal(body.tasks[0].title, 'site read task');
+  assert.equal(body.authority_events.some((event) => event.event_kind === 'carrier_site_binding_admitted'), true);
+  assert.equal(body.carrier_evidence[0].carrier_session_id, 'carrier_session_cloudflare_fixture');
+  assert.equal(body.carrier_evidence[0].events.some((event) => event.event_kind === 'carrier_session_started'), true);
+  assert.equal(body.reader_principal.email, 'admin@system');
+});
+
 test('worker serves minimal authenticated web console shell', async () => {
   const namespace = fakeDurableObjectNamespace();
   const env = authEnv(namespace);
@@ -1352,6 +1399,30 @@ function fakeD1SiteRegistryStatement(state, sql) {
       return null;
     },
     async all() {
+      if (normalized.includes('from cloudflare_site_carrier_sessions')) {
+        const [siteId, limit] = bindings;
+        return {
+          results: state.carrierSessions
+            .filter((entry) => entry.site_id === siteId)
+            .sort((left, right) => right.created_at.localeCompare(left.created_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_site_authority_events')) {
+        const [siteId, limit] = bindings;
+        return {
+          results: state.authorityEvents
+            .filter((entry) => entry.site_id === siteId)
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_site_settings')) {
+        const [siteId] = bindings;
+        return { results: state.settings.filter((entry) => entry.site_id === siteId).map((entry) => clone(entry)) };
+      }
       return { results: [] };
     },
   };

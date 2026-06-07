@@ -94,6 +94,11 @@ test('validates and records carrier session binding to registered site', async (
   assert.equal(reused.ok, true);
   assert.equal(reused.action, 'already_bound');
 
+  const read = await registry.readSite({ site_id: 'site_bound', principal });
+  assert.equal(read.ok, true);
+  assert.equal(read.sessions[0].carrier_session_id, 'carrier_session_bound');
+  assert.equal(read.authority_events.some((event) => event.event_kind === 'carrier_site_binding_admitted'), true);
+
   assert.equal(db.dump().carrierSessions.length, 1);
   assert.equal(db.dump().authorityEvents.some((event) => event.event_kind === 'carrier_site_binding_admitted'), true);
 });
@@ -236,6 +241,26 @@ function fakeD1Statement(state, sql) {
             .filter((setting) => setting.site_id === siteId)
             .sort((left, right) => left.setting_key.localeCompare(right.setting_key))
             .map(({ setting_key, value_json }) => ({ setting_key, value_json })),
+        };
+      }
+      if (/FROM cloudflare_site_carrier_sessions/i.test(sql)) {
+        const [siteId, limit] = bound;
+        return {
+          results: state.carrierSessions
+            .filter((binding) => binding.site_id === siteId)
+            .sort((left, right) => right.created_at.localeCompare(left.created_at))
+            .slice(0, Number(limit))
+            .map(clone),
+        };
+      }
+      if (/FROM cloudflare_site_authority_events/i.test(sql)) {
+        const [siteId, limit] = bound;
+        return {
+          results: state.authorityEvents
+            .filter((event) => event.site_id === siteId)
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at))
+            .slice(0, Number(limit))
+            .map(clone),
         };
       }
       return { results: [] };

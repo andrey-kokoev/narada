@@ -222,6 +222,10 @@ async function handleCarrierApiRequest(request, env) {
     if (!auth.ok) return jsonResponse({ ok: false, code: auth.code }, auth.status);
 
     const body = await request.clone().json();
+    if (isSiteProductOperation(body.operation)) {
+      const siteResponse = await handleSiteProductApiRequest(body, auth.principal, env);
+      return jsonResponse(withPrincipalEvidence(siteResponse.body, body.operation, auth.principal), siteResponse.status);
+    }
     const carrierSessionId = body.carrier_session_id ?? body.params?.carrier_session_id;
     if (!carrierSessionId) return jsonResponse({ ok: false, code: 'missing_carrier_session_id' }, 400);
     if (!env?.CLOUDFLARE_CARRIER_SESSIONS) {
@@ -254,6 +258,75 @@ async function handleCarrierApiRequest(request, env) {
     const durableResponse = await env.CLOUDFLARE_CARRIER_SESSIONS.get(id).fetch(authenticatedRequest);
     const responseBody = await durableResponse.json();
     return jsonResponse(withPrincipalEvidence(responseBody, body.operation, auth.principal), durableResponse.status);
+}
+
+function isSiteProductOperation(operation) {
+  return ['site.create', 'site.read', 'site.list', 'site.settings.put'].includes(operation);
+}
+
+async function handleSiteProductApiRequest(body, principal, env = {}) {
+  const registry = createCloudflareSiteRegistryAdapter(env);
+  if (!registry) return { status: 500, body: { ok: false, code: 'missing_site_registry_binding' } };
+  const response = await registry.handle({ ...body, principal });
+  if (!response.ok) return { status: response.code === 'site_authority_denied' ? 403 : 400, body: response };
+  if (body.operation !== 'site.read') return { status: 200, body: response };
+  const params = body.params ?? {};
+  const siteId = response.site?.site_id ?? params.site_id;
+  const tasks = await listSiteTasks(env, siteId);
+  const carrierEvidence = await readCarrierEvidenceForSiteSessions(env, response.sessions ?? [], principal, params);
+  return {
+    status: 200,
+    body: {
+      ...response,
+      tasks,
+      carrier_evidence: carrierEvidence,
+    },
+  };
+}
+
+async function listSiteTasks(env = {}, siteId) {
+  const db = env.CLOUDFLARE_CARRIER_TASK_DB ?? env.NARADA_TASK_DB ?? null;
+  if (!db || typeof db.prepare !== 'function' || !siteId) return [];
+  const store = createD1SessionTaskStore(db, { site_id: siteId });
+  return store.list();
+}
+
+async function readCarrierEvidenceForSiteSessions(env = {}, sessions = [], principal = null, params = {}) {
+  if (!env?.CLOUDFLARE_CARRIER_SESSIONS) return [];
+  const boundedLimit = clampInteger(params.carrier_event_limit, 0, 100, 25);
+  const evidence = [];
+  for (const session of sessions.slice(0, clampInteger(params.session_limit, 0, 50, 25))) {
+    const carrierSessionId = session.carrier_session_id;
+    try {
+      const id = env.CLOUDFLARE_CARRIER_SESSIONS.idFromName(carrierSessionId);
+      const durableResponse = await env.CLOUDFLARE_CARRIER_SESSIONS.get(id).fetch(new Request('https://carrier.site-read.local/control', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          operation: 'session.events.read',
+          carrier_session_id: carrierSessionId,
+          principal,
+          params: { after_sequence: 0, limit: boundedLimit },
+        }),
+      }));
+      const body = await durableResponse.json();
+      evidence.push({
+        carrier_session_id: carrierSessionId,
+        ok: body.ok === true,
+        events: body.events ?? [],
+        next_cursor: body.next_cursor ?? 0,
+      });
+    } catch (error) {
+      evidence.push({
+        carrier_session_id: carrierSessionId,
+        ok: false,
+        error: error?.message ?? 'carrier_evidence_read_failed',
+        events: [],
+        next_cursor: 0,
+      });
+    }
+  }
+  return evidence;
 }
 
 export function createCloudflareAiProviderAdapter(env = {}) {
@@ -1008,6 +1081,7 @@ function withPrincipalEvidence(body, operation, principal) {
   if (!body || typeof body !== 'object') return body;
   if (operation === 'session.status') return { ...body, reader_principal: principal };
   if (operation === 'session.events.read') return { ...body, reader_principal: principal };
+  if (operation === 'site.read') return { ...body, reader_principal: principal };
   return { ...body, principal };
 }
 
