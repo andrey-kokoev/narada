@@ -40,6 +40,7 @@ export const QUEUE_STATES = Object.freeze([
   'abandoned_on_session_end',
 ]);
 export const SESSION_EVENT_KINDS = Object.freeze([
+  'carrier_session_started',
   'input_queued_for_turn_boundary',
   'input_admitted_to_turn',
   'input_dropped_by_operator',
@@ -62,6 +63,7 @@ export const SESSION_EVENT_KINDS = Object.freeze([
   'observer_observation_recorded',
   'observer_interjection_proposed',
   'observer_interjection_admitted',
+  'observer_interjection_visible',
   'observer_interjection_suppressed',
   'carrier_host_command_requested',
   'carrier_host_command_admitted',
@@ -71,6 +73,7 @@ export const SESSION_EVENT_KINDS = Object.freeze([
   'carrier_host_command_failed',
   'carrier_command_executed',
   'carrier_diagnostic_recorded',
+  'carrier_session_closed',
 ]);
 export const CARRIER_CONTROL_METHODS = Object.freeze([
   'session.status',
@@ -807,6 +810,12 @@ export function normalizeControlInputRecord(record, defaults = {}) {
 }
 
 const SESSION_PAYLOAD_VALIDATORS = Object.freeze({
+  carrier_session_started: (payload) => requireFields(payload, [
+    'carrier_kind',
+    'carrier_host',
+    'protocol_version',
+    'runtime_contract_version',
+  ]),
   input_queued_for_turn_boundary: (payload) => requireFields(payload, ['input_event_id', 'queue_state']),
   input_admitted_to_turn: (payload) => requireFields(payload, ['input_event_id']),
   input_dropped_by_operator: (payload) => requireFields(payload, ['input_event_id', 'drop_reason']),
@@ -829,9 +838,11 @@ const SESSION_PAYLOAD_VALIDATORS = Object.freeze({
   observer_observation_recorded: validateObserverPayload,
   observer_interjection_proposed: validateObserverPayload,
   observer_interjection_admitted: validateObserverPayload,
+  observer_interjection_visible: validateObserverPayload,
   observer_interjection_suppressed: validateObserverPayload,
   carrier_command_executed: (payload) => requireFields(payload, ['command']),
   carrier_diagnostic_recorded: validateCarrierDiagnosticPayload,
+  carrier_session_closed: (payload) => requireFields(payload, ['reason']),
 });
 
 function requireFields(payload, fields) {

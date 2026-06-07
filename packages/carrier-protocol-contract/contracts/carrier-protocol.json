@@ -64,6 +64,9 @@
     "hold": ["system_directive_held"],
     "release": ["system_directive_released"]
   },
+  "carrier_session_lifecycle_event_kind": {
+    "values": ["carrier_session_started", "carrier_session_closed"]
+  },
   "carrier_host_command_event_kind": {
     "values": [
       "carrier_host_command_requested",

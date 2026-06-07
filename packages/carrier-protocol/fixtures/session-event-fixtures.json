@@ -2,6 +2,10 @@
   "schema": "narada.carrier.session_event_fixture_manifest.v1",
   "fixtures": [
     {
+      "event_kind": "carrier_session_started",
+      "fixture": "carrier-session-started-session-event.json"
+    },
+    {
       "event_kind": "input_queued_for_turn_boundary",
       "fixture": "input-queued-session-event.json"
     },
@@ -90,6 +94,10 @@
       "fixture": "observer-interjection-admitted-session-event.json"
     },
     {
+      "event_kind": "observer_interjection_visible",
+      "fixture": "observer-interjection-visible-session-event.json"
+    },
+    {
       "event_kind": "observer_interjection_suppressed",
       "fixture": "observer-interjection-suppressed-session-event.json"
     },
@@ -124,6 +132,10 @@
     {
       "event_kind": "carrier_diagnostic_recorded",
       "fixture": "carrier-diagnostic-session-event.json"
+    },
+    {
+      "event_kind": "carrier_session_closed",
+      "fixture": "carrier-session-closed-session-event.json"
     }
   ]
 }

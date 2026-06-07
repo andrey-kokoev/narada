@@ -276,6 +276,7 @@ assert.deepEqual(validatePayloadRef(readFixture('payload-ref.json')), []);
 assert.deepEqual(validatePayloadPolicy(readFixture('payload-policy.json')), []);
 assert.deepEqual(validateSessionEventFixtureManifest({ schema: SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA, fixtures: [{ event_kind: 'missing', fixture: 'x.json' }] }), [
   'fixtures.0.invalid_event_kind:missing',
+  'fixtures.missing_event_kind:carrier_session_started',
   'fixtures.missing_event_kind:input_queued_for_turn_boundary',
   'fixtures.missing_event_kind:input_admitted_to_turn',
   'fixtures.missing_event_kind:input_dropped_by_operator',
@@ -298,6 +299,7 @@ assert.deepEqual(validateSessionEventFixtureManifest({ schema: SESSION_EVENT_FIX
   'fixtures.missing_event_kind:observer_observation_recorded',
   'fixtures.missing_event_kind:observer_interjection_proposed',
   'fixtures.missing_event_kind:observer_interjection_admitted',
+  'fixtures.missing_event_kind:observer_interjection_visible',
   'fixtures.missing_event_kind:observer_interjection_suppressed',
   'fixtures.missing_event_kind:carrier_host_command_requested',
   'fixtures.missing_event_kind:carrier_host_command_admitted',
@@ -307,6 +309,7 @@ assert.deepEqual(validateSessionEventFixtureManifest({ schema: SESSION_EVENT_FIX
   'fixtures.missing_event_kind:carrier_host_command_failed',
   'fixtures.missing_event_kind:carrier_command_executed',
   'fixtures.missing_event_kind:carrier_diagnostic_recorded',
+  'fixtures.missing_event_kind:carrier_session_closed',
 ]);
 
 const input = createInputEvent(baseInput);

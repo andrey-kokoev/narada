@@ -1,0 +1,17 @@
+{
+  "name": "@narada2/cloudflare-carrier",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/cloudflare-carrier.mjs",
+    "./worker": "./src/cloudflare-worker.mjs"
+  },
+  "scripts": {
+    "test": "node --test src/cloudflare-carrier.test.mjs"
+  },
+  "dependencies": {
+    "@narada2/carrier-command-contract": "workspace:*",
+    "@narada2/carrier-protocol": "workspace:*"
+  }
+}
