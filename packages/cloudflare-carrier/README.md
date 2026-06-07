@@ -28,7 +28,7 @@ The deployed Worker serves a minimal authenticated operator console at:
 - `GET /`
 - `GET /console`
 
-The console is intentionally Worker-native HTML and browser JavaScript, so no separate asset build or static hosting step is required. It lets an operator provide a bearer token, start or resume a carrier session, send carrier input, read session events, inspect provider/tool/effect evidence from event payloads, and view or create Cloudflare-backed Narada tasks.
+The console is intentionally Worker-native HTML and browser JavaScript, so no separate asset build or static hosting step is required. It lets an operator sign in with Microsoft, optionally provide an automation bearer token, start or resume a carrier session, send carrier input, read session events, inspect provider/tool/effect evidence from event payloads, read the Site product model, and view or create Cloudflare-backed Narada tasks.
 
 Browser and API clients can call the carrier JSON API at:
 
@@ -39,7 +39,7 @@ The existing compatibility routes remain available:
 - `POST /`
 - `POST /control`
 
-All JSON API routes require the same bearer auth and accept the same operation envelope, including `session.start`, `session.status`, `carrier.input.deliver`, `carrier.command.execute`, `carrier.interrupt`, `session.events.read`, and `session.close`.
+All JSON API routes require either bearer auth or a valid operator session cookie and accept the same operation envelope, including `session.start`, `session.status`, `carrier.input.deliver`, `carrier.command.execute`, `carrier.interrupt`, `session.events.read`, `session.close`, and Site product operations such as `site.read`.
 
 ## Tool / Effect Boundary
 
@@ -109,12 +109,43 @@ Provider execution records provider request/output/turn evidence. The first Work
 
 ## Auth Boundary
 
-The Worker requires bearer auth before routing to the Durable Object.
+The Worker requires authenticated caller evidence before routing to the Durable Object or Site product API.
 
-Accepted secret bindings:
+Automation callers may use bearer auth through these secret bindings:
 
 - `ADMIN_BEARER_TOKEN` or `CLOUDFLARE_CARRIER_ADMIN_TOKEN`
 - `SERVICE_TOKEN` or `CLOUDFLARE_CARRIER_SERVICE_TOKEN`
+
+Browser operators may use Microsoft OIDC through Worker-owned auth routes:
+
+- `GET /auth/microsoft/login`
+- `GET /auth/microsoft/callback`
+- `GET /auth/session`
+- `POST /auth/logout`
+
+Required Microsoft/operator session configuration:
+
+- `MICROSOFT_OIDC_TENANT_ID`
+- `MICROSOFT_OIDC_CLIENT_ID`
+- `MICROSOFT_OIDC_CLIENT_SECRET`
+- `MICROSOFT_OIDC_REDIRECT_URI`
+- `NARADA_OPERATOR_SESSION_SECRET`
+
+The Microsoft app registration should use the Web platform redirect URI:
+
+```text
+https://<worker-host>/auth/microsoft/callback
+```
+
+The Worker uses authorization code flow with PKCE, validates Microsoft ID tokens, and then creates a D1-backed Narada operator session in `CLOUDFLARE_SITE_REGISTRY_DB`. Operator sessions use a signed `HttpOnly; Secure; SameSite=Lax` cookie named `narada_operator_session`.
+
+Microsoft identity is not Site authority. The Worker maps Microsoft claims into a Narada principal:
+
+```text
+microsoft:<tenant_id>:<object_id>
+```
+
+Site Registry membership remains the authority source for `site.read`, carrier session binding, and Site-scoped effects. OAuth token values are never serialized into carrier evidence.
 
 Auth identifies the caller and records principal evidence. It does not by itself authorize arbitrary effects.
 
@@ -149,6 +180,7 @@ pnpm --filter @narada2/cloudflare-carrier ship
 - D1 task database binding;
 - Workers AI binding;
 - auth and principal evidence;
+- Microsoft operator identity console hooks;
 - Durable Object routing and snapshot reload;
 - tool/effect admission classifier behavior;
 - deny-by-default tool/effect result evidence;

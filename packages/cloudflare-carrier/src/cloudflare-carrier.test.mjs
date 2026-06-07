@@ -392,6 +392,9 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Narada Cloudflare Carrier/);
   assert.match(html, /naradaCloudflareCarrierClient/);
   assert.match(html, /\/api\/carrier/);
+  assert.match(html, /Sign in with Microsoft/);
+  assert.match(html, /\/auth\/microsoft\/login/);
+  assert.match(html, /\/auth\/session/);
   assert.match(html, /Bearer token/);
   assert.match(html, /Provider/);
   assert.match(html, /Effects/);
@@ -404,6 +407,99 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /site\.read/);
   assert.match(html, /readSite/);
   assert.match(html, /createTask/);
+});
+
+test('worker starts Microsoft login with PKCE and signed pending cookie', async () => {
+  const env = authEnv(fakeDurableObjectNamespace(), microsoftAuthEnv());
+  const response = await worker.fetch(new Request('https://carrier.test/auth/microsoft/login'), env);
+  assert.equal(response.status, 302);
+  const location = new URL(response.headers.get('location'));
+  assert.equal(location.origin, 'https://login.microsoftonline.com');
+  assert.equal(location.pathname, '/tenant-fixture/oauth2/v2.0/authorize');
+  assert.equal(location.searchParams.get('client_id'), 'microsoft-client-fixture');
+  assert.equal(location.searchParams.get('response_type'), 'code');
+  assert.equal(location.searchParams.get('redirect_uri'), 'https://carrier.test/auth/microsoft/callback');
+  assert.equal(location.searchParams.get('code_challenge_method'), 'S256');
+  assert.match(response.headers.get('set-cookie'), /narada_microsoft_oidc_pending=/);
+});
+
+test('worker Microsoft callback creates operator session and cookie principal can read site', async () => {
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{
+      site_id: 'site_fixture',
+      site_ref: 'site://fixture',
+      display_name: 'Fixture Site',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+      created_by_principal_id: 'admin',
+    }],
+    memberships: [{
+      site_id: 'site_fixture',
+      principal_id: 'microsoft:tenant-fixture:object-fixture',
+      role: 'owner',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+  });
+  const env = authEnv(fakeDurableObjectNamespace(), { ...microsoftAuthEnv(), CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+  const login = await worker.fetch(new Request('https://carrier.test/auth/microsoft/login'), env);
+  const pendingCookie = login.headers.get('set-cookie').split(';')[0];
+  const state = new URL(login.headers.get('location')).searchParams.get('state');
+  const callback = await worker.fetch(new Request(`https://carrier.test/auth/microsoft/callback?code=code-fixture&state=${state}`, {
+    headers: { cookie: pendingCookie },
+  }), env);
+  assert.equal(callback.status, 302);
+  assert.equal(callback.headers.get('location'), '/console');
+  const operatorCookie = callback.headers.get('set-cookie').split(';')[0];
+  assert.match(operatorCookie, /narada_operator_session=/);
+
+  const session = await worker.fetch(new Request('https://carrier.test/auth/session', { headers: { cookie: operatorCookie } }), env);
+  assert.equal(session.status, 200);
+  const sessionBody = await session.json();
+  assert.equal(sessionBody.principal.auth_type, 'microsoft_oidc');
+  assert.equal(sessionBody.principal.principal_id, 'microsoft:tenant-fixture:object-fixture');
+
+  const read = await worker.fetch(jsonRequest({
+    operation: 'site.read',
+    request_id: 'request_microsoft_site_read',
+    params: { site_id: 'site_fixture' },
+  }, { path: '/api/carrier', cookie: operatorCookie }), env);
+  assert.equal(read.status, 200);
+  const readBody = await read.json();
+  assert.equal(readBody.reader_principal.auth_type, 'microsoft_oidc');
+  assert.equal(readBody.reader_principal.principal_id, 'microsoft:tenant-fixture:object-fixture');
+  assert.equal(readBody.membership.role, 'owner');
+});
+
+test('worker Microsoft cookie principal is denied without site membership', async () => {
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{
+      site_id: 'site_fixture',
+      site_ref: 'site://fixture',
+      display_name: 'Fixture Site',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+      created_by_principal_id: 'admin',
+    }],
+  });
+  const env = authEnv(fakeDurableObjectNamespace(), { ...microsoftAuthEnv(), CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+  const login = await worker.fetch(new Request('https://carrier.test/auth/microsoft/login'), env);
+  const pendingCookie = login.headers.get('set-cookie').split(';')[0];
+  const state = new URL(login.headers.get('location')).searchParams.get('state');
+  const callback = await worker.fetch(new Request(`https://carrier.test/auth/microsoft/callback?code=code-fixture&state=${state}`, {
+    headers: { cookie: pendingCookie },
+  }), env);
+  const operatorCookie = callback.headers.get('set-cookie').split(';')[0];
+  const read = await worker.fetch(jsonRequest({
+    operation: 'site.read',
+    request_id: 'request_microsoft_site_denied',
+    params: { site_id: 'site_fixture' },
+  }, { path: '/api/carrier', cookie: operatorCookie }), env);
+  assert.equal(read.status, 403);
+  assert.equal((await read.json()).code, 'site_authority_denied');
 });
 
 test('worker browser API alias starts resumes sends input and reads evidence events', async () => {
@@ -1310,7 +1406,28 @@ function authEnv(namespace, extra = {}) {
     CLOUDFLARE_CARRIER_SESSIONS: namespace,
     ADMIN_BEARER_TOKEN: 'test-admin-token',
     SERVICE_TOKEN: 'test-service-token',
+    NARADA_OPERATOR_SESSION_SECRET: 'test-operator-session-secret',
     ...extra,
+  };
+}
+
+function microsoftAuthEnv(extraClaims = {}) {
+  return {
+    MICROSOFT_OIDC_TENANT_ID: 'tenant-fixture',
+    MICROSOFT_OIDC_CLIENT_ID: 'microsoft-client-fixture',
+    MICROSOFT_OIDC_CLIENT_SECRET: 'microsoft-secret-fixture',
+    MICROSOFT_OIDC_FAKE_ID_TOKEN_PAYLOAD: {
+      iss: 'https://login.microsoftonline.com/tenant-fixture/v2.0',
+      aud: 'microsoft-client-fixture',
+      tid: 'tenant-fixture',
+      oid: 'object-fixture',
+      sub: 'subject-fixture',
+      nonce: null,
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      preferred_username: 'operator@example.com',
+      name: 'Operator Fixture',
+      ...extraClaims,
+    },
   };
 }
 
@@ -1359,6 +1476,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     settings: clone(initial.settings ?? []),
     carrierSessions: clone(initial.carrierSessions ?? []),
     authorityEvents: clone(initial.authorityEvents ?? []),
+    operatorSessions: clone(initial.operatorSessions ?? []),
   };
   return {
     prepare(sql) {
@@ -1387,6 +1505,9 @@ function fakeD1SiteRegistryStatement(state, sql) {
       } else if (normalized.startsWith('insert into cloudflare_site_authority_events')) {
         const [event_id, event_kind, site_id, carrier_session_id, principal_id, action, reason, evidence_json, recorded_at] = bindings;
         state.authorityEvents.push({ event_id, event_kind, site_id, carrier_session_id, principal_id, action, reason, evidence_json, recorded_at });
+      } else if (normalized.startsWith('insert into cloudflare_operator_sessions')) {
+        const [operator_session_id, principal_id, auth_type, issuer, tenant_id, subject, object_id, email, display_name, created_at, expires_at, revoked_at] = bindings;
+        state.operatorSessions.push({ operator_session_id, principal_id, auth_type, issuer, tenant_id, subject, object_id, email, display_name, created_at, expires_at, revoked_at });
       }
       return { success: true };
     },
@@ -1402,6 +1523,14 @@ function fakeD1SiteRegistryStatement(state, sql) {
       if (normalized.includes('from cloudflare_site_carrier_sessions where carrier_session_id = ?')) {
         const [carrierSessionId] = bindings;
         return clone(state.carrierSessions.find((entry) => entry.carrier_session_id === carrierSessionId));
+      }
+      if (normalized.includes('from cloudflare_operator_sessions')) {
+        const [operatorSessionId, now] = bindings;
+        return clone(state.operatorSessions.find((entry) => (
+          entry.operator_session_id === operatorSessionId
+          && entry.revoked_at == null
+          && entry.expires_at > now
+        )));
       }
       return null;
     },
@@ -1491,9 +1620,10 @@ function clone(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
 }
 
-function jsonRequest(body, { token = null, path = '/control' } = {}) {
+function jsonRequest(body, { token = null, cookie = null, path = '/control' } = {}) {
   const headers = { 'content-type': 'application/json' };
   if (token) headers.authorization = `Bearer ${token}`;
+  if (cookie) headers.cookie = cookie;
   return new Request(`https://carrier.test${path}`, {
     method: 'POST',
     headers,

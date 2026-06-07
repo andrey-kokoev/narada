@@ -47,6 +47,9 @@ const consoleHtml = await consoleResponse.text();
 assert.match(consoleHtml, /Narada Cloudflare Carrier/);
 assert.match(consoleHtml, /naradaCloudflareCarrierClient/);
 assert.match(consoleHtml, /\/api\/carrier/);
+assert.match(consoleHtml, /Sign in with Microsoft/);
+assert.match(consoleHtml, /\/auth\/microsoft\/login/);
+assert.match(consoleHtml, /\/auth\/session/);
 assert.match(consoleHtml, /Task State/);
 
 const apiClientStartResponse = await worker.fetch(jsonRequest({
@@ -555,6 +558,7 @@ process.stdout.write(`${JSON.stringify({
   configured_kv_write_failed_tool_effect_boundary_checked: true,
   thrown_tool_effect_adapter_failure_checked: true,
   console_surface_checked: true,
+  microsoft_operator_identity_surface_checked: true,
   api_client_route_checked: true,
   task_tool_effect_boundary_checked: true,
   d1_task_state_persistence_checked: true,

@@ -16,6 +16,11 @@ const CLOUDFLARE_TASK_UPDATE_CAPABILITY_REF = 'cloudflare-carrier:capability/tas
 const CLOUDFLARE_TASK_UPDATE_EFFECT_SCOPE = 'cloudflare-narada-task:write:update';
 const CLOUDFLARE_TASK_LIST_CAPABILITY_REF = 'cloudflare-carrier:capability/task-list:v1';
 const CLOUDFLARE_TASK_LIST_EFFECT_SCOPE = 'cloudflare-narada-task:read:list';
+const MICROSOFT_OIDC_ISSUER_BASE = 'https://login.microsoftonline.com';
+const OPERATOR_SESSION_COOKIE = 'narada_operator_session';
+const MICROSOFT_OIDC_PENDING_COOKIE = 'narada_microsoft_oidc_pending';
+const DEFAULT_OPERATOR_SESSION_TTL_SECONDS = 8 * 60 * 60;
+const MICROSOFT_OIDC_PENDING_TTL_SECONDS = 5 * 60;
 const CLOUDFLARE_RUNTIME_METADATA_READ_CAPABILITY = Object.freeze({
   capability_ref: CLOUDFLARE_RUNTIME_METADATA_READ_CAPABILITY_REF,
   effect_scope: CLOUDFLARE_RUNTIME_METADATA_READ_EFFECT_SCOPE,
@@ -201,6 +206,9 @@ async function validateCarrierSiteBindingForRequest(body, principal, env = {}) {
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
+    if (url.pathname.startsWith('/auth/')) {
+      return handleOperatorAuthRequest(request, env);
+    }
     if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/console')) {
       return htmlResponse(renderCloudflareCarrierConsole());
     }
@@ -218,7 +226,7 @@ export default {
 };
 
 async function handleCarrierApiRequest(request, env) {
-    const auth = authenticateCarrierRequest(request, env);
+    const auth = await authenticateCarrierApiRequest(request, env);
     if (!auth.ok) return jsonResponse({ ok: false, code: auth.code }, auth.status);
 
     const body = await request.clone().json();
@@ -327,6 +335,252 @@ async function readCarrierEvidenceForSiteSessions(env = {}, sessions = [], princ
     }
   }
   return evidence;
+}
+
+async function handleOperatorAuthRequest(request, env = {}) {
+  const url = new URL(request.url);
+  if (request.method === 'GET' && url.pathname === '/auth/microsoft/login') {
+    return startMicrosoftLogin(request, env);
+  }
+  if (request.method === 'GET' && url.pathname === '/auth/microsoft/callback') {
+    return completeMicrosoftLogin(request, env);
+  }
+  if (request.method === 'GET' && url.pathname === '/auth/session') {
+    const auth = await authenticateOperatorSessionRequest(request, env);
+    if (!auth.ok) return jsonResponse({ ok: false, code: auth.code }, auth.status);
+    return jsonResponse({ ok: true, principal: auth.principal });
+  }
+  if ((request.method === 'POST' || request.method === 'GET') && url.pathname === '/auth/logout') {
+    return operatorRedirectResponse('/console', 302, [
+      clearCookie(OPERATOR_SESSION_COOKIE),
+      clearCookie(MICROSOFT_OIDC_PENDING_COOKIE),
+    ]);
+  }
+  return jsonResponse({ ok: false, code: 'not_found' }, 404);
+}
+
+async function startMicrosoftLogin(request, env = {}) {
+  const config = microsoftOidcConfig(request, env);
+  if (!config.ok) return jsonResponse({ ok: false, code: config.code }, config.status);
+  const state = randomBase64Url(32);
+  const nonce = randomBase64Url(32);
+  const codeVerifier = randomBase64Url(64);
+  const codeChallenge = await sha256Base64Url(codeVerifier);
+  const pending = { state, nonce, code_verifier: codeVerifier, created_at: Date.now() };
+  const pendingCookie = await signedCookie(MICROSOFT_OIDC_PENDING_COOKIE, pending, env, {
+    maxAge: MICROSOFT_OIDC_PENDING_TTL_SECONDS,
+  });
+  const authorize = new URL(config.authorize_endpoint);
+  authorize.searchParams.set('client_id', config.client_id);
+  authorize.searchParams.set('response_type', 'code');
+  authorize.searchParams.set('redirect_uri', config.redirect_uri);
+  authorize.searchParams.set('response_mode', 'query');
+  authorize.searchParams.set('scope', 'openid profile email');
+  authorize.searchParams.set('state', state);
+  authorize.searchParams.set('nonce', nonce);
+  authorize.searchParams.set('code_challenge', codeChallenge);
+  authorize.searchParams.set('code_challenge_method', 'S256');
+  return operatorRedirectResponse(authorize.toString(), 302, [pendingCookie]);
+}
+
+async function completeMicrosoftLogin(request, env = {}) {
+  const config = microsoftOidcConfig(request, env);
+  if (!config.ok) return jsonResponse({ ok: false, code: config.code }, config.status);
+  const url = new URL(request.url);
+  const code = url.searchParams.get('code');
+  const state = url.searchParams.get('state');
+  if (!code) return jsonResponse({ ok: false, code: 'missing_microsoft_oauth_code' }, 400);
+  const pending = await readSignedCookie(request, MICROSOFT_OIDC_PENDING_COOKIE, env);
+  if (!pending.ok) return jsonResponse({ ok: false, code: pending.code }, pending.status);
+  if (pending.value.state !== state) return jsonResponse({ ok: false, code: 'microsoft_oauth_state_mismatch' }, 400);
+  if (Date.now() - Number(pending.value.created_at ?? 0) > MICROSOFT_OIDC_PENDING_TTL_SECONDS * 1000) {
+    return jsonResponse({ ok: false, code: 'microsoft_oauth_pending_expired' }, 400);
+  }
+  const tokenResponse = await exchangeMicrosoftCodeForTokens(code, pending.value.code_verifier, config, env);
+  if (!tokenResponse.ok) return jsonResponse({ ok: false, code: tokenResponse.code, detail: tokenResponse.detail }, tokenResponse.status);
+  const validation = await validateMicrosoftIdToken(tokenResponse.id_token, pending.value.nonce, config, env);
+  if (!validation.ok) return jsonResponse({ ok: false, code: validation.code, detail: validation.detail }, validation.status);
+  const session = await createOperatorSessionForMicrosoftPrincipal(validation.claims, env);
+  if (!session.ok) return jsonResponse({ ok: false, code: session.code }, session.status);
+  const cookie = await signedCookie(OPERATOR_SESSION_COOKIE, { operator_session_id: session.operator_session_id }, env, {
+    maxAge: session.expires_in,
+  });
+  return operatorRedirectResponse('/console', 302, [cookie, clearCookie(MICROSOFT_OIDC_PENDING_COOKIE)]);
+}
+
+function microsoftOidcConfig(request, env = {}) {
+  const tenantId = String(env.MICROSOFT_OIDC_TENANT_ID ?? '').trim();
+  const clientId = String(env.MICROSOFT_OIDC_CLIENT_ID ?? '').trim();
+  const clientSecret = String(env.MICROSOFT_OIDC_CLIENT_SECRET ?? '').trim();
+  if (!tenantId || !clientId || (!clientSecret && !env.MICROSOFT_OIDC_FAKE_ID_TOKEN_PAYLOAD)) {
+    return { ok: false, code: 'microsoft_oidc_not_configured', status: 500 };
+  }
+  const origin = new URL(request.url).origin;
+  const redirectUri = String(env.MICROSOFT_OIDC_REDIRECT_URI ?? `${origin}/auth/microsoft/callback`).trim();
+  const issuer = `${MICROSOFT_OIDC_ISSUER_BASE}/${tenantId}/v2.0`;
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    client_id: clientId,
+    client_secret: clientSecret,
+    redirect_uri: redirectUri,
+    issuer,
+    authorize_endpoint: `${MICROSOFT_OIDC_ISSUER_BASE}/${tenantId}/oauth2/v2.0/authorize`,
+    token_endpoint: String(env.MICROSOFT_OIDC_TOKEN_ENDPOINT ?? `${MICROSOFT_OIDC_ISSUER_BASE}/${tenantId}/oauth2/v2.0/token`),
+    jwks_uri: String(env.MICROSOFT_OIDC_JWKS_URI ?? `${MICROSOFT_OIDC_ISSUER_BASE}/${tenantId}/discovery/v2.0/keys`),
+  };
+}
+
+async function exchangeMicrosoftCodeForTokens(code, codeVerifier, config, env = {}) {
+  if (env.MICROSOFT_OIDC_FAKE_ID_TOKEN_PAYLOAD) return { ok: true, id_token: 'fake.microsoft.id_token' };
+  const body = new URLSearchParams();
+  body.set('client_id', config.client_id);
+  body.set('client_secret', config.client_secret);
+  body.set('grant_type', 'authorization_code');
+  body.set('code', code);
+  body.set('redirect_uri', config.redirect_uri);
+  body.set('code_verifier', codeVerifier);
+  const response = await fetch(config.token_endpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body,
+  });
+  const tokenBody = await response.json().catch(() => ({}));
+  if (!response.ok || !tokenBody.id_token) {
+    return { ok: false, code: 'microsoft_token_exchange_failed', status: 502, detail: tokenBody.error ?? response.statusText };
+  }
+  return { ok: true, id_token: tokenBody.id_token };
+}
+
+async function validateMicrosoftIdToken(idToken, nonce, config, env = {}) {
+  if (env.MICROSOFT_OIDC_FAKE_ID_TOKEN_PAYLOAD) {
+    const claims = typeof env.MICROSOFT_OIDC_FAKE_ID_TOKEN_PAYLOAD === 'string'
+      ? JSON.parse(env.MICROSOFT_OIDC_FAKE_ID_TOKEN_PAYLOAD)
+      : env.MICROSOFT_OIDC_FAKE_ID_TOKEN_PAYLOAD;
+    return validateMicrosoftClaims({ ...claims, nonce: claims.nonce ?? nonce }, nonce, config);
+  }
+  const parts = String(idToken).split('.');
+  if (parts.length !== 3) return { ok: false, code: 'invalid_microsoft_id_token', status: 400 };
+  const header = parseJwtPart(parts[0]);
+  const claims = parseJwtPart(parts[1]);
+  const claimValidation = validateMicrosoftClaims(claims, nonce, config);
+  if (!claimValidation.ok) return claimValidation;
+  const jwksResponse = await fetch(config.jwks_uri);
+  const jwks = await jwksResponse.json().catch(() => ({}));
+  const key = (jwks.keys ?? []).find((entry) => entry.kid === header.kid);
+  if (!key) return { ok: false, code: 'microsoft_jwks_key_not_found', status: 502 };
+  const cryptoKey = await crypto.subtle.importKey(
+    'jwk',
+    key,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['verify'],
+  );
+  const verified = await crypto.subtle.verify(
+    'RSASSA-PKCS1-v1_5',
+    cryptoKey,
+    base64UrlToBytes(parts[2]),
+    new TextEncoder().encode(`${parts[0]}.${parts[1]}`),
+  );
+  if (!verified) return { ok: false, code: 'microsoft_id_token_signature_invalid', status: 400 };
+  return { ok: true, claims };
+}
+
+function validateMicrosoftClaims(claims, nonce, config) {
+  if (claims.iss !== config.issuer) return { ok: false, code: 'microsoft_issuer_mismatch', status: 400 };
+  if (claims.aud !== config.client_id) return { ok: false, code: 'microsoft_audience_mismatch', status: 400 };
+  if (claims.tid !== config.tenant_id) return { ok: false, code: 'microsoft_tenant_mismatch', status: 400 };
+  if (claims.nonce !== nonce) return { ok: false, code: 'microsoft_nonce_mismatch', status: 400 };
+  if (!claims.oid) return { ok: false, code: 'microsoft_oid_missing', status: 400 };
+  if (Number(claims.exp ?? 0) * 1000 <= Date.now()) return { ok: false, code: 'microsoft_id_token_expired', status: 400 };
+  return { ok: true, claims };
+}
+
+async function createOperatorSessionForMicrosoftPrincipal(claims, env = {}) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return { ok: false, code: 'missing_operator_session_db', status: 500 };
+  await ensureOperatorSessionSchema(db);
+  const sessionId = `operator_session_${randomBase64Url(24)}`;
+  const now = new Date();
+  const ttl = clampInteger(env.NARADA_OPERATOR_SESSION_TTL_SECONDS, 300, 7 * 24 * 60 * 60, DEFAULT_OPERATOR_SESSION_TTL_SECONDS);
+  const expiresAt = new Date(now.getTime() + ttl * 1000).toISOString();
+  const principalId = microsoftPrincipalId(claims);
+  await db.prepare(`INSERT INTO cloudflare_operator_sessions (
+    operator_session_id, principal_id, auth_type, issuer, tenant_id, subject, object_id, email, display_name, created_at, expires_at, revoked_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(
+    sessionId,
+    principalId,
+    'microsoft_oidc',
+    claims.iss,
+    claims.tid,
+    claims.sub ?? null,
+    claims.oid,
+    claims.preferred_username ?? claims.email ?? null,
+    claims.name ?? null,
+    now.toISOString(),
+    expiresAt,
+    null,
+  ).run();
+  return { ok: true, operator_session_id: sessionId, principal_id: principalId, expires_in: ttl };
+}
+
+async function authenticateCarrierApiRequest(request, env = {}) {
+  const bearer = authenticateCarrierRequest(request, env);
+  if (bearer.ok) return bearer;
+  const operator = await authenticateOperatorSessionRequest(request, env);
+  if (operator.ok) return operator;
+  if (bearer.code === 'auth_not_configured' && operator.code !== 'unauthorized') return operator;
+  return bearer.code === 'auth_not_configured' ? bearer : operator;
+}
+
+async function authenticateOperatorSessionRequest(request, env = {}) {
+  const cookie = await readSignedCookie(request, OPERATOR_SESSION_COOKIE, env);
+  if (!cookie.ok) return { ok: false, code: 'unauthorized', status: 401 };
+  const sessionId = String(cookie.value.operator_session_id ?? '').trim();
+  if (!sessionId) return { ok: false, code: 'unauthorized', status: 401 };
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return { ok: false, code: 'missing_operator_session_db', status: 500 };
+  await ensureOperatorSessionSchema(db);
+  const row = await db.prepare(`SELECT * FROM cloudflare_operator_sessions
+    WHERE operator_session_id = ? AND revoked_at IS NULL AND expires_at > ?`).bind(sessionId, new Date().toISOString()).first();
+  if (!row) return { ok: false, code: 'unauthorized', status: 401 };
+  return {
+    ok: true,
+    principal: {
+      auth_type: row.auth_type,
+      principal_id: row.principal_id,
+      issuer: row.issuer,
+      tenant_id: row.tenant_id,
+      subject: row.subject,
+      object_id: row.object_id,
+      email: row.email,
+      name: row.display_name,
+      operator_session_id: row.operator_session_id,
+      controlled_actions: [],
+    },
+  };
+}
+
+async function ensureOperatorSessionSchema(db) {
+  await db.prepare(`CREATE TABLE IF NOT EXISTS cloudflare_operator_sessions (
+    operator_session_id TEXT PRIMARY KEY,
+    principal_id TEXT NOT NULL,
+    auth_type TEXT NOT NULL,
+    issuer TEXT NOT NULL,
+    tenant_id TEXT NOT NULL,
+    subject TEXT,
+    object_id TEXT NOT NULL,
+    email TEXT,
+    display_name TEXT,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    revoked_at TEXT
+  )`).run();
+  await db.prepare('CREATE INDEX IF NOT EXISTS cloudflare_operator_sessions_principal_idx ON cloudflare_operator_sessions(principal_id, expires_at)').run();
+}
+
+function microsoftPrincipalId(claims = {}) {
+  return `microsoft:${claims.tid}:${claims.oid}`;
 }
 
 export function createCloudflareAiProviderAdapter(env = {}) {
@@ -873,6 +1127,105 @@ function htmlResponse(body, status = 200) {
   });
 }
 
+function operatorRedirectResponse(location, status = 302, cookies = []) {
+  const headers = new Headers({ location, 'cache-control': 'no-store' });
+  for (const cookie of cookies.filter(Boolean)) headers.append('set-cookie', cookie);
+  return new Response(null, { status, headers });
+}
+
+async function signedCookie(name, value, env = {}, { maxAge = 300 } = {}) {
+  const payload = base64UrlEncode(new TextEncoder().encode(JSON.stringify(value)));
+  const signature = await hmacBase64Url(payload, operatorSessionSecret(env));
+  return `${name}=${payload}.${signature}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`;
+}
+
+function clearCookie(name) {
+  return `${name}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`;
+}
+
+async function readSignedCookie(request, name, env = {}) {
+  const raw = readCookie(request, name);
+  if (!raw) return { ok: false, code: 'missing_signed_cookie', status: 401 };
+  const [payload, signature] = raw.split('.');
+  if (!payload || !signature) return { ok: false, code: 'invalid_signed_cookie', status: 401 };
+  const secret = optionalOperatorSessionSecret(env);
+  if (!secret) return { ok: false, code: 'operator_session_secret_not_configured', status: 500 };
+  const expected = await hmacBase64Url(payload, secret);
+  if (!timingSafeEqual(signature, expected)) return { ok: false, code: 'invalid_signed_cookie_signature', status: 401 };
+  try {
+    return { ok: true, value: JSON.parse(new TextDecoder().decode(base64UrlToBytes(payload))) };
+  } catch {
+    return { ok: false, code: 'invalid_signed_cookie_payload', status: 401 };
+  }
+}
+
+function readCookie(request, name) {
+  const header = request.headers.get('cookie') ?? '';
+  for (const part of header.split(';')) {
+    const [key, ...rest] = part.trim().split('=');
+    if (key === name) return rest.join('=');
+  }
+  return null;
+}
+
+function operatorSessionSecret(env = {}) {
+  const secret = optionalOperatorSessionSecret(env);
+  if (!secret) throw new Error('operator_session_secret_not_configured');
+  return secret;
+}
+
+function optionalOperatorSessionSecret(env = {}) {
+  return String(env.NARADA_OPERATOR_SESSION_SECRET ?? env.SERVICE_TOKEN ?? env.ADMIN_BEARER_TOKEN ?? '').trim();
+}
+
+async function hmacBase64Url(payload, secret) {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const signature = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload));
+  return base64UrlEncode(new Uint8Array(signature));
+}
+
+function timingSafeEqual(left, right) {
+  if (left.length !== right.length) return false;
+  let diff = 0;
+  for (let index = 0; index < left.length; index += 1) diff |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  return diff === 0;
+}
+
+async function sha256Base64Url(value) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return base64UrlEncode(new Uint8Array(digest));
+}
+
+function randomBase64Url(byteLength) {
+  const bytes = new Uint8Array(byteLength);
+  crypto.getRandomValues(bytes);
+  return base64UrlEncode(bytes);
+}
+
+function parseJwtPart(part) {
+  return JSON.parse(new TextDecoder().decode(base64UrlToBytes(part)));
+}
+
+function base64UrlToBytes(value) {
+  const base64 = String(value).replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(String(value).length / 4) * 4, '=');
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
+function base64UrlEncode(bytes) {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
 export function renderCloudflareCarrierConsole() {
   return `<!doctype html>
 <html lang="en">
@@ -940,6 +1293,7 @@ export function renderCloudflareCarrierConsole() {
       <label>Agent ID<input id="agentId" value="narada.cloudflare.agent"></label>
       <label>Site ID<input id="siteId" value="cloudflare-console"></label>
       <div class="actions">
+        <button id="signInMicrosoft" class="secondary">Sign in with Microsoft</button>
         <button id="start">Start / Resume</button>
         <button id="refresh" class="secondary">Refresh</button>
       </div>
@@ -990,15 +1344,21 @@ export function renderCloudflareCarrierConsole() {
       async request(operation, params = {}, extra = {}) {
         const carrierSessionId = el('sessionId').value.trim();
         const token = el('token').value.trim();
-        if (!token) throw new Error('Bearer token is required.');
+        const headers = { 'content-type': 'application/json' };
+        if (token) headers.authorization = 'Bearer ' + token;
         const response = await fetch('/api/carrier', {
           method: 'POST',
-          headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token },
+          headers,
           body: JSON.stringify({ operation, carrier_session_id: carrierSessionId, params, ...extra }),
         });
         const body = await response.json();
         if (!response.ok || body.ok === false) throw new Error(body.code || body.error || response.statusText);
         return body;
+      },
+      async session() {
+        const response = await fetch('/auth/session', { headers: { accept: 'application/json' } });
+        if (!response.ok) return null;
+        return response.json();
       },
       start() {
         const carrierSessionId = el('sessionId').value.trim();
@@ -1137,16 +1497,24 @@ export function renderCloudflareCarrierConsole() {
       renderTasks(status.tasks || []);
       return status;
     }
+    async function refreshOperatorSession() {
+      const session = await api.session();
+      if (session?.principal) {
+        el('membershipRole').textContent = session.principal.email || session.principal.principal_id;
+      }
+    }
     async function run(action) {
       el('error').textContent = '';
       try { await action(); } catch (error) { el('error').textContent = error.message; }
     }
+    el('signInMicrosoft').addEventListener('click', () => { window.location.href = '/auth/microsoft/login'; });
     el('start').addEventListener('click', () => run(async () => { const body = await api.start(); appendEvents([body.event].filter(Boolean)); await refreshStatus(); }));
     el('refresh').addEventListener('click', () => run(refreshStatus));
     el('readSite').addEventListener('click', () => run(async () => { const body = await api.readSite(); renderSiteProduct(body); appendEvents((body.carrier_evidence || []).flatMap((entry) => entry.events || [])); }));
     el('read').addEventListener('click', () => run(async () => { const body = await api.readEvents(); appendEvents(body.events || []); await refreshStatus(); }));
     el('createTask').addEventListener('click', () => run(async () => { const title = el('taskTitle').value.trim(); if (!title) return; const body = await api.command('/task', ['create', ...title.split(/\\s+/)]); appendEvents(body.events || []); el('taskTitle').value = ''; await refreshStatus(); }));
     el('send').addEventListener('click', () => run(async () => { const content = el('input').value.trim(); if (!content) return; const body = await api.deliver(content); appendEvents(body.events || []); el('input').value = ''; await refreshStatus(); }));
+    refreshOperatorSession().catch(() => {});
   </script>
 </body>
 </html>`;
