@@ -65,6 +65,75 @@ test('stores site settings behind site authority', async () => {
   assert.equal(denied.code, 'site_authority_denied');
 });
 
+test('puts site membership behind owner or maintainer authority', async () => {
+  const db = fakeD1SiteRegistryDatabase();
+  const registry = createD1CloudflareSiteRegistry(db, { now: fixedNow });
+  const owner = { principal_id: 'user:owner' };
+  await registry.createSite({ site_id: 'site_membership', display_name: 'Membership Site', principal: owner });
+
+  const created = await registry.handle({
+    operation: 'site.membership.put',
+    principal: owner,
+    params: {
+      site_id: 'site_membership',
+      member_principal_id: 'microsoft:tenant:operator',
+      role: 'operator',
+      request_id: 'req_member_create',
+    },
+  });
+  assert.equal(created.ok, true);
+  assert.equal(created.action, 'created');
+  assert.equal(created.membership.principal_id, 'microsoft:tenant:operator');
+  assert.equal(created.membership.role, 'operator');
+
+  const read = await registry.readSite({ site_id: 'site_membership', principal: owner });
+  assert.deepEqual(read.memberships.map((membership) => [membership.principal_id, membership.role]), [
+    ['user:owner', 'owner'],
+    ['microsoft:tenant:operator', 'operator'],
+  ]);
+  assert.equal(read.authority_events.some((event) => event.event_kind === 'site_membership_updated'), true);
+
+  const updated = await registry.handle({
+    operation: 'site.membership.put',
+    principal: owner,
+    params: {
+      site_id: 'site_membership',
+      member_principal_id: 'microsoft:tenant:operator',
+      role: 'viewer',
+      status: 'inactive',
+      request_id: 'req_member_update',
+    },
+  });
+  assert.equal(updated.ok, true);
+  assert.equal(updated.action, 'updated');
+  assert.equal(updated.membership.role, 'viewer');
+  assert.equal(updated.membership.status, 'inactive');
+});
+
+test('rejects invalid or unauthorized site membership updates', async () => {
+  const db = fakeD1SiteRegistryDatabase();
+  const registry = createD1CloudflareSiteRegistry(db, { now: fixedNow });
+  const owner = { principal_id: 'user:owner' };
+  await registry.createSite({ site_id: 'site_membership_denied', display_name: 'Membership Denied Site', principal: owner });
+
+  const invalidRole = await registry.handle({
+    operation: 'site.membership.put',
+    principal: owner,
+    params: { site_id: 'site_membership_denied', member_principal_id: 'user:viewer', role: 'admin' },
+  });
+  assert.equal(invalidRole.ok, false);
+  assert.equal(invalidRole.code, 'invalid_site_role');
+
+  const denied = await registry.handle({
+    operation: 'site.membership.put',
+    principal: { principal_id: 'user:other' },
+    params: { site_id: 'site_membership_denied', member_principal_id: 'user:viewer', role: 'viewer' },
+  });
+  assert.equal(denied.ok, false);
+  assert.equal(denied.code, 'site_authority_denied');
+  assert.equal(db.dump().authorityEvents.some((event) => event.event_kind === 'site_membership_update_rejected'), true);
+});
+
 test('validates and records carrier session binding to registered site', async () => {
   const db = fakeD1SiteRegistryDatabase();
   const registry = createD1CloudflareSiteRegistry(db, { now: fixedNow });
@@ -188,7 +257,10 @@ function fakeD1Statement(state, sql) {
         }
       } else if (/^INSERT INTO cloudflare_site_memberships/i.test(sql)) {
         const [siteId, principalId, role, status, createdAt, updatedAt] = bound;
-        if (!state.memberships.some((membership) => membership.site_id === siteId && membership.principal_id === principalId)) {
+        const existing = state.memberships.find((membership) => membership.site_id === siteId && membership.principal_id === principalId);
+        if (existing) {
+          Object.assign(existing, { role, status, updated_at: updatedAt });
+        } else {
           state.memberships.push({ site_id: siteId, principal_id: principalId, role, status, created_at: createdAt, updated_at: updatedAt });
         }
       } else if (/^INSERT INTO cloudflare_site_settings/i.test(sql)) {
@@ -241,6 +313,16 @@ function fakeD1Statement(state, sql) {
             .filter((setting) => setting.site_id === siteId)
             .sort((left, right) => left.setting_key.localeCompare(right.setting_key))
             .map(({ setting_key, value_json }) => ({ setting_key, value_json })),
+        };
+      }
+      if (/FROM cloudflare_site_memberships\s+WHERE site_id = \?/i.test(sql)) {
+        const [siteId, limit] = bound;
+        return {
+          results: state.memberships
+            .filter((membership) => membership.site_id === siteId)
+            .sort((left, right) => left.created_at.localeCompare(right.created_at))
+            .slice(0, Number(limit))
+            .map(clone),
         };
       }
       if (/FROM cloudflare_site_carrier_sessions/i.test(sql)) {

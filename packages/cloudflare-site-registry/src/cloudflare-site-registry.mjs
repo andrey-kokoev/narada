@@ -88,6 +88,7 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     if (operation === 'site.read') return readSite({ ...params, principal });
     if (operation === 'site.list') return listSites({ ...params, principal });
     if (operation === 'site.settings.put') return putSiteSetting({ ...params, principal });
+    if (operation === 'site.membership.put') return putSiteMembership({ ...params, principal });
     if (operation === 'site.carrier_session.bind') return validateCarrierSiteBinding({ ...params, principal });
     return { ok: false, code: 'unsupported_site_registry_operation', operation };
   }
@@ -136,7 +137,7 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     return { ok: true, action: 'created', site: publicSite(site), membership: publicMembership(membership) };
   }
 
-  async function readSite({ site_id, principal, include_sessions = true, include_authority_events = true, limit = 100 } = {}) {
+  async function readSite({ site_id, principal, include_sessions = true, include_authority_events = true, include_memberships = true, limit = 100 } = {}) {
     await ensureSchema();
     const siteId = normalizeSiteId(site_id);
     if (!siteId) return { ok: false, code: 'invalid_site_id' };
@@ -149,6 +150,7 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
       ok: true,
       site: publicSite(site),
       membership: publicMembership(membership),
+      memberships: include_memberships && BINDING_ROLES.has(membership.role) ? await listMemberships(siteId, boundedLimit) : [],
       settings: await listSettings(siteId),
       sessions: include_sessions ? await listCarrierSessionBindings(siteId, boundedLimit) : [],
       authority_events: include_authority_events ? await listAuthorityEvents(siteId, boundedLimit) : [],
@@ -198,6 +200,68 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
       evidence: { setting_key: key },
     });
     return { ok: true, site_id: siteId, setting_key: key };
+  }
+
+  async function putSiteMembership({ site_id, member_principal_id, role, status = 'active', principal, request_id = null } = {}) {
+    await ensureSchema();
+    const siteId = normalizeSiteId(site_id);
+    const actorPrincipalId = normalizePrincipal(principal).principal_id;
+    const memberPrincipalId = String(member_principal_id ?? '').trim();
+    const normalizedRole = String(role ?? '').trim();
+    const normalizedStatus = String(status ?? 'active').trim();
+    if (!siteId) return { ok: false, code: 'invalid_site_id' };
+    if (!memberPrincipalId) return { ok: false, code: 'invalid_member_principal_id', site_id: siteId };
+    if (!SITE_ROLES.has(normalizedRole)) return { ok: false, code: 'invalid_site_role', site_id: siteId, role: normalizedRole || null };
+    if (!['active', 'inactive'].includes(normalizedStatus)) return { ok: false, code: 'invalid_membership_status', site_id: siteId, status: normalizedStatus || null };
+    const site = await findSite(siteId);
+    if (!site || site.status !== 'active') return { ok: false, code: 'site_not_found', site_id: siteId };
+    const actorMembership = await findMembership(siteId, actorPrincipalId);
+    if (!actorMembership || actorMembership.status !== 'active' || !['owner', 'maintainer'].includes(actorMembership.role)) {
+      return denied('site_membership_update_rejected', {
+        site_id: siteId,
+        principal_id: actorPrincipalId,
+        reason: 'site_authority_denied',
+        request_id,
+      });
+    }
+    const existing = await findMembership(siteId, memberPrincipalId);
+    const timestamp = now();
+    await db.prepare(`INSERT INTO cloudflare_site_memberships (
+      site_id, principal_id, role, status, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(site_id, principal_id) DO UPDATE SET
+      role = excluded.role,
+      status = excluded.status,
+      updated_at = excluded.updated_at`).bind(
+      siteId,
+      memberPrincipalId,
+      normalizedRole,
+      normalizedStatus,
+      existing?.created_at ?? timestamp,
+      timestamp,
+    ).run();
+    const membership = await findMembership(siteId, memberPrincipalId);
+    await recordAuthorityEvent({
+      event_kind: 'site_membership_updated',
+      site_id: siteId,
+      principal_id: actorPrincipalId,
+      action: 'admit',
+      reason: existing ? 'site_membership_updated' : 'site_membership_created',
+      evidence: {
+        request_id,
+        member_principal_id: memberPrincipalId,
+        role: normalizedRole,
+        status: normalizedStatus,
+        actor_role: actorMembership.role,
+      },
+    });
+    return {
+      ok: true,
+      action: existing ? 'updated' : 'created',
+      site: publicSite(site),
+      membership: publicMembership(membership),
+      actor_membership: publicMembership(actorMembership),
+    };
   }
 
   async function validateCarrierSiteBinding({ site_id, site_ref = null, carrier_session_id, agent_id, principal, request_id = null } = {}) {
@@ -296,6 +360,14 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     return (result.results ?? []).map(publicCarrierSessionBinding);
   }
 
+  async function listMemberships(siteId, limit = 100) {
+    const result = await db.prepare(`SELECT * FROM cloudflare_site_memberships
+      WHERE site_id = ?
+      ORDER BY created_at ASC
+      LIMIT ?`).bind(siteId, boundedReadLimit(limit)).all();
+    return (result.results ?? []).map(publicMembership);
+  }
+
   async function listAuthorityEvents(siteId, limit = 100) {
     const result = await db.prepare(`SELECT * FROM cloudflare_site_authority_events
       WHERE site_id = ?
@@ -336,9 +408,11 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     readSite,
     listSites,
     putSiteSetting,
+    putSiteMembership,
     validateCarrierSiteBinding,
     listCarrierSessionBindings,
     listAuthorityEvents,
+    listMemberships,
   };
 }
 

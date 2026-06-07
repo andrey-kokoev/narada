@@ -269,7 +269,7 @@ async function handleCarrierApiRequest(request, env) {
 }
 
 function isSiteProductOperation(operation) {
-  return ['site.create', 'site.read', 'site.list', 'site.settings.put'].includes(operation);
+  return ['site.create', 'site.read', 'site.list', 'site.settings.put', 'site.membership.put'].includes(operation);
 }
 
 async function handleSiteProductApiRequest(body, principal, env = {}) {
@@ -1311,6 +1311,12 @@ export function renderCloudflareCarrierConsole() {
         <h2>Site Product</h2>
         <div class="actions"><button id="readSite" class="secondary">Read Site</button></div>
       </div>
+      <div class="product-panel">
+        <h2>Site Membership</h2>
+        <label>Principal ID<input id="memberPrincipalId" placeholder="microsoft:tenant:object-id"></label>
+        <label>Role<input id="memberRole" value="viewer"></label>
+        <div class="actions"><button id="putMembership" class="secondary">Put Membership</button></div>
+      </div>
       <div class="task-panel">
         <h2>Task State</h2>
         <label>New task<input id="taskTitle" placeholder="Task title"></label>
@@ -1326,6 +1332,7 @@ export function renderCloudflareCarrierConsole() {
       </div>
       <div id="productOverview" class="overview">
         <div class="overview-block"><h3>Site</h3><ul><li class="empty">No site loaded.</li></ul></div>
+        <div class="overview-block"><h3>Memberships</h3><ul><li class="empty">No memberships loaded.</li></ul></div>
         <div class="overview-block"><h3>Sessions</h3><ul><li class="empty">No sessions loaded.</li></ul></div>
         <div class="overview-block"><h3>Authority Events</h3><ul><li class="empty">No authority events loaded.</li></ul></div>
         <div class="overview-block"><h3>Carrier Evidence</h3><ul><li class="empty">No carrier evidence loaded.</li></ul></div>
@@ -1372,6 +1379,14 @@ export function renderCloudflareCarrierConsole() {
       },
       status() { return this.request('session.status'); },
       readSite() { return this.request('site.read', { site_id: el('siteId').value.trim(), carrier_event_limit: 20, session_limit: 10 }); },
+      putMembership(memberPrincipalId, role) {
+        return this.request('site.membership.put', {
+          site_id: el('siteId').value.trim(),
+          member_principal_id: memberPrincipalId,
+          role,
+          status: 'active',
+        }, { request_id: 'console_membership_put_' + Date.now() });
+      },
       readEvents() { return this.request('session.events.read', { after_sequence: state.afterSequence }); },
       command(command, args = []) { return this.request('carrier.command.execute', { command, args }, { request_id: 'console_command_' + Date.now() }); },
       deliver(content) {
@@ -1442,6 +1457,7 @@ export function renderCloudflareCarrierConsole() {
         listItem('display_name', product.site?.display_name),
         listItem('principal', product.reader_principal?.email || product.reader_principal?.principal_id),
       ];
+      const membershipItems = (product.memberships || []).map((membership) => listItem(membership.principal_id, membership.role + ' / ' + membership.status));
       const sessionItems = (product.sessions || []).map((session) => listItem(session.carrier_session_id, session.binding_status || session.agent_id));
       const authorityItems = (product.authority_events || []).map((event) => listItem(event.event_kind, event.reason || event.action));
       const evidenceItems = (product.carrier_evidence || []).map((entry) => {
@@ -1450,6 +1466,7 @@ export function renderCloudflareCarrierConsole() {
       });
       el('productOverview').replaceChildren(
         renderListBlock('Site', siteItems),
+        renderListBlock('Memberships', membershipItems),
         renderListBlock('Sessions', sessionItems),
         renderListBlock('Authority Events', authorityItems),
         renderListBlock('Carrier Evidence', evidenceItems),
@@ -1511,6 +1528,7 @@ export function renderCloudflareCarrierConsole() {
     el('start').addEventListener('click', () => run(async () => { const body = await api.start(); appendEvents([body.event].filter(Boolean)); await refreshStatus(); }));
     el('refresh').addEventListener('click', () => run(refreshStatus));
     el('readSite').addEventListener('click', () => run(async () => { const body = await api.readSite(); renderSiteProduct(body); appendEvents((body.carrier_evidence || []).flatMap((entry) => entry.events || [])); }));
+    el('putMembership').addEventListener('click', () => run(async () => { const principalId = el('memberPrincipalId').value.trim(); const role = el('memberRole').value.trim(); if (!principalId || !role) return; await api.putMembership(principalId, role); const body = await api.readSite(); renderSiteProduct(body); }));
     el('read').addEventListener('click', () => run(async () => { const body = await api.readEvents(); appendEvents(body.events || []); await refreshStatus(); }));
     el('createTask').addEventListener('click', () => run(async () => { const title = el('taskTitle').value.trim(); if (!title) return; const body = await api.command('/task', ['create', ...title.split(/\\s+/)]); appendEvents(body.events || []); el('taskTitle').value = ''; await refreshStatus(); }));
     el('send').addEventListener('click', () => run(async () => { const content = el('input').value.trim(); if (!content) return; const body = await api.deliver(content); appendEvents(body.events || []); el('input').value = ''; await refreshStatus(); }));

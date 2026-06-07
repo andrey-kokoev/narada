@@ -28,7 +28,7 @@ The deployed Worker serves a minimal authenticated operator console at:
 - `GET /`
 - `GET /console`
 
-The console is intentionally Worker-native HTML and browser JavaScript, so no separate asset build or static hosting step is required. It lets an operator sign in with Microsoft, optionally provide an automation bearer token, start or resume a carrier session, send carrier input, read session events, inspect provider/tool/effect evidence from event payloads, read the Site product model, and view or create Cloudflare-backed Narada tasks.
+The console is intentionally Worker-native HTML and browser JavaScript, so no separate asset build or static hosting step is required. It lets an operator sign in with Microsoft, optionally provide an automation bearer token, start or resume a carrier session, send carrier input, read session events, inspect provider/tool/effect evidence from event payloads, read the Site product model, govern Site membership, and view or create Cloudflare-backed Narada tasks.
 
 Browser and API clients can call the carrier JSON API at:
 
@@ -39,7 +39,7 @@ The existing compatibility routes remain available:
 - `POST /`
 - `POST /control`
 
-All JSON API routes require either bearer auth or a valid operator session cookie and accept the same operation envelope, including `session.start`, `session.status`, `carrier.input.deliver`, `carrier.command.execute`, `carrier.interrupt`, `session.events.read`, `session.close`, and Site product operations such as `site.read`.
+All JSON API routes require either bearer auth or a valid operator session cookie and accept the same operation envelope, including `session.start`, `session.status`, `carrier.input.deliver`, `carrier.command.execute`, `carrier.interrupt`, `session.events.read`, `session.close`, and Site product operations such as `site.read` and `site.membership.put`.
 
 ## Tool / Effect Boundary
 
@@ -147,6 +147,8 @@ microsoft:<tenant_id>:<object_id>
 
 Site Registry membership remains the authority source for `site.read`, carrier session binding, and Site-scoped effects. OAuth token values are never serialized into carrier evidence.
 
+Owners and maintainers may govern Site membership through `site.membership.put`. The operation validates role/status, upserts the target `principal_id`, and records `site_membership_updated` authority evidence. This replaces manual D1 membership edits for Microsoft operator admission.
+
 Auth identifies the caller and records principal evidence. It does not by itself authorize arbitrary effects.
 
 ## Scripts
@@ -181,6 +183,7 @@ pnpm --filter @narada2/cloudflare-carrier ship
 - Workers AI binding;
 - auth and principal evidence;
 - Microsoft operator identity console hooks;
+- governed Site membership update surface;
 - Durable Object routing and snapshot reload;
 - tool/effect admission classifier behavior;
 - deny-by-default tool/effect result evidence;

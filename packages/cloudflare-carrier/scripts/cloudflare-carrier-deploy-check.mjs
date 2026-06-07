@@ -50,6 +50,8 @@ assert.match(consoleHtml, /\/api\/carrier/);
 assert.match(consoleHtml, /Sign in with Microsoft/);
 assert.match(consoleHtml, /\/auth\/microsoft\/login/);
 assert.match(consoleHtml, /\/auth\/session/);
+assert.match(consoleHtml, /Site Membership/);
+assert.match(consoleHtml, /site\.membership\.put/);
 assert.match(consoleHtml, /Task State/);
 
 const apiClientStartResponse = await worker.fetch(jsonRequest({
@@ -559,6 +561,7 @@ process.stdout.write(`${JSON.stringify({
   thrown_tool_effect_adapter_failure_checked: true,
   console_surface_checked: true,
   microsoft_operator_identity_surface_checked: true,
+  governed_site_membership_surface_checked: true,
   api_client_route_checked: true,
   task_tool_effect_boundary_checked: true,
   d1_task_state_persistence_checked: true,
