@@ -112,6 +112,9 @@ export class CloudflareCarrierSession {
   handle(request) {
     const operation = request?.operation;
     if (!SUPPORTED_OPERATIONS.has(operation)) return { ok: false, code: 'unsupported_operation', operation };
+    const previousPrincipal = this.currentPrincipal;
+    this.currentPrincipal = request?.principal ?? null;
+    try {
     if (MUTATING_OPERATIONS.has(operation)) {
       const idempotencyKey = request?.request_id ?? request?.event_id ?? request?.params?.event_id;
       if (idempotencyKey && this.state.processed_requests.has(idempotencyKey)) {
@@ -122,6 +125,9 @@ export class CloudflareCarrierSession {
       return response;
     }
     return this.#handleFresh(request);
+    } finally {
+      this.currentPrincipal = previousPrincipal;
+    }
   }
 
   status() {
@@ -412,6 +418,9 @@ export class CloudflareCarrierSession {
   #appendEvent(event_kind, payload = {}) {
     const sequence = this.state.next_event_sequence;
     this.state.next_event_sequence += 1;
+    const eventPayload = this.currentPrincipal && !Object.prototype.hasOwnProperty.call(payload, 'principal')
+      ? { ...payload, principal: clone(this.currentPrincipal) }
+      : payload;
     const event = {
       schema: SESSION_EVENT_SCHEMA,
       event_id: `session_event_cloudflare_${sequence}`,
@@ -423,7 +432,7 @@ export class CloudflareCarrierSession {
       site_root: this.state.site_root,
       site_ref: this.state.site_ref,
       event_kind,
-      payload,
+      payload: eventPayload,
     };
     assertNoSecretValues(event);
     this.events.push(event);

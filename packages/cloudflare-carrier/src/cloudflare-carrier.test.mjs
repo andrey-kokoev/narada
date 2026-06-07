@@ -4,7 +4,7 @@ import test from 'node:test';
 import {
   validateSessionEvent,
 } from '../../carrier-protocol/src/carrier-protocol.mjs';
-import worker, { CloudflareCarrierDurableObject } from './cloudflare-worker.mjs';
+import worker, { authenticateCarrierRequest, CloudflareCarrierDurableObject } from './cloudflare-worker.mjs';
 import {
   CloudflareCarrierRouter,
   CloudflareCarrierSession,
@@ -256,18 +256,58 @@ test('durable object facade stores and reloads session snapshot', async () => {
 
 test('worker export routes requests by carrier session durable object binding', async () => {
   const namespace = fakeDurableObjectNamespace();
-  const start = await worker.fetch(jsonRequest(startRequest()), { CLOUDFLARE_CARRIER_SESSIONS: namespace });
+  const env = authEnv(namespace);
+  const start = await worker.fetch(jsonRequest(startRequest(), { token: 'test-admin-token' }), env);
   assert.equal(start.status, 200);
+  const startBody = await start.json();
+  assert.equal(startBody.principal.email, 'admin@system');
+  assert.equal(startBody.event.payload.principal.email, 'admin@system');
 
-  const goal = await worker.fetch(jsonRequest(commandRequest('/goal', ['route', 'through', 'worker'])), { CLOUDFLARE_CARRIER_SESSIONS: namespace });
+  const goal = await worker.fetch(jsonRequest(commandRequest('/goal', ['route', 'through', 'worker']), { token: 'test-admin-token' }), env);
   assert.equal(goal.status, 200);
+  const goalBody = await goal.json();
+  assert.equal(goalBody.principal.email, 'admin@system');
+  assert.equal(goalBody.event.payload.principal.email, 'admin@system');
 
   const status = await worker.fetch(jsonRequest({
     operation: 'session.status',
     carrier_session_id: 'carrier_session_cloudflare_fixture',
-  }), { CLOUDFLARE_CARRIER_SESSIONS: namespace });
+  }, { token: 'test-admin-token' }), env);
   assert.equal(status.status, 200);
-  assert.equal((await status.json()).goal.text, 'route through worker');
+  const statusBody = await status.json();
+  assert.equal(statusBody.goal.text, 'route through worker');
+  assert.equal(statusBody.reader_principal.email, 'admin@system');
+});
+
+test('worker export rejects unauthenticated and invalid bearer requests', async () => {
+  const namespace = fakeDurableObjectNamespace();
+  const env = authEnv(namespace);
+
+  let response = await worker.fetch(jsonRequest(startRequest()), env);
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).code, 'unauthorized');
+
+  response = await worker.fetch(jsonRequest(startRequest(), { token: 'wrong-token' }), env);
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).code, 'unauthorized');
+
+  response = await worker.fetch(jsonRequest(startRequest(), { token: 'test-admin-token' }), { CLOUDFLARE_CARRIER_SESSIONS: namespace });
+  assert.equal(response.status, 500);
+  assert.equal((await response.json()).code, 'auth_not_configured');
+});
+
+test('carrier auth classifier matches revolution bearer token principal shapes', () => {
+  const admin = authenticateCarrierRequest(jsonRequest({}, { token: 'test-admin-token' }), { ADMIN_BEARER_TOKEN: 'test-admin-token' });
+  assert.equal(admin.ok, true);
+  assert.equal(admin.principal.auth_type, 'user');
+  assert.equal(admin.principal.email, 'admin@system');
+  assert.deepEqual(admin.principal.roles, [1]);
+  assert.deepEqual(admin.principal.controlled_actions, ['*']);
+
+  const service = authenticateCarrierRequest(jsonRequest({}, { token: 'test-service-token' }), { SERVICE_TOKEN: 'test-service-token' });
+  assert.equal(service.ok, true);
+  assert.equal(service.principal.auth_type, 'service');
+  assert.equal(service.principal.principal_id, 'service');
 });
 
 test('evidence rejects obvious secret values', () => {
@@ -322,10 +362,20 @@ function fakeDurableObjectNamespace() {
   };
 }
 
-function jsonRequest(body) {
+function authEnv(namespace) {
+  return {
+    CLOUDFLARE_CARRIER_SESSIONS: namespace,
+    ADMIN_BEARER_TOKEN: 'test-admin-token',
+    SERVICE_TOKEN: 'test-service-token',
+  };
+}
+
+function jsonRequest(body, { token = null } = {}) {
+  const headers = { 'content-type': 'application/json' };
+  if (token) headers.authorization = `Bearer ${token}`;
   return new Request('https://carrier.test/control', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers,
     body: JSON.stringify(body),
   });
 }

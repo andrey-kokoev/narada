@@ -14,6 +14,10 @@ assert.match(configText, /^new_sqlite_classes = \["CloudflareCarrierDurableObjec
 assert.equal(configText.includes('account_id'), false);
 
 const namespace = fakeDurableObjectNamespace();
+const env = {
+  CLOUDFLARE_CARRIER_SESSIONS: namespace,
+  ADMIN_BEARER_TOKEN: 'deploy-check-admin-token',
+};
 const startResponse = await worker.fetch(jsonRequest({
   operation: 'session.start',
   request_id: 'deploy_check_start',
@@ -23,8 +27,11 @@ const startResponse = await worker.fetch(jsonRequest({
     site_id: 'site_deploy_check',
     site_root: 'cloudflare://site_deploy_check',
   },
-}), { CLOUDFLARE_CARRIER_SESSIONS: namespace });
+}), env);
 assert.equal(startResponse.status, 200);
+const start = await startResponse.json();
+assert.equal(start.principal.email, 'admin@system');
+assert.equal(start.event.payload.principal.email, 'admin@system');
 
 const commandResponse = await worker.fetch(jsonRequest({
   operation: 'carrier.command.execute',
@@ -34,23 +41,26 @@ const commandResponse = await worker.fetch(jsonRequest({
     command: '/goal',
     args: ['prove', 'cloudflare', 'carrier', 'boundary'],
   },
-}), { CLOUDFLARE_CARRIER_SESSIONS: namespace });
+}), env);
 assert.equal(commandResponse.status, 200);
 
 const statusResponse = await worker.fetch(jsonRequest({
   operation: 'session.status',
   carrier_session_id: 'carrier_session_deploy_check',
-}), { CLOUDFLARE_CARRIER_SESSIONS: namespace });
+}), env);
 const status = await statusResponse.json();
 assert.equal(status.goal.text, 'prove cloudflare carrier boundary');
 assert.equal(status.carrier_host, 'cloudflare-durable-object');
 assert.equal(status.provider_adapter_posture, 'refused');
+assert.equal(status.reader_principal.email, 'admin@system');
 
 process.stdout.write(`${JSON.stringify({
   schema: 'narada.cloudflare_carrier.deploy_check.v1',
   status: 'ok',
   wrangler_config_checked: true,
   durable_object_binding: 'CLOUDFLARE_CARRIER_SESSIONS',
+  auth_boundary_checked: true,
+  principal_evidence_checked: true,
   worker_route_checked: true,
   durable_snapshot_reload_checked: true,
   live_deploy_performed: false,
@@ -59,7 +69,10 @@ process.stdout.write(`${JSON.stringify({
 function jsonRequest(body) {
   return new Request('https://carrier.deploy-check.example/control', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      authorization: 'Bearer deploy-check-admin-token',
+    },
     body: JSON.stringify(body),
   });
 }

@@ -7,6 +7,10 @@ const workerUrl = option('--url') ?? process.env.CLOUDFLARE_CARRIER_URL;
 if (!workerUrl) {
   throw new Error('live_smoke_requires_--url_or_CLOUDFLARE_CARRIER_URL');
 }
+const bearerToken = option('--token') ?? process.env.CLOUDFLARE_CARRIER_TOKEN;
+if (!bearerToken) {
+  throw new Error('live_smoke_requires_--token_or_CLOUDFLARE_CARRIER_TOKEN');
+}
 
 const sessionSuffix = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
 const carrierSessionId = option('--session') ?? `carrier_session_live_smoke_${sessionSuffix}`;
@@ -33,7 +37,9 @@ const start = await post({
 });
 assert.equal(start.http_status, 200);
 assert.equal(start.body.ok, true);
+assert.equal(start.body.principal.email, 'admin@system');
 assert.equal(start.body.event.event_kind, 'carrier_session_started');
+assert.equal(start.body.event.payload.principal.email, 'admin@system');
 
 const command = await post({
   operation: 'carrier.command.execute',
@@ -46,6 +52,7 @@ const command = await post({
 });
 assert.equal(command.http_status, 200);
 assert.equal(command.body.ok, true);
+assert.equal(command.body.principal.email, 'admin@system');
 assert.equal(command.body.event.event_kind, 'carrier_command_executed');
 
 const inputDelivery = await post({
@@ -58,6 +65,7 @@ const inputDelivery = await post({
 });
 assert.equal(inputDelivery.http_status, 200);
 assert.equal(inputDelivery.body.ok, true);
+assert.equal(inputDelivery.body.principal.email, 'admin@system');
 assert.equal(inputDelivery.body.input_event_id, providerRefusalInput.event_id);
 assert.equal(inputDelivery.body.terminal_state, 'failed');
 assert.deepEqual(inputDelivery.body.events.map((event) => event.event_kind), [
@@ -89,6 +97,7 @@ assert.equal(status.body.carrier_session_id, carrierSessionId);
 assert.equal(status.body.agent_id, agentId);
 assert.equal(status.body.carrier_host, 'cloudflare-durable-object');
 assert.equal(status.body.provider_adapter_posture, 'refused');
+assert.equal(status.body.reader_principal.email, 'admin@system');
 assert.deepEqual(status.body.goal, { text: expectedGoal, state: 'active' });
 assert.equal(status.body.next_event_sequence, 8);
 
@@ -102,6 +111,7 @@ const events = await post({
 });
 assert.equal(events.http_status, 200);
 assert.equal(events.body.ok, true);
+assert.equal(events.body.reader_principal.email, 'admin@system');
 assert.deepEqual(events.body.events.map((event) => event.sequence), [1, 2, 3, 4, 5, 6, 7]);
 assert.deepEqual(events.body.events.map((event) => event.event_kind), [
   'carrier_session_started',
@@ -122,6 +132,8 @@ process.stdout.write(`${JSON.stringify({
   agent_id: agentId,
   carrier_host: status.body.carrier_host,
   provider_adapter_posture: status.body.provider_adapter_posture,
+  principal_id: status.body.reader_principal.principal_id,
+  principal_email: status.body.reader_principal.email,
   goal: status.body.goal,
   input_event_id: providerRefusalInput.event_id,
   input_terminal_state: inputDelivery.body.terminal_state,
@@ -141,7 +153,10 @@ function option(name) {
 async function post(body) {
   const response = await fetch(workerUrl, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${bearerToken}`,
+    },
     body: JSON.stringify(body),
   });
   const text = await response.text();
