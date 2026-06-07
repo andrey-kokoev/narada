@@ -52,6 +52,9 @@ assert.match(consoleHtml, /\/auth\/microsoft\/login/);
 assert.match(consoleHtml, /\/auth\/session/);
 assert.match(consoleHtml, /Site Membership/);
 assert.match(consoleHtml, /site\.membership\.put/);
+assert.match(consoleHtml, /Last Authority/);
+assert.match(consoleHtml, /authoritySummary/);
+assert.match(consoleHtml, /renderLastAuthority/);
 assert.match(consoleHtml, /Task State/);
 
 const apiClientStartResponse = await worker.fetch(jsonRequest({

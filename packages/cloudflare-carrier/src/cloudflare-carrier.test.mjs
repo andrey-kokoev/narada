@@ -400,6 +400,10 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Effects/);
   assert.match(html, /Site Product/);
   assert.match(html, /Site Membership/);
+  assert.match(html, /Last Authority/);
+  assert.match(html, /authoritySummary/);
+  assert.match(html, /renderLastAuthority/);
+  assert.match(html, /actor_role/);
   assert.match(html, /Product Overview|productOverview/);
   assert.match(html, /Memberships/);
   assert.match(html, /Sessions/);

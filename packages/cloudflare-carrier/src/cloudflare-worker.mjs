@@ -1308,6 +1308,10 @@ export function renderCloudflareCarrierConsole() {
         <div class="metric"><b>Cursor</b><span id="cursor">0</span></div>
       </div>
       <div class="product-panel">
+        <h2>Last Authority</h2>
+        <div id="lastAuthority" class="task"><strong>No authority action loaded.</strong><span>Read Site or Put Membership to inspect evidence.</span></div>
+      </div>
+      <div class="product-panel">
         <h2>Site Product</h2>
         <div class="actions"><button id="readSite" class="secondary">Read Site</button></div>
       </div>
@@ -1429,6 +1433,34 @@ export function renderCloudflareCarrierConsole() {
       li.append(key, document.createTextNode(value == null || value === '' ? 'none' : String(value)));
       return li;
     }
+    function authoritySummary(event) {
+      const evidence = event?.evidence || {};
+      const parts = [
+        'actor=' + (event?.principal_id || 'unknown'),
+        'action=' + (event?.action || 'unknown'),
+        'reason=' + (event?.reason || 'none'),
+      ];
+      if (evidence.member_principal_id) parts.push('target=' + evidence.member_principal_id);
+      if (evidence.role) parts.push('role=' + evidence.role);
+      if (evidence.status) parts.push('status=' + evidence.status);
+      if (evidence.actor_role) parts.push('actor_role=' + evidence.actor_role);
+      return parts.join(' | ');
+    }
+    function renderLastAuthority(event, fallback = null) {
+      const authority = event || fallback;
+      if (!authority) {
+        el('lastAuthority').replaceChildren(
+          Object.assign(document.createElement('strong'), { textContent: 'No authority action loaded.' }),
+          Object.assign(document.createElement('span'), { textContent: 'Read Site or Put Membership to inspect evidence.' }),
+        );
+        return;
+      }
+      const title = document.createElement('strong');
+      title.textContent = authority.event_kind || 'site.membership.put';
+      const meta = document.createElement('span');
+      meta.textContent = authoritySummary(authority);
+      el('lastAuthority').replaceChildren(title, meta);
+    }
     function renderListBlock(title, items) {
       const block = document.createElement('div');
       block.className = 'overview-block';
@@ -1459,7 +1491,7 @@ export function renderCloudflareCarrierConsole() {
       ];
       const membershipItems = (product.memberships || []).map((membership) => listItem(membership.principal_id, membership.role + ' / ' + membership.status));
       const sessionItems = (product.sessions || []).map((session) => listItem(session.carrier_session_id, session.binding_status || session.agent_id));
-      const authorityItems = (product.authority_events || []).map((event) => listItem(event.event_kind, event.reason || event.action));
+      const authorityItems = (product.authority_events || []).map((event) => listItem(event.event_kind, authoritySummary(event)));
       const evidenceItems = (product.carrier_evidence || []).map((entry) => {
         const kinds = (entry.events || []).slice(0, 5).map((event) => event.event_kind).join(', ');
         return listItem(entry.carrier_session_id, kinds || entry.error || 'no events');
@@ -1471,6 +1503,7 @@ export function renderCloudflareCarrierConsole() {
         renderListBlock('Authority Events', authorityItems),
         renderListBlock('Carrier Evidence', evidenceItems),
       );
+      renderLastAuthority((product.authority_events || [])[0]);
     }
     function evidencePayload(event) {
       const payload = event.payload || {};
@@ -1528,7 +1561,26 @@ export function renderCloudflareCarrierConsole() {
     el('start').addEventListener('click', () => run(async () => { const body = await api.start(); appendEvents([body.event].filter(Boolean)); await refreshStatus(); }));
     el('refresh').addEventListener('click', () => run(refreshStatus));
     el('readSite').addEventListener('click', () => run(async () => { const body = await api.readSite(); renderSiteProduct(body); appendEvents((body.carrier_evidence || []).flatMap((entry) => entry.events || [])); }));
-    el('putMembership').addEventListener('click', () => run(async () => { const principalId = el('memberPrincipalId').value.trim(); const role = el('memberRole').value.trim(); if (!principalId || !role) return; await api.putMembership(principalId, role); const body = await api.readSite(); renderSiteProduct(body); }));
+    el('putMembership').addEventListener('click', () => run(async () => {
+      const principalId = el('memberPrincipalId').value.trim();
+      const role = el('memberRole').value.trim();
+      if (!principalId || !role) return;
+      const result = await api.putMembership(principalId, role);
+      renderLastAuthority(null, {
+        event_kind: 'site.membership.put',
+        principal_id: result.principal?.principal_id || result.reader_principal?.principal_id || result.principal?.email,
+        action: result.action,
+        reason: result.action,
+        evidence: {
+          member_principal_id: result.membership?.principal_id,
+          role: result.membership?.role,
+          status: result.membership?.status,
+          actor_role: result.actor_membership?.role,
+        },
+      });
+      const body = await api.readSite();
+      renderSiteProduct(body);
+    }));
     el('read').addEventListener('click', () => run(async () => { const body = await api.readEvents(); appendEvents(body.events || []); await refreshStatus(); }));
     el('createTask').addEventListener('click', () => run(async () => { const title = el('taskTitle').value.trim(); if (!title) return; const body = await api.command('/task', ['create', ...title.split(/\\s+/)]); appendEvents(body.events || []); el('taskTitle').value = ''; await refreshStatus(); }));
     el('send').addEventListener('click', () => run(async () => { const content = el('input').value.trim(); if (!content) return; const body = await api.deliver(content); appendEvents(body.events || []); el('input').value = ''; await refreshStatus(); }));
