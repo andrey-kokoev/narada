@@ -27,6 +27,15 @@ pnpm cloudflare:operator:check -- --operator-cookie-file D:\tmp\narada-cloudflar
 
 Without `--operator-cookie-file`, the command still verifies that the Microsoft login surface is reachable and reports `human_operator_login_ready` as `surface_only`.
 
+The repeatable capture path is:
+
+```powershell
+pnpm cloudflare:operator:login
+pnpm cloudflare:operator:check -- --require-operator-session
+```
+
+`cloudflare:operator:login` starts a short-lived loopback listener, opens the Worker capture URL in the browser, sends the operator through Microsoft login if needed, and stores only the signed `narada_operator_session` cookie in `CLOUDFLARE_OPERATOR_COOKIE_FILE`. It updates the ignored root `.env` with that cookie-file path unless `--no-write-env` is supplied. It does not store Microsoft tokens.
+
 To bootstrap the ignored `.env` from explicit local flags:
 
 ```powershell

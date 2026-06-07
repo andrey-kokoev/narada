@@ -598,6 +598,44 @@ test('worker Microsoft callback creates operator session and cookie principal ca
   assert.equal(readBody.membership.role, 'owner');
 });
 
+test('worker captures Microsoft operator session cookie for loopback helper only', async () => {
+  const siteDb = fakeD1SiteRegistryDatabase();
+  const env = authEnv(fakeDurableObjectNamespace(), { ...microsoftAuthEnv(), CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+  const returnTo = 'http://127.0.0.1:38441/capture';
+  const captureUrl = `https://carrier.test/auth/operator/session-capture?return_to=${encodeURIComponent(returnTo)}`;
+
+  const unauthenticatedCapture = await worker.fetch(new Request(captureUrl), env);
+  assert.equal(unauthenticatedCapture.status, 302);
+  const loginLocation = new URL(unauthenticatedCapture.headers.get('location'));
+  assert.equal(loginLocation.pathname, '/auth/microsoft/login');
+  assert.equal(loginLocation.searchParams.get('return_to'), `/auth/operator/session-capture?return_to=${encodeURIComponent(returnTo)}`);
+
+  const login = await worker.fetch(new Request(loginLocation.toString()), env);
+  const pendingCookie = login.headers.get('set-cookie').split(';')[0];
+  const authorize = new URL(login.headers.get('location'));
+  const state = authorize.searchParams.get('state');
+  const callback = await worker.fetch(new Request(`https://carrier.test/auth/microsoft/callback?code=code-fixture&state=${state}`, {
+    headers: { cookie: pendingCookie },
+  }), env);
+  assert.equal(callback.status, 302);
+  assert.equal(callback.headers.get('location'), `/auth/operator/session-capture?return_to=${encodeURIComponent(returnTo)}`);
+  const operatorCookie = callback.headers.get('set-cookie').split(';')[0];
+
+  const authenticatedCapture = await worker.fetch(new Request(captureUrl, { headers: { cookie: operatorCookie } }), env);
+  assert.equal(authenticatedCapture.status, 302);
+  const localRedirect = new URL(authenticatedCapture.headers.get('location'));
+  assert.equal(localRedirect.origin, 'http://127.0.0.1:38441');
+  assert.equal(localRedirect.pathname, '/capture');
+  assert.match(localRedirect.searchParams.get('cookie'), /^[^.]+\.[^.]+$/);
+  assert.equal(localRedirect.searchParams.get('principal_id'), 'microsoft:tenant-fixture:object-fixture');
+
+  const invalidCapture = await worker.fetch(new Request('https://carrier.test/auth/operator/session-capture?return_to=https%3A%2F%2Fevil.example%2Fcapture', {
+    headers: { cookie: operatorCookie },
+  }), env);
+  assert.equal(invalidCapture.status, 400);
+  assert.equal((await invalidCapture.json()).code, 'operator_capture_return_to_must_be_loopback_http');
+});
+
 test('worker Microsoft cookie principal is denied without site membership', async () => {
   const siteDb = fakeD1SiteRegistryDatabase({
     sites: [{

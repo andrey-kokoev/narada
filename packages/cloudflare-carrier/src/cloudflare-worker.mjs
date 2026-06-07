@@ -588,6 +588,9 @@ async function handleOperatorAuthRequest(request, env = {}) {
   if (request.method === 'GET' && url.pathname === '/auth/microsoft/callback') {
     return completeMicrosoftLogin(request, env);
   }
+  if (request.method === 'GET' && url.pathname === '/auth/operator/session-capture') {
+    return captureOperatorSessionCookie(request, env);
+  }
   if (request.method === 'GET' && url.pathname === '/auth/session') {
     const auth = await authenticateOperatorSessionRequest(request, env);
     if (!auth.ok) return jsonResponse({ ok: false, code: auth.code }, auth.status);
@@ -609,7 +612,13 @@ async function startMicrosoftLogin(request, env = {}) {
   const nonce = randomBase64Url(32);
   const codeVerifier = randomBase64Url(64);
   const codeChallenge = await sha256Base64Url(codeVerifier);
-  const pending = { state, nonce, code_verifier: codeVerifier, created_at: Date.now() };
+  const pending = {
+    state,
+    nonce,
+    code_verifier: codeVerifier,
+    created_at: Date.now(),
+    post_login_redirect: validatedOperatorPostLoginRedirect(new URL(request.url)),
+  };
   const pendingCookie = await signedCookie(MICROSOFT_OIDC_PENDING_COOKIE, pending, env, {
     maxAge: MICROSOFT_OIDC_PENDING_TTL_SECONDS,
   });
@@ -648,7 +657,26 @@ async function completeMicrosoftLogin(request, env = {}) {
   const cookie = await signedCookie(OPERATOR_SESSION_COOKIE, { operator_session_id: session.operator_session_id }, env, {
     maxAge: session.expires_in,
   });
-  return operatorRedirectResponse('/console', 302, [cookie, clearCookie(MICROSOFT_OIDC_PENDING_COOKIE)]);
+  return operatorRedirectResponse(pending.value.post_login_redirect ?? '/console', 302, [cookie, clearCookie(MICROSOFT_OIDC_PENDING_COOKIE)]);
+}
+
+async function captureOperatorSessionCookie(request, env = {}) {
+  const url = new URL(request.url);
+  const returnTo = validateOperatorCaptureReturnTo(url.searchParams.get('return_to'));
+  if (!returnTo.ok) return jsonResponse({ ok: false, code: returnTo.code }, returnTo.status);
+  const auth = await authenticateOperatorSessionRequest(request, env);
+  if (!auth.ok) {
+    const loginUrl = new URL('/auth/microsoft/login', url.origin);
+    loginUrl.searchParams.set('return_to', `${url.pathname}${url.search}`);
+    return operatorRedirectResponse(loginUrl.toString(), 302);
+  }
+  const rawCookie = readCookie(request, OPERATOR_SESSION_COOKIE);
+  if (!rawCookie) return jsonResponse({ ok: false, code: 'operator_session_cookie_missing' }, 401);
+  const redirect = new URL(returnTo.value);
+  redirect.searchParams.set('cookie', rawCookie);
+  redirect.searchParams.set('principal_id', auth.principal.principal_id);
+  if (auth.principal.email) redirect.searchParams.set('email', auth.principal.email);
+  return operatorRedirectResponse(redirect.toString(), 302);
 }
 
 function microsoftOidcConfig(request, env = {}) {
@@ -824,6 +852,32 @@ async function ensureOperatorSessionSchema(db) {
 
 function microsoftPrincipalId(claims = {}) {
   return `microsoft:${claims.tid}:${claims.oid}`;
+}
+
+function validatedOperatorPostLoginRedirect(url) {
+  const value = url.searchParams.get('return_to');
+  if (!value) return null;
+  try {
+    const redirect = new URL(value, url.origin);
+    if (redirect.origin !== url.origin) return null;
+    if (redirect.pathname !== '/auth/operator/session-capture') return null;
+    if (!validateOperatorCaptureReturnTo(redirect.searchParams.get('return_to')).ok) return null;
+    return `${redirect.pathname}${redirect.search}`;
+  } catch {
+    return null;
+  }
+}
+
+function validateOperatorCaptureReturnTo(value) {
+  if (!value) return { ok: false, code: 'operator_capture_requires_return_to', status: 400 };
+  try {
+    const url = new URL(value);
+    const loopbackHost = url.hostname === '127.0.0.1' || url.hostname === 'localhost' || url.hostname === '[::1]';
+    if (url.protocol !== 'http:' || !loopbackHost) return { ok: false, code: 'operator_capture_return_to_must_be_loopback_http', status: 400 };
+    return { ok: true, value: url.toString() };
+  } catch {
+    return { ok: false, code: 'operator_capture_return_to_invalid', status: 400 };
+  }
 }
 
 export function createCloudflareAiProviderAdapter(env = {}) {
