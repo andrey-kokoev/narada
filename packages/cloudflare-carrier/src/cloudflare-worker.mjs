@@ -386,13 +386,16 @@ function capabilityForTool(toolName) {
 
 export function classifyCloudflareToolEffectAdmission(toolCall = {}, state = {}) {
   const toolName = String(toolCall?.tool_name ?? toolCall?.name ?? '').trim();
-  const supportedTools = Array.isArray(state.supported_tools)
+  const supportedTools = Array.isArray(state.supportedTools)
+    ? state.supportedTools
+    : Array.isArray(state.supported_tools)
     ? state.supported_tools
     : state.runtimeReadsEnabled
       ? ['cloudflare_carrier_runtime_metadata_read']
       : [];
   return classifyToolEffectAdmission(toolCall, {
-    adapterConfigured: state.configured ?? state.runtimeReadsEnabled ?? false,
+    adapterConfigured: state.adapterConfigured ?? state.configured ?? state.runtimeReadsEnabled ?? false,
+    admissionRequired: state.admissionRequired === true,
     supportedTools,
     admitReason: toolName === 'cloudflare_carrier_kv_put' ? 'write_tool_effect_admitted' : 'read_only_tool_effect_admitted',
   });

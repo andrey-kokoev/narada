@@ -69,6 +69,23 @@
       }
     },
     {
+      "name": "configured_mutating_tool_requires_carrier_action_admission",
+      "tool_call": {
+        "tool_name": "task_lifecycle_claim"
+      },
+      "state": {
+        "adapterConfigured": true,
+        "supportedTools": ["task_lifecycle_claim"],
+        "admissionRequired": true
+      },
+      "expected": {
+        "action": "deny",
+        "reason": "tool_effect_admission_required",
+        "tool_name": "task_lifecycle_claim",
+        "supported_tools": ["task_lifecycle_claim"]
+      }
+    },
+    {
       "name": "configured_unsupported_tool_denied",
       "tool_call": {
         "tool_name": "native_shell"

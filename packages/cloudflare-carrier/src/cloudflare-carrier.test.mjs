@@ -933,10 +933,7 @@ test('carrier auth classifier matches revolution bearer token principal shapes',
 test('tool effect classifier is deny-by-default and admits only configured Cloudflare capabilities', () => {
   assert.equal(toolEffectAdmissionCases.schema, TOOL_EFFECT_ADMISSION_CASES_SCHEMA);
   for (const fixtureCase of toolEffectAdmissionCases.cases) {
-    assert.deepEqual(classifyCloudflareToolEffectAdmission(fixtureCase.tool_call, {
-      configured: fixtureCase.state.adapterConfigured,
-      supported_tools: fixtureCase.state.supportedTools,
-    }), fixtureCase.expected, fixtureCase.name);
+    assert.deepEqual(classifyCloudflareToolEffectAdmission(fixtureCase.tool_call, fixtureCase.state), fixtureCase.expected, fixtureCase.name);
   }
 });
 

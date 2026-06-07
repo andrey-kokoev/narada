@@ -45,12 +45,14 @@ export const TOOL_EFFECT_ADMISSION_ACTIONS = Object.freeze(['admit', 'deny']);
 export const TOOL_EFFECT_ADMISSION_REASONS = Object.freeze([
   'read_only_tool_effect_admitted',
   'tool_effect_adapter_unconfigured',
+  'tool_effect_admission_required',
   'unsupported_tool_effect',
   'tool_effect_authority_denied',
   'write_tool_effect_admitted',
 ]);
 export function classifyToolEffectAdmission(toolCall = {}, {
   adapterConfigured = false,
+  admissionRequired = false,
   supportedTools = [],
   admitReason = 'read_only_tool_effect_admitted',
 } = {}) {
@@ -68,6 +70,14 @@ export function classifyToolEffectAdmission(toolCall = {}, {
     return {
       action: 'deny',
       reason: 'unsupported_tool_effect',
+      tool_name: toolName,
+      supported_tools,
+    };
+  }
+  if (admissionRequired) {
+    return {
+      action: 'deny',
+      reason: 'tool_effect_admission_required',
       tool_name: toolName,
       supported_tools,
     };
@@ -932,7 +942,7 @@ function validateToolResultPayload(payload) {
   if (payload.admission_reason !== undefined && payload.admission_action === undefined) errors.push('payload.missing_admission_action');
   if (payload.admission_action === 'deny' && payload.status !== 'denied') errors.push('payload.admission_action_status_mismatch');
   if (payload.admission_action === 'admit' && payload.status === 'denied') errors.push('payload.admission_action_status_mismatch');
-  if (payload.admission_action === 'admit' && ['tool_effect_adapter_unconfigured', 'unsupported_tool_effect', 'tool_effect_authority_denied'].includes(payload.admission_reason)) errors.push('payload.admission_reason_action_mismatch');
+  if (payload.admission_action === 'admit' && ['tool_effect_adapter_unconfigured', 'tool_effect_admission_required', 'unsupported_tool_effect', 'tool_effect_authority_denied'].includes(payload.admission_reason)) errors.push('payload.admission_reason_action_mismatch');
   if (payload.admission_action === 'deny' && ['read_only_tool_effect_admitted', 'write_tool_effect_admitted'].includes(payload.admission_reason)) errors.push('payload.admission_reason_action_mismatch');
   if (payload.capability_ref !== undefined && (typeof payload.capability_ref !== 'string' || payload.capability_ref.length === 0)) errors.push('payload.invalid_capability_ref');
   if (payload.effect_scope !== undefined && (typeof payload.effect_scope !== 'string' || payload.effect_scope.length === 0)) errors.push('payload.invalid_effect_scope');

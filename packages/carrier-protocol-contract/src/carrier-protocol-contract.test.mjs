@@ -52,7 +52,7 @@ test('carrier protocol contract exposes schemas and id prefixes', () => {
   assert.deepEqual(contract.tool_result_payload.consistency.admission_action_status.deny, ['denied']);
   assert.deepEqual(contract.tool_result_payload.consistency.admission_action_status.admit, ['ok', 'failed']);
   assert.deepEqual(contract.tool_result_payload.consistency.admission_action_reason.admit, ['read_only_tool_effect_admitted', 'write_tool_effect_admitted']);
-  assert.deepEqual(contract.tool_result_payload.consistency.admission_action_reason.deny, ['tool_effect_adapter_unconfigured', 'unsupported_tool_effect', 'tool_effect_authority_denied']);
+  assert.deepEqual(contract.tool_result_payload.consistency.admission_action_reason.deny, ['tool_effect_adapter_unconfigured', 'tool_effect_admission_required', 'unsupported_tool_effect', 'tool_effect_authority_denied']);
   assert.deepEqual([
     ...contract.tool_result_payload.consistency.admission_action_status.deny,
     ...contract.tool_result_payload.consistency.admission_action_status.admit,

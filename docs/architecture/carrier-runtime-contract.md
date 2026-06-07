@@ -92,13 +92,13 @@ Provider tool-call output is not effect execution. A carrier records the crossin
 
 The shared `tool_result_received` payload distinguishes three outcomes:
 
-- `denied`: the carrier boundary refused the effect, such as an unconfigured adapter, unsupported tool, or missing authority.
+- `denied`: the carrier boundary refused the effect, such as an unconfigured adapter, a tool requiring a separate carrier-action admission, an unsupported tool, or missing authority.
 - `ok`: the carrier boundary admitted the effect and the effect completed.
 - `failed`: the effect did not complete. If the carrier boundary already admitted the effect, this is an admitted execution failure. If the adapter failed before producing an admission decision, the result may omit admission evidence while still preserving the boundary crossing.
 
 When the boundary admits or denies an effect, tool results should include `admission_action` and `admission_reason`. Admitted results should also carry `capability_ref`, `effect_scope`, and `authority_ref` evidence when those concepts apply. A failed admitted effect must remain `status: failed` with `admission_action: admit`; carriers must not collapse it into boundary denial. A failed adapter or boundary execution path with no admission decision may remain `status: failed` without `admission_action` or `admission_reason`.
 
-Shared vocabulary currently includes `read_only_tool_effect_admitted`, `write_tool_effect_admitted`, `tool_effect_adapter_unconfigured`, `unsupported_tool_effect`, and `tool_effect_authority_denied`. Carrier implementations own substrate mechanics, but they should use shared classifiers, payload constructors, validators, and fixtures for the boundary evidence.
+Shared vocabulary currently includes `read_only_tool_effect_admitted`, `write_tool_effect_admitted`, `tool_effect_adapter_unconfigured`, `tool_effect_admission_required`, `unsupported_tool_effect`, and `tool_effect_authority_denied`. Carrier implementations own substrate mechanics, but they should use shared classifiers, payload constructors, validators, and fixtures for the boundary evidence.
 
 ## Contract Invariants
 

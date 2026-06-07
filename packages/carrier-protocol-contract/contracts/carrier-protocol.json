@@ -59,7 +59,7 @@
     "values": ["admit", "deny"]
   },
   "tool_effect_admission_reason": {
-    "values": ["read_only_tool_effect_admitted", "tool_effect_adapter_unconfigured", "unsupported_tool_effect", "tool_effect_authority_denied", "write_tool_effect_admitted"]
+    "values": ["read_only_tool_effect_admitted", "tool_effect_adapter_unconfigured", "tool_effect_admission_required", "unsupported_tool_effect", "tool_effect_authority_denied", "write_tool_effect_admitted"]
   },
   "tool_result_payload": {
     "required": ["tool_name", "status", "duration_ms", "result_summary"],
@@ -72,7 +72,7 @@
       },
       "admission_action_reason": {
         "admit": ["read_only_tool_effect_admitted", "write_tool_effect_admitted"],
-        "deny": ["tool_effect_adapter_unconfigured", "unsupported_tool_effect", "tool_effect_authority_denied"]
+        "deny": ["tool_effect_adapter_unconfigured", "tool_effect_admission_required", "unsupported_tool_effect", "tool_effect_authority_denied"]
       }
     }
   },

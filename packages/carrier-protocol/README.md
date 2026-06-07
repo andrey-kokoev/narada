@@ -29,7 +29,7 @@ Shared tool/effect vocabulary:
 
 - `TOOL_RESULT_STATUSES`: `ok`, `denied`, `failed`
 - `TOOL_EFFECT_ADMISSION_ACTIONS`: `admit`, `deny`
-- `TOOL_EFFECT_ADMISSION_REASONS`: `read_only_tool_effect_admitted`, `tool_effect_adapter_unconfigured`, `unsupported_tool_effect`, `tool_effect_authority_denied`, `write_tool_effect_admitted`
+- `TOOL_EFFECT_ADMISSION_REASONS`: `read_only_tool_effect_admitted`, `tool_effect_adapter_unconfigured`, `tool_effect_admission_required`, `unsupported_tool_effect`, `tool_effect_authority_denied`, `write_tool_effect_admitted`
 
 Use `classifyToolEffectAdmission` to project configured/supported tool posture into shared `admit` or `deny` decisions. Use `createToolCallPayload` and `createToolResultPayload` when recording carrier-side tool/effect evidence. `tool_result_received` may carry structured `admission_action` and `admission_reason` when an effect boundary admits or denies the request; admitted results may also carry `capability_ref` and `effect_scope` to identify the capability that made `ok` admissible, plus `authority_ref` to identify the principal authority used for that effect.
 

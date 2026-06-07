@@ -100,7 +100,7 @@ assert.deepEqual(OBSERVER_VISIBILITIES, ['record_only', 'operator_visible', 'age
 assert.deepEqual(PAYLOAD_REF_READER_TOOLS, ['mcp_payload_read', 'mcp_payload_show', 'mcp_output_show', 'carrier_host_command_output_read']);
 assert.deepEqual(TOOL_RESULT_STATUSES, ['ok', 'denied', 'failed']);
 assert.deepEqual(TOOL_EFFECT_ADMISSION_ACTIONS, ['admit', 'deny']);
-assert.deepEqual(TOOL_EFFECT_ADMISSION_REASONS, ['read_only_tool_effect_admitted', 'tool_effect_adapter_unconfigured', 'unsupported_tool_effect', 'tool_effect_authority_denied', 'write_tool_effect_admitted']);
+assert.deepEqual(TOOL_EFFECT_ADMISSION_REASONS, ['read_only_tool_effect_admitted', 'tool_effect_adapter_unconfigured', 'tool_effect_admission_required', 'unsupported_tool_effect', 'tool_effect_authority_denied', 'write_tool_effect_admitted']);
 assert.equal(toolEffectAdmissionCases.schema, TOOL_EFFECT_ADMISSION_CASES_SCHEMA);
 for (const fixtureCase of toolEffectAdmissionCases.cases) {
   assert.deepEqual(classifyToolEffectAdmission(fixtureCase.tool_call, fixtureCase.state), fixtureCase.expected, fixtureCase.name);
