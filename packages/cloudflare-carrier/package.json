@@ -8,7 +8,10 @@
     "./worker": "./src/cloudflare-worker.mjs"
   },
   "scripts": {
-    "test": "node --test src/cloudflare-carrier.test.mjs"
+    "test": "node --test src/cloudflare-carrier.test.mjs",
+    "deploy:check": "node scripts/cloudflare-carrier-deploy-check.mjs",
+    "deploy:dry-run": "wrangler deploy --dry-run --config wrangler.toml",
+    "deploy:live": "wrangler deploy --config wrangler.toml"
   },
   "dependencies": {
     "@narada2/carrier-command-contract": "workspace:*",

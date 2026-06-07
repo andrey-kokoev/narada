@@ -1,7 +1,7 @@
-import { readFileSync } from 'node:fs';
+import commandContract from '../contracts/commands.json' with { type: 'json' };
 
-export function loadCommandContract(url = new URL('../contracts/commands.json', import.meta.url)) {
-  return Object.freeze(JSON.parse(readFileSync(url, 'utf-8')));
+export function loadCommandContract(contract = commandContract) {
+  return Object.freeze(contract);
 }
 
 export function commandRecords(contract = loadCommandContract()) {

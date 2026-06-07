@@ -4,7 +4,7 @@ import test from 'node:test';
 import {
   validateSessionEvent,
 } from '../../carrier-protocol/src/carrier-protocol.mjs';
-import { CloudflareCarrierDurableObject } from './cloudflare-worker.mjs';
+import worker, { CloudflareCarrierDurableObject } from './cloudflare-worker.mjs';
 import {
   CloudflareCarrierRouter,
   CloudflareCarrierSession,
@@ -254,6 +254,22 @@ test('durable object facade stores and reloads session snapshot', async () => {
   assert.equal(status.next_event_sequence, 3);
 });
 
+test('worker export routes requests by carrier session durable object binding', async () => {
+  const namespace = fakeDurableObjectNamespace();
+  const start = await worker.fetch(jsonRequest(startRequest()), { CLOUDFLARE_CARRIER_SESSIONS: namespace });
+  assert.equal(start.status, 200);
+
+  const goal = await worker.fetch(jsonRequest(commandRequest('/goal', ['route', 'through', 'worker'])), { CLOUDFLARE_CARRIER_SESSIONS: namespace });
+  assert.equal(goal.status, 200);
+
+  const status = await worker.fetch(jsonRequest({
+    operation: 'session.status',
+    carrier_session_id: 'carrier_session_cloudflare_fixture',
+  }), { CLOUDFLARE_CARRIER_SESSIONS: namespace });
+  assert.equal(status.status, 200);
+  assert.equal((await status.json()).goal.text, 'route through worker');
+});
+
 test('evidence rejects obvious secret values', () => {
   const { router } = startedSession();
   assert.throws(() => router.handle(commandRequest('host.command', [], {
@@ -284,4 +300,32 @@ function fakeStorage() {
       values.set(key, JSON.parse(JSON.stringify(value)));
     },
   };
+}
+
+function fakeDurableObjectNamespace() {
+  const objects = new Map();
+  return {
+    idFromName(name) {
+      return name;
+    },
+    get(id) {
+      if (!objects.has(id)) {
+        const storage = fakeStorage();
+        objects.set(id, {
+          async fetch(request) {
+            return new CloudflareCarrierDurableObject({ storage }).fetch(request);
+          },
+        });
+      }
+      return objects.get(id);
+    },
+  };
+}
+
+function jsonRequest(body) {
+  return new Request('https://carrier.test/control', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 }
