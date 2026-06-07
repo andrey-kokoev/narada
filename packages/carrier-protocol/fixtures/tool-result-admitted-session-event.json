@@ -1,0 +1,21 @@
+{
+  "schema": "narada.carrier.session_event.v1",
+  "event_kind": "tool_result_received",
+  "event_id": "session_event_tool_result_admitted_fixture_1",
+  "occurred_at": "2026-05-30T00:00:08.000Z",
+  "carrier_session_id": "carrier_fixture_1",
+  "agent_id": "sonar.resident",
+  "site_id": "narada-sonar",
+  "site_root": "D:/code/narada.sonar",
+  "payload": {
+    "tool_name": "cloudflare_carrier_runtime_metadata_read",
+    "status": "ok",
+    "admission_action": "admit",
+    "admission_reason": "read_only_tool_effect_admitted",
+    "capability_ref": "cloudflare-carrier:capability/runtime-metadata-read:v1",
+    "effect_scope": "cloudflare-carrier/runtime-metadata:read-only",
+    "duration_ms": 3,
+    "result_summary": "runtime metadata read",
+    "result_ref": null
+  }
+}

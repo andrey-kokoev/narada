@@ -9,7 +9,8 @@
     "provider_request_payload": "narada.agent_tui.provider_request_payload.v0",
     "provider_output_payload": "narada.agent_tui.provider_output_payload.v0",
     "turn_terminal_payload": "narada.agent_tui.turn_terminal_payload.v0",
-    "session_event_fixture_manifest": "narada.carrier.session_event_fixture_manifest.v1"
+    "session_event_fixture_manifest": "narada.carrier.session_event_fixture_manifest.v1",
+    "tool_effect_admission_cases": "narada.carrier.tool_effect_admission_cases.v1"
   },
   "id_prefixes": {
     "input_event": "input_",
@@ -50,6 +51,30 @@
   },
   "payload_ref_reader_tool": {
     "values": ["mcp_payload_read", "mcp_payload_show", "mcp_output_show", "carrier_host_command_output_read"]
+  },
+  "tool_result_status": {
+    "values": ["ok", "denied", "failed"]
+  },
+  "tool_effect_admission_action": {
+    "values": ["admit", "deny"]
+  },
+  "tool_effect_admission_reason": {
+    "values": ["read_only_tool_effect_admitted", "tool_effect_adapter_unconfigured", "unsupported_tool_effect", "tool_effect_authority_denied", "write_tool_effect_admitted"]
+  },
+  "tool_result_payload": {
+    "required": ["tool_name", "status", "duration_ms", "result_summary"],
+    "optional": ["admission_action", "admission_reason", "capability_ref", "effect_scope", "authority_ref", "result_ref"],
+    "consistency": {
+      "paired_fields": [["admission_action", "admission_reason"]],
+      "admission_action_status": {
+        "deny": ["denied"],
+        "admit": ["ok", "failed"]
+      },
+      "admission_action_reason": {
+        "admit": ["read_only_tool_effect_admitted", "write_tool_effect_admitted"],
+        "deny": ["tool_effect_adapter_unconfigured", "unsupported_tool_effect", "tool_effect_authority_denied"]
+      }
+    }
   },
   "input_pipeline_event_kind": {
     "queue": ["input_queued_for_turn_boundary"],

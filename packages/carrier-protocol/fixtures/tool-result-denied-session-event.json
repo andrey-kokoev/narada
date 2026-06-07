@@ -1,0 +1,19 @@
+{
+  "schema": "narada.carrier.session_event.v1",
+  "event_kind": "tool_result_received",
+  "event_id": "session_event_tool_result_denied_fixture_1",
+  "occurred_at": "2026-05-30T00:00:09.000Z",
+  "carrier_session_id": "carrier_fixture_1",
+  "agent_id": "sonar.resident",
+  "site_id": "narada-sonar",
+  "site_root": "D:/code/narada.sonar",
+  "payload": {
+    "tool_name": "cloudflare_carrier_runtime_metadata_read",
+    "status": "denied",
+    "admission_action": "deny",
+    "admission_reason": "tool_effect_adapter_unconfigured",
+    "duration_ms": 0,
+    "result_summary": "tool_effect_adapter_unconfigured",
+    "result_ref": null
+  }
+}

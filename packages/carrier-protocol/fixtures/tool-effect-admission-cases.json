@@ -1,0 +1,89 @@
+{
+  "schema": "narada.carrier.tool_effect_admission_cases.v1",
+  "cases": [
+    {
+      "name": "adapter_unconfigured_denies_read_only_tool",
+      "tool_call": {
+        "tool_name": "cloudflare_carrier_runtime_metadata_read"
+      },
+      "state": {
+        "adapterConfigured": false,
+        "supportedTools": ["cloudflare_carrier_runtime_metadata_read"]
+      },
+      "expected": {
+        "action": "deny",
+        "reason": "tool_effect_adapter_unconfigured",
+        "tool_name": "cloudflare_carrier_runtime_metadata_read",
+        "supported_tools": []
+      }
+    },
+    {
+      "name": "configured_runtime_metadata_read_admitted",
+      "tool_call": {
+        "tool_name": "cloudflare_carrier_runtime_metadata_read"
+      },
+      "state": {
+        "adapterConfigured": true,
+        "supportedTools": ["cloudflare_carrier_runtime_metadata_read"],
+        "admitReason": "read_only_tool_effect_admitted"
+      },
+      "expected": {
+        "action": "admit",
+        "reason": "read_only_tool_effect_admitted",
+        "tool_name": "cloudflare_carrier_runtime_metadata_read",
+        "supported_tools": ["cloudflare_carrier_runtime_metadata_read"]
+      }
+    },
+    {
+      "name": "configured_kv_get_admitted",
+      "tool_call": {
+        "tool_name": "cloudflare_carrier_kv_get"
+      },
+      "state": {
+        "adapterConfigured": true,
+        "supportedTools": ["cloudflare_carrier_kv_get"],
+        "admitReason": "read_only_tool_effect_admitted"
+      },
+      "expected": {
+        "action": "admit",
+        "reason": "read_only_tool_effect_admitted",
+        "tool_name": "cloudflare_carrier_kv_get",
+        "supported_tools": ["cloudflare_carrier_kv_get"]
+      }
+    },
+    {
+      "name": "configured_kv_put_admitted",
+      "tool_call": {
+        "tool_name": "cloudflare_carrier_kv_put"
+      },
+      "state": {
+        "adapterConfigured": true,
+        "supportedTools": ["cloudflare_carrier_kv_put"],
+        "admitReason": "write_tool_effect_admitted"
+      },
+      "expected": {
+        "action": "admit",
+        "reason": "write_tool_effect_admitted",
+        "tool_name": "cloudflare_carrier_kv_put",
+        "supported_tools": ["cloudflare_carrier_kv_put"]
+      }
+    },
+    {
+      "name": "configured_unsupported_tool_denied",
+      "tool_call": {
+        "tool_name": "native_shell"
+      },
+      "state": {
+        "adapterConfigured": true,
+        "supportedTools": ["cloudflare_carrier_runtime_metadata_read", "cloudflare_carrier_kv_get", "cloudflare_carrier_kv_put"],
+        "admitReason": "read_only_tool_effect_admitted"
+      },
+      "expected": {
+        "action": "deny",
+        "reason": "unsupported_tool_effect",
+        "tool_name": "native_shell",
+        "supported_tools": ["cloudflare_carrier_runtime_metadata_read", "cloudflare_carrier_kv_get", "cloudflare_carrier_kv_put"]
+      }
+    }
+  ]
+}

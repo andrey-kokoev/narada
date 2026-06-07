@@ -15,6 +15,10 @@ import {
   SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA,
   SESSION_EVENT_KINDS,
   SESSION_EVENT_SCHEMA,
+  TOOL_EFFECT_ADMISSION_ACTIONS,
+  TOOL_EFFECT_ADMISSION_CASES_SCHEMA,
+  TOOL_EFFECT_ADMISSION_REASONS,
+  TOOL_RESULT_STATUSES,
   TURN_TERMINAL_PAYLOAD_SCHEMA,
   assertValidControlInputRecord,
   assertValidInputEvent,
@@ -25,6 +29,7 @@ import {
   classifyCarrierInputHold,
   classifyCarrierInputQueueAdmission,
   classifyCarrierInputIntent,
+  classifyToolEffectAdmission,
   classifyInputAdmission,
   createCarrierDiagnosticSessionEvent,
   createControlInputRecord,
@@ -37,6 +42,8 @@ import {
   createProviderToolCallPayload,
   createQueueLifecycleSessionEvent,
   createSessionEvent,
+  createToolCallPayload,
+  createToolResultPayload,
   createTurnTerminalPayload,
   isStartupNudge,
   isTerminalTurnState,
@@ -84,11 +91,20 @@ const baseInput = {
 
 const sessionEventFixtureManifest = readFixture('session-event-fixtures.json');
 const inputPipelineCases = readFixture('carrier-input-pipeline-cases.json');
+const toolEffectAdmissionCases = readFixture('tool-effect-admission-cases.json');
 
 assert.equal(CARRIER_PROTOCOL_SCHEMAS.input_event.schema, INPUT_EVENT_SCHEMA);
 assert.equal(CARRIER_PROTOCOL_SCHEMAS.session_event_fixture_manifest.schema, SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA);
+assert.equal(CARRIER_PROTOCOL_SCHEMAS.tool_effect_admission_cases.schema, TOOL_EFFECT_ADMISSION_CASES_SCHEMA);
 assert.deepEqual(OBSERVER_VISIBILITIES, ['record_only', 'operator_visible', 'agent_visible', 'conversation_visible']);
 assert.deepEqual(PAYLOAD_REF_READER_TOOLS, ['mcp_payload_read', 'mcp_payload_show', 'mcp_output_show', 'carrier_host_command_output_read']);
+assert.deepEqual(TOOL_RESULT_STATUSES, ['ok', 'denied', 'failed']);
+assert.deepEqual(TOOL_EFFECT_ADMISSION_ACTIONS, ['admit', 'deny']);
+assert.deepEqual(TOOL_EFFECT_ADMISSION_REASONS, ['read_only_tool_effect_admitted', 'tool_effect_adapter_unconfigured', 'unsupported_tool_effect', 'tool_effect_authority_denied', 'write_tool_effect_admitted']);
+assert.equal(toolEffectAdmissionCases.schema, TOOL_EFFECT_ADMISSION_CASES_SCHEMA);
+for (const fixtureCase of toolEffectAdmissionCases.cases) {
+  assert.deepEqual(classifyToolEffectAdmission(fixtureCase.tool_call, fixtureCase.state), fixtureCase.expected, fixtureCase.name);
+}
 assert.deepEqual(classifyCarrierControlRequest({ id: 'status-1', method: 'session.status' }), {
   request_id: 'status-1',
   method: 'session.status',
@@ -248,10 +264,123 @@ const toolCallFixture = readFixture('tool-call-session-event.json');
 assert.deepEqual(validateSessionEvent(toolCallFixture), []);
 assert.equal(toolCallFixture.event_kind, 'tool_call_requested');
 assert.equal(toolCallFixture.payload.tool_name, 'site_loop_run_once');
+assert.deepEqual(toolCallFixture.payload, createToolCallPayload({
+  tool_name: 'site_loop_run_once',
+  arguments_summary: '{}',
+  requesting_agent_id: 'sonar.resident',
+}));
 const toolResultFixture = readFixture('tool-result-session-event.json');
 assert.deepEqual(validateSessionEvent(toolResultFixture), []);
 assert.equal(toolResultFixture.event_kind, 'tool_result_received');
 assert.equal(toolResultFixture.payload.status, 'ok');
+assert.deepEqual(toolResultFixture.payload, createToolResultPayload({
+  tool_name: 'site_loop_run_once',
+  status: 'ok',
+  duration_ms: 12,
+  result_summary: 'ok',
+}));
+const admittedToolResultFixture = readFixture('tool-result-admitted-session-event.json');
+assert.deepEqual(validateSessionEvent(admittedToolResultFixture), []);
+assert.equal(admittedToolResultFixture.payload.status, 'ok');
+assert.equal(admittedToolResultFixture.payload.admission_action, 'admit');
+assert.equal(admittedToolResultFixture.payload.admission_reason, 'read_only_tool_effect_admitted');
+assert.equal(admittedToolResultFixture.payload.capability_ref, 'cloudflare-carrier:capability/runtime-metadata-read:v1');
+assert.equal(admittedToolResultFixture.payload.effect_scope, 'cloudflare-carrier/runtime-metadata:read-only');
+assert.deepEqual(admittedToolResultFixture.payload, createToolResultPayload({
+  tool_name: 'cloudflare_carrier_runtime_metadata_read',
+  status: 'ok',
+  admission_action: 'admit',
+  admission_reason: 'read_only_tool_effect_admitted',
+  capability_ref: 'cloudflare-carrier:capability/runtime-metadata-read:v1',
+  effect_scope: 'cloudflare-carrier/runtime-metadata:read-only',
+  duration_ms: 3,
+  result_summary: 'runtime metadata read',
+}));
+const deniedToolResultFixture = readFixture('tool-result-denied-session-event.json');
+assert.deepEqual(validateSessionEvent(deniedToolResultFixture), []);
+assert.equal(deniedToolResultFixture.payload.status, 'denied');
+assert.equal(deniedToolResultFixture.payload.admission_action, 'deny');
+assert.equal(deniedToolResultFixture.payload.admission_reason, 'tool_effect_adapter_unconfigured');
+assert.deepEqual(deniedToolResultFixture.payload, createToolResultPayload({
+  tool_name: 'cloudflare_carrier_runtime_metadata_read',
+  status: 'denied',
+  admission_action: 'deny',
+  admission_reason: 'tool_effect_adapter_unconfigured',
+  duration_ms: 0,
+  result_summary: 'tool_effect_adapter_unconfigured',
+}));
+const failedToolResultFixture = readFixture('tool-result-failed-session-event.json');
+assert.deepEqual(validateSessionEvent(failedToolResultFixture), []);
+assert.equal(failedToolResultFixture.payload.status, 'failed');
+assert.equal(failedToolResultFixture.payload.admission_action, 'admit');
+assert.equal(failedToolResultFixture.payload.admission_reason, 'write_tool_effect_admitted');
+assert.equal(failedToolResultFixture.payload.capability_ref, 'cloudflare-carrier:capability/kv-put:v1');
+assert.equal(failedToolResultFixture.payload.effect_scope, 'cloudflare-kv:write:put');
+assert.equal(failedToolResultFixture.payload.authority_ref, 'principal:admin');
+assert.deepEqual(failedToolResultFixture.payload, createToolResultPayload({
+  tool_name: 'cloudflare_carrier_kv_put',
+  status: 'failed',
+  admission_action: 'admit',
+  admission_reason: 'write_tool_effect_admitted',
+  capability_ref: 'cloudflare-carrier:capability/kv-put:v1',
+  effect_scope: 'cloudflare-kv:write:put',
+  authority_ref: 'principal:admin',
+  duration_ms: 1,
+  result_summary: 'cloudflare_kv_put_requires_key',
+}));
+assert.ok(validateSessionEvent({
+  ...failedToolResultFixture,
+  payload: createToolResultPayload({
+    tool_name: 'cloudflare_carrier_kv_put',
+    status: 'ok',
+    admission_action: 'deny',
+    admission_reason: 'tool_effect_adapter_unconfigured',
+    duration_ms: 1,
+    result_summary: 'impossible',
+  }),
+}).includes('payload.admission_action_status_mismatch'));
+assert.ok(validateSessionEvent({
+  ...failedToolResultFixture,
+  payload: createToolResultPayload({
+    tool_name: 'cloudflare_carrier_kv_put',
+    status: 'denied',
+    admission_action: 'admit',
+    admission_reason: 'write_tool_effect_admitted',
+    duration_ms: 1,
+    result_summary: 'impossible',
+  }),
+}).includes('payload.admission_action_status_mismatch'));
+assert.ok(validateSessionEvent({
+  ...failedToolResultFixture,
+  payload: createToolResultPayload({
+    tool_name: 'cloudflare_carrier_kv_put',
+    status: 'failed',
+    admission_action: 'admit',
+    admission_reason: 'tool_effect_adapter_unconfigured',
+    duration_ms: 1,
+    result_summary: 'impossible',
+  }),
+}).includes('payload.admission_reason_action_mismatch'));
+assert.ok(validateSessionEvent({
+  ...failedToolResultFixture,
+  payload: createToolResultPayload({
+    tool_name: 'cloudflare_carrier_kv_put',
+    status: 'failed',
+    admission_action: 'admit',
+    duration_ms: 1,
+    result_summary: 'partial admission evidence',
+  }),
+}).includes('payload.missing_admission_reason'));
+assert.ok(validateSessionEvent({
+  ...failedToolResultFixture,
+  payload: createToolResultPayload({
+    tool_name: 'cloudflare_carrier_kv_put',
+    status: 'failed',
+    admission_reason: 'write_tool_effect_admitted',
+    duration_ms: 1,
+    result_summary: 'partial admission evidence',
+  }),
+}).includes('payload.missing_admission_action'));
 const carrierCommandFixture = readFixture('carrier-command-session-event.json');
 assert.deepEqual(validateSessionEvent(carrierCommandFixture), []);
 assert.equal(carrierCommandFixture.event_kind, 'carrier_command_executed');
@@ -894,6 +1023,12 @@ const toolResult = createSessionEvent({
 });
 assert.deepEqual(validateSessionEvent(toolResult), []);
 assert.match(thrownMessage(() => createSessionEvent({ ...sessionBase, event_kind: 'tool_result_received', payload: { tool_name: 'x', status: 'ok', duration_ms: -1, result_summary: '' } })), /payload.invalid_duration_ms/);
+assert.match(thrownMessage(() => createSessionEvent({ ...sessionBase, event_kind: 'tool_result_received', payload: { tool_name: 'x', status: 'unknown', duration_ms: 0, result_summary: '' } })), /payload.invalid_status:unknown/);
+assert.match(thrownMessage(() => createSessionEvent({ ...sessionBase, event_kind: 'tool_result_received', payload: { tool_name: 'x', status: 'denied', admission_action: 'maybe', duration_ms: 0, result_summary: '' } })), /payload.invalid_admission_action:maybe/);
+assert.match(thrownMessage(() => createSessionEvent({ ...sessionBase, event_kind: 'tool_result_received', payload: { tool_name: 'x', status: 'denied', admission_reason: 'unknown_reason', duration_ms: 0, result_summary: '' } })), /payload.invalid_admission_reason:unknown_reason/);
+assert.match(thrownMessage(() => createSessionEvent({ ...sessionBase, event_kind: 'tool_result_received', payload: { tool_name: 'x', status: 'ok', capability_ref: '', duration_ms: 0, result_summary: '' } })), /payload.invalid_capability_ref/);
+assert.match(thrownMessage(() => createSessionEvent({ ...sessionBase, event_kind: 'tool_result_received', payload: { tool_name: 'x', status: 'ok', effect_scope: '', duration_ms: 0, result_summary: '' } })), /payload.invalid_effect_scope/);
+assert.match(thrownMessage(() => createSessionEvent({ ...sessionBase, event_kind: 'tool_result_received', payload: { tool_name: 'x', status: 'ok', authority_ref: '', duration_ms: 0, result_summary: '' } })), /payload.invalid_authority_ref/);
 
 assert.equal(isTerminalTurnState('completed'), true);
 assert.equal(isTerminalTurnState('active'), false);

@@ -7,6 +7,7 @@ export const PROVIDER_REQUEST_PAYLOAD_SCHEMA = 'narada.agent_tui.provider_reques
 export const PROVIDER_OUTPUT_PAYLOAD_SCHEMA = 'narada.agent_tui.provider_output_payload.v0';
 export const TURN_TERMINAL_PAYLOAD_SCHEMA = 'narada.agent_tui.turn_terminal_payload.v0';
 export const SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA = 'narada.carrier.session_event_fixture_manifest.v1';
+export const TOOL_EFFECT_ADMISSION_CASES_SCHEMA = 'narada.carrier.tool_effect_admission_cases.v1';
 export const CANONICAL_STARTUP_COMMAND_NAME = 'agent_context_startup_sequence';
 export const LEGACY_STARTUP_COMMAND_NAME = 'startup_sequence';
 
@@ -39,6 +40,53 @@ export const QUEUE_STATES = Object.freeze([
   'dropped_by_operator',
   'abandoned_on_session_end',
 ]);
+export const TOOL_RESULT_STATUSES = Object.freeze(['ok', 'denied', 'failed']);
+export const TOOL_EFFECT_ADMISSION_ACTIONS = Object.freeze(['admit', 'deny']);
+export const TOOL_EFFECT_ADMISSION_REASONS = Object.freeze([
+  'read_only_tool_effect_admitted',
+  'tool_effect_adapter_unconfigured',
+  'unsupported_tool_effect',
+  'tool_effect_authority_denied',
+  'write_tool_effect_admitted',
+]);
+export function classifyToolEffectAdmission(toolCall = {}, {
+  adapterConfigured = false,
+  supportedTools = [],
+  admitReason = 'read_only_tool_effect_admitted',
+} = {}) {
+  const toolName = String(toolCall.tool_name ?? toolCall.name ?? '').trim();
+  const supported_tools = Array.isArray(supportedTools) ? [...supportedTools] : [];
+  if (!adapterConfigured) {
+    return {
+      action: 'deny',
+      reason: 'tool_effect_adapter_unconfigured',
+      tool_name: toolName,
+      supported_tools: [],
+    };
+  }
+  if (!supported_tools.includes(toolName)) {
+    return {
+      action: 'deny',
+      reason: 'unsupported_tool_effect',
+      tool_name: toolName,
+      supported_tools,
+    };
+  }
+  if (!TOOL_EFFECT_ADMISSION_REASONS.includes(admitReason)) {
+    return {
+      action: 'deny',
+      reason: 'unsupported_tool_effect',
+      tool_name: toolName,
+      supported_tools,
+    };
+  }
+  return {
+    action: 'admit',
+    reason: admitReason,
+    tool_name: toolName,
+    supported_tools,
+  };
+}
 export const SESSION_EVENT_KINDS = Object.freeze([
   'carrier_session_started',
   'input_queued_for_turn_boundary',
@@ -121,6 +169,10 @@ export const CARRIER_PROTOCOL_SCHEMAS = Object.freeze({
   session_event_fixture_manifest: Object.freeze({
     schema: SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA,
     required: Object.freeze(['schema', 'fixtures']),
+  }),
+  tool_effect_admission_cases: Object.freeze({
+    schema: TOOL_EFFECT_ADMISSION_CASES_SCHEMA,
+    required: Object.freeze(['schema', 'cases']),
   }),
 });
 
@@ -873,7 +925,18 @@ function validateToolResultPayload(payload) {
   const errors = requireFields(payload, ['tool_name', 'status', 'duration_ms', 'result_summary']);
   if (errors.length > 0) return errors;
   if (typeof payload.tool_name !== 'string' || payload.tool_name.length === 0) errors.push('payload.invalid_tool_name');
-  if (typeof payload.status !== 'string' || payload.status.length === 0) errors.push('payload.invalid_status');
+  if (!enumIncludes(TOOL_RESULT_STATUSES, payload.status)) errors.push(`payload.invalid_status:${String(payload.status)}`);
+  if (payload.admission_action !== undefined && !enumIncludes(TOOL_EFFECT_ADMISSION_ACTIONS, payload.admission_action)) errors.push(`payload.invalid_admission_action:${String(payload.admission_action)}`);
+  if (payload.admission_reason !== undefined && !enumIncludes(TOOL_EFFECT_ADMISSION_REASONS, payload.admission_reason)) errors.push(`payload.invalid_admission_reason:${String(payload.admission_reason)}`);
+  if (payload.admission_action !== undefined && payload.admission_reason === undefined) errors.push('payload.missing_admission_reason');
+  if (payload.admission_reason !== undefined && payload.admission_action === undefined) errors.push('payload.missing_admission_action');
+  if (payload.admission_action === 'deny' && payload.status !== 'denied') errors.push('payload.admission_action_status_mismatch');
+  if (payload.admission_action === 'admit' && payload.status === 'denied') errors.push('payload.admission_action_status_mismatch');
+  if (payload.admission_action === 'admit' && ['tool_effect_adapter_unconfigured', 'unsupported_tool_effect', 'tool_effect_authority_denied'].includes(payload.admission_reason)) errors.push('payload.admission_reason_action_mismatch');
+  if (payload.admission_action === 'deny' && ['read_only_tool_effect_admitted', 'write_tool_effect_admitted'].includes(payload.admission_reason)) errors.push('payload.admission_reason_action_mismatch');
+  if (payload.capability_ref !== undefined && (typeof payload.capability_ref !== 'string' || payload.capability_ref.length === 0)) errors.push('payload.invalid_capability_ref');
+  if (payload.effect_scope !== undefined && (typeof payload.effect_scope !== 'string' || payload.effect_scope.length === 0)) errors.push('payload.invalid_effect_scope');
+  if (payload.authority_ref !== undefined && (typeof payload.authority_ref !== 'string' || payload.authority_ref.length === 0)) errors.push('payload.invalid_authority_ref');
   if (typeof payload.duration_ms !== 'number' || payload.duration_ms < 0) errors.push('payload.invalid_duration_ms');
   if (typeof payload.result_summary !== 'string') errors.push('payload.invalid_result_summary');
   errors.push(...validateOptionalPayloadRef(payload, 'result_ref'));
@@ -997,6 +1060,41 @@ function validateProviderOutputPayload(expectedKind, payload) {
     errors.push(`payload.unsupported_provider_output_kind:${expectedKind}`);
   }
   return errors;
+}
+
+export function createToolCallPayload({ tool_name, arguments_summary, requesting_agent_id, arguments_ref = null }) {
+  return {
+    tool_name,
+    arguments_summary,
+    arguments_ref,
+    requesting_agent_id,
+  };
+}
+
+export function createToolResultPayload({
+  tool_name,
+  status,
+  duration_ms,
+  result_summary,
+  result_ref = null,
+  admission_action = undefined,
+  admission_reason = undefined,
+  capability_ref = undefined,
+  effect_scope = undefined,
+  authority_ref = undefined,
+}) {
+  return {
+    tool_name,
+    status,
+    ...(admission_action === undefined ? {} : { admission_action }),
+    ...(admission_reason === undefined ? {} : { admission_reason }),
+    ...(capability_ref === undefined ? {} : { capability_ref }),
+    ...(effect_scope === undefined ? {} : { effect_scope }),
+    ...(authority_ref === undefined ? {} : { authority_ref }),
+    duration_ms,
+    result_summary,
+    result_ref,
+  };
 }
 
 function validateSystemDirectiveHeldPayload(payload) {

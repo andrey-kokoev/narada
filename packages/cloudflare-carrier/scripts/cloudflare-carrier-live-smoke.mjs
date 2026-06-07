@@ -18,6 +18,7 @@ const agentId = option('--agent') ?? 'narada.live.smoke';
 const siteId = option('--site') ?? 'site_live_smoke';
 const goalWords = option('--goal')?.split(/\s+/).filter(Boolean) ?? ['prove', 'live', 'cloudflare', 'carrier'];
 const expectedGoal = goalWords.join(' ');
+const expectedToolEffectPosture = option('--expect-tool-effect-posture') ?? process.env.CLOUDFLARE_CARRIER_EXPECT_TOOL_EFFECT_POSTURE ?? null;
 const inputPipelineCases = JSON.parse(readFileSync(new URL('../../carrier-protocol/fixtures/carrier-input-pipeline-cases.json', import.meta.url), 'utf8'));
 const providerRefusalInput = {
   ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,
@@ -102,6 +103,7 @@ assert.equal(status.body.carrier_session_id, carrierSessionId);
 assert.equal(status.body.agent_id, agentId);
 assert.equal(status.body.carrier_host, 'cloudflare-durable-object');
 assert.equal(status.body.provider_adapter_posture, 'cloudflare-workers-ai');
+assertToolEffectStatus(status.body, expectedToolEffectPosture);
 assert.equal(status.body.reader_principal.email, 'admin@system');
 assert.deepEqual(status.body.goal, { text: expectedGoal, state: 'active' });
 assert.equal(status.body.next_event_sequence, 9);
@@ -138,6 +140,12 @@ process.stdout.write(`${JSON.stringify({
   agent_id: agentId,
   carrier_host: status.body.carrier_host,
   provider_adapter_posture: status.body.provider_adapter_posture,
+  tool_effect_posture: status.body.tool_effect_posture,
+  tool_effect_adapter_kind: status.body.tool_effect_adapter_kind,
+  tool_effect_supported_tools: status.body.tool_effect_supported_tools,
+  tool_effect_capabilities: status.body.tool_effect_capabilities,
+  tool_effect_outcomes_checked: false,
+  tool_effect_outcome_check_reason: 'live_smoke_uses_real_provider_output; deterministic_tool_effect_outcomes_are_checked_by_deploy_check',
   principal_id: status.body.reader_principal.principal_id,
   principal_email: status.body.reader_principal.email,
   goal: status.body.goal,
@@ -155,6 +163,56 @@ process.stdout.write(`${JSON.stringify({
 function option(name) {
   const index = args.indexOf(name);
   return index >= 0 ? args[index + 1] : null;
+}
+
+function assertToolEffectStatus(body, expectedPosture) {
+  assert.ok(['unconfigured', 'configured'].includes(body.tool_effect_posture), body.tool_effect_posture);
+  if (expectedPosture) assert.equal(body.tool_effect_posture, expectedPosture);
+  if (body.tool_effect_posture === 'configured') {
+    assert.equal(body.tool_effect_adapter_kind, 'cloudflare-tool-effect-boundary');
+    assert.ok(Array.isArray(body.tool_effect_supported_tools) && body.tool_effect_supported_tools.length > 0);
+    assert.ok(Array.isArray(body.tool_effect_capabilities) && body.tool_effect_capabilities.length > 0);
+    assert.deepEqual(body.tool_effect_supported_tools, body.tool_effect_capabilities.map((capability) => capability.tool_name));
+    for (const capability of body.tool_effect_capabilities) assertKnownToolCapability(capability);
+  } else {
+    assert.equal(body.tool_effect_adapter_kind, null);
+    assert.deepEqual(body.tool_effect_supported_tools, []);
+    assert.deepEqual(body.tool_effect_capabilities, []);
+  }
+}
+
+function assertKnownToolCapability(capability) {
+  if (capability.tool_name === 'cloudflare_carrier_runtime_metadata_read') {
+    assert.deepEqual(capability, {
+      capability_ref: 'cloudflare-carrier:capability/runtime-metadata-read:v1',
+      effect_scope: 'cloudflare-carrier/runtime-metadata:read-only',
+      tool_name: 'cloudflare_carrier_runtime_metadata_read',
+      access: 'read_only',
+      substrate: 'cloudflare-worker-runtime',
+    });
+    return;
+  }
+  if (capability.tool_name === 'cloudflare_carrier_kv_get') {
+    assert.deepEqual(capability, {
+      capability_ref: 'cloudflare-carrier:capability/kv-get:v1',
+      effect_scope: 'cloudflare-kv:read-only:get',
+      tool_name: 'cloudflare_carrier_kv_get',
+      access: 'read_only',
+      substrate: 'cloudflare-kv',
+    });
+    return;
+  }
+  if (capability.tool_name === 'cloudflare_carrier_kv_put') {
+    assert.deepEqual(capability, {
+      capability_ref: 'cloudflare-carrier:capability/kv-put:v1',
+      effect_scope: 'cloudflare-kv:write:put',
+      tool_name: 'cloudflare_carrier_kv_put',
+      access: 'write',
+      substrate: 'cloudflare-kv',
+    });
+    return;
+  }
+  assert.fail(`unknown_tool_effect_capability:${String(capability.tool_name)}`);
 }
 
 async function post(body) {

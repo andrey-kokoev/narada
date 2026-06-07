@@ -1,0 +1,22 @@
+{
+  "schema": "narada.carrier.session_event.v1",
+  "event_kind": "tool_result_received",
+  "event_id": "session_event_tool_result_failed_fixture_1",
+  "occurred_at": "2026-05-30T00:00:10.000Z",
+  "carrier_session_id": "carrier_fixture_1",
+  "agent_id": "sonar.resident",
+  "site_id": "narada-sonar",
+  "site_root": "D:/code/narada.sonar",
+  "payload": {
+    "tool_name": "cloudflare_carrier_kv_put",
+    "status": "failed",
+    "admission_action": "admit",
+    "admission_reason": "write_tool_effect_admitted",
+    "capability_ref": "cloudflare-carrier:capability/kv-put:v1",
+    "effect_scope": "cloudflare-kv:write:put",
+    "authority_ref": "principal:admin",
+    "duration_ms": 1,
+    "result_summary": "cloudflare_kv_put_requires_key",
+    "result_ref": null
+  }
+}

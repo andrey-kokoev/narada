@@ -2,9 +2,15 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
+  TOOL_EFFECT_ADMISSION_CASES_SCHEMA,
   validateSessionEvent,
 } from '../../carrier-protocol/src/carrier-protocol.mjs';
-import worker, { authenticateCarrierRequest, CloudflareCarrierDurableObject } from './cloudflare-worker.mjs';
+import worker, {
+  authenticateCarrierRequest,
+  classifyCloudflareToolEffectAdmission,
+  CloudflareCarrierDurableObject,
+  createCloudflareToolEffectAdapter,
+} from './cloudflare-worker.mjs';
 import {
   CloudflareCarrierRouter,
   CloudflareCarrierSession,
@@ -14,6 +20,7 @@ import {
 } from './cloudflare-carrier.mjs';
 
 const inputPipelineCases = JSON.parse(readFileSync(new URL('../../carrier-protocol/fixtures/carrier-input-pipeline-cases.json', import.meta.url), 'utf8'));
+const toolEffectAdmissionCases = JSON.parse(readFileSync(new URL('../../carrier-protocol/fixtures/tool-effect-admission-cases.json', import.meta.url), 'utf8'));
 
 function clock() {
   return '2026-06-06T00:00:00.000Z';
@@ -89,6 +96,10 @@ test('session.start creates one durable session with identity and version eviden
   assert.equal(status.carrier_kind, 'cloudflare-carrier');
   assert.equal(status.carrier_host, 'cloudflare-durable-object');
   assert.equal(status.provider_adapter_posture, 'refused');
+  assert.equal(status.tool_effect_posture, 'unconfigured');
+  assert.equal(status.tool_effect_adapter_kind, null);
+  assert.deepEqual(status.tool_effect_supported_tools, []);
+  assert.deepEqual(status.tool_effect_capabilities, []);
   assert.equal(status.schema_fixture_compatibility, 'carrier-input-pipeline-cases.v1');
 });
 
@@ -306,9 +317,586 @@ test('worker provider adapter completes turns through Cloudflare AI binding', as
   assert.equal(providerRequest.payload.provider_execution_enabled, true);
   assert.equal(providerRequest.payload.provider_adapter_kind, 'cloudflare-workers-ai');
   assert.equal(providerRequest.payload.provider_request_status, 'dispatched');
+  assert.equal(durableEnv.AI.calls.length, 1);
+  assert.equal(durableEnv.AI.calls[0].model, '@cf/meta/llama-3.1-8b-instruct');
+  assert.deepEqual(durableEnv.AI.calls[0].request.tools, []);
   const output = body.events.find((event) => event.event_kind === 'provider_text_delta_recorded');
   assert.equal(output.payload.text_delta, 'Cloudflare AI response from test.');
   assertValidEvents(body);
+});
+
+test('provider tool calls are denied when the Cloudflare effect adapter is not configured', async () => {
+  const durableEnv = { AI: fakeAiBinding([
+    {
+      response: 'Need a tool result.',
+      tool_calls: [{
+        tool_name: 'cloudflare_carrier_runtime_metadata_read',
+        arguments_summary: '{}',
+        arguments_ref: null,
+      }],
+    },
+    { response: 'The carrier denied that tool effect.' },
+  ]) };
+  const namespace = fakeDurableObjectNamespace(durableEnv);
+  const env = authEnv(namespace, durableEnv);
+  await worker.fetch(jsonRequest(startRequest({ request_id: 'request_start_tool_denied' }), { token: 'test-admin-token' }), env);
+  const status = await worker.fetch(jsonRequest({
+    operation: 'session.status',
+    carrier_session_id: 'carrier_session_cloudflare_fixture',
+  }, { token: 'test-admin-token' }), env);
+  const statusBody = await status.json();
+  assert.equal(statusBody.tool_effect_posture, 'unconfigured');
+  assert.deepEqual(statusBody.tool_effect_supported_tools, []);
+  assert.deepEqual(statusBody.tool_effect_capabilities, []);
+  const input = {
+    ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,
+    event_id: 'input_tool_denied_worker_1',
+    content: 'Try a Cloudflare carrier tool call.',
+  };
+
+  const response = await worker.fetch(jsonRequest(inputRequest(input, { request_id: 'request_tool_denied' }), { token: 'test-admin-token' }), env);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.terminal_state, 'completed');
+  assert.deepEqual(eventKinds(body), [
+    'input_admitted_to_turn',
+    'turn_started',
+    'provider_request_recorded',
+    'provider_text_delta_recorded',
+    'provider_tool_call_requested',
+    'tool_call_requested',
+    'tool_result_received',
+    'provider_request_recorded',
+    'provider_text_delta_recorded',
+    'turn_completed',
+    'input_completed',
+  ]);
+  const toolResult = body.events.find((event) => event.event_kind === 'tool_result_received');
+  assert.equal(toolResult.payload.status, 'denied');
+  assert.equal(toolResult.payload.admission_action, 'deny');
+  assert.equal(toolResult.payload.admission_reason, 'tool_effect_adapter_unconfigured');
+  assert.equal(toolResult.payload.capability_ref, undefined);
+  assert.equal(toolResult.payload.effect_scope, undefined);
+  assert.equal(toolResult.payload.result_summary, 'tool_effect_adapter_unconfigured');
+  assert.equal(durableEnv.AI.calls.length, 2);
+  assert.deepEqual(durableEnv.AI.calls[0].request.tools, []);
+  assert.equal(durableEnv.AI.calls[1].request.tools, undefined);
+  assert.match(durableEnv.AI.calls[1].request.messages.at(-1).content, /tool_effect_adapter_unconfigured/);
+  const textDeltas = body.events.filter((event) => event.event_kind === 'provider_text_delta_recorded');
+  assert.equal(textDeltas.at(-1).payload.text_delta, 'The carrier denied that tool effect.');
+  assertValidEvents(body);
+});
+
+test('configured Cloudflare tool adapter admits only runtime metadata read effects', async () => {
+  const durableEnv = {
+    AI: fakeAiBinding([
+      {
+        response: 'Reading runtime metadata.',
+        tool_calls: [{
+          tool_name: 'cloudflare_carrier_runtime_metadata_read',
+          arguments_summary: '{}',
+          arguments_ref: null,
+        }],
+      },
+      { response: 'Runtime metadata read completed.' },
+    ]),
+    CLOUDFLARE_CARRIER_ENABLE_RUNTIME_TOOL_READS: '1',
+  };
+  const namespace = fakeDurableObjectNamespace(durableEnv);
+  const env = authEnv(namespace, durableEnv);
+  await worker.fetch(jsonRequest(startRequest({ request_id: 'request_start_tool_ok' }), { token: 'test-admin-token' }), env);
+  const status = await worker.fetch(jsonRequest({
+    operation: 'session.status',
+    carrier_session_id: 'carrier_session_cloudflare_fixture',
+  }, { token: 'test-admin-token' }), env);
+  const statusBody = await status.json();
+  assert.equal(statusBody.tool_effect_posture, 'configured');
+  assert.equal(statusBody.tool_effect_adapter_kind, 'cloudflare-tool-effect-boundary');
+  assert.deepEqual(statusBody.tool_effect_supported_tools, ['cloudflare_carrier_runtime_metadata_read']);
+  assert.deepEqual(statusBody.tool_effect_capabilities, [{
+    capability_ref: 'cloudflare-carrier:capability/runtime-metadata-read:v1',
+    effect_scope: 'cloudflare-carrier/runtime-metadata:read-only',
+    tool_name: 'cloudflare_carrier_runtime_metadata_read',
+    access: 'read_only',
+    substrate: 'cloudflare-worker-runtime',
+  }]);
+  const input = {
+    ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,
+    event_id: 'input_tool_ok_worker_1',
+    content: 'Read Cloudflare carrier runtime metadata.',
+  };
+
+  const response = await worker.fetch(jsonRequest(inputRequest(input, { request_id: 'request_tool_ok' }), { token: 'test-admin-token' }), env);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  const toolCall = body.events.find((event) => event.event_kind === 'provider_tool_call_requested');
+  assert.equal(toolCall.payload.tool_name, 'cloudflare_carrier_runtime_metadata_read');
+  const toolResult = body.events.find((event) => event.event_kind === 'tool_result_received');
+  assert.equal(toolResult.payload.status, 'ok');
+  assert.equal(toolResult.payload.admission_action, 'admit');
+  assert.equal(toolResult.payload.admission_reason, 'read_only_tool_effect_admitted');
+  assert.equal(toolResult.payload.capability_ref, 'cloudflare-carrier:capability/runtime-metadata-read:v1');
+  assert.equal(toolResult.payload.effect_scope, 'cloudflare-carrier/runtime-metadata:read-only');
+  assert.equal(toolResult.payload.authority_ref, 'principal:admin');
+  assert.match(toolResult.payload.result_summary, /cloudflare-workers/);
+  assert.equal(durableEnv.AI.calls.length, 2);
+  assert.equal(durableEnv.AI.calls[0].request.tools[0].name, 'cloudflare_carrier_runtime_metadata_read');
+  assert.equal(durableEnv.AI.calls[1].request.tools, undefined);
+  assert.match(durableEnv.AI.calls[1].request.messages.at(-1).content, /read_only_tool_effect_admitted/);
+  assert.match(durableEnv.AI.calls[1].request.messages.at(-1).content, /cloudflare-carrier:capability\/runtime-metadata-read:v1/);
+  assert.match(durableEnv.AI.calls[1].request.messages.at(-1).content, /principal:admin/);
+  const textDeltas = body.events.filter((event) => event.event_kind === 'provider_text_delta_recorded');
+  assert.equal(textDeltas.at(-1).payload.text_delta, 'Runtime metadata read completed.');
+  assertValidEvents(body);
+});
+
+test('configured Cloudflare KV tool adapter admits read-only key gets', async () => {
+  const durableEnv = {
+    AI: fakeAiBinding([
+      {
+        response: 'Reading KV.',
+        tool_calls: [{
+          tool_name: 'cloudflare_carrier_kv_get',
+          arguments_summary: JSON.stringify({ key: 'alpha' }),
+          arguments_ref: null,
+        }],
+      },
+      { response: 'KV read completed.' },
+    ]),
+    CLOUDFLARE_CARRIER_ENABLE_KV_TOOL_READS: '1',
+    CLOUDFLARE_CARRIER_KV: fakeKvBinding({ alpha: 'value-alpha' }),
+  };
+  const namespace = fakeDurableObjectNamespace(durableEnv);
+  const env = authEnv(namespace, durableEnv);
+  await worker.fetch(jsonRequest(startRequest({ request_id: 'request_start_tool_kv' }), { token: 'test-admin-token' }), env);
+  const status = await worker.fetch(jsonRequest({
+    operation: 'session.status',
+    carrier_session_id: 'carrier_session_cloudflare_fixture',
+  }, { token: 'test-admin-token' }), env);
+  const statusBody = await status.json();
+  assert.equal(statusBody.tool_effect_posture, 'configured');
+  assert.deepEqual(statusBody.tool_effect_supported_tools, ['cloudflare_carrier_kv_get']);
+  assert.deepEqual(statusBody.tool_effect_capabilities, [{
+    capability_ref: 'cloudflare-carrier:capability/kv-get:v1',
+    effect_scope: 'cloudflare-kv:read-only:get',
+    tool_name: 'cloudflare_carrier_kv_get',
+    access: 'read_only',
+    substrate: 'cloudflare-kv',
+  }]);
+  const input = {
+    ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,
+    event_id: 'input_tool_kv_worker_1',
+    content: 'Read alpha from configured KV.',
+  };
+
+  const response = await worker.fetch(jsonRequest(inputRequest(input, { request_id: 'request_tool_kv' }), { token: 'test-admin-token' }), env);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  const toolResult = body.events.find((event) => event.event_kind === 'tool_result_received');
+  assert.equal(toolResult.payload.status, 'ok');
+  assert.equal(toolResult.payload.admission_action, 'admit');
+  assert.equal(toolResult.payload.admission_reason, 'read_only_tool_effect_admitted');
+  assert.equal(toolResult.payload.capability_ref, 'cloudflare-carrier:capability/kv-get:v1');
+  assert.equal(toolResult.payload.effect_scope, 'cloudflare-kv:read-only:get');
+  assert.equal(toolResult.payload.authority_ref, 'principal:admin');
+  assert.match(toolResult.payload.result_summary, /value-alpha/);
+  assert.equal(durableEnv.AI.calls.length, 2);
+  assert.deepEqual(durableEnv.AI.calls[0].request.tools.map((tool) => tool.name), ['cloudflare_carrier_kv_get']);
+  assert.equal(durableEnv.AI.calls[1].request.tools, undefined);
+  assert.match(durableEnv.AI.calls[1].request.messages.at(-1).content, /cloudflare-carrier:capability\/kv-get:v1/);
+  assert.match(durableEnv.AI.calls[1].request.messages.at(-1).content, /principal:admin/);
+  const textDeltas = body.events.filter((event) => event.event_kind === 'provider_text_delta_recorded');
+  assert.equal(textDeltas.at(-1).payload.text_delta, 'KV read completed.');
+  assertValidEvents(body);
+});
+
+test('configured Cloudflare KV write tool requires write flag and principal authority', async () => {
+  const kv = fakeKvBinding({});
+  const durableEnv = {
+    AI: fakeAiBinding([
+      {
+        response: 'Writing KV.',
+        tool_calls: [{
+          tool_name: 'cloudflare_carrier_kv_put',
+          arguments_summary: JSON.stringify({ key: 'beta', value: 'value-beta' }),
+          arguments_ref: null,
+        }],
+      },
+      { response: 'KV write completed.' },
+    ]),
+    CLOUDFLARE_CARRIER_ENABLE_KV_TOOL_WRITES: '1',
+    CLOUDFLARE_CARRIER_KV: kv,
+  };
+  const namespace = fakeDurableObjectNamespace(durableEnv);
+  const env = authEnv(namespace, durableEnv);
+  await worker.fetch(jsonRequest(startRequest({ request_id: 'request_start_tool_kv_put' }), { token: 'test-admin-token' }), env);
+  const status = await worker.fetch(jsonRequest({
+    operation: 'session.status',
+    carrier_session_id: 'carrier_session_cloudflare_fixture',
+  }, { token: 'test-admin-token' }), env);
+  const statusBody = await status.json();
+  assert.deepEqual(statusBody.tool_effect_supported_tools, ['cloudflare_carrier_kv_put']);
+  assert.deepEqual(statusBody.tool_effect_capabilities, [{
+    capability_ref: 'cloudflare-carrier:capability/kv-put:v1',
+    effect_scope: 'cloudflare-kv:write:put',
+    tool_name: 'cloudflare_carrier_kv_put',
+    access: 'write',
+    substrate: 'cloudflare-kv',
+  }]);
+  const input = {
+    ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,
+    event_id: 'input_tool_kv_put_worker_1',
+    content: 'Write beta into configured KV.',
+  };
+
+  const response = await worker.fetch(jsonRequest(inputRequest(input, { request_id: 'request_tool_kv_put' }), { token: 'test-admin-token' }), env);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  const toolResult = body.events.find((event) => event.event_kind === 'tool_result_received');
+  assert.equal(toolResult.payload.status, 'ok');
+  assert.equal(toolResult.payload.admission_action, 'admit');
+  assert.equal(toolResult.payload.admission_reason, 'write_tool_effect_admitted');
+  assert.equal(toolResult.payload.capability_ref, 'cloudflare-carrier:capability/kv-put:v1');
+  assert.equal(toolResult.payload.effect_scope, 'cloudflare-kv:write:put');
+  assert.equal(toolResult.payload.authority_ref, 'principal:admin');
+  assert.deepEqual(kv.dump(), { beta: 'value-beta' });
+  assert.deepEqual(durableEnv.AI.calls[0].request.tools.map((tool) => tool.name), ['cloudflare_carrier_kv_put']);
+  assert.match(durableEnv.AI.calls[1].request.messages.at(-1).content, /write_tool_effect_admitted/);
+  assert.match(durableEnv.AI.calls[1].request.messages.at(-1).content, /cloudflare-carrier:capability\/kv-put:v1/);
+  assertValidEvents(body);
+});
+
+test('configured Cloudflare KV write tool records admitted execution failure separately from denial', async () => {
+  const kv = fakeKvBinding({});
+  const durableEnv = {
+    AI: fakeAiBinding([
+      {
+        response: 'Writing KV without a key.',
+        tool_calls: [{
+          tool_name: 'cloudflare_carrier_kv_put',
+          arguments_summary: JSON.stringify({ value: 'value-without-key' }),
+          arguments_ref: null,
+        }],
+      },
+      { response: 'KV write failed after admission.' },
+    ]),
+    CLOUDFLARE_CARRIER_ENABLE_KV_TOOL_WRITES: '1',
+    CLOUDFLARE_CARRIER_KV: kv,
+  };
+  const namespace = fakeDurableObjectNamespace(durableEnv);
+  const env = authEnv(namespace, durableEnv);
+  await worker.fetch(jsonRequest(startRequest({ request_id: 'request_start_tool_kv_put_failed' }), { token: 'test-admin-token' }), env);
+  const input = {
+    ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,
+    event_id: 'input_tool_kv_put_failed_worker_1',
+    content: 'Try to write KV without a key.',
+  };
+
+  const response = await worker.fetch(jsonRequest(inputRequest(input, { request_id: 'request_tool_kv_put_failed' }), { token: 'test-admin-token' }), env);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.terminal_state, 'completed');
+  const toolResult = body.events.find((event) => event.event_kind === 'tool_result_received');
+  assert.equal(toolResult.payload.status, 'failed');
+  assert.equal(toolResult.payload.admission_action, 'admit');
+  assert.equal(toolResult.payload.admission_reason, 'write_tool_effect_admitted');
+  assert.equal(toolResult.payload.capability_ref, 'cloudflare-carrier:capability/kv-put:v1');
+  assert.equal(toolResult.payload.effect_scope, 'cloudflare-kv:write:put');
+  assert.equal(toolResult.payload.authority_ref, 'principal:admin');
+  assert.equal(toolResult.payload.result_summary, 'cloudflare_kv_put_requires_key');
+  assert.deepEqual(kv.dump(), {});
+  assert.match(durableEnv.AI.calls[1].request.messages.at(-1).content, /\"status\":\"failed\"/);
+  assert.match(durableEnv.AI.calls[1].request.messages.at(-1).content, /cloudflare_kv_put_requires_key/);
+  assertValidEvents(body);
+});
+
+test('provider follow-up tool calls are processed in bounded batches', async () => {
+  const kv = fakeKvBinding({ first: 'one', second: 'two' });
+  const durableEnv = {
+    AI: fakeAiBinding([
+      {
+        response: 'Reading first key.',
+        tool_calls: [{
+          tool_name: 'cloudflare_carrier_kv_get',
+          arguments_summary: JSON.stringify({ key: 'first' }),
+          arguments_ref: null,
+        }],
+      },
+      {
+        response: 'Reading second key.',
+        tool_calls: [{
+          tool_name: 'cloudflare_carrier_kv_get',
+          arguments_summary: JSON.stringify({ key: 'second' }),
+          arguments_ref: null,
+        }],
+      },
+      { response: 'Both KV reads completed.' },
+    ]),
+    CLOUDFLARE_CARRIER_ENABLE_KV_TOOL_READS: '1',
+    CLOUDFLARE_CARRIER_KV: kv,
+  };
+  const namespace = fakeDurableObjectNamespace(durableEnv);
+  const env = authEnv(namespace, durableEnv);
+  await worker.fetch(jsonRequest(startRequest({ request_id: 'request_start_tool_kv_loop' }), { token: 'test-admin-token' }), env);
+  const input = {
+    ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,
+    event_id: 'input_tool_kv_loop_worker_1',
+    content: 'Read two keys from configured KV.',
+  };
+
+  const response = await worker.fetch(jsonRequest(inputRequest(input, { request_id: 'request_tool_kv_loop' }), { token: 'test-admin-token' }), env);
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.terminal_state, 'completed');
+  const toolResults = body.events.filter((event) => event.event_kind === 'tool_result_received');
+  assert.equal(toolResults.length, 2);
+  assert.match(toolResults[0].payload.result_summary, /one/);
+  assert.match(toolResults[1].payload.result_summary, /two/);
+  assert.equal(durableEnv.AI.calls.length, 3);
+  assert.equal(durableEnv.AI.calls[1].request.tools, undefined);
+  assert.equal(durableEnv.AI.calls[2].request.tools, undefined);
+  const providerToolCalls = body.events.filter((event) => event.event_kind === 'provider_tool_call_requested');
+  assert.deepEqual(providerToolCalls.map((event) => event.payload.sequence), [2, 3]);
+  const textDeltas = body.events.filter((event) => event.event_kind === 'provider_text_delta_recorded');
+  assert.deepEqual(textDeltas.map((event) => event.payload.text_delta), [
+    'Reading first key.',
+    'Reading second key.',
+    'Both KV reads completed.',
+  ]);
+  assertValidEvents(body);
+});
+
+test('malformed tool effect result fails turn before invalid evidence append', async () => {
+  const session = new CloudflareCarrierSession({
+    carrier_session_id: 'carrier_session_malformed_tool_effect',
+    agent_id: 'narada.fixture.agent',
+    site_id: 'site_fixture',
+    site_root: 'cloudflare://site_fixture',
+    providerAdapter: {
+      posture: 'fixture',
+      adapter_kind: 'fixture-provider',
+      provider: 'fixture',
+      model: 'fixture',
+      async run() {
+        return {
+          text: 'Requesting malformed tool result.',
+          tool_calls: [{
+            tool_name: 'fixture_malformed_tool',
+            arguments_summary: '{}',
+            arguments_ref: null,
+          }],
+        };
+      },
+    },
+    toolEffectAdapter: {
+      posture: 'configured',
+      adapter_kind: 'fixture-malformed-tool-effect-boundary',
+      supported_tools: ['fixture_malformed_tool'],
+      capabilities: [],
+      async execute() {
+        return {
+          status: 'ok',
+          admission_action: 'admit',
+          result_summary: 'malformed missing admission reason',
+          result_ref: null,
+        };
+      },
+    },
+  });
+  const input = {
+    ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,
+    event_id: 'input_malformed_tool_effect_1',
+    content: 'Try a malformed tool result.',
+  };
+
+  const response = await session.handle({
+    operation: 'carrier.input.deliver',
+    request_id: 'request_malformed_tool_effect',
+    principal: { principal_id: 'operator.fixture', controlled_actions: ['*'] },
+    params: { input },
+  });
+  assert.equal(response.terminal_state, 'failed');
+  assert.equal(response.events.some((event) => event.event_kind === 'tool_result_received'), false);
+  const failed = response.events.find((event) => event.event_kind === 'turn_failed');
+  assert.match(failed.payload.error_summary, /cloudflare_carrier_invalid_session_event/);
+  assert.match(failed.payload.error_summary, /payload\.missing_admission_reason/);
+  assert.deepEqual(
+    response.events.map((event) => event.sequence),
+    response.events.map((_, index) => index + 1),
+  );
+  assertValidEvents(response);
+});
+
+test('plain tool effect adapter result remains valid without admission evidence', async () => {
+  const session = new CloudflareCarrierSession({
+    carrier_session_id: 'carrier_session_plain_tool_effect',
+    agent_id: 'narada.fixture.agent',
+    site_id: 'site_fixture',
+    site_root: 'cloudflare://site_fixture',
+    providerAdapter: {
+      posture: 'fixture',
+      adapter_kind: 'fixture-provider',
+      provider: 'fixture',
+      model: 'fixture',
+      async run({ tool_results = [] }) {
+        if (tool_results.length > 0) return { text: 'Observed plain tool effect.' };
+        return {
+          text: 'Requesting plain tool.',
+          tool_calls: [{
+            tool_name: 'fixture_plain_tool',
+            arguments_summary: '{}',
+            arguments_ref: null,
+          }],
+        };
+      },
+    },
+    toolEffectAdapter: {
+      posture: 'configured',
+      adapter_kind: 'fixture-plain-tool-effect-boundary',
+      supported_tools: ['fixture_plain_tool'],
+      capabilities: [],
+      async execute() {
+        return {
+          status: 'ok',
+          result_summary: 'plain tool completed',
+          result_ref: null,
+        };
+      },
+    },
+  });
+  const input = {
+    ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,
+    event_id: 'input_plain_tool_effect_1',
+    content: 'Try a plain tool result.',
+  };
+
+  const response = await session.handle({
+    operation: 'carrier.input.deliver',
+    request_id: 'request_plain_tool_effect',
+    principal: { principal_id: 'operator.fixture', controlled_actions: ['*'] },
+    params: { input },
+  });
+  assert.equal(response.terminal_state, 'completed');
+  const toolResult = response.events.find((event) => event.event_kind === 'tool_result_received');
+  assert.equal(toolResult.payload.status, 'ok');
+  assert.equal(toolResult.payload.admission_action, undefined);
+  assert.equal(toolResult.payload.admission_reason, undefined);
+  assert.equal(toolResult.payload.result_summary, 'plain tool completed');
+  assertValidEvents(response);
+});
+
+test('throwing tool effect adapter records failed tool result and provider follow-up', async () => {
+  const session = new CloudflareCarrierSession({
+    carrier_session_id: 'carrier_session_tool_effect_throw',
+    agent_id: 'narada.fixture.agent',
+    site_id: 'site_fixture',
+    site_root: 'cloudflare://site_fixture',
+    providerAdapter: {
+      posture: 'fixture',
+      adapter_kind: 'fixture-provider',
+      provider: 'fixture',
+      model: 'fixture',
+      calls: [],
+      async run({ tool_results = [] }) {
+        this.calls.push({ tool_results });
+        if (tool_results.length > 0) return { text: 'Observed failed tool effect.' };
+        return {
+          text: 'Requesting throwing tool.',
+          tool_calls: [{
+            tool_name: 'fixture_throwing_tool',
+            arguments_summary: '{}',
+            arguments_ref: null,
+          }],
+        };
+      },
+    },
+    toolEffectAdapter: {
+      posture: 'configured',
+      adapter_kind: 'fixture-throwing-tool-effect-boundary',
+      supported_tools: ['fixture_throwing_tool'],
+      capabilities: [{
+        capability_ref: 'fixture:capability/throwing-tool:v1',
+        effect_scope: 'fixture:throwing-tool',
+        tool_name: 'fixture_throwing_tool',
+        access: 'write',
+        substrate: 'fixture',
+      }],
+      async execute() {
+        throw new Error('fixture_tool_effect_threw');
+      },
+    },
+  });
+  const input = {
+    ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,
+    event_id: 'input_tool_effect_throw_1',
+    content: 'Try a tool whose adapter throws.',
+  };
+
+  const response = await session.handle({
+    operation: 'carrier.input.deliver',
+    request_id: 'request_tool_effect_throw',
+    principal: { principal_id: 'operator.fixture', controlled_actions: ['*'] },
+    params: { input },
+  });
+  assert.equal(response.terminal_state, 'completed');
+  const toolResult = response.events.find((event) => event.event_kind === 'tool_result_received');
+  assert.equal(toolResult.payload.status, 'failed');
+  assert.equal(toolResult.payload.admission_action, undefined);
+  assert.equal(toolResult.payload.admission_reason, undefined);
+  assert.equal(toolResult.payload.result_summary, 'fixture_tool_effect_threw');
+  const textDeltas = response.events.filter((event) => event.event_kind === 'provider_text_delta_recorded');
+  assert.equal(textDeltas.at(-1).payload.text_delta, 'Observed failed tool effect.');
+  assert.equal(session.providerAdapter.calls.length, 2);
+  assert.equal(session.providerAdapter.calls[1].tool_results[0].status, 'failed');
+  assertValidEvents(response);
+});
+
+test('configured Cloudflare tool adapter denies admitted effects without principal authority', async () => {
+  const session = new CloudflareCarrierSession({
+    carrier_session_id: 'carrier_session_tool_authority_denied',
+    agent_id: 'narada.fixture.agent',
+    site_id: 'site_fixture',
+    site_root: 'cloudflare://site_fixture',
+    providerAdapter: {
+      posture: 'fixture',
+      adapter_kind: 'fixture-provider',
+      provider: 'fixture',
+      model: 'fixture',
+      async run({ tool_results = [] }) {
+        if (tool_results.length > 0) return { text: 'Denied by authority.' };
+        return {
+          text: 'Requesting metadata.',
+          tool_calls: [{
+            tool_name: 'cloudflare_carrier_runtime_metadata_read',
+            arguments_summary: '{}',
+            arguments_ref: null,
+          }],
+        };
+      },
+    },
+    toolEffectAdapter: createCloudflareToolEffectAdapter({ CLOUDFLARE_CARRIER_ENABLE_RUNTIME_TOOL_READS: '1' }),
+  });
+  const input = {
+    ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,
+    event_id: 'input_tool_authority_denied_1',
+    content: 'Try runtime metadata without authority.',
+  };
+
+  const response = await session.handle({
+    operation: 'carrier.input.deliver',
+    request_id: 'request_tool_authority_denied',
+    principal: { principal_id: 'limited-user', controlled_actions: [] },
+    params: { input },
+  });
+  const toolResult = response.events.find((event) => event.event_kind === 'tool_result_received');
+  assert.equal(toolResult.payload.status, 'denied');
+  assert.equal(toolResult.payload.admission_action, 'deny');
+  assert.equal(toolResult.payload.admission_reason, 'tool_effect_authority_denied');
+  assert.equal(toolResult.payload.authority_ref, undefined);
+  assert.equal(toolResult.payload.capability_ref, undefined);
+  assert.equal(toolResult.payload.effect_scope, undefined);
+  assert.equal(toolResult.payload.result_summary, 'tool_effect_authority_denied');
+  assertValidEvents(response);
 });
 
 test('worker export rejects unauthenticated and invalid bearer requests', async () => {
@@ -340,6 +928,16 @@ test('carrier auth classifier matches revolution bearer token principal shapes',
   assert.equal(service.ok, true);
   assert.equal(service.principal.auth_type, 'service');
   assert.equal(service.principal.principal_id, 'service');
+});
+
+test('tool effect classifier is deny-by-default and admits only configured Cloudflare capabilities', () => {
+  assert.equal(toolEffectAdmissionCases.schema, TOOL_EFFECT_ADMISSION_CASES_SCHEMA);
+  for (const fixtureCase of toolEffectAdmissionCases.cases) {
+    assert.deepEqual(classifyCloudflareToolEffectAdmission(fixtureCase.tool_call, {
+      configured: fixtureCase.state.adapterConfigured,
+      supported_tools: fixtureCase.state.supportedTools,
+    }), fixtureCase.expected, fixtureCase.name);
+  }
 });
 
 test('evidence rejects obvious secret values', () => {
@@ -404,9 +1002,29 @@ function authEnv(namespace, extra = {}) {
 }
 
 function fakeAiBinding(response) {
+  const responses = Array.isArray(response) ? [...response] : [response];
+  const calls = [];
   return {
-    async run() {
-      return { response };
+    calls,
+    async run(model, request) {
+      calls.push({ model, request });
+      const next = responses.length > 1 ? responses.shift() : responses[0];
+      return typeof next === 'object' && next !== null ? next : { response: next };
+    },
+  };
+}
+
+function fakeKvBinding(values = {}) {
+  const state = { ...values };
+  return {
+    async get(key) {
+      return Object.prototype.hasOwnProperty.call(state, key) ? state[key] : null;
+    },
+    async put(key, value) {
+      state[key] = value;
+    },
+    dump() {
+      return { ...state };
     },
   };
 }

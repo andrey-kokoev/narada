@@ -5,6 +5,10 @@ import {
   PAYLOAD_REF_READER_TOOLS,
   QUEUE_STATES,
   SESSION_EVENT_KINDS,
+  TOOL_EFFECT_ADMISSION_ACTIONS,
+  TOOL_EFFECT_ADMISSION_CASES_SCHEMA,
+  TOOL_EFFECT_ADMISSION_REASONS,
+  TOOL_RESULT_STATUSES,
 } from '../../carrier-protocol/src/carrier-protocol.mjs';
 import { loadCarrierProtocolContract } from './carrier-protocol-contract.mjs';
 
@@ -13,6 +17,7 @@ test('carrier protocol contract exposes schemas and id prefixes', () => {
   assert.equal(contract.schema, 'narada.carrier.protocol_contract.v1');
   assert.equal(contract.schemas.input_event, 'narada.carrier.input_event.v1');
   assert.equal(contract.schemas.session_event, 'narada.carrier.session_event.v1');
+  assert.equal(contract.schemas.tool_effect_admission_cases, TOOL_EFFECT_ADMISSION_CASES_SCHEMA);
   assert.equal(contract.id_prefixes.input_event, 'input_');
   assert.equal(contract.id_prefixes.control_event, 'control_');
   assert.equal(contract.id_prefixes.session_event, 'session_event_');
@@ -38,6 +43,24 @@ test('carrier protocol contract exposes schemas and id prefixes', () => {
   assert.deepEqual(contract.input_hold_action.values, ['hold', 'release', 'none']);
   assert.deepEqual(contract.observer_suppression_reason.values, ['observer_muted']);
   assert.deepEqual(contract.payload_ref_reader_tool.values, PAYLOAD_REF_READER_TOOLS);
+  assert.deepEqual(contract.tool_result_status.values, TOOL_RESULT_STATUSES);
+  assert.deepEqual(contract.tool_effect_admission_action.values, TOOL_EFFECT_ADMISSION_ACTIONS);
+  assert.deepEqual(contract.tool_effect_admission_reason.values, TOOL_EFFECT_ADMISSION_REASONS);
+  assert.deepEqual(contract.tool_result_payload.required, ['tool_name', 'status', 'duration_ms', 'result_summary']);
+  assert.deepEqual(contract.tool_result_payload.optional, ['admission_action', 'admission_reason', 'capability_ref', 'effect_scope', 'authority_ref', 'result_ref']);
+  assert.deepEqual(contract.tool_result_payload.consistency.paired_fields, [['admission_action', 'admission_reason']]);
+  assert.deepEqual(contract.tool_result_payload.consistency.admission_action_status.deny, ['denied']);
+  assert.deepEqual(contract.tool_result_payload.consistency.admission_action_status.admit, ['ok', 'failed']);
+  assert.deepEqual(contract.tool_result_payload.consistency.admission_action_reason.admit, ['read_only_tool_effect_admitted', 'write_tool_effect_admitted']);
+  assert.deepEqual(contract.tool_result_payload.consistency.admission_action_reason.deny, ['tool_effect_adapter_unconfigured', 'unsupported_tool_effect', 'tool_effect_authority_denied']);
+  assert.deepEqual([
+    ...contract.tool_result_payload.consistency.admission_action_status.deny,
+    ...contract.tool_result_payload.consistency.admission_action_status.admit,
+  ].sort(), [...TOOL_RESULT_STATUSES].sort());
+  assert.deepEqual([
+    ...contract.tool_result_payload.consistency.admission_action_reason.admit,
+    ...contract.tool_result_payload.consistency.admission_action_reason.deny,
+  ].sort(), [...TOOL_EFFECT_ADMISSION_REASONS].sort());
   assert.deepEqual(contract.input_pipeline_event_kind, {
     queue: ['input_queued_for_turn_boundary'],
     admission: [

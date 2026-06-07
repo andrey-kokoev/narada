@@ -242,10 +242,36 @@ The Cloudflare carrier may initially support one of these provider postures:
 | `fixture` | Provider dispatch uses deterministic fixture output for contract tests. |
 | `remote-provider-api` | Provider dispatch calls an external provider API directly from Cloudflare. |
 | `external-worker-callback` | Provider dispatch starts external work and accepts a governed callback result. |
+| `cloudflare-workers-ai` | Provider dispatch calls Cloudflare Workers AI through an explicit adapter, records provider request/output evidence, and may feed carrier-owned tool result evidence into a follow-up provider turn. |
 
-The first implementation should choose `refused` or `fixture` unless provider credentials, streaming, timeout, retry, and callback evidence are explicitly designed. A missing provider adapter must be a recorded refusal, not a hanging turn and not silent completion.
+The first implementation may use `refused`, `fixture`, or `cloudflare-workers-ai`, but a missing provider adapter must be a recorded refusal, not a hanging turn and not silent completion. Workers AI tool use is limited to tools advertised by the carrier and still requires the carrier-owned tool/effect boundary to admit, deny, or fail the result.
 
 Provider output streaming over WebSocket or SSE is presentation. Provider evidence is session truth only after the carrier records provider request/output/turn events.
+
+## Tool / Effect Boundary
+
+Provider tool-call output is not effect execution.
+
+When a provider emits a structured tool request, the Cloudflare carrier must record:
+
+- `provider_tool_call_requested` for the provider-originated request;
+- `tool_call_requested` for the carrier-side effect boundary crossing;
+- `tool_result_received` for the admitted, denied, or failed effect result, including structured `admission_action` and `admission_reason` evidence when the boundary admits or denies the effect. An admitted result must also identify the capability, effect scope, and principal authority that made `ok` admissible.
+
+If provider execution continues after a tool result, the carrier must feed the result back as evidence, not as an implicit effect. The first Cloudflare implementation supports bounded follow-up provider turns after tool-call batches, capped by an explicit iteration limit so provider/tool recursion cannot run unbounded.
+
+The default Cloudflare posture is deny-by-default: if no tool/effect adapter is configured, the carrier records a denied `tool_result_received` with a stable unconfigured reason. A model response must not be able to create an effect path merely by naming a tool.
+
+Configured tool/effect adapters must expose their posture in `session.status`:
+
+- `tool_effect_posture`;
+- `tool_effect_adapter_kind`;
+- `tool_effect_supported_tools`;
+- `tool_effect_capabilities`.
+
+The first configured Cloudflare tool/effect adapters admit only explicitly enabled capabilities. Runtime metadata reads may admit `cloudflare_carrier_runtime_metadata_read` when enabled. KV reads may admit `cloudflare_carrier_kv_get` only when enabled and backed by a KV binding. KV writes may admit `cloudflare_carrier_kv_put` only when separately enabled, backed by a KV binding with `put()`, and authorized by the requesting principal. Unsupported tool names must be denied with result evidence. Principals without matching authority must be denied with `tool_effect_authority_denied`. Admitted effects carry `capability_ref`, `effect_scope`, and `authority_ref` evidence. This proves the crossing without granting repository, network, shell, or credential effects.
+
+Future effect adapters need a narrower authority record for their substrate before they can return `ok`. Status posture and session events are evidence of the boundary crossing; they are not capability grants.
 
 ## Host Command Posture
 
@@ -352,7 +378,10 @@ The target is not satisfied by deploying a Worker that can chat with a model. Th
 7. Session status can be reconstructed after Durable Object restart or equivalent test reset.
 8. Event reads return ordered events by sequence/cursor.
 9. Secrets are not present in emitted evidence.
-10. Tests run without a live provider dependency unless an explicit provider integration profile is selected.
+10. Provider-emitted tool calls cross a carrier-owned tool/effect boundary and record provider request, carrier request, result evidence, and follow-up provider evidence when tool results are returned to the provider. Result evidence must distinguish denied effects from admitted effects whose execution later failed.
+11. The default tool/effect posture is deny-by-default and visible in `session.status`.
+12. Configured Cloudflare tool/effect adapters advertise their supported tool list and admit only explicitly enabled capabilities such as `cloudflare_carrier_runtime_metadata_read`, `cloudflare_carrier_kv_get`, and `cloudflare_carrier_kv_put`.
+13. Tests run without a live provider dependency unless an explicit provider integration profile is selected.
 
 ## Deferred Work
 

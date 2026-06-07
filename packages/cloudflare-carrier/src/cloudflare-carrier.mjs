@@ -1,9 +1,13 @@
 import {
   classifyCarrierControlRequest,
   classifyCarrierInputQueueAdmission,
+  createProviderToolCallPayload,
+  createToolCallPayload,
+  createToolResultPayload,
   normalizeInputEvent,
   observerPayload,
   SESSION_EVENT_SCHEMA,
+  validateSessionEvent,
 } from '../../carrier-protocol/src/carrier-protocol.mjs';
 import { commandTokens } from '../../carrier-command-contract/src/carrier-command-contract.mjs';
 
@@ -32,6 +36,7 @@ const SUPPORTED_OPERATIONS = new Set([
 ]);
 
 const TERMINAL_STATES = new Set(['completed', 'completed_without_provider', 'failed', 'rejected']);
+const MAX_PROVIDER_TOOL_ITERATIONS = 3;
 
 export class CloudflareCarrierRouter {
   constructor({ now = () => new Date().toISOString() } = {}) {
@@ -81,11 +86,14 @@ export class CloudflareCarrierSession {
     site_ref = null,
     now = () => new Date().toISOString(),
     providerAdapter = null,
+    toolEffectAdapter = null,
   }) {
     if (!carrier_session_id) throw new Error('cloudflare_carrier_session_requires_id');
     if (!agent_id) throw new Error('cloudflare_carrier_session_requires_agent_id');
     this.now = now;
     this.providerAdapter = providerAdapter;
+    this.toolEffectAdapter = toolEffectAdapter;
+    this.toolEffectPosture = toolEffectPosture(toolEffectAdapter);
     this.state = {
       carrier_session_id,
       agent_id,
@@ -105,6 +113,10 @@ export class CloudflareCarrierSession {
       active_turn: null,
       closed: false,
       provider_posture: providerAdapter?.posture ?? 'refused',
+      tool_effect_posture: this.toolEffectPosture.posture,
+      tool_effect_adapter_kind: this.toolEffectPosture.adapter_kind,
+      tool_effect_supported_tools: this.toolEffectPosture.supported_tools,
+      tool_effect_capabilities: this.toolEffectPosture.capabilities,
       host_command_targets: ['diagnostic_read', 'runtime_metadata_read'],
       processed_requests: new Map(),
     };
@@ -156,6 +168,10 @@ export class CloudflareCarrierSession {
       implementation_version: this.state.implementation_version,
       command_contract_version: '0.1.0',
       provider_adapter_posture: this.state.provider_posture,
+      tool_effect_posture: this.state.tool_effect_posture,
+      tool_effect_adapter_kind: this.state.tool_effect_adapter_kind,
+      tool_effect_supported_tools: clone(this.state.tool_effect_supported_tools),
+      tool_effect_capabilities: clone(this.state.tool_effect_capabilities ?? []),
       schema_fixture_compatibility: 'carrier-input-pipeline-cases.v1',
       goal: clone(this.state.goal),
       observer_interjections_muted: this.state.observer_interjections_muted,
@@ -188,7 +204,7 @@ export class CloudflareCarrierSession {
     };
   }
 
-  static fromSnapshot(snapshot, { now = () => new Date().toISOString(), providerAdapter = null } = {}) {
+  static fromSnapshot(snapshot, { now = () => new Date().toISOString(), providerAdapter = null, toolEffectAdapter = null } = {}) {
     const session = new CloudflareCarrierSession({
       carrier_session_id: snapshot.state.carrier_session_id,
       agent_id: snapshot.state.agent_id,
@@ -197,10 +213,15 @@ export class CloudflareCarrierSession {
       site_ref: snapshot.state.site_ref,
       now,
       providerAdapter,
+      toolEffectAdapter,
     });
     session.state = {
       ...clone(snapshot.state),
       provider_posture: providerAdapter?.posture ?? snapshot.state.provider_posture,
+      tool_effect_posture: session.toolEffectPosture.posture,
+      tool_effect_adapter_kind: session.toolEffectPosture.adapter_kind,
+      tool_effect_supported_tools: session.toolEffectPosture.supported_tools,
+      tool_effect_capabilities: session.toolEffectPosture.capabilities,
       processed_requests: new Map((snapshot.processed_requests ?? []).map(([key, value]) => [key, clone(value)])),
     };
     session.events = (snapshot.events ?? []).map((event) => clone(event));
@@ -330,16 +351,48 @@ export class CloudflareCarrierSession {
       content_preview: input.content,
     }));
     try {
-      const result = await this.providerAdapter.run({ input, turn_id: turnId });
-      const text = String(result.text ?? '').trim();
-      events.push(this.#appendEvent('provider_text_delta_recorded', {
-        schema: 'narada.agent_tui.provider_output_payload.v0',
-        turn_id: turnId,
-        provider_output_kind: 'text_delta',
-        sequence: 1,
-        text_delta: text,
-        text_delta_ref: null,
-      }));
+      let result = await this.providerAdapter.run({ input, turn_id: turnId });
+      let textSequence = 1;
+      let toolSequence = 2;
+      for (let iteration = 0; iteration <= MAX_PROVIDER_TOOL_ITERATIONS; iteration += 1) {
+        const text = String(result.text ?? '').trim();
+        events.push(this.#appendEvent('provider_text_delta_recorded', {
+          schema: 'narada.agent_tui.provider_output_payload.v0',
+          turn_id: turnId,
+          provider_output_kind: 'text_delta',
+          sequence: textSequence,
+          text_delta: text,
+          text_delta_ref: null,
+        }));
+        textSequence += 1;
+        const recorded = await this.#recordProviderToolCalls(result.tool_calls, turnId, events, toolSequence);
+        toolSequence = recorded.nextSequence;
+        if (recorded.toolResults.length === 0) break;
+        if (iteration === MAX_PROVIDER_TOOL_ITERATIONS) throw new Error('cloudflare_carrier_tool_iteration_limit_exceeded');
+        events.push(this.#appendEvent('provider_request_recorded', {
+          schema: 'narada.agent_tui.provider_request_payload.v0',
+          turn_id: turnId,
+          input_event_id: input.event_id,
+          provider_request_status: 'dispatched',
+          provider_execution_enabled: true,
+          provider_runtime_status: 'available',
+          provider_adapter_admission_status: 'admitted',
+          provider_adapter_kind: this.providerAdapter.adapter_kind,
+          provider: this.providerAdapter.provider,
+          model: this.providerAdapter.model,
+          thinking: null,
+          stream: false,
+          provider_streaming_contract: 'none',
+          provider_adapter_refusal_reason: null,
+          content_preview: 'tool_results',
+          tool_result_count: recorded.toolResults.length,
+        }));
+        result = await this.providerAdapter.run({
+          input,
+          turn_id: turnId,
+          tool_results: recorded.toolResults,
+        });
+      }
       events.push(this.#appendEvent('turn_completed', {
         schema: 'narada.agent_tui.turn_terminal_payload.v0',
         turn_id: turnId,
@@ -371,6 +424,52 @@ export class CloudflareCarrierSession {
       this.state.active_turn = null;
       return 'failed';
     }
+  }
+
+  async #recordProviderToolCalls(toolCalls, turnId, events, startSequence = 2) {
+    if (!Array.isArray(toolCalls) || toolCalls.length === 0) return { toolResults: [], nextSequence: startSequence };
+    const toolResults = [];
+    let sequence = startSequence;
+    for (const rawToolCall of toolCalls) {
+      const toolCall = normalizeProviderToolCall(rawToolCall);
+      events.push(this.#appendEvent('provider_tool_call_requested', createProviderToolCallPayload({
+        turn_id: turnId,
+        sequence,
+        tool_name: toolCall.tool_name,
+        arguments_summary: toolCall.arguments_summary,
+        arguments_ref: toolCall.arguments_ref,
+      })));
+      events.push(this.#appendEvent('tool_call_requested', createToolCallPayload({
+        tool_name: toolCall.tool_name,
+        arguments_summary: toolCall.arguments_summary,
+        arguments_ref: toolCall.arguments_ref,
+        requesting_agent_id: this.state.agent_id,
+      })));
+      const startedAt = Date.now();
+      const result = await executeToolEffect(this.toolEffectAdapter, toolCall, {
+        carrier_session_id: this.state.carrier_session_id,
+        agent_id: this.state.agent_id,
+        site_id: this.state.site_id,
+        turn_id: turnId,
+        principal: this.currentPrincipal ?? null,
+      });
+      const payload = createToolResultPayload({
+        tool_name: toolCall.tool_name,
+        status: result.status,
+        admission_action: result.admission_action,
+        admission_reason: result.admission_reason,
+        capability_ref: result.capability_ref,
+        effect_scope: result.effect_scope,
+        authority_ref: result.authority_ref,
+        duration_ms: Math.max(0, Date.now() - startedAt),
+        result_summary: result.result_summary,
+        result_ref: result.result_ref ?? null,
+      });
+      events.push(this.#appendEvent('tool_result_received', payload));
+      toolResults.push(payload);
+      sequence += 1;
+    }
+    return { toolResults, nextSequence: sequence };
   }
 
   #recordProviderRefusal(input, events) {
@@ -512,7 +611,6 @@ export class CloudflareCarrierSession {
 
   #appendEvent(event_kind, payload = {}) {
     const sequence = this.state.next_event_sequence;
-    this.state.next_event_sequence += 1;
     const eventPayload = this.currentPrincipal && !Object.prototype.hasOwnProperty.call(payload, 'principal')
       ? { ...payload, principal: clone(this.currentPrincipal) }
       : payload;
@@ -530,6 +628,11 @@ export class CloudflareCarrierSession {
       payload: eventPayload,
     };
     assertNoSecretValues(event);
+    const validationErrors = validateSessionEvent(event);
+    if (validationErrors.length > 0) {
+      throw new Error(`cloudflare_carrier_invalid_session_event:${validationErrors.join(',')}`);
+    }
+    this.state.next_event_sequence += 1;
     this.events.push(event);
     return clone(event);
   }
@@ -557,6 +660,65 @@ function clone(value) {
 
 function isPromiseLike(value) {
   return value && typeof value.then === 'function';
+}
+
+function toolEffectPosture(toolEffectAdapter) {
+  if (!toolEffectAdapter) {
+    return {
+      posture: 'unconfigured',
+      adapter_kind: null,
+      supported_tools: [],
+      capabilities: [],
+    };
+  }
+  return {
+    posture: toolEffectAdapter.posture ?? 'configured',
+    adapter_kind: toolEffectAdapter.adapter_kind ?? 'unknown-tool-effect-adapter',
+    supported_tools: Array.isArray(toolEffectAdapter.supported_tools) ? [...toolEffectAdapter.supported_tools] : [],
+    capabilities: Array.isArray(toolEffectAdapter.capabilities) ? clone(toolEffectAdapter.capabilities) : [],
+  };
+}
+
+function normalizeProviderToolCall(rawToolCall) {
+  return {
+    tool_name: String(rawToolCall?.tool_name ?? rawToolCall?.name ?? '').trim() || 'unknown_tool',
+    arguments_summary: String(rawToolCall?.arguments_summary ?? rawToolCall?.arguments ?? '{}'),
+    arguments_ref: rawToolCall?.arguments_ref ?? null,
+  };
+}
+
+async function executeToolEffect(toolEffectAdapter, toolCall, context) {
+  if (!toolEffectAdapter || typeof toolEffectAdapter.execute !== 'function') {
+    return {
+      status: 'denied',
+      admission_action: 'deny',
+      admission_reason: 'tool_effect_adapter_unconfigured',
+      result_summary: 'tool_effect_adapter_unconfigured',
+      result_ref: null,
+    };
+  }
+  try {
+    const result = await toolEffectAdapter.execute({ toolCall, context });
+    const normalized = {
+      status: String(result?.status ?? 'ok'),
+      capability_ref: result?.capability_ref,
+      effect_scope: result?.effect_scope,
+      authority_ref: result?.authority_ref,
+      result_summary: String(result?.result_summary ?? result?.summary ?? 'tool_effect_completed'),
+      result_ref: result?.result_ref ?? null,
+    };
+    if (result?.admission_action !== undefined || result?.admission_reason !== undefined) {
+      normalized.admission_action = result?.admission_action ?? (result?.status === 'denied' ? 'deny' : 'admit');
+      normalized.admission_reason = result?.admission_reason;
+    }
+    return normalized;
+  } catch (error) {
+    return {
+      status: 'failed',
+      result_summary: providerErrorSummary(error),
+      result_ref: null,
+    };
+  }
 }
 
 function providerErrorSummary(error) {
