@@ -20,6 +20,7 @@ import {
 } from './cloudflare-carrier.mjs';
 
 const inputPipelineCases = JSON.parse(readFileSync(new URL('../../carrier-protocol/fixtures/carrier-input-pipeline-cases.json', import.meta.url), 'utf8'));
+const directiveEmitterRegistryCases = JSON.parse(readFileSync(new URL('../../carrier-protocol/fixtures/carrier-directive-emitter-registry-cases.json', import.meta.url), 'utf8'));
 const toolEffectAdmissionCases = JSON.parse(readFileSync(new URL('../../carrier-protocol/fixtures/tool-effect-admission-cases.json', import.meta.url), 'utf8'));
 
 function clock() {
@@ -202,6 +203,7 @@ test('operation heartbeat emitter records emission evidence and routes through i
 });
 
 test('registered directive emitter routes operation attention through input delivery', () => {
+  const fixtureCase = directiveEmitterRegistryCases.cases.find((entry) => entry.name === 'operation_attention_runtime_trigger_operator_visible_operation_target');
   const { router } = startedSession();
   const response = router.handle({
     operation: 'directive.emit',
@@ -209,15 +211,15 @@ test('registered directive emitter routes operation attention through input deli
     carrier_session_id: 'carrier_session_cloudflare_fixture',
     principal: { principal_id: 'operator.fixture' },
     params: {
-      directive_kind: 'operation_attention',
-      operation_id: 'operation_fixture_control',
+      directive_kind: fixtureCase.directive_kind,
+      operation_id: fixtureCase.operation_id,
       input_event_id: 'input_operation_attention_emit_1',
       directive_id: 'dir_operation_attention_emit_1',
-      target: { kind: 'operation', id: 'operation_fixture_control' },
+      target: fixtureCase.target,
     },
   });
   assert.equal(response.ok, true);
-  assert.equal(response.directive_kind, 'operation_attention');
+  assert.equal(response.directive_kind, fixtureCase.directive_kind);
   assert.equal(response.terminal_state, 'completed_without_provider');
   assertValidEvents(response);
   assert.deepEqual(eventKinds(response), [
@@ -228,11 +230,11 @@ test('registered directive emitter routes operation attention through input deli
     'directive_carrier_accepted_recorded',
     'input_completed',
   ]);
-  assert.equal(response.rule.visibility, 'operator_visible');
-  assert.equal(response.rule.trigger_kind, 'runtime_trigger');
-  assert.deepEqual(response.rule.target, { kind: 'operation', id: 'operation_fixture_control' });
-  assert.equal(response.events[2].payload.directive_kind, 'operation_attention');
-  assert.equal(response.events[2].payload.trigger_kind, 'runtime_trigger');
+  assert.equal(response.rule.visibility, fixtureCase.expected.default_visibility);
+  assert.equal(response.rule.trigger_kind, fixtureCase.expected.trigger_kind);
+  assert.deepEqual(response.rule.target, fixtureCase.target);
+  assert.equal(response.events[2].payload.directive_kind, fixtureCase.directive_kind);
+  assert.equal(response.events[2].payload.trigger_kind, fixtureCase.expected.trigger_kind);
   assert.equal(response.events.some((event) => event.event_kind === 'turn_started'), false);
 });
 
