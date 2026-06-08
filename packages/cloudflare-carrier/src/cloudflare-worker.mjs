@@ -1705,6 +1705,7 @@ export function renderCloudflareCarrierConsole() {
     .attention-item strong, .authority-decision strong, .session-item strong { display: block; font-size: 13px; color: #1f4e48; overflow-wrap: anywhere; }
     .attention-item span, .authority-decision span, .session-item span { display: block; margin-top: 4px; font-size: 12px; color: #686d75; overflow-wrap: anywhere; }
     .authority-decision.refuse strong { color: #9b3b22; }
+    .authority-decision.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
     .session-item.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
     .task-panel { margin-top: 16px; border-top: 1px solid #d7d7ce; padding-top: 14px; }
     .task-panel h2 { margin: 0 0 10px; font-size: 15px; letter-spacing: 0; }
@@ -1814,6 +1815,7 @@ export function renderCloudflareCarrierConsole() {
       <div class="product-panel">
         <h2>Authority State</h2>
         <div id="authorityState" class="attention-items"><div class="empty">No authority state loaded.</div></div>
+        <div id="authorityFocusDetail" class="evidence-summary"><div class="empty">No authority decision selected.</div></div>
       </div>
       <div class="product-panel">
         <h2>Operation Surface</h2>
@@ -2149,26 +2151,54 @@ export function renderCloudflareCarrierConsole() {
     function renderAuthorityState(product = {}) {
       const decisions = product.site_authority?.decisions || [];
       if (decisions.length === 0) {
+        state.authorityFocus = null;
         el('authorityState').innerHTML = '<div class="empty">No authority state loaded.</div>';
+        renderAuthorityFocusDetail();
         updateControlRoom();
         return;
       }
+      if (!state.authorityFocus) state.authorityFocus = decisions[0];
+      state.authorityFocus = decisions.find((decision) => authorityDecisionKey(decision) === authorityDecisionKey(state.authorityFocus)) || state.authorityFocus;
       el('authorityState').replaceChildren(...decisions.map((decision) => {
         const node = document.createElement('article');
-        node.className = 'authority-decision ' + (decision.action || 'unknown');
+        node.className = 'authority-decision ' + (decision.action || 'unknown') + (authorityDecisionKey(decision) === authorityDecisionKey(state.authorityFocus) ? ' selected' : '');
         const title = document.createElement('strong');
         title.textContent = [decision.action || 'unknown', decision.mutation_class || 'mutation'].join(' ');
         const meta = document.createElement('span');
         meta.textContent = authorityRouteSummary(decision);
-        node.addEventListener('click', () => {
-          state.authorityFocus = decision;
-          focusEvidenceFor((event) => JSON.stringify(event.payload || {}).includes(decision.mutation_class || '') || JSON.stringify(event.payload || {}).includes(decision.reason || ''));
-          updateControlRoom();
-        });
+        node.addEventListener('click', () => selectAuthorityDecision(decision));
         node.append(title, meta);
         return node;
       }));
+      renderAuthorityFocusDetail();
       updateControlRoom();
+    }
+    function authorityDecisionKey(decision = {}) {
+      return [decision.mutation_class, decision.action, decision.reason, decision.authority_locus].filter(Boolean).join('|');
+    }
+    function selectAuthorityDecision(decision) {
+      if (!decision) return;
+      state.authorityFocus = decision;
+      focusEvidenceFor((event) => JSON.stringify(event.payload || {}).includes(decision.mutation_class || '') || JSON.stringify(event.payload || {}).includes(decision.reason || ''));
+      renderAuthorityState(state.operationProduct || {});
+      updateControlRoom();
+    }
+    function authorityDecisionContext(decision = {}) {
+      return [
+        ['Action', decision.action || 'unknown'],
+        ['Mutation', decision.mutation_class || 'unknown'],
+        ['Reason', decision.reason || 'none'],
+        ['Authority Locus', decision.authority_locus || 'unresolved'],
+        ['Locus Kind', decision.authority_locus_kind || 'unknown'],
+        ['Controlled Action', decision.controlled_action || 'none'],
+      ];
+    }
+    function renderAuthorityFocusDetail() {
+      if (!state.authorityFocus) {
+        el('authorityFocusDetail').innerHTML = '<div class="empty">No authority decision selected.</div>';
+        return;
+      }
+      el('authorityFocusDetail').replaceChildren(...authorityDecisionContext(state.authorityFocus).map(([label, value]) => evidenceField(label, value)));
     }
     function selectOperationSession(session) {
       if (!session?.carrier_session_id) return;

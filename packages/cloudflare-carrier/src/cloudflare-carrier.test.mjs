@@ -677,6 +677,12 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Authority State/);
   assert.match(html, /controlAuthorityFocus/);
   assert.match(html, /authorityState/);
+  assert.match(html, /authorityFocusDetail/);
+  assert.match(html, /authorityDecisionKey/);
+  assert.match(html, /selectAuthorityDecision/);
+  assert.match(html, /authorityDecisionContext/);
+  assert.match(html, /renderAuthorityFocusDetail/);
+  assert.match(html, /\.authority-decision\.selected/);
   assert.match(html, /Task Focus/);
   assert.match(html, /Operation Attention/);
   assert.match(html, /Attention/);
