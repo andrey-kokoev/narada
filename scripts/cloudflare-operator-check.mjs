@@ -843,6 +843,30 @@ assert.equal(smoke.principal_id, 'service');
 assert.equal(smoke.provider_adapter_posture, 'cloudflare-workers-ai');
 assert.equal(smoke.tool_effect_posture, expectToolEffectPosture);
 
+const projectionWriteSmoke = await runJsonCommand('task-lifecycle-projection-write-smoke:live', [
+  'node',
+  'packages/cloudflare-carrier/scripts/cloudflare-carrier-task-lifecycle-projection-write-live-smoke.mjs',
+  '--url',
+  workerUrl,
+  '--token-file',
+  tokenFile,
+  '--site',
+  siteId,
+  '--operation',
+  operationId,
+]);
+assert.equal(projectionWriteSmoke.status, 'ok');
+assert.equal(projectionWriteSmoke.worker_url, workerUrl);
+assert.equal(projectionWriteSmoke.site_id, siteId);
+assert.equal(projectionWriteSmoke.operation_id, operationId);
+assert.equal(projectionWriteSmoke.mutation_authority, 'cloudflare_task_lifecycle_d1');
+assert.equal(projectionWriteSmoke.cloudflare_write_admission, 'admitted');
+assert.equal(projectionWriteSmoke.write_effect, 'task_lifecycle_projection_write');
+assert.equal(projectionWriteSmoke.sqlite_mutation_admission, 'not_admitted');
+assert.equal(projectionWriteSmoke.filesystem_mutation_admission, 'not_admitted');
+assert.equal(projectionWriteSmoke.repository_publication_admission, 'not_admitted');
+assert.equal(projectionWriteSmoke.authority_partition, 'task_create_claim_report_finish_changed_file_evidence_and_projection_write_cloudflare_remaining_windows');
+
 const siteRead = await postCarrier(workerUrl, bearerToken, {
   operation: 'site.read',
   request_id: `operator_check_site_read_${Date.now()}`,
@@ -1149,6 +1173,7 @@ const operationReadAfterContinuity = await postCarrier(workerUrl, bearerToken, {
     carrier_event_limit: 20,
     session_limit: 10,
     webhook_delay_directive_delivery_limit: 10,
+    task_lifecycle_task_limit: 100,
     task_lifecycle_write_admission_limit: 10,
     resident_loop_shadow_limit: 10,
     resident_dispatch_limit: 10,
@@ -1230,6 +1255,12 @@ assert.ok(taskLifecycleWriteAdmissions.length >= 1);
 assert.equal(operationSurface?.task_lifecycle_write_admission_count, taskLifecycleWriteAdmissions.length);
 assert.ok(Array.isArray(taskLifecycleTasks));
 assert.equal(operationSurface?.task_lifecycle_task_count, taskLifecycleTasks.length);
+const projectionWriteTask = taskLifecycleTasks.find((task) => task.task_id === projectionWriteSmoke.task_id);
+assert.ok(projectionWriteTask, `projection write task missing from operation.read: ${projectionWriteSmoke.task_id}`);
+assert.equal(projectionWriteTask.status, 'finished');
+assert.equal(projectionWriteTask.task_lifecycle_projection_write_count, 1);
+assert.equal(projectionWriteTask.task_lifecycle_projection_write_admission, 'admitted');
+assert.equal(projectionWriteTask.task_lifecycle_projection_records?.some((record) => record.projection_id === projectionWriteSmoke.projection_write_admission_id || record.source_evidence_ref === `source-evidence:${projectionWriteSmoke.task_id}:finished-row`), true);
 assert.ok(new Set([
   'writes_not_admitted',
   'task_create_admitted_remaining_writes_not_admitted',
@@ -1369,6 +1400,7 @@ const report = {
     webhook_delay_directive_delivery_surface: 'ok',
     task_lifecycle_shadow_read_surface: 'ok',
     task_lifecycle_write_admission_surface: 'ok',
+    task_lifecycle_projection_write_cutover_surface: 'ok',
     resident_loop_shadow_surface: 'ok',
     resident_dispatch_surface: 'ok',
     human_operator_session: humanOperator.status,
@@ -1424,6 +1456,11 @@ const report = {
     task_lifecycle_task_finish_count: operationSurface.task_lifecycle_task_finish_count,
     task_lifecycle_changed_file_evidence_count: operationSurface.task_lifecycle_changed_file_evidence_count,
     task_lifecycle_projection_write_count: operationSurface.task_lifecycle_projection_write_count,
+    task_lifecycle_projection_write_task_id: projectionWriteSmoke.task_id,
+    task_lifecycle_projection_write_effect: projectionWriteSmoke.write_effect,
+    task_lifecycle_projection_sqlite_mutation_admission: projectionWriteSmoke.sqlite_mutation_admission,
+    task_lifecycle_projection_filesystem_mutation_admission: projectionWriteSmoke.filesystem_mutation_admission,
+    task_lifecycle_projection_repository_publication_admission: projectionWriteSmoke.repository_publication_admission,
     task_lifecycle_write_admission_count: operationSurface.task_lifecycle_write_admission_count,
     task_lifecycle_write_admission_posture: operationSurface.task_lifecycle_write_admission_posture,
     task_lifecycle_mutation_authority: operationSurface.task_lifecycle_mutation_authority,
