@@ -681,6 +681,7 @@ function isSiteProductOperation(operation) {
     'site.membership.put',
     'site.continuity.packet.put',
     'operation.create',
+    'operation.status.put',
     'operation.read',
     'operation.list',
     'webhook_delay.shadow_read.record',
@@ -4891,6 +4892,13 @@ export function renderCloudflareCarrierConsole() {
           status: 'active',
         }, { request_id: 'console_operation_create_' + Date.now() });
       },
+      putOperationStatus(status) {
+        return this.request('operation.status.put', {
+          site_id: el('siteId').value.trim(),
+          operation_id: el('operationId').value.trim(),
+          status,
+        }, { request_id: 'console_operation_status_put_' + Date.now() });
+      },
       putMembership(memberPrincipalId, role) {
         return this.request('site.membership.put', {
           site_id: el('siteId').value.trim(),
@@ -6645,7 +6653,35 @@ export function renderCloudflareCarrierConsole() {
         el('operationFocusDetail').innerHTML = '<div class="empty">No operation selected.</div>';
         return;
       }
-      el('operationFocusDetail').replaceChildren(...operationFocusContext(operation).map(([label, value]) => evidenceField(label, value)));
+      el('operationFocusDetail').replaceChildren(
+        ...operationFocusContext(operation).map(([label, value]) => evidenceField(label, value)),
+        operationLifecycleActionRow(operation),
+      );
+    }
+    function operationLifecycleActionRow(operation = focusedOperation()) {
+      return focusActionRow(
+        focusActionButton('operationLifecycleResume', 'Resume', () => run(() => putFocusedOperationStatus('active'))),
+        focusActionButton('operationLifecyclePause', 'Pause', () => run(() => putFocusedOperationStatus('inactive'))),
+        focusActionButton('operationLifecycleArchive', 'Archive', () => run(() => putFocusedOperationStatus('archived'))),
+      );
+    }
+    async function putFocusedOperationStatus(status) {
+      const operation = focusedOperation();
+      const operationId = operation?.operation_id || el('operationId').value.trim();
+      if (!operationId) throw new Error('Operation ID is required.');
+      setCurrentOperation(operationId);
+      const body = await api.putOperationStatus(status);
+      renderLastAuthority(null, {
+        event_kind: 'operation.status.put',
+        action: body.action || 'status_updated',
+        reason: 'site_operation_status_updated',
+        evidence: {
+          operation_id: operationId,
+          previous_status: body.previous_status || operation?.status || null,
+          status: body.status || status,
+        },
+      });
+      await refreshOperation();
     }
     function operationEvents(operation = focusedOperation(), product = state.operationProduct || {}) {
       const operationId = operation?.operation_id || el('operationId').value.trim();

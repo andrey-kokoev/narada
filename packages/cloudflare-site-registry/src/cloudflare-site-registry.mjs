@@ -4,6 +4,7 @@ export const CLOUDFLARE_SITE_REGISTRY_ADAPTER_KIND = 'cloudflare-d1-site-registr
 const SITE_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{1,127}$/;
 const SITE_ROLES = new Set(['owner', 'maintainer', 'operator', 'viewer']);
 const BINDING_ROLES = new Set(['owner', 'maintainer', 'operator']);
+const OPERATION_STATUSES = new Set(['active', 'inactive', 'archived']);
 
 export function createCloudflareSiteRegistryAdapter(env = {}, { now = () => new Date().toISOString() } = {}) {
   const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
@@ -108,6 +109,61 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     initialized = true;
   }
 
+  async function putOperationStatus({ operation_id, site_id, status, principal, request_id = null } = {}) {
+    await ensureSchema();
+    const operationId = normalizeOperationId(operation_id);
+    const requestedSiteId = normalizeSiteId(site_id);
+    const normalizedStatus = String(status ?? '').trim();
+    const principalId = normalizePrincipal(principal).principal_id;
+    if (!operationId) return { ok: false, code: 'invalid_operation_id' };
+    if (!OPERATION_STATUSES.has(normalizedStatus)) return { ok: false, code: 'invalid_operation_status', site_id: requestedSiteId || null, operation_id: operationId, status: normalizedStatus || null };
+    const existing = await findOperation(operationId);
+    if (!existing) return { ok: false, code: 'operation_not_found', operation_id: operationId };
+    if (requestedSiteId && existing.site_id !== requestedSiteId) return { ok: false, code: 'operation_site_mismatch', site_id: requestedSiteId, operation_id: operationId };
+    const actorMembership = await findMembership(existing.site_id, principalId);
+    if (!actorMembership || actorMembership.status !== 'active' || !['owner', 'maintainer'].includes(actorMembership.role)) {
+      return denied('site_operation_status_update_rejected', {
+        site_id: existing.site_id,
+        operation_id: operationId,
+        principal_id: principalId,
+        reason: 'site_authority_denied',
+        request_id,
+      });
+    }
+    const timestamp = now();
+    await db.prepare(`
+      UPDATE cloudflare_site_operations
+      SET status = ?, updated_at = ?
+      WHERE operation_id = ?
+    `).bind(normalizedStatus, timestamp, operationId).run();
+    const operation = await findOperation(operationId);
+    await recordAuthorityEvent({
+      event_kind: 'site_operation_status_updated',
+      site_id: existing.site_id,
+      principal_id: principalId,
+      action: 'admit',
+      reason: 'site_operation_status_updated',
+      evidence: {
+        request_id,
+        operation_id: operationId,
+        previous_status: existing.status,
+        status: normalizedStatus,
+        actor_role: actorMembership.role,
+      },
+    });
+    return {
+      ok: true,
+      action: 'status_updated',
+      schema: 'narada.cloudflare_operation_status_update.v1',
+      site_id: existing.site_id,
+      operation_id: operationId,
+      previous_status: existing.status,
+      status: normalizedStatus,
+      operation: publicOperation(operation),
+      actor_membership: publicMembership(actorMembership),
+    };
+  }
+
   async function listOperationCarrierSessionBindings(operationId, limit = 100) {
     const result = await db.prepare(`SELECT * FROM cloudflare_site_carrier_sessions
       WHERE operation_id = ?
@@ -138,7 +194,7 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     if (!operationId) return { ok: false, code: 'invalid_operation_id', site_id: siteId };
     if (!displayName) return { ok: false, code: 'invalid_operation_display_name', site_id: siteId, operation_id: operationId };
     if (!normalizedKind) return { ok: false, code: 'invalid_operation_kind', site_id: siteId, operation_id: operationId };
-    if (!['active', 'inactive', 'archived'].includes(normalizedStatus)) return { ok: false, code: 'invalid_operation_status', site_id: siteId, operation_id: operationId, status: normalizedStatus || null };
+    if (!OPERATION_STATUSES.has(normalizedStatus)) return { ok: false, code: 'invalid_operation_status', site_id: siteId, operation_id: operationId, status: normalizedStatus || null };
     const site = await findSite(siteId);
     if (!site || site.status !== 'active') return { ok: false, code: 'site_not_found', site_id: siteId };
     const actorMembership = await findMembership(siteId, principalId);
@@ -230,6 +286,7 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     if (operation === 'site.membership.put') return putSiteMembership({ ...params, principal });
     if (operation === 'site.carrier_session.bind') return validateCarrierSiteBinding({ ...params, principal });
     if (operation === 'operation.create') return createOperation({ ...params, principal });
+    if (operation === 'operation.status.put') return putOperationStatus({ ...params, principal });
     if (operation === 'operation.read') return readOperation({ ...params, principal });
     if (operation === 'operation.list') return listOperations({ ...params, principal });
     return { ok: false, code: 'unsupported_site_registry_operation', operation };

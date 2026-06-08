@@ -1081,6 +1081,13 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Evidence Replay State/);
   assert.match(html, /Evidence Replay Source/);
   assert.match(html, /Evidence Replay Sessions/);
+  assert.match(html, /operation\.status\.put/);
+  assert.match(html, /putOperationStatus/);
+  assert.match(html, /putFocusedOperationStatus/);
+  assert.match(html, /operationLifecycleActionRow/);
+  assert.match(html, /operationLifecyclePause/);
+  assert.match(html, /operationLifecycleResume/);
+  assert.match(html, /operationLifecycleArchive/);
   assert.match(html, /provider_events/);
   assert.match(html, /session_next_action/);
   assert.match(html, /Authority Posture/);
@@ -2900,6 +2907,39 @@ test('worker operation.create read and list route through site registry authorit
   assert.equal(readBody.operation_product_surface.lifecycle_status.health, readBody.operation_lifecycle_status.health);
   assert.equal(readBody.reader_principal.email, 'admin@system');
 
+  const paused = await worker.fetch(jsonRequest({
+    operation: 'operation.status.put',
+    request_id: 'request_operation_status_pause',
+    params: { site_id: 'site_fixture', operation_id: 'operation_control', status: 'inactive' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(paused.status, 200);
+  const pausedBody = await paused.json();
+  assert.equal(pausedBody.schema, 'narada.cloudflare_operation_status_update.v1');
+  assert.equal(pausedBody.action, 'status_updated');
+  assert.equal(pausedBody.previous_status, 'active');
+  assert.equal(pausedBody.operation.status, 'inactive');
+
+  const pausedRead = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_operation_status_pause_read',
+    params: { site_id: 'site_fixture', operation_id: 'operation_control' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(pausedRead.status, 200);
+  const pausedReadBody = await pausedRead.json();
+  assert.equal(pausedReadBody.operation.status, 'inactive');
+  assert.equal(pausedReadBody.operation_lifecycle_status.phase, 'inactive');
+  assert.equal(pausedReadBody.authority_events.some((event) => event.event_kind === 'site_operation_status_updated'), true);
+
+  const resumed = await worker.fetch(jsonRequest({
+    operation: 'operation.status.put',
+    request_id: 'request_operation_status_resume',
+    params: { site_id: 'site_fixture', operation_id: 'operation_control', status: 'active' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(resumed.status, 200);
+  const resumedBody = await resumed.json();
+  assert.equal(resumedBody.previous_status, 'inactive');
+  assert.equal(resumedBody.operation.status, 'active');
+
   const listed = await worker.fetch(jsonRequest({
     operation: 'operation.list',
     request_id: 'request_operation_list',
@@ -4091,6 +4131,10 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const existing = state.operations.find((entry) => entry.operation_id === operation_id);
         if (existing) Object.assign(existing, { display_name, operation_kind, status, updated_at });
         else state.operations.push({ operation_id, site_id, display_name, operation_kind, status, created_by_principal_id, created_at, updated_at });
+      } else if (normalized.startsWith('update cloudflare_site_operations')) {
+        const [status, updated_at, operation_id] = bindings;
+        const existing = state.operations.find((entry) => entry.operation_id === operation_id);
+        if (existing) Object.assign(existing, { status, updated_at });
       } else if (normalized.startsWith('update cloudflare_site_carrier_sessions set operation_id')) {
         const [operation_id, updated_at, carrier_session_id] = bindings;
         const existing = state.carrierSessions.find((entry) => entry.carrier_session_id === carrier_session_id);

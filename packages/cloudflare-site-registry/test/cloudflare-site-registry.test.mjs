@@ -60,6 +60,64 @@ test('creates reads and lists site operations behind site authority', async () =
   assert.equal(siteRead.authority_events.some((event) => event.event_kind === 'site_operation_updated'), true);
 });
 
+test('updates operation status behind owner or maintainer authority', async () => {
+  const db = fakeD1SiteRegistryDatabase();
+  const registry = createD1CloudflareSiteRegistry(db, { now: fixedNow });
+  const owner = { principal_id: 'user:owner' };
+  await registry.createSite({ site_id: 'site_operation_status', display_name: 'Operation Status Site', principal: owner });
+  await registry.handle({
+    operation: 'operation.create',
+    principal: owner,
+    params: {
+      site_id: 'site_operation_status',
+      operation_id: 'operation_status_control',
+      display_name: 'Status Control Operation',
+      operation_kind: 'control',
+      request_id: 'req_operation_status_create',
+    },
+  });
+
+  const paused = await registry.handle({
+    operation: 'operation.status.put',
+    principal: owner,
+    params: {
+      site_id: 'site_operation_status',
+      operation_id: 'operation_status_control',
+      status: 'inactive',
+      request_id: 'req_operation_status_pause',
+    },
+  });
+  assert.equal(paused.ok, true);
+  assert.equal(paused.schema, 'narada.cloudflare_operation_status_update.v1');
+  assert.equal(paused.action, 'status_updated');
+  assert.equal(paused.previous_status, 'active');
+  assert.equal(paused.operation.status, 'inactive');
+
+  const readPaused = await registry.handle({
+    operation: 'operation.read',
+    principal: owner,
+    params: { site_id: 'site_operation_status', operation_id: 'operation_status_control' },
+  });
+  assert.equal(readPaused.operation.status, 'inactive');
+  assert.equal(readPaused.authority_events.some((event) => event.event_kind === 'site_operation_status_updated'), true);
+
+  const denied = await registry.handle({
+    operation: 'operation.status.put',
+    principal: { principal_id: 'user:viewer' },
+    params: { site_id: 'site_operation_status', operation_id: 'operation_status_control', status: 'active' },
+  });
+  assert.equal(denied.ok, false);
+  assert.equal(denied.code, 'site_authority_denied');
+
+  const invalid = await registry.handle({
+    operation: 'operation.status.put',
+    principal: owner,
+    params: { site_id: 'site_operation_status', operation_id: 'operation_status_control', status: 'completed' },
+  });
+  assert.equal(invalid.ok, false);
+  assert.equal(invalid.code, 'invalid_operation_status');
+});
+
 test('rejects operation creation without owner or maintainer authority', async () => {
   const db = fakeD1SiteRegistryDatabase();
   const registry = createD1CloudflareSiteRegistry(db, { now: fixedNow });
@@ -367,6 +425,10 @@ function fakeD1Statement(state, sql) {
         const existing = state.operations.find((operation) => operation.operation_id === operationId);
         if (existing) Object.assign(existing, { display_name: displayName, operation_kind: operationKind, status, updated_at: updatedAt });
         else state.operations.push({ operation_id: operationId, site_id: siteId, display_name: displayName, operation_kind: operationKind, status, created_by_principal_id: createdByPrincipalId, created_at: createdAt, updated_at: updatedAt });
+      } else if (/^\s*UPDATE cloudflare_site_operations/i.test(sql)) {
+        const [status, updatedAt, operationId] = bound;
+        const existing = state.operations.find((operation) => operation.operation_id === operationId);
+        if (existing) Object.assign(existing, { status, updated_at: updatedAt });
       } else if (/^UPDATE cloudflare_site_carrier_sessions SET operation_id/i.test(sql)) {
         const [operationId, updatedAt, carrierSessionId] = bound;
         const existing = state.carrierSessions.find((binding) => binding.carrier_session_id === carrierSessionId);
