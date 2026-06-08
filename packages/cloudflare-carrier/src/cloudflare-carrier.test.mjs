@@ -112,7 +112,7 @@ test('cloudflare task lifecycle write admission keeps Windows mutation authority
   assert.equal(shadow.write_effect, 'none');
   assert.equal(shadow.cloudflare_write_admission, 'not_admitted');
 
-  for (const mutationClass of ['task_create', 'task_claim', 'task_report', 'task_finish', 'changed_file_evidence', 'task_projection_write']) {
+  for (const mutationClass of ['task_create', 'task_claim', 'task_report', 'task_finish', 'changed_file_evidence', 'task_projection_write', 'task_source_state_write', 'task_sqlite_write']) {
     const decision = classifyCloudflareTaskLifecycleWriteAdmission({ mutation_class: mutationClass });
     assert.equal(decision.action, 'refuse');
     assert.equal(decision.reason, 'windows_task_lifecycle_mutation_authority_retained');
@@ -266,6 +266,30 @@ test('cloudflare task lifecycle write admission keeps Windows mutation authority
   assert.deepEqual(admittedProjectionWrite.retained_windows_authority, [
     'task_lifecycle_sqlite_mutation_store',
   ]);
+
+  const admittedSourceStateWrite = classifyCloudflareTaskLifecycleWriteAdmission({
+    mutation_class: 'task_source_state_write',
+    task_id: 'cloudflare-task-lifecycle-1',
+    cloudflare_task_source_state_write_cutover: true,
+    source_state_authority_ref: 'source-state-authority:task-lifecycle:v1',
+    source_state_schema_ref: 'schema:task-lifecycle-source-state:v1',
+    source_state_evidence_ref: 'source-state-evidence:cloudflare-task-lifecycle-row:v1',
+    cutover_point_ref: 'cutover:task-source-state-write:v1',
+    governed_write_contract_ref: 'contract:task-source-state-write:v1',
+    confirmation_evidence_ref: 'evidence:operator-check:task-source-state-write',
+  });
+  assert.equal(admittedSourceStateWrite.action, 'admit');
+  assert.equal(admittedSourceStateWrite.reason, 'cloudflare_task_source_state_write_cutover_admitted');
+  assert.equal(admittedSourceStateWrite.write_effect, 'task_lifecycle_source_state_write');
+  assert.equal(admittedSourceStateWrite.source_state_write_admission, 'admitted');
+  assert.equal(admittedSourceStateWrite.source_state_write_schema, 'narada.sonar.cloudflare_task_lifecycle_source_state_write.v1');
+  assert.equal(admittedSourceStateWrite.source_state_authority_ref, 'source-state-authority:task-lifecycle:v1');
+  assert.equal(admittedSourceStateWrite.source_state_schema_ref, 'schema:task-lifecycle-source-state:v1');
+  assert.equal(admittedSourceStateWrite.source_state_evidence_ref, 'source-state-evidence:cloudflare-task-lifecycle-row:v1');
+  assert.equal(admittedSourceStateWrite.windows_sqlite_source_write_admission, 'not_admitted');
+  assert.equal(admittedSourceStateWrite.source_state_filesystem_mutation_admission, 'not_admitted');
+  assert.equal(admittedSourceStateWrite.source_state_repository_publication_admission, 'not_admitted');
+  assert.deepEqual(admittedSourceStateWrite.retained_windows_authority, []);
 
   const unknown = classifyCloudflareTaskLifecycleWriteAdmission({ mutation_class: 'surprise_write' });
   assert.equal(unknown.action, 'refuse');
@@ -3476,6 +3500,52 @@ test('worker records task lifecycle shadow reads from Windows without admitting 
   assert.equal(admittedProjectionWriteBody.task.task_lifecycle_projection_write_admission, 'admitted');
   assert.equal(admittedProjectionWriteBody.task.task_lifecycle_projection_write_count, 1);
 
+  const refusedSourceStateWrite = await worker.fetch(jsonRequest({
+    operation: 'task_lifecycle.source_state_write.admit',
+    request_id: 'request_task_lifecycle_source_state_write_refused',
+    params: {
+      site_id: 'site_fixture',
+      admission_id: 'task_lifecycle_source_state_write_refused_1',
+      task_id: admittedCreateBody.task.task_id,
+      source_state_authority_ref: 'source-state-authority:cloudflare-task-lifecycle-d1:v1',
+      source_state_schema_ref: 'schema:cloudflare-task-lifecycle-source-state:v1',
+      source_state_evidence_ref: 'source-state-evidence:cloudflare-task-lifecycle-row:v1',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(refusedSourceStateWrite.status, 403);
+  const refusedSourceStateWriteBody = await refusedSourceStateWrite.json();
+  assert.equal(refusedSourceStateWriteBody.code, 'task_lifecycle_source_state_write_not_admitted');
+  assert.equal(refusedSourceStateWriteBody.decision.reason, 'windows_task_lifecycle_mutation_authority_retained');
+
+  const admittedSourceStateWrite = await worker.fetch(jsonRequest({
+    operation: 'task_lifecycle.source_state_write.admit',
+    request_id: 'request_task_lifecycle_source_state_write_admitted',
+    params: {
+      site_id: 'site_fixture',
+      admission_id: 'task_lifecycle_source_state_write_admitted_1',
+      task_id: admittedCreateBody.task.task_id,
+      cloudflare_task_source_state_write_cutover: true,
+      source_state_authority_ref: 'source-state-authority:cloudflare-task-lifecycle-d1:v1',
+      source_state_schema_ref: 'schema:cloudflare-task-lifecycle-source-state:v1',
+      source_state_evidence_ref: 'source-state-evidence:cloudflare-task-lifecycle-row:v1',
+      cutover_point_ref: 'cutover:task-lifecycle-source-state-write:v1',
+      governed_write_contract_ref: 'contract:task-lifecycle-source-state-write:v1',
+      confirmation_evidence_ref: 'evidence:operator-check:task-source-state-write',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(admittedSourceStateWrite.status, 200);
+  const admittedSourceStateWriteBody = await admittedSourceStateWrite.json();
+  assert.equal(admittedSourceStateWriteBody.status, 'task_lifecycle_source_state_written');
+  assert.equal(admittedSourceStateWriteBody.write_effect, 'task_lifecycle_source_state_write');
+  assert.equal(admittedSourceStateWriteBody.source_state_write.canonical_source_state_authority, 'cloudflare_task_lifecycle_d1');
+  assert.equal(admittedSourceStateWriteBody.source_state_write.windows_sqlite_source_write_admission, 'not_admitted');
+  assert.equal(admittedSourceStateWriteBody.source_state_write.filesystem_mutation_admission, 'not_admitted');
+  assert.equal(admittedSourceStateWriteBody.source_state_write.repository_publication_admission, 'not_admitted');
+  assert.equal(admittedSourceStateWriteBody.source_state_write.mailbox_mutation_admission, 'not_admitted');
+  assert.equal(admittedSourceStateWriteBody.task.task_lifecycle_source_state_write_admission, 'admitted');
+  assert.equal(admittedSourceStateWriteBody.task.task_lifecycle_source_state_write_count, 1);
+  assert.equal(admittedSourceStateWriteBody.task.canonical_source_state_authority, 'cloudflare_task_lifecycle_d1');
+
   const operationReadWithTasks = await worker.fetch(jsonRequest({
     operation: 'operation.read',
     request_id: 'request_task_lifecycle_task_operation_read',
@@ -3493,6 +3563,9 @@ test('worker records task lifecycle shadow reads from Windows without admitting 
   assert.equal(operationReadWithTasksBody.task_lifecycle_tasks[0].changed_file_evidence_count, 1);
   assert.equal(operationReadWithTasksBody.task_lifecycle_tasks[0].task_lifecycle_projection_write_admission, 'admitted');
   assert.equal(operationReadWithTasksBody.task_lifecycle_tasks[0].task_lifecycle_projection_write_count, 1);
+  assert.equal(operationReadWithTasksBody.task_lifecycle_tasks[0].task_lifecycle_source_state_write_admission, 'admitted');
+  assert.equal(operationReadWithTasksBody.task_lifecycle_tasks[0].task_lifecycle_source_state_write_count, 1);
+  assert.equal(operationReadWithTasksBody.task_lifecycle_tasks[0].canonical_source_state_authority, 'cloudflare_task_lifecycle_d1');
   assert.equal(operationReadWithTasksBody.task_lifecycle_write_admissions.length, 10);
   assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_task_count, 1);
   assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_task_claim_count, 1);
@@ -3500,18 +3573,21 @@ test('worker records task lifecycle shadow reads from Windows without admitting 
   assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_task_finish_count, 1);
   assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_changed_file_evidence_count, 1);
   assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_projection_write_count, 1);
-  assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_default_mutation_authority, 'windows_task_lifecycle_sqlite');
-  assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_default_cloudflare_write_admission, 'not_admitted');
+  assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_source_state_write_count, 1);
+  assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_default_mutation_authority, 'cloudflare_task_lifecycle_d1');
+  assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_default_cloudflare_write_admission, 'source_state_admitted_external_effects_not_admitted');
   assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_task_create_authority, 'cloudflare_task_lifecycle_d1');
   assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_task_claim_authority, 'cloudflare_task_lifecycle_d1');
   assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_task_report_authority, 'cloudflare_task_lifecycle_d1');
   assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_task_finish_authority, 'cloudflare_task_lifecycle_d1');
   assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_changed_file_evidence_authority, 'cloudflare_task_lifecycle_d1');
   assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_projection_write_authority, 'cloudflare_task_lifecycle_d1');
-  assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_authority_partition, 'task_create_claim_report_finish_changed_file_evidence_and_projection_write_cloudflare_remaining_windows');
-  assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_write_admission_posture, 'task_create_claim_report_finish_changed_file_evidence_and_projection_write_admitted_remaining_writes_not_admitted');
+  assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_source_state_authority, 'cloudflare_task_lifecycle_d1');
+  assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_windows_sqlite_source_write_admission, 'not_admitted');
+  assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_authority_partition, 'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_cloudflare_remaining_windows_effects');
+  assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_write_admission_posture, 'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_admitted_remaining_external_effects_not_admitted');
   assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_mutation_authority, 'split_by_mutation_class');
-  assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_cloudflare_write_admission, 'task_create_claim_report_finish_changed_file_evidence_and_projection_write_admitted');
+  assert.equal(operationReadWithTasksBody.operation_product_surface.task_lifecycle_cloudflare_write_admission, 'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_admitted');
 });
 
 test('worker starts controlled resident dispatch as Cloudflare primary with Windows fallback recorded', async () => {

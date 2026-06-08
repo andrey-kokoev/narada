@@ -29,6 +29,7 @@
     "task-lifecycle:report-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-report-live-smoke.mjs",
     "task-lifecycle:changed-file-evidence-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-changed-file-evidence-live-smoke.mjs",
     "task-lifecycle:projection-write-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-projection-write-live-smoke.mjs",
+    "task-lifecycle:source-state-write-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-source-state-write-live-smoke.mjs",
     "task-lifecycle:finish-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-finish-live-smoke.mjs",
     "resident-dispatch:smoke:live": "node scripts/cloudflare-carrier-resident-dispatch-live-smoke.mjs",
     "continuity:cloudflare": "node scripts/cloudflare-site-continuity-sync.mjs",

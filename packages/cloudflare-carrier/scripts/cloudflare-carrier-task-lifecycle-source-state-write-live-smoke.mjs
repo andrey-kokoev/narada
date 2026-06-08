@@ -16,28 +16,29 @@ const siteId = option('--site') ?? process.env.CLOUDFLARE_CARRIER_SITE_ID ?? 'si
 const operationId = option('--operation') ?? process.env.CLOUDFLARE_CARRIER_OPERATION_ID ?? 'operation_narada_cloudflare_control';
 const agentId = option('--agent') ?? process.env.CLOUDFLARE_TASK_LIFECYCLE_REPORT_AGENT_ID ?? 'cloudflare-live-smoke-agent';
 
-if (!workerUrl) throw new Error('projection_write_live_smoke_requires_--url_or_CLOUDFLARE_CARRIER_URL');
-if (!bearerToken) throw new Error('projection_write_live_smoke_requires_--token_or_--token-file_or_CLOUDFLARE_CARRIER_TOKEN');
-if (!siteId) throw new Error('projection_write_live_smoke_requires_site_id');
+if (!workerUrl) throw new Error('source_state_write_live_smoke_requires_--url_or_CLOUDFLARE_CARRIER_URL');
+if (!bearerToken) throw new Error('source_state_write_live_smoke_requires_--token_or_--token-file_or_CLOUDFLARE_CARRIER_TOKEN');
+if (!siteId) throw new Error('source_state_write_live_smoke_requires_site_id');
 
 const suffix = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
-const createAdmissionId = `projection_write_live_create_${suffix}`;
-const claimAdmissionId = `projection_write_live_claim_${suffix}`;
-const reportAdmissionId = `projection_write_live_report_${suffix}`;
-const evidenceAdmissionId = `projection_write_live_evidence_${suffix}`;
-const finishAdmissionId = `projection_write_live_finish_${suffix}`;
-const projectionAdmissionId = `projection_write_live_admitted_${suffix}`;
+const createAdmissionId = `source_state_write_live_create_${suffix}`;
+const claimAdmissionId = `source_state_write_live_claim_${suffix}`;
+const reportAdmissionId = `source_state_write_live_report_${suffix}`;
+const evidenceAdmissionId = `source_state_write_live_evidence_${suffix}`;
+const finishAdmissionId = `source_state_write_live_finish_${suffix}`;
+const projectionAdmissionId = `source_state_write_live_projection_${suffix}`;
+const sourceStateAdmissionId = `source_state_write_live_admitted_${suffix}`;
 const filePath = option('--file') ?? 'packages/cloudflare-carrier/src/cloudflare-worker.mjs';
-const title = option('--title') ?? `Cloudflare projection write ${suffix}`;
+const title = option('--title') ?? `Cloudflare source-state write ${suffix}`;
 
 const created = await postCarrier({
   operation: 'task_lifecycle.task_create.admit',
-  request_id: `projection_write_live_create_${suffix}`,
+  request_id: `source_state_write_live_create_${suffix}`,
   params: {
     site_id: siteId,
     admission_id: createAdmissionId,
     title,
-    description: 'Live proof setup for Cloudflare-owned task lifecycle projection write.',
+    description: 'Live proof setup for Cloudflare-owned task lifecycle source-state write.',
     cloudflare_task_create_cutover: true,
     cutover_point_ref: 'cutover:task-lifecycle-create:v1',
     governed_write_contract_ref: 'contract:task-lifecycle-create:v1',
@@ -48,7 +49,7 @@ assert.equal(created.http_status, 200, JSON.stringify(created.body));
 
 const claimed = await postCarrier({
   operation: 'task_lifecycle.task_claim.admit',
-  request_id: `projection_write_live_claim_${suffix}`,
+  request_id: `source_state_write_live_claim_${suffix}`,
   params: {
     site_id: siteId,
     admission_id: claimAdmissionId,
@@ -65,13 +66,13 @@ assert.equal(claimed.http_status, 200, JSON.stringify(claimed.body));
 
 const reported = await postCarrier({
   operation: 'task_lifecycle.task_report.admit',
-  request_id: `projection_write_live_report_${suffix}`,
+  request_id: `source_state_write_live_report_${suffix}`,
   params: {
     site_id: siteId,
     admission_id: reportAdmissionId,
     task_id: created.body.task.task_id,
     reporter_agent_id: agentId,
-    summary: 'Live Cloudflare projection write proof setup.',
+    summary: 'Live Cloudflare source-state write proof setup.',
     changed_files: [filePath],
     verification: [{ command: 'pnpm --filter @narada2/cloudflare-carrier test', result: 'passed' }],
     cloudflare_task_report_cutover: true,
@@ -87,7 +88,7 @@ assert.equal(reported.http_status, 200, JSON.stringify(reported.body));
 
 const evidence = await postCarrier({
   operation: 'task_lifecycle.changed_file_evidence.admit',
-  request_id: `projection_write_live_evidence_${suffix}`,
+  request_id: `source_state_write_live_evidence_${suffix}`,
   params: {
     site_id: siteId,
     admission_id: evidenceAdmissionId,
@@ -108,7 +109,7 @@ assert.equal(evidence.http_status, 200, JSON.stringify(evidence.body));
 
 const finished = await postCarrier({
   operation: 'task_lifecycle.task_finish.admit',
-  request_id: `projection_write_live_finish_${suffix}`,
+  request_id: `source_state_write_live_finish_${suffix}`,
   params: {
     site_id: siteId,
     admission_id: finishAdmissionId,
@@ -126,26 +127,9 @@ const finished = await postCarrier({
 assert.equal(finished.http_status, 200, JSON.stringify(finished.body));
 assert.equal(finished.body.task.status, 'finished');
 
-const refusedProjection = await postCarrier({
-  operation: 'task_lifecycle.projection_write.admit',
-  request_id: `projection_write_live_refused_${suffix}`,
-  params: {
-    site_id: siteId,
-    admission_id: `${projectionAdmissionId}_refused`,
-    task_id: created.body.task.task_id,
-    projection_target_ref: 'projection-target:cloudflare-task-lifecycle-read-model:v1',
-    projection_schema_ref: 'schema:cloudflare-task-lifecycle-read-model:v1',
-    projection_authority_ref: 'projection-authority:task-lifecycle:v1',
-    source_evidence_ref: `source-evidence:${created.body.task.task_id}:finished-row`,
-  },
-});
-assert.equal(refusedProjection.http_status, 403, JSON.stringify(refusedProjection.body));
-assert.equal(refusedProjection.body.code, 'task_lifecycle_projection_write_not_admitted');
-assert.equal(refusedProjection.body.decision.reason, 'windows_task_lifecycle_mutation_authority_retained');
-
 const projected = await postCarrier({
   operation: 'task_lifecycle.projection_write.admit',
-  request_id: `projection_write_live_admitted_${suffix}`,
+  request_id: `source_state_write_live_projection_${suffix}`,
   params: {
     site_id: siteId,
     admission_id: projectionAdmissionId,
@@ -161,37 +145,66 @@ const projected = await postCarrier({
   },
 });
 assert.equal(projected.http_status, 200, JSON.stringify(projected.body));
-assert.equal(projected.body.status, 'task_lifecycle_projection_written');
 assert.equal(projected.body.write_effect, 'task_lifecycle_projection_write');
-assert.equal(projected.body.projection.sqlite_mutation_admission, 'not_admitted');
-assert.equal(projected.body.projection.filesystem_mutation_admission, 'not_admitted');
-assert.equal(projected.body.projection.repository_publication_admission, 'not_admitted');
-assert.equal(projected.body.task.task_lifecycle_projection_write_count, 1);
+
+const refusedSourceState = await postCarrier({
+  operation: 'task_lifecycle.source_state_write.admit',
+  request_id: `source_state_write_live_refused_${suffix}`,
+  params: {
+    site_id: siteId,
+    admission_id: `${sourceStateAdmissionId}_refused`,
+    task_id: created.body.task.task_id,
+    source_state_authority_ref: 'source-state-authority:cloudflare-task-lifecycle-d1:v1',
+    source_state_schema_ref: 'schema:cloudflare-task-lifecycle-source-state:v1',
+    source_state_evidence_ref: `source-state-evidence:${created.body.task.task_id}:projection-row`,
+  },
+});
+assert.equal(refusedSourceState.http_status, 403, JSON.stringify(refusedSourceState.body));
+assert.equal(refusedSourceState.body.code, 'task_lifecycle_source_state_write_not_admitted');
+assert.equal(refusedSourceState.body.decision.reason, 'windows_task_lifecycle_mutation_authority_retained');
+
+const sourceState = await postCarrier({
+  operation: 'task_lifecycle.source_state_write.admit',
+  request_id: `source_state_write_live_admitted_${suffix}`,
+  params: {
+    site_id: siteId,
+    admission_id: sourceStateAdmissionId,
+    task_id: created.body.task.task_id,
+    cloudflare_task_source_state_write_cutover: true,
+    source_state_authority_ref: 'source-state-authority:cloudflare-task-lifecycle-d1:v1',
+    source_state_schema_ref: 'schema:cloudflare-task-lifecycle-source-state:v1',
+    source_state_evidence_ref: `source-state-evidence:${created.body.task.task_id}:projection-row`,
+    cutover_point_ref: 'cutover:task-lifecycle-source-state-write:v1',
+    governed_write_contract_ref: 'contract:task-lifecycle-source-state-write:v1',
+    confirmation_evidence_ref: 'evidence:live-smoke:task-lifecycle-source-state-write',
+  },
+});
+assert.equal(sourceState.http_status, 200, JSON.stringify(sourceState.body));
+assert.equal(sourceState.body.status, 'task_lifecycle_source_state_written');
+assert.equal(sourceState.body.write_effect, 'task_lifecycle_source_state_write');
+assert.equal(sourceState.body.source_state_write.canonical_source_state_authority, 'cloudflare_task_lifecycle_d1');
+assert.equal(sourceState.body.source_state_write.windows_sqlite_source_write_admission, 'not_admitted');
+assert.equal(sourceState.body.source_state_write.filesystem_mutation_admission, 'not_admitted');
+assert.equal(sourceState.body.source_state_write.repository_publication_admission, 'not_admitted');
+assert.equal(sourceState.body.source_state_write.mailbox_mutation_admission, 'not_admitted');
+assert.equal(sourceState.body.task.task_lifecycle_source_state_write_count, 1);
 
 const operationRead = await postCarrier({
   operation: 'operation.read',
-  request_id: `projection_write_live_operation_read_${suffix}`,
+  request_id: `source_state_write_live_operation_read_${suffix}`,
   params: { site_id: siteId, operation_id: operationId, task_lifecycle_task_limit: 100, task_lifecycle_write_admission_limit: 100 },
 });
 assert.equal(operationRead.http_status, 200, JSON.stringify(operationRead.body));
-assert.ok(operationRead.body.task_lifecycle_tasks.some((entry) => entry.task_id === created.body.task.task_id && entry.status === 'finished' && entry.task_lifecycle_projection_write_count === 1));
-assert.equal(operationRead.body.operation_product_surface.task_lifecycle_projection_write_authority, 'cloudflare_task_lifecycle_d1');
-assert.ok(operationRead.body.operation_product_surface.task_lifecycle_projection_write_count >= 1);
-assert.ok(new Set([
-  'task_create_claim_report_finish_changed_file_evidence_and_projection_write_cloudflare_remaining_windows',
-  'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_cloudflare_remaining_windows_effects',
-]).has(operationRead.body.operation_product_surface.task_lifecycle_authority_partition), `unexpected authority partition: ${operationRead.body.operation_product_surface.task_lifecycle_authority_partition}`);
-assert.ok(new Set([
-  'task_create_claim_report_finish_changed_file_evidence_and_projection_write_admitted_remaining_writes_not_admitted',
-  'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_admitted_remaining_external_effects_not_admitted',
-]).has(operationRead.body.operation_product_surface.task_lifecycle_write_admission_posture), `unexpected write admission posture: ${operationRead.body.operation_product_surface.task_lifecycle_write_admission_posture}`);
-assert.ok(new Set([
-  'task_create_claim_report_finish_changed_file_evidence_and_projection_write_admitted',
-  'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_admitted',
-]).has(operationRead.body.operation_product_surface.task_lifecycle_cloudflare_write_admission), `unexpected Cloudflare write admission: ${operationRead.body.operation_product_surface.task_lifecycle_cloudflare_write_admission}`);
+assert.ok(operationRead.body.task_lifecycle_tasks.some((entry) => entry.task_id === created.body.task.task_id && entry.status === 'finished' && entry.task_lifecycle_source_state_write_count === 1));
+assert.equal(operationRead.body.operation_product_surface.task_lifecycle_source_state_authority, 'cloudflare_task_lifecycle_d1');
+assert.ok(operationRead.body.operation_product_surface.task_lifecycle_source_state_write_count >= 1);
+assert.equal(operationRead.body.operation_product_surface.task_lifecycle_windows_sqlite_source_write_admission, 'not_admitted');
+assert.equal(operationRead.body.operation_product_surface.task_lifecycle_authority_partition, 'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_cloudflare_remaining_windows_effects');
+assert.equal(operationRead.body.operation_product_surface.task_lifecycle_write_admission_posture, 'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_admitted_remaining_external_effects_not_admitted');
+assert.equal(operationRead.body.operation_product_surface.task_lifecycle_cloudflare_write_admission, 'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_admitted');
 
 process.stdout.write(`${JSON.stringify({
-  schema: 'narada.cloudflare_carrier.task_lifecycle_projection_write_live_smoke.v1',
+  schema: 'narada.cloudflare_carrier.task_lifecycle_source_state_write_live_smoke.v1',
   status: 'ok',
   worker_url: workerUrl,
   site_id: siteId,
@@ -204,15 +217,18 @@ process.stdout.write(`${JSON.stringify({
   changed_file_evidence_admission_id: evidenceAdmissionId,
   finish_admission_id: finishAdmissionId,
   projection_write_admission_id: projectionAdmissionId,
+  source_state_write_admission_id: sourceStateAdmissionId,
   reporter_agent_id: agentId,
-  mutation_authority: projected.body.mutation_authority,
-  cloudflare_write_admission: projected.body.cloudflare_write_admission,
-  write_effect: projected.body.write_effect,
-  sqlite_mutation_admission: projected.body.projection.sqlite_mutation_admission,
-  filesystem_mutation_admission: projected.body.projection.filesystem_mutation_admission,
-  repository_publication_admission: projected.body.projection.repository_publication_admission,
+  mutation_authority: sourceState.body.mutation_authority,
+  cloudflare_write_admission: sourceState.body.cloudflare_write_admission,
+  write_effect: sourceState.body.write_effect,
+  canonical_source_state_authority: sourceState.body.source_state_write.canonical_source_state_authority,
+  windows_sqlite_source_write_admission: sourceState.body.source_state_write.windows_sqlite_source_write_admission,
+  filesystem_mutation_admission: sourceState.body.source_state_write.filesystem_mutation_admission,
+  repository_publication_admission: sourceState.body.source_state_write.repository_publication_admission,
+  mailbox_mutation_admission: sourceState.body.source_state_write.mailbox_mutation_admission,
   authority_partition: operationRead.body.operation_product_surface.task_lifecycle_authority_partition,
-  task_lifecycle_projection_write_count: operationRead.body.operation_product_surface.task_lifecycle_projection_write_count,
+  task_lifecycle_source_state_write_count: operationRead.body.operation_product_surface.task_lifecycle_source_state_write_count,
   task_lifecycle_write_admission_count: operationRead.body.operation_product_surface.task_lifecycle_write_admission_count,
 }, null, 2)}\n`);
 
@@ -235,7 +251,7 @@ function option(name) {
 
 function readTokenFile(tokenFilePath) {
   const resolved = isAbsolute(tokenFilePath) ? tokenFilePath : join(repoRoot, tokenFilePath);
-  if (!existsSync(resolved)) throw new Error(`projection_write_live_smoke_token_file_missing:${resolved}`);
+  if (!existsSync(resolved)) throw new Error(`source_state_write_live_smoke_token_file_missing:${resolved}`);
   return readFileSync(resolved, 'utf8').trim();
 }
 
