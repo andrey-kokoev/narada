@@ -1565,6 +1565,10 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Persistence Next Action/);
   assert.match(html, /Recovery Posture/);
   assert.match(html, /recoveryPostureDetail/);
+  assert.match(html, /Evidence Session Window/);
+  assert.match(html, /carrierEvidenceSessionLimit/);
+  assert.match(html, /loadRecoveryEvidenceWindow/);
+  assert.match(html, /carrierEvidenceSessionLimit\(\)/);
   assert.match(html, /recoveryPostureContext/);
   assert.match(html, /renderRecoveryPosture/);
   assert.match(html, /cloudflare_recovery_posture/);

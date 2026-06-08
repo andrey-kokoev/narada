@@ -9347,7 +9347,11 @@ export function renderCloudflareCarrierConsole() {
       <div class="product-panel">
         <h2>Recovery Posture</h2>
         <div id="recoveryPostureDetail" class="evidence-summary"><div class="empty">No recovery posture loaded.</div></div>
-        <div class="actions"><button id="recoveryNextAction" class="secondary">Apply Recovery Next Action</button></div>
+        <label>Evidence Session Window<input id="carrierEvidenceSessionLimit" type="number" min="1" max="50" value="10"></label>
+        <div class="actions">
+          <button id="recoveryNextAction" class="secondary">Apply Recovery Next Action</button>
+          <button id="loadRecoveryEvidenceWindow" class="secondary">Load Evidence Window</button>
+        </div>
         <div id="recoveryWorkflow" class="attention-items"><div class="empty">No recovery workflow loaded.</div></div>
       </div>
       <div class="product-panel">
@@ -9733,7 +9737,7 @@ export function renderCloudflareCarrierConsole() {
           site_id: el('siteId').value.trim(),
           operation_id: el('operationId').value.trim(),
           carrier_event_limit: 20,
-          session_limit: 10,
+          session_limit: carrierEvidenceSessionLimit(),
           mailbox_draft_reply_proposal_limit: 20,
           mailbox_outlook_draft_create_limit: 20,
         });
@@ -9809,6 +9813,7 @@ export function renderCloudflareCarrierConsole() {
         if (saved.site_id) el('siteId').value = saved.site_id;
         if (saved.operation_id) el('operationId').value = saved.operation_id;
         if (saved.carrier_session_id) el('sessionId').value = saved.carrier_session_id;
+        if (saved.carrier_evidence_session_limit) el('carrierEvidenceSessionLimit').value = String(saved.carrier_evidence_session_limit);
       } catch {}
       renderActiveSession();
     }
@@ -9817,6 +9822,7 @@ export function renderCloudflareCarrierConsole() {
         site_id: el('siteId').value.trim(),
         operation_id: el('operationId').value.trim(),
         carrier_session_id: el('sessionId').value.trim(),
+        carrier_evidence_session_limit: carrierEvidenceSessionLimit(),
       }));
       renderActiveSession();
     }
@@ -14318,6 +14324,11 @@ export function renderCloudflareCarrierConsole() {
       renderTasks(status.tasks || []);
       return status;
     }
+    function carrierEvidenceSessionLimit() {
+      const parsed = Number.parseInt(el('carrierEvidenceSessionLimit').value, 10);
+      if (!Number.isFinite(parsed)) return 10;
+      return Math.max(1, Math.min(50, parsed));
+    }
     async function refreshOperation() {
       saveWorkbenchState();
       const body = await api.readOperation();
@@ -14464,6 +14475,8 @@ export function renderCloudflareCarrierConsole() {
     el('operationControlTargetReadinessAction').addEventListener('click', applyWorkbenchReadinessNextAction);
     el('operationActivityApplyFocus').addEventListener('click', applyFocusedOperationActivity);
     el('recoveryNextAction').addEventListener('click', applyRecoveryNextAction);
+    el('loadRecoveryEvidenceWindow').addEventListener('click', () => run(refreshOperation));
+    el('carrierEvidenceSessionLimit').addEventListener('change', () => { el('carrierEvidenceSessionLimit').value = String(carrierEvidenceSessionLimit()); saveWorkbenchState(); });
     el('startResidentDispatch').addEventListener('click', () => run(startResidentDispatchFromWorkbench));
     el('createOutlookDraftFromProposal').addEventListener('click', () => run(createOutlookDraftFromFocusedProposal));
     el('continuityWorkflowNextAction').addEventListener('click', applyContinuityWorkflowNextStep);
