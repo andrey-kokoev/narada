@@ -855,6 +855,15 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Focus Task Evidence/);
   assert.match(html, /Task Lifecycle Summary/);
   assert.match(html, /taskLifecycleSummary/);
+  assert.match(html, /Task Command Preview/);
+  assert.match(html, /taskCommandPreview/);
+  assert.match(html, /taskCommandPreviewContext/);
+  assert.match(html, /renderTaskCommandPreview/);
+  assert.match(html, /createTaskFromWorkbench/);
+  assert.match(html, /create_task_for_operation/);
+  assert.match(html, /update_task_lifecycle_state/);
+  assert.match(html, /create_then_select_task/);
+  assert.match(html, /create_task_from_attention/);
   assert.match(html, /taskLifecycleStatus/);
   assert.match(html, /renderTaskLifecycleSummary/);
   assert.match(html, /mark_done_or_update/);

@@ -2170,6 +2170,8 @@ export function renderCloudflareCarrierConsole() {
         <label>Task ID<input id="updateTaskId" placeholder="cloudflare-task-1"></label>
         <label>Status<input id="updateTaskStatus" value="done"></label>
         <label>Note<input id="updateTaskNote" placeholder="Update note"></label>
+        <h3>Task Command Preview</h3>
+        <div id="taskCommandPreview" class="evidence-summary"><div class="empty">No task command prepared.</div></div>
         <div class="actions">
           <button id="focusTaskEvidence" class="secondary">Focus Task Evidence</button>
           <button id="markTaskOpen" class="secondary">Mark Open</button>
@@ -2434,6 +2436,7 @@ export function renderCloudflareCarrierConsole() {
       el('controlEvidenceWindow').textContent = String(surface.carrier_evidence_count ?? state.events.length) + ' evidence groups / ' + state.events.length + ' loaded events';
       el('controlContinuity').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length ?? 0) + ' packets';
       el('controlWorkbenchReadiness').textContent = operationWorkbenchReadiness(product);
+      renderTaskCommandPreview();
       renderContinuityWorkflow(product);
     }
     function productScopeSummary(product = state.operationProduct || {}) {
@@ -3175,7 +3178,55 @@ export function renderCloudflareCarrierConsole() {
       }));
       renderTaskLifecycleSummary(tasks);
       renderTaskFocusDetail();
+      renderTaskCommandPreview();
       updateControlRoom();
+    }
+    function taskCommandPreviewContext() {
+      const newTitle = el('taskTitle').value.trim();
+      const selectedTask = selectedTaskFromWorkbench();
+      const status = el('updateTaskStatus').value.trim();
+      const note = el('updateTaskNote').value.trim();
+      const activeSession = el('sessionId').value.trim();
+      const attention = selectedAttention();
+      const command = newTitle
+        ? '/task create ' + newTitle
+        : selectedTask?.task_id && status
+          ? ['/task update', selectedTask.task_id, status, note].filter(Boolean).join(' ')
+          : 'none';
+      const effect = newTitle
+        ? 'create_task_for_operation'
+        : selectedTask?.task_id && status
+          ? 'update_task_lifecycle_state'
+          : 'prepare_task_command';
+      const followUp = newTitle
+        ? 'create_then_select_task'
+        : selectedTask?.task_id
+          ? (taskLifecycleStatus(selectedTask) === 'open' ? 'mark_done_or_update' : 'inspect_task_evidence')
+          : attention
+            ? 'create_task_from_attention'
+            : 'select_or_create_task';
+      return [
+        ['Command', command],
+        ['Effect', effect],
+        ['Task', selectedTask?.task_id || 'none'],
+        ['Status', status || selectedTask?.status || 'none'],
+        ['Session', selectedTask?.carrier_session_id || activeSession || 'none'],
+        ['Attention', attention?.directive_id || 'none'],
+        ['Note', note || selectedTask?.note || 'none'],
+        ['Follow Up', followUp],
+      ];
+    }
+    function renderTaskCommandPreview() {
+      el('taskCommandPreview').replaceChildren(...taskCommandPreviewContext().map(([label, value]) => evidenceField(label, value)));
+    }
+    async function createTaskFromWorkbench() {
+      const title = el('taskTitle').value.trim();
+      if (!title) return;
+      const body = await api.createTask(title);
+      appendEvents(body.events || []);
+      el('taskTitle').value = '';
+      await refreshStatus();
+      await refreshOperation();
     }
     function taskLifecycleStatus(task = {}) {
       const status = String(task.status || '').toLowerCase();
@@ -3196,11 +3247,13 @@ export function renderCloudflareCarrierConsole() {
         : focusStatus === 'open' ? 'mark_done_or_update'
         : focusStatus === 'closed' ? 'reopen_or_inspect_evidence'
         : 'normalize_status_or_update';
+      const nextTask = tasks.find((task) => taskLifecycleStatus(task) === 'open') || state.taskFocus || tasks[0] || null;
       return [
         ['Open', counts.open],
         ['Closed', counts.closed],
         ['Other', counts.other],
         ['Focused Status', focusStatus],
+        ['Next Task', nextTask?.task_id || 'none'],
         ['Next Action', nextAction],
       ];
     }
@@ -3268,6 +3321,7 @@ export function renderCloudflareCarrierConsole() {
       focusEvidenceFor(taskEvidencePredicate(task));
       renderTasks(state.operationProduct?.tasks || []);
       renderTaskFocusDetail(task);
+      renderTaskCommandPreview();
       updateControlRoom();
     }
     async function updateFocusedTask(status, note = null) {
@@ -3920,7 +3974,11 @@ export function renderCloudflareCarrierConsole() {
       await refreshOperation();
     }));
     el('read').addEventListener('click', () => run(async () => { const body = await api.readEvents(); appendEvents(body.events || []); await refreshStatus(); }));
-    el('createTask').addEventListener('click', () => run(async () => { const title = el('taskTitle').value.trim(); if (!title) return; const body = await api.command('/task', ['create', ...title.split(/\\s+/)]); appendEvents(body.events || []); el('taskTitle').value = ''; await refreshStatus(); await refreshOperation(); }));
+    el('taskTitle').addEventListener('input', renderTaskCommandPreview);
+    el('updateTaskId').addEventListener('input', renderTaskCommandPreview);
+    el('updateTaskStatus').addEventListener('input', renderTaskCommandPreview);
+    el('updateTaskNote').addEventListener('input', renderTaskCommandPreview);
+    el('createTask').addEventListener('click', () => run(createTaskFromWorkbench));
     el('focusTaskEvidence').addEventListener('click', () => run(async () => { const task = selectedTaskFromWorkbench(); if (task) focusEvidenceFor(taskEvidencePredicate(task)); }));
     el('markTaskOpen').addEventListener('click', () => run(async () => { await updateFocusedTask('open', el('updateTaskNote').value.trim() || 'operator_marked_open'); }));
     el('markTaskDone').addEventListener('click', () => run(async () => { await updateFocusedTask('done', el('updateTaskNote').value.trim() || 'operator_marked_done'); }));
