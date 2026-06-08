@@ -2214,6 +2214,7 @@ export function renderCloudflareCarrierConsole() {
         <div class="overview-block"><h3>Carrier Evidence</h3><ul><li class="empty">No carrier evidence loaded.</li></ul></div>
       </div>
       <div id="evidenceFocus" class="evidence-focus"><h3>Evidence Focus</h3><span>No event selected.</span></div>
+      <div id="evidenceActionSummary" class="evidence-focus"><h3>Evidence Action</h3><span>No evidence action selected.</span></div>
       <div id="evidenceLanes" class="evidence-lanes"><div class="empty">No evidence lanes loaded.</div></div>
       <div id="events" class="events"><div class="empty">Start or resume a session to read carrier events.</div></div>
       <div class="composer">
@@ -2746,6 +2747,7 @@ export function renderCloudflareCarrierConsole() {
       if (!event) return;
       state.evidenceFocus = event;
       renderEvidenceFocus();
+      renderEvidenceActionSummary();
       updateControlRoom();
     }
     function focusEvidenceFor(predicate) {
@@ -2781,6 +2783,7 @@ export function renderCloudflareCarrierConsole() {
           Object.assign(document.createElement('h3'), { textContent: 'Evidence Focus' }),
           Object.assign(document.createElement('span'), { textContent: 'No event selected.' }),
         );
+        renderEvidenceActionSummary();
         return;
       }
       const heading = document.createElement('h3');
@@ -2801,6 +2804,84 @@ export function renderCloudflareCarrierConsole() {
           focusActionButton('evidenceFocusNextAction', 'Next Evidence', () => focusAdjacentEvidence(1)),
         ),
         pre,
+      );
+    }
+    function evidenceTargetContext(event = {}) {
+      const payload = event.payload || {};
+      const siteAuthority = payload.site_authority_decision || {};
+      const taskId = payload.task_id || payload.task?.task_id || tryParseTaskId(payload.result_summary) || null;
+      const targetType = taskId ? 'task'
+        : payload.directive_id ? 'attention'
+        : siteAuthority.action || payload.authority_ref ? 'authority'
+        : payload.tool_name || payload.capability_ref ? 'tool_effect'
+        : event.carrier_session_id ? 'session'
+        : 'evidence';
+      const targetRef = taskId
+        || payload.directive_id
+        || siteAuthority.mutation_class
+        || payload.tool_name
+        || event.carrier_session_id
+        || event.event_kind
+        || 'none';
+      return { targetType, targetRef };
+    }
+    function tryParseTaskId(value) {
+      if (!value || typeof value !== 'string') return null;
+      try { return JSON.parse(value).task?.task_id || null; } catch { return null; }
+    }
+    function evidenceNextAction(event = {}) {
+      const lane = classifyEvidenceLane(event);
+      const payload = event.payload || {};
+      if (lane === 'failures') return 'inspect_failure_and_retry_or_escalate';
+      if (lane === 'authority') return 'inspect_authority_locus';
+      if (lane === 'tools') return payload.status === 'failed' ? 'inspect_tool_failure' : 'inspect_tool_effect';
+      if (lane === 'directives') return 'resolve_or_acknowledge_directive';
+      if (lane === 'provider') return 'inspect_provider_turn';
+      if (lane === 'input') return 'trace_input_lifecycle';
+      return 'inspect_evidence_payload';
+    }
+    function evidenceActionSummaryContext(event = state.evidenceFocus) {
+      if (!event) return [];
+      const target = evidenceTargetContext(event);
+      return [
+        ['Next Action', evidenceNextAction(event)],
+        ['Target Type', target.targetType],
+        ['Target Ref', target.targetRef],
+        ['Lane', classifyEvidenceLane(event)],
+        ['Session', event.carrier_session_id || el('sessionId').value.trim() || 'none'],
+        ['Sequence', event.sequence ?? 'none'],
+        ['Kind', event.event_kind || 'unknown'],
+      ];
+    }
+    function focusEvidenceLaneForCurrent() {
+      if (!state.evidenceFocus) return;
+      state.evidenceLane = classifyEvidenceLane(state.evidenceFocus);
+      renderEvidenceLanes();
+      renderEvents();
+      updateControlRoom();
+    }
+    function selectEvidenceSession() {
+      if (state.evidenceFocus?.carrier_session_id) setCurrentSession(state.evidenceFocus.carrier_session_id);
+    }
+    function renderEvidenceActionSummary(event = state.evidenceFocus) {
+      if (!event) {
+        el('evidenceActionSummary').replaceChildren(
+          Object.assign(document.createElement('h3'), { textContent: 'Evidence Action' }),
+          Object.assign(document.createElement('span'), { textContent: 'No evidence action selected.' }),
+        );
+        return;
+      }
+      const heading = Object.assign(document.createElement('h3'), { textContent: 'Evidence Action' });
+      const summary = document.createElement('div');
+      summary.className = 'evidence-summary';
+      summary.replaceChildren(...evidenceActionSummaryContext(event).map(([label, value]) => evidenceField(label, value)));
+      el('evidenceActionSummary').replaceChildren(
+        heading,
+        summary,
+        focusActionRow(
+          focusActionButton('evidenceActionLaneAction', 'Focus Evidence Lane', focusEvidenceLaneForCurrent),
+          focusActionButton('evidenceActionSessionAction', 'Use Evidence Session', selectEvidenceSession),
+        ),
       );
     }
     function selectAttentionItem(item) {
@@ -3884,6 +3965,7 @@ export function renderCloudflareCarrierConsole() {
       const events = visibleEvents();
       updateControlRoom();
       renderEvidenceFocus();
+      renderEvidenceActionSummary();
       renderEvidenceLanes();
       if (events.length === 0) {
         el('events').innerHTML = '<div class="empty">No matching events read yet.</div>';
