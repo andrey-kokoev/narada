@@ -1805,6 +1805,8 @@ export function renderCloudflareCarrierConsole() {
       <div class="product-panel">
         <h2>Operation Navigator</h2>
         <div id="operationNavigator" class="attention-items"><div class="empty">No site operations loaded.</div></div>
+        <h3>Operation Focus Detail</h3>
+        <div id="operationFocusDetail" class="evidence-summary"><div class="empty">No operation selected.</div></div>
       </div>
       <div class="product-panel">
         <h2>Session Navigator</h2>
@@ -2239,6 +2241,7 @@ export function renderCloudflareCarrierConsole() {
       if (operations.length === 0) {
         state.operationFocus = null;
         el('operationNavigator').innerHTML = '<div class="empty">No site operations loaded.</div>';
+        renderOperationFocusDetail();
         updateControlRoom();
         return;
       }
@@ -2255,7 +2258,26 @@ export function renderCloudflareCarrierConsole() {
         node.append(title, meta);
         return node;
       }));
+      renderOperationFocusDetail();
       updateControlRoom();
+    }
+    function operationFocusContext(operation = {}) {
+      return [
+        ['Operation', operation.operation_id || el('operationId').value.trim() || 'none'],
+        ['Display Name', operation.display_name || 'none'],
+        ['Kind', operation.operation_kind || 'unknown'],
+        ['Status', operation.status || 'unknown'],
+        ['Site', operation.site_id || el('siteId').value.trim() || 'none'],
+        ['Created', operation.created_at || 'none'],
+        ['Updated', operation.updated_at || 'none'],
+      ];
+    }
+    function renderOperationFocusDetail(operation = state.operationFocus) {
+      if (!operation) {
+        el('operationFocusDetail').innerHTML = '<div class="empty">No operation selected.</div>';
+        return;
+      }
+      el('operationFocusDetail').replaceChildren(...operationFocusContext(operation).map(([label, value]) => evidenceField(label, value)));
     }
     function selectOperationSession(session) {
       if (!session?.carrier_session_id) return;
