@@ -13,7 +13,7 @@
  */
 
 import Database from 'better-sqlite3';
-import { readFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -45,14 +45,39 @@ const resumeCommand = `${runtime} -r ${identity}`;
 const executionContextPayload = {
   runtime,
   cwd: process.cwd(),
-  mcp_servers: [
-    { name: 'narada-andrey-operator-surface', transport: 'stdio' },
-    { name: 'narada-andrey-task-lifecycle', transport: 'stdio' },
-    { name: 'narada-andrey-inbox', transport: 'stdio' },
-  ],
+  mcp_servers: deriveMcpServersFromFabric(rootDir),
   available_tools: ['shell', 'fs_read_file', 'fs_write_file', 'fs_grep_search', 'agent'],
   transport: 'stdio',
 };
+
+function deriveMcpServersFromFabric(siteRoot) {
+  const mcpFabricDir = join(siteRoot, '.ai', 'mcp');
+  if (!existsSync(mcpFabricDir)) {
+    return [];
+  }
+
+  const servers = [];
+  for (const entry of readdirSync(mcpFabricDir).sort()) {
+    if (!entry.endsWith('.json')) continue;
+
+    const configPath = join(mcpFabricDir, entry);
+    let config;
+    try {
+      config = JSON.parse(readFileSync(configPath, 'utf8'));
+    } catch {
+      continue;
+    }
+
+    for (const [name, server] of Object.entries(config.mcpServers ?? {})) {
+      servers.push({
+        name,
+        transport: typeof server?.transport === 'string' ? server.transport : 'stdio',
+      });
+    }
+  }
+
+  return servers;
+}
 
 const intelligenceContextPayload = {
   $schema: 'narada/schemas/intelligence_context.v0.schema.json',

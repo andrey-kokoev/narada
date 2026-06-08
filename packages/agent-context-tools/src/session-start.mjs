@@ -1,5 +1,5 @@
 import Database from './sqlite-database.mjs';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { synthesizeBootstrap } from '@narada2/agent-start-bootstrap';
@@ -668,6 +668,7 @@ export function writeSessionMaterialization(db, { siteRoot, identity, runtime, d
   const resumeCommand = buildCarrierCommand(runtime, identity);
 
   const executionContextPayload = buildExecutionContextPayload({
+    siteRoot,
     runtime,
     cwd,
     identity,
@@ -771,28 +772,47 @@ function buildStartupSequence(identity, eventId) {
   ];
 }
 
-function buildExecutionContextPayload({ runtime, cwd, identity, eventId, roleBinding, capabilityPolicy }) {
+function buildExecutionContextPayload({ siteRoot, runtime, cwd, identity, eventId, roleBinding, capabilityPolicy }) {
   return {
     runtime,
     cwd,
     identity,
     agent_start_event: eventId,
     role_binding: roleBinding,
-    mcp_servers: [
-      { name: 'narada-andrey-agent-context', transport: 'stdio' },
-      { name: 'narada-andrey-operator-surface', transport: 'stdio' },
-      { name: 'narada-andrey-task-lifecycle', transport: 'stdio' },
-      { name: 'narada-andrey-inbox', transport: 'stdio' },
-      { name: 'narada-andrey-site-lift-catalog', transport: 'stdio' },
-      { name: 'narada-andrey-filesystem', transport: 'stdio' },
-      { name: 'narada-andrey-test', transport: 'stdio' },
-      { name: 'narada-andrey-shell', transport: 'stdio' },
-      { name: 'narada-andrey-adr', transport: 'stdio' },
-    ],
+    mcp_servers: deriveMcpServersFromFabric(siteRoot),
     identity_boundary: 'NARADA_AGENT_ID and NARADA_AGENT_START_EVENT_ID are launcher carrier environment inherited by MCP servers, not substrate memory or global config.',
     hydration_boundary: 'Hydration is performed through MCP tools; substrate prompt injection is not authoritative.',
     capability_policy: capabilityPolicy,
   };
+}
+
+function deriveMcpServersFromFabric(siteRoot) {
+  const mcpFabricDir = join(siteRoot, '.ai', 'mcp');
+  if (!existsSync(mcpFabricDir)) {
+    return [];
+  }
+
+  const servers = [];
+  for (const entry of readdirSync(mcpFabricDir).sort()) {
+    if (!entry.endsWith('.json')) continue;
+
+    const configPath = join(mcpFabricDir, entry);
+    let config;
+    try {
+      config = JSON.parse(readFileSync(configPath, 'utf8'));
+    } catch {
+      continue;
+    }
+
+    for (const [name, server] of Object.entries(config.mcpServers ?? {})) {
+      servers.push({
+        name,
+        transport: typeof server?.transport === 'string' ? server.transport : 'stdio',
+      });
+    }
+  }
+
+  return servers;
 }
 
 function buildIntelligenceContextPayload() {

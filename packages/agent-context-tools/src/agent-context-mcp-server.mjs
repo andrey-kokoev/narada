@@ -2220,7 +2220,7 @@ function buildSiteLiftOrientation({ role, bootstrap = null }) {
     no_copy_or_install_authority: true,
   };
 
-  if (!bootstrapHasMcpServer(bootstrap, 'narada-andrey-site-lift-catalog')) {
+  if (!bootstrapHasMcpServer(bootstrap, 'site-lift-catalog-mcp.local')) {
     return {
       ...base,
       status: 'unavailable',
@@ -2282,10 +2282,10 @@ function buildSiteLiftOrientation({ role, bootstrap = null }) {
   }
 }
 
-function bootstrapHasMcpServer(bootstrap, serverName) {
+function bootstrapHasMcpServer(bootstrap, serverNameOrSurfaceId) {
   const servers = bootstrap?.execution_context_summary?.mcp_servers;
   if (!Array.isArray(servers)) return false;
-  return servers.some((server) => server?.name === serverName || server?.surface_id === 'site-lift-catalog-mcp.local');
+  return servers.some((server) => server?.name === serverNameOrSurfaceId || server?.surface_id === serverNameOrSurfaceId);
 }
 
 function siteLiftOrientationSummary(role) {
