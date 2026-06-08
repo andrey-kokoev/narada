@@ -49,6 +49,8 @@ const CLOUDFLARE_RESIDENT_DISPATCH_PRIMARY_SCHEMA = 'narada.sonar.cloudflare_res
 const CLOUDFLARE_TASK_LIFECYCLE_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_shadow_read.v1';
 const CLOUDFLARE_TASK_LIFECYCLE_WRITE_ADMISSION_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_write_admission.v1';
 const CLOUDFLARE_TASK_LIFECYCLE_WRITE_ADMISSION_DECISION_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_write_admission_decision.v1';
+const CLOUDFLARE_TASK_LIFECYCLE_TASK_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_task.v1';
+const CLOUDFLARE_TASK_LIFECYCLE_TASK_CREATE_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_task_create.v1';
 const CLOUDFLARE_WEBHOOK_DELAY_SHADOW_MODE = 'cloudflare_shadow_read';
 const CLOUDFLARE_WEBHOOK_DELAY_OBSERVATION_PRIMARY_AUTHORITY = 'cloudflare_primary_observation_read';
 const CLOUDFLARE_WEBHOOK_DELAY_REMOTE_SOURCE_AUTHORITY = 'cloudflare_webhook_delay_remote_source_adapter';
@@ -1376,6 +1378,8 @@ function isSiteProductOperation(operation) {
     'task_lifecycle.shadow_read.source.read',
     'task_lifecycle.write_admission.classify',
     'task_lifecycle.write_admission.list',
+    'task_lifecycle.task_create.admit',
+    'task_lifecycle.task.list',
     'resident_dispatch.primary_with_fallback.start',
     'resident_dispatch.primary_with_fallback.list',
   ].includes(operation);
@@ -1518,6 +1522,11 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
     if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
     const decisions = await listCloudflareTaskLifecycleWriteAdmissions(env, requestedSiteId, params.task_lifecycle_write_admission_limit ?? params.limit);
+    const hasCloudflareTaskCreateAdmission = decisions.some((decision) => {
+      return decision.mutation_class === 'task_create'
+        && decision.admission_action === 'admit'
+        && decision.mutation_authority === 'cloudflare_task_lifecycle_d1';
+    });
     return {
       status: 200,
       body: {
@@ -1525,10 +1534,35 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         schema: CLOUDFLARE_TASK_LIFECYCLE_WRITE_ADMISSION_SCHEMA,
         status: 'ok',
         site_id: requestedSiteId,
-        mutation_authority: 'windows_task_lifecycle_sqlite',
-        cloudflare_write_admission: 'not_admitted',
-        write_effect: 'none',
+        mutation_authority: hasCloudflareTaskCreateAdmission ? 'split_by_mutation_class' : 'windows_task_lifecycle_sqlite',
+        cloudflare_write_admission: hasCloudflareTaskCreateAdmission ? 'task_create_admitted' : 'not_admitted',
+        write_effect: hasCloudflareTaskCreateAdmission ? 'task_lifecycle_create' : 'none',
+        authority_partition: hasCloudflareTaskCreateAdmission ? 'task_create_cloudflare_remaining_windows' : 'windows_all_observed_mutations',
         decisions,
+      },
+    };
+  }
+  if (body.operation === 'task_lifecycle.task_create.admit') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const result = await createCloudflareTaskLifecycleTask(env, requestedSiteId, params, principal);
+    return { status: result.ok ? 200 : result.code === 'task_lifecycle_create_not_admitted' ? 403 : 400, body: result };
+  }
+  if (body.operation === 'task_lifecycle.task.list') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const tasks = await listCloudflareTaskLifecycleTasks(env, requestedSiteId, params.task_lifecycle_task_limit ?? params.limit);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        schema: CLOUDFLARE_TASK_LIFECYCLE_TASK_SCHEMA,
+        status: 'ok',
+        site_id: requestedSiteId,
+        mutation_authority: tasks.length > 0 ? 'cloudflare_task_lifecycle_d1' : 'not_observed',
+        mutation_class: 'task_create',
+        cloudflare_write_admission: tasks.length > 0 ? 'admitted' : 'not_observed',
+        tasks,
       },
     };
   }
@@ -1807,6 +1841,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const residentLoopShadowRuns = await listCloudflareResidentLoopShadowRuns(env, siteId, params.resident_loop_shadow_limit ?? params.limit);
     const taskLifecycleShadowReads = await listCloudflareTaskLifecycleShadowReads(env, siteId, params.task_lifecycle_shadow_limit ?? params.limit);
     const taskLifecycleWriteAdmissions = await listCloudflareTaskLifecycleWriteAdmissions(env, siteId, params.task_lifecycle_write_admission_limit ?? params.limit);
+    const taskLifecycleTasks = await listCloudflareTaskLifecycleTasks(env, siteId, params.task_lifecycle_task_limit ?? params.limit);
     const residentDispatchDecisions = await listCloudflareResidentDispatchDecisions(env, siteId, params.resident_dispatch_limit ?? params.limit);
     const carrierEvidence = await readCarrierEvidenceForSiteSessions(env, sessions, principal, params);
     const carrierEvidenceReadStatus = summarizeCloudflareCarrierEvidenceReadStatus({ sessions, carrierEvidence });
@@ -1887,6 +1922,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         resident_loop_shadow_runs: residentLoopShadowRuns,
         task_lifecycle_shadow_reads: taskLifecycleShadowReads,
         task_lifecycle_write_admissions: taskLifecycleWriteAdmissions,
+        task_lifecycle_tasks: taskLifecycleTasks,
         resident_dispatch_decisions: residentDispatchDecisions,
         carrier_evidence: carrierEvidence,
         carrier_evidence_read_status: carrierEvidenceReadStatus,
@@ -1930,10 +1966,15 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           resident_loop_shadow_run_count: residentLoopShadowRuns.length,
           task_lifecycle_shadow_read_count: taskLifecycleShadowReads.length,
           task_lifecycle_write_admission_count: taskLifecycleWriteAdmissions.length,
-          task_lifecycle_write_admission_posture: 'writes_not_admitted',
+          task_lifecycle_write_admission_posture: taskLifecycleTasks.length > 0 ? 'task_create_admitted_remaining_writes_not_admitted' : 'writes_not_admitted',
+          task_lifecycle_task_count: taskLifecycleTasks.length,
+          task_lifecycle_default_mutation_authority: 'windows_task_lifecycle_sqlite',
+          task_lifecycle_default_cloudflare_write_admission: 'not_admitted',
+          task_lifecycle_task_create_authority: taskLifecycleTasks.length > 0 ? 'cloudflare_task_lifecycle_d1' : 'not_observed',
+          task_lifecycle_authority_partition: taskLifecycleTasks.length > 0 ? 'task_create_cloudflare_remaining_windows' : 'windows_all_observed_mutations',
           resident_dispatch_decision_count: residentDispatchDecisions.length,
-          task_lifecycle_mutation_authority: 'windows_task_lifecycle_sqlite',
-          task_lifecycle_cloudflare_write_admission: 'not_admitted',
+          task_lifecycle_mutation_authority: taskLifecycleTasks.length > 0 ? 'split_by_mutation_class' : 'windows_task_lifecycle_sqlite',
+          task_lifecycle_cloudflare_write_admission: taskLifecycleTasks.length > 0 ? 'task_create_admitted' : 'not_admitted',
           dispatch_authority: WINDOWS_PRIMARY_DISPATCH_AUTHORITY,
         },
       },
@@ -1970,6 +2011,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
   const residentLoopShadowRuns = await listCloudflareResidentLoopShadowRuns(env, siteId, params.resident_loop_shadow_limit ?? params.limit);
   const taskLifecycleShadowReads = await listCloudflareTaskLifecycleShadowReads(env, siteId, params.task_lifecycle_shadow_limit ?? params.limit);
   const taskLifecycleWriteAdmissions = await listCloudflareTaskLifecycleWriteAdmissions(env, siteId, params.task_lifecycle_write_admission_limit ?? params.limit);
+  const taskLifecycleTasks = await listCloudflareTaskLifecycleTasks(env, siteId, params.task_lifecycle_task_limit ?? params.limit);
   const residentDispatchDecisions = await listCloudflareResidentDispatchDecisions(env, siteId, params.resident_dispatch_limit ?? params.limit);
   const carrierEvidence = await readCarrierEvidenceForSiteSessions(env, response.sessions ?? [], principal, params);
   const carrierEvidenceReadStatus = summarizeCloudflareCarrierEvidenceReadStatus({ sessions: response.sessions ?? [], carrierEvidence });
@@ -2017,6 +2059,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     resident_loop_shadow_runs: residentLoopShadowRuns,
     task_lifecycle_shadow_reads: taskLifecycleShadowReads,
     task_lifecycle_write_admissions: taskLifecycleWriteAdmissions,
+    task_lifecycle_tasks: taskLifecycleTasks,
     resident_dispatch_decisions: residentDispatchDecisions,
     carrier_evidence: carrierEvidence,
     carrier_evidence_read_status: carrierEvidenceReadStatus,
@@ -2621,29 +2664,43 @@ export function classifyCloudflareTaskLifecycleWriteAdmission(request = {}, stat
   ]);
   const isShadowRead = shadowReadClasses.has(mutationClass);
   const isKnownWrite = knownWriteClasses.has(mutationClass);
-  const action = isShadowRead ? 'admit' : 'refuse';
+  const cutoverReady = mutationClass === 'task_create'
+    && (request.cloudflare_task_create_cutover === true || state.task_create_cutover_ready === true)
+    && Boolean(request.cutover_point_ref ?? state.cutover_point_ref)
+    && Boolean(request.governed_write_contract_ref ?? state.governed_write_contract_ref)
+    && Boolean(request.confirmation_evidence_ref ?? state.confirmation_evidence_ref);
+  const action = isShadowRead || cutoverReady ? 'admit' : 'refuse';
   const reason = isShadowRead ? 'shadow_read_projection_admitted'
-    : isKnownWrite ? 'windows_task_lifecycle_mutation_authority_retained'
-      : 'unknown_task_lifecycle_mutation_class';
-  const requiredEvidence = isShadowRead ? [] : [
+    : cutoverReady ? 'cloudflare_task_create_cutover_admitted'
+      : isKnownWrite ? 'windows_task_lifecycle_mutation_authority_retained'
+        : 'unknown_task_lifecycle_mutation_class';
+  const requiredEvidence = isShadowRead || cutoverReady ? [] : [
     'task_lifecycle_write_contract_migrated',
     'cloudflare_task_lifecycle_mutation_authority_declared',
     'cutover_point_recorded',
     'governed_write_confirmation_evidence',
   ];
+  const mutationAuthority = cutoverReady ? 'cloudflare_task_lifecycle_d1'
+    : state.mutation_authority ?? request.mutation_authority ?? 'windows_task_lifecycle_sqlite';
+  const cloudflareWriteAdmission = cutoverReady ? 'admitted' : 'not_admitted';
+  const writeEffect = cutoverReady ? 'task_lifecycle_create' : 'none';
   return {
     schema: CLOUDFLARE_TASK_LIFECYCLE_WRITE_ADMISSION_DECISION_SCHEMA,
     action,
     mutation_class: mutationClass,
     reason,
-    authority_locus: state.authority_locus ?? request.authority_locus ?? 'windows_local_site',
+    authority_locus: cutoverReady ? 'cloudflare_carrier_site' : state.authority_locus ?? request.authority_locus ?? 'windows_local_site',
     target_authority_locus: state.target_authority_locus ?? request.target_authority_locus ?? 'cloudflare_carrier_site',
-    mutation_authority: state.mutation_authority ?? request.mutation_authority ?? 'windows_task_lifecycle_sqlite',
-    cloudflare_write_admission: 'not_admitted',
-    write_effect: 'none',
+    mutation_authority: mutationAuthority,
+    cloudflare_write_admission: cloudflareWriteAdmission,
+    write_effect: writeEffect,
+    cutover_point_ref: request.cutover_point_ref ?? state.cutover_point_ref ?? null,
+    governed_write_contract_ref: request.governed_write_contract_ref ?? state.governed_write_contract_ref ?? null,
+    confirmation_evidence_ref: request.confirmation_evidence_ref ?? state.confirmation_evidence_ref ?? null,
     required_evidence: requiredEvidence,
     retained_windows_authority: isShadowRead ? [] : [
       'task_lifecycle_sqlite_mutation_store',
+      ...(cutoverReady ? [] : ['task_create_transition']),
       'task_claim_assignment_transition',
       'task_report_evidence_transition',
       'task_finish_verdict_transition',
@@ -2786,6 +2843,168 @@ async function listCloudflareTaskLifecycleWriteAdmissions(env = {}, siteId, limi
 
 function taskLifecycleWriteAdmissionId(siteId, decision, recordedAt) {
   return `task_lifecycle_write_admission_${safeIdToken(siteId)}_${safeIdToken(decision.mutation_class)}_${safeIdToken(recordedAt)}`;
+}
+
+async function createCloudflareTaskLifecycleTask(env = {}, siteId, params = {}, principal = null) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return { ok: false, code: 'missing_site_registry_binding' };
+  if (!siteId || siteId === 'unknown-site') return { ok: false, code: 'missing_site_id' };
+  const title = String(params.title ?? '').trim();
+  if (!title) return { ok: false, code: 'task_lifecycle_create_requires_title' };
+  const decision = classifyCloudflareTaskLifecycleWriteAdmission({ ...params, mutation_class: 'task_create' }, params.state ?? {});
+  const admission = await recordCloudflareTaskLifecycleWriteAdmission(env, siteId, { ...params, mutation_class: 'task_create' }, principal);
+  if (!admission.ok) return admission;
+  if (decision.action !== 'admit') {
+    return {
+      ok: false,
+      schema: CLOUDFLARE_TASK_LIFECYCLE_TASK_CREATE_SCHEMA,
+      code: 'task_lifecycle_create_not_admitted',
+      site_id: siteId,
+      decision,
+      admission_record: admission.record,
+    };
+  }
+  await ensureCloudflareTaskLifecycleTaskSchema(db);
+  const now = new Date().toISOString();
+  const taskNumber = await nextCloudflareTaskLifecycleTaskNumber(db, siteId);
+  const task = {
+    schema: CLOUDFLARE_TASK_LIFECYCLE_TASK_SCHEMA,
+    site_id: siteId,
+    task_id: params.task_id ?? `cloudflare-task-lifecycle-${taskNumber}`,
+    task_number: taskNumber,
+    title,
+    description: params.description == null ? null : String(params.description),
+    status: 'opened',
+    source: 'cloudflare_task_lifecycle_create',
+    authority_locus: 'cloudflare_carrier_site',
+    mutation_authority: 'cloudflare_task_lifecycle_d1',
+    cloudflare_write_admission: 'admitted',
+    cutover_point_ref: decision.cutover_point_ref,
+    governed_write_contract_ref: decision.governed_write_contract_ref,
+    confirmation_evidence_ref: decision.confirmation_evidence_ref,
+    created_by_principal_id: principal?.principal_id ?? 'unknown-principal',
+    created_at: now,
+    updated_at: now,
+  };
+  await db.prepare(`
+    INSERT INTO cloudflare_task_lifecycle_tasks (
+      site_id,
+      task_id,
+      task_number,
+      title,
+      description,
+      status,
+      source,
+      authority_locus,
+      mutation_authority,
+      cloudflare_write_admission,
+      cutover_point_ref,
+      governed_write_contract_ref,
+      confirmation_evidence_ref,
+      task_json,
+      created_by_principal_id,
+      created_at,
+      updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    task.site_id,
+    task.task_id,
+    task.task_number,
+    task.title,
+    task.description,
+    task.status,
+    task.source,
+    task.authority_locus,
+    task.mutation_authority,
+    task.cloudflare_write_admission,
+    task.cutover_point_ref,
+    task.governed_write_contract_ref,
+    task.confirmation_evidence_ref,
+    JSON.stringify(task),
+    task.created_by_principal_id,
+    task.created_at,
+    task.updated_at,
+  ).run();
+  return {
+    ok: true,
+    schema: CLOUDFLARE_TASK_LIFECYCLE_TASK_CREATE_SCHEMA,
+    status: 'created',
+    site_id: siteId,
+    mutation_authority: task.mutation_authority,
+    cloudflare_write_admission: task.cloudflare_write_admission,
+    write_effect: 'task_lifecycle_create',
+    decision,
+    admission_record: admission.record,
+    task,
+  };
+}
+
+async function ensureCloudflareTaskLifecycleTaskSchema(db) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS cloudflare_task_lifecycle_tasks (
+      site_id TEXT NOT NULL,
+      task_id TEXT NOT NULL,
+      task_number INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      status TEXT NOT NULL,
+      source TEXT NOT NULL,
+      authority_locus TEXT NOT NULL,
+      mutation_authority TEXT NOT NULL,
+      cloudflare_write_admission TEXT NOT NULL,
+      cutover_point_ref TEXT NOT NULL,
+      governed_write_contract_ref TEXT NOT NULL,
+      confirmation_evidence_ref TEXT NOT NULL,
+      task_json TEXT NOT NULL,
+      created_by_principal_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (site_id, task_id)
+    )
+  `).run();
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_cloudflare_task_lifecycle_tasks_site_number
+    ON cloudflare_task_lifecycle_tasks(site_id, task_number)
+  `).run();
+}
+
+async function nextCloudflareTaskLifecycleTaskNumber(db, siteId) {
+  const row = await db.prepare('SELECT COALESCE(MAX(task_number), 0) + 1 AS next_task_number FROM cloudflare_task_lifecycle_tasks WHERE site_id = ?')
+    .bind(siteId)
+    .first();
+  return Number(row?.next_task_number ?? 1);
+}
+
+async function listCloudflareTaskLifecycleTasks(env = {}, siteId, limit) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function' || !siteId) return [];
+  await ensureCloudflareTaskLifecycleTaskSchema(db);
+  const boundedLimit = clampInteger(limit, 0, 100, 25);
+  const rows = await db.prepare(`
+    SELECT * FROM cloudflare_task_lifecycle_tasks
+    WHERE site_id = ?
+    ORDER BY task_number ASC
+    LIMIT ?
+  `).bind(siteId, boundedLimit).all();
+  return (rows.results ?? []).map((row) => ({
+    schema: CLOUDFLARE_TASK_LIFECYCLE_TASK_SCHEMA,
+    site_id: row.site_id,
+    task_id: row.task_id,
+    task_number: Number(row.task_number),
+    title: row.title,
+    description: row.description ?? null,
+    status: row.status,
+    source: row.source,
+    authority_locus: row.authority_locus,
+    mutation_authority: row.mutation_authority,
+    cloudflare_write_admission: row.cloudflare_write_admission,
+    cutover_point_ref: row.cutover_point_ref,
+    governed_write_contract_ref: row.governed_write_contract_ref,
+    confirmation_evidence_ref: row.confirmation_evidence_ref,
+    created_by_principal_id: row.created_by_principal_id,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  }));
 }
 
 function createTaskLifecycleShadowRead(siteId, params = {}) {
