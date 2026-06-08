@@ -44,6 +44,8 @@ function runNaradaProperLegacyLauncherIfNeeded(argv, rootDir, naradaProperRoot) 
     '--runtime',
     '--startup-task-number',
     '--agent-tui-max-steps',
+    '--starting-carrier-input',
+    '--starting-carrier-input-file',
     '--agent-tui-starting-directive',
     '--agent-tui-starting-directive-file',
   ]);
@@ -591,41 +593,41 @@ function siteCarrierSessionPath(sessionId) {
   return join(sessionSiteRoot, '.narada', 'crew', 'nars-sessions', sessionId, 'session.jsonl');
 }
 
-function materializeAgentTuiLaunchFiles(sessionId) {
+function materializeCarrierLaunchFiles(sessionId, startingCarrierInput) {
   const controlPath = siteCarrierControlPath(sessionId);
   const sessionPath = siteCarrierSessionPath(sessionId);
   mkdirSync(dirname(controlPath), { recursive: true });
   if (!existsSync(controlPath)) writeFileSync(controlPath, '', 'utf8');
   if (!existsSync(sessionPath)) writeFileSync(sessionPath, '', 'utf8');
-  const startingDirective = resolveAgentTuiStartingDirective();
-  if (startingDirective !== null) {
+  if (startingCarrierInput?.content) {
     const existingControl = readFileSync(controlPath, 'utf8');
     if (existingControl.trim().length === 0) {
-      const token = identityToken(`${sessionId}_starting_directive`);
+      const now = new Date().toISOString();
+      const token = identityToken(`${sessionId}_starting_carrier_input`);
       const controlRecord = {
         schema: 'narada.carrier.control.input_event.v1',
         control_event_id: `control_${token}`,
         input_event_id: `input_${token}`,
-        written_at: new Date().toISOString(),
+        written_at: now,
         input: {
           schema: 'narada.carrier.input_event.v1',
           event_id: `input_${token}`,
           source_kind: 'system',
-          source_id: 'agent-start.starting_directive',
+          source_id: 'agent-start.starting_carrier_input',
           transport: 'startup_injection',
           delivery_mode: 'admit_for_current_turn',
           hold_condition: null,
-          content: startingDirective,
-          created_at: new Date().toISOString(),
+          content: startingCarrierInput.content,
+          created_at: now,
           authority_ref: `agent_start_event:${startResult.agent_start_event}`,
-          directive_id: `directive_${token}`,
+          directive_id: `dir_${token}`,
           metadata: {
             agent_start_event_id: startResult.agent_start_event,
             carrier_session_id: sessionId,
             startup_injection: true,
             directive_provenance: {
-              kind: 'operator_authorized_system_starting_directive',
-              authorized_by: 'operator_launch_argument',
+              kind: 'operator_authorized_system_starting_carrier_input',
+              authorized_by: startingCarrierInput.source,
               emitted_by: 'agent-start',
             },
           },
@@ -636,17 +638,57 @@ function materializeAgentTuiLaunchFiles(sessionId) {
   }
 }
 
-function resolveAgentTuiStartingDirective() {
-  const inline = args.agent_tui_starting_directive;
-  const file = args.agent_tui_starting_directive_file;
-  if (inline !== undefined && file !== undefined) {
-    throw new Error('agent_tui_starting_directive_source_ambiguous');
+function resolveStartingCarrierInput() {
+  const sources = [
+    args.starting_carrier_input !== undefined ? 'starting_carrier_input' : null,
+    args.starting_carrier_input_file !== undefined ? 'starting_carrier_input_file' : null,
+    args.agent_tui_starting_directive !== undefined ? 'agent_tui_starting_directive' : null,
+    args.agent_tui_starting_directive_file !== undefined ? 'agent_tui_starting_directive_file' : null,
+  ].filter(Boolean);
+  if (sources.length === 0) return null;
+  const legacyOnly = sources.every((source) => String(source).startsWith('agent_tui_'));
+  if (sources.length > 1) {
+    if (legacyOnly) throw new Error('agent_tui_starting_directive_source_ambiguous');
+    throw new Error('starting_carrier_input_source_ambiguous');
   }
-  if (inline === undefined && file === undefined) return null;
-  if (file !== undefined && !existsSync(file)) throw new Error(`agent_tui_starting_directive_file_missing: ${file}`);
+  const source = sources[0];
+  const file = source.endsWith('_file')
+    ? source === 'starting_carrier_input_file'
+      ? args.starting_carrier_input_file
+      : args.agent_tui_starting_directive_file
+    : undefined;
+  const inline = source === 'starting_carrier_input'
+    ? args.starting_carrier_input
+    : source === 'agent_tui_starting_directive'
+      ? args.agent_tui_starting_directive
+      : undefined;
+  if (file !== undefined && !existsSync(file)) {
+    if (source === 'agent_tui_starting_directive_file') throw new Error(`agent_tui_starting_directive_file_missing: ${file}`);
+    throw new Error(`starting_carrier_input_file_missing: ${file}`);
+  }
   const text = file !== undefined ? readFileSync(file, 'utf8') : String(inline ?? '');
-  if (text.trim().length === 0) throw new Error('agent_tui_starting_directive_empty');
-  return text.trimEnd();
+  if (text.trim().length === 0) {
+    if (source.startsWith('agent_tui_')) throw new Error('agent_tui_starting_directive_empty');
+    throw new Error('starting_carrier_input_empty');
+  }
+  return {
+    schema: 'narada.agent_start.starting_carrier_input.v1',
+    status: 'configured',
+    source,
+    file: file ?? null,
+    content: text.trimEnd(),
+  };
+}
+
+function startingCarrierInputOutput(startingCarrierInput) {
+  if (!startingCarrierInput) return { schema: 'narada.agent_start.starting_carrier_input.v1', status: 'none' };
+  return {
+    schema: startingCarrierInput.schema,
+    status: startingCarrierInput.status,
+    source: startingCarrierInput.source,
+    file: startingCarrierInput.file,
+    content_preview: startingCarrierInput.content.slice(0, 160),
+  };
 }
 
 function resolveRuntimeCommand(runtimeName) {
@@ -1212,7 +1254,7 @@ const toolFabricAdapter = resolveToolFabricAdapter(runtime);
 const execCommand = [resolveRuntimeCommand(runtime), ...spawnArgs].join(' ');
 const carrierEnvironment = carrierSessionRegistration.environment ?? {};
 const agentTuiEnvironment = agentTuiTerminalEnvironment();
-const agentTuiStartingDirective = runtime === AGENT_TUI_RUNTIME ? resolveAgentTuiStartingDirective() : null;
+const startingCarrierInput = resolveStartingCarrierInput();
 const environmentSiteRoot = sessionSiteRoot;
 const workspaceRoot = process.cwd();
 const requiredEnvironment = {
@@ -1286,6 +1328,7 @@ const output = {
   NARADA_WORKSPACE_ROOT: workspaceRoot, NARADA_AGENT_CONTEXT_DB: dbPath }
     : startResult.would_set_environment,
   carrier_session: carrierSessionRegistration,
+  starting_carrier_input: startingCarrierInputOutput(startingCarrierInput),
   exec: execFlag,
   carrier_actions: carrierActions,
   native_shell_exception: nativeShellExceptionStatus(),
@@ -1318,8 +1361,8 @@ if (carrierSessionRegistration.status !== 'registered') {
   process.exit(1);
 }
 
-if (runtime === AGENT_TUI_RUNTIME) {
-  materializeAgentTuiLaunchFiles(carrierSessionRegistration.carrier_session_id);
+if (runtime === 'agent-cli' || runtime === AGENT_TUI_RUNTIME) {
+  materializeCarrierLaunchFiles(carrierSessionRegistration.carrier_session_id, startingCarrierInput);
 }
 
 const child = spawn(resolveRuntimeCommand(runtime), spawnArgs, {

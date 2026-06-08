@@ -194,6 +194,45 @@ test('agent-tui starting directive file must exist', () => {
   assert.match(result.stderr, /agent_tui_starting_directive_file_missing/);
 });
 
+test('starting carrier input is runtime-neutral for agent-cli', () => {
+  const output = runOk(['--runtime', 'agent-cli', '--starting-carrier-input', 'Operation: test startup input']);
+  assert.equal(output.starting_carrier_input.status, 'configured');
+  assert.equal(output.starting_carrier_input.source, 'starting_carrier_input');
+  assert.match(output.starting_carrier_input.content_preview, /Operation: test startup input/);
+});
+
+test('starting carrier input file is runtime-neutral for agent-tui', () => {
+  const directivePath = join(mkdtempSync(join(tmpdir(), 'narada-agent-start-input-')), 'directive.md');
+  writeFileSync(directivePath, 'Operation: file startup input', 'utf8');
+  const output = runOk(['--runtime', 'agent-tui', '--starting-carrier-input-file', directivePath], agentTuiEnv());
+  assert.equal(output.starting_carrier_input.status, 'configured');
+  assert.equal(output.starting_carrier_input.source, 'starting_carrier_input_file');
+  assert.equal(output.starting_carrier_input.file, directivePath);
+  assert.match(output.starting_carrier_input.content_preview, /Operation: file startup input/);
+});
+
+test('starting carrier input sources are mutually exclusive', () => {
+  const result = runFailed([
+    '--runtime',
+    'agent-cli',
+    '--starting-carrier-input',
+    'inline directive',
+    '--starting-carrier-input-file',
+    join(naradaProperRoot, 'README.md'),
+  ]);
+  assert.match(result.stderr, /starting_carrier_input_source_ambiguous/);
+});
+
+test('starting carrier input file must exist', () => {
+  const result = runFailed([
+    '--runtime',
+    'agent-cli',
+    '--starting-carrier-input-file',
+    join(naradaProperRoot, 'missing-starting-carrier-input.txt'),
+  ]);
+  assert.match(result.stderr, /starting_carrier_input_file_missing/);
+});
+
 
 
 

@@ -13,6 +13,8 @@ param(
   [switch]$AgentTuiProviderExecution,
   [switch]$AgentTuiMcpFabric,
   [int]$AgentTuiMaxSteps,
+  [string]$StartingCarrierInput,
+  [string]$StartingCarrierInputFile,
   [string]$AgentTuiStartingDirective,
   [string]$AgentTuiStartingDirectiveFile
 )
@@ -45,6 +47,8 @@ if ($AgentTuiInteractiveLoop) { $flags += "--agent-tui-interactive-loop" }
 if ($AgentTuiProviderExecution) { $flags += "--agent-tui-provider-execution" }
 if ($AgentTuiMcpFabric) { $flags += "--agent-tui-mcp-fabric" }
 if ($AgentTuiMaxSteps -gt 0) { $flags += @("--agent-tui-max-steps", [string]$AgentTuiMaxSteps) }
+if ($StartingCarrierInput) { $flags += @("--starting-carrier-input", $StartingCarrierInput) }
+if ($StartingCarrierInputFile) { $flags += @("--starting-carrier-input-file", $StartingCarrierInputFile) }
 if ($AgentTuiStartingDirective) { $flags += @("--agent-tui-starting-directive", $AgentTuiStartingDirective) }
 if ($AgentTuiStartingDirectiveFile) { $flags += @("--agent-tui-starting-directive-file", $AgentTuiStartingDirectiveFile) }
 
