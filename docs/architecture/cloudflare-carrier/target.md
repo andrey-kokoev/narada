@@ -304,6 +304,8 @@ Cloudflare hosting does not grant authority.
 
 The carrier may enforce policy and mediate effects, but durable mutation authority remains with the declared Site, task lifecycle, inbox/outbox, repository publication, credential, or external substrate authority.
 
+Cloudflare may record a task-lifecycle shadow read from a local Windows Site, but that read is projection evidence only. The record must preserve `mutation_authority = windows_task_lifecycle_sqlite` and `cloudflare_write_admission = not_admitted`; it must not create a Cloudflare task write path or imply task lifecycle authority migration.
+
 Cloudflare secrets and bindings are host capabilities. They are not carrier permissions by themselves. Any effectful use must cross the appropriate carrier admission boundary and emit evidence.
 
 ## Synchronized Site Embodiments

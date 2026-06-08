@@ -89,6 +89,9 @@ The lower-level commands remain available for narrow checks:
 ```powershell
 pnpm --filter @narada2/cloudflare-carrier smoke:live -- --url <worker-url> --token-file <path> --expect-tool-effect-posture configured
 pnpm site:continuity:loop -- sync-cloudflare --site <site_id> --url <worker-url> --token-file <path>
+pnpm --filter @narada2/cloudflare-carrier task-lifecycle:shadow-smoke:live -- --url <worker-url> --token-file <path> --payload-file <path-to-windows-shadow-read.json>
 ```
+
+The task-lifecycle shadow smoke records Windows task lifecycle state as Cloudflare read-model evidence only. It must report `mutation_authority = windows_task_lifecycle_sqlite` and `cloudflare_write_admission = not_admitted`.
 
 Use the root operator command when the question is whether the live Cloudflare embodiment is ready for an operator to enter.
