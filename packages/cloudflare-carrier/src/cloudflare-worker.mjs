@@ -1851,6 +1851,8 @@ export function renderCloudflareCarrierConsole() {
       <div class="product-panel">
         <h2>Site Product</h2>
         <div class="actions"><button id="readSite" class="secondary">Read Site</button></div>
+        <h3>Site Focus Detail</h3>
+        <div id="siteFocusDetail" class="evidence-summary"><div class="empty">No site loaded.</div></div>
       </div>
       <div class="product-panel">
         <h2>Site Continuity</h2>
@@ -1917,7 +1919,7 @@ export function renderCloudflareCarrierConsole() {
   </main>
   <script type="module">
     const WORKBENCH_STORAGE_KEY = 'narada.cloudflare.operationWorkbench.v1';
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, operations: [], consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, operations: [], consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -2646,6 +2648,7 @@ export function renderCloudflareCarrierConsole() {
       state.operationProduct = product;
       state.operations = product.operations || [];
       renderOperatorIdentity(product.reader_principal || state.operatorPrincipal);
+      renderSiteFocusDetail(product.site || state.siteFocus);
       el('siteStatus').textContent = product.site?.status || 'unknown';
       el('operationStatus').textContent = 'site scope';
       el('membershipRole').textContent = product.membership?.role || 'none';
@@ -2706,6 +2709,7 @@ export function renderCloudflareCarrierConsole() {
     function renderOperationProduct(product) {
       state.operationProduct = product;
       renderOperatorIdentity(product.reader_principal || state.operatorPrincipal);
+      renderSiteFocusDetail(product.site || state.siteFocus);
       if (product.operation?.operation_id && !state.operations.some((operation) => operation.operation_id === product.operation.operation_id)) {
         state.operations = [product.operation, ...state.operations];
       }
@@ -2850,6 +2854,25 @@ export function renderCloudflareCarrierConsole() {
         return;
       }
       el('runtimePostureDetail').replaceChildren(...runtimePostureContext(state.runtimeStatus).map(([label, value]) => evidenceField(label, value)));
+    }
+    function siteFocusContext(site = {}) {
+      return [
+        ['Site', site.site_id || el('siteId').value.trim() || 'none'],
+        ['Display Name', site.display_name || 'none'],
+        ['Status', site.status || 'unknown'],
+        ['Site Ref', site.site_ref || 'none'],
+        ['Site Root', site.site_root || 'none'],
+        ['Created', site.created_at || 'none'],
+        ['Updated', site.updated_at || 'none'],
+      ];
+    }
+    function renderSiteFocusDetail(site = state.siteFocus) {
+      state.siteFocus = site || state.siteFocus;
+      if (!state.siteFocus) {
+        el('siteFocusDetail').innerHTML = '<div class="empty">No site loaded.</div>';
+        return;
+      }
+      el('siteFocusDetail').replaceChildren(...siteFocusContext(state.siteFocus).map(([label, value]) => evidenceField(label, value)));
     }
     function evidenceMeaning(event) {
       const payload = event.payload || {};
