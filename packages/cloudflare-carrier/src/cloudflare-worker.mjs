@@ -2104,6 +2104,13 @@ export function renderCloudflareCarrierConsole() {
       <div class="product-panel">
         <h2>Session Navigator</h2>
         <div id="sessionNavigator" class="attention-items"><div class="empty">No operation sessions loaded.</div></div>
+        <h3>Session Action</h3>
+        <div id="sessionActionSummary" class="evidence-summary"><div class="empty">No session action loaded.</div></div>
+        <div class="actions">
+          <button id="sessionActionUseSession" class="secondary">Use Focused Session</button>
+          <button id="sessionActionReadEvidence" class="secondary">Read Focused Evidence</button>
+          <button id="sessionActionFocusEvidence" class="secondary">Focus Session Evidence</button>
+        </div>
         <h3>Session Focus Detail</h3>
         <div id="sessionFocusDetail" class="evidence-summary"><div class="empty">No session selected.</div></div>
       </div>
@@ -2444,6 +2451,7 @@ export function renderCloudflareCarrierConsole() {
       el('controlEvidenceWindow').textContent = String(surface.carrier_evidence_count ?? state.events.length) + ' evidence groups / ' + state.events.length + ' loaded events';
       el('controlContinuity').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length ?? 0) + ' packets';
       el('controlWorkbenchReadiness').textContent = operationWorkbenchReadiness(product);
+      renderSessionActionSummary();
       renderTaskCommandPreview();
       renderAuthorityActionSummary(product);
       renderContinuityWorkflow(product);
@@ -3154,12 +3162,14 @@ export function renderCloudflareCarrierConsole() {
       state.sessionFocus = session;
       setCurrentSession(session.carrier_session_id);
       focusEvidenceFor((event) => event.carrier_session_id === session.carrier_session_id);
+      renderSessionActionSummary(session);
       updateControlRoom();
     }
     function renderSessionNavigator(sessions = []) {
       if (sessions.length === 0) {
         state.sessionFocus = null;
         el('sessionNavigator').innerHTML = '<div class="empty">No operation sessions loaded.</div>';
+        renderSessionActionSummary();
         renderSessionFocusDetail();
         updateControlRoom();
         return;
@@ -3177,8 +3187,55 @@ export function renderCloudflareCarrierConsole() {
         node.append(title, meta);
         return node;
       }));
+      renderSessionActionSummary();
       renderSessionFocusDetail();
       updateControlRoom();
+    }
+    function focusedSession() {
+      const activeSession = el('sessionId').value.trim();
+      return state.sessionFocus
+        || (state.operationProduct?.sessions || []).find((session) => session.carrier_session_id === activeSession)
+        || (activeSession ? { carrier_session_id: activeSession } : null);
+    }
+    function sessionEvidenceLoaded(session = focusedSession()) {
+      const sessionId = session?.carrier_session_id || el('sessionId').value.trim();
+      if (!sessionId) return false;
+      return state.events.some((event) => event.carrier_session_id === sessionId)
+        || (state.operationProduct?.carrier_evidence || []).some((entry) => entry.carrier_session_id === sessionId && (entry.events || []).length > 0);
+    }
+    function sessionActionContext(session = focusedSession()) {
+      const sessionId = session?.carrier_session_id || el('sessionId').value.trim() || '';
+      const isActive = sessionId && sessionId === el('sessionId').value.trim();
+      const hasEvidence = sessionEvidenceLoaded(session);
+      const nextAction = !sessionId ? 'select_or_start_session'
+        : !isActive ? 'use_focused_session'
+        : hasEvidence ? 'inspect_session_evidence'
+        : 'read_session_evidence';
+      return [
+        ['Session', sessionId || 'none'],
+        ['Active', isActive ? 'yes' : 'no'],
+        ['Status', session?.binding_status || session?.status || 'active'],
+        ['Agent', session?.agent_id || 'none'],
+        ['Operation', session?.operation_id || el('operationId').value.trim() || 'none'],
+        ['Evidence Loaded', hasEvidence ? 'yes' : 'no'],
+        ['Next Action', nextAction],
+      ];
+    }
+    function renderSessionActionSummary(session = focusedSession()) {
+      if (!session) {
+        el('sessionActionSummary').innerHTML = '<div class="empty">No session action loaded.</div>';
+        return;
+      }
+      el('sessionActionSummary').replaceChildren(...sessionActionContext(session).map(([label, value]) => evidenceField(label, value)));
+    }
+    function useFocusedSession() {
+      const session = focusedSession();
+      if (session?.carrier_session_id) selectOperationSession(session);
+    }
+    function focusFocusedSessionEvidence() {
+      const session = focusedSession();
+      const sessionId = session?.carrier_session_id || el('sessionId').value.trim();
+      if (sessionId) focusEvidenceFor((event) => event.carrier_session_id === sessionId);
     }
     function sessionFocusContext(session = {}) {
       const currentSession = session.carrier_session_id || el('sessionId').value.trim() || '';
@@ -3235,6 +3292,7 @@ export function renderCloudflareCarrierConsole() {
       const body = await api.readSessionEvidence();
       appendEvents(body.events || []);
       if ((body.events || []).length > 0) focusEvidence(body.events[0]);
+      renderSessionActionSummary();
       await refreshStatus();
     }
     function membershipKey(membership = {}) {
@@ -4079,6 +4137,9 @@ export function renderCloudflareCarrierConsole() {
     el('useSelectedSession').addEventListener('click', () => setCurrentSession(el('operationSessionSelect').value));
     el('operationSessionSelect').addEventListener('change', () => setCurrentSession(el('operationSessionSelect').value));
     el('readSessionEvidence').addEventListener('click', () => run(readSelectedSessionEvidence));
+    el('sessionActionUseSession').addEventListener('click', useFocusedSession);
+    el('sessionActionReadEvidence').addEventListener('click', () => run(readSelectedSessionEvidence));
+    el('sessionActionFocusEvidence').addEventListener('click', focusFocusedSessionEvidence);
     el('eventKindFilter').addEventListener('change', renderEvents);
     el('eventSessionFilter').addEventListener('change', renderEvents);
     el('raiseAttention').addEventListener('click', () => run(async () => { const body = await api.emitAttention(); appendEvents(body.events || []); await refreshOperation(); }));
