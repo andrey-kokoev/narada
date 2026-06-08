@@ -1036,6 +1036,31 @@ assert.equal(taskLifecycleWriteAdmission.body.mutation_authority, 'windows_task_
 assert.equal(taskLifecycleWriteAdmission.body.cloudflare_write_admission, 'not_admitted');
 assert.equal(taskLifecycleWriteAdmission.body.write_effect, 'none');
 
+const residentDispatch = await postCarrier(workerUrl, bearerToken, {
+  operation: 'resident_dispatch.primary_with_fallback.start',
+  request_id: `operator_check_resident_dispatch_${Date.now()}`,
+  params: {
+    site_id: siteId,
+    operation_id: operationId,
+    carrier_session_id: `carrier_session_operator_check_dispatch_${Date.now()}`,
+    dispatch_decision_id: `operator_check_resident_dispatch_${operationId}`,
+    agent_id: 'narada.operator-check.dispatch',
+    site_root: `cloudflare://${siteId}`,
+    site_ref: siteRef,
+    windows_fallback_ref: 'windows_local_site_resident_loop',
+  },
+});
+assert.equal(residentDispatch.http_status, 200);
+assert.equal(residentDispatch.body.ok, true);
+assert.equal(residentDispatch.body.schema, 'narada.sonar.cloudflare_resident_dispatch_primary_with_windows_fallback.v1');
+assert.equal(residentDispatch.body.status, 'cloudflare_primary_started');
+assert.equal(residentDispatch.body.operation_id, operationId);
+assert.equal(residentDispatch.body.dispatch_authority, 'cloudflare_primary_dispatcher');
+assert.equal(residentDispatch.body.fallback_authority, 'windows_fallback_dispatcher');
+assert.equal(residentDispatch.body.fallback_status, 'available');
+assert.equal(residentDispatch.body.dispatch_action, 'cloudflare_session_start');
+assert.equal(residentDispatch.body.session_start?.event?.event_kind, 'carrier_session_started');
+
 const operationReadAfterContinuity = await postCarrier(workerUrl, bearerToken, {
   operation: 'operation.read',
   request_id: `operator_check_operation_continuity_read_${Date.now()}`,
@@ -1045,6 +1070,7 @@ const operationReadAfterContinuity = await postCarrier(workerUrl, bearerToken, {
     carrier_event_limit: 20,
     session_limit: 10,
     task_lifecycle_write_admission_limit: 10,
+    resident_dispatch_limit: 10,
   },
 });
 assert.equal(operationReadAfterContinuity.http_status, 200);
@@ -1060,6 +1086,7 @@ const operationPersistencePosture = operationReadAfterContinuity.body.cloudflare
 const operationRecoveryPosture = operationReadAfterContinuity.body.cloudflare_recovery_posture;
 const taskLifecycleShadowReads = operationReadAfterContinuity.body.task_lifecycle_shadow_reads ?? [];
 const taskLifecycleWriteAdmissions = operationReadAfterContinuity.body.task_lifecycle_write_admissions ?? [];
+const residentDispatchDecisions = operationReadAfterContinuity.body.resident_dispatch_decisions ?? [];
 assert.equal(operationSurface?.operation_id, operationId);
 assert.ok(Array.isArray(operationContinuityPackets));
 assert.ok(operationContinuityPackets.length >= 1);
@@ -1128,6 +1155,18 @@ assert.equal(recordedTaskLifecycleWriteAdmission.admission_reason, 'windows_task
 assert.equal(recordedTaskLifecycleWriteAdmission.mutation_authority, 'windows_task_lifecycle_sqlite');
 assert.equal(recordedTaskLifecycleWriteAdmission.cloudflare_write_admission, 'not_admitted');
 assert.equal(recordedTaskLifecycleWriteAdmission.write_effect, 'none');
+assert.ok(Array.isArray(residentDispatchDecisions));
+assert.ok(residentDispatchDecisions.length >= 1);
+assert.equal(operationSurface?.resident_dispatch_decision_count, residentDispatchDecisions.length);
+const recordedResidentDispatch = residentDispatchDecisions.find((decision) => decision.dispatch_decision_id === residentDispatch.body.decision?.dispatch_decision_id);
+assert.ok(recordedResidentDispatch);
+assert.equal(recordedResidentDispatch.schema, 'narada.sonar.cloudflare_resident_dispatch_primary_with_windows_fallback.v1');
+assert.equal(recordedResidentDispatch.decision_state, 'cloudflare_primary_started');
+assert.equal(recordedResidentDispatch.dispatch_authority, 'cloudflare_primary_dispatcher');
+assert.equal(recordedResidentDispatch.fallback_authority, 'windows_fallback_dispatcher');
+assert.equal(recordedResidentDispatch.fallback_status, 'available');
+assert.equal(recordedResidentDispatch.dispatch_action, 'cloudflare_session_start');
+assert.equal(recordedResidentDispatch.session_start_ok, true);
 for (const read of taskLifecycleShadowReads) {
   assert.equal(read.schema, 'narada.sonar.cloudflare_task_lifecycle_shadow_read.v1');
   assert.equal(read.mutation_authority, 'windows_task_lifecycle_sqlite');
@@ -1181,6 +1220,7 @@ const report = {
     operation_recovery_posture: 'ok',
     task_lifecycle_shadow_read_surface: 'ok',
     task_lifecycle_write_admission_surface: 'ok',
+    resident_dispatch_surface: 'ok',
     human_operator_session: humanOperator.status,
     human_operator_membership: humanOperator.membership_status,
     human_operator_operation_read: humanOperator.operation_status,
@@ -1227,6 +1267,11 @@ const report = {
     task_lifecycle_write_admission_posture: operationSurface.task_lifecycle_write_admission_posture,
     task_lifecycle_mutation_authority: operationSurface.task_lifecycle_mutation_authority,
     task_lifecycle_cloudflare_write_admission: operationSurface.task_lifecycle_cloudflare_write_admission,
+    resident_dispatch_decision_count: operationSurface.resident_dispatch_decision_count,
+    resident_dispatch_last_state: recordedResidentDispatch.decision_state,
+    resident_dispatch_authority: recordedResidentDispatch.dispatch_authority,
+    resident_dispatch_fallback_authority: recordedResidentDispatch.fallback_authority,
+    resident_dispatch_fallback_status: recordedResidentDispatch.fallback_status,
     carrier_evidence_read_status: operationRead.body.carrier_evidence_read_status,
     smoke_session_bound: operationRead.body.sessions.some((session) => session.carrier_session_id === smoke.carrier_session_id),
   },
@@ -1500,6 +1545,7 @@ function sitePostureRouteInvariant(overview = {}, focusedSiteId = '') {
     domain: 'site_posture',
     command_state: needsAttention ? 'site_posture_attention' : 'site_posture_ready',
     status: needsAttention ? 'needs_attention' : 'ready',
+    command_action: needsAttention ? 'focus_next_site' : 'monitor_sites',
     next_action: needsAttention ? 'focus_next_site' : 'monitor_sites',
     target: nextSiteId || 'none',
     reason: overview.next_reason || 'all_sites_ready',
