@@ -665,6 +665,15 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Operation Sessions/);
   assert.match(html, /Active Session/);
   assert.match(html, /Control Room/);
+  assert.match(html, /Control Room Action/);
+  assert.match(html, /controlRoomActionSummary/);
+  assert.match(html, /controlRoomActionContext/);
+  assert.match(html, /renderControlRoomActionSummary/);
+  assert.match(html, /applyControlRoomNextAction/);
+  assert.match(html, /controlRoomNextAction/);
+  assert.match(html, /select_site_or_operation/);
+  assert.match(html, /membership_authority_bridge_needs_attention/);
+  assert.match(html, /workbench_ready_for_monitoring/);
   assert.match(html, /Operation Flight Deck/);
   assert.match(html, /Continuity Workflow/);
   assert.match(html, /continuityWorkflow/);

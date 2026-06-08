@@ -2269,6 +2269,9 @@ export function renderCloudflareCarrierConsole() {
           <div class="control-room-item"><b>Continuity</b><span id="controlContinuity">unknown</span></div>
           <div class="control-room-item"><b>Workbench Readiness</b><span id="controlWorkbenchReadiness">not loaded</span></div>
         </div>
+        <h3>Control Room Action</h3>
+        <div id="controlRoomActionSummary" class="evidence-summary"><div class="empty">No control room action loaded.</div></div>
+        <div class="actions"><button id="controlRoomNextAction" class="secondary">Apply Control Room Next Action</button></div>
       </div>
       <div class="product-panel">
         <h2>Product Scope</h2>
@@ -2682,6 +2685,7 @@ export function renderCloudflareCarrierConsole() {
       el('controlEvidenceWindow').textContent = String(surface.carrier_evidence_count ?? state.events.length) + ' evidence groups / ' + state.events.length + ' loaded events';
       el('controlContinuity').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length ?? 0) + ' packets';
       el('controlWorkbenchReadiness').textContent = operationWorkbenchReadiness(product);
+      renderControlRoomActionSummary(product);
       renderSiteActionSummary();
       renderMembershipActionSummary();
       renderOperationActionSummary();
@@ -2722,6 +2726,7 @@ export function renderCloudflareCarrierConsole() {
       el('productScopeDetail').replaceChildren(...productScopeContext(product).map(([label, value]) => evidenceField(label, value)));
     }
     function operationWorkbenchReadiness(product = {}) {
+      const surface = product.operation_product_surface || {};
       const missing = [];
       if (!product.operation && !el('operationId').value.trim()) missing.push('operation');
       if ((product.sessions || []).length === 0 && !el('sessionId').value.trim()) missing.push('session');
@@ -2733,6 +2738,80 @@ export function renderCloudflareCarrierConsole() {
         if ((product.webhook_delay_shadow_observations || []).length === 0) missing.push('shadow-read');
       }
       return missing.length === 0 ? 'ready' : 'missing ' + missing.join(', ');
+    }
+    function contextValue(context, label) {
+      return (context || []).find(([key]) => key === label)?.[1] || '';
+    }
+    function controlRoomActionContext(product = state.operationProduct || {}) {
+      const siteId = product.site?.site_id || product.operation?.site_id || el('siteId').value.trim() || '';
+      const operationId = product.operation?.operation_id || el('operationId').value.trim() || '';
+      const sessionId = el('sessionId').value.trim();
+      const siteAction = String(contextValue(siteActionContext(), 'Next Action'));
+      const membershipAction = String(contextValue(membershipActionContext(), 'Next Action'));
+      const operationAction = String(contextValue(operationActionContext(), 'Next Action'));
+      const sessionAction = String(contextValue(sessionActionContext(), 'Next Action'));
+      const authorityAction = String(contextValue(authorityActionContext(product), 'Next Action'));
+      const targets = operationFlightDeckTargets(product);
+      const next = (() => {
+        if (!siteId && !operationId) return { domain: 'site', action: 'select_site_or_operation', target: 'none', reason: 'no_site_or_operation_loaded' };
+        if (state.productScope === 'none') {
+          return operationId
+            ? { domain: 'product_scope', action: 'read_operation_scope', target: operationId, reason: 'operation_scope_not_loaded' }
+            : { domain: 'product_scope', action: 'read_site_scope', target: siteId, reason: 'site_scope_not_loaded' };
+        }
+        if (siteAction === 'create_or_select_operation') {
+          return { domain: 'site', action: 'focus_site_operation', target: siteId, reason: 'site_has_no_active_operation_focus' };
+        }
+        if (siteAction === 'read_site_authority') {
+          return { domain: 'authority', action: 'read_site_authority', target: siteId, reason: 'site_authority_not_loaded' };
+        }
+        if (membershipAction && !['enter_principal', 'monitor_membership_authority'].includes(membershipAction)) {
+          return { domain: 'membership', action: membershipAction, target: contextValue(membershipActionContext(), 'Principal') || 'none', reason: 'membership_authority_bridge_needs_attention' };
+        }
+        if (operationAction && !['inspect_operation_evidence'].includes(operationAction)) {
+          return { domain: 'operation', action: operationAction, target: operationId || 'none', reason: 'operation_focus_or_scope_needs_attention' };
+        }
+        if (sessionAction && !['inspect_session_evidence'].includes(sessionAction)) {
+          return { domain: 'session', action: sessionAction, target: sessionId || contextValue(sessionActionContext(), 'Session') || 'none', reason: 'session_focus_or_evidence_needs_attention' };
+        }
+        if (authorityAction && !['monitor_authority_admissions'].includes(authorityAction)) {
+          return { domain: 'authority', action: authorityAction, target: contextValue(authorityActionContext(product), 'Focused Decision') || 'authority', reason: 'authority_state_needs_attention' };
+        }
+        if (targets.attention && targets.attention.status !== 'resolved') {
+          return { domain: 'attention', action: 'focus_open_attention', target: targets.attention.directive_id || 'attention', reason: 'open_operation_attention' };
+        }
+        if (targets.task && !['done', 'closed', 'resolved'].includes(String(targets.task.status || '').toLowerCase())) {
+          return { domain: 'task', action: 'focus_open_task', target: targets.task.task_id || 'task', reason: 'open_task_lifecycle' };
+        }
+        return { domain: 'evidence', action: 'monitor_operation_evidence', target: sessionId || operationId || siteId || 'control_room', reason: 'workbench_ready_for_monitoring' };
+      })();
+      return [
+        ['Domain', next.domain],
+        ['Action', next.action],
+        ['Target', next.target],
+        ['Reason', next.reason],
+        ['Readiness', operationWorkbenchReadiness(product)],
+      ];
+    }
+    function renderControlRoomActionSummary(product = state.operationProduct || {}) {
+      el('controlRoomActionSummary').replaceChildren(...controlRoomActionContext(product).map(([label, value]) => evidenceField(label, value)));
+    }
+    function applyControlRoomNextAction() {
+      const product = state.operationProduct || {};
+      const action = String(contextValue(controlRoomActionContext(product), 'Action'));
+      if (action === 'read_site_scope' || action === 'read_membership_site') { run(refreshSiteProduct); return; }
+      if (action === 'read_operation_scope') { run(refreshOperation); return; }
+      if (action === 'focus_site_operation') { focusSiteOperation(); return; }
+      if (action === 'put_membership') { run(putFocusedMembership); return; }
+      if (action === 'focus_membership_authority' || action === 'inspect_inactive_membership') { focusMembershipAuthority(); return; }
+      if (action === 'use_focused_operation') { useFocusedOperation(); return; }
+      if (action === 'read_operation_evidence') { run(refreshOperation); return; }
+      if (action === 'focus_operation_session' || action === 'start_or_select_session') { focusOperationSession(); return; }
+      if (action === 'use_focused_session') { useFocusedSession(); return; }
+      if (action === 'read_session_evidence') { run(readSelectedSessionEvidence); return; }
+      if (action === 'focus_authority_evidence' || action === 'inspect_refused_authority' || action === 'resolve_authority_locus' || action === 'read_site_authority') { applyAuthorityNextAction(); return; }
+      if (action === 'focus_open_attention' || action === 'focus_open_task' || action === 'monitor_operation_evidence') { applyFlightDeckNextAction(); return; }
+      applyFlightDeckNextAction();
     }
     function operationFlightDeckContext(product = {}) {
       const surface = product.operation_product_surface || {};
@@ -4569,6 +4648,7 @@ export function renderCloudflareCarrierConsole() {
     el('operationActionUseOperation').addEventListener('click', useFocusedOperation);
     el('operationActionReadOperation').addEventListener('click', () => run(refreshOperation));
     el('operationActionFocusSession').addEventListener('click', focusOperationSession);
+    el('controlRoomNextAction').addEventListener('click', applyControlRoomNextAction);
     el('continuityWorkflowNextAction').addEventListener('click', applyContinuityWorkflowNextStep);
     el('authorityNextAction').addEventListener('click', applyAuthorityNextAction);
     el('authorityReadSiteAction').addEventListener('click', () => run(refreshSiteProduct));
