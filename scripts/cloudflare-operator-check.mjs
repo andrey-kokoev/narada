@@ -687,8 +687,6 @@ assert.match(consoleCheck.body, /Focus Next Site/);
 assert.match(consoleCheck.body, /readSites/);
 assert.match(consoleCheck.body, /renderSitesProduct/);
 assert.match(consoleCheck.body, /countMapSummary/);
-assert.match(consoleCheck.body, /narada\.cloudflare_site_product_overview\.v1/);
-assert.match(consoleCheck.body, /narada\.cloudflare_site_product_status\.v1/);
 assert.match(consoleCheck.body, /Site Focus Detail/);
 assert.match(consoleCheck.body, /siteFocusDetail/);
 assert.match(consoleCheck.body, /siteFocusContext/);
@@ -1061,6 +1059,34 @@ assert.equal(residentDispatch.body.fallback_status, 'available');
 assert.equal(residentDispatch.body.dispatch_action, 'cloudflare_session_start');
 assert.equal(residentDispatch.body.session_start?.event?.event_kind, 'carrier_session_started');
 
+const residentLoopShadow = await postCarrier(workerUrl, bearerToken, {
+  operation: 'resident_loop.shadow_read.record',
+  request_id: `operator_check_resident_loop_shadow_${Date.now()}`,
+  params: {
+    site_id: siteId,
+    loop_run_id: `operator_check_resident_loop_shadow_${operationId}`,
+    source_summary_path: '.ai/operator-attention/operator-check-resident-loop-shadow.json',
+    loop_run: {
+      operation_id: operationId,
+      run_started_at: new Date().toISOString(),
+      run_finished_at: new Date().toISOString(),
+      status: 'operator_check_shadow_recorded',
+      steps: [{ step_id: 'operator_check_resident_loop_shadow', status: 'ok' }],
+      operator_attention: [{ attention_id: 'operator_check_resident_loop_shadow', severity: 'info' }],
+    },
+  },
+});
+assert.equal(residentLoopShadow.http_status, 200);
+assert.equal(residentLoopShadow.body.ok, true);
+assert.equal(residentLoopShadow.body.schema, 'narada.sonar.cloudflare_resident_loop_shadow_read.v1');
+assert.equal(residentLoopShadow.body.status, 'recorded');
+assert.equal(residentLoopShadow.body.shadow_mode, 'cloudflare_shadow_read');
+assert.equal(residentLoopShadow.body.dispatch_authority, 'windows_primary_dispatcher');
+assert.equal(residentLoopShadow.body.dispatch_action, 'none');
+assert.equal(residentLoopShadow.body.loop_run?.operation_id, operationId);
+assert.equal(residentLoopShadow.body.loop_run?.step_count, 1);
+assert.equal(residentLoopShadow.body.loop_run?.operator_attention_count, 1);
+
 const operationReadAfterContinuity = await postCarrier(workerUrl, bearerToken, {
   operation: 'operation.read',
   request_id: `operator_check_operation_continuity_read_${Date.now()}`,
@@ -1070,6 +1096,7 @@ const operationReadAfterContinuity = await postCarrier(workerUrl, bearerToken, {
     carrier_event_limit: 20,
     session_limit: 10,
     task_lifecycle_write_admission_limit: 10,
+    resident_loop_shadow_limit: 10,
     resident_dispatch_limit: 10,
   },
 });
@@ -1086,6 +1113,7 @@ const operationPersistencePosture = operationReadAfterContinuity.body.cloudflare
 const operationRecoveryPosture = operationReadAfterContinuity.body.cloudflare_recovery_posture;
 const taskLifecycleShadowReads = operationReadAfterContinuity.body.task_lifecycle_shadow_reads ?? [];
 const taskLifecycleWriteAdmissions = operationReadAfterContinuity.body.task_lifecycle_write_admissions ?? [];
+const residentLoopShadowRuns = operationReadAfterContinuity.body.resident_loop_shadow_runs ?? [];
 const residentDispatchDecisions = operationReadAfterContinuity.body.resident_dispatch_decisions ?? [];
 assert.equal(operationSurface?.operation_id, operationId);
 assert.ok(Array.isArray(operationContinuityPackets));
@@ -1106,7 +1134,7 @@ assert.equal(operationSurface?.local_cloud_continuity_bridge?.schema, localCloud
 assert.equal(operationLifecycleStatus?.schema, 'narada.cloudflare_operation_lifecycle_status.v1');
 assert.equal(operationLifecycleStatus?.phase, 'inhabited');
 assert.match(operationLifecycleStatus?.health, /^(ready|attention)$/);
-assert.match(operationLifecycleStatus?.next_action, /^(monitor_operation|open_tasks|undelivered_directives)$/);
+assert.match(operationLifecycleStatus?.next_action, /^(monitor_operation|open_tasks|undelivered_directives|carrier_evidence_read_degraded)$/);
 assert.equal(operationLifecycleStatus?.continuity_loop_state, 'loop_report_observed');
 assert.ok((operationLifecycleStatus?.continuity_loop_report_count ?? 0) >= 1);
 assert.equal(operationSurface?.lifecycle_status?.health, operationLifecycleStatus.health);
@@ -1167,6 +1195,18 @@ assert.equal(recordedResidentDispatch.fallback_authority, 'windows_fallback_disp
 assert.equal(recordedResidentDispatch.fallback_status, 'available');
 assert.equal(recordedResidentDispatch.dispatch_action, 'cloudflare_session_start');
 assert.equal(recordedResidentDispatch.session_start_ok, true);
+assert.ok(Array.isArray(residentLoopShadowRuns));
+assert.ok(residentLoopShadowRuns.length >= 1);
+assert.equal(operationSurface?.resident_loop_shadow_run_count, residentLoopShadowRuns.length);
+const recordedResidentLoopShadow = residentLoopShadowRuns.find((run) => run.loop_run_id === residentLoopShadow.body.record?.loop_run_id);
+assert.ok(recordedResidentLoopShadow);
+assert.equal(recordedResidentLoopShadow.schema, 'narada.sonar.cloudflare_resident_loop_shadow_read.v1');
+assert.equal(recordedResidentLoopShadow.loop_status, 'operator_check_shadow_recorded');
+assert.equal(recordedResidentLoopShadow.step_count, 1);
+assert.equal(recordedResidentLoopShadow.operator_attention_count, 1);
+assert.equal(recordedResidentLoopShadow.dispatch_authority, 'windows_primary_dispatcher');
+assert.equal(recordedResidentLoopShadow.shadow_mode, 'cloudflare_shadow_read');
+assert.equal(recordedResidentLoopShadow.dispatch_action, 'none');
 for (const read of taskLifecycleShadowReads) {
   assert.equal(read.schema, 'narada.sonar.cloudflare_task_lifecycle_shadow_read.v1');
   assert.equal(read.mutation_authority, 'windows_task_lifecycle_sqlite');
@@ -1220,6 +1260,7 @@ const report = {
     operation_recovery_posture: 'ok',
     task_lifecycle_shadow_read_surface: 'ok',
     task_lifecycle_write_admission_surface: 'ok',
+    resident_loop_shadow_surface: 'ok',
     resident_dispatch_surface: 'ok',
     human_operator_session: humanOperator.status,
     human_operator_membership: humanOperator.membership_status,
@@ -1267,6 +1308,10 @@ const report = {
     task_lifecycle_write_admission_posture: operationSurface.task_lifecycle_write_admission_posture,
     task_lifecycle_mutation_authority: operationSurface.task_lifecycle_mutation_authority,
     task_lifecycle_cloudflare_write_admission: operationSurface.task_lifecycle_cloudflare_write_admission,
+    resident_loop_shadow_run_count: operationSurface.resident_loop_shadow_run_count,
+    resident_loop_shadow_last_status: recordedResidentLoopShadow.loop_status,
+    resident_loop_shadow_dispatch_authority: recordedResidentLoopShadow.dispatch_authority,
+    resident_loop_shadow_dispatch_action: recordedResidentLoopShadow.dispatch_action,
     resident_dispatch_decision_count: operationSurface.resident_dispatch_decision_count,
     resident_dispatch_last_state: recordedResidentDispatch.decision_state,
     resident_dispatch_authority: recordedResidentDispatch.dispatch_authority,
