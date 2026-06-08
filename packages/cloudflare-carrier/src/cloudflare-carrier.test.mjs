@@ -3405,6 +3405,135 @@ test('worker reads mailbox status from Graph only with Cloudflare-held credentia
   assert.equal(operationReadBody.operation_product_surface.mailbox_authority_partition, 'mailbox_status_source_read_cloudflare_owned_send_and_mutation_not_admitted');
 });
 
+test('worker records mailbox draft reply proposals without admitting Outlook draft creation or send', async () => {
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{
+      site_id: 'site_fixture',
+      site_ref: 'site://fixture',
+      display_name: 'Fixture Site',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+      created_by_principal_id: 'admin',
+    }],
+    memberships: [{
+      site_id: 'site_fixture',
+      principal_id: 'admin',
+      role: 'owner',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+    operations: [{
+      operation_id: 'operation_mailbox_draft_reply',
+      site_id: 'site_fixture',
+      display_name: 'Mailbox Draft Reply Operation',
+      operation_kind: 'operating_layer_update',
+      status: 'active',
+      created_by_principal_id: 'admin',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+  });
+  const env = authEnv(fakeDurableObjectNamespace(), { CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+  const sourcePayload = {
+    schema: 'narada.sonar.mailbox_draft_reply_proposal.v1',
+    generated_at: '2026-06-08T13:00:00.000Z',
+    operation_id: 'operation_mailbox_draft_reply',
+    account_ref: 'help@global-maxima.com',
+    source_message_ref: 'graph-message-fixture-1',
+    proposal_ref: 'mailbox-draft-reply:fixture:1',
+    subject: 'Re: support request',
+    recipient_count: 1,
+    body_preview: 'Thanks for the report. We are checking the webhook delay now.',
+    body_sha256: 'a'.repeat(64),
+    rationale: 'critical webhook delay response draft',
+    proposal_authority: 'cloudflare_carrier_site',
+    mailbox_outlook_draft_create_admission: 'not_admitted',
+    mailbox_send_admission: 'not_admitted',
+    mailbox_mutation_admission: 'not_admitted',
+    windows_draft_executor_fallback: 'available',
+    proposal_posture: 'proposal_only_no_outlook_draft_create',
+  };
+
+  const refusedDraftCreate = await worker.fetch(jsonRequest({
+    operation: 'mailbox.draft_reply_proposal.record',
+    request_id: 'request_mailbox_draft_reply_refused_draft_create',
+    params: {
+      site_id: 'site_fixture',
+      proposal_id: 'mailbox_draft_reply_refused_draft_create',
+      source_payload: { ...sourcePayload, mailbox_outlook_draft_create_admission: 'admitted' },
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(refusedDraftCreate.status, 400);
+  const refusedDraftCreateBody = await refusedDraftCreate.json();
+  assert.equal(refusedDraftCreateBody.code, 'mailbox_draft_reply_proposal_draft_create_admission_invalid');
+
+  const refusedSend = await worker.fetch(jsonRequest({
+    operation: 'mailbox.draft_reply_proposal.record',
+    request_id: 'request_mailbox_draft_reply_refused_send',
+    params: {
+      site_id: 'site_fixture',
+      proposal_id: 'mailbox_draft_reply_refused_send',
+      source_payload: { ...sourcePayload, mailbox_send_admission: 'admitted' },
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(refusedSend.status, 400);
+  const refusedSendBody = await refusedSend.json();
+  assert.equal(refusedSendBody.code, 'mailbox_draft_reply_proposal_send_admission_invalid');
+
+  const recorded = await worker.fetch(jsonRequest({
+    operation: 'mailbox.draft_reply_proposal.record',
+    request_id: 'request_mailbox_draft_reply_record',
+    params: {
+      site_id: 'site_fixture',
+      proposal_id: 'mailbox_draft_reply_fixture_1',
+      source_payload: sourcePayload,
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(recorded.status, 200);
+  const recordedBody = await recorded.json();
+  assert.equal(recordedBody.schema, 'narada.sonar.cloudflare_mailbox_draft_reply_proposal.v1');
+  assert.equal(recordedBody.status, 'recorded');
+  assert.equal(recordedBody.proposal_authority, 'cloudflare_carrier_site');
+  assert.equal(recordedBody.mailbox_outlook_draft_create_admission, 'not_admitted');
+  assert.equal(recordedBody.mailbox_send_admission, 'not_admitted');
+  assert.equal(recordedBody.mailbox_mutation_admission, 'not_admitted');
+  assert.equal(recordedBody.proposal.account_ref, 'help@global-maxima.com');
+  assert.equal(recordedBody.proposal.source_message_ref, 'graph-message-fixture-1');
+  assert.equal(recordedBody.proposal.body_sha256, 'a'.repeat(64));
+  assert.deepEqual(siteDb.dump().mailboxDraftReplyProposals.map((entry) => entry.proposal_id), ['mailbox_draft_reply_fixture_1']);
+
+  const listed = await worker.fetch(jsonRequest({
+    operation: 'mailbox.draft_reply_proposal.list',
+    request_id: 'request_mailbox_draft_reply_list',
+    params: { site_id: 'site_fixture', limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(listed.status, 200);
+  const listedBody = await listed.json();
+  assert.equal(listedBody.proposal_authority, 'cloudflare_carrier_site');
+  assert.equal(listedBody.mailbox_outlook_draft_create_admission, 'not_admitted');
+  assert.equal(listedBody.mailbox_send_admission, 'not_admitted');
+  assert.equal(listedBody.mailbox_mutation_admission, 'not_admitted');
+  assert.deepEqual(listedBody.proposals.map((entry) => entry.proposal_id), ['mailbox_draft_reply_fixture_1']);
+
+  const operationRead = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_mailbox_draft_reply_operation_read',
+    params: { site_id: 'site_fixture', operation_id: 'operation_mailbox_draft_reply', mailbox_draft_reply_proposal_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(operationRead.status, 200);
+  const operationReadBody = await operationRead.json();
+  assert.equal(operationReadBody.mailbox_draft_reply_proposals.length, 1);
+  assert.equal(operationReadBody.operation_product_surface.mailbox_draft_reply_proposal_count, 1);
+  assert.equal(operationReadBody.operation_product_surface.mailbox_draft_reply_proposal_authority, 'cloudflare_carrier_site');
+  assert.equal(operationReadBody.operation_product_surface.mailbox_outlook_draft_create_admission, 'not_admitted');
+  assert.equal(operationReadBody.operation_product_surface.mailbox_send_admission, 'not_admitted');
+  assert.equal(operationReadBody.operation_product_surface.mailbox_mutation_admission, 'not_admitted');
+  assert.equal(operationReadBody.operation_product_surface.mailbox_draft_reply_authority_partition, 'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted');
+  assert.equal(operationReadBody.operation_activity_timeline.items.some((entry) => entry.activity_kind === 'mailbox_draft_reply_proposal'), true);
+});
+
 test('worker records site file change proposals without admitting filesystem or publication mutation', async () => {
   const siteDb = fakeD1SiteRegistryDatabase({
     sites: [{
@@ -6043,6 +6172,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     residentLoopShadowRuns: clone(initial.residentLoopShadowRuns ?? []),
     mailboxStatusShadowReads: clone(initial.mailboxStatusShadowReads ?? []),
     mailboxStatusSourceReads: clone(initial.mailboxStatusSourceReads ?? []),
+    mailboxDraftReplyProposals: clone(initial.mailboxDraftReplyProposals ?? []),
     siteFileChangeProposals: clone(initial.siteFileChangeProposals ?? []),
     siteFileMaterializations: clone(initial.siteFileMaterializations ?? []),
     taskLifecycleShadowReads: clone(initial.taskLifecycleShadowReads ?? []),
@@ -6169,6 +6299,12 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const row = { read_id, site_id, source_locus, source_adapter, generated_at, account_ref, mailbox_status, unread_count, pending_draft_count, pending_send_count, latest_message_at, mailbox_read_authority, mailbox_send_admission, mailbox_mutation_admission, source_response_json, record_json, recorded_by_principal_id, recorded_at };
         if (existing) Object.assign(existing, row);
         else state.mailboxStatusSourceReads.push(row);
+      } else if (normalized.startsWith('insert into cloudflare_mailbox_draft_reply_proposals')) {
+        const [proposal_id, site_id, source_schema, generated_at, operation_id, account_ref, source_message_ref, proposal_ref, subject, recipient_count, body_preview, body_sha256, rationale, proposal_authority, mailbox_outlook_draft_create_admission, mailbox_send_admission, mailbox_mutation_admission, windows_draft_executor_fallback, proposal_posture, proposal_json, recorded_by_principal_id, recorded_at] = bindings;
+        const existing = state.mailboxDraftReplyProposals.find((entry) => entry.proposal_id === proposal_id);
+        const row = { proposal_id, site_id, source_schema, generated_at, operation_id, account_ref, source_message_ref, proposal_ref, subject, recipient_count, body_preview, body_sha256, rationale, proposal_authority, mailbox_outlook_draft_create_admission, mailbox_send_admission, mailbox_mutation_admission, windows_draft_executor_fallback, proposal_posture, proposal_json, recorded_by_principal_id, recorded_at };
+        if (existing) Object.assign(existing, row);
+        else state.mailboxDraftReplyProposals.push(row);
       } else if (normalized.startsWith('insert into cloudflare_site_file_change_proposals')) {
         const [proposal_id, site_id, source_schema, generated_at, operation_id, task_id, proposal_ref, proposal_summary, authority_locus, filesystem_executor_authority, filesystem_mutation_admission, repository_publication_admission, proposal_posture, file_count, proposal_json, recorded_by_principal_id, recorded_at] = bindings;
         const existing = state.siteFileChangeProposals.find((entry) => entry.proposal_id === proposal_id);
@@ -6293,6 +6429,16 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const [siteId, limit] = bindings;
         return {
           results: state.mailboxStatusSourceReads
+            .filter((entry) => entry.site_id === siteId)
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_mailbox_draft_reply_proposals')) {
+        const [siteId, limit] = bindings;
+        return {
+          results: state.mailboxDraftReplyProposals
             .filter((entry) => entry.site_id === siteId)
             .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
             .slice(0, Number(limit))

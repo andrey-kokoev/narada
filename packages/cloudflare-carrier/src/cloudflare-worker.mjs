@@ -48,6 +48,7 @@ const CLOUDFLARE_RESIDENT_LOOP_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_res
 const CLOUDFLARE_RESIDENT_DISPATCH_PRIMARY_SCHEMA = 'narada.sonar.cloudflare_resident_dispatch_primary_with_windows_fallback.v1';
 const CLOUDFLARE_MAILBOX_STATUS_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_mailbox_status_shadow_read.v1';
 const CLOUDFLARE_MAILBOX_STATUS_SOURCE_READ_SCHEMA = 'narada.sonar.cloudflare_mailbox_status_source_read.v1';
+const CLOUDFLARE_MAILBOX_DRAFT_REPLY_PROPOSAL_SCHEMA = 'narada.sonar.cloudflare_mailbox_draft_reply_proposal.v1';
 const CLOUDFLARE_SITE_FILE_CHANGE_PROPOSAL_SCHEMA = 'narada.sonar.cloudflare_site_file_change_proposal.v1';
 const CLOUDFLARE_SITE_FILE_MATERIALIZATION_SCHEMA = 'narada.sonar.cloudflare_site_file_materialization.v1';
 const CLOUDFLARE_TASK_LIFECYCLE_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_shadow_read.v1';
@@ -76,6 +77,7 @@ const CLOUDFLARE_PRIMARY_DISPATCH_AUTHORITY = 'cloudflare_primary_dispatcher';
 const WINDOWS_PRIMARY_DISPATCH_AUTHORITY = 'windows_primary_dispatcher';
 const WINDOWS_FALLBACK_DISPATCH_AUTHORITY = 'windows_fallback_dispatcher';
 const CLOUDFLARE_MAILBOX_STATUS_SOURCE_AUTHORITY = 'cloudflare_graph_mailbox_status_source';
+const CLOUDFLARE_MAILBOX_DRAFT_REPLY_PROPOSAL_AUTHORITY = 'cloudflare_carrier_site';
 const DEFAULT_WEBHOOK_DELAY_CRITICAL_MINUTES = 15;
 const CLOUDFLARE_RUNTIME_METADATA_READ_CAPABILITY = Object.freeze({
   capability_ref: CLOUDFLARE_RUNTIME_METADATA_READ_CAPABILITY_REF,
@@ -2124,6 +2126,7 @@ function summarizeCloudflareOperationActivityTimeline({
   webhookDelayDirectiveRecords = [],
   webhookDelayDirectiveDeliveries = [],
   residentLoopShadowRuns = [],
+  mailboxDraftReplyProposals = [],
   residentDispatchDecisions = [],
 } = {}) {
   const operationId = operation?.operation_id ?? null;
@@ -2270,6 +2273,19 @@ function summarizeCloudflareOperationActivityTimeline({
       focus_kind: 'resident_loop_shadow_read',
       focus_ref: run.loop_run_id,
       principal_id: run.recorded_by_principal_id,
+    });
+  }
+  for (const proposal of mailboxDraftReplyProposals || []) {
+    push({
+      activity_id: `mailbox_draft_reply_proposal:${proposal.proposal_id}`,
+      activity_kind: 'mailbox_draft_reply_proposal',
+      occurred_at: proposal.recorded_at || proposal.generated_at,
+      title: 'Mailbox Draft Reply Proposal',
+      summary: [proposal.account_ref, proposal.source_message_ref, proposal.proposal_posture].filter(Boolean).join(' / ') || 'draft reply proposal recorded',
+      source_ref: proposal.proposal_id,
+      focus_kind: 'mailbox_draft_reply_proposal',
+      focus_ref: proposal.proposal_id,
+      principal_id: proposal.recorded_by_principal_id,
     });
   }
   for (const decision of residentDispatchDecisions || []) {
@@ -2690,6 +2706,8 @@ function isSiteProductOperation(operation) {
     'mailbox.status_shadow.list',
     'mailbox.status_source.read',
     'mailbox.status_source.list',
+    'mailbox.draft_reply_proposal.record',
+    'mailbox.draft_reply_proposal.list',
     'site_file_change_proposal.record',
     'site_file_change_proposal.list',
     'site_file_materialization.admit',
@@ -3150,6 +3168,32 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       },
     };
   }
+  if (body.operation === 'mailbox.draft_reply_proposal.record') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const result = await recordCloudflareMailboxDraftReplyProposal(env, requestedSiteId, params, principal);
+    return { status: result.ok ? 200 : 400, body: result };
+  }
+  if (body.operation === 'mailbox.draft_reply_proposal.list') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const proposals = await listCloudflareMailboxDraftReplyProposals(env, requestedSiteId, params.mailbox_draft_reply_proposal_limit ?? params.limit);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        schema: CLOUDFLARE_MAILBOX_DRAFT_REPLY_PROPOSAL_SCHEMA,
+        status: 'ok',
+        site_id: requestedSiteId,
+        proposal_authority: proposals.length > 0 ? CLOUDFLARE_MAILBOX_DRAFT_REPLY_PROPOSAL_AUTHORITY : 'not_observed',
+        mailbox_outlook_draft_create_admission: 'not_admitted',
+        mailbox_send_admission: 'not_admitted',
+        mailbox_mutation_admission: 'not_admitted',
+        authority_partition: 'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted',
+        proposals,
+      },
+    };
+  }
   if (body.operation === 'site_file_change_proposal.record') {
     const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
     if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
@@ -3406,6 +3450,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const residentLoopShadowRuns = await listCloudflareResidentLoopShadowRuns(env, siteId, params.resident_loop_shadow_limit ?? params.limit);
     const mailboxStatusShadowReads = await listCloudflareMailboxStatusShadowReads(env, siteId, params.mailbox_status_shadow_limit ?? params.limit);
     const mailboxStatusSourceReads = await listCloudflareMailboxStatusSourceReads(env, siteId, params.mailbox_status_source_limit ?? params.limit);
+    const mailboxDraftReplyProposals = await listCloudflareMailboxDraftReplyProposals(env, siteId, params.mailbox_draft_reply_proposal_limit ?? params.limit);
     const siteFileChangeProposals = await listCloudflareSiteFileChangeProposals(env, siteId, params.site_file_change_proposal_limit ?? params.limit);
     const siteFileMaterializations = await listCloudflareSiteFileMaterializations(env, siteId, params.site_file_materialization_limit ?? params.limit);
     const taskLifecycleShadowReads = await listCloudflareTaskLifecycleShadowReads(env, siteId, params.task_lifecycle_shadow_limit ?? params.limit);
@@ -3450,6 +3495,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       residentLoopShadowRuns,
       mailboxStatusShadowReads,
       mailboxStatusSourceReads,
+      mailboxDraftReplyProposals,
       siteFileChangeProposals,
       residentDispatchDecisions,
     });
@@ -3504,6 +3550,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         resident_loop_shadow_runs: residentLoopShadowRuns,
         mailbox_status_shadow_reads: mailboxStatusShadowReads,
         mailbox_status_source_reads: mailboxStatusSourceReads,
+        mailbox_draft_reply_proposals: mailboxDraftReplyProposals,
         site_file_change_proposals: siteFileChangeProposals,
         site_file_materializations: siteFileMaterializations,
         task_lifecycle_shadow_reads: taskLifecycleShadowReads,
@@ -3556,9 +3603,13 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           mailbox_status_source_read_count: mailboxStatusSourceReads.length,
           mailbox_status_authority: mailboxStatusSourceReads.length > 0 ? CLOUDFLARE_MAILBOX_STATUS_SOURCE_AUTHORITY : mailboxStatusShadowReads.length > 0 ? 'windows_mailbox_status_source' : 'not_observed',
           mailbox_shadow_target_locus: mailboxStatusShadowReads.length > 0 ? 'cloudflare_carrier_site' : 'not_observed',
-          mailbox_send_admission: mailboxStatusSourceReads.length > 0 || mailboxStatusShadowReads.length > 0 ? 'not_admitted' : 'retained',
-          mailbox_mutation_admission: mailboxStatusSourceReads.length > 0 || mailboxStatusShadowReads.length > 0 ? 'not_admitted' : 'retained',
+          mailbox_draft_reply_proposal_count: mailboxDraftReplyProposals.length,
+          mailbox_draft_reply_proposal_authority: mailboxDraftReplyProposals.length > 0 ? CLOUDFLARE_MAILBOX_DRAFT_REPLY_PROPOSAL_AUTHORITY : 'not_observed',
+          mailbox_outlook_draft_create_admission: mailboxDraftReplyProposals.length > 0 ? 'not_admitted' : 'retained',
+          mailbox_send_admission: mailboxStatusSourceReads.length > 0 || mailboxStatusShadowReads.length > 0 || mailboxDraftReplyProposals.length > 0 ? 'not_admitted' : 'retained',
+          mailbox_mutation_admission: mailboxStatusSourceReads.length > 0 || mailboxStatusShadowReads.length > 0 || mailboxDraftReplyProposals.length > 0 ? 'not_admitted' : 'retained',
           mailbox_authority_partition: mailboxStatusSourceReads.length > 0 ? 'mailbox_status_source_read_cloudflare_owned_send_and_mutation_not_admitted' : mailboxStatusShadowReads.length > 0 ? 'mailbox_status_shadow_read_cloudflare_recorded_send_and_mutation_windows_owned' : 'mailbox_windows_owned',
+          mailbox_draft_reply_authority_partition: mailboxDraftReplyProposals.length > 0 ? 'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted' : 'mailbox_draft_reply_windows_owned',
           site_file_change_proposal_count: siteFileChangeProposals.length,
           site_file_change_proposal_authority: siteFileChangeProposals.length > 0 ? 'cloudflare_carrier_site' : 'not_observed',
           filesystem_executor_authority: siteFileChangeProposals.length > 0 ? 'windows_filesystem_executor' : 'retained',
@@ -4256,6 +4307,246 @@ async function listCloudflareMailboxStatusSourceReads(env = {}, siteId, limit) {
     mailbox_mutation_admission: row.mailbox_mutation_admission,
     source_response: parseJsonObject(row.source_response_json),
     record: parseJsonObject(row.record_json),
+    recorded_by_principal_id: row.recorded_by_principal_id,
+    recorded_at: row.recorded_at,
+  }));
+}
+
+function createMailboxDraftReplyProposal(siteId, params = {}) {
+  const source = params.source_payload ?? params.payload ?? params.proposal ?? {};
+  const sourceSchema = String(source.schema ?? params.source_schema ?? '');
+  if (sourceSchema !== 'narada.sonar.mailbox_draft_reply_proposal.v1') {
+    return { ok: false, code: 'mailbox_draft_reply_proposal_source_schema_invalid', source_schema: sourceSchema || null };
+  }
+  const proposalAuthority = String(source.proposal_authority ?? source.authority_locus ?? params.proposal_authority ?? params.authority_locus ?? CLOUDFLARE_MAILBOX_DRAFT_REPLY_PROPOSAL_AUTHORITY);
+  const outlookDraftCreateAdmission = String(source.mailbox_outlook_draft_create_admission ?? params.mailbox_outlook_draft_create_admission ?? '');
+  const sendAdmission = String(source.mailbox_send_admission ?? params.mailbox_send_admission ?? '');
+  const mutationAdmission = String(source.mailbox_mutation_admission ?? params.mailbox_mutation_admission ?? '');
+  if (proposalAuthority !== CLOUDFLARE_MAILBOX_DRAFT_REPLY_PROPOSAL_AUTHORITY) return { ok: false, code: 'mailbox_draft_reply_proposal_authority_invalid', proposal_authority: proposalAuthority };
+  if (outlookDraftCreateAdmission !== 'not_admitted') return { ok: false, code: 'mailbox_draft_reply_proposal_draft_create_admission_invalid', mailbox_outlook_draft_create_admission: outlookDraftCreateAdmission };
+  if (sendAdmission !== 'not_admitted') return { ok: false, code: 'mailbox_draft_reply_proposal_send_admission_invalid', mailbox_send_admission: sendAdmission };
+  if (mutationAdmission !== 'not_admitted') return { ok: false, code: 'mailbox_draft_reply_proposal_mutation_admission_invalid', mailbox_mutation_admission: mutationAdmission };
+  const accountRef = String(source.account_ref ?? params.account_ref ?? '');
+  const sourceMessageRef = String(source.source_message_ref ?? source.message_id ?? params.source_message_ref ?? params.message_id ?? '');
+  if (!accountRef) return { ok: false, code: 'mailbox_draft_reply_proposal_requires_account_ref' };
+  if (!sourceMessageRef) return { ok: false, code: 'mailbox_draft_reply_proposal_requires_source_message_ref' };
+  const recipients = Array.isArray(source.recipients ?? params.recipients) ? (source.recipients ?? params.recipients) : [];
+  const recipientCount = clampInteger(source.recipient_count ?? params.recipient_count ?? recipients.length, 0, 100, recipients.length);
+  const bodySha256 = String(source.body_sha256 ?? params.body_sha256 ?? '').toLowerCase();
+  if (bodySha256 && !/^[a-f0-9]{64}$/.test(bodySha256)) return { ok: false, code: 'mailbox_draft_reply_proposal_body_sha256_invalid' };
+  return {
+    ok: true,
+    proposal: {
+      schema: 'narada.sonar.cloudflare_mailbox_draft_reply_proposal_record.v1',
+      site_id: siteId,
+      source_schema: sourceSchema,
+      generated_at: String(source.generated_at ?? params.generated_at ?? new Date().toISOString()),
+      operation_id: source.operation_id == null && params.operation_id == null ? null : String(source.operation_id ?? params.operation_id),
+      account_ref: accountRef,
+      source_message_ref: sourceMessageRef,
+      proposal_ref: String(source.proposal_ref ?? params.proposal_ref ?? 'mailbox-draft-reply-proposal'),
+      subject: String(source.subject ?? params.subject ?? '').slice(0, 500),
+      recipient_count: recipientCount,
+      body_preview: String(source.body_preview ?? params.body_preview ?? '').slice(0, 1000),
+      body_sha256: bodySha256 || null,
+      rationale: String(source.rationale ?? params.rationale ?? '').slice(0, 1000),
+      proposal_authority: proposalAuthority,
+      mailbox_outlook_draft_create_admission: outlookDraftCreateAdmission,
+      mailbox_send_admission: sendAdmission,
+      mailbox_mutation_admission: mutationAdmission,
+      windows_draft_executor_fallback: String(source.windows_draft_executor_fallback ?? params.windows_draft_executor_fallback ?? 'available'),
+      proposal_posture: String(source.proposal_posture ?? params.proposal_posture ?? 'proposal_only_no_outlook_draft_create'),
+    },
+  };
+}
+
+function mailboxDraftReplyProposalId(siteId, proposal) {
+  return `mailbox_draft_reply_proposal_${safeIdToken(siteId)}_${safeIdToken(proposal.generated_at)}_${safeIdToken(proposal.proposal_ref)}`;
+}
+
+async function recordCloudflareMailboxDraftReplyProposal(env = {}, siteId, params = {}, principal = null) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return { ok: false, code: 'missing_site_registry_binding' };
+  if (!siteId || siteId === 'unknown-site') return { ok: false, code: 'missing_site_id' };
+  const payload = createMailboxDraftReplyProposal(siteId, params);
+  if (!payload.ok) return payload;
+  const proposal = payload.proposal;
+  const record = {
+    proposal_id: params.proposal_id ?? mailboxDraftReplyProposalId(siteId, proposal),
+    site_id: siteId,
+    schema: CLOUDFLARE_MAILBOX_DRAFT_REPLY_PROPOSAL_SCHEMA,
+    source_schema: proposal.source_schema,
+    generated_at: proposal.generated_at,
+    operation_id: proposal.operation_id,
+    account_ref: proposal.account_ref,
+    source_message_ref: proposal.source_message_ref,
+    proposal_ref: proposal.proposal_ref,
+    subject: proposal.subject,
+    recipient_count: proposal.recipient_count,
+    body_preview: proposal.body_preview,
+    body_sha256: proposal.body_sha256,
+    rationale: proposal.rationale,
+    proposal_authority: proposal.proposal_authority,
+    mailbox_outlook_draft_create_admission: proposal.mailbox_outlook_draft_create_admission,
+    mailbox_send_admission: proposal.mailbox_send_admission,
+    mailbox_mutation_admission: proposal.mailbox_mutation_admission,
+    windows_draft_executor_fallback: proposal.windows_draft_executor_fallback,
+    proposal_posture: proposal.proposal_posture,
+    recorded_by_principal_id: principal?.principal_id ?? 'unknown-principal',
+    recorded_at: new Date().toISOString(),
+  };
+  await ensureCloudflareMailboxDraftReplyProposalSchema(db);
+  await db.prepare(`
+    INSERT INTO cloudflare_mailbox_draft_reply_proposals (
+      proposal_id,
+      site_id,
+      source_schema,
+      generated_at,
+      operation_id,
+      account_ref,
+      source_message_ref,
+      proposal_ref,
+      subject,
+      recipient_count,
+      body_preview,
+      body_sha256,
+      rationale,
+      proposal_authority,
+      mailbox_outlook_draft_create_admission,
+      mailbox_send_admission,
+      mailbox_mutation_admission,
+      windows_draft_executor_fallback,
+      proposal_posture,
+      proposal_json,
+      recorded_by_principal_id,
+      recorded_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(proposal_id) DO UPDATE SET
+      source_schema = excluded.source_schema,
+      generated_at = excluded.generated_at,
+      operation_id = excluded.operation_id,
+      account_ref = excluded.account_ref,
+      source_message_ref = excluded.source_message_ref,
+      proposal_ref = excluded.proposal_ref,
+      subject = excluded.subject,
+      recipient_count = excluded.recipient_count,
+      body_preview = excluded.body_preview,
+      body_sha256 = excluded.body_sha256,
+      rationale = excluded.rationale,
+      proposal_authority = excluded.proposal_authority,
+      mailbox_outlook_draft_create_admission = excluded.mailbox_outlook_draft_create_admission,
+      mailbox_send_admission = excluded.mailbox_send_admission,
+      mailbox_mutation_admission = excluded.mailbox_mutation_admission,
+      windows_draft_executor_fallback = excluded.windows_draft_executor_fallback,
+      proposal_posture = excluded.proposal_posture,
+      proposal_json = excluded.proposal_json,
+      recorded_by_principal_id = excluded.recorded_by_principal_id,
+      recorded_at = excluded.recorded_at
+  `).bind(
+    record.proposal_id,
+    record.site_id,
+    record.source_schema,
+    record.generated_at,
+    record.operation_id,
+    record.account_ref,
+    record.source_message_ref,
+    record.proposal_ref,
+    record.subject,
+    record.recipient_count,
+    record.body_preview,
+    record.body_sha256,
+    record.rationale,
+    record.proposal_authority,
+    record.mailbox_outlook_draft_create_admission,
+    record.mailbox_send_admission,
+    record.mailbox_mutation_admission,
+    record.windows_draft_executor_fallback,
+    record.proposal_posture,
+    JSON.stringify({ ...record, proposal }),
+    record.recorded_by_principal_id,
+    record.recorded_at,
+  ).run();
+  return {
+    ok: true,
+    schema: CLOUDFLARE_MAILBOX_DRAFT_REPLY_PROPOSAL_SCHEMA,
+    status: 'recorded',
+    site_id: siteId,
+    proposal_authority: record.proposal_authority,
+    mailbox_outlook_draft_create_admission: record.mailbox_outlook_draft_create_admission,
+    mailbox_send_admission: record.mailbox_send_admission,
+    mailbox_mutation_admission: record.mailbox_mutation_admission,
+    proposal,
+    record,
+  };
+}
+
+async function ensureCloudflareMailboxDraftReplyProposalSchema(db) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS cloudflare_mailbox_draft_reply_proposals (
+      proposal_id TEXT PRIMARY KEY,
+      site_id TEXT NOT NULL,
+      source_schema TEXT NOT NULL,
+      generated_at TEXT NOT NULL,
+      operation_id TEXT,
+      account_ref TEXT NOT NULL,
+      source_message_ref TEXT NOT NULL,
+      proposal_ref TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      recipient_count INTEGER NOT NULL,
+      body_preview TEXT NOT NULL,
+      body_sha256 TEXT,
+      rationale TEXT NOT NULL,
+      proposal_authority TEXT NOT NULL,
+      mailbox_outlook_draft_create_admission TEXT NOT NULL,
+      mailbox_send_admission TEXT NOT NULL,
+      mailbox_mutation_admission TEXT NOT NULL,
+      windows_draft_executor_fallback TEXT NOT NULL,
+      proposal_posture TEXT NOT NULL,
+      proposal_json TEXT NOT NULL,
+      recorded_by_principal_id TEXT NOT NULL,
+      recorded_at TEXT NOT NULL
+    )
+  `).run();
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_cloudflare_mailbox_draft_reply_proposals_site_recorded
+    ON cloudflare_mailbox_draft_reply_proposals(site_id, recorded_at)
+  `).run();
+}
+
+async function listCloudflareMailboxDraftReplyProposals(env = {}, siteId, limit) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function' || !siteId) return [];
+  await ensureCloudflareMailboxDraftReplyProposalSchema(db);
+  const boundedLimit = clampInteger(limit, 0, 100, 25);
+  const rows = await db.prepare(`
+    SELECT * FROM cloudflare_mailbox_draft_reply_proposals
+    WHERE site_id = ?
+    ORDER BY recorded_at DESC, generated_at DESC
+    LIMIT ?
+  `).bind(siteId, boundedLimit).all();
+  return (rows.results ?? []).map((row) => ({
+    proposal_id: row.proposal_id,
+    site_id: row.site_id,
+    schema: CLOUDFLARE_MAILBOX_DRAFT_REPLY_PROPOSAL_SCHEMA,
+    source_schema: row.source_schema,
+    generated_at: row.generated_at,
+    operation_id: row.operation_id,
+    account_ref: row.account_ref,
+    source_message_ref: row.source_message_ref,
+    proposal_ref: row.proposal_ref,
+    subject: row.subject,
+    recipient_count: Number(row.recipient_count),
+    body_preview: row.body_preview,
+    body_sha256: row.body_sha256,
+    rationale: row.rationale,
+    proposal_authority: row.proposal_authority,
+    mailbox_outlook_draft_create_admission: row.mailbox_outlook_draft_create_admission,
+    mailbox_send_admission: row.mailbox_send_admission,
+    mailbox_mutation_admission: row.mailbox_mutation_admission,
+    windows_draft_executor_fallback: row.windows_draft_executor_fallback,
+    proposal_posture: row.proposal_posture,
+    proposal: parseJsonObject(row.proposal_json).proposal ?? {},
+    record: parseJsonObject(row.proposal_json),
     recorded_by_principal_id: row.recorded_by_principal_id,
     recorded_at: row.recorded_at,
   }));
