@@ -2183,6 +2183,9 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /localCloudContinuityBridge/);
   assert.match(html, /localCloudContinuityBridgeContext/);
   assert.match(html, /renderLocalCloudContinuityBridge/);
+  assert.match(html, /Expected Exchange Packet/);
+  assert.match(html, /Latest Packet/);
+  assert.match(html, /Latest Admission/);
   assert.match(html, /local_cloud_binding_declared/);
   assert.match(html, /authority_map_projection_reviewed/);
   assert.match(html, /read_model_projection_reviewed/);
