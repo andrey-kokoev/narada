@@ -1596,6 +1596,16 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /repository_publication_admission/);
   assert.match(html, /site_file_change_authority_partition/);
   assert.match(html, /site_file_change_next_action/);
+  assert.match(html, /site_file_materializations/);
+  assert.match(html, /site_file_materialization_count/);
+  assert.match(html, /site_file_materialization_authority/);
+  assert.match(html, /cloudflare_site_file_materialization_admission/);
+  assert.match(html, /cloudflare_site_file_materialization_executor_authority/);
+  assert.match(html, /windows_filesystem_mutation_admission/);
+  assert.match(html, /site_file_materialization_repository_publication_admission/);
+  assert.match(html, /site_file_materialization_authority_partition/);
+  assert.match(html, /site_file_materialization_next_action/);
+  assert.match(html, /review_site_file_materialization/);
   assert.match(html, /review_site_file_change_proposal/);
   assert.match(html, /selectSiteFileChangeProposal/);
   assert.match(html, /flightDeckFocusSiteFileChangeProposal/);
@@ -3375,6 +3385,135 @@ test('worker records site file change proposals without admitting filesystem or 
   assert.equal(operationReadBody.operation_product_surface.filesystem_mutation_admission, 'not_admitted');
   assert.equal(operationReadBody.operation_product_surface.repository_publication_admission, 'not_admitted');
   assert.equal(operationReadBody.operation_product_surface.site_file_change_authority_partition, 'site_file_change_proposal_cloudflare_recorded_filesystem_and_publication_windows_owned');
+});
+
+test('worker admits Cloudflare site file materialization records without Windows filesystem or publication mutation', async () => {
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{
+      site_id: 'site_fixture',
+      site_ref: 'site://fixture',
+      display_name: 'Fixture Site',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+      created_by_principal_id: 'admin',
+    }],
+    memberships: [{
+      site_id: 'site_fixture',
+      principal_id: 'admin',
+      role: 'owner',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+    operations: [{
+      operation_id: 'operation_site_file_materialization',
+      site_id: 'site_fixture',
+      display_name: 'Site File Materialization Operation',
+      operation_kind: 'operating_layer_update',
+      status: 'active',
+      created_by_principal_id: 'admin',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+  });
+  const env = authEnv(fakeDurableObjectNamespace(), { CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+  const sourcePayload = {
+    cloudflare_site_file_materialization_cutover: true,
+    generated_at: '2026-06-08T07:00:00.000Z',
+    operation_id: 'operation_site_file_materialization',
+    task_id: 'cloudflare-task-file-materialization-1',
+    proposal_id: 'site_file_change_fixture_1',
+    proposal_ref: 'proposal:file-change:1',
+    file_path: 'docs/architecture/cloudflare-carrier/target.md',
+    content_sha256: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+    content_ref: 'cloudflare-site-file-store:target-md:1',
+    materialization_authority_ref: 'cloudflare-carrier:site-file-materialization:v1',
+    cutover_point_ref: 'cutover:cloudflare-site-file-materialization:test',
+    governed_write_contract_ref: 'contract:cloudflare-site-file-materialization:test',
+    confirmation_evidence_ref: 'evidence:operator-confirmed-materialization:test',
+    authority_locus: 'cloudflare_carrier_site',
+    filesystem_executor_authority: 'cloudflare_site_file_store',
+    windows_filesystem_mutation_admission: 'not_admitted',
+    repository_publication_admission: 'not_admitted',
+  };
+
+  const refusedCutover = await worker.fetch(jsonRequest({
+    operation: 'site_file_materialization.admit',
+    request_id: 'request_site_file_materialization_refused_cutover',
+    params: {
+      site_id: 'site_fixture',
+      materialization_id: 'site_file_materialization_refused_cutover',
+      source_payload: { ...sourcePayload, cloudflare_site_file_materialization_cutover: false },
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(refusedCutover.status, 400);
+  const refusedCutoverBody = await refusedCutover.json();
+  assert.equal(refusedCutoverBody.code, 'site_file_materialization_cutover_evidence_required');
+
+  const refusedWindowsMutation = await worker.fetch(jsonRequest({
+    operation: 'site_file_materialization.admit',
+    request_id: 'request_site_file_materialization_refused_windows_mutation',
+    params: {
+      site_id: 'site_fixture',
+      materialization_id: 'site_file_materialization_refused_windows_mutation',
+      source_payload: { ...sourcePayload, windows_filesystem_mutation_admission: 'admitted' },
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(refusedWindowsMutation.status, 400);
+  const refusedWindowsMutationBody = await refusedWindowsMutation.json();
+  assert.equal(refusedWindowsMutationBody.code, 'site_file_materialization_windows_filesystem_mutation_admission_invalid');
+
+  const recorded = await worker.fetch(jsonRequest({
+    operation: 'site_file_materialization.admit',
+    request_id: 'request_site_file_materialization_admit',
+    params: {
+      site_id: 'site_fixture',
+      materialization_id: 'site_file_materialization_fixture_1',
+      source_payload: sourcePayload,
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(recorded.status, 200);
+  const recordedBody = await recorded.json();
+  assert.equal(recordedBody.schema, 'narada.sonar.cloudflare_site_file_materialization.v1');
+  assert.equal(recordedBody.status, 'admitted');
+  assert.equal(recordedBody.site_file_materialization_authority, 'cloudflare_carrier_site');
+  assert.equal(recordedBody.cloudflare_site_file_materialization_admission, 'admitted');
+  assert.equal(recordedBody.filesystem_executor_authority, 'cloudflare_site_file_store');
+  assert.equal(recordedBody.windows_filesystem_mutation_admission, 'not_admitted');
+  assert.equal(recordedBody.repository_publication_admission, 'not_admitted');
+  assert.equal(recordedBody.write_effect, 'cloudflare_site_file_materialization_record');
+  assert.deepEqual(siteDb.dump().siteFileMaterializations.map((entry) => entry.materialization_id), ['site_file_materialization_fixture_1']);
+
+  const listed = await worker.fetch(jsonRequest({
+    operation: 'site_file_materialization.list',
+    request_id: 'request_site_file_materialization_list',
+    params: { site_id: 'site_fixture', limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(listed.status, 200);
+  const listedBody = await listed.json();
+  assert.equal(listedBody.site_file_materialization_authority, 'cloudflare_carrier_site');
+  assert.equal(listedBody.cloudflare_site_file_materialization_admission, 'admitted');
+  assert.equal(listedBody.windows_filesystem_mutation_admission, 'not_admitted');
+  assert.equal(listedBody.repository_publication_admission, 'not_admitted');
+  assert.equal(listedBody.authority_partition, 'site_file_materialization_cloudflare_owned_windows_filesystem_and_publication_not_admitted');
+  assert.deepEqual(listedBody.materializations.map((entry) => entry.materialization_id), ['site_file_materialization_fixture_1']);
+
+  const operationRead = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_site_file_materialization_operation_read',
+    params: { site_id: 'site_fixture', operation_id: 'operation_site_file_materialization', site_file_materialization_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(operationRead.status, 200);
+  const operationReadBody = await operationRead.json();
+  assert.equal(operationReadBody.site_file_materializations.length, 1);
+  assert.equal(operationReadBody.operation_product_surface.site_file_materialization_count, 1);
+  assert.equal(operationReadBody.operation_product_surface.site_file_materialization_authority, 'cloudflare_carrier_site');
+  assert.equal(operationReadBody.operation_product_surface.cloudflare_site_file_materialization_admission, 'admitted');
+  assert.equal(operationReadBody.operation_product_surface.cloudflare_site_file_materialization_executor_authority, 'cloudflare_site_file_store');
+  assert.equal(operationReadBody.operation_product_surface.windows_filesystem_mutation_admission, 'not_admitted');
+  assert.equal(operationReadBody.operation_product_surface.site_file_materialization_repository_publication_admission, 'not_admitted');
+  assert.equal(operationReadBody.operation_product_surface.site_file_materialization_authority_partition, 'site_file_materialization_cloudflare_owned_windows_filesystem_and_publication_not_admitted');
 });
 
 test('worker records task lifecycle shadow reads from Windows without admitting Cloudflare writes', async () => {
@@ -5773,6 +5912,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     residentLoopShadowRuns: clone(initial.residentLoopShadowRuns ?? []),
     mailboxStatusShadowReads: clone(initial.mailboxStatusShadowReads ?? []),
     siteFileChangeProposals: clone(initial.siteFileChangeProposals ?? []),
+    siteFileMaterializations: clone(initial.siteFileMaterializations ?? []),
     taskLifecycleShadowReads: clone(initial.taskLifecycleShadowReads ?? []),
     taskLifecycleWriteAdmissions: clone(initial.taskLifecycleWriteAdmissions ?? []),
     taskLifecycleTasks: clone(initial.taskLifecycleTasks ?? []),
@@ -5897,6 +6037,12 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const row = { proposal_id, site_id, source_schema, generated_at, operation_id, task_id, proposal_ref, proposal_summary, authority_locus, filesystem_executor_authority, filesystem_mutation_admission, repository_publication_admission, proposal_posture, file_count, proposal_json, recorded_by_principal_id, recorded_at };
         if (existing) Object.assign(existing, row);
         else state.siteFileChangeProposals.push(row);
+      } else if (normalized.startsWith('insert into cloudflare_site_file_materializations')) {
+        const [materialization_id, site_id, generated_at, operation_id, task_id, proposal_id, proposal_ref, file_path, content_sha256, content_ref, materialization_authority_ref, cutover_point_ref, governed_write_contract_ref, confirmation_evidence_ref, authority_locus, filesystem_executor_authority, windows_filesystem_mutation_admission, repository_publication_admission, write_effect, materialization_posture, materialization_json, recorded_by_principal_id, recorded_at] = bindings;
+        const existing = state.siteFileMaterializations.find((entry) => entry.materialization_id === materialization_id);
+        const row = { materialization_id, site_id, generated_at, operation_id, task_id, proposal_id, proposal_ref, file_path, content_sha256, content_ref, materialization_authority_ref, cutover_point_ref, governed_write_contract_ref, confirmation_evidence_ref, authority_locus, filesystem_executor_authority, windows_filesystem_mutation_admission, repository_publication_admission, write_effect, materialization_posture, materialization_json, recorded_by_principal_id, recorded_at };
+        if (existing) Object.assign(existing, row);
+        else state.siteFileMaterializations.push(row);
       } else if (normalized.startsWith('insert into cloudflare_task_lifecycle_shadow_reads')) {
         const [read_id, site_id, source_locus, target_locus, source_url_host, source_db_path, source_schema, generated_at, task_count, status_counts_json, tasks_json, mutation_authority, shadow_read_posture, cloudflare_write_admission, dispatch_authority, shadow_mode, dispatch_action, record_json, recorded_by_principal_id, recorded_at] = bindings;
         const existing = state.taskLifecycleShadowReads.find((entry) => entry.read_id === read_id);
@@ -6143,6 +6289,16 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const [siteId, limit] = bindings;
         return {
           results: state.siteFileChangeProposals
+            .filter((entry) => entry.site_id === siteId)
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_site_file_materializations')) {
+        const [siteId, limit] = bindings;
+        return {
+          results: state.siteFileMaterializations
             .filter((entry) => entry.site_id === siteId)
             .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
             .slice(0, Number(limit))

@@ -48,6 +48,7 @@ const CLOUDFLARE_RESIDENT_LOOP_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_res
 const CLOUDFLARE_RESIDENT_DISPATCH_PRIMARY_SCHEMA = 'narada.sonar.cloudflare_resident_dispatch_primary_with_windows_fallback.v1';
 const CLOUDFLARE_MAILBOX_STATUS_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_mailbox_status_shadow_read.v1';
 const CLOUDFLARE_SITE_FILE_CHANGE_PROPOSAL_SCHEMA = 'narada.sonar.cloudflare_site_file_change_proposal.v1';
+const CLOUDFLARE_SITE_FILE_MATERIALIZATION_SCHEMA = 'narada.sonar.cloudflare_site_file_materialization.v1';
 const CLOUDFLARE_TASK_LIFECYCLE_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_shadow_read.v1';
 const CLOUDFLARE_TASK_LIFECYCLE_WRITE_ADMISSION_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_write_admission.v1';
 const CLOUDFLARE_TASK_LIFECYCLE_WRITE_ADMISSION_DECISION_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_write_admission_decision.v1';
@@ -2619,6 +2620,8 @@ function isSiteProductOperation(operation) {
     'mailbox.status_shadow.list',
     'site_file_change_proposal.record',
     'site_file_change_proposal.list',
+    'site_file_materialization.admit',
+    'site_file_materialization.list',
     'task_lifecycle.shadow_read.record',
     'task_lifecycle.shadow_read.list',
     'task_lifecycle.shadow_read.source.read',
@@ -3077,6 +3080,33 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       },
     };
   }
+  if (body.operation === 'site_file_materialization.admit') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const result = await recordCloudflareSiteFileMaterialization(env, requestedSiteId, params, principal);
+    return { status: result.ok ? 200 : 400, body: result };
+  }
+  if (body.operation === 'site_file_materialization.list') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const materializations = await listCloudflareSiteFileMaterializations(env, requestedSiteId, params.site_file_materialization_limit ?? params.limit);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        schema: CLOUDFLARE_SITE_FILE_MATERIALIZATION_SCHEMA,
+        status: 'ok',
+        site_id: requestedSiteId,
+        site_file_materialization_authority: materializations.length > 0 ? 'cloudflare_carrier_site' : 'not_observed',
+        cloudflare_site_file_materialization_admission: materializations.length > 0 ? 'admitted' : 'not_observed',
+        filesystem_executor_authority: materializations.length > 0 ? 'cloudflare_site_file_store' : 'not_observed',
+        windows_filesystem_mutation_admission: 'not_admitted',
+        repository_publication_admission: 'not_admitted',
+        authority_partition: 'site_file_materialization_cloudflare_owned_windows_filesystem_and_publication_not_admitted',
+        materializations,
+      },
+    };
+  }
   if (body.operation === 'task_lifecycle.shadow_read.source.read') {
     const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
     if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
@@ -3280,6 +3310,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const residentLoopShadowRuns = await listCloudflareResidentLoopShadowRuns(env, siteId, params.resident_loop_shadow_limit ?? params.limit);
     const mailboxStatusShadowReads = await listCloudflareMailboxStatusShadowReads(env, siteId, params.mailbox_status_shadow_limit ?? params.limit);
     const siteFileChangeProposals = await listCloudflareSiteFileChangeProposals(env, siteId, params.site_file_change_proposal_limit ?? params.limit);
+    const siteFileMaterializations = await listCloudflareSiteFileMaterializations(env, siteId, params.site_file_materialization_limit ?? params.limit);
     const taskLifecycleShadowReads = await listCloudflareTaskLifecycleShadowReads(env, siteId, params.task_lifecycle_shadow_limit ?? params.limit);
     const taskLifecycleWriteAdmissions = await listCloudflareTaskLifecycleWriteAdmissions(env, siteId, params.task_lifecycle_write_admission_limit ?? params.limit);
     const taskLifecycleTasks = await listCloudflareTaskLifecycleTasks(env, siteId, params.task_lifecycle_task_limit ?? params.limit, params);
@@ -3365,6 +3396,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         resident_loop_shadow_runs: residentLoopShadowRuns,
         mailbox_status_shadow_reads: mailboxStatusShadowReads,
         site_file_change_proposals: siteFileChangeProposals,
+        site_file_materializations: siteFileMaterializations,
         task_lifecycle_shadow_reads: taskLifecycleShadowReads,
         task_lifecycle_write_admissions: taskLifecycleWriteAdmissions,
         task_lifecycle_tasks: taskLifecycleTasks,
@@ -3421,6 +3453,13 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           filesystem_mutation_admission: siteFileChangeProposals.length > 0 ? 'not_admitted' : 'retained',
           repository_publication_admission: siteFileChangeProposals.length > 0 ? 'not_admitted' : 'retained',
           site_file_change_authority_partition: siteFileChangeProposals.length > 0 ? 'site_file_change_proposal_cloudflare_recorded_filesystem_and_publication_windows_owned' : 'filesystem_and_publication_windows_owned',
+          site_file_materialization_count: siteFileMaterializations.length,
+          site_file_materialization_authority: siteFileMaterializations.length > 0 ? 'cloudflare_carrier_site' : 'not_observed',
+          cloudflare_site_file_materialization_admission: siteFileMaterializations.length > 0 ? 'admitted' : 'not_observed',
+          cloudflare_site_file_materialization_executor_authority: siteFileMaterializations.length > 0 ? 'cloudflare_site_file_store' : 'not_observed',
+          windows_filesystem_mutation_admission: siteFileMaterializations.length > 0 ? 'not_admitted' : 'retained',
+          site_file_materialization_repository_publication_admission: siteFileMaterializations.length > 0 ? 'not_admitted' : 'retained',
+          site_file_materialization_authority_partition: siteFileMaterializations.length > 0 ? 'site_file_materialization_cloudflare_owned_windows_filesystem_and_publication_not_admitted' : 'materialization_not_observed_filesystem_and_publication_windows_owned',
           task_lifecycle_shadow_read_count: taskLifecycleShadowReads.length,
           task_lifecycle_write_admission_count: taskLifecycleWriteAdmissions.length,
           task_lifecycle_write_admission_posture: taskLifecycleTasks.some((task) => task.task_lifecycle_roster_mutation_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_and_roster_mutation_admitted_remaining_external_effects_not_admitted' : taskLifecycleTasks.some((task) => task.task_lifecycle_role_resolution_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_admitted_remaining_external_effects_not_admitted' : taskLifecycleTasks.some((task) => task.task_lifecycle_assignment_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_and_assignment_admitted_remaining_external_effects_not_admitted' : taskLifecycleTasks.some((task) => task.task_lifecycle_source_state_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_admitted_remaining_external_effects_not_admitted' : taskLifecycleTasks.some((task) => task.task_lifecycle_projection_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_and_projection_write_admitted_remaining_writes_not_admitted' : taskLifecycleTasks.some((task) => task.changed_file_evidence_count > 0) ? (taskLifecycleTasks.some((task) => task.finish_id) ? 'task_create_claim_report_finish_and_changed_file_evidence_admitted_remaining_writes_not_admitted' : 'task_create_claim_report_and_changed_file_evidence_admitted_remaining_writes_not_admitted') : taskLifecycleTasks.some((task) => task.finish_id) ? 'task_create_claim_report_and_finish_admitted_remaining_writes_not_admitted' : taskLifecycleTasks.some((task) => task.report_id) ? 'task_create_claim_and_report_admitted_remaining_writes_not_admitted' : taskLifecycleTasks.some((task) => task.status === 'claimed') ? 'task_create_and_claim_admitted_remaining_writes_not_admitted' : taskLifecycleTasks.length > 0 ? 'task_create_admitted_remaining_writes_not_admitted' : 'writes_not_admitted',
@@ -3490,6 +3529,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
   const residentLoopShadowRuns = await listCloudflareResidentLoopShadowRuns(env, siteId, params.resident_loop_shadow_limit ?? params.limit);
   const mailboxStatusShadowReads = await listCloudflareMailboxStatusShadowReads(env, siteId, params.mailbox_status_shadow_limit ?? params.limit);
   const siteFileChangeProposals = await listCloudflareSiteFileChangeProposals(env, siteId, params.site_file_change_proposal_limit ?? params.limit);
+  const siteFileMaterializations = await listCloudflareSiteFileMaterializations(env, siteId, params.site_file_materialization_limit ?? params.limit);
   const taskLifecycleShadowReads = await listCloudflareTaskLifecycleShadowReads(env, siteId, params.task_lifecycle_shadow_limit ?? params.limit);
   const taskLifecycleWriteAdmissions = await listCloudflareTaskLifecycleWriteAdmissions(env, siteId, params.task_lifecycle_write_admission_limit ?? params.limit);
   const taskLifecycleTasks = await listCloudflareTaskLifecycleTasks(env, siteId, params.task_lifecycle_task_limit ?? params.limit, params);
@@ -3540,6 +3580,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     resident_loop_shadow_runs: residentLoopShadowRuns,
     mailbox_status_shadow_reads: mailboxStatusShadowReads,
     site_file_change_proposals: siteFileChangeProposals,
+    site_file_materializations: siteFileMaterializations,
     task_lifecycle_shadow_reads: taskLifecycleShadowReads,
     task_lifecycle_write_admissions: taskLifecycleWriteAdmissions,
     task_lifecycle_tasks: taskLifecycleTasks,
@@ -5244,6 +5285,257 @@ async function listCloudflareSiteFileChangeProposals(env = {}, siteId, limit) {
     proposal_posture: row.proposal_posture,
     file_count: Number(row.file_count),
     record: parseJsonObject(row.proposal_json),
+    recorded_by_principal_id: row.recorded_by_principal_id,
+    recorded_at: row.recorded_at,
+  }));
+}
+
+function createSiteFileMaterialization(siteId, params = {}) {
+  const source = params.source_payload ?? params.payload ?? params.materialization ?? {};
+  const cutoverAdmitted = source.cloudflare_site_file_materialization_cutover ?? params.cloudflare_site_file_materialization_cutover;
+  const proposalId = String(source.proposal_id ?? params.proposal_id ?? '');
+  const proposalRef = String(source.proposal_ref ?? params.proposal_ref ?? '');
+  const filePath = String(source.file_path ?? params.file_path ?? '');
+  const contentSha256 = String(source.content_sha256 ?? params.content_sha256 ?? '').toLowerCase();
+  const materializationAuthorityRef = String(source.materialization_authority_ref ?? params.materialization_authority_ref ?? '');
+  const cutoverPointRef = String(source.cutover_point_ref ?? params.cutover_point_ref ?? '');
+  const governedWriteContractRef = String(source.governed_write_contract_ref ?? params.governed_write_contract_ref ?? '');
+  const confirmationEvidenceRef = String(source.confirmation_evidence_ref ?? params.confirmation_evidence_ref ?? '');
+  const filesystemExecutorAuthority = String(source.filesystem_executor_authority ?? params.filesystem_executor_authority ?? 'cloudflare_site_file_store');
+  const windowsFilesystemMutationAdmission = String(source.windows_filesystem_mutation_admission ?? params.windows_filesystem_mutation_admission ?? 'not_admitted');
+  const repositoryPublicationAdmission = String(source.repository_publication_admission ?? params.repository_publication_admission ?? 'not_admitted');
+  if (cutoverAdmitted !== true) return { ok: false, code: 'site_file_materialization_cutover_evidence_required' };
+  if (!proposalId && !proposalRef) return { ok: false, code: 'site_file_materialization_proposal_ref_required' };
+  if (!filePath) return { ok: false, code: 'site_file_materialization_file_path_required' };
+  if (!/^[a-f0-9]{64}$/.test(contentSha256)) return { ok: false, code: 'site_file_materialization_content_sha256_invalid' };
+  if (!materializationAuthorityRef) return { ok: false, code: 'site_file_materialization_authority_ref_required' };
+  if (!cutoverPointRef) return { ok: false, code: 'site_file_materialization_cutover_point_ref_required' };
+  if (!governedWriteContractRef) return { ok: false, code: 'site_file_materialization_governed_write_contract_ref_required' };
+  if (!confirmationEvidenceRef) return { ok: false, code: 'site_file_materialization_confirmation_evidence_ref_required' };
+  if (filesystemExecutorAuthority !== 'cloudflare_site_file_store') return { ok: false, code: 'site_file_materialization_executor_authority_invalid', filesystem_executor_authority: filesystemExecutorAuthority };
+  if (windowsFilesystemMutationAdmission !== 'not_admitted') return { ok: false, code: 'site_file_materialization_windows_filesystem_mutation_admission_invalid', windows_filesystem_mutation_admission: windowsFilesystemMutationAdmission };
+  if (repositoryPublicationAdmission !== 'not_admitted') return { ok: false, code: 'site_file_materialization_repository_publication_admission_invalid', repository_publication_admission: repositoryPublicationAdmission };
+  return {
+    ok: true,
+    materialization: {
+      schema: 'narada.sonar.cloudflare_site_file_materialization_record.v1',
+      site_id: siteId,
+      generated_at: String(source.generated_at ?? params.generated_at ?? new Date().toISOString()),
+      operation_id: source.operation_id == null && params.operation_id == null ? null : String(source.operation_id ?? params.operation_id),
+      task_id: source.task_id == null && params.task_id == null ? null : String(source.task_id ?? params.task_id),
+      proposal_id: proposalId || null,
+      proposal_ref: proposalRef || null,
+      file_path: filePath,
+      content_sha256: contentSha256,
+      content_ref: source.content_ref == null && params.content_ref == null ? null : String(source.content_ref ?? params.content_ref),
+      materialization_authority_ref: materializationAuthorityRef,
+      cutover_point_ref: cutoverPointRef,
+      governed_write_contract_ref: governedWriteContractRef,
+      confirmation_evidence_ref: confirmationEvidenceRef,
+      authority_locus: String(source.authority_locus ?? params.authority_locus ?? 'cloudflare_carrier_site'),
+      filesystem_executor_authority: filesystemExecutorAuthority,
+      windows_filesystem_mutation_admission: windowsFilesystemMutationAdmission,
+      repository_publication_admission: repositoryPublicationAdmission,
+      write_effect: 'cloudflare_site_file_materialization_record',
+      materialization_posture: String(source.materialization_posture ?? params.materialization_posture ?? 'cloudflare_site_file_store_only_no_windows_filesystem_write_no_repository_publication'),
+    },
+  };
+}
+
+function siteFileMaterializationId(siteId, materialization) {
+  return `site_file_materialization_${safeIdToken(siteId)}_${safeIdToken(materialization.generated_at)}_${safeIdToken(materialization.file_path)}`;
+}
+
+async function recordCloudflareSiteFileMaterialization(env = {}, siteId, params = {}, principal = null) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return { ok: false, code: 'missing_site_registry_binding' };
+  if (!siteId || siteId === 'unknown-site') return { ok: false, code: 'missing_site_id' };
+  const payload = createSiteFileMaterialization(siteId, params);
+  if (!payload.ok) return payload;
+  const materialization = payload.materialization;
+  const record = {
+    materialization_id: params.materialization_id ?? siteFileMaterializationId(siteId, materialization),
+    site_id: siteId,
+    schema: CLOUDFLARE_SITE_FILE_MATERIALIZATION_SCHEMA,
+    generated_at: materialization.generated_at,
+    operation_id: materialization.operation_id,
+    task_id: materialization.task_id,
+    proposal_id: materialization.proposal_id,
+    proposal_ref: materialization.proposal_ref,
+    file_path: materialization.file_path,
+    content_sha256: materialization.content_sha256,
+    content_ref: materialization.content_ref,
+    materialization_authority_ref: materialization.materialization_authority_ref,
+    cutover_point_ref: materialization.cutover_point_ref,
+    governed_write_contract_ref: materialization.governed_write_contract_ref,
+    confirmation_evidence_ref: materialization.confirmation_evidence_ref,
+    authority_locus: materialization.authority_locus,
+    filesystem_executor_authority: materialization.filesystem_executor_authority,
+    windows_filesystem_mutation_admission: materialization.windows_filesystem_mutation_admission,
+    repository_publication_admission: materialization.repository_publication_admission,
+    write_effect: materialization.write_effect,
+    materialization_posture: materialization.materialization_posture,
+    recorded_by_principal_id: principal?.principal_id ?? 'unknown-principal',
+    recorded_at: new Date().toISOString(),
+  };
+  await ensureCloudflareSiteFileMaterializationSchema(db);
+  await db.prepare(`
+    INSERT INTO cloudflare_site_file_materializations (
+      materialization_id,
+      site_id,
+      generated_at,
+      operation_id,
+      task_id,
+      proposal_id,
+      proposal_ref,
+      file_path,
+      content_sha256,
+      content_ref,
+      materialization_authority_ref,
+      cutover_point_ref,
+      governed_write_contract_ref,
+      confirmation_evidence_ref,
+      authority_locus,
+      filesystem_executor_authority,
+      windows_filesystem_mutation_admission,
+      repository_publication_admission,
+      write_effect,
+      materialization_posture,
+      materialization_json,
+      recorded_by_principal_id,
+      recorded_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(materialization_id) DO UPDATE SET
+      generated_at = excluded.generated_at,
+      operation_id = excluded.operation_id,
+      task_id = excluded.task_id,
+      proposal_id = excluded.proposal_id,
+      proposal_ref = excluded.proposal_ref,
+      file_path = excluded.file_path,
+      content_sha256 = excluded.content_sha256,
+      content_ref = excluded.content_ref,
+      materialization_authority_ref = excluded.materialization_authority_ref,
+      cutover_point_ref = excluded.cutover_point_ref,
+      governed_write_contract_ref = excluded.governed_write_contract_ref,
+      confirmation_evidence_ref = excluded.confirmation_evidence_ref,
+      authority_locus = excluded.authority_locus,
+      filesystem_executor_authority = excluded.filesystem_executor_authority,
+      windows_filesystem_mutation_admission = excluded.windows_filesystem_mutation_admission,
+      repository_publication_admission = excluded.repository_publication_admission,
+      write_effect = excluded.write_effect,
+      materialization_posture = excluded.materialization_posture,
+      materialization_json = excluded.materialization_json,
+      recorded_by_principal_id = excluded.recorded_by_principal_id,
+      recorded_at = excluded.recorded_at
+  `).bind(
+    record.materialization_id,
+    record.site_id,
+    record.generated_at,
+    record.operation_id,
+    record.task_id,
+    record.proposal_id,
+    record.proposal_ref,
+    record.file_path,
+    record.content_sha256,
+    record.content_ref,
+    record.materialization_authority_ref,
+    record.cutover_point_ref,
+    record.governed_write_contract_ref,
+    record.confirmation_evidence_ref,
+    record.authority_locus,
+    record.filesystem_executor_authority,
+    record.windows_filesystem_mutation_admission,
+    record.repository_publication_admission,
+    record.write_effect,
+    record.materialization_posture,
+    JSON.stringify({ ...record, materialization }),
+    record.recorded_by_principal_id,
+    record.recorded_at,
+  ).run();
+  return {
+    ok: true,
+    schema: CLOUDFLARE_SITE_FILE_MATERIALIZATION_SCHEMA,
+    status: 'admitted',
+    site_id: siteId,
+    site_file_materialization_authority: record.authority_locus,
+    cloudflare_site_file_materialization_admission: 'admitted',
+    filesystem_executor_authority: record.filesystem_executor_authority,
+    windows_filesystem_mutation_admission: record.windows_filesystem_mutation_admission,
+    repository_publication_admission: record.repository_publication_admission,
+    write_effect: record.write_effect,
+    materialization,
+    record,
+  };
+}
+
+async function ensureCloudflareSiteFileMaterializationSchema(db) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS cloudflare_site_file_materializations (
+      materialization_id TEXT PRIMARY KEY,
+      site_id TEXT NOT NULL,
+      generated_at TEXT NOT NULL,
+      operation_id TEXT,
+      task_id TEXT,
+      proposal_id TEXT,
+      proposal_ref TEXT,
+      file_path TEXT NOT NULL,
+      content_sha256 TEXT NOT NULL,
+      content_ref TEXT,
+      materialization_authority_ref TEXT NOT NULL,
+      cutover_point_ref TEXT NOT NULL,
+      governed_write_contract_ref TEXT NOT NULL,
+      confirmation_evidence_ref TEXT NOT NULL,
+      authority_locus TEXT NOT NULL,
+      filesystem_executor_authority TEXT NOT NULL,
+      windows_filesystem_mutation_admission TEXT NOT NULL,
+      repository_publication_admission TEXT NOT NULL,
+      write_effect TEXT NOT NULL,
+      materialization_posture TEXT NOT NULL,
+      materialization_json TEXT NOT NULL,
+      recorded_by_principal_id TEXT NOT NULL,
+      recorded_at TEXT NOT NULL
+    )
+  `).run();
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_cloudflare_site_file_materializations_site_recorded
+    ON cloudflare_site_file_materializations(site_id, recorded_at)
+  `).run();
+}
+
+async function listCloudflareSiteFileMaterializations(env = {}, siteId, limit) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function' || !siteId) return [];
+  await ensureCloudflareSiteFileMaterializationSchema(db);
+  const boundedLimit = clampInteger(limit, 0, 100, 25);
+  const rows = await db.prepare(`
+    SELECT * FROM cloudflare_site_file_materializations
+    WHERE site_id = ?
+    ORDER BY recorded_at DESC, generated_at DESC
+    LIMIT ?
+  `).bind(siteId, boundedLimit).all();
+  return (rows.results ?? []).map((row) => ({
+    materialization_id: row.materialization_id,
+    site_id: row.site_id,
+    schema: CLOUDFLARE_SITE_FILE_MATERIALIZATION_SCHEMA,
+    generated_at: row.generated_at,
+    operation_id: row.operation_id,
+    task_id: row.task_id,
+    proposal_id: row.proposal_id,
+    proposal_ref: row.proposal_ref,
+    file_path: row.file_path,
+    content_sha256: row.content_sha256,
+    content_ref: row.content_ref,
+    materialization_authority_ref: row.materialization_authority_ref,
+    cutover_point_ref: row.cutover_point_ref,
+    governed_write_contract_ref: row.governed_write_contract_ref,
+    confirmation_evidence_ref: row.confirmation_evidence_ref,
+    authority_locus: row.authority_locus,
+    filesystem_executor_authority: row.filesystem_executor_authority,
+    windows_filesystem_mutation_admission: row.windows_filesystem_mutation_admission,
+    repository_publication_admission: row.repository_publication_admission,
+    write_effect: row.write_effect,
+    materialization_posture: row.materialization_posture,
+    record: parseJsonObject(row.materialization_json),
     recorded_by_principal_id: row.recorded_by_principal_id,
     recorded_at: row.recorded_at,
   }));
@@ -9027,6 +9319,7 @@ export function renderCloudflareCarrierConsole() {
       const taskSummary = taskLifecycleSummary(product.tasks || []);
       const surface = product.operation_product_surface || {};
       const siteFileChangeProposals = product.site_file_change_proposals || [];
+      const siteFileMaterializations = product.site_file_materializations || [];
       const siteFileChangeProposalFocus = state.siteFileChangeProposalFocus || siteFileChangeProposals[0] || null;
       const siteFileChangeProposalFile = siteFileChangeProposalFocus?.record?.proposal?.files?.[0]
         || siteFileChangeProposalFocus?.proposal?.files?.[0]
@@ -9072,6 +9365,7 @@ export function renderCloudflareCarrierConsole() {
           listItem('open_tasks', openTasks.length + ' / ' + (product.tasks || []).length),
           listItem('authority_needing_action', authorityQueue.filter((item) => item.status !== 'ready').length + ' / ' + authorityQueue.length),
           listItem('site_file_change_proposals', siteFileChangeProposals.length + ' / ' + String(surface.site_file_change_proposal_count ?? siteFileChangeProposals.length)),
+          listItem('site_file_materializations', siteFileMaterializations.length + ' / ' + String(surface.site_file_materialization_count ?? siteFileMaterializations.length)),
         ],
         evidence: [
           listItem('events_loaded', String(state.events.length)),
@@ -9129,6 +9423,14 @@ export function renderCloudflareCarrierConsole() {
           listItem('repository_publication_admission', surface.repository_publication_admission || siteFileChangeProposalFocus?.repository_publication_admission || 'retained'),
           listItem('site_file_change_authority_partition', surface.site_file_change_authority_partition || 'filesystem_and_publication_windows_owned'),
           listItem('site_file_change_next_action', siteFileChangeProposalFocus ? 'review_site_file_change_proposal' : 'monitor_site_file_change_proposals'),
+          listItem('site_file_materialization_count', String(surface.site_file_materialization_count ?? siteFileMaterializations.length)),
+          listItem('site_file_materialization_authority', surface.site_file_materialization_authority || 'not_observed'),
+          listItem('cloudflare_site_file_materialization_admission', surface.cloudflare_site_file_materialization_admission || 'not_observed'),
+          listItem('cloudflare_site_file_materialization_executor_authority', surface.cloudflare_site_file_materialization_executor_authority || 'not_observed'),
+          listItem('windows_filesystem_mutation_admission', surface.windows_filesystem_mutation_admission || 'retained'),
+          listItem('site_file_materialization_repository_publication_admission', surface.site_file_materialization_repository_publication_admission || 'retained'),
+          listItem('site_file_materialization_authority_partition', surface.site_file_materialization_authority_partition || 'materialization_not_observed_filesystem_and_publication_windows_owned'),
+          listItem('site_file_materialization_next_action', siteFileMaterializations.length > 0 ? 'review_site_file_materialization' : 'monitor_site_file_materializations'),
         ],
         readiness: readinessGaps.length > 0
           ? readinessGaps.slice(0, 4).map((item) => listItem(item.label, item.detail || item.action_label || item.status))

@@ -153,6 +153,16 @@ assert.match(consoleCheck.body, /filesystem_mutation_admission/);
 assert.match(consoleCheck.body, /repository_publication_admission/);
 assert.match(consoleCheck.body, /site_file_change_authority_partition/);
 assert.match(consoleCheck.body, /site_file_change_next_action/);
+assert.match(consoleCheck.body, /site_file_materializations/);
+assert.match(consoleCheck.body, /site_file_materialization_count/);
+assert.match(consoleCheck.body, /site_file_materialization_authority/);
+assert.match(consoleCheck.body, /cloudflare_site_file_materialization_admission/);
+assert.match(consoleCheck.body, /cloudflare_site_file_materialization_executor_authority/);
+assert.match(consoleCheck.body, /windows_filesystem_mutation_admission/);
+assert.match(consoleCheck.body, /site_file_materialization_repository_publication_admission/);
+assert.match(consoleCheck.body, /site_file_materialization_authority_partition/);
+assert.match(consoleCheck.body, /site_file_materialization_next_action/);
+assert.match(consoleCheck.body, /review_site_file_materialization/);
 assert.match(consoleCheck.body, /review_site_file_change_proposal/);
 assert.match(consoleCheck.body, /selectSiteFileChangeProposal/);
 assert.match(consoleCheck.body, /controlled_action/);
@@ -1289,6 +1299,32 @@ assert.equal(siteFileChangeProposalSmoke.repository_publication_admission, 'not_
 assert.ok(siteFileChangeProposalSmoke.site_file_change_proposal_count >= 1);
 assert.equal(siteFileChangeProposalSmoke.site_file_change_authority_partition, 'site_file_change_proposal_cloudflare_recorded_filesystem_and_publication_windows_owned');
 
+const siteFileMaterializationSmoke = await runJsonCommand('site-file:materialization-smoke:live', [
+  'node',
+  'packages/cloudflare-carrier/scripts/cloudflare-carrier-site-file-materialization-live-smoke.mjs',
+  '--url',
+  workerUrl,
+  '--token-file',
+  tokenFile,
+  '--site',
+  siteId,
+  '--operation',
+  operationId,
+  '--proposal-id',
+  siteFileChangeProposalSmoke.proposal_id,
+]);
+assert.equal(siteFileMaterializationSmoke.status, 'ok');
+assert.equal(siteFileMaterializationSmoke.worker_url, workerUrl);
+assert.equal(siteFileMaterializationSmoke.site_id, siteId);
+assert.equal(siteFileMaterializationSmoke.operation_id, operationId);
+assert.equal(siteFileMaterializationSmoke.site_file_materialization_authority, 'cloudflare_carrier_site');
+assert.equal(siteFileMaterializationSmoke.cloudflare_site_file_materialization_admission, 'admitted');
+assert.equal(siteFileMaterializationSmoke.filesystem_executor_authority, 'cloudflare_site_file_store');
+assert.equal(siteFileMaterializationSmoke.windows_filesystem_mutation_admission, 'not_admitted');
+assert.equal(siteFileMaterializationSmoke.repository_publication_admission, 'not_admitted');
+assert.ok(siteFileMaterializationSmoke.site_file_materialization_count >= 1);
+assert.equal(siteFileMaterializationSmoke.site_file_materialization_authority_partition, 'site_file_materialization_cloudflare_owned_windows_filesystem_and_publication_not_admitted');
+
 const webhookDelayDirectiveDeliverySuffix = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
 const webhookDelayDirectiveDelivery = await postCarrier(workerUrl, bearerToken, {
   operation: 'webhook_delay.directive.primary_with_fallback.deliver',
@@ -1357,6 +1393,7 @@ const operationReadAfterContinuity = await postCarrier(workerUrl, bearerToken, {
     resident_loop_shadow_limit: 10,
     mailbox_status_shadow_limit: 20,
     site_file_change_proposal_limit: 20,
+    site_file_materialization_limit: 20,
     resident_dispatch_limit: 10,
   },
 });
@@ -1378,6 +1415,7 @@ const taskLifecycleTasks = operationReadAfterContinuity.body.task_lifecycle_task
 const residentLoopShadowRuns = operationReadAfterContinuity.body.resident_loop_shadow_runs ?? [];
 const mailboxStatusShadowReads = operationReadAfterContinuity.body.mailbox_status_shadow_reads ?? [];
 const siteFileChangeProposals = operationReadAfterContinuity.body.site_file_change_proposals ?? [];
+const siteFileMaterializations = operationReadAfterContinuity.body.site_file_materializations ?? [];
 const residentDispatchDecisions = operationReadAfterContinuity.body.resident_dispatch_decisions ?? [];
 assert.equal(operationSurface?.operation_id, operationId);
 assert.ok(Array.isArray(operationContinuityPackets));
@@ -1580,6 +1618,23 @@ assert.equal(operationSurface?.filesystem_executor_authority, 'windows_filesyste
 assert.equal(operationSurface?.filesystem_mutation_admission, 'not_admitted');
 assert.equal(operationSurface?.repository_publication_admission, 'not_admitted');
 assert.equal(operationSurface?.site_file_change_authority_partition, 'site_file_change_proposal_cloudflare_recorded_filesystem_and_publication_windows_owned');
+assert.ok(Array.isArray(siteFileMaterializations));
+assert.ok(siteFileMaterializations.length >= 1);
+assert.equal(operationSurface?.site_file_materialization_count, siteFileMaterializations.length);
+const recordedSiteFileMaterialization = siteFileMaterializations.find((materialization) => materialization.materialization_id === siteFileMaterializationSmoke.materialization_id);
+assert.ok(recordedSiteFileMaterialization);
+assert.equal(recordedSiteFileMaterialization.schema, 'narada.sonar.cloudflare_site_file_materialization.v1');
+assert.equal(recordedSiteFileMaterialization.authority_locus, 'cloudflare_carrier_site');
+assert.equal(recordedSiteFileMaterialization.filesystem_executor_authority, 'cloudflare_site_file_store');
+assert.equal(recordedSiteFileMaterialization.windows_filesystem_mutation_admission, 'not_admitted');
+assert.equal(recordedSiteFileMaterialization.repository_publication_admission, 'not_admitted');
+assert.equal(recordedSiteFileMaterialization.write_effect, 'cloudflare_site_file_materialization_record');
+assert.equal(operationSurface?.site_file_materialization_authority, 'cloudflare_carrier_site');
+assert.equal(operationSurface?.cloudflare_site_file_materialization_admission, 'admitted');
+assert.equal(operationSurface?.cloudflare_site_file_materialization_executor_authority, 'cloudflare_site_file_store');
+assert.equal(operationSurface?.windows_filesystem_mutation_admission, 'not_admitted');
+assert.equal(operationSurface?.site_file_materialization_repository_publication_admission, 'not_admitted');
+assert.equal(operationSurface?.site_file_materialization_authority_partition, 'site_file_materialization_cloudflare_owned_windows_filesystem_and_publication_not_admitted');
 assert.ok(Array.isArray(webhookDelayDirectiveDeliveries));
 assert.ok(webhookDelayDirectiveDeliveries.length >= 1);
 assert.equal(operationSurface?.webhook_delay_directive_delivery_count, webhookDelayDirectiveDeliveries.length);
@@ -1654,6 +1709,7 @@ const report = {
     task_lifecycle_role_resolution_write_cutover_surface: 'ok',
     task_lifecycle_roster_mutation_write_cutover_surface: 'ok',
     mailbox_status_shadow_surface: 'ok',
+    site_file_materialization_surface: 'ok',
     resident_loop_shadow_surface: 'ok',
     resident_dispatch_surface: 'ok',
     human_operator_session: humanOperator.status,
@@ -1762,6 +1818,14 @@ const report = {
     filesystem_mutation_admission: operationSurface.filesystem_mutation_admission,
     repository_publication_admission: operationSurface.repository_publication_admission,
     site_file_change_authority_partition: operationSurface.site_file_change_authority_partition,
+    site_file_materialization_count: operationSurface.site_file_materialization_count,
+    site_file_materialization_id: siteFileMaterializationSmoke.materialization_id,
+    site_file_materialization_authority: operationSurface.site_file_materialization_authority,
+    cloudflare_site_file_materialization_admission: operationSurface.cloudflare_site_file_materialization_admission,
+    cloudflare_site_file_materialization_executor_authority: operationSurface.cloudflare_site_file_materialization_executor_authority,
+    windows_filesystem_mutation_admission: operationSurface.windows_filesystem_mutation_admission,
+    site_file_materialization_repository_publication_admission: operationSurface.site_file_materialization_repository_publication_admission,
+    site_file_materialization_authority_partition: operationSurface.site_file_materialization_authority_partition,
     resident_loop_shadow_run_count: operationSurface.resident_loop_shadow_run_count,
     resident_loop_shadow_last_status: recordedResidentLoopShadow.loop_status,
     resident_loop_shadow_dispatch_authority: recordedResidentLoopShadow.dispatch_authority,

@@ -25,6 +25,7 @@
     "resident-loop:shadow-smoke:live": "node scripts/cloudflare-carrier-resident-loop-shadow-live-smoke.mjs",
     "mailbox:status-shadow-smoke:live": "node scripts/cloudflare-carrier-mailbox-status-shadow-live-smoke.mjs",
     "site-file-change:proposal-smoke:live": "node scripts/cloudflare-carrier-site-file-change-proposal-live-smoke.mjs",
+    "site-file:materialization-smoke:live": "node scripts/cloudflare-carrier-site-file-materialization-live-smoke.mjs",
     "task-lifecycle:shadow-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-shadow-live-smoke.mjs",
     "task-lifecycle:create-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-create-live-smoke.mjs",
     "task-lifecycle:claim-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-claim-live-smoke.mjs",
