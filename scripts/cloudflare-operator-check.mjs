@@ -42,11 +42,12 @@ const operatorCookieFile = option('--operator-cookie-file') ?? process.env.CLOUD
 const registryPath = option('--registry') ?? process.env.NARADA_SITE_CONTINUITY_REGISTRY ?? join(tmpdir(), 'narada-cloudflare-operator-continuity.db');
 const expectToolEffectPosture = option('--expect-tool-effect-posture') ?? process.env.CLOUDFLARE_CARRIER_EXPECT_TOOL_EFFECT_POSTURE ?? 'configured';
 const requireOperatorSession = flag('--require-operator-session');
+const requireHumanOperatorAction = flag('--require-human-operator-action');
 
 if (flag('--write-env')) await writeLocalEnv({ workerUrl, tokenFile });
 if (!workerUrl) fail('cloudflare_operator_check_requires_--url_or_CLOUDFLARE_CARRIER_URL');
 if (!tokenFile) fail('cloudflare_operator_check_requires_--token-file_or_CLOUDFLARE_CARRIER_TOKEN_FILE');
-if (requireOperatorSession && !operatorCookieFile) fail('cloudflare_operator_check_requires_--operator-cookie-file');
+if ((requireOperatorSession || requireHumanOperatorAction) && !operatorCookieFile) fail('cloudflare_operator_check_requires_--operator-cookie-file');
 
 const tokenStat = await readableFileStat(tokenFile);
 if (!tokenStat.ok) fail('cloudflare_operator_check_token_file_unreadable', { token_file: tokenFile, error: tokenStat.error });
@@ -1064,7 +1065,8 @@ const humanOperator = await checkHumanOperatorSession({
   workerUrl,
   siteId,
   operatorCookieFile,
-  required: requireOperatorSession,
+  required: requireOperatorSession || requireHumanOperatorAction,
+  requireAction: requireHumanOperatorAction,
 });
 
 const continuityFirst = await runJsonCommand('site-continuity-loop:first', continuityCommand());
@@ -1818,6 +1820,7 @@ const report = {
     human_operator_session: humanOperator.status,
     human_operator_membership: humanOperator.membership_status,
     human_operator_operation_read: humanOperator.operation_status,
+    human_operator_action: humanOperator.action_status,
     continuity_loop: 'ok',
     continuity_idempotence: 'ok',
   },
@@ -1831,6 +1834,7 @@ const report = {
     human_operator_principal_id: humanOperator.principal?.principal_id ?? null,
     human_operator_email: humanOperator.principal?.email ?? null,
   },
+  human_operator_action: humanOperator.action,
   membership: {
     count: memberships.length,
     current_role: currentMembership?.role ?? null,
@@ -2453,17 +2457,19 @@ function commandStatesForOperationProduct(product = {}, focus = {}) {
   };
 }
 
-async function checkHumanOperatorSession({ workerUrl, siteId, operatorCookieFile, required }) {
+async function checkHumanOperatorSession({ workerUrl, siteId, operatorCookieFile, required, requireAction = false }) {
   if (!operatorCookieFile) {
     if (required) fail('cloudflare_operator_check_requires_--operator-cookie-file');
     return {
       status: 'not_checked',
       membership_status: 'not_checked',
       operation_status: 'not_checked',
+      action_status: 'not_checked',
       login_ready: 'surface_only',
       membership_ready: 'not_checked',
       principal: null,
       membership: null,
+      action: null,
     };
   }
   const cookieStat = await readableFileStat(operatorCookieFile);
@@ -2484,10 +2490,12 @@ async function checkHumanOperatorSession({ workerUrl, siteId, operatorCookieFile
       status: 'unauthenticated',
       membership_status: 'not_checked',
       operation_status: 'not_checked',
+      action_status: 'not_checked',
       login_ready: false,
       membership_ready: false,
       principal: null,
       membership: null,
+      action: null,
     };
   }
   assert.equal(session.http_status, 200);
@@ -2524,14 +2532,86 @@ async function checkHumanOperatorSession({ workerUrl, siteId, operatorCookieFile
   assert.equal(operationReadAsOperator.body.operation?.operation_id, operationId);
   assert.equal(operationReadAsOperator.body.operation?.status, 'active');
   assert.ok(operationReadAsOperator.body.operation_product_surface?.session_count >= 1);
+  const action = requireAction
+    ? await verifyHumanOperatorResidentDispatchAction({
+      workerUrl,
+      siteId,
+      cookieHeader,
+      principal: session.body.principal,
+    })
+    : null;
   return {
     status: 'ok',
     membership_status: 'ok',
     operation_status: 'ok',
+    action_status: action ? 'ok' : 'not_checked',
     login_ready: true,
     membership_ready: true,
     principal: session.body.principal,
     membership: humanMembership,
+    action,
+  };
+}
+
+async function verifyHumanOperatorResidentDispatchAction({ workerUrl, siteId, cookieHeader, principal }) {
+  const actionToken = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
+  const dispatchDecisionId = `human_operator_check_resident_dispatch_${actionToken}`;
+  const carrierSessionId = `carrier_session_human_operator_dispatch_${actionToken}`;
+  const dispatch = await postCarrierWithCookie(workerUrl, cookieHeader, {
+    operation: 'resident_dispatch.primary_with_fallback.start',
+    request_id: `human_operator_check_resident_dispatch_${Date.now()}`,
+    params: {
+      site_id: siteId,
+      operation_id: operationId,
+      carrier_session_id: carrierSessionId,
+      dispatch_decision_id: dispatchDecisionId,
+      agent_id: 'narada.cloudflare.human-operator-check',
+      site_ref: siteRef,
+      dispatch_scope: 'human_operator_controlled_operation_session_start',
+      windows_fallback_ref: 'windows_local_site_resident_loop',
+    },
+  });
+  assert.equal(dispatch.http_status, 200);
+  assert.equal(dispatch.body.ok, true);
+  assert.equal(dispatch.body.schema, 'narada.sonar.cloudflare_resident_dispatch_primary_with_windows_fallback.v1');
+  assert.equal(dispatch.body.status, 'cloudflare_primary_started');
+  assert.equal(dispatch.body.operation_id, operationId);
+  assert.equal(dispatch.body.carrier_session_id, carrierSessionId);
+  assert.equal(dispatch.body.dispatch_authority, 'cloudflare_primary_dispatcher');
+  assert.equal(dispatch.body.fallback_authority, 'windows_fallback_dispatcher');
+  assert.equal(dispatch.body.fallback_status, 'available');
+  assert.equal(dispatch.body.dispatch_action, 'cloudflare_session_start');
+
+  const readback = await postCarrierWithCookie(workerUrl, cookieHeader, {
+    operation: 'operation.read',
+    request_id: `human_operator_check_resident_dispatch_readback_${Date.now()}`,
+    params: {
+      site_id: siteId,
+      operation_id: operationId,
+      carrier_event_limit: 10,
+      session_limit: 10,
+      resident_dispatch_limit: 20,
+    },
+  });
+  assert.equal(readback.http_status, 200);
+  assert.equal(readback.body.ok, true);
+  const recorded = (readback.body.resident_dispatch_decisions ?? []).find((decision) => decision.dispatch_decision_id === dispatchDecisionId);
+  assert.ok(recorded, 'human operator resident dispatch decision is visible in operation readback');
+  assert.equal(recorded.decision_state, 'cloudflare_primary_started');
+  assert.equal(recorded.operation_id, operationId);
+  assert.equal(recorded.carrier_session_id, carrierSessionId);
+  assert.equal(recorded.recorded_by_principal_id, principal.principal_id);
+  return {
+    operation: 'resident_dispatch.primary_with_fallback.start',
+    status: 'ok',
+    dispatch_decision_id: dispatchDecisionId,
+    carrier_session_id: carrierSessionId,
+    principal_id: principal.principal_id,
+    email: principal.email ?? null,
+    decision_state: recorded.decision_state,
+    dispatch_authority: recorded.dispatch_authority,
+    fallback_authority: recorded.fallback_authority,
+    fallback_status: recorded.fallback_status,
   };
 }
 
@@ -2661,5 +2741,5 @@ function fail(code, detail = {}) {
 }
 
 function printHelp() {
-  stdout.write(`Narada Cloudflare operator check\n\nCommand:\n  pnpm cloudflare:operator:check [--site <site_id>]\n\nConfiguration:\n  --url <worker-url> or CLOUDFLARE_CARRIER_URL\n  --token-file <path> or CLOUDFLARE_CARRIER_TOKEN_FILE\n  --operator-cookie-file <path> or CLOUDFLARE_OPERATOR_COOKIE_FILE\n  --operation <operation_id> or CLOUDFLARE_CARRIER_OPERATION_ID\n  --require-operator-session fails when no operator cookie file is supplied\n  --registry <registry.db> or NARADA_SITE_CONTINUITY_REGISTRY\n  --write-env writes --url and --token-file into the ignored root .env file\n\nEffect:\n  Loads the ignored root .env file.\n  Verifies the console and Microsoft login surface.\n  Optionally verifies the current Microsoft operator session, site membership, and Operation visibility from a browser cookie file.\n  Runs the live carrier smoke through Workers AI and Cloudflare task effects.\n  Reads site membership/product state and the canonical active Operation from the live Worker.\n  Runs the Windows/Cloudflare continuity loop twice to prove idempotent packet exchange.\n  Emits one JSON readiness report with console and login URLs, without printing token material.\n`);
+  stdout.write(`Narada Cloudflare operator check\n\nCommand:\n  pnpm cloudflare:operator:check [--site <site_id>]\n\nConfiguration:\n  --url <worker-url> or CLOUDFLARE_CARRIER_URL\n  --token-file <path> or CLOUDFLARE_CARRIER_TOKEN_FILE\n  --operator-cookie-file <path> or CLOUDFLARE_OPERATOR_COOKIE_FILE\n  --operation <operation_id> or CLOUDFLARE_CARRIER_OPERATION_ID\n  --require-operator-session fails when no operator cookie file is supplied\n  --require-human-operator-action verifies a cookie-backed resident dispatch action and readback\n  --registry <registry.db> or NARADA_SITE_CONTINUITY_REGISTRY\n  --write-env writes --url and --token-file into the ignored root .env file\n\nEffect:\n  Loads the ignored root .env file.\n  Verifies the console and Microsoft login surface.\n  Optionally verifies the current Microsoft operator session, site membership, and Operation visibility from a browser cookie file.\n  With --require-human-operator-action, records a real resident dispatch as the Microsoft operator and proves it is visible in Operation readback.\n  Runs the live carrier smoke through Workers AI and Cloudflare task effects.\n  Reads site membership/product state and the canonical active Operation from the live Worker.\n  Runs the Windows/Cloudflare continuity loop twice to prove idempotent packet exchange.\n  Emits one JSON readiness report with console and login URLs, without printing token material.\n`);
 }
