@@ -2159,6 +2159,13 @@ export function renderCloudflareCarrierConsole() {
       <div class="product-panel">
         <h2>Site Product</h2>
         <div class="actions"><button id="readSite" class="secondary">Read Site</button></div>
+        <h3>Site Action</h3>
+        <div id="siteActionSummary" class="evidence-summary"><div class="empty">No site action loaded.</div></div>
+        <div class="actions">
+          <button id="siteActionReadSite" class="secondary">Read Site Scope</button>
+          <button id="siteActionFocusOperation" class="secondary">Focus Site Operation</button>
+          <button id="siteActionFocusMembership" class="secondary">Focus Membership</button>
+        </div>
         <h3>Site Focus Detail</h3>
         <div id="siteFocusDetail" class="evidence-summary"><div class="empty">No site loaded.</div></div>
       </div>
@@ -2458,6 +2465,7 @@ export function renderCloudflareCarrierConsole() {
       el('controlEvidenceWindow').textContent = String(surface.carrier_evidence_count ?? state.events.length) + ' evidence groups / ' + state.events.length + ' loaded events';
       el('controlContinuity').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length ?? 0) + ' packets';
       el('controlWorkbenchReadiness').textContent = operationWorkbenchReadiness(product);
+      renderSiteActionSummary();
       renderOperationActionSummary();
       renderSessionActionSummary();
       renderTaskCommandPreview();
@@ -3368,6 +3376,7 @@ export function renderCloudflareCarrierConsole() {
       if (membership.principal_id) el('memberPrincipalId').value = membership.principal_id;
       if (membership.role) el('memberRole').value = membership.role;
       renderMembershipNavigator(currentMemberships(state.operationProduct || {}));
+      renderSiteActionSummary();
       updateControlRoom();
     }
     function currentMemberships(product = {}) {
@@ -3379,6 +3388,7 @@ export function renderCloudflareCarrierConsole() {
       if (memberships.length === 0) {
         state.membershipFocus = null;
         el('membershipNavigator').innerHTML = '<div class="empty">No memberships loaded.</div>';
+        renderSiteActionSummary();
         renderMembershipFocusDetail();
         return;
       }
@@ -3395,6 +3405,7 @@ export function renderCloudflareCarrierConsole() {
         node.append(title, meta);
         return node;
       }));
+      renderSiteActionSummary();
       renderMembershipFocusDetail();
     }
     function membershipFocusContext(membership = {}) {
@@ -4032,12 +4043,60 @@ export function renderCloudflareCarrierConsole() {
         ['Updated', site.updated_at || 'none'],
       ];
     }
+    function focusedSite() {
+      return state.siteFocus
+        || state.operationProduct?.site
+        || (el('siteId').value.trim() ? { site_id: el('siteId').value.trim() } : null);
+    }
+    function siteScopeLoaded(site = focusedSite()) {
+      const siteId = site?.site_id || el('siteId').value.trim();
+      return Boolean(siteId && state.productScope === 'site' && state.operationProduct?.site?.site_id === siteId);
+    }
+    function siteActionContext(site = focusedSite()) {
+      const siteId = site?.site_id || el('siteId').value.trim() || '';
+      const loaded = siteScopeLoaded(site);
+      const operations = state.operationProduct?.operations || [];
+      const memberships = currentMemberships(state.operationProduct || {});
+      const authorityCount = (state.operationProduct?.authority_events || []).length + (state.operationProduct?.site_authority?.decisions || []).length;
+      const nextAction = !siteId ? 'select_site'
+        : !loaded ? 'read_site_scope'
+        : memberships.length === 0 ? 'load_or_create_membership'
+        : operations.length === 0 ? 'create_or_select_operation'
+        : authorityCount === 0 ? 'read_site_authority'
+        : 'inspect_site_operations';
+      return [
+        ['Site', siteId || 'none'],
+        ['Scope Loaded', loaded ? 'yes' : 'no'],
+        ['Status', site?.status || state.operationProduct?.site?.status || 'unknown'],
+        ['Operations', operations.length],
+        ['Memberships', memberships.length],
+        ['Authority Items', authorityCount],
+        ['Next Action', nextAction],
+      ];
+    }
+    function renderSiteActionSummary(site = focusedSite()) {
+      if (!site) {
+        el('siteActionSummary').innerHTML = '<div class="empty">No site action loaded.</div>';
+        return;
+      }
+      el('siteActionSummary').replaceChildren(...siteActionContext(site).map(([label, value]) => evidenceField(label, value)));
+    }
+    function focusSiteOperation() {
+      const operation = state.operationFocus || state.operations[0] || state.operationProduct?.operation || null;
+      if (operation) run(() => selectOperation(operation));
+    }
+    function focusSiteMembership() {
+      const membership = state.membershipFocus || currentMemberships(state.operationProduct || {})[0] || null;
+      if (membership) selectMembership(membership);
+    }
     function renderSiteFocusDetail(site = state.siteFocus) {
       state.siteFocus = site || state.siteFocus;
       if (!state.siteFocus) {
         el('siteFocusDetail').innerHTML = '<div class="empty">No site loaded.</div>';
+        renderSiteActionSummary();
         return;
       }
+      renderSiteActionSummary(state.siteFocus);
       el('siteFocusDetail').replaceChildren(...siteFocusContext(state.siteFocus).map(([label, value]) => evidenceField(label, value)));
     }
     function evidenceMeaning(event) {
@@ -4224,6 +4283,9 @@ export function renderCloudflareCarrierConsole() {
     el('autoRefreshOperation').addEventListener('click', () => setAutoRefresh(!state.autoRefreshTimer));
     el('readSite').addEventListener('click', () => run(refreshSiteProduct));
     el('readSiteScope').addEventListener('click', () => run(refreshSiteProduct));
+    el('siteActionReadSite').addEventListener('click', () => run(refreshSiteProduct));
+    el('siteActionFocusOperation').addEventListener('click', focusSiteOperation);
+    el('siteActionFocusMembership').addEventListener('click', focusSiteMembership);
     el('putMembership').addEventListener('click', () => run(async () => {
       const principalId = el('memberPrincipalId').value.trim();
       const role = el('memberRole').value.trim();
