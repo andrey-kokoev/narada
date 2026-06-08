@@ -1784,6 +1784,10 @@ export function renderCloudflareCarrierConsole() {
         <div class="metric"><b>Events</b><span id="eventCount">0</span></div>
         <div class="metric"><b>Cursor</b><span id="cursor">0</span></div>
       </div>
+      <div class="product-panel">
+        <h2>Active Session Detail</h2>
+        <div id="activeSessionDetail" class="evidence-summary"><div class="empty">No active session loaded.</div></div>
+      </div>
       <div class="control-room">
         <h2>Control Room</h2>
         <div class="control-room-grid">
@@ -2014,6 +2018,7 @@ export function renderCloudflareCarrierConsole() {
     }
     function renderActiveSession() {
       el('activeSession').textContent = el('sessionId').value.trim() || 'none';
+      renderActiveSessionDetail();
       updateControlRoom();
     }
     function setCurrentOperation(operationId) {
@@ -2377,6 +2382,20 @@ export function renderCloudflareCarrierConsole() {
       }
       el('sessionFocusDetail').replaceChildren(...sessionFocusContext(session).map(([label, value]) => evidenceField(label, value)));
     }
+    function activeSessionDetail() {
+      const activeSession = el('sessionId').value.trim();
+      if (!activeSession) return null;
+      return (state.operationProduct?.sessions || []).find((session) => session.carrier_session_id === activeSession)
+        || (state.sessionFocus?.carrier_session_id === activeSession ? state.sessionFocus : null)
+        || { carrier_session_id: activeSession };
+    }
+    function renderActiveSessionDetail(session = activeSessionDetail()) {
+      if (!session) {
+        el('activeSessionDetail').innerHTML = '<div class="empty">No active session loaded.</div>';
+        return;
+      }
+      el('activeSessionDetail').replaceChildren(...sessionFocusContext(session).map(([label, value]) => evidenceField(label, value)));
+    }
     function membershipKey(membership = {}) {
       return membership.principal_id || membership.email || membership.member_principal_id || '';
     }
@@ -2705,6 +2724,7 @@ export function renderCloudflareCarrierConsole() {
         : sessions.map((session) => new Option(session.carrier_session_id + ' / ' + (session.binding_status || session.agent_id || 'active'), session.carrier_session_id))));
       if (sessions.some((session) => session.carrier_session_id === current)) select.value = current;
       renderSessionNavigator(sessions);
+      renderActiveSessionDetail();
     }
     function renderOperationProduct(product) {
       state.operationProduct = product;
