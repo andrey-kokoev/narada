@@ -862,6 +862,18 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Operation Surface/);
   assert.match(html, /Read Operation/);
   assert.match(html, /Auto Refresh/);
+  assert.match(html, /Product Scope/);
+  assert.match(html, /controlProductScope/);
+  assert.match(html, /productScopeDetail/);
+  assert.match(html, /productScopeSummary/);
+  assert.match(html, /productScopeContext/);
+  assert.match(html, /renderProductScopeDetail/);
+  assert.match(html, /readOperationScope/);
+  assert.match(html, /readSiteScope/);
+  assert.match(html, /refreshSiteProduct/);
+  assert.match(html, /read_operation_or_site_scope/);
+  assert.match(html, /read_site_scope_for_membership_and_operations/);
+  assert.match(html, /read_operation_scope_for_active_operation/);
   assert.match(html, /Site Product/);
   assert.match(html, /Site Focus Detail/);
   assert.match(html, /siteFocusDetail/);

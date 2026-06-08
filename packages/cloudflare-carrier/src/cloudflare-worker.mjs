@@ -2045,6 +2045,7 @@ export function renderCloudflareCarrierConsole() {
         <h2>Control Room</h2>
         <div class="control-room-grid">
           <div class="control-room-item"><b>Operation</b><span id="controlOperation">none</span></div>
+          <div class="control-room-item"><b>Product Scope</b><span id="controlProductScope">not loaded</span></div>
           <div class="control-room-item"><b>Operation Focus</b><span id="controlOperationFocus">none</span></div>
           <div class="control-room-item"><b>Selected Session</b><span id="controlSession">none</span></div>
           <div class="control-room-item"><b>Session Focus</b><span id="controlSessionFocus">none</span></div>
@@ -2057,6 +2058,14 @@ export function renderCloudflareCarrierConsole() {
           <div class="control-room-item"><b>Evidence Window</b><span id="controlEvidenceWindow">0 events</span></div>
           <div class="control-room-item"><b>Continuity</b><span id="controlContinuity">unknown</span></div>
           <div class="control-room-item"><b>Workbench Readiness</b><span id="controlWorkbenchReadiness">not loaded</span></div>
+        </div>
+      </div>
+      <div class="product-panel">
+        <h2>Product Scope</h2>
+        <div id="productScopeDetail" class="evidence-summary"><div class="empty">No product scope loaded.</div></div>
+        <div class="actions">
+          <button id="readOperationScope" class="secondary">Read Operation Scope</button>
+          <button id="readSiteScope" class="secondary">Read Site Scope</button>
         </div>
       </div>
       <div class="product-panel">
@@ -2201,7 +2210,7 @@ export function renderCloudflareCarrierConsole() {
   </main>
   <script type="module">
     const WORKBENCH_STORAGE_KEY = 'narada.cloudflare.operationWorkbench.v1';
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, operations: [], consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -2406,6 +2415,7 @@ export function renderCloudflareCarrierConsole() {
         || (product.site_authority?.decisions || [])[0]
         || null;
       el('controlOperation').textContent = product.operation?.operation_id || el('operationId').value.trim() || 'none';
+      el('controlProductScope').textContent = productScopeSummary(product);
       el('controlOperationFocus').textContent = state.operationFocus ? [state.operationFocus.operation_id, state.operationFocus.status || state.operationFocus.operation_kind].filter(Boolean).join(' / ') : 'none';
       el('controlSession').textContent = activeSession || 'none';
       el('controlSessionFocus').textContent = state.sessionFocus ? [state.sessionFocus.carrier_session_id, state.sessionFocus.binding_status || state.sessionFocus.agent_id].filter(Boolean).join(' / ') : 'none';
@@ -2419,6 +2429,37 @@ export function renderCloudflareCarrierConsole() {
       el('controlEvidenceWindow').textContent = String(surface.carrier_evidence_count ?? state.events.length) + ' evidence groups / ' + state.events.length + ' loaded events';
       el('controlContinuity').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length ?? 0) + ' packets';
       el('controlWorkbenchReadiness').textContent = operationWorkbenchReadiness(product);
+    }
+    function productScopeSummary(product = state.operationProduct || {}) {
+      if (state.productScope === 'site') return ['site', product.site?.site_id || el('siteId').value.trim(), String((product.operations || []).length) + ' operations'].filter(Boolean).join(' / ');
+      if (state.productScope === 'operation') return ['operation', product.operation?.operation_id || el('operationId').value.trim(), String((product.sessions || []).length) + ' sessions'].filter(Boolean).join(' / ');
+      return 'not loaded';
+    }
+    function productScopeContext(product = state.operationProduct || {}) {
+      const surface = product.operation_product_surface || {};
+      const scope = state.productScope || 'none';
+      const followUp = scope === 'operation'
+        ? 'read_site_scope_for_membership_and_operations'
+        : scope === 'site'
+          ? (el('operationId').value.trim() ? 'read_operation_scope_for_active_operation' : 'select_operation')
+          : 'read_operation_or_site_scope';
+      return [
+        ['Scope', scope],
+        ['Site', product.site?.site_id || product.operation?.site_id || el('siteId').value.trim() || 'none'],
+        ['Operation', product.operation?.operation_id || el('operationId').value.trim() || 'none'],
+        ['Sessions', String(surface.session_count ?? (product.sessions || []).length)],
+        ['Tasks', String(surface.task_count ?? (product.tasks || []).length)],
+        ['Authority Events', String((product.authority_events || []).length)],
+        ['Evidence Groups', String(surface.carrier_evidence_count ?? (product.carrier_evidence || []).length)],
+        ['Follow Up', followUp],
+      ];
+    }
+    function renderProductScopeDetail(product = state.operationProduct || {}) {
+      if (!product || state.productScope === 'none') {
+        el('productScopeDetail').innerHTML = '<div class="empty">No product scope loaded.</div>';
+        return;
+      }
+      el('productScopeDetail').replaceChildren(...productScopeContext(product).map(([label, value]) => evidenceField(label, value)));
     }
     function operationWorkbenchReadiness(product = {}) {
       const missing = [];
@@ -3318,6 +3359,7 @@ export function renderCloudflareCarrierConsole() {
     }
     function renderSiteProduct(product) {
       state.operationProduct = product;
+      state.productScope = 'site';
       state.operations = product.operations || [];
       renderOperatorIdentity(product.reader_principal || state.operatorPrincipal);
       renderSiteFocusDetail(product.site || state.siteFocus);
@@ -3335,6 +3377,7 @@ export function renderCloudflareCarrierConsole() {
       renderWebhookDelayShadowNavigator(product.webhook_delay_shadow_observations || []);
       renderAttentionQueue(extractOperationAttention(product));
       renderAuthorityState(product);
+      renderProductScopeDetail(product);
       renderOperationFlightDeck(product);
       updateControlRoom();
       const siteItems = [
@@ -3385,6 +3428,7 @@ export function renderCloudflareCarrierConsole() {
     }
     function renderOperationProduct(product) {
       state.operationProduct = product;
+      state.productScope = 'operation';
       renderOperatorIdentity(product.reader_principal || state.operatorPrincipal);
       renderSiteFocusDetail(product.site || state.siteFocus);
       if (product.operation?.operation_id && !state.operations.some((operation) => operation.operation_id === product.operation.operation_id)) {
@@ -3407,6 +3451,7 @@ export function renderCloudflareCarrierConsole() {
       renderOperationSessions(product.sessions || []);
       renderAttentionQueue(extractOperationAttention(product));
       renderAuthorityState(product);
+      renderProductScopeDetail(product);
       renderOperationFlightDeck(product);
       updateControlRoom();
       const operationItems = [
@@ -3654,6 +3699,13 @@ export function renderCloudflareCarrierConsole() {
       appendEvents((body.carrier_evidence || []).flatMap((entry) => entry.events || []));
       return body;
     }
+    async function refreshSiteProduct() {
+      saveWorkbenchState();
+      const body = await api.readSite();
+      renderSiteProduct(body);
+      appendEvents((body.carrier_evidence || []).flatMap((entry) => entry.events || []));
+      return body;
+    }
     async function createOperationFromWorkbench() {
       const operationId = el('newOperationId').value.trim();
       if (!operationId) throw new Error('Operation ID is required.');
@@ -3733,9 +3785,11 @@ export function renderCloudflareCarrierConsole() {
     el('start').addEventListener('click', () => run(async () => { const body = await api.start(); appendEvents([body.event].filter(Boolean)); await refreshStatus(); await refreshOperation(); }));
     el('refresh').addEventListener('click', () => run(refreshOperation));
     el('readOperation').addEventListener('click', () => run(refreshOperation));
+    el('readOperationScope').addEventListener('click', () => run(refreshOperation));
     el('createOperation').addEventListener('click', () => run(createOperationFromWorkbench));
     el('autoRefreshOperation').addEventListener('click', () => setAutoRefresh(!state.autoRefreshTimer));
-    el('readSite').addEventListener('click', () => run(async () => { const body = await api.readSite(); renderSiteProduct(body); appendEvents((body.carrier_evidence || []).flatMap((entry) => entry.events || [])); }));
+    el('readSite').addEventListener('click', () => run(refreshSiteProduct));
+    el('readSiteScope').addEventListener('click', () => run(refreshSiteProduct));
     el('putMembership').addEventListener('click', () => run(async () => {
       const principalId = el('memberPrincipalId').value.trim();
       const role = el('memberRole').value.trim();
