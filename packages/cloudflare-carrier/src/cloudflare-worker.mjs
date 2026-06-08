@@ -501,6 +501,8 @@ function summarizeCloudflareOperationActivityTimeline({
       title: item.title || item.activity_kind,
       summary: item.summary || 'recorded',
       source_ref: item.source_ref || null,
+      focus_kind: item.focus_kind || item.activity_kind,
+      focus_ref: item.focus_ref || item.source_ref || null,
       principal_id: item.principal_id || null,
     });
   };
@@ -512,6 +514,8 @@ function summarizeCloudflareOperationActivityTimeline({
       title: `Operation ${transition.to_status || 'status changed'}`,
       summary: `${transition.from_status || 'unknown'} -> ${transition.to_status || 'unknown'}`,
       source_ref: transition.operation_id || operationId,
+      focus_kind: 'operation_authority_event',
+      focus_ref: transition.event_id,
       principal_id: transition.principal_id,
     });
   }
@@ -523,6 +527,8 @@ function summarizeCloudflareOperationActivityTimeline({
       title: event.event_kind,
       summary: [event.action, event.reason].filter(Boolean).join(' / ') || 'authority event recorded',
       source_ref: event.evidence?.operation_id || event.carrier_session_id || operationId,
+      focus_kind: 'operation_authority_event',
+      focus_ref: event.event_id,
       principal_id: event.principal_id,
     });
   }
@@ -534,6 +540,8 @@ function summarizeCloudflareOperationActivityTimeline({
       title: 'Session Bound',
       summary: [session.binding_status, session.agent_id].filter(Boolean).join(' / ') || 'session bound',
       source_ref: session.carrier_session_id,
+      focus_kind: 'operation_session',
+      focus_ref: session.carrier_session_id,
       principal_id: session.bound_by_principal_id,
     });
   }
@@ -545,6 +553,8 @@ function summarizeCloudflareOperationActivityTimeline({
       title: task.title || task.task_id || 'Task',
       summary: [task.status, task.carrier_session_id].filter(Boolean).join(' / ') || 'task recorded',
       source_ref: task.task_id,
+      focus_kind: 'operation_task',
+      focus_ref: task.task_id,
     });
   }
   for (const packet of continuityPackets || []) {
@@ -555,6 +565,8 @@ function summarizeCloudflareOperationActivityTimeline({
       title: 'Continuity Packet',
       summary: [packet.admission_action, packet.exchange_class].filter(Boolean).join(' / ') || 'continuity packet recorded',
       source_ref: packet.packet_id,
+      focus_kind: 'site_continuity_packet',
+      focus_ref: packet.packet_id,
       principal_id: packet.imported_by_principal_id,
     });
   }
@@ -567,6 +579,8 @@ function summarizeCloudflareOperationActivityTimeline({
         title: event.event_kind || 'carrier_event',
         summary: [entry.carrier_session_id, event.payload?.tool_name || event.payload?.provider || event.payload?.status].filter(Boolean).join(' / ') || 'carrier evidence recorded',
         source_ref: entry.carrier_session_id,
+        focus_kind: 'carrier_evidence_event',
+        focus_ref: `${entry.carrier_session_id}:${event.sequence ?? event.event_id ?? event.event_kind ?? ''}`,
       });
     }
   }
@@ -578,6 +592,8 @@ function summarizeCloudflareOperationActivityTimeline({
       title: 'Directive Intent',
       summary: [record.classification_state, record.directive_action, record.fallback_status].filter(Boolean).join(' / ') || 'directive recorded',
       source_ref: record.directive_record_id,
+      focus_kind: 'webhook_delay_directive_record',
+      focus_ref: record.directive_record_id,
       principal_id: record.recorded_by_principal_id,
     });
   }
@@ -589,6 +605,8 @@ function summarizeCloudflareOperationActivityTimeline({
       title: 'Directive Delivery',
       summary: [delivery.delivery_state, delivery.carrier_session_id, delivery.fallback_status].filter(Boolean).join(' / ') || 'directive delivery recorded',
       source_ref: delivery.delivery_id,
+      focus_kind: 'webhook_delay_directive_delivery',
+      focus_ref: delivery.delivery_id,
       principal_id: delivery.recorded_by_principal_id,
     });
   }
@@ -600,6 +618,8 @@ function summarizeCloudflareOperationActivityTimeline({
       title: 'Resident Loop Shadow Read',
       summary: [run.loop_status, 'steps=' + (run.step_count ?? 'unknown'), 'attention=' + (run.operator_attention_count ?? 'unknown')].join(' / '),
       source_ref: run.loop_run_id,
+      focus_kind: 'resident_loop_shadow_read',
+      focus_ref: run.loop_run_id,
       principal_id: run.recorded_by_principal_id,
     });
   }
@@ -611,6 +631,8 @@ function summarizeCloudflareOperationActivityTimeline({
       title: 'Resident Dispatch',
       summary: [decision.decision_state, decision.dispatch_action, decision.fallback_status].filter(Boolean).join(' / ') || 'dispatch decision recorded',
       source_ref: decision.dispatch_decision_id || decision.carrier_session_id,
+      focus_kind: 'resident_dispatch_decision',
+      focus_ref: decision.dispatch_decision_id || decision.carrier_session_id,
       principal_id: decision.recorded_by_principal_id,
     });
   }
@@ -8674,6 +8696,43 @@ export function renderCloudflareCarrierConsole() {
       if (!activity) return 'none';
       return [activity.activity_kind, activity.title, activity.occurred_at || 'unknown-time'].filter(Boolean).join(' / ');
     }
+    function selectOperationActivity(activity) {
+      if (!activity) return;
+      state.operationActivityFocus = activity;
+      const product = state.operationProduct || {};
+      const ref = activity.focus_ref || activity.source_ref || '';
+      if (activity.focus_kind === 'operation_session') {
+        const session = (product.sessions || []).find((entry) => entry.carrier_session_id === ref);
+        if (session) selectOperationSession(session);
+      } else if (activity.focus_kind === 'operation_task') {
+        const task = (product.tasks || []).find((entry) => entry.task_id === ref);
+        if (task) selectTask(task);
+      } else if (activity.focus_kind === 'site_continuity_packet') {
+        const item = continuityItems(product).find((entry) => entry.packet_id === ref);
+        if (item) selectContinuity(item);
+      } else if (activity.focus_kind === 'webhook_delay_directive_record') {
+        const directive = (product.webhook_delay_directive_records || []).find((entry) => entry.directive_record_id === ref || entry.directive_intent?.directive_id === ref);
+        if (directive) selectWebhookDelayDirective(directive);
+      } else if (activity.focus_kind === 'webhook_delay_directive_delivery') {
+        const delivery = (product.webhook_delay_directive_deliveries || []).find((entry) => entry.delivery_id === ref || entry.directive_delivery_id === ref);
+        if (delivery) selectWebhookDelayDirectiveDelivery(delivery);
+      } else if (activity.focus_kind === 'resident_loop_shadow_read') {
+        const run = (product.resident_loop_shadow_runs || []).find((entry) => entry.loop_run_id === ref);
+        if (run) selectResidentLoopShadow(run);
+      } else if (activity.focus_kind === 'resident_dispatch_decision') {
+        const decision = (product.resident_dispatch_decisions || []).find((entry) => entry.dispatch_decision_id === ref || entry.carrier_session_id === ref);
+        if (decision) selectResidentDispatch(decision);
+      } else if (activity.focus_kind === 'operation_authority_event') {
+        const event = (product.authority_events || []).find((entry) => entry.event_id === ref);
+        if (event) renderLastAuthority(event);
+        focusOperationPathAuthority();
+      } else if (activity.focus_kind === 'carrier_evidence_event') {
+        const [sessionId, sequenceOrKind] = String(ref).split(':');
+        focusEvidenceFor((event) => event.carrier_session_id === sessionId && (String(event.sequence ?? event.event_id ?? event.event_kind ?? '') === sequenceOrKind || event.event_kind === activity.title));
+      }
+      renderOperationActivityTimeline(product);
+      updateControlRoom();
+    }
     function renderOperationActivityTimeline(product = state.operationProduct || {}) {
       const timeline = operationActivityTimeline(product);
       const target = el('operationActivityTimeline');
@@ -8684,11 +8743,12 @@ export function renderCloudflareCarrierConsole() {
       }
       target.replaceChildren(...timeline.items.slice(0, 30).map((activity) => {
         const node = document.createElement('article');
-        node.className = 'attention-item';
+        node.className = 'attention-item' + (state.operationActivityFocus?.activity_id === activity.activity_id ? ' selected' : '');
         const title = document.createElement('strong');
         title.textContent = [activity.occurred_at || 'unknown-time', activity.activity_kind].join(' | ');
         const meta = document.createElement('span');
-        meta.textContent = [activity.title, activity.summary, activity.source_ref].filter(Boolean).join(' | ');
+        meta.textContent = [activity.title, activity.summary, activity.source_ref, activity.focus_kind].filter(Boolean).join(' | ');
+        node.addEventListener('click', () => selectOperationActivity(activity));
         node.append(title, meta);
         return node;
       }));

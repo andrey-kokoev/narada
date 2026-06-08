@@ -1098,10 +1098,14 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /operationActivityTimeline/);
   assert.match(html, /operationActivityTimelineSummary/);
   assert.match(html, /operationLatestActivityLabel/);
+  assert.match(html, /selectOperationActivity/);
   assert.match(html, /renderOperationActivityTimeline/);
   assert.match(html, /Operation Activity Timeline/);
   assert.match(html, /Activity Items/);
   assert.match(html, /Latest Activity/);
+  assert.match(html, /operationActivityFocus/);
+  assert.match(html, /focus_kind/);
+  assert.match(html, /focus_ref/);
   assert.match(html, /provider_events/);
   assert.match(html, /session_next_action/);
   assert.match(html, /Authority Posture/);
@@ -2955,6 +2959,10 @@ test('worker operation.create read and list route through site registry authorit
   assert.equal(pausedReadBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'operation_session_binding'), true, JSON.stringify(pausedReadBody.operation_activity_timeline.items));
   assert.equal(pausedReadBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'operation_task'), true, JSON.stringify(pausedReadBody.operation_activity_timeline.items));
   assert.equal(pausedReadBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'carrier_evidence_event'), true, JSON.stringify(pausedReadBody.operation_activity_timeline.items));
+  assert.equal(pausedReadBody.operation_activity_timeline.items.some((item) => item.focus_kind === 'operation_task' && item.focus_ref === taskCreateSummary.task.task_id), true, JSON.stringify(pausedReadBody.operation_activity_timeline.items));
+  assert.equal(pausedReadBody.operation_activity_timeline.items.some((item) => item.focus_kind === 'operation_session' && item.focus_ref === 'carrier_session_operation_fixture'), true, JSON.stringify(pausedReadBody.operation_activity_timeline.items));
+  assert.equal(pausedReadBody.operation_activity_timeline.items.some((item) => item.focus_kind === 'operation_authority_event' && item.focus_ref), true, JSON.stringify(pausedReadBody.operation_activity_timeline.items));
+  assert.equal(pausedReadBody.operation_activity_timeline.items.some((item) => item.focus_kind === 'carrier_evidence_event' && item.focus_ref.startsWith('carrier_session_operation_fixture:')), true, JSON.stringify(pausedReadBody.operation_activity_timeline.items));
   assert.equal(pausedReadBody.operation_product_surface.activity_timeline.activity_count, pausedReadBody.operation_activity_timeline.activity_count);
   assert.equal(pausedReadBody.authority_events.some((event) => event.event_kind === 'site_operation_status_updated'), true);
 
