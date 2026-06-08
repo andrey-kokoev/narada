@@ -332,6 +332,41 @@ test('durable object facade stores and reloads session snapshot', async () => {
   assert.equal(status.next_event_sequence, 3);
 });
 
+test('durable object alarm emits operation heartbeat directive through input delivery', async () => {
+  const storage = fakeStorage();
+  const durableObject = new CloudflareCarrierDurableObject({ storage }, {
+    NARADA_OPERATION_HEARTBEAT_DIRECTIVE_INTERVAL_MS: '60000',
+  });
+  const request = startRequest({ request_id: 'request_alarm_heartbeat_start' });
+  request.params = { ...request.params, operation_id: 'operation_alarm_heartbeat' };
+  const start = await durableObject.handle(request);
+  assert.equal(start.ok, true);
+  assert.equal(storage.alarms().length, 1);
+
+  await durableObject.alarm();
+
+  const read = await durableObject.handle({
+    operation: 'session.events.read',
+    carrier_session_id: 'carrier_session_cloudflare_fixture',
+    params: { after_sequence: 0, limit: 50 },
+  });
+  const kinds = read.events.map((event) => event.event_kind);
+  assert.deepEqual(kinds.slice(1), [
+    'directive_emission_authorized',
+    'directive_emission_rule_recorded',
+    'directive_emitted',
+    'directive_receipt_recorded',
+    'directive_carrier_accepted_recorded',
+    'input_completed',
+  ]);
+  assert.equal(kinds.includes('turn_started'), false);
+  assert.equal(kinds.includes('provider_request_recorded'), false);
+  assert.equal(read.events[3].payload.directive_kind, 'operation_heartbeat');
+  assert.equal(read.events[3].payload.cadence, 'PT1M');
+  assert.equal(read.events[4].payload.input_event_id, read.events[3].payload.input_event_id);
+  assert.equal(storage.alarms().length, 2);
+});
+
 test('durable object facade serializes mutations while provider work is pending', async () => {
   const storage = fakeStorage();
   const providerEntered = deferred();
@@ -1798,6 +1833,7 @@ test('control classifier marks cloudflare supported and mutating operations', ()
 
 function fakeStorage() {
   const values = new Map();
+  const alarms = [];
   return {
     async get(key) {
       const value = values.get(key);
@@ -1805,6 +1841,12 @@ function fakeStorage() {
     },
     async put(key, value) {
       values.set(key, JSON.parse(JSON.stringify(value)));
+    },
+    async setAlarm(timestamp) {
+      alarms.push(timestamp);
+    },
+    alarms() {
+      return [...alarms];
     },
   };
 }

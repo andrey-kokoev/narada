@@ -174,12 +174,39 @@ export class CloudflareCarrierDurableObject {
     return result;
   }
 
+  async alarm() {
+    const run = () => this.#alarmInLane();
+    const result = this.lane.then(run, run);
+    this.lane = result.catch(() => {});
+    return result;
+  }
+
   async #handleInLane(request) {
     const session = await this.#loadOrCreateSession(request);
     if (!session) return { ok: false, code: 'carrier_session_not_found' };
     const response = await session.handle(request);
-    if (mutatesSession(request.operation)) await this.#storeSnapshot(session);
+    if (mutatesSession(request.operation)) {
+      await this.#storeSnapshot(session);
+      await this.#scheduleOperationHeartbeatAlarm(session);
+    }
     return response;
+  }
+
+  async #alarmInLane() {
+    const session = await this.#loadOrCreateSession({ operation: 'session.status' });
+    if (!session || session.state.closed) return;
+    await session.handle({
+      operation: 'directive.heartbeat.emit',
+      request_id: `request_operation_heartbeat_alarm_${Date.now()}`,
+      carrier_session_id: session.state.carrier_session_id,
+      principal: { principal_id: 'principal:service' },
+      params: {
+        operation_id: session.state.operation_id ?? null,
+        reason: 'operation_continuity_heartbeat',
+      },
+    });
+    await this.#storeSnapshot(session);
+    await this.#scheduleOperationHeartbeatAlarm(session);
   }
 
   async #loadOrCreateSession(request) {
@@ -210,6 +237,15 @@ export class CloudflareCarrierDurableObject {
 
   async #storeSnapshot(session) {
     await this.state.storage.put(SNAPSHOT_KEY, session.snapshot());
+  }
+
+  async #scheduleOperationHeartbeatAlarm(session) {
+    if (this.env.NARADA_OPERATION_HEARTBEAT_DIRECTIVE_ENABLE === 'false') return;
+    if (!session?.state?.operation_id || session.state.closed) return;
+    if (typeof this.state.storage?.setAlarm !== 'function') return;
+    const intervalMs = Number(this.env.NARADA_OPERATION_HEARTBEAT_DIRECTIVE_INTERVAL_MS ?? 60000);
+    const boundedIntervalMs = Number.isFinite(intervalMs) && intervalMs > 0 ? intervalMs : 60000;
+    await this.state.storage.setAlarm(Date.now() + boundedIntervalMs);
   }
 }
 
