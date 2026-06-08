@@ -1700,6 +1700,10 @@ export function renderCloudflareCarrierConsole() {
     .control-room-item { min-width: 0; border: 1px solid #d9dcd3; border-radius: 6px; padding: 8px; background: #fff; }
     .control-room-item b { display: block; font-size: 11px; color: #686d75; }
     .control-room-item span { display: block; margin-top: 4px; font-size: 12px; color: #1e2024; overflow-wrap: anywhere; }
+    .attention-items { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+    .attention-item { border: 1px solid #d9dcd3; border-radius: 6px; padding: 9px; background: #fff; cursor: pointer; }
+    .attention-item strong { display: block; font-size: 13px; color: #1f4e48; overflow-wrap: anywhere; }
+    .attention-item span { display: block; margin-top: 4px; font-size: 12px; color: #686d75; overflow-wrap: anywhere; }
     .task-panel { margin-top: 16px; border-top: 1px solid #d7d7ce; padding-top: 14px; }
     .task-panel h2 { margin: 0 0 10px; font-size: 15px; letter-spacing: 0; }
     .tasks { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
@@ -1769,9 +1773,15 @@ export function renderCloudflareCarrierConsole() {
           <div class="control-room-item"><b>Selected Session</b><span id="controlSession">none</span></div>
           <div class="control-room-item"><b>Authority Locus</b><span id="controlAuthorityLocus">unknown</span></div>
           <div class="control-room-item"><b>Task Focus</b><span id="controlTaskFocus">none</span></div>
+          <div class="control-room-item"><b>Attention</b><span id="controlAttention">0 open</span></div>
           <div class="control-room-item"><b>Evidence Window</b><span id="controlEvidenceWindow">0 events</span></div>
           <div class="control-room-item"><b>Continuity</b><span id="controlContinuity">unknown</span></div>
         </div>
+      </div>
+      <div class="product-panel">
+        <h2>Operation Attention</h2>
+        <div class="actions"><button id="raiseAttention" class="secondary">Raise Attention</button></div>
+        <div id="attentionQueue" class="attention-items"><div class="empty">No operation attention loaded.</div></div>
       </div>
       <div class="product-panel">
         <h2>Last Authority</h2>
@@ -1835,7 +1845,7 @@ export function renderCloudflareCarrierConsole() {
   </main>
   <script type="module">
     const WORKBENCH_STORAGE_KEY = 'narada.cloudflare.operationWorkbench.v1';
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, consoleSequence: 0, taskFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, consoleSequence: 0, taskFocus: null, attentionItems: [], attentionFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -1894,6 +1904,15 @@ export function renderCloudflareCarrierConsole() {
       },
       readEvents() { return this.request('session.events.read', { after_sequence: state.afterSequence }); },
       command(command, args = []) { return this.request('carrier.command.execute', { command, args }, { request_id: 'console_command_' + Date.now() }); },
+      emitAttention() {
+        const operationId = el('operationId').value.trim();
+        return this.request('directive.emit', {
+          directive_kind: 'operation_attention',
+          operation_id: operationId,
+          target: { kind: 'operation', id: operationId },
+          reason: 'operator_requested_attention',
+        }, { request_id: 'console_attention_' + Date.now() });
+      },
       deliver(content) {
         const eventId = 'console_input_' + Date.now();
         return this.request('carrier.input.deliver', { input: { event_id: eventId, input_id: eventId, input_kind: 'operator_message', source: 'operator', visibility: 'operator_visible', content } }, { request_id: 'request_' + eventId });
@@ -1953,6 +1972,34 @@ export function renderCloudflareCarrierConsole() {
       }
       refreshEventKindFilter();
       renderEvents();
+      renderAttentionQueue(extractOperationAttention(state.operationProduct || {}));
+    }
+    function extractOperationAttention(product = {}) {
+      const events = [
+        ...state.events,
+        ...(product.carrier_evidence || []).flatMap((entry) => entry.events || []),
+      ];
+      const seen = new Set();
+      return events
+        .filter((event) => event.event_kind === 'directive_emitted' && event.payload?.directive_kind === 'operation_attention')
+        .map((event) => {
+          const payload = event.payload || {};
+          const key = payload.directive_id || payload.input_event_id || [event.carrier_session_id, event.sequence].filter(Boolean).join(':');
+          if (seen.has(key)) return null;
+          seen.add(key);
+          return {
+            key,
+            directive_id: payload.directive_id || key,
+            input_event_id: payload.input_event_id || null,
+            carrier_session_id: event.carrier_session_id || payload.carrier_session_id || null,
+            operation_id: payload.operation_id || payload.target?.id || product.operation?.operation_id || null,
+            reason: payload.reason || 'operation_requires_attention',
+            visibility: payload.visibility || 'operator_visible',
+            target: payload.target || null,
+            sequence: event.sequence || null,
+          };
+        })
+        .filter(Boolean);
     }
     function updateControlRoom() {
       const product = state.operationProduct || {};
@@ -1965,6 +2012,7 @@ export function renderCloudflareCarrierConsole() {
       el('controlSession').textContent = activeSession || 'none';
       el('controlAuthorityLocus').textContent = activeDecision ? [activeDecision.authority_locus || 'unresolved', activeDecision.action || 'unknown'].join(' / ') : 'unknown';
       el('controlTaskFocus').textContent = state.taskFocus ? [state.taskFocus.task_id, state.taskFocus.status].filter(Boolean).join(' / ') : 'none';
+      el('controlAttention').textContent = String(state.attentionItems.length) + ' open' + (state.attentionFocus ? ' / ' + state.attentionFocus.directive_id : '');
       el('controlEvidenceWindow').textContent = String(surface.carrier_evidence_count ?? state.events.length) + ' evidence groups / ' + state.events.length + ' loaded events';
       el('controlContinuity').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length ?? 0) + ' packets';
     }
@@ -1984,6 +2032,32 @@ export function renderCloudflareCarrierConsole() {
         if (sessionFilter === 'active' && activeSession && event.carrier_session_id && event.carrier_session_id !== activeSession) return false;
         return true;
       });
+    }
+    function renderAttentionQueue(items = []) {
+      state.attentionItems = items;
+      if (items.length === 0) {
+        el('attentionQueue').innerHTML = '<div class="empty">No operation attention loaded.</div>';
+        updateControlRoom();
+        return;
+      }
+      el('attentionQueue').replaceChildren(...items.map((item) => {
+        const node = document.createElement('article');
+        node.className = 'attention-item';
+        const title = document.createElement('strong');
+        title.textContent = item.directive_id;
+        const meta = document.createElement('span');
+        meta.textContent = [item.reason, item.operation_id, item.carrier_session_id, item.visibility].filter(Boolean).join(' | ');
+        node.addEventListener('click', () => {
+          state.attentionFocus = item;
+          if (item.carrier_session_id) setCurrentSession(item.carrier_session_id);
+          el('eventKindFilter').value = 'directive_emitted';
+          renderEvents();
+          updateControlRoom();
+        });
+        node.append(title, meta);
+        return node;
+      }));
+      updateControlRoom();
     }
     function renderTasks(tasks = []) {
       el('taskCount').textContent = String(tasks.length);
@@ -2089,6 +2163,7 @@ export function renderCloudflareCarrierConsole() {
       el('authorityCount').textContent = String((product.authority_events || []).length);
       el('continuityCount').textContent = String((product.site_continuity_packets || []).length);
       renderTasks(product.tasks || []);
+      renderAttentionQueue(extractOperationAttention(product));
       updateControlRoom();
       const siteItems = [
         listItem('site_id', product.site?.site_id),
@@ -2110,6 +2185,7 @@ export function renderCloudflareCarrierConsole() {
         renderListBlock('Site', siteItems),
         renderListBlock('Memberships', membershipItems),
         renderListBlock('Sessions', sessionItems),
+        renderListBlock('Operation Attention', state.attentionItems.map((item) => listItem(item.directive_id, [item.reason, item.operation_id].filter(Boolean).join(' | ')))),
         renderListBlock('Tasks', (product.tasks || []).map((task) => listItem(task.task_id, [task.status, task.carrier_session_id].filter(Boolean).join(' | ')))),
         renderListBlock('Authority Events', authorityItems),
         renderListBlock('Authority Routing', authorityRoutingItems),
@@ -2141,6 +2217,7 @@ export function renderCloudflareCarrierConsole() {
       el('continuityCount').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length);
       renderTasks(product.tasks || []);
       renderOperationSessions(product.sessions || []);
+      renderAttentionQueue(extractOperationAttention(product));
       updateControlRoom();
       const operationItems = [
         listItem('operation_id', product.operation?.operation_id),
@@ -2169,6 +2246,7 @@ export function renderCloudflareCarrierConsole() {
         renderListBlock('Operation', operationItems),
         renderListBlock('Product Surface', surfaceItems),
         renderListBlock('Sessions', sessionItems),
+        renderListBlock('Operation Attention', state.attentionItems.map((item) => listItem(item.directive_id, [item.reason, item.operation_id].filter(Boolean).join(' | ')))),
         renderListBlock('Tasks', taskItems),
         renderListBlock('Authority Decisions', authorityDecisionItems),
         renderListBlock('Authority Events', authorityEventItems),
@@ -2196,6 +2274,11 @@ export function renderCloudflareCarrierConsole() {
         capability_ref: payload.capability_ref,
         effect_scope: payload.effect_scope,
         authority_ref: payload.authority_ref,
+        directive_kind: payload.directive_kind,
+        directive_id: payload.directive_id,
+        input_event_id: payload.input_event_id,
+        reason: payload.reason,
+        target: payload.target,
         result_summary: payload.result_summary,
         text_delta: payload.text_delta,
       };
@@ -2270,6 +2353,7 @@ export function renderCloudflareCarrierConsole() {
     el('operationSessionSelect').addEventListener('change', () => setCurrentSession(el('operationSessionSelect').value));
     el('eventKindFilter').addEventListener('change', renderEvents);
     el('eventSessionFilter').addEventListener('change', renderEvents);
+    el('raiseAttention').addEventListener('click', () => run(async () => { const body = await api.emitAttention(); appendEvents(body.events || []); await refreshOperation(); }));
     el('start').addEventListener('click', () => run(async () => { const body = await api.start(); appendEvents([body.event].filter(Boolean)); await refreshStatus(); await refreshOperation(); }));
     el('refresh').addEventListener('click', () => run(refreshOperation));
     el('readOperation').addEventListener('click', () => run(refreshOperation));
