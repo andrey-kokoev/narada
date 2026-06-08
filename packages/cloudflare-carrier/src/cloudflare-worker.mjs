@@ -1766,6 +1766,7 @@ export function renderCloudflareCarrierConsole() {
       <div class="actions">
         <button id="signInMicrosoft" class="secondary">Sign in with Microsoft</button>
         <button id="useSelectedSession" class="secondary">Use Session</button>
+        <button id="readSessionEvidence" class="secondary">Read Session Evidence</button>
         <button id="start">Start / Resume</button>
         <button id="refresh" class="secondary">Refresh</button>
       </div>
@@ -1981,6 +1982,7 @@ export function renderCloudflareCarrierConsole() {
         }, { request_id: 'console_membership_put_' + Date.now() });
       },
       readEvents() { return this.request('session.events.read', { after_sequence: state.afterSequence }); },
+      readSessionEvidence() { return this.request('session.events.read', { after_sequence: 0 }); },
       command(command, args = []) { return this.request('carrier.command.execute', { command, args }, { request_id: 'console_command_' + Date.now() }); },
       createTask(title) { return this.command('/task', ['create', ...String(title || '').split(/\s+/).filter(Boolean)]); },
       updateTask(taskId, status, note) { return this.command('/task', ['update', taskId, status, ...String(note || '').split(/\s+/).filter(Boolean)]); },
@@ -2395,6 +2397,16 @@ export function renderCloudflareCarrierConsole() {
         return;
       }
       el('activeSessionDetail').replaceChildren(...sessionFocusContext(session).map(([label, value]) => evidenceField(label, value)));
+    }
+    async function readSelectedSessionEvidence() {
+      state.events = [];
+      state.afterSequence = 0;
+      state.evidenceFocus = null;
+      renderEvents();
+      const body = await api.readSessionEvidence();
+      appendEvents(body.events || []);
+      if ((body.events || []).length > 0) focusEvidence(body.events[0]);
+      await refreshStatus();
     }
     function membershipKey(membership = {}) {
       return membership.principal_id || membership.email || membership.member_principal_id || '';
@@ -3012,6 +3024,7 @@ export function renderCloudflareCarrierConsole() {
     el('sessionId').addEventListener('change', saveWorkbenchState);
     el('useSelectedSession').addEventListener('click', () => setCurrentSession(el('operationSessionSelect').value));
     el('operationSessionSelect').addEventListener('change', () => setCurrentSession(el('operationSessionSelect').value));
+    el('readSessionEvidence').addEventListener('click', () => run(readSelectedSessionEvidence));
     el('eventKindFilter').addEventListener('change', renderEvents);
     el('eventSessionFilter').addEventListener('change', renderEvents);
     el('raiseAttention').addEventListener('click', () => run(async () => { const body = await api.emitAttention(); appendEvents(body.events || []); await refreshOperation(); }));
