@@ -13,6 +13,8 @@ const args = process.argv.slice(2);
 const repoRoot = new URL('..', import.meta.url);
 const envPath = new URL('.env', repoRoot);
 const require = createRequire(import.meta.url);
+const CANONICAL_CLOUDFLARE_SITE_ID = 'site_narada_cloudflare';
+const CANONICAL_CLOUDFLARE_SITE_REF = 'cloudflare://narada-cloudflare-carrier';
 
 loadLocalEnv(envPath);
 
@@ -21,7 +23,8 @@ if (flag('--help') || flag('-h')) {
   process.exit(0);
 }
 
-const siteId = option('--site') ?? process.env.CLOUDFLARE_CARRIER_SITE_ID ?? 'site_live_smoke';
+const siteId = option('--site') ?? process.env.CLOUDFLARE_CARRIER_SITE_ID ?? CANONICAL_CLOUDFLARE_SITE_ID;
+const siteRef = option('--site-ref') ?? process.env.CLOUDFLARE_CARRIER_SITE_REF ?? CANONICAL_CLOUDFLARE_SITE_REF;
 const workerUrl = trimTrailingSlash(option('--url') ?? process.env.CLOUDFLARE_CARRIER_URL ?? '');
 const tokenFile = option('--token-file') ?? process.env.CLOUDFLARE_CARRIER_TOKEN_FILE ?? '';
 const operatorCookieFile = option('--operator-cookie-file') ?? process.env.CLOUDFLARE_OPERATOR_COOKIE_FILE ?? '';
@@ -54,6 +57,8 @@ const smoke = await runJsonCommand('live-carrier-smoke', [
   tokenFile,
   '--site',
   siteId,
+  '--site-root',
+  siteRef,
   '--expect-tool-effect-posture',
   expectToolEffectPosture,
 ]);
@@ -103,6 +108,7 @@ const report = {
   status: 'ok',
   generated_at: new Date().toISOString(),
   site_id: siteId,
+  site_ref: siteRef,
   worker_url: workerUrl,
   console_url: workerUrl,
   microsoft_login_url: microsoftLoginUrl,

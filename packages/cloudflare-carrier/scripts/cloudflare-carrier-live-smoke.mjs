@@ -16,6 +16,7 @@ const sessionSuffix = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 
 const carrierSessionId = option('--session') ?? `carrier_session_live_smoke_${sessionSuffix}`;
 const agentId = option('--agent') ?? 'narada.live.smoke';
 const siteId = option('--site') ?? 'site_live_smoke';
+const siteRoot = option('--site-root') ?? process.env.CLOUDFLARE_CARRIER_SITE_REF ?? `cloudflare://${siteId}`;
 const goalWords = option('--goal')?.split(/\s+/).filter(Boolean) ?? ['prove', 'live', 'cloudflare', 'carrier'];
 const expectedGoal = goalWords.join(' ');
 const expectedToolEffectPosture = option('--expect-tool-effect-posture') ?? process.env.CLOUDFLARE_CARRIER_EXPECT_TOOL_EFFECT_POSTURE ?? null;
@@ -39,7 +40,7 @@ const start = await post({
     carrier_session_id: carrierSessionId,
     agent_id: agentId,
     site_id: siteId,
-    site_root: `cloudflare://${siteId}`,
+    site_root: siteRoot,
   },
 });
 assert.equal(start.http_status, 200);

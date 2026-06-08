@@ -11,6 +11,7 @@
     "site:continuity:loop": "node scripts/site-continuity-loop.mjs",
     "cloudflare:operator:check": "node scripts/cloudflare-operator-check.mjs",
     "cloudflare:operator:login": "node scripts/cloudflare-operator-login.mjs",
+    "cloudflare:operator:site:bootstrap": "node scripts/cloudflare-operator-site-bootstrap.mjs",
     "test": "tsx scripts/test-guard.ts",
     "verify": "node --import tsx scripts/verify.ts",
     "test:unit": "tsx scripts/test-unit.ts",

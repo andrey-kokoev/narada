@@ -15,7 +15,11 @@ The command loads the ignored root `.env` file and expects:
 ```dotenv
 CLOUDFLARE_CARRIER_URL=https://narada-cloudflare-carrier.<account>.workers.dev
 CLOUDFLARE_CARRIER_TOKEN_FILE=D:\tmp\narada-cloudflare-carrier-service-token.txt
+CLOUDFLARE_CARRIER_SITE_ID=site_narada_cloudflare
+CLOUDFLARE_CARRIER_SITE_REF=cloudflare://narada-cloudflare-carrier
 ```
+
+`site_narada_cloudflare` is the canonical Cloudflare Narada Site identity. Smoke-test Sites such as `site_live_smoke` remain valid for lower-level tests, but the operator runbook defaults to the canonical product Site.
 
 The token value stays in the token file and in the deployed Worker secret. The runbook command reports the credential source, not token material.
 
@@ -30,9 +34,12 @@ Without `--operator-cookie-file`, the command still verifies that the Microsoft 
 The repeatable capture path is:
 
 ```powershell
+pnpm cloudflare:operator:site:bootstrap
 pnpm cloudflare:operator:login
 pnpm cloudflare:operator:check -- --require-operator-session
 ```
+
+`cloudflare:operator:site:bootstrap` creates the canonical Site if missing, resolves the Microsoft operator principal from the captured cookie file, grants that principal `owner / active`, and writes `CLOUDFLARE_CARRIER_SITE_ID=site_narada_cloudflare` to the ignored root `.env` file unless `--no-write-env` is supplied.
 
 `cloudflare:operator:login` starts a short-lived loopback listener, opens the Worker capture URL in the browser, sends the operator through Microsoft login if needed, and stores only the signed `narada_operator_session` cookie in `CLOUDFLARE_OPERATOR_COOKIE_FILE`. It updates the ignored root `.env` with that cookie-file path unless `--no-write-env` is supplied. It does not store Microsoft tokens.
 
