@@ -1087,18 +1087,21 @@ assert.equal(residentLoopShadow.body.loop_run?.operation_id, operationId);
 assert.equal(residentLoopShadow.body.loop_run?.step_count, 1);
 assert.equal(residentLoopShadow.body.loop_run?.operator_attention_count, 1);
 
+const webhookDelayDirectiveDeliverySuffix = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
 const webhookDelayDirectiveDelivery = await postCarrier(workerUrl, bearerToken, {
   operation: 'webhook_delay.directive.primary_with_fallback.deliver',
-  request_id: `operator_check_webhook_delay_directive_delivery_${Date.now()}`,
+  request_id: `operator_check_webhook_delay_directive_delivery_${webhookDelayDirectiveDeliverySuffix}`,
   params: {
     site_id: siteId,
     site_ref: siteRef,
+    site_root: siteRef,
     operation_id: operationId,
-    carrier_session_id: `carrier_session_operator_check_directive_delivery_${Date.now()}`,
-    delivery_id: `operator_check_webhook_delay_directive_delivery_${operationId}`,
-    directive_record_id: `operator_check_webhook_delay_directive_${operationId}`,
-    directive_id: `operator_check_webhook_delay_directive_delivery_directive_${operationId}`,
-    input_event_id: `operator_check_webhook_delay_directive_delivery_input_${operationId}`,
+    carrier_session_id: `carrier_session_webhook_delay_directive_${webhookDelayDirectiveDeliverySuffix}`,
+    delivery_id: `webhook_delay_directive_delivery_live_${webhookDelayDirectiveDeliverySuffix}`,
+    directive_record_id: `webhook_delay_directive_live_${webhookDelayDirectiveDeliverySuffix}`,
+    directive_id: `directive_webhook_delay_delivery_live_${webhookDelayDirectiveDeliverySuffix}`,
+    input_event_id: `input_webhook_delay_directive_delivery_live_${webhookDelayDirectiveDeliverySuffix}`,
+    source_summary_path: '.ai/webhook-delay/latest/webhook-arrival-delay-today-vs-yesterday-summary.json',
     critical_minutes: 15,
     summary: {
       schema: 'narada.sonar/webhook-delay-today-vs-yesterday/v1',
@@ -1119,7 +1122,7 @@ const webhookDelayDirectiveDelivery = await postCarrier(workerUrl, bearerToken, 
     },
   },
 });
-assert.equal(webhookDelayDirectiveDelivery.http_status, 200);
+assert.equal(webhookDelayDirectiveDelivery.http_status, 200, JSON.stringify(webhookDelayDirectiveDelivery.body));
 assert.equal(webhookDelayDirectiveDelivery.body.ok, true);
 assert.equal(webhookDelayDirectiveDelivery.body.schema, 'narada.sonar.cloudflare_webhook_delay_directive_primary_with_windows_fallback.v1');
 assert.equal(webhookDelayDirectiveDelivery.body.status, 'cloudflare_primary_delivered');
@@ -1165,6 +1168,7 @@ const operationRecoveryPosture = operationReadAfterContinuity.body.cloudflare_re
 const webhookDelayDirectiveDeliveries = operationReadAfterContinuity.body.webhook_delay_directive_deliveries ?? [];
 const taskLifecycleShadowReads = operationReadAfterContinuity.body.task_lifecycle_shadow_reads ?? [];
 const taskLifecycleWriteAdmissions = operationReadAfterContinuity.body.task_lifecycle_write_admissions ?? [];
+const taskLifecycleTasks = operationReadAfterContinuity.body.task_lifecycle_tasks ?? [];
 const residentLoopShadowRuns = operationReadAfterContinuity.body.resident_loop_shadow_runs ?? [];
 const residentDispatchDecisions = operationReadAfterContinuity.body.resident_dispatch_decisions ?? [];
 assert.equal(operationSurface?.operation_id, operationId);
@@ -1224,9 +1228,46 @@ assert.equal(operationSurface?.task_lifecycle_shadow_read_count, taskLifecycleSh
 assert.ok(Array.isArray(taskLifecycleWriteAdmissions));
 assert.ok(taskLifecycleWriteAdmissions.length >= 1);
 assert.equal(operationSurface?.task_lifecycle_write_admission_count, taskLifecycleWriteAdmissions.length);
-assert.equal(operationSurface?.task_lifecycle_write_admission_posture, 'writes_not_admitted');
-assert.equal(operationSurface?.task_lifecycle_mutation_authority, 'windows_task_lifecycle_sqlite');
-assert.equal(operationSurface?.task_lifecycle_cloudflare_write_admission, 'not_admitted');
+assert.ok(Array.isArray(taskLifecycleTasks));
+assert.equal(operationSurface?.task_lifecycle_task_count, taskLifecycleTasks.length);
+assert.ok(new Set([
+  'writes_not_admitted',
+  'task_create_admitted_remaining_writes_not_admitted',
+  'task_create_and_claim_admitted_remaining_writes_not_admitted',
+  'task_create_claim_and_report_admitted_remaining_writes_not_admitted',
+  'task_create_claim_report_and_changed_file_evidence_admitted_remaining_writes_not_admitted',
+  'task_create_claim_report_and_finish_admitted_remaining_writes_not_admitted',
+  'task_create_claim_report_finish_and_changed_file_evidence_admitted_remaining_writes_not_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_and_projection_write_admitted_remaining_writes_not_admitted',
+]).has(operationSurface?.task_lifecycle_write_admission_posture), `unexpected task lifecycle write admission posture: ${operationSurface?.task_lifecycle_write_admission_posture}`);
+assert.ok(new Set(['windows_task_lifecycle_sqlite', 'split_by_mutation_class']).has(operationSurface?.task_lifecycle_mutation_authority), `unexpected task lifecycle mutation authority: ${operationSurface?.task_lifecycle_mutation_authority}`);
+assert.ok(new Set([
+  'not_admitted',
+  'task_create_admitted',
+  'task_create_and_claim_admitted',
+  'task_create_claim_and_report_admitted',
+  'task_create_claim_report_and_changed_file_evidence_admitted',
+  'task_create_claim_report_and_finish_admitted',
+  'task_create_claim_report_finish_and_changed_file_evidence_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_and_projection_write_admitted',
+]).has(operationSurface?.task_lifecycle_cloudflare_write_admission), `unexpected task lifecycle Cloudflare write admission: ${operationSurface?.task_lifecycle_cloudflare_write_admission}`);
+assert.ok(new Set([
+  'windows_all_observed_mutations',
+  'task_create_cloudflare_remaining_windows',
+  'task_create_and_claim_cloudflare_remaining_windows',
+  'task_create_claim_and_report_cloudflare_remaining_windows',
+  'task_create_claim_report_and_changed_file_evidence_cloudflare_remaining_windows',
+  'task_create_claim_report_and_finish_cloudflare_remaining_windows',
+  'task_create_claim_report_finish_and_changed_file_evidence_cloudflare_remaining_windows',
+  'task_create_claim_report_finish_changed_file_evidence_and_projection_write_cloudflare_remaining_windows',
+]).has(operationSurface?.task_lifecycle_authority_partition), `unexpected task lifecycle authority partition: ${operationSurface?.task_lifecycle_authority_partition}`);
+if (taskLifecycleTasks.length > 0) {
+  assert.equal(operationSurface?.task_lifecycle_mutation_authority, 'split_by_mutation_class');
+  assert.notEqual(operationSurface?.task_lifecycle_cloudflare_write_admission, 'not_admitted');
+} else {
+  assert.equal(operationSurface?.task_lifecycle_mutation_authority, 'windows_task_lifecycle_sqlite');
+  assert.equal(operationSurface?.task_lifecycle_cloudflare_write_admission, 'not_admitted');
+}
 const recordedTaskLifecycleWriteAdmission = taskLifecycleWriteAdmissions.find((admission) => admission.admission_id === taskLifecycleWriteAdmission.body.record?.admission_id);
 assert.ok(recordedTaskLifecycleWriteAdmission);
 assert.equal(recordedTaskLifecycleWriteAdmission.schema, 'narada.sonar.cloudflare_task_lifecycle_write_admission.v1');
@@ -1377,10 +1418,23 @@ const report = {
     webhook_delay_directive_delivery_fallback_authority: recordedWebhookDelayDirectiveDelivery.fallback_authority,
     webhook_delay_directive_delivery_fallback_status: recordedWebhookDelayDirectiveDelivery.fallback_status,
     task_lifecycle_shadow_read_count: operationSurface.task_lifecycle_shadow_read_count,
+    task_lifecycle_task_count: operationSurface.task_lifecycle_task_count,
+    task_lifecycle_task_claim_count: operationSurface.task_lifecycle_task_claim_count,
+    task_lifecycle_task_report_count: operationSurface.task_lifecycle_task_report_count,
+    task_lifecycle_task_finish_count: operationSurface.task_lifecycle_task_finish_count,
+    task_lifecycle_changed_file_evidence_count: operationSurface.task_lifecycle_changed_file_evidence_count,
+    task_lifecycle_projection_write_count: operationSurface.task_lifecycle_projection_write_count,
     task_lifecycle_write_admission_count: operationSurface.task_lifecycle_write_admission_count,
     task_lifecycle_write_admission_posture: operationSurface.task_lifecycle_write_admission_posture,
     task_lifecycle_mutation_authority: operationSurface.task_lifecycle_mutation_authority,
     task_lifecycle_cloudflare_write_admission: operationSurface.task_lifecycle_cloudflare_write_admission,
+    task_lifecycle_authority_partition: operationSurface.task_lifecycle_authority_partition,
+    task_lifecycle_task_create_authority: operationSurface.task_lifecycle_task_create_authority,
+    task_lifecycle_task_claim_authority: operationSurface.task_lifecycle_task_claim_authority,
+    task_lifecycle_task_report_authority: operationSurface.task_lifecycle_task_report_authority,
+    task_lifecycle_task_finish_authority: operationSurface.task_lifecycle_task_finish_authority,
+    task_lifecycle_changed_file_evidence_authority: operationSurface.task_lifecycle_changed_file_evidence_authority,
+    task_lifecycle_projection_write_authority: operationSurface.task_lifecycle_projection_write_authority,
     resident_loop_shadow_run_count: operationSurface.resident_loop_shadow_run_count,
     resident_loop_shadow_last_status: recordedResidentLoopShadow.loop_status,
     resident_loop_shadow_dispatch_authority: recordedResidentLoopShadow.dispatch_authority,
