@@ -868,6 +868,7 @@ assert.equal(projectionWriteSmoke.repository_publication_admission, 'not_admitte
 assert.ok(new Set([
   'task_create_claim_report_finish_changed_file_evidence_and_projection_write_cloudflare_remaining_windows',
   'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_cloudflare_remaining_windows_effects',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_and_assignment_cloudflare_remaining_windows_effects',
 ]).has(projectionWriteSmoke.authority_partition), `unexpected projection write smoke authority partition: ${projectionWriteSmoke.authority_partition}`);
 
 const siteRead = await postCarrier(workerUrl, bearerToken, {
@@ -1222,7 +1223,7 @@ const operationReadAfterContinuity = await postCarrier(workerUrl, bearerToken, {
     session_limit: 10,
     webhook_delay_directive_delivery_limit: 10,
     task_lifecycle_task_limit: 100,
-    task_lifecycle_write_admission_limit: 10,
+    task_lifecycle_write_admission_limit: 100,
     resident_loop_shadow_limit: 10,
     resident_dispatch_limit: 10,
   },
