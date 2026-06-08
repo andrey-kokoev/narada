@@ -2125,6 +2125,13 @@ export function renderCloudflareCarrierConsole() {
       <div class="product-panel">
         <h2>Authority State</h2>
         <div id="authorityPostureSummary" class="evidence-summary"><div class="empty">No authority posture loaded.</div></div>
+        <h3>Authority Action</h3>
+        <div id="authorityActionSummary" class="evidence-summary"><div class="empty">No authority action loaded.</div></div>
+        <div class="actions">
+          <button id="authorityNextAction" class="secondary">Apply Authority Next Action</button>
+          <button id="authorityReadSiteAction" class="secondary">Read Site Authority</button>
+          <button id="authorityActionEvidenceAction" class="secondary">Focus Authority Evidence</button>
+        </div>
         <div id="authorityState" class="attention-items"><div class="empty">No authority state loaded.</div></div>
         <div id="authorityFocusDetail" class="evidence-summary"><div class="empty">No authority decision selected.</div></div>
       </div>
@@ -2437,6 +2444,7 @@ export function renderCloudflareCarrierConsole() {
       el('controlContinuity').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length ?? 0) + ' packets';
       el('controlWorkbenchReadiness').textContent = operationWorkbenchReadiness(product);
       renderTaskCommandPreview();
+      renderAuthorityActionSummary(product);
       renderContinuityWorkflow(product);
     }
     function productScopeSummary(product = state.operationProduct || {}) {
@@ -2928,10 +2936,59 @@ export function renderCloudflareCarrierConsole() {
     function authorityDecisionKey(decision = {}) {
       return [decision.mutation_class, decision.action, decision.reason, decision.authority_locus].filter(Boolean).join('|');
     }
+    function authorityActorMembership(product = state.operationProduct || {}) {
+      const principalId = state.operatorPrincipal?.principal_id || product.reader_principal?.principal_id || '';
+      return currentMemberships(product).find((membership) => membership.principal_id === principalId || membership.email === state.operatorPrincipal?.email) || product.membership || null;
+    }
+    function authorityActionContext(product = state.operationProduct || {}) {
+      const decisions = product.site_authority?.decisions || [];
+      const focused = state.authorityFocus || decisions.find((decision) => decision.action !== 'admit') || decisions[0] || null;
+      const membership = authorityActorMembership(product);
+      const refused = decisions.filter((decision) => ['refuse', 'deny'].includes(String(decision.action || '').toLowerCase()));
+      const unresolved = decisions.filter((decision) => !decision.authority_locus || decision.authority_locus === 'unresolved');
+      const evidenceLoaded = state.events.some((event) => classifyEvidenceLane(event) === 'authority')
+        || (product.authority_events || []).length > 0
+        || (product.carrier_evidence || []).some((entry) => (entry.events || []).some((event) => classifyEvidenceLane(event) === 'authority'));
+      const nextAction = decisions.length === 0 ? 'read_site_authority'
+        : refused.length > 0 ? 'inspect_refused_authority'
+        : unresolved.length > 0 ? 'resolve_authority_locus'
+        : evidenceLoaded ? 'monitor_authority_admissions' : 'focus_authority_evidence';
+      return [
+        ['Authority Loaded', decisions.length > 0 ? 'yes' : 'no'],
+        ['Focused Decision', focused ? authorityDecisionKey(focused) || focused.mutation_class || 'authority' : 'none'],
+        ['Decision Action', focused?.action || 'none'],
+        ['Actor Membership', membership ? [membership.role || 'unknown', membership.status || 'unknown'].join(' / ') : 'none'],
+        ['Authority Locus', focused?.authority_locus || 'unresolved'],
+        ['Controlled Action', focused?.controlled_action || 'none'],
+        ['Refusals', refused.length],
+        ['Unresolved Locus', unresolved.length],
+        ['Evidence Loaded', evidenceLoaded ? 'yes' : 'no'],
+        ['Next Action', nextAction],
+      ];
+    }
+    function renderAuthorityActionSummary(product = state.operationProduct || {}) {
+      el('authorityActionSummary').replaceChildren(...authorityActionContext(product).map(([label, value]) => evidenceField(label, value)));
+    }
+    function focusAuthorityEvidence() {
+      const decision = state.authorityFocus || (state.operationProduct?.site_authority?.decisions || [])[0] || null;
+      if (decision) {
+        focusEvidenceFor((event) => JSON.stringify(event.payload || {}).includes(decision.mutation_class || '') || JSON.stringify(event.payload || {}).includes(decision.reason || '') || classifyEvidenceLane(event) === 'authority');
+        return;
+      }
+      focusEvidenceFor((event) => classifyEvidenceLane(event) === 'authority');
+    }
+    function applyAuthorityNextAction() {
+      const product = state.operationProduct || {};
+      const decisions = product.site_authority?.decisions || [];
+      if (decisions.length === 0) { run(refreshSiteProduct); return; }
+      const target = decisions.find((decision) => decision.action !== 'admit') || state.authorityFocus || decisions[0];
+      if (target) selectAuthorityDecision(target);
+      focusAuthorityEvidence();
+    }
     function selectAuthorityDecision(decision) {
       if (!decision) return;
       state.authorityFocus = decision;
-      focusEvidenceFor((event) => JSON.stringify(event.payload || {}).includes(decision.mutation_class || '') || JSON.stringify(event.payload || {}).includes(decision.reason || ''));
+      focusAuthorityEvidence();
       renderAuthorityState(state.operationProduct || {});
       updateControlRoom();
     }
@@ -3950,6 +4007,9 @@ export function renderCloudflareCarrierConsole() {
     el('readOperation').addEventListener('click', () => run(refreshOperation));
     el('readOperationScope').addEventListener('click', () => run(refreshOperation));
     el('continuityWorkflowNextAction').addEventListener('click', applyContinuityWorkflowNextStep);
+    el('authorityNextAction').addEventListener('click', applyAuthorityNextAction);
+    el('authorityReadSiteAction').addEventListener('click', () => run(refreshSiteProduct));
+    el('authorityActionEvidenceAction').addEventListener('click', focusAuthorityEvidence);
     el('createOperation').addEventListener('click', () => run(createOperationFromWorkbench));
     el('autoRefreshOperation').addEventListener('click', () => setAutoRefresh(!state.autoRefreshTimer));
     el('readSite').addEventListener('click', () => run(refreshSiteProduct));
