@@ -1587,6 +1587,7 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Authority Posture/);
   assert.match(html, /Task Lifecycle Posture/);
   assert.match(html, /Mailbox Status Posture/);
+  assert.match(html, /Mailbox Draft Review/);
   assert.match(html, /Site File Change Review/);
   assert.match(html, /focused_status/);
   assert.match(html, /next_task/);
@@ -1596,6 +1597,14 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /mailbox_send_admission/);
   assert.match(html, /mailbox_mutation_admission/);
   assert.match(html, /mailbox_authority_partition/);
+  assert.match(html, /mailbox_draft_reply_proposal_focus/);
+  assert.match(html, /mailbox_outlook_draft_create_focus/);
+  assert.match(html, /mailbox_draft_reply_proposal_count/);
+  assert.match(html, /mailbox_draft_reply_next_action/);
+  assert.match(html, /mailbox_outlook_draft_create_count/);
+  assert.match(html, /mailbox_outlook_draft_create_next_action/);
+  assert.match(html, /Focus Mailbox Proposal/);
+  assert.match(html, /Focus Outlook Draft Create/);
   assert.match(html, /site_file_change_proposal_focus/);
   assert.match(html, /site_file_change_proposal_count/);
   assert.match(html, /site_file_change_proposal_authority/);

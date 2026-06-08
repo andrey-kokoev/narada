@@ -9677,7 +9677,7 @@ export function renderCloudflareCarrierConsole() {
     const classifyCloudflareEvidenceCommandState = ${classifyCloudflareEvidenceCommandState.toString()};
     const classifyCloudflareSiteCommandState = ${classifyCloudflareSiteCommandState.toString()};
     const classifyCloudflareMembershipCommandState = ${classifyCloudflareMembershipCommandState.toString()};
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], siteList: [], siteProductStatuses: [], siteProductOverview: null, sitePostureRoute: null, consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, webhookDelayDirectiveFocus: null, webhookDelayDirectiveDeliveryFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null, siteFileChangeProposalFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], siteList: [], siteProductStatuses: [], siteProductOverview: null, sitePostureRoute: null, consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, webhookDelayDirectiveFocus: null, webhookDelayDirectiveDeliveryFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null, mailboxDraftReplyProposalFocus: null, mailboxOutlookDraftCreateFocus: null, siteFileChangeProposalFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -9725,6 +9725,8 @@ export function renderCloudflareCarrierConsole() {
           operation_id: el('operationId').value.trim(),
           carrier_event_limit: 20,
           session_limit: 10,
+          mailbox_draft_reply_proposal_limit: 20,
+          mailbox_outlook_draft_create_limit: 20,
         });
       },
       startResidentDispatch() {
@@ -10139,6 +10141,10 @@ export function renderCloudflareCarrierConsole() {
       const surface = product.operation_product_surface || {};
       const siteFileChangeProposals = product.site_file_change_proposals || [];
       const siteFileMaterializations = product.site_file_materializations || [];
+      const mailboxDraftReplyProposals = product.mailbox_draft_reply_proposals || [];
+      const mailboxOutlookDraftCreates = product.mailbox_outlook_draft_creates || [];
+      const mailboxDraftReplyProposalFocus = state.mailboxDraftReplyProposalFocus || mailboxDraftReplyProposals[0] || null;
+      const mailboxOutlookDraftCreateFocus = state.mailboxOutlookDraftCreateFocus || mailboxOutlookDraftCreates[0] || null;
       const siteFileChangeProposalFocus = state.siteFileChangeProposalFocus || siteFileChangeProposals[0] || null;
       const siteFileChangeProposalFile = siteFileChangeProposalFocus?.record?.proposal?.files?.[0]
         || siteFileChangeProposalFocus?.proposal?.files?.[0]
@@ -10164,6 +10170,8 @@ export function renderCloudflareCarrierConsole() {
           listItem('task_focus', taskFocus ? [taskFocus.task_id, taskFocus.status].filter(Boolean).join(' / ') : 'none'),
           listItem('authority_focus', authorityFocus ? [authorityFocus.mutation_class || authorityFocus.event_kind || 'authority', authorityFocus.action || authorityFocus.authority_locus || 'unknown'].join(' / ') : 'none'),
           listItem('evidence_focus', evidenceFocus ? eventTitle(evidenceFocus) : 'none'),
+          listItem('mailbox_draft_reply_proposal_focus', mailboxDraftReplyProposalFocus?.proposal_id || 'none'),
+          listItem('mailbox_outlook_draft_create_focus', mailboxOutlookDraftCreateFocus?.draft_create_id || 'none'),
           listItem('site_file_change_proposal_focus', siteFileChangeProposalFocus?.proposal_id || 'none'),
         ],
         posture: [
@@ -10183,6 +10191,8 @@ export function renderCloudflareCarrierConsole() {
           listItem('sessions_needing_action', sessionQueue.filter((item) => item.status !== 'ready').length + ' / ' + sessionQueue.length),
           listItem('open_tasks', openTasks.length + ' / ' + (product.tasks || []).length),
           listItem('authority_needing_action', authorityQueue.filter((item) => item.status !== 'ready').length + ' / ' + authorityQueue.length),
+          listItem('mailbox_draft_reply_proposals', mailboxDraftReplyProposals.length + ' / ' + String(surface.mailbox_draft_reply_proposal_count ?? mailboxDraftReplyProposals.length)),
+          listItem('mailbox_outlook_draft_creates', mailboxOutlookDraftCreates.length + ' / ' + String(surface.mailbox_outlook_draft_create_count ?? mailboxOutlookDraftCreates.length)),
           listItem('site_file_change_proposals', siteFileChangeProposals.length + ' / ' + String(surface.site_file_change_proposal_count ?? siteFileChangeProposals.length)),
           listItem('site_file_materializations', siteFileMaterializations.length + ' / ' + String(surface.site_file_materialization_count ?? siteFileMaterializations.length)),
         ],
@@ -10198,6 +10208,8 @@ export function renderCloudflareCarrierConsole() {
           listItem('task', state.taskFocus ? [state.taskFocus.task_id, state.taskFocus.status].filter(Boolean).join(' / ') : 'none'),
           listItem('authority', authorityFocus ? [authorityFocus.mutation_class || authorityFocus.event_kind || 'authority', authorityFocus.action || authorityFocus.authority_locus || 'unknown'].join(' / ') : 'none'),
           listItem('evidence', state.evidenceFocus ? eventTitle(state.evidenceFocus) : 'none'),
+          listItem('mailbox_draft_reply_proposal', mailboxDraftReplyProposalFocus?.proposal_id || 'none'),
+          listItem('mailbox_outlook_draft_create', mailboxOutlookDraftCreateFocus?.draft_create_id || 'none'),
           listItem('site_file_change_proposal', siteFileChangeProposalFocus?.proposal_id || 'none'),
         ],
         sessionEvidence: [
@@ -10232,6 +10244,26 @@ export function renderCloudflareCarrierConsole() {
           listItem('mailbox_send_admission', surface.mailbox_send_admission || 'retained'),
           listItem('mailbox_mutation_admission', surface.mailbox_mutation_admission || 'retained'),
           listItem('mailbox_authority_partition', surface.mailbox_authority_partition || 'mailbox_windows_owned'),
+        ],
+        mailboxDraftReview: [
+          listItem('mailbox_draft_reply_proposal_count', String(surface.mailbox_draft_reply_proposal_count ?? mailboxDraftReplyProposals.length)),
+          listItem('focused_proposal', mailboxDraftReplyProposalFocus?.proposal_id || 'none'),
+          listItem('focused_proposal_subject', mailboxDraftReplyProposalFocus?.subject || 'none'),
+          listItem('mailbox_draft_reply_proposal_authority', surface.mailbox_draft_reply_proposal_authority || mailboxDraftReplyProposalFocus?.authority_locus || 'not_observed'),
+          listItem('proposal_outlook_draft_create_admission', mailboxDraftReplyProposalFocus?.mailbox_outlook_draft_create_admission || 'not_observed'),
+          listItem('proposal_send_admission', mailboxDraftReplyProposalFocus?.mailbox_send_admission || surface.mailbox_send_admission || 'retained'),
+          listItem('proposal_mutation_admission', mailboxDraftReplyProposalFocus?.mailbox_mutation_admission || surface.mailbox_mutation_admission || 'retained'),
+          listItem('mailbox_draft_reply_authority_partition', surface.mailbox_draft_reply_authority_partition || 'mailbox_draft_reply_proposal_not_observed'),
+          listItem('mailbox_draft_reply_next_action', mailboxDraftReplyProposalFocus ? 'review_mailbox_draft_reply_proposal' : 'monitor_mailbox_draft_reply_proposals'),
+          listItem('mailbox_outlook_draft_create_count', String(surface.mailbox_outlook_draft_create_count ?? mailboxOutlookDraftCreates.length)),
+          listItem('focused_outlook_draft_create', mailboxOutlookDraftCreateFocus?.draft_create_id || 'none'),
+          listItem('focused_outlook_message', mailboxOutlookDraftCreateFocus?.outlook_message_id || 'none'),
+          listItem('outlook_draft_create_authority', surface.mailbox_outlook_draft_create_authority || mailboxOutlookDraftCreateFocus?.authority_locus || 'not_observed'),
+          listItem('outlook_draft_create_admission', mailboxOutlookDraftCreateFocus?.mailbox_outlook_draft_create_admission || surface.mailbox_outlook_draft_create_admission || 'not_observed'),
+          listItem('outlook_draft_create_send_admission', mailboxOutlookDraftCreateFocus?.mailbox_send_admission || 'not_observed'),
+          listItem('outlook_draft_create_mutation_admission', mailboxOutlookDraftCreateFocus?.mailbox_mutation_admission || 'not_observed'),
+          listItem('outlook_draft_create_authority_partition', surface.mailbox_outlook_draft_create_authority_partition || 'mailbox_outlook_draft_create_not_observed'),
+          listItem('mailbox_outlook_draft_create_next_action', mailboxOutlookDraftCreateFocus ? 'review_outlook_draft_create_evidence' : 'monitor_outlook_draft_create_records'),
         ],
         siteFileChangeReview: [
           listItem('site_file_change_proposal_count', String(surface.site_file_change_proposal_count ?? siteFileChangeProposals.length)),
@@ -10269,6 +10301,7 @@ export function renderCloudflareCarrierConsole() {
         renderListBlock('Authority Posture', board.authority),
         renderListBlock('Task Lifecycle Posture', board.taskLifecycle),
         renderListBlock('Mailbox Status Posture', board.mailboxStatus),
+        renderListBlock('Mailbox Draft Review', board.mailboxDraftReview),
         renderListBlock('Site File Change Review', board.siteFileChangeReview),
         renderListBlock('Work Queues', board.queues),
         renderListBlock('Evidence Review', board.evidence),
@@ -10645,6 +10678,8 @@ export function renderCloudflareCarrierConsole() {
       const unresolvedAuthority = (product.site_authority?.decisions || []).filter((decision) => decision.action !== 'admit');
       const directiveIntent = state.webhookDelayDirectiveFocus || (product.webhook_delay_directive_records || [])[0] || null;
       const directiveDelivery = state.webhookDelayDirectiveDeliveryFocus || (product.webhook_delay_directive_deliveries || [])[0] || null;
+      const mailboxDraftReplyProposal = state.mailboxDraftReplyProposalFocus || (product.mailbox_draft_reply_proposals || [])[0] || null;
+      const mailboxOutlookDraftCreate = state.mailboxOutlookDraftCreateFocus || (product.mailbox_outlook_draft_creates || [])[0] || null;
       const siteFileChangeProposal = state.siteFileChangeProposalFocus || (product.site_file_change_proposals || [])[0] || null;
       return {
         session: sessions.find((session) => session.carrier_session_id === activeSession) || state.sessionFocus || sessions[0] || null,
@@ -10653,6 +10688,8 @@ export function renderCloudflareCarrierConsole() {
         authority: unresolvedAuthority[0] || state.authorityFocus || (product.site_authority?.decisions || [])[0] || null,
         directiveIntent,
         directiveDelivery,
+        mailboxDraftReplyProposal,
+        mailboxOutlookDraftCreate,
         siteFileChangeProposal,
       };
     }
@@ -10685,6 +10722,8 @@ export function renderCloudflareCarrierConsole() {
       if (targets.authority && targets.authority.action !== 'admit') { selectAuthorityDecision(targets.authority); return; }
       if (targets.directiveDelivery) { selectWebhookDelayDirectiveDelivery(targets.directiveDelivery); return; }
       if (targets.directiveIntent) { selectWebhookDelayDirective(targets.directiveIntent); return; }
+      if (targets.mailboxDraftReplyProposal) { selectMailboxDraftReplyProposal(targets.mailboxDraftReplyProposal); return; }
+      if (targets.mailboxOutlookDraftCreate) { selectMailboxOutlookDraftCreate(targets.mailboxOutlookDraftCreate); return; }
       if (targets.siteFileChangeProposal) { selectSiteFileChangeProposal(targets.siteFileChangeProposal); return; }
       focusFlightDeckEvidence();
     }
@@ -10713,6 +10752,8 @@ export function renderCloudflareCarrierConsole() {
         operationFlightDeckButton('flightDeckFocusAuthority', 'Focus Authority', () => { if (targets.authority) selectAuthorityDecision(targets.authority); }),
         operationFlightDeckButton('flightDeckFocusDirectiveIntent', 'Focus Directive Intent', () => { if (targets.directiveIntent) selectWebhookDelayDirective(targets.directiveIntent); }),
         operationFlightDeckButton('flightDeckFocusDirectiveDelivery', 'Focus Directive Delivery', () => { if (targets.directiveDelivery) selectWebhookDelayDirectiveDelivery(targets.directiveDelivery); }),
+        operationFlightDeckButton('flightDeckFocusMailboxDraftReplyProposal', 'Focus Mailbox Proposal', () => { if (targets.mailboxDraftReplyProposal) selectMailboxDraftReplyProposal(targets.mailboxDraftReplyProposal); }),
+        operationFlightDeckButton('flightDeckFocusMailboxOutlookDraftCreate', 'Focus Outlook Draft Create', () => { if (targets.mailboxOutlookDraftCreate) selectMailboxOutlookDraftCreate(targets.mailboxOutlookDraftCreate); }),
         operationFlightDeckButton('flightDeckFocusSiteFileChangeProposal', 'Focus File Change Proposal', () => { if (targets.siteFileChangeProposal) selectSiteFileChangeProposal(targets.siteFileChangeProposal); }),
         operationFlightDeckButton('flightDeckFocusEvidenceChain', 'Focus Evidence Chain', focusFlightDeckEvidenceChain),
         operationFlightDeckButton('flightDeckFocusEvidence', 'Focus Evidence', focusFlightDeckEvidence),
@@ -12990,6 +13031,20 @@ export function renderCloudflareCarrierConsole() {
     function selectSiteFileChangeProposal(proposal) {
       if (!proposal?.proposal_id) return;
       state.siteFileChangeProposalFocus = proposal;
+      renderOperationControlBoard(state.operationProduct || {});
+      renderOperationFlightDeck(state.operationProduct || {});
+      updateControlRoom();
+    }
+    function selectMailboxDraftReplyProposal(proposal) {
+      if (!proposal?.proposal_id) return;
+      state.mailboxDraftReplyProposalFocus = proposal;
+      renderOperationControlBoard(state.operationProduct || {});
+      renderOperationFlightDeck(state.operationProduct || {});
+      updateControlRoom();
+    }
+    function selectMailboxOutlookDraftCreate(draftCreate) {
+      if (!draftCreate?.draft_create_id) return;
+      state.mailboxOutlookDraftCreateFocus = draftCreate;
       renderOperationControlBoard(state.operationProduct || {});
       renderOperationFlightDeck(state.operationProduct || {});
       updateControlRoom();
