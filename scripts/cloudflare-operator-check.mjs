@@ -567,6 +567,13 @@ assert.match(consoleCheck.body, /siteActionFocusMembership/);
 assert.match(consoleCheck.body, /read_site_scope/);
 assert.match(consoleCheck.body, /load_or_create_membership/);
 assert.match(consoleCheck.body, /inspect_site_operations/);
+assert.match(consoleCheck.body, /Sites Overview/);
+assert.match(consoleCheck.body, /Read Sites/);
+assert.match(consoleCheck.body, /Focus Next Site/);
+assert.match(consoleCheck.body, /readSites/);
+assert.match(consoleCheck.body, /renderSitesProduct/);
+assert.match(consoleCheck.body, /narada\.cloudflare_site_product_overview\.v1/);
+assert.match(consoleCheck.body, /narada\.cloudflare_site_product_status\.v1/);
 assert.match(consoleCheck.body, /Site Focus Detail/);
 assert.match(consoleCheck.body, /siteFocusDetail/);
 assert.match(consoleCheck.body, /siteFocusContext/);
@@ -689,6 +696,9 @@ assert.match(consoleCheck.body, /appendConsoleEvidence/);
 assert.match(consoleCheck.body, /operation\.read/);
 assert.match(consoleCheck.body, /operation_product_surface/);
 assert.match(consoleCheck.body, /Continuity Packets/);
+assert.match(consoleCheck.body, /Continuity Loop/);
+assert.match(consoleCheck.body, /site:continuity:loop/);
+assert.match(consoleCheck.body, /sync-cloudflare/);
 assert.match(consoleCheck.body, /Authority Decisions/);
 assert.match(consoleCheck.body, /renderAuthorityState/);
 assert.match(consoleCheck.body, /authority-decision/);
@@ -729,6 +739,8 @@ const siteRead = await postCarrier(workerUrl, bearerToken, {
 assert.equal(siteRead.http_status, 200);
 assert.equal(siteRead.body.ok, true);
 assert.equal((siteRead.body.site?.site_id ?? siteRead.body.site_id), siteId);
+assert.equal(siteRead.body.site_product_status?.schema, 'narada.cloudflare_site_product_status.v1');
+assert.equal(siteRead.body.site_product_status?.site_id, siteId);
 const memberships = siteRead.body.product?.memberships ?? siteRead.body.memberships ?? [];
 const currentMembership = siteRead.body.product?.membership ?? siteRead.body.membership ?? null;
 const operations = siteRead.body.product?.operations ?? siteRead.body.operations ?? [];
@@ -737,6 +749,31 @@ const siteAuthorityDecisions = siteRead.body.product?.site_authority?.decisions 
 assert.ok(Array.isArray(memberships));
 assert.ok(memberships.length > 0);
 assert.ok(Array.isArray(operations));
+
+const siteList = await postCarrier(workerUrl, bearerToken, {
+  operation: 'site.list',
+  request_id: `operator_check_site_list_${Date.now()}`,
+  params: {
+    limit: 20,
+    site_status_limit: 20,
+  },
+});
+assert.equal(siteList.http_status, 200);
+assert.equal(siteList.body.ok, true);
+assert.ok(Array.isArray(siteList.body.sites));
+assert.ok(siteList.body.sites.some((site) => site.site_id === siteId));
+assert.ok(Array.isArray(siteList.body.site_product_statuses));
+const focusedSiteProductStatus = siteList.body.site_product_statuses.find((status) => status.site_id === siteId) ?? null;
+assert.ok(focusedSiteProductStatus);
+assert.equal(focusedSiteProductStatus.schema, 'narada.cloudflare_site_product_status.v1');
+assert.match(focusedSiteProductStatus.health, /^(ready|attention|incomplete)$/);
+assert.ok(Array.isArray(focusedSiteProductStatus.missing));
+assert.ok(Array.isArray(focusedSiteProductStatus.attention));
+assert.equal(siteList.body.site_product_overview?.schema, 'narada.cloudflare_site_product_overview.v1');
+assert.equal(siteList.body.site_product_overview?.site_count, siteList.body.site_product_statuses.length);
+assert.ok(siteList.body.site_product_overview.site_count >= 1);
+assert.ok(siteList.body.site_product_overview.health_counts);
+assert.match(siteList.body.site_product_overview.next_action, /^(monitor_sites|active_membership|operation|session|carrier_evidence|continuity_packet|open_tasks)$/);
 
 const operationRead = await postCarrier(workerUrl, bearerToken, {
   operation: 'operation.read',
@@ -857,6 +894,10 @@ const report = {
     microsoft_login_surface: 'ok',
     live_carrier_smoke: 'ok',
     site_read: 'ok',
+    site_product_status: 'ok',
+    site_list_product_overview: 'ok',
+    console_multi_site_surface: 'ok',
+    console_continuity_loop_guidance: 'ok',
     membership_visibility: 'ok',
     operation_read: 'ok',
     canonical_operation_active: 'ok',
@@ -883,6 +924,12 @@ const report = {
   membership: {
     count: memberships.length,
     current_role: currentMembership?.role ?? null,
+  },
+  sites: {
+    count: siteList.body.sites.length,
+    product_status_count: siteList.body.site_product_statuses.length,
+    overview: siteList.body.site_product_overview,
+    focused_site_status: focusedSiteProductStatus,
   },
   operation: {
     operation_id: operationRead.body.operation.operation_id,
