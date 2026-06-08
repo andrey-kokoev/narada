@@ -524,6 +524,7 @@ function summarizeCloudflareOperationLifecycleStatus({
   carrierEvidence = [],
   carrierEvidenceReadStatus = null,
   continuityStatus = null,
+  continuityLoopStatus = null,
   residentLoopShadowRuns = [],
   residentDispatchDecisions = [],
   webhookDelayDirectiveRecords = [],
@@ -535,6 +536,7 @@ function summarizeCloudflareOperationLifecycleStatus({
   const evidenceGroups = Array.isArray(carrierEvidence) ? carrierEvidence : [];
   const evidenceEventCount = evidenceGroups.reduce((count, group) => count + (Array.isArray(group.events) ? group.events.length : 0), 0);
   const continuityState = continuityStatus?.state ?? 'unknown';
+  const continuityLoopState = continuityLoopStatus?.state ?? 'unknown';
   const residentLoopCount = Array.isArray(residentLoopShadowRuns) ? residentLoopShadowRuns.length : 0;
   const residentDispatchCount = Array.isArray(residentDispatchDecisions) ? residentDispatchDecisions.length : 0;
   const directiveRecordCount = Array.isArray(webhookDelayDirectiveRecords) ? webhookDelayDirectiveRecords.length : 0;
@@ -544,6 +546,7 @@ function summarizeCloudflareOperationLifecycleStatus({
   if (evidenceEventCount === 0) missing.push('carrier_evidence');
   if (continuityState !== 'packet_observed') missing.push('continuity_packet');
   const attention = [];
+  if (continuityState === 'packet_observed' && continuityLoopState !== 'loop_report_observed') attention.push('continuity_loop_report');
   if (carrierEvidenceReadStatus?.state === 'degraded') attention.push('carrier_evidence_read_degraded');
   if (openTaskCount > 0) attention.push('open_tasks');
   if (directiveRecordCount > directiveDeliveryCount) attention.push('undelivered_directives');
@@ -566,6 +569,8 @@ function summarizeCloudflareOperationLifecycleStatus({
     task_count: taskList.length,
     evidence_event_count: evidenceEventCount,
     continuity_state: continuityState,
+    continuity_loop_state: continuityLoopState,
+    continuity_loop_report_count: continuityLoopStatus?.report_count ?? 0,
     resident_loop_shadow_run_count: residentLoopCount,
     resident_dispatch_decision_count: residentDispatchCount,
     directive_record_count: directiveRecordCount,
@@ -1561,6 +1566,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       carrierEvidence,
       carrierEvidenceReadStatus,
       continuityStatus: siteContinuityStatus,
+      continuityLoopStatus: siteContinuityLoopStatus,
       residentLoopShadowRuns,
       residentDispatchDecisions,
       webhookDelayDirectiveRecords,
