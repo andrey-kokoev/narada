@@ -4865,6 +4865,8 @@ export function renderCloudflareCarrierConsole() {
       <div class="product-panel">
         <h2>Recovery Posture</h2>
         <div id="recoveryPostureDetail" class="evidence-summary"><div class="empty">No recovery posture loaded.</div></div>
+        <div class="actions"><button id="recoveryNextAction" class="secondary">Apply Recovery Next Action</button></div>
+        <div id="recoveryWorkflow" class="attention-items"><div class="empty">No recovery workflow loaded.</div></div>
       </div>
       <div class="product-panel">
         <h2>Operation Activity Timeline</h2>
@@ -6156,9 +6158,105 @@ export function renderCloudflareCarrierConsole() {
     function renderRecoveryPosture(product = state.operationProduct || {}) {
       if (!recoveryPosture(product)) {
         el('recoveryPostureDetail').innerHTML = '<div class="empty">No recovery posture loaded.</div>';
+        el('recoveryWorkflow').innerHTML = '<div class="empty">No recovery workflow loaded.</div>';
         return;
       }
       el('recoveryPostureDetail').replaceChildren(...recoveryPostureContext(product).map(([label, value]) => evidenceField(label, value)));
+      renderRecoveryWorkflow(product);
+    }
+    function recoveryWorkflowItems(product = state.operationProduct || {}) {
+      const posture = recoveryPosture(product) || {};
+      const gaps = posture.recovery_gaps || [];
+      const missingSessionIds = posture.missing_evidence_session_ids || [];
+      const hasProductScope = state.productScope !== 'none' && (product.operation || product.site);
+      const hasEvidence = Number(posture.evidence_event_count ?? 0) > 0 || state.events.length > 0;
+      const snapshotReady = posture.snapshot_reload === 'available';
+      const evidenceReplayReady = ['loaded', 'no_sessions'].includes(String(posture.evidence_replay || '')) && missingSessionIds.length === 0;
+      const reconstructable = ['reconstructable', 'ready_no_sessions'].includes(String(posture.state || ''));
+      const missingSession = missingSessionIds[0] || '';
+      return [
+        {
+          key: 'recovery_scope_loaded',
+          label: 'Product Scope',
+          status: hasProductScope ? 'complete' : 'needs_attention',
+          detail: hasProductScope ? productScopeSummary(product) : 'read operation or site scope before recovery review',
+          action_label: product.operation || el('operationId').value.trim() ? 'Read Operation Scope' : 'Read Site Scope',
+          action: () => run(product.operation || el('operationId').value.trim() ? refreshOperation : refreshSiteProduct),
+        },
+        {
+          key: 'snapshot_reload_available',
+          label: 'Snapshot Reload',
+          status: snapshotReady ? 'complete' : 'needs_attention',
+          detail: posture.snapshot_reload || 'unknown',
+          action_label: 'Read Runtime Scope',
+          action: () => run(product.operation || el('operationId').value.trim() ? refreshOperation : refreshSiteProduct),
+        },
+        {
+          key: 'evidence_replay_loaded',
+          label: 'Evidence Replay',
+          status: evidenceReplayReady || hasEvidence ? 'complete' : 'needs_attention',
+          detail: [posture.evidence_replay || 'unknown', String(posture.evidence_event_count ?? state.events.length) + ' events'].join(' / '),
+          action_label: 'Read Session Evidence',
+          action: () => run(readSelectedSessionEvidence),
+        },
+        {
+          key: 'missing_session_evidence_reviewed',
+          label: 'Missing Session Evidence',
+          status: missingSessionIds.length === 0 ? 'complete' : 'needs_attention',
+          detail: missingSessionIds.length === 0 ? 'all listed sessions have replayed evidence' : missingSessionIds.join(', '),
+          action_label: missingSession ? 'Read Missing Session' : 'Review Sessions',
+          action: () => run(async () => {
+            if (missingSession) setCurrentSession(missingSession);
+            await readSelectedSessionEvidence();
+          }),
+        },
+        {
+          key: 'reconstructability_confirmed',
+          label: 'Reconstructability',
+          status: reconstructable ? 'complete' : 'needs_attention',
+          detail: gaps.length === 0 ? (posture.state || 'unknown') : gaps.join(', '),
+          action_label: hasEvidence ? 'Focus Replayed Evidence' : 'Refresh Recovery State',
+          action: () => { if (hasEvidence) focusRecoveryEvidence(product); else run(refreshOperation); },
+        },
+      ];
+    }
+    function focusRecoveryEvidence(product = state.operationProduct || {}) {
+      const activeSession = el('sessionId').value.trim();
+      const groups = product.carrier_evidence || [];
+      const group = groups.find((entry) => activeSession && entry.carrier_session_id === activeSession)
+        || groups.find((entry) => (entry.events || []).length > 0)
+        || null;
+      if (group?.carrier_session_id && !activeSession) setCurrentSession(group.carrier_session_id);
+      if (group?.events?.length > 0) {
+        appendEvents(group.events);
+        focusEvidence(group.events[0]);
+        return;
+      }
+      run(readSelectedSessionEvidence);
+    }
+    function applyRecoveryNextAction() {
+      const item = recoveryWorkflowItems().find((entry) => entry.status !== 'complete') || recoveryWorkflowItems().at(-1);
+      if (item?.action) item.action();
+    }
+    function recoveryWorkflowActionButton(item) {
+      const button = document.createElement('button');
+      button.className = 'secondary';
+      button.textContent = item.action_label || 'Focus';
+      button.addEventListener('click', item.action);
+      return button;
+    }
+    function renderRecoveryWorkflow(product = state.operationProduct || {}) {
+      const items = recoveryWorkflowItems(product);
+      el('recoveryWorkflow').replaceChildren(...items.map((item) => {
+        const node = document.createElement('article');
+        node.className = 'attention-item' + (item.status !== 'complete' ? ' selected' : '');
+        const title = document.createElement('strong');
+        title.textContent = item.label;
+        const meta = document.createElement('span');
+        meta.textContent = [item.status, item.detail].filter(Boolean).join(' | ');
+        node.append(title, meta, focusActionRow(recoveryWorkflowActionButton(item)));
+        return node;
+      }));
     }
     function continuityWorkflowSteps(product = state.operationProduct || {}) {
       const activeSession = el('sessionId').value.trim();
@@ -9379,6 +9477,7 @@ export function renderCloudflareCarrierConsole() {
     el('operationControlTargetEvidenceAction').addEventListener('click', focusFlightDeckEvidence);
     el('operationControlTargetReadinessAction').addEventListener('click', applyWorkbenchReadinessNextAction);
     el('operationActivityApplyFocus').addEventListener('click', applyFocusedOperationActivity);
+    el('recoveryNextAction').addEventListener('click', applyRecoveryNextAction);
     el('startResidentDispatch').addEventListener('click', () => run(startResidentDispatchFromWorkbench));
     el('continuityWorkflowNextAction').addEventListener('click', applyContinuityWorkflowNextStep);
     el('authorityNextAction').addEventListener('click', applyAuthorityNextAction);

@@ -1143,6 +1143,15 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /monitor_recovery_posture/);
   assert.match(html, /Recovery State/);
   assert.match(html, /Recovery Next Action/);
+  assert.match(html, /recoveryWorkflow/);
+  assert.match(html, /recoveryWorkflowItems/);
+  assert.match(html, /renderRecoveryWorkflow/);
+  assert.match(html, /applyRecoveryNextAction/);
+  assert.match(html, /recoveryNextAction/);
+  assert.match(html, /Apply Recovery Next Action/);
+  assert.match(html, /snapshot_reload_available/);
+  assert.match(html, /evidence_replay_loaded/);
+  assert.match(html, /reconstructability_confirmed/);
   assert.match(html, /focus_kind/);
   assert.match(html, /focus_ref/);
   assert.match(html, /provider_events/);
