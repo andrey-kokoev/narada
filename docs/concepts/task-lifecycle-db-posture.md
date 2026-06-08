@@ -63,16 +63,14 @@ narada task unblock <task-number> --agent <id> --evidence "<evidence>" --rationa
 The command records unblock evidence in the compatibility task projection, updates SQLite lifecycle authority from `deferred` to `opened`, emits task lifecycle mutation evidence, and leaves assignment to the normal claim/work-next path. It is not a takeover command and does not silently continue prior work.
 
 ## Site-Local Initialization
-
-External Sites do not need to be Narada proper checkouts to receive the task lifecycle substrate. Initialize an explicit Site root with:
+External Sites do not need to be Narada proper checkouts to receive the task lifecycle substrate. Open the canonical store from the Site root and seed roster identities with the public task roster command:
 
 ```bash
-narada sites task-lifecycle init --site /path/to/site
+narada task roster add <agent-id> --role <role> --cwd /path/to/site
 ```
 
-The command creates the canonical runtime database at `/path/to/site/.ai/task-lifecycle.db`, initializes the same SQLite schema used by Narada proper, and reports the initialized tables. It does not create `.ai/do-not-open/tasks/` or require the Site to have Narada's repository task projections.
+The first task-lifecycle store access creates `/path/to/site/.ai/task-lifecycle.db` and initializes the same SQLite schema used by Narada proper. Roster seeding records the Site agent identities used by launch and task-routing surfaces. It does not create `.ai/do-not-open/tasks/` or require the Site to have Narada's repository task projections.
 
-## Residual Requirements
 
 1. Add a mutation ledger so sanctioned commands can prove provenance more strongly than filesystem posture.
 2. Decide whether future multi-Site task lifecycle handoffs should use one full snapshot or append-only lifecycle events.

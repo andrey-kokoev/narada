@@ -76,9 +76,9 @@
     @{
       Agent = "narada-staccato.architect"
       Title = "Staccato Architect"
-      NaradaRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Staccato\.narada"
-      WorkspaceRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Staccato\.narada"
-      SiteRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Staccato\.narada"
+      NaradaRoot = "D:\code\narada.staccato"
+      WorkspaceRoot = "D:\code\narada.staccato"
+      SiteRoot = "D:\code\narada.staccato\.narada"
       Launcher = "narada-staccato.ps1"
       Runtime = "agent-cli"
       EnableNativeShell = $false
@@ -86,9 +86,9 @@
     @{
       Agent = "narada-staccato.builder"
       Title = "Staccato Builder"
-      NaradaRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Staccato\.narada"
-      WorkspaceRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Staccato\.narada"
-      SiteRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Staccato\.narada"
+      NaradaRoot = "D:\code\narada.staccato"
+      WorkspaceRoot = "D:\code\narada.staccato"
+      SiteRoot = "D:\code\narada.staccato\.narada"
       Launcher = "narada-staccato.ps1"
       Runtime = "agent-cli"
       EnableNativeShell = $false
@@ -96,9 +96,9 @@
     @{
       Agent = "narada-staccato.resident"
       Title = "Staccato Resident"
-      NaradaRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Staccato\.narada"
-      WorkspaceRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Staccato\.narada"
-      SiteRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Staccato\.narada"
+      NaradaRoot = "D:\code\narada.staccato"
+      WorkspaceRoot = "D:\code\narada.staccato"
+      SiteRoot = "D:\code\narada.staccato\.narada"
       Launcher = "narada-staccato.ps1"
       Runtime = "agent-cli"
       EnableNativeShell = $false
@@ -106,49 +106,49 @@
     @{
       Agent = "narada-revolution.architect"
       Title = "Revolution Architect"
-      NaradaRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\!Revolution\.narada"
-      WorkspaceRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\!Revolution\.narada"
-      SiteRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\!Revolution\.narada"
-      Launcher = "narada-revolution.ps1"
+      NaradaRoot = "D:\code\narada.revolution"
+      WorkspaceRoot = "D:\code\narada.revolution"
+      SiteRoot = "D:\code\narada.revolution"
+      Launcher = ".narada\narada-revolution.ps1"
       Runtime = "agent-cli"
       EnableNativeShell = $false
     }
     @{
       Agent = "narada-revolution.builder"
       Title = "Revolution Builder"
-      NaradaRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\!Revolution\.narada"
-      WorkspaceRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\!Revolution\.narada"
-      SiteRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\!Revolution\.narada"
-      Launcher = "narada-revolution.ps1"
+      NaradaRoot = "D:\code\narada.revolution"
+      WorkspaceRoot = "D:\code\narada.revolution"
+      SiteRoot = "D:\code\narada.revolution"
+      Launcher = ".narada\narada-revolution.ps1"
       Runtime = "agent-cli"
       EnableNativeShell = $false
     }
     @{
       Agent = "narada-revolution.builder2"
       Title = "Revolution Builder 2"
-      NaradaRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\!Revolution\.narada"
-      WorkspaceRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\!Revolution\.narada"
-      SiteRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\!Revolution\.narada"
-      Launcher = "narada-revolution.ps1"
+      NaradaRoot = "D:\code\narada.revolution"
+      WorkspaceRoot = "D:\code\narada.revolution"
+      SiteRoot = "D:\code\narada.revolution"
+      Launcher = ".narada\narada-revolution.ps1"
       Runtime = "agent-cli"
       EnableNativeShell = $false
     }
     @{
       Agent = "narada-revolution.resident"
       Title = "Revolution Resident"
-      NaradaRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\!Revolution\.narada"
-      WorkspaceRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\!Revolution\.narada"
-      SiteRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\!Revolution\.narada"
-      Launcher = "narada-revolution.ps1"
+      NaradaRoot = "D:\code\narada.revolution"
+      WorkspaceRoot = "D:\code\narada.revolution"
+      SiteRoot = "D:\code\narada.revolution"
+      Launcher = ".narada\narada-revolution.ps1"
       Runtime = "agent-cli"
       EnableNativeShell = $false
     }
     @{
       Agent = "narada-timour-marketing-agent.architect"
       Title = "Timour Marketing Agent Architect"
-      NaradaRoot = "C:\Users\Andrey\Vose Software BE\Timour Koupeev - MarketingAgent\.narada"
-      WorkspaceRoot = "C:\Users\Andrey\Vose Software BE\Timour Koupeev - MarketingAgent\.narada"
-      SiteRoot = "C:\Users\Andrey\Vose Software BE\Timour Koupeev - MarketingAgent\.narada"
+      NaradaRoot = "D:\code\narada.timour-marketing-agent"
+      WorkspaceRoot = "D:\code\narada.timour-marketing-agent"
+      SiteRoot = "D:\code\narada.timour-marketing-agent\.narada"
       Launcher = "narada-timour-marketing-agent.ps1"
       Runtime = "agent-cli"
       EnableNativeShell = $false
@@ -156,9 +156,9 @@
     @{
       Agent = "narada-timour-marketing-agent.builder"
       Title = "Timour Marketing Agent Builder"
-      NaradaRoot = "C:\Users\Andrey\Vose Software BE\Timour Koupeev - MarketingAgent\.narada"
-      WorkspaceRoot = "C:\Users\Andrey\Vose Software BE\Timour Koupeev - MarketingAgent\.narada"
-      SiteRoot = "C:\Users\Andrey\Vose Software BE\Timour Koupeev - MarketingAgent\.narada"
+      NaradaRoot = "D:\code\narada.timour-marketing-agent"
+      WorkspaceRoot = "D:\code\narada.timour-marketing-agent"
+      SiteRoot = "D:\code\narada.timour-marketing-agent\.narada"
       Launcher = "narada-timour-marketing-agent.ps1"
       Runtime = "agent-cli"
       EnableNativeShell = $false
@@ -166,9 +166,9 @@
     @{
       Agent = "narada-timour-marketing-agent.builder2"
       Title = "Timour Marketing Agent Builder 2"
-      NaradaRoot = "C:\Users\Andrey\Vose Software BE\Timour Koupeev - MarketingAgent\.narada"
-      WorkspaceRoot = "C:\Users\Andrey\Vose Software BE\Timour Koupeev - MarketingAgent\.narada"
-      SiteRoot = "C:\Users\Andrey\Vose Software BE\Timour Koupeev - MarketingAgent\.narada"
+      NaradaRoot = "D:\code\narada.timour-marketing-agent"
+      WorkspaceRoot = "D:\code\narada.timour-marketing-agent"
+      SiteRoot = "D:\code\narada.timour-marketing-agent\.narada"
       Launcher = "narada-timour-marketing-agent.ps1"
       Runtime = "agent-cli"
       EnableNativeShell = $false
@@ -176,9 +176,9 @@
     @{
       Agent = "narada-timour-marketing-agent.resident"
       Title = "Timour Marketing Agent Resident"
-      NaradaRoot = "C:\Users\Andrey\Vose Software BE\Timour Koupeev - MarketingAgent\.narada"
-      WorkspaceRoot = "C:\Users\Andrey\Vose Software BE\Timour Koupeev - MarketingAgent\.narada"
-      SiteRoot = "C:\Users\Andrey\Vose Software BE\Timour Koupeev - MarketingAgent\.narada"
+      NaradaRoot = "D:\code\narada.timour-marketing-agent"
+      WorkspaceRoot = "D:\code\narada.timour-marketing-agent"
+      SiteRoot = "D:\code\narada.timour-marketing-agent\.narada"
       Launcher = "narada-timour-marketing-agent.ps1"
       Runtime = "agent-cli"
       EnableNativeShell = $false
@@ -186,9 +186,9 @@
     @{
       Agent = "narada-utz.architect"
       Title = "Utz Architect"
-      NaradaRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Utz\.narada"
-      WorkspaceRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Utz\.narada"
-      SiteRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Utz\.narada"
+      NaradaRoot = "D:\code\narada.utz"
+      WorkspaceRoot = "D:\code\narada.utz"
+      SiteRoot = "D:\code\narada.utz\.narada"
       Launcher = "narada-utz.ps1"
       Runtime = "agent-cli"
       EnableNativeShell = $false
@@ -196,9 +196,9 @@
     @{
       Agent = "narada-utz.builder"
       Title = "Utz Builder"
-      NaradaRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Utz\.narada"
-      WorkspaceRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Utz\.narada"
-      SiteRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Utz\.narada"
+      NaradaRoot = "D:\code\narada.utz"
+      WorkspaceRoot = "D:\code\narada.utz"
+      SiteRoot = "D:\code\narada.utz\.narada"
       Launcher = "narada-utz.ps1"
       Runtime = "agent-cli"
       EnableNativeShell = $false
@@ -206,9 +206,9 @@
     @{
       Agent = "narada-utz.resident"
       Title = "Utz Resident"
-      NaradaRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Utz\.narada"
-      WorkspaceRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Utz\.narada"
-      SiteRoot = "C:\Users\Andrey\OneDrive - Global Maxima LLC\!Business\!Clients\Utz\.narada"
+      NaradaRoot = "D:\code\narada.utz"
+      WorkspaceRoot = "D:\code\narada.utz"
+      SiteRoot = "D:\code\narada.utz\.narada"
       Launcher = "narada-utz.ps1"
       Runtime = "agent-cli"
       EnableNativeShell = $false
