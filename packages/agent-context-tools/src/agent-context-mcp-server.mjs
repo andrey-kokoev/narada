@@ -29,7 +29,7 @@
  *   node tools/agent-context/agent-context-mcp-server.mjs --site-root <path>
  */
 
-import Database from 'better-sqlite3';
+import Database from './sqlite-database.mjs';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';

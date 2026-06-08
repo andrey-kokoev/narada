@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import Database from './sqlite-database.mjs';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';

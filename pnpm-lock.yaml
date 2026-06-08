@@ -100,9 +100,6 @@ importers:
       '@narada2/task-lifecycle-mcp':
         specifier: workspace:*
         version: link:../../../mcp-surfaces/packages/task-lifecycle-mcp
-      better-sqlite3:
-        specifier: ^12.9.0
-        version: 12.9.0
 
   packages/agent-start: {}
 

@@ -11,25 +11,7 @@
 
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { createRequire } from 'node:module';
-
-const require = createRequire(import.meta.url);
-
-function resolveBetterSqlite3() {
-  try {
-    return require('better-sqlite3');
-  } catch {
-    try {
-      return require(resolve(process.cwd(), 'node_modules', 'better-sqlite3'));
-    } catch {
-      try {
-        return require(resolve(process.cwd(), 'tools', 'agent-context', 'node_modules', 'better-sqlite3'));
-      } catch {
-        return null;
-      }
-    }
-  }
-}
+import Database from './sqlite-database.mjs';
 
 const cwd = process.argv[2] || process.cwd();
 const agentId = process.argv[3];
@@ -43,18 +25,12 @@ const siteRoot = resolve(cwd);
 const agentDbPath = join(siteRoot, '.ai', 'state', 'agent-context.sqlite');
 const lifecycleDbPath = join(siteRoot, '.ai', 'task-lifecycle.db');
 
-const Database = resolveBetterSqlite3();
-if (!Database) {
-  console.error(JSON.stringify({ status: 'error', error: 'better-sqlite3 not found' }, null, 2));
-  process.exit(1);
-}
-
 let agentDb;
 let lifecycleDb;
 
 try {
-  agentDb = existsSync(agentDbPath) ? new Database(agentDbPath) : null;
-  lifecycleDb = existsSync(lifecycleDbPath) ? new Database(lifecycleDbPath) : null;
+  agentDb = existsSync(agentDbPath) ? new Database(agentDbPath, { readonly: true, fileMustExist: true }) : null;
+  lifecycleDb = existsSync(lifecycleDbPath) ? new Database(lifecycleDbPath, { readonly: true, fileMustExist: true }) : null;
 
   // Layer 1: Recent checkpoints
   let checkpoints = [];

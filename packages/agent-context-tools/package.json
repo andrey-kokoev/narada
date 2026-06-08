@@ -8,7 +8,6 @@
   },
   "dependencies": {
     "@narada2/agent-start-bootstrap": "workspace:*",
-    "@narada2/task-lifecycle-mcp": "workspace:*",
-    "better-sqlite3": "^12.9.0"
+    "@narada2/task-lifecycle-mcp": "workspace:*"
   }
 }
