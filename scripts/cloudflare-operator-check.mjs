@@ -65,6 +65,10 @@ assert.match(consoleCheck.body, /Operation Surface/);
 assert.match(consoleCheck.body, /Operation ID/);
 assert.match(consoleCheck.body, /Operation Sessions/);
 assert.match(consoleCheck.body, /Active Session/);
+assert.match(consoleCheck.body, /readOperation/);
+assert.match(consoleCheck.body, /readSite/);
+assert.match(consoleCheck.body, /autoRefreshOperation/);
+assert.match(consoleCheck.body, /Auto Refresh/);
 assert.match(consoleCheck.body, /Control Room/);
 assert.match(consoleCheck.body, /Control Room Action/);
 assert.match(consoleCheck.body, /controlRoomActionSummary/);
@@ -83,6 +87,56 @@ assert.match(consoleCheck.body, /membership_authority_bridge_needs_attention/);
 assert.match(consoleCheck.body, /workbench_ready_for_monitoring/);
 assert.match(consoleCheck.body, /Operation Flight Deck/);
 assert.match(consoleCheck.body, /Continuity Workflow/);
+assert.match(consoleCheck.body, /Operator Route/);
+assert.match(consoleCheck.body, /operatorRoute/);
+assert.match(consoleCheck.body, /operatorRouteStages/);
+assert.match(consoleCheck.body, /renderOperatorRoute/);
+assert.match(consoleCheck.body, /applyOperatorRouteNextAction/);
+assert.match(consoleCheck.body, /operatorRouteNextAction/);
+assert.match(consoleCheck.body, /Focus Route Next Action/);
+assert.match(consoleCheck.body, /Workbench Readiness Gate/);
+assert.match(consoleCheck.body, /Operation Control Board/);
+assert.match(consoleCheck.body, /operationControlBoard/);
+assert.match(consoleCheck.body, /operationControlTarget/);
+assert.match(consoleCheck.body, /operationControlTargetNextAction/);
+assert.match(consoleCheck.body, /operationControlTargetEvidenceAction/);
+assert.match(consoleCheck.body, /operationControlTargetReadinessAction/);
+assert.match(consoleCheck.body, /operationControlBoardContext/);
+assert.match(consoleCheck.body, /renderOperationControlBoard/);
+assert.match(consoleCheck.body, /Control Command/);
+assert.match(consoleCheck.body, /Focused Control Target/);
+assert.match(consoleCheck.body, /Apply Target Action/);
+assert.match(consoleCheck.body, /Focus Target Evidence/);
+assert.match(consoleCheck.body, /Focus Target Readiness/);
+assert.match(consoleCheck.body, /control_domain/);
+assert.match(consoleCheck.body, /control_action/);
+assert.match(consoleCheck.body, /control_target/);
+assert.match(consoleCheck.body, /operation_focus/);
+assert.match(consoleCheck.body, /session_focus/);
+assert.match(consoleCheck.body, /task_focus/);
+assert.match(consoleCheck.body, /authority_focus/);
+assert.match(consoleCheck.body, /evidence_focus/);
+assert.match(consoleCheck.body, /Control Posture/);
+assert.match(consoleCheck.body, /Active Work Path/);
+assert.match(consoleCheck.body, /Session Evidence Posture/);
+assert.match(consoleCheck.body, /provider_events/);
+assert.match(consoleCheck.body, /session_next_action/);
+assert.match(consoleCheck.body, /Authority Posture/);
+assert.match(consoleCheck.body, /Task Lifecycle Posture/);
+assert.match(consoleCheck.body, /focused_status/);
+assert.match(consoleCheck.body, /next_task/);
+assert.match(consoleCheck.body, /controlled_action/);
+assert.match(consoleCheck.body, /authority_evidence/);
+assert.match(consoleCheck.body, /Readiness Gaps/);
+assert.match(consoleCheck.body, /workbenchReadinessGate/);
+assert.match(consoleCheck.body, /workbenchReadinessGateItems/);
+assert.match(consoleCheck.body, /renderWorkbenchReadinessGate/);
+assert.match(consoleCheck.body, /applyWorkbenchReadinessNextAction/);
+assert.match(consoleCheck.body, /workbenchReadinessNextAction/);
+assert.match(consoleCheck.body, /Focus Readiness Gap/);
+assert.match(consoleCheck.body, /operator_identity_ready/);
+assert.match(consoleCheck.body, /membership_authority_ready/);
+assert.match(consoleCheck.body, /next_control_action_ready/);
 assert.match(consoleCheck.body, /continuityWorkflow/);
 assert.match(consoleCheck.body, /continuityWorkflowSteps/);
 assert.match(consoleCheck.body, /applyContinuityWorkflowNextStep/);
@@ -130,6 +184,11 @@ assert.match(consoleCheck.body, /renderOperatorIdentity/);
 assert.match(consoleCheck.body, /Controlled Actions/);
 assert.match(consoleCheck.body, /Operation Focus/);
 assert.match(consoleCheck.body, /Operation Navigator/);
+assert.match(consoleCheck.body, /Operation Work Queue/);
+assert.match(consoleCheck.body, /operationWorkQueue/);
+assert.match(consoleCheck.body, /operationWorkQueueItems/);
+assert.match(consoleCheck.body, /renderOperationWorkQueue/);
+assert.match(consoleCheck.body, /operationWorkQueueButtonId/);
 assert.match(consoleCheck.body, /Operation Action/);
 assert.match(consoleCheck.body, /operationActionSummary/);
 assert.match(consoleCheck.body, /operationActionContext/);
@@ -185,6 +244,11 @@ assert.match(consoleCheck.body, /operation-item/);
 assert.match(consoleCheck.body, /\.operation-item\.selected/);
 assert.match(consoleCheck.body, /Session Focus/);
 assert.match(consoleCheck.body, /Session Navigator/);
+assert.match(consoleCheck.body, /Session Work Queue/);
+assert.match(consoleCheck.body, /sessionWorkQueue/);
+assert.match(consoleCheck.body, /sessionWorkQueueItems/);
+assert.match(consoleCheck.body, /renderSessionWorkQueue/);
+assert.match(consoleCheck.body, /sessionWorkQueueButtonId/);
 assert.match(consoleCheck.body, /Session Action/);
 assert.match(consoleCheck.body, /sessionActionSummary/);
 assert.match(consoleCheck.body, /sessionActionContext/);
@@ -209,6 +273,20 @@ assert.match(consoleCheck.body, /Session Evidence Path/);
 assert.match(consoleCheck.body, /sessionEvidencePath/);
 assert.match(consoleCheck.body, /sessionEvidencePathContext/);
 assert.match(consoleCheck.body, /renderSessionEvidencePath/);
+assert.match(consoleCheck.body, /Session Evidence Control/);
+assert.match(consoleCheck.body, /sessionEvidenceControl/);
+assert.match(consoleCheck.body, /sessionEvidenceControlContext/);
+assert.match(consoleCheck.body, /renderSessionEvidenceControl/);
+assert.match(consoleCheck.body, /applySessionEvidenceAction/);
+assert.match(consoleCheck.body, /sessionEvidenceApplyAction/);
+assert.match(consoleCheck.body, /sessionEvidenceFocusAction/);
+assert.match(consoleCheck.body, /sessionEvidenceTaskAction/);
+assert.match(consoleCheck.body, /Apply Session Evidence Action/);
+assert.match(consoleCheck.body, /Focus Session Task/);
+assert.match(consoleCheck.body, /review_session_failures/);
+assert.match(consoleCheck.body, /review_session_open_task/);
+assert.match(consoleCheck.body, /review_session_delivery/);
+assert.match(consoleCheck.body, /monitor_session_evidence/);
 assert.match(consoleCheck.body, /sessionEvidenceEvents/);
 assert.match(consoleCheck.body, /sessionTasks/);
 assert.match(consoleCheck.body, /directiveDeliveryForSession/);
@@ -274,6 +352,28 @@ assert.match(consoleCheck.body, /monitor_authority_admissions/);
 assert.match(consoleCheck.body, /focus_authority_evidence/);
 assert.match(consoleCheck.body, /authorityDecisionKey/);
 assert.match(consoleCheck.body, /selectAuthorityDecision/);
+assert.match(consoleCheck.body, /Authority Decision Queue/);
+assert.match(consoleCheck.body, /Authority Decision Control/);
+assert.match(consoleCheck.body, /authorityDecisionControl/);
+assert.match(consoleCheck.body, /authorityDecisionControlContext/);
+assert.match(consoleCheck.body, /renderAuthorityDecisionControl/);
+assert.match(consoleCheck.body, /applyAuthorityDecisionReview/);
+assert.match(consoleCheck.body, /authorityDecisionApplyAction/);
+assert.match(consoleCheck.body, /authorityDecisionEvidenceAction/);
+assert.match(consoleCheck.body, /authorityDecisionRefreshAction/);
+assert.match(consoleCheck.body, /Apply Decision Review/);
+assert.match(consoleCheck.body, /Focus Decision Evidence/);
+assert.match(consoleCheck.body, /Refresh Decision Authority/);
+assert.match(consoleCheck.body, /Review State/);
+assert.match(consoleCheck.body, /Review Action/);
+assert.match(consoleCheck.body, /review_refused_authority/);
+assert.match(consoleCheck.body, /review_unresolved_locus/);
+assert.match(consoleCheck.body, /load_decision_evidence/);
+assert.match(consoleCheck.body, /authorityDecisionQueue/);
+assert.match(consoleCheck.body, /authorityDecisionQueueItems/);
+assert.match(consoleCheck.body, /renderAuthorityDecisionQueue/);
+assert.match(consoleCheck.body, /authorityDecisionEvidenceEvents/);
+assert.match(consoleCheck.body, /authorityDecisionQueueButtonId/);
 assert.match(consoleCheck.body, /authorityDecisionContext/);
 assert.match(consoleCheck.body, /renderAuthorityFocusDetail/);
 assert.match(consoleCheck.body, /authorityFocusEvidenceAction/);
@@ -295,6 +395,21 @@ assert.match(consoleCheck.body, /taskFocusPathAction/);
 assert.match(consoleCheck.body, /taskFocusOpenAction/);
 assert.match(consoleCheck.body, /taskFocusDoneAction/);
 assert.match(consoleCheck.body, /Next Lifecycle Action/);
+assert.match(consoleCheck.body, /Task Lifecycle Control/);
+assert.match(consoleCheck.body, /taskLifecycleControl/);
+assert.match(consoleCheck.body, /taskLifecycleControlContext/);
+assert.match(consoleCheck.body, /renderTaskLifecycleControl/);
+assert.match(consoleCheck.body, /applyTaskLifecycleAction/);
+assert.match(consoleCheck.body, /taskLifecycleApplyAction/);
+assert.match(consoleCheck.body, /taskLifecycleEvidenceAction/);
+assert.match(consoleCheck.body, /taskLifecycleSessionAction/);
+assert.match(consoleCheck.body, /Apply Lifecycle Action/);
+assert.match(consoleCheck.body, /Focus Lifecycle Evidence/);
+assert.match(consoleCheck.body, /Focus Lifecycle Session/);
+assert.match(consoleCheck.body, /Lifecycle Action/);
+assert.match(consoleCheck.body, /mark_task_done/);
+assert.match(consoleCheck.body, /inspect_task_evidence/);
+assert.match(consoleCheck.body, /normalize_task_open/);
 assert.match(consoleCheck.body, /Task Path/);
 assert.match(consoleCheck.body, /normalize_status_or_update/);
 assert.match(consoleCheck.body, /reopen_or_inspect_evidence/);
@@ -352,6 +467,11 @@ assert.match(consoleCheck.body, /evidenceFocusNextAction/);
 assert.match(consoleCheck.body, /Previous Evidence/);
 assert.match(consoleCheck.body, /Next Evidence/);
 assert.match(consoleCheck.body, /evidenceLanes/);
+assert.match(consoleCheck.body, /evidenceReviewQueue/);
+assert.match(consoleCheck.body, /evidenceReviewQueueItems/);
+assert.match(consoleCheck.body, /renderEvidenceReviewQueue/);
+assert.match(consoleCheck.body, /evidenceReviewPriority/);
+assert.match(consoleCheck.body, /evidenceReviewQueueButtonId/);
 assert.match(consoleCheck.body, /classifyEvidenceLane/);
 assert.match(consoleCheck.body, /renderEvidenceLanes/);
 assert.match(consoleCheck.body, /Input Lifecycle/);
@@ -396,6 +516,11 @@ assert.match(consoleCheck.body, /renderActiveSessionDetail/);
 assert.match(consoleCheck.body, /Focus Task Evidence/);
 assert.match(consoleCheck.body, /Task Lifecycle Summary/);
 assert.match(consoleCheck.body, /taskLifecycleSummary/);
+assert.match(consoleCheck.body, /Task Work Queue/);
+assert.match(consoleCheck.body, /taskWorkQueue/);
+assert.match(consoleCheck.body, /taskWorkQueueItems/);
+assert.match(consoleCheck.body, /renderTaskWorkQueue/);
+assert.match(consoleCheck.body, /taskWorkQueueButtonId/);
 assert.match(consoleCheck.body, /Task Command Preview/);
 assert.match(consoleCheck.body, /taskCommandPreview/);
 assert.match(consoleCheck.body, /taskCommandPreviewContext/);
@@ -568,6 +693,7 @@ assert.match(consoleCheck.body, /Authority Decisions/);
 assert.match(consoleCheck.body, /renderAuthorityState/);
 assert.match(consoleCheck.body, /authority-decision/);
 assert.match(consoleCheck.body, /credentials: 'same-origin'/);
+const consoleStructure = verifyOperatorConsoleStructure(consoleCheck.body, consoleScript);
 
 const smoke = await runJsonCommand('live-carrier-smoke', [
   'node',
@@ -715,6 +841,7 @@ const report = {
   },
   checks: {
     console_surface: 'ok',
+    console_workbench_structure: 'ok',
     microsoft_login_surface: 'ok',
     live_carrier_smoke: 'ok',
     site_read: 'ok',
@@ -730,6 +857,7 @@ const report = {
     continuity_idempotence: 'ok',
   },
   service_principal_ready: true,
+  console_structure: consoleStructure,
   human_operator_login_ready: humanOperator.login_ready,
   human_operator_membership_ready: humanOperator.membership_ready,
   principal: {
@@ -837,6 +965,128 @@ async function readConsole(baseUrl) {
     http_status: response.status,
     body: await response.text(),
   };
+}
+
+function verifyOperatorConsoleStructure(html, script) {
+  const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map((match) => match[1]);
+  const idSet = new Set(ids);
+  const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index);
+  assert.deepEqual([...new Set(duplicateIds)], [], 'operator console must not render duplicate static ids');
+
+  const panels = [
+    ['Control Room', 'controlRoomActionSummary'],
+    ['Operation Control Board', 'operationControlBoard'],
+    ['Focused Control Target', 'operationControlTarget'],
+    ['Operator Route', 'operatorRoute'],
+    ['Workbench Readiness Gate', 'workbenchReadinessGate'],
+    ['Operation Navigator', 'operationNavigator'],
+    ['Operation Work Queue', 'operationWorkQueue'],
+    ['Session Navigator', 'sessionNavigator'],
+    ['Session Work Queue', 'sessionWorkQueue'],
+    ['Session Evidence Control', 'sessionEvidenceControl'],
+    ['Task State', 'taskWorkQueue'],
+    ['Task Lifecycle Control', 'taskLifecycleControl'],
+    ['Evidence Review Queue', 'evidenceReviewQueue'],
+    ['Authority State', 'authorityState'],
+    ['Authority Decision Control', 'authorityDecisionControl'],
+    ['Authority Decision Queue', 'authorityDecisionQueue'],
+    ['Site Continuity', 'continuityNavigator'],
+  ];
+  for (const [heading, targetId] of panels) {
+    assert.match(html, new RegExp(escapeRegExp(heading)), `operator console panel missing: ${heading}`);
+    assert.ok(idSet.has(targetId), `operator console panel target missing: ${targetId}`);
+  }
+
+  const actions = [
+    ['controlRoomNextAction', 'applyControlRoomNextAction'],
+    ['operationControlBoardNextAction', 'applyControlRoomNextAction'],
+    ['operationControlBoardReadinessAction', 'applyWorkbenchReadinessNextAction'],
+    ['operationControlBoardEvidenceAction', 'focusFlightDeckEvidence'],
+    ['operationControlTargetNextAction', 'applyControlRoomNextAction'],
+    ['operationControlTargetEvidenceAction', 'focusFlightDeckEvidence'],
+    ['operationControlTargetReadinessAction', 'applyWorkbenchReadinessNextAction'],
+    ['operatorRouteNextAction', 'applyOperatorRouteNextAction'],
+    ['workbenchReadinessNextAction', 'applyWorkbenchReadinessNextAction'],
+    ['operationActionUseOperation', 'useFocusedOperation'],
+    ['operationActionReadOperation', 'refreshOperation'],
+    ['operationActionFocusSession', 'focusOperationSession'],
+    ['sessionActionUseSession', 'useFocusedSession'],
+    ['sessionActionReadEvidence', 'readSelectedSessionEvidence'],
+    ['sessionActionFocusEvidence', 'focusFocusedSessionEvidence'],
+    ['sessionEvidenceApplyAction', 'applySessionEvidenceAction'],
+    ['sessionEvidenceFocusAction', 'focusSessionPathEvidence'],
+    ['sessionEvidenceTaskAction', 'focusSessionPathTask'],
+    ['authorityNextAction', 'applyAuthorityNextAction'],
+    ['authorityReadSiteAction', 'refreshSiteProduct'],
+    ['authorityActionEvidenceAction', 'focusAuthorityEvidence'],
+    ['authorityDecisionApplyAction', 'applyAuthorityDecisionReview'],
+    ['authorityDecisionEvidenceAction', 'focusAuthorityEvidence'],
+    ['authorityDecisionRefreshAction', 'refreshAuthorityPath'],
+    ['taskLifecycleApplyAction', 'applyTaskLifecycleAction'],
+    ['taskLifecycleEvidenceAction', 'focusTaskPathEvidence'],
+    ['taskLifecycleSessionAction', 'focusTaskPathSession'],
+    ['continuityWorkflowNextAction', 'applyContinuityWorkflowNextStep'],
+    ['taskFromAttention', 'createTaskFromFocusedAttention'],
+    ['taskFromDirectiveIntent', 'createTaskFromFocusedDirectiveIntent'],
+  ];
+  for (const [buttonId, handler] of actions) {
+    assert.ok(idSet.has(buttonId), `operator console action button missing: ${buttonId}`);
+    assert.ok(script.includes(handler), `operator console action handler missing: ${handler}`);
+    assert.ok(script.includes(`el('${buttonId}').addEventListener`), `operator console action not wired: ${buttonId}`);
+    assert.match(
+      script,
+      new RegExp(`el\\('${escapeRegExp(buttonId)}'\\)\\.addEventListener\\('click',[^;]*${escapeRegExp(handler)}`),
+      `operator console action listener does not reference handler: ${buttonId} -> ${handler}`,
+    );
+  }
+
+  const renderers = [
+    'renderOperationControlBoard',
+    'renderOperatorRoute',
+    'renderWorkbenchReadinessGate',
+    'renderOperationWorkQueue',
+    'renderSessionWorkQueue',
+    'renderSessionEvidenceControl',
+    'renderTaskWorkQueue',
+    'renderTaskLifecycleControl',
+    'renderEvidenceReviewQueue',
+    'renderAuthorityDecisionControl',
+    'renderAuthorityDecisionQueue',
+  ];
+  for (const renderer of renderers) {
+    assert.ok(script.includes(`function ${renderer}`), `operator console renderer missing: ${renderer}`);
+  }
+
+  const readinessKeys = [
+    'operator_identity_ready',
+    'membership_authority_ready',
+    'operation_scope_ready',
+    'session_navigation_ready',
+    'evidence_inspection_ready',
+    'task_lifecycle_ready',
+    'authority_state_ready',
+    'continuity_posture_ready',
+    'next_control_action_ready',
+  ];
+  for (const key of readinessKeys) {
+    assert.ok(script.includes(key), `operator console readiness key missing: ${key}`);
+  }
+
+  const elReferenceIds = [...new Set([...script.matchAll(/\bel\('([^']+)'\)/g)].map((match) => match[1]))].sort();
+  const missingElTargets = elReferenceIds.filter((id) => !idSet.has(id));
+  assert.deepEqual(missingElTargets, [], 'operator console script references missing DOM ids');
+
+  return {
+    panel_count: panels.length,
+    action_count: actions.length,
+    el_reference_count: elReferenceIds.length,
+    readiness_key_count: readinessKeys.length,
+    renderer_count: renderers.length,
+  };
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 async function postCarrier(baseUrl, token, body) {

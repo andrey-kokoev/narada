@@ -4054,6 +4054,9 @@ export function renderCloudflareCarrierConsole() {
         <button id="readSessionEvidence" class="secondary">Read Session Evidence</button>
         <button id="start">Start / Resume</button>
         <button id="refresh" class="secondary">Refresh</button>
+        <button id="readOperation" class="secondary">Read Operation</button>
+        <button id="readSite" class="secondary">Read Site</button>
+        <button id="autoRefreshOperation" class="secondary" aria-pressed="false">Auto Refresh</button>
       </div>
       <div class="status">
         <div class="metric"><b>Site</b><span id="siteStatus">unknown</span></div>
@@ -4097,6 +4100,16 @@ export function renderCloudflareCarrierConsole() {
         <div class="actions"><button id="controlRoomNextAction" class="secondary">Apply Control Room Next Action</button></div>
       </div>
       <div class="product-panel">
+        <h2>Operator Route</h2>
+        <div class="actions"><button id="operatorRouteNextAction" class="secondary">Focus Route Next Action</button></div>
+        <div id="operatorRoute" class="attention-items"><div class="empty">No operator route loaded.</div></div>
+      </div>
+      <div class="product-panel">
+        <h2>Workbench Readiness Gate</h2>
+        <div class="actions"><button id="workbenchReadinessNextAction" class="secondary">Focus Readiness Gap</button></div>
+        <div id="workbenchReadinessGate" class="attention-items"><div class="empty">No workbench readiness loaded.</div></div>
+      </div>
+      <div class="product-panel">
         <h2>Product Scope</h2>
         <div id="productScopeDetail" class="evidence-summary"><div class="empty">No product scope loaded.</div></div>
         <div class="actions">
@@ -4134,6 +4147,8 @@ export function renderCloudflareCarrierConsole() {
         </label>
         <div class="actions"><button id="createOperation" class="secondary">Create Operation</button></div>
         <div id="operationNavigator" class="attention-items"><div class="empty">No site operations loaded.</div></div>
+        <h3>Operation Work Queue</h3>
+        <div id="operationWorkQueue" class="attention-items"><div class="empty">No operation work loaded.</div></div>
         <h3>Operation Action</h3>
         <div id="operationActionSummary" class="evidence-summary"><div class="empty">No operation action loaded.</div></div>
         <div class="actions">
@@ -4158,6 +4173,8 @@ export function renderCloudflareCarrierConsole() {
       <div class="product-panel">
         <h2>Session Navigator</h2>
         <div id="sessionNavigator" class="attention-items"><div class="empty">No operation sessions loaded.</div></div>
+        <h3>Session Work Queue</h3>
+        <div id="sessionWorkQueue" class="attention-items"><div class="empty">No session work loaded.</div></div>
         <h3>Session Action</h3>
         <div id="sessionActionSummary" class="evidence-summary"><div class="empty">No session action loaded.</div></div>
         <div class="actions">
@@ -4175,6 +4192,13 @@ export function renderCloudflareCarrierConsole() {
           <button id="focusSessionPathChain" class="secondary">Focus Chain</button>
         </div>
         <div id="sessionEvidencePath" class="evidence-summary"><div class="empty">No session evidence path loaded.</div></div>
+        <h3>Session Evidence Control</h3>
+        <div id="sessionEvidenceControl" class="evidence-summary"><div class="empty">No session evidence control loaded.</div></div>
+        <div class="actions">
+          <button id="sessionEvidenceApplyAction" class="secondary">Apply Session Evidence Action</button>
+          <button id="sessionEvidenceFocusAction" class="secondary">Focus Session Evidence</button>
+          <button id="sessionEvidenceTaskAction" class="secondary">Focus Session Task</button>
+        </div>
       </div>
       <div class="product-panel">
         <div class="actions">
@@ -4207,6 +4231,15 @@ export function renderCloudflareCarrierConsole() {
           <button id="authorityPathRefresh" class="secondary">Refresh Authority</button>
         </div>
         <div id="authorityPath" class="evidence-summary"><div class="empty">No authority path loaded.</div></div>
+        <h3>Authority Decision Control</h3>
+        <div id="authorityDecisionControl" class="evidence-summary"><div class="empty">No authority decision control loaded.</div></div>
+        <div class="actions">
+          <button id="authorityDecisionApplyAction" class="secondary">Apply Decision Review</button>
+          <button id="authorityDecisionEvidenceAction" class="secondary">Focus Decision Evidence</button>
+          <button id="authorityDecisionRefreshAction" class="secondary">Refresh Decision Authority</button>
+        </div>
+        <h3>Authority Decision Queue</h3>
+        <div id="authorityDecisionQueue" class="attention-items"><div class="empty">No authority decisions loaded.</div></div>
         <div id="authorityState" class="attention-items"><div class="empty">No authority state loaded.</div></div>
         <div id="authorityFocusDetail" class="evidence-summary"><div class="empty">No authority decision selected.</div></div>
       </div>
@@ -4305,6 +4338,13 @@ export function renderCloudflareCarrierConsole() {
         </div>
         <h3>Task Lifecycle Summary</h3>
         <div id="taskLifecycleSummary" class="evidence-summary"><div class="empty">No task lifecycle loaded.</div></div>
+        <h3>Task Lifecycle Control</h3>
+        <div id="taskLifecycleControl" class="evidence-summary"><div class="empty">No task lifecycle control loaded.</div></div>
+        <div class="actions">
+          <button id="taskLifecycleApplyAction" class="secondary">Apply Lifecycle Action</button>
+          <button id="taskLifecycleEvidenceAction" class="secondary">Focus Lifecycle Evidence</button>
+          <button id="taskLifecycleSessionAction" class="secondary">Focus Lifecycle Session</button>
+        </div>
         <h3>Task Evidence Path</h3>
         <div class="actions">
           <button id="focusTaskPathSession" class="secondary">Focus Task Session</button>
@@ -4316,6 +4356,8 @@ export function renderCloudflareCarrierConsole() {
         <div id="taskEvidencePath" class="evidence-summary"><div class="empty">No task evidence path loaded.</div></div>
         <h3>Task Focus Detail</h3>
         <div id="taskFocusDetail" class="evidence-summary"><div class="empty">No task selected.</div></div>
+        <h3>Task Work Queue</h3>
+        <div id="taskWorkQueue" class="attention-items"><div class="empty">No task work loaded.</div></div>
         <div id="tasks" class="tasks"><div class="empty">No tasks loaded.</div></div>
       </div>
       <div id="error" class="error" role="status"></div>
@@ -4328,6 +4370,26 @@ export function renderCloudflareCarrierConsole() {
           <label>Session Filter<select id="eventSessionFilter"><option value="active">Active session</option><option value="all">All loaded sessions</option></select></label>
         </div>
         <button id="read" class="secondary">Read Events</button>
+      </div>
+      <div id="operationControlBoard" class="overview">
+        <div class="overview-block"><h3>Operation Control Board</h3><ul><li class="empty">No control board loaded.</li></ul></div>
+      </div>
+      <div class="evidence-focus">
+        <h3>Focused Control Target</h3>
+        <div id="operationControlTarget" class="evidence-summary"><div class="empty">No control target loaded.</div></div>
+        <div class="actions">
+          <button id="operationControlTargetNextAction" class="secondary">Apply Target Action</button>
+          <button id="operationControlTargetEvidenceAction" class="secondary">Focus Target Evidence</button>
+          <button id="operationControlTargetReadinessAction" class="secondary">Focus Target Readiness</button>
+        </div>
+      </div>
+      <div class="evidence-focus">
+        <h3>Control Board Actions</h3>
+        <div class="actions">
+          <button id="operationControlBoardNextAction" class="secondary">Apply Board Next Action</button>
+          <button id="operationControlBoardReadinessAction" class="secondary">Focus Board Readiness Gap</button>
+          <button id="operationControlBoardEvidenceAction" class="secondary">Focus Board Evidence</button>
+        </div>
       </div>
       <div id="productOverview" class="overview">
         <div class="overview-block"><h3>Operation</h3><ul><li class="empty">No operation loaded.</li></ul></div>
@@ -4343,6 +4405,8 @@ export function renderCloudflareCarrierConsole() {
       <div id="evidenceFocus" class="evidence-focus"><h3>Evidence Focus</h3><span>No event selected.</span></div>
       <div id="evidenceActionSummary" class="evidence-focus"><h3>Evidence Action</h3><span>No evidence action selected.</span></div>
       <div id="evidenceLanes" class="evidence-lanes"><div class="empty">No evidence lanes loaded.</div></div>
+      <div class="evidence-focus"><h3>Evidence Review Queue</h3><span>Prioritized review path for loaded carrier events.</span></div>
+      <div id="evidenceReviewQueue" class="attention-items"><div class="empty">No evidence review loaded.</div></div>
       <div id="events" class="events"><div class="empty">Start or resume a session to read carrier events.</div></div>
       <div class="composer">
         <label>Input<textarea id="input" placeholder="Send an operator input to the Cloudflare carrier"></textarea></label>
@@ -4594,6 +4658,9 @@ export function renderCloudflareCarrierConsole() {
       el('controlContinuity').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length ?? 0) + ' packets / ' + String(surface.webhook_delay_directive_record_count ?? (product.webhook_delay_directive_records || []).length ?? 0) + ' directive intents';
       el('controlWorkbenchReadiness').textContent = operationWorkbenchReadiness(product);
       renderControlRoomActionSummary(product);
+      renderOperatorRoute(product);
+      renderWorkbenchReadinessGate(product);
+      renderOperationControlBoard(product);
       renderSiteActionSummary();
       renderMembershipActionSummary();
       renderOperationActionSummary();
@@ -4656,6 +4723,226 @@ export function renderCloudflareCarrierConsole() {
         if ((product.resident_dispatch_decisions || []).length === 0) missing.push('resident-dispatch');
       }
       return missing.length === 0 ? 'ready' : 'missing ' + missing.join(', ');
+    }
+    function workbenchReadinessGateItems(product = state.operationProduct || {}) {
+      const surface = product.operation_product_surface || {};
+      const principal = state.operatorPrincipal || product.reader_principal || null;
+      const membership = focusedMembership();
+      const activeSession = el('sessionId').value.trim();
+      const sessions = product.sessions || [];
+      const evidenceEvents = state.events.length + (product.carrier_evidence || []).reduce((count, entry) => count + (entry.events || []).length, 0);
+      const activeTasks = (product.tasks || []).filter((task) => !['done', 'closed', 'resolved'].includes(String(task.status || '').toLowerCase()));
+      const authorityEvidence = (product.site_authority?.decisions || []).length + (product.authority_events || []).length;
+      const continuityEvidence = Number(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length ?? 0);
+      const nextAction = String(contextValue(controlRoomActionContext(product), 'Action')) || 'monitor_operation_evidence';
+      return [
+        {
+          key: 'operator_identity_ready',
+          label: 'Operator Identity',
+          status: principal ? 'ready' : 'needs_attention',
+          detail: principal ? operatorPrincipalLabel(principal) : 'no signed operator principal',
+          action_label: principal ? 'Review Identity' : 'Sign In',
+          action: () => { if (principal) renderOperatorIdentity(principal); else window.location.href = '/auth/microsoft/login'; },
+        },
+        {
+          key: 'membership_authority_ready',
+          label: 'Membership Authority',
+          status: membership && membership.status === 'active' ? 'ready' : 'needs_attention',
+          detail: membership ? [membership.role || 'role unknown', membership.status || 'status unknown'].join(' / ') : 'no active membership focus',
+          action_label: membership ? 'Focus Membership' : 'Read Site Scope',
+          action: () => { if (membership) selectMembership(membership); else run(refreshSiteProduct); },
+        },
+        {
+          key: 'operation_scope_ready',
+          label: 'Operation Scope',
+          status: product.operation || el('operationId').value.trim() ? 'ready' : 'needs_attention',
+          detail: product.operation?.operation_id || el('operationId').value.trim() || 'no operation loaded',
+          action_label: product.operation ? 'Read Operation' : 'Read Scope',
+          action: () => run(refreshOperation),
+        },
+        {
+          key: 'session_navigation_ready',
+          label: 'Session Navigation',
+          status: activeSession || sessions.length > 0 ? 'ready' : 'needs_attention',
+          detail: (activeSession || 'no active session') + ' / ' + sessions.length + ' listed',
+          action_label: sessions.length > 0 ? 'Focus Session' : 'Start Session',
+          action: () => { if (sessions.length > 0) focusOperationSession(); else run(async () => { const body = await api.start(); appendEvents([body.event].filter(Boolean)); await refreshStatus(); await refreshOperation(); }); },
+        },
+        {
+          key: 'evidence_inspection_ready',
+          label: 'Evidence Inspection',
+          status: evidenceEvents > 0 ? 'ready' : 'needs_attention',
+          detail: String(evidenceEvents) + ' loaded events',
+          action_label: evidenceEvents > 0 ? 'Focus Evidence' : 'Read Evidence',
+          action: () => { if (evidenceEvents > 0) focusFlightDeckEvidence(); else run(readSelectedSessionEvidence); },
+        },
+        {
+          key: 'task_lifecycle_ready',
+          label: 'Task Lifecycle',
+          status: activeTasks.length === 0 && (product.tasks || []).length > 0 ? 'ready' : 'needs_attention',
+          detail: String(activeTasks.length) + ' open / ' + (product.tasks || []).length + ' total',
+          action_label: activeTasks.length > 0 ? 'Focus Task' : 'Review Tasks',
+          action: () => { if (activeTasks.length > 0) selectTask(activeTasks[0]); else renderTaskWorkQueue(); },
+        },
+        {
+          key: 'authority_state_ready',
+          label: 'Authority State',
+          status: authorityEvidence > 0 ? 'ready' : 'needs_attention',
+          detail: String(authorityEvidence) + ' authority records',
+          action_label: authorityEvidence > 0 ? 'Focus Authority' : 'Read Authority',
+          action: () => { if (authorityEvidence > 0) focusAuthorityPathDecision(); else run(refreshSiteProduct); },
+        },
+        {
+          key: 'continuity_posture_ready',
+          label: 'Continuity Posture',
+          status: continuityEvidence > 0 ? 'ready' : 'needs_attention',
+          detail: String(continuityEvidence) + ' continuity packets',
+          action_label: continuityEvidence > 0 ? 'Focus Continuity' : 'Review Workflow',
+          action: () => { if ((product.site_continuity_packets || []).length > 0) selectContinuity(product.site_continuity_packets[0]); else applyContinuityWorkflowNextStep(); },
+        },
+        {
+          key: 'next_control_action_ready',
+          label: 'Next Control Action',
+          status: nextAction === 'monitor_operation_evidence' ? 'ready' : 'needs_attention',
+          detail: nextAction,
+          action_label: 'Apply Next Action',
+          action: applyControlRoomNextAction,
+        },
+      ];
+    }
+    function applyWorkbenchReadinessNextAction() {
+      const item = workbenchReadinessGateItems().find((entry) => entry.status !== 'ready');
+      if (item?.action) item.action();
+    }
+    function workbenchReadinessActionButton(item) {
+      const button = document.createElement('button');
+      button.className = 'secondary';
+      button.textContent = item.action_label || 'Focus';
+      button.addEventListener('click', item.action);
+      return button;
+    }
+    function renderWorkbenchReadinessGate(product = state.operationProduct || {}) {
+      const items = workbenchReadinessGateItems(product);
+      el('workbenchReadinessGate').replaceChildren(...items.map((item) => {
+        const node = document.createElement('article');
+        node.className = 'attention-item' + (item.status !== 'ready' ? ' selected' : '');
+        const title = document.createElement('strong');
+        title.textContent = item.label;
+        const meta = document.createElement('span');
+        meta.textContent = [item.status, item.detail].filter(Boolean).join(' | ');
+        node.append(title, meta, focusActionRow(workbenchReadinessActionButton(item)));
+        return node;
+      }));
+    }
+    function operationControlBoardContext(product = state.operationProduct || {}) {
+      const control = controlRoomActionContext(product);
+      const readinessItems = workbenchReadinessGateItems(product);
+      const readinessGaps = readinessItems.filter((item) => item.status !== 'ready');
+      const operationQueue = operationWorkQueueItems(state.operations || [], product);
+      const sessionQueue = sessionWorkQueueItems(product.sessions || [], product);
+      const authorityQueue = authorityDecisionQueueItems(product.site_authority?.decisions || [], product);
+      const evidenceQueue = evidenceReviewQueueItems();
+      const openTasks = (product.tasks || []).filter((task) => !['done', 'closed', 'resolved'].includes(String(task.status || '').toLowerCase()));
+      const operationFocus = state.operationFocus || product.operation || null;
+      const sessionFocus = state.sessionFocus || activeSessionDetail();
+      const authorityFocus = state.authorityFocus || (product.site_authority?.decisions || [])[0] || null;
+      const taskFocus = state.taskFocus || openTasks[0] || null;
+      const evidenceFocus = state.evidenceFocus || evidenceQueue[0]?.event || null;
+      const sessionPath = sessionEvidencePathContext(sessionFocus, product);
+      const authoritySummary = authorityPostureSummary(product.site_authority?.decisions || []);
+      const authorityEvidenceCount = authorityEvidenceEvents(product).length;
+      const taskSummary = taskLifecycleSummary(product.tasks || []);
+      const controlDomain = contextValue(control, 'Domain') || 'none';
+      const controlAction = contextValue(control, 'Action') || 'none';
+      const controlTarget = contextValue(control, 'Target') || 'none';
+      const controlReason = contextValue(control, 'Reason') || 'none';
+      return {
+        command: [
+          listItem('domain', controlDomain),
+          listItem('action', controlAction),
+          listItem('target', controlTarget),
+          listItem('reason', controlReason),
+        ],
+        target: [
+          listItem('control_domain', controlDomain),
+          listItem('control_action', controlAction),
+          listItem('control_target', controlTarget),
+          listItem('control_reason', controlReason),
+          listItem('operation_focus', operationFocus?.operation_id || el('operationId').value.trim() || 'none'),
+          listItem('session_focus', sessionFocus?.carrier_session_id || el('sessionId').value.trim() || 'none'),
+          listItem('task_focus', taskFocus ? [taskFocus.task_id, taskFocus.status].filter(Boolean).join(' / ') : 'none'),
+          listItem('authority_focus', authorityFocus ? [authorityFocus.mutation_class || authorityFocus.event_kind || 'authority', authorityFocus.action || authorityFocus.authority_locus || 'unknown'].join(' / ') : 'none'),
+          listItem('evidence_focus', evidenceFocus ? eventTitle(evidenceFocus) : 'none'),
+        ],
+        posture: [
+          listItem('readiness', contextValue(control, 'Readiness') || operationWorkbenchReadiness(product)),
+          listItem('scope', productScopeSummary(product)),
+          listItem('operator', operatorPrincipalLabel(state.operatorPrincipal || product.reader_principal)),
+          listItem('authority_locus', (product.site_authority?.decisions || [])[0]?.authority_locus || 'unknown'),
+        ],
+        queues: [
+          listItem('operations_needing_action', operationQueue.filter((item) => item.status !== 'ready').length + ' / ' + operationQueue.length),
+          listItem('sessions_needing_action', sessionQueue.filter((item) => item.status !== 'ready').length + ' / ' + sessionQueue.length),
+          listItem('open_tasks', openTasks.length + ' / ' + (product.tasks || []).length),
+          listItem('authority_needing_action', authorityQueue.filter((item) => item.status !== 'ready').length + ' / ' + authorityQueue.length),
+        ],
+        evidence: [
+          listItem('events_loaded', String(state.events.length)),
+          listItem('review_items', String(evidenceQueue.length)),
+          listItem('focused_evidence', state.evidenceFocus ? eventTitle(state.evidenceFocus) : 'none'),
+          listItem('active_lane', state.evidenceLane || 'all'),
+        ],
+        path: [
+          listItem('operation', operationFocus?.operation_id || el('operationId').value.trim() || 'none'),
+          listItem('session', sessionFocus?.carrier_session_id || el('sessionId').value.trim() || 'none'),
+          listItem('task', state.taskFocus ? [state.taskFocus.task_id, state.taskFocus.status].filter(Boolean).join(' / ') : 'none'),
+          listItem('authority', authorityFocus ? [authorityFocus.mutation_class || authorityFocus.event_kind || 'authority', authorityFocus.action || authorityFocus.authority_locus || 'unknown'].join(' / ') : 'none'),
+          listItem('evidence', state.evidenceFocus ? eventTitle(state.evidenceFocus) : 'none'),
+        ],
+        sessionEvidence: [
+          listItem('session', contextValue(sessionPath, 'Session') || 'none'),
+          listItem('events', contextValue(sessionPath, 'Events') || '0'),
+          listItem('provider_events', contextValue(sessionPath, 'Provider Events') || '0'),
+          listItem('tool_events', contextValue(sessionPath, 'Tool Events') || '0'),
+          listItem('failure_events', contextValue(sessionPath, 'Failure Events') || '0'),
+          listItem('session_next_action', contextValue(sessionPath, 'Next Action') || 'select_or_start_session'),
+        ],
+        authority: [
+          listItem('admitted', contextValue(authoritySummary, 'Admitted') || '0'),
+          listItem('refused', contextValue(authoritySummary, 'Refused') || '0'),
+          listItem('unresolved_locus', contextValue(authoritySummary, 'Unresolved Locus') || '0'),
+          listItem('dominant_locus', contextValue(authoritySummary, 'Dominant Locus') || 'none'),
+          listItem('controlled_action', authorityFocus?.controlled_action || 'none'),
+          listItem('authority_evidence', String(authorityEvidenceCount)),
+        ],
+        taskLifecycle: [
+          listItem('open', contextValue(taskSummary, 'Open') || '0'),
+          listItem('closed', contextValue(taskSummary, 'Closed') || '0'),
+          listItem('focused_status', contextValue(taskSummary, 'Focused Status') || 'none'),
+          listItem('next_task', contextValue(taskSummary, 'Next Task') || 'none'),
+          listItem('command_state', contextValue(taskSummary, 'Command State') || 'unknown'),
+          listItem('next_action', contextValue(taskSummary, 'Next Action') || 'none'),
+        ],
+        readiness: readinessGaps.length > 0
+          ? readinessGaps.slice(0, 4).map((item) => listItem(item.label, item.detail || item.action_label || item.status))
+          : [listItem('ready', 'all readiness gates satisfied')],
+      };
+    }
+    function renderOperationControlBoard(product = state.operationProduct || {}) {
+      const board = operationControlBoardContext(product);
+      el('operationControlTarget').replaceChildren(...board.target.map((item) => evidenceField(item.label, item.value)));
+      el('operationControlBoard').replaceChildren(
+        renderListBlock('Control Command', board.command),
+        renderListBlock('Focused Control Target', board.target),
+        renderListBlock('Control Posture', board.posture),
+        renderListBlock('Active Work Path', board.path),
+        renderListBlock('Session Evidence Posture', board.sessionEvidence),
+        renderListBlock('Authority Posture', board.authority),
+        renderListBlock('Task Lifecycle Posture', board.taskLifecycle),
+        renderListBlock('Work Queues', board.queues),
+        renderListBlock('Evidence Review', board.evidence),
+        renderListBlock('Readiness Gaps', board.readiness),
+      );
     }
     function contextValue(context, label) {
       return (context || []).find(([key]) => key === label)?.[1] || '';
@@ -4785,6 +5072,102 @@ export function renderCloudflareCarrierConsole() {
       if (action === 'focus_open_attention' || action === 'focus_open_task' || action === 'monitor_operation_evidence') { applyFlightDeckNextAction(); return; }
       applyFlightDeckNextAction();
     }
+    function operatorRouteStage(domain, context, readyActions, targetLabel, action) {
+      const nextAction = String(contextValue(context, 'Next Action') || 'none');
+      const commandState = String(contextValue(context, 'Command State') || 'not_classified');
+      const commandAction = String(contextValue(context, 'Command Action') || nextAction);
+      const target = String(contextValue(context, targetLabel) || contextValue(context, 'Target Ref') || contextValue(context, 'Focused Decision') || 'none');
+      const ready = readyActions.includes(nextAction) || readyActions.includes(commandState);
+      return { domain, command_state: commandState, command_action: commandAction, next_action: nextAction, target, status: ready ? 'ready' : 'needs_attention', action };
+    }
+    function taskRouteStage(product = state.operationProduct || {}) {
+      const targets = operationFlightDeckTargets(product);
+      const selected = targets.task || selectedTaskFromWorkbench();
+      const openTasks = (product.tasks || []).filter((task) => !['done', 'closed', 'resolved'].includes(String(task.status || '').toLowerCase()));
+      if (!selected && openTasks.length === 0) {
+        return { domain: 'task', command_state: 'no_open_tasks', command_action: 'monitor_task_lifecycle', next_action: 'monitor_task_lifecycle', target: 'none', status: 'ready', action: applyFlightDeckNextAction };
+      }
+      const evidenceEvents = state.events.filter((event) => selected?.task_id && JSON.stringify(event.payload || {}).includes(selected.task_id));
+      const command = classifyCloudflareTaskCommandState({
+        task_id: selected?.task_id || '',
+        status: selected?.status || '',
+        evidence_count: evidenceEvents.length,
+      });
+      const ready = ['evidence_ready'].includes(command.command_state) || (openTasks.length === 0 && command.lifecycle === 'closed');
+      return {
+        domain: 'task',
+        command_state: command.command_state,
+        command_action: command.command_action,
+        next_action: command.next_action,
+        target: selected?.task_id || 'none',
+        status: ready ? 'ready' : 'needs_attention',
+        action: () => { if (selected) selectTask(selected); else applyFlightDeckNextAction(); },
+      };
+    }
+    function operatorRouteStages(product = state.operationProduct || {}) {
+      const evidenceContext = evidenceActionSummaryContext(state.evidenceFocus);
+      const evidenceStage = evidenceContext.length > 0
+        ? operatorRouteStage('evidence', evidenceContext, ['payload_review'], 'Target Ref', focusFlightDeckEvidence)
+        : { domain: 'evidence', command_state: 'evidence_focus_needed', command_action: 'focus_evidence', next_action: 'focus_evidence', target: el('sessionId').value.trim() || product.operation?.operation_id || product.site?.site_id || 'none', status: 'needs_attention', action: focusFlightDeckEvidence };
+      return [
+        operatorRouteStage('site', siteActionContext(), ['inspect_site_operations', 'site_operations_ready'], 'Site', () => {
+          const action = String(contextValue(siteActionContext(), 'Next Action'));
+          if (action === 'read_site_scope' || action === 'read_site_authority') run(refreshSiteProduct);
+          else if (action === 'load_or_create_membership') focusSiteMembership();
+          else focusSiteOperation();
+        }),
+        operatorRouteStage('membership', membershipActionContext(), ['monitor_membership_authority', 'membership_authority_monitoring'], 'Principal', () => {
+          const action = String(contextValue(membershipActionContext(), 'Next Action'));
+          if (action === 'read_membership_site') run(refreshSiteProduct);
+          else if (action === 'put_membership') run(putFocusedMembership);
+          else focusMembershipAuthority();
+        }),
+        operatorRouteStage('operation', operationActionContext(), ['inspect_operation_evidence', 'evidence_ready'], 'Operation', () => {
+          const action = String(contextValue(operationActionContext(), 'Next Action'));
+          if (action === 'read_operation_scope' || action === 'read_operation_evidence') run(refreshOperation);
+          else if (action === 'use_focused_operation') useFocusedOperation();
+          else focusOperationSession();
+        }),
+        operatorRouteStage('session', sessionActionContext(), ['inspect_session_evidence', 'evidence_ready'], 'Session', () => {
+          const action = String(contextValue(sessionActionContext(), 'Next Action'));
+          if (action === 'read_session_evidence') run(readSelectedSessionEvidence);
+          else if (action === 'use_focused_session') useFocusedSession();
+          else focusFocusedSessionEvidence();
+        }),
+        taskRouteStage(product),
+        operatorRouteStage('authority', authorityActionContext(product), ['monitor_authority_admissions', 'admissions_monitoring'], 'Focused Decision', applyAuthorityNextAction),
+        evidenceStage,
+      ];
+    }
+    function applyOperatorRouteNextAction() {
+      const stage = operatorRouteStages().find((item) => item.status !== 'ready') || operatorRouteStages()[0];
+      if (stage?.action) stage.action();
+    }
+    function operatorRouteActionButton(stage) {
+      const button = document.createElement('button');
+      button.className = 'secondary';
+      button.textContent = stage.status === 'ready' ? 'Focus' : 'Act';
+      button.addEventListener('click', stage.action);
+      return button;
+    }
+    function renderOperatorRoute(product = state.operationProduct || {}) {
+      const stages = operatorRouteStages(product);
+      if (stages.length === 0) {
+        el('operatorRoute').innerHTML = '<div class="empty">No operator route loaded.</div>';
+        return;
+      }
+      const firstAttention = stages.find((stage) => stage.status !== 'ready');
+      el('operatorRoute').replaceChildren(...stages.map((stage) => {
+        const node = document.createElement('article');
+        node.className = 'attention-item' + (stage === firstAttention ? ' selected' : '');
+        const title = document.createElement('strong');
+        title.textContent = stage.domain + ' | ' + stage.command_state;
+        const meta = document.createElement('span');
+        meta.textContent = [stage.status, stage.next_action, stage.target].filter(Boolean).join(' | ');
+        node.append(title, meta, focusActionRow(operatorRouteActionButton(stage)));
+        return node;
+      }));
+    }
     function operationFlightDeckContext(product = {}) {
       const surface = product.operation_product_surface || {};
       const activeSession = el('sessionId').value.trim();
@@ -4836,6 +5219,7 @@ export function renderCloudflareCarrierConsole() {
       if (first) focusEvidence(first);
       else { state.evidenceFocus = null; renderEvidenceFocus(); }
       renderEvidenceLanes();
+      renderEvidenceReviewQueue();
       renderEvents();
       updateControlRoom();
     }
@@ -5050,6 +5434,7 @@ export function renderCloudflareCarrierConsole() {
       state.evidenceFocus = event;
       renderEvidenceFocus();
       renderEvidenceActionSummary();
+      renderEvidenceReviewQueue();
       updateControlRoom();
     }
     function focusEvidenceFor(predicate) {
@@ -5138,6 +5523,7 @@ export function renderCloudflareCarrierConsole() {
       if (!state.evidenceFocus) return;
       state.evidenceLane = classifyEvidenceLane(state.evidenceFocus);
       renderEvidenceLanes();
+      renderEvidenceReviewQueue();
       renderEvents();
       updateControlRoom();
     }
@@ -5208,6 +5594,54 @@ export function renderCloudflareCarrierConsole() {
           focusActionButton('evidenceActionPathAction', 'Focus Evidence Path', focusEvidencePath),
         ),
       );
+    }
+    function evidenceReviewPriority(command = {}) {
+      if (command.lane === 'failures') return 0;
+      if (command.lane === 'authority') return 1;
+      if (command.lane === 'tools') return 2;
+      if (command.lane === 'directives') return 3;
+      if (command.lane === 'provider') return 4;
+      if (command.lane === 'input') return 5;
+      return 6;
+    }
+    function evidenceReviewQueueItems(events = visibleEvents()) {
+      return events.map((event) => {
+        const command = classifyCloudflareEvidenceCommandState(event, { parsed_task_id: tryParseTaskId(event.payload?.result_summary) });
+        return { event, command };
+      }).sort((left, right) => {
+        const priority = evidenceReviewPriority(left.command) - evidenceReviewPriority(right.command);
+        if (priority !== 0) return priority;
+        return Number(right.event.sequence ?? 0) - Number(left.event.sequence ?? 0);
+      });
+    }
+    function evidenceReviewQueueButtonId(event, suffix) {
+      return ['evidenceReviewQueue', event.event_kind || 'event', event.sequence ?? 'seq', suffix].join('_').replace(/[^a-z0-9_:-]+/gi, '_');
+    }
+    function renderEvidenceReviewQueue(events = visibleEvents()) {
+      if (!events.length) {
+        el('evidenceReviewQueue').innerHTML = '<div class="empty">No evidence review loaded.</div>';
+        return;
+      }
+      const items = evidenceReviewQueueItems(events).slice(0, 25);
+      el('evidenceReviewQueue').replaceChildren(...items.map((item) => {
+        const node = document.createElement('article');
+        node.className = 'attention-item' + (state.evidenceFocus && eventKey(state.evidenceFocus) === eventKey(item.event) ? ' selected' : '');
+        const title = document.createElement('strong');
+        title.textContent = [item.command.lane, item.command.command_state, item.event.event_kind || 'event'].join(' | ');
+        const meta = document.createElement('span');
+        meta.textContent = [item.command.next_action, item.command.target_type + ':' + item.command.target_ref, item.event.carrier_session_id || 'no session', 'seq ' + (item.event.sequence ?? 'none')].join(' | ');
+        node.addEventListener('click', () => focusEvidence(item.event));
+        node.append(
+          title,
+          meta,
+          focusActionRow(
+            focusActionButton(evidenceReviewQueueButtonId(item.event, 'focus'), 'Focus', () => focusEvidence(item.event)),
+            focusActionButton(evidenceReviewQueueButtonId(item.event, 'target'), 'Target', () => { focusEvidence(item.event); focusEvidenceTarget(); }),
+            focusActionButton(evidenceReviewQueueButtonId(item.event, 'path'), 'Path', () => { focusEvidence(item.event); focusEvidencePath(); }),
+          ),
+        );
+        return node;
+      }));
     }
     function selectAttentionItem(item) {
       if (!item?.directive_id) return;
@@ -5285,9 +5719,11 @@ export function renderCloudflareCarrierConsole() {
       if (decisions.length === 0) {
         state.authorityFocus = null;
         el('authorityState').innerHTML = '<div class="empty">No authority state loaded.</div>';
+        renderAuthorityDecisionQueue(decisions, product);
         renderAuthorityPostureSummary(decisions);
         renderAuthorityFocusDetail();
         renderAuthorityPath(product);
+        renderAuthorityDecisionControl(null, product);
         updateControlRoom();
         return;
       }
@@ -5304,9 +5740,11 @@ export function renderCloudflareCarrierConsole() {
         node.append(title, meta);
         return node;
       }));
+      renderAuthorityDecisionQueue(decisions, product);
       renderAuthorityPostureSummary(decisions);
       renderAuthorityFocusDetail();
       renderAuthorityPath(product);
+      renderAuthorityDecisionControl(state.authorityFocus, product);
       updateControlRoom();
     }
     function authorityPostureSummary(decisions = []) {
@@ -5340,6 +5778,59 @@ export function renderCloudflareCarrierConsole() {
         return;
       }
       el('authorityPostureSummary').replaceChildren(...authorityPostureSummary(decisions).map(([label, value]) => evidenceField(label, value)));
+    }
+    function authorityDecisionEvidenceEvents(decision = {}, product = state.operationProduct || {}) {
+      const tokens = [decision.mutation_class, decision.reason, decision.authority_locus, decision.controlled_action].filter(Boolean);
+      return authorityEvidenceEvents(product).filter((event) => {
+        const text = JSON.stringify(event.payload || {});
+        return tokens.length === 0 || tokens.some((token) => text.includes(token));
+      });
+    }
+    function authorityDecisionQueueItems(decisions = [], product = state.operationProduct || {}) {
+      return decisions.map((decision) => {
+        const evidenceCount = authorityDecisionEvidenceEvents(decision, product).length;
+        const action = String(decision.action || '').toLowerCase();
+        const unresolved = !decision.authority_locus || decision.authority_locus === 'unresolved';
+        const refused = action === 'refuse' || action === 'deny';
+        const status = refused || unresolved || evidenceCount === 0 ? 'needs_attention' : 'ready';
+        const nextAction = refused ? 'inspect_refused_authority'
+          : unresolved ? 'resolve_authority_locus'
+          : evidenceCount === 0 ? 'focus_authority_evidence'
+          : 'monitor_authority_admission';
+        return { decision, evidence_count: evidenceCount, status, next_action: nextAction };
+      }).sort((left, right) => {
+        if (left.status !== right.status) return left.status === 'needs_attention' ? -1 : 1;
+        if (left.decision.action !== right.decision.action) return String(right.decision.action || '').localeCompare(String(left.decision.action || ''));
+        return authorityDecisionKey(left.decision).localeCompare(authorityDecisionKey(right.decision));
+      });
+    }
+    function authorityDecisionQueueButtonId(decision, suffix) {
+      return ['authorityDecisionQueue', authorityDecisionKey(decision) || 'decision', suffix].join('_').replace(/[^a-z0-9_:-]+/gi, '_');
+    }
+    function renderAuthorityDecisionQueue(decisions = [], product = state.operationProduct || {}) {
+      if (!decisions.length) {
+        el('authorityDecisionQueue').innerHTML = '<div class="empty">No authority decisions loaded.</div>';
+        return;
+      }
+      const items = authorityDecisionQueueItems(decisions, product);
+      el('authorityDecisionQueue').replaceChildren(...items.map((item) => {
+        const node = document.createElement('article');
+        node.className = 'attention-item' + (authorityDecisionKey(item.decision) === authorityDecisionKey(state.authorityFocus) ? ' selected' : '');
+        const title = document.createElement('strong');
+        title.textContent = [item.decision.action || 'unknown', item.decision.mutation_class || 'mutation'].join(' | ');
+        const meta = document.createElement('span');
+        meta.textContent = [item.status, item.next_action, item.decision.authority_locus || 'unresolved', item.decision.controlled_action || 'none', String(item.evidence_count) + ' evidence'].join(' | ');
+        node.addEventListener('click', () => selectAuthorityDecision(item.decision));
+        node.append(
+          title,
+          meta,
+          focusActionRow(
+            focusActionButton(authorityDecisionQueueButtonId(item.decision, 'focus'), 'Focus', () => selectAuthorityDecision(item.decision)),
+            focusActionButton(authorityDecisionQueueButtonId(item.decision, 'evidence'), 'Evidence', () => { selectAuthorityDecision(item.decision); focusAuthorityEvidence(); }),
+          ),
+        );
+        return node;
+      }));
     }
     function authorityDecisionKey(decision = {}) {
       return [decision.mutation_class, decision.action, decision.reason, decision.authority_locus].filter(Boolean).join('|');
@@ -5423,6 +5914,48 @@ export function renderCloudflareCarrierConsole() {
       if (!target) return;
       target.replaceChildren(...authorityPathContext(product).map(([label, value]) => evidenceField(label, value)));
     }
+    function authorityDecisionControlContext(decision = state.authorityFocus, product = state.operationProduct || {}) {
+      const decisions = product.site_authority?.decisions || [];
+      const focused = decision || decisions.find((entry) => entry.action !== 'admit') || decisions[0] || null;
+      if (!focused) return [];
+      const evidenceEvents = authorityDecisionEvidenceEvents(focused, product);
+      const action = String(focused.action || '').toLowerCase();
+      const refused = action === 'refuse' || action === 'deny';
+      const unresolved = !focused.authority_locus || focused.authority_locus === 'unresolved';
+      const reviewAction = refused ? 'review_refused_authority'
+        : unresolved ? 'review_unresolved_locus'
+        : evidenceEvents.length === 0 ? 'load_decision_evidence'
+        : 'monitor_authority_admission';
+      return [
+        ['Decision', authorityDecisionKey(focused) || focused.mutation_class || 'authority'],
+        ['Decision Action', focused.action || 'unknown'],
+        ['Mutation', focused.mutation_class || 'unknown'],
+        ['Reason', focused.reason || 'none'],
+        ['Authority Locus', focused.authority_locus || 'unresolved'],
+        ['Controlled Action', focused.controlled_action || 'none'],
+        ['Evidence Events', String(evidenceEvents.length)],
+        ['Review State', refused || unresolved || evidenceEvents.length === 0 ? 'needs_attention' : 'ready'],
+        ['Review Action', reviewAction],
+      ];
+    }
+    function renderAuthorityDecisionControl(decision = state.authorityFocus, product = state.operationProduct || {}) {
+      const context = authorityDecisionControlContext(decision, product);
+      if (!context.length) {
+        el('authorityDecisionControl').innerHTML = '<div class="empty">No authority decision control loaded.</div>';
+        return;
+      }
+      el('authorityDecisionControl').replaceChildren(...context.map(([label, value]) => evidenceField(label, value)));
+    }
+    function applyAuthorityDecisionReview() {
+      const product = state.operationProduct || {};
+      const decisions = product.site_authority?.decisions || [];
+      const decision = state.authorityFocus || decisions.find((entry) => entry.action !== 'admit') || decisions[0] || null;
+      if (!decision) { run(refreshSiteProduct); return; }
+      selectAuthorityDecision(decision);
+      const reviewAction = contextValue(authorityDecisionControlContext(decision, product), 'Review Action');
+      if (reviewAction === 'load_decision_evidence') { run(refreshSiteProduct); return; }
+      focusAuthorityEvidence();
+    }
     function focusAuthorityPathDecision() {
       const product = state.operationProduct || {};
       const decisions = product.site_authority?.decisions || [];
@@ -5454,6 +5987,7 @@ export function renderCloudflareCarrierConsole() {
       focusAuthorityEvidence();
       renderAuthorityState(state.operationProduct || {});
       renderAuthorityPath(state.operationProduct || {});
+      renderAuthorityDecisionControl(decision, state.operationProduct || {});
       updateControlRoom();
     }
     function authorityDecisionContext(decision = {}) {
@@ -5475,8 +6009,10 @@ export function renderCloudflareCarrierConsole() {
     function renderAuthorityFocusDetail() {
       if (!state.authorityFocus) {
         el('authorityFocusDetail').innerHTML = '<div class="empty">No authority decision selected.</div>';
+        renderAuthorityDecisionControl();
         return;
       }
+      renderAuthorityDecisionControl(state.authorityFocus, state.operationProduct || {});
       el('authorityFocusDetail').replaceChildren(
         ...authorityDecisionContext(state.authorityFocus).map(([label, value]) => evidenceField(label, value)),
         focusActionRow(
@@ -5577,6 +6113,7 @@ export function renderCloudflareCarrierConsole() {
       if (operations.length === 0) {
         state.operationFocus = null;
         el('operationNavigator').innerHTML = '<div class="empty">No site operations loaded.</div>';
+        renderOperationWorkQueue(operations);
         renderOperationActionSummary();
         renderOperationFocusDetail();
         renderOperationPath();
@@ -5596,10 +6133,62 @@ export function renderCloudflareCarrierConsole() {
         node.append(title, meta);
         return node;
       }));
+      renderOperationWorkQueue(operations);
       renderOperationActionSummary();
       renderOperationFocusDetail();
       renderOperationPath();
       updateControlRoom();
+    }
+    function operationWorkQueueItems(operations = state.operations || [], product = state.operationProduct || {}) {
+      return operations.map((operation) => {
+        const path = Object.fromEntries(operationPathContext(operation, product));
+        const scopeLoaded = operationScopeLoaded(operation);
+        const evidenceLoaded = operationEvidenceLoaded(operation);
+        const command = classifyCloudflareOperationCommandState({
+          operation_id: operation.operation_id || '',
+          is_active: operation.operation_id === el('operationId').value.trim(),
+          scope_loaded: scopeLoaded,
+          session_count: Number(path.Sessions || 0) || 0,
+          evidence_loaded: evidenceLoaded,
+          operation_path_next_action: path['Next Action'] || 'read_operation_scope',
+        });
+        const ready = ['inspect_operation_evidence', 'evidence_ready'].includes(command.next_action) || command.command_state === 'evidence_ready';
+        return { operation, command, path, status: ready ? 'ready' : 'needs_attention' };
+      }).sort((left, right) => {
+        if (left.status !== right.status) return left.status === 'needs_attention' ? -1 : 1;
+        if (left.operation.operation_id === el('operationId').value.trim()) return -1;
+        if (right.operation.operation_id === el('operationId').value.trim()) return 1;
+        return String(right.operation.updated_at || '').localeCompare(String(left.operation.updated_at || ''));
+      });
+    }
+    function operationWorkQueueButtonId(operation, suffix) {
+      return ['operationWorkQueue', operation.operation_id || 'operation', suffix].join('_').replace(/[^a-z0-9_:-]+/gi, '_');
+    }
+    function renderOperationWorkQueue(operations = state.operations || [], product = state.operationProduct || {}) {
+      if (!operations.length) {
+        el('operationWorkQueue').innerHTML = '<div class="empty">No operation work loaded.</div>';
+        return;
+      }
+      const items = operationWorkQueueItems(operations, product);
+      el('operationWorkQueue').replaceChildren(...items.map((item) => {
+        const node = document.createElement('article');
+        node.className = 'attention-item' + (item.operation.operation_id === el('operationId').value.trim() ? ' selected' : '');
+        const title = document.createElement('strong');
+        title.textContent = item.operation.operation_id || 'unknown operation';
+        const meta = document.createElement('span');
+        meta.textContent = [item.status, item.command.command_state, item.command.next_action, (item.path.Sessions || '0') + ' sessions', (item.path['Open Tasks'] || '0') + ' open tasks', item.path.Attention || '0 open / 0 total'].join(' | ');
+        node.addEventListener('click', () => run(() => selectOperation(item.operation)));
+        node.append(
+          title,
+          meta,
+          focusActionRow(
+            focusActionButton(operationWorkQueueButtonId(item.operation, 'use'), 'Use', () => run(() => selectOperation(item.operation))),
+            focusActionButton(operationWorkQueueButtonId(item.operation, 'session'), 'Session', () => { state.operationFocus = item.operation; focusOperationPathSession(); }),
+            focusActionButton(operationWorkQueueButtonId(item.operation, 'evidence'), 'Evidence', () => { state.operationFocus = item.operation; focusOperationPathEvidence(); }),
+          ),
+        );
+        return node;
+      }));
     }
     function operationFocusContext(operation = {}) {
       return [
@@ -5710,6 +6299,7 @@ export function renderCloudflareCarrierConsole() {
       if (sessions.length === 0) {
         state.sessionFocus = null;
         el('sessionNavigator').innerHTML = '<div class="empty">No operation sessions loaded.</div>';
+        renderSessionWorkQueue(sessions);
         renderSessionActionSummary();
         renderSessionFocusDetail();
         renderSessionEvidencePath();
@@ -5729,10 +6319,65 @@ export function renderCloudflareCarrierConsole() {
         node.append(title, meta);
         return node;
       }));
+      renderSessionWorkQueue(sessions);
       renderSessionActionSummary();
       renderSessionFocusDetail();
       renderSessionEvidencePath();
       updateControlRoom();
+    }
+    function sessionWorkQueueItems(sessions = state.operationProduct?.sessions || [], product = state.operationProduct || {}) {
+      return sessions.map((session) => {
+        const events = sessionEvidenceEvents(session, product);
+        const tasks = sessionTasks(session, product);
+        const openTasks = tasks.filter((task) => taskLifecycleStatus(task) === 'open');
+        const failures = events.filter((event) => classifyEvidenceLane(event) === 'failures');
+        const delivery = directiveDeliveryForSession(session, product);
+        const command = classifyCloudflareSessionCommandState({
+          session_id: session.carrier_session_id || '',
+          is_active: session.carrier_session_id === el('sessionId').value.trim(),
+          evidence_loaded: events.length > 0,
+        });
+        const ready = events.length > 0 && failures.length === 0 && openTasks.length === 0;
+        const nextAction = events.length === 0 ? 'read_session_evidence'
+          : failures.length > 0 ? 'inspect_session_failures'
+          : openTasks.length > 0 ? 'inspect_open_task'
+          : delivery ? 'inspect_directive_delivery'
+          : command.next_action;
+        return { session, command, events, tasks, open_tasks: openTasks, failures, delivery, status: ready ? 'ready' : 'needs_attention', next_action: nextAction };
+      }).sort((left, right) => {
+        if (left.status !== right.status) return left.status === 'needs_attention' ? -1 : 1;
+        if (left.open_tasks.length !== right.open_tasks.length) return right.open_tasks.length - left.open_tasks.length;
+        return String(right.session.updated_at || '').localeCompare(String(left.session.updated_at || ''));
+      });
+    }
+    function sessionWorkQueueButtonId(session, suffix) {
+      return ['sessionWorkQueue', session.carrier_session_id || 'session', suffix].join('_').replace(/[^a-z0-9_:-]+/gi, '_');
+    }
+    function renderSessionWorkQueue(sessions = state.operationProduct?.sessions || [], product = state.operationProduct || {}) {
+      if (!sessions.length) {
+        el('sessionWorkQueue').innerHTML = '<div class="empty">No session work loaded.</div>';
+        return;
+      }
+      const items = sessionWorkQueueItems(sessions, product);
+      el('sessionWorkQueue').replaceChildren(...items.map((item) => {
+        const node = document.createElement('article');
+        node.className = 'attention-item' + (item.session.carrier_session_id === el('sessionId').value.trim() ? ' selected' : '');
+        const title = document.createElement('strong');
+        title.textContent = item.session.carrier_session_id || 'unknown session';
+        const meta = document.createElement('span');
+        meta.textContent = [item.status, item.command.command_state, item.next_action, String(item.events.length) + ' events', String(item.open_tasks.length) + ' open tasks', item.delivery?.delivery_state || 'no delivery'].join(' | ');
+        node.addEventListener('click', () => selectOperationSession(item.session));
+        node.append(
+          title,
+          meta,
+          focusActionRow(
+            focusActionButton(sessionWorkQueueButtonId(item.session, 'use'), 'Use', () => selectOperationSession(item.session)),
+            focusActionButton(sessionWorkQueueButtonId(item.session, 'evidence'), 'Evidence', () => { selectOperationSession(item.session); focusFocusedSessionEvidence(); }),
+            focusActionButton(sessionWorkQueueButtonId(item.session, 'task'), 'Task', () => { selectOperationSession(item.session); focusSessionPathTask(); }),
+          ),
+        );
+        return node;
+      }));
     }
     function focusedSession() {
       const activeSession = el('sessionId').value.trim();
@@ -5770,9 +6415,11 @@ export function renderCloudflareCarrierConsole() {
     function renderSessionActionSummary(session = focusedSession()) {
       if (!session) {
         el('sessionActionSummary').innerHTML = '<div class="empty">No session action loaded.</div>';
+        renderSessionEvidenceControl();
         return;
       }
       el('sessionActionSummary').replaceChildren(...sessionActionContext(session).map(([label, value]) => evidenceField(label, value)));
+      renderSessionEvidenceControl(session);
     }
     function useFocusedSession() {
       const session = focusedSession();
@@ -5806,8 +6453,10 @@ export function renderCloudflareCarrierConsole() {
     function renderSessionFocusDetail(session = state.sessionFocus) {
       if (!session) {
         el('sessionFocusDetail').innerHTML = '<div class="empty">No session selected.</div>';
+        renderSessionEvidenceControl();
         return;
       }
+      renderSessionEvidenceControl(session);
       el('sessionFocusDetail').replaceChildren(
         ...sessionFocusContext(session).map(([label, value]) => evidenceField(label, value)),
         focusActionRow(
@@ -5871,9 +6520,55 @@ export function renderCloudflareCarrierConsole() {
     function renderSessionEvidencePath(session = focusedSession(), product = state.operationProduct || {}) {
       if (!session) {
         el('sessionEvidencePath').innerHTML = '<div class="empty">No session evidence path loaded.</div>';
+        renderSessionEvidenceControl();
         return;
       }
       el('sessionEvidencePath').replaceChildren(...sessionEvidencePathContext(session, product).map(([label, value]) => evidenceField(label, value)));
+      renderSessionEvidenceControl(session, product);
+    }
+    function sessionEvidenceControlContext(session = focusedSession(), product = state.operationProduct || {}) {
+      if (!session) return [];
+      const path = Object.fromEntries(sessionEvidencePathContext(session, product));
+      const events = Number(path.Events || 0);
+      const failures = Number(path['Failure Events'] || 0);
+      const openTasks = Number(path['Open Tasks'] || 0);
+      const delivery = path['Directive Delivery'] || 'none';
+      const nextAction = path['Next Action'] || 'select_or_start_session';
+      const reviewAction = nextAction === 'read_session_evidence' ? 'read_session_evidence'
+        : failures > 0 ? 'review_session_failures'
+        : openTasks > 0 ? 'review_session_open_task'
+        : delivery !== 'none' ? 'review_session_delivery'
+        : 'monitor_session_evidence';
+      return [
+        ['Session', path.Session || session.carrier_session_id || 'none'],
+        ['Events', String(events)],
+        ['Provider Events', path['Provider Events'] || '0'],
+        ['Tool Events', path['Tool Events'] || '0'],
+        ['Failure Events', String(failures)],
+        ['Open Tasks', String(openTasks)],
+        ['Directive Delivery', delivery],
+        ['Delivery State', path['Delivery State'] || 'unknown'],
+        ['Next Action', nextAction],
+        ['Review Action', reviewAction],
+      ];
+    }
+    function renderSessionEvidenceControl(session = focusedSession(), product = state.operationProduct || {}) {
+      const context = sessionEvidenceControlContext(session, product);
+      if (!context.length) {
+        el('sessionEvidenceControl').innerHTML = '<div class="empty">No session evidence control loaded.</div>';
+        return;
+      }
+      el('sessionEvidenceControl').replaceChildren(...context.map(([label, value]) => evidenceField(label, value)));
+    }
+    async function applySessionEvidenceAction() {
+      const session = focusedSession();
+      if (!session) return;
+      useFocusedSession();
+      const action = contextValue(sessionEvidenceControlContext(session), 'Review Action');
+      if (action === 'read_session_evidence') { await readSelectedSessionEvidence(); return; }
+      if (action === 'review_session_open_task') { focusSessionPathTask(); return; }
+      if (action === 'review_session_delivery') { focusSessionPathDelivery(); return; }
+      focusSessionPathEvidence();
     }
     function focusSessionPathEvidence() {
       focusFocusedSessionEvidence();
@@ -6058,6 +6753,7 @@ export function renderCloudflareCarrierConsole() {
       if (tasks.length === 0) {
         state.taskFocus = null;
         el('tasks').innerHTML = '<div class="empty">No tasks yet.</div>';
+        renderTaskWorkQueue(tasks);
         renderTaskLifecycleSummary(tasks);
         renderTaskFocusDetail();
         renderTaskEvidencePath();
@@ -6076,11 +6772,63 @@ export function renderCloudflareCarrierConsole() {
         node.append(title, meta);
         return node;
       }));
+      renderTaskWorkQueue(tasks);
       renderTaskLifecycleSummary(tasks);
       renderTaskFocusDetail();
       renderTaskEvidencePath();
       renderTaskCommandPreview();
       updateControlRoom();
+    }
+    function taskWorkQueueItems(tasks = state.operationProduct?.tasks || []) {
+      return tasks.map((task) => {
+        const evidenceCount = taskEvidenceEvents(task).length;
+        const command = classifyCloudflareTaskCommandState({ task_id: task.task_id || '', status: task.status, evidence_count: evidenceCount });
+        const ready = command.lifecycle === 'closed' && evidenceCount > 0;
+        return {
+          task,
+          lifecycle: command.lifecycle,
+          command_state: command.command_state,
+          command_action: command.command_action,
+          next_action: command.next_action,
+          evidence_count: evidenceCount,
+          status: ready ? 'ready' : 'needs_attention',
+        };
+      }).sort((left, right) => {
+        if (left.status !== right.status) return left.status === 'needs_attention' ? -1 : 1;
+        if (left.lifecycle !== right.lifecycle) return left.lifecycle === 'open' ? -1 : 1;
+        return String(right.task.updated_at || '').localeCompare(String(left.task.updated_at || ''));
+      });
+    }
+    function taskWorkQueueButtonId(task, suffix) {
+      return ['taskWorkQueue', task.task_id || 'task', suffix].join('_').replace(/[^a-z0-9_:-]+/gi, '_');
+    }
+    function renderTaskWorkQueue(tasks = state.operationProduct?.tasks || []) {
+      if (!tasks.length) {
+        el('taskWorkQueue').innerHTML = '<div class="empty">No task work loaded.</div>';
+        return;
+      }
+      const items = taskWorkQueueItems(tasks);
+      el('taskWorkQueue').replaceChildren(...items.map((item) => {
+        const node = document.createElement('article');
+        node.className = 'attention-item' + (state.taskFocus?.task_id === item.task.task_id ? ' selected' : '');
+        const title = document.createElement('strong');
+        title.textContent = [item.task.task_id, item.task.title || 'untitled'].filter(Boolean).join(' | ');
+        const meta = document.createElement('span');
+        meta.textContent = [item.status, item.lifecycle, item.command_state, item.next_action, String(item.evidence_count) + ' evidence'].join(' | ');
+        node.addEventListener('click', () => selectTask(item.task));
+        const markLabel = item.lifecycle === 'open' ? 'Mark Done' : 'Mark Open';
+        const markStatus = item.lifecycle === 'open' ? 'done' : 'open';
+        node.append(
+          title,
+          meta,
+          focusActionRow(
+            focusActionButton(taskWorkQueueButtonId(item.task, 'focus'), 'Focus', () => selectTask(item.task)),
+            focusActionButton(taskWorkQueueButtonId(item.task, 'evidence'), 'Evidence', () => { selectTask(item.task); focusTaskPathEvidence(); }),
+            focusActionButton(taskWorkQueueButtonId(item.task, 'mark'), markLabel, () => run(async () => { selectTask(item.task); await updateFocusedTask(markStatus, el('updateTaskNote').value.trim() || 'operator_route_task_queue'); })),
+          ),
+        );
+        return node;
+      }));
     }
     function taskCommandPreviewContext() {
       const newTitle = el('taskTitle').value.trim();
@@ -6173,9 +6921,53 @@ export function renderCloudflareCarrierConsole() {
     function renderTaskLifecycleSummary(tasks = state.operationProduct?.tasks || []) {
       if (!tasks.length) {
         el('taskLifecycleSummary').innerHTML = '<div class="empty">No task lifecycle loaded.</div>';
+        renderTaskLifecycleControl();
         return;
       }
       el('taskLifecycleSummary').replaceChildren(...taskLifecycleSummary(tasks).map(([label, value]) => evidenceField(label, value)));
+      renderTaskLifecycleControl(selectedTaskFromWorkbench() || tasks.find((task) => taskLifecycleStatus(task) === 'open') || tasks[0] || null);
+    }
+    function taskLifecycleControlContext(task = selectedTaskFromWorkbench(), product = state.operationProduct || {}) {
+      const target = task || (product.tasks || []).find((entry) => taskLifecycleStatus(entry) === 'open') || (product.tasks || [])[0] || null;
+      if (!target) return [];
+      const evidenceEvents = taskEvidenceEvents(target, product);
+      const command = classifyCloudflareTaskCommandState({ task_id: target.task_id || '', status: target.status, evidence_count: evidenceEvents.length });
+      const lifecycleAction = command.next_action === 'mark_done_or_update' ? 'mark_task_done'
+        : command.next_action === 'reopen_or_inspect_evidence' ? (evidenceEvents.length > 0 ? 'inspect_task_evidence' : 'reopen_task')
+        : command.next_action === 'normalize_status_or_update' ? 'normalize_task_open'
+        : command.next_action === 'select_task' ? 'select_next_task'
+        : command.next_action || 'inspect_task';
+      return [
+        ['Task', target.task_id || 'none'],
+        ['Lifecycle', command.lifecycle],
+        ['Status', target.status || 'unknown'],
+        ['Evidence Events', String(evidenceEvents.length)],
+        ['Command State', command.command_state],
+        ['Command Action', command.command_action],
+        ['Next Action', command.next_action],
+        ['Lifecycle Action', lifecycleAction],
+        ['Session', target.carrier_session_id || directiveDeliveryForTask(target, product)?.carrier_session_id || 'none'],
+        ['Note', target.note || 'none'],
+      ];
+    }
+    function renderTaskLifecycleControl(task = selectedTaskFromWorkbench()) {
+      const context = taskLifecycleControlContext(task);
+      if (!context.length) {
+        el('taskLifecycleControl').innerHTML = '<div class="empty">No task lifecycle control loaded.</div>';
+        return;
+      }
+      el('taskLifecycleControl').replaceChildren(...context.map(([label, value]) => evidenceField(label, value)));
+    }
+    async function applyTaskLifecycleAction() {
+      const product = state.operationProduct || {};
+      const task = selectedTaskFromWorkbench() || (product.tasks || []).find((entry) => taskLifecycleStatus(entry) === 'open') || (product.tasks || [])[0] || null;
+      if (!task) return;
+      selectTask(task);
+      const action = contextValue(taskLifecycleControlContext(task, product), 'Lifecycle Action');
+      if (action === 'mark_task_done') { await updateFocusedTask('done', el('updateTaskNote').value.trim() || 'operator_lifecycle_mark_done'); return; }
+      if (action === 'reopen_task' || action === 'normalize_task_open') { await updateFocusedTask('open', el('updateTaskNote').value.trim() || 'operator_lifecycle_mark_open'); return; }
+      if (action === 'inspect_task_evidence') { focusTaskPathEvidence(); return; }
+      focusTaskLifecyclePath();
     }
     function directiveIntentForTask(task = state.taskFocus, product = state.operationProduct || {}) {
       if (!task) return null;
@@ -6301,8 +7093,10 @@ export function renderCloudflareCarrierConsole() {
     function renderTaskFocusDetail(task = state.taskFocus) {
       if (!task) {
         el('taskFocusDetail').innerHTML = '<div class="empty">No task selected.</div>';
+        renderTaskLifecycleControl();
         return;
       }
+      renderTaskLifecycleControl(task);
       el('taskFocusDetail').replaceChildren(
         ...taskFocusContext(task).map(([label, value]) => evidenceField(label, value)),
         ...taskLifecyclePathContext(task).map(([label, value]) => evidenceField(label, value)),
@@ -6354,6 +7148,7 @@ export function renderCloudflareCarrierConsole() {
       renderTasks(state.operationProduct?.tasks || []);
       renderTaskFocusDetail(task);
       renderTaskCommandPreview();
+      renderTaskLifecycleControl(task);
       renderWebhookDelayEvidenceChain();
       updateControlRoom();
     }
@@ -7271,6 +8066,7 @@ export function renderCloudflareCarrierConsole() {
       renderEvidenceFocus();
       renderEvidenceActionSummary();
       renderEvidenceLanes();
+      renderEvidenceReviewQueue(events);
       if (events.length === 0) {
         el('events').innerHTML = '<div class="empty">No matching events read yet.</div>';
         return;
@@ -7400,6 +8196,9 @@ export function renderCloudflareCarrierConsole() {
     el('focusSessionPathTask').addEventListener('click', focusSessionPathTask);
     el('focusSessionPathDelivery').addEventListener('click', focusSessionPathDelivery);
     el('focusSessionPathChain').addEventListener('click', focusSessionPathChain);
+    el('sessionEvidenceApplyAction').addEventListener('click', () => run(applySessionEvidenceAction));
+    el('sessionEvidenceFocusAction').addEventListener('click', focusSessionPathEvidence);
+    el('sessionEvidenceTaskAction').addEventListener('click', focusSessionPathTask);
     el('eventKindFilter').addEventListener('change', renderEvents);
     el('eventSessionFilter').addEventListener('change', renderEvents);
     el('raiseAttention').addEventListener('click', () => run(async () => { const body = await api.emitAttention(); appendEvents(body.events || []); await refreshOperation(); }));
@@ -7424,6 +8223,14 @@ export function renderCloudflareCarrierConsole() {
     el('focusOperationPathAuthority').addEventListener('click', focusOperationPathAuthority);
     el('focusOperationPathEvidence').addEventListener('click', focusOperationPathEvidence);
     el('controlRoomNextAction').addEventListener('click', applyControlRoomNextAction);
+    el('operatorRouteNextAction').addEventListener('click', applyOperatorRouteNextAction);
+    el('workbenchReadinessNextAction').addEventListener('click', applyWorkbenchReadinessNextAction);
+    el('operationControlBoardNextAction').addEventListener('click', applyControlRoomNextAction);
+    el('operationControlBoardReadinessAction').addEventListener('click', applyWorkbenchReadinessNextAction);
+    el('operationControlBoardEvidenceAction').addEventListener('click', focusFlightDeckEvidence);
+    el('operationControlTargetNextAction').addEventListener('click', applyControlRoomNextAction);
+    el('operationControlTargetEvidenceAction').addEventListener('click', focusFlightDeckEvidence);
+    el('operationControlTargetReadinessAction').addEventListener('click', applyWorkbenchReadinessNextAction);
     el('startResidentDispatch').addEventListener('click', () => run(startResidentDispatchFromWorkbench));
     el('continuityWorkflowNextAction').addEventListener('click', applyContinuityWorkflowNextStep);
     el('authorityNextAction').addEventListener('click', applyAuthorityNextAction);
@@ -7432,6 +8239,9 @@ export function renderCloudflareCarrierConsole() {
     el('authorityPathFocusDecision').addEventListener('click', focusAuthorityPathDecision);
     el('authorityPathFocusEvidence').addEventListener('click', focusAuthorityEvidence);
     el('authorityPathRefresh').addEventListener('click', refreshAuthorityPath);
+    el('authorityDecisionApplyAction').addEventListener('click', applyAuthorityDecisionReview);
+    el('authorityDecisionEvidenceAction').addEventListener('click', focusAuthorityEvidence);
+    el('authorityDecisionRefreshAction').addEventListener('click', refreshAuthorityPath);
     el('createOperation').addEventListener('click', () => run(createOperationFromWorkbench));
     el('autoRefreshOperation').addEventListener('click', () => setAutoRefresh(!state.autoRefreshTimer));
     el('readSite').addEventListener('click', () => run(refreshSiteProduct));
@@ -7445,9 +8255,9 @@ export function renderCloudflareCarrierConsole() {
     el('putMembership').addEventListener('click', () => run(putFocusedMembership));
     el('read').addEventListener('click', () => run(async () => { const body = await api.readEvents(); appendEvents(body.events || []); await refreshStatus(); }));
     el('taskTitle').addEventListener('input', renderTaskCommandPreview);
-    el('updateTaskId').addEventListener('input', () => { renderTaskCommandPreview(); renderTaskEvidencePath(selectedTaskFromWorkbench()); });
-    el('updateTaskStatus').addEventListener('input', () => { renderTaskCommandPreview(); renderTaskEvidencePath(selectedTaskFromWorkbench()); });
-    el('updateTaskNote').addEventListener('input', renderTaskCommandPreview);
+    el('updateTaskId').addEventListener('input', () => { renderTaskCommandPreview(); renderTaskEvidencePath(selectedTaskFromWorkbench()); renderTaskLifecycleControl(selectedTaskFromWorkbench()); });
+    el('updateTaskStatus').addEventListener('input', () => { renderTaskCommandPreview(); renderTaskEvidencePath(selectedTaskFromWorkbench()); renderTaskLifecycleControl(selectedTaskFromWorkbench()); });
+    el('updateTaskNote').addEventListener('input', () => { renderTaskCommandPreview(); renderTaskLifecycleControl(selectedTaskFromWorkbench()); });
     el('memberPrincipalId').addEventListener('input', () => renderMembershipActionSummary());
     el('memberRole').addEventListener('input', () => renderMembershipActionSummary());
     el('createTask').addEventListener('click', () => run(createTaskFromWorkbench));
@@ -7457,6 +8267,9 @@ export function renderCloudflareCarrierConsole() {
     el('focusTaskPathDirective').addEventListener('click', focusTaskPathDirective);
     el('focusTaskPathDelivery').addEventListener('click', focusTaskPathDelivery);
     el('focusTaskPathChain').addEventListener('click', focusTaskPathChain);
+    el('taskLifecycleApplyAction').addEventListener('click', () => run(applyTaskLifecycleAction));
+    el('taskLifecycleEvidenceAction').addEventListener('click', focusTaskPathEvidence);
+    el('taskLifecycleSessionAction').addEventListener('click', focusTaskPathSession);
     el('markTaskOpen').addEventListener('click', () => run(async () => { await updateFocusedTask('open', el('updateTaskNote').value.trim() || 'operator_marked_open'); }));
     el('markTaskDone').addEventListener('click', () => run(async () => { await updateFocusedTask('done', el('updateTaskNote').value.trim() || 'operator_marked_done'); }));
     el('updateTask').addEventListener('click', () => run(async () => {
