@@ -1809,6 +1809,8 @@ export function renderCloudflareCarrierConsole() {
       <div class="product-panel">
         <h2>Session Navigator</h2>
         <div id="sessionNavigator" class="attention-items"><div class="empty">No operation sessions loaded.</div></div>
+        <h3>Session Focus Detail</h3>
+        <div id="sessionFocusDetail" class="evidence-summary"><div class="empty">No session selected.</div></div>
       </div>
       <div class="product-panel">
         <h2>Operation Attention</h2>
@@ -2266,6 +2268,7 @@ export function renderCloudflareCarrierConsole() {
       if (sessions.length === 0) {
         state.sessionFocus = null;
         el('sessionNavigator').innerHTML = '<div class="empty">No operation sessions loaded.</div>';
+        renderSessionFocusDetail();
         updateControlRoom();
         return;
       }
@@ -2282,7 +2285,28 @@ export function renderCloudflareCarrierConsole() {
         node.append(title, meta);
         return node;
       }));
+      renderSessionFocusDetail();
       updateControlRoom();
+    }
+    function sessionFocusContext(session = {}) {
+      return [
+        ['Session', session.carrier_session_id || el('sessionId').value.trim() || 'none'],
+        ['Status', session.binding_status || session.status || 'active'],
+        ['Agent', session.agent_id || 'none'],
+        ['Operation', session.operation_id || el('operationId').value.trim() || 'none'],
+        ['Site', session.site_id || el('siteId').value.trim() || 'none'],
+        ['Site Ref', session.site_ref || 'none'],
+        ['Site Root', session.site_root || 'none'],
+        ['Started', session.started_at || session.created_at || 'none'],
+        ['Updated', session.updated_at || 'none'],
+      ];
+    }
+    function renderSessionFocusDetail(session = state.sessionFocus) {
+      if (!session) {
+        el('sessionFocusDetail').innerHTML = '<div class="empty">No session selected.</div>';
+        return;
+      }
+      el('sessionFocusDetail').replaceChildren(...sessionFocusContext(session).map(([label, value]) => evidenceField(label, value)));
     }
     function renderTasks(tasks = []) {
       el('taskCount').textContent = String(tasks.length);
