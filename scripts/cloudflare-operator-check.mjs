@@ -1087,6 +1087,56 @@ assert.equal(residentLoopShadow.body.loop_run?.operation_id, operationId);
 assert.equal(residentLoopShadow.body.loop_run?.step_count, 1);
 assert.equal(residentLoopShadow.body.loop_run?.operator_attention_count, 1);
 
+const webhookDelayDirectiveDelivery = await postCarrier(workerUrl, bearerToken, {
+  operation: 'webhook_delay.directive.primary_with_fallback.deliver',
+  request_id: `operator_check_webhook_delay_directive_delivery_${Date.now()}`,
+  params: {
+    site_id: siteId,
+    site_ref: siteRef,
+    operation_id: operationId,
+    carrier_session_id: `carrier_session_operator_check_directive_delivery_${Date.now()}`,
+    delivery_id: `operator_check_webhook_delay_directive_delivery_${operationId}`,
+    directive_record_id: `operator_check_webhook_delay_directive_${operationId}`,
+    directive_id: `operator_check_webhook_delay_directive_delivery_directive_${operationId}`,
+    input_event_id: `operator_check_webhook_delay_directive_delivery_input_${operationId}`,
+    critical_minutes: 15,
+    summary: {
+      schema: 'narada.sonar/webhook-delay-today-vs-yesterday/v1',
+      generated_at: new Date().toISOString(),
+      rows72: 1,
+      today: {
+        latest: {
+          at: new Date().toISOString(),
+          at_ct: 'operator-check',
+          elapsed_minutes: 1405,
+          delay_minutes: 16,
+        },
+      },
+      yesterday_same_clock: {
+        delay_minutes: 1,
+        delta_minutes_today_minus_yesterday: 15,
+      },
+    },
+  },
+});
+assert.equal(webhookDelayDirectiveDelivery.http_status, 200);
+assert.equal(webhookDelayDirectiveDelivery.body.ok, true);
+assert.equal(webhookDelayDirectiveDelivery.body.schema, 'narada.sonar.cloudflare_webhook_delay_directive_primary_with_windows_fallback.v1');
+assert.equal(webhookDelayDirectiveDelivery.body.status, 'cloudflare_primary_delivered');
+assert.equal(webhookDelayDirectiveDelivery.body.operation_id, operationId);
+assert.equal(webhookDelayDirectiveDelivery.body.directive_authority, 'cloudflare_primary_directive_delivery');
+assert.equal(webhookDelayDirectiveDelivery.body.dispatch_authority, 'cloudflare_primary_dispatcher');
+assert.equal(webhookDelayDirectiveDelivery.body.fallback_authority, 'windows_fallback_dispatcher');
+assert.equal(webhookDelayDirectiveDelivery.body.fallback_status, 'available');
+assert.equal(webhookDelayDirectiveDelivery.body.delivery_action, 'cloudflare_carrier_input_deliver');
+assert.equal(webhookDelayDirectiveDelivery.body.directive_intent?.carrier_input_operation, 'carrier.input.deliver');
+assert.equal(webhookDelayDirectiveDelivery.body.directive_intent?.delivery_semantics, 'cloudflare_primary_delivery');
+assert.equal(webhookDelayDirectiveDelivery.body.carrier_admission?.admission_action, 'admit');
+assert.equal(webhookDelayDirectiveDelivery.body.carrier_admission?.is_directive, true);
+assert.equal(webhookDelayDirectiveDelivery.body.carrier_admission?.directive_visibility, 'agent_visible');
+assert.equal(webhookDelayDirectiveDelivery.body.delivery?.admitted, true);
+assert.equal(webhookDelayDirectiveDelivery.body.delivery?.terminal_state, 'completed');
+
 const operationReadAfterContinuity = await postCarrier(workerUrl, bearerToken, {
   operation: 'operation.read',
   request_id: `operator_check_operation_continuity_read_${Date.now()}`,
@@ -1095,6 +1145,7 @@ const operationReadAfterContinuity = await postCarrier(workerUrl, bearerToken, {
     operation_id: operationId,
     carrier_event_limit: 20,
     session_limit: 10,
+    webhook_delay_directive_delivery_limit: 10,
     task_lifecycle_write_admission_limit: 10,
     resident_loop_shadow_limit: 10,
     resident_dispatch_limit: 10,
@@ -1111,6 +1162,7 @@ const localCloudContinuityBridge = operationReadAfterContinuity.body.local_cloud
 const operationLifecycleStatus = operationReadAfterContinuity.body.operation_lifecycle_status;
 const operationPersistencePosture = operationReadAfterContinuity.body.cloudflare_persistence_posture;
 const operationRecoveryPosture = operationReadAfterContinuity.body.cloudflare_recovery_posture;
+const webhookDelayDirectiveDeliveries = operationReadAfterContinuity.body.webhook_delay_directive_deliveries ?? [];
 const taskLifecycleShadowReads = operationReadAfterContinuity.body.task_lifecycle_shadow_reads ?? [];
 const taskLifecycleWriteAdmissions = operationReadAfterContinuity.body.task_lifecycle_write_admissions ?? [];
 const residentLoopShadowRuns = operationReadAfterContinuity.body.resident_loop_shadow_runs ?? [];
@@ -1207,6 +1259,21 @@ assert.equal(recordedResidentLoopShadow.operator_attention_count, 1);
 assert.equal(recordedResidentLoopShadow.dispatch_authority, 'windows_primary_dispatcher');
 assert.equal(recordedResidentLoopShadow.shadow_mode, 'cloudflare_shadow_read');
 assert.equal(recordedResidentLoopShadow.dispatch_action, 'none');
+assert.ok(Array.isArray(webhookDelayDirectiveDeliveries));
+assert.ok(webhookDelayDirectiveDeliveries.length >= 1);
+assert.equal(operationSurface?.webhook_delay_directive_delivery_count, webhookDelayDirectiveDeliveries.length);
+const recordedWebhookDelayDirectiveDelivery = webhookDelayDirectiveDeliveries.find((delivery) => delivery.delivery_id === webhookDelayDirectiveDelivery.body.record?.delivery_id);
+assert.ok(recordedWebhookDelayDirectiveDelivery);
+assert.equal(recordedWebhookDelayDirectiveDelivery.schema, 'narada.sonar.cloudflare_webhook_delay_directive_primary_with_windows_fallback.v1');
+assert.equal(recordedWebhookDelayDirectiveDelivery.delivery_state, 'cloudflare_primary_delivered');
+assert.equal(recordedWebhookDelayDirectiveDelivery.directive_authority, 'cloudflare_primary_directive_delivery');
+assert.equal(recordedWebhookDelayDirectiveDelivery.dispatch_authority, 'cloudflare_primary_dispatcher');
+assert.equal(recordedWebhookDelayDirectiveDelivery.fallback_authority, 'windows_fallback_dispatcher');
+assert.equal(recordedWebhookDelayDirectiveDelivery.fallback_status, 'available');
+assert.equal(recordedWebhookDelayDirectiveDelivery.delivery_action, 'cloudflare_carrier_input_deliver');
+assert.equal(recordedWebhookDelayDirectiveDelivery.delivery_ok, true);
+assert.equal(operationReadAfterContinuity.body.sessions.some((session) => session.carrier_session_id === webhookDelayDirectiveDelivery.body.carrier_session_id), true);
+assert.equal(operationReadAfterContinuity.body.carrier_evidence.some((entry) => entry.carrier_session_id === webhookDelayDirectiveDelivery.body.carrier_session_id && entry.ok === true && entry.events.some((event) => event.event_kind === 'directive_receipt_recorded')), true);
 for (const read of taskLifecycleShadowReads) {
   assert.equal(read.schema, 'narada.sonar.cloudflare_task_lifecycle_shadow_read.v1');
   assert.equal(read.mutation_authority, 'windows_task_lifecycle_sqlite');
@@ -1258,6 +1325,7 @@ const report = {
     operation_lifecycle_status: 'ok',
     operation_persistence_posture: 'ok',
     operation_recovery_posture: 'ok',
+    webhook_delay_directive_delivery_surface: 'ok',
     task_lifecycle_shadow_read_surface: 'ok',
     task_lifecycle_write_admission_surface: 'ok',
     resident_loop_shadow_surface: 'ok',
@@ -1303,6 +1371,11 @@ const report = {
     lifecycle_status: operationSurface.lifecycle_status,
     persistence_posture: operationSurface.persistence_posture,
     recovery_posture: operationSurface.recovery_posture,
+    webhook_delay_directive_delivery_count: operationSurface.webhook_delay_directive_delivery_count,
+    webhook_delay_directive_delivery_last_state: recordedWebhookDelayDirectiveDelivery.delivery_state,
+    webhook_delay_directive_delivery_authority: recordedWebhookDelayDirectiveDelivery.directive_authority,
+    webhook_delay_directive_delivery_fallback_authority: recordedWebhookDelayDirectiveDelivery.fallback_authority,
+    webhook_delay_directive_delivery_fallback_status: recordedWebhookDelayDirectiveDelivery.fallback_status,
     task_lifecycle_shadow_read_count: operationSurface.task_lifecycle_shadow_read_count,
     task_lifecycle_write_admission_count: operationSurface.task_lifecycle_write_admission_count,
     task_lifecycle_write_admission_posture: operationSurface.task_lifecycle_write_admission_posture,
