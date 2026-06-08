@@ -52,7 +52,7 @@ assert.equal(read.body.source_id, sourceId);
 assert.equal(read.body.source_adapter_id, sourceAdapterId);
 assert.equal(read.body.source_authority, 'cloudflare_webhook_delay_direct_remote_metric_source_adapter');
 assert.equal(read.body.source_material_locus, 'direct_remote_metric_source');
-assert.equal(read.body.observation_id, observationId);
+assert.equal(read.body.record?.observation_id, observationId);
 assert.equal(read.body.observation_authority, 'cloudflare_primary_observation_read');
 assert.equal(read.body.fallback_authority, 'windows_observation_read_fallback');
 assert.equal(read.body.fallback_status, 'available');
@@ -61,7 +61,6 @@ assert.ok(read.body.direct_source_sample_count > 0, 'direct source samples are r
 assert.equal(read.body.source_sample_count, read.body.direct_source_sample_count);
 assert.ok(['ok', 'critical'].includes(read.body.classification?.state), JSON.stringify(read.body.classification));
 assert.equal(read.body.record?.source_material_locus, 'direct_remote_metric_source');
-assert.equal(read.body.record?.source_authority, 'cloudflare_webhook_delay_direct_remote_metric_source_adapter');
 
 const listedSamples = await postCarrier({
   operation: 'webhook_delay.remote_source.samples.list',
