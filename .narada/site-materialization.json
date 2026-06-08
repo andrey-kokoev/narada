@@ -1,0 +1,99 @@
+{
+  "schema": "narada.site_materialization.v0",
+  "site_id": "narada-proper",
+  "site_kind": "narada_proper",
+  "authority_object": {
+    "authority_locus": "narada_proper",
+    "site_root": "D:\\code\\narada",
+    "workspace_root": "D:\\code\\narada",
+    "governance_root": "D:\\code\\narada\\.narada",
+    "runtime_state_root": "D:\\code\\narada\\.ai"
+  },
+  "realization": {
+    "kind": "private_git_workspace_with_contained_governance_root",
+    "repository_root": "D:\\code\\narada",
+    "repository_remote": "https://github.com/andrey-kokoev/narada",
+    "repository_visibility": "private",
+    "contained_governance_root": "D:\\code\\narada\\.narada"
+  },
+  "operation_binding": {
+    "launcher": "narada.ps1",
+    "agent_identity_default": "narada.architect",
+    "startup_command": "agent_context_startup_sequence {}"
+  },
+  "interface": {
+    "agent_orientation": [
+      "AGENTS.md",
+      ".narada/AGENTS.md"
+    ],
+    "mcp_surface_registry": ".narada/capabilities/mcp-surfaces.json"
+  },
+  "projection": {
+    "site_marker": ".narada/site.json",
+    "posture_note": ".narada/docs/modern-site-factorization.md"
+  },
+  "lineage": {
+    "promoted_from_schema": "narada.site.seed.v0",
+    "promoted_from_seed_state": "seed_admitted_minimal",
+    "created_from": {
+      "kind": "external_handoff",
+      "source_site": "narada-andrey",
+      "source_ref": "C:\\Users\\Andrey\\Narada\\kb\\proposals\\narada-proper-site-seed-admission-package.md",
+      "source_task": "#531",
+      "source_commit": "93881ac1"
+    },
+    "authority_admission": {
+      "kind": "operator_admitted_windows_native_narada_proper_authority",
+      "admitted_path": "D:\\code\\narada",
+      "canonical_authority_root": "D:\\code\\narada",
+      "previous_canonical_authority_root": "/home/andrey/src/narada",
+      "admitted_scope": "Narada proper repo, package, task, inbox, admission, capability, and .narada Site substrate mutations performed through governed Narada proper tasks and evidence.",
+      "reason": "The operator directed migration to a fully Windows-native Narada proper setup. Subsequent admitted Narada proper tasks established and exercised D:\\code\\narada as the Windows-native mutation authority root.",
+      "supersedes": {
+        "kind": "operator_explicit_temporary_path_admission",
+        "admitted_path": "D:\\code\\narada",
+        "canonical_authority_root": "/home/andrey/src/narada",
+        "scope": "seed_only"
+      },
+      "not_admitted": [
+        "narada-andrey mutation authority over Narada proper",
+        "source Site runtime state import",
+        "runtime DB/task/inbox/roster/checkpoint/operator-surface/PC/secrets state import",
+        "raw WSL crossing as mutation authority",
+        "unrecorded native shell fallback"
+      ],
+      "evidence_refs": [
+        "task:1228",
+        "task:1230",
+        "task:1231",
+        "task:1232",
+        "commit:6a176adc",
+        "commit:c35c29dd",
+        "commit:fb9f42cc",
+        "commit:c9f93d0c",
+        "commit:2f5bed2c"
+      ]
+    },
+    "runtime_state_imported": false
+  },
+  "sync_posture": {
+    "current": "git_private_repo",
+    "runtime_state_policy": "excluded_or_explicitly_admitted",
+    "ignored_material": [
+      ".ai/",
+      "node_modules/",
+      "dist/",
+      ".wrangler/"
+    ]
+  },
+  "execution_surface": {
+    "substrate": "windows-native",
+    "script_execution_surface": "mcp_only_by_default",
+    "native_shell": "operator_admitted_only",
+    "launcher_cwd": "D:\\code\\narada"
+  },
+  "known_debts": [
+    "Site marker modernization preserves existing seed admission history as lineage.",
+    "No runtime DB/task/inbox state was imported or rewritten by this materialization."
+  ]
+}

@@ -1,54 +1,69 @@
 {
-  "schema": "narada.site.seed.v0",
+  "schema": "narada.site.v0",
   "site_id": "narada-proper",
-  "site_name": "Narada proper",
-  "locus": "narada_proper",
-  "repo_root": "D:\\code\\narada",
-  "site_root": "D:\\code\\narada\\.narada",
-  "seed_state": "seed_admitted_minimal",
-  "created_from": {
-    "kind": "external_handoff",
-    "source_site": "narada-andrey",
-    "source_ref": "C:\\Users\\Andrey\\Narada\\kb\\proposals\\narada-proper-site-seed-admission-package.md",
-    "source_task": "#531",
-    "source_commit": "93881ac1"
+  "display_name": "Narada proper",
+  "site_kind": "narada_proper",
+  "authority_locus": "narada_proper",
+  "default_agent_identity": "narada.architect",
+  "site_root": "D:\\code\\narada",
+  "workspace_root": "D:\\code\\narada",
+  "governance_root": "D:\\code\\narada\\.narada",
+  "runtime_state_root": "D:\\code\\narada\\.ai",
+  "substrate": "windows-native",
+  "execution_surface": "windows_native",
+  "sync_posture": "git_private_repo",
+  "repository": {
+    "remote": "https://github.com/andrey-kokoev/narada",
+    "visibility": "private"
   },
-  "authority_admission": {
-    "kind": "operator_admitted_windows_native_narada_proper_authority",
-    "admitted_path": "D:\\code\\narada",
-    "canonical_authority_root": "D:\\code\\narada",
-    "previous_canonical_authority_root": "/home/andrey/src/narada",
-    "admitted_scope": "Narada proper repo, package, task, inbox, admission, capability, and .narada Site substrate mutations performed through governed Narada proper tasks and evidence.",
-    "reason": "The operator directed migration to a fully Windows-native Narada proper setup. Subsequent admitted Narada proper tasks established and exercised D:\\code\\narada as the Windows-native mutation authority root.",
-    "supersedes": {
-      "kind": "operator_explicit_temporary_path_admission",
-      "admitted_path": "D:\\code\\narada",
-      "canonical_authority_root": "/home/andrey/src/narada",
-      "scope": "seed_only"
+  "lineage": {
+    "prior_schema": "narada.site.seed.v0",
+    "prior_seed_state": "seed_admitted_minimal",
+    "created_from": {
+      "kind": "external_handoff",
+      "source_site": "narada-andrey",
+      "source_ref": "C:\\Users\\Andrey\\Narada\\kb\\proposals\\narada-proper-site-seed-admission-package.md",
+      "source_task": "#531",
+      "source_commit": "93881ac1"
     },
-    "not_admitted": [
-      "narada-andrey mutation authority over Narada proper",
-      "source Site runtime state import",
-      "runtime DB/task/inbox/roster/checkpoint/operator-surface/PC/secrets state import",
-      "raw WSL crossing as mutation authority",
-      "unrecorded native shell fallback"
-    ],
-    "evidence_refs": [
-      "task:1228",
-      "task:1230",
-      "task:1231",
-      "task:1232",
-      "commit:6a176adc",
-      "commit:c35c29dd",
-      "commit:fb9f42cc",
-      "commit:c9f93d0c",
-      "commit:2f5bed2c"
-    ]
-  },
-  "admission_state": {
-    "seed_decision": "admit_minimal_seed_substrate",
-    "first_memory_status": "external_orientation_pending_admission",
-    "runtime_state_imported": false
+    "authority_admission": {
+      "kind": "operator_admitted_windows_native_narada_proper_authority",
+      "admitted_path": "D:\\code\\narada",
+      "canonical_authority_root": "D:\\code\\narada",
+      "previous_canonical_authority_root": "/home/andrey/src/narada",
+      "admitted_scope": "Narada proper repo, package, task, inbox, admission, capability, and .narada Site substrate mutations performed through governed Narada proper tasks and evidence.",
+      "reason": "The operator directed migration to a fully Windows-native Narada proper setup. Subsequent admitted Narada proper tasks established and exercised D:\\code\\narada as the Windows-native mutation authority root.",
+      "supersedes": {
+        "kind": "operator_explicit_temporary_path_admission",
+        "admitted_path": "D:\\code\\narada",
+        "canonical_authority_root": "/home/andrey/src/narada",
+        "scope": "seed_only"
+      },
+      "not_admitted": [
+        "narada-andrey mutation authority over Narada proper",
+        "source Site runtime state import",
+        "runtime DB/task/inbox/roster/checkpoint/operator-surface/PC/secrets state import",
+        "raw WSL crossing as mutation authority",
+        "unrecorded native shell fallback"
+      ],
+      "evidence_refs": [
+        "task:1228",
+        "task:1230",
+        "task:1231",
+        "task:1232",
+        "commit:6a176adc",
+        "commit:c35c29dd",
+        "commit:fb9f42cc",
+        "commit:c9f93d0c",
+        "commit:2f5bed2c"
+      ]
+    },
+    "admission_state": {
+      "seed_decision": "admit_minimal_seed_substrate",
+      "first_memory_status": "external_orientation_pending_admission",
+      "runtime_state_imported": false
+    },
+    "authority_warning": "External handoff material remains orientation evidence until admitted by Narada proper authority. This seed does not import narada-andrey runtime state."
   },
   "site_telemetry": {
     "schema": "narada.site_config.telemetry.v0",
@@ -231,5 +246,8 @@
       "checklist_path": ".narada/bootstrap/agent-execution-policy-startup.md"
     }
   },
-  "authority_warning": "External handoff material remains orientation evidence until admitted by Narada proper authority. This seed does not import narada-andrey runtime state."
+  "known_debts": [
+    "Promoted from narada.site.seed.v0 without importing external runtime state.",
+    "Existing package/source changes in this repo were left untouched during site marker modernization."
+  ]
 }
