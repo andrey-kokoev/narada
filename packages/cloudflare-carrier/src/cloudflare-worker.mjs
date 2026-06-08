@@ -1723,7 +1723,12 @@ export function renderCloudflareCarrierConsole() {
     .event-filters { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr); gap: 8px; width: min(420px, 100%); }
     .event-filters label { margin: 0; }
     .events { overflow: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
-    .event { border: 1px solid #d9dcd3; border-radius: 8px; padding: 10px; background: #fff; }
+    .evidence-focus { padding: 12px 14px; border-bottom: 1px solid #d7d7ce; background: #fff; }
+    .evidence-focus h3 { margin: 0 0 6px; font-size: 13px; color: #1f4e48; letter-spacing: 0; }
+    .evidence-focus span { display: block; font-size: 12px; color: #686d75; overflow-wrap: anywhere; }
+    .evidence-focus pre { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; color: #343941; }
+    .event { border: 1px solid #d9dcd3; border-radius: 8px; padding: 10px; background: #fff; cursor: pointer; }
+    .event.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
     .event strong { display: block; color: #1f4e48; font-size: 13px; overflow-wrap: anywhere; }
     .event pre { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; color: #343941; }
     .composer { padding: 12px 14px; border-top: 1px solid #d7d7ce; }
@@ -1774,6 +1779,7 @@ export function renderCloudflareCarrierConsole() {
           <div class="control-room-item"><b>Authority Locus</b><span id="controlAuthorityLocus">unknown</span></div>
           <div class="control-room-item"><b>Task Focus</b><span id="controlTaskFocus">none</span></div>
           <div class="control-room-item"><b>Attention</b><span id="controlAttention">0 open</span></div>
+          <div class="control-room-item"><b>Evidence Focus</b><span id="controlEvidenceFocus">none</span></div>
           <div class="control-room-item"><b>Evidence Window</b><span id="controlEvidenceWindow">0 events</span></div>
           <div class="control-room-item"><b>Continuity</b><span id="controlContinuity">unknown</span></div>
         </div>
@@ -1840,6 +1846,7 @@ export function renderCloudflareCarrierConsole() {
         <div class="overview-block"><h3>Continuity Packets</h3><ul><li class="empty">No continuity packets loaded.</li></ul></div>
         <div class="overview-block"><h3>Carrier Evidence</h3><ul><li class="empty">No carrier evidence loaded.</li></ul></div>
       </div>
+      <div id="evidenceFocus" class="evidence-focus"><h3>Evidence Focus</h3><span>No event selected.</span></div>
       <div id="events" class="events"><div class="empty">Start or resume a session to read carrier events.</div></div>
       <div class="composer">
         <label>Input<textarea id="input" placeholder="Send an operator input to the Cloudflare carrier"></textarea></label>
@@ -1849,7 +1856,7 @@ export function renderCloudflareCarrierConsole() {
   </main>
   <script type="module">
     const WORKBENCH_STORAGE_KEY = 'narada.cloudflare.operationWorkbench.v1';
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, consoleSequence: 0, taskFocus: null, attentionItems: [], attentionFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, consoleSequence: 0, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -1969,6 +1976,9 @@ export function renderCloudflareCarrierConsole() {
     function eventKey(event) {
       return (event.carrier_session_id || el('sessionId').value.trim()) + ':' + event.sequence;
     }
+    function eventTitle(event) {
+      return (event.carrier_session_id ? event.carrier_session_id + ' ' : '') + '#' + event.sequence + ' ' + event.event_kind;
+    }
     function appendEvents(events = []) {
       for (const event of events) {
         if (state.events.some((existing) => eventKey(existing) === eventKey(event))) continue;
@@ -2030,6 +2040,7 @@ export function renderCloudflareCarrierConsole() {
       el('controlTaskFocus').textContent = state.taskFocus ? [state.taskFocus.task_id, state.taskFocus.status].filter(Boolean).join(' / ') : 'none';
       const openAttention = state.attentionItems.filter((item) => item.status !== 'resolved').length;
       el('controlAttention').textContent = String(openAttention) + ' open / ' + state.attentionItems.length + ' total' + (state.attentionFocus ? ' / ' + state.attentionFocus.directive_id : '');
+      el('controlEvidenceFocus').textContent = state.evidenceFocus ? eventTitle(state.evidenceFocus) : 'none';
       el('controlEvidenceWindow').textContent = String(surface.carrier_evidence_count ?? state.events.length) + ' evidence groups / ' + state.events.length + ' loaded events';
       el('controlContinuity').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length ?? 0) + ' packets';
     }
@@ -2050,6 +2061,32 @@ export function renderCloudflareCarrierConsole() {
         return true;
       });
     }
+    function focusEvidence(event) {
+      if (!event) return;
+      state.evidenceFocus = event;
+      renderEvidenceFocus();
+      updateControlRoom();
+    }
+    function focusEvidenceFor(predicate) {
+      const event = state.events.find(predicate) || (state.operationProduct?.carrier_evidence || []).flatMap((entry) => entry.events || []).find(predicate) || null;
+      if (event) focusEvidence(event);
+    }
+    function renderEvidenceFocus() {
+      if (!state.evidenceFocus) {
+        el('evidenceFocus').replaceChildren(
+          Object.assign(document.createElement('h3'), { textContent: 'Evidence Focus' }),
+          Object.assign(document.createElement('span'), { textContent: 'No event selected.' }),
+        );
+        return;
+      }
+      const heading = document.createElement('h3');
+      heading.textContent = 'Evidence Focus';
+      const meta = document.createElement('span');
+      meta.textContent = eventTitle(state.evidenceFocus);
+      const pre = document.createElement('pre');
+      pre.textContent = JSON.stringify(evidencePayload(state.evidenceFocus), null, 2);
+      el('evidenceFocus').replaceChildren(heading, meta, pre);
+    }
     function renderAttentionQueue(items = []) {
       state.attentionItems = items;
       if (items.length === 0) {
@@ -2066,6 +2103,7 @@ export function renderCloudflareCarrierConsole() {
         meta.textContent = [item.reason, item.operation_id, item.carrier_session_id, item.visibility, item.resolving_task_id].filter(Boolean).join(' | ');
         node.addEventListener('click', () => {
           state.attentionFocus = item;
+          focusEvidenceFor((event) => event.event_kind === 'directive_emitted' && event.payload?.directive_id === item.directive_id);
           if (item.carrier_session_id) setCurrentSession(item.carrier_session_id);
           el('updateTaskStatus').value = 'done';
           el('updateTaskNote').value = ['resolved_attention', item.directive_id, item.input_event_id, item.reason].filter(Boolean).join(' ');
@@ -2096,6 +2134,7 @@ export function renderCloudflareCarrierConsole() {
           el('updateTaskId').value = task.task_id;
           el('updateTaskStatus').value = task.status || 'done';
           el('updateTaskNote').value = task.note || '';
+          focusEvidenceFor((event) => event.event_kind === 'tool_result_received' && String(event.payload?.result_summary || '').includes(task.task_id));
           if (task.carrier_session_id) setCurrentSession(task.carrier_session_id);
           updateControlRoom();
         });
@@ -2308,17 +2347,19 @@ export function renderCloudflareCarrierConsole() {
       el('cursor').textContent = String(state.afterSequence);
       const events = visibleEvents();
       updateControlRoom();
+      renderEvidenceFocus();
       if (events.length === 0) {
         el('events').innerHTML = '<div class="empty">No matching events read yet.</div>';
         return;
       }
       el('events').replaceChildren(...events.map((event) => {
         const node = document.createElement('article');
-        node.className = 'event';
+        node.className = 'event' + (state.evidenceFocus && eventKey(state.evidenceFocus) === eventKey(event) ? ' selected' : '');
         const title = document.createElement('strong');
-        title.textContent = (event.carrier_session_id ? event.carrier_session_id + ' ' : '') + '#' + event.sequence + ' ' + event.event_kind;
+        title.textContent = eventTitle(event);
         const pre = document.createElement('pre');
         pre.textContent = JSON.stringify(evidencePayload(event), null, 2);
+        node.addEventListener('click', () => { focusEvidence(event); renderEvents(); });
         node.append(title, pre);
         return node;
       }));

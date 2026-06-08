@@ -674,6 +674,8 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Task From Attention/);
   assert.match(html, /Resolve Attention/);
   assert.match(html, /Evidence Window/);
+  assert.match(html, /Evidence Focus/);
+  assert.match(html, /controlEvidenceFocus/);
   assert.match(html, /Evidence Filter/);
   assert.match(html, /Session Filter/);
   assert.match(html, /eventKindFilter/);
@@ -687,6 +689,11 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /directive\.emit/);
   assert.match(html, /operation_attention/);
   assert.match(html, /visibleEvents/);
+  assert.match(html, /focusEvidence/);
+  assert.match(html, /focusEvidenceFor/);
+  assert.match(html, /renderEvidenceFocus/);
+  assert.match(html, /eventTitle/);
+  assert.match(html, /event selected/);
   assert.match(html, /refreshEventKindFilter/);
   assert.match(html, /operation_narada_cloudflare_control/);
   assert.match(html, /Optional when signed in/);
