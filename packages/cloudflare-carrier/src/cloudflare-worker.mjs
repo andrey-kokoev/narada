@@ -5118,6 +5118,7 @@ export function renderCloudflareCarrierConsole() {
         <div id="operationNavigator" class="attention-items"><div class="empty">No site operations loaded.</div></div>
         <h3>Operation Posture</h3>
         <div id="operationPostureOverview" class="evidence-summary"><div class="empty">No operation posture loaded.</div></div>
+        <div class="actions"><button id="operationPostureNextAction" class="secondary">Focus Next Operation</button></div>
         <h3>Operation Work Queue</h3>
         <div id="operationWorkQueue" class="attention-items"><div class="empty">No operation work loaded.</div></div>
         <h3>Operation Action</h3>
@@ -7554,6 +7555,14 @@ export function renderCloudflareCarrierConsole() {
         ['Command State Counts', countMapSummary(overview.command_state_counts)],
       ].map(([label, value]) => evidenceField(label, value)));
     }
+    function nextOperationFromPosture(operations = state.operations || [], product = state.operationProduct || {}) {
+      const overview = operationPostureOverview(operations, product);
+      return operations.find((operation) => operation.operation_id === overview.next_operation_id) || operations[0] || null;
+    }
+    async function focusNextOperationFromPosture() {
+      const operation = nextOperationFromPosture();
+      if (operation) await selectOperation(operation);
+    }
     function operationWorkQueueButtonId(operation, suffix) {
       return ['operationWorkQueue', operation.operation_id || 'operation', suffix].join('_').replace(/[^a-z0-9_:-]+/gi, '_');
     }
@@ -9887,6 +9896,7 @@ export function renderCloudflareCarrierConsole() {
     el('operationActionUseOperation').addEventListener('click', useFocusedOperation);
     el('operationActionReadOperation').addEventListener('click', () => run(refreshOperation));
     el('operationActionFocusSession').addEventListener('click', focusOperationSession);
+    el('operationPostureNextAction').addEventListener('click', () => run(focusNextOperationFromPosture));
     el('focusOperationPathSession').addEventListener('click', focusOperationPathSession);
     el('focusOperationPathTask').addEventListener('click', focusOperationPathTask);
     el('focusOperationPathAttention').addEventListener('click', focusOperationPathAttention);

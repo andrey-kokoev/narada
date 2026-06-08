@@ -1276,6 +1276,10 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Operation Posture/);
   assert.match(html, /operationPostureOverview/);
   assert.match(html, /renderOperationPostureOverview/);
+  assert.match(html, /operationPostureNextAction/);
+  assert.match(html, /Focus Next Operation/);
+  assert.match(html, /nextOperationFromPosture/);
+  assert.match(html, /focusNextOperationFromPosture/);
   assert.match(html, /operationPostureReason/);
   assert.match(html, /narada\.cloudflare_operation_posture_overview\.v1/);
   assert.match(html, /Reason Counts/);
