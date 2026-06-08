@@ -794,6 +794,14 @@ test('worker site.read composes site sessions tasks authority events and carrier
   const readAfterPacketPutBody = await readAfterPacketPut.json();
   assert.equal(readAfterPacketPutBody.site_continuity_packets.length, 1);
   assert.equal(readAfterPacketPutBody.site_continuity_packets[0].admission_action, 'projection_only');
+  assert.equal(readAfterPacketPutBody.site_continuity_status.schema, 'narada.cloudflare_site_continuity_status.v1');
+  assert.equal(readAfterPacketPutBody.site_continuity_status.state, 'packet_observed');
+  assert.equal(readAfterPacketPutBody.site_continuity_status.packet_count, 1);
+  assert.equal(readAfterPacketPutBody.site_continuity_status.latest_packet_id, readAfterPacketPutBody.site_continuity_packets[0].packet_id);
+  assert.equal(readAfterPacketPutBody.site_continuity_status.latest_admission_action, 'projection_only');
+  assert.equal(readAfterPacketPutBody.site_continuity_status.direction_counts.cloudflare_to_local_windows, 1);
+  assert.equal(readAfterPacketPutBody.site_continuity_status.direction_counts.local_windows_to_cloudflare, 0);
+  assert.equal(readAfterPacketPutBody.site_continuity_status.authority_boundary.executable_cross_embodiment_mutation, 'refused_by_site_continuity_classifier');
 });
 
 test('worker serves minimal authenticated web console shell', async () => {
@@ -1623,6 +1631,9 @@ test('worker records webhook delay observations as Cloudflare shadow-read eviden
   assert.equal(operationRead.status, 200);
   const operationReadBody = await operationRead.json();
   assert.equal(operationReadBody.operation_product_surface.webhook_delay_shadow_observation_count, 2);
+  assert.equal(operationReadBody.operation_product_surface.continuity_status.schema, 'narada.cloudflare_site_continuity_status.v1');
+  assert.equal(operationReadBody.operation_product_surface.continuity_status.state, 'no_packet_observed');
+  assert.equal(operationReadBody.operation_product_surface.continuity_status.packet_count, 0);
   assert.equal(operationReadBody.operation_product_surface.dispatch_authority, 'windows_primary_dispatcher');
   assert.deepEqual(classifyCloudflareOperationCommandState({
     operation_id: operationReadBody.operation.operation_id,

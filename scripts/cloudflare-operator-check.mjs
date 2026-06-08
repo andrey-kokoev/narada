@@ -814,10 +814,15 @@ assert.equal(operationReadAfterContinuity.http_status, 200);
 assert.equal(operationReadAfterContinuity.body.ok, true);
 const operationSurface = operationReadAfterContinuity.body.operation_product_surface;
 const operationContinuityPackets = operationReadAfterContinuity.body.site_continuity_packets ?? [];
+const operationContinuityStatus = operationReadAfterContinuity.body.site_continuity_status;
 assert.equal(operationSurface?.operation_id, operationId);
 assert.ok(Array.isArray(operationContinuityPackets));
 assert.ok(operationContinuityPackets.length >= 1);
 assert.equal(operationSurface?.continuity_packet_count, operationContinuityPackets.length);
+assert.equal(operationContinuityStatus?.schema, 'narada.cloudflare_site_continuity_status.v1');
+assert.equal(operationContinuityStatus?.state, 'packet_observed');
+assert.equal(operationContinuityStatus?.packet_count, operationContinuityPackets.length);
+assert.equal(operationSurface?.continuity_status?.state, operationContinuityStatus.state);
 
 const microsoftLoginUrl = new URL('/auth/microsoft/login', withTrailingSlash(workerUrl)).toString();
 const apiClientPath = new URL('/api/carrier', withTrailingSlash(workerUrl)).toString();
@@ -850,6 +855,7 @@ const report = {
     canonical_operation_active: 'ok',
     operation_inhabited_by_live_work: 'ok',
     operation_continuity_packets: 'ok',
+    operation_continuity_status: 'ok',
     human_operator_session: humanOperator.status,
     human_operator_membership: humanOperator.membership_status,
     human_operator_operation_read: humanOperator.operation_status,
@@ -880,6 +886,7 @@ const report = {
     task_count: operationSurface.task_count,
     carrier_evidence_count: operationSurface.carrier_evidence_count,
     continuity_packet_count: operationSurface.continuity_packet_count,
+    continuity_status: operationSurface.continuity_status,
     smoke_session_bound: operationRead.body.sessions.some((session) => session.carrier_session_id === smoke.carrier_session_id),
   },
   command_states: liveCommandStates,

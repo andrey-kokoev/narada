@@ -331,6 +331,47 @@ async function listCloudflareContinuityPackets(env = {}, siteId, limit = 100) {
   return result.results ?? [];
 }
 
+function summarizeCloudflareSiteContinuityStatus(siteId, continuityPackets = [], siteContinuity = null) {
+  const packets = Array.isArray(continuityPackets) ? continuityPackets : [];
+  const latestPacket = packets[0] ?? null;
+  const directionCounts = {
+    cloudflare_to_local_windows: 0,
+    local_windows_to_cloudflare: 0,
+    other: 0,
+  };
+  for (const packet of packets) {
+    if (
+      packet.source_embodiment_kind === SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER
+      && packet.target_embodiment_kind === SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS
+    ) {
+      directionCounts.cloudflare_to_local_windows += 1;
+    } else if (
+      packet.source_embodiment_kind === SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS
+      && packet.target_embodiment_kind === SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER
+    ) {
+      directionCounts.local_windows_to_cloudflare += 1;
+    } else {
+      directionCounts.other += 1;
+    }
+  }
+  return {
+    schema: 'narada.cloudflare_site_continuity_status.v1',
+    site_id: siteId,
+    state: packets.length > 0 ? 'packet_observed' : 'no_packet_observed',
+    packet_count: packets.length,
+    direction_counts: directionCounts,
+    latest_packet_id: latestPacket?.packet_id ?? null,
+    latest_imported_at: latestPacket?.imported_at ?? null,
+    latest_admission_action: latestPacket?.admission_action ?? null,
+    latest_admission_reason: latestPacket?.admission_reason ?? null,
+    expected_exchange_packet_id: siteContinuity?.exchange_packet?.packet_id ?? null,
+    authority_boundary: {
+      executable_cross_embodiment_mutation: 'refused_by_site_continuity_classifier',
+      durable_mutation_authority: 'unchanged; routed_by_site_authority_map',
+    },
+  };
+}
+
 function boundedContinuityPacketReadLimit(value = 100) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 100;
@@ -831,6 +872,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const carrierEvidence = await readCarrierEvidenceForSiteSessions(env, sessions, principal, params);
     const siteAuthority = cloudflareSiteAuthorityReadModel(env, siteId);
     const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
+    const siteContinuityStatus = summarizeCloudflareSiteContinuityStatus(siteId, continuityPackets, siteContinuity);
     return {
       status: 200,
       body: {
@@ -847,6 +889,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         carrier_evidence: carrierEvidence,
         site_authority: siteAuthority,
         site_continuity: siteContinuity,
+        site_continuity_status: siteContinuityStatus,
         operation_product_surface: {
           schema: 'narada.cloudflare_operation_product_surface.v1',
           operation_id: operation?.operation_id ?? null,
@@ -855,6 +898,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           task_count: tasks.length,
           carrier_evidence_count: carrierEvidence.length,
           continuity_packet_count: continuityPackets.length,
+          continuity_status: siteContinuityStatus,
           webhook_delay_shadow_observation_count: webhookDelayShadowObservations.length,
           webhook_delay_observation_primary_read_count: webhookDelayObservationPrimaryReads.length,
           webhook_delay_scheduled_source_read_count: webhookDelayScheduledSourceReads.length,
@@ -888,6 +932,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
   const carrierEvidence = await readCarrierEvidenceForSiteSessions(env, response.sessions ?? [], principal, params);
   const siteAuthority = cloudflareSiteAuthorityReadModel(env, siteId);
   const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
+  const siteContinuityStatus = summarizeCloudflareSiteContinuityStatus(siteId, continuityPackets, siteContinuity);
   return {
     status: 200,
     body: {
@@ -904,6 +949,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       carrier_evidence: carrierEvidence,
       site_authority: siteAuthority,
       site_continuity: siteContinuity,
+      site_continuity_status: siteContinuityStatus,
     },
   };
 }
@@ -4655,7 +4701,8 @@ export function renderCloudflareCarrierConsole() {
       el('controlAttention').textContent = String(openAttention) + ' open / ' + state.attentionItems.length + ' total' + (state.attentionFocus ? ' / ' + state.attentionFocus.directive_id : '');
       el('controlEvidenceFocus').textContent = state.evidenceFocus ? eventTitle(state.evidenceFocus) : 'none';
       el('controlEvidenceWindow').textContent = String(surface.carrier_evidence_count ?? state.events.length) + ' evidence groups / ' + state.events.length + ' loaded events';
-      el('controlContinuity').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length ?? 0) + ' packets / ' + String(surface.webhook_delay_directive_record_count ?? (product.webhook_delay_directive_records || []).length ?? 0) + ' directive intents';
+      const continuityStatus = surface.continuity_status || product.site_continuity_status || {};
+      el('controlContinuity').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length ?? 0) + ' packets / ' + String(continuityStatus.state || 'no_status') + ' / ' + String(surface.webhook_delay_directive_record_count ?? (product.webhook_delay_directive_records || []).length ?? 0) + ' directive intents';
       el('controlWorkbenchReadiness').textContent = operationWorkbenchReadiness(product);
       renderControlRoomActionSummary(product);
       renderOperatorRoute(product);
