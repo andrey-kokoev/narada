@@ -1,5 +1,5 @@
 import { CloudflareCarrierSession } from './cloudflare-carrier.mjs';
-import { classifyToolEffectAdmission } from '../../carrier-protocol/src/carrier-protocol.mjs';
+import { classifyCarrierInputAdmission, classifyToolEffectAdmission } from '../../carrier-protocol/src/carrier-protocol.mjs';
 import { createCloudflareSiteRegistryAdapter } from '../../cloudflare-site-registry/src/cloudflare-site-registry.mjs';
 import {
   SITE_AUTHORITY_ACTIONS,
@@ -38,9 +38,11 @@ const MICROSOFT_OIDC_PENDING_COOKIE = 'narada_microsoft_oidc_pending';
 const DEFAULT_OPERATOR_SESSION_TTL_SECONDS = 8 * 60 * 60;
 const MICROSOFT_OIDC_PENDING_TTL_SECONDS = 5 * 60;
 const CLOUDFLARE_WEBHOOK_DELAY_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_webhook_delay_shadow_read.v1';
+const CLOUDFLARE_WEBHOOK_DELAY_DIRECTIVE_DUAL_RECORD_SCHEMA = 'narada.sonar.cloudflare_webhook_delay_directive_dual_record.v1';
 const CLOUDFLARE_RESIDENT_LOOP_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_resident_loop_shadow_read.v1';
 const CLOUDFLARE_RESIDENT_DISPATCH_PRIMARY_SCHEMA = 'narada.sonar.cloudflare_resident_dispatch_primary_with_windows_fallback.v1';
 const CLOUDFLARE_WEBHOOK_DELAY_SHADOW_MODE = 'cloudflare_shadow_read';
+const CLOUDFLARE_DIRECTIVE_DUAL_RECORD_AUTHORITY = 'cloudflare_directive_dual_recorded';
 const CLOUDFLARE_PRIMARY_DISPATCH_AUTHORITY = 'cloudflare_primary_dispatcher';
 const WINDOWS_PRIMARY_DISPATCH_AUTHORITY = 'windows_primary_dispatcher';
 const WINDOWS_FALLBACK_DISPATCH_AUTHORITY = 'windows_fallback_dispatcher';
@@ -456,6 +458,8 @@ function isSiteProductOperation(operation) {
     'operation.list',
     'webhook_delay.shadow_read.record',
     'webhook_delay.shadow_read.list',
+    'webhook_delay.directive.dual_record.record',
+    'webhook_delay.directive.dual_record.list',
     'resident_loop.shadow_read.record',
     'resident_loop.shadow_read.list',
     'resident_dispatch.primary_with_fallback.start',
@@ -590,6 +594,30 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       },
     };
   }
+  if (body.operation === 'webhook_delay.directive.dual_record.record') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const result = await recordCloudflareWebhookDelayDirectiveDualRecord(env, requestedSiteId, params, principal);
+    return { status: result.ok ? 200 : 400, body: result };
+  }
+  if (body.operation === 'webhook_delay.directive.dual_record.list') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const directiveRecords = await listCloudflareWebhookDelayDirectiveDualRecords(env, requestedSiteId, params.webhook_delay_directive_limit ?? params.limit);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        schema: CLOUDFLARE_WEBHOOK_DELAY_DIRECTIVE_DUAL_RECORD_SCHEMA,
+        status: 'ok',
+        site_id: requestedSiteId,
+        directive_authority: CLOUDFLARE_DIRECTIVE_DUAL_RECORD_AUTHORITY,
+        fallback_authority: WINDOWS_FALLBACK_DISPATCH_AUTHORITY,
+        directive_action: 'record_directive_emission_intent',
+        directive_records: directiveRecords,
+      },
+    };
+  }
   if (body.operation === 'resident_loop.shadow_read.record') {
     const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
     if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
@@ -661,6 +689,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const tasks = await listOperationTasks(env, siteId, sessions);
     const continuityPackets = await listCloudflareContinuityPackets(env, siteId);
     const webhookDelayShadowObservations = await listCloudflareWebhookDelayShadowObservations(env, siteId, params.webhook_delay_shadow_limit ?? params.limit);
+    const webhookDelayDirectiveRecords = await listCloudflareWebhookDelayDirectiveDualRecords(env, siteId, params.webhook_delay_directive_limit ?? params.limit);
     const residentLoopShadowRuns = await listCloudflareResidentLoopShadowRuns(env, siteId, params.resident_loop_shadow_limit ?? params.limit);
     const residentDispatchDecisions = await listCloudflareResidentDispatchDecisions(env, siteId, params.resident_dispatch_limit ?? params.limit);
     const carrierEvidence = await readCarrierEvidenceForSiteSessions(env, sessions, principal, params);
@@ -673,6 +702,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         tasks,
         site_continuity_packets: continuityPackets,
         webhook_delay_shadow_observations: webhookDelayShadowObservations,
+        webhook_delay_directive_records: webhookDelayDirectiveRecords,
         resident_loop_shadow_runs: residentLoopShadowRuns,
         resident_dispatch_decisions: residentDispatchDecisions,
         carrier_evidence: carrierEvidence,
@@ -687,6 +717,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           carrier_evidence_count: carrierEvidence.length,
           continuity_packet_count: continuityPackets.length,
           webhook_delay_shadow_observation_count: webhookDelayShadowObservations.length,
+          webhook_delay_directive_record_count: webhookDelayDirectiveRecords.length,
           resident_loop_shadow_run_count: residentLoopShadowRuns.length,
           resident_dispatch_decision_count: residentDispatchDecisions.length,
           dispatch_authority: WINDOWS_PRIMARY_DISPATCH_AUTHORITY,
@@ -706,6 +737,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
   const tasks = await listSiteTasks(env, siteId);
   const continuityPackets = await listCloudflareContinuityPackets(env, siteId);
   const webhookDelayShadowObservations = await listCloudflareWebhookDelayShadowObservations(env, siteId, params.webhook_delay_shadow_limit ?? params.limit);
+  const webhookDelayDirectiveRecords = await listCloudflareWebhookDelayDirectiveDualRecords(env, siteId, params.webhook_delay_directive_limit ?? params.limit);
   const residentLoopShadowRuns = await listCloudflareResidentLoopShadowRuns(env, siteId, params.resident_loop_shadow_limit ?? params.limit);
   const residentDispatchDecisions = await listCloudflareResidentDispatchDecisions(env, siteId, params.resident_dispatch_limit ?? params.limit);
   const carrierEvidence = await readCarrierEvidenceForSiteSessions(env, response.sessions ?? [], principal, params);
@@ -718,6 +750,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       tasks,
       site_continuity_packets: continuityPackets,
       webhook_delay_shadow_observations: webhookDelayShadowObservations,
+      webhook_delay_directive_records: webhookDelayDirectiveRecords,
       resident_loop_shadow_runs: residentLoopShadowRuns,
       resident_dispatch_decisions: residentDispatchDecisions,
       carrier_evidence: carrierEvidence,
@@ -1275,6 +1308,260 @@ function classifyWebhookDelayShadowObservation(observation) {
 
 function webhookDelayShadowObservationId(siteId, observation) {
   return `webhook_delay_shadow_${safeIdToken(siteId)}_${safeIdToken(observation.generated_at)}_${safeIdToken(observation.latest.delay_minutes)}`;
+}
+
+async function recordCloudflareWebhookDelayDirectiveDualRecord(env = {}, siteId, params = {}, principal = null) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return { ok: false, code: 'missing_site_registry_binding' };
+  if (!siteId || siteId === 'unknown-site') return { ok: false, code: 'missing_site_id' };
+  const observation = createWebhookDelayShadowObservation(siteId, params);
+  if (!observation.ok) return observation;
+  const classification = classifyWebhookDelayShadowObservation(observation.observation);
+  if (classification.state !== 'critical') return { ok: false, code: 'webhook_delay_directive_requires_critical_classification', classification };
+
+  const now = new Date().toISOString();
+  const operationId = params.operation_id ?? null;
+  const directiveRecordId = params.directive_record_id ?? webhookDelayDirectiveRecordId(siteId, operationId, observation.observation.generated_at);
+  const directiveId = params.directive_id ?? `directive_webhook_delay_${safeIdToken(siteId)}_${safeIdToken(operationId)}_${safeIdToken(now)}`;
+  const inputEventId = params.input_event_id ?? `input_webhook_delay_directive_${safeIdToken(siteId)}_${safeIdToken(operationId)}_${safeIdToken(now)}`;
+  const thresholdPolicy = createWebhookDelayThresholdPolicy(params, classification);
+  const directiveIntent = createWebhookDelayDirectiveIntent({
+    siteId,
+    operationId,
+    directiveId,
+    inputEventId,
+    observation: observation.observation,
+    classification,
+    thresholdPolicy,
+    createdAt: now,
+    principal,
+  });
+  const carrierAdmission = classifyCarrierInputAdmission(directiveIntent.input_event, { activeTurn: false, observerMuted: false });
+  const record = {
+    directive_record_id: directiveRecordId,
+    site_id: siteId,
+    operation_id: operationId,
+    schema: CLOUDFLARE_WEBHOOK_DELAY_DIRECTIVE_DUAL_RECORD_SCHEMA,
+    threshold_policy: thresholdPolicy,
+    observation: observation.observation,
+    classification,
+    directive_intent: directiveIntent,
+    carrier_admission: carrierAdmission,
+    classification_state: classification.state,
+    critical_minutes: classification.critical_minutes,
+    latest_delay_minutes: classification.latest_delay_minutes,
+    directive_action: 'record_directive_emission_intent',
+    directive_authority: CLOUDFLARE_DIRECTIVE_DUAL_RECORD_AUTHORITY,
+    fallback_authority: WINDOWS_FALLBACK_DISPATCH_AUTHORITY,
+    fallback_status: 'available',
+    migrated_authority: 'directive_emission_intent_only',
+    retained_windows_authority: ['mailbox_send', 'local_filesystem_mutation', 'task_lifecycle_write', 'windows_fallback_dispatch'],
+    recorded_by_principal_id: principal?.principal_id ?? 'unknown-principal',
+    recorded_at: now,
+  };
+  await ensureCloudflareWebhookDelayDirectiveDualRecordSchema(db);
+  await db.prepare(`
+    INSERT INTO cloudflare_webhook_delay_directive_dual_records (
+      directive_record_id,
+      site_id,
+      operation_id,
+      classification_state,
+      latest_delay_minutes,
+      critical_minutes,
+      directive_action,
+      directive_authority,
+      fallback_authority,
+      fallback_status,
+      threshold_policy_json,
+      observation_json,
+      classification_json,
+      directive_intent_json,
+      carrier_admission_json,
+      recorded_by_principal_id,
+      recorded_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(directive_record_id) DO UPDATE SET
+      operation_id = excluded.operation_id,
+      classification_state = excluded.classification_state,
+      latest_delay_minutes = excluded.latest_delay_minutes,
+      critical_minutes = excluded.critical_minutes,
+      directive_action = excluded.directive_action,
+      directive_authority = excluded.directive_authority,
+      fallback_authority = excluded.fallback_authority,
+      fallback_status = excluded.fallback_status,
+      threshold_policy_json = excluded.threshold_policy_json,
+      observation_json = excluded.observation_json,
+      classification_json = excluded.classification_json,
+      directive_intent_json = excluded.directive_intent_json,
+      carrier_admission_json = excluded.carrier_admission_json,
+      recorded_by_principal_id = excluded.recorded_by_principal_id,
+      recorded_at = excluded.recorded_at
+  `).bind(
+    record.directive_record_id,
+    record.site_id,
+    record.operation_id,
+    record.classification_state,
+    record.latest_delay_minutes,
+    record.critical_minutes,
+    record.directive_action,
+    record.directive_authority,
+    record.fallback_authority,
+    record.fallback_status,
+    JSON.stringify(record.threshold_policy),
+    JSON.stringify(record.observation),
+    JSON.stringify(record.classification),
+    JSON.stringify(record.directive_intent),
+    JSON.stringify(record.carrier_admission),
+    record.recorded_by_principal_id,
+    record.recorded_at,
+  ).run();
+  return {
+    ok: true,
+    schema: CLOUDFLARE_WEBHOOK_DELAY_DIRECTIVE_DUAL_RECORD_SCHEMA,
+    status: 'recorded',
+    site_id: siteId,
+    operation_id: operationId,
+    directive_action: record.directive_action,
+    directive_authority: CLOUDFLARE_DIRECTIVE_DUAL_RECORD_AUTHORITY,
+    fallback_authority: WINDOWS_FALLBACK_DISPATCH_AUTHORITY,
+    fallback_status: record.fallback_status,
+    threshold_policy: thresholdPolicy,
+    observation: record.observation,
+    classification,
+    directive_intent: directiveIntent,
+    carrier_admission: carrierAdmission,
+    record,
+  };
+}
+
+async function ensureCloudflareWebhookDelayDirectiveDualRecordSchema(db) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS cloudflare_webhook_delay_directive_dual_records (
+      directive_record_id TEXT PRIMARY KEY,
+      site_id TEXT NOT NULL,
+      operation_id TEXT,
+      classification_state TEXT NOT NULL,
+      latest_delay_minutes REAL NOT NULL,
+      critical_minutes REAL NOT NULL,
+      directive_action TEXT NOT NULL,
+      directive_authority TEXT NOT NULL,
+      fallback_authority TEXT NOT NULL,
+      fallback_status TEXT NOT NULL,
+      threshold_policy_json TEXT NOT NULL,
+      observation_json TEXT NOT NULL,
+      classification_json TEXT NOT NULL,
+      directive_intent_json TEXT NOT NULL,
+      carrier_admission_json TEXT NOT NULL,
+      recorded_by_principal_id TEXT NOT NULL,
+      recorded_at TEXT NOT NULL
+    )
+  `).run();
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_cloudflare_webhook_delay_directive_dual_records_site_recorded
+    ON cloudflare_webhook_delay_directive_dual_records(site_id, recorded_at)
+  `).run();
+}
+
+async function listCloudflareWebhookDelayDirectiveDualRecords(env = {}, siteId, limit) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function' || !siteId) return [];
+  await ensureCloudflareWebhookDelayDirectiveDualRecordSchema(db);
+  const boundedLimit = clampInteger(limit, 0, 100, 25);
+  const rows = await db.prepare(`
+    SELECT * FROM cloudflare_webhook_delay_directive_dual_records
+    WHERE site_id = ?
+    ORDER BY recorded_at DESC
+    LIMIT ?
+  `).bind(siteId, boundedLimit).all();
+  return (rows.results ?? []).map((row) => ({
+    directive_record_id: row.directive_record_id,
+    site_id: row.site_id,
+    operation_id: row.operation_id,
+    schema: CLOUDFLARE_WEBHOOK_DELAY_DIRECTIVE_DUAL_RECORD_SCHEMA,
+    classification_state: row.classification_state,
+    latest_delay_minutes: Number(row.latest_delay_minutes),
+    critical_minutes: Number(row.critical_minutes),
+    directive_action: row.directive_action,
+    directive_authority: row.directive_authority,
+    fallback_authority: row.fallback_authority,
+    fallback_status: row.fallback_status,
+    threshold_policy: parseJsonObject(row.threshold_policy_json),
+    observation: parseJsonObject(row.observation_json),
+    classification: parseJsonObject(row.classification_json),
+    directive_intent: parseJsonObject(row.directive_intent_json),
+    carrier_admission: parseJsonObject(row.carrier_admission_json),
+    recorded_by_principal_id: row.recorded_by_principal_id,
+    recorded_at: row.recorded_at,
+  }));
+}
+
+function createWebhookDelayThresholdPolicy(params = {}, classification = {}) {
+  const criticalMinutes = Number(params.critical_minutes ?? classification.critical_minutes ?? DEFAULT_WEBHOOK_DELAY_CRITICAL_MINUTES);
+  return {
+    schema: 'narada.sonar.webhook_delay_threshold_policy.v1',
+    policy_id: params.threshold_policy_id ?? 'webhook_delay_critical_threshold_policy',
+    policy_source_ref: params.threshold_policy_source_ref ?? 'D:/code/narada.sonar/.narada/capabilities/operating-loop-policy.json',
+    policy_authority: 'cloudflare_carrier_site_recorded_policy',
+    critical_minutes: Number.isFinite(criticalMinutes) ? criticalMinutes : DEFAULT_WEBHOOK_DELAY_CRITICAL_MINUTES,
+    classification_reason: classification.reason ?? null,
+  };
+}
+
+function createWebhookDelayDirectiveIntent({ siteId, operationId, directiveId, inputEventId, observation, classification, thresholdPolicy, createdAt, principal }) {
+  const directive = {
+    schema: 'narada.directive.operation_update_request.v1',
+    kind: 'webhook_delay_critical',
+    visibility: 'record_only',
+    target: { kind: 'operation', id: operationId },
+    operation: 'Operation: Update on webhook delays',
+    content_kind: 'operation_update_request',
+    content: {
+      kind: 'operation_update_request',
+      operation_name: 'Operation: Update on webhook delays',
+      reason: classification.reason,
+      latest_delay_minutes: classification.latest_delay_minutes,
+      critical_minutes: classification.critical_minutes,
+      observation_generated_at: observation.generated_at,
+    },
+  };
+  const inputEvent = {
+    schema: 'narada.carrier.input_event.v1',
+    event_id: inputEventId,
+    source_kind: 'system',
+    source_id: 'narada.sonar.cloudflare.webhook_delay_directive_emitter',
+    source_display_name: 'Narada Sonar Webhook Delay Directive Emitter',
+    transport: 'carrier_server_api',
+    created_at: createdAt,
+    content: 'Operation: Update on webhook delays',
+    delivery_mode: 'admit_for_current_turn',
+    hold_condition: null,
+    authority_ref: 'cloudflare-carrier:authority/webhook-delay-directive-dual-record:v1',
+    directive_id: directiveId,
+    metadata: {
+      directive,
+      directive_provenance: {
+        kind: 'system_directive',
+        source: 'webhook_delay_critical_threshold',
+        site_id: siteId,
+        operation_id: operationId,
+        threshold_policy: thresholdPolicy,
+        emitted_by_principal_id: principal?.principal_id ?? 'unknown-principal',
+      },
+    },
+  };
+  return {
+    schema: 'narada.sonar.webhook_delay_directive_intent.v1',
+    directive_id: directiveId,
+    input_event_id: inputEventId,
+    carrier_input_operation: 'carrier.input.record',
+    delivery_semantics: 'record_only',
+    directive_kind: 'webhook_delay_critical',
+    input_event: inputEvent,
+  };
+}
+
+function webhookDelayDirectiveRecordId(siteId, operationId, generatedAt) {
+  return `webhook_delay_directive_${safeIdToken(siteId)}_${safeIdToken(operationId)}_${safeIdToken(generatedAt)}`;
 }
 
 function safeIdToken(value) {
