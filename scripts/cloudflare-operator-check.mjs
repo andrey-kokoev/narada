@@ -1308,9 +1308,9 @@ if (mailboxSourceAccount) {
   assert.equal(mailboxStatusSourceSmoke.mailbox_authority_partition, 'mailbox_status_source_read_cloudflare_owned_send_and_mutation_not_admitted');
 }
 
-const siteFileChangeProposalSmoke = await runJsonCommand('site-file-change:proposal-smoke:live', [
+const mailboxDraftReplyProposalSmoke = await runJsonCommand('mailbox:draft-reply-proposal-smoke:live', [
   'node',
-  'packages/cloudflare-carrier/scripts/cloudflare-carrier-site-file-change-proposal-live-smoke.mjs',
+  'packages/cloudflare-carrier/scripts/cloudflare-carrier-mailbox-draft-reply-proposal-live-smoke.mjs',
   '--url',
   workerUrl,
   '--token-file',
@@ -1320,6 +1320,29 @@ const siteFileChangeProposalSmoke = await runJsonCommand('site-file-change:propo
   '--operation',
   operationId,
 ]);
+assert.equal(mailboxDraftReplyProposalSmoke.status, 'ok');
+assert.equal(mailboxDraftReplyProposalSmoke.worker_url, workerUrl);
+assert.equal(mailboxDraftReplyProposalSmoke.site_id, siteId);
+assert.equal(mailboxDraftReplyProposalSmoke.operation_id, operationId);
+assert.equal(mailboxDraftReplyProposalSmoke.proposal_authority, 'cloudflare_carrier_site');
+assert.equal(mailboxDraftReplyProposalSmoke.mailbox_outlook_draft_create_admission, 'not_admitted');
+assert.equal(mailboxDraftReplyProposalSmoke.mailbox_send_admission, 'not_admitted');
+assert.equal(mailboxDraftReplyProposalSmoke.mailbox_mutation_admission, 'not_admitted');
+assert.ok(mailboxDraftReplyProposalSmoke.mailbox_draft_reply_proposal_count >= 1);
+assert.equal(mailboxDraftReplyProposalSmoke.mailbox_draft_reply_authority_partition, 'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted');
+
+const siteFileChangeProposalSmoke = await runJsonCommand('site-file-change:proposal-smoke:live', [
+  'node',
+  'packages/cloudflare-carrier/scripts/cloudflare-carrier-site-file-change-proposal-live-smoke.mjs',
+  '--url',
+  workerUrl,
+  '--token-file',
+  tokenFile,
+  '--site',
+  siteId,
+  operationId,
+]);
+  operationId,
 assert.equal(siteFileChangeProposalSmoke.status, 'ok');
 assert.equal(siteFileChangeProposalSmoke.worker_url, workerUrl);
 assert.equal(siteFileChangeProposalSmoke.site_id, siteId);
@@ -1329,6 +1352,7 @@ assert.equal(siteFileChangeProposalSmoke.filesystem_executor_authority, 'windows
 assert.equal(siteFileChangeProposalSmoke.filesystem_mutation_admission, 'not_admitted');
 assert.equal(siteFileChangeProposalSmoke.repository_publication_admission, 'not_admitted');
 assert.ok(siteFileChangeProposalSmoke.site_file_change_proposal_count >= 1);
+assert.equal(siteFileChangeProposalSmoke.site_file_change_authority_partition, 'site_file_change_proposal_cloudflare_recorded_filesystem_and_publication_windows_owned');
 assert.equal(siteFileChangeProposalSmoke.site_file_change_authority_partition, 'site_file_change_proposal_cloudflare_recorded_filesystem_and_publication_windows_owned');
 
 const siteFileMaterializationSmoke = await runJsonCommand('site-file:materialization-smoke:live', [
@@ -1447,6 +1471,7 @@ const taskLifecycleWriteAdmissions = operationReadAfterContinuity.body.task_life
 const taskLifecycleTasks = operationReadAfterContinuity.body.task_lifecycle_tasks ?? [];
 const residentLoopShadowRuns = operationReadAfterContinuity.body.resident_loop_shadow_runs ?? [];
 const mailboxStatusShadowReads = operationReadAfterContinuity.body.mailbox_status_shadow_reads ?? [];
+const mailboxDraftReplyProposals = operationReadAfterContinuity.body.mailbox_draft_reply_proposals ?? [];
 const siteFileChangeProposals = operationReadAfterContinuity.body.site_file_change_proposals ?? [];
 const siteFileMaterializations = operationReadAfterContinuity.body.site_file_materializations ?? [];
 const residentDispatchDecisions = operationReadAfterContinuity.body.resident_dispatch_decisions ?? [];
@@ -1654,6 +1679,19 @@ assert.equal(operationSurface?.mailbox_shadow_target_locus, 'cloudflare_carrier_
 assert.equal(operationSurface?.mailbox_send_admission, 'not_admitted');
 assert.equal(operationSurface?.mailbox_mutation_admission, 'not_admitted');
 assert.equal(operationSurface?.mailbox_authority_partition, expectedOperationSurfaceMailboxPartition);
+assert.ok(Array.isArray(mailboxDraftReplyProposals));
+assert.ok(mailboxDraftReplyProposals.length >= 1);
+assert.equal(operationSurface?.mailbox_draft_reply_proposal_count, mailboxDraftReplyProposals.length);
+const recordedMailboxDraftReplyProposal = mailboxDraftReplyProposals.find((proposal) => proposal.proposal_id === mailboxDraftReplyProposalSmoke.proposal_id);
+assert.ok(recordedMailboxDraftReplyProposal);
+assert.equal(recordedMailboxDraftReplyProposal.schema, 'narada.sonar.cloudflare_mailbox_draft_reply_proposal.v1');
+assert.equal(recordedMailboxDraftReplyProposal.proposal_authority, 'cloudflare_carrier_site');
+assert.equal(recordedMailboxDraftReplyProposal.mailbox_outlook_draft_create_admission, 'not_admitted');
+assert.equal(recordedMailboxDraftReplyProposal.mailbox_send_admission, 'not_admitted');
+assert.equal(recordedMailboxDraftReplyProposal.mailbox_mutation_admission, 'not_admitted');
+assert.equal(operationSurface?.mailbox_draft_reply_proposal_authority, 'cloudflare_carrier_site');
+assert.equal(operationSurface?.mailbox_outlook_draft_create_admission, 'not_admitted');
+assert.equal(operationSurface?.mailbox_draft_reply_authority_partition, 'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted');
 assert.ok(Array.isArray(siteFileChangeProposals));
 assert.ok(siteFileChangeProposals.length >= 1);
 assert.equal(operationSurface?.site_file_change_proposal_count, siteFileChangeProposals.length);
@@ -1767,6 +1805,7 @@ const report = {
     task_lifecycle_role_resolution_write_cutover_surface: 'ok',
     task_lifecycle_roster_mutation_write_cutover_surface: 'ok',
     mailbox_status_shadow_surface: 'ok',
+    mailbox_draft_reply_proposal_surface: 'ok',
     site_file_materialization_surface: 'ok',
     resident_loop_shadow_surface: 'ok',
     resident_dispatch_surface: 'ok',
