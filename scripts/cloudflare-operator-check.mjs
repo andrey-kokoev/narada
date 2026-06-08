@@ -1036,6 +1036,8 @@ const operationContinuityLoopReports = operationReadAfterContinuity.body.site_co
 const operationContinuityLoopStatus = operationReadAfterContinuity.body.site_continuity_loop_status;
 const localCloudContinuityBridge = operationReadAfterContinuity.body.local_cloud_continuity_bridge;
 const operationLifecycleStatus = operationReadAfterContinuity.body.operation_lifecycle_status;
+const operationPersistencePosture = operationReadAfterContinuity.body.cloudflare_persistence_posture;
+const operationRecoveryPosture = operationReadAfterContinuity.body.cloudflare_recovery_posture;
 assert.equal(operationSurface?.operation_id, operationId);
 assert.ok(Array.isArray(operationContinuityPackets));
 assert.ok(operationContinuityPackets.length >= 1);
@@ -1060,6 +1062,34 @@ assert.equal(operationLifecycleStatus?.continuity_loop_state, 'loop_report_obser
 assert.ok((operationLifecycleStatus?.continuity_loop_report_count ?? 0) >= 1);
 assert.equal(operationSurface?.lifecycle_status?.health, operationLifecycleStatus.health);
 assert.equal(operationSurface?.lifecycle_status?.next_action, operationLifecycleStatus.next_action);
+assert.equal(operationPersistencePosture?.schema, 'narada.cloudflare_persistence_posture.v1');
+assert.equal(operationPersistencePosture?.site_id, siteId);
+assert.equal(operationPersistencePosture?.operation_id, operationId);
+assert.match(operationPersistencePosture?.state, /^(durable|degraded|incomplete)$/);
+assert.equal(operationPersistencePosture?.durable_boundary_count, 4);
+assert.ok(operationPersistencePosture?.active_boundary_count >= 1);
+assert.ok(Array.isArray(operationPersistencePosture?.durable_boundaries));
+assert.ok(Array.isArray(operationPersistencePosture?.missing_boundaries));
+assert.ok(Array.isArray(operationPersistencePosture?.warnings));
+assert.equal(operationPersistencePosture?.session_count, operationReadAfterContinuity.body.sessions.length);
+assert.equal(operationPersistencePosture?.task_count, operationReadAfterContinuity.body.tasks.length);
+assert.equal(operationPersistencePosture?.carrier_evidence_group_count, operationReadAfterContinuity.body.carrier_evidence.length);
+assert.equal(operationPersistencePosture?.continuity_packet_count, operationContinuityPackets.length);
+assert.match(operationPersistencePosture?.next_action, /^(monitor_persistence_posture|session_snapshot|site_registry|carrier_evidence_index|task_lifecycle_store|session_without_replayed_evidence|task_projection_without_task_store_binding|carrier_evidence_replay_degraded)$/);
+assert.deepEqual(operationSurface?.persistence_posture, operationPersistencePosture);
+assert.equal(operationRecoveryPosture?.schema, 'narada.cloudflare_recovery_posture.v1');
+assert.equal(operationRecoveryPosture?.site_id, siteId);
+assert.equal(operationRecoveryPosture?.operation_id, operationId);
+assert.match(operationRecoveryPosture?.state, /^(reconstructable|ready_no_sessions|partially_reconstructable|not_reconstructable)$/);
+assert.match(operationRecoveryPosture?.snapshot_reload, /^(available|unavailable)$/);
+assert.match(operationRecoveryPosture?.evidence_replay, /^(loaded|degraded|no_sessions|unknown)$/);
+assert.ok(Array.isArray(operationRecoveryPosture?.evidence_sources));
+assert.ok(Array.isArray(operationRecoveryPosture?.recovery_gaps));
+assert.ok(Array.isArray(operationRecoveryPosture?.missing_evidence_session_ids));
+assert.equal(operationRecoveryPosture?.session_count, operationReadAfterContinuity.body.sessions.length);
+assert.equal(operationRecoveryPosture?.evidence_session_count, new Set(operationReadAfterContinuity.body.carrier_evidence.filter((group) => group.ok === true && (group.events || []).length > 0).map((group) => group.carrier_session_id)).size);
+assert.match(operationRecoveryPosture?.next_action, /^(monitor_recovery_posture|session_snapshot_reload_unavailable|carrier_evidence_index_unavailable|no_replayed_evidence|session_evidence_missing|carrier_evidence_replay_degraded)$/);
+assert.deepEqual(operationSurface?.recovery_posture, operationRecoveryPosture);
 
 const microsoftLoginUrl = new URL('/auth/microsoft/login', withTrailingSlash(workerUrl)).toString();
 const apiClientPath = new URL('/api/carrier', withTrailingSlash(workerUrl)).toString();
@@ -1102,6 +1132,8 @@ const report = {
     operation_continuity_packets: 'ok',
     operation_continuity_status: 'ok',
     operation_lifecycle_status: 'ok',
+    operation_persistence_posture: 'ok',
+    operation_recovery_posture: 'ok',
     human_operator_session: humanOperator.status,
     human_operator_membership: humanOperator.membership_status,
     human_operator_operation_read: humanOperator.operation_status,
@@ -1141,6 +1173,8 @@ const report = {
     continuity_packet_count: operationSurface.continuity_packet_count,
     continuity_status: operationSurface.continuity_status,
     lifecycle_status: operationSurface.lifecycle_status,
+    persistence_posture: operationSurface.persistence_posture,
+    recovery_posture: operationSurface.recovery_posture,
     carrier_evidence_read_status: operationRead.body.carrier_evidence_read_status,
     smoke_session_bound: operationRead.body.sessions.some((session) => session.carrier_session_id === smoke.carrier_session_id),
   },
