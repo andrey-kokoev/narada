@@ -1701,10 +1701,11 @@ export function renderCloudflareCarrierConsole() {
     .control-room-item b { display: block; font-size: 11px; color: #686d75; }
     .control-room-item span { display: block; margin-top: 4px; font-size: 12px; color: #1e2024; overflow-wrap: anywhere; }
     .attention-items { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-    .attention-item, .authority-decision { border: 1px solid #d9dcd3; border-radius: 6px; padding: 9px; background: #fff; cursor: pointer; }
-    .attention-item strong, .authority-decision strong { display: block; font-size: 13px; color: #1f4e48; overflow-wrap: anywhere; }
-    .attention-item span, .authority-decision span { display: block; margin-top: 4px; font-size: 12px; color: #686d75; overflow-wrap: anywhere; }
+    .attention-item, .authority-decision, .session-item { border: 1px solid #d9dcd3; border-radius: 6px; padding: 9px; background: #fff; cursor: pointer; }
+    .attention-item strong, .authority-decision strong, .session-item strong { display: block; font-size: 13px; color: #1f4e48; overflow-wrap: anywhere; }
+    .attention-item span, .authority-decision span, .session-item span { display: block; margin-top: 4px; font-size: 12px; color: #686d75; overflow-wrap: anywhere; }
     .authority-decision.refuse strong { color: #9b3b22; }
+    .session-item.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
     .task-panel { margin-top: 16px; border-top: 1px solid #d7d7ce; padding-top: 14px; }
     .task-panel h2 { margin: 0 0 10px; font-size: 15px; letter-spacing: 0; }
     .tasks { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
@@ -1777,6 +1778,7 @@ export function renderCloudflareCarrierConsole() {
         <div class="control-room-grid">
           <div class="control-room-item"><b>Operation</b><span id="controlOperation">none</span></div>
           <div class="control-room-item"><b>Selected Session</b><span id="controlSession">none</span></div>
+          <div class="control-room-item"><b>Session Focus</b><span id="controlSessionFocus">none</span></div>
           <div class="control-room-item"><b>Authority Locus</b><span id="controlAuthorityLocus">unknown</span></div>
           <div class="control-room-item"><b>Authority Focus</b><span id="controlAuthorityFocus">none</span></div>
           <div class="control-room-item"><b>Task Focus</b><span id="controlTaskFocus">none</span></div>
@@ -1785,6 +1787,10 @@ export function renderCloudflareCarrierConsole() {
           <div class="control-room-item"><b>Evidence Window</b><span id="controlEvidenceWindow">0 events</span></div>
           <div class="control-room-item"><b>Continuity</b><span id="controlContinuity">unknown</span></div>
         </div>
+      </div>
+      <div class="product-panel">
+        <h2>Session Navigator</h2>
+        <div id="sessionNavigator" class="attention-items"><div class="empty">No operation sessions loaded.</div></div>
       </div>
       <div class="product-panel">
         <h2>Operation Attention</h2>
@@ -1862,7 +1868,7 @@ export function renderCloudflareCarrierConsole() {
   </main>
   <script type="module">
     const WORKBENCH_STORAGE_KEY = 'narada.cloudflare.operationWorkbench.v1';
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, consoleSequence: 0, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, authorityFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, consoleSequence: 0, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, authorityFocus: null, sessionFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -1964,10 +1970,12 @@ export function renderCloudflareCarrierConsole() {
       if (!next) return;
       el('sessionId').value = next;
       el('operationSessionSelect').value = next;
+      state.sessionFocus = (state.operationProduct?.sessions || []).find((session) => session.carrier_session_id === next) || null;
       saveWorkbenchState();
       state.events = [];
       state.afterSequence = 0;
       renderEvents();
+      renderSessionNavigator(state.operationProduct?.sessions || []);
       updateControlRoom();
     }
     function appendConsoleEvidence(eventKind, payload = {}) {
@@ -2042,6 +2050,7 @@ export function renderCloudflareCarrierConsole() {
         || null;
       el('controlOperation').textContent = product.operation?.operation_id || el('operationId').value.trim() || 'none';
       el('controlSession').textContent = activeSession || 'none';
+      el('controlSessionFocus').textContent = state.sessionFocus ? [state.sessionFocus.carrier_session_id, state.sessionFocus.binding_status || state.sessionFocus.agent_id].filter(Boolean).join(' / ') : 'none';
       el('controlAuthorityLocus').textContent = activeDecision ? [activeDecision.authority_locus || 'unresolved', activeDecision.action || 'unknown'].join(' / ') : 'unknown';
       el('controlAuthorityFocus').textContent = state.authorityFocus ? [state.authorityFocus.mutation_class || state.authorityFocus.event_kind || 'authority', state.authorityFocus.action || 'unknown'].join(' / ') : 'none';
       el('controlTaskFocus').textContent = state.taskFocus ? [state.taskFocus.task_id, state.taskFocus.status].filter(Boolean).join(' / ') : 'none';
@@ -2142,6 +2151,35 @@ export function renderCloudflareCarrierConsole() {
           focusEvidenceFor((event) => JSON.stringify(event.payload || {}).includes(decision.mutation_class || '') || JSON.stringify(event.payload || {}).includes(decision.reason || ''));
           updateControlRoom();
         });
+        node.append(title, meta);
+        return node;
+      }));
+      updateControlRoom();
+    }
+    function selectOperationSession(session) {
+      if (!session?.carrier_session_id) return;
+      state.sessionFocus = session;
+      setCurrentSession(session.carrier_session_id);
+      focusEvidenceFor((event) => event.carrier_session_id === session.carrier_session_id);
+      updateControlRoom();
+    }
+    function renderSessionNavigator(sessions = []) {
+      if (sessions.length === 0) {
+        state.sessionFocus = null;
+        el('sessionNavigator').innerHTML = '<div class="empty">No operation sessions loaded.</div>';
+        updateControlRoom();
+        return;
+      }
+      const activeSession = el('sessionId').value.trim();
+      state.sessionFocus = sessions.find((session) => session.carrier_session_id === activeSession) || null;
+      el('sessionNavigator').replaceChildren(...sessions.map((session) => {
+        const node = document.createElement('article');
+        node.className = 'session-item' + (session.carrier_session_id === activeSession ? ' selected' : '');
+        const title = document.createElement('strong');
+        title.textContent = session.carrier_session_id;
+        const meta = document.createElement('span');
+        meta.textContent = [session.binding_status || 'active', session.agent_id, session.operation_id].filter(Boolean).join(' | ');
+        node.addEventListener('click', () => selectOperationSession(session));
         node.append(title, meta);
         return node;
       }));
@@ -2293,6 +2331,7 @@ export function renderCloudflareCarrierConsole() {
         ? [new Option('No operation sessions loaded', '')]
         : sessions.map((session) => new Option(session.carrier_session_id + ' / ' + (session.binding_status || session.agent_id || 'active'), session.carrier_session_id))));
       if (sessions.some((session) => session.carrier_session_id === current)) select.value = current;
+      renderSessionNavigator(sessions);
     }
     function renderOperationProduct(product) {
       state.operationProduct = product;

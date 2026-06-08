@@ -666,6 +666,12 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Active Session/);
   assert.match(html, /Control Room/);
   assert.match(html, /Selected Session/);
+  assert.match(html, /Session Focus/);
+  assert.match(html, /Session Navigator/);
+  assert.match(html, /sessionNavigator/);
+  assert.match(html, /renderSessionNavigator/);
+  assert.match(html, /selectOperationSession/);
+  assert.match(html, /session-item/);
   assert.match(html, /Authority Locus/);
   assert.match(html, /Authority Focus/);
   assert.match(html, /Authority State/);
