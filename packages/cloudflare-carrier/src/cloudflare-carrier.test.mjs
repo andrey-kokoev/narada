@@ -1605,6 +1605,12 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /mailbox_outlook_draft_create_next_action/);
   assert.match(html, /Focus Mailbox Proposal/);
   assert.match(html, /Focus Outlook Draft Create/);
+  assert.match(html, /Mailbox Draft Create/);
+  assert.match(html, /mailboxDraftCreateControl/);
+  assert.match(html, /createOutlookDraftFromProposal/);
+  assert.match(html, /mailbox\.outlook_draft\.create/);
+  assert.match(html, /narada\.sonar\.mailbox_outlook_draft_create_request\.v1/);
+  assert.match(html, /operator_admitted_cloudflare_created_outlook_draft_send_not_admitted/);
   assert.match(html, /site_file_change_proposal_focus/);
   assert.match(html, /site_file_change_proposal_count/);
   assert.match(html, /site_file_change_proposal_authority/);
