@@ -629,6 +629,14 @@ assert.match(consoleCheck.body, /mutation_evidence_reference_reviewed/);
 assert.match(consoleCheck.body, /cross_embodiment_execution_guarded/);
 assert.match(consoleCheck.body, /durable_mutation_authority/);
 assert.match(consoleCheck.body, /routed_by_site_authority_map/);
+assert.match(consoleCheck.body, /Continuity Loop Evidence/);
+assert.match(consoleCheck.body, /continuityLoopEvidence/);
+assert.match(consoleCheck.body, /continuityLoopEvidenceContext/);
+assert.match(consoleCheck.body, /renderContinuityLoopEvidence/);
+assert.match(consoleCheck.body, /continuity_loop_report_recorded/);
+assert.match(consoleCheck.body, /site_continuity_loop_report/);
+assert.match(consoleCheck.body, /review_continuity_loop_report/);
+assert.match(consoleCheck.body, /run_site_continuity_loop/);
 assert.match(consoleCheck.body, /Site Product/);
 assert.match(consoleCheck.body, /Site Action/);
 assert.match(consoleCheck.body, /classifyCloudflareSiteCommandState/);
@@ -937,6 +945,8 @@ assert.equal(operationReadAfterContinuity.body.ok, true);
 const operationSurface = operationReadAfterContinuity.body.operation_product_surface;
 const operationContinuityPackets = operationReadAfterContinuity.body.site_continuity_packets ?? [];
 const operationContinuityStatus = operationReadAfterContinuity.body.site_continuity_status;
+const operationContinuityLoopReports = operationReadAfterContinuity.body.site_continuity_loop_reports ?? [];
+const operationContinuityLoopStatus = operationReadAfterContinuity.body.site_continuity_loop_status;
 const localCloudContinuityBridge = operationReadAfterContinuity.body.local_cloud_continuity_bridge;
 const operationLifecycleStatus = operationReadAfterContinuity.body.operation_lifecycle_status;
 assert.equal(operationSurface?.operation_id, operationId);
@@ -947,6 +957,10 @@ assert.equal(operationContinuityStatus?.schema, 'narada.cloudflare_site_continui
 assert.equal(operationContinuityStatus?.state, 'packet_observed');
 assert.equal(operationContinuityStatus?.packet_count, operationContinuityPackets.length);
 assert.equal(operationSurface?.continuity_status?.state, operationContinuityStatus.state);
+assert.equal(operationContinuityLoopStatus?.schema, 'narada.cloudflare_site_continuity_loop_status.v1');
+assert.equal(operationContinuityLoopStatus?.state, 'loop_report_observed');
+assert.ok(operationContinuityLoopReports.length >= 1);
+assert.equal(operationSurface?.continuity_loop_status?.state, operationContinuityLoopStatus.state);
 assert.equal(localCloudContinuityBridge?.schema, 'narada.local_cloud_continuity_bridge.v1');
 assert.equal(localCloudContinuityBridge?.next_action, 'review_continuity_packet');
 assert.equal(operationSurface?.local_cloud_continuity_bridge?.schema, localCloudContinuityBridge.schema);
@@ -988,6 +1002,7 @@ const report = {
     console_multi_site_surface: 'ok',
     console_continuity_loop_guidance: 'ok',
     local_cloud_continuity_bridge: 'ok',
+    continuity_loop_report_status: 'ok',
     membership_visibility: 'ok',
     operation_read: 'ok',
     canonical_operation_active: 'ok',

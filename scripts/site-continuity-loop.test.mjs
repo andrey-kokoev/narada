@@ -119,6 +119,7 @@ test('site continuity loop emits an idempotent offline operator report without t
   assert.equal(firstReport.cloudflare_worker_url, null);
   assert.equal(firstReport.cloudflare_credential_source, null);
   assert.equal(firstReport.cloudflare_push.status, 'skipped');
+  assert.equal(firstReport.cloudflare_report_push.status, 'skipped');
   assert.equal(firstReport.windows_packet_count, 1);
   assert.equal(firstReport.windows_packets.length, 1);
   assert.equal(firstReport.windows_packets[0].source_embodiment_kind, SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER);

@@ -123,7 +123,7 @@ const windowsList = runWindowsContinuityCommand([
 ]);
 const windowsPackets = windowsList.site_continuity_packets ?? [];
 
-await writeJson(option('--out'), {
+const report = {
   schema: 'narada.site_continuity_productized_loop.v1',
   status: 'ok',
   site_id: siteId,
@@ -142,7 +142,13 @@ await writeJson(option('--out'), {
     executable_cross_embodiment_mutation: 'refused_by_site_continuity_classifier',
     durable_mutation_authority: 'unchanged; routed_by_site_authority_map',
   },
-});
+};
+
+report.cloudflare_report_push = (!skipCloudflarePush && workerUrl && bearerToken)
+  ? summarizeCloudflareReportPush(await pushCloudflareLoopReport(siteId, report))
+  : { status: 'skipped', reason: skipCloudflarePush ? 'skip_cloudflare_push_requested' : 'missing_cloudflare_url_or_token' };
+
+await writeJson(option('--out'), report);
 
 function createWindowsContinuityPacket(input) {
   const binding = createSiteContinuityBinding({
@@ -209,6 +215,14 @@ async function readCloudflareSite(readSiteId) {
   return response.body;
 }
 
+async function pushCloudflareLoopReport(pushSiteId, report) {
+  const response = await postCloudflare({ operation: 'site.continuity.loop.report.put', params: { site_id: pushSiteId, report } });
+  if (response.http_status !== 200 || response.body?.ok === false) {
+    failJson('site_continuity_loop_cloudflare_report_push_failed', response);
+  }
+  return response.body;
+}
+
 async function pushCloudflarePacket(pushSiteId, packet) {
   const response = await postCloudflare({ operation: 'site.continuity.packet.put', params: { site_id: pushSiteId, packet } });
   if (response.http_status !== 200 || response.body?.ok === false) {
@@ -250,6 +264,13 @@ function summarizeCloudflarePush(push) {
     status: push.status ?? 'ok',
     site_continuity_packet_admission: push.site_continuity_packet_admission ?? null,
     packet_record: push.packet_record ?? null,
+  };
+}
+
+function summarizeCloudflareReportPush(push) {
+  return {
+    status: push.status ?? 'ok',
+    report_record: push.report_record ?? null,
   };
 }
 

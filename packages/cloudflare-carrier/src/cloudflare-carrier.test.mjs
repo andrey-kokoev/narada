@@ -842,6 +842,32 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(refusedPacketPutBody.status, 'refused');
   assert.equal(refusedPacketPutBody.site_continuity_packet_admission.reason, 'site_continuity_exchange_packet_executable_mutation_refused');
 
+  const loopReport = {
+    schema: 'narada.site_continuity_productized_loop.v1',
+    status: 'ok',
+    site_id: 'site_fixture',
+    generated_at: '2026-06-08T00:00:00.000Z',
+    cloudflare_source: 'cloudflare.site.read',
+    cloudflare_worker_url: 'https://carrier.example.test',
+    cloudflare_credential_source: 'flag:--token-file',
+    cloudflare_push: { status: 'imported' },
+    windows_packet_count: 1,
+    authority_boundary: {
+      executable_cross_embodiment_mutation: 'refused_by_site_continuity_classifier',
+      durable_mutation_authority: 'unchanged; routed_by_site_authority_map',
+    },
+  };
+  const loopReportPut = await worker.fetch(jsonRequest({
+    operation: 'site.continuity.loop.report.put',
+    request_id: 'request_site_continuity_loop_report_put',
+    params: { site_id: 'site_fixture', report: loopReport },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(loopReportPut.status, 200);
+  const loopReportPutBody = await loopReportPut.json();
+  assert.equal(loopReportPutBody.status, 'recorded');
+  assert.match(loopReportPutBody.report_record.report_id, /^site-continuity-loop:site_fixture:/);
+  assert.equal(loopReportPutBody.report_record.windows_packet_count, 1);
+
   const readAfterPacketPut = await worker.fetch(jsonRequest({
     operation: 'site.read',
     request_id: 'request_site_read_after_continuity_packet_put',
@@ -867,6 +893,13 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.executable_cross_embodiment_mutation, 'refused_by_site_continuity_classifier');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.durable_mutation_authority, 'unchanged; routed_by_site_authority_map');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.next_action, 'review_continuity_packet');
+  assert.equal(readAfterPacketPutBody.site_continuity_loop_reports.length, 1);
+  assert.equal(readAfterPacketPutBody.site_continuity_loop_status.schema, 'narada.cloudflare_site_continuity_loop_status.v1');
+  assert.equal(readAfterPacketPutBody.site_continuity_loop_status.state, 'loop_report_observed');
+  assert.equal(readAfterPacketPutBody.site_continuity_loop_status.report_count, 1);
+  assert.equal(readAfterPacketPutBody.site_continuity_loop_status.latest_status, 'ok');
+  assert.equal(readAfterPacketPutBody.site_continuity_loop_status.cloudflare_push_status, 'imported');
+  assert.equal(readAfterPacketPutBody.site_continuity_loop_status.next_action, 'review_continuity_loop_report');
   assert.equal(readAfterPacketPutBody.site_product_status.schema, 'narada.cloudflare_site_product_status.v1');
   assert.deepEqual(readAfterPacketPutBody.site_product_status.missing, []);
   assert.deepEqual(readAfterPacketPutBody.site_product_status.attention, ['open_tasks']);
@@ -1702,6 +1735,14 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /cross_embodiment_execution_guarded/);
   assert.match(html, /durable_mutation_authority/);
   assert.match(html, /routed_by_site_authority_map/);
+  assert.match(html, /Continuity Loop Evidence/);
+  assert.match(html, /continuityLoopEvidence/);
+  assert.match(html, /continuityLoopEvidenceContext/);
+  assert.match(html, /renderContinuityLoopEvidence/);
+  assert.match(html, /continuity_loop_report_recorded/);
+  assert.match(html, /site_continuity_loop_report/);
+  assert.match(html, /review_continuity_loop_report/);
+  assert.match(html, /run_site_continuity_loop/);
   assert.match(html, /site:continuity:loop/);
   assert.match(html, /sync-cloudflare/);
   assert.match(html, /Read Site Continuity/);
@@ -4225,6 +4266,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     authorityEvents: clone(initial.authorityEvents ?? []),
     operatorSessions: clone(initial.operatorSessions ?? []),
     continuityPackets: clone(initial.continuityPackets ?? []),
+    continuityLoopReports: clone(initial.continuityLoopReports ?? []),
     webhookDelayRemoteSourceSamples: clone(initial.webhookDelayRemoteSourceSamples ?? []),
     webhookDelayScheduledSourceReads: clone(initial.webhookDelayScheduledSourceReads ?? []),
     webhookDelayShadowObservations: clone(initial.webhookDelayShadowObservations ?? []),
@@ -4293,6 +4335,12 @@ function fakeD1SiteRegistryStatement(state, sql) {
       } else if (normalized.startsWith('insert into cloudflare_site_continuity_packets')) {
         const [packet_id, site_id, relation_id, source_embodiment_kind, target_embodiment_kind, admission_action, admission_reason, packet_json, imported_by_principal_id, imported_at] = bindings;
         state.continuityPackets.push({ packet_id, site_id, relation_id, source_embodiment_kind, target_embodiment_kind, admission_action, admission_reason, packet_json, imported_by_principal_id, imported_at });
+      } else if (normalized.startsWith('insert into cloudflare_site_continuity_loop_reports')) {
+        const [report_id, site_id, status, generated_at, cloudflare_source, cloudflare_push_status, windows_packet_count, cloudflare_credential_source, report_json, recorded_by_principal_id, recorded_at] = bindings;
+        const existing = state.continuityLoopReports.find((entry) => entry.report_id === report_id);
+        const row = { report_id, site_id, status, generated_at, cloudflare_source, cloudflare_push_status, windows_packet_count, cloudflare_credential_source, report_json, recorded_by_principal_id, recorded_at };
+        if (existing) Object.assign(existing, row);
+        else state.continuityLoopReports.push(row);
       } else if (normalized.startsWith('insert into cloudflare_webhook_delay_shadow_observations')) {
         const [observation_id, site_id, source_locus, target_locus, generated_at, latest_delay_minutes, critical_minutes, classification_state, dispatch_authority, shadow_mode, dispatch_action, observation_json, classification_json, recorded_by_principal_id, recorded_at] = bindings;
         const existing = state.webhookDelayShadowObservations.find((entry) => entry.observation_id === observation_id);
@@ -4406,6 +4454,16 @@ function fakeD1SiteRegistryStatement(state, sql) {
           results: state.carrierSessions
             .filter((entry) => entry.site_id === siteId)
             .sort((left, right) => right.created_at.localeCompare(left.created_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_site_continuity_loop_reports')) {
+        const [siteId, limit] = bindings;
+        return {
+          results: state.continuityLoopReports
+            .filter((entry) => entry.site_id === siteId)
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at))
             .slice(0, Number(limit))
             .map((entry) => clone(entry)),
         };

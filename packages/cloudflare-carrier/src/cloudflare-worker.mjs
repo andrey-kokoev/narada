@@ -323,6 +323,99 @@ async function importCloudflareContinuityPacket(env = {}, packet, { imported_by_
   };
 }
 
+function summarizeCloudflareSiteContinuityLoopStatus(siteId, loopReports = []) {
+  const reports = Array.isArray(loopReports) ? loopReports : [];
+  const latestReport = reports[0] ?? null;
+  return {
+    schema: 'narada.cloudflare_site_continuity_loop_status.v1',
+    site_id: siteId,
+    state: latestReport ? 'loop_report_observed' : 'no_loop_report_observed',
+    report_count: reports.length,
+    latest_report_id: latestReport?.report_id ?? null,
+    latest_status: latestReport?.status ?? null,
+    latest_generated_at: latestReport?.generated_at ?? null,
+    latest_recorded_at: latestReport?.recorded_at ?? null,
+    cloudflare_push_status: latestReport?.cloudflare_push_status ?? null,
+    windows_packet_count: latestReport?.windows_packet_count ?? 0,
+    authority_boundary: {
+      executable_cross_embodiment_mutation: 'refused_by_site_continuity_classifier',
+      durable_mutation_authority: 'unchanged; routed_by_site_authority_map',
+    },
+    next_action: latestReport ? 'review_continuity_loop_report' : 'run_site_continuity_loop',
+  };
+}
+
+function createSiteContinuityLoopReportId(report = {}) {
+  return [
+    'site-continuity-loop',
+    report.site_id || 'unknown-site',
+    report.generated_at || report.recorded_at || 'unknown-time',
+  ].map((part) => String(part).replace(/[^A-Za-z0-9_.:-]/g, '_')).join(':');
+}
+
+function summarizeSiteContinuityLoopReport(report = {}) {
+  return {
+    report_id: report.report_id ?? createSiteContinuityLoopReportId(report),
+    site_id: report.site_id ?? null,
+    status: report.status ?? 'unknown',
+    generated_at: report.generated_at ?? null,
+    cloudflare_source: report.cloudflare_source ?? null,
+    cloudflare_push_status: report.cloudflare_push?.status ?? null,
+    windows_packet_count: report.windows_packet_count ?? 0,
+    cloudflare_credential_source: report.cloudflare_credential_source ?? null,
+    authority_boundary: report.authority_boundary ?? {
+      executable_cross_embodiment_mutation: 'refused_by_site_continuity_classifier',
+      durable_mutation_authority: 'unchanged; routed_by_site_authority_map',
+    },
+  };
+}
+
+async function importCloudflareContinuityLoopReport(env = {}, report, { recorded_by_principal_id = 'unknown-principal' } = {}) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return { ok: false, code: 'missing_site_registry_binding' };
+  if (!report || typeof report !== 'object') return { ok: false, code: 'missing_site_continuity_loop_report' };
+  if (report.schema !== 'narada.site_continuity_productized_loop.v1') return { ok: false, code: 'unsupported_site_continuity_loop_report_schema' };
+  if (!report.site_id) return { ok: false, code: 'site_continuity_loop_report_site_id_missing' };
+  await ensureCloudflareContinuityLoopReportSchema(db);
+  const recordedAt = new Date().toISOString();
+  const summary = summarizeSiteContinuityLoopReport(report);
+  await db.prepare(`INSERT INTO cloudflare_site_continuity_loop_reports (
+    report_id, site_id, status, generated_at, cloudflare_source, cloudflare_push_status,
+    windows_packet_count, cloudflare_credential_source, report_json, recorded_by_principal_id, recorded_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT(report_id) DO UPDATE SET
+    status = excluded.status,
+    generated_at = excluded.generated_at,
+    cloudflare_source = excluded.cloudflare_source,
+    cloudflare_push_status = excluded.cloudflare_push_status,
+    windows_packet_count = excluded.windows_packet_count,
+    cloudflare_credential_source = excluded.cloudflare_credential_source,
+    report_json = excluded.report_json,
+    recorded_by_principal_id = excluded.recorded_by_principal_id,
+    recorded_at = excluded.recorded_at`).bind(
+    summary.report_id,
+    report.site_id,
+    summary.status,
+    summary.generated_at,
+    summary.cloudflare_source,
+    summary.cloudflare_push_status,
+    summary.windows_packet_count,
+    summary.cloudflare_credential_source,
+    JSON.stringify(report),
+    recorded_by_principal_id,
+    recordedAt,
+  ).run();
+  return {
+    ok: true,
+    status: 'recorded',
+    report_record: {
+      ...summary,
+      recorded_by_principal_id,
+      recorded_at: recordedAt,
+    },
+  };
+}
+
 function summarizeLocalCloudContinuityBridge(siteId, continuityPackets = [], siteContinuity = null, continuityStatus = null) {
   const binding = siteContinuity?.binding ?? {};
   const localWindowsEmbodiment = (binding.embodiments || []).find((embodiment) => embodiment.embodiment_kind === SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS) ?? {};
@@ -370,6 +463,16 @@ async function listCloudflareContinuityPackets(env = {}, siteId, limit = 100) {
   const result = await db.prepare(`SELECT packet_id, site_id, relation_id, source_embodiment_kind, target_embodiment_kind,
     admission_action, admission_reason, imported_by_principal_id, imported_at
     FROM cloudflare_site_continuity_packets WHERE site_id = ? ORDER BY imported_at DESC LIMIT ?`).bind(siteId, boundedContinuityPacketReadLimit(limit)).all();
+  return result.results ?? [];
+}
+
+async function listCloudflareContinuityLoopReports(env = {}, siteId, limit = 20) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function' || !siteId) return [];
+  await ensureCloudflareContinuityLoopReportSchema(db);
+  const result = await db.prepare(`SELECT report_id, site_id, status, generated_at, cloudflare_source, cloudflare_push_status,
+    windows_packet_count, cloudflare_credential_source, recorded_by_principal_id, recorded_at
+    FROM cloudflare_site_continuity_loop_reports WHERE site_id = ? ORDER BY recorded_at DESC LIMIT ?`).bind(siteId, boundedContinuityPacketReadLimit(limit)).all();
   return result.results ?? [];
 }
 
@@ -506,6 +609,7 @@ function summarizeCloudflareOperationActivityTimeline({
   tasks = [],
   carrierEvidence = [],
   continuityPackets = [],
+  continuityLoopReports = [],
   webhookDelayDirectiveRecords = [],
   webhookDelayDirectiveDeliveries = [],
   residentLoopShadowRuns = [],
@@ -589,6 +693,19 @@ function summarizeCloudflareOperationActivityTimeline({
       focus_kind: 'site_continuity_packet',
       focus_ref: packet.packet_id,
       principal_id: packet.imported_by_principal_id,
+    });
+  }
+  for (const report of continuityLoopReports || []) {
+    push({
+      activity_id: `continuity_loop_report:${report.report_id}`,
+      activity_kind: 'site_continuity_loop_report',
+      occurred_at: report.recorded_at || report.generated_at,
+      title: 'Continuity Loop Report',
+      summary: [report.status, report.cloudflare_push_status, String(report.windows_packet_count ?? 0) + ' windows packet(s)'].filter(Boolean).join(' / '),
+      source_ref: report.report_id,
+      focus_kind: 'site_continuity_loop_report',
+      focus_ref: report.report_id,
+      principal_id: report.recorded_by_principal_id,
     });
   }
   for (const entry of carrierEvidence || []) {
@@ -874,6 +991,23 @@ async function ensureCloudflareContinuityPacketSchema(db) {
   await db.prepare('CREATE INDEX IF NOT EXISTS cloudflare_site_continuity_packets_site_idx ON cloudflare_site_continuity_packets(site_id, imported_at)').run();
 }
 
+async function ensureCloudflareContinuityLoopReportSchema(db) {
+  await db.prepare(`CREATE TABLE IF NOT EXISTS cloudflare_site_continuity_loop_reports (
+    report_id TEXT PRIMARY KEY,
+    site_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    generated_at TEXT,
+    cloudflare_source TEXT,
+    cloudflare_push_status TEXT,
+    windows_packet_count INTEGER NOT NULL,
+    cloudflare_credential_source TEXT,
+    report_json TEXT NOT NULL,
+    recorded_by_principal_id TEXT NOT NULL,
+    recorded_at TEXT NOT NULL
+  )`).run();
+  await db.prepare('CREATE INDEX IF NOT EXISTS cloudflare_site_continuity_loop_reports_site_idx ON cloudflare_site_continuity_loop_reports(site_id, recorded_at)').run();
+}
+
 async function validateCarrierSiteBindingForRequest(body, principal, env = {}) {
   if (body?.operation !== 'session.start') return null;
   const registry = createCloudflareSiteRegistryAdapter(env);
@@ -994,6 +1128,7 @@ function isSiteProductOperation(operation) {
     'site.settings.put',
     'site.membership.put',
     'site.continuity.packet.put',
+    'site.continuity.loop.report.put',
     'operation.create',
     'operation.status.put',
     'operation.read',
@@ -1329,6 +1464,14 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const result = await importCloudflareContinuityPacket(env, packet, { imported_by_principal_id: principal?.principal_id ?? 'unknown-principal' });
     return { status: result.ok ? 200 : 403, body: result };
   }
+  if (body.operation === 'site.continuity.loop.report.put') {
+    const report = params.report ?? body.report ?? null;
+    const reportSiteId = report?.site_id ?? requestedSiteId;
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: reportSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const result = await importCloudflareContinuityLoopReport(env, report, { recorded_by_principal_id: principal?.principal_id ?? 'unknown-principal' });
+    return { status: result.ok ? 200 : 400, body: result };
+  }
   if (body.operation === 'site.membership.put') {
     const { decision } = classifyCloudflareSiteAuthority(env, requestedSiteId, SITE_MUTATION_CLASSES.HOSTED_SITE_MEMBERSHIP);
     if (decision.action !== SITE_AUTHORITY_ACTIONS.ADMIT) {
@@ -1364,6 +1507,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const sessions = response.sessions ?? [];
     const tasks = await listOperationTasks(env, siteId, sessions);
     const continuityPackets = await listCloudflareContinuityPackets(env, siteId);
+    const continuityLoopReports = await listCloudflareContinuityLoopReports(env, siteId, params.continuity_loop_report_limit ?? params.limit);
     const webhookDelayShadowObservations = await listCloudflareWebhookDelayShadowObservations(env, siteId, params.webhook_delay_shadow_limit ?? params.limit);
     const webhookDelayObservationPrimaryReads = await listCloudflareWebhookDelayObservationPrimaryReads(env, siteId, params.webhook_delay_observation_primary_limit ?? params.limit);
     const webhookDelayScheduledSourceReads = await listCloudflareWebhookDelayScheduledSourceReads(env, siteId, params.webhook_delay_scheduled_source_read_limit ?? params.limit);
@@ -1376,6 +1520,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const siteAuthority = cloudflareSiteAuthorityReadModel(env, siteId);
     const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
     const siteContinuityStatus = summarizeCloudflareSiteContinuityStatus(siteId, continuityPackets, siteContinuity);
+    const siteContinuityLoopStatus = summarizeCloudflareSiteContinuityLoopStatus(siteId, continuityLoopReports);
     const cloudflarePersistencePosture = summarizeCloudflarePersistencePosture(env, {
       siteId,
       operation,
@@ -1402,6 +1547,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       tasks,
       carrierEvidence,
       continuityPackets,
+      continuityLoopReports,
       webhookDelayDirectiveRecords,
       webhookDelayDirectiveDeliveries,
       residentLoopShadowRuns,
@@ -1426,6 +1572,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         ...response,
         tasks,
         site_continuity_packets: continuityPackets,
+        site_continuity_loop_reports: continuityLoopReports,
         webhook_delay_shadow_observations: webhookDelayShadowObservations,
         webhook_delay_observation_primary_reads: webhookDelayObservationPrimaryReads,
         webhook_delay_scheduled_source_reads: webhookDelayScheduledSourceReads,
@@ -1438,6 +1585,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         site_authority: siteAuthority,
         site_continuity: siteContinuity,
         site_continuity_status: siteContinuityStatus,
+        site_continuity_loop_status: siteContinuityLoopStatus,
         local_cloud_continuity_bridge: localCloudContinuityBridge,
         cloudflare_persistence_posture: cloudflarePersistencePosture,
         cloudflare_recovery_posture: cloudflareRecoveryPosture,
@@ -1456,6 +1604,8 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           recovery_posture: cloudflareRecoveryPosture,
           continuity_packet_count: continuityPackets.length,
           continuity_status: siteContinuityStatus,
+          continuity_loop_report_count: continuityLoopReports.length,
+          continuity_loop_status: siteContinuityLoopStatus,
           local_cloud_continuity_bridge: localCloudContinuityBridge,
           status_history: operationStatusHistory,
           activity_timeline: operationActivityTimeline,
@@ -1494,6 +1644,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
   const siteId = response.site?.site_id ?? params.site_id;
   const tasks = await listSiteTasks(env, siteId);
   const continuityPackets = await listCloudflareContinuityPackets(env, siteId);
+  const continuityLoopReports = await listCloudflareContinuityLoopReports(env, siteId, params.continuity_loop_report_limit ?? params.limit);
   const webhookDelayShadowObservations = await listCloudflareWebhookDelayShadowObservations(env, siteId, params.webhook_delay_shadow_limit ?? params.limit);
   const webhookDelayObservationPrimaryReads = await listCloudflareWebhookDelayObservationPrimaryReads(env, siteId, params.webhook_delay_observation_primary_limit ?? params.limit);
   const webhookDelayScheduledSourceReads = await listCloudflareWebhookDelayScheduledSourceReads(env, siteId, params.webhook_delay_scheduled_source_read_limit ?? params.limit);
@@ -1506,6 +1657,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
   const siteAuthority = cloudflareSiteAuthorityReadModel(env, siteId);
   const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
   const siteContinuityStatus = summarizeCloudflareSiteContinuityStatus(siteId, continuityPackets, siteContinuity);
+  const siteContinuityLoopStatus = summarizeCloudflareSiteContinuityLoopStatus(siteId, continuityLoopReports);
   const localCloudContinuityBridge = summarizeLocalCloudContinuityBridge(siteId, continuityPackets, siteContinuity, siteContinuityStatus);
   const cloudflarePersistencePosture = summarizeCloudflarePersistencePosture(env, {
     siteId,
@@ -1536,6 +1688,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
   return {
     tasks,
     site_continuity_packets: continuityPackets,
+    site_continuity_loop_reports: continuityLoopReports,
     webhook_delay_shadow_observations: webhookDelayShadowObservations,
     webhook_delay_observation_primary_reads: webhookDelayObservationPrimaryReads,
     webhook_delay_scheduled_source_reads: webhookDelayScheduledSourceReads,
@@ -1548,6 +1701,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     site_authority: siteAuthority,
     site_continuity: siteContinuity,
     site_continuity_status: siteContinuityStatus,
+    site_continuity_loop_status: siteContinuityLoopStatus,
     local_cloud_continuity_bridge: localCloudContinuityBridge,
     cloudflare_persistence_posture: cloudflarePersistencePosture,
     cloudflare_recovery_posture: cloudflareRecoveryPosture,
@@ -4911,6 +5065,10 @@ export function renderCloudflareCarrierConsole() {
         <div id="localCloudContinuityBridge" class="evidence-summary"><div class="empty">No local-cloud continuity loaded.</div></div>
       </div>
       <div class="product-panel">
+        <h2>Continuity Loop Evidence</h2>
+        <div id="continuityLoopEvidence" class="evidence-summary"><div class="empty">No continuity loop evidence loaded.</div></div>
+      </div>
+      <div class="product-panel">
         <h2>Runtime Posture</h2>
         <div id="runtimePostureDetail" class="evidence-summary"><div class="empty">No runtime status loaded.</div></div>
       </div>
@@ -5471,6 +5629,7 @@ export function renderCloudflareCarrierConsole() {
       renderAuthorityActionSummary(product);
       renderContinuityWorkflow(product);
       renderLocalCloudContinuityBridge(product);
+      renderContinuityLoopEvidence(product);
     }
     function productScopeSummary(product = state.operationProduct || {}) {
       if (state.productScope === 'site') return ['site', product.site?.site_id || el('siteId').value.trim(), String((product.operations || []).length) + ' operations'].filter(Boolean).join(' / ');
@@ -6301,6 +6460,7 @@ export function renderCloudflareCarrierConsole() {
       const localWindowsEmbodiment = (product.site_continuity?.binding?.embodiments || []).find((embodiment) => embodiment.embodiment_kind === 'local_windows') || {};
       const cloudflareEmbodiment = (product.site_continuity?.binding?.embodiments || []).find((embodiment) => embodiment.embodiment_kind === 'cloudflare_carrier') || {};
       const continuityPacketCount = Number(product.site_continuity_status?.packet_count ?? (product.site_continuity_packets || []).length ?? 0);
+      const continuityLoopReportCount = Number(product.site_continuity_loop_status?.report_count ?? product.operation_product_surface?.continuity_loop_report_count ?? (product.site_continuity_loop_reports || []).length ?? 0);
       const continuityLoopCommand = siteId
         ? 'pnpm site:continuity:loop -- sync-cloudflare --site ' + siteId + ' --url <worker-url> --token-file <token-file>'
         : 'pnpm site:continuity:loop -- sync-cloudflare --site <site_id> --url <worker-url> --token-file <token-file>';
@@ -6412,6 +6572,14 @@ export function renderCloudflareCarrierConsole() {
           action: () => run(refreshSiteProduct),
         },
         {
+          key: 'continuity_loop_report_recorded',
+          label: 'Continuity Loop Report',
+          status: continuityLoopReportCount > 0 ? 'complete' : 'needs_attention',
+          detail: continuityLoopReportCount > 0 ? String(continuityLoopReportCount) + ' report(s) recorded' : continuityLoopCommand,
+          action_label: 'Read Loop Evidence',
+          action: () => run(refreshSiteProduct),
+        },
+        {
           key: 'evidence_focus_set',
           label: 'Evidence Focus',
           status: state.evidenceFocus ? 'complete' : 'needs_attention',
@@ -6473,6 +6641,29 @@ export function renderCloudflareCarrierConsole() {
         return;
       }
       el('localCloudContinuityBridge').replaceChildren(...localCloudContinuityBridgeContext(product).map(([label, value]) => evidenceField(label, value)));
+    }
+    function continuityLoopEvidenceContext(product = state.operationProduct || {}) {
+      const status = product.site_continuity_loop_status || product.operation_product_surface?.continuity_loop_status || {};
+      const latest = (product.site_continuity_loop_reports || [])[0] || {};
+      return [
+        ['Schema', status.schema || 'narada.cloudflare_site_continuity_loop_status.v1'],
+        ['State', status.state || 'no_loop_report_observed'],
+        ['Reports', status.report_count ?? (product.site_continuity_loop_reports || []).length ?? 0],
+        ['Latest Report', status.latest_report_id || latest.report_id || 'none'],
+        ['Latest Status', status.latest_status || latest.status || 'none'],
+        ['Generated', status.latest_generated_at || latest.generated_at || 'none'],
+        ['Recorded', status.latest_recorded_at || latest.recorded_at || 'none'],
+        ['Cloudflare Push', status.cloudflare_push_status || latest.cloudflare_push_status || 'none'],
+        ['Windows Packets', status.windows_packet_count ?? latest.windows_packet_count ?? 0],
+        ['Next Action', status.next_action || ((status.report_count ?? 0) > 0 ? 'review_continuity_loop_report' : 'run_site_continuity_loop')],
+      ];
+    }
+    function renderContinuityLoopEvidence(product = state.operationProduct || {}) {
+      if (!product?.site_continuity_loop_status && !product?.operation_product_surface?.continuity_loop_status) {
+        el('continuityLoopEvidence').innerHTML = '<div class="empty">No continuity loop evidence loaded.</div>';
+        return;
+      }
+      el('continuityLoopEvidence').replaceChildren(...continuityLoopEvidenceContext(product).map(([label, value]) => evidenceField(label, value)));
     }
     function refreshEventKindFilter() {
       const select = el('eventKindFilter');
