@@ -1646,6 +1646,10 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /read_operation_scope_for_active_operation/);
   assert.match(html, /Site Product/);
   assert.match(html, /Sites Overview/);
+  assert.match(html, /Next Reason/);
+  assert.match(html, /Action Counts/);
+  assert.match(html, /Missing Counts/);
+  assert.match(html, /Attention Counts/);
   assert.match(html, /readSites/);
   assert.match(html, /sitesOverview/);
   assert.match(html, /sitesStatusList/);
@@ -1654,6 +1658,7 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /refreshSitesProduct/);
   assert.match(html, /focusNextSiteFromOverview/);
   assert.match(html, /siteProductStatusSummary/);
+  assert.match(html, /countMapSummary/);
   assert.match(html, /Site Action/);
   assert.match(html, /classifyCloudflareSiteCommandState/);
   assert.match(html, /siteActionSummary/);
@@ -2957,8 +2962,13 @@ test('worker site.list exposes product statuses across visible sites', async () 
   assert.equal(listedBody.site_product_overview.schema, 'narada.cloudflare_site_product_overview.v1');
   assert.equal(listedBody.site_product_overview.site_count, 2);
   assert.deepEqual(listedBody.site_product_overview.health_counts, { ready: 0, attention: 1, incomplete: 1, other: 0 });
+  assert.deepEqual(listedBody.site_product_overview.action_counts, { continuity_packet: 1, operation: 1 });
+  assert.deepEqual(listedBody.site_product_overview.missing_counts, { continuity_packet: 2, operation: 1, session: 1, carrier_evidence: 1 });
+  assert.deepEqual(listedBody.site_product_overview.attention_counts, {});
   assert.equal(listedBody.site_product_overview.next_site_id, 'site_alpha');
+  assert.equal(listedBody.site_product_overview.next_health, 'attention');
   assert.equal(listedBody.site_product_overview.next_action, 'continuity_packet');
+  assert.equal(listedBody.site_product_overview.next_reason, 'continuity_packet');
 });
 
 test('worker operation.create read and list route through site registry authority', async () => {

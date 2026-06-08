@@ -440,19 +440,34 @@ function summarizeLocalCloudContinuityBridge(siteId, continuityPackets = [], sit
 function summarizeCloudflareSiteProductOverview(siteProductStatuses = []) {
   const statuses = Array.isArray(siteProductStatuses) ? siteProductStatuses : [];
   const healthCounts = { ready: 0, attention: 0, incomplete: 0, other: 0 };
+  const actionCounts = {};
+  const missingCounts = {};
+  const attentionCounts = {};
   for (const status of statuses) {
     if (status?.health === 'ready') healthCounts.ready += 1;
     else if (status?.health === 'attention') healthCounts.attention += 1;
     else if (status?.health === 'incomplete') healthCounts.incomplete += 1;
     else healthCounts.other += 1;
+    const action = status?.next_action || 'monitor_site';
+    actionCounts[action] = (actionCounts[action] || 0) + 1;
+    for (const missing of status?.missing || []) missingCounts[missing] = (missingCounts[missing] || 0) + 1;
+    for (const attention of status?.attention || []) attentionCounts[attention] = (attentionCounts[attention] || 0) + 1;
   }
   const firstActionable = statuses.find((status) => status?.next_action && status.next_action !== 'monitor_site');
+  const nextReason = firstActionable
+    ? (firstActionable.missing || [])[0] || (firstActionable.attention || [])[0] || firstActionable.next_action || 'inspect_site'
+    : 'all_sites_monitoring';
   return {
     schema: 'narada.cloudflare_site_product_overview.v1',
     site_count: statuses.length,
     health_counts: healthCounts,
+    action_counts: actionCounts,
+    missing_counts: missingCounts,
+    attention_counts: attentionCounts,
     next_site_id: firstActionable?.site_id ?? null,
+    next_health: firstActionable?.health ?? 'ready',
     next_action: firstActionable?.next_action ?? 'monitor_sites',
+    next_reason: nextReason,
   };
 }
 
@@ -9038,6 +9053,10 @@ export function renderCloudflareCarrierConsole() {
         'attention=' + attention,
       ].join(' | ');
     }
+    function countMapSummary(counts = {}) {
+      const entries = Object.entries(counts || {}).filter(([, value]) => Number(value) > 0);
+      return entries.length > 0 ? entries.map(([key, value]) => key + '=' + value).join(' | ') : 'none';
+    }
     function renderSitesProduct(product) {
       state.siteList = product.sites || [];
       state.siteProductStatuses = product.site_product_statuses || [];
@@ -9053,7 +9072,12 @@ export function renderCloudflareCarrierConsole() {
           ['Attention', health.attention ?? 0],
           ['Incomplete', health.incomplete ?? 0],
           ['Next Site', overview.next_site_id || 'none'],
+          ['Next Health', overview.next_health || 'ready'],
           ['Next Action', overview.next_action || 'monitor_sites'],
+          ['Next Reason', overview.next_reason || 'all_sites_monitoring'],
+          ['Action Counts', countMapSummary(overview.action_counts)],
+          ['Missing Counts', countMapSummary(overview.missing_counts)],
+          ['Attention Counts', countMapSummary(overview.attention_counts)],
         ].map(([label, value]) => evidenceField(label, value)),
       );
       if (state.siteProductStatuses.length === 0) {

@@ -657,10 +657,15 @@ assert.match(consoleCheck.body, /read_site_scope/);
 assert.match(consoleCheck.body, /load_or_create_membership/);
 assert.match(consoleCheck.body, /inspect_site_operations/);
 assert.match(consoleCheck.body, /Sites Overview/);
+assert.match(consoleCheck.body, /Next Reason/);
+assert.match(consoleCheck.body, /Action Counts/);
+assert.match(consoleCheck.body, /Missing Counts/);
+assert.match(consoleCheck.body, /Attention Counts/);
 assert.match(consoleCheck.body, /Read Sites/);
 assert.match(consoleCheck.body, /Focus Next Site/);
 assert.match(consoleCheck.body, /readSites/);
 assert.match(consoleCheck.body, /renderSitesProduct/);
+assert.match(consoleCheck.body, /countMapSummary/);
 assert.match(consoleCheck.body, /narada\.cloudflare_site_product_overview\.v1/);
 assert.match(consoleCheck.body, /narada\.cloudflare_site_product_status\.v1/);
 assert.match(consoleCheck.body, /Site Focus Detail/);
@@ -873,7 +878,11 @@ assert.equal(siteList.body.site_product_overview?.schema, 'narada.cloudflare_sit
 assert.equal(siteList.body.site_product_overview?.site_count, siteList.body.site_product_statuses.length);
 assert.ok(siteList.body.site_product_overview.site_count >= 1);
 assert.ok(siteList.body.site_product_overview.health_counts);
-assert.match(siteList.body.site_product_overview.next_action, /^(monitor_sites|active_membership|operation|session|carrier_evidence|continuity_packet|open_tasks)$/);
+assert.ok(siteList.body.site_product_overview.action_counts);
+assert.ok(siteList.body.site_product_overview.missing_counts);
+assert.ok(siteList.body.site_product_overview.attention_counts);
+assert.equal(typeof siteList.body.site_product_overview.next_reason, 'string');
+assert.match(siteList.body.site_product_overview.next_action, /^(monitor_sites|active_membership|operation|session|carrier_evidence|continuity_packet|continuity_loop_report|open_tasks)$/);
 
 const operationRead = await postCarrier(workerUrl, bearerToken, {
   operation: 'operation.read',
