@@ -904,6 +904,24 @@ assert.ok(siteList.body.site_product_overview.missing_counts);
 assert.ok(siteList.body.site_product_overview.attention_counts);
 assert.equal(typeof siteList.body.site_product_overview.next_reason, 'string');
 assert.match(siteList.body.site_product_overview.next_action, /^(monitor_sites|active_membership|operation|session|carrier_evidence|continuity_packet|continuity_loop_report|open_tasks)$/);
+const expectedSiteOverview = expectedSiteProductOverview(siteList.body.site_product_statuses);
+assert.deepEqual(siteList.body.site_product_overview.health_counts, expectedSiteOverview.health_counts);
+assert.deepEqual(siteList.body.site_product_overview.action_counts, expectedSiteOverview.action_counts);
+assert.deepEqual(siteList.body.site_product_overview.missing_counts, expectedSiteOverview.missing_counts);
+assert.deepEqual(siteList.body.site_product_overview.attention_counts, expectedSiteOverview.attention_counts);
+assert.equal(siteList.body.site_product_overview.next_site_id, expectedSiteOverview.next_site_id);
+assert.equal(siteList.body.site_product_overview.next_health, expectedSiteOverview.next_health);
+assert.equal(siteList.body.site_product_overview.next_action, expectedSiteOverview.next_action);
+assert.equal(siteList.body.site_product_overview.next_reason, expectedSiteOverview.next_reason);
+const sitePostureRoute = sitePostureRouteInvariant(siteList.body.site_product_overview, siteId);
+assert.match(sitePostureRoute.command_state, /^(site_posture_ready|site_posture_attention)$/);
+assert.match(sitePostureRoute.next_action, /^(monitor_sites|focus_next_site)$/);
+if (sitePostureRoute.status === 'needs_attention') {
+  assert.notEqual(sitePostureRoute.target, siteId);
+  assert.ok(siteList.body.site_product_statuses.some((status) => status.site_id === sitePostureRoute.target));
+} else {
+  assert.notEqual(sitePostureRoute.next_action, 'focus_next_site');
+}
 
 const operationRead = await postCarrier(workerUrl, bearerToken, {
   operation: 'operation.read',
@@ -1318,6 +1336,67 @@ async function postCarrier(baseUrl, token, body) {
     parsed = { raw: text };
   }
   return { http_status: response.status, body: parsed };
+}
+
+function expectedSiteProductOverview(statuses = []) {
+  const actionableStatus = statuses.find((status) => {
+    const nextAction = status?.next_action || 'monitor_site';
+    return nextAction !== 'monitor_site';
+  }) ?? null;
+  return {
+    health_counts: statuses.reduce((counts, status) => {
+      if (status?.health === 'ready') counts.ready += 1;
+      else if (status?.health === 'attention') counts.attention += 1;
+      else if (status?.health === 'incomplete') counts.incomplete += 1;
+      else counts.other += 1;
+      return counts;
+    }, { ready: 0, attention: 0, incomplete: 0, other: 0 }),
+    action_counts: countBy(statuses, (status) => status?.next_action || 'monitor_site'),
+    missing_counts: countNestedValues(statuses, 'missing'),
+    attention_counts: countNestedValues(statuses, 'attention'),
+    next_site_id: actionableStatus?.site_id || null,
+    next_health: actionableStatus?.health || 'ready',
+    next_action: actionableStatus?.next_action || 'monitor_sites',
+    next_reason: actionableStatus
+      ? (actionableStatus.missing || [])[0] || (actionableStatus.attention || [])[0] || actionableStatus.next_action || 'inspect_site'
+      : 'all_sites_monitoring',
+  };
+}
+
+function sitePostureRouteInvariant(overview = {}, focusedSiteId = '') {
+  const nextSiteId = overview.next_site_id || '';
+  const nextAction = overview.next_action || 'monitor_sites';
+  const changesFocus = nextSiteId && nextSiteId !== focusedSiteId;
+  const needsAttention = Boolean(
+    overview.site_count > 0
+    && nextAction
+    && nextAction !== 'monitor_sites'
+    && changesFocus,
+  );
+  return {
+    domain: 'site_posture',
+    command_state: needsAttention ? 'site_posture_attention' : 'site_posture_ready',
+    status: needsAttention ? 'needs_attention' : 'ready',
+    next_action: needsAttention ? 'focus_next_site' : 'monitor_sites',
+    target: nextSiteId || 'none',
+    reason: overview.next_reason || 'all_sites_ready',
+  };
+}
+
+function countBy(items = [], keyForItem) {
+  return items.reduce((counts, item) => {
+    const key = keyForItem(item);
+    counts[key] = (counts[key] || 0) + 1;
+    return counts;
+  }, {});
+}
+
+function countNestedValues(items = [], key) {
+  return items.reduce((counts, item) => {
+    const values = Array.isArray(item?.[key]) ? item[key] : [];
+    for (const value of values) counts[value] = (counts[value] || 0) + 1;
+    return counts;
+  }, {});
 }
 
 function commandStatesForOperationProduct(product = {}, focus = {}) {
