@@ -692,6 +692,30 @@ test('worker site.read composes site sessions tasks authority events and carrier
   const localFilesystemDecision = body.site_authority.decisions.find((decision) => decision.mutation_class === 'local_repository_filesystem_mutation');
   assert.equal(localFilesystemDecision.action, 'refuse');
   assert.equal(localFilesystemDecision.reason, 'site_authority_embodiment_not_authoritative');
+  assert.deepEqual(classifyCloudflareSessionCommandState({
+    session_id: body.sessions[0].carrier_session_id,
+    is_active: true,
+    evidence_loaded: body.carrier_evidence[0].events.length > 0,
+  }), { command_state: 'evidence_ready', command_action: 'inspect_session_evidence', next_action: 'inspect_session_evidence' });
+  assert.deepEqual(classifyCloudflareTaskCommandState({
+    task_id: body.tasks[0].task_id,
+    status: body.tasks[0].status,
+    evidence_count: body.carrier_evidence[0].events.filter((event) => JSON.stringify(event.payload || {}).includes(body.tasks[0].task_id)).length,
+  }), { lifecycle: 'open', command_state: 'task_work_open', command_action: 'mark_done_or_update', next_action: 'mark_done_or_update' });
+  assert.deepEqual(classifyCloudflareAuthorityCommandState({
+    decision_count: body.site_authority.decisions.length,
+    refusal_count: body.site_authority.decisions.filter((decision) => ['refuse', 'deny'].includes(decision.action)).length,
+    unresolved_locus_count: body.site_authority.decisions.filter((decision) => !decision.authority_locus || decision.authority_locus === 'unresolved').length,
+    evidence_loaded: body.authority_events.length > 0,
+  }), { command_state: 'refusal_requires_review', command_action: 'inspect_refused_authority', next_action: 'inspect_refused_authority' });
+  assert.deepEqual(classifyCloudflareEvidenceCommandState(body.carrier_evidence[0].events.find((event) => event.event_kind === 'carrier_session_started')), {
+    lane: 'authority',
+    target_type: 'authority',
+    target_ref: 'hosted_carrier_session_events',
+    command_state: 'authority_locus_review',
+    command_action: 'inspect_authority_locus',
+    next_action: 'inspect_authority_locus',
+  });
   assert.equal(body.site_continuity.binding.schema, 'narada.site_continuity_binding.v1');
   assert.equal(body.site_continuity.binding.site_id, 'site_fixture');
   const identityContinuity = body.site_continuity.decisions.find((decision) => decision.exchange_class === 'site_identity_binding');
@@ -1434,6 +1458,14 @@ test('worker records webhook delay observations as Cloudflare shadow-read eviden
   const operationReadBody = await operationRead.json();
   assert.equal(operationReadBody.operation_product_surface.webhook_delay_shadow_observation_count, 2);
   assert.equal(operationReadBody.operation_product_surface.dispatch_authority, 'windows_primary_dispatcher');
+  assert.deepEqual(classifyCloudflareOperationCommandState({
+    operation_id: operationReadBody.operation.operation_id,
+    is_active: true,
+    scope_loaded: true,
+    session_count: operationReadBody.sessions.length,
+    evidence_loaded: (operationReadBody.carrier_evidence || []).some((entry) => (entry.events || []).length > 0),
+    operation_path_next_action: operationReadBody.sessions.length === 0 ? 'start_or_select_session' : 'read_operation_evidence',
+  }), { command_state: 'session_needed', command_action: 'start_or_select_session', next_action: 'start_or_select_session' });
 });
 
 test('worker records webhook delay observation as Cloudflare primary with Windows fallback', async () => {
