@@ -3716,6 +3716,56 @@ export function classifyCloudflareTaskCommandState(input = {}) {
   };
 }
 
+export function classifyCloudflareEvidenceCommandState(event = {}, options = {}) {
+  const kind = event.event_kind || '';
+  const payload = event.payload || {};
+  const siteAuthority = payload.site_authority_decision || {};
+  const parsedTaskId = options.parsed_task_id || null;
+  const taskId = payload.task_id || payload.task?.task_id || parsedTaskId || null;
+  const lane = kind.includes('failed') || kind.includes('rejected') || payload.status === 'failed' || payload.admission_action === 'deny' || payload.action === 'refuse' ? 'failures'
+    : kind.startsWith('directive_') || payload.directive_kind || payload.directive_id ? 'directives'
+    : kind.includes('authority') || payload.site_authority_decision || payload.authority_ref ? 'authority'
+    : kind.includes('tool') || payload.tool_name || payload.capability_ref || payload.effect_scope ? 'tools'
+    : kind.startsWith('provider_') || kind.startsWith('turn_') || payload.provider || payload.provider_adapter_kind ? 'provider'
+    : kind.includes('input') || kind === 'carrier_command_executed' || kind === 'carrier_session_started' ? 'input'
+    : 'other';
+  const targetType = taskId ? 'task'
+    : payload.directive_id ? 'attention'
+    : siteAuthority.action || payload.authority_ref ? 'authority'
+    : payload.tool_name || payload.capability_ref ? 'tool_effect'
+    : event.carrier_session_id ? 'session'
+    : 'evidence';
+  const targetRef = taskId
+    || payload.directive_id
+    || siteAuthority.mutation_class
+    || payload.tool_name
+    || event.carrier_session_id
+    || event.event_kind
+    || 'none';
+  const nextAction = lane === 'failures' ? 'inspect_failure_and_retry_or_escalate'
+    : lane === 'authority' ? 'inspect_authority_locus'
+    : lane === 'tools' ? (payload.status === 'failed' ? 'inspect_tool_failure' : 'inspect_tool_effect')
+    : lane === 'directives' ? 'resolve_or_acknowledge_directive'
+    : lane === 'provider' ? 'inspect_provider_turn'
+    : lane === 'input' ? 'trace_input_lifecycle'
+    : 'inspect_evidence_payload';
+  const commandState = lane === 'failures' ? 'failure_requires_review'
+    : lane === 'authority' ? 'authority_locus_review'
+    : lane === 'tools' ? (payload.status === 'failed' ? 'tool_failure_review' : 'tool_effect_review')
+    : lane === 'directives' ? 'directive_requires_resolution'
+    : lane === 'provider' ? 'provider_turn_review'
+    : lane === 'input' ? 'input_lifecycle_trace'
+    : 'payload_review';
+  return {
+    lane,
+    target_type: targetType,
+    target_ref: targetRef,
+    command_state: commandState,
+    command_action: nextAction,
+    next_action: nextAction,
+  };
+}
+
 function mutatesSession(operation) {
   return [
     'session.start',
@@ -4256,6 +4306,7 @@ export function renderCloudflareCarrierConsole() {
     const classifyCloudflareAuthorityCommandState = ${classifyCloudflareAuthorityCommandState.toString()};
     const classifyCloudflareSessionCommandState = ${classifyCloudflareSessionCommandState.toString()};
     const classifyCloudflareTaskCommandState = ${classifyCloudflareTaskCommandState.toString()};
+    const classifyCloudflareEvidenceCommandState = ${classifyCloudflareEvidenceCommandState.toString()};
     const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, webhookDelayDirectiveFocus: null, webhookDelayDirectiveDeliveryFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
@@ -4921,15 +4972,7 @@ export function renderCloudflareCarrierConsole() {
       ];
     }
     function classifyEvidenceLane(event = {}) {
-      const kind = event.event_kind || '';
-      const payload = event.payload || {};
-      if (kind.includes('failed') || kind.includes('rejected') || payload.status === 'failed' || payload.admission_action === 'deny' || payload.action === 'refuse') return 'failures';
-      if (kind.startsWith('directive_') || payload.directive_kind || payload.directive_id) return 'directives';
-      if (kind.includes('authority') || payload.site_authority_decision || payload.authority_ref) return 'authority';
-      if (kind.includes('tool') || payload.tool_name || payload.capability_ref || payload.effect_scope) return 'tools';
-      if (kind.startsWith('provider_') || kind.startsWith('turn_') || payload.provider || payload.provider_adapter_kind) return 'provider';
-      if (kind.includes('input') || kind === 'carrier_command_executed' || kind === 'carrier_session_started') return 'input';
-      return 'other';
+      return classifyCloudflareEvidenceCommandState(event, { parsed_task_id: tryParseTaskId(event.payload?.result_summary) }).lane;
     }
     function renderEvidenceLanes() {
       const counts = new Map(evidenceLaneDefinitions().map((lane) => [lane.key, 0]));
@@ -5014,47 +5057,26 @@ export function renderCloudflareCarrierConsole() {
       );
     }
     function evidenceTargetContext(event = {}) {
-      const payload = event.payload || {};
-      const siteAuthority = payload.site_authority_decision || {};
-      const taskId = payload.task_id || payload.task?.task_id || tryParseTaskId(payload.result_summary) || null;
-      const targetType = taskId ? 'task'
-        : payload.directive_id ? 'attention'
-        : siteAuthority.action || payload.authority_ref ? 'authority'
-        : payload.tool_name || payload.capability_ref ? 'tool_effect'
-        : event.carrier_session_id ? 'session'
-        : 'evidence';
-      const targetRef = taskId
-        || payload.directive_id
-        || siteAuthority.mutation_class
-        || payload.tool_name
-        || event.carrier_session_id
-        || event.event_kind
-        || 'none';
-      return { targetType, targetRef };
+      const command = classifyCloudflareEvidenceCommandState(event, { parsed_task_id: tryParseTaskId(event.payload?.result_summary) });
+      return { targetType: command.target_type, targetRef: command.target_ref };
     }
     function tryParseTaskId(value) {
       if (!value || typeof value !== 'string') return null;
       try { return JSON.parse(value).task?.task_id || null; } catch { return null; }
     }
     function evidenceNextAction(event = {}) {
-      const lane = classifyEvidenceLane(event);
-      const payload = event.payload || {};
-      if (lane === 'failures') return 'inspect_failure_and_retry_or_escalate';
-      if (lane === 'authority') return 'inspect_authority_locus';
-      if (lane === 'tools') return payload.status === 'failed' ? 'inspect_tool_failure' : 'inspect_tool_effect';
-      if (lane === 'directives') return 'resolve_or_acknowledge_directive';
-      if (lane === 'provider') return 'inspect_provider_turn';
-      if (lane === 'input') return 'trace_input_lifecycle';
-      return 'inspect_evidence_payload';
+      return classifyCloudflareEvidenceCommandState(event, { parsed_task_id: tryParseTaskId(event.payload?.result_summary) }).next_action;
     }
     function evidenceActionSummaryContext(event = state.evidenceFocus) {
       if (!event) return [];
-      const target = evidenceTargetContext(event);
+      const command = classifyCloudflareEvidenceCommandState(event, { parsed_task_id: tryParseTaskId(event.payload?.result_summary) });
       return [
-        ['Next Action', evidenceNextAction(event)],
-        ['Target Type', target.targetType],
-        ['Target Ref', target.targetRef],
-        ['Lane', classifyEvidenceLane(event)],
+        ['Command State', command.command_state],
+        ['Command Action', command.command_action],
+        ['Next Action', command.next_action],
+        ['Target Type', command.target_type],
+        ['Target Ref', command.target_ref],
+        ['Lane', command.lane],
         ['Session', event.carrier_session_id || el('sessionId').value.trim() || 'none'],
         ['Sequence', event.sequence ?? 'none'],
         ['Kind', event.event_kind || 'unknown'],

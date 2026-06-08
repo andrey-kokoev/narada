@@ -8,6 +8,7 @@ import {
 import worker, {
   authenticateCarrierRequest,
   classifyCloudflareAuthorityCommandState,
+  classifyCloudflareEvidenceCommandState,
   classifyCloudflareOperationCommandState,
   classifyCloudflareSessionCommandState,
   classifyCloudflareTaskCommandState,
@@ -136,6 +137,42 @@ test('cloudflare task command state classifies lifecycle and evidence readiness'
   ];
   for (const [input, expected] of cases) {
     assert.deepEqual(classifyCloudflareTaskCommandState(input), expected);
+  }
+});
+
+test('cloudflare evidence command state classifies lane, target, and next action', () => {
+  const cases = [
+    [
+      { event_kind: 'tool_result_received', carrier_session_id: 'carrier_session_1', payload: { status: 'failed', tool_name: 'cloudflare_carrier_task_update' } },
+      { lane: 'failures', target_type: 'tool_effect', target_ref: 'cloudflare_carrier_task_update', command_state: 'failure_requires_review', command_action: 'inspect_failure_and_retry_or_escalate', next_action: 'inspect_failure_and_retry_or_escalate' },
+    ],
+    [
+      { event_kind: 'tool_result_received', payload: { status: 'ok', result_summary: '{"task":{"task_id":"cloudflare-task-7"}}' } },
+      { parsed_task_id: 'cloudflare-task-7' },
+      { lane: 'tools', target_type: 'task', target_ref: 'cloudflare-task-7', command_state: 'tool_effect_review', command_action: 'inspect_tool_effect', next_action: 'inspect_tool_effect' },
+    ],
+    [
+      { event_kind: 'site_authority_decision_recorded', payload: { site_authority_decision: { action: 'refuse', mutation_class: 'site_membership_update' } } },
+      { lane: 'authority', target_type: 'authority', target_ref: 'site_membership_update', command_state: 'authority_locus_review', command_action: 'inspect_authority_locus', next_action: 'inspect_authority_locus' },
+    ],
+    [
+      { event_kind: 'directive_emitted', payload: { directive_id: 'directive_1' } },
+      { lane: 'directives', target_type: 'attention', target_ref: 'directive_1', command_state: 'directive_requires_resolution', command_action: 'resolve_or_acknowledge_directive', next_action: 'resolve_or_acknowledge_directive' },
+    ],
+    [
+      { event_kind: 'provider_request_recorded', payload: { provider: 'cloudflare-workers-ai' } },
+      { lane: 'provider', target_type: 'evidence', target_ref: 'provider_request_recorded', command_state: 'provider_turn_review', command_action: 'inspect_provider_turn', next_action: 'inspect_provider_turn' },
+    ],
+    [
+      { event_kind: 'input_admitted_to_turn', carrier_session_id: 'carrier_session_1', payload: {} },
+      { lane: 'input', target_type: 'session', target_ref: 'carrier_session_1', command_state: 'input_lifecycle_trace', command_action: 'trace_input_lifecycle', next_action: 'trace_input_lifecycle' },
+    ],
+  ];
+  for (const entry of cases) {
+    const [event, optionsOrExpected, maybeExpected] = entry;
+    const options = maybeExpected ? optionsOrExpected : {};
+    const expected = maybeExpected || optionsOrExpected;
+    assert.deepEqual(classifyCloudflareEvidenceCommandState(event, options), expected);
   }
 });
 
@@ -973,8 +1010,11 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /evidenceMeaning/);
   assert.match(html, /evidenceActionContext/);
   assert.match(html, /evidenceTargetContext/);
+  assert.match(html, /classifyCloudflareEvidenceCommandState/);
   assert.match(html, /evidenceActionSummaryContext/);
   assert.match(html, /evidenceNextAction/);
+  assert.match(html, /Command State/);
+  assert.match(html, /Command Action/);
   assert.match(html, /tryParseTaskId/);
   assert.match(html, /focusEvidenceLaneForCurrent/);
   assert.match(html, /selectEvidenceSession/);
