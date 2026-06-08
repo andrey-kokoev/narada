@@ -451,6 +451,32 @@ function summarizeCloudflareOperationLifecycleStatus({
   };
 }
 
+function summarizeCloudflareOperationStatusHistory(authorityEvents = [], operation = null) {
+  const operationId = operation?.operation_id ?? null;
+  const transitions = (Array.isArray(authorityEvents) ? authorityEvents : [])
+    .filter((event) => event?.event_kind === 'site_operation_status_updated')
+    .filter((event) => !operationId || event?.evidence?.operation_id === operationId)
+    .map((event) => ({
+      event_id: event.event_id,
+      operation_id: event.evidence?.operation_id ?? operationId,
+      from_status: event.evidence?.previous_status ?? null,
+      to_status: event.evidence?.status ?? null,
+      principal_id: event.principal_id ?? null,
+      actor_role: event.evidence?.actor_role ?? null,
+      reason: event.reason ?? null,
+      recorded_at: event.recorded_at ?? null,
+    }))
+    .sort((left, right) => String(left.recorded_at || '').localeCompare(String(right.recorded_at || '')));
+  return {
+    schema: 'narada.cloudflare_operation_status_history.v1',
+    operation_id: operationId,
+    current_status: operation?.status ?? null,
+    transition_count: transitions.length,
+    latest_transition: transitions.at(-1) ?? null,
+    transitions,
+  };
+}
+
 function summarizeCloudflareCarrierEvidenceReadStatus({ sessions = [], carrierEvidence = [] } = {}) {
   const sessionList = Array.isArray(sessions) ? sessions : [];
   const evidenceGroups = Array.isArray(carrierEvidence) ? carrierEvidence : [];
@@ -1062,6 +1088,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const siteAuthority = cloudflareSiteAuthorityReadModel(env, siteId);
     const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
     const siteContinuityStatus = summarizeCloudflareSiteContinuityStatus(siteId, continuityPackets, siteContinuity);
+    const operationStatusHistory = summarizeCloudflareOperationStatusHistory(response.authority_events, operation);
     const operationLifecycleStatus = summarizeCloudflareOperationLifecycleStatus({
       operation,
       sessions,
@@ -1092,6 +1119,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         site_authority: siteAuthority,
         site_continuity: siteContinuity,
         site_continuity_status: siteContinuityStatus,
+        operation_status_history: operationStatusHistory,
         operation_lifecycle_status: operationLifecycleStatus,
         operation_product_surface: {
           schema: 'narada.cloudflare_operation_product_surface.v1',
@@ -1103,6 +1131,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           carrier_evidence_read_status: carrierEvidenceReadStatus,
           continuity_packet_count: continuityPackets.length,
           continuity_status: siteContinuityStatus,
+          status_history: operationStatusHistory,
           lifecycle_status: operationLifecycleStatus,
           webhook_delay_shadow_observation_count: webhookDelayShadowObservations.length,
           webhook_delay_observation_primary_read_count: webhookDelayObservationPrimaryReads.length,
@@ -5083,6 +5112,7 @@ export function renderCloudflareCarrierConsole() {
     function productScopeContext(product = state.operationProduct || {}) {
       const surface = product.operation_product_surface || {};
       const evidenceStatus = evidenceReplayStatus(product) || {};
+      const statusHistory = operationStatusHistory(product);
       const scope = state.productScope || 'none';
       const followUp = scope === 'operation'
         ? 'read_site_scope_for_membership_and_operations'
@@ -5100,6 +5130,8 @@ export function renderCloudflareCarrierConsole() {
         ['Evidence Replay State', evidenceStatus.state || 'unknown'],
         ['Evidence Replay Source', evidenceReplaySources(product)],
         ['Evidence Replay Sessions', evidenceReplaySessionSummary(evidenceStatus)],
+        ['Status Transitions', operationStatusTransitionSummary(statusHistory)],
+        ['Latest Status Transition', operationLatestStatusTransitionLabel(statusHistory)],
         ['Follow Up', followUp],
       ];
     }
@@ -5601,6 +5633,7 @@ export function renderCloudflareCarrierConsole() {
     function operationFlightDeckContext(product = {}) {
       const surface = product.operation_product_surface || {};
       const evidenceStatus = evidenceReplayStatus(product) || {};
+      const statusHistory = operationStatusHistory(product);
       const activeSession = el('sessionId').value.trim();
       const openAttention = state.attentionItems.filter((item) => item.status !== 'resolved');
       const unresolvedAuthority = (product.site_authority?.decisions || []).filter((decision) => decision.action !== 'admit');
@@ -5626,6 +5659,8 @@ export function renderCloudflareCarrierConsole() {
         ['Evidence Replay State', evidenceStatus.state || 'unknown'],
         ['Evidence Replay Source', evidenceReplaySources(product)],
         ['Evidence Replay Sessions', evidenceReplaySessionSummary(evidenceStatus)],
+        ['Status Transitions', operationStatusTransitionSummary(statusHistory)],
+        ['Latest Status Transition', operationLatestStatusTransitionLabel(statusHistory)],
         ['Authority Posture', unresolvedAuthority.length === 0 ? 'no unresolved decisions' : String(unresolvedAuthority.length) + ' unresolved'],
         ['Next Action', nextAction],
       ];
@@ -6638,11 +6673,14 @@ export function renderCloudflareCarrierConsole() {
       }));
     }
     function operationFocusContext(operation = {}) {
+      const statusHistory = operationStatusHistory();
       return [
         ['Operation', operation.operation_id || el('operationId').value.trim() || 'none'],
         ['Display Name', operation.display_name || 'none'],
         ['Kind', operation.operation_kind || 'unknown'],
         ['Status', operation.status || 'unknown'],
+        ['Status Transitions', operationStatusTransitionSummary(statusHistory)],
+        ['Latest Status Transition', operationLatestStatusTransitionLabel(statusHistory)],
         ['Site', operation.site_id || el('siteId').value.trim() || 'none'],
         ['Created', operation.created_at || 'none'],
         ['Updated', operation.updated_at || 'none'],
@@ -8426,6 +8464,24 @@ export function renderCloudflareCarrierConsole() {
         'readable=' + (status.readable_session_count ?? 0),
         'missing=' + (status.missing_session_count ?? 0),
         'failed=' + (status.failed_session_count ?? 0),
+      ].join(' / ');
+    }
+    function operationStatusHistory(product = state.operationProduct || {}) {
+      return product.operation_product_surface?.status_history
+        || product.operation_status_history
+        || null;
+    }
+    function operationStatusTransitionSummary(history = operationStatusHistory()) {
+      if (!history) return 'unknown';
+      return String(history.transition_count ?? (history.transitions || []).length ?? 0) + ' transitions';
+    }
+    function operationLatestStatusTransitionLabel(history = operationStatusHistory()) {
+      const transition = history?.latest_transition || (history?.transitions || []).at(-1) || null;
+      if (!transition) return 'none';
+      return [
+        (transition.from_status || 'unknown') + ' -> ' + (transition.to_status || 'unknown'),
+        transition.principal_id || 'unknown-principal',
+        transition.recorded_at || 'unknown-time',
       ].join(' / ');
     }
     function renderEvidenceReplayMetric(product = state.operationProduct || {}) {

@@ -1088,6 +1088,12 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /operationLifecyclePause/);
   assert.match(html, /operationLifecycleResume/);
   assert.match(html, /operationLifecycleArchive/);
+  assert.match(html, /operation_status_history/);
+  assert.match(html, /operationStatusHistory/);
+  assert.match(html, /operationStatusTransitionSummary/);
+  assert.match(html, /operationLatestStatusTransitionLabel/);
+  assert.match(html, /Status Transitions/);
+  assert.match(html, /Latest Status Transition/);
   assert.match(html, /provider_events/);
   assert.match(html, /session_next_action/);
   assert.match(html, /Authority Posture/);
@@ -2928,6 +2934,12 @@ test('worker operation.create read and list route through site registry authorit
   const pausedReadBody = await pausedRead.json();
   assert.equal(pausedReadBody.operation.status, 'inactive');
   assert.equal(pausedReadBody.operation_lifecycle_status.phase, 'inactive');
+  assert.equal(pausedReadBody.operation_status_history.schema, 'narada.cloudflare_operation_status_history.v1');
+  assert.equal(pausedReadBody.operation_status_history.current_status, 'inactive');
+  assert.equal(pausedReadBody.operation_status_history.transition_count, 1);
+  assert.equal(pausedReadBody.operation_status_history.latest_transition.from_status, 'active');
+  assert.equal(pausedReadBody.operation_status_history.latest_transition.to_status, 'inactive');
+  assert.equal(pausedReadBody.operation_product_surface.status_history.transition_count, 1);
   assert.equal(pausedReadBody.authority_events.some((event) => event.event_kind === 'site_operation_status_updated'), true);
 
   const resumed = await worker.fetch(jsonRequest({
@@ -2939,6 +2951,19 @@ test('worker operation.create read and list route through site registry authorit
   const resumedBody = await resumed.json();
   assert.equal(resumedBody.previous_status, 'inactive');
   assert.equal(resumedBody.operation.status, 'active');
+
+  const resumedRead = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_operation_status_resume_read',
+    params: { site_id: 'site_fixture', operation_id: 'operation_control' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(resumedRead.status, 200);
+  const resumedReadBody = await resumedRead.json();
+  assert.equal(resumedReadBody.operation_status_history.current_status, 'active');
+  assert.equal(resumedReadBody.operation_status_history.transition_count, 2);
+  assert.deepEqual(resumedReadBody.operation_status_history.transitions.map((transition) => transition.to_status), ['inactive', 'active']);
+  assert.equal(resumedReadBody.operation_status_history.latest_transition.from_status, 'inactive');
+  assert.equal(resumedReadBody.operation_status_history.latest_transition.to_status, 'active');
 
   const listed = await worker.fetch(jsonRequest({
     operation: 'operation.list',
