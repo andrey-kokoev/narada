@@ -713,6 +713,14 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /operation_narada_cloudflare_control/);
   assert.match(html, /Optional when signed in/);
   assert.match(html, /Use Session/);
+  assert.match(html, /Focus Task Evidence/);
+  assert.match(html, /Mark Open/);
+  assert.match(html, /Mark Done/);
+  assert.match(html, /taskEvidencePredicate/);
+  assert.match(html, /selectedTaskFromWorkbench/);
+  assert.match(html, /selectTask/);
+  assert.match(html, /updateFocusedTask/);
+  assert.match(html, /\.task\.selected/);
   assert.match(html, /Provider/);
   assert.match(html, /Effects/);
   assert.match(html, /Operation Surface/);

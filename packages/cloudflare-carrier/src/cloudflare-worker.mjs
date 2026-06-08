@@ -1709,7 +1709,8 @@ export function renderCloudflareCarrierConsole() {
     .task-panel { margin-top: 16px; border-top: 1px solid #d7d7ce; padding-top: 14px; }
     .task-panel h2 { margin: 0 0 10px; font-size: 15px; letter-spacing: 0; }
     .tasks { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
-    .task { border: 1px solid #d9dcd3; border-radius: 6px; padding: 9px; background: #fff; }
+    .task { border: 1px solid #d9dcd3; border-radius: 6px; padding: 9px; background: #fff; cursor: pointer; }
+    .task.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
     .task strong { display: block; font-size: 13px; color: #1f4e48; overflow-wrap: anywhere; }
     .task span { display: block; margin-top: 4px; font-size: 12px; color: #686d75; overflow-wrap: anywhere; }
     .product-panel { margin-top: 16px; border-top: 1px solid #d7d7ce; padding-top: 14px; }
@@ -1838,7 +1839,12 @@ export function renderCloudflareCarrierConsole() {
         <label>Task ID<input id="updateTaskId" placeholder="cloudflare-task-1"></label>
         <label>Status<input id="updateTaskStatus" value="done"></label>
         <label>Note<input id="updateTaskNote" placeholder="Update note"></label>
-        <div class="actions"><button id="updateTask" class="secondary">Update Task</button></div>
+        <div class="actions">
+          <button id="focusTaskEvidence" class="secondary">Focus Task Evidence</button>
+          <button id="markTaskOpen" class="secondary">Mark Open</button>
+          <button id="markTaskDone" class="secondary">Mark Done</button>
+          <button id="updateTask" class="secondary">Update Task</button>
+        </div>
         <div id="tasks" class="tasks"><div class="empty">No tasks loaded.</div></div>
       </div>
       <div id="error" class="error" role="status"></div>
@@ -2196,28 +2202,57 @@ export function renderCloudflareCarrierConsole() {
     function renderTasks(tasks = []) {
       el('taskCount').textContent = String(tasks.length);
       if (tasks.length === 0) {
+        state.taskFocus = null;
         el('tasks').innerHTML = '<div class="empty">No tasks yet.</div>';
+        updateControlRoom();
         return;
       }
+      if (state.taskFocus) state.taskFocus = tasks.find((task) => task.task_id === state.taskFocus.task_id) || state.taskFocus;
       el('tasks').replaceChildren(...tasks.map((task) => {
         const node = document.createElement('article');
-        node.className = 'task';
+        node.className = 'task' + (state.taskFocus?.task_id === task.task_id ? ' selected' : '');
         const title = document.createElement('strong');
         title.textContent = task.task_id + ' ' + task.title;
         const meta = document.createElement('span');
         meta.textContent = [task.status, task.carrier_session_id, task.note].filter(Boolean).join(' | ');
-        node.addEventListener('click', () => {
-          state.taskFocus = task;
-          el('updateTaskId').value = task.task_id;
-          el('updateTaskStatus').value = task.status || 'done';
-          el('updateTaskNote').value = task.note || '';
-          focusEvidenceFor((event) => event.event_kind === 'tool_result_received' && String(event.payload?.result_summary || '').includes(task.task_id));
-          if (task.carrier_session_id) setCurrentSession(task.carrier_session_id);
-          updateControlRoom();
-        });
+        node.addEventListener('click', () => selectTask(task));
         node.append(title, meta);
         return node;
       }));
+      updateControlRoom();
+    }
+    function taskEvidencePredicate(task) {
+      return (event) => {
+        const payloadText = JSON.stringify(event.payload || {});
+        return payloadText.includes(task.task_id) || (task.task_number != null && payloadText.includes('"task_number":' + task.task_number));
+      };
+    }
+    function selectedTaskFromWorkbench() {
+      const taskId = el('updateTaskId').value.trim() || state.taskFocus?.task_id || '';
+      if (!taskId) return null;
+      if (state.taskFocus?.task_id === taskId) return state.taskFocus;
+      return (state.operationProduct?.tasks || []).find((task) => task.task_id === taskId) || { task_id: taskId };
+    }
+    function selectTask(task) {
+      if (!task?.task_id) return;
+      state.taskFocus = task;
+      el('updateTaskId').value = task.task_id;
+      el('updateTaskStatus').value = task.status || 'done';
+      el('updateTaskNote').value = task.note || '';
+      if (task.carrier_session_id) setCurrentSession(task.carrier_session_id);
+      focusEvidenceFor(taskEvidencePredicate(task));
+      renderTasks(state.operationProduct?.tasks || []);
+      updateControlRoom();
+    }
+    async function updateFocusedTask(status, note = null) {
+      const taskId = selectedTaskFromWorkbench()?.task_id || '';
+      if (!taskId) return;
+      const body = await api.updateTask(taskId, status, note ?? el('updateTaskNote').value.trim());
+      appendEvents(body.events || []);
+      await refreshStatus();
+      await refreshOperation();
+      const task = (state.operationProduct?.tasks || []).find((entry) => entry.task_id === taskId);
+      if (task) selectTask(task);
     }
     function listItem(label, value) {
       const li = document.createElement('li');
@@ -2600,15 +2635,13 @@ export function renderCloudflareCarrierConsole() {
     }));
     el('read').addEventListener('click', () => run(async () => { const body = await api.readEvents(); appendEvents(body.events || []); await refreshStatus(); }));
     el('createTask').addEventListener('click', () => run(async () => { const title = el('taskTitle').value.trim(); if (!title) return; const body = await api.command('/task', ['create', ...title.split(/\\s+/)]); appendEvents(body.events || []); el('taskTitle').value = ''; await refreshStatus(); await refreshOperation(); }));
+    el('focusTaskEvidence').addEventListener('click', () => run(async () => { const task = selectedTaskFromWorkbench(); if (task) focusEvidenceFor(taskEvidencePredicate(task)); }));
+    el('markTaskOpen').addEventListener('click', () => run(async () => { await updateFocusedTask('open', el('updateTaskNote').value.trim() || 'operator_marked_open'); }));
+    el('markTaskDone').addEventListener('click', () => run(async () => { await updateFocusedTask('done', el('updateTaskNote').value.trim() || 'operator_marked_done'); }));
     el('updateTask').addEventListener('click', () => run(async () => {
-      const taskId = el('updateTaskId').value.trim();
       const status = el('updateTaskStatus').value.trim();
-      const note = el('updateTaskNote').value.trim();
-      if (!taskId || !status) return;
-      const body = await api.command('/task', ['update', taskId, status, ...note.split(/\\s+/).filter(Boolean)]);
-      appendEvents(body.events || []);
-      await refreshStatus();
-      await refreshOperation();
+      if (!status) return;
+      await updateFocusedTask(status);
     }));
     el('send').addEventListener('click', () => run(async () => { const content = el('input').value.trim(); if (!content) return; const body = await api.deliver(content); appendEvents(body.events || []); el('input').value = ''; await refreshStatus(); await refreshOperation(); }));
     loadWorkbenchState();
