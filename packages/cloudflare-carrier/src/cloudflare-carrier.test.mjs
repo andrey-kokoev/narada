@@ -735,6 +735,13 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(body.authority_events.some((event) => event.event_kind === 'carrier_site_binding_admitted'), true);
   assert.equal(body.carrier_evidence[0].carrier_session_id, 'carrier_session_cloudflare_fixture');
   assert.equal(body.carrier_evidence[0].events.some((event) => event.event_kind === 'carrier_session_started'), true);
+  assert.equal(body.carrier_evidence_read_status.schema, 'narada.cloudflare_carrier_evidence_read_status.v1');
+  assert.equal(body.carrier_evidence_read_status.state, 'loaded');
+  assert.equal(body.carrier_evidence_read_status.session_count, 1);
+  assert.equal(body.carrier_evidence_read_status.readable_session_count, 1);
+  assert.equal(body.carrier_evidence_read_status.failed_session_count, 0);
+  assert.equal(body.carrier_evidence_read_status.missing_session_count, 0);
+  assert.equal(body.carrier_evidence_read_status.event_count, body.carrier_evidence[0].events.length);
   assert.equal(body.reader_principal.email, 'admin@system');
   assert.equal(body.site_authority.map.schema, 'narada.site_authority_map.v1');
   assert.equal(body.site_authority.map.site_id, 'site_fixture');
@@ -790,6 +797,7 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(body.site_product_status.active_membership_count, 1);
   assert.equal(body.site_product_status.session_count, 1);
   assert.equal(body.site_product_status.open_task_count, 1);
+  assert.equal(body.site_product_status.carrier_evidence_read_status.state, 'loaded');
   assert.equal(body.site_product_status.continuity_state, 'no_packet_observed');
   assert.equal(body.site_product_status.next_action, 'continuity_packet');
 
@@ -840,9 +848,74 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.deepEqual(readAfterPacketPutBody.site_product_status.missing, []);
   assert.deepEqual(readAfterPacketPutBody.site_product_status.attention, ['open_tasks']);
   assert.equal(readAfterPacketPutBody.site_product_status.health, 'attention');
+  assert.equal(readAfterPacketPutBody.site_product_status.carrier_evidence_read_status.state, 'loaded');
   assert.equal(readAfterPacketPutBody.site_product_status.continuity_state, 'packet_observed');
   assert.equal(readAfterPacketPutBody.site_product_status.continuity_packet_count, 1);
   assert.equal(readAfterPacketPutBody.site_product_status.next_action, 'open_tasks');
+});
+
+test('worker site.read surfaces degraded carrier evidence replay when session events are unavailable', async () => {
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{
+      site_id: 'site_fixture',
+      site_ref: 'site://fixture',
+      display_name: 'Fixture Site',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+      created_by_principal_id: 'admin',
+    }],
+    memberships: [{
+      site_id: 'site_fixture',
+      principal_id: 'admin',
+      role: 'owner',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+    operations: [{
+      operation_id: 'operation_site_read',
+      site_id: 'site_fixture',
+      display_name: 'Site Read Operation',
+      operation_kind: 'control',
+      status: 'active',
+      created_by_principal_id: 'admin',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+    carrierSessions: [{
+      carrier_session_id: 'carrier_session_missing_events',
+      site_id: 'site_fixture',
+      operation_id: 'operation_site_read',
+      agent_id: 'narada.fixture.agent',
+      bound_by_principal_id: 'admin',
+      binding_status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+  });
+  const env = authEnv(null, { CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+
+  const read = await worker.fetch(jsonRequest({
+    operation: 'site.read',
+    request_id: 'request_site_read_degraded_carrier_evidence',
+    params: { site_id: 'site_fixture', carrier_event_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(read.status, 200);
+  const body = await read.json();
+  assert.deepEqual(body.carrier_evidence, []);
+  assert.equal(body.carrier_evidence_read_status.schema, 'narada.cloudflare_carrier_evidence_read_status.v1');
+  assert.equal(body.carrier_evidence_read_status.state, 'degraded');
+  assert.equal(body.carrier_evidence_read_status.session_count, 1);
+  assert.equal(body.carrier_evidence_read_status.attempted_session_count, 0);
+  assert.equal(body.carrier_evidence_read_status.readable_session_count, 0);
+  assert.equal(body.carrier_evidence_read_status.failed_session_count, 0);
+  assert.equal(body.carrier_evidence_read_status.missing_session_count, 1);
+  assert.deepEqual(body.carrier_evidence_read_status.missing_session_ids, ['carrier_session_missing_events']);
+  assert.equal(body.site_product_status.carrier_evidence_read_status.state, 'degraded');
+  assert.deepEqual(body.site_product_status.missing, ['carrier_evidence', 'continuity_packet']);
+  assert.deepEqual(body.site_product_status.attention, ['carrier_evidence_read_degraded']);
+  assert.equal(body.site_product_status.next_action, 'carrier_evidence');
 });
 
 test('worker serves minimal authenticated web console shell', async () => {

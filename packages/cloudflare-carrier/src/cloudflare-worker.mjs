@@ -396,6 +396,7 @@ function summarizeCloudflareOperationLifecycleStatus({
   sessions = [],
   tasks = [],
   carrierEvidence = [],
+  carrierEvidenceReadStatus = null,
   continuityStatus = null,
   residentLoopShadowRuns = [],
   residentDispatchDecisions = [],
@@ -417,6 +418,7 @@ function summarizeCloudflareOperationLifecycleStatus({
   if (evidenceEventCount === 0) missing.push('carrier_evidence');
   if (continuityState !== 'packet_observed') missing.push('continuity_packet');
   const attention = [];
+  if (carrierEvidenceReadStatus?.state === 'degraded') attention.push('carrier_evidence_read_degraded');
   if (openTaskCount > 0) attention.push('open_tasks');
   if (directiveRecordCount > directiveDeliveryCount) attention.push('undelivered_directives');
   const phase = operation?.status === 'active'
@@ -442,7 +444,37 @@ function summarizeCloudflareOperationLifecycleStatus({
     resident_dispatch_decision_count: residentDispatchCount,
     directive_record_count: directiveRecordCount,
     directive_delivery_count: directiveDeliveryCount,
+    carrier_evidence_read_status: carrierEvidenceReadStatus,
     next_action: missing[0] ?? attention[0] ?? 'monitor_operation',
+  };
+}
+
+function summarizeCloudflareCarrierEvidenceReadStatus({ sessions = [], carrierEvidence = [] } = {}) {
+  const sessionList = Array.isArray(sessions) ? sessions : [];
+  const evidenceGroups = Array.isArray(carrierEvidence) ? carrierEvidence : [];
+  const sessionIds = sessionList.map((session) => session.carrier_session_id).filter(Boolean);
+  const evidenceBySession = new Map(evidenceGroups.map((entry) => [entry?.carrier_session_id, entry]).filter(([id]) => Boolean(id)));
+  const missingSessionIds = sessionIds.filter((sessionId) => !evidenceBySession.has(sessionId));
+  const failed = evidenceGroups.filter((entry) => entry?.ok !== true);
+  const readable = evidenceGroups.filter((entry) => entry?.ok === true);
+  const eventCount = evidenceGroups.reduce((count, group) => count + (Array.isArray(group?.events) ? group.events.length : 0), 0);
+  const state = sessionIds.length === 0
+    ? 'no_sessions'
+    : (failed.length > 0 || missingSessionIds.length > 0 ? 'degraded' : 'loaded');
+  return {
+    schema: 'narada.cloudflare_carrier_evidence_read_status.v1',
+    state,
+    session_count: sessionIds.length,
+    attempted_session_count: evidenceGroups.length,
+    readable_session_count: readable.length,
+    failed_session_count: failed.length,
+    missing_session_count: missingSessionIds.length,
+    event_count: eventCount,
+    missing_session_ids: missingSessionIds,
+    failures: failed.map((entry) => ({
+      carrier_session_id: entry.carrier_session_id ?? null,
+      error: entry.error ?? 'carrier_evidence_read_failed',
+    })),
   };
 }
 
@@ -454,6 +486,7 @@ function summarizeCloudflareSiteProductStatus({
   sessions = [],
   tasks = [],
   carrierEvidence = [],
+  carrierEvidenceReadStatus = null,
   continuityStatus = null,
 } = {}) {
   const operationList = Array.isArray(operations) ? operations : [];
@@ -474,6 +507,7 @@ function summarizeCloudflareSiteProductStatus({
   if (evidenceEventCount === 0) missing.push('carrier_evidence');
   if (continuityState !== 'packet_observed') missing.push('continuity_packet');
   const attention = [];
+  if (carrierEvidenceReadStatus?.state === 'degraded') attention.push('carrier_evidence_read_degraded');
   if (openTaskCount > 0) attention.push('open_tasks');
   const health = missing.length === 0 && attention.length === 0
     ? 'ready'
@@ -494,6 +528,7 @@ function summarizeCloudflareSiteProductStatus({
     open_task_count: openTaskCount,
     carrier_evidence_group_count: evidenceGroups.length,
     carrier_evidence_event_count: evidenceEventCount,
+    carrier_evidence_read_status: carrierEvidenceReadStatus,
     authority_event_count: authorityEventList.length,
     continuity_state: continuityState,
     continuity_packet_count: continuityStatus?.packet_count ?? 0,
@@ -1020,6 +1055,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const residentLoopShadowRuns = await listCloudflareResidentLoopShadowRuns(env, siteId, params.resident_loop_shadow_limit ?? params.limit);
     const residentDispatchDecisions = await listCloudflareResidentDispatchDecisions(env, siteId, params.resident_dispatch_limit ?? params.limit);
     const carrierEvidence = await readCarrierEvidenceForSiteSessions(env, sessions, principal, params);
+    const carrierEvidenceReadStatus = summarizeCloudflareCarrierEvidenceReadStatus({ sessions, carrierEvidence });
     const siteAuthority = cloudflareSiteAuthorityReadModel(env, siteId);
     const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
     const siteContinuityStatus = summarizeCloudflareSiteContinuityStatus(siteId, continuityPackets, siteContinuity);
@@ -1028,6 +1064,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       sessions,
       tasks,
       carrierEvidence,
+      carrierEvidenceReadStatus,
       continuityStatus: siteContinuityStatus,
       residentLoopShadowRuns,
       residentDispatchDecisions,
@@ -1048,6 +1085,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         resident_loop_shadow_runs: residentLoopShadowRuns,
         resident_dispatch_decisions: residentDispatchDecisions,
         carrier_evidence: carrierEvidence,
+        carrier_evidence_read_status: carrierEvidenceReadStatus,
         site_authority: siteAuthority,
         site_continuity: siteContinuity,
         site_continuity_status: siteContinuityStatus,
@@ -1059,6 +1097,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           session_count: sessions.length,
           task_count: tasks.length,
           carrier_evidence_count: carrierEvidence.length,
+          carrier_evidence_read_status: carrierEvidenceReadStatus,
           continuity_packet_count: continuityPackets.length,
           continuity_status: siteContinuityStatus,
           lifecycle_status: operationLifecycleStatus,
@@ -1104,6 +1143,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
   const residentLoopShadowRuns = await listCloudflareResidentLoopShadowRuns(env, siteId, params.resident_loop_shadow_limit ?? params.limit);
   const residentDispatchDecisions = await listCloudflareResidentDispatchDecisions(env, siteId, params.resident_dispatch_limit ?? params.limit);
   const carrierEvidence = await readCarrierEvidenceForSiteSessions(env, response.sessions ?? [], principal, params);
+  const carrierEvidenceReadStatus = summarizeCloudflareCarrierEvidenceReadStatus({ sessions: response.sessions ?? [], carrierEvidence });
   const siteAuthority = cloudflareSiteAuthorityReadModel(env, siteId);
   const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
   const siteContinuityStatus = summarizeCloudflareSiteContinuityStatus(siteId, continuityPackets, siteContinuity);
@@ -1115,6 +1155,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     sessions: response.sessions,
     tasks,
     carrierEvidence,
+    carrierEvidenceReadStatus,
     continuityStatus: siteContinuityStatus,
   });
   return {
@@ -1128,6 +1169,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     resident_loop_shadow_runs: residentLoopShadowRuns,
     resident_dispatch_decisions: residentDispatchDecisions,
     carrier_evidence: carrierEvidence,
+    carrier_evidence_read_status: carrierEvidenceReadStatus,
     site_authority: siteAuthority,
     site_continuity: siteContinuity,
     site_continuity_status: siteContinuityStatus,
