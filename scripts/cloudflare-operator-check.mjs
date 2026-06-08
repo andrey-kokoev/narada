@@ -49,6 +49,12 @@ assert.equal(consoleCheck.http_status, 200);
 assert.match(consoleCheck.body, /Narada Cloudflare Carrier/);
 assert.match(consoleCheck.body, /naradaCloudflareCarrierClient/);
 assert.match(consoleCheck.body, /auth\/microsoft\/login|Microsoft/i);
+assert.match(consoleCheck.body, /Operation Surface/);
+assert.match(consoleCheck.body, /Operation ID/);
+assert.match(consoleCheck.body, /operation\.read/);
+assert.match(consoleCheck.body, /operation_product_surface/);
+assert.match(consoleCheck.body, /Continuity Packets/);
+assert.match(consoleCheck.body, /Authority Decisions/);
 
 const smoke = await runJsonCommand('live-carrier-smoke', [
   'node',

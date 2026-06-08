@@ -1677,14 +1677,15 @@ export function renderCloudflareCarrierConsole() {
 <body>
   <header>
     <h1>Narada Cloudflare Carrier</h1>
-    <p>Authenticated operator console for Worker-hosted sessions, inputs, events, and carrier evidence.</p>
+    <p>Authenticated operator console for Worker-hosted Operations, sessions, tasks, evidence, and authority decisions.</p>
   </header>
   <main>
     <aside>
       <label>Bearer token<input id="token" type="password" autocomplete="current-password" placeholder="Cloudflare carrier token"></label>
       <label>Session ID<input id="sessionId" value="narada-cloudflare-console"></label>
       <label>Agent ID<input id="agentId" value="narada.cloudflare.agent"></label>
-      <label>Site ID<input id="siteId" value="cloudflare-console"></label>
+      <label>Site ID<input id="siteId" value="site_narada_cloudflare"></label>
+      <label>Operation ID<input id="operationId" value="operation_narada_cloudflare_control"></label>
       <div class="actions">
         <button id="signInMicrosoft" class="secondary">Sign in with Microsoft</button>
         <button id="start">Start / Resume</button>
@@ -1692,9 +1693,13 @@ export function renderCloudflareCarrierConsole() {
       </div>
       <div class="status">
         <div class="metric"><b>Site</b><span id="siteStatus">unknown</span></div>
+        <div class="metric"><b>Operation</b><span id="operationStatus">unknown</span></div>
         <div class="metric"><b>Role</b><span id="membershipRole">unknown</span></div>
         <div class="metric"><b>Sessions</b><span id="sessionCount">0</span></div>
+        <div class="metric"><b>Tasks</b><span id="taskCount">0</span></div>
+        <div class="metric"><b>Evidence</b><span id="evidenceCount">0</span></div>
         <div class="metric"><b>Authority</b><span id="authorityCount">0</span></div>
+        <div class="metric"><b>Continuity</b><span id="continuityCount">0</span></div>
         <div class="metric"><b>Provider</b><span id="provider">unknown</span></div>
         <div class="metric"><b>Effects</b><span id="effects">unknown</span></div>
         <div class="metric"><b>Events</b><span id="eventCount">0</span></div>
@@ -1703,6 +1708,10 @@ export function renderCloudflareCarrierConsole() {
       <div class="product-panel">
         <h2>Last Authority</h2>
         <div id="lastAuthority" class="task"><strong>No authority action loaded.</strong><span>Read Site or Put Membership to inspect evidence.</span></div>
+      </div>
+      <div class="product-panel">
+        <h2>Operation Surface</h2>
+        <div class="actions"><button id="readOperation" class="secondary">Read Operation</button></div>
       </div>
       <div class="product-panel">
         <h2>Site Product</h2>
@@ -1728,11 +1737,14 @@ export function renderCloudflareCarrierConsole() {
         <button id="read" class="secondary">Read Events</button>
       </div>
       <div id="productOverview" class="overview">
+        <div class="overview-block"><h3>Operation</h3><ul><li class="empty">No operation loaded.</li></ul></div>
         <div class="overview-block"><h3>Site</h3><ul><li class="empty">No site loaded.</li></ul></div>
         <div class="overview-block"><h3>Memberships</h3><ul><li class="empty">No memberships loaded.</li></ul></div>
         <div class="overview-block"><h3>Sessions</h3><ul><li class="empty">No sessions loaded.</li></ul></div>
+        <div class="overview-block"><h3>Tasks</h3><ul><li class="empty">No tasks loaded.</li></ul></div>
         <div class="overview-block"><h3>Authority Events</h3><ul><li class="empty">No authority events loaded.</li></ul></div>
         <div class="overview-block"><h3>Authority Routing</h3><ul><li class="empty">No authority routing loaded.</li></ul></div>
+        <div class="overview-block"><h3>Continuity Packets</h3><ul><li class="empty">No continuity packets loaded.</li></ul></div>
         <div class="overview-block"><h3>Carrier Evidence</h3><ul><li class="empty">No carrier evidence loaded.</li></ul></div>
       </div>
       <div id="events" class="events"><div class="empty">Start or resume a session to read carrier events.</div></div>
@@ -1767,16 +1779,26 @@ export function renderCloudflareCarrierConsole() {
       },
       start() {
         const carrierSessionId = el('sessionId').value.trim();
+        const operationId = el('operationId').value.trim();
         return this.request('session.start', {
           carrier_session_id: carrierSessionId,
           agent_id: el('agentId').value.trim(),
           site_id: el('siteId').value.trim(),
+          operation_id: operationId || null,
           site_root: 'cloudflare://' + el('siteId').value.trim(),
           site_ref: 'site://' + el('siteId').value.trim(),
         }, { request_id: 'console_start_' + carrierSessionId });
       },
       status() { return this.request('session.status'); },
       readSite() { return this.request('site.read', { site_id: el('siteId').value.trim(), carrier_event_limit: 20, session_limit: 10 }); },
+      readOperation() {
+        return this.request('operation.read', {
+          site_id: el('siteId').value.trim(),
+          operation_id: el('operationId').value.trim(),
+          carrier_event_limit: 20,
+          session_limit: 10,
+        });
+      },
       putMembership(memberPrincipalId, role) {
         return this.request('site.membership.put', {
           site_id: el('siteId').value.trim(),
@@ -1805,6 +1827,7 @@ export function renderCloudflareCarrierConsole() {
       renderEvents();
     }
     function renderTasks(tasks = []) {
+      el('taskCount').textContent = String(tasks.length);
       if (tasks.length === 0) {
         el('tasks').innerHTML = '<div class="empty">No tasks yet.</div>';
         return;
@@ -1815,7 +1838,7 @@ export function renderCloudflareCarrierConsole() {
         const title = document.createElement('strong');
         title.textContent = task.task_id + ' ' + task.title;
         const meta = document.createElement('span');
-        meta.textContent = task.status + (task.note ? ' - ' + task.note : '');
+        meta.textContent = [task.status, task.carrier_session_id, task.note].filter(Boolean).join(' | ');
         node.append(title, meta);
         return node;
       }));
@@ -1890,9 +1913,13 @@ export function renderCloudflareCarrierConsole() {
     }
     function renderSiteProduct(product) {
       el('siteStatus').textContent = product.site?.status || 'unknown';
+      el('operationStatus').textContent = 'site scope';
       el('membershipRole').textContent = product.membership?.role || 'none';
       el('sessionCount').textContent = String((product.sessions || []).length);
+      el('taskCount').textContent = String((product.tasks || []).length);
+      el('evidenceCount').textContent = String((product.carrier_evidence || []).length);
       el('authorityCount').textContent = String((product.authority_events || []).length);
+      el('continuityCount').textContent = String((product.site_continuity_packets || []).length);
       renderTasks(product.tasks || []);
       const siteItems = [
         listItem('site_id', product.site?.site_id),
@@ -1904,6 +1931,7 @@ export function renderCloudflareCarrierConsole() {
       const authorityItems = (product.authority_events || []).map((event) => listItem(event.event_kind, authoritySummary(event)));
       const authorityRoutingItems = (product.site_authority?.decisions || []).map((decision) => listItem(decision.mutation_class, authorityRouteSummary(decision)));
       const continuityItems = (product.site_continuity?.decisions || []).map((decision) => listItem(decision.exchange_class, continuitySummary(decision)));
+      const continuityPacketItems = (product.site_continuity_packets || []).map((packet) => listItem(packet.packet_id, packet.admission_action || packet.imported_at));
       const evidenceItems = (product.carrier_evidence || []).map((entry) => {
         const kinds = (entry.events || []).slice(0, 5).map((event) => event.event_kind).join(', ');
         return listItem(entry.carrier_session_id, kinds || entry.error || 'no events');
@@ -1912,9 +1940,58 @@ export function renderCloudflareCarrierConsole() {
         renderListBlock('Site', siteItems),
         renderListBlock('Memberships', membershipItems),
         renderListBlock('Sessions', sessionItems),
+        renderListBlock('Tasks', (product.tasks || []).map((task) => listItem(task.task_id, [task.status, task.carrier_session_id].filter(Boolean).join(' | ')))),
         renderListBlock('Authority Events', authorityItems),
         renderListBlock('Authority Routing', authorityRoutingItems),
         renderListBlock('Site Continuity', continuityItems),
+        renderListBlock('Continuity Packets', continuityPacketItems),
+        renderListBlock('Carrier Evidence', evidenceItems),
+      );
+      renderLastAuthority((product.authority_events || [])[0]);
+    }
+    function renderOperationProduct(product) {
+      const surface = product.operation_product_surface || {};
+      el('siteStatus').textContent = product.operation?.site_id || product.site?.status || 'unknown';
+      el('operationStatus').textContent = product.operation?.status || 'unknown';
+      el('membershipRole').textContent = product.membership?.role || 'none';
+      el('sessionCount').textContent = String(surface.session_count ?? (product.sessions || []).length);
+      el('taskCount').textContent = String(surface.task_count ?? (product.tasks || []).length);
+      el('evidenceCount').textContent = String(surface.carrier_evidence_count ?? (product.carrier_evidence || []).length);
+      el('authorityCount').textContent = String((product.authority_events || []).length + (product.site_authority?.decisions || []).length);
+      el('continuityCount').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length);
+      renderTasks(product.tasks || []);
+      const operationItems = [
+        listItem('operation_id', product.operation?.operation_id),
+        listItem('display_name', product.operation?.display_name),
+        listItem('kind', product.operation?.operation_kind),
+        listItem('status', product.operation?.status),
+      ];
+      const surfaceItems = [
+        listItem('schema', surface.schema),
+        listItem('sessions', surface.session_count),
+        listItem('tasks', surface.task_count),
+        listItem('evidence', surface.carrier_evidence_count),
+        listItem('continuity_packets', surface.continuity_packet_count),
+      ];
+      const sessionItems = (product.sessions || []).map((session) => listItem(session.carrier_session_id, session.binding_status || session.agent_id));
+      const taskItems = (product.tasks || []).map((task) => listItem(task.task_id, [task.status, task.carrier_session_id].filter(Boolean).join(' | ')));
+      const authorityDecisionItems = (product.site_authority?.decisions || []).map((decision) => listItem(decision.mutation_class, authorityRouteSummary(decision)));
+      const authorityEventItems = (product.authority_events || []).map((event) => listItem(event.event_kind, authoritySummary(event)));
+      const continuityDecisionItems = (product.site_continuity?.decisions || []).map((decision) => listItem(decision.exchange_class, continuitySummary(decision)));
+      const continuityPacketItems = (product.site_continuity_packets || []).map((packet) => listItem(packet.packet_id, packet.admission_action || packet.imported_at));
+      const evidenceItems = (product.carrier_evidence || []).map((entry) => {
+        const kinds = (entry.events || []).slice(0, 5).map((event) => event.event_kind).join(', ');
+        return listItem(entry.carrier_session_id, kinds || entry.error || 'no events');
+      });
+      el('productOverview').replaceChildren(
+        renderListBlock('Operation', operationItems),
+        renderListBlock('Product Surface', surfaceItems),
+        renderListBlock('Sessions', sessionItems),
+        renderListBlock('Tasks', taskItems),
+        renderListBlock('Authority Decisions', authorityDecisionItems),
+        renderListBlock('Authority Events', authorityEventItems),
+        renderListBlock('Continuity Decisions', continuityDecisionItems),
+        renderListBlock('Continuity Packets', continuityPacketItems),
         renderListBlock('Carrier Evidence', evidenceItems),
       );
       renderLastAuthority((product.authority_events || [])[0]);
@@ -1974,6 +2051,7 @@ export function renderCloudflareCarrierConsole() {
     el('signInMicrosoft').addEventListener('click', () => { window.location.href = '/auth/microsoft/login'; });
     el('start').addEventListener('click', () => run(async () => { const body = await api.start(); appendEvents([body.event].filter(Boolean)); await refreshStatus(); }));
     el('refresh').addEventListener('click', () => run(refreshStatus));
+    el('readOperation').addEventListener('click', () => run(async () => { const body = await api.readOperation(); renderOperationProduct(body); appendEvents((body.carrier_evidence || []).flatMap((entry) => entry.events || [])); }));
     el('readSite').addEventListener('click', () => run(async () => { const body = await api.readSite(); renderSiteProduct(body); appendEvents((body.carrier_evidence || []).flatMap((entry) => entry.events || [])); }));
     el('putMembership').addEventListener('click', () => run(async () => {
       const principalId = el('memberPrincipalId').value.trim();
