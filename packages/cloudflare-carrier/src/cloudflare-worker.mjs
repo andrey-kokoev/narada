@@ -1701,14 +1701,15 @@ export function renderCloudflareCarrierConsole() {
     .control-room-item b { display: block; font-size: 11px; color: #686d75; }
     .control-room-item span { display: block; margin-top: 4px; font-size: 12px; color: #1e2024; overflow-wrap: anywhere; }
     .attention-items { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-    .attention-item, .authority-decision, .operation-item, .session-item { border: 1px solid #d9dcd3; border-radius: 6px; padding: 9px; background: #fff; cursor: pointer; }
-    .attention-item strong, .authority-decision strong, .operation-item strong, .session-item strong { display: block; font-size: 13px; color: #1f4e48; overflow-wrap: anywhere; }
-    .attention-item span, .authority-decision span, .operation-item span, .session-item span { display: block; margin-top: 4px; font-size: 12px; color: #686d75; overflow-wrap: anywhere; }
+    .attention-item, .authority-decision, .operation-item, .session-item, .membership-item { border: 1px solid #d9dcd3; border-radius: 6px; padding: 9px; background: #fff; cursor: pointer; }
+    .attention-item strong, .authority-decision strong, .operation-item strong, .session-item strong, .membership-item strong { display: block; font-size: 13px; color: #1f4e48; overflow-wrap: anywhere; }
+    .attention-item span, .authority-decision span, .operation-item span, .session-item span, .membership-item span { display: block; margin-top: 4px; font-size: 12px; color: #686d75; overflow-wrap: anywhere; }
     .authority-decision.refuse strong { color: #9b3b22; }
     .authority-decision.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
     .operation-item.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
     .session-item.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
     .attention-item.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
+    .membership-item.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
     .task-panel { margin-top: 16px; border-top: 1px solid #d7d7ce; padding-top: 14px; }
     .task-panel h2 { margin: 0 0 10px; font-size: 15px; letter-spacing: 0; }
     .tasks { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
@@ -1851,6 +1852,10 @@ export function renderCloudflareCarrierConsole() {
         <label>Principal ID<input id="memberPrincipalId" placeholder="microsoft:tenant:object-id"></label>
         <label>Role<input id="memberRole" value="viewer"></label>
         <div class="actions"><button id="putMembership" class="secondary">Put Membership</button></div>
+        <h3>Membership Navigator</h3>
+        <div id="membershipNavigator" class="attention-items"><div class="empty">No memberships loaded.</div></div>
+        <h3>Membership Focus Detail</h3>
+        <div id="membershipFocusDetail" class="evidence-summary"><div class="empty">No membership selected.</div></div>
       </div>
       <div class="task-panel">
         <h2>Task State</h2>
@@ -1901,7 +1906,7 @@ export function renderCloudflareCarrierConsole() {
   </main>
   <script type="module">
     const WORKBENCH_STORAGE_KEY = 'narada.cloudflare.operationWorkbench.v1';
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, operations: [], consoleSequence: 0, operatorPrincipal: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, authorityFocus: null, operationFocus: null, sessionFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, operations: [], consoleSequence: 0, operatorPrincipal: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -2359,6 +2364,61 @@ export function renderCloudflareCarrierConsole() {
       }
       el('sessionFocusDetail').replaceChildren(...sessionFocusContext(session).map(([label, value]) => evidenceField(label, value)));
     }
+    function membershipKey(membership = {}) {
+      return membership.principal_id || membership.email || membership.member_principal_id || '';
+    }
+    function selectMembership(membership) {
+      if (!membership) return;
+      state.membershipFocus = membership;
+      if (membership.principal_id) el('memberPrincipalId').value = membership.principal_id;
+      if (membership.role) el('memberRole').value = membership.role;
+      renderMembershipNavigator(currentMemberships(state.operationProduct || {}));
+      updateControlRoom();
+    }
+    function currentMemberships(product = {}) {
+      const memberships = product.memberships || [];
+      if (memberships.length > 0) return memberships;
+      return [product.membership].filter(Boolean);
+    }
+    function renderMembershipNavigator(memberships = []) {
+      if (memberships.length === 0) {
+        state.membershipFocus = null;
+        el('membershipNavigator').innerHTML = '<div class="empty">No memberships loaded.</div>';
+        renderMembershipFocusDetail();
+        return;
+      }
+      if (state.membershipFocus) state.membershipFocus = memberships.find((membership) => membershipKey(membership) === membershipKey(state.membershipFocus)) || state.membershipFocus;
+      if (!state.membershipFocus) state.membershipFocus = memberships[0];
+      el('membershipNavigator').replaceChildren(...memberships.map((membership) => {
+        const node = document.createElement('article');
+        node.className = 'membership-item' + (membershipKey(membership) === membershipKey(state.membershipFocus) ? ' selected' : '');
+        const title = document.createElement('strong');
+        title.textContent = membership.principal_id || membership.email || 'unknown principal';
+        const meta = document.createElement('span');
+        meta.textContent = [membership.role || 'unknown', membership.status || 'unknown'].join(' | ');
+        node.addEventListener('click', () => selectMembership(membership));
+        node.append(title, meta);
+        return node;
+      }));
+      renderMembershipFocusDetail();
+    }
+    function membershipFocusContext(membership = {}) {
+      return [
+        ['Principal', membership.principal_id || membership.email || 'none'],
+        ['Role', membership.role || 'unknown'],
+        ['Status', membership.status || 'unknown'],
+        ['Site', membership.site_id || el('siteId').value.trim() || 'none'],
+        ['Created', membership.created_at || 'none'],
+        ['Updated', membership.updated_at || 'none'],
+      ];
+    }
+    function renderMembershipFocusDetail(membership = state.membershipFocus) {
+      if (!membership) {
+        el('membershipFocusDetail').innerHTML = '<div class="empty">No membership selected.</div>';
+        return;
+      }
+      el('membershipFocusDetail').replaceChildren(...membershipFocusContext(membership).map(([label, value]) => evidenceField(label, value)));
+    }
     function renderTasks(tasks = []) {
       el('taskCount').textContent = String(tasks.length);
       if (tasks.length === 0) {
@@ -2519,6 +2579,7 @@ export function renderCloudflareCarrierConsole() {
       el('authorityCount').textContent = String((product.authority_events || []).length);
       el('continuityCount').textContent = String((product.site_continuity_packets || []).length);
       renderTasks(product.tasks || []);
+      renderMembershipNavigator(currentMemberships(product));
       renderAttentionQueue(extractOperationAttention(product));
       renderAuthorityState(product);
       updateControlRoom();
@@ -2581,6 +2642,7 @@ export function renderCloudflareCarrierConsole() {
       el('authorityCount').textContent = String((product.authority_events || []).length + (product.site_authority?.decisions || []).length);
       el('continuityCount').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length);
       renderTasks(product.tasks || []);
+      renderMembershipNavigator(currentMemberships(product));
       renderOperationNavigator(state.operations || []);
       renderOperationSessions(product.sessions || []);
       renderAttentionQueue(extractOperationAttention(product));
