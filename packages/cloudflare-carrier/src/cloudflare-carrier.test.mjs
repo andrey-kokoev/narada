@@ -1117,6 +1117,9 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Operator Route/);
   assert.match(html, /operatorRoute/);
   assert.match(html, /operatorRouteStages/);
+  assert.match(html, /operationPostureRouteStage/);
+  assert.match(html, /operation_posture/);
+  assert.match(html, /focus_next_operation/);
   assert.match(html, /renderOperatorRoute/);
   assert.match(html, /applyOperatorRouteNextAction/);
   assert.match(html, /operatorRouteNextAction/);
@@ -1130,6 +1133,8 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /operationControlTargetReadinessAction/);
   assert.match(html, /operationControlBoardContext/);
   assert.match(html, /renderOperationControlBoard/);
+  assert.match(html, /next_operation_action/);
+  assert.match(html, /next_operation_reason/);
   assert.match(html, /Control Command/);
   assert.match(html, /Focused Control Target/);
   assert.match(html, /Apply Target Action/);

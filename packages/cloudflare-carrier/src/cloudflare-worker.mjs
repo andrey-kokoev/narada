@@ -5846,6 +5846,7 @@ export function renderCloudflareCarrierConsole() {
       const readinessItems = workbenchReadinessGateItems(product);
       const readinessGaps = readinessItems.filter((item) => item.status !== 'ready');
       const operationQueue = operationWorkQueueItems(state.operations || [], product);
+      const operationPosture = operationPostureOverview(state.operations || [], product);
       const sessionQueue = sessionWorkQueueItems(product.sessions || [], product);
       const authorityQueue = authorityDecisionQueueItems(product.site_authority?.decisions || [], product);
       const evidenceQueue = evidenceReviewQueueItems();
@@ -5886,6 +5887,9 @@ export function renderCloudflareCarrierConsole() {
           listItem('scope', productScopeSummary(product)),
           listItem('operator', operatorPrincipalLabel(state.operatorPrincipal || product.reader_principal)),
           listItem('authority_locus', (product.site_authority?.decisions || [])[0]?.authority_locus || 'unknown'),
+          listItem('next_operation', operationPosture.next_operation_id || 'none'),
+          listItem('next_operation_action', operationPosture.next_action || 'monitor_operations'),
+          listItem('next_operation_reason', operationPosture.next_reason || 'all_operations_monitoring'),
         ],
         queues: [
           listItem('operations_needing_action', operationQueue.filter((item) => item.status !== 'ready').length + ' / ' + operationQueue.length),
@@ -6136,6 +6140,21 @@ export function renderCloudflareCarrierConsole() {
         action: () => { if (selected) selectTask(selected); else applyFlightDeckNextAction(); },
       };
     }
+    function operationPostureRouteStage(product = state.operationProduct || {}) {
+      const overview = operationPostureOverview(state.operations || [], product);
+      const activeOperationId = el('operationId').value.trim();
+      const changesFocus = overview.next_operation_id && overview.next_operation_id !== activeOperationId;
+      const status = overview.operation_count > 0 && overview.next_status !== 'ready' && changesFocus ? 'needs_attention' : 'ready';
+      return {
+        domain: 'operation_posture',
+        command_state: status === 'ready' ? 'operation_posture_ready' : 'operation_posture_attention',
+        command_action: status === 'ready' ? 'monitor_operations' : 'focus_next_operation',
+        next_action: status === 'ready' ? 'monitor_operations' : 'focus_next_operation',
+        target: overview.next_operation_id || 'none',
+        status,
+        action: () => run(focusNextOperationFromPosture),
+      };
+    }
     function operatorRouteStages(product = state.operationProduct || {}) {
       const evidenceContext = evidenceActionSummaryContext(state.evidenceFocus);
       const evidenceStage = evidenceContext.length > 0
@@ -6154,6 +6173,7 @@ export function renderCloudflareCarrierConsole() {
           else if (action === 'put_membership') run(putFocusedMembership);
           else focusMembershipAuthority();
         }),
+        operationPostureRouteStage(product),
         operatorRouteStage('operation', operationActionContext(), ['inspect_operation_evidence', 'evidence_ready'], 'Operation', () => {
           const action = String(contextValue(operationActionContext(), 'Next Action'));
           if (action === 'read_operation_scope' || action === 'read_operation_evidence') run(refreshOperation);
