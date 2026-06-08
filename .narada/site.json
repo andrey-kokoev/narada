@@ -14,7 +14,7 @@
   "sync_posture": "git_private_repo",
   "repository": {
     "remote": "https://github.com/andrey-kokoev/narada",
-    "visibility": "private"
+    "visibility": "public"
   },
   "lineage": {
     "prior_schema": "narada.site.seed.v0",

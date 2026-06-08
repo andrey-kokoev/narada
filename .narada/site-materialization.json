@@ -13,7 +13,7 @@
     "kind": "private_git_workspace_with_contained_governance_root",
     "repository_root": "D:\\code\\narada",
     "repository_remote": "https://github.com/andrey-kokoev/narada",
-    "repository_visibility": "private",
+    "repository_visibility": "public",
     "contained_governance_root": "D:\\code\\narada\\.narada"
   },
   "operation_binding": {
