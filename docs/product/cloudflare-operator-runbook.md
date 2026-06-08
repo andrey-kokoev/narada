@@ -111,6 +111,7 @@ pnpm --filter @narada2/cloudflare-carrier task-lifecycle:changed-file-evidence-s
 pnpm --filter @narada2/cloudflare-carrier task-lifecycle:finish-smoke:live -- --url <worker-url> --token-file <path>
 pnpm --filter @narada2/cloudflare-carrier task-lifecycle:projection-write-smoke:live -- --url <worker-url> --token-file <path>
 pnpm --filter @narada2/cloudflare-carrier task-lifecycle:source-state-write-smoke:live -- --url <worker-url> --token-file <path>
+pnpm --filter @narada2/cloudflare-carrier task-lifecycle:assignment-write-smoke:live -- --url <worker-url> --token-file <path>
 ```
 
 The task-lifecycle shadow smoke records Windows task lifecycle state as Cloudflare read-model evidence only. It must report `mutation_authority = windows_task_lifecycle_sqlite` and `cloudflare_write_admission = not_admitted`.
@@ -128,5 +129,7 @@ The task-lifecycle finish smoke is intentionally mutating. It creates, claims, r
 The task-lifecycle projection-write smoke is intentionally mutating. It creates, claims, reports, records changed-file evidence for, finishes, and then writes one Cloudflare task lifecycle projection record, proves an unevidenced projection write is refused, admits one `task_projection_write` with explicit projection/cutover evidence, keeps SQLite source mutation, filesystem mutation, and repository publication at `not_admitted`, and verifies `operation.read` reports `task_lifecycle_authority_partition = task_create_claim_report_finish_changed_file_evidence_and_projection_write_cloudflare_remaining_windows`.
 
 The task-lifecycle source-state write smoke is intentionally mutating. It creates a finished projected Cloudflare task lifecycle row, proves an unevidenced `task_source_state_write` is refused, admits one source-state write with explicit source-state/cutover evidence, records canonical Cloudflare D1 source-state authority for that Cloudflare row, keeps Windows SQLite source writes, mailbox mutation, filesystem mutation, repository publication, assignment authority, and role resolution at `not_admitted`, and verifies `operation.read` reports `task_lifecycle_authority_partition = task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_cloudflare_remaining_windows_effects`.
+
+The task-lifecycle assignment write smoke is intentionally mutating. It extends the same Cloudflare task lifecycle row to an assignment write, proves an unevidenced `task_assignment_write` is refused, admits one assignment write with explicit assignment/cutover evidence, records canonical Cloudflare D1 assignment authority for that Cloudflare row, keeps roster mutation, role resolution, mailbox mutation, filesystem mutation, and repository publication at `not_admitted`, and verifies `operation.read` reports `task_lifecycle_authority_partition = task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_and_assignment_cloudflare_remaining_windows_effects`.
 
 Use the root operator command when the question is whether the live Cloudflare embodiment is ready for an operator to enter.
