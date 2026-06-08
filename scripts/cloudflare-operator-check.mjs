@@ -1223,6 +1223,29 @@ assert.equal(residentLoopShadow.body.loop_run?.operation_id, operationId);
 assert.equal(residentLoopShadow.body.loop_run?.step_count, 1);
 assert.equal(residentLoopShadow.body.loop_run?.operator_attention_count, 1);
 
+const mailboxStatusShadowSmoke = await runJsonCommand('mailbox:status-shadow-smoke:live', [
+  'node',
+  'packages/cloudflare-carrier/scripts/cloudflare-carrier-mailbox-status-shadow-live-smoke.mjs',
+  '--url',
+  workerUrl,
+  '--token-file',
+  tokenFile,
+  '--site',
+  siteId,
+  '--operation',
+  operationId,
+]);
+assert.equal(mailboxStatusShadowSmoke.status, 'ok');
+assert.equal(mailboxStatusShadowSmoke.worker_url, workerUrl);
+assert.equal(mailboxStatusShadowSmoke.site_id, siteId);
+assert.equal(mailboxStatusShadowSmoke.operation_id, operationId);
+assert.equal(mailboxStatusShadowSmoke.mailbox_status_authority, 'windows_mailbox_status_source');
+assert.equal(mailboxStatusShadowSmoke.mailbox_write_authority, 'windows_mailbox_mcp');
+assert.equal(mailboxStatusShadowSmoke.mailbox_send_admission, 'not_admitted');
+assert.equal(mailboxStatusShadowSmoke.mailbox_mutation_admission, 'not_admitted');
+assert.ok(mailboxStatusShadowSmoke.mailbox_status_shadow_read_count >= 1);
+assert.equal(mailboxStatusShadowSmoke.mailbox_authority_partition, 'mailbox_status_shadow_read_cloudflare_recorded_send_and_mutation_windows_owned');
+
 const webhookDelayDirectiveDeliverySuffix = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
 const webhookDelayDirectiveDelivery = await postCarrier(workerUrl, bearerToken, {
   operation: 'webhook_delay.directive.primary_with_fallback.deliver',
@@ -1308,6 +1331,7 @@ const taskLifecycleShadowReads = operationReadAfterContinuity.body.task_lifecycl
 const taskLifecycleWriteAdmissions = operationReadAfterContinuity.body.task_lifecycle_write_admissions ?? [];
 const taskLifecycleTasks = operationReadAfterContinuity.body.task_lifecycle_tasks ?? [];
 const residentLoopShadowRuns = operationReadAfterContinuity.body.resident_loop_shadow_runs ?? [];
+const mailboxStatusShadowReads = operationReadAfterContinuity.body.mailbox_status_shadow_reads ?? [];
 const residentDispatchDecisions = operationReadAfterContinuity.body.resident_dispatch_decisions ?? [];
 assert.equal(operationSurface?.operation_id, operationId);
 assert.ok(Array.isArray(operationContinuityPackets));
@@ -1480,6 +1504,21 @@ assert.equal(recordedResidentLoopShadow.operator_attention_count, 1);
 assert.equal(recordedResidentLoopShadow.dispatch_authority, 'windows_primary_dispatcher');
 assert.equal(recordedResidentLoopShadow.shadow_mode, 'cloudflare_shadow_read');
 assert.equal(recordedResidentLoopShadow.dispatch_action, 'none');
+assert.ok(Array.isArray(mailboxStatusShadowReads));
+assert.ok(mailboxStatusShadowReads.length >= 1);
+assert.equal(operationSurface?.mailbox_status_shadow_read_count, mailboxStatusShadowReads.length);
+const recordedMailboxStatusShadow = mailboxStatusShadowReads.find((read) => read.read_id === mailboxStatusShadowSmoke.read_id);
+assert.ok(recordedMailboxStatusShadow);
+assert.equal(recordedMailboxStatusShadow.schema, 'narada.sonar.cloudflare_mailbox_status_shadow_read.v1');
+assert.equal(recordedMailboxStatusShadow.mailbox_read_authority, 'windows_mailbox_status_source');
+assert.equal(recordedMailboxStatusShadow.mailbox_write_authority, 'windows_mailbox_mcp');
+assert.equal(recordedMailboxStatusShadow.mailbox_send_admission, 'not_admitted');
+assert.equal(recordedMailboxStatusShadow.mailbox_mutation_admission, 'not_admitted');
+assert.equal(operationSurface?.mailbox_status_authority, 'windows_mailbox_status_source');
+assert.equal(operationSurface?.mailbox_shadow_target_locus, 'cloudflare_carrier_site');
+assert.equal(operationSurface?.mailbox_send_admission, 'not_admitted');
+assert.equal(operationSurface?.mailbox_mutation_admission, 'not_admitted');
+assert.equal(operationSurface?.mailbox_authority_partition, 'mailbox_status_shadow_read_cloudflare_recorded_send_and_mutation_windows_owned');
 assert.ok(Array.isArray(webhookDelayDirectiveDeliveries));
 assert.ok(webhookDelayDirectiveDeliveries.length >= 1);
 assert.equal(operationSurface?.webhook_delay_directive_delivery_count, webhookDelayDirectiveDeliveries.length);
@@ -1553,6 +1592,7 @@ const report = {
     task_lifecycle_projection_write_cutover_surface: 'ok',
     task_lifecycle_role_resolution_write_cutover_surface: 'ok',
     task_lifecycle_roster_mutation_write_cutover_surface: 'ok',
+    mailbox_status_shadow_surface: 'ok',
     resident_loop_shadow_surface: 'ok',
     resident_dispatch_surface: 'ok',
     human_operator_session: humanOperator.status,
@@ -1647,6 +1687,13 @@ const report = {
     task_lifecycle_task_finish_authority: operationSurface.task_lifecycle_task_finish_authority,
     task_lifecycle_changed_file_evidence_authority: operationSurface.task_lifecycle_changed_file_evidence_authority,
     task_lifecycle_projection_write_authority: operationSurface.task_lifecycle_projection_write_authority,
+    mailbox_status_shadow_read_count: operationSurface.mailbox_status_shadow_read_count,
+    mailbox_status_shadow_read_id: mailboxStatusShadowSmoke.read_id,
+    mailbox_status_authority: operationSurface.mailbox_status_authority,
+    mailbox_write_authority: mailboxStatusShadowSmoke.mailbox_write_authority,
+    mailbox_send_admission: operationSurface.mailbox_send_admission,
+    mailbox_mutation_admission: operationSurface.mailbox_mutation_admission,
+    mailbox_authority_partition: operationSurface.mailbox_authority_partition,
     resident_loop_shadow_run_count: operationSurface.resident_loop_shadow_run_count,
     resident_loop_shadow_last_status: recordedResidentLoopShadow.loop_status,
     resident_loop_shadow_dispatch_authority: recordedResidentLoopShadow.dispatch_authority,
