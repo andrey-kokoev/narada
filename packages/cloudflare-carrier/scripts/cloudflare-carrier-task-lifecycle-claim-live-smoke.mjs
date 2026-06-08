@@ -124,9 +124,18 @@ assert.equal(operationRead.body.operation_product_surface.task_lifecycle_default
 assert.equal(operationRead.body.operation_product_surface.task_lifecycle_task_create_authority, 'cloudflare_task_lifecycle_d1');
 assert.equal(operationRead.body.operation_product_surface.task_lifecycle_task_claim_authority, 'cloudflare_task_lifecycle_d1');
 assert.equal(operationRead.body.operation_product_surface.task_lifecycle_task_claim_count >= 1, true);
-assert.equal(operationRead.body.operation_product_surface.task_lifecycle_authority_partition, 'task_create_and_claim_cloudflare_remaining_windows');
-assert.equal(operationRead.body.operation_product_surface.task_lifecycle_write_admission_posture, 'task_create_and_claim_admitted_remaining_writes_not_admitted');
-assert.equal(operationRead.body.operation_product_surface.task_lifecycle_cloudflare_write_admission, 'task_create_and_claim_admitted');
+assert.ok([
+  'task_create_and_claim_cloudflare_remaining_windows',
+  'task_create_claim_and_report_cloudflare_remaining_windows',
+].includes(operationRead.body.operation_product_surface.task_lifecycle_authority_partition));
+assert.ok([
+  'task_create_and_claim_admitted_remaining_writes_not_admitted',
+  'task_create_claim_and_report_admitted_remaining_writes_not_admitted',
+].includes(operationRead.body.operation_product_surface.task_lifecycle_write_admission_posture));
+assert.ok([
+  'task_create_and_claim_admitted',
+  'task_create_claim_and_report_admitted',
+].includes(operationRead.body.operation_product_surface.task_lifecycle_cloudflare_write_admission));
 
 process.stdout.write(`${JSON.stringify({
   schema: 'narada.cloudflare_carrier.task_lifecycle_claim_live_smoke.v1',

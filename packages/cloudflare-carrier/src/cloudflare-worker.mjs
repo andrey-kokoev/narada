@@ -52,6 +52,7 @@ const CLOUDFLARE_TASK_LIFECYCLE_WRITE_ADMISSION_DECISION_SCHEMA = 'narada.sonar.
 const CLOUDFLARE_TASK_LIFECYCLE_TASK_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_task.v1';
 const CLOUDFLARE_TASK_LIFECYCLE_TASK_CREATE_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_task_create.v1';
 const CLOUDFLARE_TASK_LIFECYCLE_TASK_CLAIM_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_task_claim.v1';
+const CLOUDFLARE_TASK_LIFECYCLE_TASK_REPORT_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_task_report.v1';
 const CLOUDFLARE_WEBHOOK_DELAY_SHADOW_MODE = 'cloudflare_shadow_read';
 const CLOUDFLARE_WEBHOOK_DELAY_OBSERVATION_PRIMARY_AUTHORITY = 'cloudflare_primary_observation_read';
 const CLOUDFLARE_WEBHOOK_DELAY_REMOTE_SOURCE_AUTHORITY = 'cloudflare_webhook_delay_remote_source_adapter';
@@ -425,6 +426,183 @@ async function claimCloudflareTaskLifecycleTask(env = {}, siteId, params = {}, p
     admission_record: admission.record,
     task,
   };
+}
+
+async function reportCloudflareTaskLifecycleTask(env = {}, siteId, params = {}, principal = null) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return { ok: false, code: 'missing_site_registry_binding' };
+  if (!siteId || siteId === 'unknown-site') return { ok: false, code: 'missing_site_id' };
+  const taskId = String(params.task_id ?? '').trim();
+  if (!taskId) return { ok: false, code: 'task_lifecycle_report_requires_task_id' };
+  const reporterAgentId = String(params.reporter_agent_id ?? params.agent ?? '').trim();
+  const reporterPrincipalId = String(params.reporter_principal_id ?? principal?.principal_id ?? '').trim();
+  if (!reporterAgentId && !reporterPrincipalId) return { ok: false, code: 'task_lifecycle_report_requires_reporter' };
+  const summary = String(params.summary ?? '').trim();
+  if (!summary) return { ok: false, code: 'task_lifecycle_report_requires_summary' };
+  const verification = parseCloudflareTaskLifecycleVerification(params.verification);
+  if (!verification.ok) return { ok: false, code: verification.code, schema: CLOUDFLARE_TASK_LIFECYCLE_TASK_REPORT_SCHEMA };
+  const changedFiles = parseCloudflareTaskLifecycleStringList(params.changed_files ?? params.changedFiles);
+  if (!changedFiles.ok) return { ok: false, code: changedFiles.code, schema: CLOUDFLARE_TASK_LIFECYCLE_TASK_REPORT_SCHEMA };
+  const requestedStatus = String(params.resulting_status ?? params.new_status ?? '').trim();
+  const reportStatus = String(params.report_status ?? (requestedStatus === 'needs_continuation' ? 'blocked' : 'submitted')).trim();
+  const nextStatus = requestedStatus || (reportStatus === 'blocked' ? 'needs_continuation' : 'closed');
+  if (!['closed', 'needs_continuation'].includes(nextStatus)) {
+    return { ok: false, code: 'task_lifecycle_report_resulting_status_invalid', schema: CLOUDFLARE_TASK_LIFECYCLE_TASK_REPORT_SCHEMA, resulting_status: nextStatus };
+  }
+  if (!['submitted', 'blocked'].includes(reportStatus)) {
+    return { ok: false, code: 'task_lifecycle_report_status_invalid', schema: CLOUDFLARE_TASK_LIFECYCLE_TASK_REPORT_SCHEMA, report_status: reportStatus };
+  }
+  const decision = classifyCloudflareTaskLifecycleWriteAdmission({ ...params, mutation_class: 'task_report', reporter_principal_id: reporterPrincipalId || params.reporter_principal_id, summary }, params.state ?? {});
+  const admission = await recordCloudflareTaskLifecycleWriteAdmission(env, siteId, { ...params, mutation_class: 'task_report', reporter_principal_id: reporterPrincipalId || params.reporter_principal_id, summary }, principal);
+  if (!admission.ok) return admission;
+  if (decision.action !== 'admit') {
+    return {
+      ok: false,
+      schema: CLOUDFLARE_TASK_LIFECYCLE_TASK_REPORT_SCHEMA,
+      code: 'task_lifecycle_report_not_admitted',
+      site_id: siteId,
+      decision,
+      admission_record: admission.record,
+    };
+  }
+  await ensureCloudflareTaskLifecycleTaskSchema(db);
+  const existing = await getCloudflareTaskLifecycleTask(db, siteId, taskId);
+  if (!existing) {
+    return {
+      ok: false,
+      schema: CLOUDFLARE_TASK_LIFECYCLE_TASK_REPORT_SCHEMA,
+      code: 'task_lifecycle_task_not_found',
+      site_id: siteId,
+      task_id: taskId,
+      decision,
+      admission_record: admission.record,
+    };
+  }
+  if (existing.status !== 'claimed') {
+    return {
+      ok: false,
+      schema: CLOUDFLARE_TASK_LIFECYCLE_TASK_REPORT_SCHEMA,
+      code: 'task_lifecycle_report_conflict',
+      site_id: siteId,
+      task_id: taskId,
+      previous_status: existing.status,
+      conflict_policy: 'claimed_only_report_no_overwrite',
+      rollback_posture: decision.rollback_posture,
+      decision,
+      admission_record: admission.record,
+      task: existing,
+    };
+  }
+  if (existing.claimed_by_agent_id && reporterAgentId && existing.claimed_by_agent_id !== reporterAgentId) {
+    return {
+      ok: false,
+      schema: CLOUDFLARE_TASK_LIFECYCLE_TASK_REPORT_SCHEMA,
+      code: 'task_lifecycle_report_reporter_mismatch',
+      site_id: siteId,
+      task_id: taskId,
+      claimed_by_agent_id: existing.claimed_by_agent_id,
+      reporter_agent_id: reporterAgentId,
+      decision,
+      admission_record: admission.record,
+      task: existing,
+    };
+  }
+  const now = new Date().toISOString();
+  const reportId = params.report_id ?? `cloudflare-task-lifecycle-report-${safeIdToken(taskId)}-${safeIdToken(now)}`;
+  const report = {
+    schema: 'narada.sonar.cloudflare_task_lifecycle_report.v1',
+    report_id: reportId,
+    task_id: taskId,
+    task_number: existing.task_number,
+    reporter_agent_id: reporterAgentId || null,
+    reporter_principal_id: reporterPrincipalId || null,
+    report_authority_ref: decision.report_authority_ref,
+    report_schema_ref: decision.report_schema_ref,
+    summary,
+    changed_files: changedFiles.value,
+    changed_file_evidence_boundary_ref: decision.changed_file_evidence_boundary_ref,
+    changed_file_evidence_admission: 'not_admitted',
+    verification: verification.value,
+    report_status: reportStatus,
+    previous_status: existing.status,
+    resulting_status: nextStatus,
+    cutover_point_ref: decision.cutover_point_ref,
+    governed_write_contract_ref: decision.governed_write_contract_ref,
+    confirmation_evidence_ref: decision.confirmation_evidence_ref,
+    rollback_posture: decision.rollback_posture,
+    reported_at: now,
+  };
+  const task = {
+    ...existing,
+    status: nextStatus,
+    report,
+    report_id: reportId,
+    report_status: reportStatus,
+    reported_by_agent_id: reporterAgentId || null,
+    reported_by_principal_id: reporterPrincipalId || null,
+    reported_at: now,
+    report_authority_ref: decision.report_authority_ref,
+    report_schema_ref: decision.report_schema_ref,
+    report_cutover_point_ref: decision.cutover_point_ref,
+    report_governed_write_contract_ref: decision.governed_write_contract_ref,
+    report_confirmation_evidence_ref: decision.confirmation_evidence_ref,
+    changed_file_evidence_boundary_ref: decision.changed_file_evidence_boundary_ref,
+    changed_file_evidence_admission: 'not_admitted',
+    updated_at: now,
+  };
+  await db.prepare(`
+    UPDATE cloudflare_task_lifecycle_tasks
+    SET status = ?, task_json = ?, updated_at = ?
+    WHERE site_id = ? AND task_id = ?
+  `).bind(
+    task.status,
+    JSON.stringify(task),
+    task.updated_at,
+    siteId,
+    taskId,
+  ).run();
+  return {
+    ok: true,
+    schema: CLOUDFLARE_TASK_LIFECYCLE_TASK_REPORT_SCHEMA,
+    status: 'reported',
+    site_id: siteId,
+    mutation_authority: 'cloudflare_task_lifecycle_d1',
+    cloudflare_write_admission: 'admitted',
+    write_effect: 'task_lifecycle_report',
+    previous_status: existing.status,
+    new_status: nextStatus,
+    report,
+    decision,
+    admission_record: admission.record,
+    task,
+  };
+}
+
+function parseCloudflareTaskLifecycleStringList(value) {
+  if (value == null || value === '') return { ok: true, value: [] };
+  if (Array.isArray(value)) {
+    if (!value.every((entry) => typeof entry === 'string')) return { ok: false, code: 'task_lifecycle_report_string_list_invalid' };
+    return { ok: true, value };
+  }
+  const text = String(value).trim();
+  if (!text) return { ok: true, value: [] };
+  if (text.startsWith('[')) {
+    const parsed = parseJsonArray(text);
+    if (!parsed.every((entry) => typeof entry === 'string')) return { ok: false, code: 'task_lifecycle_report_string_list_invalid' };
+    return { ok: true, value: parsed };
+  }
+  return { ok: true, value: text.split(',').map((entry) => entry.trim()).filter(Boolean) };
+}
+
+function parseCloudflareTaskLifecycleVerification(value) {
+  if (value == null || value === '') return { ok: true, value: [] };
+  const parsed = Array.isArray(value) ? value : parseJsonArray(String(value));
+  for (const item of parsed) {
+    if (!item || typeof item !== 'object' || typeof item.command !== 'string' || typeof item.result !== 'string') {
+      return { ok: false, code: 'task_lifecycle_report_verification_invalid' };
+    }
+  }
+  return { ok: true, value: parsed.map((item) => ({ command: String(item.command), result: String(item.result) })) };
 }
 
 function summarizeCloudflareSiteContinuityLoopStatus(siteId, loopReports = []) {
@@ -1479,6 +1657,7 @@ function isSiteProductOperation(operation) {
     'task_lifecycle.write_admission.list',
     'task_lifecycle.task_create.admit',
     'task_lifecycle.task_claim.admit',
+    'task_lifecycle.task_report.admit',
     'task_lifecycle.task.list',
     'resident_dispatch.primary_with_fallback.start',
     'resident_dispatch.primary_with_fallback.list',
@@ -1632,14 +1811,22 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         && decision.admission_action === 'admit'
         && decision.mutation_authority === 'cloudflare_task_lifecycle_d1';
     });
-    const hasCloudflareTaskLifecycleAdmission = hasCloudflareTaskCreateAdmission || hasCloudflareTaskClaimAdmission;
-    const cloudflareWriteAdmission = hasCloudflareTaskClaimAdmission ? 'task_create_and_claim_admitted'
+    const hasCloudflareTaskReportAdmission = decisions.some((decision) => {
+      return decision.mutation_class === 'task_report'
+        && decision.admission_action === 'admit'
+        && decision.mutation_authority === 'cloudflare_task_lifecycle_d1';
+    });
+    const hasCloudflareTaskLifecycleAdmission = hasCloudflareTaskCreateAdmission || hasCloudflareTaskClaimAdmission || hasCloudflareTaskReportAdmission;
+    const cloudflareWriteAdmission = hasCloudflareTaskReportAdmission ? 'task_create_claim_and_report_admitted'
+      : hasCloudflareTaskClaimAdmission ? 'task_create_and_claim_admitted'
       : hasCloudflareTaskCreateAdmission ? 'task_create_admitted'
         : 'not_admitted';
-    const writeEffect = hasCloudflareTaskClaimAdmission ? 'task_lifecycle_create_and_claim'
+    const writeEffect = hasCloudflareTaskReportAdmission ? 'task_lifecycle_create_claim_and_report'
+      : hasCloudflareTaskClaimAdmission ? 'task_lifecycle_create_and_claim'
       : hasCloudflareTaskCreateAdmission ? 'task_lifecycle_create'
         : 'none';
-    const authorityPartition = hasCloudflareTaskClaimAdmission ? 'task_create_and_claim_cloudflare_remaining_windows'
+    const authorityPartition = hasCloudflareTaskReportAdmission ? 'task_create_claim_and_report_cloudflare_remaining_windows'
+      : hasCloudflareTaskClaimAdmission ? 'task_create_and_claim_cloudflare_remaining_windows'
       : hasCloudflareTaskCreateAdmission ? 'task_create_cloudflare_remaining_windows'
         : 'windows_all_observed_mutations';
     return {
@@ -1668,6 +1855,12 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
     const result = await claimCloudflareTaskLifecycleTask(env, requestedSiteId, params, principal);
     return { status: result.ok ? 200 : result.code === 'task_lifecycle_claim_not_admitted' ? 403 : result.code === 'task_lifecycle_claim_conflict' ? 409 : 400, body: result };
+  }
+  if (body.operation === 'task_lifecycle.task_report.admit') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const result = await reportCloudflareTaskLifecycleTask(env, requestedSiteId, params, principal);
+    return { status: result.ok ? 200 : result.code === 'task_lifecycle_report_not_admitted' ? 403 : result.code === 'task_lifecycle_report_conflict' ? 409 : 400, body: result };
   }
   if (body.operation === 'task_lifecycle.task.list') {
     const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
@@ -2087,17 +2280,19 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           resident_loop_shadow_run_count: residentLoopShadowRuns.length,
           task_lifecycle_shadow_read_count: taskLifecycleShadowReads.length,
           task_lifecycle_write_admission_count: taskLifecycleWriteAdmissions.length,
-          task_lifecycle_write_admission_posture: taskLifecycleTasks.some((task) => task.status === 'claimed') ? 'task_create_and_claim_admitted_remaining_writes_not_admitted' : taskLifecycleTasks.length > 0 ? 'task_create_admitted_remaining_writes_not_admitted' : 'writes_not_admitted',
+          task_lifecycle_write_admission_posture: taskLifecycleTasks.some((task) => task.report_id) ? 'task_create_claim_and_report_admitted_remaining_writes_not_admitted' : taskLifecycleTasks.some((task) => task.status === 'claimed') ? 'task_create_and_claim_admitted_remaining_writes_not_admitted' : taskLifecycleTasks.length > 0 ? 'task_create_admitted_remaining_writes_not_admitted' : 'writes_not_admitted',
           task_lifecycle_task_count: taskLifecycleTasks.length,
-          task_lifecycle_task_claim_count: taskLifecycleTasks.filter((task) => task.status === 'claimed').length,
+          task_lifecycle_task_claim_count: taskLifecycleTasks.filter((task) => task.assignment_authority_ref).length,
+          task_lifecycle_task_report_count: taskLifecycleTasks.filter((task) => task.report_id).length,
           task_lifecycle_default_mutation_authority: 'windows_task_lifecycle_sqlite',
           task_lifecycle_default_cloudflare_write_admission: 'not_admitted',
           task_lifecycle_task_create_authority: taskLifecycleTasks.length > 0 ? 'cloudflare_task_lifecycle_d1' : 'not_observed',
-          task_lifecycle_task_claim_authority: taskLifecycleTasks.some((task) => task.status === 'claimed') ? 'cloudflare_task_lifecycle_d1' : 'not_observed',
-          task_lifecycle_authority_partition: taskLifecycleTasks.some((task) => task.status === 'claimed') ? 'task_create_and_claim_cloudflare_remaining_windows' : taskLifecycleTasks.length > 0 ? 'task_create_cloudflare_remaining_windows' : 'windows_all_observed_mutations',
+          task_lifecycle_task_claim_authority: taskLifecycleTasks.some((task) => task.assignment_authority_ref) ? 'cloudflare_task_lifecycle_d1' : 'not_observed',
+          task_lifecycle_task_report_authority: taskLifecycleTasks.some((task) => task.report_id) ? 'cloudflare_task_lifecycle_d1' : 'not_observed',
+          task_lifecycle_authority_partition: taskLifecycleTasks.some((task) => task.report_id) ? 'task_create_claim_and_report_cloudflare_remaining_windows' : taskLifecycleTasks.some((task) => task.status === 'claimed') ? 'task_create_and_claim_cloudflare_remaining_windows' : taskLifecycleTasks.length > 0 ? 'task_create_cloudflare_remaining_windows' : 'windows_all_observed_mutations',
           resident_dispatch_decision_count: residentDispatchDecisions.length,
           task_lifecycle_mutation_authority: taskLifecycleTasks.length > 0 ? 'split_by_mutation_class' : 'windows_task_lifecycle_sqlite',
-          task_lifecycle_cloudflare_write_admission: taskLifecycleTasks.some((task) => task.status === 'claimed') ? 'task_create_and_claim_admitted' : taskLifecycleTasks.length > 0 ? 'task_create_admitted' : 'not_admitted',
+          task_lifecycle_cloudflare_write_admission: taskLifecycleTasks.some((task) => task.report_id) ? 'task_create_claim_and_report_admitted' : taskLifecycleTasks.some((task) => task.status === 'claimed') ? 'task_create_and_claim_admitted' : taskLifecycleTasks.length > 0 ? 'task_create_admitted' : 'not_admitted',
           dispatch_authority: WINDOWS_PRIMARY_DISPATCH_AUTHORITY,
         },
       },
@@ -2800,11 +2995,23 @@ export function classifyCloudflareTaskLifecycleWriteAdmission(request = {}, stat
     && Boolean(request.cutover_point_ref ?? state.cutover_point_ref)
     && Boolean(request.governed_write_contract_ref ?? state.governed_write_contract_ref)
     && Boolean(request.confirmation_evidence_ref ?? state.confirmation_evidence_ref);
-  const cutoverReady = taskCreateCutoverReady || taskClaimCutoverReady;
+  const taskReportCutoverReady = mutationClass === 'task_report'
+    && (request.cloudflare_task_report_cutover === true || state.task_report_cutover_ready === true)
+    && Boolean(request.task_id ?? state.task_id)
+    && Boolean(request.reporter_agent_id ?? request.agent ?? request.reporter_principal_id ?? state.reporter_agent_id ?? state.reporter_principal_id)
+    && Boolean(request.summary ?? state.summary)
+    && Boolean(request.report_authority_ref ?? state.report_authority_ref)
+    && Boolean(request.report_schema_ref ?? state.report_schema_ref)
+    && Boolean(request.changed_file_evidence_boundary_ref ?? state.changed_file_evidence_boundary_ref)
+    && Boolean(request.cutover_point_ref ?? state.cutover_point_ref)
+    && Boolean(request.governed_write_contract_ref ?? state.governed_write_contract_ref)
+    && Boolean(request.confirmation_evidence_ref ?? state.confirmation_evidence_ref);
+  const cutoverReady = taskCreateCutoverReady || taskClaimCutoverReady || taskReportCutoverReady;
   const action = isShadowRead || cutoverReady ? 'admit' : 'refuse';
   const reason = isShadowRead ? 'shadow_read_projection_admitted'
     : taskCreateCutoverReady ? 'cloudflare_task_create_cutover_admitted'
       : taskClaimCutoverReady ? 'cloudflare_task_claim_cutover_admitted'
+      : taskReportCutoverReady ? 'cloudflare_task_report_cutover_admitted'
       : isKnownWrite ? 'windows_task_lifecycle_mutation_authority_retained'
         : 'unknown_task_lifecycle_mutation_class';
   const requiredEvidence = isShadowRead || cutoverReady ? [] : [
@@ -2818,6 +3025,7 @@ export function classifyCloudflareTaskLifecycleWriteAdmission(request = {}, stat
   const cloudflareWriteAdmission = cutoverReady ? 'admitted' : 'not_admitted';
   const writeEffect = taskCreateCutoverReady ? 'task_lifecycle_create'
     : taskClaimCutoverReady ? 'task_lifecycle_claim'
+      : taskReportCutoverReady ? 'task_lifecycle_report'
       : 'none';
   return {
     schema: CLOUDFLARE_TASK_LIFECYCLE_WRITE_ADMISSION_DECISION_SCHEMA,
@@ -2832,18 +3040,23 @@ export function classifyCloudflareTaskLifecycleWriteAdmission(request = {}, stat
     task_id: request.task_id ?? state.task_id ?? null,
     claimant_agent_id: request.claimant_agent_id ?? request.agent ?? state.claimant_agent_id ?? null,
     claimant_principal_id: request.claimant_principal_id ?? state.claimant_principal_id ?? null,
+    reporter_agent_id: request.reporter_agent_id ?? request.agent ?? state.reporter_agent_id ?? null,
+    reporter_principal_id: request.reporter_principal_id ?? state.reporter_principal_id ?? null,
     assignment_authority_ref: request.assignment_authority_ref ?? state.assignment_authority_ref ?? null,
-    conflict_policy: request.conflict_policy ?? state.conflict_policy ?? (taskClaimCutoverReady ? 'opened_only_no_overwrite' : null),
-    rollback_posture: request.rollback_posture ?? state.rollback_posture ?? (taskClaimCutoverReady ? 'claim_update_can_be_released_by_future_unclaim_cutover' : null),
+    report_authority_ref: request.report_authority_ref ?? state.report_authority_ref ?? null,
+    report_schema_ref: request.report_schema_ref ?? state.report_schema_ref ?? null,
+    changed_file_evidence_boundary_ref: request.changed_file_evidence_boundary_ref ?? state.changed_file_evidence_boundary_ref ?? null,
+    conflict_policy: request.conflict_policy ?? state.conflict_policy ?? (taskClaimCutoverReady ? 'opened_only_no_overwrite' : taskReportCutoverReady ? 'claimed_only_report_no_overwrite' : null),
+    rollback_posture: request.rollback_posture ?? state.rollback_posture ?? (taskClaimCutoverReady ? 'claim_update_can_be_released_by_future_unclaim_cutover' : taskReportCutoverReady ? 'report_transition_can_be_reviewed_or_reopened_by_future_cutover' : null),
     cutover_point_ref: request.cutover_point_ref ?? state.cutover_point_ref ?? null,
     governed_write_contract_ref: request.governed_write_contract_ref ?? state.governed_write_contract_ref ?? null,
     confirmation_evidence_ref: request.confirmation_evidence_ref ?? state.confirmation_evidence_ref ?? null,
     required_evidence: requiredEvidence,
     retained_windows_authority: isShadowRead ? [] : [
       'task_lifecycle_sqlite_mutation_store',
-      ...(taskCreateCutoverReady || taskClaimCutoverReady ? [] : ['task_create_transition']),
-      ...(taskClaimCutoverReady ? [] : ['task_claim_assignment_transition']),
-      'task_report_evidence_transition',
+      ...(taskCreateCutoverReady || taskClaimCutoverReady || taskReportCutoverReady ? [] : ['task_create_transition']),
+      ...(taskClaimCutoverReady || taskReportCutoverReady ? [] : ['task_claim_assignment_transition']),
+      ...(taskReportCutoverReady ? [] : ['task_report_evidence_transition']),
       'task_finish_verdict_transition',
       'changed_file_evidence_transition',
     ],
@@ -3157,6 +3370,19 @@ function formatCloudflareTaskLifecycleTask(row) {
     claim_conflict_policy: taskJson.claim_conflict_policy ?? null,
     claim_rollback_posture: taskJson.claim_rollback_posture ?? null,
     claimed_at: taskJson.claimed_at ?? null,
+    report_id: taskJson.report_id ?? null,
+    report_status: taskJson.report_status ?? null,
+    reported_by_agent_id: taskJson.reported_by_agent_id ?? null,
+    reported_by_principal_id: taskJson.reported_by_principal_id ?? null,
+    report_authority_ref: taskJson.report_authority_ref ?? null,
+    report_schema_ref: taskJson.report_schema_ref ?? null,
+    report_cutover_point_ref: taskJson.report_cutover_point_ref ?? null,
+    report_governed_write_contract_ref: taskJson.report_governed_write_contract_ref ?? null,
+    report_confirmation_evidence_ref: taskJson.report_confirmation_evidence_ref ?? null,
+    changed_file_evidence_boundary_ref: taskJson.changed_file_evidence_boundary_ref ?? null,
+    changed_file_evidence_admission: taskJson.changed_file_evidence_admission ?? null,
+    reported_at: taskJson.reported_at ?? null,
+    report: taskJson.report ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };

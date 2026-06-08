@@ -94,15 +94,18 @@ assert.equal(operationRead.body.operation_product_surface.task_lifecycle_task_cr
 assert.ok([
   'task_create_cloudflare_remaining_windows',
   'task_create_and_claim_cloudflare_remaining_windows',
+  'task_create_claim_and_report_cloudflare_remaining_windows',
 ].includes(operationRead.body.operation_product_surface.task_lifecycle_authority_partition));
 assert.ok([
   'task_create_admitted_remaining_writes_not_admitted',
   'task_create_and_claim_admitted_remaining_writes_not_admitted',
+  'task_create_claim_and_report_admitted_remaining_writes_not_admitted',
 ].includes(operationRead.body.operation_product_surface.task_lifecycle_write_admission_posture));
 assert.equal(operationRead.body.operation_product_surface.task_lifecycle_mutation_authority, 'split_by_mutation_class');
 assert.ok([
   'task_create_admitted',
   'task_create_and_claim_admitted',
+  'task_create_claim_and_report_admitted',
 ].includes(operationRead.body.operation_product_surface.task_lifecycle_cloudflare_write_admission));
 
 process.stdout.write(`${JSON.stringify({

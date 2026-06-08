@@ -80,6 +80,7 @@ pnpm cloudflare:operator:check -- --url <worker-url> --token-file <path> --write
 | Task lifecycle write admission surface | `task_lifecycle.write_admission.classify` records a refused Cloudflare task lifecycle write decision, and `operation.read` exposes the decision count/posture without mutating task lifecycle state. |
 | Task lifecycle create cutover surface | The lower-level `task-lifecycle:create-smoke:live` gate proves `task_create` can be admitted on Cloudflare only with explicit cutover evidence while non-migrated task lifecycle mutations retain Windows authority. |
 | Task lifecycle claim cutover surface | The lower-level `task-lifecycle:claim-smoke:live` gate proves `task_claim` can be admitted on Cloudflare only for an existing Cloudflare task row with explicit assignment/cutover evidence and opened-only conflict behavior. |
+| Task lifecycle report cutover surface | The lower-level `task-lifecycle:report-smoke:live` gate proves `task_report` can be admitted on Cloudflare only for a claimed Cloudflare task with explicit report/cutover evidence while changed-file evidence remains outside Cloudflare task lifecycle authority. |
 | Resident loop shadow surface | `resident_loop.shadow_read.record` records a Windows-primary resident loop shadow run as read-model evidence and `operation.read` exposes its count/status/dispatch posture. |
 | Resident dispatch surface | `resident_dispatch.primary_with_fallback.start` starts a Cloudflare primary carrier session, records the dispatch decision, and keeps Windows fallback authority visible in `operation.read`. |
 | Continuity loop | Windows and Cloudflare exchange site-continuity packets through the productized loop. |
@@ -91,7 +92,7 @@ The final JSON report includes `service_principal_ready`, `human_operator_login_
 
 This command does not itself move mutation authority between embodiments. It can prove that the Cloudflare and local Windows embodiments recognize the same `site_id`, exchange read-model/evidence packets, and preserve stable packet ids. Durable mutations still route through the declared authority locus for the mutation class.
 
-The first deliberate task lifecycle authority migration is narrower: `task_create` may be cut over to Cloudflare D1 only when the request carries `cloudflare_task_create_cutover = true`, `cutover_point_ref`, `governed_write_contract_ref`, and `confirmation_evidence_ref`. `task_claim` may then be cut over only for an existing Cloudflare task row and only when the request carries `cloudflare_task_claim_cutover = true`, `task_id`, claimant identity, `assignment_authority_ref`, `cutover_point_ref`, `governed_write_contract_ref`, and `confirmation_evidence_ref`. These cutovers must be reported as an authority partition, not as full task lifecycle ownership. `task_report`, `task_finish`, changed-file evidence, projection writes, and SQLite writes remain Windows-authoritative until separate cutover evidence exists.
+The first deliberate task lifecycle authority migration is narrower: `task_create` may be cut over to Cloudflare D1 only when the request carries `cloudflare_task_create_cutover = true`, `cutover_point_ref`, `governed_write_contract_ref`, and `confirmation_evidence_ref`. `task_claim` may then be cut over only for an existing Cloudflare task row and only when the request carries `cloudflare_task_claim_cutover = true`, `task_id`, claimant identity, `assignment_authority_ref`, `cutover_point_ref`, `governed_write_contract_ref`, and `confirmation_evidence_ref`. `task_report` may then be cut over only for a claimed Cloudflare task row and only when the request carries `cloudflare_task_report_cutover = true`, `task_id`, reporter identity, `summary`, `report_authority_ref`, `report_schema_ref`, `changed_file_evidence_boundary_ref`, `cutover_point_ref`, `governed_write_contract_ref`, and `confirmation_evidence_ref`. These cutovers must be reported as an authority partition, not as full task lifecycle ownership. `task_finish`, changed-file evidence, projection writes, and SQLite writes remain Windows-authoritative until separate cutover evidence exists.
 
 The lower-level commands remain available for narrow checks:
 
@@ -101,6 +102,7 @@ pnpm site:continuity:loop -- sync-cloudflare --site <site_id> --url <worker-url>
 pnpm --filter @narada2/cloudflare-carrier task-lifecycle:shadow-smoke:live -- --url <worker-url> --token-file <path> --payload-file <path-to-windows-shadow-read.json>
 pnpm --filter @narada2/cloudflare-carrier task-lifecycle:create-smoke:live -- --url <worker-url> --token-file <path>
 pnpm --filter @narada2/cloudflare-carrier task-lifecycle:claim-smoke:live -- --url <worker-url> --token-file <path>
+pnpm --filter @narada2/cloudflare-carrier task-lifecycle:report-smoke:live -- --url <worker-url> --token-file <path>
 ```
 
 The task-lifecycle shadow smoke records Windows task lifecycle state as Cloudflare read-model evidence only. It must report `mutation_authority = windows_task_lifecycle_sqlite` and `cloudflare_write_admission = not_admitted`.
@@ -108,5 +110,7 @@ The task-lifecycle shadow smoke records Windows task lifecycle state as Cloudfla
 The task-lifecycle create smoke is intentionally mutating. It first proves an unevidenced create is refused, then admits one Cloudflare `task_create` with explicit cutover evidence, lists the created task, and verifies `operation.read` reports `task_lifecycle_authority_partition = task_create_cloudflare_remaining_windows` with default Windows authority still visible for the remaining task lifecycle mutation classes.
 
 The task-lifecycle claim smoke is also intentionally mutating. It creates one Cloudflare task through the governed create cutover, proves an unevidenced claim is refused, admits one `task_claim` with explicit assignment/cutover evidence, verifies a duplicate claim returns conflict evidence, and verifies `operation.read` reports `task_lifecycle_authority_partition = task_create_and_claim_cloudflare_remaining_windows`.
+
+The task-lifecycle report smoke is intentionally mutating as well. It creates and claims one Cloudflare task, proves an unevidenced report is refused, admits one `task_report` with explicit report/cutover evidence, keeps changed-file evidence at `not_admitted`, and verifies `operation.read` reports `task_lifecycle_authority_partition = task_create_claim_and_report_cloudflare_remaining_windows`.
 
 Use the root operator command when the question is whether the live Cloudflare embodiment is ready for an operator to enter.

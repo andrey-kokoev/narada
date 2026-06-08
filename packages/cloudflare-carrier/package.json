@@ -26,6 +26,7 @@
     "task-lifecycle:shadow-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-shadow-live-smoke.mjs",
     "task-lifecycle:create-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-create-live-smoke.mjs",
     "task-lifecycle:claim-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-claim-live-smoke.mjs",
+    "task-lifecycle:report-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-report-live-smoke.mjs",
     "resident-dispatch:smoke:live": "node scripts/cloudflare-carrier-resident-dispatch-live-smoke.mjs",
     "continuity:cloudflare": "node scripts/cloudflare-site-continuity-sync.mjs",
     "ship": "pnpm test && pnpm deploy:check && pnpm deploy:dry-run"
