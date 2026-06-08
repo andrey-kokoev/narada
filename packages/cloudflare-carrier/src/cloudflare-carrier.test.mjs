@@ -1357,6 +1357,15 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /read_site_scope_for_membership_and_operations/);
   assert.match(html, /read_operation_scope_for_active_operation/);
   assert.match(html, /Site Product/);
+  assert.match(html, /Sites Overview/);
+  assert.match(html, /readSites/);
+  assert.match(html, /sitesOverview/);
+  assert.match(html, /sitesStatusList/);
+  assert.match(html, /sitesOverviewNextAction/);
+  assert.match(html, /renderSitesProduct/);
+  assert.match(html, /refreshSitesProduct/);
+  assert.match(html, /focusNextSiteFromOverview/);
+  assert.match(html, /siteProductStatusSummary/);
   assert.match(html, /Site Action/);
   assert.match(html, /classifyCloudflareSiteCommandState/);
   assert.match(html, /siteActionSummary/);

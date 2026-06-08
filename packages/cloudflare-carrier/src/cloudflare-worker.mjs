@@ -4472,6 +4472,13 @@ export function renderCloudflareCarrierConsole() {
       </div>
       <div class="product-panel">
         <h2>Site Product</h2>
+        <h3>Sites Overview</h3>
+        <div id="sitesOverview" class="evidence-summary"><div class="empty">No sites loaded.</div></div>
+        <div id="sitesStatusList" class="attention-items"><div class="empty">No site statuses loaded.</div></div>
+        <div class="actions">
+          <button id="readSites" class="secondary">Read Sites</button>
+          <button id="sitesOverviewNextAction" class="secondary">Focus Next Site</button>
+        </div>
         <h3>Site Action</h3>
         <div id="siteActionSummary" class="evidence-summary"><div class="empty">No site action loaded.</div></div>
         <div class="actions">
@@ -4650,7 +4657,7 @@ export function renderCloudflareCarrierConsole() {
     const classifyCloudflareEvidenceCommandState = ${classifyCloudflareEvidenceCommandState.toString()};
     const classifyCloudflareSiteCommandState = ${classifyCloudflareSiteCommandState.toString()};
     const classifyCloudflareMembershipCommandState = ${classifyCloudflareMembershipCommandState.toString()};
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, webhookDelayDirectiveFocus: null, webhookDelayDirectiveDeliveryFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], siteList: [], siteProductStatuses: [], siteProductOverview: null, consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, webhookDelayDirectiveFocus: null, webhookDelayDirectiveDeliveryFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -4691,6 +4698,7 @@ export function renderCloudflareCarrierConsole() {
       },
       status() { return this.request('session.status'); },
       readSite() { return this.request('site.read', { site_id: el('siteId').value.trim(), carrier_event_limit: 20, session_limit: 10 }); },
+      readSites() { return this.request('site.list', { limit: 20, site_status_limit: 20 }); },
       readOperation() {
         return this.request('operation.read', {
           site_id: el('siteId').value.trim(),
@@ -7922,6 +7930,62 @@ export function renderCloudflareCarrierConsole() {
       }
       el('residentDispatchFocusDetail').replaceChildren(...residentDispatchFocusContext(item).map(([label, value]) => evidenceField(label, value)));
     }
+    function siteProductStatusSummary(status) {
+      const missing = (status?.missing || []).join(', ') || 'none';
+      const attention = (status?.attention || []).join(', ') || 'none';
+      return [
+        status?.health || 'unknown',
+        'next=' + (status?.next_action || 'none'),
+        'missing=' + missing,
+        'attention=' + attention,
+      ].join(' | ');
+    }
+    function renderSitesProduct(product) {
+      state.siteList = product.sites || [];
+      state.siteProductStatuses = product.site_product_statuses || [];
+      state.siteProductOverview = product.site_product_overview || null;
+      renderOperatorIdentity(product.reader_principal || state.operatorPrincipal);
+      const overview = state.siteProductOverview || {};
+      const health = overview.health_counts || {};
+      el('sitesOverview').replaceChildren(
+        ...[
+          ['Schema', overview.schema || 'none'],
+          ['Sites', overview.site_count ?? state.siteList.length],
+          ['Ready', health.ready ?? 0],
+          ['Attention', health.attention ?? 0],
+          ['Incomplete', health.incomplete ?? 0],
+          ['Next Site', overview.next_site_id || 'none'],
+          ['Next Action', overview.next_action || 'monitor_sites'],
+        ].map(([label, value]) => evidenceField(label, value)),
+      );
+      if (state.siteProductStatuses.length === 0) {
+        el('sitesStatusList').innerHTML = '<div class="empty">No site statuses loaded.</div>';
+      } else {
+        el('sitesStatusList').replaceChildren(...state.siteProductStatuses.map((status) => {
+          const item = document.createElement('button');
+          item.type = 'button';
+          item.className = 'attention-item';
+          item.textContent = (status.site_id || 'unknown-site') + ' / ' + siteProductStatusSummary(status);
+          item.addEventListener('click', () => focusSiteFromStatus(status));
+          return item;
+        }));
+      }
+      updateControlRoom();
+    }
+    function focusSiteFromStatus(status) {
+      const siteId = status?.site_id;
+      if (!siteId) return;
+      const site = state.siteList.find((entry) => entry.site_id === siteId) || { site_id: siteId, status: status.site_status };
+      el('siteId').value = siteId;
+      state.siteFocus = site;
+      renderSiteFocusDetail(site);
+      run(refreshSiteProduct);
+    }
+    function focusNextSiteFromOverview() {
+      const nextSiteId = state.siteProductOverview?.next_site_id || state.siteProductStatuses[0]?.site_id;
+      const status = state.siteProductStatuses.find((entry) => entry.site_id === nextSiteId) || state.siteProductStatuses[0];
+      if (status) focusSiteFromStatus(status);
+    }
     function renderSiteProduct(product) {
       state.operationProduct = product;
       state.productScope = 'site';
@@ -8358,6 +8422,12 @@ export function renderCloudflareCarrierConsole() {
       appendEvents((body.carrier_evidence || []).flatMap((entry) => entry.events || []));
       return body;
     }
+    async function refreshSitesProduct() {
+      saveWorkbenchState();
+      const body = await api.readSites();
+      renderSitesProduct(body);
+      return body;
+    }
     async function createOperationFromWorkbench() {
       const operationId = el('newOperationId').value.trim();
       if (!operationId) throw new Error('Operation ID is required.');
@@ -8494,6 +8564,8 @@ export function renderCloudflareCarrierConsole() {
     el('authorityDecisionRefreshAction').addEventListener('click', refreshAuthorityPath);
     el('createOperation').addEventListener('click', () => run(createOperationFromWorkbench));
     el('autoRefreshOperation').addEventListener('click', () => setAutoRefresh(!state.autoRefreshTimer));
+    el('readSites').addEventListener('click', () => run(refreshSitesProduct));
+    el('sitesOverviewNextAction').addEventListener('click', focusNextSiteFromOverview);
     el('readSite').addEventListener('click', () => run(refreshSiteProduct));
     el('readSiteScope').addEventListener('click', () => run(refreshSiteProduct));
     el('siteActionReadSite').addEventListener('click', () => run(refreshSiteProduct));
