@@ -306,6 +306,8 @@ The carrier may enforce policy and mediate effects, but durable mutation authori
 
 Cloudflare may record a task-lifecycle shadow read from a local Windows Site, but that read is projection evidence only. The record must preserve `mutation_authority = windows_task_lifecycle_sqlite` and `cloudflare_write_admission = not_admitted`; it must not create a Cloudflare task write path or imply task lifecycle authority migration.
 
+Cloudflare may also record task-lifecycle write-admission decisions for proposed mutation classes. That surface classifies `task_create`, `task_claim`, `task_report`, `task_finish`, changed-file evidence, projection writes, and SQLite writes as refused while Windows remains the mutation authority. `shadow_read_record` may be admitted only as a non-mutating projection record with `write_effect = none`. The admission record is evidence about the boundary, not execution of the task lifecycle mutation.
+
 Cloudflare secrets and bindings are host capabilities. They are not carrier permissions by themselves. Any effectful use must cross the appropriate carrier admission boundary and emit evidence.
 
 ## Synchronized Site Embodiments

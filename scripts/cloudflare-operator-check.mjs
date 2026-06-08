@@ -1017,6 +1017,25 @@ const continuitySecond = await runJsonCommand('site-continuity-loop:idempotent',
 assert.equal(continuitySecond.status, 'ok');
 assert.equal(continuitySecond.windows_packet_count, 1);
 
+const taskLifecycleWriteAdmission = await postCarrier(workerUrl, bearerToken, {
+  operation: 'task_lifecycle.write_admission.classify',
+  request_id: `operator_check_task_lifecycle_write_admission_${Date.now()}`,
+  params: {
+    site_id: siteId,
+    admission_id: `operator_check_task_lifecycle_write_admission_${operationId}`,
+    mutation_class: 'task_finish',
+  },
+});
+assert.equal(taskLifecycleWriteAdmission.http_status, 200);
+assert.equal(taskLifecycleWriteAdmission.body.ok, true);
+assert.equal(taskLifecycleWriteAdmission.body.schema, 'narada.sonar.cloudflare_task_lifecycle_write_admission.v1');
+assert.equal(taskLifecycleWriteAdmission.body.decision?.schema, 'narada.sonar.cloudflare_task_lifecycle_write_admission_decision.v1');
+assert.equal(taskLifecycleWriteAdmission.body.decision?.action, 'refuse');
+assert.equal(taskLifecycleWriteAdmission.body.decision?.reason, 'windows_task_lifecycle_mutation_authority_retained');
+assert.equal(taskLifecycleWriteAdmission.body.mutation_authority, 'windows_task_lifecycle_sqlite');
+assert.equal(taskLifecycleWriteAdmission.body.cloudflare_write_admission, 'not_admitted');
+assert.equal(taskLifecycleWriteAdmission.body.write_effect, 'none');
+
 const operationReadAfterContinuity = await postCarrier(workerUrl, bearerToken, {
   operation: 'operation.read',
   request_id: `operator_check_operation_continuity_read_${Date.now()}`,
@@ -1025,6 +1044,7 @@ const operationReadAfterContinuity = await postCarrier(workerUrl, bearerToken, {
     operation_id: operationId,
     carrier_event_limit: 20,
     session_limit: 10,
+    task_lifecycle_write_admission_limit: 10,
   },
 });
 assert.equal(operationReadAfterContinuity.http_status, 200);
@@ -1039,6 +1059,7 @@ const operationLifecycleStatus = operationReadAfterContinuity.body.operation_lif
 const operationPersistencePosture = operationReadAfterContinuity.body.cloudflare_persistence_posture;
 const operationRecoveryPosture = operationReadAfterContinuity.body.cloudflare_recovery_posture;
 const taskLifecycleShadowReads = operationReadAfterContinuity.body.task_lifecycle_shadow_reads ?? [];
+const taskLifecycleWriteAdmissions = operationReadAfterContinuity.body.task_lifecycle_write_admissions ?? [];
 assert.equal(operationSurface?.operation_id, operationId);
 assert.ok(Array.isArray(operationContinuityPackets));
 assert.ok(operationContinuityPackets.length >= 1);
@@ -1093,8 +1114,20 @@ assert.match(operationRecoveryPosture?.next_action, /^(monitor_recovery_posture|
 assert.deepEqual(operationSurface?.recovery_posture, operationRecoveryPosture);
 assert.ok(Array.isArray(taskLifecycleShadowReads));
 assert.equal(operationSurface?.task_lifecycle_shadow_read_count, taskLifecycleShadowReads.length);
+assert.ok(Array.isArray(taskLifecycleWriteAdmissions));
+assert.ok(taskLifecycleWriteAdmissions.length >= 1);
+assert.equal(operationSurface?.task_lifecycle_write_admission_count, taskLifecycleWriteAdmissions.length);
+assert.equal(operationSurface?.task_lifecycle_write_admission_posture, 'writes_not_admitted');
 assert.equal(operationSurface?.task_lifecycle_mutation_authority, 'windows_task_lifecycle_sqlite');
 assert.equal(operationSurface?.task_lifecycle_cloudflare_write_admission, 'not_admitted');
+const recordedTaskLifecycleWriteAdmission = taskLifecycleWriteAdmissions.find((admission) => admission.admission_id === taskLifecycleWriteAdmission.body.record?.admission_id);
+assert.ok(recordedTaskLifecycleWriteAdmission);
+assert.equal(recordedTaskLifecycleWriteAdmission.schema, 'narada.sonar.cloudflare_task_lifecycle_write_admission.v1');
+assert.equal(recordedTaskLifecycleWriteAdmission.admission_action, 'refuse');
+assert.equal(recordedTaskLifecycleWriteAdmission.admission_reason, 'windows_task_lifecycle_mutation_authority_retained');
+assert.equal(recordedTaskLifecycleWriteAdmission.mutation_authority, 'windows_task_lifecycle_sqlite');
+assert.equal(recordedTaskLifecycleWriteAdmission.cloudflare_write_admission, 'not_admitted');
+assert.equal(recordedTaskLifecycleWriteAdmission.write_effect, 'none');
 for (const read of taskLifecycleShadowReads) {
   assert.equal(read.schema, 'narada.sonar.cloudflare_task_lifecycle_shadow_read.v1');
   assert.equal(read.mutation_authority, 'windows_task_lifecycle_sqlite');
@@ -1147,6 +1180,7 @@ const report = {
     operation_persistence_posture: 'ok',
     operation_recovery_posture: 'ok',
     task_lifecycle_shadow_read_surface: 'ok',
+    task_lifecycle_write_admission_surface: 'ok',
     human_operator_session: humanOperator.status,
     human_operator_membership: humanOperator.membership_status,
     human_operator_operation_read: humanOperator.operation_status,
@@ -1189,6 +1223,8 @@ const report = {
     persistence_posture: operationSurface.persistence_posture,
     recovery_posture: operationSurface.recovery_posture,
     task_lifecycle_shadow_read_count: operationSurface.task_lifecycle_shadow_read_count,
+    task_lifecycle_write_admission_count: operationSurface.task_lifecycle_write_admission_count,
+    task_lifecycle_write_admission_posture: operationSurface.task_lifecycle_write_admission_posture,
     task_lifecycle_mutation_authority: operationSurface.task_lifecycle_mutation_authority,
     task_lifecycle_cloudflare_write_admission: operationSurface.task_lifecycle_cloudflare_write_admission,
     carrier_evidence_read_status: operationRead.body.carrier_evidence_read_status,

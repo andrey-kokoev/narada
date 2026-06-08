@@ -14,6 +14,7 @@ import worker, {
   classifyCloudflareSessionCommandState,
   classifyCloudflareSiteCommandState,
   classifyCloudflareTaskCommandState,
+  classifyCloudflareTaskLifecycleWriteAdmission,
   classifyCloudflareToolEffectAdmission,
   CloudflareCarrierDurableObject,
   createCloudflareToolEffectAdapter,
@@ -102,6 +103,27 @@ test('cloudflare operation command state classifies focus, scope, evidence, and 
   for (const [input, expected] of cases) {
     assert.deepEqual(classifyCloudflareOperationCommandState(input), expected);
   }
+});
+
+test('cloudflare task lifecycle write admission keeps Windows mutation authority until cutover', () => {
+  const shadow = classifyCloudflareTaskLifecycleWriteAdmission({ mutation_class: 'shadow_read_record' });
+  assert.equal(shadow.action, 'admit');
+  assert.equal(shadow.reason, 'shadow_read_projection_admitted');
+  assert.equal(shadow.write_effect, 'none');
+  assert.equal(shadow.cloudflare_write_admission, 'not_admitted');
+
+  for (const mutationClass of ['task_create', 'task_claim', 'task_report', 'task_finish', 'changed_file_evidence']) {
+    const decision = classifyCloudflareTaskLifecycleWriteAdmission({ mutation_class: mutationClass });
+    assert.equal(decision.action, 'refuse');
+    assert.equal(decision.reason, 'windows_task_lifecycle_mutation_authority_retained');
+    assert.equal(decision.mutation_authority, 'windows_task_lifecycle_sqlite');
+    assert.equal(decision.write_effect, 'none');
+    assert.match(decision.required_evidence.join(' '), /cutover_point_recorded/);
+  }
+
+  const unknown = classifyCloudflareTaskLifecycleWriteAdmission({ mutation_class: 'surprise_write' });
+  assert.equal(unknown.action, 'refuse');
+  assert.equal(unknown.reason, 'unknown_task_lifecycle_mutation_class');
 });
 
 test('cloudflare authority command state classifies authority loading, refusals, locus, and evidence', () => {
@@ -2915,6 +2937,51 @@ test('worker records task lifecycle shadow reads from Windows without admitting 
   assert.equal(operationReadBody.operation_product_surface.task_lifecycle_shadow_read_count, 2);
   assert.equal(operationReadBody.operation_product_surface.task_lifecycle_mutation_authority, 'windows_task_lifecycle_sqlite');
   assert.equal(operationReadBody.operation_product_surface.task_lifecycle_cloudflare_write_admission, 'not_admitted');
+
+  const refusedWrite = await worker.fetch(jsonRequest({
+    operation: 'task_lifecycle.write_admission.classify',
+    request_id: 'request_task_lifecycle_write_admission_refuse',
+    params: { site_id: 'site_fixture', admission_id: 'task_lifecycle_write_admission_refuse_1', mutation_class: 'task_finish' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(refusedWrite.status, 200);
+  const refusedWriteBody = await refusedWrite.json();
+  assert.equal(refusedWriteBody.status, 'admission_recorded');
+  assert.equal(refusedWriteBody.decision.action, 'refuse');
+  assert.equal(refusedWriteBody.decision.reason, 'windows_task_lifecycle_mutation_authority_retained');
+  assert.equal(refusedWriteBody.write_effect, 'none');
+  assert.equal(refusedWriteBody.cloudflare_write_admission, 'not_admitted');
+
+  const admittedProjection = await worker.fetch(jsonRequest({
+    operation: 'task_lifecycle.write_admission.classify',
+    request_id: 'request_task_lifecycle_write_admission_projection',
+    params: { site_id: 'site_fixture', admission_id: 'task_lifecycle_write_admission_projection_1', mutation_class: 'shadow_read_record' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(admittedProjection.status, 200);
+  const admittedProjectionBody = await admittedProjection.json();
+  assert.equal(admittedProjectionBody.decision.action, 'admit');
+  assert.equal(admittedProjectionBody.decision.reason, 'shadow_read_projection_admitted');
+  assert.equal(admittedProjectionBody.write_effect, 'none');
+
+  const admissionList = await worker.fetch(jsonRequest({
+    operation: 'task_lifecycle.write_admission.list',
+    request_id: 'request_task_lifecycle_write_admission_list',
+    params: { site_id: 'site_fixture', limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(admissionList.status, 200);
+  const admissionListBody = await admissionList.json();
+  assert.equal(admissionListBody.write_effect, 'none');
+  assert.deepEqual(admissionListBody.decisions.map((entry) => entry.admission_action).sort(), ['admit', 'refuse']);
+
+  const operationReadWithAdmissions = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_task_lifecycle_write_admission_operation_read',
+    params: { site_id: 'site_fixture', operation_id: 'operation_task_lifecycle', task_lifecycle_write_admission_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(operationReadWithAdmissions.status, 200);
+  const operationReadWithAdmissionsBody = await operationReadWithAdmissions.json();
+  assert.equal(operationReadWithAdmissionsBody.task_lifecycle_write_admissions.length, 2);
+  assert.equal(operationReadWithAdmissionsBody.operation_product_surface.task_lifecycle_write_admission_count, 2);
+  assert.equal(operationReadWithAdmissionsBody.operation_product_surface.task_lifecycle_write_admission_posture, 'writes_not_admitted');
 });
 
 test('worker starts controlled resident dispatch as Cloudflare primary with Windows fallback recorded', async () => {
@@ -4498,6 +4565,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     webhookDelayDirectiveDeliveries: clone(initial.webhookDelayDirectiveDeliveries ?? []),
     residentLoopShadowRuns: clone(initial.residentLoopShadowRuns ?? []),
     taskLifecycleShadowReads: clone(initial.taskLifecycleShadowReads ?? []),
+    taskLifecycleWriteAdmissions: clone(initial.taskLifecycleWriteAdmissions ?? []),
     residentDispatchDecisions: clone(initial.residentDispatchDecisions ?? []),
     carrierSessionEvents: clone(initial.carrierSessionEvents ?? []),
   };
@@ -4613,6 +4681,12 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const row = { read_id, site_id, source_locus, target_locus, source_url_host, source_db_path, source_schema, generated_at, task_count, status_counts_json, tasks_json, mutation_authority, shadow_read_posture, cloudflare_write_admission, dispatch_authority, shadow_mode, dispatch_action, record_json, recorded_by_principal_id, recorded_at };
         if (existing) Object.assign(existing, row);
         else state.taskLifecycleShadowReads.push(row);
+      } else if (normalized.startsWith('insert into cloudflare_task_lifecycle_write_admissions')) {
+        const [admission_id, site_id, mutation_class, admission_action, admission_reason, authority_locus, target_authority_locus, mutation_authority, cloudflare_write_admission, write_effect, decision_json, recorded_by_principal_id, recorded_at] = bindings;
+        const existing = state.taskLifecycleWriteAdmissions.find((entry) => entry.admission_id === admission_id);
+        const row = { admission_id, site_id, mutation_class, admission_action, admission_reason, authority_locus, target_authority_locus, mutation_authority, cloudflare_write_admission, write_effect, decision_json, recorded_by_principal_id, recorded_at };
+        if (existing) Object.assign(existing, row);
+        else state.taskLifecycleWriteAdmissions.push(row);
       } else if (normalized.startsWith('insert into cloudflare_resident_dispatch_decisions')) {
         const [dispatch_decision_id, site_id, operation_id, carrier_session_id, decision_state, dispatch_authority, fallback_authority, fallback_status, dispatch_action, dispatch_scope, session_start_status, session_start_ok, decision_json, recorded_by_principal_id, recorded_at] = bindings;
         const existing = state.residentDispatchDecisions.find((entry) => entry.dispatch_decision_id === dispatch_decision_id);
@@ -4818,6 +4892,16 @@ function fakeD1SiteRegistryStatement(state, sql) {
           results: state.taskLifecycleShadowReads
             .filter((entry) => entry.site_id === siteId)
             .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_task_lifecycle_write_admissions')) {
+        const [siteId, limit] = bindings;
+        return {
+          results: state.taskLifecycleWriteAdmissions
+            .filter((entry) => entry.site_id === siteId)
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at))
             .slice(0, Number(limit))
             .map((entry) => clone(entry)),
         };
