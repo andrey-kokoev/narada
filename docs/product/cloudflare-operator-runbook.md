@@ -75,10 +75,11 @@ pnpm cloudflare:operator:check -- --url <worker-url> --token-file <path> --write
 | Operation posture route | `operation.read` returns `operation_posture_overview` and `operation_posture_route`, proving the operation next-focus route from live operation product data. |
 | Persistence posture | `operation.read` returns `cloudflare_persistence_posture` and mirrors it into `operation_product_surface.persistence_posture`. |
 | Recovery posture | `operation.read` returns `cloudflare_recovery_posture` and mirrors it into `operation_product_surface.recovery_posture`. |
+| Task lifecycle shadow surface | `operation.read` exposes task lifecycle shadow-read count and preserves Windows mutation authority with Cloudflare write admission refused. |
 | Continuity loop | Windows and Cloudflare exchange site-continuity packets through the productized loop. |
 | Idempotence | The continuity loop runs twice and the local packet ledger remains at one packet for the Cloudflare-to-Windows direction. |
 
-The final JSON report includes `service_principal_ready`, `human_operator_login_ready`, `human_operator_membership_ready`, `sites.overview`, `sites.route`, `operation`, `operation.persistence_posture`, `operation.recovery_posture`, `operation_posture`, `console_url`, and `microsoft_login_url`. The service fields prove automation and substrate readiness. The human fields prove operator entry only when the cookie-backed session check is supplied.
+The final JSON report includes `service_principal_ready`, `human_operator_login_ready`, `human_operator_membership_ready`, `sites.overview`, `sites.route`, `operation`, `operation.persistence_posture`, `operation.recovery_posture`, `operation.task_lifecycle_shadow_read_count`, `operation_posture`, `console_url`, and `microsoft_login_url`. The service fields prove automation and substrate readiness. The human fields prove operator entry only when the cookie-backed session check is supplied.
 
 ## Boundary
 
