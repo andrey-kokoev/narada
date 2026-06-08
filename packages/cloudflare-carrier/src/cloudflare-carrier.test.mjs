@@ -667,6 +667,10 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Control Room/);
   assert.match(html, /Selected Session/);
   assert.match(html, /Authority Locus/);
+  assert.match(html, /Authority Focus/);
+  assert.match(html, /Authority State/);
+  assert.match(html, /controlAuthorityFocus/);
+  assert.match(html, /authorityState/);
   assert.match(html, /Task Focus/);
   assert.match(html, /Operation Attention/);
   assert.match(html, /Attention/);
@@ -708,6 +712,8 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Last Authority/);
   assert.match(html, /authoritySummary/);
   assert.match(html, /renderLastAuthority/);
+  assert.match(html, /renderAuthorityState/);
+  assert.match(html, /authority-decision/);
   assert.match(html, /actor_role/);
   assert.match(html, /Product Overview|productOverview/);
   assert.match(html, /Operation/);

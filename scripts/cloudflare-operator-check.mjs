@@ -55,6 +55,10 @@ assert.match(consoleCheck.body, /Operation Sessions/);
 assert.match(consoleCheck.body, /Active Session/);
 assert.match(consoleCheck.body, /Control Room/);
 assert.match(consoleCheck.body, /Authority Locus/);
+assert.match(consoleCheck.body, /Authority Focus/);
+assert.match(consoleCheck.body, /Authority State/);
+assert.match(consoleCheck.body, /controlAuthorityFocus/);
+assert.match(consoleCheck.body, /authorityState/);
 assert.match(consoleCheck.body, /Task Focus/);
 assert.match(consoleCheck.body, /Operation Attention/);
 assert.match(consoleCheck.body, /Raise Attention/);
@@ -92,6 +96,8 @@ assert.match(consoleCheck.body, /operation\.read/);
 assert.match(consoleCheck.body, /operation_product_surface/);
 assert.match(consoleCheck.body, /Continuity Packets/);
 assert.match(consoleCheck.body, /Authority Decisions/);
+assert.match(consoleCheck.body, /renderAuthorityState/);
+assert.match(consoleCheck.body, /authority-decision/);
 assert.match(consoleCheck.body, /credentials: 'same-origin'/);
 
 const smoke = await runJsonCommand('live-carrier-smoke', [

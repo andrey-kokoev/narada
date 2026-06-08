@@ -1701,9 +1701,10 @@ export function renderCloudflareCarrierConsole() {
     .control-room-item b { display: block; font-size: 11px; color: #686d75; }
     .control-room-item span { display: block; margin-top: 4px; font-size: 12px; color: #1e2024; overflow-wrap: anywhere; }
     .attention-items { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-    .attention-item { border: 1px solid #d9dcd3; border-radius: 6px; padding: 9px; background: #fff; cursor: pointer; }
-    .attention-item strong { display: block; font-size: 13px; color: #1f4e48; overflow-wrap: anywhere; }
-    .attention-item span { display: block; margin-top: 4px; font-size: 12px; color: #686d75; overflow-wrap: anywhere; }
+    .attention-item, .authority-decision { border: 1px solid #d9dcd3; border-radius: 6px; padding: 9px; background: #fff; cursor: pointer; }
+    .attention-item strong, .authority-decision strong { display: block; font-size: 13px; color: #1f4e48; overflow-wrap: anywhere; }
+    .attention-item span, .authority-decision span { display: block; margin-top: 4px; font-size: 12px; color: #686d75; overflow-wrap: anywhere; }
+    .authority-decision.refuse strong { color: #9b3b22; }
     .task-panel { margin-top: 16px; border-top: 1px solid #d7d7ce; padding-top: 14px; }
     .task-panel h2 { margin: 0 0 10px; font-size: 15px; letter-spacing: 0; }
     .tasks { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
@@ -1777,6 +1778,7 @@ export function renderCloudflareCarrierConsole() {
           <div class="control-room-item"><b>Operation</b><span id="controlOperation">none</span></div>
           <div class="control-room-item"><b>Selected Session</b><span id="controlSession">none</span></div>
           <div class="control-room-item"><b>Authority Locus</b><span id="controlAuthorityLocus">unknown</span></div>
+          <div class="control-room-item"><b>Authority Focus</b><span id="controlAuthorityFocus">none</span></div>
           <div class="control-room-item"><b>Task Focus</b><span id="controlTaskFocus">none</span></div>
           <div class="control-room-item"><b>Attention</b><span id="controlAttention">0 open</span></div>
           <div class="control-room-item"><b>Evidence Focus</b><span id="controlEvidenceFocus">none</span></div>
@@ -1796,6 +1798,10 @@ export function renderCloudflareCarrierConsole() {
       <div class="product-panel">
         <h2>Last Authority</h2>
         <div id="lastAuthority" class="task"><strong>No authority action loaded.</strong><span>Read Site or Put Membership to inspect evidence.</span></div>
+      </div>
+      <div class="product-panel">
+        <h2>Authority State</h2>
+        <div id="authorityState" class="attention-items"><div class="empty">No authority state loaded.</div></div>
       </div>
       <div class="product-panel">
         <h2>Operation Surface</h2>
@@ -1856,7 +1862,7 @@ export function renderCloudflareCarrierConsole() {
   </main>
   <script type="module">
     const WORKBENCH_STORAGE_KEY = 'narada.cloudflare.operationWorkbench.v1';
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, consoleSequence: 0, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, consoleSequence: 0, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, authorityFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -2037,6 +2043,7 @@ export function renderCloudflareCarrierConsole() {
       el('controlOperation').textContent = product.operation?.operation_id || el('operationId').value.trim() || 'none';
       el('controlSession').textContent = activeSession || 'none';
       el('controlAuthorityLocus').textContent = activeDecision ? [activeDecision.authority_locus || 'unresolved', activeDecision.action || 'unknown'].join(' / ') : 'unknown';
+      el('controlAuthorityFocus').textContent = state.authorityFocus ? [state.authorityFocus.mutation_class || state.authorityFocus.event_kind || 'authority', state.authorityFocus.action || 'unknown'].join(' / ') : 'none';
       el('controlTaskFocus').textContent = state.taskFocus ? [state.taskFocus.task_id, state.taskFocus.status].filter(Boolean).join(' / ') : 'none';
       const openAttention = state.attentionItems.filter((item) => item.status !== 'resolved').length;
       el('controlAttention').textContent = String(openAttention) + ' open / ' + state.attentionItems.length + ' total' + (state.attentionFocus ? ' / ' + state.attentionFocus.directive_id : '');
@@ -2109,6 +2116,30 @@ export function renderCloudflareCarrierConsole() {
           el('updateTaskNote').value = ['resolved_attention', item.directive_id, item.input_event_id, item.reason].filter(Boolean).join(' ');
           el('eventKindFilter').value = 'directive_emitted';
           renderEvents();
+          updateControlRoom();
+        });
+        node.append(title, meta);
+        return node;
+      }));
+      updateControlRoom();
+    }
+    function renderAuthorityState(product = {}) {
+      const decisions = product.site_authority?.decisions || [];
+      if (decisions.length === 0) {
+        el('authorityState').innerHTML = '<div class="empty">No authority state loaded.</div>';
+        updateControlRoom();
+        return;
+      }
+      el('authorityState').replaceChildren(...decisions.map((decision) => {
+        const node = document.createElement('article');
+        node.className = 'authority-decision ' + (decision.action || 'unknown');
+        const title = document.createElement('strong');
+        title.textContent = [decision.action || 'unknown', decision.mutation_class || 'mutation'].join(' ');
+        const meta = document.createElement('span');
+        meta.textContent = authorityRouteSummary(decision);
+        node.addEventListener('click', () => {
+          state.authorityFocus = decision;
+          focusEvidenceFor((event) => JSON.stringify(event.payload || {}).includes(decision.mutation_class || '') || JSON.stringify(event.payload || {}).includes(decision.reason || ''));
           updateControlRoom();
         });
         node.append(title, meta);
@@ -2222,6 +2253,7 @@ export function renderCloudflareCarrierConsole() {
       el('continuityCount').textContent = String((product.site_continuity_packets || []).length);
       renderTasks(product.tasks || []);
       renderAttentionQueue(extractOperationAttention(product));
+      renderAuthorityState(product);
       updateControlRoom();
       const siteItems = [
         listItem('site_id', product.site?.site_id),
@@ -2276,6 +2308,7 @@ export function renderCloudflareCarrierConsole() {
       renderTasks(product.tasks || []);
       renderOperationSessions(product.sessions || []);
       renderAttentionQueue(extractOperationAttention(product));
+      renderAuthorityState(product);
       updateControlRoom();
       const operationItems = [
         listItem('operation_id', product.operation?.operation_id),
