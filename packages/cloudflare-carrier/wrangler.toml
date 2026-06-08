@@ -11,6 +11,14 @@ binding = "AI"
 
 [vars]
 CLOUDFLARE_CARRIER_ENABLE_TASK_TOOLS = "1"
+CLOUDFLARE_CARRIER_SITE_ID = "site_narada_cloudflare"
+CLOUDFLARE_WEBHOOK_DELAY_SCHEDULED_READ_ENABLED = "1"
+CLOUDFLARE_WEBHOOK_DELAY_SCHEDULED_SITE_ID = "site_narada_cloudflare"
+CLOUDFLARE_WEBHOOK_DELAY_SCHEDULED_SOURCE_ADAPTER_ID = "sonar_webhook_delay_windows_readonly_db_summary_feed_v1"
+CLOUDFLARE_WEBHOOK_DELAY_CRITICAL_MINUTES = "15"
+
+[triggers]
+crons = ["* * * * *"]
 
 [[d1_databases]]
 binding = "CLOUDFLARE_CARRIER_TASK_DB"

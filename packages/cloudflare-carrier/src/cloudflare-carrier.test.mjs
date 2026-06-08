@@ -654,6 +654,9 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.equal(response.status, 200);
   assert.match(response.headers.get('content-type'), /text\/html/);
   const html = await response.text();
+  const consoleScript = html.match(/<script type="module">([\s\S]*)<\/script>/)?.[1] || '';
+  assert.ok(consoleScript, 'console module script is rendered');
+  assert.doesNotThrow(() => new Function(consoleScript));
   assert.match(html, /Narada Cloudflare Carrier/);
   assert.match(html, /naradaCloudflareCarrierClient/);
   assert.match(html, /\/api\/carrier/);
@@ -671,6 +674,12 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /renderControlRoomActionSummary/);
   assert.match(html, /applyControlRoomNextAction/);
   assert.match(html, /controlRoomNextAction/);
+  assert.match(html, /focus_operation_path_attention/);
+  assert.match(html, /focus_operation_path_task/);
+  assert.match(html, /focus_session_path_evidence/);
+  assert.match(html, /focus_session_path_task/);
+  assert.match(html, /focus_task_path_evidence/);
+  assert.match(html, /focus_authority_path_evidence/);
   assert.match(html, /select_site_or_operation/);
   assert.match(html, /membership_authority_bridge_needs_attention/);
   assert.match(html, /workbench_ready_for_monitoring/);
@@ -737,6 +746,17 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /operationFocusDetail/);
   assert.match(html, /operationFocusContext/);
   assert.match(html, /renderOperationFocusDetail/);
+  assert.match(html, /Operation Path/);
+  assert.match(html, /operationPath/);
+  assert.match(html, /operationPathContext/);
+  assert.match(html, /renderOperationPath/);
+  assert.match(html, /operationEvents/);
+  assert.match(html, /operationTasks/);
+  assert.match(html, /focusOperationPathSession/);
+  assert.match(html, /focusOperationPathTask/);
+  assert.match(html, /focusOperationPathAttention/);
+  assert.match(html, /focusOperationPathAuthority/);
+  assert.match(html, /focusOperationPathEvidence/);
   assert.match(html, /operationNavigator/);
   assert.match(html, /renderOperationNavigator/);
   assert.match(html, /selectOperation/);
@@ -757,11 +777,23 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /sessionActionUseSession/);
   assert.match(html, /sessionActionReadEvidence/);
   assert.match(html, /sessionActionFocusEvidence/);
+  assert.equal([...html.matchAll(/id="sessionActionFocusEvidence"/g)].length, 1);
   assert.match(html, /use_focused_session/);
   assert.match(html, /Session Focus Detail/);
   assert.match(html, /sessionFocusDetail/);
   assert.match(html, /sessionFocusContext/);
   assert.match(html, /renderSessionFocusDetail/);
+  assert.match(html, /Session Evidence Path/);
+  assert.match(html, /sessionEvidencePath/);
+  assert.match(html, /sessionEvidencePathContext/);
+  assert.match(html, /renderSessionEvidencePath/);
+  assert.match(html, /sessionEvidenceEvents/);
+  assert.match(html, /sessionTasks/);
+  assert.match(html, /directiveDeliveryForSession/);
+  assert.match(html, /focusSessionPathEvidence/);
+  assert.match(html, /focusSessionPathTask/);
+  assert.match(html, /focusSessionPathDelivery/);
+  assert.match(html, /focusSessionPathChain/);
   assert.match(html, /sessionNavigator/);
   assert.match(html, /renderSessionNavigator/);
   assert.match(html, /selectOperationSession/);
@@ -792,6 +824,16 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /controlAuthorityFocus/);
   assert.match(html, /authorityState/);
   assert.match(html, /authorityFocusDetail/);
+  assert.match(html, /Authority Path/);
+  assert.match(html, /authorityPath/);
+  assert.match(html, /authorityPathContext/);
+  assert.match(html, /renderAuthorityPath/);
+  assert.match(html, /authorityEvidenceEvents/);
+  assert.match(html, /focusAuthorityPathDecision/);
+  assert.match(html, /refreshAuthorityPath/);
+  assert.match(html, /authorityPathFocusDecision/);
+  assert.match(html, /authorityPathFocusEvidence/);
+  assert.match(html, /authorityPathRefresh/);
   assert.match(html, /authorityDecisionKey/);
   assert.match(html, /selectAuthorityDecision/);
   assert.match(html, /Authority Action/);
@@ -854,9 +896,15 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /tryParseTaskId/);
   assert.match(html, /focusEvidenceLaneForCurrent/);
   assert.match(html, /selectEvidenceSession/);
+  assert.match(html, /focusEvidenceTarget/);
+  assert.match(html, /focusEvidencePath/);
   assert.match(html, /renderEvidenceActionSummary/);
   assert.match(html, /evidenceActionLaneAction/);
   assert.match(html, /evidenceActionSessionAction/);
+  assert.match(html, /evidenceActionTargetAction/);
+  assert.match(html, /evidenceActionPathAction/);
+  assert.match(html, /Focus Evidence Target/);
+  assert.match(html, /Focus Evidence Path/);
   assert.match(html, /inspect_failure_and_retry_or_escalate/);
   assert.match(html, /resolve_or_acknowledge_directive/);
   assert.match(html, /trace_input_lifecycle/);
@@ -928,6 +976,18 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /create_task_from_attention/);
   assert.match(html, /taskLifecycleStatus/);
   assert.match(html, /renderTaskLifecycleSummary/);
+  assert.match(html, /Task Evidence Path/);
+  assert.match(html, /taskEvidencePath/);
+  assert.match(html, /taskEvidencePathContext/);
+  assert.match(html, /renderTaskEvidencePath/);
+  assert.match(html, /directiveIntentForTask/);
+  assert.match(html, /directiveDeliveryForTask/);
+  assert.match(html, /taskEvidenceEvents/);
+  assert.match(html, /focusTaskPathSession/);
+  assert.match(html, /focusTaskPathEvidence/);
+  assert.match(html, /focusTaskPathDirective/);
+  assert.match(html, /focusTaskPathDelivery/);
+  assert.match(html, /focusTaskPathChain/);
   assert.match(html, /mark_done_or_update/);
   assert.match(html, /focusActionButton/);
   assert.match(html, /focusActionRow/);
@@ -1060,6 +1120,16 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /focus_webhook_delay_directive_delivery/);
   assert.match(html, /directive_delivery_needs_operator_focus/);
   assert.match(html, /Directive Delivery Session/);
+  assert.match(html, /Webhook Delay Evidence Chain/);
+  assert.match(html, /webhookDelayEvidenceChain/);
+  assert.match(html, /webhookDelayEvidenceChainContext/);
+  assert.match(html, /renderWebhookDelayEvidenceChain/);
+  assert.match(html, /focusWebhookDelayChainObservation/);
+  assert.match(html, /focusWebhookDelayChainIntent/);
+  assert.match(html, /focusWebhookDelayChainDelivery/);
+  assert.match(html, /focusWebhookDelayChainSession/);
+  assert.match(html, /focusWebhookDelayChainTask/);
+  assert.match(html, /flightDeckFocusEvidenceChain/);
   assert.match(html, /focusWebhookDelayShadow/);
   assert.match(html, /focus_webhook_delay_directive_intent/);
   assert.match(html, /focus_webhook_delay_shadow_read/);
@@ -1151,7 +1221,9 @@ test('worker records webhook delay observations as Cloudflare shadow-read eviden
       updated_at: clock(),
     }],
   });
-  const env = authEnv(fakeDurableObjectNamespace(), { CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+  const env = authEnv(fakeDurableObjectNamespace(), {
+    CLOUDFLARE_SITE_REGISTRY_DB: siteDb,
+  });
   const summary = {
     schema: 'narada.sonar/webhook-delay-today-vs-yesterday/v1',
     generated_at: '2026-06-08T03:29:51.398Z',
@@ -1272,7 +1344,9 @@ test('worker records webhook delay observation as Cloudflare primary with Window
       updated_at: clock(),
     }],
   });
-  const env = authEnv(fakeDurableObjectNamespace(), { CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+  const env = authEnv(fakeDurableObjectNamespace(), {
+    CLOUDFLARE_SITE_REGISTRY_DB: siteDb,
+  });
   const summary = {
     schema: 'narada.sonar/webhook-delay-today-vs-yesterday/v1',
     generated_at: '2026-06-08T06:05:00.000Z',
@@ -1383,7 +1457,14 @@ test('worker reads webhook delay observation from Cloudflare remote source adapt
       updated_at: clock(),
     }],
   });
-  const env = authEnv(fakeDurableObjectNamespace(), { CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+
+  const env = authEnv(fakeDurableObjectNamespace(), {
+    CLOUDFLARE_SITE_REGISTRY_DB: siteDb,
+    CLOUDFLARE_WEBHOOK_DELAY_SCHEDULED_READ_ENABLED: '1',
+    CLOUDFLARE_WEBHOOK_DELAY_SCHEDULED_SITE_ID: 'site_fixture',
+    CLOUDFLARE_WEBHOOK_DELAY_SCHEDULED_SOURCE_ADAPTER_ID: 'fixture_webhook_delay_source',
+    CLOUDFLARE_WEBHOOK_DELAY_CRITICAL_MINUTES: '15',
+  });
 
   const putSamples = await worker.fetch(jsonRequest({
     operation: 'webhook_delay.remote_source.samples.put',
@@ -1458,6 +1539,59 @@ test('worker reads webhook delay observation from Cloudflare remote source adapt
   const operationReadBody = await operationRead.json();
   assert.equal(operationReadBody.webhook_delay_observation_primary_reads[0].observation_id, 'webhook_delay_remote_source_observation_fixture_1');
   assert.equal(operationReadBody.webhook_delay_observation_primary_reads[0].record.source_material_locus, 'cloudflare_remote_source_adapter');
+
+  const scheduledRun = await worker.fetch(jsonRequest({
+    operation: 'webhook_delay.remote_source.scheduled_read.run',
+    request_id: 'request_webhook_delay_scheduled_source_read_run',
+    params: {
+      site_id: 'site_fixture',
+      source_adapter_id: 'fixture_webhook_delay_source',
+      scheduled_run_id: 'webhook_delay_scheduled_source_read_fixture_1',
+      observation_id: 'webhook_delay_scheduled_source_observation_fixture_1',
+      scheduled_time: '2026-06-08T06:30:00.000Z',
+      trigger_kind: 'operator_requested',
+      critical_minutes: 15,
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(scheduledRun.status, 200);
+  const scheduledRunBody = await scheduledRun.json();
+  assert.equal(scheduledRunBody.status, 'cloudflare_scheduled_read_recorded');
+  assert.equal(scheduledRunBody.trigger_authority, 'cloudflare_cron_trigger');
+  assert.equal(scheduledRunBody.source_authority, 'cloudflare_webhook_delay_remote_source_adapter');
+  assert.equal(scheduledRunBody.source_material_locus, 'cloudflare_remote_source_adapter');
+  assert.equal(scheduledRunBody.source_sample_count, 2);
+  assert.equal(scheduledRunBody.classification_state, 'critical');
+  assert.equal(scheduledRunBody.fallback_authority, 'windows_observation_read_fallback');
+  assert.equal(scheduledRunBody.fallback_status, 'available');
+
+  const scheduledPromises = [];
+  await worker.scheduled({ cron: '* * * * *', scheduledTime: Date.parse('2026-06-08T06:31:00.000Z') }, env, {
+    waitUntil(promise) { scheduledPromises.push(promise); },
+  });
+  await Promise.all(scheduledPromises);
+
+  const scheduledList = await worker.fetch(jsonRequest({
+    operation: 'webhook_delay.remote_source.scheduled_read.list',
+    request_id: 'request_webhook_delay_scheduled_source_read_list',
+    params: { site_id: 'site_fixture', limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(scheduledList.status, 200);
+  const scheduledListBody = await scheduledList.json();
+  assert.equal(scheduledListBody.trigger_authority, 'cloudflare_cron_trigger');
+  assert.equal(scheduledListBody.runs.length, 2);
+  assert.equal(scheduledListBody.runs[0].source_adapter_id, 'fixture_webhook_delay_source');
+  assert.equal(scheduledListBody.runs[0].source_material_locus, 'cloudflare_remote_source_adapter');
+  assert.equal(scheduledListBody.runs[0].classification_state, 'critical');
+
+  const scheduledOperationRead = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_webhook_delay_scheduled_source_operation_read',
+    params: { site_id: 'site_fixture', operation_id: 'operation_webhook_delay', webhook_delay_scheduled_source_read_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(scheduledOperationRead.status, 200);
+  const scheduledOperationReadBody = await scheduledOperationRead.json();
+  assert.equal(scheduledOperationReadBody.webhook_delay_scheduled_source_reads.length, 2);
+  assert.equal(scheduledOperationReadBody.operation_product_surface.webhook_delay_scheduled_source_read_count, 2);
 });
 
 test('worker records webhook delay directive intent as dual-recorded carrier input without delivery', async () => {
@@ -3170,6 +3304,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     operatorSessions: clone(initial.operatorSessions ?? []),
     continuityPackets: clone(initial.continuityPackets ?? []),
     webhookDelayRemoteSourceSamples: clone(initial.webhookDelayRemoteSourceSamples ?? []),
+    webhookDelayScheduledSourceReads: clone(initial.webhookDelayScheduledSourceReads ?? []),
     webhookDelayShadowObservations: clone(initial.webhookDelayShadowObservations ?? []),
     webhookDelayObservationPrimaryReads: clone(initial.webhookDelayObservationPrimaryReads ?? []),
     webhookDelayDirectiveRecords: clone(initial.webhookDelayDirectiveRecords ?? []),
@@ -3243,6 +3378,12 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const row = { sample_id, site_id, source_adapter_id, sample_role, observed_at, observed_at_ct, elapsed_minutes, delay_minutes, sample_json, recorded_by_principal_id, recorded_at };
         if (existing) Object.assign(existing, row);
         else state.webhookDelayRemoteSourceSamples.push(row);
+      } else if (normalized.startsWith('insert into cloudflare_webhook_delay_scheduled_source_reads')) {
+        const [scheduled_run_id, site_id, source_adapter_id, observation_id, trigger_authority, trigger_kind, cron, scheduled_at, run_status, failure_code, source_material_locus, source_authority, source_sample_count, classification_state, latest_delay_minutes, critical_minutes, fallback_authority, fallback_status, record_json, recorded_by_principal_id, recorded_at] = bindings;
+        const existing = state.webhookDelayScheduledSourceReads.find((entry) => entry.scheduled_run_id === scheduled_run_id);
+        const row = { scheduled_run_id, site_id, source_adapter_id, observation_id, trigger_authority, trigger_kind, cron, scheduled_at, run_status, failure_code, source_material_locus, source_authority, source_sample_count, classification_state, latest_delay_minutes, critical_minutes, fallback_authority, fallback_status, record_json, recorded_by_principal_id, recorded_at };
+        if (existing) Object.assign(existing, row);
+        else state.webhookDelayScheduledSourceReads.push(row);
       } else if (normalized.startsWith('insert into cloudflare_webhook_delay_observation_primary_reads')) {
         const [observation_id, site_id, source_locus, source_material_locus, target_locus, generated_at, latest_delay_minutes, critical_minutes, classification_state, observation_authority, fallback_authority, fallback_status, dispatch_authority, dispatch_action, observation_json, classification_json, record_json, recorded_by_principal_id, recorded_at] = bindings;
         const existing = state.webhookDelayObservationPrimaryReads.find((entry) => entry.observation_id === observation_id);
@@ -3374,6 +3515,16 @@ function fakeD1SiteRegistryStatement(state, sql) {
           results: state.webhookDelayRemoteSourceSamples
             .filter((entry) => entry.site_id === siteId && entry.source_adapter_id === sourceAdapterId)
             .sort((left, right) => right.observed_at.localeCompare(left.observed_at) || right.recorded_at.localeCompare(left.recorded_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_webhook_delay_scheduled_source_reads')) {
+        const [siteId, limit] = bindings;
+        return {
+          results: state.webhookDelayScheduledSourceReads
+            .filter((entry) => entry.site_id === siteId)
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.scheduled_at.localeCompare(left.scheduled_at))
             .slice(0, Number(limit))
             .map((entry) => clone(entry)),
         };
