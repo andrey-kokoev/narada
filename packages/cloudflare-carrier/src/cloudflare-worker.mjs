@@ -5535,11 +5535,16 @@ export function renderCloudflareCarrierConsole() {
     function continuityWorkflowSteps(product = state.operationProduct || {}) {
       const activeSession = el('sessionId').value.trim();
       const targets = operationFlightDeckTargets(product);
+      const siteId = product.site?.site_id || product.operation?.site_id || el('siteId').value.trim();
       const sessionEvidenceLoaded = activeSession && (state.events.some((event) => event.carrier_session_id === activeSession)
         || (product.carrier_evidence || []).some((entry) => entry.carrier_session_id === activeSession && (entry.events || []).length > 0));
       const openAttention = state.attentionItems.filter((item) => item.status !== 'resolved');
       const openTasks = (product.tasks || []).filter((task) => !['done', 'closed', 'resolved'].includes(String(task.status || '').toLowerCase()));
       const authorityLoaded = (product.site_authority?.decisions || []).length > 0 || (product.authority_events || []).length > 0;
+      const continuityPacketCount = Number(product.site_continuity_status?.packet_count ?? (product.site_continuity_packets || []).length ?? 0);
+      const continuityLoopCommand = siteId
+        ? 'pnpm site:continuity:loop -- sync-cloudflare --site ' + siteId + ' --url <worker-url> --token-file <token-file>'
+        : 'pnpm site:continuity:loop -- sync-cloudflare --site <site_id> --url <worker-url> --token-file <token-file>';
       return [
         {
           key: 'operation_scope_loaded',
@@ -5595,6 +5600,14 @@ export function renderCloudflareCarrierConsole() {
           status: authorityLoaded ? 'complete' : 'needs_attention',
           detail: authorityLoaded ? 'authority evidence loaded' : 'read site scope for authority state',
           action_label: 'Read Site Scope',
+          action: () => run(refreshSiteProduct),
+        },
+        {
+          key: 'continuity_loop_recorded',
+          label: 'Continuity Loop',
+          status: continuityPacketCount > 0 ? 'complete' : 'needs_attention',
+          detail: continuityPacketCount > 0 ? String(continuityPacketCount) + ' packet(s) observed' : continuityLoopCommand,
+          action_label: 'Read Site Continuity',
           action: () => run(refreshSiteProduct),
         },
         {

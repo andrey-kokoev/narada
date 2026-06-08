@@ -61,6 +61,9 @@ assert.match(consoleHtml, /site_authority/);
 assert.match(consoleHtml, /Site Continuity/);
 assert.match(consoleHtml, /continuitySummary/);
 assert.match(consoleHtml, /site_continuity/);
+assert.match(consoleHtml, /Continuity Loop/);
+assert.match(consoleHtml, /site:continuity:loop/);
+assert.match(consoleHtml, /sync-cloudflare/);
 assert.match(consoleHtml, /Task State/);
 
 const apiClientStartResponse = await worker.fetch(jsonRequest({

@@ -1452,6 +1452,11 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /continuity_packet_count/);
   assert.match(html, /continuitySummary/);
   assert.match(html, /site_continuity/);
+  assert.match(html, /Continuity Loop/);
+  assert.match(html, /continuity_loop_recorded/);
+  assert.match(html, /site:continuity:loop/);
+  assert.match(html, /sync-cloudflare/);
+  assert.match(html, /Read Site Continuity/);
   assert.match(html, /Webhook Delay Shadow Read/);
   assert.match(html, /webhookDelayShadowNavigator/);
   assert.match(html, /webhookDelayShadowFocusDetail/);
