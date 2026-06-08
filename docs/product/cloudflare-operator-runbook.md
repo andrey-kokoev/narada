@@ -71,10 +71,12 @@ pnpm cloudflare:operator:check -- --url <worker-url> --token-file <path> --write
 | Live carrier runtime | `smoke:live` starts a session, admits input, dispatches Workers AI, and records terminal carrier evidence. |
 | Tool effect boundary | Cloudflare task create/update tools are admitted through the configured Cloudflare effect boundary. |
 | Site product read | `site.read` returns site/product state and membership visibility. |
+| Site posture route | `site.list` returns `site_product_overview` and `site_posture_route`, proving the multi-site next-focus route from live site product statuses. |
+| Operation posture route | `operation.read` returns `operation_posture_overview` and `operation_posture_route`, proving the operation next-focus route from live operation product data. |
 | Continuity loop | Windows and Cloudflare exchange site-continuity packets through the productized loop. |
 | Idempotence | The continuity loop runs twice and the local packet ledger remains at one packet for the Cloudflare-to-Windows direction. |
 
-The final JSON report includes `service_principal_ready`, `human_operator_login_ready`, `human_operator_membership_ready`, `operation`, `console_url`, and `microsoft_login_url`. The service fields prove automation and substrate readiness. The human fields prove operator entry only when the cookie-backed session check is supplied.
+The final JSON report includes `service_principal_ready`, `human_operator_login_ready`, `human_operator_membership_ready`, `sites.overview`, `sites.route`, `operation`, `operation_posture`, `console_url`, and `microsoft_login_url`. The service fields prove automation and substrate readiness. The human fields prove operator entry only when the cookie-backed session check is supplied.
 
 ## Boundary
 

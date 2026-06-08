@@ -31,7 +31,11 @@ Cloudflare changes the host, durability, concurrency, transport, storage, and de
 
 `site.list` exposes the same status vocabulary across visible sites as `site_product_statuses`, plus a `site_product_overview` aggregate. This is the multi-site operator index: it should show which site needs attention next without changing the underlying site, operation, continuity, or task authority boundaries.
 
+`site.list` also exposes `site_posture_route`. This is the worker-published route summary for the current multi-site focus: `domain`, `command_state`, `command_action`, `next_action`, `target`, `status`, and `reason`. It exists so operator clients can follow the same loop guard without reimplementing it. It does not execute focus changes by itself and does not grant site mutation authority.
+
 `operation.read` exposes an `operation_lifecycle_status` derived from existing durable operation facts: operation status, sessions, tasks, carrier evidence, site continuity status, resident loop/dispatch records, and directive delivery state. It is a read-model summary, not a new authority path; it gives operators one lifecycle health signal while preserving the underlying evidence rows and authority classifications.
+
+`operation.read` exposes `operation_posture_overview` and `operation_posture_route` for the visible operation set. The overview summarizes readiness, action, reason, and command-state counts. The route summarizes whether the next operator action should monitor operations or focus a different operation. The same route is mirrored inside `operation_product_surface` so non-console clients can consume one product surface without duplicating console code.
 
 The control room maps lifecycle `next_action` values to existing operator actions: start or focus a session, refresh operation evidence, inspect continuity workflow, focus open task work, or inspect directive delivery. These are navigation/workflow affordances over existing product state, not hidden mutation shortcuts.
 
