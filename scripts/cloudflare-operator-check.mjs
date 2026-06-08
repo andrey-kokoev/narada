@@ -971,6 +971,26 @@ assert.equal(liveCommandStates.session.next_action, 'inspect_session_evidence');
 assert.match(liveCommandStates.task.next_action, /^(mark_done_or_update|reopen_or_inspect_evidence|normalize_status_or_update)$/);
 assert.match(liveCommandStates.authority.next_action, /^(read_site_authority|inspect_refused_authority|resolve_authority_locus|monitor_authority_admissions|focus_authority_evidence)$/);
 assert.match(liveCommandStates.evidence.next_action, /^(inspect_authority_locus|trace_input_lifecycle|inspect_tool_effect|inspect_failure_and_retry_or_escalate|inspect_provider_turn|resolve_or_acknowledge_directive|inspect_evidence_payload)$/);
+const operationPostureOverview = expectedOperationPostureOverview(operations, operationRead.body, { activeOperationId: operationId, siteId });
+assert.equal(operationPostureOverview.schema, 'narada.cloudflare_operation_posture_overview.v1');
+assert.equal(operationPostureOverview.operation_count, operations.length);
+assert.ok(operationPostureOverview.operation_count >= 1);
+assert.ok(operationPostureOverview.health_counts);
+assert.ok(operationPostureOverview.action_counts);
+assert.ok(operationPostureOverview.reason_counts);
+assert.ok(operationPostureOverview.command_state_counts);
+assert.equal(operationPostureOverview.active_operation_id, operationId);
+assert.match(operationPostureOverview.next_status, /^(ready|needs_attention)$/);
+assert.match(operationPostureOverview.next_action, /^(select_or_create_operation|use_focused_operation|read_operation_scope|start_or_select_session|inspect_operation_evidence|read_operation_evidence)$/);
+const operationPostureRoute = operationPostureRouteInvariant(operationPostureOverview, operationId);
+assert.match(operationPostureRoute.command_state, /^(operation_posture_ready|operation_posture_attention)$/);
+assert.match(operationPostureRoute.next_action, /^(monitor_operations|focus_next_operation)$/);
+if (operationPostureRoute.status === 'needs_attention') {
+  assert.notEqual(operationPostureRoute.target, operationId);
+  assert.ok(operations.some((operation) => operation.operation_id === operationPostureRoute.target));
+} else {
+  assert.notEqual(operationPostureRoute.next_action, 'focus_next_operation');
+}
 
 const humanOperator = await checkHumanOperatorSession({
   workerUrl,
@@ -1068,6 +1088,7 @@ const report = {
     operation_read: 'ok',
     canonical_operation_active: 'ok',
     operation_inhabited_by_live_work: 'ok',
+    operation_posture_route: 'ok',
     operation_continuity_packets: 'ok',
     operation_continuity_status: 'ok',
     operation_lifecycle_status: 'ok',
@@ -1113,6 +1134,10 @@ const report = {
     smoke_session_bound: operationRead.body.sessions.some((session) => session.carrier_session_id === smoke.carrier_session_id),
   },
   command_states: liveCommandStates,
+  operation_posture: {
+    overview: operationPostureOverview,
+    route: operationPostureRoute,
+  },
   carrier: {
     session_id: smoke.carrier_session_id,
     provider_adapter_posture: smoke.provider_adapter_posture,
@@ -1381,6 +1406,175 @@ function sitePostureRouteInvariant(overview = {}, focusedSiteId = '') {
     target: nextSiteId || 'none',
     reason: overview.next_reason || 'all_sites_ready',
   };
+}
+
+function expectedOperationPostureOverview(operations = [], product = {}, context = {}) {
+  const items = operationWorkQueueItemsForCheck(operations, product, context);
+  const healthCounts = { ready: 0, needs_attention: 0 };
+  const actionCounts = {};
+  const reasonCounts = {};
+  const commandStateCounts = {};
+  for (const item of items) {
+    healthCounts[item.status] = (healthCounts[item.status] || 0) + 1;
+    const action = item.command?.next_action || 'inspect_operation';
+    const reason = operationPostureReasonForCheck(item);
+    const commandState = item.command?.command_state || 'not_classified';
+    actionCounts[action] = (actionCounts[action] || 0) + 1;
+    reasonCounts[reason] = (reasonCounts[reason] || 0) + 1;
+    commandStateCounts[commandState] = (commandStateCounts[commandState] || 0) + 1;
+  }
+  const activeOperationId = context.activeOperationId || '';
+  const next = items.find((item) => item.status === 'needs_attention')
+    || items.find((item) => item.operation.operation_id === activeOperationId)
+    || items[0]
+    || null;
+  return {
+    schema: 'narada.cloudflare_operation_posture_overview.v1',
+    operation_count: items.length,
+    health_counts: healthCounts,
+    action_counts: actionCounts,
+    reason_counts: reasonCounts,
+    command_state_counts: commandStateCounts,
+    active_operation_id: activeOperationId || null,
+    next_operation_id: next?.operation?.operation_id || null,
+    next_status: next?.status || 'ready',
+    next_action: next?.command?.next_action || 'monitor_operations',
+    next_reason: next ? operationPostureReasonForCheck(next) : 'all_operations_monitoring',
+  };
+}
+
+function operationPostureRouteInvariant(overview = {}, activeOperationId = '') {
+  const nextOperationId = overview.next_operation_id || '';
+  const changesFocus = nextOperationId && nextOperationId !== activeOperationId;
+  const needsAttention = Boolean(overview.operation_count > 0 && overview.next_status !== 'ready' && changesFocus);
+  return {
+    domain: 'operation_posture',
+    command_state: needsAttention ? 'operation_posture_attention' : 'operation_posture_ready',
+    command_action: needsAttention ? 'focus_next_operation' : 'monitor_operations',
+    next_action: needsAttention ? 'focus_next_operation' : 'monitor_operations',
+    target: nextOperationId || 'none',
+    status: needsAttention ? 'needs_attention' : 'ready',
+    reason: overview.next_reason || 'all_operations_monitoring',
+  };
+}
+
+function operationWorkQueueItemsForCheck(operations = [], product = {}, context = {}) {
+  const activeOperationId = context.activeOperationId || '';
+  return operations.map((operation) => {
+    const path = operationPathForCheck(operation, product, context);
+    const scopeLoaded = operationScopeLoadedForCheck(operation, product, context);
+    const evidenceLoaded = operationEventsForCheck(operation, product, context).length > 0;
+    const command = classifyCloudflareOperationCommandState({
+      operation_id: operation.operation_id || '',
+      is_active: operation.operation_id === activeOperationId,
+      scope_loaded: scopeLoaded,
+      session_count: path.session_count,
+      evidence_loaded: evidenceLoaded,
+      operation_path_next_action: path.next_action || 'read_operation_scope',
+    });
+    const ready = ['inspect_operation_evidence', 'evidence_ready'].includes(command.next_action) || command.command_state === 'evidence_ready';
+    return { operation, command, path, status: ready ? 'ready' : 'needs_attention' };
+  }).sort((left, right) => {
+    if (left.status !== right.status) return left.status === 'needs_attention' ? -1 : 1;
+    if (left.operation.operation_id === activeOperationId) return -1;
+    if (right.operation.operation_id === activeOperationId) return 1;
+    return String(right.operation.updated_at || '').localeCompare(String(left.operation.updated_at || ''));
+  });
+}
+
+function operationPathForCheck(operation = {}, product = {}, context = {}) {
+  const operationId = operation.operation_id || context.activeOperationId || '';
+  const sessions = (product.sessions || []).filter((session) => !session.operation_id || session.operation_id === operationId);
+  const tasks = operationTasksForCheck(operation, product, context);
+  const events = operationEventsForCheck(operation, product, context);
+  const attention = operationAttentionForCheck(product).filter((item) => !item.operation_id || item.operation_id === operationId);
+  const openTasks = tasks.filter((task) => taskLifecycleStatusForCheck(task) === 'open');
+  const openAttention = attention.filter((item) => item.status !== 'resolved');
+  const nextAction = !operationId ? 'select_or_create_operation'
+    : sessions.length === 0 ? 'start_or_select_session'
+    : openAttention.length > 0 ? 'inspect_attention'
+    : openTasks.length > 0 ? 'inspect_open_task'
+    : events.length > 0 ? 'inspect_operation_evidence' : 'read_operation_evidence';
+  return {
+    operation_id: operationId,
+    session_count: sessions.length,
+    task_count: tasks.length,
+    open_task_count: openTasks.length,
+    attention_count: attention.length,
+    open_attention_count: openAttention.length,
+    evidence_event_count: events.length,
+    next_action: nextAction,
+  };
+}
+
+function operationScopeLoadedForCheck(operation = {}, product = {}, context = {}) {
+  const operationId = operation.operation_id || context.activeOperationId || '';
+  return Boolean(operationId && product.operation?.operation_id === operationId);
+}
+
+function operationEventsForCheck(operation = {}, product = {}, context = {}) {
+  const operationId = operation.operation_id || context.activeOperationId || '';
+  if (!operationId) return [];
+  const seen = new Set();
+  return (product.carrier_evidence || []).flatMap((entry) => entry.events || []).filter((event) => {
+    const eventOperationId = event.payload?.operation_id || event.payload?.target?.id || product.operation?.operation_id || '';
+    if (eventOperationId !== operationId) return false;
+    const key = [event.carrier_session_id, event.sequence, event.event_kind, JSON.stringify(event.payload || {})].join(':');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function operationTasksForCheck(operation = {}, product = {}, context = {}) {
+  const operationId = operation.operation_id || context.activeOperationId || '';
+  if (!operationId) return [];
+  const siteId = product.site?.site_id || context.siteId || '';
+  return (product.tasks || []).filter((task) => task.operation_id === operationId || task.site_id === siteId);
+}
+
+function operationAttentionForCheck(product = {}) {
+  const tasks = product.tasks || [];
+  const seen = new Set();
+  return (product.carrier_evidence || []).flatMap((entry) => entry.events || [])
+    .filter((event) => event.event_kind === 'directive_emitted' && event.payload?.directive_kind === 'operation_attention')
+    .map((event) => {
+      const payload = event.payload || {};
+      const key = payload.directive_id || payload.input_event_id || [event.carrier_session_id, event.sequence].filter(Boolean).join(':');
+      if (seen.has(key)) return null;
+      seen.add(key);
+      const resolvedByTask = tasks.find((task) => {
+        const note = String(task.note || '');
+        const status = String(task.status || '').toLowerCase();
+        const resolutionStatus = status === 'done' || status === 'resolved' || status === 'closed';
+        const inputEventId = String(payload.input_event_id || '');
+        return resolutionStatus && (note.includes(key) || (inputEventId && note.includes(inputEventId)));
+      }) || null;
+      return {
+        key,
+        operation_id: payload.operation_id || payload.target?.id || product.operation?.operation_id || null,
+        status: resolvedByTask ? 'resolved' : 'open',
+      };
+    })
+    .filter(Boolean);
+}
+
+function operationPostureReasonForCheck(item = {}) {
+  const action = item.command?.next_action || 'inspect_operation';
+  if (action === 'read_operation_scope') return 'operation_scope';
+  if (action === 'start_or_select_session') return 'session';
+  if (action === 'inspect_attention') return 'operation_attention';
+  if (action === 'inspect_open_task') return 'open_tasks';
+  if (action === 'read_operation_evidence') return 'carrier_evidence';
+  if (action === 'inspect_operation_evidence') return 'evidence_review';
+  return action;
+}
+
+function taskLifecycleStatusForCheck(task = {}) {
+  const status = String(task.status || '').toLowerCase();
+  if (status === 'open' || status === 'todo' || status === 'pending') return 'open';
+  if (status === 'done' || status === 'resolved' || status === 'closed') return 'closed';
+  return status || 'unknown';
 }
 
 function countBy(items = [], keyForItem) {
