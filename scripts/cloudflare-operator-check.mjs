@@ -148,6 +148,7 @@ assert.match(consoleCheck.body, /mailbox_authority_partition/);
 assert.match(consoleCheck.body, /site_file_change_proposal_focus/);
 assert.match(consoleCheck.body, /site_file_change_proposal_count/);
 assert.match(consoleCheck.body, /site_file_change_proposal_authority/);
+assert.match(consoleCheck.body, /mailbox_status_source_read_count/);
 assert.match(consoleCheck.body, /filesystem_executor_authority/);
 assert.match(consoleCheck.body, /filesystem_mutation_admission/);
 assert.match(consoleCheck.body, /repository_publication_admission/);
@@ -1640,6 +1641,13 @@ assert.equal(operationSurface?.cloudflare_site_file_materialization_executor_aut
 assert.equal(operationSurface?.windows_filesystem_mutation_admission, 'not_admitted');
 assert.equal(operationSurface?.site_file_materialization_repository_publication_admission, 'not_admitted');
 assert.equal(operationSurface?.site_file_materialization_authority_partition, 'site_file_materialization_cloudflare_owned_windows_filesystem_and_publication_not_admitted');
+assert.ok(Number.isInteger(operationSurface?.mailbox_status_source_read_count));
+if (operationSurface.mailbox_status_source_read_count > 0) {
+  assert.equal(operationSurface.mailbox_status_authority, 'cloudflare_graph_mailbox_status_source');
+  assert.equal(operationSurface.mailbox_send_admission, 'not_admitted');
+  assert.equal(operationSurface.mailbox_mutation_admission, 'not_admitted');
+  assert.equal(operationSurface.mailbox_authority_partition, 'mailbox_status_source_read_cloudflare_owned_send_and_mutation_not_admitted');
+}
 assert.ok(Array.isArray(webhookDelayDirectiveDeliveries));
 assert.ok(webhookDelayDirectiveDeliveries.length >= 1);
 assert.equal(operationSurface?.webhook_delay_directive_delivery_count, webhookDelayDirectiveDeliveries.length);

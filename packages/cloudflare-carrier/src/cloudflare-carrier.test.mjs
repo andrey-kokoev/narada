@@ -3279,6 +3279,115 @@ test('worker records mailbox status shadow reads without admitting mailbox mutat
   assert.equal(operationReadBody.operation_product_surface.mailbox_authority_partition, 'mailbox_status_shadow_read_cloudflare_recorded_send_and_mutation_windows_owned');
 });
 
+test('worker reads mailbox status from Graph only with Cloudflare-held credentials', async () => {
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{
+      site_id: 'site_fixture',
+      site_ref: 'site://fixture',
+      display_name: 'Fixture Site',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+    memberships: [{
+      site_id: 'site_fixture',
+      principal_id: 'admin',
+      role: 'owner',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+    operations: [{
+      operation_id: 'operation_mailbox_source',
+      site_id: 'site_fixture',
+      display_name: 'Mailbox Source Operation',
+      operation_kind: 'operating_layer_update',
+      status: 'active',
+      created_by_principal_id: 'admin',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+  });
+  let graphFetchCalls = 0;
+  const envWithoutCredentials = authEnv(fakeDurableObjectNamespace(), {
+    CLOUDFLARE_SITE_REGISTRY_DB: siteDb,
+    CLOUDFLARE_GRAPH_FETCH: async () => {
+      graphFetchCalls += 1;
+      return new Response('{}', { status: 500 });
+    },
+  });
+  const missingCredentials = await worker.fetch(jsonRequest({
+    operation: 'mailbox.status_source.read',
+    request_id: 'request_mailbox_source_missing_credentials',
+    params: { site_id: 'site_fixture', account_ref: 'sonar.narada@example.com' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), envWithoutCredentials);
+  const missingCredentialsBody = await missingCredentials.json();
+  assert.equal(missingCredentialsBody.code, 'graph_credentials_missing');
+  assert.equal(missingCredentials.status, 401);
+  assert.equal(graphFetchCalls, 0);
+
+  const graphUrls = [];
+  const env = authEnv(fakeDurableObjectNamespace(), {
+    CLOUDFLARE_SITE_REGISTRY_DB: siteDb,
+    GRAPH_ACCESS_TOKEN: 'cloudflare-worker-graph-token',
+    CLOUDFLARE_GRAPH_FETCH: async (url, init) => {
+      graphUrls.push({ url: String(url), authorization: init?.headers?.Authorization });
+      if (String(url).includes('/mailFolders/inbox/messages')) {
+        return new Response(JSON.stringify({ value: [{ receivedDateTime: '2026-06-08T12:00:00Z' }] }), { status: 200 });
+      }
+      if (String(url).includes('/mailFolders/drafts')) {
+        return new Response(JSON.stringify({ totalItemCount: 1 }), { status: 200 });
+      }
+      if (String(url).includes('/mailFolders/inbox')) {
+        return new Response(JSON.stringify({ unreadItemCount: 2, totalItemCount: 7 }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ error: { code: 'UnexpectedUrl' } }), { status: 404 });
+    },
+  });
+
+  const recorded = await worker.fetch(jsonRequest({
+    operation: 'mailbox.status_source.read',
+    request_id: 'request_mailbox_source_read',
+    params: { site_id: 'site_fixture', account_ref: 'sonar.narada@example.com', read_id: 'mailbox_status_source_fixture_1' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(recorded.status, 200);
+  const recordedBody = await recorded.json();
+  assert.equal(recordedBody.schema, 'narada.sonar.cloudflare_mailbox_status_source_read.v1');
+  assert.equal(recordedBody.mailbox_status_authority, 'cloudflare_graph_mailbox_status_source');
+  assert.equal(recordedBody.mailbox_send_admission, 'not_admitted');
+  assert.equal(recordedBody.mailbox_mutation_admission, 'not_admitted');
+  assert.equal(recordedBody.read.source_locus, 'cloudflare_carrier_site');
+  assert.equal(recordedBody.read.unread_count, 2);
+  assert.equal(recordedBody.read.pending_draft_count, 1);
+  assert.equal(recordedBody.read.latest_message_at, '2026-06-08T12:00:00Z');
+  assert.equal(graphUrls.length, 3);
+  assert.ok(graphUrls.every((entry) => entry.authorization === 'Bearer cloudflare-worker-graph-token'));
+
+  const listed = await worker.fetch(jsonRequest({
+    operation: 'mailbox.status_source.list',
+    request_id: 'request_mailbox_source_list',
+    params: { site_id: 'site_fixture', limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(listed.status, 200);
+  const listedBody = await listed.json();
+  assert.equal(listedBody.mailbox_status_authority, 'cloudflare_graph_mailbox_status_source');
+  assert.deepEqual(listedBody.reads.map((entry) => entry.read_id), ['mailbox_status_source_fixture_1']);
+
+  const operationRead = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_mailbox_source_operation_read',
+    params: { site_id: 'site_fixture', operation_id: 'operation_mailbox_source', mailbox_status_source_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(operationRead.status, 200);
+  const operationReadBody = await operationRead.json();
+  assert.equal(operationReadBody.mailbox_status_source_reads.length, 1);
+  assert.equal(operationReadBody.operation_product_surface.mailbox_status_source_read_count, 1);
+  assert.equal(operationReadBody.operation_product_surface.mailbox_status_authority, 'cloudflare_graph_mailbox_status_source');
+  assert.equal(operationReadBody.operation_product_surface.mailbox_send_admission, 'not_admitted');
+  assert.equal(operationReadBody.operation_product_surface.mailbox_mutation_admission, 'not_admitted');
+  assert.equal(operationReadBody.operation_product_surface.mailbox_authority_partition, 'mailbox_status_source_read_cloudflare_owned_send_and_mutation_not_admitted');
+});
+
 test('worker records site file change proposals without admitting filesystem or publication mutation', async () => {
   const siteDb = fakeD1SiteRegistryDatabase({
     sites: [{
@@ -5916,6 +6025,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     webhookDelayDirectiveDeliveries: clone(initial.webhookDelayDirectiveDeliveries ?? []),
     residentLoopShadowRuns: clone(initial.residentLoopShadowRuns ?? []),
     mailboxStatusShadowReads: clone(initial.mailboxStatusShadowReads ?? []),
+    mailboxStatusSourceReads: clone(initial.mailboxStatusSourceReads ?? []),
     siteFileChangeProposals: clone(initial.siteFileChangeProposals ?? []),
     siteFileMaterializations: clone(initial.siteFileMaterializations ?? []),
     taskLifecycleShadowReads: clone(initial.taskLifecycleShadowReads ?? []),
@@ -6036,6 +6146,12 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const row = { read_id, site_id, source_locus, target_locus, source_schema, generated_at, account_ref, mailbox_status, unread_count, pending_draft_count, pending_send_count, latest_message_at, ticket_count, sync_state, mailbox_read_authority, mailbox_write_authority, mailbox_send_admission, mailbox_mutation_admission, shadow_read_posture, record_json, recorded_by_principal_id, recorded_at };
         if (existing) Object.assign(existing, row);
         else state.mailboxStatusShadowReads.push(row);
+      } else if (normalized.startsWith('insert into cloudflare_mailbox_status_source_reads')) {
+        const [read_id, site_id, source_locus, source_adapter, generated_at, account_ref, mailbox_status, unread_count, pending_draft_count, pending_send_count, latest_message_at, mailbox_read_authority, mailbox_send_admission, mailbox_mutation_admission, source_response_json, record_json, recorded_by_principal_id, recorded_at] = bindings;
+        const existing = state.mailboxStatusSourceReads.find((entry) => entry.read_id === read_id);
+        const row = { read_id, site_id, source_locus, source_adapter, generated_at, account_ref, mailbox_status, unread_count, pending_draft_count, pending_send_count, latest_message_at, mailbox_read_authority, mailbox_send_admission, mailbox_mutation_admission, source_response_json, record_json, recorded_by_principal_id, recorded_at };
+        if (existing) Object.assign(existing, row);
+        else state.mailboxStatusSourceReads.push(row);
       } else if (normalized.startsWith('insert into cloudflare_site_file_change_proposals')) {
         const [proposal_id, site_id, source_schema, generated_at, operation_id, task_id, proposal_ref, proposal_summary, authority_locus, filesystem_executor_authority, filesystem_mutation_admission, repository_publication_admission, proposal_posture, file_count, proposal_json, recorded_by_principal_id, recorded_at] = bindings;
         const existing = state.siteFileChangeProposals.find((entry) => entry.proposal_id === proposal_id);
@@ -6152,6 +6268,16 @@ function fakeD1SiteRegistryStatement(state, sql) {
           results: state.carrierSessions
             .filter((entry) => entry.site_id === siteId)
             .sort((left, right) => right.created_at.localeCompare(left.created_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_mailbox_status_source_reads')) {
+        const [siteId, limit] = bindings;
+        return {
+          results: state.mailboxStatusSourceReads
+            .filter((entry) => entry.site_id === siteId)
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
             .slice(0, Number(limit))
             .map((entry) => clone(entry)),
         };
