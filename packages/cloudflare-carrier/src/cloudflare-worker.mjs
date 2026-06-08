@@ -2591,6 +2591,29 @@ export function renderCloudflareCarrierConsole() {
       const event = state.events.find(predicate) || (state.operationProduct?.carrier_evidence || []).flatMap((entry) => entry.events || []).find(predicate) || null;
       if (event) focusEvidence(event);
     }
+    function evidenceFocusIndex(events = visibleEvents()) {
+      if (!state.evidenceFocus) return -1;
+      return events.findIndex((event) => eventKey(event) === eventKey(state.evidenceFocus));
+    }
+    function focusAdjacentEvidence(offset) {
+      const events = visibleEvents();
+      if (events.length === 0) return;
+      const current = evidenceFocusIndex(events);
+      const nextIndex = current < 0 ? 0 : Math.max(0, Math.min(events.length - 1, current + offset));
+      focusEvidence(events[nextIndex]);
+      renderEvents();
+    }
+    function evidenceTrailContext(event) {
+      const events = visibleEvents();
+      const index = evidenceFocusIndex(events);
+      const lane = state.evidenceLane || classifyEvidenceLane(event);
+      return [
+        ['Trail Position', index >= 0 ? String(index + 1) + ' / ' + events.length : 'outside visible window'],
+        ['Lane', lane || 'all'],
+        ['Active Kind Filter', el('eventKindFilter').value || 'all'],
+        ['Active Session Filter', el('eventSessionFilter').value || 'all'],
+      ];
+    }
     function renderEvidenceFocus() {
       if (!state.evidenceFocus) {
         el('evidenceFocus').replaceChildren(
@@ -2605,10 +2628,19 @@ export function renderCloudflareCarrierConsole() {
       meta.textContent = eventTitle(state.evidenceFocus);
       const summary = document.createElement('div');
       summary.className = 'evidence-summary';
-      summary.replaceChildren(...evidenceActionContext(state.evidenceFocus).map(([label, value]) => evidenceField(label, value)));
+      summary.replaceChildren(...evidenceActionContext(state.evidenceFocus).map(([label, value]) => evidenceField(label, value)), ...evidenceTrailContext(state.evidenceFocus).map(([label, value]) => evidenceField(label, value)));
       const pre = document.createElement('pre');
       pre.textContent = JSON.stringify(evidencePayload(state.evidenceFocus), null, 2);
-      el('evidenceFocus').replaceChildren(heading, meta, summary, pre);
+      el('evidenceFocus').replaceChildren(
+        heading,
+        meta,
+        summary,
+        focusActionRow(
+          focusActionButton('evidenceFocusPreviousAction', 'Previous Evidence', () => focusAdjacentEvidence(-1)),
+          focusActionButton('evidenceFocusNextAction', 'Next Evidence', () => focusAdjacentEvidence(1)),
+        ),
+        pre,
+      );
     }
     function selectAttentionItem(item) {
       if (!item?.directive_id) return;

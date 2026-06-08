@@ -788,6 +788,14 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /evidence-field/);
   assert.match(html, /evidenceMeaning/);
   assert.match(html, /evidenceActionContext/);
+  assert.match(html, /evidenceTrailContext/);
+  assert.match(html, /evidenceFocusIndex/);
+  assert.match(html, /focusAdjacentEvidence/);
+  assert.match(html, /Trail Position/);
+  assert.match(html, /evidenceFocusPreviousAction/);
+  assert.match(html, /evidenceFocusNextAction/);
+  assert.match(html, /Previous Evidence/);
+  assert.match(html, /Next Evidence/);
   assert.match(html, /Evidence Lanes|evidenceLanes/);
   assert.match(html, /classifyEvidenceLane/);
   assert.match(html, /renderEvidenceLanes/);
