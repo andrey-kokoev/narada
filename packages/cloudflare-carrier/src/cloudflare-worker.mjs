@@ -1785,6 +1785,62 @@ function summarizeCloudflareOperationPostureRoute(overview = {}, activeOperation
   };
 }
 
+function summarizeCloudflareOperationWorkflowRoute({
+  operation = null,
+  lifecycleStatus = null,
+  persistencePosture = null,
+  recoveryPosture = null,
+  webhookDelayDirectiveRecords = [],
+  webhookDelayDirectiveDeliveries = [],
+  residentDispatchDecisions = [],
+  tasks = [],
+} = {}) {
+  const operationId = operation?.operation_id ?? lifecycleStatus?.operation_id ?? persistencePosture?.operation_id ?? recoveryPosture?.operation_id ?? null;
+  const siteId = operation?.site_id ?? lifecycleStatus?.site_id ?? persistencePosture?.site_id ?? recoveryPosture?.site_id ?? null;
+  const openTasks = (Array.isArray(tasks) ? tasks : []).filter((task) => !['done', 'closed', 'cancelled', 'resolved'].includes(String(task.status ?? '').toLowerCase()));
+  const directiveRecords = Array.isArray(webhookDelayDirectiveRecords) ? webhookDelayDirectiveRecords : [];
+  const directiveDeliveries = Array.isArray(webhookDelayDirectiveDeliveries) ? webhookDelayDirectiveDeliveries : [];
+  const dispatchDecisions = Array.isArray(residentDispatchDecisions) ? residentDispatchDecisions : [];
+  const next = (() => {
+    if (!operationId) return { action: 'select_operation', target: siteId ?? 'none', reason: 'operation_not_loaded' };
+    if (persistencePosture?.state && persistencePosture.state !== 'durable') {
+      return { action: 'review_persistence_posture', target: persistencePosture.next_action || operationId, reason: 'persistence_posture_needs_attention' };
+    }
+    if (Array.isArray(recoveryPosture?.recovery_gaps) && recoveryPosture.recovery_gaps.length > 0) {
+      return { action: 'review_recovery_posture', target: recoveryPosture.next_action || operationId, reason: 'recovery_posture_needs_attention' };
+    }
+    if (lifecycleStatus?.next_action === 'session') return { action: 'start_or_select_session', target: operationId, reason: 'operation_lifecycle_missing_session' };
+    if (lifecycleStatus?.next_action === 'carrier_evidence') return { action: 'read_operation_evidence', target: operationId, reason: 'operation_lifecycle_missing_carrier_evidence' };
+    if (lifecycleStatus?.next_action === 'continuity_packet') return { action: 'review_continuity_packet', target: siteId ?? operationId, reason: 'operation_lifecycle_missing_continuity_packet' };
+    if (lifecycleStatus?.next_action === 'continuity_loop_report') return { action: 'review_continuity_loop_report', target: siteId ?? operationId, reason: 'operation_lifecycle_missing_continuity_loop_report' };
+    if (lifecycleStatus?.next_action === 'carrier_evidence_read_degraded') return { action: 'review_carrier_evidence_replay', target: operationId, reason: 'carrier_evidence_read_degraded' };
+    if (lifecycleStatus?.next_action === 'undelivered_directives' || directiveRecords.length > directiveDeliveries.length) {
+      return { action: 'review_directive_delivery', target: directiveRecords[0]?.directive_record_id ?? operationId, reason: 'undelivered_directives' };
+    }
+    if (lifecycleStatus?.next_action === 'open_tasks' || openTasks.length > 0) {
+      return { action: 'focus_open_task', target: openTasks[0]?.task_id ?? operationId, reason: 'open_tasks' };
+    }
+    if (dispatchDecisions.length === 0 && operation?.status === 'active') {
+      return { action: 'start_resident_dispatch', target: operationId, reason: 'resident_dispatch_not_recorded' };
+    }
+    return { action: 'monitor_operation', target: operationId, reason: 'operation_ready' };
+  })();
+  const ready = next.action === 'monitor_operation';
+  return {
+    schema: 'narada.cloudflare_operation_workflow_route.v1',
+    domain: 'operation_workflow',
+    site_id: siteId,
+    operation_id: operationId,
+    command_state: ready ? 'operation_workflow_ready' : 'operation_workflow_attention',
+    command_action: next.action,
+    next_action: next.action,
+    target: next.target,
+    status: ready ? 'ready' : 'needs_attention',
+    reason: next.reason,
+    lifecycle_next_action: lifecycleStatus?.next_action ?? 'unknown',
+  };
+}
+
 function cloudflareOperationWorkQueueItems(operations = [], product = {}, context = {}) {
   const activeOperationId = context.active_operation_id || product.operation?.operation_id || '';
   return (Array.isArray(operations) ? operations : []).map((operation) => {
@@ -3422,6 +3478,16 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       site_id: siteId,
     });
     const operationPostureRoute = summarizeCloudflareOperationPostureRoute(operationPostureOverview, operation?.operation_id ?? params.operation_id ?? '');
+    const operationWorkflowRoute = summarizeCloudflareOperationWorkflowRoute({
+      operation,
+      lifecycleStatus: operationLifecycleStatus,
+      persistencePosture: cloudflarePersistencePosture,
+      recoveryPosture: cloudflareRecoveryPosture,
+      webhookDelayDirectiveRecords,
+      webhookDelayDirectiveDeliveries,
+      residentDispatchDecisions,
+      tasks,
+    });
     return {
       status: 200,
       body: {
@@ -3458,6 +3524,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         operation_lifecycle_status: operationLifecycleStatus,
         operation_posture_overview: operationPostureOverview,
         operation_posture_route: operationPostureRoute,
+        operation_workflow_route: operationWorkflowRoute,
         operation_product_surface: {
           schema: 'narada.cloudflare_operation_product_surface.v1',
           operation_id: operation?.operation_id ?? null,
@@ -3478,6 +3545,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           lifecycle_status: operationLifecycleStatus,
           operation_posture_overview: operationPostureOverview,
           operation_posture_route: operationPostureRoute,
+          operation_workflow_route: operationWorkflowRoute,
           webhook_delay_shadow_observation_count: webhookDelayShadowObservations.length,
           webhook_delay_observation_primary_read_count: webhookDelayObservationPrimaryReads.length,
           webhook_delay_scheduled_source_read_count: webhookDelayScheduledSourceReads.length,

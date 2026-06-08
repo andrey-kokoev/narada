@@ -1435,6 +1435,7 @@ const operationContinuityLoopReports = operationReadAfterContinuity.body.site_co
 const operationContinuityLoopStatus = operationReadAfterContinuity.body.site_continuity_loop_status;
 const localCloudContinuityBridge = operationReadAfterContinuity.body.local_cloud_continuity_bridge;
 const operationLifecycleStatus = operationReadAfterContinuity.body.operation_lifecycle_status;
+const operationWorkflowRoute = operationReadAfterContinuity.body.operation_workflow_route;
 const operationPersistencePosture = operationReadAfterContinuity.body.cloudflare_persistence_posture;
 const operationRecoveryPosture = operationReadAfterContinuity.body.cloudflare_recovery_posture;
 const webhookDelayDirectiveDeliveries = operationReadAfterContinuity.body.webhook_delay_directive_deliveries ?? [];
@@ -1470,6 +1471,14 @@ assert.equal(operationLifecycleStatus?.continuity_loop_state, 'loop_report_obser
 assert.ok((operationLifecycleStatus?.continuity_loop_report_count ?? 0) >= 1);
 assert.equal(operationSurface?.lifecycle_status?.health, operationLifecycleStatus.health);
 assert.equal(operationSurface?.lifecycle_status?.next_action, operationLifecycleStatus.next_action);
+assert.equal(operationWorkflowRoute?.schema, 'narada.cloudflare_operation_workflow_route.v1');
+assert.equal(operationWorkflowRoute?.domain, 'operation_workflow');
+assert.equal(operationWorkflowRoute?.site_id, siteId);
+assert.equal(operationWorkflowRoute?.operation_id, operationId);
+assert.match(operationWorkflowRoute?.status, /^(ready|needs_attention)$/);
+assert.match(operationWorkflowRoute?.next_action, /^(select_operation|review_persistence_posture|review_recovery_posture|start_or_select_session|read_operation_evidence|review_continuity_packet|review_continuity_loop_report|review_carrier_evidence_replay|review_directive_delivery|focus_open_task|start_resident_dispatch|monitor_operation)$/);
+assert.equal(operationSurface?.operation_workflow_route?.next_action, operationWorkflowRoute.next_action);
+assert.deepEqual(operationSurface?.operation_workflow_route, operationWorkflowRoute);
 assert.equal(operationPersistencePosture?.schema, 'narada.cloudflare_persistence_posture.v1');
 assert.equal(operationPersistencePosture?.site_id, siteId);
 assert.equal(operationPersistencePosture?.operation_id, operationId);

@@ -2440,6 +2440,20 @@ test('worker records webhook delay observations as Cloudflare shadow-read eviden
     reason: 'session',
   });
   assert.deepEqual(operationReadBody.operation_product_surface.operation_posture_route, operationReadBody.operation_posture_route);
+  assert.deepEqual(operationReadBody.operation_workflow_route, {
+    schema: 'narada.cloudflare_operation_workflow_route.v1',
+    domain: 'operation_workflow',
+    site_id: 'site_fixture',
+    operation_id: 'operation_webhook_delay',
+    command_state: 'operation_workflow_attention',
+    command_action: 'review_persistence_posture',
+    next_action: 'review_persistence_posture',
+    target: 'task_lifecycle_store',
+    status: 'needs_attention',
+    reason: 'persistence_posture_needs_attention',
+    lifecycle_next_action: 'session',
+  });
+  assert.deepEqual(operationReadBody.operation_product_surface.operation_workflow_route, operationReadBody.operation_workflow_route);
   assert.equal(operationReadBody.operation_product_surface.continuity_status.schema, 'narada.cloudflare_site_continuity_status.v1');
   assert.equal(operationReadBody.operation_product_surface.continuity_status.state, 'no_packet_observed');
   assert.equal(operationReadBody.operation_product_surface.continuity_status.packet_count, 0);
