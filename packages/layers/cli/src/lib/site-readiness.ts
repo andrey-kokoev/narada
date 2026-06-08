@@ -126,14 +126,21 @@ function nextCommandFor(posture: SiteReadinessPosture, siteRoot: string, role: s
   }
 }
 
-function readSiteConfig(siteRoot: string): Record<string, unknown> | null {
-  const configPath = join(siteRoot, 'config.json');
-  if (!existsSync(configPath)) return null;
+function readJsonFile(path: string): Record<string, unknown> | null {
+  if (!existsSync(path)) return null;
   try {
-    return JSON.parse(readFileSync(configPath, 'utf8')) as Record<string, unknown>;
+    return JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
   } catch {
     return null;
   }
+}
+
+function readSiteConfig(siteRoot: string): Record<string, unknown> | null {
+  return readJsonFile(join(siteRoot, 'config.json')) ?? readJsonFile(join(siteRoot, '.narada', 'config.json'));
+}
+
+function readSiteMaterialization(siteRoot: string): Record<string, unknown> | null {
+  return readJsonFile(join(siteRoot, 'site-materialization.json')) ?? readJsonFile(join(siteRoot, '.narada', 'site-materialization.json'));
 }
 
 function objectField(source: Record<string, unknown> | null | undefined, key: string): Record<string, unknown> | null {
@@ -147,7 +154,8 @@ function arrayField(source: Record<string, unknown> | null | undefined, key: str
 }
 
 function siteKind(config: Record<string, unknown> | null): string | null {
-  const kind = config?.site_kind;
+  const site = objectField(config, 'site');
+  const kind = config?.site_kind ?? site?.site_kind;
   return typeof kind === 'string' && kind.trim() ? kind : null;
 }
 
@@ -239,16 +247,50 @@ function coordinates(config: Record<string, unknown> | null, roleIdentity: Opera
   };
 }
 
+function materializedOperationBinding(materialization: Record<string, unknown> | null): Record<string, unknown> | null {
+  return objectField(materialization, 'operation_binding');
+}
+
+function materializedRoleIdentity(
+  materialization: Record<string, unknown> | null,
+  role: string,
+): OperatorSurfaceIdentity | null {
+  const binding = materializedOperationBinding(materialization);
+  const siteId = materialization?.site_id;
+  const identity = binding?.agent_identity_default;
+  const launcher = binding?.launcher;
+  if (typeof identity !== 'string' || !identity.endsWith(`.${role}`)) return null;
+  if (typeof siteId !== 'string' || !siteId.trim()) return null;
+  const launcherDeclared = typeof launcher === 'string' && launcher.trim();
+  return {
+    identity_id: identity,
+    site_id: siteId,
+    role,
+    agent_kind: 'agent-cli',
+    label: identity,
+    input_capabilities: launcherDeclared ? ['focus', 'type_text', 'submit'] : [],
+    submit_strategy: launcherDeclared ? 'known_surface_submit' : undefined,
+    admitted_by: 'site-materialization',
+    admitted_at: '',
+    updated_at: '',
+    authority_limits: [
+      'projection_from_site_materialization',
+      'does_not_grant_additional_capability_beyond_launcher_policy',
+    ],
+  };
+}
+
 export async function assessSiteReadiness(options: AssessSiteReadinessOptions): Promise<SiteReadinessResult> {
   const role = options.role?.trim() || 'architect';
   const siteRoot = resolve(options.site);
   const siteExists = existsSync(siteRoot);
-  const configExists = existsSync(join(siteRoot, 'config.json'));
   const aiExists = existsSync(join(siteRoot, '.ai'));
-  const config = siteExists && configExists ? readSiteConfig(siteRoot) : null;
+  const config = siteExists ? readSiteConfig(siteRoot) : null;
+  const configExists = config !== null;
+  const materialization = siteExists ? readSiteMaterialization(siteRoot) : null;
   const pendingInbox = siteExists ? listPendingInbox(siteRoot) : [];
   const identities = siteExists ? await readOperatorSurfaceIdentities(siteRoot) : { identities: [] };
-  const roleIdentity = identities.identities.find((identity) => identity.role === role) ?? null;
+  const roleIdentity = identities.identities.find((identity) => identity.role === role) ?? materializedRoleIdentity(materialization, role);
 
   let posture: SiteReadinessPosture;
   if (!siteExists) {
