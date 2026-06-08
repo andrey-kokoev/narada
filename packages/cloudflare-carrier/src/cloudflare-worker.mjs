@@ -427,6 +427,61 @@ function summarizeCloudflareOperationLifecycleStatus({
   };
 }
 
+function summarizeCloudflareSiteProductStatus({
+  site = null,
+  operations = [],
+  memberships = [],
+  authorityEvents = [],
+  sessions = [],
+  tasks = [],
+  carrierEvidence = [],
+  continuityStatus = null,
+} = {}) {
+  const operationList = Array.isArray(operations) ? operations : [];
+  const membershipList = Array.isArray(memberships) ? memberships : [];
+  const authorityEventList = Array.isArray(authorityEvents) ? authorityEvents : [];
+  const sessionList = Array.isArray(sessions) ? sessions : [];
+  const taskList = Array.isArray(tasks) ? tasks : [];
+  const evidenceGroups = Array.isArray(carrierEvidence) ? carrierEvidence : [];
+  const evidenceEventCount = evidenceGroups.reduce((count, group) => count + (Array.isArray(group.events) ? group.events.length : 0), 0);
+  const activeOperationCount = operationList.filter((operation) => String(operation.status ?? '').toLowerCase() === 'active').length;
+  const activeMembershipCount = membershipList.filter((membership) => String(membership.status ?? '').toLowerCase() === 'active').length;
+  const openTaskCount = taskList.filter((task) => !['done', 'closed', 'cancelled'].includes(String(task.status ?? '').toLowerCase())).length;
+  const continuityState = continuityStatus?.state ?? 'unknown';
+  const missing = [];
+  if (activeMembershipCount === 0) missing.push('active_membership');
+  if (operationList.length === 0) missing.push('operation');
+  if (sessionList.length === 0) missing.push('session');
+  if (evidenceEventCount === 0) missing.push('carrier_evidence');
+  if (continuityState !== 'packet_observed') missing.push('continuity_packet');
+  const attention = [];
+  if (openTaskCount > 0) attention.push('open_tasks');
+  const health = missing.length === 0 && attention.length === 0
+    ? 'ready'
+    : (activeMembershipCount === 0 || operationList.length === 0 || sessionList.length === 0 || evidenceEventCount === 0 ? 'incomplete' : 'attention');
+  return {
+    schema: 'narada.cloudflare_site_product_status.v1',
+    site_id: site?.site_id ?? continuityStatus?.site_id ?? null,
+    site_status: site?.status ?? 'unknown',
+    health,
+    missing,
+    attention,
+    operation_count: operationList.length,
+    active_operation_count: activeOperationCount,
+    membership_count: membershipList.length,
+    active_membership_count: activeMembershipCount,
+    session_count: sessionList.length,
+    task_count: taskList.length,
+    open_task_count: openTaskCount,
+    carrier_evidence_group_count: evidenceGroups.length,
+    carrier_evidence_event_count: evidenceEventCount,
+    authority_event_count: authorityEventList.length,
+    continuity_state: continuityState,
+    continuity_packet_count: continuityStatus?.packet_count ?? 0,
+    next_action: missing[0] ?? attention[0] ?? 'monitor_site',
+  };
+}
+
 function boundedContinuityPacketReadLimit(value = 100) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 100;
@@ -1001,6 +1056,16 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
   const siteAuthority = cloudflareSiteAuthorityReadModel(env, siteId);
   const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
   const siteContinuityStatus = summarizeCloudflareSiteContinuityStatus(siteId, continuityPackets, siteContinuity);
+  const siteProductStatus = summarizeCloudflareSiteProductStatus({
+    site: response.site,
+    operations: response.operations,
+    memberships: response.memberships ?? (response.membership ? [response.membership] : []),
+    authorityEvents: response.authority_events,
+    sessions: response.sessions,
+    tasks,
+    carrierEvidence,
+    continuityStatus: siteContinuityStatus,
+  });
   return {
     status: 200,
     body: {
@@ -1018,6 +1083,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       site_authority: siteAuthority,
       site_continuity: siteContinuity,
       site_continuity_status: siteContinuityStatus,
+      site_product_status: siteProductStatus,
     },
   };
 }

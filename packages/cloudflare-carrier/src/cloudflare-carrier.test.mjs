@@ -694,7 +694,29 @@ test('worker site.read composes site sessions tasks authority events and carrier
   const namespace = fakeDurableObjectNamespace(durableEnv);
   const env = authEnv(namespace, { CLOUDFLARE_SITE_REGISTRY_DB: siteDb, CLOUDFLARE_CARRIER_TASK_DB: taskDb });
 
-  const start = await worker.fetch(jsonRequest(startRequest({ request_id: 'request_site_read_start' }), { token: 'test-admin-token' }), env);
+  const operationCreate = await worker.fetch(jsonRequest({
+    operation: 'operation.create',
+    request_id: 'request_site_read_operation_create',
+    params: {
+      site_id: 'site_fixture',
+      operation_id: 'operation_site_read',
+      display_name: 'Site Read Operation',
+      operation_kind: 'control',
+      status: 'active',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(operationCreate.status, 200);
+  const start = await worker.fetch(jsonRequest(startRequest({
+    request_id: 'request_site_read_start',
+    params: {
+      carrier_session_id: 'carrier_session_cloudflare_fixture',
+      agent_id: 'narada.fixture.agent',
+      site_id: 'site_fixture',
+      site_root: 'cloudflare://site_fixture',
+      site_ref: 'site://fixture',
+      operation_id: 'operation_site_read',
+    },
+  }), { token: 'test-admin-token' }), env);
   assert.equal(start.status, 200);
   const taskCreate = await worker.fetch(jsonRequest(commandRequest('/task', ['create', 'site', 'read', 'task'], { request_id: 'request_site_read_task_create' }), { token: 'test-admin-token' }), env);
   assert.equal(taskCreate.status, 200);
@@ -758,6 +780,18 @@ test('worker site.read composes site sessions tasks authority events and carrier
   const mutationExecutionContinuity = body.site_continuity.decisions.find((decision) => decision.exchange_class === 'cross_embodiment_mutation_execution');
   assert.equal(mutationExecutionContinuity.action, 'refuse');
   assert.equal(mutationExecutionContinuity.reason, 'site_continuity_cross_embodiment_mutation_execution_refused');
+  assert.equal(body.site_product_status.schema, 'narada.cloudflare_site_product_status.v1');
+  assert.equal(body.site_product_status.site_id, 'site_fixture');
+  assert.equal(body.site_product_status.health, 'attention');
+  assert.deepEqual(body.site_product_status.missing, ['continuity_packet']);
+  assert.deepEqual(body.site_product_status.attention, ['open_tasks']);
+  assert.equal(body.site_product_status.operation_count, 1);
+  assert.equal(body.site_product_status.active_operation_count, 1);
+  assert.equal(body.site_product_status.active_membership_count, 1);
+  assert.equal(body.site_product_status.session_count, 1);
+  assert.equal(body.site_product_status.open_task_count, 1);
+  assert.equal(body.site_product_status.continuity_state, 'no_packet_observed');
+  assert.equal(body.site_product_status.next_action, 'continuity_packet');
 
   const packetPut = await worker.fetch(jsonRequest({
     operation: 'site.continuity.packet.put',
@@ -802,6 +836,13 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(readAfterPacketPutBody.site_continuity_status.direction_counts.cloudflare_to_local_windows, 1);
   assert.equal(readAfterPacketPutBody.site_continuity_status.direction_counts.local_windows_to_cloudflare, 0);
   assert.equal(readAfterPacketPutBody.site_continuity_status.authority_boundary.executable_cross_embodiment_mutation, 'refused_by_site_continuity_classifier');
+  assert.equal(readAfterPacketPutBody.site_product_status.schema, 'narada.cloudflare_site_product_status.v1');
+  assert.deepEqual(readAfterPacketPutBody.site_product_status.missing, []);
+  assert.deepEqual(readAfterPacketPutBody.site_product_status.attention, ['open_tasks']);
+  assert.equal(readAfterPacketPutBody.site_product_status.health, 'attention');
+  assert.equal(readAfterPacketPutBody.site_product_status.continuity_state, 'packet_observed');
+  assert.equal(readAfterPacketPutBody.site_product_status.continuity_packet_count, 1);
+  assert.equal(readAfterPacketPutBody.site_product_status.next_action, 'open_tasks');
 });
 
 test('worker serves minimal authenticated web console shell', async () => {
