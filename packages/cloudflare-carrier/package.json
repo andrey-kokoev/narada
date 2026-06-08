@@ -16,6 +16,7 @@
     "d1:migrations:remote": "wrangler d1 migrations apply narada-cloudflare-carrier-tasks --remote --config wrangler.toml",
     "smoke:live": "node scripts/cloudflare-carrier-live-smoke.mjs",
     "webhook-delay:shadow-smoke:live": "node scripts/cloudflare-carrier-webhook-delay-shadow-live-smoke.mjs",
+    "resident-loop:shadow-smoke:live": "node scripts/cloudflare-carrier-resident-loop-shadow-live-smoke.mjs",
     "continuity:cloudflare": "node scripts/cloudflare-site-continuity-sync.mjs",
     "ship": "pnpm test && pnpm deploy:check && pnpm deploy:dry-run"
   },

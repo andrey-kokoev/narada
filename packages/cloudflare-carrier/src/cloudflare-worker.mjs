@@ -38,6 +38,7 @@ const MICROSOFT_OIDC_PENDING_COOKIE = 'narada_microsoft_oidc_pending';
 const DEFAULT_OPERATOR_SESSION_TTL_SECONDS = 8 * 60 * 60;
 const MICROSOFT_OIDC_PENDING_TTL_SECONDS = 5 * 60;
 const CLOUDFLARE_WEBHOOK_DELAY_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_webhook_delay_shadow_read.v1';
+const CLOUDFLARE_RESIDENT_LOOP_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_resident_loop_shadow_read.v1';
 const CLOUDFLARE_WEBHOOK_DELAY_SHADOW_MODE = 'cloudflare_shadow_read';
 const WINDOWS_PRIMARY_DISPATCH_AUTHORITY = 'windows_primary_dispatcher';
 const DEFAULT_WEBHOOK_DELAY_CRITICAL_MINUTES = 15;
@@ -447,6 +448,8 @@ function isSiteProductOperation(operation) {
     'operation.list',
     'webhook_delay.shadow_read.record',
     'webhook_delay.shadow_read.list',
+    'resident_loop.shadow_read.record',
+    'resident_loop.shadow_read.list',
   ].includes(operation);
 }
 
@@ -554,6 +557,30 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
   if (!registry) return { status: 500, body: { ok: false, code: 'missing_site_registry_binding' } };
   const params = body.params ?? {};
   const requestedSiteId = params.site_id ?? body.site_id ?? 'unknown-site';
+  if (body.operation === 'resident_loop.shadow_read.record') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const result = await recordCloudflareResidentLoopShadowRun(env, requestedSiteId, params, principal);
+    return { status: result.ok ? 200 : 400, body: result };
+  }
+  if (body.operation === 'resident_loop.shadow_read.list') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const loopRuns = await listCloudflareResidentLoopShadowRuns(env, requestedSiteId, params.resident_loop_shadow_limit ?? params.limit);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        schema: CLOUDFLARE_RESIDENT_LOOP_SHADOW_READ_SCHEMA,
+        status: 'ok',
+        site_id: requestedSiteId,
+        shadow_mode: CLOUDFLARE_WEBHOOK_DELAY_SHADOW_MODE,
+        dispatch_authority: WINDOWS_PRIMARY_DISPATCH_AUTHORITY,
+        dispatch_action: 'none',
+        loop_runs: loopRuns,
+      },
+    };
+  }
   if (body.operation === 'webhook_delay.shadow_read.record') {
     const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
     if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
@@ -601,6 +628,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const tasks = await listOperationTasks(env, siteId, sessions);
     const continuityPackets = await listCloudflareContinuityPackets(env, siteId);
     const webhookDelayShadowObservations = await listCloudflareWebhookDelayShadowObservations(env, siteId, params.webhook_delay_shadow_limit ?? params.limit);
+    const residentLoopShadowRuns = await listCloudflareResidentLoopShadowRuns(env, siteId, params.resident_loop_shadow_limit ?? params.limit);
     const carrierEvidence = await readCarrierEvidenceForSiteSessions(env, sessions, principal, params);
     const siteAuthority = cloudflareSiteAuthorityReadModel(env, siteId);
     const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
@@ -611,6 +639,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         tasks,
         site_continuity_packets: continuityPackets,
         webhook_delay_shadow_observations: webhookDelayShadowObservations,
+        resident_loop_shadow_runs: residentLoopShadowRuns,
         carrier_evidence: carrierEvidence,
         site_authority: siteAuthority,
         site_continuity: siteContinuity,
@@ -623,6 +652,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           carrier_evidence_count: carrierEvidence.length,
           continuity_packet_count: continuityPackets.length,
           webhook_delay_shadow_observation_count: webhookDelayShadowObservations.length,
+          resident_loop_shadow_run_count: residentLoopShadowRuns.length,
           dispatch_authority: WINDOWS_PRIMARY_DISPATCH_AUTHORITY,
         },
       },
@@ -640,6 +670,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
   const tasks = await listSiteTasks(env, siteId);
   const continuityPackets = await listCloudflareContinuityPackets(env, siteId);
   const webhookDelayShadowObservations = await listCloudflareWebhookDelayShadowObservations(env, siteId, params.webhook_delay_shadow_limit ?? params.limit);
+  const residentLoopShadowRuns = await listCloudflareResidentLoopShadowRuns(env, siteId, params.resident_loop_shadow_limit ?? params.limit);
   const carrierEvidence = await readCarrierEvidenceForSiteSessions(env, response.sessions ?? [], principal, params);
   const siteAuthority = cloudflareSiteAuthorityReadModel(env, siteId);
   const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
@@ -650,11 +681,190 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       tasks,
       site_continuity_packets: continuityPackets,
       webhook_delay_shadow_observations: webhookDelayShadowObservations,
+      resident_loop_shadow_runs: residentLoopShadowRuns,
       carrier_evidence: carrierEvidence,
       site_authority: siteAuthority,
       site_continuity: siteContinuity,
     },
   };
+}
+
+async function recordCloudflareResidentLoopShadowRun(env = {}, siteId, params = {}, principal = null) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return { ok: false, code: 'missing_site_registry_binding' };
+  if (!siteId || siteId === 'unknown-site') return { ok: false, code: 'missing_site_id' };
+  const loopRun = createResidentLoopShadowRun(siteId, params);
+  if (!loopRun.ok) return loopRun;
+  const record = {
+    loop_run_id: params.loop_run_id ?? residentLoopShadowRunId(siteId, loopRun.loop_run),
+    site_id: siteId,
+    schema: CLOUDFLARE_RESIDENT_LOOP_SHADOW_READ_SCHEMA,
+    shadow_mode: CLOUDFLARE_WEBHOOK_DELAY_SHADOW_MODE,
+    dispatch_authority: WINDOWS_PRIMARY_DISPATCH_AUTHORITY,
+    dispatch_action: 'none',
+    source_locus: params.source_locus ?? 'windows_local_site',
+    target_locus: params.target_locus ?? 'cloudflare_carrier_site',
+    loop_run: loopRun.loop_run,
+    recorded_by_principal_id: principal?.principal_id ?? 'unknown-principal',
+    recorded_at: new Date().toISOString(),
+  };
+  await ensureCloudflareResidentLoopShadowRunSchema(db);
+  await db.prepare(`
+    INSERT INTO cloudflare_resident_loop_shadow_runs (
+      loop_run_id,
+      site_id,
+      operation_id,
+      source_locus,
+      target_locus,
+      run_started_at,
+      run_finished_at,
+      loop_status,
+      step_count,
+      operator_attention_count,
+      dispatch_authority,
+      shadow_mode,
+      dispatch_action,
+      loop_run_json,
+      recorded_by_principal_id,
+      recorded_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(loop_run_id) DO UPDATE SET
+      operation_id = excluded.operation_id,
+      source_locus = excluded.source_locus,
+      target_locus = excluded.target_locus,
+      run_started_at = excluded.run_started_at,
+      run_finished_at = excluded.run_finished_at,
+      loop_status = excluded.loop_status,
+      step_count = excluded.step_count,
+      operator_attention_count = excluded.operator_attention_count,
+      dispatch_authority = excluded.dispatch_authority,
+      shadow_mode = excluded.shadow_mode,
+      dispatch_action = excluded.dispatch_action,
+      loop_run_json = excluded.loop_run_json,
+      recorded_by_principal_id = excluded.recorded_by_principal_id,
+      recorded_at = excluded.recorded_at
+  `).bind(
+    record.loop_run_id,
+    record.site_id,
+    record.loop_run.operation_id,
+    record.source_locus,
+    record.target_locus,
+    record.loop_run.run_started_at,
+    record.loop_run.run_finished_at,
+    record.loop_run.status,
+    record.loop_run.step_count,
+    record.loop_run.operator_attention_count,
+    record.dispatch_authority,
+    record.shadow_mode,
+    record.dispatch_action,
+    JSON.stringify(record.loop_run),
+    record.recorded_by_principal_id,
+    record.recorded_at,
+  ).run();
+  return {
+    ok: true,
+    schema: CLOUDFLARE_RESIDENT_LOOP_SHADOW_READ_SCHEMA,
+    status: 'recorded',
+    site_id: siteId,
+    shadow_mode: CLOUDFLARE_WEBHOOK_DELAY_SHADOW_MODE,
+    dispatch_authority: WINDOWS_PRIMARY_DISPATCH_AUTHORITY,
+    dispatch_action: 'none',
+    loop_run: record.loop_run,
+    record,
+  };
+}
+
+async function ensureCloudflareResidentLoopShadowRunSchema(db) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS cloudflare_resident_loop_shadow_runs (
+      loop_run_id TEXT PRIMARY KEY,
+      site_id TEXT NOT NULL,
+      operation_id TEXT,
+      source_locus TEXT NOT NULL,
+      target_locus TEXT NOT NULL,
+      run_started_at TEXT NOT NULL,
+      run_finished_at TEXT,
+      loop_status TEXT NOT NULL,
+      step_count INTEGER NOT NULL,
+      operator_attention_count INTEGER NOT NULL,
+      dispatch_authority TEXT NOT NULL,
+      shadow_mode TEXT NOT NULL,
+      dispatch_action TEXT NOT NULL,
+      loop_run_json TEXT NOT NULL,
+      recorded_by_principal_id TEXT NOT NULL,
+      recorded_at TEXT NOT NULL
+    )
+  `).run();
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_cloudflare_resident_loop_shadow_runs_site_recorded
+    ON cloudflare_resident_loop_shadow_runs(site_id, recorded_at)
+  `).run();
+}
+
+async function listCloudflareResidentLoopShadowRuns(env = {}, siteId, limit) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function' || !siteId) return [];
+  await ensureCloudflareResidentLoopShadowRunSchema(db);
+  const boundedLimit = clampInteger(limit, 0, 100, 25);
+  const rows = await db.prepare(`
+    SELECT * FROM cloudflare_resident_loop_shadow_runs
+    WHERE site_id = ?
+    ORDER BY recorded_at DESC
+    LIMIT ?
+  `).bind(siteId, boundedLimit).all();
+  return (rows.results ?? []).map((row) => ({
+    loop_run_id: row.loop_run_id,
+    site_id: row.site_id,
+    operation_id: row.operation_id,
+    schema: CLOUDFLARE_RESIDENT_LOOP_SHADOW_READ_SCHEMA,
+    source_locus: row.source_locus,
+    target_locus: row.target_locus,
+    run_started_at: row.run_started_at,
+    run_finished_at: row.run_finished_at,
+    loop_status: row.loop_status,
+    step_count: Number(row.step_count),
+    operator_attention_count: Number(row.operator_attention_count),
+    dispatch_authority: row.dispatch_authority,
+    shadow_mode: row.shadow_mode,
+    dispatch_action: row.dispatch_action,
+    loop_run: parseJsonObject(row.loop_run_json),
+    recorded_by_principal_id: row.recorded_by_principal_id,
+    recorded_at: row.recorded_at,
+  }));
+}
+
+function createResidentLoopShadowRun(siteId, params = {}) {
+  const source = params.loop_run ?? params.summary ?? {};
+  const runStartedAt = String(params.run_started_at ?? source.run_started_at ?? source.started_at ?? new Date().toISOString());
+  const status = String(params.status ?? source.status ?? 'observed');
+  const steps = Array.isArray(params.steps) ? params.steps : Array.isArray(source.steps) ? source.steps : [];
+  const operatorAttention = Array.isArray(params.operator_attention) ? params.operator_attention
+    : Array.isArray(source.operator_attention) ? source.operator_attention
+      : Array.isArray(source.operator_attention_events) ? source.operator_attention_events
+        : [];
+  return {
+    ok: true,
+    loop_run: {
+      schema: 'narada.sonar.resident_loop_shadow_run.v1',
+      site_id: siteId,
+      operation_id: params.operation_id ?? source.operation_id ?? null,
+      run_started_at: runStartedAt,
+      run_finished_at: params.run_finished_at ?? source.run_finished_at ?? source.finished_at ?? null,
+      status,
+      step_count: clampInteger(params.step_count ?? source.step_count ?? steps.length, 0, 10000, steps.length),
+      operator_attention_count: clampInteger(params.operator_attention_count ?? source.operator_attention_count ?? operatorAttention.length, 0, 10000, operatorAttention.length),
+      steps,
+      operator_attention: operatorAttention,
+      source_summary_path: params.source_summary_path ?? params.summary_path ?? null,
+      dispatch_authority: WINDOWS_PRIMARY_DISPATCH_AUTHORITY,
+      dispatch_action: 'none',
+      shadow_mode: CLOUDFLARE_WEBHOOK_DELAY_SHADOW_MODE,
+    },
+  };
+}
+
+function residentLoopShadowRunId(siteId, loopRun) {
+  return `resident_loop_shadow_${safeIdToken(siteId)}_${safeIdToken(loopRun.operation_id)}_${safeIdToken(loopRun.run_started_at)}`;
 }
 
 async function recordCloudflareWebhookDelayShadowObservation(env = {}, siteId, params = {}, principal = null) {
@@ -2186,6 +2396,13 @@ export function renderCloudflareCarrierConsole() {
         <label>Principal ID<input id="memberPrincipalId" placeholder="microsoft:tenant:object-id"></label>
         <label>Role<input id="memberRole" value="viewer"></label>
         <div class="actions"><button id="putMembership" class="secondary">Put Membership</button></div>
+        <h3>Membership Action</h3>
+        <div id="membershipActionSummary" class="evidence-summary"><div class="empty">No membership action loaded.</div></div>
+        <div class="actions">
+          <button id="membershipActionPut" class="secondary">Put Focused Membership</button>
+          <button id="membershipActionReadSite" class="secondary">Read Membership Site</button>
+          <button id="membershipActionFocusAuthority" class="secondary">Focus Membership Authority</button>
+        </div>
         <h3>Membership Navigator</h3>
         <div id="membershipNavigator" class="attention-items"><div class="empty">No memberships loaded.</div></div>
         <h3>Membership Focus Detail</h3>
@@ -2466,6 +2683,7 @@ export function renderCloudflareCarrierConsole() {
       el('controlContinuity').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length ?? 0) + ' packets';
       el('controlWorkbenchReadiness').textContent = operationWorkbenchReadiness(product);
       renderSiteActionSummary();
+      renderMembershipActionSummary();
       renderOperationActionSummary();
       renderSessionActionSummary();
       renderTaskCommandPreview();
@@ -3377,6 +3595,7 @@ export function renderCloudflareCarrierConsole() {
       if (membership.role) el('memberRole').value = membership.role;
       renderMembershipNavigator(currentMemberships(state.operationProduct || {}));
       renderSiteActionSummary();
+      renderMembershipActionSummary();
       updateControlRoom();
     }
     function currentMemberships(product = {}) {
@@ -3389,6 +3608,7 @@ export function renderCloudflareCarrierConsole() {
         state.membershipFocus = null;
         el('membershipNavigator').innerHTML = '<div class="empty">No memberships loaded.</div>';
         renderSiteActionSummary();
+        renderMembershipActionSummary();
         renderMembershipFocusDetail();
         return;
       }
@@ -3406,7 +3626,79 @@ export function renderCloudflareCarrierConsole() {
         return node;
       }));
       renderSiteActionSummary();
+      renderMembershipActionSummary();
       renderMembershipFocusDetail();
+    }
+    function focusedMembership() {
+      const principalId = el('memberPrincipalId').value.trim();
+      return state.membershipFocus
+        || currentMemberships(state.operationProduct || {}).find((membership) => membershipKey(membership) === principalId || membership.principal_id === principalId)
+        || (principalId ? { principal_id: principalId, role: el('memberRole').value.trim() || 'viewer' } : null);
+    }
+    function membershipAuthorityLoaded(membership = focusedMembership()) {
+      const principal = membership?.principal_id || membership?.email || el('memberPrincipalId').value.trim();
+      if (!principal) return false;
+      return (state.operationProduct?.authority_events || []).some((event) => JSON.stringify(event).includes(principal))
+        || (state.operationProduct?.site_authority?.decisions || []).some((decision) => JSON.stringify(decision).includes(principal))
+        || state.events.some((event) => classifyEvidenceLane(event) === 'authority' && JSON.stringify(event.payload || {}).includes(principal));
+    }
+    function membershipActionContext(membership = focusedMembership()) {
+      const principal = membership?.principal_id || membership?.email || el('memberPrincipalId').value.trim() || '';
+      const role = membership?.role || el('memberRole').value.trim() || 'viewer';
+      const status = membership?.status || 'unknown';
+      const memberships = currentMemberships(state.operationProduct || {});
+      const known = Boolean(principal && memberships.some((item) => membershipKey(item) === membershipKey(membership) || item.principal_id === principal || item.email === principal));
+      const isOperator = principal && (principal === state.operatorPrincipal?.principal_id || principal === state.operatorPrincipal?.email);
+      const siteLoaded = siteScopeLoaded();
+      const authorityLoaded = membershipAuthorityLoaded(membership);
+      const nextAction = !principal ? 'enter_principal'
+        : !siteLoaded ? 'read_membership_site'
+        : !known ? 'put_membership'
+        : status !== 'active' ? 'inspect_inactive_membership'
+        : !authorityLoaded ? 'focus_membership_authority'
+        : 'monitor_membership_authority';
+      return [
+        ['Principal', principal || 'none'],
+        ['Role', role || 'unknown'],
+        ['Status', status],
+        ['Known Membership', known ? 'yes' : 'no'],
+        ['Operator Principal', isOperator ? 'yes' : 'no'],
+        ['Site Scope Loaded', siteLoaded ? 'yes' : 'no'],
+        ['Authority Loaded', authorityLoaded ? 'yes' : 'no'],
+        ['Next Action', nextAction],
+      ];
+    }
+    function renderMembershipActionSummary(membership = focusedMembership()) {
+      if (!membership) {
+        el('membershipActionSummary').innerHTML = '<div class="empty">No membership action loaded.</div>';
+        return;
+      }
+      el('membershipActionSummary').replaceChildren(...membershipActionContext(membership).map(([label, value]) => evidenceField(label, value)));
+    }
+    async function putFocusedMembership() {
+      const principalId = el('memberPrincipalId').value.trim();
+      const role = el('memberRole').value.trim();
+      if (!principalId || !role) return;
+      const result = await api.putMembership(principalId, role);
+      renderLastAuthority(null, {
+        event_kind: 'site.membership.put',
+        principal_id: result.principal?.principal_id || result.reader_principal?.principal_id || result.principal?.email,
+        action: result.action,
+        reason: result.action,
+        evidence: {
+          member_principal_id: result.membership?.principal_id,
+          role: result.membership?.role,
+          status: result.membership?.status,
+          actor_role: result.actor_membership?.role,
+        },
+      });
+      await refreshOperation();
+    }
+    function focusMembershipAuthority() {
+      const membership = focusedMembership();
+      const principal = membership?.principal_id || membership?.email || el('memberPrincipalId').value.trim();
+      if (!principal) { focusAuthorityEvidence(); return; }
+      focusEvidenceFor((event) => classifyEvidenceLane(event) === 'authority' && JSON.stringify(event.payload || {}).includes(principal));
     }
     function membershipFocusContext(membership = {}) {
       return [
@@ -3421,8 +3713,10 @@ export function renderCloudflareCarrierConsole() {
     function renderMembershipFocusDetail(membership = state.membershipFocus) {
       if (!membership) {
         el('membershipFocusDetail').innerHTML = '<div class="empty">No membership selected.</div>';
+        renderMembershipActionSummary();
         return;
       }
+      renderMembershipActionSummary(membership);
       el('membershipFocusDetail').replaceChildren(...membershipFocusContext(membership).map(([label, value]) => evidenceField(label, value)));
     }
     function renderTasks(tasks = []) {
@@ -4286,30 +4580,17 @@ export function renderCloudflareCarrierConsole() {
     el('siteActionReadSite').addEventListener('click', () => run(refreshSiteProduct));
     el('siteActionFocusOperation').addEventListener('click', focusSiteOperation);
     el('siteActionFocusMembership').addEventListener('click', focusSiteMembership);
-    el('putMembership').addEventListener('click', () => run(async () => {
-      const principalId = el('memberPrincipalId').value.trim();
-      const role = el('memberRole').value.trim();
-      if (!principalId || !role) return;
-      const result = await api.putMembership(principalId, role);
-      renderLastAuthority(null, {
-        event_kind: 'site.membership.put',
-        principal_id: result.principal?.principal_id || result.reader_principal?.principal_id || result.principal?.email,
-        action: result.action,
-        reason: result.action,
-        evidence: {
-          member_principal_id: result.membership?.principal_id,
-          role: result.membership?.role,
-          status: result.membership?.status,
-          actor_role: result.actor_membership?.role,
-        },
-      });
-      await refreshOperation();
-    }));
+    el('membershipActionPut').addEventListener('click', () => run(putFocusedMembership));
+    el('membershipActionReadSite').addEventListener('click', () => run(refreshSiteProduct));
+    el('membershipActionFocusAuthority').addEventListener('click', focusMembershipAuthority);
+    el('putMembership').addEventListener('click', () => run(putFocusedMembership));
     el('read').addEventListener('click', () => run(async () => { const body = await api.readEvents(); appendEvents(body.events || []); await refreshStatus(); }));
     el('taskTitle').addEventListener('input', renderTaskCommandPreview);
     el('updateTaskId').addEventListener('input', renderTaskCommandPreview);
     el('updateTaskStatus').addEventListener('input', renderTaskCommandPreview);
     el('updateTaskNote').addEventListener('input', renderTaskCommandPreview);
+    el('memberPrincipalId').addEventListener('input', () => renderMembershipActionSummary());
+    el('memberRole').addEventListener('input', () => renderMembershipActionSummary());
     el('createTask').addEventListener('click', () => run(createTaskFromWorkbench));
     el('focusTaskEvidence').addEventListener('click', () => run(async () => { const task = selectedTaskFromWorkbench(); if (task) focusEvidenceFor(taskEvidencePredicate(task)); }));
     el('markTaskOpen').addEventListener('click', () => run(async () => { await updateFocusedTask('open', el('updateTaskNote').value.trim() || 'operator_marked_open'); }));
