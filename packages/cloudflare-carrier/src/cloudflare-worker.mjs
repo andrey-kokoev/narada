@@ -1858,6 +1858,8 @@ export function renderCloudflareCarrierConsole() {
           <button id="markTaskDone" class="secondary">Mark Done</button>
           <button id="updateTask" class="secondary">Update Task</button>
         </div>
+        <h3>Task Focus Detail</h3>
+        <div id="taskFocusDetail" class="evidence-summary"><div class="empty">No task selected.</div></div>
         <div id="tasks" class="tasks"><div class="empty">No tasks loaded.</div></div>
       </div>
       <div id="error" class="error" role="status"></div>
@@ -2287,6 +2289,7 @@ export function renderCloudflareCarrierConsole() {
       if (tasks.length === 0) {
         state.taskFocus = null;
         el('tasks').innerHTML = '<div class="empty">No tasks yet.</div>';
+        renderTaskFocusDetail();
         updateControlRoom();
         return;
       }
@@ -2302,7 +2305,29 @@ export function renderCloudflareCarrierConsole() {
         node.append(title, meta);
         return node;
       }));
+      renderTaskFocusDetail();
       updateControlRoom();
+    }
+    function taskFocusContext(task = {}) {
+      return [
+        ['Task', task.task_id || 'none'],
+        ['Number', task.task_number ?? 'none'],
+        ['Title', task.title || 'untitled'],
+        ['Status', task.status || 'unknown'],
+        ['Source', task.source || 'unknown'],
+        ['Session', task.carrier_session_id || 'none'],
+        ['Site', task.site_id || 'none'],
+        ['Created', task.created_at || 'none'],
+        ['Updated', task.updated_at || 'none'],
+        ['Note', task.note || 'none'],
+      ];
+    }
+    function renderTaskFocusDetail(task = state.taskFocus) {
+      if (!task) {
+        el('taskFocusDetail').innerHTML = '<div class="empty">No task selected.</div>';
+        return;
+      }
+      el('taskFocusDetail').replaceChildren(...taskFocusContext(task).map(([label, value]) => evidenceField(label, value)));
     }
     function taskEvidencePredicate(task) {
       return (event) => {
@@ -2325,6 +2350,7 @@ export function renderCloudflareCarrierConsole() {
       if (task.carrier_session_id) setCurrentSession(task.carrier_session_id);
       focusEvidenceFor(taskEvidencePredicate(task));
       renderTasks(state.operationProduct?.tasks || []);
+      renderTaskFocusDetail(task);
       updateControlRoom();
     }
     async function updateFocusedTask(status, note = null) {
