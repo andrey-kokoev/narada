@@ -53,6 +53,7 @@ const CLOUDFLARE_MAILBOX_OUTLOOK_DRAFT_CREATE_SCHEMA = 'narada.sonar.cloudflare_
 const CLOUDFLARE_SITE_FILE_CHANGE_PROPOSAL_SCHEMA = 'narada.sonar.cloudflare_site_file_change_proposal.v1';
 const CLOUDFLARE_SITE_FILE_MATERIALIZATION_SCHEMA = 'narada.sonar.cloudflare_site_file_materialization.v1';
 const CLOUDFLARE_LOCAL_INGRESS_REQUEST_SCHEMA = 'narada.sonar.cloudflare_local_ingress_request.v1';
+const CLOUDFLARE_LOCAL_INGRESS_EVIDENCE_SCHEMA = 'narada.sonar.cloudflare_local_ingress_evidence.v1';
 const CLOUDFLARE_TASK_LIFECYCLE_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_shadow_read.v1';
 const CLOUDFLARE_TASK_LIFECYCLE_WRITE_ADMISSION_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_write_admission.v1';
 const CLOUDFLARE_TASK_LIFECYCLE_WRITE_ADMISSION_DECISION_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_write_admission_decision.v1';
@@ -2758,6 +2759,8 @@ function isSiteProductOperation(operation) {
     'site_file_materialization.list',
     'local_ingress.request.create',
     'local_ingress.request.list',
+    'local_ingress.evidence.put',
+    'local_ingress.evidence.list',
     'task_lifecycle.shadow_read.record',
     'task_lifecycle.shadow_read.list',
     'task_lifecycle.shadow_read.source.read',
@@ -3343,6 +3346,33 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         repository_publication_admission: 'not_admitted',
         authority_partition: 'cloudflare_queues_governed_local_ingress_request_windows_admits_executes_and_returns_evidence',
         requests,
+      },
+    };
+  }
+  if (body.operation === 'local_ingress.evidence.put') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const result = await recordCloudflareLocalIngressEvidence(env, requestedSiteId, params, principal);
+    return { status: result.ok ? 200 : 400, body: result };
+  }
+  if (body.operation === 'local_ingress.evidence.list') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const evidence = await listCloudflareLocalIngressEvidence(env, requestedSiteId, params.local_ingress_evidence_limit ?? params.limit, params.local_ingress_request_id);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        schema: CLOUDFLARE_LOCAL_INGRESS_EVIDENCE_SCHEMA,
+        status: 'ok',
+        site_id: requestedSiteId,
+        local_ingress_evidence_authority: evidence.length > 0 ? 'windows_local_ingress_executor' : 'not_observed',
+        cloudflare_evidence_store_authority: evidence.length > 0 ? 'cloudflare_local_ingress_evidence_store' : 'not_observed',
+        local_filesystem_mutation_admission: evidence.length > 0 ? 'admitted_by_windows_local_ingress' : 'not_observed',
+        direct_cloudflare_filesystem_mutation_admission: 'not_admitted',
+        repository_publication_admission: 'not_admitted',
+        authority_partition: 'windows_executes_local_ingress_cloudflare_records_evidence_without_direct_filesystem_authority',
+        evidence,
       },
     };
   }

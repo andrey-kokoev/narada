@@ -1247,6 +1247,28 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(localIngressListBody.requests.length, 1);
   assert.equal(localIngressListBody.requests[0].local_ingress_request_id, 'local-ingress-request-fixture');
 
+  const operationReadAfterLocalIngress = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_operation_read_after_local_ingress',
+    params: {
+      site_id: 'site_fixture',
+      operation_id: 'operation_site_read',
+      local_ingress_request_limit: 10,
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(operationReadAfterLocalIngress.status, 200);
+  const operationReadAfterLocalIngressBody = await operationReadAfterLocalIngress.json();
+  assert.equal(operationReadAfterLocalIngressBody.local_ingress_requests.length, 1);
+  assert.equal(operationReadAfterLocalIngressBody.local_ingress_requests[0].local_ingress_request_id, 'local-ingress-request-fixture');
+  assert.equal(operationReadAfterLocalIngressBody.operation_product_surface.local_ingress_request_count, 1);
+  assert.equal(operationReadAfterLocalIngressBody.operation_product_surface.local_ingress_request_authority, 'cloudflare_local_ingress_request_queue');
+  assert.equal(operationReadAfterLocalIngressBody.operation_product_surface.local_ingress_executor_authority, 'windows_local_ingress_executor');
+  assert.equal(operationReadAfterLocalIngressBody.operation_product_surface.local_ingress_execution_admission, 'pending_windows_admission');
+  assert.equal(operationReadAfterLocalIngressBody.operation_product_surface.local_ingress_direct_cloudflare_filesystem_mutation_admission, 'not_admitted');
+  assert.equal(operationReadAfterLocalIngressBody.operation_product_surface.local_ingress_repository_publication_admission, 'not_admitted');
+  assert.equal(operationReadAfterLocalIngressBody.operation_lifecycle_status.local_ingress_request_count, 1);
+  assert.equal(operationReadAfterLocalIngressBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'local_ingress_request'), true);
+
   const directMutationClaim = await worker.fetch(jsonRequest({
     operation: 'local_ingress.request.create',
     request_id: 'request_local_ingress_direct_mutation_claim',
