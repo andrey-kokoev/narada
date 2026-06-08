@@ -29,6 +29,7 @@
     "mailbox:outlook-draft-create-smoke:live": "node scripts/cloudflare-carrier-mailbox-outlook-draft-create-live-smoke.mjs",
     "site-file-change:proposal-smoke:live": "node scripts/cloudflare-carrier-site-file-change-proposal-live-smoke.mjs",
     "site-file:materialization-smoke:live": "node scripts/cloudflare-carrier-site-file-materialization-live-smoke.mjs",
+    "local-ingress:request-smoke:live": "node scripts/cloudflare-carrier-local-ingress-request-live-smoke.mjs",
     "task-lifecycle:shadow-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-shadow-live-smoke.mjs",
     "task-lifecycle:create-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-create-live-smoke.mjs",
     "task-lifecycle:claim-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-claim-live-smoke.mjs",

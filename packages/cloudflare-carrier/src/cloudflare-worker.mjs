@@ -52,6 +52,7 @@ const CLOUDFLARE_MAILBOX_DRAFT_REPLY_PROPOSAL_SCHEMA = 'narada.sonar.cloudflare_
 const CLOUDFLARE_MAILBOX_OUTLOOK_DRAFT_CREATE_SCHEMA = 'narada.sonar.cloudflare_mailbox_outlook_draft_create.v1';
 const CLOUDFLARE_SITE_FILE_CHANGE_PROPOSAL_SCHEMA = 'narada.sonar.cloudflare_site_file_change_proposal.v1';
 const CLOUDFLARE_SITE_FILE_MATERIALIZATION_SCHEMA = 'narada.sonar.cloudflare_site_file_materialization.v1';
+const CLOUDFLARE_LOCAL_INGRESS_REQUEST_SCHEMA = 'narada.sonar.cloudflare_local_ingress_request.v1';
 const CLOUDFLARE_TASK_LIFECYCLE_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_shadow_read.v1';
 const CLOUDFLARE_TASK_LIFECYCLE_WRITE_ADMISSION_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_write_admission.v1';
 const CLOUDFLARE_TASK_LIFECYCLE_WRITE_ADMISSION_DECISION_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_write_admission_decision.v1';
@@ -80,6 +81,8 @@ const WINDOWS_FALLBACK_DISPATCH_AUTHORITY = 'windows_fallback_dispatcher';
 const CLOUDFLARE_MAILBOX_STATUS_SOURCE_AUTHORITY = 'cloudflare_graph_mailbox_status_source';
 const CLOUDFLARE_MAILBOX_DRAFT_REPLY_PROPOSAL_AUTHORITY = 'cloudflare_carrier_site';
 const CLOUDFLARE_MAILBOX_OUTLOOK_DRAFT_CREATE_AUTHORITY = 'cloudflare_graph_outlook_draft_create';
+const CLOUDFLARE_LOCAL_INGRESS_REQUEST_AUTHORITY = 'cloudflare_local_ingress_request_queue';
+const WINDOWS_LOCAL_INGRESS_EXECUTOR_AUTHORITY = 'windows_local_ingress_executor';
 const DEFAULT_WEBHOOK_DELAY_CRITICAL_MINUTES = 15;
 const CLOUDFLARE_RUNTIME_METADATA_READ_CAPABILITY = Object.freeze({
   capability_ref: CLOUDFLARE_RUNTIME_METADATA_READ_CAPABILITY_REF,
@@ -2042,6 +2045,7 @@ function summarizeCloudflareOperationLifecycleStatus({
   continuityLoopStatus = null,
   residentLoopShadowRuns = [],
   residentDispatchDecisions = [],
+  localIngressRequests = [],
   webhookDelayDirectiveRecords = [],
   webhookDelayDirectiveDeliveries = [],
 } = {}) {
@@ -2056,6 +2060,7 @@ function summarizeCloudflareOperationLifecycleStatus({
   const residentDispatchCount = Array.isArray(residentDispatchDecisions) ? residentDispatchDecisions.length : 0;
   const directiveRecordCount = Array.isArray(webhookDelayDirectiveRecords) ? webhookDelayDirectiveRecords.length : 0;
   const directiveDeliveryCount = Array.isArray(webhookDelayDirectiveDeliveries) ? webhookDelayDirectiveDeliveries.length : 0;
+  const localIngressRequestCount = Array.isArray(localIngressRequests) ? localIngressRequests.length : 0;
   const missing = [];
   if (sessionCount === 0) missing.push('session');
   if (evidenceEventCount === 0) missing.push('carrier_evidence');
@@ -2088,6 +2093,7 @@ function summarizeCloudflareOperationLifecycleStatus({
     continuity_loop_report_count: continuityLoopStatus?.report_count ?? 0,
     resident_loop_shadow_run_count: residentLoopCount,
     resident_dispatch_decision_count: residentDispatchCount,
+    local_ingress_request_count: localIngressRequestCount,
     directive_record_count: directiveRecordCount,
     directive_delivery_count: directiveDeliveryCount,
     carrier_evidence_read_status: carrierEvidenceReadStatus,
@@ -2135,6 +2141,7 @@ function summarizeCloudflareOperationActivityTimeline({
   residentLoopShadowRuns = [],
   mailboxDraftReplyProposals = [],
   mailboxOutlookDraftCreates = [],
+  localIngressRequests = [],
   residentDispatchDecisions = [],
 } = {}) {
   const operationId = operation?.operation_id ?? null;
@@ -2309,6 +2316,19 @@ function summarizeCloudflareOperationActivityTimeline({
       principal_id: draft.recorded_by_principal_id,
     });
   }
+  for (const request of localIngressRequests || []) {
+    push({
+      activity_id: `local_ingress_request:${request.local_ingress_request_id}`,
+      activity_kind: 'local_ingress_request',
+      occurred_at: request.recorded_at || request.generated_at,
+      title: 'Local Ingress Request',
+      summary: [request.local_execution_admission, request.requested_action_ref, request.target_authority_locus].filter(Boolean).join(' / ') || 'local ingress request queued',
+      source_ref: request.local_ingress_request_id,
+      focus_kind: 'local_ingress_request',
+      focus_ref: request.local_ingress_request_id,
+      principal_id: request.recorded_by_principal_id,
+    });
+  }
   for (const decision of residentDispatchDecisions || []) {
     push({
       activity_id: `resident_dispatch:${decision.dispatch_decision_id}`,
@@ -2391,6 +2411,7 @@ function summarizeCloudflarePersistencePosture(env = {}, {
     { key: 'site_registry', substrate: 'cloudflare_d1_site_registry', status: hasSiteRegistry ? 'available' : 'missing', authority: 'site_membership_operation_authority' },
     { key: 'carrier_evidence_index', substrate: 'cloudflare_d1_site_registry', status: hasSiteRegistry ? 'available' : 'missing', authority: 'reconstructable_carrier_evidence_projection' },
     { key: 'site_file_materialization_store', substrate: 'cloudflare_d1_site_registry', status: hasSiteRegistry ? 'available' : 'missing', authority: 'cloudflare_site_file_materialization_record' },
+    { key: 'local_ingress_request_queue', substrate: 'cloudflare_d1_site_registry', status: hasSiteRegistry ? 'available' : 'missing', authority: CLOUDFLARE_LOCAL_INGRESS_REQUEST_AUTHORITY },
     { key: 'task_lifecycle_store', substrate: 'cloudflare_d1_task_store', status: hasTaskStore ? 'available' : 'missing', authority: 'task_lifecycle_projection' },
   ];
   const missing = durableBoundaries.filter((boundary) => boundary.status !== 'available').map((boundary) => boundary.key);
@@ -2735,6 +2756,8 @@ function isSiteProductOperation(operation) {
     'site_file_change_proposal.list',
     'site_file_materialization.admit',
     'site_file_materialization.list',
+    'local_ingress.request.create',
+    'local_ingress.request.list',
     'task_lifecycle.shadow_read.record',
     'task_lifecycle.shadow_read.list',
     'task_lifecycle.shadow_read.source.read',
@@ -3296,6 +3319,33 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       },
     };
   }
+  if (body.operation === 'local_ingress.request.create') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const result = await createCloudflareLocalIngressRequest(env, requestedSiteId, params, principal);
+    return { status: result.ok ? 200 : 400, body: result };
+  }
+  if (body.operation === 'local_ingress.request.list') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const requests = await listCloudflareLocalIngressRequests(env, requestedSiteId, params.local_ingress_request_limit ?? params.limit);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        schema: CLOUDFLARE_LOCAL_INGRESS_REQUEST_SCHEMA,
+        status: 'ok',
+        site_id: requestedSiteId,
+        local_ingress_request_authority: requests.length > 0 ? CLOUDFLARE_LOCAL_INGRESS_REQUEST_AUTHORITY : 'not_observed',
+        local_executor_authority: requests.length > 0 ? WINDOWS_LOCAL_INGRESS_EXECUTOR_AUTHORITY : 'not_observed',
+        local_execution_admission: requests.length > 0 ? 'pending_windows_admission' : 'not_observed',
+        direct_cloudflare_filesystem_mutation_admission: 'not_admitted',
+        repository_publication_admission: 'not_admitted',
+        authority_partition: 'cloudflare_queues_governed_local_ingress_request_windows_admits_executes_and_returns_evidence',
+        requests,
+      },
+    };
+  }
   if (body.operation === 'task_lifecycle.shadow_read.source.read') {
     const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
     if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
@@ -3503,6 +3553,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const mailboxOutlookDraftCreates = await listCloudflareMailboxOutlookDraftCreates(env, siteId, params.mailbox_outlook_draft_create_limit ?? params.limit);
     const siteFileChangeProposals = await listCloudflareSiteFileChangeProposals(env, siteId, params.site_file_change_proposal_limit ?? params.limit);
     const siteFileMaterializations = await listCloudflareSiteFileMaterializations(env, siteId, params.site_file_materialization_limit ?? params.limit);
+    const localIngressRequests = await listCloudflareLocalIngressRequests(env, siteId, params.local_ingress_request_limit ?? params.limit);
     const taskLifecycleShadowReads = await listCloudflareTaskLifecycleShadowReads(env, siteId, params.task_lifecycle_shadow_limit ?? params.limit);
     const taskLifecycleWriteAdmissions = await listCloudflareTaskLifecycleWriteAdmissions(env, siteId, params.task_lifecycle_write_admission_limit ?? params.limit);
     const taskLifecycleTasks = await listCloudflareTaskLifecycleTasks(env, siteId, params.task_lifecycle_task_limit ?? params.limit, params);
@@ -3548,6 +3599,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       mailboxDraftReplyProposals,
       mailboxOutlookDraftCreates,
       siteFileChangeProposals,
+      localIngressRequests,
       residentDispatchDecisions,
     });
     const localCloudContinuityBridge = summarizeLocalCloudContinuityBridge(siteId, continuityPackets, siteContinuity, siteContinuityStatus);
@@ -3561,6 +3613,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       continuityLoopStatus: siteContinuityLoopStatus,
       residentLoopShadowRuns,
       residentDispatchDecisions,
+      localIngressRequests,
       webhookDelayDirectiveRecords,
       webhookDelayDirectiveDeliveries,
     });
@@ -3605,6 +3658,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         mailbox_outlook_draft_creates: mailboxOutlookDraftCreates,
         site_file_change_proposals: siteFileChangeProposals,
         site_file_materializations: siteFileMaterializations,
+        local_ingress_requests: localIngressRequests,
         task_lifecycle_shadow_reads: taskLifecycleShadowReads,
         task_lifecycle_write_admissions: taskLifecycleWriteAdmissions,
         task_lifecycle_tasks: taskLifecycleTasks,
@@ -3678,6 +3732,14 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           windows_filesystem_mutation_admission: siteFileMaterializations.length > 0 ? 'not_admitted' : 'retained',
           site_file_materialization_repository_publication_admission: siteFileMaterializations.length > 0 ? 'not_admitted' : 'retained',
           site_file_materialization_authority_partition: siteFileMaterializations.length > 0 ? 'site_file_materialization_cloudflare_owned_windows_filesystem_and_publication_not_admitted' : 'materialization_not_observed_filesystem_and_publication_windows_owned',
+          local_ingress_request_count: localIngressRequests.length,
+          local_ingress_request_authority: localIngressRequests.length > 0 ? CLOUDFLARE_LOCAL_INGRESS_REQUEST_AUTHORITY : 'not_observed',
+          local_ingress_target_authority_locus: localIngressRequests.length > 0 ? 'local-windows-site-authority' : 'not_observed',
+          local_ingress_executor_authority: localIngressRequests.length > 0 ? WINDOWS_LOCAL_INGRESS_EXECUTOR_AUTHORITY : 'not_observed',
+          local_ingress_execution_admission: localIngressRequests.length > 0 ? 'pending_windows_admission' : 'not_observed',
+          local_ingress_direct_cloudflare_filesystem_mutation_admission: localIngressRequests.length > 0 ? 'not_admitted' : 'retained',
+          local_ingress_repository_publication_admission: localIngressRequests.length > 0 ? 'not_admitted' : 'retained',
+          local_ingress_authority_partition: localIngressRequests.length > 0 ? 'cloudflare_queues_governed_local_ingress_request_windows_admits_executes_and_returns_evidence' : 'local_ingress_not_observed_windows_authority_retained',
           task_lifecycle_shadow_read_count: taskLifecycleShadowReads.length,
           task_lifecycle_write_admission_count: taskLifecycleWriteAdmissions.length,
           task_lifecycle_write_admission_posture: taskLifecycleTasks.some((task) => task.task_lifecycle_roster_mutation_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_and_roster_mutation_admitted_remaining_external_effects_not_admitted' : taskLifecycleTasks.some((task) => task.task_lifecycle_role_resolution_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_admitted_remaining_external_effects_not_admitted' : taskLifecycleTasks.some((task) => task.task_lifecycle_assignment_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_and_assignment_admitted_remaining_external_effects_not_admitted' : taskLifecycleTasks.some((task) => task.task_lifecycle_source_state_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_admitted_remaining_external_effects_not_admitted' : taskLifecycleTasks.some((task) => task.task_lifecycle_projection_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_and_projection_write_admitted_remaining_writes_not_admitted' : taskLifecycleTasks.some((task) => task.changed_file_evidence_count > 0) ? (taskLifecycleTasks.some((task) => task.finish_id) ? 'task_create_claim_report_finish_and_changed_file_evidence_admitted_remaining_writes_not_admitted' : 'task_create_claim_report_and_changed_file_evidence_admitted_remaining_writes_not_admitted') : taskLifecycleTasks.some((task) => task.finish_id) ? 'task_create_claim_report_and_finish_admitted_remaining_writes_not_admitted' : taskLifecycleTasks.some((task) => task.report_id) ? 'task_create_claim_and_report_admitted_remaining_writes_not_admitted' : taskLifecycleTasks.some((task) => task.status === 'claimed') ? 'task_create_and_claim_admitted_remaining_writes_not_admitted' : taskLifecycleTasks.length > 0 ? 'task_create_admitted_remaining_writes_not_admitted' : 'writes_not_admitted',
@@ -3749,6 +3811,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
   const mailboxStatusSourceReads = await listCloudflareMailboxStatusSourceReads(env, siteId, params.mailbox_status_source_limit ?? params.limit);
   const siteFileChangeProposals = await listCloudflareSiteFileChangeProposals(env, siteId, params.site_file_change_proposal_limit ?? params.limit);
   const siteFileMaterializations = await listCloudflareSiteFileMaterializations(env, siteId, params.site_file_materialization_limit ?? params.limit);
+  const localIngressRequests = await listCloudflareLocalIngressRequests(env, siteId, params.local_ingress_request_limit ?? params.limit);
   const taskLifecycleShadowReads = await listCloudflareTaskLifecycleShadowReads(env, siteId, params.task_lifecycle_shadow_limit ?? params.limit);
   const taskLifecycleWriteAdmissions = await listCloudflareTaskLifecycleWriteAdmissions(env, siteId, params.task_lifecycle_write_admission_limit ?? params.limit);
   const taskLifecycleTasks = await listCloudflareTaskLifecycleTasks(env, siteId, params.task_lifecycle_task_limit ?? params.limit, params);
@@ -3801,6 +3864,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     mailbox_status_source_reads: mailboxStatusSourceReads,
     site_file_change_proposals: siteFileChangeProposals,
     site_file_materializations: siteFileMaterializations,
+    local_ingress_requests: localIngressRequests,
     task_lifecycle_shadow_reads: taskLifecycleShadowReads,
     task_lifecycle_write_admissions: taskLifecycleWriteAdmissions,
     task_lifecycle_tasks: taskLifecycleTasks,
@@ -6360,6 +6424,241 @@ async function listCloudflareSiteFileMaterializations(env = {}, siteId, limit) {
     write_effect: row.write_effect,
     materialization_posture: row.materialization_posture,
     record: parseJsonObject(row.materialization_json),
+    recorded_by_principal_id: row.recorded_by_principal_id,
+    recorded_at: row.recorded_at,
+  }));
+}
+
+function createLocalIngressRequest(siteId, params = {}) {
+  const source = params.source_payload ?? params.payload ?? params.request ?? {};
+  const requestedMutationClass = String(source.requested_mutation_class ?? params.requested_mutation_class ?? 'local_repository_filesystem_mutation');
+  const requestedActionRef = String(source.requested_action_ref ?? params.requested_action_ref ?? '');
+  const requestedActionSummary = String(source.requested_action_summary ?? params.requested_action_summary ?? '');
+  const governedRequestContractRef = String(source.governed_request_contract_ref ?? params.governed_request_contract_ref ?? '');
+  const evidenceReturnContractRef = String(source.evidence_return_contract_ref ?? params.evidence_return_contract_ref ?? '');
+  const rollbackPlanRef = String(source.rollback_plan_ref ?? params.rollback_plan_ref ?? '');
+  const targetAuthorityLocus = String(source.target_authority_locus ?? params.target_authority_locus ?? 'local-windows-site-authority');
+  const localExecutorAuthority = String(source.local_executor_authority ?? params.local_executor_authority ?? WINDOWS_LOCAL_INGRESS_EXECUTOR_AUTHORITY);
+  const localExecutionAdmission = String(source.local_execution_admission ?? params.local_execution_admission ?? 'pending_windows_admission');
+  const directCloudflareFilesystemMutationAdmission = String(source.direct_cloudflare_filesystem_mutation_admission ?? params.direct_cloudflare_filesystem_mutation_admission ?? 'not_admitted');
+  const repositoryPublicationAdmission = String(source.repository_publication_admission ?? params.repository_publication_admission ?? 'not_admitted');
+  if (requestedMutationClass !== 'local_repository_filesystem_mutation') return { ok: false, code: 'local_ingress_request_mutation_class_invalid', requested_mutation_class: requestedMutationClass };
+  if (!requestedActionRef) return { ok: false, code: 'local_ingress_request_action_ref_required' };
+  if (!governedRequestContractRef) return { ok: false, code: 'local_ingress_request_contract_ref_required' };
+  if (!evidenceReturnContractRef) return { ok: false, code: 'local_ingress_evidence_return_contract_ref_required' };
+  if (!rollbackPlanRef) return { ok: false, code: 'local_ingress_rollback_plan_ref_required' };
+  if (targetAuthorityLocus !== 'local-windows-site-authority') return { ok: false, code: 'local_ingress_target_authority_locus_invalid', target_authority_locus: targetAuthorityLocus };
+  if (localExecutorAuthority !== WINDOWS_LOCAL_INGRESS_EXECUTOR_AUTHORITY) return { ok: false, code: 'local_ingress_executor_authority_invalid', local_executor_authority: localExecutorAuthority };
+  if (localExecutionAdmission !== 'pending_windows_admission') return { ok: false, code: 'local_ingress_execution_admission_invalid', local_execution_admission: localExecutionAdmission };
+  if (directCloudflareFilesystemMutationAdmission !== 'not_admitted') return { ok: false, code: 'local_ingress_direct_cloudflare_filesystem_mutation_admission_invalid', direct_cloudflare_filesystem_mutation_admission: directCloudflareFilesystemMutationAdmission };
+  if (repositoryPublicationAdmission !== 'not_admitted') return { ok: false, code: 'local_ingress_repository_publication_admission_invalid', repository_publication_admission: repositoryPublicationAdmission };
+  return {
+    ok: true,
+    request: {
+      schema: 'narada.sonar.cloudflare_local_ingress_request_record.v1',
+      site_id: siteId,
+      generated_at: String(source.generated_at ?? params.generated_at ?? new Date().toISOString()),
+      operation_id: source.operation_id == null && params.operation_id == null ? null : String(source.operation_id ?? params.operation_id),
+      task_id: source.task_id == null && params.task_id == null ? null : String(source.task_id ?? params.task_id),
+      requested_mutation_class: requestedMutationClass,
+      requested_action_ref: requestedActionRef,
+      requested_action_summary: requestedActionSummary || requestedActionRef,
+      governed_request_contract_ref: governedRequestContractRef,
+      evidence_return_contract_ref: evidenceReturnContractRef,
+      rollback_plan_ref: rollbackPlanRef,
+      authority_locus: CLOUDFLARE_LOCAL_INGRESS_REQUEST_AUTHORITY,
+      target_authority_locus: targetAuthorityLocus,
+      local_executor_authority: localExecutorAuthority,
+      local_execution_admission: localExecutionAdmission,
+      direct_cloudflare_filesystem_mutation_admission: directCloudflareFilesystemMutationAdmission,
+      repository_publication_admission: repositoryPublicationAdmission,
+      request_posture: 'cloudflare_queued_request_windows_must_admit_execute_and_return_evidence',
+    },
+  };
+}
+
+function localIngressRequestId(siteId, request) {
+  return `local_ingress_request_${safeIdToken(siteId)}_${safeIdToken(request.generated_at)}_${safeIdToken(request.requested_action_ref)}`;
+}
+
+async function createCloudflareLocalIngressRequest(env = {}, siteId, params = {}, principal = null) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return { ok: false, code: 'missing_site_registry_binding' };
+  if (!siteId || siteId === 'unknown-site') return { ok: false, code: 'missing_site_id' };
+  const payload = createLocalIngressRequest(siteId, params);
+  if (!payload.ok) return payload;
+  const request = payload.request;
+  const record = {
+    local_ingress_request_id: params.local_ingress_request_id ?? localIngressRequestId(siteId, request),
+    site_id: siteId,
+    generated_at: request.generated_at,
+    operation_id: request.operation_id,
+    task_id: request.task_id,
+    requested_mutation_class: request.requested_mutation_class,
+    requested_action_ref: request.requested_action_ref,
+    requested_action_summary: request.requested_action_summary,
+    governed_request_contract_ref: request.governed_request_contract_ref,
+    evidence_return_contract_ref: request.evidence_return_contract_ref,
+    rollback_plan_ref: request.rollback_plan_ref,
+    authority_locus: request.authority_locus,
+    target_authority_locus: request.target_authority_locus,
+    local_executor_authority: request.local_executor_authority,
+    local_execution_admission: request.local_execution_admission,
+    direct_cloudflare_filesystem_mutation_admission: request.direct_cloudflare_filesystem_mutation_admission,
+    repository_publication_admission: request.repository_publication_admission,
+    request_posture: request.request_posture,
+    recorded_by_principal_id: principal?.principal_id ?? 'unknown-principal',
+    recorded_at: new Date().toISOString(),
+  };
+  await ensureCloudflareLocalIngressRequestSchema(db);
+  await db.prepare(`
+    INSERT INTO cloudflare_local_ingress_requests (
+      local_ingress_request_id,
+      site_id,
+      generated_at,
+      operation_id,
+      task_id,
+      requested_mutation_class,
+      requested_action_ref,
+      requested_action_summary,
+      governed_request_contract_ref,
+      evidence_return_contract_ref,
+      rollback_plan_ref,
+      authority_locus,
+      target_authority_locus,
+      local_executor_authority,
+      local_execution_admission,
+      direct_cloudflare_filesystem_mutation_admission,
+      repository_publication_admission,
+      request_posture,
+      request_json,
+      recorded_by_principal_id,
+      recorded_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(local_ingress_request_id) DO UPDATE SET
+      generated_at = excluded.generated_at,
+      operation_id = excluded.operation_id,
+      task_id = excluded.task_id,
+      requested_mutation_class = excluded.requested_mutation_class,
+      requested_action_ref = excluded.requested_action_ref,
+      requested_action_summary = excluded.requested_action_summary,
+      governed_request_contract_ref = excluded.governed_request_contract_ref,
+      evidence_return_contract_ref = excluded.evidence_return_contract_ref,
+      rollback_plan_ref = excluded.rollback_plan_ref,
+      authority_locus = excluded.authority_locus,
+      target_authority_locus = excluded.target_authority_locus,
+      local_executor_authority = excluded.local_executor_authority,
+      local_execution_admission = excluded.local_execution_admission,
+      direct_cloudflare_filesystem_mutation_admission = excluded.direct_cloudflare_filesystem_mutation_admission,
+      repository_publication_admission = excluded.repository_publication_admission,
+      request_posture = excluded.request_posture,
+      request_json = excluded.request_json,
+      recorded_by_principal_id = excluded.recorded_by_principal_id,
+      recorded_at = excluded.recorded_at
+  `).bind(
+    record.local_ingress_request_id,
+    record.site_id,
+    record.generated_at,
+    record.operation_id,
+    record.task_id,
+    record.requested_mutation_class,
+    record.requested_action_ref,
+    record.requested_action_summary,
+    record.governed_request_contract_ref,
+    record.evidence_return_contract_ref,
+    record.rollback_plan_ref,
+    record.authority_locus,
+    record.target_authority_locus,
+    record.local_executor_authority,
+    record.local_execution_admission,
+    record.direct_cloudflare_filesystem_mutation_admission,
+    record.repository_publication_admission,
+    record.request_posture,
+    JSON.stringify({ ...record, request }),
+    record.recorded_by_principal_id,
+    record.recorded_at,
+  ).run();
+  return {
+    ok: true,
+    schema: CLOUDFLARE_LOCAL_INGRESS_REQUEST_SCHEMA,
+    status: 'queued',
+    site_id: siteId,
+    local_ingress_request_authority: record.authority_locus,
+    target_authority_locus: record.target_authority_locus,
+    local_executor_authority: record.local_executor_authority,
+    local_execution_admission: record.local_execution_admission,
+    direct_cloudflare_filesystem_mutation_admission: record.direct_cloudflare_filesystem_mutation_admission,
+    repository_publication_admission: record.repository_publication_admission,
+    authority_partition: 'cloudflare_queues_governed_local_ingress_request_windows_admits_executes_and_returns_evidence',
+    request,
+    record,
+  };
+}
+
+async function ensureCloudflareLocalIngressRequestSchema(db) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS cloudflare_local_ingress_requests (
+      local_ingress_request_id TEXT PRIMARY KEY,
+      site_id TEXT NOT NULL,
+      generated_at TEXT NOT NULL,
+      operation_id TEXT,
+      task_id TEXT,
+      requested_mutation_class TEXT NOT NULL,
+      requested_action_ref TEXT NOT NULL,
+      requested_action_summary TEXT NOT NULL,
+      governed_request_contract_ref TEXT NOT NULL,
+      evidence_return_contract_ref TEXT NOT NULL,
+      rollback_plan_ref TEXT NOT NULL,
+      authority_locus TEXT NOT NULL,
+      target_authority_locus TEXT NOT NULL,
+      local_executor_authority TEXT NOT NULL,
+      local_execution_admission TEXT NOT NULL,
+      direct_cloudflare_filesystem_mutation_admission TEXT NOT NULL,
+      repository_publication_admission TEXT NOT NULL,
+      request_posture TEXT NOT NULL,
+      request_json TEXT NOT NULL,
+      recorded_by_principal_id TEXT NOT NULL,
+      recorded_at TEXT NOT NULL
+    )
+  `).run();
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_cloudflare_local_ingress_requests_site_recorded
+    ON cloudflare_local_ingress_requests(site_id, recorded_at)
+  `).run();
+}
+
+async function listCloudflareLocalIngressRequests(env = {}, siteId, limit) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function' || !siteId) return [];
+  await ensureCloudflareLocalIngressRequestSchema(db);
+  const boundedLimit = clampInteger(limit, 0, 100, 25);
+  const rows = await db.prepare(`
+    SELECT * FROM cloudflare_local_ingress_requests
+    WHERE site_id = ?
+    ORDER BY recorded_at DESC, generated_at DESC
+    LIMIT ?
+  `).bind(siteId, boundedLimit).all();
+  return (rows.results ?? []).map((row) => ({
+    local_ingress_request_id: row.local_ingress_request_id,
+    site_id: row.site_id,
+    schema: CLOUDFLARE_LOCAL_INGRESS_REQUEST_SCHEMA,
+    generated_at: row.generated_at,
+    operation_id: row.operation_id,
+    task_id: row.task_id,
+    requested_mutation_class: row.requested_mutation_class,
+    requested_action_ref: row.requested_action_ref,
+    requested_action_summary: row.requested_action_summary,
+    governed_request_contract_ref: row.governed_request_contract_ref,
+    evidence_return_contract_ref: row.evidence_return_contract_ref,
+    rollback_plan_ref: row.rollback_plan_ref,
+    authority_locus: row.authority_locus,
+    target_authority_locus: row.target_authority_locus,
+    local_executor_authority: row.local_executor_authority,
+    local_execution_admission: row.local_execution_admission,
+    direct_cloudflare_filesystem_mutation_admission: row.direct_cloudflare_filesystem_mutation_admission,
+    repository_publication_admission: row.repository_publication_admission,
+    request_posture: row.request_posture,
+    record: parseJsonObject(row.request_json),
     recorded_by_principal_id: row.recorded_by_principal_id,
     recorded_at: row.recorded_at,
   }));

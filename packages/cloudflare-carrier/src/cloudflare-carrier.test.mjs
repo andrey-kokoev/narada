@@ -1023,20 +1023,22 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(body.cloudflare_persistence_posture.schema, 'narada.cloudflare_persistence_posture.v1');
   assert.equal(body.cloudflare_persistence_posture.state, 'durable');
   assert.equal(body.cloudflare_persistence_posture.site_id, 'site_fixture');
-  assert.equal(body.cloudflare_persistence_posture.active_boundary_count, 5);
+  assert.equal(body.cloudflare_persistence_posture.active_boundary_count, 6);
   assert.equal(body.cloudflare_persistence_posture.missing_boundaries.length, 0);
   assert.equal(body.cloudflare_persistence_posture.next_action, 'monitor_persistence_posture');
   assert.equal(body.cloudflare_persistence_posture.durable_boundaries.some((boundary) => boundary.key === 'session_snapshot'), true);
   assert.equal(body.cloudflare_persistence_posture.durable_boundaries.some((boundary) => boundary.key === 'carrier_evidence_index'), true);
   assert.equal(body.cloudflare_persistence_posture.durable_boundaries.some((boundary) => boundary.key === 'site_file_materialization_store'), true);
+  assert.equal(body.cloudflare_persistence_posture.durable_boundaries.some((boundary) => boundary.key === 'local_ingress_request_queue'), true);
   assert.equal(body.cloudflare_recovery_posture.schema, 'narada.cloudflare_recovery_posture.v1');
   assert.equal(body.cloudflare_recovery_posture.state, 'reconstructable');
   assert.equal(body.cloudflare_recovery_posture.snapshot_reload, 'available');
   assert.equal(body.cloudflare_recovery_posture.evidence_replay, 'loaded');
   assert.equal(body.cloudflare_recovery_posture.evidence_sources.includes('cloudflare-durable-object'), true);
-  assert.equal(body.cloudflare_recovery_posture.recovery_boundary_count, 5);
-  assert.equal(body.cloudflare_recovery_posture.recoverable_boundary_count, 5);
+  assert.equal(body.cloudflare_recovery_posture.recovery_boundary_count, 6);
+  assert.equal(body.cloudflare_recovery_posture.recoverable_boundary_count, 6);
   assert.equal(body.cloudflare_recovery_posture.recovery_boundaries.some((boundary) => boundary.key === 'site_file_materialization_store' && boundary.status === 'recoverable'), true);
+  assert.equal(body.cloudflare_recovery_posture.recovery_boundaries.some((boundary) => boundary.key === 'local_ingress_request_queue' && boundary.status === 'recoverable'), true);
   assert.equal(body.cloudflare_recovery_posture.recovery_gaps.length, 0);
   assert.equal(body.cloudflare_recovery_posture.next_action, 'monitor_recovery_posture');
   assert.equal(body.reader_principal.email, 'admin@system');
@@ -1206,6 +1208,61 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(readAfterPacketPutBody.site_product_status.continuity_packet_count, 1);
   assert.equal(readAfterPacketPutBody.site_product_status.continuity_loop_report_count, 1);
   assert.equal(readAfterPacketPutBody.site_product_status.next_action, 'open_tasks');
+
+  const localIngressCreate = await worker.fetch(jsonRequest({
+    operation: 'local_ingress.request.create',
+    request_id: 'request_local_ingress_create',
+    params: {
+      site_id: 'site_fixture',
+      local_ingress_request_id: 'local-ingress-request-fixture',
+      generated_at: '2026-06-08T00:01:00.000Z',
+      requested_mutation_class: 'local_repository_filesystem_mutation',
+      requested_action_ref: 'local-windows-action:site-file-write-fixture',
+      requested_action_summary: 'write one governed fixture file in the local Windows checkout',
+      governed_request_contract_ref: 'contract:local-ingress-request:v1',
+      evidence_return_contract_ref: 'contract:local-ingress-evidence-return:v1',
+      rollback_plan_ref: 'rollback:local-ingress-fixture',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(localIngressCreate.status, 200);
+  const localIngressCreateBody = await localIngressCreate.json();
+  assert.equal(localIngressCreateBody.status, 'queued');
+  assert.equal(localIngressCreateBody.local_ingress_request_authority, 'cloudflare_local_ingress_request_queue');
+  assert.equal(localIngressCreateBody.target_authority_locus, 'local-windows-site-authority');
+  assert.equal(localIngressCreateBody.local_executor_authority, 'windows_local_ingress_executor');
+  assert.equal(localIngressCreateBody.local_execution_admission, 'pending_windows_admission');
+  assert.equal(localIngressCreateBody.direct_cloudflare_filesystem_mutation_admission, 'not_admitted');
+  assert.equal(localIngressCreateBody.repository_publication_admission, 'not_admitted');
+
+  const localIngressList = await worker.fetch(jsonRequest({
+    operation: 'local_ingress.request.list',
+    request_id: 'request_local_ingress_list',
+    params: { site_id: 'site_fixture', limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(localIngressList.status, 200);
+  const localIngressListBody = await localIngressList.json();
+  assert.equal(localIngressListBody.local_ingress_request_authority, 'cloudflare_local_ingress_request_queue');
+  assert.equal(localIngressListBody.local_execution_admission, 'pending_windows_admission');
+  assert.equal(localIngressListBody.direct_cloudflare_filesystem_mutation_admission, 'not_admitted');
+  assert.equal(localIngressListBody.requests.length, 1);
+  assert.equal(localIngressListBody.requests[0].local_ingress_request_id, 'local-ingress-request-fixture');
+
+  const directMutationClaim = await worker.fetch(jsonRequest({
+    operation: 'local_ingress.request.create',
+    request_id: 'request_local_ingress_direct_mutation_claim',
+    params: {
+      site_id: 'site_fixture',
+      requested_mutation_class: 'local_repository_filesystem_mutation',
+      requested_action_ref: 'local-windows-action:invalid-direct-mutation-claim',
+      governed_request_contract_ref: 'contract:local-ingress-request:v1',
+      evidence_return_contract_ref: 'contract:local-ingress-evidence-return:v1',
+      rollback_plan_ref: 'rollback:local-ingress-fixture',
+      direct_cloudflare_filesystem_mutation_admission: 'admitted',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(directMutationClaim.status, 400);
+  const directMutationClaimBody = await directMutationClaim.json();
+  assert.equal(directMutationClaimBody.code, 'local_ingress_direct_cloudflare_filesystem_mutation_admission_invalid');
 });
 
 test('worker site.read surfaces degraded carrier evidence replay when session events are unavailable', async () => {
@@ -6293,6 +6350,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     mailboxOutlookDraftCreates: clone(initial.mailboxOutlookDraftCreates ?? []),
     siteFileChangeProposals: clone(initial.siteFileChangeProposals ?? []),
     siteFileMaterializations: clone(initial.siteFileMaterializations ?? []),
+    localIngressRequests: clone(initial.localIngressRequests ?? []),
     taskLifecycleShadowReads: clone(initial.taskLifecycleShadowReads ?? []),
     taskLifecycleWriteAdmissions: clone(initial.taskLifecycleWriteAdmissions ?? []),
     taskLifecycleTasks: clone(initial.taskLifecycleTasks ?? []),
@@ -6441,6 +6499,12 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const row = { materialization_id, site_id, generated_at, operation_id, task_id, proposal_id, proposal_ref, file_path, content_sha256, content_ref, materialization_authority_ref, cutover_point_ref, governed_write_contract_ref, confirmation_evidence_ref, authority_locus, filesystem_executor_authority, windows_filesystem_mutation_admission, repository_publication_admission, write_effect, materialization_posture, materialization_json, recorded_by_principal_id, recorded_at };
         if (existing) Object.assign(existing, row);
         else state.siteFileMaterializations.push(row);
+      } else if (normalized.startsWith('insert into cloudflare_local_ingress_requests')) {
+        const [local_ingress_request_id, site_id, generated_at, operation_id, task_id, requested_mutation_class, requested_action_ref, requested_action_summary, governed_request_contract_ref, evidence_return_contract_ref, rollback_plan_ref, authority_locus, target_authority_locus, local_executor_authority, local_execution_admission, direct_cloudflare_filesystem_mutation_admission, repository_publication_admission, request_posture, request_json, recorded_by_principal_id, recorded_at] = bindings;
+        const existing = state.localIngressRequests.find((entry) => entry.local_ingress_request_id === local_ingress_request_id);
+        const row = { local_ingress_request_id, site_id, generated_at, operation_id, task_id, requested_mutation_class, requested_action_ref, requested_action_summary, governed_request_contract_ref, evidence_return_contract_ref, rollback_plan_ref, authority_locus, target_authority_locus, local_executor_authority, local_execution_admission, direct_cloudflare_filesystem_mutation_admission, repository_publication_admission, request_posture, request_json, recorded_by_principal_id, recorded_at };
+        if (existing) Object.assign(existing, row);
+        else state.localIngressRequests.push(row);
       } else if (normalized.startsWith('insert into cloudflare_task_lifecycle_shadow_reads')) {
         const [read_id, site_id, source_locus, target_locus, source_url_host, source_db_path, source_schema, generated_at, task_count, status_counts_json, tasks_json, mutation_authority, shadow_read_posture, cloudflare_write_admission, dispatch_authority, shadow_mode, dispatch_action, record_json, recorded_by_principal_id, recorded_at] = bindings;
         const existing = state.taskLifecycleShadowReads.find((entry) => entry.read_id === read_id);
@@ -6727,6 +6791,16 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const [siteId, limit] = bindings;
         return {
           results: state.siteFileMaterializations
+            .filter((entry) => entry.site_id === siteId)
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_local_ingress_requests')) {
+        const [siteId, limit] = bindings;
+        return {
+          results: state.localIngressRequests
             .filter((entry) => entry.site_id === siteId)
             .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
             .slice(0, Number(limit))
