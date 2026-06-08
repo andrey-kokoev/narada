@@ -1094,6 +1094,14 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /operationLatestStatusTransitionLabel/);
   assert.match(html, /Status Transitions/);
   assert.match(html, /Latest Status Transition/);
+  assert.match(html, /operation_activity_timeline/);
+  assert.match(html, /operationActivityTimeline/);
+  assert.match(html, /operationActivityTimelineSummary/);
+  assert.match(html, /operationLatestActivityLabel/);
+  assert.match(html, /renderOperationActivityTimeline/);
+  assert.match(html, /Operation Activity Timeline/);
+  assert.match(html, /Activity Items/);
+  assert.match(html, /Latest Activity/);
   assert.match(html, /provider_events/);
   assert.match(html, /session_next_action/);
   assert.match(html, /Authority Posture/);
@@ -2940,6 +2948,14 @@ test('worker operation.create read and list route through site registry authorit
   assert.equal(pausedReadBody.operation_status_history.latest_transition.from_status, 'active');
   assert.equal(pausedReadBody.operation_status_history.latest_transition.to_status, 'inactive');
   assert.equal(pausedReadBody.operation_product_surface.status_history.transition_count, 1);
+  assert.equal(pausedReadBody.operation_activity_timeline.schema, 'narada.cloudflare_operation_activity_timeline.v1');
+  assert.equal(pausedReadBody.operation_activity_timeline.operation_id, 'operation_control');
+  assert.ok(pausedReadBody.operation_activity_timeline.activity_count >= 5, JSON.stringify(pausedReadBody.operation_activity_timeline));
+  assert.equal(pausedReadBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'operation_status_transition' && item.summary === 'active -> inactive'), true, JSON.stringify(pausedReadBody.operation_activity_timeline.items));
+  assert.equal(pausedReadBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'operation_session_binding'), true, JSON.stringify(pausedReadBody.operation_activity_timeline.items));
+  assert.equal(pausedReadBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'operation_task'), true, JSON.stringify(pausedReadBody.operation_activity_timeline.items));
+  assert.equal(pausedReadBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'carrier_evidence_event'), true, JSON.stringify(pausedReadBody.operation_activity_timeline.items));
+  assert.equal(pausedReadBody.operation_product_surface.activity_timeline.activity_count, pausedReadBody.operation_activity_timeline.activity_count);
   assert.equal(pausedReadBody.authority_events.some((event) => event.event_kind === 'site_operation_status_updated'), true);
 
   const resumed = await worker.fetch(jsonRequest({
@@ -2964,6 +2980,7 @@ test('worker operation.create read and list route through site registry authorit
   assert.deepEqual(resumedReadBody.operation_status_history.transitions.map((transition) => transition.to_status), ['inactive', 'active']);
   assert.equal(resumedReadBody.operation_status_history.latest_transition.from_status, 'inactive');
   assert.equal(resumedReadBody.operation_status_history.latest_transition.to_status, 'active');
+  assert.equal(resumedReadBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'operation_status_transition' && item.summary === 'inactive -> active'), true, JSON.stringify(resumedReadBody.operation_activity_timeline.items));
 
   const listed = await worker.fetch(jsonRequest({
     operation: 'operation.list',

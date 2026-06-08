@@ -477,6 +477,156 @@ function summarizeCloudflareOperationStatusHistory(authorityEvents = [], operati
   };
 }
 
+function summarizeCloudflareOperationActivityTimeline({
+  operation = null,
+  statusHistory = null,
+  authorityEvents = [],
+  sessions = [],
+  tasks = [],
+  carrierEvidence = [],
+  continuityPackets = [],
+  webhookDelayDirectiveRecords = [],
+  webhookDelayDirectiveDeliveries = [],
+  residentLoopShadowRuns = [],
+  residentDispatchDecisions = [],
+} = {}) {
+  const operationId = operation?.operation_id ?? null;
+  const items = [];
+  const push = (item) => {
+    if (!item?.activity_kind) return;
+    items.push({
+      activity_id: item.activity_id || `${item.activity_kind}:${items.length}`,
+      activity_kind: item.activity_kind,
+      occurred_at: item.occurred_at || null,
+      title: item.title || item.activity_kind,
+      summary: item.summary || 'recorded',
+      source_ref: item.source_ref || null,
+      principal_id: item.principal_id || null,
+    });
+  };
+  for (const transition of statusHistory?.transitions || []) {
+    push({
+      activity_id: transition.event_id,
+      activity_kind: 'operation_status_transition',
+      occurred_at: transition.recorded_at,
+      title: `Operation ${transition.to_status || 'status changed'}`,
+      summary: `${transition.from_status || 'unknown'} -> ${transition.to_status || 'unknown'}`,
+      source_ref: transition.operation_id || operationId,
+      principal_id: transition.principal_id,
+    });
+  }
+  for (const event of authorityEvents || []) {
+    push({
+      activity_id: event.event_id,
+      activity_kind: event.event_kind === 'site_operation_status_updated' ? 'operation_authority_status_event' : 'operation_authority_event',
+      occurred_at: event.recorded_at,
+      title: event.event_kind,
+      summary: [event.action, event.reason].filter(Boolean).join(' / ') || 'authority event recorded',
+      source_ref: event.evidence?.operation_id || event.carrier_session_id || operationId,
+      principal_id: event.principal_id,
+    });
+  }
+  for (const session of sessions || []) {
+    push({
+      activity_id: `operation_session:${session.carrier_session_id}`,
+      activity_kind: 'operation_session_binding',
+      occurred_at: session.created_at || session.updated_at,
+      title: 'Session Bound',
+      summary: [session.binding_status, session.agent_id].filter(Boolean).join(' / ') || 'session bound',
+      source_ref: session.carrier_session_id,
+      principal_id: session.bound_by_principal_id,
+    });
+  }
+  for (const task of tasks || []) {
+    push({
+      activity_id: `operation_task:${task.task_id}`,
+      activity_kind: 'operation_task',
+      occurred_at: task.updated_at || task.created_at,
+      title: task.title || task.task_id || 'Task',
+      summary: [task.status, task.carrier_session_id].filter(Boolean).join(' / ') || 'task recorded',
+      source_ref: task.task_id,
+    });
+  }
+  for (const packet of continuityPackets || []) {
+    push({
+      activity_id: `continuity_packet:${packet.packet_id}`,
+      activity_kind: 'site_continuity_packet',
+      occurred_at: packet.imported_at || packet.created_at,
+      title: 'Continuity Packet',
+      summary: [packet.admission_action, packet.exchange_class].filter(Boolean).join(' / ') || 'continuity packet recorded',
+      source_ref: packet.packet_id,
+      principal_id: packet.imported_by_principal_id,
+    });
+  }
+  for (const entry of carrierEvidence || []) {
+    for (const event of entry.events || []) {
+      push({
+        activity_id: `carrier_event:${entry.carrier_session_id}:${event.sequence ?? event.event_id ?? items.length}`,
+        activity_kind: 'carrier_evidence_event',
+        occurred_at: event.created_at || event.recorded_at,
+        title: event.event_kind || 'carrier_event',
+        summary: [entry.carrier_session_id, event.payload?.tool_name || event.payload?.provider || event.payload?.status].filter(Boolean).join(' / ') || 'carrier evidence recorded',
+        source_ref: entry.carrier_session_id,
+      });
+    }
+  }
+  for (const record of webhookDelayDirectiveRecords || []) {
+    push({
+      activity_id: `directive_record:${record.directive_record_id}`,
+      activity_kind: 'webhook_delay_directive_record',
+      occurred_at: record.recorded_at || record.generated_at,
+      title: 'Directive Intent',
+      summary: [record.classification_state, record.directive_action, record.fallback_status].filter(Boolean).join(' / ') || 'directive recorded',
+      source_ref: record.directive_record_id,
+      principal_id: record.recorded_by_principal_id,
+    });
+  }
+  for (const delivery of webhookDelayDirectiveDeliveries || []) {
+    push({
+      activity_id: `directive_delivery:${delivery.delivery_id}`,
+      activity_kind: 'webhook_delay_directive_delivery',
+      occurred_at: delivery.recorded_at || delivery.delivery?.completed_at,
+      title: 'Directive Delivery',
+      summary: [delivery.delivery_state, delivery.carrier_session_id, delivery.fallback_status].filter(Boolean).join(' / ') || 'directive delivery recorded',
+      source_ref: delivery.delivery_id,
+      principal_id: delivery.recorded_by_principal_id,
+    });
+  }
+  for (const run of residentLoopShadowRuns || []) {
+    push({
+      activity_id: `resident_loop:${run.loop_run_id}`,
+      activity_kind: 'resident_loop_shadow_read',
+      occurred_at: run.run_started_at || run.recorded_at,
+      title: 'Resident Loop Shadow Read',
+      summary: [run.loop_status, 'steps=' + (run.step_count ?? 'unknown'), 'attention=' + (run.operator_attention_count ?? 'unknown')].join(' / '),
+      source_ref: run.loop_run_id,
+      principal_id: run.recorded_by_principal_id,
+    });
+  }
+  for (const decision of residentDispatchDecisions || []) {
+    push({
+      activity_id: `resident_dispatch:${decision.dispatch_decision_id}`,
+      activity_kind: 'resident_dispatch_decision',
+      occurred_at: decision.recorded_at || decision.session_start?.started_at,
+      title: 'Resident Dispatch',
+      summary: [decision.decision_state, decision.dispatch_action, decision.fallback_status].filter(Boolean).join(' / ') || 'dispatch decision recorded',
+      source_ref: decision.dispatch_decision_id || decision.carrier_session_id,
+      principal_id: decision.recorded_by_principal_id,
+    });
+  }
+  const sorted = items.sort((left, right) => {
+    const timeCompare = String(right.occurred_at || '').localeCompare(String(left.occurred_at || ''));
+    return timeCompare || String(right.activity_id).localeCompare(String(left.activity_id));
+  });
+  return {
+    schema: 'narada.cloudflare_operation_activity_timeline.v1',
+    operation_id: operationId,
+    activity_count: sorted.length,
+    latest_activity: sorted[0] ?? null,
+    items: sorted.slice(0, 100),
+  };
+}
+
 function summarizeCloudflareCarrierEvidenceReadStatus({ sessions = [], carrierEvidence = [] } = {}) {
   const sessionList = Array.isArray(sessions) ? sessions : [];
   const evidenceGroups = Array.isArray(carrierEvidence) ? carrierEvidence : [];
@@ -1089,6 +1239,19 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
     const siteContinuityStatus = summarizeCloudflareSiteContinuityStatus(siteId, continuityPackets, siteContinuity);
     const operationStatusHistory = summarizeCloudflareOperationStatusHistory(response.authority_events, operation);
+    const operationActivityTimeline = summarizeCloudflareOperationActivityTimeline({
+      operation,
+      statusHistory: operationStatusHistory,
+      authorityEvents: response.authority_events,
+      sessions,
+      tasks,
+      carrierEvidence,
+      continuityPackets,
+      webhookDelayDirectiveRecords,
+      webhookDelayDirectiveDeliveries,
+      residentLoopShadowRuns,
+      residentDispatchDecisions,
+    });
     const operationLifecycleStatus = summarizeCloudflareOperationLifecycleStatus({
       operation,
       sessions,
@@ -1120,6 +1283,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         site_continuity: siteContinuity,
         site_continuity_status: siteContinuityStatus,
         operation_status_history: operationStatusHistory,
+        operation_activity_timeline: operationActivityTimeline,
         operation_lifecycle_status: operationLifecycleStatus,
         operation_product_surface: {
           schema: 'narada.cloudflare_operation_product_surface.v1',
@@ -1132,6 +1296,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           continuity_packet_count: continuityPackets.length,
           continuity_status: siteContinuityStatus,
           status_history: operationStatusHistory,
+          activity_timeline: operationActivityTimeline,
           lifecycle_status: operationLifecycleStatus,
           webhook_delay_shadow_observation_count: webhookDelayShadowObservations.length,
           webhook_delay_observation_primary_read_count: webhookDelayObservationPrimaryReads.length,
@@ -4539,6 +4704,10 @@ export function renderCloudflareCarrierConsole() {
         <div id="operationFlightDeck" class="evidence-summary"><div class="empty">No operation product loaded.</div></div>
       </div>
       <div class="product-panel">
+        <h2>Operation Activity Timeline</h2>
+        <div id="operationActivityTimeline" class="attention-items"><div class="empty">No operation activity loaded.</div></div>
+      </div>
+      <div class="product-panel">
         <h2>Continuity Workflow</h2>
         <div class="actions"><button id="continuityWorkflowNextAction" class="secondary">Focus Next Workflow Step</button></div>
         <div id="continuityWorkflow" class="attention-items"><div class="empty">No continuity workflow loaded.</div></div>
@@ -5132,6 +5301,8 @@ export function renderCloudflareCarrierConsole() {
         ['Evidence Replay Sessions', evidenceReplaySessionSummary(evidenceStatus)],
         ['Status Transitions', operationStatusTransitionSummary(statusHistory)],
         ['Latest Status Transition', operationLatestStatusTransitionLabel(statusHistory)],
+        ['Activity Items', operationActivityTimelineSummary(product)],
+        ['Latest Activity', operationLatestActivityLabel(product)],
         ['Follow Up', followUp],
       ];
     }
@@ -5661,6 +5832,8 @@ export function renderCloudflareCarrierConsole() {
         ['Evidence Replay Sessions', evidenceReplaySessionSummary(evidenceStatus)],
         ['Status Transitions', operationStatusTransitionSummary(statusHistory)],
         ['Latest Status Transition', operationLatestStatusTransitionLabel(statusHistory)],
+        ['Activity Items', operationActivityTimelineSummary(product)],
+        ['Latest Activity', operationLatestActivityLabel(product)],
         ['Authority Posture', unresolvedAuthority.length === 0 ? 'no unresolved decisions' : String(unresolvedAuthority.length) + ' unresolved'],
         ['Next Action', nextAction],
       ];
@@ -8270,6 +8443,7 @@ export function renderCloudflareCarrierConsole() {
       renderAuthorityPath(product);
       renderProductScopeDetail(product);
       renderOperationFlightDeck(product);
+      renderOperationActivityTimeline(product);
       renderOperationPath(focusedOperation(), product);
       updateControlRoom();
       const siteItems = [
@@ -8360,6 +8534,7 @@ export function renderCloudflareCarrierConsole() {
       renderAuthorityPath(product);
       renderProductScopeDetail(product);
       renderOperationFlightDeck(product);
+      renderOperationActivityTimeline(product);
       renderOperationPath(focusedOperation(), product);
       updateControlRoom();
       const operationItems = [
@@ -8483,6 +8658,40 @@ export function renderCloudflareCarrierConsole() {
         transition.principal_id || 'unknown-principal',
         transition.recorded_at || 'unknown-time',
       ].join(' / ');
+    }
+    function operationActivityTimeline(product = state.operationProduct || {}) {
+      return product.operation_product_surface?.activity_timeline
+        || product.operation_activity_timeline
+        || null;
+    }
+    function operationActivityTimelineSummary(product = state.operationProduct || {}) {
+      const timeline = operationActivityTimeline(product);
+      if (!timeline) return 'unknown';
+      return String(timeline.activity_count ?? (timeline.items || []).length ?? 0) + ' activities';
+    }
+    function operationLatestActivityLabel(product = state.operationProduct || {}) {
+      const activity = operationActivityTimeline(product)?.latest_activity || null;
+      if (!activity) return 'none';
+      return [activity.activity_kind, activity.title, activity.occurred_at || 'unknown-time'].filter(Boolean).join(' / ');
+    }
+    function renderOperationActivityTimeline(product = state.operationProduct || {}) {
+      const timeline = operationActivityTimeline(product);
+      const target = el('operationActivityTimeline');
+      if (!target) return;
+      if (!timeline || !(timeline.items || []).length) {
+        target.innerHTML = '<div class="empty">No operation activity loaded.</div>';
+        return;
+      }
+      target.replaceChildren(...timeline.items.slice(0, 30).map((activity) => {
+        const node = document.createElement('article');
+        node.className = 'attention-item';
+        const title = document.createElement('strong');
+        title.textContent = [activity.occurred_at || 'unknown-time', activity.activity_kind].join(' | ');
+        const meta = document.createElement('span');
+        meta.textContent = [activity.title, activity.summary, activity.source_ref].filter(Boolean).join(' | ');
+        node.append(title, meta);
+        return node;
+      }));
     }
     function renderEvidenceReplayMetric(product = state.operationProduct || {}) {
       const status = evidenceReplayStatus(product);
