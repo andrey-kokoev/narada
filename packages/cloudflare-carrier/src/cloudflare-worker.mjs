@@ -2060,6 +2060,10 @@ export function renderCloudflareCarrierConsole() {
         </div>
       </div>
       <div class="product-panel">
+        <h2>Operation Flight Deck</h2>
+        <div id="operationFlightDeck" class="evidence-summary"><div class="empty">No operation product loaded.</div></div>
+      </div>
+      <div class="product-panel">
         <h2>Runtime Posture</h2>
         <div id="runtimePostureDetail" class="evidence-summary"><div class="empty">No runtime status loaded.</div></div>
       </div>
@@ -2428,6 +2432,39 @@ export function renderCloudflareCarrierConsole() {
         if ((product.webhook_delay_shadow_observations || []).length === 0) missing.push('shadow-read');
       }
       return missing.length === 0 ? 'ready' : 'missing ' + missing.join(', ');
+    }
+    function operationFlightDeckContext(product = {}) {
+      const surface = product.operation_product_surface || {};
+      const activeSession = el('sessionId').value.trim();
+      const openAttention = state.attentionItems.filter((item) => item.status !== 'resolved');
+      const unresolvedAuthority = (product.site_authority?.decisions || []).filter((decision) => decision.action !== 'admit');
+      const openTasks = (product.tasks || []).filter((task) => !['done', 'closed', 'resolved'].includes(String(task.status || '').toLowerCase()));
+      const nextAction = openAttention[0]
+        ? 'resolve attention ' + openAttention[0].directive_id
+        : openTasks[0]
+          ? 'advance task ' + openTasks[0].task_id
+          : !activeSession
+            ? 'select or start session'
+            : unresolvedAuthority[0]
+              ? 'inspect authority ' + (unresolvedAuthority[0].mutation_class || unresolvedAuthority[0].reason || 'decision')
+              : 'monitor operation';
+      return [
+        ['Operation', product.operation?.operation_id || el('operationId').value.trim() || 'none'],
+        ['Selected Session', activeSession || 'none'],
+        ['Session Focus', state.sessionFocus?.carrier_session_id || 'none'],
+        ['Open Attention', String(openAttention.length) + ' / ' + state.attentionItems.length],
+        ['Open Tasks', String(openTasks.length) + ' / ' + (product.tasks || []).length],
+        ['Evidence Loaded', String(surface.carrier_evidence_count ?? (product.carrier_evidence || []).length) + ' groups / ' + state.events.length + ' events'],
+        ['Authority Posture', unresolvedAuthority.length === 0 ? 'no unresolved decisions' : String(unresolvedAuthority.length) + ' unresolved'],
+        ['Next Action', nextAction],
+      ];
+    }
+    function renderOperationFlightDeck(product = state.operationProduct || {}) {
+      if (!product.operation && !el('operationId').value.trim()) {
+        el('operationFlightDeck').innerHTML = '<div class="empty">No operation product loaded.</div>';
+        return;
+      }
+      el('operationFlightDeck').replaceChildren(...operationFlightDeckContext(product).map(([label, value]) => evidenceField(label, value)));
     }
     function refreshEventKindFilter() {
       const select = el('eventKindFilter');
@@ -3164,6 +3201,7 @@ export function renderCloudflareCarrierConsole() {
       renderWebhookDelayShadowNavigator(product.webhook_delay_shadow_observations || []);
       renderAttentionQueue(extractOperationAttention(product));
       renderAuthorityState(product);
+      renderOperationFlightDeck(product);
       updateControlRoom();
       const siteItems = [
         listItem('site_id', product.site?.site_id),
@@ -3235,6 +3273,7 @@ export function renderCloudflareCarrierConsole() {
       renderOperationSessions(product.sessions || []);
       renderAttentionQueue(extractOperationAttention(product));
       renderAuthorityState(product);
+      renderOperationFlightDeck(product);
       updateControlRoom();
       const operationItems = [
         listItem('operation_id', product.operation?.operation_id),
