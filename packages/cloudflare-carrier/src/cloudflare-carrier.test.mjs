@@ -1024,6 +1024,27 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /cloudflare_shadow_read/);
   assert.match(html, /windows_primary_dispatcher/);
   assert.match(html, /Dispatch Action/);
+  assert.match(html, /Resident Loop Shadow Read/);
+  assert.match(html, /residentLoopShadowNavigator/);
+  assert.match(html, /residentLoopShadowFocusDetail/);
+  assert.match(html, /renderResidentLoopShadowNavigator/);
+  assert.match(html, /residentLoopShadowFocusContext/);
+  assert.match(html, /selectResidentLoopShadow/);
+  assert.match(html, /resident_loop_shadow_reads/);
+  assert.match(html, /resident_loop_shadow_run_count/);
+  assert.match(html, /Operator Attention/);
+  assert.match(html, /Resident Dispatch/);
+  assert.match(html, /residentDispatchNavigator/);
+  assert.match(html, /residentDispatchFocusDetail/);
+  assert.match(html, /renderResidentDispatchNavigator/);
+  assert.match(html, /residentDispatchFocusContext/);
+  assert.match(html, /selectResidentDispatch/);
+  assert.match(html, /resident_dispatch_decisions/);
+  assert.match(html, /resident_dispatch_decision_count/);
+  assert.match(html, /Fallback Authority/);
+  assert.match(html, /Fallback Status/);
+  assert.match(html, /cloudflare_primary_dispatcher/);
+  assert.match(html, /windows_fallback_dispatcher/);
   assert.match(html, /operation_product_surface/);
   assert.match(html, /Carrier Evidence/);
   assert.match(html, /Task State/);
@@ -1263,6 +1284,85 @@ test('worker records resident loop runs as Cloudflare shadow-read evidence witho
   const operationReadBody = await operationRead.json();
   assert.equal(operationReadBody.operation_product_surface.resident_loop_shadow_run_count, 1);
   assert.equal(operationReadBody.operation_product_surface.dispatch_authority, 'windows_primary_dispatcher');
+});
+
+test('worker starts controlled resident dispatch as Cloudflare primary with Windows fallback recorded', async () => {
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{
+      site_id: 'site_fixture',
+      site_ref: 'site://fixture',
+      display_name: 'Fixture Site',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+      created_by_principal_id: 'admin',
+    }],
+    memberships: [{
+      site_id: 'site_fixture',
+      principal_id: 'admin',
+      role: 'owner',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+    operations: [{
+      operation_id: 'operation_dispatch',
+      site_id: 'site_fixture',
+      display_name: 'Dispatch Operation',
+      operation_kind: 'control',
+      status: 'active',
+      created_by_principal_id: 'admin',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+  });
+  const env = authEnv(fakeDurableObjectNamespace(), { CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+
+  const dispatched = await worker.fetch(jsonRequest({
+    operation: 'resident_dispatch.primary_with_fallback.start',
+    request_id: 'request_resident_dispatch_primary_start',
+    params: {
+      site_id: 'site_fixture',
+      operation_id: 'operation_dispatch',
+      carrier_session_id: 'carrier_session_dispatch_fixture',
+      dispatch_decision_id: 'resident_dispatch_fixture_1',
+      agent_id: 'narada.dispatch.fixture',
+      site_root: 'cloudflare://site_fixture',
+      site_ref: 'site://fixture',
+      windows_fallback_ref: 'windows_local_site_resident_loop',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(dispatched.status, 200);
+  const dispatchedBody = await dispatched.json();
+  assert.equal(dispatchedBody.status, 'cloudflare_primary_started');
+  assert.equal(dispatchedBody.dispatch_authority, 'cloudflare_primary_dispatcher');
+  assert.equal(dispatchedBody.fallback_authority, 'windows_fallback_dispatcher');
+  assert.equal(dispatchedBody.fallback_status, 'available');
+  assert.equal(dispatchedBody.dispatch_action, 'cloudflare_session_start');
+  assert.equal(dispatchedBody.carrier_session_id, 'carrier_session_dispatch_fixture');
+  assert.equal(dispatchedBody.session_start.event.event_kind, 'carrier_session_started');
+  assert.equal(siteDb.dump().carrierSessions.some((session) => session.carrier_session_id === 'carrier_session_dispatch_fixture'), true);
+
+  const listed = await worker.fetch(jsonRequest({
+    operation: 'resident_dispatch.primary_with_fallback.list',
+    request_id: 'request_resident_dispatch_primary_list',
+    params: { site_id: 'site_fixture', limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(listed.status, 200);
+  const listedBody = await listed.json();
+  assert.equal(listedBody.dispatch_authority, 'cloudflare_primary_dispatcher');
+  assert.equal(listedBody.fallback_authority, 'windows_fallback_dispatcher');
+  assert.deepEqual(listedBody.dispatch_decisions.map((entry) => entry.decision_state), ['cloudflare_primary_started']);
+
+  const operationRead = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_resident_dispatch_operation_read',
+    params: { site_id: 'site_fixture', operation_id: 'operation_dispatch', resident_dispatch_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(operationRead.status, 200);
+  const operationReadBody = await operationRead.json();
+  assert.equal(operationReadBody.resident_dispatch_decisions[0].dispatch_decision_id, 'resident_dispatch_fixture_1');
+  assert.equal(operationReadBody.operation_product_surface.resident_dispatch_decision_count, 1);
 });
 
 test('worker site.membership.put admits owner and exposes membership through site.read', async () => {
@@ -2563,6 +2663,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     continuityPackets: clone(initial.continuityPackets ?? []),
     webhookDelayShadowObservations: clone(initial.webhookDelayShadowObservations ?? []),
     residentLoopShadowRuns: clone(initial.residentLoopShadowRuns ?? []),
+    residentDispatchDecisions: clone(initial.residentDispatchDecisions ?? []),
   };
   return {
     prepare(sql) {
@@ -2630,6 +2731,12 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const row = { loop_run_id, site_id, operation_id, source_locus, target_locus, run_started_at, run_finished_at, loop_status, step_count, operator_attention_count, dispatch_authority, shadow_mode, dispatch_action, loop_run_json, recorded_by_principal_id, recorded_at };
         if (existing) Object.assign(existing, row);
         else state.residentLoopShadowRuns.push(row);
+      } else if (normalized.startsWith('insert into cloudflare_resident_dispatch_decisions')) {
+        const [dispatch_decision_id, site_id, operation_id, carrier_session_id, decision_state, dispatch_authority, fallback_authority, fallback_status, dispatch_action, dispatch_scope, session_start_status, session_start_ok, decision_json, recorded_by_principal_id, recorded_at] = bindings;
+        const existing = state.residentDispatchDecisions.find((entry) => entry.dispatch_decision_id === dispatch_decision_id);
+        const row = { dispatch_decision_id, site_id, operation_id, carrier_session_id, decision_state, dispatch_authority, fallback_authority, fallback_status, dispatch_action, dispatch_scope, session_start_status, session_start_ok, decision_json, recorded_by_principal_id, recorded_at };
+        if (existing) Object.assign(existing, row);
+        else state.residentDispatchDecisions.push(row);
       }
       return { success: true };
     },
@@ -2729,6 +2836,16 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const [siteId, limit] = bindings;
         return {
           results: state.residentLoopShadowRuns
+            .filter((entry) => entry.site_id === siteId)
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_resident_dispatch_decisions')) {
+        const [siteId, limit] = bindings;
+        return {
+          results: state.residentDispatchDecisions
             .filter((entry) => entry.site_id === siteId)
             .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at))
             .slice(0, Number(limit))

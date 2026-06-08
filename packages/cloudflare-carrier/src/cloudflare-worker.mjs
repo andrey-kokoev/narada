@@ -39,8 +39,11 @@ const DEFAULT_OPERATOR_SESSION_TTL_SECONDS = 8 * 60 * 60;
 const MICROSOFT_OIDC_PENDING_TTL_SECONDS = 5 * 60;
 const CLOUDFLARE_WEBHOOK_DELAY_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_webhook_delay_shadow_read.v1';
 const CLOUDFLARE_RESIDENT_LOOP_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_resident_loop_shadow_read.v1';
+const CLOUDFLARE_RESIDENT_DISPATCH_PRIMARY_SCHEMA = 'narada.sonar.cloudflare_resident_dispatch_primary_with_windows_fallback.v1';
 const CLOUDFLARE_WEBHOOK_DELAY_SHADOW_MODE = 'cloudflare_shadow_read';
+const CLOUDFLARE_PRIMARY_DISPATCH_AUTHORITY = 'cloudflare_primary_dispatcher';
 const WINDOWS_PRIMARY_DISPATCH_AUTHORITY = 'windows_primary_dispatcher';
+const WINDOWS_FALLBACK_DISPATCH_AUTHORITY = 'windows_fallback_dispatcher';
 const DEFAULT_WEBHOOK_DELAY_CRITICAL_MINUTES = 15;
 const CLOUDFLARE_RUNTIME_METADATA_READ_CAPABILITY = Object.freeze({
   capability_ref: CLOUDFLARE_RUNTIME_METADATA_READ_CAPABILITY_REF,
@@ -391,28 +394,33 @@ async function handleCarrierApiRequest(request, env) {
       const siteResponse = await handleSiteProductApiRequest(body, auth.principal, env);
       return jsonResponse(withPrincipalEvidence(siteResponse.body, body.operation, auth.principal), siteResponse.status);
     }
+    const routed = await routeCarrierSessionRequest(request.url, body, auth.principal, env);
+    return jsonResponse(withPrincipalEvidence(routed.body, body.operation, auth.principal), routed.status);
+}
+
+async function routeCarrierSessionRequest(requestUrl, body, principal, env) {
     const carrierSessionId = body.carrier_session_id ?? body.params?.carrier_session_id;
-    if (!carrierSessionId) return jsonResponse({ ok: false, code: 'missing_carrier_session_id' }, 400);
+    if (!carrierSessionId) return { status: 400, body: { ok: false, code: 'missing_carrier_session_id' } };
     if (!env?.CLOUDFLARE_CARRIER_SESSIONS) {
-      return jsonResponse({ ok: false, code: 'missing_durable_object_binding' }, 500);
+      return { status: 500, body: { ok: false, code: 'missing_durable_object_binding' } };
     }
-    const registryAdmission = await validateCarrierSiteBindingForRequest(body, auth.principal, env);
+    const registryAdmission = await validateCarrierSiteBindingForRequest(body, principal, env);
     if (registryAdmission?.ok === false) {
-      return jsonResponse(withPrincipalEvidence({
+      return { status: 403, body: {
         ok: false,
         code: 'carrier_site_binding_denied',
         site_registry_code: registryAdmission.code,
         site_registry_reason: registryAdmission.reason ?? registryAdmission.code,
-      }, body.operation, auth.principal), 403);
+      } };
     }
     const sessionAuthorityDecision = validateCarrierSessionAuthorityForRequest(body, env);
     if (sessionAuthorityDecision && sessionAuthorityDecision.action !== SITE_AUTHORITY_ACTIONS.ADMIT) {
-      return jsonResponse(withPrincipalEvidence({
+      return { status: 403, body: {
         ok: false,
         code: 'site_authority_route_denied',
         operation: body.operation,
         site_authority_decision: sessionAuthorityDecision,
-      }, body.operation, auth.principal), 403);
+      } };
     }
     const routedBody = (registryAdmission?.evidence || sessionAuthorityDecision)
       ? {
@@ -425,14 +433,14 @@ async function handleCarrierApiRequest(request, env) {
         }
       : body;
     const id = env.CLOUDFLARE_CARRIER_SESSIONS.idFromName(carrierSessionId);
-    const authenticatedRequest = new Request(request.url, {
-      method: request.method,
+    const authenticatedRequest = new Request(requestUrl, {
+      method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ ...routedBody, principal: auth.principal }),
+      body: JSON.stringify({ ...routedBody, principal }),
     });
     const durableResponse = await env.CLOUDFLARE_CARRIER_SESSIONS.get(id).fetch(authenticatedRequest);
     const responseBody = await durableResponse.json();
-    return jsonResponse(withPrincipalEvidence(responseBody, body.operation, auth.principal), durableResponse.status);
+    return { status: durableResponse.status, body: responseBody };
 }
 
 function isSiteProductOperation(operation) {
@@ -450,6 +458,8 @@ function isSiteProductOperation(operation) {
     'webhook_delay.shadow_read.list',
     'resident_loop.shadow_read.record',
     'resident_loop.shadow_read.list',
+    'resident_dispatch.primary_with_fallback.start',
+    'resident_dispatch.primary_with_fallback.list',
   ].includes(operation);
 }
 
@@ -557,6 +567,29 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
   if (!registry) return { status: 500, body: { ok: false, code: 'missing_site_registry_binding' } };
   const params = body.params ?? {};
   const requestedSiteId = params.site_id ?? body.site_id ?? 'unknown-site';
+  if (body.operation === 'resident_dispatch.primary_with_fallback.start') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const result = await startCloudflareResidentDispatchWithWindowsFallback(env, requestedSiteId, params, principal);
+    return { status: result.ok ? 200 : 400, body: result };
+  }
+  if (body.operation === 'resident_dispatch.primary_with_fallback.list') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const dispatchDecisions = await listCloudflareResidentDispatchDecisions(env, requestedSiteId, params.resident_dispatch_limit ?? params.limit);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        schema: CLOUDFLARE_RESIDENT_DISPATCH_PRIMARY_SCHEMA,
+        status: 'ok',
+        site_id: requestedSiteId,
+        dispatch_authority: CLOUDFLARE_PRIMARY_DISPATCH_AUTHORITY,
+        fallback_authority: WINDOWS_FALLBACK_DISPATCH_AUTHORITY,
+        dispatch_decisions: dispatchDecisions,
+      },
+    };
+  }
   if (body.operation === 'resident_loop.shadow_read.record') {
     const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
     if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
@@ -629,6 +662,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const continuityPackets = await listCloudflareContinuityPackets(env, siteId);
     const webhookDelayShadowObservations = await listCloudflareWebhookDelayShadowObservations(env, siteId, params.webhook_delay_shadow_limit ?? params.limit);
     const residentLoopShadowRuns = await listCloudflareResidentLoopShadowRuns(env, siteId, params.resident_loop_shadow_limit ?? params.limit);
+    const residentDispatchDecisions = await listCloudflareResidentDispatchDecisions(env, siteId, params.resident_dispatch_limit ?? params.limit);
     const carrierEvidence = await readCarrierEvidenceForSiteSessions(env, sessions, principal, params);
     const siteAuthority = cloudflareSiteAuthorityReadModel(env, siteId);
     const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
@@ -640,6 +674,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         site_continuity_packets: continuityPackets,
         webhook_delay_shadow_observations: webhookDelayShadowObservations,
         resident_loop_shadow_runs: residentLoopShadowRuns,
+        resident_dispatch_decisions: residentDispatchDecisions,
         carrier_evidence: carrierEvidence,
         site_authority: siteAuthority,
         site_continuity: siteContinuity,
@@ -653,6 +688,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           continuity_packet_count: continuityPackets.length,
           webhook_delay_shadow_observation_count: webhookDelayShadowObservations.length,
           resident_loop_shadow_run_count: residentLoopShadowRuns.length,
+          resident_dispatch_decision_count: residentDispatchDecisions.length,
           dispatch_authority: WINDOWS_PRIMARY_DISPATCH_AUTHORITY,
         },
       },
@@ -671,6 +707,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
   const continuityPackets = await listCloudflareContinuityPackets(env, siteId);
   const webhookDelayShadowObservations = await listCloudflareWebhookDelayShadowObservations(env, siteId, params.webhook_delay_shadow_limit ?? params.limit);
   const residentLoopShadowRuns = await listCloudflareResidentLoopShadowRuns(env, siteId, params.resident_loop_shadow_limit ?? params.limit);
+  const residentDispatchDecisions = await listCloudflareResidentDispatchDecisions(env, siteId, params.resident_dispatch_limit ?? params.limit);
   const carrierEvidence = await readCarrierEvidenceForSiteSessions(env, response.sessions ?? [], principal, params);
   const siteAuthority = cloudflareSiteAuthorityReadModel(env, siteId);
   const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
@@ -682,11 +719,193 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       site_continuity_packets: continuityPackets,
       webhook_delay_shadow_observations: webhookDelayShadowObservations,
       resident_loop_shadow_runs: residentLoopShadowRuns,
+      resident_dispatch_decisions: residentDispatchDecisions,
       carrier_evidence: carrierEvidence,
       site_authority: siteAuthority,
       site_continuity: siteContinuity,
     },
   };
+}
+
+async function startCloudflareResidentDispatchWithWindowsFallback(env = {}, siteId, params = {}, principal = null) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return { ok: false, code: 'missing_site_registry_binding' };
+  if (!siteId || siteId === 'unknown-site') return { ok: false, code: 'missing_site_id' };
+  const dispatch = createResidentDispatchDecision(siteId, params, principal);
+  const sessionStart = {
+    operation: 'session.start',
+    request_id: dispatch.dispatch_request_id,
+    params: {
+      carrier_session_id: dispatch.carrier_session_id,
+      agent_id: dispatch.agent_id,
+      site_id: siteId,
+      site_root: dispatch.site_root,
+      site_ref: dispatch.site_ref,
+      operation_id: dispatch.operation_id,
+    },
+  };
+  const routed = await routeCarrierSessionRequest('https://carrier.dispatch.local/api/carrier', sessionStart, principal, env);
+  const cloudflareStarted = routed.status >= 200 && routed.status < 300 && routed.body?.ok !== false;
+  const record = {
+    ...dispatch,
+    decision_state: cloudflareStarted ? 'cloudflare_primary_started' : 'cloudflare_primary_failed_windows_fallback_available',
+    dispatch_action: 'cloudflare_session_start',
+    fallback_status: 'available',
+    session_start_status: routed.status,
+    session_start_ok: routed.body?.ok === true,
+    session_start_body: routed.body,
+    recorded_by_principal_id: principal?.principal_id ?? 'unknown-principal',
+    recorded_at: new Date().toISOString(),
+  };
+  await recordCloudflareResidentDispatchDecision(env, record);
+  return {
+    ok: cloudflareStarted,
+    schema: CLOUDFLARE_RESIDENT_DISPATCH_PRIMARY_SCHEMA,
+    status: record.decision_state,
+    site_id: siteId,
+    operation_id: record.operation_id,
+    carrier_session_id: record.carrier_session_id,
+    dispatch_authority: CLOUDFLARE_PRIMARY_DISPATCH_AUTHORITY,
+    fallback_authority: WINDOWS_FALLBACK_DISPATCH_AUTHORITY,
+    fallback_status: record.fallback_status,
+    dispatch_action: record.dispatch_action,
+    decision: record,
+    session_start: routed.body,
+  };
+}
+
+function createResidentDispatchDecision(siteId, params = {}, principal = null) {
+  const nowToken = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
+  const operationId = params.operation_id ?? 'operation_narada_cloudflare_control';
+  const carrierSessionId = params.carrier_session_id ?? `carrier_session_cloudflare_dispatch_${nowToken}`;
+  return {
+    dispatch_decision_id: params.dispatch_decision_id ?? `resident_dispatch_${safeIdToken(siteId)}_${safeIdToken(operationId)}_${safeIdToken(carrierSessionId)}`,
+    site_id: siteId,
+    operation_id: operationId,
+    carrier_session_id: carrierSessionId,
+    dispatch_request_id: params.dispatch_request_id ?? `request_resident_dispatch_${nowToken}`,
+    agent_id: params.agent_id ?? 'narada.cloudflare.dispatch',
+    site_root: params.site_root ?? params.site_ref ?? `cloudflare://${siteId}`,
+    site_ref: params.site_ref ?? `cloudflare://${siteId}`,
+    dispatch_authority: CLOUDFLARE_PRIMARY_DISPATCH_AUTHORITY,
+    fallback_authority: WINDOWS_FALLBACK_DISPATCH_AUTHORITY,
+    fallback_ref: params.windows_fallback_ref ?? params.fallback_ref ?? 'windows_local_site_resident_loop',
+    dispatch_scope: params.dispatch_scope ?? 'controlled_operation_session_start',
+    requested_by_principal_id: principal?.principal_id ?? 'unknown-principal',
+  };
+}
+
+async function recordCloudflareResidentDispatchDecision(env = {}, record) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return { ok: false, code: 'missing_site_registry_binding' };
+  await ensureCloudflareResidentDispatchDecisionSchema(db);
+  await db.prepare(`
+    INSERT INTO cloudflare_resident_dispatch_decisions (
+      dispatch_decision_id,
+      site_id,
+      operation_id,
+      carrier_session_id,
+      decision_state,
+      dispatch_authority,
+      fallback_authority,
+      fallback_status,
+      dispatch_action,
+      dispatch_scope,
+      session_start_status,
+      session_start_ok,
+      decision_json,
+      recorded_by_principal_id,
+      recorded_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(dispatch_decision_id) DO UPDATE SET
+      operation_id = excluded.operation_id,
+      carrier_session_id = excluded.carrier_session_id,
+      decision_state = excluded.decision_state,
+      dispatch_authority = excluded.dispatch_authority,
+      fallback_authority = excluded.fallback_authority,
+      fallback_status = excluded.fallback_status,
+      dispatch_action = excluded.dispatch_action,
+      dispatch_scope = excluded.dispatch_scope,
+      session_start_status = excluded.session_start_status,
+      session_start_ok = excluded.session_start_ok,
+      decision_json = excluded.decision_json,
+      recorded_by_principal_id = excluded.recorded_by_principal_id,
+      recorded_at = excluded.recorded_at
+  `).bind(
+    record.dispatch_decision_id,
+    record.site_id,
+    record.operation_id,
+    record.carrier_session_id,
+    record.decision_state,
+    record.dispatch_authority,
+    record.fallback_authority,
+    record.fallback_status,
+    record.dispatch_action,
+    record.dispatch_scope,
+    record.session_start_status,
+    record.session_start_ok ? 1 : 0,
+    JSON.stringify(record),
+    record.recorded_by_principal_id,
+    record.recorded_at,
+  ).run();
+  return { ok: true };
+}
+
+async function ensureCloudflareResidentDispatchDecisionSchema(db) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS cloudflare_resident_dispatch_decisions (
+      dispatch_decision_id TEXT PRIMARY KEY,
+      site_id TEXT NOT NULL,
+      operation_id TEXT,
+      carrier_session_id TEXT,
+      decision_state TEXT NOT NULL,
+      dispatch_authority TEXT NOT NULL,
+      fallback_authority TEXT NOT NULL,
+      fallback_status TEXT NOT NULL,
+      dispatch_action TEXT NOT NULL,
+      dispatch_scope TEXT NOT NULL,
+      session_start_status INTEGER NOT NULL,
+      session_start_ok INTEGER NOT NULL,
+      decision_json TEXT NOT NULL,
+      recorded_by_principal_id TEXT NOT NULL,
+      recorded_at TEXT NOT NULL
+    )
+  `).run();
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_cloudflare_resident_dispatch_decisions_site_recorded
+    ON cloudflare_resident_dispatch_decisions(site_id, recorded_at)
+  `).run();
+}
+
+async function listCloudflareResidentDispatchDecisions(env = {}, siteId, limit) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function' || !siteId) return [];
+  await ensureCloudflareResidentDispatchDecisionSchema(db);
+  const boundedLimit = clampInteger(limit, 0, 100, 25);
+  const rows = await db.prepare(`
+    SELECT * FROM cloudflare_resident_dispatch_decisions
+    WHERE site_id = ?
+    ORDER BY recorded_at DESC
+    LIMIT ?
+  `).bind(siteId, boundedLimit).all();
+  return (rows.results ?? []).map((row) => ({
+    dispatch_decision_id: row.dispatch_decision_id,
+    site_id: row.site_id,
+    operation_id: row.operation_id,
+    carrier_session_id: row.carrier_session_id,
+    schema: CLOUDFLARE_RESIDENT_DISPATCH_PRIMARY_SCHEMA,
+    decision_state: row.decision_state,
+    dispatch_authority: row.dispatch_authority,
+    fallback_authority: row.fallback_authority,
+    fallback_status: row.fallback_status,
+    dispatch_action: row.dispatch_action,
+    dispatch_scope: row.dispatch_scope,
+    session_start_status: Number(row.session_start_status),
+    session_start_ok: Boolean(row.session_start_ok),
+    decision: parseJsonObject(row.decision_json),
+    recorded_by_principal_id: row.recorded_by_principal_id,
+    recorded_at: row.recorded_at,
+  }));
 }
 
 async function recordCloudflareResidentLoopShadowRun(env = {}, siteId, params = {}, principal = null) {
@@ -2395,6 +2614,18 @@ export function renderCloudflareCarrierConsole() {
         <div id="webhookDelayShadowFocusDetail" class="evidence-summary"><div class="empty">No webhook delay shadow read selected.</div></div>
       </div>
       <div class="product-panel">
+        <h2>Resident Loop Shadow Read</h2>
+        <div id="residentLoopShadowNavigator" class="attention-items"><div class="empty">No resident loop shadow reads loaded.</div></div>
+        <h3>Resident Loop Focus Detail</h3>
+        <div id="residentLoopShadowFocusDetail" class="evidence-summary"><div class="empty">No resident loop shadow read selected.</div></div>
+      </div>
+      <div class="product-panel">
+        <h2>Resident Dispatch</h2>
+        <div id="residentDispatchNavigator" class="attention-items"><div class="empty">No resident dispatch decisions loaded.</div></div>
+        <h3>Resident Dispatch Focus Detail</h3>
+        <div id="residentDispatchFocusDetail" class="evidence-summary"><div class="empty">No resident dispatch decision selected.</div></div>
+      </div>
+      <div class="product-panel">
         <h2>Site Membership</h2>
         <label>Principal ID<input id="memberPrincipalId" placeholder="microsoft:tenant:object-id"></label>
         <label>Role<input id="memberRole" value="viewer"></label>
@@ -2466,7 +2697,7 @@ export function renderCloudflareCarrierConsole() {
   </main>
   <script type="module">
     const WORKBENCH_STORAGE_KEY = 'narada.cloudflare.operationWorkbench.v1';
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -2736,6 +2967,12 @@ export function renderCloudflareCarrierConsole() {
       if ((product.site_continuity_packets || []).length === 0 && (product.site_continuity?.decisions || []).length === 0) missing.push('continuity');
       if ('webhook_delay_shadow_observations' in product || 'webhook_delay_shadow_observation_count' in surface) {
         if ((product.webhook_delay_shadow_observations || []).length === 0) missing.push('shadow-read');
+      }
+      if ('resident_loop_shadow_runs' in product || 'resident_loop_shadow_run_count' in surface) {
+        if ((product.resident_loop_shadow_runs || []).length === 0) missing.push('resident-loop-shadow-read');
+      }
+      if ('resident_dispatch_decisions' in product || 'resident_dispatch_decision_count' in surface) {
+        if ((product.resident_dispatch_decisions || []).length === 0) missing.push('resident-dispatch');
       }
       return missing.length === 0 ? 'ready' : 'missing ' + missing.join(', ');
     }
@@ -4164,6 +4401,118 @@ export function renderCloudflareCarrierConsole() {
       }
       el('webhookDelayShadowFocusDetail').replaceChildren(...webhookDelayShadowFocusContext(item).map(([label, value]) => evidenceField(label, value)));
     }
+    function residentLoopShadowKey(item = {}) {
+      return item.loop_run_id || [item.site_id, item.operation_id, item.run_started_at].filter(Boolean).join('|');
+    }
+    function selectResidentLoopShadow(item) {
+      if (!item) return;
+      state.residentLoopShadowFocus = item;
+      renderResidentLoopShadowNavigator(state.operationProduct?.resident_loop_shadow_runs || []);
+      updateControlRoom();
+    }
+    function renderResidentLoopShadowNavigator(items = []) {
+      if (items.length === 0) {
+        state.residentLoopShadowFocus = null;
+        el('residentLoopShadowNavigator').innerHTML = '<div class="empty">No resident loop shadow reads loaded.</div>';
+        renderResidentLoopShadowFocusDetail();
+        return;
+      }
+      if (state.residentLoopShadowFocus) state.residentLoopShadowFocus = items.find((item) => residentLoopShadowKey(item) === residentLoopShadowKey(state.residentLoopShadowFocus)) || state.residentLoopShadowFocus;
+      if (!state.residentLoopShadowFocus) state.residentLoopShadowFocus = items[0];
+      el('residentLoopShadowNavigator').replaceChildren(...items.map((item) => {
+        const node = document.createElement('article');
+        node.className = 'shadow-read-item' + (residentLoopShadowKey(item) === residentLoopShadowKey(state.residentLoopShadowFocus) ? ' selected' : '');
+        const title = document.createElement('strong');
+        title.textContent = [item.loop_status || item.loop_run?.status || 'unknown', item.loop_run_id || item.run_started_at || 'resident_loop_shadow'].join(' ');
+        const meta = document.createElement('span');
+        meta.textContent = ['steps=' + (item.step_count ?? item.loop_run?.step_count ?? 'unknown'), 'attention=' + (item.operator_attention_count ?? item.loop_run?.operator_attention_count ?? 'unknown'), item.dispatch_authority, item.dispatch_action || 'none'].filter(Boolean).join(' | ');
+        node.addEventListener('click', () => selectResidentLoopShadow(item));
+        node.append(title, meta);
+        return node;
+      }));
+      renderResidentLoopShadowFocusDetail();
+    }
+    function residentLoopShadowFocusContext(item = {}) {
+      const loopRun = item.loop_run || {};
+      return [
+        ['Loop Run', item.loop_run_id || 'none'],
+        ['Status', item.loop_status || loopRun.status || 'unknown'],
+        ['Site', item.site_id || el('siteId').value.trim() || 'none'],
+        ['Operation', item.operation_id || loopRun.operation_id || el('operationId').value.trim() || 'none'],
+        ['Started', item.run_started_at || loopRun.run_started_at || 'none'],
+        ['Finished', item.run_finished_at || loopRun.run_finished_at || 'none'],
+        ['Steps', item.step_count ?? loopRun.step_count ?? 'unknown'],
+        ['Operator Attention', item.operator_attention_count ?? loopRun.operator_attention_count ?? 'unknown'],
+        ['Source Locus', item.source_locus || 'unknown'],
+        ['Target Locus', item.target_locus || 'unknown'],
+        ['Shadow Mode', item.shadow_mode || loopRun.shadow_mode || 'unknown'],
+        ['Dispatch Authority', item.dispatch_authority || loopRun.dispatch_authority || 'none'],
+        ['Dispatch Action', item.dispatch_action || loopRun.dispatch_action || 'none'],
+        ['Recorded', item.recorded_at || 'none'],
+      ];
+    }
+    function renderResidentLoopShadowFocusDetail(item = state.residentLoopShadowFocus) {
+      if (!item) {
+        el('residentLoopShadowFocusDetail').innerHTML = '<div class="empty">No resident loop shadow read selected.</div>';
+        return;
+      }
+      el('residentLoopShadowFocusDetail').replaceChildren(...residentLoopShadowFocusContext(item).map(([label, value]) => evidenceField(label, value)));
+    }
+    function residentDispatchKey(item = {}) {
+      return item.dispatch_decision_id || [item.site_id, item.operation_id, item.carrier_session_id].filter(Boolean).join('|');
+    }
+    function selectResidentDispatch(item) {
+      if (!item) return;
+      state.residentDispatchFocus = item;
+      renderResidentDispatchNavigator(state.operationProduct?.resident_dispatch_decisions || []);
+      updateControlRoom();
+    }
+    function renderResidentDispatchNavigator(items = []) {
+      if (items.length === 0) {
+        state.residentDispatchFocus = null;
+        el('residentDispatchNavigator').innerHTML = '<div class="empty">No resident dispatch decisions loaded.</div>';
+        renderResidentDispatchFocusDetail();
+        return;
+      }
+      if (state.residentDispatchFocus) state.residentDispatchFocus = items.find((item) => residentDispatchKey(item) === residentDispatchKey(state.residentDispatchFocus)) || state.residentDispatchFocus;
+      if (!state.residentDispatchFocus) state.residentDispatchFocus = items[0];
+      el('residentDispatchNavigator').replaceChildren(...items.map((item) => {
+        const node = document.createElement('article');
+        node.className = 'shadow-read-item' + (residentDispatchKey(item) === residentDispatchKey(state.residentDispatchFocus) ? ' selected' : '');
+        const title = document.createElement('strong');
+        title.textContent = [item.decision_state || 'unknown', item.dispatch_decision_id || item.carrier_session_id || 'resident_dispatch'].join(' ');
+        const meta = document.createElement('span');
+        meta.textContent = [item.dispatch_authority, item.fallback_authority, item.fallback_status, item.dispatch_action].filter(Boolean).join(' | ');
+        node.addEventListener('click', () => selectResidentDispatch(item));
+        node.append(title, meta);
+        return node;
+      }));
+      renderResidentDispatchFocusDetail();
+    }
+    function residentDispatchFocusContext(item = {}) {
+      return [
+        ['Decision', item.dispatch_decision_id || 'none'],
+        ['State', item.decision_state || 'unknown'],
+        ['Site', item.site_id || el('siteId').value.trim() || 'none'],
+        ['Operation', item.operation_id || el('operationId').value.trim() || 'none'],
+        ['Session', item.carrier_session_id || 'none'],
+        ['Dispatch Authority', item.dispatch_authority || 'cloudflare_primary_dispatcher'],
+        ['Fallback Authority', item.fallback_authority || 'windows_fallback_dispatcher'],
+        ['Fallback Status', item.fallback_status || 'unknown'],
+        ['Dispatch Action', item.dispatch_action || 'none'],
+        ['Dispatch Scope', item.dispatch_scope || 'unknown'],
+        ['Session Start Status', item.session_start_status ?? 'none'],
+        ['Session Start OK', item.session_start_ok ?? 'unknown'],
+        ['Recorded', item.recorded_at || 'none'],
+      ];
+    }
+    function renderResidentDispatchFocusDetail(item = state.residentDispatchFocus) {
+      if (!item) {
+        el('residentDispatchFocusDetail').innerHTML = '<div class="empty">No resident dispatch decision selected.</div>';
+        return;
+      }
+      el('residentDispatchFocusDetail').replaceChildren(...residentDispatchFocusContext(item).map(([label, value]) => evidenceField(label, value)));
+    }
     function renderSiteProduct(product) {
       state.operationProduct = product;
       state.productScope = 'site';
@@ -4182,6 +4531,8 @@ export function renderCloudflareCarrierConsole() {
       renderMembershipNavigator(currentMemberships(product));
       renderContinuityNavigator(continuityItems(product));
       renderWebhookDelayShadowNavigator(product.webhook_delay_shadow_observations || []);
+      renderResidentLoopShadowNavigator(product.resident_loop_shadow_runs || []);
+      renderResidentDispatchNavigator(product.resident_dispatch_decisions || []);
       renderAttentionQueue(extractOperationAttention(product));
       renderAuthorityState(product);
       renderProductScopeDetail(product);
@@ -4200,6 +4551,8 @@ export function renderCloudflareCarrierConsole() {
       const continuityItems = (product.site_continuity?.decisions || []).map((decision) => listItem(decision.exchange_class, continuitySummary(decision)));
       const continuityPacketItems = (product.site_continuity_packets || []).map((packet) => listItem(packet.packet_id, packet.admission_action || packet.imported_at));
       const webhookDelayShadowItems = (product.webhook_delay_shadow_observations || []).map((entry) => listItem(entry.observation_id || entry.generated_at, [entry.classification_state, entry.latest_delay_minutes, entry.dispatch_action || 'none'].filter((value) => value != null && value !== '').join(' | ')));
+      const residentLoopShadowItems = (product.resident_loop_shadow_runs || []).map((entry) => listItem(entry.loop_run_id || entry.run_started_at, [entry.loop_status, 'steps=' + (entry.step_count ?? 'unknown'), 'attention=' + (entry.operator_attention_count ?? 'unknown'), entry.dispatch_action || 'none'].filter((value) => value != null && value !== '').join(' | ')));
+      const residentDispatchItems = (product.resident_dispatch_decisions || []).map((entry) => listItem(entry.dispatch_decision_id || entry.carrier_session_id, [entry.decision_state, entry.dispatch_authority, entry.fallback_status, entry.dispatch_action].filter((value) => value != null && value !== '').join(' | ')));
       const evidenceItems = (product.carrier_evidence || []).map((entry) => {
         const kinds = (entry.events || []).slice(0, 5).map((event) => event.event_kind).join(', ');
         return listItem(entry.carrier_session_id, kinds || entry.error || 'no events');
@@ -4218,6 +4571,8 @@ export function renderCloudflareCarrierConsole() {
         renderListBlock('Site Continuity', continuityItems),
         renderListBlock('Continuity Packets', continuityPacketItems),
         renderListBlock('Webhook Delay Shadow Reads', webhookDelayShadowItems),
+        renderListBlock('Resident Loop Shadow Reads', residentLoopShadowItems),
+        renderListBlock('Resident Dispatch', residentDispatchItems),
         renderListBlock('Carrier Evidence', evidenceItems),
       );
       renderLastAuthority((product.authority_events || [])[0]);
@@ -4254,6 +4609,8 @@ export function renderCloudflareCarrierConsole() {
       renderMembershipNavigator(currentMemberships(product));
       renderContinuityNavigator(continuityItems(product));
       renderWebhookDelayShadowNavigator(product.webhook_delay_shadow_observations || []);
+      renderResidentLoopShadowNavigator(product.resident_loop_shadow_runs || []);
+      renderResidentDispatchNavigator(product.resident_dispatch_decisions || []);
       renderOperationNavigator(state.operations || []);
       renderOperationSessions(product.sessions || []);
       renderAttentionQueue(extractOperationAttention(product));
@@ -4274,6 +4631,8 @@ export function renderCloudflareCarrierConsole() {
         listItem('evidence', surface.carrier_evidence_count),
         listItem('continuity_packets', surface.continuity_packet_count),
         listItem('webhook_delay_shadow_reads', surface.webhook_delay_shadow_observation_count),
+        listItem('resident_loop_shadow_reads', surface.resident_loop_shadow_run_count),
+        listItem('resident_dispatch_decisions', surface.resident_dispatch_decision_count),
         listItem('dispatch_authority', surface.dispatch_authority),
       ];
       const sessionItems = (product.sessions || []).map((session) => listItem(session.carrier_session_id, session.binding_status || session.agent_id));
@@ -4283,6 +4642,8 @@ export function renderCloudflareCarrierConsole() {
       const continuityDecisionItems = (product.site_continuity?.decisions || []).map((decision) => listItem(decision.exchange_class, continuitySummary(decision)));
       const continuityPacketItems = (product.site_continuity_packets || []).map((packet) => listItem(packet.packet_id, packet.admission_action || packet.imported_at));
       const webhookDelayShadowItems = (product.webhook_delay_shadow_observations || []).map((entry) => listItem(entry.observation_id || entry.generated_at, [entry.classification_state, entry.latest_delay_minutes, entry.dispatch_action || 'none'].filter((value) => value != null && value !== '').join(' | ')));
+      const residentLoopShadowItems = (product.resident_loop_shadow_runs || []).map((entry) => listItem(entry.loop_run_id || entry.run_started_at, [entry.loop_status, 'steps=' + (entry.step_count ?? 'unknown'), 'attention=' + (entry.operator_attention_count ?? 'unknown'), entry.dispatch_action || 'none'].filter((value) => value != null && value !== '').join(' | ')));
+      const residentDispatchItems = (product.resident_dispatch_decisions || []).map((entry) => listItem(entry.dispatch_decision_id || entry.carrier_session_id, [entry.decision_state, entry.dispatch_authority, entry.fallback_status, entry.dispatch_action].filter((value) => value != null && value !== '').join(' | ')));
       const evidenceItems = (product.carrier_evidence || []).map((entry) => {
         const kinds = (entry.events || []).slice(0, 5).map((event) => event.event_kind).join(', ');
         return listItem(entry.carrier_session_id, kinds || entry.error || 'no events');
@@ -4298,6 +4659,8 @@ export function renderCloudflareCarrierConsole() {
         renderListBlock('Continuity Decisions', continuityDecisionItems),
         renderListBlock('Continuity Packets', continuityPacketItems),
         renderListBlock('Webhook Delay Shadow Reads', webhookDelayShadowItems),
+        renderListBlock('Resident Loop Shadow Reads', residentLoopShadowItems),
+        renderListBlock('Resident Dispatch', residentDispatchItems),
         renderListBlock('Carrier Evidence', evidenceItems),
       );
       renderLastAuthority((product.authority_events || [])[0]);
