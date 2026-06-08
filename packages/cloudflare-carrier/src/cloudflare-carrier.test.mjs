@@ -750,6 +750,13 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(body.cloudflare_persistence_posture.next_action, 'monitor_persistence_posture');
   assert.equal(body.cloudflare_persistence_posture.durable_boundaries.some((boundary) => boundary.key === 'session_snapshot'), true);
   assert.equal(body.cloudflare_persistence_posture.durable_boundaries.some((boundary) => boundary.key === 'carrier_evidence_index'), true);
+  assert.equal(body.cloudflare_recovery_posture.schema, 'narada.cloudflare_recovery_posture.v1');
+  assert.equal(body.cloudflare_recovery_posture.state, 'reconstructable');
+  assert.equal(body.cloudflare_recovery_posture.snapshot_reload, 'available');
+  assert.equal(body.cloudflare_recovery_posture.evidence_replay, 'loaded');
+  assert.equal(body.cloudflare_recovery_posture.evidence_sources.includes('cloudflare-durable-object'), true);
+  assert.equal(body.cloudflare_recovery_posture.recovery_gaps.length, 0);
+  assert.equal(body.cloudflare_recovery_posture.next_action, 'monitor_recovery_posture');
   assert.equal(body.reader_principal.email, 'admin@system');
   assert.equal(body.site_authority.map.schema, 'narada.site_authority_map.v1');
   assert.equal(body.site_authority.map.site_id, 'site_fixture');
@@ -1128,6 +1135,14 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /monitor_persistence_posture/);
   assert.match(html, /Persistence State/);
   assert.match(html, /Persistence Next Action/);
+  assert.match(html, /Recovery Posture/);
+  assert.match(html, /recoveryPostureDetail/);
+  assert.match(html, /recoveryPostureContext/);
+  assert.match(html, /renderRecoveryPosture/);
+  assert.match(html, /cloudflare_recovery_posture/);
+  assert.match(html, /monitor_recovery_posture/);
+  assert.match(html, /Recovery State/);
+  assert.match(html, /Recovery Next Action/);
   assert.match(html, /focus_kind/);
   assert.match(html, /focus_ref/);
   assert.match(html, /provider_events/);
@@ -2954,6 +2969,13 @@ test('worker operation.create read and list route through site registry authorit
   assert.equal(readBody.cloudflare_persistence_posture.task_count, 1);
   assert.equal(readBody.operation_product_surface.persistence_posture.state, 'durable');
   assert.equal(readBody.operation_product_surface.persistence_posture.next_action, 'monitor_persistence_posture');
+  assert.equal(readBody.cloudflare_recovery_posture.schema, 'narada.cloudflare_recovery_posture.v1');
+  assert.equal(readBody.cloudflare_recovery_posture.operation_id, 'operation_control');
+  assert.equal(readBody.cloudflare_recovery_posture.state, 'reconstructable');
+  assert.equal(readBody.cloudflare_recovery_posture.snapshot_reload, 'available');
+  assert.equal(readBody.cloudflare_recovery_posture.evidence_replay, 'loaded');
+  assert.equal(readBody.operation_product_surface.recovery_posture.state, 'reconstructable');
+  assert.equal(readBody.operation_product_surface.recovery_posture.next_action, 'monitor_recovery_posture');
   assert.equal(readBody.reader_principal.email, 'admin@system');
 
   const paused = await worker.fetch(jsonRequest({
