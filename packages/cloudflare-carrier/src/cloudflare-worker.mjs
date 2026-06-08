@@ -2098,6 +2098,13 @@ export function renderCloudflareCarrierConsole() {
         </label>
         <div class="actions"><button id="createOperation" class="secondary">Create Operation</button></div>
         <div id="operationNavigator" class="attention-items"><div class="empty">No site operations loaded.</div></div>
+        <h3>Operation Action</h3>
+        <div id="operationActionSummary" class="evidence-summary"><div class="empty">No operation action loaded.</div></div>
+        <div class="actions">
+          <button id="operationActionUseOperation" class="secondary">Use Focused Operation</button>
+          <button id="operationActionReadOperation" class="secondary">Read Focused Operation</button>
+          <button id="operationActionFocusSession" class="secondary">Focus Operation Session</button>
+        </div>
         <h3>Operation Focus Detail</h3>
         <div id="operationFocusDetail" class="evidence-summary"><div class="empty">No operation selected.</div></div>
       </div>
@@ -2451,6 +2458,7 @@ export function renderCloudflareCarrierConsole() {
       el('controlEvidenceWindow').textContent = String(surface.carrier_evidence_count ?? state.events.length) + ' evidence groups / ' + state.events.length + ' loaded events';
       el('controlContinuity').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length ?? 0) + ' packets';
       el('controlWorkbenchReadiness').textContent = operationWorkbenchReadiness(product);
+      renderOperationActionSummary();
       renderSessionActionSummary();
       renderTaskCommandPreview();
       renderAuthorityActionSummary(product);
@@ -3114,11 +3122,66 @@ export function renderCloudflareCarrierConsole() {
       setCurrentOperation(operation.operation_id);
       await refreshOperation();
     }
+    function focusedOperation() {
+      const activeOperation = el('operationId').value.trim();
+      return state.operationFocus
+        || (state.operations || []).find((operation) => operation.operation_id === activeOperation)
+        || (state.operationProduct?.operation?.operation_id === activeOperation ? state.operationProduct.operation : null)
+        || (activeOperation ? { operation_id: activeOperation } : null);
+    }
+    function operationScopeLoaded(operation = focusedOperation()) {
+      const operationId = operation?.operation_id || el('operationId').value.trim();
+      return Boolean(operationId && state.productScope === 'operation' && state.operationProduct?.operation?.operation_id === operationId);
+    }
+    function operationEvidenceLoaded(operation = focusedOperation()) {
+      const operationId = operation?.operation_id || el('operationId').value.trim();
+      if (!operationId) return false;
+      return (state.operationProduct?.carrier_evidence || []).some((entry) => (entry.events || []).length > 0)
+        || state.events.some((event) => (event.payload?.operation_id || event.payload?.target?.id || state.operationProduct?.operation?.operation_id) === operationId);
+    }
+    function operationActionContext(operation = focusedOperation()) {
+      const operationId = operation?.operation_id || el('operationId').value.trim() || '';
+      const isActive = operationId && operationId === el('operationId').value.trim();
+      const scopeLoaded = operationScopeLoaded(operation);
+      const sessionCount = scopeLoaded ? (state.operationProduct?.sessions || []).length : 0;
+      const evidenceLoaded = operationEvidenceLoaded(operation);
+      const nextAction = !operationId ? 'select_or_create_operation'
+        : !isActive ? 'use_focused_operation'
+        : !scopeLoaded ? 'read_operation_scope'
+        : sessionCount === 0 ? 'start_or_select_session'
+        : evidenceLoaded ? 'inspect_operation_evidence' : 'read_operation_evidence';
+      return [
+        ['Operation', operationId || 'none'],
+        ['Active', isActive ? 'yes' : 'no'],
+        ['Status', operation?.status || state.operationProduct?.operation?.status || 'unknown'],
+        ['Kind', operation?.operation_kind || state.operationProduct?.operation?.operation_kind || 'unknown'],
+        ['Scope Loaded', scopeLoaded ? 'yes' : 'no'],
+        ['Sessions', sessionCount],
+        ['Evidence Loaded', evidenceLoaded ? 'yes' : 'no'],
+        ['Next Action', nextAction],
+      ];
+    }
+    function renderOperationActionSummary(operation = focusedOperation()) {
+      if (!operation) {
+        el('operationActionSummary').innerHTML = '<div class="empty">No operation action loaded.</div>';
+        return;
+      }
+      el('operationActionSummary').replaceChildren(...operationActionContext(operation).map(([label, value]) => evidenceField(label, value)));
+    }
+    function useFocusedOperation() {
+      const operation = focusedOperation();
+      if (operation?.operation_id) run(() => selectOperation(operation));
+    }
+    function focusOperationSession() {
+      const targets = operationFlightDeckTargets();
+      if (targets.session) selectOperationSession(targets.session);
+    }
     function renderOperationNavigator(operations = []) {
       state.operations = operations;
       if (operations.length === 0) {
         state.operationFocus = null;
         el('operationNavigator').innerHTML = '<div class="empty">No site operations loaded.</div>';
+        renderOperationActionSummary();
         renderOperationFocusDetail();
         updateControlRoom();
         return;
@@ -3136,6 +3199,7 @@ export function renderCloudflareCarrierConsole() {
         node.append(title, meta);
         return node;
       }));
+      renderOperationActionSummary();
       renderOperationFocusDetail();
       updateControlRoom();
     }
@@ -4149,6 +4213,9 @@ export function renderCloudflareCarrierConsole() {
     el('refresh').addEventListener('click', () => run(refreshOperation));
     el('readOperation').addEventListener('click', () => run(refreshOperation));
     el('readOperationScope').addEventListener('click', () => run(refreshOperation));
+    el('operationActionUseOperation').addEventListener('click', useFocusedOperation);
+    el('operationActionReadOperation').addEventListener('click', () => run(refreshOperation));
+    el('operationActionFocusSession').addEventListener('click', focusOperationSession);
     el('continuityWorkflowNextAction').addEventListener('click', applyContinuityWorkflowNextStep);
     el('authorityNextAction').addEventListener('click', applyAuthorityNextAction);
     el('authorityReadSiteAction').addEventListener('click', () => run(refreshSiteProduct));
