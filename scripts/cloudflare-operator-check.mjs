@@ -827,7 +827,9 @@ assert.equal(operationSurface?.continuity_status?.state, operationContinuityStat
 assert.equal(operationLifecycleStatus?.schema, 'narada.cloudflare_operation_lifecycle_status.v1');
 assert.equal(operationLifecycleStatus?.phase, 'inhabited');
 assert.match(operationLifecycleStatus?.health, /^(ready|attention)$/);
+assert.match(operationLifecycleStatus?.next_action, /^(monitor_operation|open_tasks|undelivered_directives)$/);
 assert.equal(operationSurface?.lifecycle_status?.health, operationLifecycleStatus.health);
+assert.equal(operationSurface?.lifecycle_status?.next_action, operationLifecycleStatus.next_action);
 
 const microsoftLoginUrl = new URL('/auth/microsoft/login', withTrailingSlash(workerUrl)).toString();
 const apiClientPath = new URL('/api/carrier', withTrailingSlash(workerUrl)).toString();

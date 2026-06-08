@@ -841,6 +841,12 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /focus_session_path_task/);
   assert.match(html, /focus_task_path_evidence/);
   assert.match(html, /focus_authority_path_evidence/);
+  assert.match(html, /focus_lifecycle_start_session/);
+  assert.match(html, /focus_lifecycle_read_evidence/);
+  assert.match(html, /focus_lifecycle_continuity/);
+  assert.match(html, /focus_lifecycle_open_task/);
+  assert.match(html, /focus_lifecycle_directive_delivery/);
+  assert.match(html, /operation_lifecycle_missing_continuity_packet/);
   assert.match(html, /select_site_or_operation/);
   assert.match(html, /membership_authority_bridge_needs_attention/);
   assert.match(html, /workbench_ready_for_monitoring/);

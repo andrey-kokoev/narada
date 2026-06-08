@@ -5078,6 +5078,7 @@ export function renderCloudflareCarrierConsole() {
       const authorityPathAction = String(contextValue(authorityPathContext(product), 'Next Action'));
       const targets = operationFlightDeckTargets(product);
       const surface = product.operation_product_surface || {};
+      const lifecycleStatus = surface.lifecycle_status || product.operation_lifecycle_status || {};
       const webhookDelayDirectiveRecords = product.webhook_delay_directive_records || [];
       const webhookDelayDirectiveDeliveries = product.webhook_delay_directive_deliveries || [];
       const webhookDelayDirectiveSurfacePresent = 'webhook_delay_directive_records' in product || 'webhook_delay_directive_record_count' in surface;
@@ -5107,6 +5108,21 @@ export function renderCloudflareCarrierConsole() {
         }
         if (authorityAction && !['monitor_authority_admissions'].includes(authorityAction)) {
           return { domain: 'authority', action: authorityAction, target: contextValue(authorityActionContext(product), 'Focused Decision') || 'authority', reason: 'authority_state_needs_attention' };
+        }
+        if (lifecycleStatus.next_action === 'session') {
+          return { domain: 'operation_lifecycle', action: 'focus_lifecycle_start_session', target: operationId || 'operation', reason: 'operation_lifecycle_missing_session' };
+        }
+        if (lifecycleStatus.next_action === 'carrier_evidence') {
+          return { domain: 'operation_lifecycle', action: 'focus_lifecycle_read_evidence', target: sessionId || operationId || 'operation', reason: 'operation_lifecycle_missing_carrier_evidence' };
+        }
+        if (lifecycleStatus.next_action === 'continuity_packet') {
+          return { domain: 'operation_lifecycle', action: 'focus_lifecycle_continuity', target: operationId || siteId || 'operation', reason: 'operation_lifecycle_missing_continuity_packet' };
+        }
+        if (lifecycleStatus.next_action === 'open_tasks') {
+          return { domain: 'operation_lifecycle', action: 'focus_lifecycle_open_task', target: (targets.task?.task_id || 'task'), reason: 'operation_lifecycle_open_tasks' };
+        }
+        if (lifecycleStatus.next_action === 'undelivered_directives') {
+          return { domain: 'operation_lifecycle', action: 'focus_lifecycle_directive_delivery', target: (webhookDelayDirectiveRecords[0]?.directive_record_id || 'directive'), reason: 'operation_lifecycle_undelivered_directives' };
         }
         if (operationPathAction === 'inspect_attention') {
           return { domain: 'operation_path', action: 'focus_operation_path_attention', target: contextValue(operationPathContext(focusedOperation(), product), 'Operation') || operationId || 'operation', reason: 'operation_path_has_open_attention' };
@@ -5174,6 +5190,11 @@ export function renderCloudflareCarrierConsole() {
       if (action === 'use_focused_session') { useFocusedSession(); return; }
       if (action === 'read_session_evidence') { run(readSelectedSessionEvidence); return; }
       if (action === 'focus_authority_evidence' || action === 'inspect_refused_authority' || action === 'resolve_authority_locus' || action === 'read_site_authority') { applyAuthorityNextAction(); return; }
+      if (action === 'focus_lifecycle_start_session') { focusOperationSession(); return; }
+      if (action === 'focus_lifecycle_read_evidence') { run(refreshOperation); return; }
+      if (action === 'focus_lifecycle_continuity') { applyContinuityWorkflowNextStep(); return; }
+      if (action === 'focus_lifecycle_open_task') { applyFlightDeckNextAction(); return; }
+      if (action === 'focus_lifecycle_directive_delivery') { focusWebhookDelayDirectiveDelivery(); return; }
       if (action === 'focus_operation_path_attention') { focusOperationPathAttention(); return; }
       if (action === 'focus_operation_path_task') { focusOperationPathTask(); return; }
       if (action === 'focus_session_path_evidence') { focusSessionPathEvidence(); return; }
