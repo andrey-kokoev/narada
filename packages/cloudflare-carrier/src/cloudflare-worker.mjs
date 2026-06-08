@@ -1790,12 +1790,17 @@ export function renderCloudflareCarrierConsole() {
           <div class="control-room-item"><b>Session Focus</b><span id="controlSessionFocus">none</span></div>
           <div class="control-room-item"><b>Authority Locus</b><span id="controlAuthorityLocus">unknown</span></div>
           <div class="control-room-item"><b>Authority Focus</b><span id="controlAuthorityFocus">none</span></div>
+          <div class="control-room-item"><b>Operator</b><span id="controlOperator">anonymous</span></div>
           <div class="control-room-item"><b>Task Focus</b><span id="controlTaskFocus">none</span></div>
           <div class="control-room-item"><b>Attention</b><span id="controlAttention">0 open</span></div>
           <div class="control-room-item"><b>Evidence Focus</b><span id="controlEvidenceFocus">none</span></div>
           <div class="control-room-item"><b>Evidence Window</b><span id="controlEvidenceWindow">0 events</span></div>
           <div class="control-room-item"><b>Continuity</b><span id="controlContinuity">unknown</span></div>
         </div>
+      </div>
+      <div class="product-panel">
+        <h2>Operator Identity</h2>
+        <div id="operatorIdentity" class="evidence-summary"><div class="empty">No operator session loaded.</div></div>
       </div>
       <div class="product-panel">
         <h2>Operation Navigator</h2>
@@ -1887,7 +1892,7 @@ export function renderCloudflareCarrierConsole() {
   </main>
   <script type="module">
     const WORKBENCH_STORAGE_KEY = 'narada.cloudflare.operationWorkbench.v1';
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, operations: [], consoleSequence: 0, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, authorityFocus: null, operationFocus: null, sessionFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, operations: [], consoleSequence: 0, operatorPrincipal: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, authorityFocus: null, operationFocus: null, sessionFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -2085,6 +2090,7 @@ export function renderCloudflareCarrierConsole() {
       el('controlSessionFocus').textContent = state.sessionFocus ? [state.sessionFocus.carrier_session_id, state.sessionFocus.binding_status || state.sessionFocus.agent_id].filter(Boolean).join(' / ') : 'none';
       el('controlAuthorityLocus').textContent = activeDecision ? [activeDecision.authority_locus || 'unresolved', activeDecision.action || 'unknown'].join(' / ') : 'unknown';
       el('controlAuthorityFocus').textContent = state.authorityFocus ? [state.authorityFocus.mutation_class || state.authorityFocus.event_kind || 'authority', state.authorityFocus.action || 'unknown'].join(' / ') : 'none';
+      el('controlOperator').textContent = operatorPrincipalLabel(state.operatorPrincipal);
       el('controlTaskFocus').textContent = state.taskFocus ? [state.taskFocus.task_id, state.taskFocus.status].filter(Boolean).join(' / ') : 'none';
       const openAttention = state.attentionItems.filter((item) => item.status !== 'resolved').length;
       el('controlAttention').textContent = String(openAttention) + ' open / ' + state.attentionItems.length + ' total' + (state.attentionFocus ? ' / ' + state.attentionFocus.directive_id : '');
@@ -2402,6 +2408,7 @@ export function renderCloudflareCarrierConsole() {
     function renderSiteProduct(product) {
       state.operationProduct = product;
       state.operations = product.operations || [];
+      renderOperatorIdentity(product.reader_principal || state.operatorPrincipal);
       el('siteStatus').textContent = product.site?.status || 'unknown';
       el('operationStatus').textContent = 'site scope';
       el('membershipRole').textContent = product.membership?.role || 'none';
@@ -2459,6 +2466,7 @@ export function renderCloudflareCarrierConsole() {
     }
     function renderOperationProduct(product) {
       state.operationProduct = product;
+      renderOperatorIdentity(product.reader_principal || state.operatorPrincipal);
       if (product.operation?.operation_id && !state.operations.some((operation) => operation.operation_id === product.operation.operation_id)) {
         state.operations = [product.operation, ...state.operations];
       }
@@ -2557,6 +2565,30 @@ export function renderCloudflareCarrierConsole() {
       node.append(key, body);
       return node;
     }
+    function operatorPrincipalLabel(principal) {
+      return principal?.email || principal?.name || principal?.principal_id || 'anonymous';
+    }
+    function operatorPrincipalContext(principal = {}) {
+      return [
+        ['Principal', operatorPrincipalLabel(principal)],
+        ['Principal ID', principal.principal_id || 'none'],
+        ['Auth Type', principal.auth_type || 'unknown'],
+        ['Tenant', principal.tenant_id || 'none'],
+        ['Object ID', principal.object_id || 'none'],
+        ['Operator Session', principal.operator_session_id || 'none'],
+        ['Controlled Actions', (principal.controlled_actions || []).join(', ') || 'none'],
+      ];
+    }
+    function renderOperatorIdentity(principal = state.operatorPrincipal) {
+      state.operatorPrincipal = principal || state.operatorPrincipal;
+      if (!state.operatorPrincipal) {
+        el('operatorIdentity').innerHTML = '<div class="empty">No operator session loaded.</div>';
+        updateControlRoom();
+        return;
+      }
+      el('operatorIdentity').replaceChildren(...operatorPrincipalContext(state.operatorPrincipal).map(([label, value]) => evidenceField(label, value)));
+      updateControlRoom();
+    }
     function evidenceMeaning(event) {
       const payload = event.payload || {};
       switch (event.event_kind) {
@@ -2644,6 +2676,7 @@ export function renderCloudflareCarrierConsole() {
     async function refreshOperatorSession() {
       const session = await api.session();
       if (session?.principal) {
+        renderOperatorIdentity(session.principal);
         el('membershipRole').textContent = session.principal.email || session.principal.principal_id;
       }
     }
