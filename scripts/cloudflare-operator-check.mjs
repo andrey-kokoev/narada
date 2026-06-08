@@ -1448,6 +1448,7 @@ const operationReadAfterContinuity = await postCarrier(workerUrl, bearerToken, {
     task_lifecycle_write_admission_limit: 100,
     resident_loop_shadow_limit: 10,
     mailbox_status_shadow_limit: 20,
+    mailbox_outlook_draft_create_limit: 20,
     site_file_change_proposal_limit: 20,
     site_file_materialization_limit: 20,
     resident_dispatch_limit: 10,
@@ -1472,6 +1473,7 @@ const taskLifecycleTasks = operationReadAfterContinuity.body.task_lifecycle_task
 const residentLoopShadowRuns = operationReadAfterContinuity.body.resident_loop_shadow_runs ?? [];
 const mailboxStatusShadowReads = operationReadAfterContinuity.body.mailbox_status_shadow_reads ?? [];
 const mailboxDraftReplyProposals = operationReadAfterContinuity.body.mailbox_draft_reply_proposals ?? [];
+const mailboxOutlookDraftCreates = operationReadAfterContinuity.body.mailbox_outlook_draft_creates ?? [];
 const siteFileChangeProposals = operationReadAfterContinuity.body.site_file_change_proposals ?? [];
 const siteFileMaterializations = operationReadAfterContinuity.body.site_file_materializations ?? [];
 const residentDispatchDecisions = operationReadAfterContinuity.body.resident_dispatch_decisions ?? [];
@@ -1690,7 +1692,10 @@ assert.equal(recordedMailboxDraftReplyProposal.mailbox_outlook_draft_create_admi
 assert.equal(recordedMailboxDraftReplyProposal.mailbox_send_admission, 'not_admitted');
 assert.equal(recordedMailboxDraftReplyProposal.mailbox_mutation_admission, 'not_admitted');
 assert.equal(operationSurface?.mailbox_draft_reply_proposal_authority, 'cloudflare_carrier_site');
-assert.equal(operationSurface?.mailbox_outlook_draft_create_admission, 'not_admitted');
+assert.ok(Array.isArray(mailboxOutlookDraftCreates));
+assert.equal(operationSurface?.mailbox_outlook_draft_create_count, mailboxOutlookDraftCreates.length);
+assert.equal(operationSurface?.mailbox_outlook_draft_create_admission, mailboxOutlookDraftCreates.length > 0 ? 'admitted' : 'not_admitted');
+assert.match(operationSurface?.mailbox_outlook_draft_create_authority_partition, /^(mailbox_outlook_draft_create_cloudflare_owned_send_and_other_mutation_not_admitted|mailbox_outlook_draft_create_not_observed)$/);
 assert.equal(operationSurface?.mailbox_draft_reply_authority_partition, 'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted');
 assert.ok(Array.isArray(siteFileChangeProposals));
 assert.ok(siteFileChangeProposals.length >= 1);
@@ -1806,6 +1811,7 @@ const report = {
     task_lifecycle_roster_mutation_write_cutover_surface: 'ok',
     mailbox_status_shadow_surface: 'ok',
     mailbox_draft_reply_proposal_surface: 'ok',
+    mailbox_outlook_draft_create_surface: 'ok',
     site_file_materialization_surface: 'ok',
     resident_loop_shadow_surface: 'ok',
     resident_dispatch_surface: 'ok',
