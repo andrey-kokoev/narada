@@ -1708,6 +1708,7 @@ export function renderCloudflareCarrierConsole() {
     .authority-decision.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
     .operation-item.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
     .session-item.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
+    .attention-item.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
     .task-panel { margin-top: 16px; border-top: 1px solid #d7d7ce; padding-top: 14px; }
     .task-panel h2 { margin: 0 0 10px; font-size: 15px; letter-spacing: 0; }
     .tasks { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
@@ -1821,6 +1822,8 @@ export function renderCloudflareCarrierConsole() {
           <button id="taskFromAttention" class="secondary">Task From Attention</button>
           <button id="resolveAttention" class="secondary">Resolve Attention</button>
         </div>
+        <h3>Attention Focus Detail</h3>
+        <div id="attentionFocusDetail" class="evidence-summary"><div class="empty">No attention item selected.</div></div>
         <div id="attentionQueue" class="attention-items"><div class="empty">No operation attention loaded.</div></div>
       </div>
       <div class="product-panel">
@@ -2153,13 +2156,16 @@ export function renderCloudflareCarrierConsole() {
     function renderAttentionQueue(items = []) {
       state.attentionItems = items;
       if (items.length === 0) {
+        state.attentionFocus = null;
         el('attentionQueue').innerHTML = '<div class="empty">No operation attention loaded.</div>';
+        renderAttentionFocusDetail();
         updateControlRoom();
         return;
       }
+      if (state.attentionFocus) state.attentionFocus = items.find((item) => item.directive_id === state.attentionFocus.directive_id) || state.attentionFocus;
       el('attentionQueue').replaceChildren(...items.map((item) => {
         const node = document.createElement('article');
-        node.className = 'attention-item';
+        node.className = 'attention-item' + (state.attentionFocus?.directive_id === item.directive_id ? ' selected' : '');
         const title = document.createElement('strong');
         title.textContent = item.status + ' ' + item.directive_id;
         const meta = document.createElement('span');
@@ -2171,13 +2177,36 @@ export function renderCloudflareCarrierConsole() {
           el('updateTaskStatus').value = 'done';
           el('updateTaskNote').value = ['resolved_attention', item.directive_id, item.input_event_id, item.reason].filter(Boolean).join(' ');
           el('eventKindFilter').value = 'directive_emitted';
+          renderAttentionFocusDetail(item);
           renderEvents();
           updateControlRoom();
         });
         node.append(title, meta);
         return node;
       }));
+      renderAttentionFocusDetail();
       updateControlRoom();
+    }
+    function attentionFocusContext(item = {}) {
+      return [
+        ['Directive', item.directive_id || 'none'],
+        ['Status', item.status || 'unknown'],
+        ['Reason', item.reason || 'none'],
+        ['Operation', item.operation_id || el('operationId').value.trim() || 'none'],
+        ['Session', item.carrier_session_id || 'none'],
+        ['Visibility', item.visibility || 'unknown'],
+        ['Input Event', item.input_event_id || 'none'],
+        ['Sequence', item.sequence ?? 'none'],
+        ['Resolving Task', item.resolving_task_id || 'none'],
+        ['Target', item.target ? JSON.stringify(item.target) : 'none'],
+      ];
+    }
+    function renderAttentionFocusDetail(item = state.attentionFocus) {
+      if (!item) {
+        el('attentionFocusDetail').innerHTML = '<div class="empty">No attention item selected.</div>';
+        return;
+      }
+      el('attentionFocusDetail').replaceChildren(...attentionFocusContext(item).map(([label, value]) => evidenceField(label, value)));
     }
     function renderAuthorityState(product = {}) {
       const decisions = product.site_authority?.decisions || [];

@@ -713,6 +713,11 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /renderTaskFocusDetail/);
   assert.match(html, /Operation Attention/);
   assert.match(html, /Attention/);
+  assert.match(html, /Attention Focus Detail/);
+  assert.match(html, /attentionFocusDetail/);
+  assert.match(html, /attentionFocusContext/);
+  assert.match(html, /renderAttentionFocusDetail/);
+  assert.match(html, /\.attention-item\.selected/);
   assert.match(html, /Raise Attention/);
   assert.match(html, /Task From Attention/);
   assert.match(html, /Resolve Attention/);
