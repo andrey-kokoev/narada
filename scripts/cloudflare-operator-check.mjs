@@ -51,10 +51,15 @@ assert.match(consoleCheck.body, /naradaCloudflareCarrierClient/);
 assert.match(consoleCheck.body, /auth\/microsoft\/login|Microsoft/i);
 assert.match(consoleCheck.body, /Operation Surface/);
 assert.match(consoleCheck.body, /Operation ID/);
+assert.match(consoleCheck.body, /Operation Sessions/);
+assert.match(consoleCheck.body, /Use Session/);
+assert.match(consoleCheck.body, /Update Task/);
+assert.match(consoleCheck.body, /Auto Refresh/);
 assert.match(consoleCheck.body, /operation\.read/);
 assert.match(consoleCheck.body, /operation_product_surface/);
 assert.match(consoleCheck.body, /Continuity Packets/);
 assert.match(consoleCheck.body, /Authority Decisions/);
+assert.match(consoleCheck.body, /credentials: 'same-origin'/);
 
 const smoke = await runJsonCommand('live-carrier-smoke', [
   'node',

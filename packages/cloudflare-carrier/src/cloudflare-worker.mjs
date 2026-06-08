@@ -1638,7 +1638,7 @@ export function renderCloudflareCarrierConsole() {
     aside { padding: 16px; align-self: start; }
     section { min-height: calc(100vh - 150px); display: grid; grid-template-rows: auto minmax(220px, 1fr) auto; overflow: hidden; }
     label { display: block; margin: 0 0 12px; font-size: 12px; font-weight: 700; color: #343941; }
-    input, textarea { width: 100%; margin-top: 6px; padding: 10px 12px; border: 1px solid #c5c7bf; border-radius: 6px; background: #fff; color: #1e2024; font: inherit; }
+    input, select, textarea { width: 100%; margin-top: 6px; padding: 10px 12px; border: 1px solid #c5c7bf; border-radius: 6px; background: #fff; color: #1e2024; font: inherit; }
     textarea { min-height: 92px; resize: vertical; }
     button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 8px 12px; border: 1px solid #1f6f62; border-radius: 6px; background: #1f6f62; color: #fff; font-weight: 700; cursor: pointer; }
     button.secondary { background: #fff; color: #1f6f62; }
@@ -1681,13 +1681,15 @@ export function renderCloudflareCarrierConsole() {
   </header>
   <main>
     <aside>
-      <label>Bearer token<input id="token" type="password" autocomplete="current-password" placeholder="Cloudflare carrier token"></label>
+      <label>Service token<input id="token" type="password" autocomplete="current-password" placeholder="Optional when signed in"></label>
       <label>Session ID<input id="sessionId" value="narada-cloudflare-console"></label>
+      <label>Operation Sessions<select id="operationSessionSelect"><option value="">No operation sessions loaded</option></select></label>
       <label>Agent ID<input id="agentId" value="narada.cloudflare.agent"></label>
       <label>Site ID<input id="siteId" value="site_narada_cloudflare"></label>
       <label>Operation ID<input id="operationId" value="operation_narada_cloudflare_control"></label>
       <div class="actions">
         <button id="signInMicrosoft" class="secondary">Sign in with Microsoft</button>
+        <button id="useSelectedSession" class="secondary">Use Session</button>
         <button id="start">Start / Resume</button>
         <button id="refresh" class="secondary">Refresh</button>
       </div>
@@ -1711,7 +1713,10 @@ export function renderCloudflareCarrierConsole() {
       </div>
       <div class="product-panel">
         <h2>Operation Surface</h2>
-        <div class="actions"><button id="readOperation" class="secondary">Read Operation</button></div>
+        <div class="actions">
+          <button id="readOperation" class="secondary">Read Operation</button>
+          <button id="autoRefreshOperation" class="secondary" aria-pressed="false">Auto Refresh</button>
+        </div>
       </div>
       <div class="product-panel">
         <h2>Site Product</h2>
@@ -1727,6 +1732,10 @@ export function renderCloudflareCarrierConsole() {
         <h2>Task State</h2>
         <label>New task<input id="taskTitle" placeholder="Task title"></label>
         <div class="actions"><button id="createTask" class="secondary">Create Task</button></div>
+        <label>Task ID<input id="updateTaskId" placeholder="cloudflare-task-1"></label>
+        <label>Status<input id="updateTaskStatus" value="done"></label>
+        <label>Note<input id="updateTaskNote" placeholder="Update note"></label>
+        <div class="actions"><button id="updateTask" class="secondary">Update Task</button></div>
         <div id="tasks" class="tasks"><div class="empty">No tasks loaded.</div></div>
       </div>
       <div id="error" class="error" role="status"></div>
@@ -1755,7 +1764,7 @@ export function renderCloudflareCarrierConsole() {
     </section>
   </main>
   <script type="module">
-    const state = { events: [], afterSequence: 0 };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -1765,6 +1774,7 @@ export function renderCloudflareCarrierConsole() {
         if (token) headers.authorization = 'Bearer ' + token;
         const response = await fetch('/api/carrier', {
           method: 'POST',
+          credentials: 'same-origin',
           headers,
           body: JSON.stringify({ operation, carrier_session_id: carrierSessionId, params, ...extra }),
         });
@@ -1773,7 +1783,7 @@ export function renderCloudflareCarrierConsole() {
         return body;
       },
       async session() {
-        const response = await fetch('/auth/session', { headers: { accept: 'application/json' } });
+        const response = await fetch('/auth/session', { credentials: 'same-origin', headers: { accept: 'application/json' } });
         if (!response.ok) return null;
         return response.json();
       },
@@ -1815,6 +1825,15 @@ export function renderCloudflareCarrierConsole() {
       },
     };
     window.naradaCloudflareCarrierClient = api;
+    function setCurrentSession(carrierSessionId) {
+      const next = String(carrierSessionId || '').trim();
+      if (!next) return;
+      el('sessionId').value = next;
+      el('operationSessionSelect').value = next;
+      state.events = [];
+      state.afterSequence = 0;
+      renderEvents();
+    }
     function eventKey(event) {
       return (event.carrier_session_id || el('sessionId').value.trim()) + ':' + event.sequence;
     }
@@ -1839,6 +1858,12 @@ export function renderCloudflareCarrierConsole() {
         title.textContent = task.task_id + ' ' + task.title;
         const meta = document.createElement('span');
         meta.textContent = [task.status, task.carrier_session_id, task.note].filter(Boolean).join(' | ');
+        node.addEventListener('click', () => {
+          el('updateTaskId').value = task.task_id;
+          el('updateTaskStatus').value = task.status || 'done';
+          el('updateTaskNote').value = task.note || '';
+          if (task.carrier_session_id) setCurrentSession(task.carrier_session_id);
+        });
         node.append(title, meta);
         return node;
       }));
@@ -1936,6 +1961,7 @@ export function renderCloudflareCarrierConsole() {
         const kinds = (entry.events || []).slice(0, 5).map((event) => event.event_kind).join(', ');
         return listItem(entry.carrier_session_id, kinds || entry.error || 'no events');
       });
+      renderOperationSessions(product.sessions || []);
       el('productOverview').replaceChildren(
         renderListBlock('Site', siteItems),
         renderListBlock('Memberships', membershipItems),
@@ -1949,7 +1975,16 @@ export function renderCloudflareCarrierConsole() {
       );
       renderLastAuthority((product.authority_events || [])[0]);
     }
+    function renderOperationSessions(sessions = []) {
+      const select = el('operationSessionSelect');
+      const current = el('sessionId').value.trim();
+      select.replaceChildren(...(sessions.length === 0
+        ? [new Option('No operation sessions loaded', '')]
+        : sessions.map((session) => new Option(session.carrier_session_id + ' / ' + (session.binding_status || session.agent_id || 'active'), session.carrier_session_id))));
+      if (sessions.some((session) => session.carrier_session_id === current)) select.value = current;
+    }
     function renderOperationProduct(product) {
+      state.operationProduct = product;
       const surface = product.operation_product_surface || {};
       el('siteStatus').textContent = product.operation?.site_id || product.site?.status || 'unknown';
       el('operationStatus').textContent = product.operation?.status || 'unknown';
@@ -1960,6 +1995,7 @@ export function renderCloudflareCarrierConsole() {
       el('authorityCount').textContent = String((product.authority_events || []).length + (product.site_authority?.decisions || []).length);
       el('continuityCount').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length);
       renderTasks(product.tasks || []);
+      renderOperationSessions(product.sessions || []);
       const operationItems = [
         listItem('operation_id', product.operation?.operation_id),
         listItem('display_name', product.operation?.display_name),
@@ -2038,6 +2074,12 @@ export function renderCloudflareCarrierConsole() {
       renderTasks(status.tasks || []);
       return status;
     }
+    async function refreshOperation() {
+      const body = await api.readOperation();
+      renderOperationProduct(body);
+      appendEvents((body.carrier_evidence || []).flatMap((entry) => entry.events || []));
+      return body;
+    }
     async function refreshOperatorSession() {
       const session = await api.session();
       if (session?.principal) {
@@ -2048,10 +2090,19 @@ export function renderCloudflareCarrierConsole() {
       el('error').textContent = '';
       try { await action(); } catch (error) { el('error').textContent = error.message; }
     }
+    function setAutoRefresh(enabled) {
+      if (state.autoRefreshTimer) clearInterval(state.autoRefreshTimer);
+      state.autoRefreshTimer = enabled ? setInterval(() => run(refreshOperation), 15000) : null;
+      el('autoRefreshOperation').setAttribute('aria-pressed', enabled ? 'true' : 'false');
+      el('autoRefreshOperation').textContent = enabled ? 'Auto Refresh On' : 'Auto Refresh';
+    }
     el('signInMicrosoft').addEventListener('click', () => { window.location.href = '/auth/microsoft/login'; });
-    el('start').addEventListener('click', () => run(async () => { const body = await api.start(); appendEvents([body.event].filter(Boolean)); await refreshStatus(); }));
-    el('refresh').addEventListener('click', () => run(refreshStatus));
-    el('readOperation').addEventListener('click', () => run(async () => { const body = await api.readOperation(); renderOperationProduct(body); appendEvents((body.carrier_evidence || []).flatMap((entry) => entry.events || [])); }));
+    el('useSelectedSession').addEventListener('click', () => setCurrentSession(el('operationSessionSelect').value));
+    el('operationSessionSelect').addEventListener('change', () => setCurrentSession(el('operationSessionSelect').value));
+    el('start').addEventListener('click', () => run(async () => { const body = await api.start(); appendEvents([body.event].filter(Boolean)); await refreshStatus(); await refreshOperation(); }));
+    el('refresh').addEventListener('click', () => run(refreshOperation));
+    el('readOperation').addEventListener('click', () => run(refreshOperation));
+    el('autoRefreshOperation').addEventListener('click', () => setAutoRefresh(!state.autoRefreshTimer));
     el('readSite').addEventListener('click', () => run(async () => { const body = await api.readSite(); renderSiteProduct(body); appendEvents((body.carrier_evidence || []).flatMap((entry) => entry.events || [])); }));
     el('putMembership').addEventListener('click', () => run(async () => {
       const principalId = el('memberPrincipalId').value.trim();
@@ -2070,13 +2121,22 @@ export function renderCloudflareCarrierConsole() {
           actor_role: result.actor_membership?.role,
         },
       });
-      const body = await api.readSite();
-      renderSiteProduct(body);
+      await refreshOperation();
     }));
     el('read').addEventListener('click', () => run(async () => { const body = await api.readEvents(); appendEvents(body.events || []); await refreshStatus(); }));
-    el('createTask').addEventListener('click', () => run(async () => { const title = el('taskTitle').value.trim(); if (!title) return; const body = await api.command('/task', ['create', ...title.split(/\\s+/)]); appendEvents(body.events || []); el('taskTitle').value = ''; await refreshStatus(); }));
-    el('send').addEventListener('click', () => run(async () => { const content = el('input').value.trim(); if (!content) return; const body = await api.deliver(content); appendEvents(body.events || []); el('input').value = ''; await refreshStatus(); }));
-    refreshOperatorSession().catch(() => {});
+    el('createTask').addEventListener('click', () => run(async () => { const title = el('taskTitle').value.trim(); if (!title) return; const body = await api.command('/task', ['create', ...title.split(/\\s+/)]); appendEvents(body.events || []); el('taskTitle').value = ''; await refreshStatus(); await refreshOperation(); }));
+    el('updateTask').addEventListener('click', () => run(async () => {
+      const taskId = el('updateTaskId').value.trim();
+      const status = el('updateTaskStatus').value.trim();
+      const note = el('updateTaskNote').value.trim();
+      if (!taskId || !status) return;
+      const body = await api.command('/task', ['update', taskId, status, ...note.split(/\\s+/).filter(Boolean)]);
+      appendEvents(body.events || []);
+      await refreshStatus();
+      await refreshOperation();
+    }));
+    el('send').addEventListener('click', () => run(async () => { const content = el('input').value.trim(); if (!content) return; const body = await api.deliver(content); appendEvents(body.events || []); el('input').value = ''; await refreshStatus(); await refreshOperation(); }));
+    refreshOperatorSession().then(() => refreshOperation()).catch(() => {});
   </script>
 </body>
 </html>`;
