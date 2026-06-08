@@ -2295,6 +2295,7 @@ function summarizeCloudflarePersistencePosture(env = {}, {
     { key: 'session_snapshot', substrate: 'cloudflare_durable_object_storage', status: hasCarrierSessions ? 'available' : 'missing', authority: 'carrier_session_ordered_lane' },
     { key: 'site_registry', substrate: 'cloudflare_d1_site_registry', status: hasSiteRegistry ? 'available' : 'missing', authority: 'site_membership_operation_authority' },
     { key: 'carrier_evidence_index', substrate: 'cloudflare_d1_site_registry', status: hasSiteRegistry ? 'available' : 'missing', authority: 'reconstructable_carrier_evidence_projection' },
+    { key: 'site_file_materialization_store', substrate: 'cloudflare_d1_site_registry', status: hasSiteRegistry ? 'available' : 'missing', authority: 'cloudflare_site_file_materialization_record' },
     { key: 'task_lifecycle_store', substrate: 'cloudflare_d1_task_store', status: hasTaskStore ? 'available' : 'missing', authority: 'task_lifecycle_projection' },
   ];
   const missing = durableBoundaries.filter((boundary) => boundary.status !== 'available').map((boundary) => boundary.key);

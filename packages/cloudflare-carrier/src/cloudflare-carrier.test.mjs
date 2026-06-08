@@ -1023,11 +1023,12 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(body.cloudflare_persistence_posture.schema, 'narada.cloudflare_persistence_posture.v1');
   assert.equal(body.cloudflare_persistence_posture.state, 'durable');
   assert.equal(body.cloudflare_persistence_posture.site_id, 'site_fixture');
-  assert.equal(body.cloudflare_persistence_posture.active_boundary_count, 4);
+  assert.equal(body.cloudflare_persistence_posture.active_boundary_count, 5);
   assert.equal(body.cloudflare_persistence_posture.missing_boundaries.length, 0);
   assert.equal(body.cloudflare_persistence_posture.next_action, 'monitor_persistence_posture');
   assert.equal(body.cloudflare_persistence_posture.durable_boundaries.some((boundary) => boundary.key === 'session_snapshot'), true);
   assert.equal(body.cloudflare_persistence_posture.durable_boundaries.some((boundary) => boundary.key === 'carrier_evidence_index'), true);
+  assert.equal(body.cloudflare_persistence_posture.durable_boundaries.some((boundary) => boundary.key === 'site_file_materialization_store'), true);
   assert.equal(body.cloudflare_recovery_posture.schema, 'narada.cloudflare_recovery_posture.v1');
   assert.equal(body.cloudflare_recovery_posture.state, 'reconstructable');
   assert.equal(body.cloudflare_recovery_posture.snapshot_reload, 'available');
