@@ -88,7 +88,10 @@ const operationRead = await postCarrier({
 assert.equal(operationRead.http_status, 200, JSON.stringify(operationRead.body));
 assert.equal(operationRead.body.ok, true);
 assert.ok(operationRead.body.task_lifecycle_tasks.some((entry) => entry.task_id === created.body.task.task_id));
+assert.equal(operationRead.body.operation_product_surface.task_lifecycle_default_mutation_authority, 'windows_task_lifecycle_sqlite');
+assert.equal(operationRead.body.operation_product_surface.task_lifecycle_default_cloudflare_write_admission, 'not_admitted');
 assert.equal(operationRead.body.operation_product_surface.task_lifecycle_task_create_authority, 'cloudflare_task_lifecycle_d1');
+assert.equal(operationRead.body.operation_product_surface.task_lifecycle_authority_partition, 'task_create_cloudflare_remaining_windows');
 assert.equal(operationRead.body.operation_product_surface.task_lifecycle_write_admission_posture, 'task_create_admitted_remaining_writes_not_admitted');
 assert.equal(operationRead.body.operation_product_surface.task_lifecycle_mutation_authority, 'split_by_mutation_class');
 assert.equal(operationRead.body.operation_product_surface.task_lifecycle_cloudflare_write_admission, 'task_create_admitted');
