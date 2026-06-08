@@ -7,6 +7,10 @@ import {
 } from '../../carrier-protocol/src/carrier-protocol.mjs';
 import worker, {
   authenticateCarrierRequest,
+  classifyCloudflareAuthorityCommandState,
+  classifyCloudflareOperationCommandState,
+  classifyCloudflareSessionCommandState,
+  classifyCloudflareTaskCommandState,
   classifyCloudflareToolEffectAdmission,
   CloudflareCarrierDurableObject,
   createCloudflareToolEffectAdapter,
@@ -80,6 +84,60 @@ function assertValidEvents(response) {
     assert.deepEqual(validateSessionEvent(event), [], event.event_kind);
   }
 }
+
+test('cloudflare operation command state classifies focus, scope, evidence, and triage actions', () => {
+  const cases = [
+    [{}, { command_state: 'scope_needed', command_action: 'read_operation_scope', next_action: 'select_or_create_operation' }],
+    [{ operation_id: 'operation_1', is_active: false, scope_loaded: false }, { command_state: 'scope_needed', command_action: 'read_operation_scope', next_action: 'use_focused_operation' }],
+    [{ operation_id: 'operation_1', is_active: true, scope_loaded: false }, { command_state: 'scope_needed', command_action: 'read_operation_scope', next_action: 'read_operation_scope' }],
+    [{ operation_id: 'operation_1', is_active: true, scope_loaded: true, session_count: 0, operation_path_next_action: 'start_or_select_session' }, { command_state: 'session_needed', command_action: 'start_or_select_session', next_action: 'start_or_select_session' }],
+    [{ operation_id: 'operation_1', is_active: true, scope_loaded: true, session_count: 1, evidence_loaded: false, operation_path_next_action: 'read_operation_evidence' }, { command_state: 'evidence_needed', command_action: 'read_operation_evidence', next_action: 'read_operation_evidence' }],
+    [{ operation_id: 'operation_1', is_active: true, scope_loaded: true, session_count: 1, evidence_loaded: true, operation_path_next_action: 'inspect_operation_evidence' }, { command_state: 'evidence_ready', command_action: 'inspect_operation_evidence', next_action: 'inspect_operation_evidence' }],
+    [{ operation_id: 'operation_1', is_active: true, scope_loaded: true, session_count: 1, evidence_loaded: true, operation_path_next_action: 'inspect_attention' }, { command_state: 'attention_required', command_action: 'inspect_attention', next_action: 'inspect_operation_evidence' }],
+    [{ operation_id: 'operation_1', is_active: true, scope_loaded: true, session_count: 1, evidence_loaded: true, operation_path_next_action: 'inspect_open_task' }, { command_state: 'task_work_open', command_action: 'inspect_open_task', next_action: 'inspect_operation_evidence' }],
+  ];
+  for (const [input, expected] of cases) {
+    assert.deepEqual(classifyCloudflareOperationCommandState(input), expected);
+  }
+});
+
+test('cloudflare authority command state classifies authority loading, refusals, locus, and evidence', () => {
+  const cases = [
+    [{}, { command_state: 'authority_needed', command_action: 'read_site_authority', next_action: 'read_site_authority' }],
+    [{ decision_count: 2, refusal_count: 1, unresolved_locus_count: 0, evidence_loaded: true }, { command_state: 'refusal_requires_review', command_action: 'inspect_refused_authority', next_action: 'inspect_refused_authority' }],
+    [{ decision_count: 2, refusal_count: 0, unresolved_locus_count: 1, evidence_loaded: true }, { command_state: 'locus_unresolved', command_action: 'resolve_authority_locus', next_action: 'resolve_authority_locus' }],
+    [{ decision_count: 2, refusal_count: 0, unresolved_locus_count: 0, evidence_loaded: false }, { command_state: 'evidence_needed', command_action: 'focus_authority_evidence', next_action: 'focus_authority_evidence' }],
+    [{ decision_count: 2, refusal_count: 0, unresolved_locus_count: 0, evidence_loaded: true }, { command_state: 'admissions_monitoring', command_action: 'monitor_authority_admissions', next_action: 'monitor_authority_admissions' }],
+  ];
+  for (const [input, expected] of cases) {
+    assert.deepEqual(classifyCloudflareAuthorityCommandState(input), expected);
+  }
+});
+
+test('cloudflare session command state classifies focus and evidence readiness', () => {
+  const cases = [
+    [{}, { command_state: 'session_needed', command_action: 'select_or_start_session', next_action: 'select_or_start_session' }],
+    [{ session_id: 'carrier_session_1', is_active: false, evidence_loaded: false }, { command_state: 'session_focus_needed', command_action: 'use_focused_session', next_action: 'use_focused_session' }],
+    [{ session_id: 'carrier_session_1', is_active: true, evidence_loaded: false }, { command_state: 'evidence_needed', command_action: 'read_session_evidence', next_action: 'read_session_evidence' }],
+    [{ session_id: 'carrier_session_1', is_active: true, evidence_loaded: true }, { command_state: 'evidence_ready', command_action: 'inspect_session_evidence', next_action: 'inspect_session_evidence' }],
+  ];
+  for (const [input, expected] of cases) {
+    assert.deepEqual(classifyCloudflareSessionCommandState(input), expected);
+  }
+});
+
+test('cloudflare task command state classifies lifecycle and evidence readiness', () => {
+  const cases = [
+    [{}, { lifecycle: 'unknown', command_state: 'task_needed', command_action: 'select_task', next_action: 'select_task' }],
+    [{ task_id: 'cloudflare-task-1', status: 'open', evidence_count: 0 }, { lifecycle: 'open', command_state: 'task_work_open', command_action: 'mark_done_or_update', next_action: 'mark_done_or_update' }],
+    [{ task_id: 'cloudflare-task-1', status: 'done', evidence_count: 0 }, { lifecycle: 'closed', command_state: 'evidence_needed', command_action: 'reopen_or_inspect_evidence', next_action: 'reopen_or_inspect_evidence' }],
+    [{ task_id: 'cloudflare-task-1', status: 'done', evidence_count: 2 }, { lifecycle: 'closed', command_state: 'evidence_ready', command_action: 'reopen_or_inspect_evidence', next_action: 'reopen_or_inspect_evidence' }],
+    [{ task_id: 'cloudflare-task-1', status: 'blocked', evidence_count: 1 }, { lifecycle: 'blocked', command_state: 'status_needs_normalization', command_action: 'normalize_status_or_update', next_action: 'normalize_status_or_update' }],
+  ];
+  for (const [input, expected] of cases) {
+    assert.deepEqual(classifyCloudflareTaskCommandState(input), expected);
+  }
+});
 
 test('session.start creates one durable session with identity and version evidence', () => {
   const router = new CloudflareCarrierRouter({ now: clock });
@@ -723,7 +781,17 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Operation Action/);
   assert.match(html, /operationActionSummary/);
   assert.match(html, /operationActionContext/);
+  assert.match(html, /classifyCloudflareOperationCommandState/);
+  assert.match(html, /applyOperationCommandAction/);
   assert.match(html, /renderOperationActionSummary/);
+  assert.match(html, /Command State/);
+  assert.match(html, /Command Action/);
+  assert.match(html, /operationCommandNextAction/);
+  assert.match(html, /operationCommandSessionAction/);
+  assert.match(html, /operationCommandTaskAction/);
+  assert.match(html, /operationCommandAuthorityAction/);
+  assert.match(html, /operationCommandEvidenceAction/);
+  assert.match(html, /Run Operation Command/);
   assert.match(html, /focusedOperation/);
   assert.match(html, /operationScopeLoaded/);
   assert.match(html, /operationEvidenceLoaded/);
@@ -769,7 +837,10 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Session Action/);
   assert.match(html, /sessionActionSummary/);
   assert.match(html, /sessionActionContext/);
+  assert.match(html, /classifyCloudflareSessionCommandState/);
   assert.match(html, /renderSessionActionSummary/);
+  assert.match(html, /Command State/);
+  assert.match(html, /Command Action/);
   assert.match(html, /focusedSession/);
   assert.match(html, /sessionEvidenceLoaded/);
   assert.match(html, /useFocusedSession/);
@@ -839,7 +910,10 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Authority Action/);
   assert.match(html, /authorityActionSummary/);
   assert.match(html, /authorityActionContext/);
+  assert.match(html, /classifyCloudflareAuthorityCommandState/);
   assert.match(html, /renderAuthorityActionSummary/);
+  assert.match(html, /Command State/);
+  assert.match(html, /Command Action/);
   assert.match(html, /authorityActorMembership/);
   assert.match(html, /applyAuthorityNextAction/);
   assert.match(html, /focusAuthorityEvidence/);
@@ -859,10 +933,18 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Task Focus Detail/);
   assert.match(html, /taskFocusDetail/);
   assert.match(html, /taskFocusContext/);
+  assert.match(html, /classifyCloudflareTaskCommandState/);
+  assert.match(html, /taskLifecyclePathContext/);
+  assert.match(html, /focusTaskLifecyclePath/);
   assert.match(html, /renderTaskFocusDetail/);
+  assert.match(html, /Command State/);
+  assert.match(html, /Command Action/);
   assert.match(html, /taskFocusEvidenceAction/);
+  assert.match(html, /taskFocusPathAction/);
   assert.match(html, /taskFocusOpenAction/);
   assert.match(html, /taskFocusDoneAction/);
+  assert.match(html, /Next Lifecycle Action/);
+  assert.match(html, /Task Path/);
   assert.match(html, /normalize_status_or_update/);
   assert.match(html, /reopen_or_inspect_evidence/);
   assert.match(html, /Operation Attention/);
