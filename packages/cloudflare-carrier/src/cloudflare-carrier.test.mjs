@@ -678,6 +678,14 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Controlled Actions/);
   assert.match(html, /Operation Focus/);
   assert.match(html, /Operation Navigator/);
+  assert.match(html, /Create Operation ID/);
+  assert.match(html, /newOperationId/);
+  assert.match(html, /Create Operation Display Name/);
+  assert.match(html, /newOperationDisplayName/);
+  assert.match(html, /Create Operation Kind/);
+  assert.match(html, /newOperationKind/);
+  assert.match(html, /createOperation/);
+  assert.match(html, /createOperationFromWorkbench/);
   assert.match(html, /Operation Focus Detail/);
   assert.match(html, /operationFocusDetail/);
   assert.match(html, /operationFocusContext/);
@@ -869,6 +877,7 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /credentials: 'same-origin'/);
   assert.match(html, /operation_id/);
   assert.match(html, /operation\.read/);
+  assert.match(html, /operation\.create/);
   assert.match(html, /site\.read/);
   assert.match(html, /site\.membership\.put/);
   assert.match(html, /putMembership/);

@@ -2069,6 +2069,16 @@ export function renderCloudflareCarrierConsole() {
       </div>
       <div class="product-panel">
         <h2>Operation Navigator</h2>
+        <label>Create Operation ID
+          <input id="newOperationId" value="operation_control" autocomplete="off">
+        </label>
+        <label>Create Operation Display Name
+          <input id="newOperationDisplayName" value="Control Operation" autocomplete="off">
+        </label>
+        <label>Create Operation Kind
+          <input id="newOperationKind" value="cloudflare_control" autocomplete="off">
+        </label>
+        <div class="actions"><button id="createOperation" class="secondary">Create Operation</button></div>
         <div id="operationNavigator" class="attention-items"><div class="empty">No site operations loaded.</div></div>
         <h3>Operation Focus Detail</h3>
         <div id="operationFocusDetail" class="evidence-summary"><div class="empty">No operation selected.</div></div>
@@ -2235,6 +2245,15 @@ export function renderCloudflareCarrierConsole() {
           carrier_event_limit: 20,
           session_limit: 10,
         });
+      },
+      createOperation(operationId, displayName, operationKind) {
+        return this.request('operation.create', {
+          site_id: el('siteId').value.trim(),
+          operation_id: operationId,
+          display_name: displayName,
+          operation_kind: operationKind,
+          status: 'active',
+        }, { request_id: 'console_operation_create_' + Date.now() });
       },
       putMembership(memberPrincipalId, role) {
         return this.request('site.membership.put', {
@@ -3447,6 +3466,21 @@ export function renderCloudflareCarrierConsole() {
       appendEvents((body.carrier_evidence || []).flatMap((entry) => entry.events || []));
       return body;
     }
+    async function createOperationFromWorkbench() {
+      const operationId = el('newOperationId').value.trim();
+      if (!operationId) throw new Error('Operation ID is required.');
+      const displayName = el('newOperationDisplayName').value.trim() || operationId;
+      const operationKind = el('newOperationKind').value.trim() || 'cloudflare_control';
+      const body = await api.createOperation(operationId, displayName, operationKind);
+      if (body.operation?.operation_id) setCurrentOperation(body.operation.operation_id);
+      renderLastAuthority(null, {
+        event_kind: 'operation.create',
+        action: body.action || 'created',
+        reason: body.action === 'updated' ? 'site_operation_updated' : 'site_operation_created',
+        evidence: { operation_id: operationId, operation_kind: operationKind, status: body.operation?.status || 'active' },
+      });
+      await refreshOperation();
+    }
     function selectedAttention() {
       if (state.attentionFocus) return state.attentionFocus;
       return state.attentionItems.find((item) => item.status !== 'resolved') || state.attentionItems[0] || null;
@@ -3509,6 +3543,7 @@ export function renderCloudflareCarrierConsole() {
     el('start').addEventListener('click', () => run(async () => { const body = await api.start(); appendEvents([body.event].filter(Boolean)); await refreshStatus(); await refreshOperation(); }));
     el('refresh').addEventListener('click', () => run(refreshOperation));
     el('readOperation').addEventListener('click', () => run(refreshOperation));
+    el('createOperation').addEventListener('click', () => run(createOperationFromWorkbench));
     el('autoRefreshOperation').addEventListener('click', () => setAutoRefresh(!state.autoRefreshTimer));
     el('readSite').addEventListener('click', () => run(async () => { const body = await api.readSite(); renderSiteProduct(body); appendEvents((body.carrier_evidence || []).flatMap((entry) => entry.events || [])); }));
     el('putMembership').addEventListener('click', () => run(async () => {
