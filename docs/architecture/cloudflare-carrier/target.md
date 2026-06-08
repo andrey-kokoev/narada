@@ -27,6 +27,8 @@ Cloudflare changes the host, durability, concurrency, transport, storage, and de
 
 ## Target Shape
 
+`operation.read` exposes an `operation_lifecycle_status` derived from existing durable operation facts: operation status, sessions, tasks, carrier evidence, site continuity status, resident loop/dispatch records, and directive delivery state. It is a read-model summary, not a new authority path; it gives operators one lifecycle health signal while preserving the underlying evidence rows and authority classifications.
+
 ```json
 {
   "carrier_kind": "cloudflare-carrier",

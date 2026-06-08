@@ -372,6 +372,61 @@ function summarizeCloudflareSiteContinuityStatus(siteId, continuityPackets = [],
   };
 }
 
+function summarizeCloudflareOperationLifecycleStatus({
+  operation = null,
+  sessions = [],
+  tasks = [],
+  carrierEvidence = [],
+  continuityStatus = null,
+  residentLoopShadowRuns = [],
+  residentDispatchDecisions = [],
+  webhookDelayDirectiveRecords = [],
+  webhookDelayDirectiveDeliveries = [],
+} = {}) {
+  const sessionCount = Array.isArray(sessions) ? sessions.length : 0;
+  const taskList = Array.isArray(tasks) ? tasks : [];
+  const openTaskCount = taskList.filter((task) => !['done', 'closed', 'cancelled'].includes(String(task.status ?? '').toLowerCase())).length;
+  const evidenceGroups = Array.isArray(carrierEvidence) ? carrierEvidence : [];
+  const evidenceEventCount = evidenceGroups.reduce((count, group) => count + (Array.isArray(group.events) ? group.events.length : 0), 0);
+  const continuityState = continuityStatus?.state ?? 'unknown';
+  const residentLoopCount = Array.isArray(residentLoopShadowRuns) ? residentLoopShadowRuns.length : 0;
+  const residentDispatchCount = Array.isArray(residentDispatchDecisions) ? residentDispatchDecisions.length : 0;
+  const directiveRecordCount = Array.isArray(webhookDelayDirectiveRecords) ? webhookDelayDirectiveRecords.length : 0;
+  const directiveDeliveryCount = Array.isArray(webhookDelayDirectiveDeliveries) ? webhookDelayDirectiveDeliveries.length : 0;
+  const missing = [];
+  if (sessionCount === 0) missing.push('session');
+  if (evidenceEventCount === 0) missing.push('carrier_evidence');
+  if (continuityState !== 'packet_observed') missing.push('continuity_packet');
+  const attention = [];
+  if (openTaskCount > 0) attention.push('open_tasks');
+  if (directiveRecordCount > directiveDeliveryCount) attention.push('undelivered_directives');
+  const phase = operation?.status === 'active'
+    ? (sessionCount > 0 ? 'inhabited' : 'active_uninhabited')
+    : String(operation?.status ?? 'unknown');
+  const health = missing.length === 0 && attention.length === 0
+    ? 'ready'
+    : (sessionCount === 0 || evidenceEventCount === 0 ? 'incomplete' : 'attention');
+  return {
+    schema: 'narada.cloudflare_operation_lifecycle_status.v1',
+    operation_id: operation?.operation_id ?? null,
+    site_id: operation?.site_id ?? null,
+    phase,
+    health,
+    missing,
+    attention,
+    session_count: sessionCount,
+    open_task_count: openTaskCount,
+    task_count: taskList.length,
+    evidence_event_count: evidenceEventCount,
+    continuity_state: continuityState,
+    resident_loop_shadow_run_count: residentLoopCount,
+    resident_dispatch_decision_count: residentDispatchCount,
+    directive_record_count: directiveRecordCount,
+    directive_delivery_count: directiveDeliveryCount,
+    next_action: missing[0] ?? attention[0] ?? 'monitor_operation',
+  };
+}
+
 function boundedContinuityPacketReadLimit(value = 100) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 100;
@@ -873,6 +928,17 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const siteAuthority = cloudflareSiteAuthorityReadModel(env, siteId);
     const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
     const siteContinuityStatus = summarizeCloudflareSiteContinuityStatus(siteId, continuityPackets, siteContinuity);
+    const operationLifecycleStatus = summarizeCloudflareOperationLifecycleStatus({
+      operation,
+      sessions,
+      tasks,
+      carrierEvidence,
+      continuityStatus: siteContinuityStatus,
+      residentLoopShadowRuns,
+      residentDispatchDecisions,
+      webhookDelayDirectiveRecords,
+      webhookDelayDirectiveDeliveries,
+    });
     return {
       status: 200,
       body: {
@@ -890,6 +956,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         site_authority: siteAuthority,
         site_continuity: siteContinuity,
         site_continuity_status: siteContinuityStatus,
+        operation_lifecycle_status: operationLifecycleStatus,
         operation_product_surface: {
           schema: 'narada.cloudflare_operation_product_surface.v1',
           operation_id: operation?.operation_id ?? null,
@@ -899,6 +966,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           carrier_evidence_count: carrierEvidence.length,
           continuity_packet_count: continuityPackets.length,
           continuity_status: siteContinuityStatus,
+          lifecycle_status: operationLifecycleStatus,
           webhook_delay_shadow_observation_count: webhookDelayShadowObservations.length,
           webhook_delay_observation_primary_read_count: webhookDelayObservationPrimaryReads.length,
           webhook_delay_scheduled_source_read_count: webhookDelayScheduledSourceReads.length,
@@ -4703,7 +4771,8 @@ export function renderCloudflareCarrierConsole() {
       el('controlEvidenceWindow').textContent = String(surface.carrier_evidence_count ?? state.events.length) + ' evidence groups / ' + state.events.length + ' loaded events';
       const continuityStatus = surface.continuity_status || product.site_continuity_status || {};
       el('controlContinuity').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length ?? 0) + ' packets / ' + String(continuityStatus.state || 'no_status') + ' / ' + String(surface.webhook_delay_directive_record_count ?? (product.webhook_delay_directive_records || []).length ?? 0) + ' directive intents';
-      el('controlWorkbenchReadiness').textContent = operationWorkbenchReadiness(product);
+      const lifecycleStatus = surface.lifecycle_status || product.operation_lifecycle_status || {};
+      el('controlWorkbenchReadiness').textContent = operationWorkbenchReadiness(product) + ' / ' + String(lifecycleStatus.health || 'no_lifecycle_status');
       renderControlRoomActionSummary(product);
       renderOperatorRoute(product);
       renderWorkbenchReadinessGate(product);

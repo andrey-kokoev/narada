@@ -1631,6 +1631,11 @@ test('worker records webhook delay observations as Cloudflare shadow-read eviden
   assert.equal(operationRead.status, 200);
   const operationReadBody = await operationRead.json();
   assert.equal(operationReadBody.operation_product_surface.webhook_delay_shadow_observation_count, 2);
+  assert.equal(operationReadBody.operation_lifecycle_status.schema, 'narada.cloudflare_operation_lifecycle_status.v1');
+  assert.equal(operationReadBody.operation_lifecycle_status.phase, 'active_uninhabited');
+  assert.equal(operationReadBody.operation_lifecycle_status.health, 'incomplete');
+  assert.deepEqual(operationReadBody.operation_lifecycle_status.missing, ['session', 'carrier_evidence', 'continuity_packet']);
+  assert.equal(operationReadBody.operation_product_surface.lifecycle_status.health, 'incomplete');
   assert.equal(operationReadBody.operation_product_surface.continuity_status.schema, 'narada.cloudflare_site_continuity_status.v1');
   assert.equal(operationReadBody.operation_product_surface.continuity_status.state, 'no_packet_observed');
   assert.equal(operationReadBody.operation_product_surface.continuity_status.packet_count, 0);
@@ -2576,6 +2581,13 @@ test('worker operation.create read and list route through site registry authorit
   assert.equal(readBody.operation_product_surface.operation_id, 'operation_control');
   assert.equal(readBody.operation_product_surface.session_count, 1);
   assert.equal(readBody.operation_product_surface.task_count, 1);
+  assert.equal(readBody.operation_lifecycle_status.schema, 'narada.cloudflare_operation_lifecycle_status.v1');
+  assert.equal(readBody.operation_lifecycle_status.phase, 'inhabited');
+  assert.equal(readBody.operation_lifecycle_status.session_count, 1);
+  assert.equal(readBody.operation_lifecycle_status.task_count, 1);
+  assert.equal(readBody.operation_lifecycle_status.open_task_count, 1);
+  assert.equal(readBody.operation_lifecycle_status.next_action, 'continuity_packet');
+  assert.equal(readBody.operation_product_surface.lifecycle_status.health, readBody.operation_lifecycle_status.health);
   assert.equal(readBody.reader_principal.email, 'admin@system');
 
   const listed = await worker.fetch(jsonRequest({

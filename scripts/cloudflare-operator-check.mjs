@@ -815,6 +815,7 @@ assert.equal(operationReadAfterContinuity.body.ok, true);
 const operationSurface = operationReadAfterContinuity.body.operation_product_surface;
 const operationContinuityPackets = operationReadAfterContinuity.body.site_continuity_packets ?? [];
 const operationContinuityStatus = operationReadAfterContinuity.body.site_continuity_status;
+const operationLifecycleStatus = operationReadAfterContinuity.body.operation_lifecycle_status;
 assert.equal(operationSurface?.operation_id, operationId);
 assert.ok(Array.isArray(operationContinuityPackets));
 assert.ok(operationContinuityPackets.length >= 1);
@@ -823,6 +824,10 @@ assert.equal(operationContinuityStatus?.schema, 'narada.cloudflare_site_continui
 assert.equal(operationContinuityStatus?.state, 'packet_observed');
 assert.equal(operationContinuityStatus?.packet_count, operationContinuityPackets.length);
 assert.equal(operationSurface?.continuity_status?.state, operationContinuityStatus.state);
+assert.equal(operationLifecycleStatus?.schema, 'narada.cloudflare_operation_lifecycle_status.v1');
+assert.equal(operationLifecycleStatus?.phase, 'inhabited');
+assert.match(operationLifecycleStatus?.health, /^(ready|attention)$/);
+assert.equal(operationSurface?.lifecycle_status?.health, operationLifecycleStatus.health);
 
 const microsoftLoginUrl = new URL('/auth/microsoft/login', withTrailingSlash(workerUrl)).toString();
 const apiClientPath = new URL('/api/carrier', withTrailingSlash(workerUrl)).toString();
@@ -856,6 +861,7 @@ const report = {
     operation_inhabited_by_live_work: 'ok',
     operation_continuity_packets: 'ok',
     operation_continuity_status: 'ok',
+    operation_lifecycle_status: 'ok',
     human_operator_session: humanOperator.status,
     human_operator_membership: humanOperator.membership_status,
     human_operator_operation_read: humanOperator.operation_status,
@@ -887,6 +893,7 @@ const report = {
     carrier_evidence_count: operationSurface.carrier_evidence_count,
     continuity_packet_count: operationSurface.continuity_packet_count,
     continuity_status: operationSurface.continuity_status,
+    lifecycle_status: operationSurface.lifecycle_status,
     smoke_session_bound: operationRead.body.sessions.some((session) => session.carrier_session_id === smoke.carrier_session_id),
   },
   command_states: liveCommandStates,
