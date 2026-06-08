@@ -2345,11 +2345,19 @@ function summarizeCloudflareRecoveryPosture({
     : sessionList.map((session) => session.carrier_session_id).filter((sessionId) => sessionId && !evidenceSessionIds.has(sessionId));
   const sessionSnapshotBoundary = (persistencePosture?.durable_boundaries || []).find((boundary) => boundary.key === 'session_snapshot');
   const evidenceIndexBoundary = (persistencePosture?.durable_boundaries || []).find((boundary) => boundary.key === 'carrier_evidence_index');
+  const recoveryBoundaries = (persistencePosture?.durable_boundaries || []).map((boundary) => ({
+    key: boundary.key,
+    substrate: boundary.substrate,
+    status: boundary.status === 'available' ? 'recoverable' : 'unavailable',
+    authority: boundary.authority,
+  }));
+  const unavailableRecoveryBoundaries = recoveryBoundaries.filter((boundary) => boundary.status !== 'recoverable').map((boundary) => boundary.key);
   const snapshotReload = sessionSnapshotBoundary?.status === 'available' ? 'available' : 'unavailable';
   const evidenceReplay = carrierEvidenceReadStatus?.state ?? (evidenceGroups.length > 0 ? 'loaded' : 'unknown');
   const gaps = [];
   if (snapshotReload !== 'available') gaps.push('session_snapshot_reload_unavailable');
   if (evidenceIndexBoundary?.status !== 'available') gaps.push('carrier_evidence_index_unavailable');
+  for (const boundary of unavailableRecoveryBoundaries) gaps.push(`${boundary}_recovery_unavailable`);
   if (sessionList.length > 0 && evidenceEventCount === 0) gaps.push('no_replayed_evidence');
   if (missingEvidenceSessionIds.length > 0) gaps.push('session_evidence_missing');
   if (carrierEvidenceReadStatus?.state === 'degraded') gaps.push('carrier_evidence_replay_degraded');
@@ -2364,6 +2372,9 @@ function summarizeCloudflareRecoveryPosture({
     snapshot_reload: snapshotReload,
     evidence_replay: evidenceReplay,
     evidence_sources: evidenceSources,
+    recovery_boundary_count: recoveryBoundaries.length,
+    recoverable_boundary_count: recoveryBoundaries.length - unavailableRecoveryBoundaries.length,
+    recovery_boundaries: recoveryBoundaries,
     recovery_gaps: gaps,
     missing_evidence_session_ids: missingEvidenceSessionIds,
     truncated_evidence_session_count: carrierEvidenceReadStatus?.truncated_session_count ?? 0,
@@ -9919,6 +9930,8 @@ export function renderCloudflareCarrierConsole() {
         ['Snapshot Reload', posture.snapshot_reload || 'unknown'],
         ['Evidence Replay', posture.evidence_replay || evidenceReplayStatus(product)?.state || 'unknown'],
         ['Evidence Sources', (posture.evidence_sources || []).join(', ') || 'none'],
+        ['Recoverable Boundaries', String(posture.recoverable_boundary_count ?? (posture.recovery_boundaries || []).filter((boundary) => boundary.status === 'recoverable').length)],
+        ['Recovery Boundaries', (posture.recovery_boundaries || []).filter((boundary) => boundary.status === 'recoverable').map((boundary) => boundary.key).join(', ') || 'none'],
         ['Recovery Gaps', (posture.recovery_gaps || []).join(', ') || 'none'],
         ['Missing Sessions', (posture.missing_evidence_session_ids || []).join(', ') || 'none'],
         ['Sessions', String(posture.session_count ?? (product.sessions || []).length)],

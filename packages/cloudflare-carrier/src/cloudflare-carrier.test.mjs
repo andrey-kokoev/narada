@@ -1034,6 +1034,9 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(body.cloudflare_recovery_posture.snapshot_reload, 'available');
   assert.equal(body.cloudflare_recovery_posture.evidence_replay, 'loaded');
   assert.equal(body.cloudflare_recovery_posture.evidence_sources.includes('cloudflare-durable-object'), true);
+  assert.equal(body.cloudflare_recovery_posture.recovery_boundary_count, 5);
+  assert.equal(body.cloudflare_recovery_posture.recoverable_boundary_count, 5);
+  assert.equal(body.cloudflare_recovery_posture.recovery_boundaries.some((boundary) => boundary.key === 'site_file_materialization_store' && boundary.status === 'recoverable'), true);
   assert.equal(body.cloudflare_recovery_posture.recovery_gaps.length, 0);
   assert.equal(body.cloudflare_recovery_posture.next_action, 'monitor_recovery_posture');
   assert.equal(body.reader_principal.email, 'admin@system');
@@ -1413,6 +1416,7 @@ test('worker site.read reports bounded carrier evidence reads as partial rather 
   assert.equal(body.cloudflare_recovery_posture.state, 'reconstructable');
   assert.equal(body.cloudflare_recovery_posture.evidence_replay, 'partial');
   assert.equal(body.cloudflare_recovery_posture.truncated_evidence_session_count, 1);
+  assert.equal(body.cloudflare_recovery_posture.recovery_boundaries.some((boundary) => boundary.key === 'site_file_materialization_store' && boundary.status === 'recoverable'), true);
   assert.deepEqual(body.cloudflare_recovery_posture.recovery_gaps, []);
 });
 

@@ -246,6 +246,8 @@ read next_event_sequence
 
 If storage APIs require separate writes, recovery must detect and repair incomplete writes by replaying or marking a carrier diagnostic event. Silent loss is not acceptable.
 
+`operation.read` must expose recovery posture as a boundary-aware read model. The posture may report session snapshot reload and carrier evidence replay separately, but it must also enumerate recoverable durable boundaries derived from persistence posture, including the site registry, carrier evidence index, task lifecycle store, and Cloudflare site-file materialization store. This does not mean every boundary is replayed through carrier evidence; it means the operator can see which declared durable stores are available for recovery and which boundary is the next repair target.
+
 ## Provider Posture
 
 Provider execution is a separate target slice from carrier admission.

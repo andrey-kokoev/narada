@@ -1464,11 +1464,15 @@ assert.match(operationRecoveryPosture?.state, /^(reconstructable|ready_no_sessio
 assert.match(operationRecoveryPosture?.snapshot_reload, /^(available|unavailable)$/);
 assert.match(operationRecoveryPosture?.evidence_replay, /^(loaded|partial|degraded|no_sessions|unknown)$/);
 assert.ok(Array.isArray(operationRecoveryPosture?.evidence_sources));
+assert.equal(operationRecoveryPosture?.recovery_boundary_count, operationPersistencePosture?.durable_boundary_count);
+assert.ok(operationRecoveryPosture?.recoverable_boundary_count >= 1);
+assert.ok(Array.isArray(operationRecoveryPosture?.recovery_boundaries));
+assert.equal(operationRecoveryPosture?.recovery_boundaries.some((boundary) => boundary.key === 'site_file_materialization_store' && boundary.status === 'recoverable'), true);
 assert.ok(Array.isArray(operationRecoveryPosture?.recovery_gaps));
 assert.ok(Array.isArray(operationRecoveryPosture?.missing_evidence_session_ids));
 assert.equal(operationRecoveryPosture?.session_count, operationReadAfterContinuity.body.sessions.length);
 assert.equal(operationRecoveryPosture?.evidence_session_count, new Set(operationReadAfterContinuity.body.carrier_evidence.filter((group) => group.ok === true && (group.events || []).length > 0).map((group) => group.carrier_session_id)).size);
-assert.match(operationRecoveryPosture?.next_action, /^(monitor_recovery_posture|session_snapshot_reload_unavailable|carrier_evidence_index_unavailable|no_replayed_evidence|session_evidence_missing|carrier_evidence_replay_degraded)$/);
+assert.match(operationRecoveryPosture?.next_action, /^(monitor_recovery_posture|session_snapshot_reload_unavailable|carrier_evidence_index_unavailable|session_snapshot_recovery_unavailable|site_registry_recovery_unavailable|carrier_evidence_index_recovery_unavailable|site_file_materialization_store_recovery_unavailable|task_lifecycle_store_recovery_unavailable|no_replayed_evidence|session_evidence_missing|carrier_evidence_replay_degraded)$/);
 assert.deepEqual(operationSurface?.recovery_posture, operationRecoveryPosture);
 assert.ok(Array.isArray(taskLifecycleShadowReads));
 assert.equal(operationSurface?.task_lifecycle_shadow_read_count, taskLifecycleShadowReads.length);
