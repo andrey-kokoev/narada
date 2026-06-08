@@ -1104,6 +1104,14 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Activity Items/);
   assert.match(html, /Latest Activity/);
   assert.match(html, /operationActivityFocus/);
+  assert.match(html, /operationActivityFocusDetail/);
+  assert.match(html, /operationActivityFocusContext/);
+  assert.match(html, /renderOperationActivityFocusDetail/);
+  assert.match(html, /applyFocusedOperationActivity/);
+  assert.match(html, /operationActivityApplyFocus/);
+  assert.match(html, /Activity Focus/);
+  assert.match(html, /Apply Activity Focus/);
+  assert.match(html, /apply_activity_focus/);
   assert.match(html, /focus_kind/);
   assert.match(html, /focus_ref/);
   assert.match(html, /provider_events/);

@@ -4728,6 +4728,9 @@ export function renderCloudflareCarrierConsole() {
       <div class="product-panel">
         <h2>Operation Activity Timeline</h2>
         <div id="operationActivityTimeline" class="attention-items"><div class="empty">No operation activity loaded.</div></div>
+        <h3>Activity Focus</h3>
+        <div id="operationActivityFocusDetail" class="evidence-summary"><div class="empty">No operation activity selected.</div></div>
+        <div class="actions"><button id="operationActivityApplyFocus" class="secondary">Apply Activity Focus</button></div>
       </div>
       <div class="product-panel">
         <h2>Continuity Workflow</h2>
@@ -5467,6 +5470,7 @@ export function renderCloudflareCarrierConsole() {
         node.append(title, meta, focusActionRow(workbenchReadinessActionButton(item)));
         return node;
       }));
+      renderOperationActivityFocusDetail();
     }
     function operationControlBoardContext(product = state.operationProduct || {}) {
       const control = controlRoomActionContext(product);
@@ -8696,6 +8700,34 @@ export function renderCloudflareCarrierConsole() {
       if (!activity) return 'none';
       return [activity.activity_kind, activity.title, activity.occurred_at || 'unknown-time'].filter(Boolean).join(' / ');
     }
+    function operationActivityFocusContext(activity = state.operationActivityFocus) {
+      if (!activity) return [];
+      return [
+        ['Activity', activity.activity_id || 'none'],
+        ['Kind', activity.activity_kind || 'unknown'],
+        ['Title', activity.title || 'none'],
+        ['Summary', activity.summary || 'none'],
+        ['Occurred', activity.occurred_at || 'unknown'],
+        ['Source Ref', activity.source_ref || 'none'],
+        ['Focus Kind', activity.focus_kind || 'unknown'],
+        ['Focus Ref', activity.focus_ref || 'none'],
+        ['Principal', activity.principal_id || 'none'],
+        ['Next Action', activity.focus_kind ? 'apply_activity_focus' : 'inspect_activity'],
+      ];
+    }
+    function renderOperationActivityFocusDetail(activity = state.operationActivityFocus) {
+      const target = el('operationActivityFocusDetail');
+      if (!target) return;
+      const context = operationActivityFocusContext(activity);
+      if (!context.length) {
+        target.innerHTML = '<div class="empty">No operation activity selected.</div>';
+        return;
+      }
+      target.replaceChildren(...context.map(([label, value]) => evidenceField(label, value)));
+    }
+    function applyFocusedOperationActivity() {
+      if (state.operationActivityFocus) selectOperationActivity(state.operationActivityFocus);
+    }
     function selectOperationActivity(activity) {
       if (!activity) return;
       state.operationActivityFocus = activity;
@@ -8731,6 +8763,7 @@ export function renderCloudflareCarrierConsole() {
         focusEvidenceFor((event) => event.carrier_session_id === sessionId && (String(event.sequence ?? event.event_id ?? event.event_kind ?? '') === sequenceOrKind || event.event_kind === activity.title));
       }
       renderOperationActivityTimeline(product);
+      renderOperationActivityFocusDetail(activity);
       updateControlRoom();
     }
     function renderOperationActivityTimeline(product = state.operationProduct || {}) {
@@ -8739,7 +8772,11 @@ export function renderCloudflareCarrierConsole() {
       if (!target) return;
       if (!timeline || !(timeline.items || []).length) {
         target.innerHTML = '<div class="empty">No operation activity loaded.</div>';
+        renderOperationActivityFocusDetail();
         return;
+      }
+      if (state.operationActivityFocus) {
+        state.operationActivityFocus = timeline.items.find((activity) => activity.activity_id === state.operationActivityFocus.activity_id) || state.operationActivityFocus;
       }
       target.replaceChildren(...timeline.items.slice(0, 30).map((activity) => {
         const node = document.createElement('article');
@@ -9119,6 +9156,7 @@ export function renderCloudflareCarrierConsole() {
     el('operationControlTargetNextAction').addEventListener('click', applyControlRoomNextAction);
     el('operationControlTargetEvidenceAction').addEventListener('click', focusFlightDeckEvidence);
     el('operationControlTargetReadinessAction').addEventListener('click', applyWorkbenchReadinessNextAction);
+    el('operationActivityApplyFocus').addEventListener('click', applyFocusedOperationActivity);
     el('startResidentDispatch').addEventListener('click', () => run(startResidentDispatchFromWorkbench));
     el('continuityWorkflowNextAction').addEventListener('click', applyContinuityWorkflowNextStep);
     el('authorityNextAction').addEventListener('click', applyAuthorityNextAction);
