@@ -2780,6 +2780,143 @@ test('worker records resident loop runs as Cloudflare shadow-read evidence witho
   assert.equal(operationReadBody.operation_product_surface.dispatch_authority, 'windows_primary_dispatcher');
 });
 
+test('worker records task lifecycle shadow reads from Windows without admitting Cloudflare writes', async () => {
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{
+      site_id: 'site_fixture',
+      site_ref: 'site://fixture',
+      display_name: 'Fixture Site',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+      created_by_principal_id: 'admin',
+    }],
+    memberships: [{
+      site_id: 'site_fixture',
+      principal_id: 'admin',
+      role: 'owner',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+    operations: [{
+      operation_id: 'operation_task_lifecycle',
+      site_id: 'site_fixture',
+      display_name: 'Task Lifecycle Operation',
+      operation_kind: 'operating_layer_update',
+      status: 'active',
+      created_by_principal_id: 'admin',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+  });
+  const env = authEnv(fakeDurableObjectNamespace(), {
+    CLOUDFLARE_SITE_REGISTRY_DB: siteDb,
+    CLOUDFLARE_TASK_LIFECYCLE_SHADOW_READ_ALLOW_OPERATOR_URL: '1',
+  });
+  const payload = {
+    schema: 'narada.sonar.task_lifecycle_shadow_read.v1',
+    status: 'ok',
+    generated_at: '2026-06-08T17:18:04.097Z',
+    authority_locus: 'windows_local_site',
+    shadow_target_locus: 'cloudflare_carrier_site',
+    mutation_authority: 'windows_task_lifecycle_sqlite',
+    shadow_read_posture: 'read_only_projection',
+    cloudflare_write_admission: 'not_admitted',
+    source_db_path: 'D:/code/narada.sonar/.ai/task-lifecycle.db',
+    limit: 5,
+    task_count: 2,
+    status_counts: { claimed: 1, closed: 1 },
+    tasks: [
+      { task_id: 'task-2', task_number: 2, status: 'closed', governed_by: 'architect', updated_at: '2026-06-08T11:00:00.000Z', closed_at: '2026-06-08T11:30:00.000Z', active_assignment_count: 0, report_count: 1 },
+      { task_id: 'task-1', task_number: 1, status: 'claimed', governed_by: 'architect', updated_at: '2026-06-08T10:00:00.000Z', closed_at: null, active_assignment_count: 1, report_count: 0 },
+    ],
+  };
+
+  const recorded = await worker.fetch(jsonRequest({
+    operation: 'task_lifecycle.shadow_read.record',
+    request_id: 'request_task_lifecycle_shadow_read_record',
+    params: {
+      site_id: 'site_fixture',
+      read_id: 'task_lifecycle_shadow_fixture_1',
+      source_payload: payload,
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(recorded.status, 200);
+  const recordedBody = await recorded.json();
+  assert.equal(recordedBody.status, 'recorded');
+  assert.equal(recordedBody.shadow_mode, 'cloudflare_shadow_read');
+  assert.equal(recordedBody.mutation_authority, 'windows_task_lifecycle_sqlite');
+  assert.equal(recordedBody.cloudflare_write_admission, 'not_admitted');
+  assert.equal(recordedBody.dispatch_authority, 'windows_primary_dispatcher');
+  assert.equal(recordedBody.dispatch_action, 'none');
+  assert.equal(recordedBody.read.task_count, 2);
+  assert.equal(recordedBody.record.recorded_by_principal_id, 'admin');
+
+  const originalFetch = globalThis.fetch;
+  try {
+    globalThis.fetch = async (url, init = {}) => {
+      assert.match(String(url), /limit=2/);
+      assert.equal(init.headers.authorization, 'Bearer source-token');
+      return new Response(JSON.stringify({ ...payload, generated_at: '2026-06-08T17:19:04.097Z', task_count: 1, tasks: payload.tasks.slice(0, 1) }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    };
+    const sourceRead = await worker.fetch(jsonRequest({
+      operation: 'task_lifecycle.shadow_read.source.read',
+      request_id: 'request_task_lifecycle_shadow_source_read',
+      params: {
+        site_id: 'site_fixture',
+        read_id: 'task_lifecycle_shadow_fixture_source_1',
+        source_url: 'https://windows-source.test/task-lifecycle/shadow-read',
+        source_token: 'source-token',
+        limit: 2,
+      },
+    }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+    assert.equal(sourceRead.status, 200);
+    const sourceReadBody = await sourceRead.json();
+    assert.equal(sourceReadBody.status, 'source_read_recorded');
+    assert.equal(sourceReadBody.record.source_url_host, 'windows-source.test');
+    assert.equal(sourceReadBody.record.cloudflare_write_admission, 'not_admitted');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  const listed = await worker.fetch(jsonRequest({
+    operation: 'task_lifecycle.shadow_read.list',
+    request_id: 'request_task_lifecycle_shadow_read_list',
+    params: { site_id: 'site_fixture', limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(listed.status, 200);
+  const listedBody = await listed.json();
+  assert.equal(listedBody.mutation_authority, 'windows_task_lifecycle_sqlite');
+  assert.equal(listedBody.cloudflare_write_admission, 'not_admitted');
+  assert.equal(listedBody.dispatch_authority, 'windows_primary_dispatcher');
+  assert.deepEqual(listedBody.reads.map((entry) => entry.cloudflare_write_admission), ['not_admitted', 'not_admitted']);
+
+  const siteRead = await worker.fetch(jsonRequest({
+    operation: 'site.read',
+    request_id: 'request_task_lifecycle_shadow_read_site_read',
+    params: { site_id: 'site_fixture', task_lifecycle_shadow_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(siteRead.status, 200);
+  const siteReadBody = await siteRead.json();
+  assert.equal(siteReadBody.task_lifecycle_shadow_reads.length, 2);
+
+  const operationRead = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_task_lifecycle_shadow_read_operation_read',
+    params: { site_id: 'site_fixture', operation_id: 'operation_task_lifecycle', task_lifecycle_shadow_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(operationRead.status, 200);
+  const operationReadBody = await operationRead.json();
+  assert.equal(operationReadBody.task_lifecycle_shadow_reads.length, 2);
+  assert.equal(operationReadBody.operation_product_surface.task_lifecycle_shadow_read_count, 2);
+  assert.equal(operationReadBody.operation_product_surface.task_lifecycle_mutation_authority, 'windows_task_lifecycle_sqlite');
+  assert.equal(operationReadBody.operation_product_surface.task_lifecycle_cloudflare_write_admission, 'not_admitted');
+});
+
 test('worker starts controlled resident dispatch as Cloudflare primary with Windows fallback recorded', async () => {
   const siteDb = fakeD1SiteRegistryDatabase({
     sites: [{
@@ -4360,6 +4497,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     webhookDelayDirectiveRecords: clone(initial.webhookDelayDirectiveRecords ?? []),
     webhookDelayDirectiveDeliveries: clone(initial.webhookDelayDirectiveDeliveries ?? []),
     residentLoopShadowRuns: clone(initial.residentLoopShadowRuns ?? []),
+    taskLifecycleShadowReads: clone(initial.taskLifecycleShadowReads ?? []),
     residentDispatchDecisions: clone(initial.residentDispatchDecisions ?? []),
     carrierSessionEvents: clone(initial.carrierSessionEvents ?? []),
   };
@@ -4469,6 +4607,12 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const row = { loop_run_id, site_id, operation_id, source_locus, target_locus, run_started_at, run_finished_at, loop_status, step_count, operator_attention_count, dispatch_authority, shadow_mode, dispatch_action, loop_run_json, recorded_by_principal_id, recorded_at };
         if (existing) Object.assign(existing, row);
         else state.residentLoopShadowRuns.push(row);
+      } else if (normalized.startsWith('insert into cloudflare_task_lifecycle_shadow_reads')) {
+        const [read_id, site_id, source_locus, target_locus, source_url_host, source_db_path, source_schema, generated_at, task_count, status_counts_json, tasks_json, mutation_authority, shadow_read_posture, cloudflare_write_admission, dispatch_authority, shadow_mode, dispatch_action, record_json, recorded_by_principal_id, recorded_at] = bindings;
+        const existing = state.taskLifecycleShadowReads.find((entry) => entry.read_id === read_id);
+        const row = { read_id, site_id, source_locus, target_locus, source_url_host, source_db_path, source_schema, generated_at, task_count, status_counts_json, tasks_json, mutation_authority, shadow_read_posture, cloudflare_write_admission, dispatch_authority, shadow_mode, dispatch_action, record_json, recorded_by_principal_id, recorded_at };
+        if (existing) Object.assign(existing, row);
+        else state.taskLifecycleShadowReads.push(row);
       } else if (normalized.startsWith('insert into cloudflare_resident_dispatch_decisions')) {
         const [dispatch_decision_id, site_id, operation_id, carrier_session_id, decision_state, dispatch_authority, fallback_authority, fallback_status, dispatch_action, dispatch_scope, session_start_status, session_start_ok, decision_json, recorded_by_principal_id, recorded_at] = bindings;
         const existing = state.residentDispatchDecisions.find((entry) => entry.dispatch_decision_id === dispatch_decision_id);
@@ -4664,6 +4808,16 @@ function fakeD1SiteRegistryStatement(state, sql) {
           results: state.residentLoopShadowRuns
             .filter((entry) => entry.site_id === siteId)
             .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_task_lifecycle_shadow_reads')) {
+        const [siteId, limit] = bindings;
+        return {
+          results: state.taskLifecycleShadowReads
+            .filter((entry) => entry.site_id === siteId)
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
             .slice(0, Number(limit))
             .map((entry) => clone(entry)),
         };

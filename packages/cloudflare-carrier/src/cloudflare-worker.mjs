@@ -46,6 +46,7 @@ const CLOUDFLARE_WEBHOOK_DELAY_DIRECTIVE_DUAL_RECORD_SCHEMA = 'narada.sonar.clou
 const CLOUDFLARE_WEBHOOK_DELAY_DIRECTIVE_PRIMARY_SCHEMA = 'narada.sonar.cloudflare_webhook_delay_directive_primary_with_windows_fallback.v1';
 const CLOUDFLARE_RESIDENT_LOOP_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_resident_loop_shadow_read.v1';
 const CLOUDFLARE_RESIDENT_DISPATCH_PRIMARY_SCHEMA = 'narada.sonar.cloudflare_resident_dispatch_primary_with_windows_fallback.v1';
+const CLOUDFLARE_TASK_LIFECYCLE_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_shadow_read.v1';
 const CLOUDFLARE_WEBHOOK_DELAY_SHADOW_MODE = 'cloudflare_shadow_read';
 const CLOUDFLARE_WEBHOOK_DELAY_OBSERVATION_PRIMARY_AUTHORITY = 'cloudflare_primary_observation_read';
 const CLOUDFLARE_WEBHOOK_DELAY_REMOTE_SOURCE_AUTHORITY = 'cloudflare_webhook_delay_remote_source_adapter';
@@ -1368,6 +1369,9 @@ function isSiteProductOperation(operation) {
     'webhook_delay.directive.primary_with_fallback.list',
     'resident_loop.shadow_read.record',
     'resident_loop.shadow_read.list',
+    'task_lifecycle.shadow_read.record',
+    'task_lifecycle.shadow_read.list',
+    'task_lifecycle.shadow_read.source.read',
     'resident_dispatch.primary_with_fallback.start',
     'resident_dispatch.primary_with_fallback.list',
   ].includes(operation);
@@ -1572,6 +1576,38 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       },
     };
   }
+  if (body.operation === 'task_lifecycle.shadow_read.source.read') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const result = await readCloudflareTaskLifecycleShadowSource(env, requestedSiteId, params, principal);
+    return { status: result.ok ? 200 : 400, body: result };
+  }
+  if (body.operation === 'task_lifecycle.shadow_read.record') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const result = await recordCloudflareTaskLifecycleShadowRead(env, requestedSiteId, params, principal);
+    return { status: result.ok ? 200 : 400, body: result };
+  }
+  if (body.operation === 'task_lifecycle.shadow_read.list') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const reads = await listCloudflareTaskLifecycleShadowReads(env, requestedSiteId, params.task_lifecycle_shadow_limit ?? params.limit);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        schema: CLOUDFLARE_TASK_LIFECYCLE_SHADOW_READ_SCHEMA,
+        status: 'ok',
+        site_id: requestedSiteId,
+        shadow_mode: CLOUDFLARE_WEBHOOK_DELAY_SHADOW_MODE,
+        mutation_authority: 'windows_task_lifecycle_sqlite',
+        cloudflare_write_admission: 'not_admitted',
+        dispatch_authority: WINDOWS_PRIMARY_DISPATCH_AUTHORITY,
+        dispatch_action: 'none',
+        reads,
+      },
+    };
+  }
   if (body.operation === 'webhook_delay.shadow_read.record') {
     const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
     if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
@@ -1741,6 +1777,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const webhookDelayDirectiveRecords = await listCloudflareWebhookDelayDirectiveDualRecords(env, siteId, params.webhook_delay_directive_limit ?? params.limit);
     const webhookDelayDirectiveDeliveries = await listCloudflareWebhookDelayDirectiveDeliveries(env, siteId, params.webhook_delay_directive_delivery_limit ?? params.limit);
     const residentLoopShadowRuns = await listCloudflareResidentLoopShadowRuns(env, siteId, params.resident_loop_shadow_limit ?? params.limit);
+    const taskLifecycleShadowReads = await listCloudflareTaskLifecycleShadowReads(env, siteId, params.task_lifecycle_shadow_limit ?? params.limit);
     const residentDispatchDecisions = await listCloudflareResidentDispatchDecisions(env, siteId, params.resident_dispatch_limit ?? params.limit);
     const carrierEvidence = await readCarrierEvidenceForSiteSessions(env, sessions, principal, params);
     const carrierEvidenceReadStatus = summarizeCloudflareCarrierEvidenceReadStatus({ sessions, carrierEvidence });
@@ -1819,6 +1856,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         webhook_delay_directive_records: webhookDelayDirectiveRecords,
         webhook_delay_directive_deliveries: webhookDelayDirectiveDeliveries,
         resident_loop_shadow_runs: residentLoopShadowRuns,
+        task_lifecycle_shadow_reads: taskLifecycleShadowReads,
         resident_dispatch_decisions: residentDispatchDecisions,
         carrier_evidence: carrierEvidence,
         carrier_evidence_read_status: carrierEvidenceReadStatus,
@@ -1860,7 +1898,10 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           webhook_delay_directive_record_count: webhookDelayDirectiveRecords.length,
           webhook_delay_directive_delivery_count: webhookDelayDirectiveDeliveries.length,
           resident_loop_shadow_run_count: residentLoopShadowRuns.length,
+          task_lifecycle_shadow_read_count: taskLifecycleShadowReads.length,
           resident_dispatch_decision_count: residentDispatchDecisions.length,
+          task_lifecycle_mutation_authority: 'windows_task_lifecycle_sqlite',
+          task_lifecycle_cloudflare_write_admission: 'not_admitted',
           dispatch_authority: WINDOWS_PRIMARY_DISPATCH_AUTHORITY,
         },
       },
@@ -1895,6 +1936,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
   const webhookDelayDirectiveRecords = await listCloudflareWebhookDelayDirectiveDualRecords(env, siteId, params.webhook_delay_directive_limit ?? params.limit);
   const webhookDelayDirectiveDeliveries = await listCloudflareWebhookDelayDirectiveDeliveries(env, siteId, params.webhook_delay_directive_delivery_limit ?? params.limit);
   const residentLoopShadowRuns = await listCloudflareResidentLoopShadowRuns(env, siteId, params.resident_loop_shadow_limit ?? params.limit);
+  const taskLifecycleShadowReads = await listCloudflareTaskLifecycleShadowReads(env, siteId, params.task_lifecycle_shadow_limit ?? params.limit);
   const residentDispatchDecisions = await listCloudflareResidentDispatchDecisions(env, siteId, params.resident_dispatch_limit ?? params.limit);
   const carrierEvidence = await readCarrierEvidenceForSiteSessions(env, response.sessions ?? [], principal, params);
   const carrierEvidenceReadStatus = summarizeCloudflareCarrierEvidenceReadStatus({ sessions: response.sessions ?? [], carrierEvidence });
@@ -1940,6 +1982,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     webhook_delay_directive_records: webhookDelayDirectiveRecords,
     webhook_delay_directive_deliveries: webhookDelayDirectiveDeliveries,
     resident_loop_shadow_runs: residentLoopShadowRuns,
+    task_lifecycle_shadow_reads: taskLifecycleShadowReads,
     resident_dispatch_decisions: residentDispatchDecisions,
     carrier_evidence: carrierEvidence,
     carrier_evidence_read_status: carrierEvidenceReadStatus,
@@ -2311,6 +2354,271 @@ function createResidentLoopShadowRun(siteId, params = {}) {
 
 function residentLoopShadowRunId(siteId, loopRun) {
   return `resident_loop_shadow_${safeIdToken(siteId)}_${safeIdToken(loopRun.operation_id)}_${safeIdToken(loopRun.run_started_at)}`;
+}
+
+async function readCloudflareTaskLifecycleShadowSource(env = {}, siteId, params = {}, principal = null) {
+  const sourceUrl = resolveTaskLifecycleShadowReadSourceUrl(env, params);
+  if (!sourceUrl) return { ok: false, code: 'task_lifecycle_shadow_read_source_url_missing' };
+  const fetched = await fetchTaskLifecycleShadowReadSource(env, sourceUrl, params);
+  if (!fetched.ok) return fetched;
+  const readId = params.read_id ?? `task_lifecycle_shadow_read_${safeIdToken(siteId)}_${safeIdToken(fetched.body.generated_at ?? new Date().toISOString())}`;
+  const recorded = await recordCloudflareTaskLifecycleShadowRead(env, siteId, {
+    ...params,
+    read_id: readId,
+    source_payload: fetched.body,
+    source_locus: fetched.body.authority_locus ?? 'windows_local_site',
+    target_locus: fetched.body.shadow_target_locus ?? 'cloudflare_carrier_site',
+    source_url_host: safeUrlHost(sourceUrl),
+  }, principal);
+  if (!recorded.ok) return recorded;
+  return {
+    ...recorded,
+    status: 'source_read_recorded',
+    source_url_host: safeUrlHost(sourceUrl),
+  };
+}
+
+function resolveTaskLifecycleShadowReadSourceUrl(env = {}, params = {}) {
+  if (env.CLOUDFLARE_TASK_LIFECYCLE_SHADOW_READ_SOURCE_URL) return env.CLOUDFLARE_TASK_LIFECYCLE_SHADOW_READ_SOURCE_URL;
+  if (env.CLOUDFLARE_TASK_LIFECYCLE_SHADOW_READ_ALLOW_OPERATOR_URL === '1' && params.source_url) return params.source_url;
+  return null;
+}
+
+async function fetchTaskLifecycleShadowReadSource(env = {}, sourceUrl, params = {}) {
+  const headers = { accept: 'application/json' };
+  const token = params.source_token ?? env.CLOUDFLARE_TASK_LIFECYCLE_SHADOW_READ_SOURCE_TOKEN ?? null;
+  if (token) headers.authorization = `Bearer ${token}`;
+  const url = new URL(sourceUrl);
+  if (params.limit != null && !url.searchParams.has('limit')) url.searchParams.set('limit', String(clampInteger(params.limit, 1, 100, 25)));
+  const response = await fetch(url.toString(), { method: 'GET', headers });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) return { ok: false, code: 'task_lifecycle_shadow_read_source_fetch_failed', http_status: response.status, body };
+  if (!body || typeof body !== 'object') return { ok: false, code: 'task_lifecycle_shadow_read_source_invalid_json' };
+  return { ok: true, body };
+}
+
+async function recordCloudflareTaskLifecycleShadowRead(env = {}, siteId, params = {}, principal = null) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return { ok: false, code: 'missing_site_registry_binding' };
+  if (!siteId || siteId === 'unknown-site') return { ok: false, code: 'missing_site_id' };
+  const payload = createTaskLifecycleShadowRead(siteId, params);
+  if (!payload.ok) return payload;
+  const read = payload.read;
+  const record = {
+    read_id: params.read_id ?? taskLifecycleShadowReadId(siteId, read),
+    site_id: siteId,
+    schema: CLOUDFLARE_TASK_LIFECYCLE_SHADOW_READ_SCHEMA,
+    shadow_mode: CLOUDFLARE_WEBHOOK_DELAY_SHADOW_MODE,
+    source_locus: params.source_locus ?? read.authority_locus,
+    target_locus: params.target_locus ?? read.shadow_target_locus,
+    source_url_host: params.source_url_host ?? null,
+    source_db_path: read.source_db_path,
+    source_schema: read.source_schema,
+    generated_at: read.generated_at,
+    task_count: read.task_count,
+    status_counts: read.status_counts,
+    tasks: read.tasks,
+    mutation_authority: read.mutation_authority,
+    shadow_read_posture: read.shadow_read_posture,
+    cloudflare_write_admission: read.cloudflare_write_admission,
+    dispatch_authority: WINDOWS_PRIMARY_DISPATCH_AUTHORITY,
+    dispatch_action: 'none',
+    recorded_by_principal_id: principal?.principal_id ?? 'unknown-principal',
+    recorded_at: new Date().toISOString(),
+  };
+  await ensureCloudflareTaskLifecycleShadowReadSchema(db);
+  await db.prepare(`
+    INSERT INTO cloudflare_task_lifecycle_shadow_reads (
+      read_id,
+      site_id,
+      source_locus,
+      target_locus,
+      source_url_host,
+      source_db_path,
+      source_schema,
+      generated_at,
+      task_count,
+      status_counts_json,
+      tasks_json,
+      mutation_authority,
+      shadow_read_posture,
+      cloudflare_write_admission,
+      dispatch_authority,
+      shadow_mode,
+      dispatch_action,
+      record_json,
+      recorded_by_principal_id,
+      recorded_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(read_id) DO UPDATE SET
+      source_locus = excluded.source_locus,
+      target_locus = excluded.target_locus,
+      source_url_host = excluded.source_url_host,
+      source_db_path = excluded.source_db_path,
+      source_schema = excluded.source_schema,
+      generated_at = excluded.generated_at,
+      task_count = excluded.task_count,
+      status_counts_json = excluded.status_counts_json,
+      tasks_json = excluded.tasks_json,
+      mutation_authority = excluded.mutation_authority,
+      shadow_read_posture = excluded.shadow_read_posture,
+      cloudflare_write_admission = excluded.cloudflare_write_admission,
+      dispatch_authority = excluded.dispatch_authority,
+      shadow_mode = excluded.shadow_mode,
+      dispatch_action = excluded.dispatch_action,
+      record_json = excluded.record_json,
+      recorded_by_principal_id = excluded.recorded_by_principal_id,
+      recorded_at = excluded.recorded_at
+  `).bind(
+    record.read_id,
+    record.site_id,
+    record.source_locus,
+    record.target_locus,
+    record.source_url_host,
+    record.source_db_path,
+    record.source_schema,
+    record.generated_at,
+    record.task_count,
+    JSON.stringify(record.status_counts),
+    JSON.stringify(record.tasks),
+    record.mutation_authority,
+    record.shadow_read_posture,
+    record.cloudflare_write_admission,
+    record.dispatch_authority,
+    record.shadow_mode,
+    record.dispatch_action,
+    JSON.stringify(record),
+    record.recorded_by_principal_id,
+    record.recorded_at,
+  ).run();
+  return {
+    ok: true,
+    schema: CLOUDFLARE_TASK_LIFECYCLE_SHADOW_READ_SCHEMA,
+    status: 'recorded',
+    site_id: siteId,
+    shadow_mode: CLOUDFLARE_WEBHOOK_DELAY_SHADOW_MODE,
+    mutation_authority: record.mutation_authority,
+    cloudflare_write_admission: record.cloudflare_write_admission,
+    dispatch_authority: WINDOWS_PRIMARY_DISPATCH_AUTHORITY,
+    dispatch_action: 'none',
+    read,
+    record,
+  };
+}
+
+async function ensureCloudflareTaskLifecycleShadowReadSchema(db) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS cloudflare_task_lifecycle_shadow_reads (
+      read_id TEXT PRIMARY KEY,
+      site_id TEXT NOT NULL,
+      source_locus TEXT NOT NULL,
+      target_locus TEXT NOT NULL,
+      source_url_host TEXT,
+      source_db_path TEXT,
+      source_schema TEXT NOT NULL,
+      generated_at TEXT NOT NULL,
+      task_count INTEGER NOT NULL,
+      status_counts_json TEXT NOT NULL,
+      tasks_json TEXT NOT NULL,
+      mutation_authority TEXT NOT NULL,
+      shadow_read_posture TEXT NOT NULL,
+      cloudflare_write_admission TEXT NOT NULL,
+      dispatch_authority TEXT NOT NULL,
+      shadow_mode TEXT NOT NULL,
+      dispatch_action TEXT NOT NULL,
+      record_json TEXT NOT NULL,
+      recorded_by_principal_id TEXT NOT NULL,
+      recorded_at TEXT NOT NULL
+    )
+  `).run();
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_cloudflare_task_lifecycle_shadow_reads_site_recorded
+    ON cloudflare_task_lifecycle_shadow_reads(site_id, recorded_at)
+  `).run();
+}
+
+async function listCloudflareTaskLifecycleShadowReads(env = {}, siteId, limit) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function' || !siteId) return [];
+  await ensureCloudflareTaskLifecycleShadowReadSchema(db);
+  const boundedLimit = clampInteger(limit, 0, 100, 25);
+  const rows = await db.prepare(`
+    SELECT * FROM cloudflare_task_lifecycle_shadow_reads
+    WHERE site_id = ?
+    ORDER BY recorded_at DESC, generated_at DESC
+    LIMIT ?
+  `).bind(siteId, boundedLimit).all();
+  return (rows.results ?? []).map((row) => ({
+    read_id: row.read_id,
+    site_id: row.site_id,
+    schema: CLOUDFLARE_TASK_LIFECYCLE_SHADOW_READ_SCHEMA,
+    source_locus: row.source_locus,
+    target_locus: row.target_locus,
+    source_url_host: row.source_url_host,
+    source_db_path: row.source_db_path,
+    source_schema: row.source_schema,
+    generated_at: row.generated_at,
+    task_count: Number(row.task_count),
+    status_counts: parseJsonObject(row.status_counts_json),
+    tasks: parseJsonArray(row.tasks_json),
+    mutation_authority: row.mutation_authority,
+    shadow_read_posture: row.shadow_read_posture,
+    cloudflare_write_admission: row.cloudflare_write_admission,
+    dispatch_authority: row.dispatch_authority,
+    shadow_mode: row.shadow_mode,
+    dispatch_action: row.dispatch_action,
+    record: parseJsonObject(row.record_json),
+    recorded_by_principal_id: row.recorded_by_principal_id,
+    recorded_at: row.recorded_at,
+  }));
+}
+
+function createTaskLifecycleShadowRead(siteId, params = {}) {
+  const source = params.source_payload ?? params.payload ?? params.shadow_read ?? params.read ?? {};
+  const sourceSchema = String(source.schema ?? params.source_schema ?? '');
+  if (sourceSchema !== 'narada.sonar.task_lifecycle_shadow_read.v1') {
+    return { ok: false, code: 'task_lifecycle_shadow_read_source_schema_invalid', source_schema: sourceSchema || null };
+  }
+  const mutationAuthority = String(source.mutation_authority ?? params.mutation_authority ?? '');
+  const cloudflareWriteAdmission = String(source.cloudflare_write_admission ?? params.cloudflare_write_admission ?? '');
+  if (mutationAuthority !== 'windows_task_lifecycle_sqlite') return { ok: false, code: 'task_lifecycle_shadow_read_mutation_authority_invalid', mutation_authority: mutationAuthority };
+  if (cloudflareWriteAdmission !== 'not_admitted') return { ok: false, code: 'task_lifecycle_shadow_read_cloudflare_write_admission_invalid', cloudflare_write_admission: cloudflareWriteAdmission };
+  const tasks = Array.isArray(source.tasks) ? source.tasks.slice(0, clampInteger(source.limit, 0, 100, 25)).map((task) => ({
+    task_id: String(task.task_id),
+    task_number: Number(task.task_number),
+    status: String(task.status),
+    governed_by: task.governed_by == null ? null : String(task.governed_by),
+    updated_at: task.updated_at == null ? null : String(task.updated_at),
+    closed_at: task.closed_at == null ? null : String(task.closed_at),
+    active_assignment_count: Number(task.active_assignment_count ?? 0),
+    report_count: Number(task.report_count ?? 0),
+  })) : [];
+  return {
+    ok: true,
+    read: {
+      schema: 'narada.sonar.cloudflare_task_lifecycle_shadow_read_record.v1',
+      site_id: siteId,
+      source_schema: sourceSchema,
+      generated_at: String(source.generated_at ?? params.generated_at ?? new Date().toISOString()),
+      authority_locus: String(source.authority_locus ?? params.source_locus ?? 'windows_local_site'),
+      shadow_target_locus: String(source.shadow_target_locus ?? params.target_locus ?? 'cloudflare_carrier_site'),
+      mutation_authority: mutationAuthority,
+      shadow_read_posture: String(source.shadow_read_posture ?? params.shadow_read_posture ?? 'read_only_projection'),
+      cloudflare_write_admission: cloudflareWriteAdmission,
+      source_db_path: source.source_db_path == null ? null : String(source.source_db_path),
+      limit: Number(source.limit ?? tasks.length),
+      task_count: Number(source.task_count ?? tasks.length),
+      status_counts: source.status_counts && typeof source.status_counts === 'object' ? source.status_counts : {},
+      tasks,
+      dispatch_authority: WINDOWS_PRIMARY_DISPATCH_AUTHORITY,
+      dispatch_action: 'none',
+      shadow_mode: CLOUDFLARE_WEBHOOK_DELAY_SHADOW_MODE,
+    },
+  };
+}
+
+function taskLifecycleShadowReadId(siteId, read) {
+  return `task_lifecycle_shadow_read_${safeIdToken(siteId)}_${safeIdToken(read.generated_at)}_${safeIdToken(read.task_count)}`;
 }
 
 async function recordCloudflareWebhookDelayShadowObservation(env = {}, siteId, params = {}, principal = null) {
@@ -3755,6 +4063,16 @@ function parseJsonObject(value) {
     return parsed && typeof parsed === 'object' ? parsed : {};
   } catch {
     return {};
+  }
+}
+
+function parseJsonArray(value) {
+  if (Array.isArray(value)) return value;
+  try {
+    const parsed = JSON.parse(String(value ?? '[]'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
   }
 }
 
