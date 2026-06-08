@@ -1701,11 +1701,12 @@ export function renderCloudflareCarrierConsole() {
     .control-room-item b { display: block; font-size: 11px; color: #686d75; }
     .control-room-item span { display: block; margin-top: 4px; font-size: 12px; color: #1e2024; overflow-wrap: anywhere; }
     .attention-items { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-    .attention-item, .authority-decision, .session-item { border: 1px solid #d9dcd3; border-radius: 6px; padding: 9px; background: #fff; cursor: pointer; }
-    .attention-item strong, .authority-decision strong, .session-item strong { display: block; font-size: 13px; color: #1f4e48; overflow-wrap: anywhere; }
-    .attention-item span, .authority-decision span, .session-item span { display: block; margin-top: 4px; font-size: 12px; color: #686d75; overflow-wrap: anywhere; }
+    .attention-item, .authority-decision, .operation-item, .session-item { border: 1px solid #d9dcd3; border-radius: 6px; padding: 9px; background: #fff; cursor: pointer; }
+    .attention-item strong, .authority-decision strong, .operation-item strong, .session-item strong { display: block; font-size: 13px; color: #1f4e48; overflow-wrap: anywhere; }
+    .attention-item span, .authority-decision span, .operation-item span, .session-item span { display: block; margin-top: 4px; font-size: 12px; color: #686d75; overflow-wrap: anywhere; }
     .authority-decision.refuse strong { color: #9b3b22; }
     .authority-decision.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
+    .operation-item.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
     .session-item.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
     .task-panel { margin-top: 16px; border-top: 1px solid #d7d7ce; padding-top: 14px; }
     .task-panel h2 { margin: 0 0 10px; font-size: 15px; letter-spacing: 0; }
@@ -1784,6 +1785,7 @@ export function renderCloudflareCarrierConsole() {
         <h2>Control Room</h2>
         <div class="control-room-grid">
           <div class="control-room-item"><b>Operation</b><span id="controlOperation">none</span></div>
+          <div class="control-room-item"><b>Operation Focus</b><span id="controlOperationFocus">none</span></div>
           <div class="control-room-item"><b>Selected Session</b><span id="controlSession">none</span></div>
           <div class="control-room-item"><b>Session Focus</b><span id="controlSessionFocus">none</span></div>
           <div class="control-room-item"><b>Authority Locus</b><span id="controlAuthorityLocus">unknown</span></div>
@@ -1794,6 +1796,10 @@ export function renderCloudflareCarrierConsole() {
           <div class="control-room-item"><b>Evidence Window</b><span id="controlEvidenceWindow">0 events</span></div>
           <div class="control-room-item"><b>Continuity</b><span id="controlContinuity">unknown</span></div>
         </div>
+      </div>
+      <div class="product-panel">
+        <h2>Operation Navigator</h2>
+        <div id="operationNavigator" class="attention-items"><div class="empty">No site operations loaded.</div></div>
       </div>
       <div class="product-panel">
         <h2>Session Navigator</h2>
@@ -1881,7 +1887,7 @@ export function renderCloudflareCarrierConsole() {
   </main>
   <script type="module">
     const WORKBENCH_STORAGE_KEY = 'narada.cloudflare.operationWorkbench.v1';
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, consoleSequence: 0, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, authorityFocus: null, sessionFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, operations: [], consoleSequence: 0, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, authorityFocus: null, operationFocus: null, sessionFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -1978,6 +1984,18 @@ export function renderCloudflareCarrierConsole() {
       el('activeSession').textContent = el('sessionId').value.trim() || 'none';
       updateControlRoom();
     }
+    function setCurrentOperation(operationId) {
+      const next = String(operationId || '').trim();
+      if (!next) return;
+      el('operationId').value = next;
+      state.operationFocus = state.operations.find((operation) => operation.operation_id === next) || null;
+      saveWorkbenchState();
+      state.events = [];
+      state.afterSequence = 0;
+      renderEvents();
+      renderOperationNavigator(state.operations || []);
+      updateControlRoom();
+    }
     function setCurrentSession(carrierSessionId) {
       const next = String(carrierSessionId || '').trim();
       if (!next) return;
@@ -2062,6 +2080,7 @@ export function renderCloudflareCarrierConsole() {
         || (product.site_authority?.decisions || [])[0]
         || null;
       el('controlOperation').textContent = product.operation?.operation_id || el('operationId').value.trim() || 'none';
+      el('controlOperationFocus').textContent = state.operationFocus ? [state.operationFocus.operation_id, state.operationFocus.status || state.operationFocus.operation_kind].filter(Boolean).join(' / ') : 'none';
       el('controlSession').textContent = activeSession || 'none';
       el('controlSessionFocus').textContent = state.sessionFocus ? [state.sessionFocus.carrier_session_id, state.sessionFocus.binding_status || state.sessionFocus.agent_id].filter(Boolean).join(' / ') : 'none';
       el('controlAuthorityLocus').textContent = activeDecision ? [activeDecision.authority_locus || 'unresolved', activeDecision.action || 'unknown'].join(' / ') : 'unknown';
@@ -2199,6 +2218,34 @@ export function renderCloudflareCarrierConsole() {
         return;
       }
       el('authorityFocusDetail').replaceChildren(...authorityDecisionContext(state.authorityFocus).map(([label, value]) => evidenceField(label, value)));
+    }
+    async function selectOperation(operation) {
+      if (!operation?.operation_id) return;
+      setCurrentOperation(operation.operation_id);
+      await refreshOperation();
+    }
+    function renderOperationNavigator(operations = []) {
+      state.operations = operations;
+      if (operations.length === 0) {
+        state.operationFocus = null;
+        el('operationNavigator').innerHTML = '<div class="empty">No site operations loaded.</div>';
+        updateControlRoom();
+        return;
+      }
+      const activeOperation = el('operationId').value.trim();
+      state.operationFocus = operations.find((operation) => operation.operation_id === activeOperation) || null;
+      el('operationNavigator').replaceChildren(...operations.map((operation) => {
+        const node = document.createElement('article');
+        node.className = 'operation-item' + (operation.operation_id === activeOperation ? ' selected' : '');
+        const title = document.createElement('strong');
+        title.textContent = operation.operation_id;
+        const meta = document.createElement('span');
+        meta.textContent = [operation.status || 'unknown', operation.operation_kind, operation.display_name].filter(Boolean).join(' | ');
+        node.addEventListener('click', () => run(() => selectOperation(operation)));
+        node.append(title, meta);
+        return node;
+      }));
+      updateControlRoom();
     }
     function selectOperationSession(session) {
       if (!session?.carrier_session_id) return;
@@ -2354,6 +2401,7 @@ export function renderCloudflareCarrierConsole() {
     }
     function renderSiteProduct(product) {
       state.operationProduct = product;
+      state.operations = product.operations || [];
       el('siteStatus').textContent = product.site?.status || 'unknown';
       el('operationStatus').textContent = 'site scope';
       el('membershipRole').textContent = product.membership?.role || 'none';
@@ -2371,6 +2419,7 @@ export function renderCloudflareCarrierConsole() {
         listItem('display_name', product.site?.display_name),
         listItem('principal', product.reader_principal?.email || product.reader_principal?.principal_id),
       ];
+      const operationItems = (product.operations || []).map((operation) => listItem(operation.operation_id, [operation.status, operation.operation_kind, operation.display_name].filter(Boolean).join(' | ')));
       const membershipItems = (product.memberships || []).map((membership) => listItem(membership.principal_id, membership.role + ' / ' + membership.status));
       const sessionItems = (product.sessions || []).map((session) => listItem(session.carrier_session_id, session.binding_status || session.agent_id));
       const authorityItems = (product.authority_events || []).map((event) => listItem(event.event_kind, authoritySummary(event)));
@@ -2381,9 +2430,11 @@ export function renderCloudflareCarrierConsole() {
         const kinds = (entry.events || []).slice(0, 5).map((event) => event.event_kind).join(', ');
         return listItem(entry.carrier_session_id, kinds || entry.error || 'no events');
       });
+      renderOperationNavigator(product.operations || []);
       renderOperationSessions(product.sessions || []);
       el('productOverview').replaceChildren(
         renderListBlock('Site', siteItems),
+        renderListBlock('Operations', operationItems),
         renderListBlock('Memberships', membershipItems),
         renderListBlock('Sessions', sessionItems),
         renderListBlock('Operation Attention', state.attentionItems.map((item) => listItem(item.directive_id, [item.reason, item.operation_id].filter(Boolean).join(' | ')))),
@@ -2408,6 +2459,9 @@ export function renderCloudflareCarrierConsole() {
     }
     function renderOperationProduct(product) {
       state.operationProduct = product;
+      if (product.operation?.operation_id && !state.operations.some((operation) => operation.operation_id === product.operation.operation_id)) {
+        state.operations = [product.operation, ...state.operations];
+      }
       const surface = product.operation_product_surface || {};
       el('siteStatus').textContent = product.operation?.site_id || product.site?.status || 'unknown';
       el('operationStatus').textContent = product.operation?.status || 'unknown';
@@ -2418,6 +2472,7 @@ export function renderCloudflareCarrierConsole() {
       el('authorityCount').textContent = String((product.authority_events || []).length + (product.site_authority?.decisions || []).length);
       el('continuityCount').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length);
       renderTasks(product.tasks || []);
+      renderOperationNavigator(state.operations || []);
       renderOperationSessions(product.sessions || []);
       renderAttentionQueue(extractOperationAttention(product));
       renderAuthorityState(product);
