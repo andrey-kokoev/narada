@@ -9398,7 +9398,10 @@ export function renderCloudflareCarrierConsole() {
         <label>Create Operation Kind
           <input id="newOperationKind" value="cloudflare_control" autocomplete="off">
         </label>
-        <div class="actions"><button id="createOperation" class="secondary">Create Operation</button></div>
+        <div class="actions">
+          <button id="prepareFocusedSiteOperation" class="secondary">Prepare Focused Site Operation</button>
+          <button id="createOperation" class="secondary">Create Operation</button>
+        </div>
         <div id="operationNavigator" class="attention-items"><div class="empty">No site operations loaded.</div></div>
         <h3>Operation Posture</h3>
         <div id="operationPostureOverview" class="evidence-summary"><div class="empty">No operation posture loaded.</div></div>
@@ -13746,6 +13749,7 @@ export function renderCloudflareCarrierConsole() {
       el('siteId').value = siteId;
       state.siteFocus = site;
       renderSiteFocusDetail(site);
+      if (status.next_action === 'operation' || (status.missing || []).includes('operation')) prepareOperationDraftForSite(site, status);
       run(refreshSiteProduct);
     }
     function focusNextSiteFromOverview() {
@@ -14244,6 +14248,30 @@ export function renderCloudflareCarrierConsole() {
     function focusSiteOperation() {
       const operation = state.operationFocus || state.operations[0] || state.operationProduct?.operation || null;
       if (operation) run(() => selectOperation(operation));
+      else prepareOperationDraftForSite(focusedSite(), focusedSiteProductStatus());
+    }
+    function siteOperationDraftId(site = focusedSite()) {
+      const siteId = String(site?.site_id || el('siteId').value.trim() || 'site').replace(/[^A-Za-z0-9_]+/g, '_');
+      return 'operation_' + siteId + '_control';
+    }
+    function siteOperationDraftDisplayName(site = focusedSite()) {
+      const siteId = String(site?.site_id || el('siteId').value.trim() || 'site');
+      const readable = siteId.replace(/^site_/, '').split(/[_\s-]+/).filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+      return (readable || siteId) + ' Control Operation';
+    }
+    function focusedSiteProductStatus() {
+      const siteId = focusedSite()?.site_id || el('siteId').value.trim();
+      return state.siteProductStatuses.find((entry) => entry.site_id === siteId) || state.operationProduct?.site_product_status || null;
+    }
+    function prepareOperationDraftForSite(site = focusedSite(), status = focusedSiteProductStatus()) {
+      const targetSite = site || (status?.site_id ? { site_id: status.site_id, status: status.site_status } : null);
+      if (!targetSite?.site_id && !el('siteId').value.trim()) return;
+      if (targetSite?.site_id) el('siteId').value = targetSite.site_id;
+      el('newOperationId').value = siteOperationDraftId(targetSite);
+      el('newOperationDisplayName').value = siteOperationDraftDisplayName(targetSite);
+      el('newOperationKind').value = status?.next_action === 'operation' || (status?.missing || []).includes('operation') ? 'cloudflare_control' : (el('newOperationKind').value.trim() || 'cloudflare_control');
+      renderSiteActionSummary(targetSite || focusedSite());
+      updateControlRoom();
     }
     function focusSiteMembership() {
       const membership = state.membershipFocus || currentMemberships(state.operationProduct || {})[0] || null;
@@ -14501,6 +14529,7 @@ export function renderCloudflareCarrierConsole() {
     el('authorityDecisionApplyAction').addEventListener('click', applyAuthorityDecisionReview);
     el('authorityDecisionEvidenceAction').addEventListener('click', focusAuthorityEvidence);
     el('authorityDecisionRefreshAction').addEventListener('click', refreshAuthorityPath);
+    el('prepareFocusedSiteOperation').addEventListener('click', () => prepareOperationDraftForSite(focusedSite(), focusedSiteProductStatus()));
     el('createOperation').addEventListener('click', () => run(createOperationFromWorkbench));
     el('autoRefreshOperation').addEventListener('click', () => setAutoRefresh(!state.autoRefreshTimer));
     el('readSites').addEventListener('click', () => run(refreshSitesProduct));
