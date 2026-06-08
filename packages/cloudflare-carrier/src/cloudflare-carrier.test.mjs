@@ -534,6 +534,74 @@ test('worker site.membership.put admits owner and exposes membership through sit
   assert.equal(readBody.authority_events.some((event) => event.event_kind === 'site_membership_updated'), true);
 });
 
+test('worker operation.create read and list route through site registry authority', async () => {
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{
+      site_id: 'site_fixture',
+      site_ref: 'site://fixture',
+      display_name: 'Fixture Site',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+      created_by_principal_id: 'admin',
+    }],
+    memberships: [{
+      site_id: 'site_fixture',
+      principal_id: 'admin',
+      role: 'owner',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+  });
+  const env = authEnv(fakeDurableObjectNamespace(), { CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+
+  const created = await worker.fetch(jsonRequest({
+    operation: 'operation.create',
+    request_id: 'request_operation_create',
+    params: {
+      site_id: 'site_fixture',
+      operation_id: 'operation_control',
+      display_name: 'Control Operation',
+      operation_kind: 'control',
+      status: 'active',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(created.status, 200);
+  const createdBody = await created.json();
+  assert.equal(createdBody.operation.operation_id, 'operation_control');
+  assert.equal(createdBody.operation.status, 'active');
+  assert.equal(createdBody.principal.email, 'admin@system');
+
+  const read = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_operation_read',
+    params: { site_id: 'site_fixture', operation_id: 'operation_control' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(read.status, 200);
+  const readBody = await read.json();
+  assert.equal(readBody.operation.display_name, 'Control Operation');
+  assert.equal(readBody.reader_principal.email, 'admin@system');
+
+  const listed = await worker.fetch(jsonRequest({
+    operation: 'operation.list',
+    request_id: 'request_operation_list',
+    params: { site_id: 'site_fixture' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(listed.status, 200);
+  const listedBody = await listed.json();
+  assert.deepEqual(listedBody.operations.map((operation) => operation.operation_id), ['operation_control']);
+
+  const siteRead = await worker.fetch(jsonRequest({
+    operation: 'site.read',
+    request_id: 'request_operation_site_read',
+    params: { site_id: 'site_fixture' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(siteRead.status, 200);
+  const siteReadBody = await siteRead.json();
+  assert.equal(siteReadBody.operations.some((operation) => operation.operation_id === 'operation_control'), true);
+});
+
 test('worker starts Microsoft login with PKCE and signed pending cookie', async () => {
   const env = authEnv(fakeDurableObjectNamespace(), microsoftAuthEnv());
   const response = await worker.fetch(new Request('https://carrier.test/auth/microsoft/login'), env);
@@ -1642,6 +1710,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     sites: clone(initial.sites ?? []),
     memberships: clone(initial.memberships ?? []),
     settings: clone(initial.settings ?? []),
+    operations: clone(initial.operations ?? []),
     carrierSessions: clone(initial.carrierSessions ?? []),
     authorityEvents: clone(initial.authorityEvents ?? []),
     operatorSessions: clone(initial.operatorSessions ?? []),
@@ -1671,6 +1740,11 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const existing = state.memberships.find((entry) => entry.site_id === site_id && entry.principal_id === principal_id);
         if (existing) Object.assign(existing, { role, status, updated_at });
         else state.memberships.push({ site_id, principal_id, role, status, created_at, updated_at });
+      } else if (normalized.startsWith('insert into cloudflare_site_operations')) {
+        const [operation_id, site_id, display_name, operation_kind, status, created_by_principal_id, created_at, updated_at] = bindings;
+        const existing = state.operations.find((entry) => entry.operation_id === operation_id);
+        if (existing) Object.assign(existing, { display_name, operation_kind, status, updated_at });
+        else state.operations.push({ operation_id, site_id, display_name, operation_kind, status, created_by_principal_id, created_at, updated_at });
       } else if (normalized.startsWith('insert into cloudflare_site_carrier_sessions')) {
         const [carrier_session_id, site_id, agent_id, bound_by_principal_id, binding_status, created_at, updated_at] = bindings;
         if (!state.carrierSessions.some((entry) => entry.carrier_session_id === carrier_session_id)) {
@@ -1700,6 +1774,10 @@ function fakeD1SiteRegistryStatement(state, sql) {
       if (normalized.includes('from cloudflare_site_carrier_sessions where carrier_session_id = ?')) {
         const [carrierSessionId] = bindings;
         return clone(state.carrierSessions.find((entry) => entry.carrier_session_id === carrierSessionId));
+      }
+      if (normalized.includes('from cloudflare_site_operations where operation_id = ?')) {
+        const [operationId] = bindings;
+        return clone(state.operations.find((entry) => entry.operation_id === operationId));
       }
       if (normalized.includes('from cloudflare_operator_sessions')) {
         const [operatorSessionId, now] = bindings;
@@ -1735,6 +1813,16 @@ function fakeD1SiteRegistryStatement(state, sql) {
       if (normalized.includes('from cloudflare_site_settings')) {
         const [siteId] = bindings;
         return { results: state.settings.filter((entry) => entry.site_id === siteId).map((entry) => clone(entry)) };
+      }
+      if (normalized.includes('from cloudflare_site_operations')) {
+        const [siteId, limit] = bindings;
+        return {
+          results: state.operations
+            .filter((entry) => entry.site_id === siteId)
+            .sort((left, right) => left.created_at.localeCompare(right.created_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
       }
       if (normalized.includes('from cloudflare_site_continuity_packets')) {
         const [siteId, limit] = bindings;

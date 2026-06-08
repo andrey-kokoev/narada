@@ -5,6 +5,7 @@ import {
   CLOUDFLARE_SITE_REGISTRY_SCHEMA,
   createCloudflareSiteRegistryAdapter,
   createD1CloudflareSiteRegistry,
+  normalizeOperationId,
   normalizeSiteId,
 } from '../src/cloudflare-site-registry.mjs';
 
@@ -13,6 +14,84 @@ test('normalizes bounded site identifiers', () => {
   assert.equal(normalizeSiteId('a:b.c-1'), 'a:b.c-1');
   assert.equal(normalizeSiteId('x'), null);
   assert.equal(normalizeSiteId('../escape'), null);
+  assert.equal(normalizeOperationId('operation_alpha'), 'operation_alpha');
+  assert.equal(normalizeOperationId('x'), null);
+});
+
+test('creates reads and lists site operations behind site authority', async () => {
+  const db = fakeD1SiteRegistryDatabase();
+  const registry = createD1CloudflareSiteRegistry(db, { now: fixedNow });
+  const owner = { principal_id: 'user:owner' };
+  await registry.createSite({ site_id: 'site_operations', display_name: 'Operations Site', principal: owner });
+
+  const created = await registry.handle({
+    operation: 'operation.create',
+    principal: owner,
+    params: {
+      site_id: 'site_operations',
+      operation_id: 'operation_control',
+      display_name: 'Control Operation',
+      operation_kind: 'control',
+      request_id: 'req_operation_create',
+    },
+  });
+  assert.equal(created.ok, true);
+  assert.equal(created.action, 'created');
+  assert.equal(created.operation.operation_id, 'operation_control');
+  assert.equal(created.operation.status, 'active');
+
+  const read = await registry.handle({
+    operation: 'operation.read',
+    principal: owner,
+    params: { site_id: 'site_operations', operation_id: 'operation_control' },
+  });
+  assert.equal(read.ok, true);
+  assert.equal(read.operation.display_name, 'Control Operation');
+
+  const listed = await registry.handle({
+    operation: 'operation.list',
+    principal: owner,
+    params: { site_id: 'site_operations' },
+  });
+  assert.deepEqual(listed.operations.map((operation) => operation.operation_id), ['operation_control']);
+
+  const siteRead = await registry.readSite({ site_id: 'site_operations', principal: owner });
+  assert.deepEqual(siteRead.operations.map((operation) => operation.operation_id), ['operation_control']);
+  assert.equal(siteRead.authority_events.some((event) => event.event_kind === 'site_operation_updated'), true);
+});
+
+test('rejects operation creation without owner or maintainer authority', async () => {
+  const db = fakeD1SiteRegistryDatabase();
+  const registry = createD1CloudflareSiteRegistry(db, { now: fixedNow });
+  const owner = { principal_id: 'user:owner' };
+  await registry.createSite({ site_id: 'site_operation_denied', display_name: 'Operation Denied Site', principal: owner });
+  await registry.putSiteMembership({
+    site_id: 'site_operation_denied',
+    member_principal_id: 'user:viewer',
+    role: 'viewer',
+    principal: owner,
+  });
+
+  const denied = await registry.handle({
+    operation: 'operation.create',
+    principal: { principal_id: 'user:viewer' },
+    params: {
+      site_id: 'site_operation_denied',
+      operation_id: 'operation_denied',
+      display_name: 'Denied Operation',
+      operation_kind: 'control',
+    },
+  });
+  assert.equal(denied.ok, false);
+  assert.equal(denied.code, 'site_authority_denied');
+
+  const listed = await registry.handle({
+    operation: 'operation.list',
+    principal: { principal_id: 'user:viewer' },
+    params: { site_id: 'site_operation_denied' },
+  });
+  assert.equal(listed.ok, true);
+  assert.deepEqual(listed.operations, []);
 });
 
 test('creates lists and reads authority-bearing sites', async () => {
@@ -229,6 +308,7 @@ function fakeD1SiteRegistryDatabase() {
     sites: [],
     memberships: [],
     settings: [],
+    operations: [],
     carrierSessions: [],
     authorityEvents: [],
   };
@@ -268,6 +348,11 @@ function fakeD1Statement(state, sql) {
         const existing = state.settings.find((setting) => setting.site_id === siteId && setting.setting_key === settingKey);
         if (existing) Object.assign(existing, { value_json: valueJson, updated_at: updatedAt, updated_by_principal_id: updatedByPrincipalId });
         else state.settings.push({ site_id: siteId, setting_key: settingKey, value_json: valueJson, updated_at: updatedAt, updated_by_principal_id: updatedByPrincipalId });
+      } else if (/^INSERT INTO cloudflare_site_operations/i.test(sql)) {
+        const [operationId, siteId, displayName, operationKind, status, createdByPrincipalId, createdAt, updatedAt] = bound;
+        const existing = state.operations.find((operation) => operation.operation_id === operationId);
+        if (existing) Object.assign(existing, { display_name: displayName, operation_kind: operationKind, status, updated_at: updatedAt });
+        else state.operations.push({ operation_id: operationId, site_id: siteId, display_name: displayName, operation_kind: operationKind, status, created_by_principal_id: createdByPrincipalId, created_at: createdAt, updated_at: updatedAt });
       } else if (/^INSERT INTO cloudflare_site_carrier_sessions/i.test(sql)) {
         const [carrierSessionId, siteId, agentId, boundByPrincipalId, bindingStatus, createdAt, updatedAt] = bound;
         if (!state.carrierSessions.some((binding) => binding.carrier_session_id === carrierSessionId)) {
@@ -291,6 +376,10 @@ function fakeD1Statement(state, sql) {
       if (/FROM cloudflare_site_carrier_sessions WHERE carrier_session_id = \?/i.test(sql)) {
         const [carrierSessionId] = bound;
         return clone(state.carrierSessions.find((binding) => binding.carrier_session_id === carrierSessionId));
+      }
+      if (/FROM cloudflare_site_operations WHERE operation_id = \?/i.test(sql)) {
+        const [operationId] = bound;
+        return clone(state.operations.find((operation) => operation.operation_id === operationId));
       }
       return null;
     },
@@ -320,6 +409,16 @@ function fakeD1Statement(state, sql) {
         return {
           results: state.memberships
             .filter((membership) => membership.site_id === siteId)
+            .sort((left, right) => left.created_at.localeCompare(right.created_at))
+            .slice(0, Number(limit))
+            .map(clone),
+        };
+      }
+      if (/FROM cloudflare_site_operations/i.test(sql)) {
+        const [siteId, limit] = bound;
+        return {
+          results: state.operations
+            .filter((operation) => operation.site_id === siteId)
             .sort((left, right) => left.created_at.localeCompare(right.created_at))
             .slice(0, Number(limit))
             .map(clone),

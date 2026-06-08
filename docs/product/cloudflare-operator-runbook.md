@@ -17,9 +17,12 @@ CLOUDFLARE_CARRIER_URL=https://narada-cloudflare-carrier.<account>.workers.dev
 CLOUDFLARE_CARRIER_TOKEN_FILE=D:\tmp\narada-cloudflare-carrier-service-token.txt
 CLOUDFLARE_CARRIER_SITE_ID=site_narada_cloudflare
 CLOUDFLARE_CARRIER_SITE_REF=cloudflare://narada-cloudflare-carrier
+CLOUDFLARE_CARRIER_OPERATION_ID=operation_narada_cloudflare_control
 ```
 
 `site_narada_cloudflare` is the canonical Cloudflare Narada Site identity. Smoke-test Sites such as `site_live_smoke` remain valid for lower-level tests, but the operator runbook defaults to the canonical product Site.
+
+`operation_narada_cloudflare_control` is the canonical Cloudflare control Operation. It is the initial inhabited work locus inside the canonical Site; it is not a substitute for Site identity, provider execution, or membership authority.
 
 The token value stays in the token file and in the deployed Worker secret. The runbook command reports the credential source, not token material.
 
@@ -34,12 +37,15 @@ Without `--operator-cookie-file`, the command still verifies that the Microsoft 
 The repeatable capture path is:
 
 ```powershell
-pnpm cloudflare:operator:site:bootstrap
 pnpm cloudflare:operator:login
+pnpm cloudflare:operator:site:bootstrap
+pnpm cloudflare:operator:operation:bootstrap
 pnpm cloudflare:operator:check -- --require-operator-session
 ```
 
 `cloudflare:operator:site:bootstrap` creates the canonical Site if missing, resolves the Microsoft operator principal from the captured cookie file, grants that principal `owner / active`, and writes `CLOUDFLARE_CARRIER_SITE_ID=site_narada_cloudflare` to the ignored root `.env` file unless `--no-write-env` is supplied.
+
+`cloudflare:operator:operation:bootstrap` ensures the canonical Site exists, ensures the Microsoft operator principal remains `owner / active`, creates or updates `operation_narada_cloudflare_control`, and writes `CLOUDFLARE_CARRIER_OPERATION_ID=operation_narada_cloudflare_control` to the ignored root `.env` file unless `--no-write-env` is supplied.
 
 `cloudflare:operator:login` starts a short-lived loopback listener, opens the Worker capture URL in the browser, sends the operator through Microsoft login if needed, and stores only the signed `narada_operator_session` cookie in `CLOUDFLARE_OPERATOR_COOKIE_FILE`. It updates the ignored root `.env` with that cookie-file path unless `--no-write-env` is supplied. It does not store Microsoft tokens.
 
@@ -60,13 +66,15 @@ pnpm cloudflare:operator:check -- --url <worker-url> --token-file <path> --write
 | Credential posture | The local ignored `.env` points to a readable token file. |
 | Human operator session | When `--operator-cookie-file` is supplied, `/auth/session` reconstructs a `microsoft_oidc` principal from the signed browser cookie. |
 | Human operator membership | When `--operator-cookie-file` is supplied, cookie-authenticated `site.read` proves active Site membership for that principal. |
+| Canonical Operation | `operation.read` proves `operation_narada_cloudflare_control` exists, belongs to the canonical Site, and is active. |
+| Human operator Operation visibility | When `--operator-cookie-file` is supplied, cookie-authenticated `operation.read` proves the human operator can see the canonical Operation through active Site membership. |
 | Live carrier runtime | `smoke:live` starts a session, admits input, dispatches Workers AI, and records terminal carrier evidence. |
 | Tool effect boundary | Cloudflare task create/update tools are admitted through the configured Cloudflare effect boundary. |
 | Site product read | `site.read` returns site/product state and membership visibility. |
 | Continuity loop | Windows and Cloudflare exchange site-continuity packets through the productized loop. |
 | Idempotence | The continuity loop runs twice and the local packet ledger remains at one packet for the Cloudflare-to-Windows direction. |
 
-The final JSON report includes `service_principal_ready`, `human_operator_login_ready`, `human_operator_membership_ready`, `console_url`, and `microsoft_login_url`. The service fields prove automation and substrate readiness. The human fields prove operator entry only when the cookie-backed session check is supplied.
+The final JSON report includes `service_principal_ready`, `human_operator_login_ready`, `human_operator_membership_ready`, `operation`, `console_url`, and `microsoft_login_url`. The service fields prove automation and substrate readiness. The human fields prove operator entry only when the cookie-backed session check is supplied.
 
 ## Boundary
 

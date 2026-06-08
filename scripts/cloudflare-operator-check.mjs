@@ -15,6 +15,7 @@ const envPath = new URL('.env', repoRoot);
 const require = createRequire(import.meta.url);
 const CANONICAL_CLOUDFLARE_SITE_ID = 'site_narada_cloudflare';
 const CANONICAL_CLOUDFLARE_SITE_REF = 'cloudflare://narada-cloudflare-carrier';
+const CANONICAL_CLOUDFLARE_OPERATION_ID = 'operation_narada_cloudflare_control';
 
 loadLocalEnv(envPath);
 
@@ -25,6 +26,7 @@ if (flag('--help') || flag('-h')) {
 
 const siteId = option('--site') ?? process.env.CLOUDFLARE_CARRIER_SITE_ID ?? CANONICAL_CLOUDFLARE_SITE_ID;
 const siteRef = option('--site-ref') ?? process.env.CLOUDFLARE_CARRIER_SITE_REF ?? CANONICAL_CLOUDFLARE_SITE_REF;
+const operationId = option('--operation') ?? process.env.CLOUDFLARE_CARRIER_OPERATION_ID ?? CANONICAL_CLOUDFLARE_OPERATION_ID;
 const workerUrl = trimTrailingSlash(option('--url') ?? process.env.CLOUDFLARE_CARRIER_URL ?? '');
 const tokenFile = option('--token-file') ?? process.env.CLOUDFLARE_CARRIER_TOKEN_FILE ?? '';
 const operatorCookieFile = option('--operator-cookie-file') ?? process.env.CLOUDFLARE_OPERATOR_COOKIE_FILE ?? '';
@@ -82,8 +84,24 @@ assert.equal(siteRead.body.ok, true);
 assert.equal((siteRead.body.site?.site_id ?? siteRead.body.site_id), siteId);
 const memberships = siteRead.body.product?.memberships ?? siteRead.body.memberships ?? [];
 const currentMembership = siteRead.body.product?.membership ?? siteRead.body.membership ?? null;
+const operations = siteRead.body.product?.operations ?? siteRead.body.operations ?? [];
 assert.ok(Array.isArray(memberships));
 assert.ok(memberships.length > 0);
+assert.ok(Array.isArray(operations));
+
+const operationRead = await postCarrier(workerUrl, bearerToken, {
+  operation: 'operation.read',
+  request_id: `operator_check_operation_read_${Date.now()}`,
+  params: {
+    site_id: siteId,
+    operation_id: operationId,
+  },
+});
+assert.equal(operationRead.http_status, 200);
+assert.equal(operationRead.body.ok, true);
+assert.equal(operationRead.body.operation?.operation_id, operationId);
+assert.equal(operationRead.body.operation?.site_id, siteId);
+assert.equal(operationRead.body.operation?.status, 'active');
 
 const humanOperator = await checkHumanOperatorSession({
   workerUrl,
@@ -109,6 +127,7 @@ const report = {
   generated_at: new Date().toISOString(),
   site_id: siteId,
   site_ref: siteRef,
+  operation_id: operationId,
   worker_url: workerUrl,
   console_url: workerUrl,
   microsoft_login_url: microsoftLoginUrl,
@@ -126,8 +145,11 @@ const report = {
     live_carrier_smoke: 'ok',
     site_read: 'ok',
     membership_visibility: 'ok',
+    operation_read: 'ok',
+    canonical_operation_active: 'ok',
     human_operator_session: humanOperator.status,
     human_operator_membership: humanOperator.membership_status,
+    human_operator_operation_read: humanOperator.operation_status,
     continuity_loop: 'ok',
     continuity_idempotence: 'ok',
   },
@@ -143,6 +165,13 @@ const report = {
   membership: {
     count: memberships.length,
     current_role: currentMembership?.role ?? null,
+  },
+  operation: {
+    operation_id: operationRead.body.operation.operation_id,
+    display_name: operationRead.body.operation.display_name,
+    operation_kind: operationRead.body.operation.operation_kind,
+    status: operationRead.body.operation.status,
+    listed_on_site_read: operations.some((operation) => operation.operation_id === operationId),
   },
   carrier: {
     session_id: smoke.carrier_session_id,
@@ -164,6 +193,7 @@ const report = {
     microsoft_login_url: microsoftLoginUrl,
     operator_session_check: operatorCookieFile ? 'verified' : 'provide --operator-cookie-file to verify the current browser operator session',
     site_id: siteId,
+    operation_id: operationId,
   },
 };
 
@@ -252,6 +282,7 @@ async function checkHumanOperatorSession({ workerUrl, siteId, operatorCookieFile
     return {
       status: 'not_checked',
       membership_status: 'not_checked',
+      operation_status: 'not_checked',
       login_ready: 'surface_only',
       membership_ready: 'not_checked',
       principal: null,
@@ -282,9 +313,23 @@ async function checkHumanOperatorSession({ workerUrl, siteId, operatorCookieFile
   const humanMembership = siteReadAsOperator.body.product?.membership ?? siteReadAsOperator.body.membership ?? null;
   assert.ok(humanMembership);
   assert.equal(humanMembership.status, 'active');
+
+  const operationReadAsOperator = await postCarrierWithCookie(workerUrl, cookieHeader, {
+    operation: 'operation.read',
+    request_id: `operator_check_human_operation_read_${Date.now()}`,
+    params: {
+      site_id: siteId,
+      operation_id: operationId,
+    },
+  });
+  assert.equal(operationReadAsOperator.http_status, 200);
+  assert.equal(operationReadAsOperator.body.ok, true);
+  assert.equal(operationReadAsOperator.body.operation?.operation_id, operationId);
+  assert.equal(operationReadAsOperator.body.operation?.status, 'active');
   return {
     status: 'ok',
     membership_status: 'ok',
+    operation_status: 'ok',
     login_ready: true,
     membership_ready: true,
     principal: session.body.principal,
@@ -418,5 +463,5 @@ function fail(code, detail = {}) {
 }
 
 function printHelp() {
-  stdout.write(`Narada Cloudflare operator check\n\nCommand:\n  pnpm cloudflare:operator:check [--site <site_id>]\n\nConfiguration:\n  --url <worker-url> or CLOUDFLARE_CARRIER_URL\n  --token-file <path> or CLOUDFLARE_CARRIER_TOKEN_FILE\n  --operator-cookie-file <path> or CLOUDFLARE_OPERATOR_COOKIE_FILE\n  --require-operator-session fails when no operator cookie file is supplied\n  --registry <registry.db> or NARADA_SITE_CONTINUITY_REGISTRY\n  --write-env writes --url and --token-file into the ignored root .env file\n\nEffect:\n  Loads the ignored root .env file.\n  Verifies the console and Microsoft login surface.\n  Optionally verifies the current Microsoft operator session and site membership from a browser cookie file.\n  Runs the live carrier smoke through Workers AI and Cloudflare task effects.\n  Reads site membership/product state from the live Worker.\n  Runs the Windows/Cloudflare continuity loop twice to prove idempotent packet exchange.\n  Emits one JSON readiness report with console and login URLs, without printing token material.\n`);
+  stdout.write(`Narada Cloudflare operator check\n\nCommand:\n  pnpm cloudflare:operator:check [--site <site_id>]\n\nConfiguration:\n  --url <worker-url> or CLOUDFLARE_CARRIER_URL\n  --token-file <path> or CLOUDFLARE_CARRIER_TOKEN_FILE\n  --operator-cookie-file <path> or CLOUDFLARE_OPERATOR_COOKIE_FILE\n  --operation <operation_id> or CLOUDFLARE_CARRIER_OPERATION_ID\n  --require-operator-session fails when no operator cookie file is supplied\n  --registry <registry.db> or NARADA_SITE_CONTINUITY_REGISTRY\n  --write-env writes --url and --token-file into the ignored root .env file\n\nEffect:\n  Loads the ignored root .env file.\n  Verifies the console and Microsoft login surface.\n  Optionally verifies the current Microsoft operator session, site membership, and Operation visibility from a browser cookie file.\n  Runs the live carrier smoke through Workers AI and Cloudflare task effects.\n  Reads site membership/product state and the canonical active Operation from the live Worker.\n  Runs the Windows/Cloudflare continuity loop twice to prove idempotent packet exchange.\n  Emits one JSON readiness report with console and login URLs, without printing token material.\n`);
 }

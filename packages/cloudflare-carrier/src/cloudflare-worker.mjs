@@ -385,7 +385,17 @@ async function handleCarrierApiRequest(request, env) {
 }
 
 function isSiteProductOperation(operation) {
-  return ['site.create', 'site.read', 'site.list', 'site.settings.put', 'site.membership.put', 'site.continuity.packet.put'].includes(operation);
+  return [
+    'site.create',
+    'site.read',
+    'site.list',
+    'site.settings.put',
+    'site.membership.put',
+    'site.continuity.packet.put',
+    'operation.create',
+    'operation.read',
+    'operation.list',
+  ].includes(operation);
 }
 
 function cloudflareSiteAuthorityMap(env = {}, siteId = 'unknown-site') {
@@ -1933,6 +1943,8 @@ function withPrincipalEvidence(body, operation, principal) {
   if (operation === 'session.status') return { ...body, reader_principal: principal };
   if (operation === 'session.events.read') return { ...body, reader_principal: principal };
   if (operation === 'site.read') return { ...body, reader_principal: principal };
+  if (operation === 'operation.read') return { ...body, reader_principal: principal };
+  if (operation === 'operation.list') return { ...body, reader_principal: principal };
   return { ...body, principal };
 }
 

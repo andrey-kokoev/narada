@@ -34,6 +34,20 @@ CREATE TABLE IF NOT EXISTS cloudflare_site_settings (
   PRIMARY KEY (site_id, setting_key)
 );
 
+CREATE TABLE IF NOT EXISTS cloudflare_site_operations (
+  operation_id TEXT PRIMARY KEY,
+  site_id TEXT NOT NULL,
+  display_name TEXT NOT NULL,
+  operation_kind TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_by_principal_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS cloudflare_site_operations_site_idx
+  ON cloudflare_site_operations(site_id, status);
+
 CREATE TABLE IF NOT EXISTS cloudflare_site_carrier_sessions (
   carrier_session_id TEXT PRIMARY KEY,
   site_id TEXT NOT NULL,
