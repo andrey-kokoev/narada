@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -93,6 +93,28 @@ test('agent-cli accepts explicit intelligence provider and materializes provider
   assert.equal(output.required_environment.NARADA_INTELLIGENCE_PROVIDER, 'codex-subscription');
   assert.equal(output.required_environment.NARADA_AI_BASE_URL, 'codex://local-subscription');
   assert.equal(output.required_environment.NARADA_AI_MODEL, 'gpt-5.5');
+});
+
+test('agent-cli can resolve intelligence provider from target site env file', () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-site-env-'));
+  mkdirSync(join(siteRoot, '.ai'), { recursive: true });
+  mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
+  copyFileSync(join(naradaProperRoot, '.ai', 'task-lifecycle.db'), join(siteRoot, '.ai', 'task-lifecycle.db'));
+  writeFileSync(join(siteRoot, '.ai', 'mcp', 'config.json'), JSON.stringify({
+    mcpServers: {
+      'site-env-fixture': {
+        transport: 'stdio',
+        command: 'node',
+        args: ['--version'],
+        tools: ['agent_context_startup_sequence'],
+      },
+    },
+  }, null, 2), 'utf8');
+  writeFileSync(join(siteRoot, '.env'), 'NARADA_INTELLIGENCE_PROVIDER=codex-subscription\n', 'utf8');
+  const output = runOk(['--runtime', 'agent-cli', '--target-site-root', siteRoot], { NARADA_INTELLIGENCE_PROVIDER: '' });
+  assert.equal(output.target_site_root, siteRoot);
+  assert.equal(output.intelligence_provider_resolution.support_state, 'verified_supported');
+  assert.equal(output.required_environment.NARADA_INTELLIGENCE_PROVIDER, 'codex-subscription');
 });
 
 test('agent-cli exec launches package bin through node, not PowerShell', () => {

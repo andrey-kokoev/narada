@@ -79,6 +79,31 @@ function runNaradaProperLegacyLauncherIfNeeded(argv, rootDir, naradaProperRoot) 
 function normalizePath(value) {
   return resolve(String(value ?? '')).replace(/[\\/]+$/, '').toLowerCase();
 }
+
+function loadSiteEnvFile(path) {
+  if (!existsSync(path)) return;
+  const text = readFileSync(path, 'utf8');
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const separatorIndex = trimmed.indexOf('=');
+    if (separatorIndex <= 0) continue;
+    const name = trimmed.slice(0, separatorIndex).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) continue;
+    if (process.env[name]) continue;
+    let value = trimmed.slice(separatorIndex + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    process.env[name] = value;
+  }
+}
+
+function loadSiteEnvFiles(siteRoot) {
+  loadSiteEnvFile(join(siteRoot, '.env'));
+  loadSiteEnvFile(join(siteRoot, '.narada', '.env'));
+}
+
 function parseArgs(argv) {
   const result = {};
   let i = 0;
@@ -131,7 +156,6 @@ const { writeJsonFile } = await import(pathToFileURL(join(commonToolsRoot, 'incu
 const { beginCodexSessionAdmission, getCodexSessionAdmission, materializeAgentSessionStart } = await import(pathToFileURL(agentContextSessionStartPath));
 const { McpFabricError, loadSiteMcpFabric, mcpServerNames, projectFabricForAgentTui, projectFabricForClaudeCode, projectFabricForCodex } = await import(pathToFileURL(join(NARADA_PROPER_ROOT, 'packages', 'mcp-fabric', 'src', 'mcp-fabric.mjs')));
 const runtimeInput = args.runtime ?? 'agent-cli';
-const intelligenceProviderInput = args.intelligence_provider ?? (runtimeInput === 'agent-cli' ? process.env.NARADA_INTELLIGENCE_PROVIDER : null) ?? null;
 const jsonOutput = !!args.json;
 const execFlag = !!args.exec;
 const dryRun = !!args.dry_run;
@@ -145,6 +169,8 @@ const showAdmission = args.show_admission ?? null;
 const targetSiteId = args.target_site_id ?? process.env.NARADA_TARGET_SITE_ID ?? null;
 const targetSiteRoot = args.target_site_root ?? process.env.NARADA_TARGET_SITE_ROOT ?? null;
 const sessionSiteRoot = targetSiteRoot ?? rootDir;
+loadSiteEnvFiles(sessionSiteRoot);
+const intelligenceProviderInput = args.intelligence_provider ?? (runtimeInput === 'agent-cli' ? process.env.NARADA_INTELLIGENCE_PROVIDER : null) ?? null;
 const dbPath = args.db ?? join(sessionSiteRoot, '.ai', 'state', 'agent-context.sqlite');
 const require = createRequire(import.meta.url);
 const RUNTIME_SUBSTRATE_KINDS_PACKET = Object.freeze(JSON.parse(readFileSync(resolveNaradaPackageExport('@narada2/carrier-runtime-contract', './runtime-substrate-kinds'), 'utf8')));
