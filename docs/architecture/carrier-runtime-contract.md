@@ -74,6 +74,12 @@ The shared pipeline stages are:
 
    A runtime that emits a registered directive records `directive_emission_authorized`, then `directive_emission_rule_recorded`, then `directive_emitted` before delivering the generated `narada.carrier.input_event.v1` through `carrier.input.deliver`. These emission events are producer-side evidence; they do not replace carrier receipt or acceptance evidence. Suppressed emission is not carrier receipt: disabled emission, inactive rules, missing targets, and unsupported directive kinds stop before delivery.
 
+   System-originated carrier input is the general pattern. A site loop, scheduler, probe, webhook, sensor, operator policy, or other mechanical observation may produce a directive, but the origin mechanism does not create a new participant or a new carrier semantics category. It produces an authorized directive input event and sends it through the same `carrier.input.deliver` pipeline as every other directive.
+
+   This follows Narada's intelligence-authority separation: the detecting mechanism may classify a condition, but authority is carried by the directive emitter registration, rule evidence, target scope, and input event metadata. It also preserves constructive invariance: the same system-originated directive should mean the same thing in `agent-cli`, `agent-tui`, Cloudflare carrier hosts, or any future carrier host.
+
+   A one-minute heartbeat is only the minimal test case for this pattern. A probe that observes a webhook delay crossing a critical threshold, a scheduler that notices an operation is overdue, or a site loop that detects a stale resident all use the same shape: observe, classify, authorize emission, emit a directive input event, deliver it through the carrier input pipeline, and record carrier receipt/acceptance/completion evidence. Whether the carrier dispatches that directive into provider context depends on directive visibility and admission classification, not on the fact that it came from a system mechanism.
+
 5. Composer hold classification
 
    `classifyCarrierInputHold(...)` classifies whether a system directive must be held because the carrier composer is active with a non-empty draft. The carrier surface detects composer state; the shared contract determines the `system_directive_held` and `system_directive_released` lifecycle evidence.
