@@ -112,7 +112,7 @@ test('cloudflare task lifecycle write admission keeps Windows mutation authority
   assert.equal(shadow.write_effect, 'none');
   assert.equal(shadow.cloudflare_write_admission, 'not_admitted');
 
-  for (const mutationClass of ['task_create', 'task_claim', 'task_report', 'task_finish', 'changed_file_evidence', 'task_projection_write', 'task_source_state_write', 'task_assignment_write', 'task_role_resolution_write', 'task_sqlite_write']) {
+  for (const mutationClass of ['task_create', 'task_claim', 'task_report', 'task_finish', 'changed_file_evidence', 'task_projection_write', 'task_source_state_write', 'task_assignment_write', 'task_role_resolution_write', 'task_roster_mutation_write', 'task_sqlite_write']) {
     const decision = classifyCloudflareTaskLifecycleWriteAdmission({ mutation_class: mutationClass });
     assert.equal(decision.action, 'refuse');
     assert.equal(decision.reason, 'windows_task_lifecycle_mutation_authority_retained');
@@ -347,6 +347,35 @@ test('cloudflare task lifecycle write admission keeps Windows mutation authority
   assert.deepEqual(admittedRoleResolutionWrite.retained_windows_authority, [
     'windows_roster_mutation_store',
   ]);
+
+  const admittedRosterMutationWrite = classifyCloudflareTaskLifecycleWriteAdmission({
+    mutation_class: 'task_roster_mutation_write',
+    task_id: 'cloudflare-task-lifecycle-1',
+    assignee_principal_id: 'principal:service',
+    cloudflare_task_roster_mutation_write_cutover: true,
+    roster_mutation_authority_ref: 'roster-mutation-authority:cloudflare-site-membership:v1',
+    roster_schema_ref: 'schema:cloudflare-site-membership-roster:v1',
+    roster_evidence_ref: 'roster-evidence:cloudflare-site-membership-upsert:v1',
+    membership_role: 'owner',
+    membership_status: 'active',
+    cutover_point_ref: 'cutover:task-roster-mutation-write:v1',
+    governed_write_contract_ref: 'contract:task-roster-mutation-write:v1',
+    confirmation_evidence_ref: 'evidence:operator-check:task-roster-mutation-write',
+  });
+  assert.equal(admittedRosterMutationWrite.action, 'admit');
+  assert.equal(admittedRosterMutationWrite.reason, 'cloudflare_task_roster_mutation_write_cutover_admitted');
+  assert.equal(admittedRosterMutationWrite.write_effect, 'task_lifecycle_roster_mutation_write');
+  assert.equal(admittedRosterMutationWrite.roster_mutation_write_admission, 'admitted');
+  assert.equal(admittedRosterMutationWrite.roster_mutation_write_schema, 'narada.sonar.cloudflare_task_lifecycle_roster_mutation_write.v1');
+  assert.equal(admittedRosterMutationWrite.roster_mutation_authority_ref, 'roster-mutation-authority:cloudflare-site-membership:v1');
+  assert.equal(admittedRosterMutationWrite.roster_schema_ref, 'schema:cloudflare-site-membership-roster:v1');
+  assert.equal(admittedRosterMutationWrite.roster_evidence_ref, 'roster-evidence:cloudflare-site-membership-upsert:v1');
+  assert.equal(admittedRosterMutationWrite.membership_role, 'owner');
+  assert.equal(admittedRosterMutationWrite.membership_status, 'active');
+  assert.equal(admittedRosterMutationWrite.roster_mailbox_mutation_admission, 'not_admitted');
+  assert.equal(admittedRosterMutationWrite.roster_filesystem_mutation_admission, 'not_admitted');
+  assert.equal(admittedRosterMutationWrite.roster_repository_publication_admission, 'not_admitted');
+  assert.deepEqual(admittedRosterMutationWrite.retained_windows_authority, []);
 
   const unknown = classifyCloudflareTaskLifecycleWriteAdmission({ mutation_class: 'surprise_write' });
   assert.equal(unknown.action, 'refuse');
@@ -1311,6 +1340,79 @@ test('worker site.read can replay carrier evidence from D1 index without durable
   assert.equal(body.site_product_status.carrier_evidence_read_status.state, 'loaded');
   assert.equal(body.site_product_status.carrier_evidence_event_count, 2);
   assert.equal(body.site_product_status.missing.includes('carrier_evidence'), false);
+});
+
+test('worker site.read reports bounded carrier evidence reads as partial rather than degraded', async () => {
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{
+      site_id: 'site_fixture',
+      site_ref: 'site://fixture',
+      display_name: 'Fixture Site',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+      created_by_principal_id: 'admin',
+    }],
+    memberships: [{
+      site_id: 'site_fixture',
+      principal_id: 'admin',
+      role: 'owner',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+    operations: [{
+      operation_id: 'operation_partial_evidence',
+      site_id: 'site_fixture',
+      display_name: 'Partial Evidence Operation',
+      operation_kind: 'control',
+      status: 'active',
+      created_by_principal_id: 'admin',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+  });
+  const namespace = fakeDurableObjectNamespace({ CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+  const taskDb = fakeD1TaskDatabase();
+  const env = authEnv(namespace, { CLOUDFLARE_SITE_REGISTRY_DB: siteDb, CLOUDFLARE_CARRIER_TASK_DB: taskDb });
+  for (const carrierSessionId of ['carrier_session_partial_one', 'carrier_session_partial_two']) {
+    const start = await worker.fetch(jsonRequest(startRequest({
+      request_id: `request_${carrierSessionId}`,
+      params: {
+        carrier_session_id: carrierSessionId,
+        agent_id: 'narada.fixture.agent',
+        site_id: 'site_fixture',
+        site_root: 'cloudflare://site_fixture',
+        site_ref: 'site://fixture',
+        operation_id: 'operation_partial_evidence',
+      },
+    }), { token: 'test-admin-token' }), env);
+    assert.equal(start.status, 200);
+  }
+
+  const read = await worker.fetch(jsonRequest({
+    operation: 'site.read',
+    request_id: 'request_site_read_partial_carrier_evidence',
+    params: { site_id: 'site_fixture', carrier_event_limit: 10, session_limit: 1 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(read.status, 200);
+  const body = await read.json();
+  assert.equal(body.carrier_evidence.length, 1);
+  assert.equal(body.carrier_evidence_read_status.state, 'partial');
+  assert.equal(body.carrier_evidence_read_status.session_count, 2);
+  assert.equal(body.carrier_evidence_read_status.session_read_limit, 1);
+  assert.equal(body.carrier_evidence_read_status.truncated_session_count, 1);
+  assert.equal(body.carrier_evidence_read_status.missing_session_count, 0);
+  assert.deepEqual(body.carrier_evidence_read_status.missing_session_ids, []);
+  assert.equal(body.site_product_status.carrier_evidence_read_status.state, 'partial');
+  assert.equal(body.site_product_status.attention.includes('carrier_evidence_read_degraded'), false);
+  assert.equal(body.cloudflare_persistence_posture.state, 'durable');
+  assert.equal(body.cloudflare_persistence_posture.evidence_read_state, 'partial');
+  assert.equal(body.cloudflare_persistence_posture.carrier_evidence_truncated_session_count, 1);
+  assert.equal(body.cloudflare_recovery_posture.state, 'reconstructable');
+  assert.equal(body.cloudflare_recovery_posture.evidence_replay, 'partial');
+  assert.equal(body.cloudflare_recovery_posture.truncated_evidence_session_count, 1);
+  assert.deepEqual(body.cloudflare_recovery_posture.recovery_gaps, []);
 });
 
 test('worker serves minimal authenticated web console shell', async () => {
