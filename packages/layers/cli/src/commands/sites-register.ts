@@ -31,7 +31,7 @@ import {
 import { siteImmuneScanCommand } from './site-immune-scan.js';
 import { siteMutationAuthorityPreflightCommand } from './site-mutation-authority-preflight.js';
 import { directCommandAction, silentCommandContext, wrapCommand } from '../lib/command-wrapper.js';
-import { emitCommandResult, emitFormatterBackedCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
+import { emitCommandResult, emitFiniteCommandResult, emitFormatterBackedCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
 export function registerSitesCommands(program: Command): void {
   const sitesCmd = program
@@ -544,7 +544,7 @@ export function registerSitesCommands(program: Command): void {
         format: resolveCommandFormat(opts.format, 'auto'),
         verbose: opts.verbose as boolean | undefined,
       }, silentCommandContext({ verbose: !!opts.verbose }));
-      emitFormatterBackedCommandResult(result, { format: opts.format });
+      emitFiniteCommandResult(result, { format: opts.format });
     });
 
   sitesCmd

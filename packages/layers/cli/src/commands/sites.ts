@@ -3221,6 +3221,29 @@ function containedSiteRootFromInput(root: string): string {
   return clientSiteRootFromWorkspace(resolved);
 }
 
+async function readSiteMaterialization(siteRoot: string): Promise<Record<string, unknown> | null> {
+  const candidates = [
+    join(siteRoot, 'site-materialization.json'),
+    join(siteRoot, '.narada', 'site-materialization.json'),
+  ];
+  for (const candidate of candidates) {
+    if (!existsSync(candidate)) continue;
+    try {
+      return JSON.parse(await readFile(candidate, 'utf8')) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function materializedAuthorityField(materialization: Record<string, unknown> | null, field: string): unknown {
+  const authority = materialization?.authority_object && typeof materialization.authority_object === 'object'
+    ? materialization.authority_object as Record<string, unknown>
+    : null;
+  return materialization?.[field] ?? authority?.[field];
+}
+
 function workspaceRootFromContainedInput(inputRoot: string, siteRoot: string): string {
   const resolved = resolve(inputRoot);
   if (normalizeNativePath(resolved) === normalizeNativePath(siteRoot) && basename(siteRoot).toLowerCase() === '.narada') {
@@ -4280,9 +4303,17 @@ async function sitesClientDoctorCommand(
   const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
   const checks: SiteDoctorCheck[] = [];
   const inputRoot = resolve(options.root ?? '.');
-  const siteRoot = containedSiteRootFromInput(inputRoot);
-  const workspaceRoot = workspaceRootFromContainedInput(inputRoot, siteRoot);
-  const configPath = join(siteRoot, 'config.json');
+  const configRoot = containedSiteRootFromInput(inputRoot);
+  const materialization = await readSiteMaterialization(configRoot);
+  const materializedSiteRoot = materializedAuthorityField(materialization, 'site_root');
+  const materializedWorkspaceRoot = materializedAuthorityField(materialization, 'workspace_root');
+  const siteRoot = typeof materializedSiteRoot === 'string' && materializedSiteRoot.trim()
+    ? resolve(materializedSiteRoot)
+    : configRoot;
+  const workspaceRoot = typeof materializedWorkspaceRoot === 'string' && materializedWorkspaceRoot.trim()
+    ? resolve(materializedWorkspaceRoot)
+    : workspaceRootFromContainedInput(inputRoot, configRoot);
+  const configPath = join(configRoot, 'config.json');
   let config: Record<string, unknown> | null = null;
 
   if (existsSync(siteRoot)) {
@@ -4290,8 +4321,21 @@ async function sitesClientDoctorCommand(
   } else {
     addCheck(checks, 'client_site_root_exists', 'fail', `Client Site root is missing: ${siteRoot}`, 'Run narada sites bootstrap-client --workspace <path> --execute');
   }
+  addCheck(
+    checks,
+    'client_governance_root_exists',
+    existsSync(configRoot) ? 'pass' : 'fail',
+    existsSync(configRoot) ? `Client governance root exists: ${configRoot}` : `Client governance root is missing: ${configRoot}`,
+    'Create or repair <workspace>/.narada governance materialization.',
+  );
 
+  const materializedRootArtifactNames = new Set(
+    materialization
+      ? ['AGENTS.md', 'README.md', '.ai']
+      : [],
+  );
   const misplacedGovernance = ['config.json', 'AGENTS.md', 'README.md', '.ai']
+    .filter((entry) => !materializedRootArtifactNames.has(entry))
     .map((entry) => join(workspaceRoot, entry))
     .filter((pathValue) => existsSync(pathValue));
   addCheck(
@@ -4344,9 +4388,9 @@ async function sitesClientDoctorCommand(
     addCheck(
       checks,
       'durability_posture',
-      posture === 'onedrive_non_git' || posture === 'local_non_git' ? 'pass' : 'fail',
+      posture === 'onedrive_non_git' || posture === 'local_non_git' || posture === 'git_private_repo' ? 'pass' : 'fail',
       posture ? `Sync posture is ${posture}` : 'Sync posture is missing',
-      'Use onedrive_non_git or local_non_git for client Site bootstrap',
+      'Use onedrive_non_git, local_non_git, or git_private_repo for client Site bootstrap',
     );
     if (workspaceRoot.toLowerCase().includes('onedrive')) {
       addCheck(
@@ -4359,7 +4403,7 @@ async function sitesClientDoctorCommand(
   }
 
   for (const directory of CLIENT_SITE_DIRECTORIES) {
-    const pathValue = join(siteRoot, directory);
+    const pathValue = join(configRoot, directory);
     addCheck(
       checks,
       `dir_${directory.replace(/[^a-z0-9]+/gi, '_')}`,
@@ -4369,7 +4413,7 @@ async function sitesClientDoctorCommand(
   }
 
   for (const file of CLIENT_SITE_GUIDANCE_FILES) {
-    const pathValue = join(siteRoot, file);
+    const pathValue = join(configRoot, file);
     addCheck(
       checks,
       `file_${file.replace(/[^a-z0-9]+/gi, '_')}`,
@@ -4378,9 +4422,9 @@ async function sitesClientDoctorCommand(
     );
   }
 
-  addDelegatedCliEmbodimentCheck(checks, siteRoot);
-  await addSiteToolSurfaceChecks(checks, siteRoot);
-  await addMcpFreshnessChecks(checks, siteRoot);
+  addDelegatedCliEmbodimentCheck(checks, configRoot);
+  await addSiteToolSurfaceChecks(checks, configRoot);
+  await addMcpFreshnessChecks(checks, configRoot);
 
   const failed = checks.filter((check) => check.status === 'fail');
   const warned = checks.filter((check) => check.status === 'warn');
@@ -4390,6 +4434,7 @@ async function sitesClientDoctorCommand(
     fmt.section(`Client Site Doctor - ${siteId}`);
     fmt.kv('Workspace', workspaceRoot);
     fmt.kv('Site Root', siteRoot);
+    fmt.kv('Governance Root', configRoot);
     fmt.kv('Health', health);
     for (const check of checks) {
       fmt.message(`${siteDoctorPrefix(check.status)} ${check.name}: ${check.message}`, siteDoctorMessageKind(check.status));
@@ -4407,6 +4452,7 @@ async function sitesClientDoctorCommand(
       site_kind: 'client_service',
       workspace_root: workspaceRoot,
       site_root: siteRoot,
+      governance_root: configRoot,
       readiness: await assessSiteReadiness({ site: siteRoot, role: 'architect' }),
       checks,
     },
