@@ -47,6 +47,7 @@ const CLOUDFLARE_WEBHOOK_DELAY_DIRECTIVE_PRIMARY_SCHEMA = 'narada.sonar.cloudfla
 const CLOUDFLARE_RESIDENT_LOOP_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_resident_loop_shadow_read.v1';
 const CLOUDFLARE_RESIDENT_DISPATCH_PRIMARY_SCHEMA = 'narada.sonar.cloudflare_resident_dispatch_primary_with_windows_fallback.v1';
 const CLOUDFLARE_MAILBOX_STATUS_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_mailbox_status_shadow_read.v1';
+const CLOUDFLARE_SITE_FILE_CHANGE_PROPOSAL_SCHEMA = 'narada.sonar.cloudflare_site_file_change_proposal.v1';
 const CLOUDFLARE_TASK_LIFECYCLE_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_shadow_read.v1';
 const CLOUDFLARE_TASK_LIFECYCLE_WRITE_ADMISSION_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_write_admission.v1';
 const CLOUDFLARE_TASK_LIFECYCLE_WRITE_ADMISSION_DECISION_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_write_admission_decision.v1';
@@ -2616,6 +2617,8 @@ function isSiteProductOperation(operation) {
     'resident_loop.shadow_read.list',
     'mailbox.status_shadow.record',
     'mailbox.status_shadow.list',
+    'site_file_change_proposal.record',
+    'site_file_change_proposal.list',
     'task_lifecycle.shadow_read.record',
     'task_lifecycle.shadow_read.list',
     'task_lifecycle.shadow_read.source.read',
@@ -3048,6 +3051,32 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       },
     };
   }
+  if (body.operation === 'site_file_change_proposal.record') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const result = await recordCloudflareSiteFileChangeProposal(env, requestedSiteId, params, principal);
+    return { status: result.ok ? 200 : 400, body: result };
+  }
+  if (body.operation === 'site_file_change_proposal.list') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const proposals = await listCloudflareSiteFileChangeProposals(env, requestedSiteId, params.site_file_change_proposal_limit ?? params.limit);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        schema: CLOUDFLARE_SITE_FILE_CHANGE_PROPOSAL_SCHEMA,
+        status: 'ok',
+        site_id: requestedSiteId,
+        proposal_authority: 'cloudflare_carrier_site',
+        filesystem_executor_authority: 'windows_filesystem_executor',
+        filesystem_mutation_admission: 'not_admitted',
+        repository_publication_admission: 'not_admitted',
+        authority_partition: 'site_file_change_proposal_cloudflare_recorded_filesystem_and_publication_windows_owned',
+        proposals,
+      },
+    };
+  }
   if (body.operation === 'task_lifecycle.shadow_read.source.read') {
     const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
     if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
@@ -3250,6 +3279,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const webhookDelayDirectiveDeliveries = await listCloudflareWebhookDelayDirectiveDeliveries(env, siteId, params.webhook_delay_directive_delivery_limit ?? params.limit);
     const residentLoopShadowRuns = await listCloudflareResidentLoopShadowRuns(env, siteId, params.resident_loop_shadow_limit ?? params.limit);
     const mailboxStatusShadowReads = await listCloudflareMailboxStatusShadowReads(env, siteId, params.mailbox_status_shadow_limit ?? params.limit);
+    const siteFileChangeProposals = await listCloudflareSiteFileChangeProposals(env, siteId, params.site_file_change_proposal_limit ?? params.limit);
     const taskLifecycleShadowReads = await listCloudflareTaskLifecycleShadowReads(env, siteId, params.task_lifecycle_shadow_limit ?? params.limit);
     const taskLifecycleWriteAdmissions = await listCloudflareTaskLifecycleWriteAdmissions(env, siteId, params.task_lifecycle_write_admission_limit ?? params.limit);
     const taskLifecycleTasks = await listCloudflareTaskLifecycleTasks(env, siteId, params.task_lifecycle_task_limit ?? params.limit, params);
@@ -3291,6 +3321,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       webhookDelayDirectiveDeliveries,
       residentLoopShadowRuns,
       mailboxStatusShadowReads,
+      siteFileChangeProposals,
       residentDispatchDecisions,
     });
     const localCloudContinuityBridge = summarizeLocalCloudContinuityBridge(siteId, continuityPackets, siteContinuity, siteContinuityStatus);
@@ -3333,6 +3364,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         webhook_delay_directive_deliveries: webhookDelayDirectiveDeliveries,
         resident_loop_shadow_runs: residentLoopShadowRuns,
         mailbox_status_shadow_reads: mailboxStatusShadowReads,
+        site_file_change_proposals: siteFileChangeProposals,
         task_lifecycle_shadow_reads: taskLifecycleShadowReads,
         task_lifecycle_write_admissions: taskLifecycleWriteAdmissions,
         task_lifecycle_tasks: taskLifecycleTasks,
@@ -3383,6 +3415,12 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           mailbox_send_admission: mailboxStatusShadowReads.length > 0 ? 'not_admitted' : 'retained',
           mailbox_mutation_admission: mailboxStatusShadowReads.length > 0 ? 'not_admitted' : 'retained',
           mailbox_authority_partition: mailboxStatusShadowReads.length > 0 ? 'mailbox_status_shadow_read_cloudflare_recorded_send_and_mutation_windows_owned' : 'mailbox_windows_owned',
+          site_file_change_proposal_count: siteFileChangeProposals.length,
+          site_file_change_proposal_authority: siteFileChangeProposals.length > 0 ? 'cloudflare_carrier_site' : 'not_observed',
+          filesystem_executor_authority: siteFileChangeProposals.length > 0 ? 'windows_filesystem_executor' : 'retained',
+          filesystem_mutation_admission: siteFileChangeProposals.length > 0 ? 'not_admitted' : 'retained',
+          repository_publication_admission: siteFileChangeProposals.length > 0 ? 'not_admitted' : 'retained',
+          site_file_change_authority_partition: siteFileChangeProposals.length > 0 ? 'site_file_change_proposal_cloudflare_recorded_filesystem_and_publication_windows_owned' : 'filesystem_and_publication_windows_owned',
           task_lifecycle_shadow_read_count: taskLifecycleShadowReads.length,
           task_lifecycle_write_admission_count: taskLifecycleWriteAdmissions.length,
           task_lifecycle_write_admission_posture: taskLifecycleTasks.some((task) => task.task_lifecycle_roster_mutation_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_and_roster_mutation_admitted_remaining_external_effects_not_admitted' : taskLifecycleTasks.some((task) => task.task_lifecycle_role_resolution_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_admitted_remaining_external_effects_not_admitted' : taskLifecycleTasks.some((task) => task.task_lifecycle_assignment_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_and_assignment_admitted_remaining_external_effects_not_admitted' : taskLifecycleTasks.some((task) => task.task_lifecycle_source_state_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_admitted_remaining_external_effects_not_admitted' : taskLifecycleTasks.some((task) => task.task_lifecycle_projection_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_and_projection_write_admitted_remaining_writes_not_admitted' : taskLifecycleTasks.some((task) => task.changed_file_evidence_count > 0) ? (taskLifecycleTasks.some((task) => task.finish_id) ? 'task_create_claim_report_finish_and_changed_file_evidence_admitted_remaining_writes_not_admitted' : 'task_create_claim_report_and_changed_file_evidence_admitted_remaining_writes_not_admitted') : taskLifecycleTasks.some((task) => task.finish_id) ? 'task_create_claim_report_and_finish_admitted_remaining_writes_not_admitted' : taskLifecycleTasks.some((task) => task.report_id) ? 'task_create_claim_and_report_admitted_remaining_writes_not_admitted' : taskLifecycleTasks.some((task) => task.status === 'claimed') ? 'task_create_and_claim_admitted_remaining_writes_not_admitted' : taskLifecycleTasks.length > 0 ? 'task_create_admitted_remaining_writes_not_admitted' : 'writes_not_admitted',
@@ -3451,6 +3489,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
   const webhookDelayDirectiveDeliveries = await listCloudflareWebhookDelayDirectiveDeliveries(env, siteId, params.webhook_delay_directive_delivery_limit ?? params.limit);
   const residentLoopShadowRuns = await listCloudflareResidentLoopShadowRuns(env, siteId, params.resident_loop_shadow_limit ?? params.limit);
   const mailboxStatusShadowReads = await listCloudflareMailboxStatusShadowReads(env, siteId, params.mailbox_status_shadow_limit ?? params.limit);
+  const siteFileChangeProposals = await listCloudflareSiteFileChangeProposals(env, siteId, params.site_file_change_proposal_limit ?? params.limit);
   const taskLifecycleShadowReads = await listCloudflareTaskLifecycleShadowReads(env, siteId, params.task_lifecycle_shadow_limit ?? params.limit);
   const taskLifecycleWriteAdmissions = await listCloudflareTaskLifecycleWriteAdmissions(env, siteId, params.task_lifecycle_write_admission_limit ?? params.limit);
   const taskLifecycleTasks = await listCloudflareTaskLifecycleTasks(env, siteId, params.task_lifecycle_task_limit ?? params.limit, params);
@@ -3500,6 +3539,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     webhook_delay_directive_deliveries: webhookDelayDirectiveDeliveries,
     resident_loop_shadow_runs: residentLoopShadowRuns,
     mailbox_status_shadow_reads: mailboxStatusShadowReads,
+    site_file_change_proposals: siteFileChangeProposals,
     task_lifecycle_shadow_reads: taskLifecycleShadowReads,
     task_lifecycle_write_admissions: taskLifecycleWriteAdmissions,
     task_lifecycle_tasks: taskLifecycleTasks,
@@ -5007,6 +5047,206 @@ function createMailboxStatusShadowRead(siteId, params = {}) {
 
 function mailboxStatusShadowReadId(siteId, read) {
   return `mailbox_status_shadow_read_${safeIdToken(siteId)}_${safeIdToken(read.generated_at)}_${safeIdToken(read.account_ref)}`;
+}
+
+function createSiteFileChangeProposal(siteId, params = {}) {
+  const source = params.source_payload ?? params.payload ?? params.proposal ?? {};
+  const sourceSchema = String(source.schema ?? params.source_schema ?? '');
+  if (sourceSchema !== 'narada.sonar.site_file_change_proposal.v1') {
+    return { ok: false, code: 'site_file_change_proposal_source_schema_invalid', source_schema: sourceSchema || null };
+  }
+  const filesystemMutationAdmission = String(source.filesystem_mutation_admission ?? params.filesystem_mutation_admission ?? '');
+  const repositoryPublicationAdmission = String(source.repository_publication_admission ?? params.repository_publication_admission ?? '');
+  const filesystemExecutorAuthority = String(source.filesystem_executor_authority ?? params.filesystem_executor_authority ?? 'windows_filesystem_executor');
+  if (filesystemMutationAdmission !== 'not_admitted') return { ok: false, code: 'site_file_change_proposal_filesystem_mutation_admission_invalid', filesystem_mutation_admission: filesystemMutationAdmission };
+  if (repositoryPublicationAdmission !== 'not_admitted') return { ok: false, code: 'site_file_change_proposal_repository_publication_admission_invalid', repository_publication_admission: repositoryPublicationAdmission };
+  if (filesystemExecutorAuthority !== 'windows_filesystem_executor') return { ok: false, code: 'site_file_change_proposal_executor_authority_invalid', filesystem_executor_authority: filesystemExecutorAuthority };
+  const files = Array.isArray(source.files ?? params.files) ? (source.files ?? params.files).slice(0, 100).map((file) => ({
+    file_path: String(file.file_path ?? file.path ?? ''),
+    change_kind: String(file.change_kind ?? file.kind ?? 'unknown'),
+    material_source_ref: file.material_source_ref == null ? null : String(file.material_source_ref),
+  })).filter((file) => file.file_path) : [];
+  if (files.length === 0) return { ok: false, code: 'site_file_change_proposal_requires_files' };
+  return {
+    ok: true,
+    proposal: {
+      schema: 'narada.sonar.cloudflare_site_file_change_proposal_record.v1',
+      site_id: siteId,
+      source_schema: sourceSchema,
+      generated_at: String(source.generated_at ?? params.generated_at ?? new Date().toISOString()),
+      operation_id: source.operation_id == null && params.operation_id == null ? null : String(source.operation_id ?? params.operation_id),
+      task_id: source.task_id == null && params.task_id == null ? null : String(source.task_id ?? params.task_id),
+      proposal_ref: String(source.proposal_ref ?? params.proposal_ref ?? 'site-file-change-proposal'),
+      proposal_summary: String(source.proposal_summary ?? params.proposal_summary ?? 'site file change proposal'),
+      authority_locus: String(source.authority_locus ?? params.authority_locus ?? 'cloudflare_carrier_site'),
+      filesystem_executor_authority: filesystemExecutorAuthority,
+      filesystem_mutation_admission: filesystemMutationAdmission,
+      repository_publication_admission: repositoryPublicationAdmission,
+      proposal_posture: String(source.proposal_posture ?? params.proposal_posture ?? 'proposal_only_no_filesystem_write'),
+      files,
+    },
+  };
+}
+
+function siteFileChangeProposalId(siteId, proposal) {
+  return `site_file_change_proposal_${safeIdToken(siteId)}_${safeIdToken(proposal.generated_at)}_${safeIdToken(proposal.proposal_ref)}`;
+}
+
+async function recordCloudflareSiteFileChangeProposal(env = {}, siteId, params = {}, principal = null) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return { ok: false, code: 'missing_site_registry_binding' };
+  if (!siteId || siteId === 'unknown-site') return { ok: false, code: 'missing_site_id' };
+  const payload = createSiteFileChangeProposal(siteId, params);
+  if (!payload.ok) return payload;
+  const proposal = payload.proposal;
+  const record = {
+    proposal_id: params.proposal_id ?? siteFileChangeProposalId(siteId, proposal),
+    site_id: siteId,
+    schema: CLOUDFLARE_SITE_FILE_CHANGE_PROPOSAL_SCHEMA,
+    source_schema: proposal.source_schema,
+    generated_at: proposal.generated_at,
+    operation_id: proposal.operation_id,
+    task_id: proposal.task_id,
+    proposal_ref: proposal.proposal_ref,
+    proposal_summary: proposal.proposal_summary,
+    authority_locus: proposal.authority_locus,
+    filesystem_executor_authority: proposal.filesystem_executor_authority,
+    filesystem_mutation_admission: proposal.filesystem_mutation_admission,
+    repository_publication_admission: proposal.repository_publication_admission,
+    proposal_posture: proposal.proposal_posture,
+    file_count: proposal.files.length,
+    recorded_by_principal_id: principal?.principal_id ?? 'unknown-principal',
+    recorded_at: new Date().toISOString(),
+  };
+  await ensureCloudflareSiteFileChangeProposalSchema(db);
+  await db.prepare(`
+    INSERT INTO cloudflare_site_file_change_proposals (
+      proposal_id,
+      site_id,
+      source_schema,
+      generated_at,
+      operation_id,
+      task_id,
+      proposal_ref,
+      proposal_summary,
+      authority_locus,
+      filesystem_executor_authority,
+      filesystem_mutation_admission,
+      repository_publication_admission,
+      proposal_posture,
+      file_count,
+      proposal_json,
+      recorded_by_principal_id,
+      recorded_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(proposal_id) DO UPDATE SET
+      source_schema = excluded.source_schema,
+      generated_at = excluded.generated_at,
+      operation_id = excluded.operation_id,
+      task_id = excluded.task_id,
+      proposal_ref = excluded.proposal_ref,
+      proposal_summary = excluded.proposal_summary,
+      authority_locus = excluded.authority_locus,
+      filesystem_executor_authority = excluded.filesystem_executor_authority,
+      filesystem_mutation_admission = excluded.filesystem_mutation_admission,
+      repository_publication_admission = excluded.repository_publication_admission,
+      proposal_posture = excluded.proposal_posture,
+      file_count = excluded.file_count,
+      proposal_json = excluded.proposal_json,
+      recorded_by_principal_id = excluded.recorded_by_principal_id,
+      recorded_at = excluded.recorded_at
+  `).bind(
+    record.proposal_id,
+    record.site_id,
+    record.source_schema,
+    record.generated_at,
+    record.operation_id,
+    record.task_id,
+    record.proposal_ref,
+    record.proposal_summary,
+    record.authority_locus,
+    record.filesystem_executor_authority,
+    record.filesystem_mutation_admission,
+    record.repository_publication_admission,
+    record.proposal_posture,
+    record.file_count,
+    JSON.stringify({ ...record, proposal }),
+    record.recorded_by_principal_id,
+    record.recorded_at,
+  ).run();
+  return {
+    ok: true,
+    schema: CLOUDFLARE_SITE_FILE_CHANGE_PROPOSAL_SCHEMA,
+    status: 'recorded',
+    site_id: siteId,
+    proposal_authority: record.authority_locus,
+    filesystem_executor_authority: record.filesystem_executor_authority,
+    filesystem_mutation_admission: record.filesystem_mutation_admission,
+    repository_publication_admission: record.repository_publication_admission,
+    proposal,
+    record,
+  };
+}
+
+async function ensureCloudflareSiteFileChangeProposalSchema(db) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS cloudflare_site_file_change_proposals (
+      proposal_id TEXT PRIMARY KEY,
+      site_id TEXT NOT NULL,
+      source_schema TEXT NOT NULL,
+      generated_at TEXT NOT NULL,
+      operation_id TEXT,
+      task_id TEXT,
+      proposal_ref TEXT NOT NULL,
+      proposal_summary TEXT NOT NULL,
+      authority_locus TEXT NOT NULL,
+      filesystem_executor_authority TEXT NOT NULL,
+      filesystem_mutation_admission TEXT NOT NULL,
+      repository_publication_admission TEXT NOT NULL,
+      proposal_posture TEXT NOT NULL,
+      file_count INTEGER NOT NULL,
+      proposal_json TEXT NOT NULL,
+      recorded_by_principal_id TEXT NOT NULL,
+      recorded_at TEXT NOT NULL
+    )
+  `).run();
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_cloudflare_site_file_change_proposals_site_recorded
+    ON cloudflare_site_file_change_proposals(site_id, recorded_at)
+  `).run();
+}
+
+async function listCloudflareSiteFileChangeProposals(env = {}, siteId, limit) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function' || !siteId) return [];
+  await ensureCloudflareSiteFileChangeProposalSchema(db);
+  const boundedLimit = clampInteger(limit, 0, 100, 25);
+  const rows = await db.prepare(`
+    SELECT * FROM cloudflare_site_file_change_proposals
+    WHERE site_id = ?
+    ORDER BY recorded_at DESC, generated_at DESC
+    LIMIT ?
+  `).bind(siteId, boundedLimit).all();
+  return (rows.results ?? []).map((row) => ({
+    proposal_id: row.proposal_id,
+    site_id: row.site_id,
+    schema: CLOUDFLARE_SITE_FILE_CHANGE_PROPOSAL_SCHEMA,
+    source_schema: row.source_schema,
+    generated_at: row.generated_at,
+    operation_id: row.operation_id,
+    task_id: row.task_id,
+    proposal_ref: row.proposal_ref,
+    proposal_summary: row.proposal_summary,
+    authority_locus: row.authority_locus,
+    filesystem_executor_authority: row.filesystem_executor_authority,
+    filesystem_mutation_admission: row.filesystem_mutation_admission,
+    repository_publication_admission: row.repository_publication_admission,
+    proposal_posture: row.proposal_posture,
+    file_count: Number(row.file_count),
+    record: parseJsonObject(row.proposal_json),
+    recorded_by_principal_id: row.recorded_by_principal_id,
+    recorded_at: row.recorded_at,
+  }));
 }
 
 async function recordCloudflareWebhookDelayShadowObservation(env = {}, siteId, params = {}, principal = null) {
@@ -8785,6 +9025,7 @@ export function renderCloudflareCarrierConsole() {
       const authoritySummary = authorityPostureSummary(product.site_authority?.decisions || []);
       const authorityEvidenceCount = authorityEvidenceEvents(product).length;
       const taskSummary = taskLifecycleSummary(product.tasks || []);
+      const surface = product.operation_product_surface || {};
       const controlDomain = contextValue(control, 'Domain') || 'none';
       const controlAction = contextValue(control, 'Action') || 'none';
       const controlTarget = contextValue(control, 'Target') || 'none';
@@ -8862,6 +9103,14 @@ export function renderCloudflareCarrierConsole() {
           listItem('command_state', contextValue(taskSummary, 'Command State') || 'unknown'),
           listItem('next_action', contextValue(taskSummary, 'Next Action') || 'none'),
         ],
+        mailboxStatus: [
+          listItem('mailbox_status_shadow_read_count', String(surface.mailbox_status_shadow_read_count ?? 0)),
+          listItem('mailbox_status_authority', surface.mailbox_status_authority || 'not_observed'),
+          listItem('mailbox_shadow_target_locus', surface.mailbox_shadow_target_locus || 'not_observed'),
+          listItem('mailbox_send_admission', surface.mailbox_send_admission || 'retained'),
+          listItem('mailbox_mutation_admission', surface.mailbox_mutation_admission || 'retained'),
+          listItem('mailbox_authority_partition', surface.mailbox_authority_partition || 'mailbox_windows_owned'),
+        ],
         readiness: readinessGaps.length > 0
           ? readinessGaps.slice(0, 4).map((item) => listItem(item.label, item.detail || item.action_label || item.status))
           : [listItem('ready', 'all readiness gates satisfied')],
@@ -8878,6 +9127,7 @@ export function renderCloudflareCarrierConsole() {
         renderListBlock('Session Evidence Posture', board.sessionEvidence),
         renderListBlock('Authority Posture', board.authority),
         renderListBlock('Task Lifecycle Posture', board.taskLifecycle),
+        renderListBlock('Mailbox Status Posture', board.mailboxStatus),
         renderListBlock('Work Queues', board.queues),
         renderListBlock('Evidence Review', board.evidence),
         renderListBlock('Readiness Gaps', board.readiness),

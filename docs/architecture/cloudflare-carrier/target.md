@@ -37,6 +37,8 @@ Cloudflare changes the host, durability, concurrency, transport, storage, and de
 
 `operation.read` exposes `operation_posture_overview` and `operation_posture_route` for the visible operation set. The overview summarizes readiness, action, reason, and command-state counts. The route summarizes whether the next operator action should monitor operations or focus a different operation. The same route is mirrored inside `operation_product_surface` so non-console clients can consume one product surface without duplicating console code.
 
+`operation.read` exposes `site_file_change_proposals` and `operation_product_surface.site_file_change_proposal_count` as a Cloudflare-recorded proposal evidence surface. This is not filesystem mutation authority. The proposal surface records intended site-file changes with `filesystem_executor_authority = windows_filesystem_executor`, `filesystem_mutation_admission = not_admitted`, and `repository_publication_admission = not_admitted` until separate governed contracts admit those effects.
+
 The control room maps lifecycle `next_action` values to existing operator actions: start or focus a session, refresh operation evidence, inspect continuity workflow, focus open task work, or inspect directive delivery. These are navigation/workflow affordances over existing product state, not hidden mutation shortcuts.
 
 ```json

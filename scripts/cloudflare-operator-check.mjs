@@ -1246,6 +1246,29 @@ assert.equal(mailboxStatusShadowSmoke.mailbox_mutation_admission, 'not_admitted'
 assert.ok(mailboxStatusShadowSmoke.mailbox_status_shadow_read_count >= 1);
 assert.equal(mailboxStatusShadowSmoke.mailbox_authority_partition, 'mailbox_status_shadow_read_cloudflare_recorded_send_and_mutation_windows_owned');
 
+const siteFileChangeProposalSmoke = await runJsonCommand('site-file-change:proposal-smoke:live', [
+  'node',
+  'packages/cloudflare-carrier/scripts/cloudflare-carrier-site-file-change-proposal-live-smoke.mjs',
+  '--url',
+  workerUrl,
+  '--token-file',
+  tokenFile,
+  '--site',
+  siteId,
+  '--operation',
+  operationId,
+]);
+assert.equal(siteFileChangeProposalSmoke.status, 'ok');
+assert.equal(siteFileChangeProposalSmoke.worker_url, workerUrl);
+assert.equal(siteFileChangeProposalSmoke.site_id, siteId);
+assert.equal(siteFileChangeProposalSmoke.operation_id, operationId);
+assert.equal(siteFileChangeProposalSmoke.proposal_authority, 'cloudflare_carrier_site');
+assert.equal(siteFileChangeProposalSmoke.filesystem_executor_authority, 'windows_filesystem_executor');
+assert.equal(siteFileChangeProposalSmoke.filesystem_mutation_admission, 'not_admitted');
+assert.equal(siteFileChangeProposalSmoke.repository_publication_admission, 'not_admitted');
+assert.ok(siteFileChangeProposalSmoke.site_file_change_proposal_count >= 1);
+assert.equal(siteFileChangeProposalSmoke.site_file_change_authority_partition, 'site_file_change_proposal_cloudflare_recorded_filesystem_and_publication_windows_owned');
+
 const webhookDelayDirectiveDeliverySuffix = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
 const webhookDelayDirectiveDelivery = await postCarrier(workerUrl, bearerToken, {
   operation: 'webhook_delay.directive.primary_with_fallback.deliver',
@@ -1312,6 +1335,8 @@ const operationReadAfterContinuity = await postCarrier(workerUrl, bearerToken, {
     task_lifecycle_include_task_ids: [projectionWriteSmoke.task_id, taskLifecycleRoleResolutionWriteSmoke.task_id, taskLifecycleRosterMutationWriteSmoke.task_id],
     task_lifecycle_write_admission_limit: 100,
     resident_loop_shadow_limit: 10,
+    mailbox_status_shadow_limit: 20,
+    site_file_change_proposal_limit: 20,
     resident_dispatch_limit: 10,
   },
 });
@@ -1332,6 +1357,7 @@ const taskLifecycleWriteAdmissions = operationReadAfterContinuity.body.task_life
 const taskLifecycleTasks = operationReadAfterContinuity.body.task_lifecycle_tasks ?? [];
 const residentLoopShadowRuns = operationReadAfterContinuity.body.resident_loop_shadow_runs ?? [];
 const mailboxStatusShadowReads = operationReadAfterContinuity.body.mailbox_status_shadow_reads ?? [];
+const siteFileChangeProposals = operationReadAfterContinuity.body.site_file_change_proposals ?? [];
 const residentDispatchDecisions = operationReadAfterContinuity.body.resident_dispatch_decisions ?? [];
 assert.equal(operationSurface?.operation_id, operationId);
 assert.ok(Array.isArray(operationContinuityPackets));
@@ -1519,6 +1545,21 @@ assert.equal(operationSurface?.mailbox_shadow_target_locus, 'cloudflare_carrier_
 assert.equal(operationSurface?.mailbox_send_admission, 'not_admitted');
 assert.equal(operationSurface?.mailbox_mutation_admission, 'not_admitted');
 assert.equal(operationSurface?.mailbox_authority_partition, 'mailbox_status_shadow_read_cloudflare_recorded_send_and_mutation_windows_owned');
+assert.ok(Array.isArray(siteFileChangeProposals));
+assert.ok(siteFileChangeProposals.length >= 1);
+assert.equal(operationSurface?.site_file_change_proposal_count, siteFileChangeProposals.length);
+const recordedSiteFileChangeProposal = siteFileChangeProposals.find((proposal) => proposal.proposal_id === siteFileChangeProposalSmoke.proposal_id);
+assert.ok(recordedSiteFileChangeProposal);
+assert.equal(recordedSiteFileChangeProposal.schema, 'narada.sonar.cloudflare_site_file_change_proposal.v1');
+assert.equal(recordedSiteFileChangeProposal.authority_locus, 'cloudflare_carrier_site');
+assert.equal(recordedSiteFileChangeProposal.filesystem_executor_authority, 'windows_filesystem_executor');
+assert.equal(recordedSiteFileChangeProposal.filesystem_mutation_admission, 'not_admitted');
+assert.equal(recordedSiteFileChangeProposal.repository_publication_admission, 'not_admitted');
+assert.equal(operationSurface?.site_file_change_proposal_authority, 'cloudflare_carrier_site');
+assert.equal(operationSurface?.filesystem_executor_authority, 'windows_filesystem_executor');
+assert.equal(operationSurface?.filesystem_mutation_admission, 'not_admitted');
+assert.equal(operationSurface?.repository_publication_admission, 'not_admitted');
+assert.equal(operationSurface?.site_file_change_authority_partition, 'site_file_change_proposal_cloudflare_recorded_filesystem_and_publication_windows_owned');
 assert.ok(Array.isArray(webhookDelayDirectiveDeliveries));
 assert.ok(webhookDelayDirectiveDeliveries.length >= 1);
 assert.equal(operationSurface?.webhook_delay_directive_delivery_count, webhookDelayDirectiveDeliveries.length);
@@ -1694,6 +1735,13 @@ const report = {
     mailbox_send_admission: operationSurface.mailbox_send_admission,
     mailbox_mutation_admission: operationSurface.mailbox_mutation_admission,
     mailbox_authority_partition: operationSurface.mailbox_authority_partition,
+    site_file_change_proposal_count: operationSurface.site_file_change_proposal_count,
+    site_file_change_proposal_id: siteFileChangeProposalSmoke.proposal_id,
+    site_file_change_proposal_authority: operationSurface.site_file_change_proposal_authority,
+    filesystem_executor_authority: operationSurface.filesystem_executor_authority,
+    filesystem_mutation_admission: operationSurface.filesystem_mutation_admission,
+    repository_publication_admission: operationSurface.repository_publication_admission,
+    site_file_change_authority_partition: operationSurface.site_file_change_authority_partition,
     resident_loop_shadow_run_count: operationSurface.resident_loop_shadow_run_count,
     resident_loop_shadow_last_status: recordedResidentLoopShadow.loop_status,
     resident_loop_shadow_dispatch_authority: recordedResidentLoopShadow.dispatch_authority,
