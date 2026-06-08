@@ -218,10 +218,18 @@ test('validates and records carrier session binding to registered site', async (
   const registry = createD1CloudflareSiteRegistry(db, { now: fixedNow });
   const principal = { principal_id: 'service', controlled_actions: ['*'] };
   await registry.createSite({ site_id: 'site_bound', site_ref: 'cloudflare://site_bound', display_name: 'Bound Site', principal });
+  await registry.createOperation({
+    site_id: 'site_bound',
+    operation_id: 'operation_bound',
+    display_name: 'Bound Operation',
+    operation_kind: 'control',
+    principal,
+  });
 
   const admitted = await registry.validateCarrierSiteBinding({
     site_id: 'site_bound',
     site_ref: 'cloudflare://site_bound',
+    operation_id: 'operation_bound',
     carrier_session_id: 'carrier_session_bound',
     agent_id: 'narada.agent.bound',
     principal,
@@ -232,6 +240,7 @@ test('validates and records carrier session binding to registered site', async (
   assert.equal(admitted.evidence.schema, CLOUDFLARE_SITE_REGISTRY_SCHEMA);
   assert.equal(admitted.evidence.action, 'admit');
   assert.equal(admitted.binding.site_id, 'site_bound');
+  assert.equal(admitted.binding.operation_id, 'operation_bound');
 
   const reused = await registry.validateCarrierSiteBinding({
     site_id: 'site_bound',
@@ -245,7 +254,12 @@ test('validates and records carrier session binding to registered site', async (
   const read = await registry.readSite({ site_id: 'site_bound', principal });
   assert.equal(read.ok, true);
   assert.equal(read.sessions[0].carrier_session_id, 'carrier_session_bound');
+  assert.equal(read.sessions[0].operation_id, 'operation_bound');
   assert.equal(read.authority_events.some((event) => event.event_kind === 'carrier_site_binding_admitted'), true);
+
+  const operationRead = await registry.readOperation({ site_id: 'site_bound', operation_id: 'operation_bound', principal });
+  assert.equal(operationRead.ok, true);
+  assert.equal(operationRead.sessions[0].carrier_session_id, 'carrier_session_bound');
 
   assert.equal(db.dump().carrierSessions.length, 1);
   assert.equal(db.dump().authorityEvents.some((event) => event.event_kind === 'carrier_site_binding_admitted'), true);
@@ -353,10 +367,21 @@ function fakeD1Statement(state, sql) {
         const existing = state.operations.find((operation) => operation.operation_id === operationId);
         if (existing) Object.assign(existing, { display_name: displayName, operation_kind: operationKind, status, updated_at: updatedAt });
         else state.operations.push({ operation_id: operationId, site_id: siteId, display_name: displayName, operation_kind: operationKind, status, created_by_principal_id: createdByPrincipalId, created_at: createdAt, updated_at: updatedAt });
+      } else if (/^UPDATE cloudflare_site_carrier_sessions SET operation_id/i.test(sql)) {
+        const [operationId, updatedAt, carrierSessionId] = bound;
+        const existing = state.carrierSessions.find((binding) => binding.carrier_session_id === carrierSessionId);
+        if (existing) Object.assign(existing, { operation_id: operationId, updated_at: updatedAt });
       } else if (/^INSERT INTO cloudflare_site_carrier_sessions/i.test(sql)) {
-        const [carrierSessionId, siteId, agentId, boundByPrincipalId, bindingStatus, createdAt, updatedAt] = bound;
+        const hasOperationId = bound.length === 8;
+        const [carrierSessionId, siteId, maybeOperationId, maybeAgentId, maybeBoundByPrincipalId, maybeBindingStatus, maybeCreatedAt, maybeUpdatedAt] = bound;
+        const operationId = hasOperationId ? maybeOperationId : null;
+        const agentId = hasOperationId ? maybeAgentId : maybeOperationId;
+        const boundByPrincipalId = hasOperationId ? maybeBoundByPrincipalId : maybeAgentId;
+        const bindingStatus = hasOperationId ? maybeBindingStatus : maybeBoundByPrincipalId;
+        const createdAt = hasOperationId ? maybeCreatedAt : maybeBindingStatus;
+        const updatedAt = hasOperationId ? maybeUpdatedAt : maybeCreatedAt;
         if (!state.carrierSessions.some((binding) => binding.carrier_session_id === carrierSessionId)) {
-          state.carrierSessions.push({ carrier_session_id: carrierSessionId, site_id: siteId, agent_id: agentId, bound_by_principal_id: boundByPrincipalId, binding_status: bindingStatus, created_at: createdAt, updated_at: updatedAt });
+          state.carrierSessions.push({ carrier_session_id: carrierSessionId, site_id: siteId, operation_id: operationId, agent_id: agentId, bound_by_principal_id: boundByPrincipalId, binding_status: bindingStatus, created_at: createdAt, updated_at: updatedAt });
         }
       } else if (/^INSERT INTO cloudflare_site_authority_events/i.test(sql)) {
         const [eventId, eventKind, siteId, carrierSessionId, principalId, action, reason, evidenceJson, recordedAt] = bound;
@@ -426,6 +451,15 @@ function fakeD1Statement(state, sql) {
       }
       if (/FROM cloudflare_site_carrier_sessions/i.test(sql)) {
         const [siteId, limit] = bound;
+        if (/WHERE operation_id = \?/i.test(sql)) {
+          return {
+            results: state.carrierSessions
+              .filter((binding) => binding.operation_id === siteId)
+              .sort((left, right) => right.created_at.localeCompare(left.created_at))
+              .slice(0, Number(limit))
+              .map(clone),
+          };
+        }
         return {
           results: state.carrierSessions
             .filter((binding) => binding.site_id === siteId)

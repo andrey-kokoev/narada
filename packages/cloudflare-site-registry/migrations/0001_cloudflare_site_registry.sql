@@ -51,6 +51,7 @@ CREATE INDEX IF NOT EXISTS cloudflare_site_operations_site_idx
 CREATE TABLE IF NOT EXISTS cloudflare_site_carrier_sessions (
   carrier_session_id TEXT PRIMARY KEY,
   site_id TEXT NOT NULL,
+  operation_id TEXT,
   agent_id TEXT NOT NULL,
   bound_by_principal_id TEXT NOT NULL,
   binding_status TEXT NOT NULL,
@@ -60,6 +61,9 @@ CREATE TABLE IF NOT EXISTS cloudflare_site_carrier_sessions (
 
 CREATE INDEX IF NOT EXISTS cloudflare_site_carrier_sessions_site_idx
   ON cloudflare_site_carrier_sessions(site_id, created_at);
+
+CREATE INDEX IF NOT EXISTS cloudflare_site_carrier_sessions_operation_idx
+  ON cloudflare_site_carrier_sessions(operation_id, created_at);
 
 CREATE TABLE IF NOT EXISTS cloudflare_site_authority_events (
   event_id TEXT PRIMARY KEY,

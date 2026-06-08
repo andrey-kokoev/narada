@@ -190,6 +190,7 @@ export class CloudflareCarrierDurableObject {
       carrier_session_id: params.carrier_session_id ?? request.carrier_session_id,
       agent_id: params.agent_id,
       site_id: params.site_id,
+      operation_id: params.operation_id ?? null,
       site_root: params.site_root ?? params.site_ref,
       site_ref: params.site_ref,
       providerAdapter,
@@ -295,6 +296,7 @@ async function validateCarrierSiteBindingForRequest(body, principal, env = {}) {
   return registry.validateCarrierSiteBinding({
     site_id: params.site_id,
     site_ref: params.site_ref ?? params.site_root,
+    operation_id: params.operation_id,
     carrier_session_id: params.carrier_session_id ?? body.carrier_session_id,
     agent_id: params.agent_id,
     principal,
@@ -518,6 +520,36 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
   }
   const response = await registry.handle({ ...body, principal });
   if (!response.ok) return { status: response.code === 'site_authority_denied' ? 403 : 400, body: response };
+  if (body.operation === 'operation.read') {
+    const operation = response.operation;
+    const siteId = operation?.site_id ?? params.site_id;
+    const sessions = response.sessions ?? [];
+    const tasks = await listOperationTasks(env, siteId, sessions);
+    const continuityPackets = await listCloudflareContinuityPackets(env, siteId);
+    const carrierEvidence = await readCarrierEvidenceForSiteSessions(env, sessions, principal, params);
+    const siteAuthority = cloudflareSiteAuthorityReadModel(env, siteId);
+    const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
+    return {
+      status: 200,
+      body: {
+        ...response,
+        tasks,
+        site_continuity_packets: continuityPackets,
+        carrier_evidence: carrierEvidence,
+        site_authority: siteAuthority,
+        site_continuity: siteContinuity,
+        operation_product_surface: {
+          schema: 'narada.cloudflare_operation_product_surface.v1',
+          operation_id: operation?.operation_id ?? null,
+          site_id: siteId,
+          session_count: sessions.length,
+          task_count: tasks.length,
+          carrier_evidence_count: carrierEvidence.length,
+          continuity_packet_count: continuityPackets.length,
+        },
+      },
+    };
+  }
   if (body.operation !== 'site.read') {
     if (body.operation === 'site.membership.put') {
       const siteId = response.site?.site_id ?? requestedSiteId;
@@ -550,6 +582,13 @@ async function listSiteTasks(env = {}, siteId) {
   if (!db || typeof db.prepare !== 'function' || !siteId) return [];
   const store = createD1SessionTaskStore(db, { site_id: siteId });
   return store.list();
+}
+
+async function listOperationTasks(env = {}, siteId, sessions = []) {
+  const sessionIds = new Set((sessions ?? []).map((session) => session.carrier_session_id).filter(Boolean));
+  if (sessionIds.size === 0) return [];
+  const tasks = await listSiteTasks(env, siteId);
+  return tasks.filter((task) => sessionIds.has(task.carrier_session_id));
 }
 
 async function readCarrierEvidenceForSiteSessions(env = {}, sessions = [], principal = null, params = {}) {
@@ -1089,8 +1128,20 @@ export function createCloudflareToolEffectAdapter(env = {}) {
             result_ref: null,
           };
         }
+        if (!context.taskStore || typeof context.taskStore.create !== 'function') {
+          return {
+            status: 'failed',
+            admission_action: admission.action,
+            admission_reason: admission.reason,
+            capability_ref: CLOUDFLARE_TASK_CREATE_CAPABILITY_REF,
+            effect_scope: CLOUDFLARE_TASK_CREATE_EFFECT_SCOPE,
+            authority_ref: authority.authority_ref,
+            result_summary: 'cloudflare_task_store_unavailable',
+            result_ref: null,
+          };
+        }
         const args = parseToolArguments(toolCall.arguments_summary);
-        const task = await context.taskStore?.create({
+        const task = await context.taskStore.create({
           title: args.title,
           description: args.description,
           source: 'cloudflare-carrier-task-effect',
@@ -1117,8 +1168,20 @@ export function createCloudflareToolEffectAdapter(env = {}) {
             result_ref: null,
           };
         }
+        if (!context.taskStore || typeof context.taskStore.update !== 'function') {
+          return {
+            status: 'failed',
+            admission_action: admission.action,
+            admission_reason: admission.reason,
+            capability_ref: CLOUDFLARE_TASK_UPDATE_CAPABILITY_REF,
+            effect_scope: CLOUDFLARE_TASK_UPDATE_EFFECT_SCOPE,
+            authority_ref: authority.authority_ref,
+            result_summary: 'cloudflare_task_store_unavailable',
+            result_ref: null,
+          };
+        }
         const args = parseToolArguments(toolCall.arguments_summary);
-        const task = await context.taskStore?.update({
+        const task = await context.taskStore.update({
           task_id: args.task_id,
           status: args.status,
           note: args.note,
@@ -1335,6 +1398,9 @@ function publicTask(task) {
     updated_at: String(task.updated_at),
     note: task.note ?? null,
     site_id: task.site_id ?? null,
+    carrier_session_id: task.carrier_session_id ?? null,
+    agent_id: task.agent_id ?? null,
+    site_root: task.site_root ?? null,
   };
 }
 

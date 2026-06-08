@@ -502,7 +502,9 @@ test('worker site.membership.put admits owner and exposes membership through sit
       updated_at: clock(),
     }],
   });
-  const env = authEnv(fakeDurableObjectNamespace(), { CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+  const taskDb = fakeD1TaskDatabase();
+  const durableEnv = { CLOUDFLARE_CARRIER_ENABLE_TASK_TOOLS: '1', CLOUDFLARE_CARRIER_TASK_DB: taskDb };
+  const env = authEnv(fakeDurableObjectNamespace(durableEnv), { CLOUDFLARE_SITE_REGISTRY_DB: siteDb, CLOUDFLARE_CARRIER_TASK_DB: taskDb, CLOUDFLARE_CARRIER_ENABLE_TASK_TOOLS: '1' });
   const put = await worker.fetch(jsonRequest({
     operation: 'site.membership.put',
     request_id: 'request_site_membership_put',
@@ -554,7 +556,13 @@ test('worker operation.create read and list route through site registry authorit
       updated_at: clock(),
     }],
   });
-  const env = authEnv(fakeDurableObjectNamespace(), { CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+  const taskDb = fakeD1TaskDatabase();
+  const durableEnv = { CLOUDFLARE_CARRIER_ENABLE_TASK_TOOLS: '1', CLOUDFLARE_CARRIER_TASK_DB: taskDb };
+  const env = authEnv(fakeDurableObjectNamespace(durableEnv), {
+    CLOUDFLARE_SITE_REGISTRY_DB: siteDb,
+    CLOUDFLARE_CARRIER_ENABLE_TASK_TOOLS: '1',
+    CLOUDFLARE_CARRIER_TASK_DB: taskDb,
+  });
 
   const created = await worker.fetch(jsonRequest({
     operation: 'operation.create',
@@ -573,6 +581,35 @@ test('worker operation.create read and list route through site registry authorit
   assert.equal(createdBody.operation.status, 'active');
   assert.equal(createdBody.principal.email, 'admin@system');
 
+  const start = await worker.fetch(jsonRequest(startRequest({
+    request_id: 'request_operation_session_start',
+    params: {
+      carrier_session_id: 'carrier_session_operation_fixture',
+      agent_id: 'narada.fixture.agent',
+      site_id: 'site_fixture',
+      site_root: 'cloudflare://site_fixture',
+      site_ref: 'site://fixture',
+      operation_id: 'operation_control',
+    },
+  }), { token: 'test-admin-token' }), env);
+  assert.equal(start.status, 200);
+  assert.equal(siteDb.dump().carrierSessions.some((session) => session.operation_id === 'operation_control'), true, JSON.stringify(siteDb.dump().carrierSessions));
+  const directOperationSessions = await siteDb.prepare('SELECT * FROM cloudflare_site_carrier_sessions WHERE operation_id = ? ORDER BY created_at DESC LIMIT ?').bind('operation_control', 10).all();
+  assert.equal(directOperationSessions.results.length, 1, JSON.stringify(directOperationSessions.results));
+
+  const taskCreate = await worker.fetch(jsonRequest(commandRequest('/task', ['create', 'operation', 'task'], {
+    request_id: 'request_operation_task_create',
+    carrier_session_id: 'carrier_session_operation_fixture',
+  }), { token: 'test-admin-token' }), env);
+  const taskCreateBody = await taskCreate.json();
+  assert.equal(taskCreate.status, 200, JSON.stringify(taskCreateBody));
+  const taskCreateResult = taskCreateBody.events?.find((event) => event.event_kind === 'tool_result_received');
+  assert.equal(taskCreateResult?.payload?.status, 'ok', JSON.stringify(taskCreateBody));
+  const taskCreateSummary = JSON.parse(taskCreateResult.payload.result_summary);
+  assert.ok(taskCreateSummary.task?.task_id, JSON.stringify(taskCreateSummary));
+  const directSiteTasks = await taskDb.prepare('SELECT * FROM narada_tasks WHERE site_id = ? ORDER BY task_number ASC').bind('site_fixture').all();
+  assert.equal(directSiteTasks.results.some((task) => task.carrier_session_id === 'carrier_session_operation_fixture'), true, JSON.stringify(directSiteTasks.results));
+
   const read = await worker.fetch(jsonRequest({
     operation: 'operation.read',
     request_id: 'request_operation_read',
@@ -581,6 +618,12 @@ test('worker operation.create read and list route through site registry authorit
   assert.equal(read.status, 200);
   const readBody = await read.json();
   assert.equal(readBody.operation.display_name, 'Control Operation');
+  assert.equal(readBody.sessions.some((session) => session.carrier_session_id === 'carrier_session_operation_fixture'), true, JSON.stringify(readBody.sessions));
+  assert.equal(readBody.tasks.some((task) => task.carrier_session_id === 'carrier_session_operation_fixture'), true, JSON.stringify(readBody.tasks));
+  assert.equal(readBody.carrier_evidence.some((entry) => entry.carrier_session_id === 'carrier_session_operation_fixture'), true, JSON.stringify(readBody.carrier_evidence));
+  assert.equal(readBody.operation_product_surface.operation_id, 'operation_control');
+  assert.equal(readBody.operation_product_surface.session_count, 1);
+  assert.equal(readBody.operation_product_surface.task_count, 1);
   assert.equal(readBody.reader_principal.email, 'admin@system');
 
   const listed = await worker.fetch(jsonRequest({
@@ -1745,10 +1788,21 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const existing = state.operations.find((entry) => entry.operation_id === operation_id);
         if (existing) Object.assign(existing, { display_name, operation_kind, status, updated_at });
         else state.operations.push({ operation_id, site_id, display_name, operation_kind, status, created_by_principal_id, created_at, updated_at });
+      } else if (normalized.startsWith('update cloudflare_site_carrier_sessions set operation_id')) {
+        const [operation_id, updated_at, carrier_session_id] = bindings;
+        const existing = state.carrierSessions.find((entry) => entry.carrier_session_id === carrier_session_id);
+        if (existing) Object.assign(existing, { operation_id, updated_at });
       } else if (normalized.startsWith('insert into cloudflare_site_carrier_sessions')) {
-        const [carrier_session_id, site_id, agent_id, bound_by_principal_id, binding_status, created_at, updated_at] = bindings;
+        const hasOperationId = bindings.length === 8;
+        const [carrier_session_id, site_id, maybe_operation_id, maybe_agent_id, maybe_bound_by_principal_id, maybe_binding_status, maybe_created_at, maybe_updated_at] = bindings;
+        const operation_id = hasOperationId ? maybe_operation_id : null;
+        const agent_id = hasOperationId ? maybe_agent_id : maybe_operation_id;
+        const bound_by_principal_id = hasOperationId ? maybe_bound_by_principal_id : maybe_agent_id;
+        const binding_status = hasOperationId ? maybe_binding_status : maybe_bound_by_principal_id;
+        const created_at = hasOperationId ? maybe_created_at : maybe_binding_status;
+        const updated_at = hasOperationId ? maybe_updated_at : maybe_created_at;
         if (!state.carrierSessions.some((entry) => entry.carrier_session_id === carrier_session_id)) {
-          state.carrierSessions.push({ carrier_session_id, site_id, agent_id, bound_by_principal_id, binding_status, created_at, updated_at });
+          state.carrierSessions.push({ carrier_session_id, site_id, operation_id, agent_id, bound_by_principal_id, binding_status, created_at, updated_at });
         }
       } else if (normalized.startsWith('insert into cloudflare_site_authority_events')) {
         const [event_id, event_kind, site_id, carrier_session_id, principal_id, action, reason, evidence_json, recorded_at] = bindings;
@@ -1791,6 +1845,16 @@ function fakeD1SiteRegistryStatement(state, sql) {
     },
     async all() {
       if (normalized.includes('from cloudflare_site_carrier_sessions')) {
+        if (normalized.includes('where operation_id = ?')) {
+          const [operationId, limit] = bindings;
+          return {
+            results: state.carrierSessions
+              .filter((entry) => entry.operation_id === operationId)
+              .sort((left, right) => right.created_at.localeCompare(left.created_at))
+              .slice(0, Number(limit))
+              .map((entry) => clone(entry)),
+          };
+        }
         const [siteId, limit] = bindings;
         return {
           results: state.carrierSessions

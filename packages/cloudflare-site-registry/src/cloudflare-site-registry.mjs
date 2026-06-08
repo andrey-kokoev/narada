@@ -83,13 +83,16 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     await db.prepare(`CREATE TABLE IF NOT EXISTS cloudflare_site_carrier_sessions (
       carrier_session_id TEXT PRIMARY KEY,
       site_id TEXT NOT NULL,
+      operation_id TEXT,
       agent_id TEXT NOT NULL,
       bound_by_principal_id TEXT NOT NULL,
       binding_status TEXT NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`).run();
+    await addColumnIfMissing('cloudflare_site_carrier_sessions', 'operation_id TEXT');
     await db.prepare('CREATE INDEX IF NOT EXISTS cloudflare_site_carrier_sessions_site_idx ON cloudflare_site_carrier_sessions(site_id, created_at)').run();
+    await db.prepare('CREATE INDEX IF NOT EXISTS cloudflare_site_carrier_sessions_operation_idx ON cloudflare_site_carrier_sessions(operation_id, created_at)').run();
     await db.prepare(`CREATE TABLE IF NOT EXISTS cloudflare_site_authority_events (
       event_id TEXT PRIMARY KEY,
       event_kind TEXT NOT NULL,
@@ -103,6 +106,24 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     )`).run();
     await db.prepare('CREATE INDEX IF NOT EXISTS cloudflare_site_authority_events_site_idx ON cloudflare_site_authority_events(site_id, recorded_at)').run();
     initialized = true;
+  }
+
+  async function listOperationCarrierSessionBindings(operationId, limit = 100) {
+    const result = await db.prepare(`SELECT * FROM cloudflare_site_carrier_sessions
+      WHERE operation_id = ?
+      ORDER BY created_at DESC
+      LIMIT ?`).bind(operationId, boundedReadLimit(limit)).all();
+    return (result.results ?? []).map(publicCarrierSessionBinding);
+  }
+
+  async function listOperationAuthorityEvents(siteId, operationId, limit = 100) {
+    const result = await db.prepare(`SELECT * FROM cloudflare_site_authority_events
+      WHERE site_id = ?
+      ORDER BY recorded_at DESC
+      LIMIT ?`).bind(siteId, boundedReadLimit(limit)).all();
+    return (result.results ?? [])
+      .map(publicAuthorityEvent)
+      .filter((event) => event?.evidence?.operation_id === operationId || event?.carrier_session_id != null);
   }
 
   async function createOperation({ operation_id, site_id, display_name = null, operation_kind = 'control', status = 'active', principal, request_id = null } = {}) {
@@ -167,7 +188,7 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     };
   }
 
-  async function readOperation({ operation_id, site_id, principal } = {}) {
+  async function readOperation({ operation_id, site_id, principal, include_sessions = true, include_authority_events = true, limit = 100 } = {}) {
     await ensureSchema();
     const operationId = normalizeOperationId(operation_id);
     const requestedSiteId = normalizeSiteId(site_id);
@@ -178,7 +199,14 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     if (requestedSiteId && operation.site_id !== requestedSiteId) return { ok: false, code: 'operation_site_mismatch', site_id: requestedSiteId, operation_id: operationId };
     const membership = await findMembership(operation.site_id, principalId);
     if (!membership || membership.status !== 'active') return { ok: false, code: 'site_authority_denied', site_id: operation.site_id, operation_id: operationId };
-    return { ok: true, operation: publicOperation(operation), membership: publicMembership(membership) };
+    const boundedLimit = boundedReadLimit(limit);
+    return {
+      ok: true,
+      operation: publicOperation(operation),
+      membership: publicMembership(membership),
+      sessions: include_sessions ? await listOperationCarrierSessionBindings(operationId, boundedLimit) : [],
+      authority_events: include_authority_events ? await listOperationAuthorityEvents(operation.site_id, operationId, boundedLimit) : [],
+    };
   }
 
   async function listOperations({ site_id, principal, limit = 100 } = {}) {
@@ -379,7 +407,7 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     };
   }
 
-  async function validateCarrierSiteBinding({ site_id, site_ref = null, carrier_session_id, agent_id, principal, request_id = null } = {}) {
+  async function validateCarrierSiteBinding({ site_id, site_ref = null, operation_id = null, carrier_session_id, agent_id, principal, request_id = null } = {}) {
     await ensureSchema();
     const siteId = normalizeSiteId(site_id);
     const principalId = normalizePrincipal(principal).principal_id;
@@ -393,6 +421,13 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     if (site_ref && site.site_ref && String(site.site_ref) !== String(site_ref)) {
       return denied('carrier_site_binding_rejected', { site_id: siteId, carrier_session_id: carrierSessionId, principal_id: principalId, reason: 'site_ref_mismatch', request_id });
     }
+    const rawOperationId = String(operation_id ?? '').trim();
+    const operationId = rawOperationId ? normalizeOperationId(rawOperationId) : null;
+    if (rawOperationId && !operationId) return denied('carrier_site_binding_rejected', { site_id: siteId, carrier_session_id: carrierSessionId, principal_id: principalId, reason: 'invalid_operation_id', request_id });
+    const operation = operationId ? await findOperation(operationId) : null;
+    if (operationId && (!operation || operation.site_id !== siteId || operation.status !== 'active')) {
+      return denied('carrier_site_binding_rejected', { site_id: siteId, carrier_session_id: carrierSessionId, principal_id: principalId, reason: operation ? 'operation_site_mismatch' : 'operation_not_found', request_id });
+    }
     const membership = await findMembership(siteId, principalId);
     if (!membership || membership.status !== 'active' || !BINDING_ROLES.has(membership.role)) {
       return denied('carrier_site_binding_rejected', { site_id: siteId, carrier_session_id: carrierSessionId, principal_id: principalId, reason: 'site_authority_denied', request_id });
@@ -401,19 +436,25 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     if (existing && existing.site_id !== siteId) {
       return denied('carrier_site_binding_rejected', { site_id: siteId, carrier_session_id: carrierSessionId, principal_id: principalId, reason: 'carrier_session_site_mismatch', request_id });
     }
+    if (existing && operationId && existing.operation_id && existing.operation_id !== operationId) {
+      return denied('carrier_site_binding_rejected', { site_id: siteId, carrier_session_id: carrierSessionId, principal_id: principalId, reason: 'carrier_session_operation_mismatch', request_id });
+    }
     const timestamp = now();
     if (!existing) {
       await db.prepare(`INSERT INTO cloudflare_site_carrier_sessions (
-        carrier_session_id, site_id, agent_id, bound_by_principal_id, binding_status, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`).bind(
+        carrier_session_id, site_id, operation_id, agent_id, bound_by_principal_id, binding_status, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(
         carrierSessionId,
         siteId,
+        operationId,
         agentId,
         principalId,
         'active',
         timestamp,
         timestamp,
       ).run();
+    } else if (operationId && !existing.operation_id) {
+      await db.prepare('UPDATE cloudflare_site_carrier_sessions SET operation_id = ?, updated_at = ? WHERE carrier_session_id = ?').bind(operationId, timestamp, carrierSessionId).run();
     }
     await recordAuthorityEvent({
       event_kind: 'carrier_site_binding_admitted',
@@ -422,7 +463,7 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
       principal_id: principalId,
       action: 'admit',
       reason: existing ? 'carrier_site_binding_reused' : 'carrier_site_binding_created',
-      evidence: { request_id, site_id: siteId, carrier_session_id: carrierSessionId, agent_id: agentId, role: membership.role },
+      evidence: { request_id, site_id: siteId, operation_id: operationId, carrier_session_id: carrierSessionId, agent_id: agentId, role: membership.role },
     });
     return {
       ok: true,
@@ -435,6 +476,7 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
         action: 'admit',
         reason: existing ? 'carrier_site_binding_reused' : 'carrier_site_binding_created',
         site_id: siteId,
+        operation_id: operationId,
         carrier_session_id: carrierSessionId,
         principal_id: principalId,
       },
@@ -469,6 +511,14 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
 
   async function findOperation(operationId) {
     return db.prepare('SELECT * FROM cloudflare_site_operations WHERE operation_id = ?').bind(operationId).first();
+  }
+
+  async function addColumnIfMissing(tableName, columnDefinition) {
+    try {
+      await db.prepare(`ALTER TABLE ${tableName} ADD COLUMN ${columnDefinition}`).run();
+    } catch (error) {
+      if (!/duplicate column|already exists/i.test(String(error?.message ?? error))) throw error;
+    }
   }
 
   async function listSiteOperations(siteId, limit = 100) {
@@ -542,6 +592,7 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     validateCarrierSiteBinding,
     listSiteOperations,
     listCarrierSessionBindings,
+    listOperationCarrierSessionBindings,
     listAuthorityEvents,
     listMemberships,
   };
@@ -597,6 +648,7 @@ function publicCarrierSessionBinding(binding) {
   return {
     carrier_session_id: String(binding.carrier_session_id),
     site_id: String(binding.site_id),
+    operation_id: binding.operation_id ?? null,
     agent_id: String(binding.agent_id),
     bound_by_principal_id: String(binding.bound_by_principal_id),
     binding_status: String(binding.binding_status),

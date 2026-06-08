@@ -59,6 +59,8 @@ const smoke = await runJsonCommand('live-carrier-smoke', [
   tokenFile,
   '--site',
   siteId,
+  '--operation',
+  operationId,
   '--site-root',
   siteRef,
   '--expect-tool-effect-posture',
@@ -95,6 +97,8 @@ const operationRead = await postCarrier(workerUrl, bearerToken, {
   params: {
     site_id: siteId,
     operation_id: operationId,
+    carrier_event_limit: 20,
+    session_limit: 10,
   },
 });
 assert.equal(operationRead.http_status, 200);
@@ -102,6 +106,12 @@ assert.equal(operationRead.body.ok, true);
 assert.equal(operationRead.body.operation?.operation_id, operationId);
 assert.equal(operationRead.body.operation?.site_id, siteId);
 assert.equal(operationRead.body.operation?.status, 'active');
+assert.equal(operationRead.body.sessions?.some((session) => session.carrier_session_id === smoke.carrier_session_id), true);
+assert.equal(operationRead.body.tasks?.some((task) => task.carrier_session_id === smoke.carrier_session_id), true);
+assert.equal(operationRead.body.carrier_evidence?.some((entry) => entry.carrier_session_id === smoke.carrier_session_id && entry.ok === true), true);
+assert.equal(operationRead.body.operation_product_surface?.operation_id, operationId);
+assert.ok(operationRead.body.operation_product_surface?.session_count >= 1);
+assert.ok(operationRead.body.operation_product_surface?.task_count >= 1);
 
 const humanOperator = await checkHumanOperatorSession({
   workerUrl,
@@ -147,6 +157,7 @@ const report = {
     membership_visibility: 'ok',
     operation_read: 'ok',
     canonical_operation_active: 'ok',
+    operation_inhabited_by_live_work: 'ok',
     human_operator_session: humanOperator.status,
     human_operator_membership: humanOperator.membership_status,
     human_operator_operation_read: humanOperator.operation_status,
@@ -172,6 +183,10 @@ const report = {
     operation_kind: operationRead.body.operation.operation_kind,
     status: operationRead.body.operation.status,
     listed_on_site_read: operations.some((operation) => operation.operation_id === operationId),
+    session_count: operationRead.body.operation_product_surface.session_count,
+    task_count: operationRead.body.operation_product_surface.task_count,
+    carrier_evidence_count: operationRead.body.operation_product_surface.carrier_evidence_count,
+    smoke_session_bound: operationRead.body.sessions.some((session) => session.carrier_session_id === smoke.carrier_session_id),
   },
   carrier: {
     session_id: smoke.carrier_session_id,
@@ -320,12 +335,15 @@ async function checkHumanOperatorSession({ workerUrl, siteId, operatorCookieFile
     params: {
       site_id: siteId,
       operation_id: operationId,
+      carrier_event_limit: 10,
+      session_limit: 5,
     },
   });
   assert.equal(operationReadAsOperator.http_status, 200);
   assert.equal(operationReadAsOperator.body.ok, true);
   assert.equal(operationReadAsOperator.body.operation?.operation_id, operationId);
   assert.equal(operationReadAsOperator.body.operation?.status, 'active');
+  assert.ok(operationReadAsOperator.body.operation_product_surface?.session_count >= 1);
   return {
     status: 'ok',
     membership_status: 'ok',

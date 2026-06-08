@@ -17,6 +17,7 @@ const carrierSessionId = option('--session') ?? `carrier_session_live_smoke_${se
 const agentId = option('--agent') ?? 'narada.live.smoke';
 const siteId = option('--site') ?? 'site_live_smoke';
 const siteRoot = option('--site-root') ?? process.env.CLOUDFLARE_CARRIER_SITE_REF ?? `cloudflare://${siteId}`;
+const operationId = option('--operation') ?? process.env.CLOUDFLARE_CARRIER_OPERATION_ID ?? null;
 const goalWords = option('--goal')?.split(/\s+/).filter(Boolean) ?? ['prove', 'live', 'cloudflare', 'carrier'];
 const expectedGoal = goalWords.join(' ');
 const expectedToolEffectPosture = option('--expect-tool-effect-posture') ?? process.env.CLOUDFLARE_CARRIER_EXPECT_TOOL_EFFECT_POSTURE ?? null;
@@ -40,6 +41,7 @@ const start = await post({
     carrier_session_id: carrierSessionId,
     agent_id: agentId,
     site_id: siteId,
+    ...(operationId ? { operation_id: operationId } : {}),
     site_root: siteRoot,
   },
 });
@@ -141,6 +143,7 @@ assert.equal(status.http_status, 200);
 assert.equal(status.body.ok, true);
 assert.equal(status.body.carrier_session_id, carrierSessionId);
 assert.equal(status.body.agent_id, agentId);
+if (operationId) assert.equal(status.body.operation_id, operationId);
 assert.equal(status.body.carrier_host, 'cloudflare-durable-object');
 assert.equal(status.body.provider_adapter_posture, 'cloudflare-workers-ai');
 assertToolEffectStatus(status.body, expectedToolEffectPosture);
@@ -175,6 +178,7 @@ process.stdout.write(`${JSON.stringify({
   api_client_path: apiUrl().toString(),
   carrier_session_id: carrierSessionId,
   agent_id: agentId,
+  operation_id: operationId,
   carrier_host: status.body.carrier_host,
   provider_adapter_posture: status.body.provider_adapter_posture,
   tool_effect_posture: status.body.tool_effect_posture,
