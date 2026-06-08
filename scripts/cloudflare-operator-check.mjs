@@ -129,6 +129,25 @@ const continuitySecond = await runJsonCommand('site-continuity-loop:idempotent',
 assert.equal(continuitySecond.status, 'ok');
 assert.equal(continuitySecond.windows_packet_count, 1);
 
+const operationReadAfterContinuity = await postCarrier(workerUrl, bearerToken, {
+  operation: 'operation.read',
+  request_id: `operator_check_operation_continuity_read_${Date.now()}`,
+  params: {
+    site_id: siteId,
+    operation_id: operationId,
+    carrier_event_limit: 20,
+    session_limit: 10,
+  },
+});
+assert.equal(operationReadAfterContinuity.http_status, 200);
+assert.equal(operationReadAfterContinuity.body.ok, true);
+const operationSurface = operationReadAfterContinuity.body.operation_product_surface;
+const operationContinuityPackets = operationReadAfterContinuity.body.site_continuity_packets ?? [];
+assert.equal(operationSurface?.operation_id, operationId);
+assert.ok(Array.isArray(operationContinuityPackets));
+assert.ok(operationContinuityPackets.length >= 1);
+assert.equal(operationSurface?.continuity_packet_count, operationContinuityPackets.length);
+
 const microsoftLoginUrl = new URL('/auth/microsoft/login', withTrailingSlash(workerUrl)).toString();
 const apiClientPath = new URL('/api/carrier', withTrailingSlash(workerUrl)).toString();
 const report = {
@@ -158,6 +177,7 @@ const report = {
     operation_read: 'ok',
     canonical_operation_active: 'ok',
     operation_inhabited_by_live_work: 'ok',
+    operation_continuity_packets: 'ok',
     human_operator_session: humanOperator.status,
     human_operator_membership: humanOperator.membership_status,
     human_operator_operation_read: humanOperator.operation_status,
@@ -183,9 +203,10 @@ const report = {
     operation_kind: operationRead.body.operation.operation_kind,
     status: operationRead.body.operation.status,
     listed_on_site_read: operations.some((operation) => operation.operation_id === operationId),
-    session_count: operationRead.body.operation_product_surface.session_count,
-    task_count: operationRead.body.operation_product_surface.task_count,
-    carrier_evidence_count: operationRead.body.operation_product_surface.carrier_evidence_count,
+    session_count: operationSurface.session_count,
+    task_count: operationSurface.task_count,
+    carrier_evidence_count: operationSurface.carrier_evidence_count,
+    continuity_packet_count: operationSurface.continuity_packet_count,
     smoke_session_bound: operationRead.body.sessions.some((session) => session.carrier_session_id === smoke.carrier_session_id),
   },
   carrier: {
