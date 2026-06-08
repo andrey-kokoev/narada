@@ -3302,6 +3302,8 @@ export function renderCloudflareCarrierConsole() {
       const authorityAction = String(contextValue(authorityActionContext(product), 'Next Action'));
       const targets = operationFlightDeckTargets(product);
       const surface = product.operation_product_surface || {};
+      const webhookDelayDirectiveRecords = product.webhook_delay_directive_records || [];
+      const webhookDelayDirectiveSurfacePresent = 'webhook_delay_directive_records' in product || 'webhook_delay_directive_record_count' in surface;
       const dispatchDecisions = product.resident_dispatch_decisions || [];
       const dispatchSurfacePresent = 'resident_dispatch_decisions' in product || 'resident_dispatch_decision_count' in surface;
       const next = (() => {
@@ -3328,6 +3330,12 @@ export function renderCloudflareCarrierConsole() {
         }
         if (authorityAction && !['monitor_authority_admissions'].includes(authorityAction)) {
           return { domain: 'authority', action: authorityAction, target: contextValue(authorityActionContext(product), 'Focused Decision') || 'authority', reason: 'authority_state_needs_attention' };
+        }
+        if (webhookDelayDirectiveRecords.length > 0 && !state.webhookDelayDirectiveFocus) {
+          return { domain: 'webhook_delay_directive', action: 'focus_webhook_delay_directive_intent', target: webhookDelayDirectiveRecords[0].directive_record_id || 'directive_intent', reason: 'directive_intent_record_needs_operator_focus' };
+        }
+        if (webhookDelayDirectiveSurfacePresent && webhookDelayDirectiveRecords.length === 0 && (product.webhook_delay_shadow_observations || []).length > 0) {
+          return { domain: 'webhook_delay_directive', action: 'focus_webhook_delay_shadow_read', target: (product.webhook_delay_shadow_observations || [])[0].observation_id || 'shadow_read', reason: 'directive_intent_not_recorded_from_shadow_read' };
         }
         if (dispatchSurfacePresent && dispatchDecisions.length === 0 && operationId) {
           return { domain: 'resident_dispatch', action: 'start_resident_dispatch', target: operationId, reason: 'cloudflare_primary_dispatch_not_recorded' };
@@ -3365,6 +3373,8 @@ export function renderCloudflareCarrierConsole() {
       if (action === 'use_focused_session') { useFocusedSession(); return; }
       if (action === 'read_session_evidence') { run(readSelectedSessionEvidence); return; }
       if (action === 'focus_authority_evidence' || action === 'inspect_refused_authority' || action === 'resolve_authority_locus' || action === 'read_site_authority') { applyAuthorityNextAction(); return; }
+      if (action === 'focus_webhook_delay_directive_intent') { focusWebhookDelayDirective(); return; }
+      if (action === 'focus_webhook_delay_shadow_read') { focusWebhookDelayShadow(); return; }
       if (action === 'start_resident_dispatch') { run(startResidentDispatchFromWorkbench); return; }
       if (action === 'focus_open_attention' || action === 'focus_open_task' || action === 'monitor_operation_evidence') { applyFlightDeckNextAction(); return; }
       applyFlightDeckNextAction();
@@ -3401,11 +3411,13 @@ export function renderCloudflareCarrierConsole() {
       const openAttention = state.attentionItems.filter((item) => item.status !== 'resolved');
       const openTasks = (product.tasks || []).filter((task) => !['done', 'closed', 'resolved'].includes(String(task.status || '').toLowerCase()));
       const unresolvedAuthority = (product.site_authority?.decisions || []).filter((decision) => decision.action !== 'admit');
+      const directiveIntent = state.webhookDelayDirectiveFocus || (product.webhook_delay_directive_records || [])[0] || null;
       return {
         session: sessions.find((session) => session.carrier_session_id === activeSession) || state.sessionFocus || sessions[0] || null,
         attention: openAttention[0] || state.attentionFocus || state.attentionItems[0] || null,
         task: openTasks[0] || state.taskFocus || (product.tasks || [])[0] || null,
         authority: unresolvedAuthority[0] || state.authorityFocus || (product.site_authority?.decisions || [])[0] || null,
+        directiveIntent,
       };
     }
     function setEvidenceLane(key) {
@@ -3428,6 +3440,7 @@ export function renderCloudflareCarrierConsole() {
       if (targets.task && !['done', 'closed', 'resolved'].includes(String(targets.task.status || '').toLowerCase())) { selectTask(targets.task); return; }
       if (targets.session && !el('sessionId').value.trim()) { selectOperationSession(targets.session); return; }
       if (targets.authority && targets.authority.action !== 'admit') { selectAuthorityDecision(targets.authority); return; }
+      if (targets.directiveIntent) { selectWebhookDelayDirective(targets.directiveIntent); return; }
       focusFlightDeckEvidence();
     }
     function operationFlightDeckButton(id, label, action) {
@@ -3453,6 +3466,7 @@ export function renderCloudflareCarrierConsole() {
         operationFlightDeckButton('flightDeckFocusAttention', 'Focus Attention', () => { if (targets.attention) selectAttentionItem(targets.attention); }),
         operationFlightDeckButton('flightDeckFocusTask', 'Focus Task', () => { if (targets.task) selectTask(targets.task); }),
         operationFlightDeckButton('flightDeckFocusAuthority', 'Focus Authority', () => { if (targets.authority) selectAuthorityDecision(targets.authority); }),
+        operationFlightDeckButton('flightDeckFocusDirectiveIntent', 'Focus Directive Intent', () => { if (targets.directiveIntent) selectWebhookDelayDirective(targets.directiveIntent); }),
         operationFlightDeckButton('flightDeckFocusEvidence', 'Focus Evidence', focusFlightDeckEvidence),
       );
       el('operationFlightDeck').replaceChildren(...operationFlightDeckContext(product).map(([label, value]) => evidenceField(label, value)), actions);
@@ -4676,6 +4690,11 @@ export function renderCloudflareCarrierConsole() {
       renderWebhookDelayShadowNavigator(state.operationProduct?.webhook_delay_shadow_observations || []);
       updateControlRoom();
     }
+    function focusWebhookDelayShadow(item = null) {
+      const items = state.operationProduct?.webhook_delay_shadow_observations || [];
+      const focused = item || state.webhookDelayShadowFocus || items[0] || null;
+      if (focused) selectWebhookDelayShadow(focused);
+    }
     function renderWebhookDelayShadowNavigator(items = []) {
       if (items.length === 0) {
         state.webhookDelayShadowFocus = null;
@@ -4728,6 +4747,11 @@ export function renderCloudflareCarrierConsole() {
       state.webhookDelayDirectiveFocus = item;
       renderWebhookDelayDirectiveNavigator(state.operationProduct?.webhook_delay_directive_records || []);
       updateControlRoom();
+    }
+    function focusWebhookDelayDirective(item = null) {
+      const items = state.operationProduct?.webhook_delay_directive_records || [];
+      const focused = item || state.webhookDelayDirectiveFocus || items[0] || null;
+      if (focused) selectWebhookDelayDirective(focused);
     }
     function renderWebhookDelayDirectiveNavigator(items = []) {
       if (items.length === 0) {
