@@ -1730,6 +1730,11 @@ export function renderCloudflareCarrierConsole() {
     .toolbar h2 { margin: 0; font-size: 16px; letter-spacing: 0; }
     .event-filters { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr); gap: 8px; width: min(420px, 100%); }
     .event-filters label { margin: 0; }
+    .evidence-lanes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 12px 14px; border-bottom: 1px solid #d7d7ce; background: #faf9f4; }
+    .evidence-lane { min-width: 0; border: 1px solid #d9dcd3; border-radius: 6px; padding: 9px; background: #fff; cursor: pointer; }
+    .evidence-lane.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
+    .evidence-lane strong { display: block; font-size: 12px; color: #1f4e48; overflow-wrap: anywhere; }
+    .evidence-lane span { display: block; margin-top: 4px; font-size: 12px; color: #686d75; overflow-wrap: anywhere; }
     .events { overflow: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
     .evidence-focus { padding: 12px 14px; border-bottom: 1px solid #d7d7ce; background: #fff; }
     .evidence-focus h3 { margin: 0 0 6px; font-size: 13px; color: #1f4e48; letter-spacing: 0; }
@@ -1747,7 +1752,7 @@ export function renderCloudflareCarrierConsole() {
     .composer { padding: 12px 14px; border-top: 1px solid #d7d7ce; }
     .error { margin-top: 12px; color: #a5361f; font-size: 13px; overflow-wrap: anywhere; }
     .empty { color: #686d75; font-size: 14px; padding: 24px 4px; }
-    @media (max-width: 840px) { main { grid-template-columns: 1fr; } section { min-height: 560px; } }
+    @media (max-width: 840px) { main { grid-template-columns: 1fr; } section { min-height: 560px; } .evidence-lanes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   </style>
 </head>
 <body>
@@ -1915,6 +1920,7 @@ export function renderCloudflareCarrierConsole() {
         <div class="overview-block"><h3>Carrier Evidence</h3><ul><li class="empty">No carrier evidence loaded.</li></ul></div>
       </div>
       <div id="evidenceFocus" class="evidence-focus"><h3>Evidence Focus</h3><span>No event selected.</span></div>
+      <div id="evidenceLanes" class="evidence-lanes"><div class="empty">No evidence lanes loaded.</div></div>
       <div id="events" class="events"><div class="empty">Start or resume a session to read carrier events.</div></div>
       <div class="composer">
         <label>Input<textarea id="input" placeholder="Send an operator input to the Cloudflare carrier"></textarea></label>
@@ -1924,7 +1930,7 @@ export function renderCloudflareCarrierConsole() {
   </main>
   <script type="module">
     const WORKBENCH_STORAGE_KEY = 'narada.cloudflare.operationWorkbench.v1';
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, operations: [], consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, operations: [], consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -2071,6 +2077,7 @@ export function renderCloudflareCarrierConsole() {
         if (Number.isInteger(sequence)) state.afterSequence = Math.max(state.afterSequence, sequence);
       }
       refreshEventKindFilter();
+      renderEvidenceLanes();
       renderEvents();
       renderAttentionQueue(extractOperationAttention(state.operationProduct || {}));
     }
@@ -2145,9 +2152,59 @@ export function renderCloudflareCarrierConsole() {
       const sessionFilter = el('eventSessionFilter').value;
       return state.events.filter((event) => {
         if (kindFilter && event.event_kind !== kindFilter) return false;
+        if (state.evidenceLane && classifyEvidenceLane(event) !== state.evidenceLane) return false;
         if (sessionFilter === 'active' && activeSession && event.carrier_session_id && event.carrier_session_id !== activeSession) return false;
         return true;
       });
+    }
+    function evidenceLaneDefinitions() {
+      return [
+        { key: '', label: 'All Evidence' },
+        { key: 'input', label: 'Input Lifecycle' },
+        { key: 'provider', label: 'Provider Turns' },
+        { key: 'tools', label: 'Tools / Effects' },
+        { key: 'authority', label: 'Authority' },
+        { key: 'directives', label: 'Directives' },
+        { key: 'failures', label: 'Failures' },
+        { key: 'other', label: 'Other' },
+      ];
+    }
+    function classifyEvidenceLane(event = {}) {
+      const kind = event.event_kind || '';
+      const payload = event.payload || {};
+      if (kind.includes('failed') || kind.includes('rejected') || payload.status === 'failed' || payload.admission_action === 'deny' || payload.action === 'refuse') return 'failures';
+      if (kind.startsWith('directive_') || payload.directive_kind || payload.directive_id) return 'directives';
+      if (kind.includes('authority') || payload.site_authority_decision || payload.authority_ref) return 'authority';
+      if (kind.includes('tool') || payload.tool_name || payload.capability_ref || payload.effect_scope) return 'tools';
+      if (kind.startsWith('provider_') || kind.startsWith('turn_') || payload.provider || payload.provider_adapter_kind) return 'provider';
+      if (kind.includes('input') || kind === 'carrier_command_executed' || kind === 'carrier_session_started') return 'input';
+      return 'other';
+    }
+    function renderEvidenceLanes() {
+      const counts = new Map(evidenceLaneDefinitions().map((lane) => [lane.key, 0]));
+      for (const event of state.events) {
+        counts.set('', (counts.get('') || 0) + 1);
+        const lane = classifyEvidenceLane(event);
+        counts.set(lane, (counts.get(lane) || 0) + 1);
+      }
+      el('evidenceLanes').replaceChildren(...evidenceLaneDefinitions().map((lane) => {
+        const node = document.createElement('article');
+        node.className = 'evidence-lane' + (state.evidenceLane === lane.key ? ' selected' : '');
+        const title = document.createElement('strong');
+        title.textContent = lane.label;
+        const meta = document.createElement('span');
+        meta.textContent = String(counts.get(lane.key) || 0) + ' events';
+        node.addEventListener('click', () => {
+          state.evidenceLane = lane.key;
+          const first = visibleEvents()[0] || null;
+          if (first) focusEvidence(first);
+          else { state.evidenceFocus = null; renderEvidenceFocus(); }
+          renderEvidenceLanes();
+          renderEvents();
+        });
+        node.append(title, meta);
+        return node;
+      }));
     }
     function focusEvidence(event) {
       if (!event) return;
@@ -2953,6 +3010,7 @@ export function renderCloudflareCarrierConsole() {
       const events = visibleEvents();
       updateControlRoom();
       renderEvidenceFocus();
+      renderEvidenceLanes();
       if (events.length === 0) {
         el('events').innerHTML = '<div class="empty">No matching events read yet.</div>';
         return;
