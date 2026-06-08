@@ -8,6 +8,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { stderr, stdout } from 'node:process';
+import {
+  classifyCloudflareAuthorityCommandState,
+  classifyCloudflareEvidenceCommandState,
+  classifyCloudflareOperationCommandState,
+  classifyCloudflareSessionCommandState,
+  classifyCloudflareTaskCommandState,
+} from '../packages/cloudflare-carrier/src/cloudflare-worker.mjs';
 
 const args = process.argv.slice(2);
 const repoRoot = new URL('..', import.meta.url);
@@ -621,6 +628,13 @@ assert.equal(operationRead.body.operation_product_surface?.operation_id, operati
 assert.ok(operationRead.body.operation_product_surface?.session_count >= 1);
 assert.ok(operationRead.body.operation_product_surface?.task_count >= 1);
 
+const liveCommandStates = commandStatesForOperationProduct(operationRead.body, { session_id: smoke.carrier_session_id });
+assert.match(liveCommandStates.operation.next_action, /^(inspect_operation_evidence|read_operation_evidence|start_or_select_session)$/);
+assert.equal(liveCommandStates.session.next_action, 'inspect_session_evidence');
+assert.match(liveCommandStates.task.next_action, /^(mark_done_or_update|reopen_or_inspect_evidence|normalize_status_or_update)$/);
+assert.match(liveCommandStates.authority.next_action, /^(read_site_authority|inspect_refused_authority|resolve_authority_locus|monitor_authority_admissions|focus_authority_evidence)$/);
+assert.match(liveCommandStates.evidence.next_action, /^(inspect_authority_locus|trace_input_lifecycle|inspect_tool_effect|inspect_failure_and_retry_or_escalate|inspect_provider_turn|resolve_or_acknowledge_directive|inspect_evidence_payload)$/);
+
 const humanOperator = await checkHumanOperatorSession({
   workerUrl,
   siteId,
@@ -717,6 +731,7 @@ const report = {
     continuity_packet_count: operationSurface.continuity_packet_count,
     smoke_session_bound: operationRead.body.sessions.some((session) => session.carrier_session_id === smoke.carrier_session_id),
   },
+  command_states: liveCommandStates,
   carrier: {
     session_id: smoke.carrier_session_id,
     provider_adapter_posture: smoke.provider_adapter_posture,
@@ -820,6 +835,55 @@ async function postCarrier(baseUrl, token, body) {
   return { http_status: response.status, body: parsed };
 }
 
+function commandStatesForOperationProduct(product = {}, focus = {}) {
+  const sessions = product.sessions ?? [];
+  const tasks = product.tasks ?? [];
+  const evidenceGroups = product.carrier_evidence ?? [];
+  const authorityDecisions = product.site_authority?.decisions ?? [];
+  const focusSessionId = focus.session_id || sessions[0]?.carrier_session_id || '';
+  const focusSession = sessions.find((session) => session.carrier_session_id === focusSessionId) || sessions[0] || null;
+  const focusEvidence = evidenceGroups.find((entry) => entry.carrier_session_id === focusSessionId) || evidenceGroups[0] || null;
+  const evidenceEvents = focusEvidence?.events ?? [];
+  const focusTask = tasks.find((task) => task.carrier_session_id === focusSessionId) || tasks[0] || null;
+  const taskEvidenceCount = focusTask
+    ? evidenceEvents.filter((event) => JSON.stringify(event.payload || {}).includes(focusTask.task_id)).length
+    : 0;
+  const hasOperationEvidence = evidenceGroups.some((entry) => (entry.events || []).length > 0);
+  const openTasks = tasks.filter((task) => ['open', 'todo', 'pending'].includes(String(task.status || '').toLowerCase()));
+  const operationPathNextAction = sessions.length === 0 ? 'start_or_select_session'
+    : openTasks.length > 0 ? 'inspect_open_task'
+    : hasOperationEvidence ? 'inspect_operation_evidence' : 'read_operation_evidence';
+  const authorityEvents = product.authority_events ?? [];
+  const evidenceEvent = evidenceEvents[0] || (product.carrier_evidence || []).flatMap((entry) => entry.events || [])[0] || {};
+  return {
+    operation: classifyCloudflareOperationCommandState({
+      operation_id: product.operation?.operation_id || '',
+      is_active: true,
+      scope_loaded: Boolean(product.operation?.operation_id),
+      session_count: sessions.length,
+      evidence_loaded: hasOperationEvidence,
+      operation_path_next_action: operationPathNextAction,
+    }),
+    session: classifyCloudflareSessionCommandState({
+      session_id: focusSession?.carrier_session_id || '',
+      is_active: true,
+      evidence_loaded: evidenceEvents.length > 0,
+    }),
+    task: classifyCloudflareTaskCommandState({
+      task_id: focusTask?.task_id || '',
+      status: focusTask?.status || '',
+      evidence_count: taskEvidenceCount,
+    }),
+    authority: classifyCloudflareAuthorityCommandState({
+      decision_count: authorityDecisions.length,
+      refusal_count: authorityDecisions.filter((decision) => ['refuse', 'deny'].includes(String(decision.action || '').toLowerCase())).length,
+      unresolved_locus_count: authorityDecisions.filter((decision) => !decision.authority_locus || decision.authority_locus === 'unresolved').length,
+      evidence_loaded: authorityEvents.length > 0,
+    }),
+    evidence: classifyCloudflareEvidenceCommandState(evidenceEvent),
+  };
+}
+
 async function checkHumanOperatorSession({ workerUrl, siteId, operatorCookieFile, required }) {
   if (!operatorCookieFile) {
     if (required) fail('cloudflare_operator_check_requires_--operator-cookie-file');
@@ -839,6 +903,17 @@ async function checkHumanOperatorSession({ workerUrl, siteId, operatorCookieFile
   if (!cookieHeader) fail('cloudflare_operator_cookie_file_empty', { operator_cookie_file: operatorCookieFile });
 
   const session = await getOperatorSession(workerUrl, cookieHeader);
+  if (session.http_status === 401 && !required) {
+    return {
+      status: 'unauthenticated',
+      membership_status: 'not_checked',
+      operation_status: 'not_checked',
+      login_ready: false,
+      membership_ready: false,
+      principal: null,
+      membership: null,
+    };
+  }
   assert.equal(session.http_status, 200);
   assert.equal(session.body.ok, true);
   assert.equal(session.body.principal?.auth_type, 'microsoft_oidc');
