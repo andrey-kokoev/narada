@@ -1353,6 +1353,113 @@ test('worker records webhook delay observation as Cloudflare primary with Window
   assert.equal(siteReadBody.webhook_delay_observation_primary_reads[0].observation_id, 'webhook_delay_observation_primary_fixture_1');
 });
 
+test('worker reads webhook delay observation from Cloudflare remote source adapter', async () => {
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{
+      site_id: 'site_fixture',
+      site_ref: 'site://fixture',
+      display_name: 'Fixture Site',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+      created_by_principal_id: 'admin',
+    }],
+    memberships: [{
+      site_id: 'site_fixture',
+      principal_id: 'admin',
+      role: 'owner',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+    operations: [{
+      operation_id: 'operation_webhook_delay',
+      site_id: 'site_fixture',
+      display_name: 'Webhook Delay Operation',
+      operation_kind: 'operating_layer_update',
+      status: 'active',
+      created_by_principal_id: 'admin',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+  });
+  const env = authEnv(fakeDurableObjectNamespace(), { CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+
+  const putSamples = await worker.fetch(jsonRequest({
+    operation: 'webhook_delay.remote_source.samples.put',
+    request_id: 'request_webhook_delay_remote_source_samples_put',
+    params: {
+      site_id: 'site_fixture',
+      source_adapter_id: 'fixture_webhook_delay_source',
+      samples: [{
+        sample_id: 'webhook_delay_source_sample_today',
+        sample_role: 'today_latest',
+        observed_at: '2026-06-08T06:20:00.000Z',
+        observed_at_ct: 'Jun 08, 1:20 AM CDT',
+        elapsed_minutes: 80,
+        delay_minutes: 18,
+      }, {
+        sample_id: 'webhook_delay_source_sample_yesterday',
+        sample_role: 'yesterday_same_clock',
+        observed_at: '2026-06-07T06:20:00.000Z',
+        observed_at_ct: 'Jun 07, 1:20 AM CDT',
+        elapsed_minutes: 80,
+        delay_minutes: 2,
+      }],
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(putSamples.status, 200);
+  const putSamplesBody = await putSamples.json();
+  assert.equal(putSamplesBody.status, 'samples_recorded');
+  assert.equal(putSamplesBody.source_authority, 'cloudflare_webhook_delay_remote_source_adapter');
+  assert.equal(putSamplesBody.sample_count, 2);
+
+  const read = await worker.fetch(jsonRequest({
+    operation: 'webhook_delay.remote_source.primary_with_fallback.read',
+    request_id: 'request_webhook_delay_remote_source_read',
+    params: {
+      site_id: 'site_fixture',
+      source_adapter_id: 'fixture_webhook_delay_source',
+      observation_id: 'webhook_delay_remote_source_observation_fixture_1',
+      critical_minutes: 15,
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(read.status, 200);
+  const readBody = await read.json();
+  assert.equal(readBody.status, 'cloudflare_primary_recorded');
+  assert.equal(readBody.source_authority, 'cloudflare_webhook_delay_remote_source_adapter');
+  assert.equal(readBody.source_material_locus, 'cloudflare_remote_source_adapter');
+  assert.equal(readBody.source_sample_count, 2);
+  assert.equal(readBody.observation.source_schema, 'narada.sonar/webhook-delay-remote-source-adapter/v1');
+  assert.equal(readBody.observation.latest.delay_minutes, 18);
+  assert.equal(readBody.observation.yesterday_same_clock.delay_minutes, 2);
+  assert.equal(readBody.classification.state, 'critical');
+  assert.equal(readBody.record.source_material_locus, 'cloudflare_remote_source_adapter');
+  assert.equal(readBody.record.fallback_authority, 'windows_observation_read_fallback');
+
+  const listedSamples = await worker.fetch(jsonRequest({
+    operation: 'webhook_delay.remote_source.samples.list',
+    request_id: 'request_webhook_delay_remote_source_samples_list',
+    params: { site_id: 'site_fixture', source_adapter_id: 'fixture_webhook_delay_source', limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(listedSamples.status, 200);
+  const listedSamplesBody = await listedSamples.json();
+  assert.deepEqual(listedSamplesBody.samples.map((sample) => sample.sample_id), [
+    'webhook_delay_source_sample_today',
+    'webhook_delay_source_sample_yesterday',
+  ]);
+
+  const operationRead = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_webhook_delay_remote_source_operation_read',
+    params: { site_id: 'site_fixture', operation_id: 'operation_webhook_delay', webhook_delay_observation_primary_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(operationRead.status, 200);
+  const operationReadBody = await operationRead.json();
+  assert.equal(operationReadBody.webhook_delay_observation_primary_reads[0].observation_id, 'webhook_delay_remote_source_observation_fixture_1');
+  assert.equal(operationReadBody.webhook_delay_observation_primary_reads[0].record.source_material_locus, 'cloudflare_remote_source_adapter');
+});
+
 test('worker records webhook delay directive intent as dual-recorded carrier input without delivery', async () => {
   const siteDb = fakeD1SiteRegistryDatabase({
     sites: [{
@@ -3062,6 +3169,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     authorityEvents: clone(initial.authorityEvents ?? []),
     operatorSessions: clone(initial.operatorSessions ?? []),
     continuityPackets: clone(initial.continuityPackets ?? []),
+    webhookDelayRemoteSourceSamples: clone(initial.webhookDelayRemoteSourceSamples ?? []),
     webhookDelayShadowObservations: clone(initial.webhookDelayShadowObservations ?? []),
     webhookDelayObservationPrimaryReads: clone(initial.webhookDelayObservationPrimaryReads ?? []),
     webhookDelayDirectiveRecords: clone(initial.webhookDelayDirectiveRecords ?? []),
@@ -3129,6 +3237,12 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const row = { observation_id, site_id, source_locus, target_locus, generated_at, latest_delay_minutes, critical_minutes, classification_state, dispatch_authority, shadow_mode, dispatch_action, observation_json, classification_json, recorded_by_principal_id, recorded_at };
         if (existing) Object.assign(existing, row);
         else state.webhookDelayShadowObservations.push(row);
+      } else if (normalized.startsWith('insert into cloudflare_webhook_delay_remote_source_samples')) {
+        const [sample_id, site_id, source_adapter_id, sample_role, observed_at, observed_at_ct, elapsed_minutes, delay_minutes, sample_json, recorded_by_principal_id, recorded_at] = bindings;
+        const existing = state.webhookDelayRemoteSourceSamples.find((entry) => entry.sample_id === sample_id);
+        const row = { sample_id, site_id, source_adapter_id, sample_role, observed_at, observed_at_ct, elapsed_minutes, delay_minutes, sample_json, recorded_by_principal_id, recorded_at };
+        if (existing) Object.assign(existing, row);
+        else state.webhookDelayRemoteSourceSamples.push(row);
       } else if (normalized.startsWith('insert into cloudflare_webhook_delay_observation_primary_reads')) {
         const [observation_id, site_id, source_locus, source_material_locus, target_locus, generated_at, latest_delay_minutes, critical_minutes, classification_state, observation_authority, fallback_authority, fallback_status, dispatch_authority, dispatch_action, observation_json, classification_json, record_json, recorded_by_principal_id, recorded_at] = bindings;
         const existing = state.webhookDelayObservationPrimaryReads.find((entry) => entry.observation_id === observation_id);
@@ -3250,6 +3364,16 @@ function fakeD1SiteRegistryStatement(state, sql) {
           results: state.webhookDelayShadowObservations
             .filter((entry) => entry.site_id === siteId)
             .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_webhook_delay_remote_source_samples')) {
+        const [siteId, sourceAdapterId, limit] = bindings;
+        return {
+          results: state.webhookDelayRemoteSourceSamples
+            .filter((entry) => entry.site_id === siteId && entry.source_adapter_id === sourceAdapterId)
+            .sort((left, right) => right.observed_at.localeCompare(left.observed_at) || right.recorded_at.localeCompare(left.recorded_at))
             .slice(0, Number(limit))
             .map((entry) => clone(entry)),
         };
