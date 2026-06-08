@@ -926,6 +926,7 @@ function summarizeCloudflareSiteProductStatus({
   carrierEvidence = [],
   carrierEvidenceReadStatus = null,
   continuityStatus = null,
+  continuityLoopStatus = null,
 } = {}) {
   const operationList = Array.isArray(operations) ? operations : [];
   const membershipList = Array.isArray(memberships) ? memberships : [];
@@ -938,6 +939,7 @@ function summarizeCloudflareSiteProductStatus({
   const activeMembershipCount = membershipList.filter((membership) => String(membership.status ?? '').toLowerCase() === 'active').length;
   const openTaskCount = taskList.filter((task) => !['done', 'closed', 'cancelled'].includes(String(task.status ?? '').toLowerCase())).length;
   const continuityState = continuityStatus?.state ?? 'unknown';
+  const continuityLoopState = continuityLoopStatus?.state ?? 'unknown';
   const missing = [];
   if (activeMembershipCount === 0) missing.push('active_membership');
   if (operationList.length === 0) missing.push('operation');
@@ -945,6 +947,7 @@ function summarizeCloudflareSiteProductStatus({
   if (evidenceEventCount === 0) missing.push('carrier_evidence');
   if (continuityState !== 'packet_observed') missing.push('continuity_packet');
   const attention = [];
+  if (continuityState === 'packet_observed' && continuityLoopState !== 'loop_report_observed') attention.push('continuity_loop_report');
   if (carrierEvidenceReadStatus?.state === 'degraded') attention.push('carrier_evidence_read_degraded');
   if (openTaskCount > 0) attention.push('open_tasks');
   const health = missing.length === 0 && attention.length === 0
@@ -969,7 +972,9 @@ function summarizeCloudflareSiteProductStatus({
     carrier_evidence_read_status: carrierEvidenceReadStatus,
     authority_event_count: authorityEventList.length,
     continuity_state: continuityState,
+    continuity_loop_state: continuityLoopState,
     continuity_packet_count: continuityStatus?.packet_count ?? 0,
+    continuity_loop_report_count: continuityLoopStatus?.report_count ?? 0,
     next_action: missing[0] ?? attention[0] ?? 'monitor_site',
   };
 }
@@ -1690,6 +1695,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     carrierEvidence,
     carrierEvidenceReadStatus,
     continuityStatus: siteContinuityStatus,
+    continuityLoopStatus: siteContinuityLoopStatus,
   });
   return {
     tasks,

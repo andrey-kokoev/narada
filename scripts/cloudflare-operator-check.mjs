@@ -829,6 +829,8 @@ assert.equal(siteRead.body.site_product_status?.schema, 'narada.cloudflare_site_
 assert.equal(siteRead.body.site_product_status?.site_id, siteId);
 assert.equal(siteRead.body.site_product_status?.carrier_evidence_read_status?.schema, 'narada.cloudflare_carrier_evidence_read_status.v1');
 assert.match(siteRead.body.site_product_status.carrier_evidence_read_status.state, /^(loaded|degraded|no_sessions)$/);
+assert.match(siteRead.body.site_product_status.continuity_loop_state, /^(loop_report_observed|no_loop_report_observed)$/);
+assert.equal(typeof siteRead.body.site_product_status.continuity_loop_report_count, 'number');
 const memberships = siteRead.body.product?.memberships ?? siteRead.body.memberships ?? [];
 const currentMembership = siteRead.body.product?.membership ?? siteRead.body.membership ?? null;
 const operations = siteRead.body.product?.operations ?? siteRead.body.operations ?? [];
@@ -857,6 +859,8 @@ assert.equal(focusedSiteProductStatus.schema, 'narada.cloudflare_site_product_st
 assert.match(focusedSiteProductStatus.health, /^(ready|attention|incomplete)$/);
 assert.equal(focusedSiteProductStatus.carrier_evidence_read_status?.schema, 'narada.cloudflare_carrier_evidence_read_status.v1');
 assert.match(focusedSiteProductStatus.carrier_evidence_read_status.state, /^(loaded|degraded|no_sessions)$/);
+assert.match(focusedSiteProductStatus.continuity_loop_state, /^(loop_report_observed|no_loop_report_observed)$/);
+assert.equal(typeof focusedSiteProductStatus.continuity_loop_report_count, 'number');
 assert.ok(Array.isArray(focusedSiteProductStatus.missing));
 assert.ok(Array.isArray(focusedSiteProductStatus.attention));
 assert.equal(siteList.body.site_product_overview?.schema, 'narada.cloudflare_site_product_overview.v1');

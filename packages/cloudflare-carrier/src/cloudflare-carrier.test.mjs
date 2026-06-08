@@ -814,6 +814,8 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(body.site_product_status.open_task_count, 1);
   assert.equal(body.site_product_status.carrier_evidence_read_status.state, 'loaded');
   assert.equal(body.site_product_status.continuity_state, 'no_packet_observed');
+  assert.equal(body.site_product_status.continuity_loop_state, 'no_loop_report_observed');
+  assert.equal(body.site_product_status.continuity_loop_report_count, 0);
   assert.equal(body.site_product_status.next_action, 'continuity_packet');
 
   const packetPut = await worker.fetch(jsonRequest({
@@ -841,6 +843,18 @@ test('worker site.read composes site sessions tasks authority events and carrier
   const refusedPacketPutBody = await refusedPacketPut.json();
   assert.equal(refusedPacketPutBody.status, 'refused');
   assert.equal(refusedPacketPutBody.site_continuity_packet_admission.reason, 'site_continuity_exchange_packet_executable_mutation_refused');
+
+  const readAfterPacketOnly = await worker.fetch(jsonRequest({
+    operation: 'site.read',
+    request_id: 'request_site_read_after_continuity_packet_only',
+    params: { site_id: 'site_fixture', carrier_event_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(readAfterPacketOnly.status, 200);
+  const readAfterPacketOnlyBody = await readAfterPacketOnly.json();
+  assert.equal(readAfterPacketOnlyBody.site_product_status.continuity_state, 'packet_observed');
+  assert.equal(readAfterPacketOnlyBody.site_product_status.continuity_loop_state, 'no_loop_report_observed');
+  assert.deepEqual(readAfterPacketOnlyBody.site_product_status.attention, ['continuity_loop_report', 'open_tasks']);
+  assert.equal(readAfterPacketOnlyBody.site_product_status.next_action, 'continuity_loop_report');
 
   const loopReport = {
     schema: 'narada.site_continuity_productized_loop.v1',
@@ -906,7 +920,9 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(readAfterPacketPutBody.site_product_status.health, 'attention');
   assert.equal(readAfterPacketPutBody.site_product_status.carrier_evidence_read_status.state, 'loaded');
   assert.equal(readAfterPacketPutBody.site_product_status.continuity_state, 'packet_observed');
+  assert.equal(readAfterPacketPutBody.site_product_status.continuity_loop_state, 'loop_report_observed');
   assert.equal(readAfterPacketPutBody.site_product_status.continuity_packet_count, 1);
+  assert.equal(readAfterPacketPutBody.site_product_status.continuity_loop_report_count, 1);
   assert.equal(readAfterPacketPutBody.site_product_status.next_action, 'open_tasks');
 });
 
