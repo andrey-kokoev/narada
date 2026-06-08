@@ -1035,6 +1035,15 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Operator Attention/);
   assert.match(html, /Resident Dispatch/);
   assert.match(html, /Webhook Delay Directive Intent/);
+  assert.match(html, /Task From Directive Intent/);
+  assert.match(html, /taskFromDirectiveIntent/);
+  assert.match(html, /createTaskFromFocusedDirectiveIntent/);
+  assert.match(html, /directiveIntentTaskTitle/);
+  assert.match(html, /directiveIntentTaskPredicate/);
+  assert.match(html, /taskForDirectiveIntent/);
+  assert.match(html, /create_task_from_directive_intent/);
+  assert.match(html, /directive_intent_has_no_task/);
+  assert.match(html, /Directive Task/);
   assert.match(html, /webhookDelayDirectiveNavigator/);
   assert.match(html, /webhookDelayDirectiveFocusDetail/);
   assert.match(html, /renderWebhookDelayDirectiveNavigator/);
@@ -1332,6 +1341,138 @@ test('worker records webhook delay directive intent as dual-recorded carrier inp
   const operationReadBody = await operationRead.json();
   assert.equal(operationReadBody.webhook_delay_directive_records[0].directive_record_id, 'webhook_delay_directive_fixture_1');
   assert.equal(operationReadBody.operation_product_surface.webhook_delay_directive_record_count, 1);
+});
+
+test('worker delivers webhook delay directive as Cloudflare primary with Windows fallback recorded', async () => {
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{
+      site_id: 'site_fixture',
+      site_ref: 'site://fixture',
+      display_name: 'Fixture Site',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+      created_by_principal_id: 'admin',
+    }],
+    memberships: [{
+      site_id: 'site_fixture',
+      principal_id: 'admin',
+      role: 'owner',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+    operations: [{
+      operation_id: 'operation_webhook_delay',
+      site_id: 'site_fixture',
+      display_name: 'Webhook Delay Operation',
+      operation_kind: 'operating_layer_update',
+      status: 'active',
+      created_by_principal_id: 'admin',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+  });
+  const durableEnv = {
+    AI: {
+      async run() {
+        return { response: 'Operation: Update on webhook delays acknowledged.' };
+      },
+    },
+  };
+  const env = authEnv(fakeDurableObjectNamespace(durableEnv), { CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+  const summary = {
+    schema: 'narada.sonar/webhook-delay-today-vs-yesterday/v1',
+    generated_at: '2026-06-08T04:45:00.000Z',
+    rows72: 4313,
+    today: {
+      latest: {
+        at: '2026-06-08T04:43:00.000Z',
+        at_ct: '2026-06-07 23:43:00',
+        elapsed_minutes: 1405,
+        delay_minutes: 16,
+      },
+    },
+    yesterday_same_clock: {
+      delay_minutes: 1,
+      delta_minutes_today_minus_yesterday: 15,
+    },
+  };
+
+  const delivered = await worker.fetch(jsonRequest({
+    operation: 'webhook_delay.directive.primary_with_fallback.deliver',
+    request_id: 'request_webhook_delay_directive_delivery',
+    params: {
+      site_id: 'site_fixture',
+      site_ref: 'site://fixture',
+      operation_id: 'operation_webhook_delay',
+      carrier_session_id: 'carrier_session_webhook_delay_directive_fixture',
+      delivery_id: 'webhook_delay_directive_delivery_fixture_1',
+      directive_record_id: 'webhook_delay_directive_fixture_1',
+      directive_id: 'directive_webhook_delay_delivery_fixture_1',
+      input_event_id: 'input_webhook_delay_directive_delivery_fixture_1',
+      critical_minutes: 15,
+      summary,
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(delivered.status, 200);
+  const deliveredBody = await delivered.json();
+  assert.equal(deliveredBody.status, 'cloudflare_primary_delivered');
+  assert.equal(deliveredBody.directive_authority, 'cloudflare_primary_directive_delivery');
+  assert.equal(deliveredBody.dispatch_authority, 'cloudflare_primary_dispatcher');
+  assert.equal(deliveredBody.fallback_authority, 'windows_fallback_dispatcher');
+  assert.equal(deliveredBody.fallback_status, 'available');
+  assert.equal(deliveredBody.delivery_action, 'cloudflare_carrier_input_deliver');
+  assert.equal(deliveredBody.carrier_session_id, 'carrier_session_webhook_delay_directive_fixture');
+  assert.equal(deliveredBody.directive_intent.carrier_input_operation, 'carrier.input.deliver');
+  assert.equal(deliveredBody.directive_intent.delivery_semantics, 'cloudflare_primary_delivery');
+  assert.equal(deliveredBody.directive_intent.input_event.source_kind, 'system');
+  assert.equal(deliveredBody.directive_intent.input_event.metadata.directive.visibility, 'agent_visible');
+  assert.equal(deliveredBody.carrier_admission.admission_action, 'admit');
+  assert.equal(deliveredBody.carrier_admission.is_directive, true);
+  assert.equal(deliveredBody.carrier_admission.directive_visibility, 'agent_visible');
+  assert.equal(deliveredBody.carrier_admission.dispatch_to_provider, true);
+  assert.equal(deliveredBody.carrier_admission.directive_render_to_agent, true);
+  assert.equal(deliveredBody.carrier_admission.creates_turn, true);
+  assert.equal(deliveredBody.delivery.admitted, true);
+  assert.equal(deliveredBody.delivery.terminal_state, 'completed');
+  assert.equal(deliveredBody.delivery.events.some((event) => event.event_kind === 'carrier_session_started'), false);
+  assert.equal(deliveredBody.delivery.events.some((event) => event.event_kind === 'directive_receipt_recorded'), true);
+  assert.equal(deliveredBody.delivery.events.some((event) => event.event_kind === 'input_admitted_to_turn'), true);
+  assert.equal(deliveredBody.delivery.events.some((event) => event.event_kind === 'provider_request_recorded'), true);
+  assert.equal(deliveredBody.record.session_start_ok, true);
+  assert.equal(deliveredBody.record.delivery_ok, true);
+  assert.deepEqual(deliveredBody.record.retained_windows_authority, [
+    'mailbox_send',
+    'local_filesystem_mutation',
+    'task_lifecycle_write',
+    'windows_fallback_dispatch',
+  ]);
+  assert.equal(siteDb.dump().carrierSessions.some((session) => session.carrier_session_id === 'carrier_session_webhook_delay_directive_fixture'), true);
+
+  const listed = await worker.fetch(jsonRequest({
+    operation: 'webhook_delay.directive.primary_with_fallback.list',
+    request_id: 'request_webhook_delay_directive_delivery_list',
+    params: { site_id: 'site_fixture', limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(listed.status, 200);
+  const listedBody = await listed.json();
+  assert.equal(listedBody.directive_authority, 'cloudflare_primary_directive_delivery');
+  assert.deepEqual(listedBody.directive_deliveries.map((entry) => entry.delivery_id), ['webhook_delay_directive_delivery_fixture_1']);
+  assert.equal(listedBody.directive_deliveries[0].delivery_state, 'cloudflare_primary_delivered');
+  assert.equal(listedBody.directive_deliveries[0].delivery_ok, true);
+
+  const operationRead = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_webhook_delay_directive_delivery_operation_read',
+    params: { site_id: 'site_fixture', operation_id: 'operation_webhook_delay', webhook_delay_directive_delivery_limit: 10, carrier_event_limit: 20 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(operationRead.status, 200);
+  const operationReadBody = await operationRead.json();
+  assert.equal(operationReadBody.webhook_delay_directive_deliveries[0].delivery_id, 'webhook_delay_directive_delivery_fixture_1');
+  assert.equal(operationReadBody.operation_product_surface.webhook_delay_directive_delivery_count, 1);
+  assert.equal(operationReadBody.sessions.some((session) => session.carrier_session_id === 'carrier_session_webhook_delay_directive_fixture'), true);
+  assert.equal(operationReadBody.carrier_evidence.some((entry) => entry.carrier_session_id === 'carrier_session_webhook_delay_directive_fixture' && entry.events.some((event) => event.event_kind === 'directive_receipt_recorded')), true);
 });
 
 test('worker records resident loop runs as Cloudflare shadow-read evidence without dispatching', async () => {
@@ -2802,6 +2943,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     continuityPackets: clone(initial.continuityPackets ?? []),
     webhookDelayShadowObservations: clone(initial.webhookDelayShadowObservations ?? []),
     webhookDelayDirectiveRecords: clone(initial.webhookDelayDirectiveRecords ?? []),
+    webhookDelayDirectiveDeliveries: clone(initial.webhookDelayDirectiveDeliveries ?? []),
     residentLoopShadowRuns: clone(initial.residentLoopShadowRuns ?? []),
     residentDispatchDecisions: clone(initial.residentDispatchDecisions ?? []),
   };
@@ -2871,6 +3013,12 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const row = { directive_record_id, site_id, operation_id, classification_state, latest_delay_minutes, critical_minutes, directive_action, directive_authority, fallback_authority, fallback_status, threshold_policy_json, observation_json, classification_json, directive_intent_json, carrier_admission_json, recorded_by_principal_id, recorded_at };
         if (existing) Object.assign(existing, row);
         else state.webhookDelayDirectiveRecords.push(row);
+      } else if (normalized.startsWith('insert into cloudflare_webhook_delay_directive_deliveries')) {
+        const [delivery_id, directive_record_id, site_id, operation_id, carrier_session_id, delivery_state, classification_state, latest_delay_minutes, critical_minutes, directive_authority, dispatch_authority, fallback_authority, fallback_status, delivery_action, session_start_status, session_start_ok, delivery_status, delivery_ok, threshold_policy_json, observation_json, classification_json, directive_intent_json, carrier_admission_json, session_start_json, delivery_json, record_json, recorded_by_principal_id, recorded_at] = bindings;
+        const existing = state.webhookDelayDirectiveDeliveries.find((entry) => entry.delivery_id === delivery_id);
+        const row = { delivery_id, directive_record_id, site_id, operation_id, carrier_session_id, delivery_state, classification_state, latest_delay_minutes, critical_minutes, directive_authority, dispatch_authority, fallback_authority, fallback_status, delivery_action, session_start_status, session_start_ok, delivery_status, delivery_ok, threshold_policy_json, observation_json, classification_json, directive_intent_json, carrier_admission_json, session_start_json, delivery_json, record_json, recorded_by_principal_id, recorded_at };
+        if (existing) Object.assign(existing, row);
+        else state.webhookDelayDirectiveDeliveries.push(row);
       } else if (normalized.startsWith('insert into cloudflare_resident_loop_shadow_runs')) {
         const [loop_run_id, site_id, operation_id, source_locus, target_locus, run_started_at, run_finished_at, loop_status, step_count, operator_attention_count, dispatch_authority, shadow_mode, dispatch_action, loop_run_json, recorded_by_principal_id, recorded_at] = bindings;
         const existing = state.residentLoopShadowRuns.find((entry) => entry.loop_run_id === loop_run_id);
@@ -2982,6 +3130,16 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const [siteId, limit] = bindings;
         return {
           results: state.webhookDelayDirectiveRecords
+            .filter((entry) => entry.site_id === siteId)
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_webhook_delay_directive_deliveries')) {
+        const [siteId, limit] = bindings;
+        return {
+          results: state.webhookDelayDirectiveDeliveries
             .filter((entry) => entry.site_id === siteId)
             .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at))
             .slice(0, Number(limit))

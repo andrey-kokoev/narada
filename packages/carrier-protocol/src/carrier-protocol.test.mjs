@@ -609,6 +609,29 @@ assert.deepEqual(admittedOperator.admission_events, [{
   event_kind: 'input_admitted_to_turn',
   payload: { input_event_id: 'input_test_1' },
 }]);
+const agentVisibleDirectiveInput = createInputEvent({
+  ...baseInput,
+  event_id: 'input_agent_visible_directive',
+  source_kind: 'system',
+  source_id: 'narada-proper.system.directive_emitter',
+  directive_id: 'dir_agent_visible',
+  authority_ref: 'authority:system-directive',
+  metadata: {
+    directive_provenance: { kind: 'system_directive' },
+    directive: {
+      kind: 'operation_update_request',
+      visibility: 'agent_visible',
+      content_kind: 'operation_update_request',
+    },
+  },
+});
+const agentVisibleDirectiveAdmission = classifyCarrierInputAdmission(agentVisibleDirectiveInput, { activeTurn: false });
+assert.equal(agentVisibleDirectiveAdmission.is_observer, false);
+assert.equal(agentVisibleDirectiveAdmission.is_directive, true);
+assert.equal(agentVisibleDirectiveAdmission.directive_visibility, 'agent_visible');
+assert.equal(agentVisibleDirectiveAdmission.directive_render_to_agent, true);
+assert.equal(agentVisibleDirectiveAdmission.creates_turn, true);
+assert.equal(agentVisibleDirectiveAdmission.dispatch_to_provider, true);
 
 assert.match(thrownMessage(() => createInputEvent({ ...baseInput, event_id: 'input_bad_directive', directive_id: 'dir_bad' })), /directive_id_incompatible_with_source/);
 assert.match(thrownMessage(() => createInputEvent({ ...baseInput, event_id: 'input_bad_operator_directive', directive_id: 'dir_bad', authority_ref: 'auth' })), /directive_id_incompatible_with_source/);

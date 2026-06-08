@@ -884,9 +884,13 @@ export function classifyCarrierInputAdmission(input = {}, state = {}) {
     if (directive.completes_without_provider) terminalState = 'completed_without_provider';
   }
   const createsTurn = inputAdmission.action === 'admit' && observer.creates_turn && directive.creates_turn;
+  const providerDispatchSurface = observer.is_observer || directive.is_directive;
+  const observerAllowsProviderDispatch = !observer.is_observer || observer.dispatch_to_agent;
+  const directiveAllowsProviderDispatch = !directive.is_directive || directive.render_to_agent;
   const dispatchToProvider = inputAdmission.action === 'admit'
-    && observer.dispatch_to_agent
-    && (!directive.is_directive || directive.render_to_agent);
+    && providerDispatchSurface
+    && observerAllowsProviderDispatch
+    && directiveAllowsProviderDispatch;
   if (createsTurn) {
     admissionEvents.push({
       event_kind: 'input_admitted_to_turn',
