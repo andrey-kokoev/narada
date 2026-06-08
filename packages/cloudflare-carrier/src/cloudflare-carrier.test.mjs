@@ -1034,6 +1034,16 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /resident_loop_shadow_run_count/);
   assert.match(html, /Operator Attention/);
   assert.match(html, /Resident Dispatch/);
+  assert.match(html, /Webhook Delay Directive Intent/);
+  assert.match(html, /webhookDelayDirectiveNavigator/);
+  assert.match(html, /webhookDelayDirectiveFocusDetail/);
+  assert.match(html, /renderWebhookDelayDirectiveNavigator/);
+  assert.match(html, /webhookDelayDirectiveFocusContext/);
+  assert.match(html, /selectWebhookDelayDirective/);
+  assert.match(html, /webhook_delay_directive_records/);
+  assert.match(html, /webhook_delay_directive_record_count/);
+  assert.match(html, /webhook-delay-directive-intent/);
+  assert.match(html, /cloudflare_directive_dual_recorded/);
   assert.match(html, /Start Resident Dispatch/);
   assert.match(html, /startResidentDispatch/);
   assert.match(html, /startResidentDispatchFromWorkbench/);

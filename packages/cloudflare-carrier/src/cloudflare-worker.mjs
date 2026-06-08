@@ -2901,6 +2901,12 @@ export function renderCloudflareCarrierConsole() {
         <div id="webhookDelayShadowFocusDetail" class="evidence-summary"><div class="empty">No webhook delay shadow read selected.</div></div>
       </div>
       <div class="product-panel">
+        <h2>Webhook Delay Directive Intent</h2>
+        <div id="webhookDelayDirectiveNavigator" class="attention-items"><div class="empty">No webhook delay directive records loaded.</div></div>
+        <h3>Directive Intent Focus Detail</h3>
+        <div id="webhookDelayDirectiveFocusDetail" class="evidence-summary"><div class="empty">No webhook delay directive record selected.</div></div>
+      </div>
+      <div class="product-panel">
         <h2>Resident Loop Shadow Read</h2>
         <div id="residentLoopShadowNavigator" class="attention-items"><div class="empty">No resident loop shadow reads loaded.</div></div>
         <h3>Resident Loop Focus Detail</h3>
@@ -2985,7 +2991,7 @@ export function renderCloudflareCarrierConsole() {
   </main>
   <script type="module">
     const WORKBENCH_STORAGE_KEY = 'narada.cloudflare.operationWorkbench.v1';
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, webhookDelayDirectiveFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -3217,7 +3223,7 @@ export function renderCloudflareCarrierConsole() {
       el('controlAttention').textContent = String(openAttention) + ' open / ' + state.attentionItems.length + ' total' + (state.attentionFocus ? ' / ' + state.attentionFocus.directive_id : '');
       el('controlEvidenceFocus').textContent = state.evidenceFocus ? eventTitle(state.evidenceFocus) : 'none';
       el('controlEvidenceWindow').textContent = String(surface.carrier_evidence_count ?? state.events.length) + ' evidence groups / ' + state.events.length + ' loaded events';
-      el('controlContinuity').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length ?? 0) + ' packets';
+      el('controlContinuity').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length ?? 0) + ' packets / ' + String(surface.webhook_delay_directive_record_count ?? (product.webhook_delay_directive_records || []).length ?? 0) + ' directive intents';
       el('controlWorkbenchReadiness').textContent = operationWorkbenchReadiness(product);
       renderControlRoomActionSummary(product);
       renderSiteActionSummary();
@@ -3270,6 +3276,9 @@ export function renderCloudflareCarrierConsole() {
       if ((product.site_continuity_packets || []).length === 0 && (product.site_continuity?.decisions || []).length === 0) missing.push('continuity');
       if ('webhook_delay_shadow_observations' in product || 'webhook_delay_shadow_observation_count' in surface) {
         if ((product.webhook_delay_shadow_observations || []).length === 0) missing.push('shadow-read');
+      }
+      if ('webhook_delay_directive_records' in product || 'webhook_delay_directive_record_count' in surface) {
+        if ((product.webhook_delay_directive_records || []).length === 0) missing.push('webhook-delay-directive-intent');
       }
       if ('resident_loop_shadow_runs' in product || 'resident_loop_shadow_run_count' in surface) {
         if ((product.resident_loop_shadow_runs || []).length === 0) missing.push('resident-loop-shadow-read');
@@ -4711,6 +4720,61 @@ export function renderCloudflareCarrierConsole() {
       }
       el('webhookDelayShadowFocusDetail').replaceChildren(...webhookDelayShadowFocusContext(item).map(([label, value]) => evidenceField(label, value)));
     }
+    function webhookDelayDirectiveKey(item = {}) {
+      return item.directive_record_id || item.directive_intent?.directive_id || [item.site_id, item.operation_id, item.recorded_at].filter(Boolean).join('|');
+    }
+    function selectWebhookDelayDirective(item) {
+      if (!item) return;
+      state.webhookDelayDirectiveFocus = item;
+      renderWebhookDelayDirectiveNavigator(state.operationProduct?.webhook_delay_directive_records || []);
+      updateControlRoom();
+    }
+    function renderWebhookDelayDirectiveNavigator(items = []) {
+      if (items.length === 0) {
+        state.webhookDelayDirectiveFocus = null;
+        el('webhookDelayDirectiveNavigator').innerHTML = '<div class="empty">No webhook delay directive records loaded.</div>';
+        renderWebhookDelayDirectiveFocusDetail();
+        return;
+      }
+      if (state.webhookDelayDirectiveFocus) state.webhookDelayDirectiveFocus = items.find((item) => webhookDelayDirectiveKey(item) === webhookDelayDirectiveKey(state.webhookDelayDirectiveFocus)) || state.webhookDelayDirectiveFocus;
+      if (!state.webhookDelayDirectiveFocus) state.webhookDelayDirectiveFocus = items[0];
+      el('webhookDelayDirectiveNavigator').replaceChildren(...items.map((item) => {
+        const node = document.createElement('article');
+        node.className = 'shadow-read-item' + (webhookDelayDirectiveKey(item) === webhookDelayDirectiveKey(state.webhookDelayDirectiveFocus) ? ' selected' : '');
+        const title = document.createElement('strong');
+        title.textContent = [item.classification_state || item.classification?.state || 'unknown', item.directive_record_id || item.directive_intent?.directive_id || 'webhook_delay_directive'].join(' ');
+        const meta = document.createElement('span');
+        meta.textContent = [item.directive_authority, item.fallback_authority, item.fallback_status, item.directive_action, item.carrier_admission?.directive_visibility].filter(Boolean).join(' | ');
+        node.addEventListener('click', () => selectWebhookDelayDirective(item));
+        node.append(title, meta);
+        return node;
+      }));
+      renderWebhookDelayDirectiveFocusDetail();
+    }
+    function webhookDelayDirectiveFocusContext(item = {}) {
+      return [
+        ['Directive Record', item.directive_record_id || 'none'],
+        ['Classification', item.classification_state || item.classification?.state || 'unknown'],
+        ['Latest Delay Minutes', item.latest_delay_minutes ?? item.classification?.latest_delay_minutes ?? 'none'],
+        ['Critical Minutes', item.critical_minutes ?? item.classification?.critical_minutes ?? item.threshold_policy?.critical_minutes ?? 'none'],
+        ['Directive Authority', item.directive_authority || 'cloudflare_directive_dual_recorded'],
+        ['Fallback Authority', item.fallback_authority || 'windows_fallback_dispatcher'],
+        ['Fallback Status', item.fallback_status || 'unknown'],
+        ['Directive Action', item.directive_action || 'none'],
+        ['Carrier Input Operation', item.directive_intent?.carrier_input_operation || 'none'],
+        ['Directive Visibility', item.carrier_admission?.directive_visibility || item.directive_intent?.input_event?.metadata?.directive?.visibility || 'unknown'],
+        ['Dispatch To Provider', item.carrier_admission?.dispatch_to_provider ?? 'unknown'],
+        ['Complete Without Provider', item.carrier_admission?.complete_without_provider ?? 'unknown'],
+        ['Recorded', item.recorded_at || 'none'],
+      ];
+    }
+    function renderWebhookDelayDirectiveFocusDetail(item = state.webhookDelayDirectiveFocus) {
+      if (!item) {
+        el('webhookDelayDirectiveFocusDetail').innerHTML = '<div class="empty">No webhook delay directive record selected.</div>';
+        return;
+      }
+      el('webhookDelayDirectiveFocusDetail').replaceChildren(...webhookDelayDirectiveFocusContext(item).map(([label, value]) => evidenceField(label, value)));
+    }
     function residentLoopShadowKey(item = {}) {
       return item.loop_run_id || [item.site_id, item.operation_id, item.run_started_at].filter(Boolean).join('|');
     }
@@ -4857,6 +4921,7 @@ export function renderCloudflareCarrierConsole() {
       renderMembershipNavigator(currentMemberships(product));
       renderContinuityNavigator(continuityItems(product));
       renderWebhookDelayShadowNavigator(product.webhook_delay_shadow_observations || []);
+      renderWebhookDelayDirectiveNavigator(product.webhook_delay_directive_records || []);
       renderResidentLoopShadowNavigator(product.resident_loop_shadow_runs || []);
       renderResidentDispatchNavigator(product.resident_dispatch_decisions || []);
       renderAttentionQueue(extractOperationAttention(product));
@@ -4877,6 +4942,7 @@ export function renderCloudflareCarrierConsole() {
       const continuityItems = (product.site_continuity?.decisions || []).map((decision) => listItem(decision.exchange_class, continuitySummary(decision)));
       const continuityPacketItems = (product.site_continuity_packets || []).map((packet) => listItem(packet.packet_id, packet.admission_action || packet.imported_at));
       const webhookDelayShadowItems = (product.webhook_delay_shadow_observations || []).map((entry) => listItem(entry.observation_id || entry.generated_at, [entry.classification_state, entry.latest_delay_minutes, entry.dispatch_action || 'none'].filter((value) => value != null && value !== '').join(' | ')));
+      const webhookDelayDirectiveItems = (product.webhook_delay_directive_records || []).map((entry) => listItem(entry.directive_record_id || entry.directive_intent?.directive_id, [entry.classification_state, entry.directive_authority, entry.fallback_status, entry.directive_action, entry.carrier_admission?.directive_visibility].filter((value) => value != null && value !== '').join(' | ')));
       const residentLoopShadowItems = (product.resident_loop_shadow_runs || []).map((entry) => listItem(entry.loop_run_id || entry.run_started_at, [entry.loop_status, 'steps=' + (entry.step_count ?? 'unknown'), 'attention=' + (entry.operator_attention_count ?? 'unknown'), entry.dispatch_action || 'none'].filter((value) => value != null && value !== '').join(' | ')));
       const residentDispatchItems = (product.resident_dispatch_decisions || []).map((entry) => listItem(entry.dispatch_decision_id || entry.carrier_session_id, [entry.decision_state, entry.dispatch_authority, entry.fallback_status, entry.dispatch_action].filter((value) => value != null && value !== '').join(' | ')));
       const evidenceItems = (product.carrier_evidence || []).map((entry) => {
@@ -4897,6 +4963,7 @@ export function renderCloudflareCarrierConsole() {
         renderListBlock('Site Continuity', continuityItems),
         renderListBlock('Continuity Packets', continuityPacketItems),
         renderListBlock('Webhook Delay Shadow Reads', webhookDelayShadowItems),
+        renderListBlock('Webhook Delay Directive Intents', webhookDelayDirectiveItems),
         renderListBlock('Resident Loop Shadow Reads', residentLoopShadowItems),
         renderListBlock('Resident Dispatch', residentDispatchItems),
         renderListBlock('Carrier Evidence', evidenceItems),
@@ -4935,6 +5002,7 @@ export function renderCloudflareCarrierConsole() {
       renderMembershipNavigator(currentMemberships(product));
       renderContinuityNavigator(continuityItems(product));
       renderWebhookDelayShadowNavigator(product.webhook_delay_shadow_observations || []);
+      renderWebhookDelayDirectiveNavigator(product.webhook_delay_directive_records || []);
       renderResidentLoopShadowNavigator(product.resident_loop_shadow_runs || []);
       renderResidentDispatchNavigator(product.resident_dispatch_decisions || []);
       renderOperationNavigator(state.operations || []);
@@ -4957,6 +5025,7 @@ export function renderCloudflareCarrierConsole() {
         listItem('evidence', surface.carrier_evidence_count),
         listItem('continuity_packets', surface.continuity_packet_count),
         listItem('webhook_delay_shadow_reads', surface.webhook_delay_shadow_observation_count),
+        listItem('webhook_delay_directive_intents', surface.webhook_delay_directive_record_count),
         listItem('resident_loop_shadow_reads', surface.resident_loop_shadow_run_count),
         listItem('resident_dispatch_decisions', surface.resident_dispatch_decision_count),
         listItem('dispatch_authority', surface.dispatch_authority),
@@ -4968,6 +5037,7 @@ export function renderCloudflareCarrierConsole() {
       const continuityDecisionItems = (product.site_continuity?.decisions || []).map((decision) => listItem(decision.exchange_class, continuitySummary(decision)));
       const continuityPacketItems = (product.site_continuity_packets || []).map((packet) => listItem(packet.packet_id, packet.admission_action || packet.imported_at));
       const webhookDelayShadowItems = (product.webhook_delay_shadow_observations || []).map((entry) => listItem(entry.observation_id || entry.generated_at, [entry.classification_state, entry.latest_delay_minutes, entry.dispatch_action || 'none'].filter((value) => value != null && value !== '').join(' | ')));
+      const webhookDelayDirectiveItems = (product.webhook_delay_directive_records || []).map((entry) => listItem(entry.directive_record_id || entry.directive_intent?.directive_id, [entry.classification_state, entry.directive_authority, entry.fallback_status, entry.directive_action, entry.carrier_admission?.directive_visibility].filter((value) => value != null && value !== '').join(' | ')));
       const residentLoopShadowItems = (product.resident_loop_shadow_runs || []).map((entry) => listItem(entry.loop_run_id || entry.run_started_at, [entry.loop_status, 'steps=' + (entry.step_count ?? 'unknown'), 'attention=' + (entry.operator_attention_count ?? 'unknown'), entry.dispatch_action || 'none'].filter((value) => value != null && value !== '').join(' | ')));
       const residentDispatchItems = (product.resident_dispatch_decisions || []).map((entry) => listItem(entry.dispatch_decision_id || entry.carrier_session_id, [entry.decision_state, entry.dispatch_authority, entry.fallback_status, entry.dispatch_action].filter((value) => value != null && value !== '').join(' | ')));
       const evidenceItems = (product.carrier_evidence || []).map((entry) => {
@@ -4985,6 +5055,7 @@ export function renderCloudflareCarrierConsole() {
         renderListBlock('Continuity Decisions', continuityDecisionItems),
         renderListBlock('Continuity Packets', continuityPacketItems),
         renderListBlock('Webhook Delay Shadow Reads', webhookDelayShadowItems),
+        renderListBlock('Webhook Delay Directive Intents', webhookDelayDirectiveItems),
         renderListBlock('Resident Loop Shadow Reads', residentLoopShadowItems),
         renderListBlock('Resident Dispatch', residentDispatchItems),
         renderListBlock('Carrier Evidence', evidenceItems),
