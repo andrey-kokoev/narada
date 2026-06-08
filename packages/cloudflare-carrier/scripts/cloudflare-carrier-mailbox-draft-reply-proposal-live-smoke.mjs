@@ -96,13 +96,14 @@ assert.equal(listed.body.authority_partition, 'mailbox_draft_reply_proposal_clou
 const operationRead = await postCarrier({
   operation: 'operation.read',
   request_id: `mailbox_draft_reply_proposal_operation_read_${suffix}`,
-  params: { site_id: siteId, operation_id: operationId, mailbox_draft_reply_proposal_limit: 20 },
+  params: { site_id: siteId, operation_id: operationId, mailbox_draft_reply_proposal_limit: 20, mailbox_outlook_draft_create_limit: 20 },
 });
 assert.equal(operationRead.http_status, 200, JSON.stringify(operationRead.body));
 assert.ok(operationRead.body.mailbox_draft_reply_proposals.some((entry) => entry.proposal_id === proposalId));
+const mailboxOutlookDraftCreates = operationRead.body.mailbox_outlook_draft_creates ?? [];
 assert.ok(operationRead.body.operation_product_surface.mailbox_draft_reply_proposal_count >= 1);
 assert.equal(operationRead.body.operation_product_surface.mailbox_draft_reply_proposal_authority, 'cloudflare_carrier_site');
-assert.equal(operationRead.body.operation_product_surface.mailbox_outlook_draft_create_admission, 'not_admitted');
+assert.equal(operationRead.body.operation_product_surface.mailbox_outlook_draft_create_admission, mailboxOutlookDraftCreates.length > 0 ? 'admitted' : 'not_admitted');
 assert.equal(operationRead.body.operation_product_surface.mailbox_send_admission, 'not_admitted');
 assert.equal(operationRead.body.operation_product_surface.mailbox_mutation_admission, 'not_admitted');
 assert.equal(operationRead.body.operation_product_surface.mailbox_draft_reply_authority_partition, 'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted');
@@ -120,6 +121,8 @@ process.stdout.write(`${JSON.stringify({
   mailbox_send_admission: recorded.body.mailbox_send_admission,
   mailbox_mutation_admission: recorded.body.mailbox_mutation_admission,
   mailbox_draft_reply_proposal_count: operationRead.body.operation_product_surface.mailbox_draft_reply_proposal_count,
+  mailbox_outlook_draft_create_count: mailboxOutlookDraftCreates.length,
+  operation_mailbox_outlook_draft_create_admission: operationRead.body.operation_product_surface.mailbox_outlook_draft_create_admission,
   mailbox_draft_reply_authority_partition: operationRead.body.operation_product_surface.mailbox_draft_reply_authority_partition,
 }, null, 2)}\n`);
 
