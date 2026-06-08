@@ -838,6 +838,14 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /continuity_packet_count/);
   assert.match(html, /continuitySummary/);
   assert.match(html, /site_continuity/);
+  assert.match(html, /Webhook Delay Shadow Read/);
+  assert.match(html, /webhookDelayShadowNavigator/);
+  assert.match(html, /webhookDelayShadowFocusDetail/);
+  assert.match(html, /renderWebhookDelayShadowNavigator/);
+  assert.match(html, /webhookDelayShadowFocusContext/);
+  assert.match(html, /cloudflare_shadow_read/);
+  assert.match(html, /windows_primary_dispatcher/);
+  assert.match(html, /Dispatch Action/);
   assert.match(html, /operation_product_surface/);
   assert.match(html, /Carrier Evidence/);
   assert.match(html, /Task State/);
