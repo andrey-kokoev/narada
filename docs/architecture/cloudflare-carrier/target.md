@@ -29,6 +29,8 @@ Cloudflare changes the host, durability, concurrency, transport, storage, and de
 
 `site.read` exposes a `site_product_status` derived from durable site facts: site status, operations, memberships, sessions, tasks, carrier evidence, authority events, and site continuity status. It is a site-level read model for the operator's product surface; it does not create a second authority path or collapse site authority, continuity, and task work into one mutation channel. Its `next_action` is a navigation/work queue hint over existing facts.
 
+`site.list` exposes the same status vocabulary across visible sites as `site_product_statuses`, plus a `site_product_overview` aggregate. This is the multi-site operator index: it should show which site needs attention next without changing the underlying site, operation, continuity, or task authority boundaries.
+
 `operation.read` exposes an `operation_lifecycle_status` derived from existing durable operation facts: operation status, sessions, tasks, carrier evidence, site continuity status, resident loop/dispatch records, and directive delivery state. It is a read-model summary, not a new authority path; it gives operators one lifecycle health signal while preserving the underlying evidence rows and authority classifications.
 
 The control room maps lifecycle `next_action` values to existing operator actions: start or focus a session, refresh operation evidence, inspect continuity workflow, focus open task work, or inspect directive delivery. These are navigation/workflow affordances over existing product state, not hidden mutation shortcuts.

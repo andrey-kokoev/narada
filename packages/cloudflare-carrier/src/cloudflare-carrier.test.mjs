@@ -2540,6 +2540,99 @@ test('worker site.membership.put admits owner and exposes membership through sit
   assert.equal(readBody.authority_events.some((event) => event.event_kind === 'site_membership_updated'), true);
 });
 
+test('worker site.list exposes product statuses across visible sites', async () => {
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{
+      site_id: 'site_alpha',
+      site_ref: 'site://alpha',
+      display_name: 'Alpha Site',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+      created_by_principal_id: 'admin',
+    }, {
+      site_id: 'site_beta',
+      site_ref: 'site://beta',
+      display_name: 'Beta Site',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+      created_by_principal_id: 'admin',
+    }],
+    memberships: [{
+      site_id: 'site_alpha',
+      principal_id: 'admin',
+      role: 'owner',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+    }, {
+      site_id: 'site_beta',
+      principal_id: 'admin',
+      role: 'owner',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+  });
+  const taskDb = fakeD1TaskDatabase();
+  const env = authEnv(fakeDurableObjectNamespace({ CLOUDFLARE_CARRIER_TASK_DB: taskDb }), {
+    CLOUDFLARE_SITE_REGISTRY_DB: siteDb,
+    CLOUDFLARE_CARRIER_TASK_DB: taskDb,
+  });
+
+  const operationCreate = await worker.fetch(jsonRequest({
+    operation: 'operation.create',
+    request_id: 'request_site_list_operation_create',
+    params: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      display_name: 'Alpha Operation',
+      operation_kind: 'control',
+      status: 'active',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(operationCreate.status, 200);
+  const start = await worker.fetch(jsonRequest(startRequest({
+    request_id: 'request_site_list_start',
+    params: {
+      carrier_session_id: 'carrier_session_alpha',
+      agent_id: 'narada.fixture.agent',
+      site_id: 'site_alpha',
+      site_root: 'cloudflare://site_alpha',
+      site_ref: 'site://alpha',
+      operation_id: 'operation_alpha',
+    },
+  }), { token: 'test-admin-token' }), env);
+  assert.equal(start.status, 200);
+
+  const listed = await worker.fetch(jsonRequest({
+    operation: 'site.list',
+    request_id: 'request_site_list_product_statuses',
+    params: { limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(listed.status, 200);
+  const listedBody = await listed.json();
+  assert.deepEqual(listedBody.sites.map((site) => site.site_id), ['site_alpha', 'site_beta']);
+  assert.equal(listedBody.site_product_statuses.length, 2);
+  assert.equal(listedBody.site_product_statuses[0].schema, 'narada.cloudflare_site_product_status.v1');
+  assert.equal(listedBody.site_product_statuses[0].site_id, 'site_alpha');
+  assert.equal(listedBody.site_product_statuses[0].health, 'attention');
+  assert.deepEqual(listedBody.site_product_statuses[0].missing, ['continuity_packet']);
+  assert.equal(listedBody.site_product_statuses[0].operation_count, 1);
+  assert.equal(listedBody.site_product_statuses[0].session_count, 1);
+  assert.equal(listedBody.site_product_statuses[0].next_action, 'continuity_packet');
+  assert.equal(listedBody.site_product_statuses[1].site_id, 'site_beta');
+  assert.equal(listedBody.site_product_statuses[1].health, 'incomplete');
+  assert.deepEqual(listedBody.site_product_statuses[1].missing, ['operation', 'session', 'carrier_evidence', 'continuity_packet']);
+  assert.equal(listedBody.site_product_statuses[1].next_action, 'operation');
+  assert.equal(listedBody.site_product_overview.schema, 'narada.cloudflare_site_product_overview.v1');
+  assert.equal(listedBody.site_product_overview.site_count, 2);
+  assert.deepEqual(listedBody.site_product_overview.health_counts, { ready: 0, attention: 1, incomplete: 1, other: 0 });
+  assert.equal(listedBody.site_product_overview.next_site_id, 'site_alpha');
+  assert.equal(listedBody.site_product_overview.next_action, 'continuity_packet');
+});
+
 test('worker operation.create read and list route through site registry authority', async () => {
   const siteDb = fakeD1SiteRegistryDatabase({
     sites: [{
@@ -3931,6 +4024,18 @@ function fakeD1SiteRegistryStatement(state, sql) {
       return null;
     },
     async all() {
+      if (normalized.includes('from cloudflare_sites s join cloudflare_site_memberships m')) {
+        const [principalId] = bindings;
+        const visibleSiteIds = new Set(state.memberships
+          .filter((membership) => membership.principal_id === principalId && membership.status === 'active')
+          .map((membership) => membership.site_id));
+        return {
+          results: state.sites
+            .filter((site) => visibleSiteIds.has(site.site_id) && site.status === 'active')
+            .sort((left, right) => left.created_at.localeCompare(right.created_at))
+            .map((site) => clone(site)),
+        };
+      }
       if (normalized.includes('from cloudflare_site_carrier_sessions')) {
         if (normalized.includes('where operation_id = ?')) {
           const [operationId, limit] = bindings;

@@ -321,6 +321,25 @@ async function importCloudflareContinuityPacket(env = {}, packet, { imported_by_
   };
 }
 
+function summarizeCloudflareSiteProductOverview(siteProductStatuses = []) {
+  const statuses = Array.isArray(siteProductStatuses) ? siteProductStatuses : [];
+  const healthCounts = { ready: 0, attention: 0, incomplete: 0, other: 0 };
+  for (const status of statuses) {
+    if (status?.health === 'ready') healthCounts.ready += 1;
+    else if (status?.health === 'attention') healthCounts.attention += 1;
+    else if (status?.health === 'incomplete') healthCounts.incomplete += 1;
+    else healthCounts.other += 1;
+  }
+  const firstActionable = statuses.find((status) => status?.next_action && status.next_action !== 'monitor_site');
+  return {
+    schema: 'narada.cloudflare_site_product_overview.v1',
+    site_count: statuses.length,
+    health_counts: healthCounts,
+    next_site_id: firstActionable?.site_id ?? null,
+    next_action: firstActionable?.next_action ?? 'monitor_sites',
+  };
+}
+
 async function listCloudflareContinuityPackets(env = {}, siteId, limit = 100) {
   const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
   if (!db || typeof db.prepare !== 'function' || !siteId) return [];
@@ -966,6 +985,27 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
   }
   const response = await registry.handle({ ...body, principal });
   if (!response.ok) return { status: response.code === 'site_authority_denied' ? 403 : 400, body: response };
+  if (body.operation === 'site.list') {
+    const siteProductStatuses = [];
+    for (const site of response.sites ?? []) {
+      const siteRead = await registry.handle({
+        operation: 'site.read',
+        params: { site_id: site.site_id, limit: params.site_status_limit ?? params.limit },
+        principal,
+      });
+      if (!siteRead.ok) continue;
+      const projection = await buildCloudflareSiteProductProjection(env, principal, siteRead, params);
+      siteProductStatuses.push(projection.site_product_status);
+    }
+    return {
+      status: 200,
+      body: {
+        ...response,
+        site_product_statuses: siteProductStatuses,
+        site_product_overview: summarizeCloudflareSiteProductOverview(siteProductStatuses),
+      },
+    };
+  }
   if (body.operation === 'operation.read') {
     const operation = response.operation;
     const siteId = operation?.site_id ?? params.site_id;
@@ -1042,6 +1082,17 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     }
     return { status: 200, body: response };
   }
+  const projection = await buildCloudflareSiteProductProjection(env, principal, response, params);
+  return {
+    status: 200,
+    body: {
+      ...response,
+      ...projection,
+    },
+  };
+}
+
+async function buildCloudflareSiteProductProjection(env, principal, response, params = {}) {
   const siteId = response.site?.site_id ?? params.site_id;
   const tasks = await listSiteTasks(env, siteId);
   const continuityPackets = await listCloudflareContinuityPackets(env, siteId);
@@ -1067,24 +1118,20 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     continuityStatus: siteContinuityStatus,
   });
   return {
-    status: 200,
-    body: {
-      ...response,
-      tasks,
-      site_continuity_packets: continuityPackets,
-      webhook_delay_shadow_observations: webhookDelayShadowObservations,
-      webhook_delay_observation_primary_reads: webhookDelayObservationPrimaryReads,
-      webhook_delay_scheduled_source_reads: webhookDelayScheduledSourceReads,
-      webhook_delay_directive_records: webhookDelayDirectiveRecords,
-      webhook_delay_directive_deliveries: webhookDelayDirectiveDeliveries,
-      resident_loop_shadow_runs: residentLoopShadowRuns,
-      resident_dispatch_decisions: residentDispatchDecisions,
-      carrier_evidence: carrierEvidence,
-      site_authority: siteAuthority,
-      site_continuity: siteContinuity,
-      site_continuity_status: siteContinuityStatus,
-      site_product_status: siteProductStatus,
-    },
+    tasks,
+    site_continuity_packets: continuityPackets,
+    webhook_delay_shadow_observations: webhookDelayShadowObservations,
+    webhook_delay_observation_primary_reads: webhookDelayObservationPrimaryReads,
+    webhook_delay_scheduled_source_reads: webhookDelayScheduledSourceReads,
+    webhook_delay_directive_records: webhookDelayDirectiveRecords,
+    webhook_delay_directive_deliveries: webhookDelayDirectiveDeliveries,
+    resident_loop_shadow_runs: residentLoopShadowRuns,
+    resident_dispatch_decisions: residentDispatchDecisions,
+    carrier_evidence: carrierEvidence,
+    site_authority: siteAuthority,
+    site_continuity: siteContinuity,
+    site_continuity_status: siteContinuityStatus,
+    site_product_status: siteProductStatus,
   };
 }
 
