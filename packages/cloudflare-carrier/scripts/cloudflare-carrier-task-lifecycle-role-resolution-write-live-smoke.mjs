@@ -76,17 +76,29 @@ assert.equal(roleResolution.body.role_resolution.mailbox_mutation_admission, 'no
 assert.equal(roleResolution.body.role_resolution.filesystem_mutation_admission, 'not_admitted');
 assert.equal(roleResolution.body.role_resolution.repository_publication_admission, 'not_admitted');
 
-const operationRead = await postCarrier({ operation: 'operation.read', request_id: `role_resolution_write_live_operation_read_${suffix}`, params: { site_id: siteId, operation_id: operationId, task_lifecycle_task_limit: 100, task_lifecycle_write_admission_limit: 100 } });
+const operationRead = await postCarrier({ operation: 'operation.read', request_id: `role_resolution_write_live_operation_read_${suffix}`, params: { site_id: siteId, operation_id: operationId, task_lifecycle_task_limit: 100, task_lifecycle_include_task_ids: [taskId], task_lifecycle_write_admission_limit: 100 } });
 assert.equal(operationRead.http_status, 200, JSON.stringify(operationRead.body));
 assert.ok(operationRead.body.task_lifecycle_tasks.some((entry) => entry.task_id === taskId && entry.task_lifecycle_role_resolution_write_count === 1));
 assert.equal(operationRead.body.operation_product_surface.task_lifecycle_role_resolution_authority, 'cloudflare_task_lifecycle_d1');
 assert.ok(operationRead.body.operation_product_surface.task_lifecycle_role_resolution_write_count >= 1);
 assert.equal(operationRead.body.operation_product_surface.task_lifecycle_roster_read_admission, 'admitted');
-assert.equal(operationRead.body.operation_product_surface.task_lifecycle_roster_mutation_admission, 'not_admitted');
+assert.ok(new Set([
+  'not_admitted',
+  'admitted',
+]).has(operationRead.body.operation_product_surface.task_lifecycle_roster_mutation_admission), `unexpected role-resolution smoke roster mutation admission: ${operationRead.body.operation_product_surface.task_lifecycle_roster_mutation_admission}`);
 assert.equal(operationRead.body.operation_product_surface.task_lifecycle_role_resolution_authority_admission, 'admitted');
-assert.equal(operationRead.body.operation_product_surface.task_lifecycle_authority_partition, 'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_cloudflare_remaining_windows_effects');
-assert.equal(operationRead.body.operation_product_surface.task_lifecycle_write_admission_posture, 'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_admitted_remaining_external_effects_not_admitted');
-assert.equal(operationRead.body.operation_product_surface.task_lifecycle_cloudflare_write_admission, 'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_admitted');
+assert.ok(new Set([
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_cloudflare_remaining_windows_effects',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_and_roster_mutation_cloudflare_remaining_windows_effects',
+]).has(operationRead.body.operation_product_surface.task_lifecycle_authority_partition), `unexpected authority partition: ${operationRead.body.operation_product_surface.task_lifecycle_authority_partition}`);
+assert.ok(new Set([
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_admitted_remaining_external_effects_not_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_and_roster_mutation_admitted_remaining_external_effects_not_admitted',
+]).has(operationRead.body.operation_product_surface.task_lifecycle_write_admission_posture), `unexpected write admission posture: ${operationRead.body.operation_product_surface.task_lifecycle_write_admission_posture}`);
+assert.ok(new Set([
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_and_roster_mutation_admitted',
+]).has(operationRead.body.operation_product_surface.task_lifecycle_cloudflare_write_admission), `unexpected Cloudflare write admission: ${operationRead.body.operation_product_surface.task_lifecycle_cloudflare_write_admission}`);
 
 process.stdout.write(`${JSON.stringify({
   schema: 'narada.cloudflare_carrier.task_lifecycle_role_resolution_write_live_smoke.v1',

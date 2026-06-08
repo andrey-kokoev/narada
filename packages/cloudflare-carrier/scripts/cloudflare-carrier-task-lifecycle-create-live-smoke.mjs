@@ -83,7 +83,7 @@ assert.equal(listedTask.cloudflare_write_admission, 'admitted');
 const operationRead = await postCarrier({
   operation: 'operation.read',
   request_id: `task_lifecycle_create_live_operation_read_${suffix}`,
-  params: { site_id: siteId, operation_id: operationId, task_lifecycle_task_limit: 20, task_lifecycle_write_admission_limit: 20 },
+  params: { site_id: siteId, operation_id: operationId, task_lifecycle_task_limit: 20, task_lifecycle_include_task_ids: [created.body.task.task_id], task_lifecycle_write_admission_limit: 20 },
 });
 assert.equal(operationRead.http_status, 200, JSON.stringify(operationRead.body));
 assert.equal(operationRead.body.ok, true);

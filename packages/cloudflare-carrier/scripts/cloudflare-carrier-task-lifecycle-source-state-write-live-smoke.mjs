@@ -192,16 +192,31 @@ assert.equal(sourceState.body.task.task_lifecycle_source_state_write_count, 1);
 const operationRead = await postCarrier({
   operation: 'operation.read',
   request_id: `source_state_write_live_operation_read_${suffix}`,
-  params: { site_id: siteId, operation_id: operationId, task_lifecycle_task_limit: 100, task_lifecycle_write_admission_limit: 100 },
+  params: { site_id: siteId, operation_id: operationId, task_lifecycle_task_limit: 100, task_lifecycle_include_task_ids: [created.body.task.task_id], task_lifecycle_write_admission_limit: 100 },
 });
 assert.equal(operationRead.http_status, 200, JSON.stringify(operationRead.body));
 assert.ok(operationRead.body.task_lifecycle_tasks.some((entry) => entry.task_id === created.body.task.task_id && entry.status === 'finished' && entry.task_lifecycle_source_state_write_count === 1));
 assert.equal(operationRead.body.operation_product_surface.task_lifecycle_source_state_authority, 'cloudflare_task_lifecycle_d1');
 assert.ok(operationRead.body.operation_product_surface.task_lifecycle_source_state_write_count >= 1);
 assert.equal(operationRead.body.operation_product_surface.task_lifecycle_windows_sqlite_source_write_admission, 'not_admitted');
-assert.equal(operationRead.body.operation_product_surface.task_lifecycle_authority_partition, 'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_cloudflare_remaining_windows_effects');
-assert.equal(operationRead.body.operation_product_surface.task_lifecycle_write_admission_posture, 'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_admitted_remaining_external_effects_not_admitted');
-assert.equal(operationRead.body.operation_product_surface.task_lifecycle_cloudflare_write_admission, 'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_admitted');
+assert.ok(new Set([
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_cloudflare_remaining_windows_effects',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_and_assignment_cloudflare_remaining_windows_effects',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_cloudflare_remaining_windows_effects',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_and_roster_mutation_cloudflare_remaining_windows_effects',
+]).has(operationRead.body.operation_product_surface.task_lifecycle_authority_partition), `unexpected source-state smoke authority partition: ${operationRead.body.operation_product_surface.task_lifecycle_authority_partition}`);
+assert.ok(new Set([
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_admitted_remaining_external_effects_not_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_and_assignment_admitted_remaining_external_effects_not_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_admitted_remaining_external_effects_not_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_and_roster_mutation_admitted_remaining_external_effects_not_admitted',
+]).has(operationRead.body.operation_product_surface.task_lifecycle_write_admission_posture), `unexpected source-state smoke write posture: ${operationRead.body.operation_product_surface.task_lifecycle_write_admission_posture}`);
+assert.ok(new Set([
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_and_assignment_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_and_roster_mutation_admitted',
+]).has(operationRead.body.operation_product_surface.task_lifecycle_cloudflare_write_admission), `unexpected source-state smoke Cloudflare write admission: ${operationRead.body.operation_product_surface.task_lifecycle_cloudflare_write_admission}`);
 
 process.stdout.write(`${JSON.stringify({
   schema: 'narada.cloudflare_carrier.task_lifecycle_source_state_write_live_smoke.v1',

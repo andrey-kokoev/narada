@@ -172,7 +172,7 @@ assert.equal(finished.body.task.changed_file_evidence_count, 1);
 const operationRead = await postCarrier({
   operation: 'operation.read',
   request_id: `changed_file_evidence_live_operation_read_${suffix}`,
-  params: { site_id: siteId, operation_id: operationId, task_lifecycle_task_limit: 100, task_lifecycle_write_admission_limit: 100 },
+  params: { site_id: siteId, operation_id: operationId, task_lifecycle_task_limit: 100, task_lifecycle_include_task_ids: [created.body.task.task_id], task_lifecycle_write_admission_limit: 100 },
 });
 assert.equal(operationRead.http_status, 200, JSON.stringify(operationRead.body));
 assert.equal(operationRead.body.ok, true);
@@ -180,9 +180,30 @@ assert.ok(operationRead.body.task_lifecycle_tasks.some((entry) => entry.task_id 
 assert.equal(operationRead.body.operation_product_surface.task_lifecycle_task_finish_authority, 'cloudflare_task_lifecycle_d1');
 assert.equal(operationRead.body.operation_product_surface.task_lifecycle_changed_file_evidence_authority, 'cloudflare_task_lifecycle_d1');
 assert.ok(operationRead.body.operation_product_surface.task_lifecycle_changed_file_evidence_count >= 1);
-assert.equal(operationRead.body.operation_product_surface.task_lifecycle_authority_partition, 'task_create_claim_report_finish_and_changed_file_evidence_cloudflare_remaining_windows');
-assert.equal(operationRead.body.operation_product_surface.task_lifecycle_write_admission_posture, 'task_create_claim_report_finish_and_changed_file_evidence_admitted_remaining_writes_not_admitted');
-assert.equal(operationRead.body.operation_product_surface.task_lifecycle_cloudflare_write_admission, 'task_create_claim_report_finish_and_changed_file_evidence_admitted');
+assert.ok(new Set([
+  'task_create_claim_report_finish_and_changed_file_evidence_cloudflare_remaining_windows',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_cloudflare_remaining_windows_effects',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_cloudflare_remaining_windows_effects',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_and_assignment_cloudflare_remaining_windows_effects',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_cloudflare_remaining_windows_effects',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_and_roster_mutation_cloudflare_remaining_windows_effects',
+]).has(operationRead.body.operation_product_surface.task_lifecycle_authority_partition), `unexpected changed-file evidence smoke authority partition: ${operationRead.body.operation_product_surface.task_lifecycle_authority_partition}`);
+assert.ok(new Set([
+  'task_create_claim_report_finish_and_changed_file_evidence_admitted_remaining_writes_not_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_admitted_remaining_external_effects_not_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_admitted_remaining_external_effects_not_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_and_assignment_admitted_remaining_external_effects_not_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_admitted_remaining_external_effects_not_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_and_roster_mutation_admitted_remaining_external_effects_not_admitted',
+]).has(operationRead.body.operation_product_surface.task_lifecycle_write_admission_posture), `unexpected changed-file evidence smoke write posture: ${operationRead.body.operation_product_surface.task_lifecycle_write_admission_posture}`);
+assert.ok(new Set([
+  'task_create_claim_report_finish_and_changed_file_evidence_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_and_assignment_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_and_roster_mutation_admitted',
+]).has(operationRead.body.operation_product_surface.task_lifecycle_cloudflare_write_admission), `unexpected changed-file evidence smoke Cloudflare write admission: ${operationRead.body.operation_product_surface.task_lifecycle_cloudflare_write_admission}`);
 
 process.stdout.write(`${JSON.stringify({
   schema: 'narada.cloudflare_carrier.changed_file_evidence_live_smoke.v1',

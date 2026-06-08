@@ -89,8 +89,22 @@ assert.equal(operationRead.http_status, 200, JSON.stringify(operationRead.body))
 assert.equal(operationRead.body.ok, true);
 assert.ok(operationRead.body.task_lifecycle_shadow_reads.some((entry) => entry.read_id === readId));
 assert.ok(operationRead.body.operation_product_surface.task_lifecycle_shadow_read_count >= 1);
-assert.equal(operationRead.body.operation_product_surface.task_lifecycle_mutation_authority, 'windows_task_lifecycle_sqlite');
-assert.equal(operationRead.body.operation_product_surface.task_lifecycle_cloudflare_write_admission, 'not_admitted');
+assert.ok(new Set([
+  'windows_task_lifecycle_sqlite',
+  'cloudflare_task_lifecycle_d1',
+]).has(operationRead.body.operation_product_surface.task_lifecycle_mutation_authority), `unexpected shadow smoke mutation authority: ${operationRead.body.operation_product_surface.task_lifecycle_mutation_authority}`);
+assert.ok(new Set([
+  'not_admitted',
+  'task_create_admitted',
+  'task_create_and_claim_admitted',
+  'task_create_claim_and_report_admitted',
+  'task_create_claim_report_finish_and_changed_file_evidence_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_and_assignment_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_and_roster_mutation_admitted',
+]).has(operationRead.body.operation_product_surface.task_lifecycle_cloudflare_write_admission), `unexpected shadow smoke Cloudflare write admission: ${operationRead.body.operation_product_surface.task_lifecycle_cloudflare_write_admission}`);
 
 process.stdout.write(`${JSON.stringify({
   schema: 'narada.cloudflare_carrier.task_lifecycle_shadow_live_smoke.v1',

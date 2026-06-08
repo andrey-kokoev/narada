@@ -870,6 +870,7 @@ assert.ok(new Set([
   'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_cloudflare_remaining_windows_effects',
   'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_and_assignment_cloudflare_remaining_windows_effects',
   'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_cloudflare_remaining_windows_effects',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_and_roster_mutation_cloudflare_remaining_windows_effects',
 ]).has(projectionWriteSmoke.authority_partition), `unexpected projection write smoke authority partition: ${projectionWriteSmoke.authority_partition}`);
 
 const siteRead = await postCarrier(workerUrl, bearerToken, {
@@ -1109,6 +1110,7 @@ assert.equal(taskLifecycleAssignmentWriteSmoke.task_lifecycle_assignment_write_c
 assert.ok(new Set([
   'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_and_assignment_cloudflare_remaining_windows_effects',
   'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_cloudflare_remaining_windows_effects',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_and_roster_mutation_cloudflare_remaining_windows_effects',
 ]).has(taskLifecycleAssignmentWriteSmoke.authority_partition), `unexpected assignment write smoke authority partition: ${taskLifecycleAssignmentWriteSmoke.authority_partition}`);
 
 const taskLifecycleRoleResolutionWriteSmoke = await runJsonCommand('task-lifecycle-role-resolution-write-smoke:live', [
@@ -1137,7 +1139,36 @@ assert.equal(taskLifecycleRoleResolutionWriteSmoke.mailbox_mutation_admission, '
 assert.equal(taskLifecycleRoleResolutionWriteSmoke.filesystem_mutation_admission, 'not_admitted');
 assert.equal(taskLifecycleRoleResolutionWriteSmoke.repository_publication_admission, 'not_admitted');
 assert.ok(taskLifecycleRoleResolutionWriteSmoke.task_lifecycle_role_resolution_write_count >= 1);
-assert.equal(taskLifecycleRoleResolutionWriteSmoke.authority_partition, 'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_cloudflare_remaining_windows_effects');
+assert.ok(new Set([
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_cloudflare_remaining_windows_effects',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_and_roster_mutation_cloudflare_remaining_windows_effects',
+]).has(taskLifecycleRoleResolutionWriteSmoke.authority_partition), `unexpected role-resolution write smoke authority partition: ${taskLifecycleRoleResolutionWriteSmoke.authority_partition}`);
+
+const taskLifecycleRosterMutationWriteSmoke = await runJsonCommand('task-lifecycle-roster-mutation-write-smoke:live', [
+  'node',
+  'packages/cloudflare-carrier/scripts/cloudflare-carrier-task-lifecycle-roster-mutation-write-live-smoke.mjs',
+  '--url',
+  workerUrl,
+  '--token-file',
+  tokenFile,
+  '--site',
+  siteId,
+  '--operation',
+  operationId,
+]);
+assert.equal(taskLifecycleRosterMutationWriteSmoke.status, 'ok');
+assert.equal(taskLifecycleRosterMutationWriteSmoke.worker_url, workerUrl);
+assert.equal(taskLifecycleRosterMutationWriteSmoke.site_id, siteId);
+assert.equal(taskLifecycleRosterMutationWriteSmoke.operation_id, operationId);
+assert.equal(taskLifecycleRosterMutationWriteSmoke.mutation_authority, 'cloudflare_task_lifecycle_d1');
+assert.equal(taskLifecycleRosterMutationWriteSmoke.cloudflare_write_admission, 'admitted');
+assert.equal(taskLifecycleRosterMutationWriteSmoke.write_effect, 'task_lifecycle_roster_mutation_write');
+assert.equal(taskLifecycleRosterMutationWriteSmoke.roster_mutation_admission, 'admitted');
+assert.equal(taskLifecycleRosterMutationWriteSmoke.mailbox_mutation_admission, 'not_admitted');
+assert.equal(taskLifecycleRosterMutationWriteSmoke.filesystem_mutation_admission, 'not_admitted');
+assert.equal(taskLifecycleRosterMutationWriteSmoke.repository_publication_admission, 'not_admitted');
+assert.ok(taskLifecycleRosterMutationWriteSmoke.task_lifecycle_roster_mutation_write_count >= 1);
+assert.equal(taskLifecycleRosterMutationWriteSmoke.authority_partition, 'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_and_roster_mutation_cloudflare_remaining_windows_effects');
 
 const residentDispatch = await postCarrier(workerUrl, bearerToken, {
   operation: 'resident_dispatch.primary_with_fallback.start',
@@ -1255,6 +1286,7 @@ const operationReadAfterContinuity = await postCarrier(workerUrl, bearerToken, {
     session_limit: 10,
     webhook_delay_directive_delivery_limit: 10,
     task_lifecycle_task_limit: 100,
+    task_lifecycle_include_task_ids: [projectionWriteSmoke.task_id, taskLifecycleRoleResolutionWriteSmoke.task_id, taskLifecycleRosterMutationWriteSmoke.task_id],
     task_lifecycle_write_admission_limit: 100,
     resident_loop_shadow_limit: 10,
     resident_dispatch_limit: 10,
@@ -1351,6 +1383,13 @@ assert.equal(roleResolutionWriteTask.roster_read_admission, 'admitted');
 assert.equal(roleResolutionWriteTask.roster_mutation_admission, 'not_admitted');
 assert.equal(roleResolutionWriteTask.resolved_assignee_principal_id, taskLifecycleRoleResolutionWriteSmoke.assignee_principal_id);
 assert.equal(roleResolutionWriteTask.resolved_assignee_role, taskLifecycleRoleResolutionWriteSmoke.resolved_role);
+const rosterMutationWriteTask = taskLifecycleTasks.find((task) => task.task_id === taskLifecycleRosterMutationWriteSmoke.task_id);
+assert.ok(rosterMutationWriteTask, `roster-mutation write task missing from operation.read: ${taskLifecycleRosterMutationWriteSmoke.task_id}`);
+assert.equal(rosterMutationWriteTask.task_lifecycle_roster_mutation_write_count, 1);
+assert.equal(rosterMutationWriteTask.task_lifecycle_roster_mutation_write_admission, 'admitted');
+assert.equal(rosterMutationWriteTask.roster_mutation_authority, 'cloudflare_task_lifecycle_d1');
+assert.equal(rosterMutationWriteTask.roster_mutation_admission, 'admitted');
+assert.equal(rosterMutationWriteTask.mailbox_mutation_admission, 'not_admitted');
 assert.ok(new Set([
   'writes_not_admitted',
   'task_create_admitted_remaining_writes_not_admitted',
@@ -1363,6 +1402,7 @@ assert.ok(new Set([
   'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_admitted_remaining_external_effects_not_admitted',
   'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_and_assignment_admitted_remaining_external_effects_not_admitted',
   'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_admitted_remaining_external_effects_not_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_and_roster_mutation_admitted_remaining_external_effects_not_admitted',
 ]).has(operationSurface?.task_lifecycle_write_admission_posture), `unexpected task lifecycle write admission posture: ${operationSurface?.task_lifecycle_write_admission_posture}`);
 assert.ok(new Set(['windows_task_lifecycle_sqlite', 'split_by_mutation_class']).has(operationSurface?.task_lifecycle_mutation_authority), `unexpected task lifecycle mutation authority: ${operationSurface?.task_lifecycle_mutation_authority}`);
 assert.ok(new Set([
@@ -1377,6 +1417,7 @@ assert.ok(new Set([
   'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_admitted',
   'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_and_assignment_admitted',
   'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_admitted',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_and_roster_mutation_admitted',
 ]).has(operationSurface?.task_lifecycle_cloudflare_write_admission), `unexpected task lifecycle Cloudflare write admission: ${operationSurface?.task_lifecycle_cloudflare_write_admission}`);
 assert.ok(new Set([
   'windows_all_observed_mutations',
@@ -1390,6 +1431,7 @@ assert.ok(new Set([
   'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_cloudflare_remaining_windows_effects',
   'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_and_assignment_cloudflare_remaining_windows_effects',
   'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_cloudflare_remaining_windows_effects',
+  'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_and_roster_mutation_cloudflare_remaining_windows_effects',
 ]).has(operationSurface?.task_lifecycle_authority_partition), `unexpected task lifecycle authority partition: ${operationSurface?.task_lifecycle_authority_partition}`);
 if (taskLifecycleTasks.length > 0) {
   assert.equal(operationSurface?.task_lifecycle_mutation_authority, 'split_by_mutation_class');
@@ -1510,6 +1552,7 @@ const report = {
     task_lifecycle_source_state_write_boundary: 'ok',
     task_lifecycle_projection_write_cutover_surface: 'ok',
     task_lifecycle_role_resolution_write_cutover_surface: 'ok',
+    task_lifecycle_roster_mutation_write_cutover_surface: 'ok',
     resident_loop_shadow_surface: 'ok',
     resident_dispatch_surface: 'ok',
     human_operator_session: humanOperator.status,
@@ -1583,6 +1626,14 @@ const report = {
     task_lifecycle_role_resolution_write_effect: taskLifecycleRoleResolutionWriteSmoke.write_effect,
     task_lifecycle_role_resolution_assignee_principal_id: taskLifecycleRoleResolutionWriteSmoke.assignee_principal_id,
     task_lifecycle_role_resolution_resolved_role: taskLifecycleRoleResolutionWriteSmoke.resolved_role,
+    task_lifecycle_roster_mutation_write_count: operationSurface.task_lifecycle_roster_mutation_write_count,
+    task_lifecycle_roster_mutation_write_admission: taskLifecycleRosterMutationWriteSmoke.cloudflare_write_admission,
+    task_lifecycle_roster_mutation_write_authority: operationSurface.task_lifecycle_roster_mutation_authority,
+    task_lifecycle_roster_mutation_write_task_id: taskLifecycleRosterMutationWriteSmoke.task_id,
+    task_lifecycle_roster_mutation_write_effect: taskLifecycleRosterMutationWriteSmoke.write_effect,
+    task_lifecycle_roster_mutation_assignee_principal_id: taskLifecycleRosterMutationWriteSmoke.assignee_principal_id,
+    task_lifecycle_roster_mutation_membership_role: taskLifecycleRosterMutationWriteSmoke.membership_role,
+    task_lifecycle_roster_mutation_membership_status: taskLifecycleRosterMutationWriteSmoke.membership_status,
     task_lifecycle_roster_read_admission: operationSurface.task_lifecycle_roster_read_admission,
     task_lifecycle_roster_mutation_admission: operationSurface.task_lifecycle_roster_mutation_admission,
     task_lifecycle_role_resolution_authority_admission: operationSurface.task_lifecycle_role_resolution_authority_admission,

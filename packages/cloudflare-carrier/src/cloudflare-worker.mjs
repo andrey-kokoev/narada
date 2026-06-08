@@ -2933,7 +2933,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
   if (body.operation === 'task_lifecycle.task.list') {
     const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
     if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
-    const tasks = await listCloudflareTaskLifecycleTasks(env, requestedSiteId, params.task_lifecycle_task_limit ?? params.limit);
+    const tasks = await listCloudflareTaskLifecycleTasks(env, requestedSiteId, params.task_lifecycle_task_limit ?? params.limit, params);
     return {
       status: 200,
       body: {
@@ -3223,7 +3223,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const residentLoopShadowRuns = await listCloudflareResidentLoopShadowRuns(env, siteId, params.resident_loop_shadow_limit ?? params.limit);
     const taskLifecycleShadowReads = await listCloudflareTaskLifecycleShadowReads(env, siteId, params.task_lifecycle_shadow_limit ?? params.limit);
     const taskLifecycleWriteAdmissions = await listCloudflareTaskLifecycleWriteAdmissions(env, siteId, params.task_lifecycle_write_admission_limit ?? params.limit);
-    const taskLifecycleTasks = await listCloudflareTaskLifecycleTasks(env, siteId, params.task_lifecycle_task_limit ?? params.limit);
+    const taskLifecycleTasks = await listCloudflareTaskLifecycleTasks(env, siteId, params.task_lifecycle_task_limit ?? params.limit, params);
     const residentDispatchDecisions = await listCloudflareResidentDispatchDecisions(env, siteId, params.resident_dispatch_limit ?? params.limit);
     const carrierEvidence = await readCarrierEvidenceForSiteSessions(env, sessions, principal, params);
     const carrierEvidenceReadStatus = summarizeCloudflareCarrierEvidenceReadStatus({ sessions, carrierEvidence, params });
@@ -3415,7 +3415,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
   const residentLoopShadowRuns = await listCloudflareResidentLoopShadowRuns(env, siteId, params.resident_loop_shadow_limit ?? params.limit);
   const taskLifecycleShadowReads = await listCloudflareTaskLifecycleShadowReads(env, siteId, params.task_lifecycle_shadow_limit ?? params.limit);
   const taskLifecycleWriteAdmissions = await listCloudflareTaskLifecycleWriteAdmissions(env, siteId, params.task_lifecycle_write_admission_limit ?? params.limit);
-  const taskLifecycleTasks = await listCloudflareTaskLifecycleTasks(env, siteId, params.task_lifecycle_task_limit ?? params.limit);
+  const taskLifecycleTasks = await listCloudflareTaskLifecycleTasks(env, siteId, params.task_lifecycle_task_limit ?? params.limit, params);
   const residentDispatchDecisions = await listCloudflareResidentDispatchDecisions(env, siteId, params.resident_dispatch_limit ?? params.limit);
   const carrierEvidence = await readCarrierEvidenceForSiteSessions(env, response.sessions ?? [], principal, params);
   const carrierEvidenceReadStatus = summarizeCloudflareCarrierEvidenceReadStatus({ sessions: response.sessions ?? [], carrierEvidence, params });
@@ -4570,7 +4570,13 @@ async function nextCloudflareTaskLifecycleTaskNumber(db, siteId) {
   return Number(row?.next_task_number ?? 1);
 }
 
-async function listCloudflareTaskLifecycleTasks(env = {}, siteId, limit) {
+function normalizeCloudflareTaskLifecycleIncludeTaskIds(params = {}) {
+  const raw = params.task_lifecycle_include_task_ids ?? params.task_lifecycle_task_ids ?? params.task_lifecycle_task_id;
+  const values = Array.isArray(raw) ? raw : typeof raw === 'string' ? raw.split(',') : raw == null ? [] : [raw];
+  return [...new Set(values.map((value) => String(value ?? '').trim()).filter(Boolean))].slice(0, 25);
+}
+
+async function listCloudflareTaskLifecycleTasks(env = {}, siteId, limit, params = {}) {
   const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
   if (!db || typeof db.prepare !== 'function' || !siteId) return [];
   await ensureCloudflareTaskLifecycleTaskSchema(db);
@@ -4581,7 +4587,16 @@ async function listCloudflareTaskLifecycleTasks(env = {}, siteId, limit) {
     ORDER BY task_number ASC
     LIMIT ?
   `).bind(siteId, boundedLimit).all();
-  return (rows.results ?? []).map(formatCloudflareTaskLifecycleTask);
+  const tasks = (rows.results ?? []).map(formatCloudflareTaskLifecycleTask);
+  const seenTaskIds = new Set(tasks.map((task) => task.task_id));
+  for (const taskId of normalizeCloudflareTaskLifecycleIncludeTaskIds(params)) {
+    if (seenTaskIds.has(taskId)) continue;
+    const task = await getCloudflareTaskLifecycleTask(db, siteId, taskId);
+    if (!task) continue;
+    tasks.push(task);
+    seenTaskIds.add(taskId);
+  }
+  return tasks;
 }
 
 function formatCloudflareTaskLifecycleTask(row) {
@@ -4667,6 +4682,9 @@ function formatCloudflareTaskLifecycleTask(row) {
     resolved_assignee_role: taskJson.resolved_assignee_role ?? null,
     roster_read_admission: taskJson.roster_read_admission ?? null,
     roster_mutation_admission: taskJson.roster_mutation_admission ?? null,
+    mailbox_mutation_admission: taskJson.mailbox_mutation_admission ?? null,
+    filesystem_mutation_admission: taskJson.filesystem_mutation_admission ?? null,
+    repository_publication_admission: taskJson.repository_publication_admission ?? null,
     role_resolution_authority_admission: taskJson.role_resolution_authority_admission ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at,
