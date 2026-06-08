@@ -45,6 +45,9 @@
     "values": ["operation_heartbeat"],
     "basic_test_kind": "operation_heartbeat"
   },
+  "directive_emission_event_kind": {
+    "values": ["directive_emission_authorized", "directive_emission_rule_recorded", "directive_emitted"]
+  },
   "queue_state": {
     "values": ["queued_for_turn_boundary", "admitted_to_turn", "dropped_by_operator", "abandoned_on_session_end"]
   },

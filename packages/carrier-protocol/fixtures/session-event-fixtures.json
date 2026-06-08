@@ -34,6 +34,18 @@
       "fixture": "system-directive-released-session-event.json"
     },
     {
+      "event_kind": "directive_emission_authorized",
+      "fixture": "directive-emission-authorized-session-event.json"
+    },
+    {
+      "event_kind": "directive_emission_rule_recorded",
+      "fixture": "directive-emission-rule-recorded-session-event.json"
+    },
+    {
+      "event_kind": "directive_emitted",
+      "fixture": "directive-emitted-session-event.json"
+    },
+    {
       "event_kind": "directive_receipt_recorded",
       "fixture": "directive-receipt-session-event.json"
     },

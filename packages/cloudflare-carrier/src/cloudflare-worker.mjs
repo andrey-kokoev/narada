@@ -155,6 +155,7 @@ export class CloudflareCarrierDurableObject {
     this.state = state;
     this.env = env;
     this.session = null;
+    this.lane = Promise.resolve();
   }
 
   async fetch(request) {
@@ -167,6 +168,13 @@ export class CloudflareCarrierDurableObject {
   }
 
   async handle(request) {
+    const run = () => this.#handleInLane(request);
+    const result = this.lane.then(run, run);
+    this.lane = result.catch(() => {});
+    return result;
+  }
+
+  async #handleInLane(request) {
     const session = await this.#loadOrCreateSession(request);
     if (!session) return { ok: false, code: 'carrier_session_not_found' };
     const response = await session.handle(request);
@@ -1496,6 +1504,7 @@ export function authenticateCarrierRequest(request, env = {}) {
 function mutatesSession(operation) {
   return [
     'session.start',
+    'directive.heartbeat.emit',
     'carrier.input.deliver',
     'carrier.command.execute',
     'carrier.interrupt',

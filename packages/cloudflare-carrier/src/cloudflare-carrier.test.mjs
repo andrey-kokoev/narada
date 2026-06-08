@@ -152,6 +152,55 @@ test('record-only operation heartbeat directive records acceptance without provi
   assert.equal(response.events[0].payload.directive_kind, 'operation_heartbeat');
 });
 
+test('operation heartbeat emitter records emission evidence and routes through input delivery', () => {
+  const { router } = startedSession();
+  const response = router.handle({
+    operation: 'directive.heartbeat.emit',
+    request_id: 'request_emit_operation_heartbeat_1',
+    carrier_session_id: 'carrier_session_cloudflare_fixture',
+    principal: { principal_id: 'operator.fixture' },
+    params: {
+      operation_id: 'operation_fixture_control',
+      input_event_id: 'input_operation_heartbeat_emit_1',
+      directive_id: 'dir_operation_heartbeat_emit_1',
+    },
+  });
+  assert.equal(response.ok, true);
+  assert.equal(response.terminal_state, 'completed_without_provider');
+  assert.equal(response.input_event_id, 'input_operation_heartbeat_emit_1');
+  assert.equal(response.directive_id, 'dir_operation_heartbeat_emit_1');
+  assertValidEvents(response);
+  assert.deepEqual(eventKinds(response), [
+    'directive_emission_authorized',
+    'directive_emission_rule_recorded',
+    'directive_emitted',
+    'directive_receipt_recorded',
+    'directive_carrier_accepted_recorded',
+    'input_completed',
+  ]);
+  assert.equal(response.events[2].payload.input_event_id, 'input_operation_heartbeat_emit_1');
+  assert.equal(response.events[3].payload.input_event_id, 'input_operation_heartbeat_emit_1');
+  assert.equal(response.events.some((event) => event.event_kind === 'turn_started'), false);
+  assert.equal(response.events.some((event) => event.event_kind === 'provider_request_recorded'), false);
+
+  const repeated = router.handle({
+    operation: 'directive.heartbeat.emit',
+    request_id: 'request_emit_operation_heartbeat_2',
+    carrier_session_id: 'carrier_session_cloudflare_fixture',
+    params: {
+      operation_id: 'operation_fixture_control',
+      input_event_id: 'input_operation_heartbeat_emit_2',
+      directive_id: 'dir_operation_heartbeat_emit_2',
+    },
+  });
+  assert.deepEqual(eventKinds(repeated), [
+    'directive_emitted',
+    'directive_receipt_recorded',
+    'directive_carrier_accepted_recorded',
+    'input_completed',
+  ]);
+});
+
 test('goal command supports show set pause resume and clear', () => {
   const { router } = startedSession();
   let response = router.handle(commandRequest('/goal', ['stabilize', 'carrier']));
@@ -281,6 +330,53 @@ test('durable object facade stores and reloads session snapshot', async () => {
   });
   assert.equal(status.goal.text, 'stabilize');
   assert.equal(status.next_event_sequence, 3);
+});
+
+test('durable object facade serializes mutations while provider work is pending', async () => {
+  const storage = fakeStorage();
+  const providerEntered = deferred();
+  const providerGate = deferred();
+  const durableObject = new CloudflareCarrierDurableObject({ storage }, {
+    AI: {
+      async run() {
+        providerEntered.resolve();
+        await providerGate.promise;
+        return { response: 'provider completed after held gate' };
+      },
+    },
+  });
+  await durableObject.handle(startRequest());
+  const input = {
+    ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,
+    event_id: 'input_provider_gate_ordered_lane_1',
+    content: 'Hold provider turn open while another mutation arrives.',
+  };
+
+  const inputPromise = durableObject.handle(inputRequest(input, { request_id: 'request_provider_gate_ordered_lane_1' }));
+  await providerEntered.promise;
+  let commandSettled = false;
+  const commandPromise = durableObject.handle(commandRequest('/goal', ['after', 'provider'], { request_id: 'request_goal_after_provider_gate' }))
+    .then((response) => {
+      commandSettled = true;
+      return response;
+    });
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(commandSettled, false);
+
+  providerGate.resolve();
+  const [inputResponse, commandResponse] = await Promise.all([inputPromise, commandPromise]);
+  assert.equal(inputResponse.terminal_state, 'completed');
+  assert.equal(commandResponse.event.event_kind, 'carrier_command_executed');
+  assert.equal(commandResponse.event.sequence > inputResponse.events.at(-1).sequence, true);
+
+  const read = await durableObject.handle({
+    operation: 'session.events.read',
+    carrier_session_id: 'carrier_session_cloudflare_fixture',
+    params: { after_sequence: 0, limit: 50 },
+  });
+  assert.deepEqual(read.events.map((event) => event.sequence), read.events.map((_, index) => index + 1));
+  assert.equal(read.events.at(-1).event_kind, 'carrier_command_executed');
 });
 
 test('worker export routes requests by carrier session durable object binding', async () => {
@@ -1722,15 +1818,26 @@ function fakeDurableObjectNamespace(durableEnv = {}) {
     get(id) {
       if (!objects.has(id)) {
         const storage = fakeStorage();
+        const durableObject = new CloudflareCarrierDurableObject({ storage }, durableEnv);
         objects.set(id, {
           async fetch(request) {
-            return new CloudflareCarrierDurableObject({ storage }, durableEnv).fetch(request);
+            return durableObject.fetch(request);
           },
         });
       }
       return objects.get(id);
     },
   };
+}
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
 }
 
 function authEnv(namespace, extra = {}) {

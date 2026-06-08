@@ -1,6 +1,10 @@
 import {
   classifyCarrierControlRequest,
   classifyCarrierInputQueueAdmission,
+  createDirectiveEmissionAuthorization,
+  createDirectiveEmissionRule,
+  createOperationHeartbeatDirectiveInput,
+  directiveEmissionPayload,
   createProviderToolCallPayload,
   createToolCallPayload,
   createToolResultPayload,
@@ -19,6 +23,7 @@ export const CLOUDFLARE_CARRIER_IMPLEMENTATION_VERSION = '0.1.0';
 
 const MUTATING_OPERATIONS = new Set([
   'session.start',
+  'directive.heartbeat.emit',
   'carrier.input.deliver',
   'carrier.command.execute',
   'carrier.interrupt',
@@ -28,6 +33,7 @@ const MUTATING_OPERATIONS = new Set([
 const SUPPORTED_OPERATIONS = new Set([
   'session.start',
   'session.status',
+  'directive.heartbeat.emit',
   'carrier.input.deliver',
   'carrier.command.execute',
   'carrier.interrupt',
@@ -123,6 +129,9 @@ export class CloudflareCarrierSession {
       tool_effect_supported_tools: this.toolEffectPosture.supported_tools,
       tool_effect_capabilities: this.toolEffectPosture.capabilities,
       host_command_targets: ['diagnostic_read', 'runtime_metadata_read'],
+      directive_emission_authorizations: [],
+      directive_emission_rules: [],
+      directive_emission_sequence: 0,
       processed_requests: new Map(),
     };
     this.events = [];
@@ -189,6 +198,8 @@ export class CloudflareCarrierSession {
       observer_interjections_muted: this.state.observer_interjections_muted,
       queue_count: this.state.queue.length,
       active_turn: this.state.active_turn,
+      directive_emission_authorization_count: this.state.directive_emission_authorizations.length,
+      directive_emission_rule_count: this.state.directive_emission_rules.length,
       tasks,
       closed: this.state.closed,
       next_event_sequence: this.state.next_event_sequence,
@@ -237,6 +248,9 @@ export class CloudflareCarrierSession {
       tool_effect_adapter_kind: session.toolEffectPosture.adapter_kind,
       tool_effect_supported_tools: session.toolEffectPosture.supported_tools,
       tool_effect_capabilities: session.toolEffectPosture.capabilities,
+      directive_emission_authorizations: clone(snapshot.state.directive_emission_authorizations ?? []),
+      directive_emission_rules: clone(snapshot.state.directive_emission_rules ?? []),
+      directive_emission_sequence: snapshot.state.directive_emission_sequence ?? 0,
       processed_requests: new Map((snapshot.processed_requests ?? []).map(([key, value]) => [key, clone(value)])),
     };
     session.events = (snapshot.events ?? []).map((event) => clone(event));
@@ -249,6 +263,8 @@ export class CloudflareCarrierSession {
         return this.#start(request);
       case 'session.status':
         return this.status();
+      case 'directive.heartbeat.emit':
+        return this.#emitOperationHeartbeat(request);
       case 'carrier.input.deliver':
         return this.#deliverInput(request);
       case 'carrier.command.execute':
@@ -278,6 +294,100 @@ export class CloudflareCarrierSession {
     };
     const event = this.#appendEvent('carrier_session_started', payload);
     return { ok: true, operation: 'session.start', carrier_session_id: this.state.carrier_session_id, event };
+  }
+
+  #ensureOperationHeartbeatEmissionRule(request = {}) {
+    const params = request.params ?? {};
+    const timestamp = this.now();
+    const authorizationId = params.authorization_id ?? `auth_operation_heartbeat_${this.state.carrier_session_id}`;
+    const ruleId = params.rule_id ?? `directive_emission_rule_operation_heartbeat_${this.state.carrier_session_id}`;
+    const target = { kind: 'carrier_session', id: this.state.carrier_session_id };
+    let authorization = this.state.directive_emission_authorizations.find((entry) => entry.authorization_id === authorizationId) ?? null;
+    let rule = this.state.directive_emission_rules.find((entry) => entry.rule_id === ruleId) ?? null;
+    const events = [];
+    if (!authorization) {
+      authorization = createDirectiveEmissionAuthorization({
+        authorization_id: authorizationId,
+        directive_kind: 'operation_heartbeat',
+        cadence: params.cadence ?? 'PT1M',
+        authorized_by: params.authorized_by ?? { kind: 'principal', id: request.principal?.principal_id ?? 'principal:service' },
+        authorized_emitter: params.authorized_emitter ?? { kind: 'system', id: params.source_id ?? 'narada-proper.system.directive_emitter' },
+        authority: params.authority ?? { locus: 'narada_proper', basis: 'operator_authorized_system_directive' },
+        target,
+        status: 'authorized',
+        created_at: timestamp,
+      });
+      this.state.directive_emission_authorizations.push(authorization);
+      events.push(this.#appendEvent('directive_emission_authorized', authorization));
+    }
+    if (!rule) {
+      rule = createDirectiveEmissionRule({
+        rule_id: ruleId,
+        authorization_id: authorization.authorization_id,
+        directive_kind: 'operation_heartbeat',
+        cadence: params.cadence ?? authorization.cadence ?? 'PT1M',
+        visibility: 'record_only',
+        target,
+        status: 'active',
+        created_at: timestamp,
+      });
+      this.state.directive_emission_rules.push(rule);
+      events.push(this.#appendEvent('directive_emission_rule_recorded', rule));
+    }
+    return { authorization, rule, events };
+  }
+
+  #emitOperationHeartbeat(request) {
+    if (this.state.closed) return this.#rejectClosed('directive.heartbeat.emit');
+    const params = request.params ?? {};
+    const { authorization, rule, events } = this.#ensureOperationHeartbeatEmissionRule(request);
+    const emittedAt = this.now();
+    this.state.directive_emission_sequence += 1;
+    const input = createOperationHeartbeatDirectiveInput({
+      event_id: params.input_event_id ?? `input_operation_heartbeat_${this.state.carrier_session_id}_${this.state.directive_emission_sequence}`,
+      directive_id: params.directive_id ?? `dir_operation_heartbeat_${this.state.carrier_session_id}_${this.state.directive_emission_sequence}`,
+      authorization_id: authorization.authorization_id,
+      rule_id: rule.rule_id,
+      operation_id: params.operation_id ?? this.state.operation_id ?? null,
+      carrier_session_id: this.state.carrier_session_id,
+      created_at: emittedAt,
+      source_id: authorization.authorized_emitter?.id ?? 'narada-proper.system.directive_emitter',
+      cadence: rule.cadence,
+      reason: params.reason ?? 'operation_continuity_heartbeat',
+    });
+    events.push(this.#appendEvent('directive_emitted', directiveEmissionPayload({ authorization, rule, input, emitted_at: emittedAt })));
+    const delivery = this.#deliverInput({
+      operation: 'carrier.input.deliver',
+      request_id: params.delivery_request_id ?? `request_${input.event_id}`,
+      params: { input },
+      principal: request.principal ?? null,
+    });
+    if (isPromiseLike(delivery)) {
+      return delivery.then((resolved) => ({
+        ok: true,
+        operation: 'directive.heartbeat.emit',
+        carrier_session_id: this.state.carrier_session_id,
+        input_event_id: input.event_id,
+        directive_id: input.directive_id,
+        terminal_state: resolved.terminal_state,
+        authorization: clone(authorization),
+        rule: clone(rule),
+        events: [...events, ...(resolved.events ?? [])],
+        delivery: resolved,
+      }));
+    }
+    return {
+      ok: true,
+      operation: 'directive.heartbeat.emit',
+      carrier_session_id: this.state.carrier_session_id,
+      input_event_id: input.event_id,
+      directive_id: input.directive_id,
+      terminal_state: delivery.terminal_state,
+      authorization: clone(authorization),
+      rule: clone(rule),
+      events: [...events, ...(delivery.events ?? [])],
+      delivery,
+    };
   }
 
   #deliverInput(request) {

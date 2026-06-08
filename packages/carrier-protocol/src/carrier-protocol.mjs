@@ -14,6 +14,7 @@ export const LEGACY_STARTUP_COMMAND_NAME = 'startup_sequence';
 export const SOURCE_KINDS = Object.freeze(['operator', 'system', 'agent', 'external']);
 export const OBSERVER_VISIBILITIES = Object.freeze(['record_only', 'operator_visible', 'agent_visible', 'conversation_visible']);
 export const DIRECTIVE_VISIBILITIES = OBSERVER_VISIBILITIES;
+export const DIRECTIVE_KINDS = Object.freeze(['operation_heartbeat']);
 export const OBSERVER_CONFIDENCES = Object.freeze(['low', 'medium', 'high']);
 export const PAYLOAD_REF_READER_TOOLS = Object.freeze([
   'mcp_payload_read',
@@ -107,6 +108,9 @@ export const SESSION_EVENT_KINDS = Object.freeze([
   'input_completed',
   'system_directive_held',
   'system_directive_released',
+  'directive_emission_authorized',
+  'directive_emission_rule_recorded',
+  'directive_emitted',
   'directive_receipt_recorded',
   'directive_carrier_accepted_recorded',
   'turn_started',
@@ -569,6 +573,113 @@ export function classifyCarrierDirectiveInput(input = {}) {
   };
 }
 
+export function createDirectiveEmissionAuthorization({
+  authorization_id,
+  directive_kind = 'operation_heartbeat',
+  cadence = 'PT1M',
+  authorized_by = { kind: 'system', id: 'principal:service' },
+  authorized_emitter = { kind: 'system', id: 'narada-proper.system.directive_emitter' },
+  authority = { locus: 'narada_proper', basis: 'operator_authorized_system_directive' },
+  target = { kind: 'carrier_session', id: null },
+  status = 'authorized',
+  created_at = nowIso(),
+} = {}) {
+  const normalizedDirectiveKind = enumIncludes(DIRECTIVE_KINDS, directive_kind) ? directive_kind : 'operation_heartbeat';
+  return {
+    schema: 'narada.directive_emission_authorization.v1',
+    authorization_id: authorization_id ?? `auth_${normalizedDirectiveKind}_${randomIdPart()}`,
+    directive_kind: normalizedDirectiveKind,
+    cadence,
+    authorized_by,
+    authorized_emitter,
+    authority,
+    target,
+    status,
+    created_at,
+  };
+}
+
+export function createDirectiveEmissionRule({
+  rule_id,
+  authorization_id,
+  directive_kind = 'operation_heartbeat',
+  cadence = 'PT1M',
+  visibility = 'record_only',
+  target = { kind: 'carrier_session', id: null },
+  status = 'active',
+  created_at = nowIso(),
+} = {}) {
+  const normalizedDirectiveKind = enumIncludes(DIRECTIVE_KINDS, directive_kind) ? directive_kind : 'operation_heartbeat';
+  return {
+    schema: 'narada.directive_emission_rule.v1',
+    rule_id: rule_id ?? `directive_emission_rule_${normalizedDirectiveKind}_${randomIdPart()}`,
+    authorization_id: authorization_id ?? null,
+    directive_kind: normalizedDirectiveKind,
+    cadence,
+    visibility: enumIncludes(DIRECTIVE_VISIBILITIES, visibility) ? visibility : 'record_only',
+    target,
+    status,
+    created_at,
+  };
+}
+
+export function createOperationHeartbeatDirectiveInput({
+  event_id,
+  directive_id,
+  authorization_id,
+  rule_id,
+  operation_id,
+  carrier_session_id = null,
+  created_at = nowIso(),
+  source_id = 'narada-proper.system.directive_emitter',
+  authority_ref = null,
+  cadence = 'PT1M',
+  reason = 'operation_continuity_heartbeat',
+} = {}) {
+  const normalizedOperationId = String(operation_id ?? '').trim();
+  return createInputEvent({
+    event_id: event_id ?? `input_operation_heartbeat_${randomIdPart()}`,
+    source_kind: 'system',
+    source_id,
+    transport: 'carrier_server_api',
+    delivery_mode: 'admit_for_current_turn',
+    hold_condition: null,
+    content: '',
+    created_at,
+    authority_ref: authority_ref ?? (authorization_id ? `directive_emission_authorization:${authorization_id}` : null),
+    directive_id: directive_id ?? `dir_operation_heartbeat_${randomIdPart()}`,
+    metadata: {
+      directive_provenance: { kind: 'system_directive' },
+      directive: {
+        kind: 'operation_heartbeat',
+        visibility: 'record_only',
+        cadence,
+        ...(normalizedOperationId ? { operation_id: normalizedOperationId } : {}),
+        ...(carrier_session_id ? { carrier_session_id } : {}),
+        ...(authorization_id ? { authorization_id } : {}),
+        ...(rule_id ? { rule_id } : {}),
+        reason,
+      },
+    },
+  });
+}
+
+export function directiveEmissionPayload({ authorization = null, rule = null, input = null, emitted_at = nowIso(), extra = {} } = {}) {
+  return {
+    authorization_id: authorization?.authorization_id ?? rule?.authorization_id ?? input?.metadata?.directive?.authorization_id ?? null,
+    rule_id: rule?.rule_id ?? input?.metadata?.directive?.rule_id ?? null,
+    directive_kind: rule?.directive_kind ?? input?.metadata?.directive?.kind ?? null,
+    cadence: rule?.cadence ?? input?.metadata?.directive?.cadence ?? null,
+    visibility: rule?.visibility ?? directiveVisibility(input ?? {}),
+    input_event_id: input?.event_id ?? null,
+    directive_id: input?.directive_id ?? null,
+    operation_id: input?.metadata?.directive?.operation_id ?? null,
+    carrier_session_id: input?.metadata?.directive?.carrier_session_id ?? null,
+    emitted_at,
+    ...extra,
+  };
+}
+
 export function observerPayload(input = {}, extra = {}) {
   const metadata = observerMetadata(input) ?? {};
   return {
@@ -949,6 +1060,9 @@ const SESSION_PAYLOAD_VALIDATORS = Object.freeze({
   input_completed: (payload) => requireFields(payload, ['input_event_id', 'terminal_state']),
   system_directive_held: validateSystemDirectiveHeldPayload,
   system_directive_released: validateSystemDirectiveReleasedPayload,
+  directive_emission_authorized: (payload) => requireFields(payload, ['authorization_id', 'directive_kind', 'cadence', 'authorized_emitter', 'authority', 'status']),
+  directive_emission_rule_recorded: (payload) => requireFields(payload, ['rule_id', 'authorization_id', 'directive_kind', 'cadence', 'visibility', 'status']),
+  directive_emitted: (payload) => requireFields(payload, ['authorization_id', 'rule_id', 'directive_kind', 'cadence', 'visibility', 'input_event_id', 'directive_id', 'emitted_at']),
   directive_receipt_recorded: (payload) => requireFields(payload, ['input_event_id', 'directive_id']),
   directive_carrier_accepted_recorded: (payload) => requireFields(payload, ['input_event_id', 'directive_id']),
   turn_started: (payload) => requireFields(payload, ['input_event_id', 'turn_id']),

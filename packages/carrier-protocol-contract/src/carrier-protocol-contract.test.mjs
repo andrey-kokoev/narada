@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  DIRECTIVE_KINDS,
   DIRECTIVE_VISIBILITIES,
   OBSERVER_VISIBILITIES,
   PAYLOAD_REF_READER_TOOLS,
@@ -41,8 +42,13 @@ test('carrier protocol contract exposes schemas and id prefixes', () => {
   assert.equal(contract.observer_visibility.default, 'operator_visible');
   assert.deepEqual(contract.directive_visibility.values, DIRECTIVE_VISIBILITIES);
   assert.equal(contract.directive_visibility.default, 'agent_visible');
-  assert.deepEqual(contract.directive_kind.values, ['operation_heartbeat']);
+  assert.deepEqual(contract.directive_kind.values, DIRECTIVE_KINDS);
   assert.equal(contract.directive_kind.basic_test_kind, 'operation_heartbeat');
+  assert.deepEqual(contract.directive_emission_event_kind.values, [
+    'directive_emission_authorized',
+    'directive_emission_rule_recorded',
+    'directive_emitted',
+  ]);
   assert.deepEqual(contract.queue_state.values, QUEUE_STATES);
   assert.deepEqual(contract.input_admission_action.values, ['admit', 'queue', 'hold', 'reject']);
   assert.deepEqual(contract.input_hold_action.values, ['hold', 'release', 'none']);
@@ -92,6 +98,7 @@ test('carrier protocol contract exposes schemas and id prefixes', () => {
   for (const eventKind of [
     ...contract.input_pipeline_event_kind.queue,
     ...contract.input_pipeline_event_kind.admission,
+    ...contract.directive_emission_event_kind.values,
     ...contract.input_pipeline_event_kind.hold,
     ...contract.input_pipeline_event_kind.release,
     ...contract.carrier_host_command_event_kind.values,

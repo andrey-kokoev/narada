@@ -70,6 +70,8 @@ The shared pipeline stages are:
 
    The basic shared test is an `operation_heartbeat` system directive with `visibility: record_only` and a one-minute cadence. It records `directive_receipt_recorded` and `directive_carrier_accepted_recorded`, completes without provider dispatch, and does not create `input_admitted_to_turn`. Other directive origins or cadences should use the same directive pipeline instead of introducing carrier-specific runtime stimulus categories.
 
+   Directive production is also governed. A runtime that emits operation heartbeats records `directive_emission_authorized`, then `directive_emission_rule_recorded`, then `directive_emitted` before delivering the generated `narada.carrier.input_event.v1` through `carrier.input.deliver`. These emission events are producer-side evidence; they do not replace carrier receipt or acceptance evidence.
+
 5. Composer hold classification
 
    `classifyCarrierInputHold(...)` classifies whether a system directive must be held because the carrier composer is active with a non-empty draft. The carrier surface detects composer state; the shared contract determines the `system_directive_held` and `system_directive_released` lifecycle evidence.

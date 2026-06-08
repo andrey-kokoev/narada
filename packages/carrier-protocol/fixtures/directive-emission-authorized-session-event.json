@@ -1,0 +1,35 @@
+{
+  "schema": "narada.carrier.session_event.v1",
+  "event_id": "session_event_directive_emission_authorized_1",
+  "sequence": 9,
+  "occurred_at": "2026-05-30T00:00:00.000Z",
+  "carrier_session_id": "carrier_session_fixture",
+  "agent_id": "narada.fixture.agent",
+  "site_id": "site_fixture",
+  "site_root": "cloudflare://site_fixture",
+  "site_ref": "site://fixture",
+  "event_kind": "directive_emission_authorized",
+  "payload": {
+    "authorization_id": "auth_operation_heartbeat_fixture",
+    "directive_kind": "operation_heartbeat",
+    "cadence": "PT1M",
+    "authorized_by": {
+      "kind": "operator",
+      "id": "operator.fixture"
+    },
+    "authorized_emitter": {
+      "kind": "system",
+      "id": "narada-proper.system.directive_emitter"
+    },
+    "authority": {
+      "locus": "narada_proper",
+      "basis": "operator_authorized_system_directive"
+    },
+    "target": {
+      "kind": "carrier_session",
+      "id": "carrier_session_fixture"
+    },
+    "status": "authorized",
+    "created_at": "2026-05-30T00:00:00.000Z"
+  }
+}
