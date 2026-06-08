@@ -471,6 +471,162 @@ function summarizeCloudflareSiteProductOverview(siteProductStatuses = []) {
   };
 }
 
+function summarizeCloudflareOperationPostureOverview(operations = [], product = {}, context = {}) {
+  const items = cloudflareOperationWorkQueueItems(operations, product, context);
+  const healthCounts = { ready: 0, needs_attention: 0 };
+  const actionCounts = {};
+  const reasonCounts = {};
+  const commandStateCounts = {};
+  for (const item of items) {
+    healthCounts[item.status] = (healthCounts[item.status] || 0) + 1;
+    const action = item.command?.next_action || 'inspect_operation';
+    const reason = cloudflareOperationPostureReason(item);
+    const commandState = item.command?.command_state || 'not_classified';
+    actionCounts[action] = (actionCounts[action] || 0) + 1;
+    reasonCounts[reason] = (reasonCounts[reason] || 0) + 1;
+    commandStateCounts[commandState] = (commandStateCounts[commandState] || 0) + 1;
+  }
+  const activeOperationId = context.active_operation_id || product.operation?.operation_id || '';
+  const next = items.find((item) => item.status === 'needs_attention')
+    || items.find((item) => item.operation.operation_id === activeOperationId)
+    || items[0]
+    || null;
+  return {
+    schema: 'narada.cloudflare_operation_posture_overview.v1',
+    operation_count: items.length,
+    health_counts: healthCounts,
+    action_counts: actionCounts,
+    reason_counts: reasonCounts,
+    command_state_counts: commandStateCounts,
+    active_operation_id: activeOperationId || null,
+    next_operation_id: next?.operation?.operation_id || null,
+    next_status: next?.status || 'ready',
+    next_action: next?.command?.next_action || 'monitor_operations',
+    next_reason: next ? cloudflareOperationPostureReason(next) : 'all_operations_monitoring',
+  };
+}
+
+function cloudflareOperationWorkQueueItems(operations = [], product = {}, context = {}) {
+  const activeOperationId = context.active_operation_id || product.operation?.operation_id || '';
+  return (Array.isArray(operations) ? operations : []).map((operation) => {
+    const path = cloudflareOperationPathContext(operation, product, context);
+    const scopeLoaded = cloudflareOperationScopeLoaded(operation, product, context);
+    const command = classifyCloudflareOperationCommandState({
+      operation_id: operation.operation_id || '',
+      is_active: operation.operation_id === activeOperationId,
+      scope_loaded: scopeLoaded,
+      session_count: path.session_count,
+      evidence_loaded: path.evidence_event_count > 0,
+      operation_path_next_action: path.next_action || 'read_operation_scope',
+    });
+    const ready = ['inspect_operation_evidence', 'evidence_ready'].includes(command.next_action) || command.command_state === 'evidence_ready';
+    return { operation, command, path, status: ready ? 'ready' : 'needs_attention' };
+  }).sort((left, right) => {
+    if (left.status !== right.status) return left.status === 'needs_attention' ? -1 : 1;
+    if (left.operation.operation_id === activeOperationId) return -1;
+    if (right.operation.operation_id === activeOperationId) return 1;
+    return String(right.operation.updated_at || '').localeCompare(String(left.operation.updated_at || ''));
+  });
+}
+
+function cloudflareOperationPathContext(operation = {}, product = {}, context = {}) {
+  const operationId = operation.operation_id || context.active_operation_id || product.operation?.operation_id || '';
+  const sessions = cloudflareOperationSessions(operationId, product);
+  const tasks = cloudflareOperationTasks(operationId, product, context);
+  const events = cloudflareOperationEvents(operationId, product);
+  const attention = cloudflareOperationAttention(product).filter((item) => !item.operation_id || item.operation_id === operationId);
+  const openTasks = tasks.filter((task) => cloudflareTaskLifecycleStatus(task) === 'open');
+  const openAttention = attention.filter((item) => item.status !== 'resolved');
+  const nextAction = !operationId ? 'select_or_create_operation'
+    : sessions.length === 0 ? 'start_or_select_session'
+    : openAttention.length > 0 ? 'inspect_attention'
+    : openTasks.length > 0 ? 'inspect_open_task'
+    : events.length > 0 ? 'inspect_operation_evidence' : 'read_operation_evidence';
+  return {
+    operation_id: operationId,
+    session_count: sessions.length,
+    task_count: tasks.length,
+    open_task_count: openTasks.length,
+    attention_count: attention.length,
+    open_attention_count: openAttention.length,
+    evidence_event_count: events.length,
+    next_action: nextAction,
+  };
+}
+
+function cloudflareOperationScopeLoaded(operation = {}, product = {}, context = {}) {
+  const operationId = operation.operation_id || context.active_operation_id || '';
+  return Boolean(operationId && product.operation?.operation_id === operationId);
+}
+
+function cloudflareOperationSessions(operationId, product = {}) {
+  if (!operationId) return [];
+  return (product.sessions || []).filter((session) => !session.operation_id || session.operation_id === operationId);
+}
+
+function cloudflareOperationTasks(operationId, product = {}, context = {}) {
+  if (!operationId) return [];
+  const siteId = product.site?.site_id || product.operation?.site_id || context.site_id || '';
+  return (product.tasks || []).filter((task) => task.operation_id === operationId || task.site_id === siteId);
+}
+
+function cloudflareOperationEvents(operationId, product = {}) {
+  if (!operationId) return [];
+  const seen = new Set();
+  return (product.carrier_evidence || []).flatMap((entry) => entry.events || []).filter((event) => {
+    const eventOperationId = event.payload?.operation_id || event.payload?.target?.id || product.operation?.operation_id || '';
+    if (eventOperationId !== operationId) return false;
+    const key = [event.carrier_session_id, event.sequence, event.event_kind, JSON.stringify(event.payload || {})].join(':');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function cloudflareOperationAttention(product = {}) {
+  const tasks = product.tasks || [];
+  const seen = new Set();
+  return (product.carrier_evidence || []).flatMap((entry) => entry.events || [])
+    .filter((event) => event.event_kind === 'directive_emitted' && event.payload?.directive_kind === 'operation_attention')
+    .map((event) => {
+      const payload = event.payload || {};
+      const key = payload.directive_id || payload.input_event_id || [event.carrier_session_id, event.sequence].filter(Boolean).join(':');
+      if (seen.has(key)) return null;
+      seen.add(key);
+      const resolvedByTask = tasks.find((task) => {
+        const note = String(task.note || '');
+        const status = String(task.status || '').toLowerCase();
+        const resolutionStatus = status === 'done' || status === 'resolved' || status === 'closed';
+        const inputEventId = String(payload.input_event_id || '');
+        return resolutionStatus && (note.includes(key) || (inputEventId && note.includes(inputEventId)));
+      }) || null;
+      return {
+        key,
+        operation_id: payload.operation_id || payload.target?.id || product.operation?.operation_id || null,
+        status: resolvedByTask ? 'resolved' : 'open',
+      };
+    })
+    .filter(Boolean);
+}
+
+function cloudflareOperationPostureReason(item = {}) {
+  const action = item.command?.next_action || 'inspect_operation';
+  if (action === 'read_operation_scope') return 'operation_scope';
+  if (action === 'start_or_select_session') return 'session';
+  if (action === 'inspect_attention') return 'operation_attention';
+  if (action === 'inspect_open_task') return 'open_tasks';
+  if (action === 'read_operation_evidence') return 'carrier_evidence';
+  if (action === 'inspect_operation_evidence') return 'evidence_review';
+  return action;
+}
+
+function cloudflareTaskLifecycleStatus(task = {}) {
+  const status = String(task.status || '').toLowerCase();
+  if (status === 'open' || status === 'todo' || status === 'pending') return 'open';
+  if (status === 'done' || status === 'resolved' || status === 'closed') return 'closed';
+  return status || 'unknown';
+}
+
 async function listCloudflareContinuityPackets(env = {}, siteId, limit = 100) {
   const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
   if (!db || typeof db.prepare !== 'function' || !siteId) return [];
@@ -1529,6 +1685,12 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
   if (body.operation === 'operation.read') {
     const operation = response.operation;
     const siteId = operation?.site_id ?? params.site_id;
+    const operationListResponse = await registry.handle({
+      operation: 'operation.list',
+      params: { site_id: siteId, limit: params.operation_limit ?? params.limit },
+      principal,
+    });
+    const siteOperations = operationListResponse.ok ? operationListResponse.operations ?? [] : (operation ? [operation] : []);
     const sessions = response.sessions ?? [];
     const tasks = await listOperationTasks(env, siteId, sessions);
     const continuityPackets = await listCloudflareContinuityPackets(env, siteId);
@@ -1592,10 +1754,21 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       webhookDelayDirectiveRecords,
       webhookDelayDirectiveDeliveries,
     });
+    const operationPostureOverview = summarizeCloudflareOperationPostureOverview(siteOperations, {
+      ...response,
+      tasks,
+      carrier_evidence: carrierEvidence,
+      site_continuity_packets: continuityPackets,
+      site_continuity_loop_reports: continuityLoopReports,
+    }, {
+      active_operation_id: operation?.operation_id ?? params.operation_id,
+      site_id: siteId,
+    });
     return {
       status: 200,
       body: {
         ...response,
+        operations: siteOperations,
         tasks,
         site_continuity_packets: continuityPackets,
         site_continuity_loop_reports: continuityLoopReports,
@@ -1618,6 +1791,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         operation_status_history: operationStatusHistory,
         operation_activity_timeline: operationActivityTimeline,
         operation_lifecycle_status: operationLifecycleStatus,
+        operation_posture_overview: operationPostureOverview,
         operation_product_surface: {
           schema: 'narada.cloudflare_operation_product_surface.v1',
           operation_id: operation?.operation_id ?? null,
@@ -1636,6 +1810,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           status_history: operationStatusHistory,
           activity_timeline: operationActivityTimeline,
           lifecycle_status: operationLifecycleStatus,
+          operation_posture_overview: operationPostureOverview,
           webhook_delay_shadow_observation_count: webhookDelayShadowObservations.length,
           webhook_delay_observation_primary_read_count: webhookDelayObservationPrimaryReads.length,
           webhook_delay_scheduled_source_read_count: webhookDelayScheduledSourceReads.length,
@@ -7542,6 +7717,8 @@ export function renderCloudflareCarrierConsole() {
       return action;
     }
     function operationPostureOverview(operations = state.operations || [], product = state.operationProduct || {}) {
+      const provided = product.operation_posture_overview || product.operation_product_surface?.operation_posture_overview || null;
+      if (provided?.schema === 'narada.cloudflare_operation_posture_overview.v1') return provided;
       const items = operationWorkQueueItems(operations, product);
       const healthCounts = { ready: 0, needs_attention: 0 };
       const actionCounts = {};
@@ -9318,6 +9495,7 @@ export function renderCloudflareCarrierConsole() {
     function renderOperationProduct(product) {
       state.operationProduct = product;
       state.productScope = 'operation';
+      if (Array.isArray(product.operations)) state.operations = product.operations;
       renderOperatorIdentity(product.reader_principal || state.operatorPrincipal);
       renderSiteFocusDetail(product.site || state.siteFocus);
       if (product.operation?.operation_id && !state.operations.some((operation) => operation.operation_id === product.operation.operation_id)) {

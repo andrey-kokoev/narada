@@ -2035,6 +2035,14 @@ test('worker records webhook delay observations as Cloudflare shadow-read eviden
   assert.deepEqual(operationReadBody.operation_lifecycle_status.missing, ['session', 'carrier_evidence', 'continuity_packet']);
   assert.equal(operationReadBody.operation_lifecycle_status.continuity_loop_state, 'no_loop_report_observed');
   assert.equal(operationReadBody.operation_product_surface.lifecycle_status.health, 'incomplete');
+  assert.equal(operationReadBody.operation_posture_overview.schema, 'narada.cloudflare_operation_posture_overview.v1');
+  assert.equal(operationReadBody.operation_posture_overview.operation_count, 1);
+  assert.equal(operationReadBody.operation_posture_overview.active_operation_id, 'operation_webhook_delay');
+  assert.equal(operationReadBody.operation_posture_overview.next_operation_id, 'operation_webhook_delay');
+  assert.equal(operationReadBody.operation_posture_overview.next_status, 'needs_attention');
+  assert.equal(operationReadBody.operation_posture_overview.next_action, 'start_or_select_session');
+  assert.equal(operationReadBody.operation_posture_overview.next_reason, 'session');
+  assert.deepEqual(operationReadBody.operation_product_surface.operation_posture_overview, operationReadBody.operation_posture_overview);
   assert.equal(operationReadBody.operation_product_surface.continuity_status.schema, 'narada.cloudflare_site_continuity_status.v1');
   assert.equal(operationReadBody.operation_product_surface.continuity_status.state, 'no_packet_observed');
   assert.equal(operationReadBody.operation_product_surface.continuity_status.packet_count, 0);

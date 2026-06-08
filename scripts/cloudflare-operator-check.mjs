@@ -947,6 +947,8 @@ assert.equal(operationRead.body.operation_product_surface?.operation_id, operati
 assert.ok(operationRead.body.operation_product_surface?.session_count >= 1);
 assert.ok(operationRead.body.operation_product_surface?.task_count >= 1);
 assert.deepEqual(operationRead.body.operation_product_surface.carrier_evidence_read_status, operationRead.body.carrier_evidence_read_status);
+assert.ok(Array.isArray(operationRead.body.operations));
+assert.ok(operationRead.body.operations.some((operation) => operation.operation_id === operationId));
 
 const liveCommandStates = commandStatesForOperationProduct(operationRead.body, { session_id: smoke.carrier_session_id });
 const focusedMembership = currentMembership ?? memberships[0] ?? null;
@@ -971,9 +973,12 @@ assert.equal(liveCommandStates.session.next_action, 'inspect_session_evidence');
 assert.match(liveCommandStates.task.next_action, /^(mark_done_or_update|reopen_or_inspect_evidence|normalize_status_or_update)$/);
 assert.match(liveCommandStates.authority.next_action, /^(read_site_authority|inspect_refused_authority|resolve_authority_locus|monitor_authority_admissions|focus_authority_evidence)$/);
 assert.match(liveCommandStates.evidence.next_action, /^(inspect_authority_locus|trace_input_lifecycle|inspect_tool_effect|inspect_failure_and_retry_or_escalate|inspect_provider_turn|resolve_or_acknowledge_directive|inspect_evidence_payload)$/);
-const operationPostureOverview = expectedOperationPostureOverview(operations, operationRead.body, { activeOperationId: operationId, siteId });
+const expectedOperationPosture = expectedOperationPostureOverview(operationRead.body.operations, operationRead.body, { activeOperationId: operationId, siteId });
+const operationPostureOverview = operationRead.body.operation_posture_overview;
 assert.equal(operationPostureOverview.schema, 'narada.cloudflare_operation_posture_overview.v1');
-assert.equal(operationPostureOverview.operation_count, operations.length);
+assert.deepEqual(operationPostureOverview, expectedOperationPosture);
+assert.deepEqual(operationRead.body.operation_product_surface.operation_posture_overview, operationPostureOverview);
+assert.equal(operationPostureOverview.operation_count, operationRead.body.operations.length);
 assert.ok(operationPostureOverview.operation_count >= 1);
 assert.ok(operationPostureOverview.health_counts);
 assert.ok(operationPostureOverview.action_counts);
@@ -1529,7 +1534,7 @@ function operationEventsForCheck(operation = {}, product = {}, context = {}) {
 function operationTasksForCheck(operation = {}, product = {}, context = {}) {
   const operationId = operation.operation_id || context.activeOperationId || '';
   if (!operationId) return [];
-  const siteId = product.site?.site_id || context.siteId || '';
+  const siteId = product.site?.site_id || product.operation?.site_id || context.siteId || '';
   return (product.tasks || []).filter((task) => task.operation_id === operationId || task.site_id === siteId);
 }
 
