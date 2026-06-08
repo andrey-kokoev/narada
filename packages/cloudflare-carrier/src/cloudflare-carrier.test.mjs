@@ -859,6 +859,14 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(readAfterPacketPutBody.site_continuity_status.direction_counts.cloudflare_to_local_windows, 1);
   assert.equal(readAfterPacketPutBody.site_continuity_status.direction_counts.local_windows_to_cloudflare, 0);
   assert.equal(readAfterPacketPutBody.site_continuity_status.authority_boundary.executable_cross_embodiment_mutation, 'refused_by_site_continuity_classifier');
+  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.schema, 'narada.local_cloud_continuity_bridge.v1');
+  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.local_windows_site_ref, 'local-windows-site');
+  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.cloudflare_site_ref, 'cloudflare-site');
+  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.cloudflare_to_local_windows_packets, 1);
+  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.local_windows_to_cloudflare_packets, 0);
+  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.executable_cross_embodiment_mutation, 'refused_by_site_continuity_classifier');
+  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.durable_mutation_authority, 'unchanged; routed_by_site_authority_map');
+  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.next_action, 'review_continuity_packet');
   assert.equal(readAfterPacketPutBody.site_product_status.schema, 'narada.cloudflare_site_product_status.v1');
   assert.deepEqual(readAfterPacketPutBody.site_product_status.missing, []);
   assert.deepEqual(readAfterPacketPutBody.site_product_status.attention, ['open_tasks']);
@@ -1683,6 +1691,17 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /site_continuity/);
   assert.match(html, /Continuity Loop/);
   assert.match(html, /continuity_loop_recorded/);
+  assert.match(html, /Local-Cloud Continuity/);
+  assert.match(html, /localCloudContinuityBridge/);
+  assert.match(html, /localCloudContinuityBridgeContext/);
+  assert.match(html, /renderLocalCloudContinuityBridge/);
+  assert.match(html, /local_cloud_binding_declared/);
+  assert.match(html, /authority_map_projection_reviewed/);
+  assert.match(html, /read_model_projection_reviewed/);
+  assert.match(html, /mutation_evidence_reference_reviewed/);
+  assert.match(html, /cross_embodiment_execution_guarded/);
+  assert.match(html, /durable_mutation_authority/);
+  assert.match(html, /routed_by_site_authority_map/);
   assert.match(html, /site:continuity:loop/);
   assert.match(html, /sync-cloudflare/);
   assert.match(html, /Read Site Continuity/);
@@ -1929,6 +1948,8 @@ test('worker records webhook delay observations as Cloudflare shadow-read eviden
   assert.equal(operationReadBody.operation_product_surface.continuity_status.schema, 'narada.cloudflare_site_continuity_status.v1');
   assert.equal(operationReadBody.operation_product_surface.continuity_status.state, 'no_packet_observed');
   assert.equal(operationReadBody.operation_product_surface.continuity_status.packet_count, 0);
+  assert.equal(operationReadBody.operation_product_surface.local_cloud_continuity_bridge.schema, 'narada.local_cloud_continuity_bridge.v1');
+  assert.equal(operationReadBody.operation_product_surface.local_cloud_continuity_bridge.next_action, 'observe_continuity_packet');
   assert.equal(operationReadBody.operation_product_surface.dispatch_authority, 'windows_primary_dispatcher');
   assert.deepEqual(classifyCloudflareOperationCommandState({
     operation_id: operationReadBody.operation.operation_id,

@@ -323,6 +323,27 @@ async function importCloudflareContinuityPacket(env = {}, packet, { imported_by_
   };
 }
 
+function summarizeLocalCloudContinuityBridge(siteId, continuityPackets = [], siteContinuity = null, continuityStatus = null) {
+  const binding = siteContinuity?.binding ?? {};
+  const localWindowsEmbodiment = (binding.embodiments || []).find((embodiment) => embodiment.embodiment_kind === SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS) ?? {};
+  const cloudflareEmbodiment = (binding.embodiments || []).find((embodiment) => embodiment.embodiment_kind === SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER) ?? {};
+  const directionCounts = continuityStatus?.direction_counts ?? {};
+  const authorityBoundary = continuityStatus?.authority_boundary ?? {};
+  return {
+    schema: 'narada.local_cloud_continuity_bridge.v1',
+    site_id: siteId,
+    local_windows_site_ref: binding.local_windows_site_ref ?? localWindowsEmbodiment.site_ref ?? null,
+    cloudflare_site_ref: binding.cloudflare_site_ref ?? cloudflareEmbodiment.site_ref ?? null,
+    authority_map_ref: binding.authority_map_ref ?? null,
+    cloudflare_to_local_windows_packets: directionCounts.cloudflare_to_local_windows ?? 0,
+    local_windows_to_cloudflare_packets: directionCounts.local_windows_to_cloudflare ?? 0,
+    continuity_packet_count: continuityStatus?.packet_count ?? (Array.isArray(continuityPackets) ? continuityPackets.length : 0),
+    executable_cross_embodiment_mutation: authorityBoundary.executable_cross_embodiment_mutation ?? 'refused_by_site_continuity_classifier',
+    durable_mutation_authority: authorityBoundary.durable_mutation_authority ?? 'unchanged; routed_by_site_authority_map',
+    next_action: continuityStatus?.state === 'packet_observed' ? 'review_continuity_packet' : 'observe_continuity_packet',
+  };
+}
+
 function summarizeCloudflareSiteProductOverview(siteProductStatuses = []) {
   const statuses = Array.isArray(siteProductStatuses) ? siteProductStatuses : [];
   const healthCounts = { ready: 0, attention: 0, incomplete: 0, other: 0 };
@@ -1386,6 +1407,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       residentLoopShadowRuns,
       residentDispatchDecisions,
     });
+    const localCloudContinuityBridge = summarizeLocalCloudContinuityBridge(siteId, continuityPackets, siteContinuity, siteContinuityStatus);
     const operationLifecycleStatus = summarizeCloudflareOperationLifecycleStatus({
       operation,
       sessions,
@@ -1416,6 +1438,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         site_authority: siteAuthority,
         site_continuity: siteContinuity,
         site_continuity_status: siteContinuityStatus,
+        local_cloud_continuity_bridge: localCloudContinuityBridge,
         cloudflare_persistence_posture: cloudflarePersistencePosture,
         cloudflare_recovery_posture: cloudflareRecoveryPosture,
         operation_status_history: operationStatusHistory,
@@ -1433,6 +1456,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           recovery_posture: cloudflareRecoveryPosture,
           continuity_packet_count: continuityPackets.length,
           continuity_status: siteContinuityStatus,
+          local_cloud_continuity_bridge: localCloudContinuityBridge,
           status_history: operationStatusHistory,
           activity_timeline: operationActivityTimeline,
           lifecycle_status: operationLifecycleStatus,
@@ -1482,6 +1506,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
   const siteAuthority = cloudflareSiteAuthorityReadModel(env, siteId);
   const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
   const siteContinuityStatus = summarizeCloudflareSiteContinuityStatus(siteId, continuityPackets, siteContinuity);
+  const localCloudContinuityBridge = summarizeLocalCloudContinuityBridge(siteId, continuityPackets, siteContinuity, siteContinuityStatus);
   const cloudflarePersistencePosture = summarizeCloudflarePersistencePosture(env, {
     siteId,
     sessions: response.sessions,
@@ -1523,6 +1548,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     site_authority: siteAuthority,
     site_continuity: siteContinuity,
     site_continuity_status: siteContinuityStatus,
+    local_cloud_continuity_bridge: localCloudContinuityBridge,
     cloudflare_persistence_posture: cloudflarePersistencePosture,
     cloudflare_recovery_posture: cloudflareRecoveryPosture,
     site_product_status: siteProductStatus,
@@ -4881,6 +4907,10 @@ export function renderCloudflareCarrierConsole() {
         <div id="continuityWorkflow" class="attention-items"><div class="empty">No continuity workflow loaded.</div></div>
       </div>
       <div class="product-panel">
+        <h2>Local-Cloud Continuity</h2>
+        <div id="localCloudContinuityBridge" class="evidence-summary"><div class="empty">No local-cloud continuity loaded.</div></div>
+      </div>
+      <div class="product-panel">
         <h2>Runtime Posture</h2>
         <div id="runtimePostureDetail" class="evidence-summary"><div class="empty">No runtime status loaded.</div></div>
       </div>
@@ -5440,6 +5470,7 @@ export function renderCloudflareCarrierConsole() {
       renderTaskCommandPreview();
       renderAuthorityActionSummary(product);
       renderContinuityWorkflow(product);
+      renderLocalCloudContinuityBridge(product);
     }
     function productScopeSummary(product = state.operationProduct || {}) {
       if (state.productScope === 'site') return ['site', product.site?.site_id || el('siteId').value.trim(), String((product.operations || []).length) + ' operations'].filter(Boolean).join(' / ');
@@ -6267,6 +6298,8 @@ export function renderCloudflareCarrierConsole() {
       const openAttention = state.attentionItems.filter((item) => item.status !== 'resolved');
       const openTasks = (product.tasks || []).filter((task) => !['done', 'closed', 'resolved'].includes(String(task.status || '').toLowerCase()));
       const authorityLoaded = (product.site_authority?.decisions || []).length > 0 || (product.authority_events || []).length > 0;
+      const localWindowsEmbodiment = (product.site_continuity?.binding?.embodiments || []).find((embodiment) => embodiment.embodiment_kind === 'local_windows') || {};
+      const cloudflareEmbodiment = (product.site_continuity?.binding?.embodiments || []).find((embodiment) => embodiment.embodiment_kind === 'cloudflare_carrier') || {};
       const continuityPacketCount = Number(product.site_continuity_status?.packet_count ?? (product.site_continuity_packets || []).length ?? 0);
       const continuityLoopCommand = siteId
         ? 'pnpm site:continuity:loop -- sync-cloudflare --site ' + siteId + ' --url <worker-url> --token-file <token-file>'
@@ -6329,6 +6362,48 @@ export function renderCloudflareCarrierConsole() {
           action: () => run(refreshSiteProduct),
         },
         {
+          key: 'local_cloud_binding_declared',
+          label: 'Local-Cloud Binding',
+          status: product.site_continuity?.binding ? 'complete' : 'needs_attention',
+          detail: product.site_continuity?.binding
+            ? [localWindowsEmbodiment.site_ref, cloudflareEmbodiment.site_ref].filter(Boolean).join(' <-> ')
+            : 'read site continuity binding',
+          action_label: 'Read Site Continuity',
+          action: () => run(refreshSiteProduct),
+        },
+        {
+          key: 'authority_map_projection_reviewed',
+          label: 'Authority Map Projection',
+          status: (product.site_continuity?.decisions || []).some((decision) => decision.exchange_class === 'authority_map_projection') ? 'complete' : 'needs_attention',
+          detail: product.site_continuity?.binding?.authority_map_ref || 'read authority map projection decision',
+          action_label: 'Focus Authority Projection',
+          action: () => selectContinuity((product.site_continuity?.decisions || []).find((decision) => decision.exchange_class === 'authority_map_projection')),
+        },
+        {
+          key: 'read_model_projection_reviewed',
+          label: 'Read Model Projection',
+          status: (product.site_continuity?.decisions || []).some((decision) => decision.exchange_class === 'read_model_projection') ? 'complete' : 'needs_attention',
+          detail: 'projection is evidence-bearing; not mutation authority',
+          action_label: 'Focus Read Projection',
+          action: () => selectContinuity((product.site_continuity?.decisions || []).find((decision) => decision.exchange_class === 'read_model_projection')),
+        },
+        {
+          key: 'mutation_evidence_reference_reviewed',
+          label: 'Mutation Evidence Reference',
+          status: (product.site_continuity?.decisions || []).some((decision) => decision.exchange_class === 'mutation_evidence_reference') ? 'complete' : 'needs_attention',
+          detail: 'remote mutation evidence may be referenced without replaying authority',
+          action_label: 'Focus Evidence Reference',
+          action: () => selectContinuity((product.site_continuity?.decisions || []).find((decision) => decision.exchange_class === 'mutation_evidence_reference')),
+        },
+        {
+          key: 'cross_embodiment_execution_guarded',
+          label: 'Cross-Embodiment Execution Guard',
+          status: product.site_continuity_status?.authority_boundary?.executable_cross_embodiment_mutation ? 'complete' : 'needs_attention',
+          detail: product.site_continuity_status?.authority_boundary?.executable_cross_embodiment_mutation || 'confirm cross-embodiment mutation refusal',
+          action_label: 'Read Site Continuity',
+          action: () => run(refreshSiteProduct),
+        },
+        {
           key: 'continuity_loop_recorded',
           label: 'Continuity Loop',
           status: continuityPacketCount > 0 ? 'complete' : 'needs_attention',
@@ -6373,6 +6448,31 @@ export function renderCloudflareCarrierConsole() {
         node.append(title, meta, focusActionRow(continuityWorkflowActionButton(step)));
         return node;
       }));
+    }
+    function localCloudContinuityBridgeContext(product = state.operationProduct || {}) {
+      const bridge = product.local_cloud_continuity_bridge || product.operation_product_surface?.local_cloud_continuity_bridge || {};
+      const binding = product.site_continuity?.binding || {};
+      const localWindowsEmbodiment = (binding.embodiments || []).find((embodiment) => embodiment.embodiment_kind === 'local_windows') || {};
+      const cloudflareEmbodiment = (binding.embodiments || []).find((embodiment) => embodiment.embodiment_kind === 'cloudflare_carrier') || {};
+      const status = product.site_continuity_status || product.operation_product_surface?.continuity_status || {};
+      return [
+        ['Bridge Schema', bridge.schema || 'narada.local_cloud_continuity_bridge.v1'],
+        ['Local Site Ref', bridge.local_windows_site_ref || binding.local_windows_site_ref || localWindowsEmbodiment.site_ref || 'none'],
+        ['Cloudflare Site Ref', bridge.cloudflare_site_ref || binding.cloudflare_site_ref || cloudflareEmbodiment.site_ref || 'none'],
+        ['Authority Map Ref', bridge.authority_map_ref || binding.authority_map_ref || 'none'],
+        ['Cloudflare -> Local Packets', bridge.cloudflare_to_local_windows_packets ?? status.direction_counts?.cloudflare_to_local_windows ?? 0],
+        ['Local -> Cloudflare Packets', bridge.local_windows_to_cloudflare_packets ?? status.direction_counts?.local_windows_to_cloudflare ?? 0],
+        ['Executable Cross-Embodiment Mutation', bridge.executable_cross_embodiment_mutation || status.authority_boundary?.executable_cross_embodiment_mutation || 'refused_by_site_continuity_classifier'],
+        ['Durable Mutation Authority', bridge.durable_mutation_authority || status.authority_boundary?.durable_mutation_authority || 'unchanged; routed_by_site_authority_map'],
+        ['Next Action', bridge.next_action || 'observe_continuity_packet'],
+      ];
+    }
+    function renderLocalCloudContinuityBridge(product = state.operationProduct || {}) {
+      if (!product?.site_continuity && !product?.site_continuity_status && !product?.operation_product_surface?.continuity_status && !product?.local_cloud_continuity_bridge) {
+        el('localCloudContinuityBridge').innerHTML = '<div class="empty">No local-cloud continuity loaded.</div>';
+        return;
+      }
+      el('localCloudContinuityBridge').replaceChildren(...localCloudContinuityBridgeContext(product).map(([label, value]) => evidenceField(label, value)));
     }
     function refreshEventKindFilter() {
       const select = el('eventKindFilter');
