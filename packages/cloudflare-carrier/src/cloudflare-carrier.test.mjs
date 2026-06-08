@@ -1104,9 +1104,11 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /focus_lifecycle_start_session/);
   assert.match(html, /focus_lifecycle_read_evidence/);
   assert.match(html, /focus_lifecycle_continuity/);
+  assert.match(html, /focus_lifecycle_continuity_loop_report/);
   assert.match(html, /focus_lifecycle_open_task/);
   assert.match(html, /focus_lifecycle_directive_delivery/);
   assert.match(html, /operation_lifecycle_missing_continuity_packet/);
+  assert.match(html, /operation_lifecycle_missing_continuity_loop_report/);
   assert.match(html, /select_site_or_operation/);
   assert.match(html, /membership_authority_bridge_needs_attention/);
   assert.match(html, /workbench_ready_for_monitoring/);
@@ -1735,7 +1737,10 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /site_authority/);
   assert.match(html, /Site Continuity/);
   assert.match(html, /Continuity Packets/);
+  assert.match(html, /Continuity Loop Reports/);
   assert.match(html, /continuity_packet_count/);
+  assert.match(html, /continuity_loop_reports/);
+  assert.match(html, /loop_report/);
   assert.match(html, /continuitySummary/);
   assert.match(html, /site_continuity/);
   assert.match(html, /Continuity Loop/);
@@ -1755,6 +1760,7 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /continuityLoopEvidence/);
   assert.match(html, /continuityLoopEvidenceContext/);
   assert.match(html, /renderContinuityLoopEvidence/);
+  assert.match(html, /focusContinuityLoopReport/);
   assert.match(html, /continuity_loop_report_recorded/);
   assert.match(html, /site_continuity_loop_report/);
   assert.match(html, /review_continuity_loop_report/);
