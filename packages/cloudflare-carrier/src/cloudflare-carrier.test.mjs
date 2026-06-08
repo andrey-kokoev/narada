@@ -1285,6 +1285,70 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(directMutationClaim.status, 400);
   const directMutationClaimBody = await directMutationClaim.json();
   assert.equal(directMutationClaimBody.code, 'local_ingress_direct_cloudflare_filesystem_mutation_admission_invalid');
+
+  const localIngressEvidence = await worker.fetch(jsonRequest({
+    operation: 'local_ingress.evidence.put',
+    request_id: 'request_local_ingress_evidence_put',
+    params: {
+      site_id: 'site_fixture',
+      local_ingress_evidence_id: 'local-ingress-evidence-fixture',
+      source_payload: {
+        generated_at: '2026-06-08T00:02:00.000Z',
+        local_ingress_request_id: 'local-ingress-request-fixture',
+        local_execution_id: 'local-ingress-execution-fixture',
+        requested_mutation_class: 'local_repository_filesystem_mutation',
+        windows_admission_action: 'admit',
+        windows_admission_reason: 'governed_local_ingress_request_admitted',
+        local_execution_status: 'completed',
+        local_executor_authority: 'windows_local_ingress_executor',
+        local_filesystem_mutation_admission: 'admitted_by_windows_local_ingress',
+        changed_files: [{ path: '.narada/local-ingress-executions/local-ingress-execution-fixture.json', operation: 'write' }],
+        rollback_evidence_ref: 'rollback:local-ingress-execution-fixture',
+        direct_cloudflare_filesystem_mutation_admission: 'not_admitted',
+        repository_publication_admission: 'not_admitted',
+      },
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(localIngressEvidence.status, 200);
+  const localIngressEvidenceBody = await localIngressEvidence.json();
+  assert.equal(localIngressEvidenceBody.status, 'recorded');
+  assert.equal(localIngressEvidenceBody.local_ingress_evidence_authority, 'windows_local_ingress_executor');
+  assert.equal(localIngressEvidenceBody.cloudflare_evidence_store_authority, 'cloudflare_local_ingress_evidence_store');
+  assert.equal(localIngressEvidenceBody.local_filesystem_mutation_admission, 'admitted_by_windows_local_ingress');
+  assert.equal(localIngressEvidenceBody.direct_cloudflare_filesystem_mutation_admission, 'not_admitted');
+  assert.equal(localIngressEvidenceBody.repository_publication_admission, 'not_admitted');
+
+  const localIngressEvidenceList = await worker.fetch(jsonRequest({
+    operation: 'local_ingress.evidence.list',
+    request_id: 'request_local_ingress_evidence_list',
+    params: { site_id: 'site_fixture', local_ingress_request_id: 'local-ingress-request-fixture', limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(localIngressEvidenceList.status, 200);
+  const localIngressEvidenceListBody = await localIngressEvidenceList.json();
+  assert.equal(localIngressEvidenceListBody.local_ingress_evidence_authority, 'windows_local_ingress_executor');
+  assert.equal(localIngressEvidenceListBody.cloudflare_evidence_store_authority, 'cloudflare_local_ingress_evidence_store');
+  assert.equal(localIngressEvidenceListBody.local_filesystem_mutation_admission, 'admitted_by_windows_local_ingress');
+  assert.equal(localIngressEvidenceListBody.direct_cloudflare_filesystem_mutation_admission, 'not_admitted');
+  assert.equal(localIngressEvidenceListBody.repository_publication_admission, 'not_admitted');
+  assert.equal(localIngressEvidenceListBody.authority_partition, 'windows_executes_local_ingress_cloudflare_records_evidence_without_direct_filesystem_authority');
+  assert.equal(localIngressEvidenceListBody.evidence.length, 1);
+
+  const publicationClaim = await worker.fetch(jsonRequest({
+    operation: 'local_ingress.evidence.put',
+    request_id: 'request_local_ingress_evidence_publication_claim',
+    params: {
+      site_id: 'site_fixture',
+      source_payload: {
+        local_ingress_request_id: 'local-ingress-request-fixture',
+        local_execution_id: 'local-ingress-execution-publication-claim',
+        changed_files: [{ path: '.narada/local-ingress-executions/local-ingress-execution-publication-claim.json', operation: 'write' }],
+        repository_publication_admission: 'admitted',
+      },
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(publicationClaim.status, 400);
+  const publicationClaimBody = await publicationClaim.json();
+  assert.equal(publicationClaimBody.code, 'local_ingress_evidence_repository_publication_admission_invalid');
 });
 
 test('worker site.read surfaces degraded carrier evidence replay when session events are unavailable', async () => {
@@ -6373,6 +6437,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     siteFileChangeProposals: clone(initial.siteFileChangeProposals ?? []),
     siteFileMaterializations: clone(initial.siteFileMaterializations ?? []),
     localIngressRequests: clone(initial.localIngressRequests ?? []),
+    localIngressEvidence: clone(initial.localIngressEvidence ?? []),
     taskLifecycleShadowReads: clone(initial.taskLifecycleShadowReads ?? []),
     taskLifecycleWriteAdmissions: clone(initial.taskLifecycleWriteAdmissions ?? []),
     taskLifecycleTasks: clone(initial.taskLifecycleTasks ?? []),
@@ -6527,6 +6592,12 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const row = { local_ingress_request_id, site_id, generated_at, operation_id, task_id, requested_mutation_class, requested_action_ref, requested_action_summary, governed_request_contract_ref, evidence_return_contract_ref, rollback_plan_ref, authority_locus, target_authority_locus, local_executor_authority, local_execution_admission, direct_cloudflare_filesystem_mutation_admission, repository_publication_admission, request_posture, request_json, recorded_by_principal_id, recorded_at };
         if (existing) Object.assign(existing, row);
         else state.localIngressRequests.push(row);
+      } else if (normalized.startsWith('insert into cloudflare_local_ingress_evidence')) {
+        const [local_ingress_evidence_id, site_id, generated_at, local_ingress_request_id, local_execution_id, requested_mutation_class, windows_admission_action, windows_admission_reason, local_execution_status, local_executor_authority, local_filesystem_mutation_admission, changed_file_count, rollback_evidence_ref, direct_cloudflare_filesystem_mutation_admission, repository_publication_admission, evidence_posture, evidence_json, recorded_by_principal_id, recorded_at] = bindings;
+        const existing = state.localIngressEvidence.find((entry) => entry.local_ingress_evidence_id === local_ingress_evidence_id);
+        const row = { local_ingress_evidence_id, site_id, generated_at, local_ingress_request_id, local_execution_id, requested_mutation_class, windows_admission_action, windows_admission_reason, local_execution_status, local_executor_authority, local_filesystem_mutation_admission, changed_file_count, rollback_evidence_ref, direct_cloudflare_filesystem_mutation_admission, repository_publication_admission, evidence_posture, evidence_json, recorded_by_principal_id, recorded_at };
+        if (existing) Object.assign(existing, row);
+        else state.localIngressEvidence.push(row);
       } else if (normalized.startsWith('insert into cloudflare_task_lifecycle_shadow_reads')) {
         const [read_id, site_id, source_locus, target_locus, source_url_host, source_db_path, source_schema, generated_at, task_count, status_counts_json, tasks_json, mutation_authority, shadow_read_posture, cloudflare_write_admission, dispatch_authority, shadow_mode, dispatch_action, record_json, recorded_by_principal_id, recorded_at] = bindings;
         const existing = state.taskLifecycleShadowReads.find((entry) => entry.read_id === read_id);
@@ -6824,6 +6895,19 @@ function fakeD1SiteRegistryStatement(state, sql) {
         return {
           results: state.localIngressRequests
             .filter((entry) => entry.site_id === siteId)
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_local_ingress_evidence')) {
+        const [siteId, maybeRequestId, maybeLimit] = bindings;
+        const hasRequestFilter = normalized.includes('local_ingress_request_id = ?');
+        const requestId = hasRequestFilter ? maybeRequestId : null;
+        const limit = hasRequestFilter ? maybeLimit : maybeRequestId;
+        return {
+          results: state.localIngressEvidence
+            .filter((entry) => entry.site_id === siteId && (!requestId || entry.local_ingress_request_id === requestId))
             .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
             .slice(0, Number(limit))
             .map((entry) => clone(entry)),
