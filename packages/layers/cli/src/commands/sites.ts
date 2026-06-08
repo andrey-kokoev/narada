@@ -3171,7 +3171,7 @@ const AGENT_CLI_WRAPPER_TEMPLATE_HASH_LINE = /^# narada_template_hash: .*$/m;
 const SHARED_SITE_PACKAGES = [
   {
     package_name: '@narada2/agent-cli',
-    source_locus: fileURLToPath(new URL('../../../../../packages/agent-cli', import.meta.url)),
+    source_locus: fileURLToPath(new URL('../../../../../../agent-cli', import.meta.url)),
   },
   {
     package_name: '@narada2/mcp-transport',
@@ -3215,9 +3215,18 @@ function siteDoctorPrefix(status: SiteDoctorCheck['status']): string {
 
 function containedSiteRootFromInput(root: string): string {
   const resolved = resolve(root);
-  if (existsSync(join(resolved, 'config.json')) || resolved.toLowerCase().endsWith(`${win32.sep}.narada`) || resolved.toLowerCase().endsWith('/.narada')) {
+  if (resolved.toLowerCase().endsWith(`${win32.sep}.narada`) || resolved.toLowerCase().endsWith('/.narada')) {
     return resolved;
   }
+  const containedGovernanceRoot = clientSiteRootFromWorkspace(resolved);
+  if (
+    existsSync(join(containedGovernanceRoot, 'site.json'))
+    || existsSync(join(containedGovernanceRoot, 'config.json'))
+    || existsSync(join(containedGovernanceRoot, 'site-materialization.json'))
+  ) {
+    return containedGovernanceRoot;
+  }
+  if (existsSync(join(resolved, 'config.json'))) return resolved;
   return clientSiteRootFromWorkspace(resolved);
 }
 
@@ -3242,6 +3251,13 @@ function materializedAuthorityField(materialization: Record<string, unknown> | n
     ? materialization.authority_object as Record<string, unknown>
     : null;
   return materialization?.[field] ?? authority?.[field];
+}
+
+function materializedProjectionField(materialization: Record<string, unknown> | null, field: string): unknown {
+  const projection = materialization?.projection && typeof materialization.projection === 'object'
+    ? materialization.projection as Record<string, unknown>
+    : null;
+  return projection?.[field];
 }
 
 function workspaceRootFromContainedInput(inputRoot: string, siteRoot: string): string {
@@ -3285,7 +3301,7 @@ function normalizeAgentCliWrapperTemplateText(text: string): string {
 }
 
 function agentCliWrapperTemplatePath(): string {
-  return fileURLToPath(new URL('../../../../../packages/agent-cli/templates/Start-AgentCliSession.ps1', import.meta.url));
+  return fileURLToPath(new URL('../../../../../../agent-cli/templates/Start-AgentCliSession.ps1', import.meta.url));
 }
 
 function packageInstallPath(siteRoot: string, packageName: string): string {
@@ -3298,7 +3314,7 @@ function packageInstallPath(siteRoot: string, packageName: string): string {
 function isNaradaProperWorkspaceRoot(siteRoot: string): boolean {
   return normalizeNativePath(siteRoot) === normalizeNativePath(NARADA_PROPER_ROOT)
     && existsSync(join(siteRoot, 'pnpm-workspace.yaml'))
-    && existsSync(join(siteRoot, 'packages', 'agent-cli'));
+    && existsSync(resolve(siteRoot, '..', 'agent-cli'));
 }
 
 function assertContainedPackageInstallPath(siteRoot: string, packageName: string, installPath: string): void {
@@ -4334,6 +4350,9 @@ async function sitesClientDoctorCommand(
       ? ['AGENTS.md', 'README.md', '.ai']
       : [],
   );
+  if (materialization && materializedProjectionField(materialization, 'root_config_pointer') === 'config.json') {
+    materializedRootArtifactNames.add('config.json');
+  }
   const misplacedGovernance = ['config.json', 'AGENTS.md', 'README.md', '.ai']
     .filter((entry) => !materializedRootArtifactNames.has(entry))
     .map((entry) => join(workspaceRoot, entry))
