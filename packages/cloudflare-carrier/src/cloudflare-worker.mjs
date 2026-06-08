@@ -1728,10 +1728,15 @@ export function renderCloudflareCarrierConsole() {
     .evidence-focus { padding: 12px 14px; border-bottom: 1px solid #d7d7ce; background: #fff; }
     .evidence-focus h3 { margin: 0 0 6px; font-size: 13px; color: #1f4e48; letter-spacing: 0; }
     .evidence-focus span { display: block; font-size: 12px; color: #686d75; overflow-wrap: anywhere; }
+    .evidence-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+    .evidence-field { min-width: 0; border: 1px solid #d9dcd3; border-radius: 6px; padding: 8px; background: #faf9f4; }
+    .evidence-field b { display: block; font-size: 11px; color: #686d75; }
+    .evidence-field span { margin-top: 4px; color: #1e2024; }
     .evidence-focus pre { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; color: #343941; }
     .event { border: 1px solid #d9dcd3; border-radius: 8px; padding: 10px; background: #fff; cursor: pointer; }
     .event.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
     .event strong { display: block; color: #1f4e48; font-size: 13px; overflow-wrap: anywhere; }
+    .event span { display: block; margin-top: 4px; color: #686d75; font-size: 12px; overflow-wrap: anywhere; }
     .event pre { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; color: #343941; }
     .composer { padding: 12px 14px; border-top: 1px solid #d7d7ce; }
     .error { margin-top: 12px; color: #a5361f; font-size: 13px; overflow-wrap: anywhere; }
@@ -2099,9 +2104,12 @@ export function renderCloudflareCarrierConsole() {
       heading.textContent = 'Evidence Focus';
       const meta = document.createElement('span');
       meta.textContent = eventTitle(state.evidenceFocus);
+      const summary = document.createElement('div');
+      summary.className = 'evidence-summary';
+      summary.replaceChildren(...evidenceActionContext(state.evidenceFocus).map(([label, value]) => evidenceField(label, value)));
       const pre = document.createElement('pre');
       pre.textContent = JSON.stringify(evidencePayload(state.evidenceFocus), null, 2);
-      el('evidenceFocus').replaceChildren(heading, meta, pre);
+      el('evidenceFocus').replaceChildren(heading, meta, summary, pre);
     }
     function renderAttentionQueue(items = []) {
       state.attentionItems = items;
@@ -2414,6 +2422,62 @@ export function renderCloudflareCarrierConsole() {
       };
       return Object.fromEntries(Object.entries(evidence).filter(([, value]) => value !== undefined));
     }
+    function compactEvidenceValue(value) {
+      if (value == null || value === '') return 'none';
+      if (typeof value === 'string') return value.length > 220 ? value.slice(0, 217) + '...' : value;
+      return JSON.stringify(value);
+    }
+    function evidenceField(label, value) {
+      const node = document.createElement('div');
+      node.className = 'evidence-field';
+      const key = document.createElement('b');
+      key.textContent = label;
+      const body = document.createElement('span');
+      body.textContent = compactEvidenceValue(value);
+      node.append(key, body);
+      return node;
+    }
+    function evidenceMeaning(event) {
+      const payload = event.payload || {};
+      switch (event.event_kind) {
+        case 'carrier_session_started': return 'Session admitted to the Cloudflare carrier runtime.';
+        case 'carrier_command_executed': return 'Operator command entered the carrier command lane.';
+        case 'input_admitted_to_turn': return 'Input entered a provider turn.';
+        case 'turn_started': return 'Provider turn opened for the active session.';
+        case 'provider_request_recorded': return 'Provider request recorded through ' + (payload.provider || payload.provider_adapter_kind || 'configured provider') + '.';
+        case 'provider_text_delta_recorded': return 'Provider output recorded as carrier evidence.';
+        case 'provider_tool_call_requested': return 'Provider requested tool ' + (payload.tool_name || 'unknown') + '.';
+        case 'tool_call_requested': return 'Carrier requested tool execution for ' + (payload.tool_name || 'unknown') + '.';
+        case 'tool_result_received': return 'Tool result recorded with status ' + (payload.status || 'unknown') + '.';
+        case 'turn_completed': return 'Provider turn completed with posture ' + (payload.provider || payload.status || 'completed') + '.';
+        case 'input_completed': return 'Input lifecycle reached a terminal state.';
+        case 'directive_emitted': return 'Directive emitted for ' + (payload.directive_kind || 'unknown directive') + '.';
+        case 'directive_receipt_recorded': return 'Directive receipt recorded by the carrier.';
+        case 'directive_carrier_accepted_recorded': return 'Carrier accepted directive without provider work.';
+        case 'directive_emission_authorized': return 'Directive emission was authorized.';
+        case 'directive_emission_rule_recorded': return 'Directive emission rule was recorded.';
+        case 'console_action_failed': return 'Console action failed before completing.';
+        default: return 'Carrier evidence recorded for ' + (event.event_kind || 'unknown event') + '.';
+      }
+    }
+    function evidenceActionContext(event) {
+      const payload = event.payload || {};
+      const siteAuthority = payload.site_authority_decision || {};
+      const provider = payload.provider || payload.provider_adapter_kind || payload.provider_request_status || payload.provider_execution_enabled;
+      const directive = payload.directive_kind || payload.directive_id || payload.input_event_id;
+      const effect = payload.tool_name || payload.capability_ref || payload.effect_scope;
+      const authority = payload.authority_ref || payload.admission_action || siteAuthority.action || siteAuthority.authority_locus;
+      return [
+        ['Meaning', evidenceMeaning(event)],
+        ['Session', event.carrier_session_id || el('sessionId').value.trim() || 'none'],
+        ['Event Kind', event.event_kind || 'unknown'],
+        ['Authority', [authority, payload.admission_reason || siteAuthority.reason].filter(Boolean).join(' / ') || 'none'],
+        ['Effect', [effect, payload.status].filter(Boolean).join(' / ') || 'none'],
+        ['Provider', provider || 'none'],
+        ['Directive', directive || 'none'],
+        ['Result', payload.result_summary || payload.message || payload.code || 'none'],
+      ];
+    }
     function renderEvents() {
       el('eventCount').textContent = String(state.events.length);
       el('cursor').textContent = String(state.afterSequence);
@@ -2429,10 +2493,12 @@ export function renderCloudflareCarrierConsole() {
         node.className = 'event' + (state.evidenceFocus && eventKey(state.evidenceFocus) === eventKey(event) ? ' selected' : '');
         const title = document.createElement('strong');
         title.textContent = eventTitle(event);
+        const summary = document.createElement('span');
+        summary.textContent = evidenceMeaning(event);
         const pre = document.createElement('pre');
         pre.textContent = JSON.stringify(evidencePayload(event), null, 2);
         node.addEventListener('click', () => { focusEvidence(event); renderEvents(); });
-        node.append(title, pre);
+        node.append(title, summary, pre);
         return node;
       }));
       el('events').scrollTop = el('events').scrollHeight;

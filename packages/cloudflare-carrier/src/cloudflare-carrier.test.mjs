@@ -685,6 +685,11 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Resolve Attention/);
   assert.match(html, /Evidence Window/);
   assert.match(html, /Evidence Focus/);
+  assert.match(html, /evidence-summary/);
+  assert.match(html, /evidence-field/);
+  assert.match(html, /evidenceMeaning/);
+  assert.match(html, /evidenceActionContext/);
+  assert.match(html, /compactEvidenceValue/);
   assert.match(html, /controlEvidenceFocus/);
   assert.match(html, /Evidence Filter/);
   assert.match(html, /Session Filter/);
