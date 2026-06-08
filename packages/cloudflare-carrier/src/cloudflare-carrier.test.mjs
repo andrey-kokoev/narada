@@ -707,6 +707,16 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /renderMembershipFocusDetail/);
   assert.match(html, /selectMembership/);
   assert.match(html, /\.membership-item\.selected/);
+  assert.match(html, /Site Continuity/);
+  assert.match(html, /Continuity Focus Detail/);
+  assert.match(html, /continuityNavigator/);
+  assert.match(html, /continuityFocusDetail/);
+  assert.match(html, /continuityItems/);
+  assert.match(html, /continuityFocusContext/);
+  assert.match(html, /renderContinuityNavigator/);
+  assert.match(html, /renderContinuityFocusDetail/);
+  assert.match(html, /selectContinuity/);
+  assert.match(html, /\.continuity-item\.selected/);
   assert.match(html, /Authority State/);
   assert.match(html, /controlAuthorityFocus/);
   assert.match(html, /authorityState/);

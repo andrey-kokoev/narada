@@ -1701,15 +1701,16 @@ export function renderCloudflareCarrierConsole() {
     .control-room-item b { display: block; font-size: 11px; color: #686d75; }
     .control-room-item span { display: block; margin-top: 4px; font-size: 12px; color: #1e2024; overflow-wrap: anywhere; }
     .attention-items { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-    .attention-item, .authority-decision, .operation-item, .session-item, .membership-item { border: 1px solid #d9dcd3; border-radius: 6px; padding: 9px; background: #fff; cursor: pointer; }
-    .attention-item strong, .authority-decision strong, .operation-item strong, .session-item strong, .membership-item strong { display: block; font-size: 13px; color: #1f4e48; overflow-wrap: anywhere; }
-    .attention-item span, .authority-decision span, .operation-item span, .session-item span, .membership-item span { display: block; margin-top: 4px; font-size: 12px; color: #686d75; overflow-wrap: anywhere; }
+    .attention-item, .authority-decision, .operation-item, .session-item, .membership-item, .continuity-item { border: 1px solid #d9dcd3; border-radius: 6px; padding: 9px; background: #fff; cursor: pointer; }
+    .attention-item strong, .authority-decision strong, .operation-item strong, .session-item strong, .membership-item strong, .continuity-item strong { display: block; font-size: 13px; color: #1f4e48; overflow-wrap: anywhere; }
+    .attention-item span, .authority-decision span, .operation-item span, .session-item span, .membership-item span, .continuity-item span { display: block; margin-top: 4px; font-size: 12px; color: #686d75; overflow-wrap: anywhere; }
     .authority-decision.refuse strong { color: #9b3b22; }
     .authority-decision.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
     .operation-item.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
     .session-item.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
     .attention-item.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
     .membership-item.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
+    .continuity-item.selected { border-color: #1f6f62; box-shadow: inset 0 0 0 1px #1f6f62; }
     .task-panel { margin-top: 16px; border-top: 1px solid #d7d7ce; padding-top: 14px; }
     .task-panel h2 { margin: 0 0 10px; font-size: 15px; letter-spacing: 0; }
     .tasks { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
@@ -1848,6 +1849,12 @@ export function renderCloudflareCarrierConsole() {
         <div class="actions"><button id="readSite" class="secondary">Read Site</button></div>
       </div>
       <div class="product-panel">
+        <h2>Site Continuity</h2>
+        <div id="continuityNavigator" class="attention-items"><div class="empty">No continuity loaded.</div></div>
+        <h3>Continuity Focus Detail</h3>
+        <div id="continuityFocusDetail" class="evidence-summary"><div class="empty">No continuity item selected.</div></div>
+      </div>
+      <div class="product-panel">
         <h2>Site Membership</h2>
         <label>Principal ID<input id="memberPrincipalId" placeholder="microsoft:tenant:object-id"></label>
         <label>Role<input id="memberRole" value="viewer"></label>
@@ -1906,7 +1913,7 @@ export function renderCloudflareCarrierConsole() {
   </main>
   <script type="module">
     const WORKBENCH_STORAGE_KEY = 'narada.cloudflare.operationWorkbench.v1';
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, operations: [], consoleSequence: 0, operatorPrincipal: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, operations: [], consoleSequence: 0, operatorPrincipal: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -2566,6 +2573,71 @@ export function renderCloudflareCarrierConsole() {
         'target=' + (decision.target_embodiment_kind || 'unknown'),
       ].join(' | ');
     }
+    function continuityKey(item = {}) {
+      return [item.kind, item.packet_id, item.exchange_class, item.source, item.target].filter(Boolean).join('|');
+    }
+    function continuityItems(product = {}) {
+      const decisions = (product.site_continuity?.decisions || []).map((decision) => ({ kind: 'decision', ...decision }));
+      const packets = (product.site_continuity_packets || []).map((packet) => ({ kind: 'packet', ...packet }));
+      return [...decisions, ...packets];
+    }
+    function selectContinuity(item) {
+      if (!item) return;
+      state.continuityFocus = item;
+      renderContinuityNavigator(continuityItems(state.operationProduct || {}));
+      updateControlRoom();
+    }
+    function renderContinuityNavigator(items = []) {
+      if (items.length === 0) {
+        state.continuityFocus = null;
+        el('continuityNavigator').innerHTML = '<div class="empty">No continuity loaded.</div>';
+        renderContinuityFocusDetail();
+        return;
+      }
+      if (state.continuityFocus) state.continuityFocus = items.find((item) => continuityKey(item) === continuityKey(state.continuityFocus)) || state.continuityFocus;
+      if (!state.continuityFocus) state.continuityFocus = items[0];
+      el('continuityNavigator').replaceChildren(...items.map((item) => {
+        const node = document.createElement('article');
+        node.className = 'continuity-item' + (continuityKey(item) === continuityKey(state.continuityFocus) ? ' selected' : '');
+        const title = document.createElement('strong');
+        title.textContent = item.kind + ' ' + (item.packet_id || item.exchange_class || item.reason || 'continuity');
+        const meta = document.createElement('span');
+        meta.textContent = item.kind === 'packet'
+          ? [item.admission_action, item.imported_at, item.imported_by_principal_id].filter(Boolean).join(' | ')
+          : continuitySummary(item);
+        node.addEventListener('click', () => selectContinuity(item));
+        node.append(title, meta);
+        return node;
+      }));
+      renderContinuityFocusDetail();
+    }
+    function continuityFocusContext(item = {}) {
+      if (item.kind === 'packet') {
+        return [
+          ['Kind', 'packet'],
+          ['Packet', item.packet_id || 'none'],
+          ['Admission', item.admission_action || 'unknown'],
+          ['Site', item.site_id || el('siteId').value.trim() || 'none'],
+          ['Imported', item.imported_at || 'none'],
+          ['Imported By', item.imported_by_principal_id || 'none'],
+        ];
+      }
+      return [
+        ['Kind', item.kind || 'decision'],
+        ['Exchange', item.exchange_class || 'unknown'],
+        ['Action', item.action || 'unknown'],
+        ['Reason', item.reason || 'none'],
+        ['Source', item.source_embodiment_kind || 'unknown'],
+        ['Target', item.target_embodiment_kind || 'unknown'],
+      ];
+    }
+    function renderContinuityFocusDetail(item = state.continuityFocus) {
+      if (!item) {
+        el('continuityFocusDetail').innerHTML = '<div class="empty">No continuity item selected.</div>';
+        return;
+      }
+      el('continuityFocusDetail').replaceChildren(...continuityFocusContext(item).map(([label, value]) => evidenceField(label, value)));
+    }
     function renderSiteProduct(product) {
       state.operationProduct = product;
       state.operations = product.operations || [];
@@ -2580,6 +2652,7 @@ export function renderCloudflareCarrierConsole() {
       el('continuityCount').textContent = String((product.site_continuity_packets || []).length);
       renderTasks(product.tasks || []);
       renderMembershipNavigator(currentMemberships(product));
+      renderContinuityNavigator(continuityItems(product));
       renderAttentionQueue(extractOperationAttention(product));
       renderAuthorityState(product);
       updateControlRoom();
@@ -2643,6 +2716,7 @@ export function renderCloudflareCarrierConsole() {
       el('continuityCount').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length);
       renderTasks(product.tasks || []);
       renderMembershipNavigator(currentMemberships(product));
+      renderContinuityNavigator(continuityItems(product));
       renderOperationNavigator(state.operations || []);
       renderOperationSessions(product.sessions || []);
       renderAttentionQueue(extractOperationAttention(product));
