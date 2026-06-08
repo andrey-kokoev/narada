@@ -5116,6 +5116,8 @@ export function renderCloudflareCarrierConsole() {
         </label>
         <div class="actions"><button id="createOperation" class="secondary">Create Operation</button></div>
         <div id="operationNavigator" class="attention-items"><div class="empty">No site operations loaded.</div></div>
+        <h3>Operation Posture</h3>
+        <div id="operationPostureOverview" class="evidence-summary"><div class="empty">No operation posture loaded.</div></div>
         <h3>Operation Work Queue</h3>
         <div id="operationWorkQueue" class="attention-items"><div class="empty">No operation work loaded.</div></div>
         <h3>Operation Action</h3>
@@ -7438,6 +7440,7 @@ export function renderCloudflareCarrierConsole() {
       if (operations.length === 0) {
         state.operationFocus = null;
         el('operationNavigator').innerHTML = '<div class="empty">No site operations loaded.</div>';
+        renderOperationPostureOverview(operations);
         renderOperationWorkQueue(operations);
         renderOperationActionSummary();
         renderOperationFocusDetail();
@@ -7458,6 +7461,7 @@ export function renderCloudflareCarrierConsole() {
         node.append(title, meta);
         return node;
       }));
+      renderOperationPostureOverview(operations);
       renderOperationWorkQueue(operations);
       renderOperationActionSummary();
       renderOperationFocusDetail();
@@ -7485,6 +7489,70 @@ export function renderCloudflareCarrierConsole() {
         if (right.operation.operation_id === el('operationId').value.trim()) return 1;
         return String(right.operation.updated_at || '').localeCompare(String(left.operation.updated_at || ''));
       });
+    }
+    function operationPostureReason(item = {}) {
+      const action = item.command?.next_action || 'inspect_operation';
+      if (action === 'read_operation_scope') return 'operation_scope';
+      if (action === 'start_or_select_session') return 'session';
+      if (action === 'inspect_attention') return 'operation_attention';
+      if (action === 'inspect_open_task') return 'open_tasks';
+      if (action === 'read_operation_evidence') return 'carrier_evidence';
+      if (action === 'inspect_operation_evidence') return 'evidence_review';
+      return action;
+    }
+    function operationPostureOverview(operations = state.operations || [], product = state.operationProduct || {}) {
+      const items = operationWorkQueueItems(operations, product);
+      const healthCounts = { ready: 0, needs_attention: 0 };
+      const actionCounts = {};
+      const reasonCounts = {};
+      const commandStateCounts = {};
+      for (const item of items) {
+        healthCounts[item.status] = (healthCounts[item.status] || 0) + 1;
+        const action = item.command?.next_action || 'inspect_operation';
+        const reason = operationPostureReason(item);
+        const commandState = item.command?.command_state || 'not_classified';
+        actionCounts[action] = (actionCounts[action] || 0) + 1;
+        reasonCounts[reason] = (reasonCounts[reason] || 0) + 1;
+        commandStateCounts[commandState] = (commandStateCounts[commandState] || 0) + 1;
+      }
+      const activeOperationId = el('operationId').value.trim();
+      const next = items.find((item) => item.status === 'needs_attention') || items.find((item) => item.operation.operation_id === activeOperationId) || items[0] || null;
+      return {
+        schema: 'narada.cloudflare_operation_posture_overview.v1',
+        operation_count: items.length,
+        health_counts: healthCounts,
+        action_counts: actionCounts,
+        reason_counts: reasonCounts,
+        command_state_counts: commandStateCounts,
+        active_operation_id: activeOperationId || null,
+        next_operation_id: next?.operation?.operation_id || null,
+        next_status: next?.status || 'ready',
+        next_action: next?.command?.next_action || 'monitor_operations',
+        next_reason: next ? operationPostureReason(next) : 'all_operations_monitoring',
+      };
+    }
+    function renderOperationPostureOverview(operations = state.operations || [], product = state.operationProduct || {}) {
+      const target = el('operationPostureOverview');
+      if (!target) return;
+      const overview = operationPostureOverview(operations, product);
+      if (overview.operation_count === 0) {
+        target.innerHTML = '<div class="empty">No operation posture loaded.</div>';
+        return;
+      }
+      target.replaceChildren(...[
+        ['Schema', overview.schema],
+        ['Operations', overview.operation_count],
+        ['Ready', overview.health_counts.ready ?? 0],
+        ['Needs Attention', overview.health_counts.needs_attention ?? 0],
+        ['Active Operation', overview.active_operation_id || 'none'],
+        ['Next Operation', overview.next_operation_id || 'none'],
+        ['Next Status', overview.next_status || 'ready'],
+        ['Next Action', overview.next_action || 'monitor_operations'],
+        ['Next Reason', overview.next_reason || 'all_operations_monitoring'],
+        ['Action Counts', countMapSummary(overview.action_counts)],
+        ['Reason Counts', countMapSummary(overview.reason_counts)],
+        ['Command State Counts', countMapSummary(overview.command_state_counts)],
+      ].map(([label, value]) => evidenceField(label, value)));
     }
     function operationWorkQueueButtonId(operation, suffix) {
       return ['operationWorkQueue', operation.operation_id || 'operation', suffix].join('_').replace(/[^a-z0-9_:-]+/gi, '_');

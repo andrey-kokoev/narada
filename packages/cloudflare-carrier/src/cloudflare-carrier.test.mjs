@@ -1273,6 +1273,13 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Controlled Actions/);
   assert.match(html, /Operation Focus/);
   assert.match(html, /Operation Navigator/);
+  assert.match(html, /Operation Posture/);
+  assert.match(html, /operationPostureOverview/);
+  assert.match(html, /renderOperationPostureOverview/);
+  assert.match(html, /operationPostureReason/);
+  assert.match(html, /narada\.cloudflare_operation_posture_overview\.v1/);
+  assert.match(html, /Reason Counts/);
+  assert.match(html, /Command State Counts/);
   assert.match(html, /Operation Work Queue/);
   assert.match(html, /operationWorkQueue/);
   assert.match(html, /operationWorkQueueItems/);
