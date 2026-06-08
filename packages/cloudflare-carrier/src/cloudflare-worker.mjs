@@ -2672,7 +2672,14 @@ export function renderCloudflareCarrierConsole() {
         el('attentionFocusDetail').innerHTML = '<div class="empty">No attention item selected.</div>';
         return;
       }
-      el('attentionFocusDetail').replaceChildren(...attentionFocusContext(item).map(([label, value]) => evidenceField(label, value)));
+      el('attentionFocusDetail').replaceChildren(
+        ...attentionFocusContext(item).map(([label, value]) => evidenceField(label, value)),
+        focusActionRow(
+          focusActionButton('attentionFocusEvidenceAction', 'Focus Evidence', () => focusEvidenceFor((event) => event.event_kind === 'directive_emitted' && event.payload?.directive_id === item.directive_id)),
+          focusActionButton('attentionFocusTaskAction', 'Task From Attention', () => run(createTaskFromFocusedAttention)),
+          focusActionButton('attentionFocusResolveAction', 'Resolve Attention', () => run(resolveFocusedAttention)),
+        ),
+      );
     }
     function renderAuthorityState(product = {}) {
       const decisions = product.site_authority?.decisions || [];
@@ -2764,7 +2771,12 @@ export function renderCloudflareCarrierConsole() {
         el('authorityFocusDetail').innerHTML = '<div class="empty">No authority decision selected.</div>';
         return;
       }
-      el('authorityFocusDetail').replaceChildren(...authorityDecisionContext(state.authorityFocus).map(([label, value]) => evidenceField(label, value)));
+      el('authorityFocusDetail').replaceChildren(
+        ...authorityDecisionContext(state.authorityFocus).map(([label, value]) => evidenceField(label, value)),
+        focusActionRow(
+          focusActionButton('authorityFocusEvidenceAction', 'Focus Evidence', () => focusEvidenceFor((event) => JSON.stringify(event.payload || {}).includes(state.authorityFocus.mutation_class || '') || JSON.stringify(event.payload || {}).includes(state.authorityFocus.reason || ''))),
+        ),
+      );
     }
     async function selectOperation(operation) {
       if (!operation?.operation_id) return;
@@ -2870,7 +2882,13 @@ export function renderCloudflareCarrierConsole() {
         el('sessionFocusDetail').innerHTML = '<div class="empty">No session selected.</div>';
         return;
       }
-      el('sessionFocusDetail').replaceChildren(...sessionFocusContext(session).map(([label, value]) => evidenceField(label, value)));
+      el('sessionFocusDetail').replaceChildren(
+        ...sessionFocusContext(session).map(([label, value]) => evidenceField(label, value)),
+        focusActionRow(
+          focusActionButton('sessionFocusReadEvidenceAction', 'Read Evidence', () => run(readSelectedSessionEvidence)),
+          focusActionButton('sessionFocusEvidenceAction', 'Focus Evidence', () => focusEvidenceFor((event) => event.carrier_session_id === (session.carrier_session_id || el('sessionId').value.trim()))),
+        ),
+      );
     }
     function activeSessionDetail() {
       const activeSession = el('sessionId').value.trim();
@@ -3037,7 +3055,14 @@ export function renderCloudflareCarrierConsole() {
         el('taskFocusDetail').innerHTML = '<div class="empty">No task selected.</div>';
         return;
       }
-      el('taskFocusDetail').replaceChildren(...taskFocusContext(task).map(([label, value]) => evidenceField(label, value)));
+      el('taskFocusDetail').replaceChildren(
+        ...taskFocusContext(task).map(([label, value]) => evidenceField(label, value)),
+        focusActionRow(
+          focusActionButton('taskFocusEvidenceAction', 'Focus Evidence', () => focusEvidenceFor(taskEvidencePredicate(task))),
+          focusActionButton('taskFocusOpenAction', 'Mark Open', () => run(async () => { await updateFocusedTask('open', el('updateTaskNote').value.trim() || 'operator_marked_open'); })),
+          focusActionButton('taskFocusDoneAction', 'Mark Done', () => run(async () => { await updateFocusedTask('done', el('updateTaskNote').value.trim() || 'operator_marked_done'); })),
+        ),
+      );
     }
     function taskEvidencePredicate(task) {
       return (event) => {
@@ -3436,6 +3461,21 @@ export function renderCloudflareCarrierConsole() {
       node.append(key, body);
       return node;
     }
+    function focusActionButton(id, label, action) {
+      const button = document.createElement('button');
+      button.id = id;
+      button.className = 'secondary';
+      button.textContent = label;
+      button.addEventListener('click', action);
+      return button;
+    }
+    function focusActionRow(...buttons) {
+      const row = document.createElement('div');
+      row.className = 'actions';
+      row.style.gridColumn = '1 / -1';
+      row.append(...buttons);
+      return row;
+    }
     function operatorPrincipalLabel(principal) {
       return principal?.email || principal?.name || principal?.principal_id || 'anonymous';
     }
@@ -3601,6 +3641,24 @@ export function renderCloudflareCarrierConsole() {
       if (state.attentionFocus) return state.attentionFocus;
       return state.attentionItems.find((item) => item.status !== 'resolved') || state.attentionItems[0] || null;
     }
+    async function createTaskFromFocusedAttention() {
+      const attention = selectedAttention();
+      if (!attention) return;
+      const body = await api.createTask(['attention', attention.directive_id, attention.reason].filter(Boolean).join(' '));
+      appendEvents(body.events || []);
+      await refreshStatus();
+      await refreshOperation();
+    }
+    async function resolveFocusedAttention() {
+      const attention = selectedAttention();
+      const taskId = el('updateTaskId').value.trim() || state.taskFocus?.task_id || '';
+      if (!attention || !taskId) return;
+      const note = ['resolved_attention', attention.directive_id, attention.input_event_id, attention.reason].filter(Boolean).join(' ');
+      const body = await api.updateTask(taskId, 'done', note);
+      appendEvents(body.events || []);
+      await refreshStatus();
+      await refreshOperation();
+    }
     async function refreshOperatorSession() {
       const session = await api.session();
       if (session?.principal) {
@@ -3638,24 +3696,8 @@ export function renderCloudflareCarrierConsole() {
     el('eventKindFilter').addEventListener('change', renderEvents);
     el('eventSessionFilter').addEventListener('change', renderEvents);
     el('raiseAttention').addEventListener('click', () => run(async () => { const body = await api.emitAttention(); appendEvents(body.events || []); await refreshOperation(); }));
-    el('taskFromAttention').addEventListener('click', () => run(async () => {
-      const attention = selectedAttention();
-      if (!attention) return;
-      const body = await api.createTask(['attention', attention.directive_id, attention.reason].filter(Boolean).join(' '));
-      appendEvents(body.events || []);
-      await refreshStatus();
-      await refreshOperation();
-    }));
-    el('resolveAttention').addEventListener('click', () => run(async () => {
-      const attention = selectedAttention();
-      const taskId = el('updateTaskId').value.trim() || state.taskFocus?.task_id || '';
-      if (!attention || !taskId) return;
-      const note = ['resolved_attention', attention.directive_id, attention.input_event_id, attention.reason].filter(Boolean).join(' ');
-      const body = await api.updateTask(taskId, 'done', note);
-      appendEvents(body.events || []);
-      await refreshStatus();
-      await refreshOperation();
-    }));
+    el('taskFromAttention').addEventListener('click', () => run(createTaskFromFocusedAttention));
+    el('resolveAttention').addEventListener('click', () => run(resolveFocusedAttention));
     el('start').addEventListener('click', () => run(async () => { const body = await api.start(); appendEvents([body.event].filter(Boolean)); await refreshStatus(); await refreshOperation(); }));
     el('refresh').addEventListener('click', () => run(refreshOperation));
     el('readOperation').addEventListener('click', () => run(refreshOperation));

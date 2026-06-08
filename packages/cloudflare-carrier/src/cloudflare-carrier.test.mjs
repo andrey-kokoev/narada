@@ -751,6 +751,7 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /selectAuthorityDecision/);
   assert.match(html, /authorityDecisionContext/);
   assert.match(html, /renderAuthorityFocusDetail/);
+  assert.match(html, /authorityFocusEvidenceAction/);
   assert.match(html, /resolve_authority_locus/);
   assert.match(html, /inspect_authority_locus/);
   assert.match(html, /\.authority-decision\.selected/);
@@ -759,6 +760,9 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /taskFocusDetail/);
   assert.match(html, /taskFocusContext/);
   assert.match(html, /renderTaskFocusDetail/);
+  assert.match(html, /taskFocusEvidenceAction/);
+  assert.match(html, /taskFocusOpenAction/);
+  assert.match(html, /taskFocusDoneAction/);
   assert.match(html, /normalize_status_or_update/);
   assert.match(html, /reopen_or_inspect_evidence/);
   assert.match(html, /Operation Attention/);
@@ -767,6 +771,11 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /attentionFocusDetail/);
   assert.match(html, /attentionFocusContext/);
   assert.match(html, /renderAttentionFocusDetail/);
+  assert.match(html, /attentionFocusEvidenceAction/);
+  assert.match(html, /attentionFocusTaskAction/);
+  assert.match(html, /attentionFocusResolveAction/);
+  assert.match(html, /createTaskFromFocusedAttention/);
+  assert.match(html, /resolveFocusedAttention/);
   assert.match(html, /create_or_select_resolution_task/);
   assert.match(html, /inspect_resolving_task/);
   assert.match(html, /\.attention-item\.selected/);
@@ -818,6 +827,8 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Read Session Evidence/);
   assert.match(html, /readSessionEvidence/);
   assert.match(html, /readSelectedSessionEvidence/);
+  assert.match(html, /sessionFocusReadEvidenceAction/);
+  assert.match(html, /sessionFocusEvidenceAction/);
   assert.match(html, /read_session_evidence/);
   assert.match(html, /inspect_session_evidence/);
   assert.match(html, /Active Session Detail/);
@@ -829,6 +840,8 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /taskLifecycleStatus/);
   assert.match(html, /renderTaskLifecycleSummary/);
   assert.match(html, /mark_done_or_update/);
+  assert.match(html, /focusActionButton/);
+  assert.match(html, /focusActionRow/);
   assert.match(html, /Mark Open/);
   assert.match(html, /Mark Done/);
   assert.match(html, /taskEvidencePredicate/);
