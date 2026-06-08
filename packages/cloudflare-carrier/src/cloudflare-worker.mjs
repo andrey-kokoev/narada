@@ -2056,6 +2056,7 @@ export function renderCloudflareCarrierConsole() {
           <div class="control-room-item"><b>Evidence Focus</b><span id="controlEvidenceFocus">none</span></div>
           <div class="control-room-item"><b>Evidence Window</b><span id="controlEvidenceWindow">0 events</span></div>
           <div class="control-room-item"><b>Continuity</b><span id="controlContinuity">unknown</span></div>
+          <div class="control-room-item"><b>Workbench Readiness</b><span id="controlWorkbenchReadiness">not loaded</span></div>
         </div>
       </div>
       <div class="product-panel">
@@ -2394,6 +2395,20 @@ export function renderCloudflareCarrierConsole() {
       el('controlEvidenceFocus').textContent = state.evidenceFocus ? eventTitle(state.evidenceFocus) : 'none';
       el('controlEvidenceWindow').textContent = String(surface.carrier_evidence_count ?? state.events.length) + ' evidence groups / ' + state.events.length + ' loaded events';
       el('controlContinuity').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length ?? 0) + ' packets';
+      el('controlWorkbenchReadiness').textContent = operationWorkbenchReadiness(product);
+    }
+    function operationWorkbenchReadiness(product = {}) {
+      const missing = [];
+      if (!product.operation && !el('operationId').value.trim()) missing.push('operation');
+      if ((product.sessions || []).length === 0 && !el('sessionId').value.trim()) missing.push('session');
+      if ((product.carrier_evidence || []).length === 0 && state.events.length === 0) missing.push('evidence');
+      if ((product.site_authority?.decisions || []).length === 0 && (product.authority_events || []).length === 0) missing.push('authority');
+      if ((product.tasks || []).length === 0) missing.push('tasks');
+      if ((product.site_continuity_packets || []).length === 0 && (product.site_continuity?.decisions || []).length === 0) missing.push('continuity');
+      if ('webhook_delay_shadow_observations' in product || 'webhook_delay_shadow_observation_count' in surface) {
+        if ((product.webhook_delay_shadow_observations || []).length === 0) missing.push('shadow-read');
+      }
+      return missing.length === 0 ? 'ready' : 'missing ' + missing.join(', ');
     }
     function refreshEventKindFilter() {
       const select = el('eventKindFilter');

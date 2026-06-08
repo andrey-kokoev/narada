@@ -764,6 +764,10 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /eventKindFilter/);
   assert.match(html, /eventSessionFilter/);
   assert.match(html, /updateControlRoom/);
+  assert.match(html, /Workbench Readiness/);
+  assert.match(html, /controlWorkbenchReadiness/);
+  assert.match(html, /operationWorkbenchReadiness/);
+  assert.match(html, /shadow-read/);
   assert.match(html, /extractOperationAttention/);
   assert.match(html, /renderAttentionQueue/);
   assert.match(html, /selectedAttention/);
