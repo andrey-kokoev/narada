@@ -2648,6 +2648,11 @@ export function renderCloudflareCarrierConsole() {
       updateControlRoom();
     }
     function attentionFocusContext(item = {}) {
+      const followUp = item.status === 'resolved'
+        ? 'inspect_evidence'
+        : item.resolving_task_id
+          ? 'inspect_resolving_task'
+          : 'create_or_select_resolution_task';
       return [
         ['Directive', item.directive_id || 'none'],
         ['Status', item.status || 'unknown'],
@@ -2658,6 +2663,7 @@ export function renderCloudflareCarrierConsole() {
         ['Input Event', item.input_event_id || 'none'],
         ['Sequence', item.sequence ?? 'none'],
         ['Resolving Task', item.resolving_task_id || 'none'],
+        ['Follow Up', followUp],
         ['Target', item.target ? JSON.stringify(item.target) : 'none'],
       ];
     }
@@ -2738,6 +2744,11 @@ export function renderCloudflareCarrierConsole() {
       updateControlRoom();
     }
     function authorityDecisionContext(decision = {}) {
+      const followUp = decision.action === 'admit'
+        ? 'inspect_admission_evidence'
+        : decision.authority_locus
+          ? 'inspect_authority_locus'
+          : 'resolve_authority_locus';
       return [
         ['Action', decision.action || 'unknown'],
         ['Mutation', decision.mutation_class || 'unknown'],
@@ -2745,6 +2756,7 @@ export function renderCloudflareCarrierConsole() {
         ['Authority Locus', decision.authority_locus || 'unresolved'],
         ['Locus Kind', decision.authority_locus_kind || 'unknown'],
         ['Controlled Action', decision.controlled_action || 'none'],
+        ['Follow Up', followUp],
       ];
     }
     function renderAuthorityFocusDetail() {
@@ -2834,8 +2846,14 @@ export function renderCloudflareCarrierConsole() {
       updateControlRoom();
     }
     function sessionFocusContext(session = {}) {
+      const currentSession = session.carrier_session_id || el('sessionId').value.trim() || '';
+      const hasEvidence = state.events.some((event) => event.carrier_session_id === currentSession)
+        || (state.operationProduct?.carrier_evidence || []).some((entry) => entry.carrier_session_id === currentSession && (entry.events || []).length > 0);
+      const followUp = currentSession
+        ? (hasEvidence ? 'inspect_session_evidence' : 'read_session_evidence')
+        : 'select_or_start_session';
       return [
-        ['Session', session.carrier_session_id || el('sessionId').value.trim() || 'none'],
+        ['Session', currentSession || 'none'],
         ['Status', session.binding_status || session.status || 'active'],
         ['Agent', session.agent_id || 'none'],
         ['Operation', session.operation_id || el('operationId').value.trim() || 'none'],
@@ -2844,6 +2862,7 @@ export function renderCloudflareCarrierConsole() {
         ['Site Root', session.site_root || 'none'],
         ['Started', session.started_at || session.created_at || 'none'],
         ['Updated', session.updated_at || 'none'],
+        ['Follow Up', followUp],
       ];
     }
     function renderSessionFocusDetail(session = state.sessionFocus) {
@@ -2993,6 +3012,12 @@ export function renderCloudflareCarrierConsole() {
       el('taskLifecycleSummary').replaceChildren(...taskLifecycleSummary(tasks).map(([label, value]) => evidenceField(label, value)));
     }
     function taskFocusContext(task = {}) {
+      const status = taskLifecycleStatus(task);
+      const followUp = status === 'open'
+        ? 'mark_done_or_update'
+        : status === 'closed'
+          ? 'reopen_or_inspect_evidence'
+          : 'normalize_status_or_update';
       return [
         ['Task', task.task_id || 'none'],
         ['Number', task.task_number ?? 'none'],
@@ -3003,6 +3028,7 @@ export function renderCloudflareCarrierConsole() {
         ['Site', task.site_id || 'none'],
         ['Created', task.created_at || 'none'],
         ['Updated', task.updated_at || 'none'],
+        ['Follow Up', followUp],
         ['Note', task.note || 'none'],
       ];
     }
