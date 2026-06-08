@@ -37,6 +37,10 @@ const OPERATOR_SESSION_COOKIE = 'narada_operator_session';
 const MICROSOFT_OIDC_PENDING_COOKIE = 'narada_microsoft_oidc_pending';
 const DEFAULT_OPERATOR_SESSION_TTL_SECONDS = 8 * 60 * 60;
 const MICROSOFT_OIDC_PENDING_TTL_SECONDS = 5 * 60;
+const CLOUDFLARE_WEBHOOK_DELAY_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_webhook_delay_shadow_read.v1';
+const CLOUDFLARE_WEBHOOK_DELAY_SHADOW_MODE = 'cloudflare_shadow_read';
+const WINDOWS_PRIMARY_DISPATCH_AUTHORITY = 'windows_primary_dispatcher';
+const DEFAULT_WEBHOOK_DELAY_CRITICAL_MINUTES = 15;
 const CLOUDFLARE_RUNTIME_METADATA_READ_CAPABILITY = Object.freeze({
   capability_ref: CLOUDFLARE_RUNTIME_METADATA_READ_CAPABILITY_REF,
   effect_scope: CLOUDFLARE_RUNTIME_METADATA_READ_EFFECT_SCOPE,
@@ -441,6 +445,8 @@ function isSiteProductOperation(operation) {
     'operation.create',
     'operation.read',
     'operation.list',
+    'webhook_delay.shadow_read.record',
+    'webhook_delay.shadow_read.list',
   ].includes(operation);
 }
 
@@ -548,6 +554,30 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
   if (!registry) return { status: 500, body: { ok: false, code: 'missing_site_registry_binding' } };
   const params = body.params ?? {};
   const requestedSiteId = params.site_id ?? body.site_id ?? 'unknown-site';
+  if (body.operation === 'webhook_delay.shadow_read.record') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const result = await recordCloudflareWebhookDelayShadowObservation(env, requestedSiteId, params, principal);
+    return { status: result.ok ? 200 : 400, body: result };
+  }
+  if (body.operation === 'webhook_delay.shadow_read.list') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const observations = await listCloudflareWebhookDelayShadowObservations(env, requestedSiteId, params.webhook_delay_shadow_limit ?? params.limit);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        schema: CLOUDFLARE_WEBHOOK_DELAY_SHADOW_READ_SCHEMA,
+        status: 'ok',
+        site_id: requestedSiteId,
+        shadow_mode: CLOUDFLARE_WEBHOOK_DELAY_SHADOW_MODE,
+        dispatch_authority: WINDOWS_PRIMARY_DISPATCH_AUTHORITY,
+        dispatch_action: 'none',
+        observations,
+      },
+    };
+  }
   if (body.operation === 'site.continuity.packet.put') {
     const packet = params.packet ?? body.packet ?? null;
     const packetSiteId = packet?.site_id ?? requestedSiteId;
@@ -570,6 +600,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const sessions = response.sessions ?? [];
     const tasks = await listOperationTasks(env, siteId, sessions);
     const continuityPackets = await listCloudflareContinuityPackets(env, siteId);
+    const webhookDelayShadowObservations = await listCloudflareWebhookDelayShadowObservations(env, siteId, params.webhook_delay_shadow_limit ?? params.limit);
     const carrierEvidence = await readCarrierEvidenceForSiteSessions(env, sessions, principal, params);
     const siteAuthority = cloudflareSiteAuthorityReadModel(env, siteId);
     const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
@@ -579,6 +610,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         ...response,
         tasks,
         site_continuity_packets: continuityPackets,
+        webhook_delay_shadow_observations: webhookDelayShadowObservations,
         carrier_evidence: carrierEvidence,
         site_authority: siteAuthority,
         site_continuity: siteContinuity,
@@ -590,6 +622,8 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           task_count: tasks.length,
           carrier_evidence_count: carrierEvidence.length,
           continuity_packet_count: continuityPackets.length,
+          webhook_delay_shadow_observation_count: webhookDelayShadowObservations.length,
+          dispatch_authority: WINDOWS_PRIMARY_DISPATCH_AUTHORITY,
         },
       },
     };
@@ -605,6 +639,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
   const siteId = response.site?.site_id ?? params.site_id;
   const tasks = await listSiteTasks(env, siteId);
   const continuityPackets = await listCloudflareContinuityPackets(env, siteId);
+  const webhookDelayShadowObservations = await listCloudflareWebhookDelayShadowObservations(env, siteId, params.webhook_delay_shadow_limit ?? params.limit);
   const carrierEvidence = await readCarrierEvidenceForSiteSessions(env, response.sessions ?? [], principal, params);
   const siteAuthority = cloudflareSiteAuthorityReadModel(env, siteId);
   const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
@@ -614,11 +649,222 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       ...response,
       tasks,
       site_continuity_packets: continuityPackets,
+      webhook_delay_shadow_observations: webhookDelayShadowObservations,
       carrier_evidence: carrierEvidence,
       site_authority: siteAuthority,
       site_continuity: siteContinuity,
     },
   };
+}
+
+async function recordCloudflareWebhookDelayShadowObservation(env = {}, siteId, params = {}, principal = null) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return { ok: false, code: 'missing_site_registry_binding' };
+  if (!siteId || siteId === 'unknown-site') return { ok: false, code: 'missing_site_id' };
+  const observation = createWebhookDelayShadowObservation(siteId, params);
+  if (!observation.ok) return observation;
+  const classification = classifyWebhookDelayShadowObservation(observation.observation);
+  const record = {
+    observation_id: params.observation_id ?? webhookDelayShadowObservationId(siteId, observation.observation),
+    site_id: siteId,
+    schema: CLOUDFLARE_WEBHOOK_DELAY_SHADOW_READ_SCHEMA,
+    shadow_mode: CLOUDFLARE_WEBHOOK_DELAY_SHADOW_MODE,
+    dispatch_authority: WINDOWS_PRIMARY_DISPATCH_AUTHORITY,
+    dispatch_action: 'none',
+    source_locus: params.source_locus ?? 'windows_local_site',
+    target_locus: params.target_locus ?? 'cloudflare_carrier_site',
+    observation: observation.observation,
+    classification,
+    recorded_by_principal_id: principal?.principal_id ?? 'unknown-principal',
+    recorded_at: new Date().toISOString(),
+  };
+  await ensureCloudflareWebhookDelayShadowObservationSchema(db);
+  await db.prepare(`
+    INSERT INTO cloudflare_webhook_delay_shadow_observations (
+      observation_id,
+      site_id,
+      source_locus,
+      target_locus,
+      generated_at,
+      latest_delay_minutes,
+      critical_minutes,
+      classification_state,
+      dispatch_authority,
+      shadow_mode,
+      dispatch_action,
+      observation_json,
+      classification_json,
+      recorded_by_principal_id,
+      recorded_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(observation_id) DO UPDATE SET
+      source_locus = excluded.source_locus,
+      target_locus = excluded.target_locus,
+      generated_at = excluded.generated_at,
+      latest_delay_minutes = excluded.latest_delay_minutes,
+      critical_minutes = excluded.critical_minutes,
+      classification_state = excluded.classification_state,
+      dispatch_authority = excluded.dispatch_authority,
+      shadow_mode = excluded.shadow_mode,
+      dispatch_action = excluded.dispatch_action,
+      observation_json = excluded.observation_json,
+      classification_json = excluded.classification_json,
+      recorded_by_principal_id = excluded.recorded_by_principal_id,
+      recorded_at = excluded.recorded_at
+  `).bind(
+    record.observation_id,
+    record.site_id,
+    record.source_locus,
+    record.target_locus,
+    record.observation.generated_at,
+    record.classification.latest_delay_minutes,
+    record.classification.critical_minutes,
+    record.classification.state,
+    record.dispatch_authority,
+    record.shadow_mode,
+    record.dispatch_action,
+    JSON.stringify(record.observation),
+    JSON.stringify(record.classification),
+    record.recorded_by_principal_id,
+    record.recorded_at,
+  ).run();
+  return {
+    ok: true,
+    schema: CLOUDFLARE_WEBHOOK_DELAY_SHADOW_READ_SCHEMA,
+    status: 'recorded',
+    site_id: siteId,
+    shadow_mode: CLOUDFLARE_WEBHOOK_DELAY_SHADOW_MODE,
+    dispatch_authority: WINDOWS_PRIMARY_DISPATCH_AUTHORITY,
+    dispatch_action: 'none',
+    observation: record.observation,
+    classification,
+    record,
+  };
+}
+
+async function ensureCloudflareWebhookDelayShadowObservationSchema(db) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS cloudflare_webhook_delay_shadow_observations (
+      observation_id TEXT PRIMARY KEY,
+      site_id TEXT NOT NULL,
+      source_locus TEXT NOT NULL,
+      target_locus TEXT NOT NULL,
+      generated_at TEXT NOT NULL,
+      latest_delay_minutes REAL NOT NULL,
+      critical_minutes REAL NOT NULL,
+      classification_state TEXT NOT NULL,
+      dispatch_authority TEXT NOT NULL,
+      shadow_mode TEXT NOT NULL,
+      dispatch_action TEXT NOT NULL,
+      observation_json TEXT NOT NULL,
+      classification_json TEXT NOT NULL,
+      recorded_by_principal_id TEXT NOT NULL,
+      recorded_at TEXT NOT NULL
+    )
+  `).run();
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_cloudflare_webhook_delay_shadow_observations_site_recorded
+    ON cloudflare_webhook_delay_shadow_observations(site_id, recorded_at)
+  `).run();
+}
+
+async function listCloudflareWebhookDelayShadowObservations(env = {}, siteId, limit) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function' || !siteId) return [];
+  await ensureCloudflareWebhookDelayShadowObservationSchema(db);
+  const boundedLimit = clampInteger(limit, 0, 100, 25);
+  const rows = await db.prepare(`
+    SELECT * FROM cloudflare_webhook_delay_shadow_observations
+    WHERE site_id = ?
+    ORDER BY recorded_at DESC
+    LIMIT ?
+  `).bind(siteId, boundedLimit).all();
+  return (rows.results ?? []).map((row) => ({
+    observation_id: row.observation_id,
+    site_id: row.site_id,
+    schema: CLOUDFLARE_WEBHOOK_DELAY_SHADOW_READ_SCHEMA,
+    source_locus: row.source_locus,
+    target_locus: row.target_locus,
+    generated_at: row.generated_at,
+    latest_delay_minutes: Number(row.latest_delay_minutes),
+    critical_minutes: Number(row.critical_minutes),
+    classification_state: row.classification_state,
+    dispatch_authority: row.dispatch_authority,
+    shadow_mode: row.shadow_mode,
+    dispatch_action: row.dispatch_action,
+    observation: parseJsonObject(row.observation_json),
+    classification: parseJsonObject(row.classification_json),
+    recorded_by_principal_id: row.recorded_by_principal_id,
+    recorded_at: row.recorded_at,
+  }));
+}
+
+function createWebhookDelayShadowObservation(siteId, params = {}) {
+  const summary = params.summary ?? params.observation ?? {};
+  const latest = summary.today?.latest ?? params.latest ?? {};
+  const latestDelayMinutes = Number(params.latest_delay_minutes ?? latest.delay_minutes);
+  if (!Number.isFinite(latestDelayMinutes)) return { ok: false, code: 'webhook_delay_latest_delay_minutes_missing' };
+  const criticalMinutes = Number(params.critical_minutes ?? DEFAULT_WEBHOOK_DELAY_CRITICAL_MINUTES);
+  if (!Number.isFinite(criticalMinutes) || criticalMinutes <= 0) return { ok: false, code: 'webhook_delay_critical_minutes_invalid' };
+  const generatedAt = String(params.generated_at ?? summary.generated_at ?? new Date().toISOString());
+  return {
+    ok: true,
+    observation: {
+      schema: 'narada.sonar.webhook_delay_observation.v1',
+      site_id: siteId,
+      source_schema: summary.schema ?? null,
+      source_summary_path: params.source_summary_path ?? params.summary_path ?? null,
+      generated_at: generatedAt,
+      rows72: numberOrNull(summary.rows72 ?? params.rows72),
+      latest: {
+        at: latest.at ?? params.latest_at ?? null,
+        at_ct: latest.at_ct ?? params.latest_at_ct ?? null,
+        elapsed_minutes: numberOrNull(latest.elapsed_minutes ?? params.latest_elapsed_minutes),
+        delay_minutes: latestDelayMinutes,
+      },
+      yesterday_same_clock: summary.yesterday_same_clock ?? params.yesterday_same_clock ?? null,
+      critical_minutes: criticalMinutes,
+    },
+  };
+}
+
+function classifyWebhookDelayShadowObservation(observation) {
+  const latestDelayMinutes = Number(observation?.latest?.delay_minutes);
+  const criticalMinutes = Number(observation?.critical_minutes ?? DEFAULT_WEBHOOK_DELAY_CRITICAL_MINUTES);
+  const state = Number.isFinite(latestDelayMinutes) && latestDelayMinutes >= criticalMinutes ? 'critical' : 'ok';
+  return {
+    schema: 'narada.sonar.webhook_delay_classification.v1',
+    state,
+    reason: state === 'critical' ? 'webhook_delay_critical_threshold_crossed' : 'webhook_delay_below_critical_threshold',
+    latest_delay_minutes: latestDelayMinutes,
+    critical_minutes: criticalMinutes,
+    dispatch_authority: WINDOWS_PRIMARY_DISPATCH_AUTHORITY,
+    dispatch_action: 'none',
+    shadow_mode: CLOUDFLARE_WEBHOOK_DELAY_SHADOW_MODE,
+  };
+}
+
+function webhookDelayShadowObservationId(siteId, observation) {
+  return `webhook_delay_shadow_${safeIdToken(siteId)}_${safeIdToken(observation.generated_at)}_${safeIdToken(observation.latest.delay_minutes)}`;
+}
+
+function safeIdToken(value) {
+  return String(value ?? 'unknown').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').slice(0, 80) || 'unknown';
+}
+
+function numberOrNull(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function parseJsonObject(value) {
+  if (value && typeof value === 'object') return value;
+  try {
+    const parsed = JSON.parse(String(value ?? '{}'));
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
 }
 
 async function listSiteTasks(env = {}, siteId) {
@@ -1893,6 +2139,8 @@ export function renderCloudflareCarrierConsole() {
           <button id="markTaskDone" class="secondary">Mark Done</button>
           <button id="updateTask" class="secondary">Update Task</button>
         </div>
+        <h3>Task Lifecycle Summary</h3>
+        <div id="taskLifecycleSummary" class="evidence-summary"><div class="empty">No task lifecycle loaded.</div></div>
         <h3>Task Focus Detail</h3>
         <div id="taskFocusDetail" class="evidence-summary"><div class="empty">No task selected.</div></div>
         <div id="tasks" class="tasks"><div class="empty">No tasks loaded.</div></div>
@@ -2525,6 +2773,7 @@ export function renderCloudflareCarrierConsole() {
       if (tasks.length === 0) {
         state.taskFocus = null;
         el('tasks').innerHTML = '<div class="empty">No tasks yet.</div>';
+        renderTaskLifecycleSummary(tasks);
         renderTaskFocusDetail();
         updateControlRoom();
         return;
@@ -2541,8 +2790,43 @@ export function renderCloudflareCarrierConsole() {
         node.append(title, meta);
         return node;
       }));
+      renderTaskLifecycleSummary(tasks);
       renderTaskFocusDetail();
       updateControlRoom();
+    }
+    function taskLifecycleStatus(task = {}) {
+      const status = String(task.status || '').toLowerCase();
+      if (status === 'open' || status === 'todo' || status === 'pending') return 'open';
+      if (status === 'done' || status === 'resolved' || status === 'closed') return 'closed';
+      return status || 'unknown';
+    }
+    function taskLifecycleSummary(tasks = []) {
+      const counts = tasks.reduce((next, task) => {
+        const status = taskLifecycleStatus(task);
+        if (status === 'open') next.open += 1;
+        else if (status === 'closed') next.closed += 1;
+        else next.other += 1;
+        return next;
+      }, { open: 0, closed: 0, other: 0 });
+      const focusStatus = state.taskFocus ? taskLifecycleStatus(state.taskFocus) : 'none';
+      const nextAction = !state.taskFocus ? 'select_task'
+        : focusStatus === 'open' ? 'mark_done_or_update'
+        : focusStatus === 'closed' ? 'reopen_or_inspect_evidence'
+        : 'normalize_status_or_update';
+      return [
+        ['Open', counts.open],
+        ['Closed', counts.closed],
+        ['Other', counts.other],
+        ['Focused Status', focusStatus],
+        ['Next Action', nextAction],
+      ];
+    }
+    function renderTaskLifecycleSummary(tasks = state.operationProduct?.tasks || []) {
+      if (!tasks.length) {
+        el('taskLifecycleSummary').innerHTML = '<div class="empty">No task lifecycle loaded.</div>';
+        return;
+      }
+      el('taskLifecycleSummary').replaceChildren(...taskLifecycleSummary(tasks).map(([label, value]) => evidenceField(label, value)));
     }
     function taskFocusContext(task = {}) {
       return [
