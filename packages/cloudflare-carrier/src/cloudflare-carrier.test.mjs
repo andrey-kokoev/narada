@@ -1072,6 +1072,15 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Control Posture/);
   assert.match(html, /Active Work Path/);
   assert.match(html, /Session Evidence Posture/);
+  assert.match(html, /Evidence Replay/);
+  assert.match(html, /evidenceReplayStatus/);
+  assert.match(html, /evidenceReplayStatus\(/);
+  assert.match(html, /evidenceReplaySources/);
+  assert.match(html, /evidenceReplaySessionSummary/);
+  assert.match(html, /renderEvidenceReplayMetric/);
+  assert.match(html, /Evidence Replay State/);
+  assert.match(html, /Evidence Replay Source/);
+  assert.match(html, /Evidence Replay Sessions/);
   assert.match(html, /provider_events/);
   assert.match(html, /session_next_action/);
   assert.match(html, /Authority Posture/);

@@ -4452,6 +4452,7 @@ export function renderCloudflareCarrierConsole() {
         <div class="metric"><b>Sessions</b><span id="sessionCount">0</span></div>
         <div class="metric"><b>Tasks</b><span id="taskCount">0</span></div>
         <div class="metric"><b>Evidence</b><span id="evidenceCount">0</span></div>
+        <div class="metric"><b>Evidence Replay</b><span id="evidenceReplayStatus">unknown</span></div>
         <div class="metric"><b>Authority</b><span id="authorityCount">0</span></div>
         <div class="metric"><b>Continuity</b><span id="continuityCount">0</span></div>
         <div class="metric"><b>Provider</b><span id="provider">unknown</span></div>
@@ -5073,6 +5074,7 @@ export function renderCloudflareCarrierConsole() {
     }
     function productScopeContext(product = state.operationProduct || {}) {
       const surface = product.operation_product_surface || {};
+      const evidenceStatus = evidenceReplayStatus(product) || {};
       const scope = state.productScope || 'none';
       const followUp = scope === 'operation'
         ? 'read_site_scope_for_membership_and_operations'
@@ -5087,6 +5089,9 @@ export function renderCloudflareCarrierConsole() {
         ['Tasks', String(surface.task_count ?? (product.tasks || []).length)],
         ['Authority Events', String((product.authority_events || []).length)],
         ['Evidence Groups', String(surface.carrier_evidence_count ?? (product.carrier_evidence || []).length)],
+        ['Evidence Replay State', evidenceStatus.state || 'unknown'],
+        ['Evidence Replay Source', evidenceReplaySources(product)],
+        ['Evidence Replay Sessions', evidenceReplaySessionSummary(evidenceStatus)],
         ['Follow Up', followUp],
       ];
     }
@@ -5587,6 +5592,7 @@ export function renderCloudflareCarrierConsole() {
     }
     function operationFlightDeckContext(product = {}) {
       const surface = product.operation_product_surface || {};
+      const evidenceStatus = evidenceReplayStatus(product) || {};
       const activeSession = el('sessionId').value.trim();
       const openAttention = state.attentionItems.filter((item) => item.status !== 'resolved');
       const unresolvedAuthority = (product.site_authority?.decisions || []).filter((decision) => decision.action !== 'admit');
@@ -5609,6 +5615,9 @@ export function renderCloudflareCarrierConsole() {
         ['Open Tasks', String(openTasks.length) + ' / ' + (product.tasks || []).length],
         ['Directive Deliveries', String(directiveDeliveries.length)],
         ['Evidence Loaded', String(surface.carrier_evidence_count ?? (product.carrier_evidence || []).length) + ' groups / ' + state.events.length + ' events'],
+        ['Evidence Replay State', evidenceStatus.state || 'unknown'],
+        ['Evidence Replay Source', evidenceReplaySources(product)],
+        ['Evidence Replay Sessions', evidenceReplaySessionSummary(evidenceStatus)],
         ['Authority Posture', unresolvedAuthority.length === 0 ? 'no unresolved decisions' : String(unresolvedAuthority.length) + ' unresolved'],
         ['Next Action', nextAction],
       ];
@@ -8170,6 +8179,7 @@ export function renderCloudflareCarrierConsole() {
       el('sessionCount').textContent = String((product.sessions || []).length);
       el('taskCount').textContent = String((product.tasks || []).length);
       el('evidenceCount').textContent = String((product.carrier_evidence || []).length);
+      renderEvidenceReplayMetric(product);
       el('authorityCount').textContent = String((product.authority_events || []).length);
       el('continuityCount').textContent = String((product.site_continuity_packets || []).length);
       renderTasks(product.tasks || []);
@@ -8257,6 +8267,7 @@ export function renderCloudflareCarrierConsole() {
       el('sessionCount').textContent = String(surface.session_count ?? (product.sessions || []).length);
       el('taskCount').textContent = String(surface.task_count ?? (product.tasks || []).length);
       el('evidenceCount').textContent = String(surface.carrier_evidence_count ?? (product.carrier_evidence || []).length);
+      renderEvidenceReplayMetric(product);
       el('authorityCount').textContent = String((product.authority_events || []).length + (product.site_authority?.decisions || []).length);
       el('continuityCount').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length);
       renderTasks(product.tasks || []);
@@ -8362,6 +8373,30 @@ export function renderCloudflareCarrierConsole() {
       if (value == null || value === '') return 'none';
       if (typeof value === 'string') return value.length > 220 ? value.slice(0, 217) + '...' : value;
       return JSON.stringify(value);
+    }
+    function evidenceReplayStatus(product = state.operationProduct || {}) {
+      return product.operation_product_surface?.carrier_evidence_read_status
+        || product.carrier_evidence_read_status
+        || product.site_product_status?.carrier_evidence_read_status
+        || null;
+    }
+    function evidenceReplaySources(product = state.operationProduct || {}) {
+      const sources = [...new Set((product.carrier_evidence || []).map((entry) => entry.source || 'cloudflare-durable-object'))];
+      return sources.join(', ') || 'none';
+    }
+    function evidenceReplaySessionSummary(status = evidenceReplayStatus() || {}) {
+      if (!status) return 'unknown';
+      return [
+        'readable=' + (status.readable_session_count ?? 0),
+        'missing=' + (status.missing_session_count ?? 0),
+        'failed=' + (status.failed_session_count ?? 0),
+      ].join(' / ');
+    }
+    function renderEvidenceReplayMetric(product = state.operationProduct || {}) {
+      const status = evidenceReplayStatus(product);
+      el('evidenceReplayStatus').textContent = status
+        ? [status.state || 'unknown', evidenceReplaySources(product)].filter(Boolean).join(' / ')
+        : 'unknown';
     }
     function evidenceField(label, value) {
       const node = document.createElement('div');

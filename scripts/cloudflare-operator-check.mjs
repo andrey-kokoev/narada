@@ -513,6 +513,15 @@ assert.match(consoleCheck.body, /inspect_session_evidence/);
 assert.match(consoleCheck.body, /Active Session Detail/);
 assert.match(consoleCheck.body, /activeSessionDetail/);
 assert.match(consoleCheck.body, /renderActiveSessionDetail/);
+assert.match(consoleCheck.body, /Evidence Replay/);
+assert.match(consoleCheck.body, /evidenceReplayStatus/);
+assert.match(consoleCheck.body, /evidenceReplayStatus\(/);
+assert.match(consoleCheck.body, /evidenceReplaySources/);
+assert.match(consoleCheck.body, /evidenceReplaySessionSummary/);
+assert.match(consoleCheck.body, /renderEvidenceReplayMetric/);
+assert.match(consoleCheck.body, /Evidence Replay State/);
+assert.match(consoleCheck.body, /Evidence Replay Source/);
+assert.match(consoleCheck.body, /Evidence Replay Sessions/);
 assert.match(consoleCheck.body, /Focus Task Evidence/);
 assert.match(consoleCheck.body, /Task Lifecycle Summary/);
 assert.match(consoleCheck.body, /taskLifecycleSummary/);
@@ -741,6 +750,8 @@ assert.equal(siteRead.body.ok, true);
 assert.equal((siteRead.body.site?.site_id ?? siteRead.body.site_id), siteId);
 assert.equal(siteRead.body.site_product_status?.schema, 'narada.cloudflare_site_product_status.v1');
 assert.equal(siteRead.body.site_product_status?.site_id, siteId);
+assert.equal(siteRead.body.site_product_status?.carrier_evidence_read_status?.schema, 'narada.cloudflare_carrier_evidence_read_status.v1');
+assert.match(siteRead.body.site_product_status.carrier_evidence_read_status.state, /^(loaded|degraded|no_sessions)$/);
 const memberships = siteRead.body.product?.memberships ?? siteRead.body.memberships ?? [];
 const currentMembership = siteRead.body.product?.membership ?? siteRead.body.membership ?? null;
 const operations = siteRead.body.product?.operations ?? siteRead.body.operations ?? [];
@@ -767,6 +778,8 @@ const focusedSiteProductStatus = siteList.body.site_product_statuses.find((statu
 assert.ok(focusedSiteProductStatus);
 assert.equal(focusedSiteProductStatus.schema, 'narada.cloudflare_site_product_status.v1');
 assert.match(focusedSiteProductStatus.health, /^(ready|attention|incomplete)$/);
+assert.equal(focusedSiteProductStatus.carrier_evidence_read_status?.schema, 'narada.cloudflare_carrier_evidence_read_status.v1');
+assert.match(focusedSiteProductStatus.carrier_evidence_read_status.state, /^(loaded|degraded|no_sessions)$/);
 assert.ok(Array.isArray(focusedSiteProductStatus.missing));
 assert.ok(Array.isArray(focusedSiteProductStatus.attention));
 assert.equal(siteList.body.site_product_overview?.schema, 'narada.cloudflare_site_product_overview.v1');
@@ -793,9 +806,12 @@ assert.equal(operationRead.body.operation?.status, 'active');
 assert.equal(operationRead.body.sessions?.some((session) => session.carrier_session_id === smoke.carrier_session_id), true);
 assert.equal(operationRead.body.tasks?.some((task) => task.carrier_session_id === smoke.carrier_session_id), true);
 assert.equal(operationRead.body.carrier_evidence?.some((entry) => entry.carrier_session_id === smoke.carrier_session_id && entry.ok === true), true);
+assert.equal(operationRead.body.carrier_evidence_read_status?.schema, 'narada.cloudflare_carrier_evidence_read_status.v1');
+assert.match(operationRead.body.carrier_evidence_read_status.state, /^(loaded|degraded|no_sessions)$/);
 assert.equal(operationRead.body.operation_product_surface?.operation_id, operationId);
 assert.ok(operationRead.body.operation_product_surface?.session_count >= 1);
 assert.ok(operationRead.body.operation_product_surface?.task_count >= 1);
+assert.deepEqual(operationRead.body.operation_product_surface.carrier_evidence_read_status, operationRead.body.carrier_evidence_read_status);
 
 const liveCommandStates = commandStatesForOperationProduct(operationRead.body, { session_id: smoke.carrier_session_id });
 const focusedMembership = currentMembership ?? memberships[0] ?? null;
@@ -943,6 +959,7 @@ const report = {
     continuity_packet_count: operationSurface.continuity_packet_count,
     continuity_status: operationSurface.continuity_status,
     lifecycle_status: operationSurface.lifecycle_status,
+    carrier_evidence_read_status: operationRead.body.carrier_evidence_read_status,
     smoke_session_bound: operationRead.body.sessions.some((session) => session.carrier_session_id === smoke.carrier_session_id),
   },
   command_states: liveCommandStates,
