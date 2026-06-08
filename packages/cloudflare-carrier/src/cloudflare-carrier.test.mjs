@@ -1479,6 +1479,9 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /operationPostureRouteStage/);
   assert.match(html, /operation_posture/);
   assert.match(html, /focus_next_operation/);
+  assert.match(html, /operationWorkflowRouteStage/);
+  assert.match(html, /operation_workflow/);
+  assert.match(html, /applyOperationWorkflowRouteAction/);
   assert.match(html, /renderOperatorRoute/);
   assert.match(html, /applyOperatorRouteNextAction/);
   assert.match(html, /operatorRouteNextAction/);

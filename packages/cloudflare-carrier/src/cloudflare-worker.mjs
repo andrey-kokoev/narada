@@ -10014,6 +10014,36 @@ export function renderCloudflareCarrierConsole() {
         action: () => run(focusNextOperationFromPosture),
       };
     }
+    function operationWorkflowRouteStage(product = state.operationProduct || {}) {
+      const provided = product.operation_workflow_route || product.operation_product_surface?.operation_workflow_route || null;
+      if (provided?.schema === 'narada.cloudflare_operation_workflow_route.v1') {
+        return { ...provided, action: () => applyOperationWorkflowRouteAction(provided, product) };
+      }
+      return {
+        domain: 'operation_workflow',
+        command_state: 'operation_workflow_unloaded',
+        command_action: 'read_operation_scope',
+        next_action: 'read_operation_scope',
+        target: product.operation?.operation_id || el('operationId').value.trim() || 'none',
+        status: 'needs_attention',
+        action: () => run(refreshOperation),
+      };
+    }
+    function applyOperationWorkflowRouteAction(route = operationWorkflowRouteStage(), product = state.operationProduct || {}) {
+      const action = String(route.next_action || route.command_action || '');
+      if (action === 'select_operation') { focusSiteOperation(); return; }
+      if (action === 'review_persistence_posture') { renderPersistencePosture(product); return; }
+      if (action === 'review_recovery_posture') { renderRecoveryPosture(product); return; }
+      if (action === 'start_or_select_session') { focusOperationSession(); return; }
+      if (action === 'read_operation_evidence') { run(refreshOperation); return; }
+      if (action === 'review_continuity_packet') { applyContinuityWorkflowNextStep(); return; }
+      if (action === 'review_continuity_loop_report') { focusContinuityLoopReport(product); return; }
+      if (action === 'review_carrier_evidence_replay') { focusRecoveryEvidence(product); return; }
+      if (action === 'review_directive_delivery') { focusWebhookDelayDirectiveDelivery(); return; }
+      if (action === 'focus_open_task') { applyFlightDeckNextAction(); return; }
+      if (action === 'start_resident_dispatch') { run(startResidentDispatchFromWorkbench); return; }
+      run(refreshOperation);
+    }
     function operatorRouteStages(product = state.operationProduct || {}) {
       const evidenceContext = evidenceActionSummaryContext(state.evidenceFocus);
       const evidenceStage = evidenceContext.length > 0
@@ -10034,6 +10064,7 @@ export function renderCloudflareCarrierConsole() {
           else focusMembershipAuthority();
         }),
         operationPostureRouteStage(product),
+        operationWorkflowRouteStage(product),
         operatorRouteStage('operation', operationActionContext(), ['inspect_operation_evidence', 'evidence_ready'], 'Operation', () => {
           const action = String(contextValue(operationActionContext(), 'Next Action'));
           if (action === 'read_operation_scope' || action === 'read_operation_evidence') run(refreshOperation);
