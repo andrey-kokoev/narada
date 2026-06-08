@@ -670,6 +670,15 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /operationFlightDeckContext/);
   assert.match(html, /renderOperationFlightDeck/);
   assert.match(html, /Next Action/);
+  assert.match(html, /operationFlightDeckTargets/);
+  assert.match(html, /applyFlightDeckNextAction/);
+  assert.match(html, /flightDeckNextAction/);
+  assert.match(html, /flightDeckFocusSession/);
+  assert.match(html, /flightDeckFocusAttention/);
+  assert.match(html, /flightDeckFocusTask/);
+  assert.match(html, /flightDeckFocusAuthority/);
+  assert.match(html, /flightDeckFocusEvidence/);
+  assert.match(html, /Focus Next Action/);
   assert.match(html, /Runtime Posture/);
   assert.match(html, /runtimePostureDetail/);
   assert.match(html, /runtimePostureContext/);
@@ -791,6 +800,8 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /visibleEvents/);
   assert.match(html, /focusEvidence/);
   assert.match(html, /focusEvidenceFor/);
+  assert.match(html, /setEvidenceLane/);
+  assert.match(html, /selectAttentionItem/);
   assert.match(html, /renderEvidenceFocus/);
   assert.match(html, /eventTitle/);
   assert.match(html, /event selected/);

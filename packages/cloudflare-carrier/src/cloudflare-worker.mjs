@@ -2459,12 +2459,67 @@ export function renderCloudflareCarrierConsole() {
         ['Next Action', nextAction],
       ];
     }
+    function operationFlightDeckTargets(product = state.operationProduct || {}) {
+      const activeSession = el('sessionId').value.trim();
+      const sessions = product.sessions || [];
+      const openAttention = state.attentionItems.filter((item) => item.status !== 'resolved');
+      const openTasks = (product.tasks || []).filter((task) => !['done', 'closed', 'resolved'].includes(String(task.status || '').toLowerCase()));
+      const unresolvedAuthority = (product.site_authority?.decisions || []).filter((decision) => decision.action !== 'admit');
+      return {
+        session: sessions.find((session) => session.carrier_session_id === activeSession) || state.sessionFocus || sessions[0] || null,
+        attention: openAttention[0] || state.attentionFocus || state.attentionItems[0] || null,
+        task: openTasks[0] || state.taskFocus || (product.tasks || [])[0] || null,
+        authority: unresolvedAuthority[0] || state.authorityFocus || (product.site_authority?.decisions || [])[0] || null,
+      };
+    }
+    function setEvidenceLane(key) {
+      state.evidenceLane = key;
+      const first = visibleEvents()[0] || null;
+      if (first) focusEvidence(first);
+      else { state.evidenceFocus = null; renderEvidenceFocus(); }
+      renderEvidenceLanes();
+      renderEvents();
+      updateControlRoom();
+    }
+    function focusFlightDeckEvidence() {
+      setEvidenceLane('');
+      const activeSession = el('sessionId').value.trim();
+      focusEvidenceFor((event) => activeSession && event.carrier_session_id === activeSession);
+    }
+    function applyFlightDeckNextAction() {
+      const targets = operationFlightDeckTargets();
+      if (targets.attention && targets.attention.status !== 'resolved') { selectAttentionItem(targets.attention); return; }
+      if (targets.task && !['done', 'closed', 'resolved'].includes(String(targets.task.status || '').toLowerCase())) { selectTask(targets.task); return; }
+      if (targets.session && !el('sessionId').value.trim()) { selectOperationSession(targets.session); return; }
+      if (targets.authority && targets.authority.action !== 'admit') { selectAuthorityDecision(targets.authority); return; }
+      focusFlightDeckEvidence();
+    }
+    function operationFlightDeckButton(id, label, action) {
+      const button = document.createElement('button');
+      button.id = id;
+      button.className = 'secondary';
+      button.textContent = label;
+      button.addEventListener('click', action);
+      return button;
+    }
     function renderOperationFlightDeck(product = state.operationProduct || {}) {
       if (!product.operation && !el('operationId').value.trim()) {
         el('operationFlightDeck').innerHTML = '<div class="empty">No operation product loaded.</div>';
         return;
       }
-      el('operationFlightDeck').replaceChildren(...operationFlightDeckContext(product).map(([label, value]) => evidenceField(label, value)));
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+      actions.style.gridColumn = '1 / -1';
+      const targets = operationFlightDeckTargets(product);
+      actions.append(
+        operationFlightDeckButton('flightDeckNextAction', 'Focus Next Action', applyFlightDeckNextAction),
+        operationFlightDeckButton('flightDeckFocusSession', 'Focus Session', () => { if (targets.session) selectOperationSession(targets.session); }),
+        operationFlightDeckButton('flightDeckFocusAttention', 'Focus Attention', () => { if (targets.attention) selectAttentionItem(targets.attention); }),
+        operationFlightDeckButton('flightDeckFocusTask', 'Focus Task', () => { if (targets.task) selectTask(targets.task); }),
+        operationFlightDeckButton('flightDeckFocusAuthority', 'Focus Authority', () => { if (targets.authority) selectAuthorityDecision(targets.authority); }),
+        operationFlightDeckButton('flightDeckFocusEvidence', 'Focus Evidence', focusFlightDeckEvidence),
+      );
+      el('operationFlightDeck').replaceChildren(...operationFlightDeckContext(product).map(([label, value]) => evidenceField(label, value)), actions);
     }
     function refreshEventKindFilter() {
       const select = el('eventKindFilter');
@@ -2521,14 +2576,7 @@ export function renderCloudflareCarrierConsole() {
         title.textContent = lane.label;
         const meta = document.createElement('span');
         meta.textContent = String(counts.get(lane.key) || 0) + ' events';
-        node.addEventListener('click', () => {
-          state.evidenceLane = lane.key;
-          const first = visibleEvents()[0] || null;
-          if (first) focusEvidence(first);
-          else { state.evidenceFocus = null; renderEvidenceFocus(); }
-          renderEvidenceLanes();
-          renderEvents();
-        });
+        node.addEventListener('click', () => setEvidenceLane(lane.key));
         node.append(title, meta);
         return node;
       }));
@@ -2562,6 +2610,19 @@ export function renderCloudflareCarrierConsole() {
       pre.textContent = JSON.stringify(evidencePayload(state.evidenceFocus), null, 2);
       el('evidenceFocus').replaceChildren(heading, meta, summary, pre);
     }
+    function selectAttentionItem(item) {
+      if (!item?.directive_id) return;
+      state.attentionFocus = item;
+      focusEvidenceFor((event) => event.event_kind === 'directive_emitted' && event.payload?.directive_id === item.directive_id);
+      if (item.carrier_session_id) setCurrentSession(item.carrier_session_id);
+      el('updateTaskStatus').value = 'done';
+      el('updateTaskNote').value = ['resolved_attention', item.directive_id, item.input_event_id, item.reason].filter(Boolean).join(' ');
+      el('eventKindFilter').value = 'directive_emitted';
+      renderAttentionFocusDetail(item);
+      renderAttentionQueue(state.attentionItems);
+      renderEvents();
+      updateControlRoom();
+    }
     function renderAttentionQueue(items = []) {
       state.attentionItems = items;
       if (items.length === 0) {
@@ -2579,17 +2640,7 @@ export function renderCloudflareCarrierConsole() {
         title.textContent = item.status + ' ' + item.directive_id;
         const meta = document.createElement('span');
         meta.textContent = [item.reason, item.operation_id, item.carrier_session_id, item.visibility, item.resolving_task_id].filter(Boolean).join(' | ');
-        node.addEventListener('click', () => {
-          state.attentionFocus = item;
-          focusEvidenceFor((event) => event.event_kind === 'directive_emitted' && event.payload?.directive_id === item.directive_id);
-          if (item.carrier_session_id) setCurrentSession(item.carrier_session_id);
-          el('updateTaskStatus').value = 'done';
-          el('updateTaskNote').value = ['resolved_attention', item.directive_id, item.input_event_id, item.reason].filter(Boolean).join(' ');
-          el('eventKindFilter').value = 'directive_emitted';
-          renderAttentionFocusDetail(item);
-          renderEvents();
-          updateControlRoom();
-        });
+        node.addEventListener('click', () => selectAttentionItem(item));
         node.append(title, meta);
         return node;
       }));
