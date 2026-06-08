@@ -8566,7 +8566,7 @@ export function renderCloudflareCarrierConsole() {
     const classifyCloudflareEvidenceCommandState = ${classifyCloudflareEvidenceCommandState.toString()};
     const classifyCloudflareSiteCommandState = ${classifyCloudflareSiteCommandState.toString()};
     const classifyCloudflareMembershipCommandState = ${classifyCloudflareMembershipCommandState.toString()};
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], siteList: [], siteProductStatuses: [], siteProductOverview: null, sitePostureRoute: null, consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, webhookDelayDirectiveFocus: null, webhookDelayDirectiveDeliveryFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], siteList: [], siteProductStatuses: [], siteProductOverview: null, sitePostureRoute: null, consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, webhookDelayDirectiveFocus: null, webhookDelayDirectiveDeliveryFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null, siteFileChangeProposalFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -9026,6 +9026,11 @@ export function renderCloudflareCarrierConsole() {
       const authorityEvidenceCount = authorityEvidenceEvents(product).length;
       const taskSummary = taskLifecycleSummary(product.tasks || []);
       const surface = product.operation_product_surface || {};
+      const siteFileChangeProposals = product.site_file_change_proposals || [];
+      const siteFileChangeProposalFocus = state.siteFileChangeProposalFocus || siteFileChangeProposals[0] || null;
+      const siteFileChangeProposalFile = siteFileChangeProposalFocus?.record?.proposal?.files?.[0]
+        || siteFileChangeProposalFocus?.proposal?.files?.[0]
+        || null;
       const controlDomain = contextValue(control, 'Domain') || 'none';
       const controlAction = contextValue(control, 'Action') || 'none';
       const controlTarget = contextValue(control, 'Target') || 'none';
@@ -9047,6 +9052,7 @@ export function renderCloudflareCarrierConsole() {
           listItem('task_focus', taskFocus ? [taskFocus.task_id, taskFocus.status].filter(Boolean).join(' / ') : 'none'),
           listItem('authority_focus', authorityFocus ? [authorityFocus.mutation_class || authorityFocus.event_kind || 'authority', authorityFocus.action || authorityFocus.authority_locus || 'unknown'].join(' / ') : 'none'),
           listItem('evidence_focus', evidenceFocus ? eventTitle(evidenceFocus) : 'none'),
+          listItem('site_file_change_proposal_focus', siteFileChangeProposalFocus?.proposal_id || 'none'),
         ],
         posture: [
           listItem('readiness', contextValue(control, 'Readiness') || operationWorkbenchReadiness(product)),
@@ -9065,6 +9071,7 @@ export function renderCloudflareCarrierConsole() {
           listItem('sessions_needing_action', sessionQueue.filter((item) => item.status !== 'ready').length + ' / ' + sessionQueue.length),
           listItem('open_tasks', openTasks.length + ' / ' + (product.tasks || []).length),
           listItem('authority_needing_action', authorityQueue.filter((item) => item.status !== 'ready').length + ' / ' + authorityQueue.length),
+          listItem('site_file_change_proposals', siteFileChangeProposals.length + ' / ' + String(surface.site_file_change_proposal_count ?? siteFileChangeProposals.length)),
         ],
         evidence: [
           listItem('events_loaded', String(state.events.length)),
@@ -9078,6 +9085,7 @@ export function renderCloudflareCarrierConsole() {
           listItem('task', state.taskFocus ? [state.taskFocus.task_id, state.taskFocus.status].filter(Boolean).join(' / ') : 'none'),
           listItem('authority', authorityFocus ? [authorityFocus.mutation_class || authorityFocus.event_kind || 'authority', authorityFocus.action || authorityFocus.authority_locus || 'unknown'].join(' / ') : 'none'),
           listItem('evidence', state.evidenceFocus ? eventTitle(state.evidenceFocus) : 'none'),
+          listItem('site_file_change_proposal', siteFileChangeProposalFocus?.proposal_id || 'none'),
         ],
         sessionEvidence: [
           listItem('session', contextValue(sessionPath, 'Session') || 'none'),
@@ -9111,6 +9119,17 @@ export function renderCloudflareCarrierConsole() {
           listItem('mailbox_mutation_admission', surface.mailbox_mutation_admission || 'retained'),
           listItem('mailbox_authority_partition', surface.mailbox_authority_partition || 'mailbox_windows_owned'),
         ],
+        siteFileChangeReview: [
+          listItem('site_file_change_proposal_count', String(surface.site_file_change_proposal_count ?? siteFileChangeProposals.length)),
+          listItem('focused_proposal', siteFileChangeProposalFocus?.proposal_id || 'none'),
+          listItem('focused_file', siteFileChangeProposalFile?.file_path || 'none'),
+          listItem('site_file_change_proposal_authority', surface.site_file_change_proposal_authority || siteFileChangeProposalFocus?.authority_locus || 'not_observed'),
+          listItem('filesystem_executor_authority', surface.filesystem_executor_authority || siteFileChangeProposalFocus?.filesystem_executor_authority || 'retained'),
+          listItem('filesystem_mutation_admission', surface.filesystem_mutation_admission || siteFileChangeProposalFocus?.filesystem_mutation_admission || 'retained'),
+          listItem('repository_publication_admission', surface.repository_publication_admission || siteFileChangeProposalFocus?.repository_publication_admission || 'retained'),
+          listItem('site_file_change_authority_partition', surface.site_file_change_authority_partition || 'filesystem_and_publication_windows_owned'),
+          listItem('site_file_change_next_action', siteFileChangeProposalFocus ? 'review_site_file_change_proposal' : 'monitor_site_file_change_proposals'),
+        ],
         readiness: readinessGaps.length > 0
           ? readinessGaps.slice(0, 4).map((item) => listItem(item.label, item.detail || item.action_label || item.status))
           : [listItem('ready', 'all readiness gates satisfied')],
@@ -9128,6 +9147,7 @@ export function renderCloudflareCarrierConsole() {
         renderListBlock('Authority Posture', board.authority),
         renderListBlock('Task Lifecycle Posture', board.taskLifecycle),
         renderListBlock('Mailbox Status Posture', board.mailboxStatus),
+        renderListBlock('Site File Change Review', board.siteFileChangeReview),
         renderListBlock('Work Queues', board.queues),
         renderListBlock('Evidence Review', board.evidence),
         renderListBlock('Readiness Gaps', board.readiness),
@@ -9429,6 +9449,7 @@ export function renderCloudflareCarrierConsole() {
       const unresolvedAuthority = (product.site_authority?.decisions || []).filter((decision) => decision.action !== 'admit');
       const openTasks = (product.tasks || []).filter((task) => !['done', 'closed', 'resolved'].includes(String(task.status || '').toLowerCase()));
       const directiveDeliveries = product.webhook_delay_directive_deliveries || [];
+      const siteFileChangeProposals = product.site_file_change_proposals || [];
       const nextAction = openAttention[0]
         ? 'resolve attention ' + openAttention[0].directive_id
         : openTasks[0]
@@ -9445,6 +9466,8 @@ export function renderCloudflareCarrierConsole() {
         ['Open Attention', String(openAttention.length) + ' / ' + state.attentionItems.length],
         ['Open Tasks', String(openTasks.length) + ' / ' + (product.tasks || []).length],
         ['Directive Deliveries', String(directiveDeliveries.length)],
+        ['Site File Change Proposals', String(siteFileChangeProposals.length)],
+        ['Site File Change Next Action', siteFileChangeProposals.length > 0 ? 'review_site_file_change_proposal' : 'monitor_site_file_change_proposals'],
         ['Evidence Loaded', String(surface.carrier_evidence_count ?? (product.carrier_evidence || []).length) + ' groups / ' + state.events.length + ' events'],
         ['Evidence Replay State', evidenceStatus.state || 'unknown'],
         ['Evidence Replay Source', evidenceReplaySources(product)],
@@ -9469,6 +9492,7 @@ export function renderCloudflareCarrierConsole() {
       const unresolvedAuthority = (product.site_authority?.decisions || []).filter((decision) => decision.action !== 'admit');
       const directiveIntent = state.webhookDelayDirectiveFocus || (product.webhook_delay_directive_records || [])[0] || null;
       const directiveDelivery = state.webhookDelayDirectiveDeliveryFocus || (product.webhook_delay_directive_deliveries || [])[0] || null;
+      const siteFileChangeProposal = state.siteFileChangeProposalFocus || (product.site_file_change_proposals || [])[0] || null;
       return {
         session: sessions.find((session) => session.carrier_session_id === activeSession) || state.sessionFocus || sessions[0] || null,
         attention: openAttention[0] || state.attentionFocus || state.attentionItems[0] || null,
@@ -9476,6 +9500,7 @@ export function renderCloudflareCarrierConsole() {
         authority: unresolvedAuthority[0] || state.authorityFocus || (product.site_authority?.decisions || [])[0] || null,
         directiveIntent,
         directiveDelivery,
+        siteFileChangeProposal,
       };
     }
     function setEvidenceLane(key) {
@@ -9507,6 +9532,7 @@ export function renderCloudflareCarrierConsole() {
       if (targets.authority && targets.authority.action !== 'admit') { selectAuthorityDecision(targets.authority); return; }
       if (targets.directiveDelivery) { selectWebhookDelayDirectiveDelivery(targets.directiveDelivery); return; }
       if (targets.directiveIntent) { selectWebhookDelayDirective(targets.directiveIntent); return; }
+      if (targets.siteFileChangeProposal) { selectSiteFileChangeProposal(targets.siteFileChangeProposal); return; }
       focusFlightDeckEvidence();
     }
     function operationFlightDeckButton(id, label, action) {
@@ -9534,6 +9560,7 @@ export function renderCloudflareCarrierConsole() {
         operationFlightDeckButton('flightDeckFocusAuthority', 'Focus Authority', () => { if (targets.authority) selectAuthorityDecision(targets.authority); }),
         operationFlightDeckButton('flightDeckFocusDirectiveIntent', 'Focus Directive Intent', () => { if (targets.directiveIntent) selectWebhookDelayDirective(targets.directiveIntent); }),
         operationFlightDeckButton('flightDeckFocusDirectiveDelivery', 'Focus Directive Delivery', () => { if (targets.directiveDelivery) selectWebhookDelayDirectiveDelivery(targets.directiveDelivery); }),
+        operationFlightDeckButton('flightDeckFocusSiteFileChangeProposal', 'Focus File Change Proposal', () => { if (targets.siteFileChangeProposal) selectSiteFileChangeProposal(targets.siteFileChangeProposal); }),
         operationFlightDeckButton('flightDeckFocusEvidenceChain', 'Focus Evidence Chain', focusFlightDeckEvidenceChain),
         operationFlightDeckButton('flightDeckFocusEvidence', 'Focus Evidence', focusFlightDeckEvidence),
       );
@@ -11803,6 +11830,13 @@ export function renderCloudflareCarrierConsole() {
       renderTaskCommandPreview();
       renderTaskLifecycleControl(task);
       renderWebhookDelayEvidenceChain();
+      updateControlRoom();
+    }
+    function selectSiteFileChangeProposal(proposal) {
+      if (!proposal?.proposal_id) return;
+      state.siteFileChangeProposalFocus = proposal;
+      renderOperationControlBoard(state.operationProduct || {});
+      renderOperationFlightDeck(state.operationProduct || {});
       updateControlRoom();
     }
     async function updateFocusedTask(status, note = null) {

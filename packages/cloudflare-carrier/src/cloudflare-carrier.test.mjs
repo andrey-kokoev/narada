@@ -1579,6 +1579,7 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Authority Posture/);
   assert.match(html, /Task Lifecycle Posture/);
   assert.match(html, /Mailbox Status Posture/);
+  assert.match(html, /Site File Change Review/);
   assert.match(html, /focused_status/);
   assert.match(html, /next_task/);
   assert.match(html, /mailbox_status_shadow_read_count/);
@@ -1587,6 +1588,18 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /mailbox_send_admission/);
   assert.match(html, /mailbox_mutation_admission/);
   assert.match(html, /mailbox_authority_partition/);
+  assert.match(html, /site_file_change_proposal_focus/);
+  assert.match(html, /site_file_change_proposal_count/);
+  assert.match(html, /site_file_change_proposal_authority/);
+  assert.match(html, /filesystem_executor_authority/);
+  assert.match(html, /filesystem_mutation_admission/);
+  assert.match(html, /repository_publication_admission/);
+  assert.match(html, /site_file_change_authority_partition/);
+  assert.match(html, /site_file_change_next_action/);
+  assert.match(html, /review_site_file_change_proposal/);
+  assert.match(html, /selectSiteFileChangeProposal/);
+  assert.match(html, /flightDeckFocusSiteFileChangeProposal/);
+  assert.match(html, /Focus File Change Proposal/);
   assert.match(html, /controlled_action/);
   assert.match(html, /authority_evidence/);
   assert.match(html, /Readiness Gaps/);
