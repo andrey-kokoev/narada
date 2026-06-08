@@ -2472,7 +2472,14 @@ async function checkHumanOperatorSession({ workerUrl, siteId, operatorCookieFile
   if (!cookieHeader) fail('cloudflare_operator_cookie_file_empty', { operator_cookie_file: operatorCookieFile });
 
   const session = await getOperatorSession(workerUrl, cookieHeader);
-  if (session.http_status === 401 && !required) {
+  if (session.http_status === 401) {
+    if (required) {
+      fail('cloudflare_operator_session_unauthenticated', {
+        operator_cookie_file: operatorCookieFile,
+        microsoft_login_url: new URL('/auth/microsoft/login', withTrailingSlash(workerUrl)).toString(),
+        remediation: 'refresh_operator_session_with_pnpm_cloudflare_operator_login',
+      });
+    }
     return {
       status: 'unauthenticated',
       membership_status: 'not_checked',
