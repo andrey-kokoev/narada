@@ -1277,6 +1277,34 @@ assert.equal(mailboxStatusShadowSmoke.mailbox_mutation_admission, 'not_admitted'
 assert.ok(mailboxStatusShadowSmoke.mailbox_status_shadow_read_count >= 1);
 assert.equal(mailboxStatusShadowSmoke.mailbox_authority_partition, 'mailbox_status_shadow_read_cloudflare_recorded_send_and_mutation_windows_owned');
 
+const mailboxSourceAccount = process.env.CLOUDFLARE_GRAPH_MAILBOX_ID ?? process.env.GRAPH_MAILBOX_ID ?? process.env.MAILBOX_ID ?? '';
+let mailboxStatusSourceSmoke = null;
+if (mailboxSourceAccount) {
+  mailboxStatusSourceSmoke = await runJsonCommand('mailbox:status-source-smoke:live', [
+    'node',
+    'packages/cloudflare-carrier/scripts/cloudflare-carrier-mailbox-status-source-live-smoke.mjs',
+    '--url',
+    workerUrl,
+    '--token-file',
+    tokenFile,
+    '--site',
+    siteId,
+    '--operation',
+    operationId,
+    '--account',
+    mailboxSourceAccount,
+  ]);
+  assert.equal(mailboxStatusSourceSmoke.status, 'ok');
+  assert.equal(mailboxStatusSourceSmoke.worker_url, workerUrl);
+  assert.equal(mailboxStatusSourceSmoke.site_id, siteId);
+  assert.equal(mailboxStatusSourceSmoke.operation_id, operationId);
+  assert.equal(mailboxStatusSourceSmoke.mailbox_status_authority, 'cloudflare_graph_mailbox_status_source');
+  assert.equal(mailboxStatusSourceSmoke.mailbox_send_admission, 'not_admitted');
+  assert.equal(mailboxStatusSourceSmoke.mailbox_mutation_admission, 'not_admitted');
+  assert.ok(mailboxStatusSourceSmoke.mailbox_status_source_read_count >= 1);
+  assert.equal(mailboxStatusSourceSmoke.mailbox_authority_partition, 'mailbox_status_source_read_cloudflare_owned_send_and_mutation_not_admitted');
+}
+
 const siteFileChangeProposalSmoke = await runJsonCommand('site-file-change:proposal-smoke:live', [
   'node',
   'packages/cloudflare-carrier/scripts/cloudflare-carrier-site-file-change-proposal-live-smoke.mjs',
