@@ -878,6 +878,7 @@ const siteList = await postCarrier(workerUrl, bearerToken, {
   params: {
     limit: 20,
     site_status_limit: 20,
+    focused_site_id: siteId,
   },
 });
 assert.equal(siteList.http_status, 200);
@@ -914,6 +915,7 @@ assert.equal(siteList.body.site_product_overview.next_health, expectedSiteOvervi
 assert.equal(siteList.body.site_product_overview.next_action, expectedSiteOverview.next_action);
 assert.equal(siteList.body.site_product_overview.next_reason, expectedSiteOverview.next_reason);
 const sitePostureRoute = sitePostureRouteInvariant(siteList.body.site_product_overview, siteId);
+assert.deepEqual(siteList.body.site_posture_route, sitePostureRoute);
 assert.match(sitePostureRoute.command_state, /^(site_posture_ready|site_posture_attention)$/);
 assert.match(sitePostureRoute.next_action, /^(monitor_sites|focus_next_site)$/);
 if (sitePostureRoute.status === 'needs_attention') {
@@ -988,6 +990,8 @@ assert.equal(operationPostureOverview.active_operation_id, operationId);
 assert.match(operationPostureOverview.next_status, /^(ready|needs_attention)$/);
 assert.match(operationPostureOverview.next_action, /^(select_or_create_operation|use_focused_operation|read_operation_scope|start_or_select_session|inspect_operation_evidence|read_operation_evidence)$/);
 const operationPostureRoute = operationPostureRouteInvariant(operationPostureOverview, operationId);
+assert.deepEqual(operationRead.body.operation_posture_route, operationPostureRoute);
+assert.deepEqual(operationRead.body.operation_product_surface.operation_posture_route, operationPostureRoute);
 assert.match(operationPostureRoute.command_state, /^(operation_posture_ready|operation_posture_attention)$/);
 assert.match(operationPostureRoute.next_action, /^(monitor_operations|focus_next_operation)$/);
 if (operationPostureRoute.status === 'needs_attention') {
@@ -1085,6 +1089,7 @@ const report = {
     site_read: 'ok',
     site_product_status: 'ok',
     site_list_product_overview: 'ok',
+    site_posture_route: 'ok',
     console_multi_site_surface: 'ok',
     console_continuity_loop_guidance: 'ok',
     local_cloud_continuity_bridge: 'ok',
@@ -1121,6 +1126,7 @@ const report = {
     count: siteList.body.sites.length,
     product_status_count: siteList.body.site_product_statuses.length,
     overview: siteList.body.site_product_overview,
+    route: siteList.body.site_posture_route,
     focused_site_status: focusedSiteProductStatus,
   },
   operation: {
@@ -1404,6 +1410,7 @@ function sitePostureRouteInvariant(overview = {}, focusedSiteId = '') {
     && changesFocus,
   );
   return {
+    schema: 'narada.cloudflare_site_posture_route.v1',
     domain: 'site_posture',
     command_state: needsAttention ? 'site_posture_attention' : 'site_posture_ready',
     status: needsAttention ? 'needs_attention' : 'ready',
@@ -1453,6 +1460,7 @@ function operationPostureRouteInvariant(overview = {}, activeOperationId = '') {
   const changesFocus = nextOperationId && nextOperationId !== activeOperationId;
   const needsAttention = Boolean(overview.operation_count > 0 && overview.next_status !== 'ready' && changesFocus);
   return {
+    schema: 'narada.cloudflare_operation_posture_route.v1',
     domain: 'operation_posture',
     command_state: needsAttention ? 'operation_posture_attention' : 'operation_posture_ready',
     command_action: needsAttention ? 'focus_next_operation' : 'monitor_operations',

@@ -506,6 +506,44 @@ function summarizeCloudflareOperationPostureOverview(operations = [], product = 
   };
 }
 
+function summarizeCloudflareSitePostureRoute(overview = {}, focusedSiteId = '') {
+  const nextSiteId = overview.next_site_id || '';
+  const nextAction = overview.next_action || 'monitor_sites';
+  const changesFocus = nextSiteId && nextSiteId !== focusedSiteId;
+  const needsAttention = Boolean(
+    overview.site_count > 0
+    && nextAction
+    && nextAction !== 'monitor_sites'
+    && changesFocus,
+  );
+  return {
+    schema: 'narada.cloudflare_site_posture_route.v1',
+    domain: 'site_posture',
+    command_state: needsAttention ? 'site_posture_attention' : 'site_posture_ready',
+    command_action: needsAttention ? 'focus_next_site' : 'monitor_sites',
+    next_action: needsAttention ? 'focus_next_site' : 'monitor_sites',
+    target: nextSiteId || 'none',
+    status: needsAttention ? 'needs_attention' : 'ready',
+    reason: overview.next_reason || 'all_sites_monitoring',
+  };
+}
+
+function summarizeCloudflareOperationPostureRoute(overview = {}, activeOperationId = '') {
+  const nextOperationId = overview.next_operation_id || '';
+  const changesFocus = nextOperationId && nextOperationId !== activeOperationId;
+  const needsAttention = Boolean(overview.operation_count > 0 && overview.next_status !== 'ready' && changesFocus);
+  return {
+    schema: 'narada.cloudflare_operation_posture_route.v1',
+    domain: 'operation_posture',
+    command_state: needsAttention ? 'operation_posture_attention' : 'operation_posture_ready',
+    command_action: needsAttention ? 'focus_next_operation' : 'monitor_operations',
+    next_action: needsAttention ? 'focus_next_operation' : 'monitor_operations',
+    target: nextOperationId || 'none',
+    status: needsAttention ? 'needs_attention' : 'ready',
+    reason: overview.next_reason || 'all_operations_monitoring',
+  };
+}
+
 function cloudflareOperationWorkQueueItems(operations = [], product = {}, context = {}) {
   const activeOperationId = context.active_operation_id || product.operation?.operation_id || '';
   return (Array.isArray(operations) ? operations : []).map((operation) => {
@@ -1673,12 +1711,14 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       const projection = await buildCloudflareSiteProductProjection(env, principal, siteRead, params);
       siteProductStatuses.push(projection.site_product_status);
     }
+    const siteProductOverview = summarizeCloudflareSiteProductOverview(siteProductStatuses);
     return {
       status: 200,
       body: {
         ...response,
         site_product_statuses: siteProductStatuses,
-        site_product_overview: summarizeCloudflareSiteProductOverview(siteProductStatuses),
+        site_product_overview: siteProductOverview,
+        site_posture_route: summarizeCloudflareSitePostureRoute(siteProductOverview, params.focused_site_id ?? params.site_id ?? response.sites?.[0]?.site_id ?? ''),
       },
     };
   }
@@ -1764,6 +1804,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       active_operation_id: operation?.operation_id ?? params.operation_id,
       site_id: siteId,
     });
+    const operationPostureRoute = summarizeCloudflareOperationPostureRoute(operationPostureOverview, operation?.operation_id ?? params.operation_id ?? '');
     return {
       status: 200,
       body: {
@@ -1792,6 +1833,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         operation_activity_timeline: operationActivityTimeline,
         operation_lifecycle_status: operationLifecycleStatus,
         operation_posture_overview: operationPostureOverview,
+        operation_posture_route: operationPostureRoute,
         operation_product_surface: {
           schema: 'narada.cloudflare_operation_product_surface.v1',
           operation_id: operation?.operation_id ?? null,
@@ -1811,6 +1853,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           activity_timeline: operationActivityTimeline,
           lifecycle_status: operationLifecycleStatus,
           operation_posture_overview: operationPostureOverview,
+          operation_posture_route: operationPostureRoute,
           webhook_delay_shadow_observation_count: webhookDelayShadowObservations.length,
           webhook_delay_observation_primary_read_count: webhookDelayObservationPrimaryReads.length,
           webhook_delay_scheduled_source_read_count: webhookDelayScheduledSourceReads.length,
@@ -5577,7 +5620,7 @@ export function renderCloudflareCarrierConsole() {
     const classifyCloudflareEvidenceCommandState = ${classifyCloudflareEvidenceCommandState.toString()};
     const classifyCloudflareSiteCommandState = ${classifyCloudflareSiteCommandState.toString()};
     const classifyCloudflareMembershipCommandState = ${classifyCloudflareMembershipCommandState.toString()};
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], siteList: [], siteProductStatuses: [], siteProductOverview: null, consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, webhookDelayDirectiveFocus: null, webhookDelayDirectiveDeliveryFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], siteList: [], siteProductStatuses: [], siteProductOverview: null, sitePostureRoute: null, consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, webhookDelayDirectiveFocus: null, webhookDelayDirectiveDeliveryFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -6320,6 +6363,8 @@ export function renderCloudflareCarrierConsole() {
       };
     }
     function sitePostureRouteStage() {
+      const provided = state.sitePostureRoute || null;
+      if (provided?.schema === 'narada.cloudflare_site_posture_route.v1') return { ...provided, action: focusNextSiteFromOverview };
       const overview = state.siteProductOverview || {};
       const focusedSiteId = focusedSite()?.site_id || el('siteId').value.trim();
       const changesFocus = overview.next_site_id && overview.next_site_id !== focusedSiteId;
@@ -6335,6 +6380,8 @@ export function renderCloudflareCarrierConsole() {
       };
     }
     function operationPostureRouteStage(product = state.operationProduct || {}) {
+      const provided = product.operation_posture_route || product.operation_product_surface?.operation_posture_route || null;
+      if (provided?.schema === 'narada.cloudflare_operation_posture_route.v1') return { ...provided, action: () => run(focusNextOperationFromPosture) };
       const overview = operationPostureOverview(state.operations || [], product);
       const activeOperationId = el('operationId').value.trim();
       const changesFocus = overview.next_operation_id && overview.next_operation_id !== activeOperationId;
@@ -9355,6 +9402,7 @@ export function renderCloudflareCarrierConsole() {
       state.siteList = product.sites || [];
       state.siteProductStatuses = product.site_product_statuses || [];
       state.siteProductOverview = product.site_product_overview || null;
+      state.sitePostureRoute = product.site_posture_route || null;
       renderOperatorIdentity(product.reader_principal || state.operatorPrincipal);
       const overview = state.siteProductOverview || {};
       const health = overview.health_counts || {};

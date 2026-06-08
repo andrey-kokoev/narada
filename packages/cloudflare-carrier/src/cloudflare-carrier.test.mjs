@@ -2043,6 +2043,17 @@ test('worker records webhook delay observations as Cloudflare shadow-read eviden
   assert.equal(operationReadBody.operation_posture_overview.next_action, 'start_or_select_session');
   assert.equal(operationReadBody.operation_posture_overview.next_reason, 'session');
   assert.deepEqual(operationReadBody.operation_product_surface.operation_posture_overview, operationReadBody.operation_posture_overview);
+  assert.deepEqual(operationReadBody.operation_posture_route, {
+    schema: 'narada.cloudflare_operation_posture_route.v1',
+    domain: 'operation_posture',
+    command_state: 'operation_posture_ready',
+    command_action: 'monitor_operations',
+    next_action: 'monitor_operations',
+    target: 'operation_webhook_delay',
+    status: 'ready',
+    reason: 'session',
+  });
+  assert.deepEqual(operationReadBody.operation_product_surface.operation_posture_route, operationReadBody.operation_posture_route);
   assert.equal(operationReadBody.operation_product_surface.continuity_status.schema, 'narada.cloudflare_site_continuity_status.v1');
   assert.equal(operationReadBody.operation_product_surface.continuity_status.state, 'no_packet_observed');
   assert.equal(operationReadBody.operation_product_surface.continuity_status.packet_count, 0);
@@ -2998,6 +3009,16 @@ test('worker site.list exposes product statuses across visible sites', async () 
   assert.equal(listedBody.site_product_overview.next_health, 'attention');
   assert.equal(listedBody.site_product_overview.next_action, 'continuity_packet');
   assert.equal(listedBody.site_product_overview.next_reason, 'continuity_packet');
+  assert.deepEqual(listedBody.site_posture_route, {
+    schema: 'narada.cloudflare_site_posture_route.v1',
+    domain: 'site_posture',
+    command_state: 'site_posture_ready',
+    command_action: 'monitor_sites',
+    next_action: 'monitor_sites',
+    target: 'site_alpha',
+    status: 'ready',
+    reason: 'continuity_packet',
+  });
 });
 
 test('worker operation.create read and list route through site registry authority', async () => {
