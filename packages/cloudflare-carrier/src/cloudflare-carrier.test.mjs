@@ -475,6 +475,7 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Service token/);
   assert.match(html, /Operation ID/);
   assert.match(html, /Operation Sessions/);
+  assert.match(html, /Active Session/);
   assert.match(html, /operation_narada_cloudflare_control/);
   assert.match(html, /Optional when signed in/);
   assert.match(html, /Use Session/);
@@ -513,6 +514,12 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Update Task/);
   assert.match(html, /updateTask/);
   assert.match(html, /setCurrentSession/);
+  assert.match(html, /loadWorkbenchState/);
+  assert.match(html, /saveWorkbenchState/);
+  assert.match(html, /narada\.cloudflare\.operationWorkbench\.v1/);
+  assert.match(html, /console_action_failed/);
+  assert.match(html, /console_operation_autoload_failed/);
+  assert.match(html, /appendConsoleEvidence/);
   assert.match(html, /renderOperationSessions/);
   assert.match(html, /refreshOperation/);
   assert.match(html, /setAutoRefresh/);

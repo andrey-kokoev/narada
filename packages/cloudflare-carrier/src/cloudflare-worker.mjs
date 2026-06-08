@@ -1696,6 +1696,7 @@ export function renderCloudflareCarrierConsole() {
       <div class="status">
         <div class="metric"><b>Site</b><span id="siteStatus">unknown</span></div>
         <div class="metric"><b>Operation</b><span id="operationStatus">unknown</span></div>
+        <div class="metric"><b>Active Session</b><span id="activeSession">none</span></div>
         <div class="metric"><b>Role</b><span id="membershipRole">unknown</span></div>
         <div class="metric"><b>Sessions</b><span id="sessionCount">0</span></div>
         <div class="metric"><b>Tasks</b><span id="taskCount">0</span></div>
@@ -1764,7 +1765,8 @@ export function renderCloudflareCarrierConsole() {
     </section>
   </main>
   <script type="module">
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null };
+    const WORKBENCH_STORAGE_KEY = 'narada.cloudflare.operationWorkbench.v1';
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, consoleSequence: 0 };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -1779,7 +1781,11 @@ export function renderCloudflareCarrierConsole() {
           body: JSON.stringify({ operation, carrier_session_id: carrierSessionId, params, ...extra }),
         });
         const body = await response.json();
-        if (!response.ok || body.ok === false) throw new Error(body.code || body.error || response.statusText);
+        if (!response.ok || body.ok === false) {
+          const error = new Error(body.code || body.error || response.statusText);
+          error.details = { operation, http_status: response.status, body };
+          throw error;
+        }
         return body;
       },
       async session() {
@@ -1825,14 +1831,44 @@ export function renderCloudflareCarrierConsole() {
       },
     };
     window.naradaCloudflareCarrierClient = api;
+    function loadWorkbenchState() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(WORKBENCH_STORAGE_KEY) || '{}');
+        if (saved.site_id) el('siteId').value = saved.site_id;
+        if (saved.operation_id) el('operationId').value = saved.operation_id;
+        if (saved.carrier_session_id) el('sessionId').value = saved.carrier_session_id;
+      } catch {}
+      renderActiveSession();
+    }
+    function saveWorkbenchState() {
+      localStorage.setItem(WORKBENCH_STORAGE_KEY, JSON.stringify({
+        site_id: el('siteId').value.trim(),
+        operation_id: el('operationId').value.trim(),
+        carrier_session_id: el('sessionId').value.trim(),
+      }));
+      renderActiveSession();
+    }
+    function renderActiveSession() {
+      el('activeSession').textContent = el('sessionId').value.trim() || 'none';
+    }
     function setCurrentSession(carrierSessionId) {
       const next = String(carrierSessionId || '').trim();
       if (!next) return;
       el('sessionId').value = next;
       el('operationSessionSelect').value = next;
+      saveWorkbenchState();
       state.events = [];
       state.afterSequence = 0;
       renderEvents();
+    }
+    function appendConsoleEvidence(eventKind, payload = {}) {
+      state.consoleSequence += 1;
+      appendEvents([{
+        carrier_session_id: el('sessionId').value.trim() || 'console',
+        sequence: state.afterSequence + state.consoleSequence / 1000,
+        event_kind: eventKind,
+        payload,
+      }]);
     }
     function eventKey(event) {
       return (event.carrier_session_id || el('sessionId').value.trim()) + ':' + event.sequence;
@@ -1841,7 +1877,8 @@ export function renderCloudflareCarrierConsole() {
       for (const event of events) {
         if (state.events.some((existing) => eventKey(existing) === eventKey(event))) continue;
         state.events.push(event);
-        state.afterSequence = Math.max(state.afterSequence, Number(event.sequence || 0));
+        const sequence = Number(event.sequence || 0);
+        if (Number.isInteger(sequence)) state.afterSequence = Math.max(state.afterSequence, sequence);
       }
       renderEvents();
     }
@@ -2035,6 +2072,12 @@ export function renderCloudflareCarrierConsole() {
     function evidencePayload(event) {
       const payload = event.payload || {};
       const evidence = {
+        code: payload.code,
+        message: payload.message,
+        operation: payload.operation,
+        http_status: payload.http_status,
+        site_registry_reason: payload.site_registry_reason,
+        site_authority_decision: payload.site_authority_decision,
         provider: payload.provider_adapter_kind || payload.provider_request_status || payload.provider_execution_enabled,
         tool_name: payload.tool_name,
         status: payload.status,
@@ -2075,6 +2118,7 @@ export function renderCloudflareCarrierConsole() {
       return status;
     }
     async function refreshOperation() {
+      saveWorkbenchState();
       const body = await api.readOperation();
       renderOperationProduct(body);
       appendEvents((body.carrier_evidence || []).flatMap((entry) => entry.events || []));
@@ -2088,7 +2132,17 @@ export function renderCloudflareCarrierConsole() {
     }
     async function run(action) {
       el('error').textContent = '';
-      try { await action(); } catch (error) { el('error').textContent = error.message; }
+      try { await action(); } catch (error) {
+        el('error').textContent = error.message;
+        appendConsoleEvidence('console_action_failed', {
+          message: error.message,
+          operation: error.details?.operation,
+          http_status: error.details?.http_status,
+          code: error.details?.body?.code,
+          site_registry_reason: error.details?.body?.site_registry_reason,
+          site_authority_decision: error.details?.body?.site_authority_decision,
+        });
+      }
     }
     function setAutoRefresh(enabled) {
       if (state.autoRefreshTimer) clearInterval(state.autoRefreshTimer);
@@ -2097,6 +2151,9 @@ export function renderCloudflareCarrierConsole() {
       el('autoRefreshOperation').textContent = enabled ? 'Auto Refresh On' : 'Auto Refresh';
     }
     el('signInMicrosoft').addEventListener('click', () => { window.location.href = '/auth/microsoft/login'; });
+    el('siteId').addEventListener('change', saveWorkbenchState);
+    el('operationId').addEventListener('change', saveWorkbenchState);
+    el('sessionId').addEventListener('change', saveWorkbenchState);
     el('useSelectedSession').addEventListener('click', () => setCurrentSession(el('operationSessionSelect').value));
     el('operationSessionSelect').addEventListener('change', () => setCurrentSession(el('operationSessionSelect').value));
     el('start').addEventListener('click', () => run(async () => { const body = await api.start(); appendEvents([body.event].filter(Boolean)); await refreshStatus(); await refreshOperation(); }));
@@ -2136,7 +2193,8 @@ export function renderCloudflareCarrierConsole() {
       await refreshOperation();
     }));
     el('send').addEventListener('click', () => run(async () => { const content = el('input').value.trim(); if (!content) return; const body = await api.deliver(content); appendEvents(body.events || []); el('input').value = ''; await refreshStatus(); await refreshOperation(); }));
-    refreshOperatorSession().then(() => refreshOperation()).catch(() => {});
+    loadWorkbenchState();
+    refreshOperatorSession().then(() => refreshOperation()).catch((error) => appendConsoleEvidence('console_operation_autoload_failed', { message: error.message }));
   </script>
 </body>
 </html>`;
