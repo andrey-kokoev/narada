@@ -1594,6 +1594,102 @@ test('worker reads webhook delay observation from Cloudflare remote source adapt
   assert.equal(scheduledOperationReadBody.operation_product_surface.webhook_delay_scheduled_source_read_count, 2);
 });
 
+test('worker reads webhook delay observation from direct remote metric source', async () => {
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{
+      site_id: 'site_fixture',
+      site_ref: 'site://fixture',
+      display_name: 'Fixture Site',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+      created_by_principal_id: 'admin',
+    }],
+    memberships: [{
+      site_id: 'site_fixture',
+      principal_id: 'admin',
+      role: 'owner',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+    operations: [{
+      operation_id: 'operation_webhook_delay',
+      site_id: 'site_fixture',
+      display_name: 'Webhook Delay Operation',
+      operation_kind: 'operating_layer_update',
+      status: 'active',
+      created_by_principal_id: 'admin',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+  });
+  const env = authEnv(fakeDurableObjectNamespace(), {
+    CLOUDFLARE_SITE_REGISTRY_DB: siteDb,
+    CLOUDFLARE_WEBHOOK_DELAY_DIRECT_SOURCE_ALLOW_OPERATOR_URL: '1',
+    CLOUDFLARE_WEBHOOK_DELAY_DIRECT_SOURCE_ADAPTER_ID: 'fixture_direct_metric_source',
+  });
+  const originalFetch = globalThis.fetch;
+  const fetches = [];
+  globalThis.fetch = async (url, init = {}) => {
+    fetches.push({ url: String(url), authorization: init.headers?.authorization ?? null });
+    assert.equal(String(url), 'https://metrics.example.test/webhook-delay.json');
+    return new Response(JSON.stringify({
+      schema: 'narada.sonar.webhook_delay_remote_metric_rows.v1',
+      generated_at: '2026-06-08T07:20:00.000Z',
+      rows: [{
+        id: 1,
+        created_at: '2026-06-08T07:10:00.000Z',
+        delay_minutes: 3,
+        last_event_datetime_that_arrived: '2026-06-08T07:07:00.000Z',
+      }, {
+        id: 2,
+        created_at: '2026-06-08T07:20:00.000Z',
+        delay_minutes: 19,
+        last_event_datetime_that_arrived: '2026-06-08T07:01:00.000Z',
+      }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  try {
+    const read = await worker.fetch(jsonRequest({
+      operation: 'webhook_delay.remote_metric.direct_source.read',
+      request_id: 'request_webhook_delay_direct_metric_source_read',
+      params: {
+        site_id: 'site_fixture',
+        source_url: 'https://metrics.example.test/webhook-delay.json',
+        observation_id: 'webhook_delay_direct_metric_observation_fixture_1',
+        critical_minutes: 15,
+      },
+    }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+    assert.equal(read.status, 200);
+    const readBody = await read.json();
+    assert.equal(fetches.length, 1);
+    assert.equal(readBody.status, 'direct_remote_metric_source_recorded');
+    assert.equal(readBody.schema, 'narada.sonar.cloudflare_webhook_delay_direct_remote_metric_source.v1');
+    assert.equal(readBody.source_authority, 'cloudflare_webhook_delay_direct_remote_metric_source_adapter');
+    assert.equal(readBody.source_material_locus, 'direct_remote_metric_source');
+    assert.equal(readBody.direct_source_url_host, 'metrics.example.test');
+    assert.equal(readBody.direct_source_sample_count, 2);
+    assert.equal(readBody.source_sample_count, 2);
+    assert.equal(readBody.observation.latest.delay_minutes, 19);
+    assert.equal(readBody.classification.state, 'critical');
+    assert.equal(readBody.record.source_material_locus, 'direct_remote_metric_source');
+    assert.equal(readBody.fallback_authority, 'windows_observation_read_fallback');
+
+    const listedSamples = await worker.fetch(jsonRequest({
+      operation: 'webhook_delay.remote_source.samples.list',
+      request_id: 'request_webhook_delay_direct_metric_samples_list',
+      params: { site_id: 'site_fixture', source_adapter_id: 'fixture_direct_metric_source', limit: 10 },
+    }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+    assert.equal(listedSamples.status, 200);
+    const listedSamplesBody = await listedSamples.json();
+    assert.equal(listedSamplesBody.samples.length, 2);
+    assert.equal(listedSamplesBody.samples[0].sample.source_record.direct_source_url_host, 'metrics.example.test');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('worker records webhook delay directive intent as dual-recorded carrier input without delivery', async () => {
   const siteDb = fakeD1SiteRegistryDatabase({
     sites: [{

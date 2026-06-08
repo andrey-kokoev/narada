@@ -41,6 +41,7 @@ const CLOUDFLARE_WEBHOOK_DELAY_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_web
 const CLOUDFLARE_WEBHOOK_DELAY_OBSERVATION_PRIMARY_SCHEMA = 'narada.sonar.cloudflare_webhook_delay_observation_primary_with_windows_fallback.v1';
 const CLOUDFLARE_WEBHOOK_DELAY_REMOTE_SOURCE_SCHEMA = 'narada.sonar.cloudflare_webhook_delay_remote_source_adapter.v1';
 const CLOUDFLARE_WEBHOOK_DELAY_SCHEDULED_SOURCE_READ_SCHEMA = 'narada.sonar.cloudflare_webhook_delay_scheduled_source_read.v1';
+const CLOUDFLARE_WEBHOOK_DELAY_DIRECT_REMOTE_METRIC_SOURCE_SCHEMA = 'narada.sonar.cloudflare_webhook_delay_direct_remote_metric_source.v1';
 const CLOUDFLARE_WEBHOOK_DELAY_DIRECTIVE_DUAL_RECORD_SCHEMA = 'narada.sonar.cloudflare_webhook_delay_directive_dual_record.v1';
 const CLOUDFLARE_WEBHOOK_DELAY_DIRECTIVE_PRIMARY_SCHEMA = 'narada.sonar.cloudflare_webhook_delay_directive_primary_with_windows_fallback.v1';
 const CLOUDFLARE_RESIDENT_LOOP_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_resident_loop_shadow_read.v1';
@@ -48,6 +49,7 @@ const CLOUDFLARE_RESIDENT_DISPATCH_PRIMARY_SCHEMA = 'narada.sonar.cloudflare_res
 const CLOUDFLARE_WEBHOOK_DELAY_SHADOW_MODE = 'cloudflare_shadow_read';
 const CLOUDFLARE_WEBHOOK_DELAY_OBSERVATION_PRIMARY_AUTHORITY = 'cloudflare_primary_observation_read';
 const CLOUDFLARE_WEBHOOK_DELAY_REMOTE_SOURCE_AUTHORITY = 'cloudflare_webhook_delay_remote_source_adapter';
+const CLOUDFLARE_WEBHOOK_DELAY_DIRECT_REMOTE_METRIC_SOURCE_AUTHORITY = 'cloudflare_webhook_delay_direct_remote_metric_source_adapter';
 const CLOUDFLARE_WEBHOOK_DELAY_SCHEDULED_TRIGGER_AUTHORITY = 'cloudflare_cron_trigger';
 const WINDOWS_OBSERVATION_READ_FALLBACK_AUTHORITY = 'windows_observation_read_fallback';
 const CLOUDFLARE_DIRECTIVE_DUAL_RECORD_AUTHORITY = 'cloudflare_directive_dual_recorded';
@@ -481,6 +483,7 @@ function isSiteProductOperation(operation) {
     'webhook_delay.remote_source.samples.put',
     'webhook_delay.remote_source.primary_with_fallback.read',
     'webhook_delay.remote_source.samples.list',
+    'webhook_delay.remote_metric.direct_source.read',
     'webhook_delay.remote_source.scheduled_read.run',
     'webhook_delay.remote_source.scheduled_read.list',
     'webhook_delay.directive.dual_record.record',
@@ -769,6 +772,12 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
     if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
     const result = await readCloudflareWebhookDelayRemoteSourceWithWindowsFallback(env, requestedSiteId, params, principal);
+    return { status: result.ok ? 200 : 400, body: result };
+  }
+  if (body.operation === 'webhook_delay.remote_metric.direct_source.read') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const result = await readCloudflareWebhookDelayDirectRemoteMetricSource(env, requestedSiteId, params, principal);
     return { status: result.ok ? 200 : 400, body: result };
   }
   if (body.operation === 'webhook_delay.remote_source.scheduled_read.run') {
@@ -1631,6 +1640,7 @@ async function putCloudflareWebhookDelayRemoteSourceSamples(env = {}, siteId, pa
 
 async function readCloudflareWebhookDelayRemoteSourceWithWindowsFallback(env = {}, siteId, params = {}, principal = null) {
   const sourceAdapterId = params.source_adapter_id ?? 'sonar_webhook_delay_d1_remote_source_v1';
+  const sourceMaterialLocus = params.source_material_locus ?? 'cloudflare_remote_source_adapter';
   const samples = await listCloudflareWebhookDelayRemoteSourceSamples(env, siteId, sourceAdapterId, params.sample_limit ?? 200);
   if (samples.length === 0) return { ok: false, code: 'webhook_delay_remote_source_samples_missing', source_adapter_id: sourceAdapterId };
   const summary = createWebhookDelaySummaryFromRemoteSourceSamples(siteId, samples, params);
@@ -1639,7 +1649,7 @@ async function readCloudflareWebhookDelayRemoteSourceWithWindowsFallback(env = {
     observation_id: params.observation_id ?? `webhook_delay_remote_source_observation_${safeIdToken(siteId)}_${safeIdToken(sourceAdapterId)}_${safeIdToken(summary.generated_at)}`,
     source_summary_path: null,
     source_locus: 'cloudflare_carrier_site',
-    source_material_locus: 'cloudflare_remote_source_adapter',
+    source_material_locus: sourceMaterialLocus,
     summary,
   }, principal);
   if (!result.ok) return result;
@@ -1648,10 +1658,98 @@ async function readCloudflareWebhookDelayRemoteSourceWithWindowsFallback(env = {
     schema: CLOUDFLARE_WEBHOOK_DELAY_REMOTE_SOURCE_SCHEMA,
     source_adapter_id: sourceAdapterId,
     source_authority: CLOUDFLARE_WEBHOOK_DELAY_REMOTE_SOURCE_AUTHORITY,
-    source_material_locus: 'cloudflare_remote_source_adapter',
+    source_material_locus: sourceMaterialLocus,
     source_sample_count: samples.length,
     source_samples: samples,
   };
+}
+
+async function readCloudflareWebhookDelayDirectRemoteMetricSource(env = {}, siteId, params = {}, principal = null) {
+  const sourceUrl = resolveDirectMetricSourceUrl(env, params);
+  if (!sourceUrl) return { ok: false, code: 'webhook_delay_direct_remote_metric_source_url_missing' };
+  const sourceAdapterId = params.source_adapter_id ?? env.CLOUDFLARE_WEBHOOK_DELAY_DIRECT_SOURCE_ADAPTER_ID ?? 'sonar_webhook_delay_direct_remote_metric_source_v1';
+  const sourceId = params.source_id ?? env.CLOUDFLARE_WEBHOOK_DELAY_DIRECT_SOURCE_ID ?? 'sonar_webhook_delay_direct_remote_metric_source';
+  const fetched = await fetchWebhookDelayDirectMetricSource(env, sourceUrl, params);
+  if (!fetched.ok) return fetched;
+  const samples = createWebhookDelayDirectMetricSourceSamples(siteId, sourceAdapterId, sourceId, sourceUrl, fetched.body, params);
+  if (!samples.ok) return samples;
+  const put = await putCloudflareWebhookDelayRemoteSourceSamples(env, siteId, { source_adapter_id: sourceAdapterId, samples: samples.samples }, principal);
+  if (!put.ok) return put;
+  const read = await readCloudflareWebhookDelayRemoteSourceWithWindowsFallback(env, siteId, {
+    ...params,
+    source_adapter_id: sourceAdapterId,
+    source_material_locus: 'direct_remote_metric_source',
+    observation_id: params.observation_id ?? `webhook_delay_direct_remote_metric_observation_${safeIdToken(siteId)}_${safeIdToken(sourceAdapterId)}_${safeIdToken(samples.generated_at)}`,
+    generated_at: params.generated_at ?? samples.generated_at,
+  }, principal);
+  if (!read.ok) return read;
+  return {
+    ...read,
+    schema: CLOUDFLARE_WEBHOOK_DELAY_DIRECT_REMOTE_METRIC_SOURCE_SCHEMA,
+    status: 'direct_remote_metric_source_recorded',
+    source_id: sourceId,
+    source_adapter_id: sourceAdapterId,
+    source_authority: CLOUDFLARE_WEBHOOK_DELAY_DIRECT_REMOTE_METRIC_SOURCE_AUTHORITY,
+    source_material_locus: 'direct_remote_metric_source',
+    direct_source_url_host: safeUrlHost(sourceUrl),
+    direct_source_sample_count: samples.samples.length,
+    source_sample_count: samples.samples.length,
+    put,
+  };
+}
+
+function resolveDirectMetricSourceUrl(env = {}, params = {}) {
+  if (env.CLOUDFLARE_WEBHOOK_DELAY_DIRECT_SOURCE_URL) return env.CLOUDFLARE_WEBHOOK_DELAY_DIRECT_SOURCE_URL;
+  if (env.CLOUDFLARE_WEBHOOK_DELAY_DIRECT_SOURCE_ALLOW_OPERATOR_URL === '1' && params.source_url) return params.source_url;
+  return null;
+}
+
+async function fetchWebhookDelayDirectMetricSource(env = {}, sourceUrl, params = {}) {
+  const headers = { accept: 'application/json' };
+  const token = params.source_token ?? env.CLOUDFLARE_WEBHOOK_DELAY_DIRECT_SOURCE_TOKEN ?? null;
+  if (token) headers.authorization = `Bearer ${token}`;
+  const response = await fetch(sourceUrl, { method: 'GET', headers });
+  const body = await response.json().catch(() => null);
+  if (!response.ok) return { ok: false, code: 'webhook_delay_direct_remote_metric_source_fetch_failed', http_status: response.status, body };
+  if (!body || typeof body !== 'object') return { ok: false, code: 'webhook_delay_direct_remote_metric_source_invalid_json' };
+  return { ok: true, body };
+}
+
+function createWebhookDelayDirectMetricSourceSamples(siteId, sourceAdapterId, sourceId, sourceUrl, body = {}, params = {}) {
+  const rows = Array.isArray(body.samples) ? body.samples
+    : Array.isArray(body.rows) ? body.rows
+      : Array.isArray(body.observations) ? body.observations
+        : [];
+  if (rows.length === 0) return { ok: false, code: 'webhook_delay_direct_remote_metric_source_rows_missing' };
+  const generatedAt = params.generated_at ?? body.generated_at ?? new Date().toISOString();
+  const sourceHost = safeUrlHost(sourceUrl);
+  const samples = rows.map((row, index) => {
+    const observedAt = row.observed_at ?? row.created_at ?? row.at ?? row.last_event_datetime_that_arrived ?? generatedAt;
+    return {
+      sample_id: row.sample_id ?? `webhook_delay_direct_metric_sample_${safeIdToken(siteId)}_${safeIdToken(sourceAdapterId)}_${safeIdToken(observedAt)}_${index}`,
+      sample_role: row.sample_role ?? row.role ?? (index === rows.length - 1 ? 'today_latest' : 'historical_source_row'),
+      observed_at: observedAt,
+      observed_at_ct: row.observed_at_ct ?? row.at_ct ?? null,
+      elapsed_minutes: row.elapsed_minutes ?? null,
+      delay_minutes: row.delay_minutes ?? row.delayMinutes ?? row.latest?.delay_minutes,
+      source_record: {
+        source_id: sourceId,
+        source_schema: body.schema ?? null,
+        direct_source_url_host: sourceHost,
+        source_record_id: row.id ?? row.sample_id ?? null,
+        last_event_datetime_that_arrived: row.last_event_datetime_that_arrived ?? null,
+      },
+    };
+  });
+  return { ok: true, generated_at: generatedAt, samples };
+}
+
+function safeUrlHost(value) {
+  try {
+    return new URL(value).host;
+  } catch {
+    return 'unknown-host';
+  }
 }
 
 async function runCloudflareWebhookDelayScheduledSourceRead(env = {}, params = {}, principal = null) {
