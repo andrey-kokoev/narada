@@ -1034,11 +1034,18 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /resident_loop_shadow_run_count/);
   assert.match(html, /Operator Attention/);
   assert.match(html, /Resident Dispatch/);
+  assert.match(html, /Start Resident Dispatch/);
+  assert.match(html, /startResidentDispatch/);
+  assert.match(html, /startResidentDispatchFromWorkbench/);
+  assert.match(html, /start_resident_dispatch/);
+  assert.match(html, /cloudflare_primary_dispatch_not_recorded/);
+  assert.match(html, /resident_dispatch\.primary_with_fallback\.start/);
   assert.match(html, /residentDispatchNavigator/);
   assert.match(html, /residentDispatchFocusDetail/);
   assert.match(html, /renderResidentDispatchNavigator/);
   assert.match(html, /residentDispatchFocusContext/);
   assert.match(html, /selectResidentDispatch/);
+  assert.match(html, /focusResidentDispatch/);
   assert.match(html, /resident_dispatch_decisions/);
   assert.match(html, /resident_dispatch_decision_count/);
   assert.match(html, /Fallback Authority/);

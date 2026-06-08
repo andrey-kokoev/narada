@@ -2621,6 +2621,7 @@ export function renderCloudflareCarrierConsole() {
       </div>
       <div class="product-panel">
         <h2>Resident Dispatch</h2>
+        <div class="actions"><button id="startResidentDispatch" class="secondary">Start Resident Dispatch</button></div>
         <div id="residentDispatchNavigator" class="attention-items"><div class="empty">No resident dispatch decisions loaded.</div></div>
         <h3>Resident Dispatch Focus Detail</h3>
         <div id="residentDispatchFocusDetail" class="evidence-summary"><div class="empty">No resident dispatch decision selected.</div></div>
@@ -2745,6 +2746,21 @@ export function renderCloudflareCarrierConsole() {
           carrier_event_limit: 20,
           session_limit: 10,
         });
+      },
+      startResidentDispatch() {
+        const siteId = el('siteId').value.trim();
+        const operationId = el('operationId').value.trim() || 'operation_narada_cloudflare_control';
+        const suffix = Date.now();
+        const carrierSessionId = 'carrier_session_cloudflare_dispatch_' + suffix;
+        return this.request('resident_dispatch.primary_with_fallback.start', {
+          site_id: siteId,
+          operation_id: operationId,
+          carrier_session_id: carrierSessionId,
+          agent_id: el('agentId').value.trim() || 'narada.cloudflare.dispatch',
+          site_root: 'cloudflare://' + siteId,
+          site_ref: 'site://' + siteId,
+          windows_fallback_ref: 'windows_local_site_resident_loop',
+        }, { request_id: 'console_resident_dispatch_' + suffix });
       },
       createOperation(operationId, displayName, operationKind) {
         return this.request('operation.create', {
@@ -2989,6 +3005,9 @@ export function renderCloudflareCarrierConsole() {
       const sessionAction = String(contextValue(sessionActionContext(), 'Next Action'));
       const authorityAction = String(contextValue(authorityActionContext(product), 'Next Action'));
       const targets = operationFlightDeckTargets(product);
+      const surface = product.operation_product_surface || {};
+      const dispatchDecisions = product.resident_dispatch_decisions || [];
+      const dispatchSurfacePresent = 'resident_dispatch_decisions' in product || 'resident_dispatch_decision_count' in surface;
       const next = (() => {
         if (!siteId && !operationId) return { domain: 'site', action: 'select_site_or_operation', target: 'none', reason: 'no_site_or_operation_loaded' };
         if (state.productScope === 'none') {
@@ -3013,6 +3032,9 @@ export function renderCloudflareCarrierConsole() {
         }
         if (authorityAction && !['monitor_authority_admissions'].includes(authorityAction)) {
           return { domain: 'authority', action: authorityAction, target: contextValue(authorityActionContext(product), 'Focused Decision') || 'authority', reason: 'authority_state_needs_attention' };
+        }
+        if (dispatchSurfacePresent && dispatchDecisions.length === 0 && operationId) {
+          return { domain: 'resident_dispatch', action: 'start_resident_dispatch', target: operationId, reason: 'cloudflare_primary_dispatch_not_recorded' };
         }
         if (targets.attention && targets.attention.status !== 'resolved') {
           return { domain: 'attention', action: 'focus_open_attention', target: targets.attention.directive_id || 'attention', reason: 'open_operation_attention' };
@@ -3047,6 +3069,7 @@ export function renderCloudflareCarrierConsole() {
       if (action === 'use_focused_session') { useFocusedSession(); return; }
       if (action === 'read_session_evidence') { run(readSelectedSessionEvidence); return; }
       if (action === 'focus_authority_evidence' || action === 'inspect_refused_authority' || action === 'resolve_authority_locus' || action === 'read_site_authority') { applyAuthorityNextAction(); return; }
+      if (action === 'start_resident_dispatch') { run(startResidentDispatchFromWorkbench); return; }
       if (action === 'focus_open_attention' || action === 'focus_open_task' || action === 'monitor_operation_evidence') { applyFlightDeckNextAction(); return; }
       applyFlightDeckNextAction();
     }
@@ -4467,6 +4490,22 @@ export function renderCloudflareCarrierConsole() {
       renderResidentDispatchNavigator(state.operationProduct?.resident_dispatch_decisions || []);
       updateControlRoom();
     }
+    function focusResidentDispatch(decision = null) {
+      const items = state.operationProduct?.resident_dispatch_decisions || [];
+      const focused = decision || state.residentDispatchFocus || items[0] || null;
+      if (focused) selectResidentDispatch(focused);
+    }
+    async function startResidentDispatchFromWorkbench() {
+      const body = await api.startResidentDispatch();
+      const carrierSessionId = body.carrier_session_id || body.decision?.carrier_session_id || body.session_start?.carrier_session_id;
+      if (carrierSessionId) setCurrentSession(carrierSessionId);
+      appendEvents([body.session_start?.event].filter(Boolean));
+      await refreshStatus();
+      await refreshOperation();
+      const decisionId = body.decision?.dispatch_decision_id;
+      const decisions = state.operationProduct?.resident_dispatch_decisions || [];
+      focusResidentDispatch(decisions.find((item) => item.dispatch_decision_id === decisionId || item.carrier_session_id === carrierSessionId));
+    }
     function renderResidentDispatchNavigator(items = []) {
       if (items.length === 0) {
         state.residentDispatchFocus = null;
@@ -5012,6 +5051,7 @@ export function renderCloudflareCarrierConsole() {
     el('operationActionReadOperation').addEventListener('click', () => run(refreshOperation));
     el('operationActionFocusSession').addEventListener('click', focusOperationSession);
     el('controlRoomNextAction').addEventListener('click', applyControlRoomNextAction);
+    el('startResidentDispatch').addEventListener('click', () => run(startResidentDispatchFromWorkbench));
     el('continuityWorkflowNextAction').addEventListener('click', applyContinuityWorkflowNextStep);
     el('authorityNextAction').addEventListener('click', applyAuthorityNextAction);
     el('authorityReadSiteAction').addEventListener('click', () => run(refreshSiteProduct));
