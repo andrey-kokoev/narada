@@ -37,6 +37,14 @@
     "values": ["record_only", "operator_visible", "agent_visible", "conversation_visible"],
     "default": "operator_visible"
   },
+  "directive_visibility": {
+    "values": ["record_only", "operator_visible", "agent_visible", "conversation_visible"],
+    "default": "agent_visible"
+  },
+  "directive_kind": {
+    "values": ["operation_heartbeat"],
+    "basic_test_kind": "operation_heartbeat"
+  },
   "queue_state": {
     "values": ["queued_for_turn_boundary", "admitted_to_turn", "dropped_by_operator", "abandoned_on_session_end"]
   },
@@ -83,6 +91,8 @@
       "observer_interjection_proposed",
       "observer_interjection_admitted",
       "observer_interjection_suppressed",
+      "directive_receipt_recorded",
+      "directive_carrier_accepted_recorded",
       "input_admitted_to_turn"
     ],
     "visible": ["observer_interjection_visible"],

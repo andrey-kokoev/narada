@@ -196,6 +196,54 @@
         "hold_event_kinds": ["system_directive_held"],
         "should_defer": true
       }
+    },
+    {
+      "name": "operation_heartbeat_system_directive_record_only",
+      "input": {
+        "schema": "narada.carrier.input_event.v1",
+        "event_id": "input_pipeline_operation_heartbeat_1",
+        "source_kind": "system",
+        "source_id": "narada-proper.system.directive_emitter",
+        "transport": "carrier_server_api",
+        "delivery_mode": "admit_for_current_turn",
+        "hold_condition": null,
+        "content": "",
+        "created_at": "2026-05-30T00:01:00.000Z",
+        "authority_ref": "auth_operation_heartbeat",
+        "directive_id": "dir_operation_heartbeat_1",
+        "metadata": {
+          "directive_provenance": {
+            "kind": "system_directive"
+          },
+          "directive": {
+            "kind": "operation_heartbeat",
+            "visibility": "record_only",
+            "cadence": "PT1M",
+            "operation_id": "operation_fixture_control",
+            "reason": "operation_continuity_heartbeat"
+          }
+        }
+      },
+      "state": {
+        "activeTurn": false,
+        "composerHasDraft": false,
+        "observerMuted": false
+      },
+      "expected": {
+        "admission_action": "admit",
+        "creates_turn": false,
+        "complete_without_provider": true,
+        "dispatch_to_provider": false,
+        "directive_visibility": "record_only",
+        "queue_event_kinds": [],
+        "admission_event_kinds": [
+          "directive_receipt_recorded",
+          "directive_carrier_accepted_recorded"
+        ],
+        "visible_event_kinds": [],
+        "hold_action": "none",
+        "should_defer": false
+      }
     }
   ]
 }

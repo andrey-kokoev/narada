@@ -181,6 +181,7 @@ for (const entry of inputPipelineCases.cases) {
   assert.equal(queueAdmission.complete_without_provider, entry.expected.complete_without_provider, entry.name);
   assert.equal(queueAdmission.dispatch_to_provider, entry.expected.dispatch_to_provider, entry.name);
   if (hasOwn(entry.expected, 'visible_to_operator')) assert.equal(queueAdmission.visible_to_operator, entry.expected.visible_to_operator, entry.name);
+  if (hasOwn(entry.expected, 'directive_visibility')) assert.equal(queueAdmission.directive_visibility, entry.expected.directive_visibility, entry.name);
   if (hasOwn(entry.expected, 'suppression_reason')) assert.equal(queueAdmission.suppression_reason, entry.expected.suppression_reason, entry.name);
   assert.deepEqual(queueAdmission.queue_events.map((event) => event.event_kind), entry.expected.queue_event_kinds, entry.name);
   assert.deepEqual(queueAdmission.admission_events.map((event) => event.event_kind), entry.expected.admission_event_kinds, entry.name);

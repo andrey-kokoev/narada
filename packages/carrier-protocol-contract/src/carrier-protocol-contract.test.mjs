@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  DIRECTIVE_VISIBILITIES,
   OBSERVER_VISIBILITIES,
   PAYLOAD_REF_READER_TOOLS,
   QUEUE_STATES,
@@ -38,6 +39,10 @@ test('carrier protocol contract exposes schemas and id prefixes', () => {
   ]);
   assert.deepEqual(contract.observer_visibility.values, OBSERVER_VISIBILITIES);
   assert.equal(contract.observer_visibility.default, 'operator_visible');
+  assert.deepEqual(contract.directive_visibility.values, DIRECTIVE_VISIBILITIES);
+  assert.equal(contract.directive_visibility.default, 'agent_visible');
+  assert.deepEqual(contract.directive_kind.values, ['operation_heartbeat']);
+  assert.equal(contract.directive_kind.basic_test_kind, 'operation_heartbeat');
   assert.deepEqual(contract.queue_state.values, QUEUE_STATES);
   assert.deepEqual(contract.input_admission_action.values, ['admit', 'queue', 'hold', 'reject']);
   assert.deepEqual(contract.input_hold_action.values, ['hold', 'release', 'none']);
@@ -68,6 +73,8 @@ test('carrier protocol contract exposes schemas and id prefixes', () => {
       'observer_interjection_proposed',
       'observer_interjection_admitted',
       'observer_interjection_suppressed',
+      'directive_receipt_recorded',
+      'directive_carrier_accepted_recorded',
       'input_admitted_to_turn',
     ],
     visible: ['observer_interjection_visible'],

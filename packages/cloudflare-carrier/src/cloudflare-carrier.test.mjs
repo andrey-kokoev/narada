@@ -134,6 +134,24 @@ test('observer fixture cases produce shared pipeline event kinds plus terminal c
   }
 });
 
+test('record-only operation heartbeat directive records acceptance without provider turn', () => {
+  const fixtureCase = inputPipelineCases.cases.find((entry) => entry.name === 'operation_heartbeat_system_directive_record_only');
+  assert.ok(fixtureCase);
+  const { router } = startedSession();
+  const response = router.handle(inputRequest(fixtureCase.input, { request_id: 'request_operation_heartbeat' }));
+  assert.equal(response.ok, true);
+  assert.equal(response.terminal_state, 'completed_without_provider');
+  assertValidEvents(response);
+  assert.deepEqual(eventKinds(response), [
+    'directive_receipt_recorded',
+    'directive_carrier_accepted_recorded',
+    'input_completed',
+  ]);
+  assert.equal(response.events.some((event) => event.event_kind === 'turn_started'), false);
+  assert.equal(response.events.some((event) => event.event_kind === 'provider_request_recorded'), false);
+  assert.equal(response.events[0].payload.directive_kind, 'operation_heartbeat');
+});
+
 test('goal command supports show set pause resume and clear', () => {
   const { router } = startedSession();
   let response = router.handle(commandRequest('/goal', ['stabilize', 'carrier']));

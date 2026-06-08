@@ -13,6 +13,7 @@ export const LEGACY_STARTUP_COMMAND_NAME = 'startup_sequence';
 
 export const SOURCE_KINDS = Object.freeze(['operator', 'system', 'agent', 'external']);
 export const OBSERVER_VISIBILITIES = Object.freeze(['record_only', 'operator_visible', 'agent_visible', 'conversation_visible']);
+export const DIRECTIVE_VISIBILITIES = OBSERVER_VISIBILITIES;
 export const OBSERVER_CONFIDENCES = Object.freeze(['low', 'medium', 'high']);
 export const PAYLOAD_REF_READER_TOOLS = Object.freeze([
   'mcp_payload_read',
@@ -524,6 +525,50 @@ export function isObserverInputEvent(input = {}) {
   return Boolean(observerMetadata(input));
 }
 
+export function directiveMetadata(input = {}) {
+  return isObject(input?.metadata?.directive) ? input.metadata.directive : null;
+}
+
+export function isDirectiveInputEvent(input = {}) {
+  return Boolean(input?.directive_id) || directiveMetadata(input) !== null;
+}
+
+export function directiveVisibility(input = {}) {
+  const visibility = directiveMetadata(input)?.visibility;
+  return enumIncludes(DIRECTIVE_VISIBILITIES, visibility) ? visibility : 'agent_visible';
+}
+
+export function directivePayload(input = {}, extra = {}) {
+  const metadata = directiveMetadata(input) ?? {};
+  return {
+    directive_id: input.directive_id ?? metadata.directive_id ?? null,
+    input_event_id: input.event_id ?? null,
+    directive_kind: metadata.kind ?? metadata.directive_kind ?? null,
+    visibility: directiveVisibility(input),
+    source_kind: input.source_kind ?? null,
+    source_id: input.source_id ?? null,
+    authority_ref: input.authority_ref ?? null,
+    content_kind: metadata.content_kind ?? metadata.content?.kind ?? null,
+    ...extra,
+  };
+}
+
+export function classifyCarrierDirectiveInput(input = {}) {
+  const isDirective = isDirectiveInputEvent(input);
+  const visibility = directiveVisibility(input);
+  const renderToAgent = isDirective && (visibility === 'agent_visible' || visibility === 'conversation_visible');
+  const visibleToOperator = isDirective && (visibility === 'operator_visible' || visibility === 'conversation_visible');
+  return {
+    is_directive: isDirective,
+    visibility,
+    visible_to_operator: visibleToOperator,
+    render_to_agent: renderToAgent,
+    creates_turn: !isDirective || renderToAgent,
+    completes_without_provider: isDirective && !renderToAgent,
+    payload: isDirective ? directivePayload(input) : null,
+  };
+}
+
 export function observerPayload(input = {}, extra = {}) {
   const metadata = observerMetadata(input) ?? {};
   return {
@@ -563,6 +608,7 @@ export function classifyCarrierInputAdmission(input = {}, state = {}) {
   const inputAdmission = classifyInputAdmission(input, state);
   const event = inputAdmission.event;
   const observer = classifyCarrierObserverInput(event, { observerMuted: state.observerMuted === true });
+  const directive = classifyCarrierDirectiveInput(event);
   const inputEventId = event?.event_id ?? null;
   const queueEvents = [];
   const admissionEvents = [];
@@ -610,7 +656,22 @@ export function classifyCarrierInputAdmission(input = {}, state = {}) {
       if (observer.completes_without_provider) terminalState = 'completed_without_provider';
     }
   }
-  if (inputAdmission.action === 'admit' && observer.creates_turn) {
+  if (directive.is_directive && inputAdmission.action === 'admit') {
+    admissionEvents.push({
+      event_kind: 'directive_receipt_recorded',
+      payload: directivePayload(event),
+    });
+    admissionEvents.push({
+      event_kind: 'directive_carrier_accepted_recorded',
+      payload: directivePayload(event, { carrier_acceptance: 'accepted_for_session_flow' }),
+    });
+    if (directive.completes_without_provider) terminalState = 'completed_without_provider';
+  }
+  const createsTurn = inputAdmission.action === 'admit' && observer.creates_turn && directive.creates_turn;
+  const dispatchToProvider = inputAdmission.action === 'admit'
+    && observer.dispatch_to_agent
+    && (!directive.is_directive || directive.render_to_agent);
+  if (createsTurn) {
     admissionEvents.push({
       event_kind: 'input_admitted_to_turn',
       payload: {
@@ -630,9 +691,12 @@ export function classifyCarrierInputAdmission(input = {}, state = {}) {
     suppressed: observer.suppressed,
     suppression_reason: observer.suppression_reason,
     visible_to_operator: observer.visible_to_operator,
-    dispatch_to_provider: observer.dispatch_to_agent,
-    creates_turn: inputAdmission.action === 'admit' && observer.creates_turn,
-    complete_without_provider: inputAdmission.action === 'admit' && observer.completes_without_provider,
+    dispatch_to_provider: dispatchToProvider,
+    is_directive: directive.is_directive,
+    directive_visibility: directive.is_directive ? directive.visibility : null,
+    directive_render_to_agent: directive.render_to_agent,
+    creates_turn: createsTurn,
+    complete_without_provider: inputAdmission.action === 'admit' && (observer.completes_without_provider || directive.completes_without_provider),
     terminal_state: terminalState,
     queue_events: queueEvents,
     admission_events: admissionEvents,

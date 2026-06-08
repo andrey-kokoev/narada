@@ -64,21 +64,27 @@ The shared pipeline stages are:
 
    `classifyCarrierObserverInput(...)` classifies observer input visibility and effect. It determines whether the input is an observer observation, whether it is `record_only`, `operator_visible`, `agent_visible`, or `conversation_visible`, whether it is suppressed by mute state, whether it is visible to the Operator, and whether it may be dispatched to the active agent provider context.
 
-4. Composer hold classification
+4. Directive classification
+
+   `classifyCarrierDirectiveInput(...)` classifies directive input visibility and effect. A directive is first-class addressed intent; prompt text is only one possible delivery artifact. `system` is source/provenance for a directive emitter, not a hidden conversation participant. Directive visibility determines whether an admitted directive is record-only, operator-visible, agent-visible, or conversation-visible.
+
+   The basic shared test is an `operation_heartbeat` system directive with `visibility: record_only` and a one-minute cadence. It records `directive_receipt_recorded` and `directive_carrier_accepted_recorded`, completes without provider dispatch, and does not create `input_admitted_to_turn`. Other directive origins or cadences should use the same directive pipeline instead of introducing carrier-specific runtime stimulus categories.
+
+5. Composer hold classification
 
    `classifyCarrierInputHold(...)` classifies whether a system directive must be held because the carrier composer is active with a non-empty draft. The carrier surface detects composer state; the shared contract determines the `system_directive_held` and `system_directive_released` lifecycle evidence.
 
-5. Input admission
+6. Input admission
 
-   `classifyCarrierInputAdmission(...)` composes base input admission with observer classification. It decides whether the input creates a provider turn, completes without provider dispatch, emits observer observation/proposal/admission/suppression evidence, or emits `input_admitted_to_turn`.
+   `classifyCarrierInputAdmission(...)` composes base input admission with observer and directive classification. It decides whether the input creates a provider turn, completes without provider dispatch, emits observer observation/proposal/admission/suppression evidence, emits directive receipt/acceptance evidence, or emits `input_admitted_to_turn`.
 
-6. Queue admission
+7. Queue admission
 
    `classifyCarrierInputQueueAdmission(...)` adds carrier queue lifecycle evidence. It records the shared rule that `admit_after_active_turn` input emits `input_queued_for_turn_boundary` when it enters the carrier queue, including the idle case where the same input may be admitted immediately on drain.
 
-7. Completion
+8. Completion
 
-   Carrier runtimes record `input_completed` with the terminal state produced by the admitted work. Observer inputs that are record-only, operator-visible only, or muted complete without provider dispatch. Agent-visible and conversation-visible observer inputs create ordinary provider turns, queueing for the next turn boundary when another turn is active.
+   Carrier runtimes record `input_completed` with the terminal state produced by the admitted work. Observer inputs that are record-only, operator-visible only, or muted complete without provider dispatch. Record-only and operator-visible directives also complete without provider dispatch. Agent-visible and conversation-visible observer or directive inputs create ordinary provider turns, queueing for the next turn boundary when another turn is active.
 
 Shared packages own the stages above. Carrier surfaces own queue storage, rendering, composer behavior, transport mechanics, and provider adapter execution, but they should consume the shared classifiers instead of copying these decisions locally.
 
@@ -111,7 +117,7 @@ A carrier is compatible only if these invariants hold:
 5. The same provider/carrier configuration resolves to the same admitted or refused state in every carrier.
 6. The same command text resolves to the same command effect in every carrier.
 7. The same launch/session identity data produces the same heartbeat and session metadata in every carrier.
-8. The same carrier input event produces the same observer visibility, queue lifecycle evidence, turn admission, provider dispatch decision, and completion posture in every carrier.
+8. The same carrier input event produces the same observer visibility, directive visibility, queue lifecycle evidence, turn admission, provider dispatch decision, and completion posture in every carrier.
 
 ## Package Shape
 
