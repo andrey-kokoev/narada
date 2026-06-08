@@ -742,6 +742,14 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(body.carrier_evidence_read_status.failed_session_count, 0);
   assert.equal(body.carrier_evidence_read_status.missing_session_count, 0);
   assert.equal(body.carrier_evidence_read_status.event_count, body.carrier_evidence[0].events.length);
+  assert.equal(body.cloudflare_persistence_posture.schema, 'narada.cloudflare_persistence_posture.v1');
+  assert.equal(body.cloudflare_persistence_posture.state, 'durable');
+  assert.equal(body.cloudflare_persistence_posture.site_id, 'site_fixture');
+  assert.equal(body.cloudflare_persistence_posture.active_boundary_count, 4);
+  assert.equal(body.cloudflare_persistence_posture.missing_boundaries.length, 0);
+  assert.equal(body.cloudflare_persistence_posture.next_action, 'monitor_persistence_posture');
+  assert.equal(body.cloudflare_persistence_posture.durable_boundaries.some((boundary) => boundary.key === 'session_snapshot'), true);
+  assert.equal(body.cloudflare_persistence_posture.durable_boundaries.some((boundary) => boundary.key === 'carrier_evidence_index'), true);
   assert.equal(body.reader_principal.email, 'admin@system');
   assert.equal(body.site_authority.map.schema, 'narada.site_authority_map.v1');
   assert.equal(body.site_authority.map.site_id, 'site_fixture');
@@ -1112,6 +1120,14 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Activity Focus/);
   assert.match(html, /Apply Activity Focus/);
   assert.match(html, /apply_activity_focus/);
+  assert.match(html, /Persistence Posture/);
+  assert.match(html, /persistencePostureDetail/);
+  assert.match(html, /persistencePostureContext/);
+  assert.match(html, /renderPersistencePosture/);
+  assert.match(html, /cloudflare_persistence_posture/);
+  assert.match(html, /monitor_persistence_posture/);
+  assert.match(html, /Persistence State/);
+  assert.match(html, /Persistence Next Action/);
   assert.match(html, /focus_kind/);
   assert.match(html, /focus_ref/);
   assert.match(html, /provider_events/);
@@ -2931,6 +2947,13 @@ test('worker operation.create read and list route through site registry authorit
   assert.equal(readBody.operation_lifecycle_status.open_task_count, 1);
   assert.equal(readBody.operation_lifecycle_status.next_action, 'continuity_packet');
   assert.equal(readBody.operation_product_surface.lifecycle_status.health, readBody.operation_lifecycle_status.health);
+  assert.equal(readBody.cloudflare_persistence_posture.schema, 'narada.cloudflare_persistence_posture.v1');
+  assert.equal(readBody.cloudflare_persistence_posture.operation_id, 'operation_control');
+  assert.equal(readBody.cloudflare_persistence_posture.state, 'durable');
+  assert.equal(readBody.cloudflare_persistence_posture.session_count, 1);
+  assert.equal(readBody.cloudflare_persistence_posture.task_count, 1);
+  assert.equal(readBody.operation_product_surface.persistence_posture.state, 'durable');
+  assert.equal(readBody.operation_product_surface.persistence_posture.next_action, 'monitor_persistence_posture');
   assert.equal(readBody.reader_principal.email, 'admin@system');
 
   const paused = await worker.fetch(jsonRequest({

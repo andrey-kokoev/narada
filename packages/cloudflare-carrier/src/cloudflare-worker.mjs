@@ -678,6 +678,57 @@ function summarizeCloudflareCarrierEvidenceReadStatus({ sessions = [], carrierEv
   };
 }
 
+function summarizeCloudflarePersistencePosture(env = {}, {
+  siteId = null,
+  operation = null,
+  sessions = [],
+  tasks = [],
+  carrierEvidence = [],
+  continuityPackets = [],
+  carrierEvidenceReadStatus = null,
+} = {}) {
+  const hasCarrierSessions = Boolean(env.CLOUDFLARE_CARRIER_SESSIONS);
+  const hasSiteRegistry = Boolean(env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB);
+  const hasTaskStore = Boolean(env.CLOUDFLARE_CARRIER_TASK_DB ?? env.NARADA_TASK_DB);
+  const sessionList = Array.isArray(sessions) ? sessions : [];
+  const taskList = Array.isArray(tasks) ? tasks : [];
+  const evidenceGroups = Array.isArray(carrierEvidence) ? carrierEvidence : [];
+  const continuityPacketList = Array.isArray(continuityPackets) ? continuityPackets : [];
+  const evidenceEventCount = evidenceGroups.reduce((count, group) => count + (Array.isArray(group?.events) ? group.events.length : 0), 0);
+  const durableBoundaries = [
+    { key: 'session_snapshot', substrate: 'cloudflare_durable_object_storage', status: hasCarrierSessions ? 'available' : 'missing', authority: 'carrier_session_ordered_lane' },
+    { key: 'site_registry', substrate: 'cloudflare_d1_site_registry', status: hasSiteRegistry ? 'available' : 'missing', authority: 'site_membership_operation_authority' },
+    { key: 'carrier_evidence_index', substrate: 'cloudflare_d1_site_registry', status: hasSiteRegistry ? 'available' : 'missing', authority: 'reconstructable_carrier_evidence_projection' },
+    { key: 'task_lifecycle_store', substrate: 'cloudflare_d1_task_store', status: hasTaskStore ? 'available' : 'missing', authority: 'task_lifecycle_projection' },
+  ];
+  const missing = durableBoundaries.filter((boundary) => boundary.status !== 'available').map((boundary) => boundary.key);
+  const warnings = [];
+  if (sessionList.length > 0 && evidenceEventCount === 0) warnings.push('session_without_replayed_evidence');
+  if (taskList.length > 0 && !hasTaskStore) warnings.push('task_projection_without_task_store_binding');
+  if (carrierEvidenceReadStatus?.state === 'degraded') warnings.push('carrier_evidence_replay_degraded');
+  const state = missing.length > 0
+    ? 'incomplete'
+    : (warnings.length > 0 ? 'degraded' : 'durable');
+  return {
+    schema: 'narada.cloudflare_persistence_posture.v1',
+    site_id: siteId ?? operation?.site_id ?? null,
+    operation_id: operation?.operation_id ?? null,
+    state,
+    durable_boundary_count: durableBoundaries.length,
+    active_boundary_count: durableBoundaries.length - missing.length,
+    missing_boundaries: missing,
+    warnings,
+    durable_boundaries: durableBoundaries,
+    session_count: sessionList.length,
+    task_count: taskList.length,
+    carrier_evidence_group_count: evidenceGroups.length,
+    carrier_evidence_event_count: evidenceEventCount,
+    continuity_packet_count: continuityPacketList.length,
+    evidence_read_state: carrierEvidenceReadStatus?.state ?? 'unknown',
+    next_action: missing[0] ?? warnings[0] ?? 'monitor_persistence_posture',
+  };
+}
+
 function summarizeCloudflareSiteProductStatus({
   site = null,
   operations = [],
@@ -1260,6 +1311,15 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const siteAuthority = cloudflareSiteAuthorityReadModel(env, siteId);
     const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
     const siteContinuityStatus = summarizeCloudflareSiteContinuityStatus(siteId, continuityPackets, siteContinuity);
+    const cloudflarePersistencePosture = summarizeCloudflarePersistencePosture(env, {
+      siteId,
+      operation,
+      sessions,
+      tasks,
+      carrierEvidence,
+      continuityPackets,
+      carrierEvidenceReadStatus,
+    });
     const operationStatusHistory = summarizeCloudflareOperationStatusHistory(response.authority_events, operation);
     const operationActivityTimeline = summarizeCloudflareOperationActivityTimeline({
       operation,
@@ -1304,6 +1364,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         site_authority: siteAuthority,
         site_continuity: siteContinuity,
         site_continuity_status: siteContinuityStatus,
+        cloudflare_persistence_posture: cloudflarePersistencePosture,
         operation_status_history: operationStatusHistory,
         operation_activity_timeline: operationActivityTimeline,
         operation_lifecycle_status: operationLifecycleStatus,
@@ -1315,6 +1376,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           task_count: tasks.length,
           carrier_evidence_count: carrierEvidence.length,
           carrier_evidence_read_status: carrierEvidenceReadStatus,
+          persistence_posture: cloudflarePersistencePosture,
           continuity_packet_count: continuityPackets.length,
           continuity_status: siteContinuityStatus,
           status_history: operationStatusHistory,
@@ -1366,6 +1428,14 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
   const siteAuthority = cloudflareSiteAuthorityReadModel(env, siteId);
   const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
   const siteContinuityStatus = summarizeCloudflareSiteContinuityStatus(siteId, continuityPackets, siteContinuity);
+  const cloudflarePersistencePosture = summarizeCloudflarePersistencePosture(env, {
+    siteId,
+    sessions: response.sessions,
+    tasks,
+    carrierEvidence,
+    continuityPackets,
+    carrierEvidenceReadStatus,
+  });
   const siteProductStatus = summarizeCloudflareSiteProductStatus({
     site: response.site,
     operations: response.operations,
@@ -1392,6 +1462,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     site_authority: siteAuthority,
     site_continuity: siteContinuity,
     site_continuity_status: siteContinuityStatus,
+    cloudflare_persistence_posture: cloudflarePersistencePosture,
     site_product_status: siteProductStatus,
   };
 }
@@ -4726,6 +4797,10 @@ export function renderCloudflareCarrierConsole() {
         <div id="operationFlightDeck" class="evidence-summary"><div class="empty">No operation product loaded.</div></div>
       </div>
       <div class="product-panel">
+        <h2>Persistence Posture</h2>
+        <div id="persistencePostureDetail" class="evidence-summary"><div class="empty">No persistence posture loaded.</div></div>
+      </div>
+      <div class="product-panel">
         <h2>Operation Activity Timeline</h2>
         <div id="operationActivityTimeline" class="attention-items"><div class="empty">No operation activity loaded.</div></div>
         <h3>Activity Focus</h3>
@@ -5306,6 +5381,7 @@ export function renderCloudflareCarrierConsole() {
     function productScopeContext(product = state.operationProduct || {}) {
       const surface = product.operation_product_surface || {};
       const evidenceStatus = evidenceReplayStatus(product) || {};
+      const persistence = persistencePosture(product) || {};
       const statusHistory = operationStatusHistory(product);
       const scope = state.productScope || 'none';
       const followUp = scope === 'operation'
@@ -5324,6 +5400,8 @@ export function renderCloudflareCarrierConsole() {
         ['Evidence Replay State', evidenceStatus.state || 'unknown'],
         ['Evidence Replay Source', evidenceReplaySources(product)],
         ['Evidence Replay Sessions', evidenceReplaySessionSummary(evidenceStatus)],
+        ['Persistence State', persistence.state || 'unknown'],
+        ['Persistence Next Action', persistence.next_action || 'monitor_persistence_posture'],
         ['Status Transitions', operationStatusTransitionSummary(statusHistory)],
         ['Latest Status Transition', operationLatestStatusTransitionLabel(statusHistory)],
         ['Activity Items', operationActivityTimelineSummary(product)],
@@ -5830,6 +5908,7 @@ export function renderCloudflareCarrierConsole() {
     function operationFlightDeckContext(product = {}) {
       const surface = product.operation_product_surface || {};
       const evidenceStatus = evidenceReplayStatus(product) || {};
+      const persistence = persistencePosture(product) || {};
       const statusHistory = operationStatusHistory(product);
       const activeSession = el('sessionId').value.trim();
       const openAttention = state.attentionItems.filter((item) => item.status !== 'resolved');
@@ -5856,6 +5935,8 @@ export function renderCloudflareCarrierConsole() {
         ['Evidence Replay State', evidenceStatus.state || 'unknown'],
         ['Evidence Replay Source', evidenceReplaySources(product)],
         ['Evidence Replay Sessions', evidenceReplaySessionSummary(evidenceStatus)],
+        ['Persistence State', persistence.state || 'unknown'],
+        ['Persistence Next Action', persistence.next_action || 'monitor_persistence_posture'],
         ['Status Transitions', operationStatusTransitionSummary(statusHistory)],
         ['Latest Status Transition', operationLatestStatusTransitionLabel(statusHistory)],
         ['Activity Items', operationActivityTimelineSummary(product)],
@@ -5941,6 +6022,42 @@ export function renderCloudflareCarrierConsole() {
         operationFlightDeckButton('flightDeckFocusEvidence', 'Focus Evidence', focusFlightDeckEvidence),
       );
       el('operationFlightDeck').replaceChildren(...operationFlightDeckContext(product).map(([label, value]) => evidenceField(label, value)), actions);
+    }
+    function persistencePosture(product = state.operationProduct || {}) {
+      return product.cloudflare_persistence_posture
+        || product.operation_product_surface?.persistence_posture
+        || null;
+    }
+    function persistencePostureContext(product = state.operationProduct || {}) {
+      const posture = persistencePosture(product) || {};
+      const boundaries = posture.durable_boundaries || [];
+      const active = boundaries.filter((boundary) => boundary.status === 'available').map((boundary) => boundary.key).join(', ') || 'none';
+      const missing = (posture.missing_boundaries || []).join(', ') || 'none';
+      const warnings = (posture.warnings || []).join(', ') || 'none';
+      return [
+        ['State', posture.state || 'unknown'],
+        ['Site', posture.site_id || product.site?.site_id || product.operation?.site_id || el('siteId').value.trim() || 'none'],
+        ['Operation', posture.operation_id || product.operation?.operation_id || el('operationId').value.trim() || 'none'],
+        ['Active Boundaries', String(posture.active_boundary_count ?? boundaries.filter((boundary) => boundary.status === 'available').length)],
+        ['Durable Boundaries', String(posture.durable_boundary_count ?? boundaries.length)],
+        ['Available', active],
+        ['Missing', missing],
+        ['Warnings', warnings],
+        ['Sessions', String(posture.session_count ?? (product.sessions || []).length)],
+        ['Tasks', String(posture.task_count ?? (product.tasks || []).length)],
+        ['Evidence Groups', String(posture.carrier_evidence_group_count ?? (product.carrier_evidence || []).length)],
+        ['Evidence Events', String(posture.carrier_evidence_event_count ?? state.events.length)],
+        ['Continuity Packets', String(posture.continuity_packet_count ?? (product.site_continuity_packets || []).length)],
+        ['Evidence Read State', posture.evidence_read_state || evidenceReplayStatus(product)?.state || 'unknown'],
+        ['Next Action', posture.next_action || 'monitor_persistence_posture'],
+      ];
+    }
+    function renderPersistencePosture(product = state.operationProduct || {}) {
+      if (!persistencePosture(product)) {
+        el('persistencePostureDetail').innerHTML = '<div class="empty">No persistence posture loaded.</div>';
+        return;
+      }
+      el('persistencePostureDetail').replaceChildren(...persistencePostureContext(product).map(([label, value]) => evidenceField(label, value)));
     }
     function continuityWorkflowSteps(product = state.operationProduct || {}) {
       const activeSession = el('sessionId').value.trim();
@@ -8469,6 +8586,7 @@ export function renderCloudflareCarrierConsole() {
       renderAuthorityPath(product);
       renderProductScopeDetail(product);
       renderOperationFlightDeck(product);
+      renderPersistencePosture(product);
       renderOperationActivityTimeline(product);
       renderOperationPath(focusedOperation(), product);
       updateControlRoom();
@@ -8560,6 +8678,7 @@ export function renderCloudflareCarrierConsole() {
       renderAuthorityPath(product);
       renderProductScopeDetail(product);
       renderOperationFlightDeck(product);
+      renderPersistencePosture(product);
       renderOperationActivityTimeline(product);
       renderOperationPath(focusedOperation(), product);
       updateControlRoom();
