@@ -1275,7 +1275,10 @@ assert.equal(mailboxStatusShadowSmoke.mailbox_write_authority, 'windows_mailbox_
 assert.equal(mailboxStatusShadowSmoke.mailbox_send_admission, 'not_admitted');
 assert.equal(mailboxStatusShadowSmoke.mailbox_mutation_admission, 'not_admitted');
 assert.ok(mailboxStatusShadowSmoke.mailbox_status_shadow_read_count >= 1);
-assert.equal(mailboxStatusShadowSmoke.mailbox_authority_partition, 'mailbox_status_shadow_read_cloudflare_recorded_send_and_mutation_windows_owned');
+assert.ok([
+  'mailbox_status_shadow_read_cloudflare_recorded_send_and_mutation_windows_owned',
+  'mailbox_status_source_read_cloudflare_owned_send_and_mutation_not_admitted',
+].includes(mailboxStatusShadowSmoke.mailbox_authority_partition));
 
 const mailboxSourceAccount = process.env.CLOUDFLARE_GRAPH_MAILBOX_ID ?? process.env.GRAPH_MAILBOX_ID ?? process.env.MAILBOX_ID ?? '';
 let mailboxStatusSourceSmoke = null;
@@ -1641,11 +1644,16 @@ assert.equal(recordedMailboxStatusShadow.mailbox_read_authority, 'windows_mailbo
 assert.equal(recordedMailboxStatusShadow.mailbox_write_authority, 'windows_mailbox_mcp');
 assert.equal(recordedMailboxStatusShadow.mailbox_send_admission, 'not_admitted');
 assert.equal(recordedMailboxStatusShadow.mailbox_mutation_admission, 'not_admitted');
-assert.equal(operationSurface?.mailbox_status_authority, 'windows_mailbox_status_source');
+const operationSurfaceMailboxSourceReadCount = Number(operationSurface?.mailbox_status_source_read_count ?? 0);
+const expectedOperationSurfaceMailboxAuthority = operationSurfaceMailboxSourceReadCount > 0 ? 'cloudflare_graph_mailbox_status_source' : 'windows_mailbox_status_source';
+const expectedOperationSurfaceMailboxPartition = operationSurfaceMailboxSourceReadCount > 0
+  ? 'mailbox_status_source_read_cloudflare_owned_send_and_mutation_not_admitted'
+  : 'mailbox_status_shadow_read_cloudflare_recorded_send_and_mutation_windows_owned';
+assert.equal(operationSurface?.mailbox_status_authority, expectedOperationSurfaceMailboxAuthority);
 assert.equal(operationSurface?.mailbox_shadow_target_locus, 'cloudflare_carrier_site');
 assert.equal(operationSurface?.mailbox_send_admission, 'not_admitted');
 assert.equal(operationSurface?.mailbox_mutation_admission, 'not_admitted');
-assert.equal(operationSurface?.mailbox_authority_partition, 'mailbox_status_shadow_read_cloudflare_recorded_send_and_mutation_windows_owned');
+assert.equal(operationSurface?.mailbox_authority_partition, expectedOperationSurfaceMailboxPartition);
 assert.ok(Array.isArray(siteFileChangeProposals));
 assert.ok(siteFileChangeProposals.length >= 1);
 assert.equal(operationSurface?.site_file_change_proposal_count, siteFileChangeProposals.length);

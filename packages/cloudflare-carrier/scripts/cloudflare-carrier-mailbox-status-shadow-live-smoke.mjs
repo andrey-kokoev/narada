@@ -84,12 +84,18 @@ const operationRead = await postCarrier({
 });
 assert.equal(operationRead.http_status, 200, JSON.stringify(operationRead.body));
 assert.ok(operationRead.body.mailbox_status_shadow_reads.some((entry) => entry.read_id === readId));
-assert.ok(operationRead.body.operation_product_surface.mailbox_status_shadow_read_count >= 1);
-assert.equal(operationRead.body.operation_product_surface.mailbox_status_authority, 'windows_mailbox_status_source');
-assert.equal(operationRead.body.operation_product_surface.mailbox_shadow_target_locus, 'cloudflare_carrier_site');
-assert.equal(operationRead.body.operation_product_surface.mailbox_send_admission, 'not_admitted');
-assert.equal(operationRead.body.operation_product_surface.mailbox_mutation_admission, 'not_admitted');
-assert.equal(operationRead.body.operation_product_surface.mailbox_authority_partition, 'mailbox_status_shadow_read_cloudflare_recorded_send_and_mutation_windows_owned');
+const productSurface = operationRead.body.operation_product_surface;
+assert.ok(productSurface.mailbox_status_shadow_read_count >= 1);
+const sourceReadCount = Number(productSurface.mailbox_status_source_read_count ?? 0);
+const expectedProductAuthority = sourceReadCount > 0 ? 'cloudflare_graph_mailbox_status_source' : 'windows_mailbox_status_source';
+const expectedProductPartition = sourceReadCount > 0
+  ? 'mailbox_status_source_read_cloudflare_owned_send_and_mutation_not_admitted'
+  : 'mailbox_status_shadow_read_cloudflare_recorded_send_and_mutation_windows_owned';
+assert.equal(productSurface.mailbox_status_authority, expectedProductAuthority);
+assert.equal(productSurface.mailbox_shadow_target_locus, 'cloudflare_carrier_site');
+assert.equal(productSurface.mailbox_send_admission, 'not_admitted');
+assert.equal(productSurface.mailbox_mutation_admission, 'not_admitted');
+assert.equal(productSurface.mailbox_authority_partition, expectedProductPartition);
 
 process.stdout.write(`${JSON.stringify({
   schema: 'narada.cloudflare_carrier.mailbox_status_shadow_live_smoke.v1',
