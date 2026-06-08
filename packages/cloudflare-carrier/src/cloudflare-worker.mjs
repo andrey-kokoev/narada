@@ -1780,7 +1780,11 @@ export function renderCloudflareCarrierConsole() {
       </div>
       <div class="product-panel">
         <h2>Operation Attention</h2>
-        <div class="actions"><button id="raiseAttention" class="secondary">Raise Attention</button></div>
+        <div class="actions">
+          <button id="raiseAttention" class="secondary">Raise Attention</button>
+          <button id="taskFromAttention" class="secondary">Task From Attention</button>
+          <button id="resolveAttention" class="secondary">Resolve Attention</button>
+        </div>
         <div id="attentionQueue" class="attention-items"><div class="empty">No operation attention loaded.</div></div>
       </div>
       <div class="product-panel">
@@ -1904,6 +1908,8 @@ export function renderCloudflareCarrierConsole() {
       },
       readEvents() { return this.request('session.events.read', { after_sequence: state.afterSequence }); },
       command(command, args = []) { return this.request('carrier.command.execute', { command, args }, { request_id: 'console_command_' + Date.now() }); },
+      createTask(title) { return this.command('/task', ['create', ...String(title || '').split(/\s+/).filter(Boolean)]); },
+      updateTask(taskId, status, note) { return this.command('/task', ['update', taskId, status, ...String(note || '').split(/\s+/).filter(Boolean)]); },
       emitAttention() {
         const operationId = el('operationId').value.trim();
         return this.request('directive.emit', {
@@ -1975,6 +1981,7 @@ export function renderCloudflareCarrierConsole() {
       renderAttentionQueue(extractOperationAttention(state.operationProduct || {}));
     }
     function extractOperationAttention(product = {}) {
+      const tasks = product.tasks || [];
       const events = [
         ...state.events,
         ...(product.carrier_evidence || []).flatMap((entry) => entry.events || []),
@@ -1987,6 +1994,13 @@ export function renderCloudflareCarrierConsole() {
           const key = payload.directive_id || payload.input_event_id || [event.carrier_session_id, event.sequence].filter(Boolean).join(':');
           if (seen.has(key)) return null;
           seen.add(key);
+          const resolvedByTask = tasks.find((task) => {
+            const note = String(task.note || '');
+            const status = String(task.status || '').toLowerCase();
+            const resolutionStatus = status === 'done' || status === 'resolved' || status === 'closed';
+            const inputEventId = String(payload.input_event_id || '');
+            return resolutionStatus && (note.includes(key) || (inputEventId && note.includes(inputEventId)));
+          }) || null;
           return {
             key,
             directive_id: payload.directive_id || key,
@@ -1997,6 +2011,8 @@ export function renderCloudflareCarrierConsole() {
             visibility: payload.visibility || 'operator_visible',
             target: payload.target || null,
             sequence: event.sequence || null,
+            status: resolvedByTask ? 'resolved' : 'open',
+            resolving_task_id: resolvedByTask?.task_id || null,
           };
         })
         .filter(Boolean);
@@ -2012,7 +2028,8 @@ export function renderCloudflareCarrierConsole() {
       el('controlSession').textContent = activeSession || 'none';
       el('controlAuthorityLocus').textContent = activeDecision ? [activeDecision.authority_locus || 'unresolved', activeDecision.action || 'unknown'].join(' / ') : 'unknown';
       el('controlTaskFocus').textContent = state.taskFocus ? [state.taskFocus.task_id, state.taskFocus.status].filter(Boolean).join(' / ') : 'none';
-      el('controlAttention').textContent = String(state.attentionItems.length) + ' open' + (state.attentionFocus ? ' / ' + state.attentionFocus.directive_id : '');
+      const openAttention = state.attentionItems.filter((item) => item.status !== 'resolved').length;
+      el('controlAttention').textContent = String(openAttention) + ' open / ' + state.attentionItems.length + ' total' + (state.attentionFocus ? ' / ' + state.attentionFocus.directive_id : '');
       el('controlEvidenceWindow').textContent = String(surface.carrier_evidence_count ?? state.events.length) + ' evidence groups / ' + state.events.length + ' loaded events';
       el('controlContinuity').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length ?? 0) + ' packets';
     }
@@ -2044,12 +2061,14 @@ export function renderCloudflareCarrierConsole() {
         const node = document.createElement('article');
         node.className = 'attention-item';
         const title = document.createElement('strong');
-        title.textContent = item.directive_id;
+        title.textContent = item.status + ' ' + item.directive_id;
         const meta = document.createElement('span');
-        meta.textContent = [item.reason, item.operation_id, item.carrier_session_id, item.visibility].filter(Boolean).join(' | ');
+        meta.textContent = [item.reason, item.operation_id, item.carrier_session_id, item.visibility, item.resolving_task_id].filter(Boolean).join(' | ');
         node.addEventListener('click', () => {
           state.attentionFocus = item;
           if (item.carrier_session_id) setCurrentSession(item.carrier_session_id);
+          el('updateTaskStatus').value = 'done';
+          el('updateTaskNote').value = ['resolved_attention', item.directive_id, item.input_event_id, item.reason].filter(Boolean).join(' ');
           el('eventKindFilter').value = 'directive_emitted';
           renderEvents();
           updateControlRoom();
@@ -2319,6 +2338,10 @@ export function renderCloudflareCarrierConsole() {
       appendEvents((body.carrier_evidence || []).flatMap((entry) => entry.events || []));
       return body;
     }
+    function selectedAttention() {
+      if (state.attentionFocus) return state.attentionFocus;
+      return state.attentionItems.find((item) => item.status !== 'resolved') || state.attentionItems[0] || null;
+    }
     async function refreshOperatorSession() {
       const session = await api.session();
       if (session?.principal) {
@@ -2354,6 +2377,24 @@ export function renderCloudflareCarrierConsole() {
     el('eventKindFilter').addEventListener('change', renderEvents);
     el('eventSessionFilter').addEventListener('change', renderEvents);
     el('raiseAttention').addEventListener('click', () => run(async () => { const body = await api.emitAttention(); appendEvents(body.events || []); await refreshOperation(); }));
+    el('taskFromAttention').addEventListener('click', () => run(async () => {
+      const attention = selectedAttention();
+      if (!attention) return;
+      const body = await api.createTask(['attention', attention.directive_id, attention.reason].filter(Boolean).join(' '));
+      appendEvents(body.events || []);
+      await refreshStatus();
+      await refreshOperation();
+    }));
+    el('resolveAttention').addEventListener('click', () => run(async () => {
+      const attention = selectedAttention();
+      const taskId = el('updateTaskId').value.trim() || state.taskFocus?.task_id || '';
+      if (!attention || !taskId) return;
+      const note = ['resolved_attention', attention.directive_id, attention.input_event_id, attention.reason].filter(Boolean).join(' ');
+      const body = await api.updateTask(taskId, 'done', note);
+      appendEvents(body.events || []);
+      await refreshStatus();
+      await refreshOperation();
+    }));
     el('start').addEventListener('click', () => run(async () => { const body = await api.start(); appendEvents([body.event].filter(Boolean)); await refreshStatus(); await refreshOperation(); }));
     el('refresh').addEventListener('click', () => run(refreshOperation));
     el('readOperation').addEventListener('click', () => run(refreshOperation));

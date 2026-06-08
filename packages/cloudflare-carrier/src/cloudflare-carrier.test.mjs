@@ -671,6 +671,8 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Operation Attention/);
   assert.match(html, /Attention/);
   assert.match(html, /Raise Attention/);
+  assert.match(html, /Task From Attention/);
+  assert.match(html, /Resolve Attention/);
   assert.match(html, /Evidence Window/);
   assert.match(html, /Evidence Filter/);
   assert.match(html, /Session Filter/);
@@ -679,6 +681,9 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /updateControlRoom/);
   assert.match(html, /extractOperationAttention/);
   assert.match(html, /renderAttentionQueue/);
+  assert.match(html, /selectedAttention/);
+  assert.match(html, /resolved_attention/);
+  assert.match(html, /controlAttention/);
   assert.match(html, /directive\.emit/);
   assert.match(html, /operation_attention/);
   assert.match(html, /visibleEvents/);
