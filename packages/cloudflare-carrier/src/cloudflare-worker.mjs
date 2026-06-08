@@ -1802,6 +1802,10 @@ export function renderCloudflareCarrierConsole() {
         </div>
       </div>
       <div class="product-panel">
+        <h2>Runtime Posture</h2>
+        <div id="runtimePostureDetail" class="evidence-summary"><div class="empty">No runtime status loaded.</div></div>
+      </div>
+      <div class="product-panel">
         <h2>Operator Identity</h2>
         <div id="operatorIdentity" class="evidence-summary"><div class="empty">No operator session loaded.</div></div>
       </div>
@@ -1913,7 +1917,7 @@ export function renderCloudflareCarrierConsole() {
   </main>
   <script type="module">
     const WORKBENCH_STORAGE_KEY = 'narada.cloudflare.operationWorkbench.v1';
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, operations: [], consoleSequence: 0, operatorPrincipal: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, operations: [], consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -2826,6 +2830,27 @@ export function renderCloudflareCarrierConsole() {
       el('operatorIdentity').replaceChildren(...operatorPrincipalContext(state.operatorPrincipal).map(([label, value]) => evidenceField(label, value)));
       updateControlRoom();
     }
+    function runtimePostureContext(status = {}) {
+      return [
+        ['Provider', status.provider_adapter_posture || status.provider_adapter_kind || 'unknown'],
+        ['Provider Kind', status.provider_adapter_kind || 'none'],
+        ['Provider Execution', status.provider_execution_enabled ?? 'unknown'],
+        ['Tool Effects', status.tool_effect_posture || 'unknown'],
+        ['Tool Effect Kind', status.tool_effect_adapter_kind || 'none'],
+        ['Supported Tools', (status.supported_tools || []).join(', ') || 'none'],
+        ['Session', status.carrier_session_id || el('sessionId').value.trim() || 'none'],
+        ['Tasks', (status.tasks || []).length],
+        ['Events', status.event_count ?? state.events.length],
+      ];
+    }
+    function renderRuntimePosture(status = state.runtimeStatus) {
+      state.runtimeStatus = status || state.runtimeStatus;
+      if (!state.runtimeStatus) {
+        el('runtimePostureDetail').innerHTML = '<div class="empty">No runtime status loaded.</div>';
+        return;
+      }
+      el('runtimePostureDetail').replaceChildren(...runtimePostureContext(state.runtimeStatus).map(([label, value]) => evidenceField(label, value)));
+    }
     function evidenceMeaning(event) {
       const payload = event.payload || {};
       switch (event.event_kind) {
@@ -2896,6 +2921,7 @@ export function renderCloudflareCarrierConsole() {
       const status = await api.status();
       el('provider').textContent = status.provider_adapter_posture || status.provider_adapter_kind || 'unknown';
       el('effects').textContent = status.tool_effect_posture || 'unknown';
+      renderRuntimePosture(status);
       renderTasks(status.tasks || []);
       return status;
     }
