@@ -201,6 +201,61 @@ test('operation heartbeat emitter records emission evidence and routes through i
   ]);
 });
 
+test('registered directive emitter routes operation attention through input delivery', () => {
+  const { router } = startedSession();
+  const response = router.handle({
+    operation: 'directive.emit',
+    request_id: 'request_emit_operation_attention_1',
+    carrier_session_id: 'carrier_session_cloudflare_fixture',
+    principal: { principal_id: 'operator.fixture' },
+    params: {
+      directive_kind: 'operation_attention',
+      operation_id: 'operation_fixture_control',
+      input_event_id: 'input_operation_attention_emit_1',
+      directive_id: 'dir_operation_attention_emit_1',
+      target: { kind: 'operation', id: 'operation_fixture_control' },
+    },
+  });
+  assert.equal(response.ok, true);
+  assert.equal(response.directive_kind, 'operation_attention');
+  assert.equal(response.terminal_state, 'completed_without_provider');
+  assertValidEvents(response);
+  assert.deepEqual(eventKinds(response), [
+    'directive_emission_authorized',
+    'directive_emission_rule_recorded',
+    'directive_emitted',
+    'directive_receipt_recorded',
+    'directive_carrier_accepted_recorded',
+    'input_completed',
+  ]);
+  assert.equal(response.rule.visibility, 'operator_visible');
+  assert.equal(response.rule.trigger_kind, 'runtime_trigger');
+  assert.deepEqual(response.rule.target, { kind: 'operation', id: 'operation_fixture_control' });
+  assert.equal(response.events[2].payload.directive_kind, 'operation_attention');
+  assert.equal(response.events[2].payload.trigger_kind, 'runtime_trigger');
+  assert.equal(response.events.some((event) => event.event_kind === 'turn_started'), false);
+});
+
+test('registered directive emitter reports suppression without delivery events', () => {
+  const { router } = startedSession();
+  const response = router.handle({
+    operation: 'directive.emit',
+    request_id: 'request_emit_operation_attention_disabled',
+    carrier_session_id: 'carrier_session_cloudflare_fixture',
+    params: {
+      directive_kind: 'operation_attention',
+      enabled: false,
+      target: { kind: 'operation', id: 'operation_fixture_control' },
+    },
+  });
+  assert.deepEqual(response, {
+    ok: false,
+    operation: 'directive.emit',
+    code: 'directive_emission_disabled',
+    directive_kind: 'operation_attention',
+  });
+});
+
 test('goal command supports show set pause resume and clear', () => {
   const { router } = startedSession();
   let response = router.handle(commandRequest('/goal', ['stabilize', 'carrier']));
@@ -607,6 +662,18 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Operation ID/);
   assert.match(html, /Operation Sessions/);
   assert.match(html, /Active Session/);
+  assert.match(html, /Control Room/);
+  assert.match(html, /Selected Session/);
+  assert.match(html, /Authority Locus/);
+  assert.match(html, /Task Focus/);
+  assert.match(html, /Evidence Window/);
+  assert.match(html, /Evidence Filter/);
+  assert.match(html, /Session Filter/);
+  assert.match(html, /eventKindFilter/);
+  assert.match(html, /eventSessionFilter/);
+  assert.match(html, /updateControlRoom/);
+  assert.match(html, /visibleEvents/);
+  assert.match(html, /refreshEventKindFilter/);
   assert.match(html, /operation_narada_cloudflare_control/);
   assert.match(html, /Optional when signed in/);
   assert.match(html, /Use Session/);
@@ -1825,6 +1892,8 @@ test('evidence rejects obvious secret values', () => {
 });
 
 test('control classifier marks cloudflare supported and mutating operations', () => {
+  assert.equal(classifyCloudflareCarrierControl({ operation: 'directive.emit' }).cloudflare_supported, true);
+  assert.equal(classifyCloudflareCarrierControl({ operation: 'directive.emit' }).mutates_session, true);
   assert.equal(classifyCloudflareCarrierControl({ operation: 'carrier.input.deliver' }).cloudflare_supported, true);
   assert.equal(classifyCloudflareCarrierControl({ operation: 'carrier.input.deliver' }).mutates_session, true);
   assert.equal(classifyCloudflareCarrierControl({ operation: 'session.events.read' }).mutates_session, false);

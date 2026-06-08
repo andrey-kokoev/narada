@@ -1540,6 +1540,7 @@ export function authenticateCarrierRequest(request, env = {}) {
 function mutatesSession(operation) {
   return [
     'session.start',
+    'directive.emit',
     'directive.heartbeat.emit',
     'carrier.input.deliver',
     'carrier.command.execute',
@@ -1693,6 +1694,12 @@ export function renderCloudflareCarrierConsole() {
     .metric { border: 1px solid #d7d7ce; border-radius: 6px; padding: 10px; background: #faf9f4; min-width: 0; }
     .metric b { display: block; font-size: 11px; color: #686d75; }
     .metric span { display: block; margin-top: 4px; overflow-wrap: anywhere; }
+    .control-room { margin-top: 16px; border: 1px solid #cfd7d2; border-radius: 8px; padding: 12px; background: #f5faf7; }
+    .control-room h2 { margin: 0 0 10px; font-size: 15px; letter-spacing: 0; color: #1f4e48; }
+    .control-room-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .control-room-item { min-width: 0; border: 1px solid #d9dcd3; border-radius: 6px; padding: 8px; background: #fff; }
+    .control-room-item b { display: block; font-size: 11px; color: #686d75; }
+    .control-room-item span { display: block; margin-top: 4px; font-size: 12px; color: #1e2024; overflow-wrap: anywhere; }
     .task-panel { margin-top: 16px; border-top: 1px solid #d7d7ce; padding-top: 14px; }
     .task-panel h2 { margin: 0 0 10px; font-size: 15px; letter-spacing: 0; }
     .tasks { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
@@ -1709,6 +1716,8 @@ export function renderCloudflareCarrierConsole() {
     .overview-block b { color: #686d75; }
     .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px; border-bottom: 1px solid #d7d7ce; }
     .toolbar h2 { margin: 0; font-size: 16px; letter-spacing: 0; }
+    .event-filters { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(140px, 1fr); gap: 8px; width: min(420px, 100%); }
+    .event-filters label { margin: 0; }
     .events { overflow: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
     .event { border: 1px solid #d9dcd3; border-radius: 8px; padding: 10px; background: #fff; }
     .event strong { display: block; color: #1f4e48; font-size: 13px; overflow-wrap: anywhere; }
@@ -1753,6 +1762,17 @@ export function renderCloudflareCarrierConsole() {
         <div class="metric"><b>Events</b><span id="eventCount">0</span></div>
         <div class="metric"><b>Cursor</b><span id="cursor">0</span></div>
       </div>
+      <div class="control-room">
+        <h2>Control Room</h2>
+        <div class="control-room-grid">
+          <div class="control-room-item"><b>Operation</b><span id="controlOperation">none</span></div>
+          <div class="control-room-item"><b>Selected Session</b><span id="controlSession">none</span></div>
+          <div class="control-room-item"><b>Authority Locus</b><span id="controlAuthorityLocus">unknown</span></div>
+          <div class="control-room-item"><b>Task Focus</b><span id="controlTaskFocus">none</span></div>
+          <div class="control-room-item"><b>Evidence Window</b><span id="controlEvidenceWindow">0 events</span></div>
+          <div class="control-room-item"><b>Continuity</b><span id="controlContinuity">unknown</span></div>
+        </div>
+      </div>
       <div class="product-panel">
         <h2>Last Authority</h2>
         <div id="lastAuthority" class="task"><strong>No authority action loaded.</strong><span>Read Site or Put Membership to inspect evidence.</span></div>
@@ -1789,6 +1809,10 @@ export function renderCloudflareCarrierConsole() {
     <section>
       <div class="toolbar">
         <h2>Session Events</h2>
+        <div class="event-filters">
+          <label>Evidence Filter<select id="eventKindFilter"><option value="">All event kinds</option></select></label>
+          <label>Session Filter<select id="eventSessionFilter"><option value="active">Active session</option><option value="all">All loaded sessions</option></select></label>
+        </div>
         <button id="read" class="secondary">Read Events</button>
       </div>
       <div id="productOverview" class="overview">
@@ -1811,7 +1835,7 @@ export function renderCloudflareCarrierConsole() {
   </main>
   <script type="module">
     const WORKBENCH_STORAGE_KEY = 'narada.cloudflare.operationWorkbench.v1';
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, consoleSequence: 0 };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, consoleSequence: 0, taskFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -1895,6 +1919,7 @@ export function renderCloudflareCarrierConsole() {
     }
     function renderActiveSession() {
       el('activeSession').textContent = el('sessionId').value.trim() || 'none';
+      updateControlRoom();
     }
     function setCurrentSession(carrierSessionId) {
       const next = String(carrierSessionId || '').trim();
@@ -1905,6 +1930,7 @@ export function renderCloudflareCarrierConsole() {
       state.events = [];
       state.afterSequence = 0;
       renderEvents();
+      updateControlRoom();
     }
     function appendConsoleEvidence(eventKind, payload = {}) {
       state.consoleSequence += 1;
@@ -1925,7 +1951,39 @@ export function renderCloudflareCarrierConsole() {
         const sequence = Number(event.sequence || 0);
         if (Number.isInteger(sequence)) state.afterSequence = Math.max(state.afterSequence, sequence);
       }
+      refreshEventKindFilter();
       renderEvents();
+    }
+    function updateControlRoom() {
+      const product = state.operationProduct || {};
+      const surface = product.operation_product_surface || {};
+      const activeSession = el('sessionId').value.trim();
+      const activeDecision = (product.site_authority?.decisions || []).find((decision) => decision.mutation_class === 'cloudflare_carrier_session')
+        || (product.site_authority?.decisions || [])[0]
+        || null;
+      el('controlOperation').textContent = product.operation?.operation_id || el('operationId').value.trim() || 'none';
+      el('controlSession').textContent = activeSession || 'none';
+      el('controlAuthorityLocus').textContent = activeDecision ? [activeDecision.authority_locus || 'unresolved', activeDecision.action || 'unknown'].join(' / ') : 'unknown';
+      el('controlTaskFocus').textContent = state.taskFocus ? [state.taskFocus.task_id, state.taskFocus.status].filter(Boolean).join(' / ') : 'none';
+      el('controlEvidenceWindow').textContent = String(surface.carrier_evidence_count ?? state.events.length) + ' evidence groups / ' + state.events.length + ' loaded events';
+      el('controlContinuity').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length ?? 0) + ' packets';
+    }
+    function refreshEventKindFilter() {
+      const select = el('eventKindFilter');
+      const current = select.value;
+      const kinds = [...new Set(state.events.map((event) => event.event_kind).filter(Boolean))].sort();
+      select.replaceChildren(new Option('All event kinds', ''), ...kinds.map((kind) => new Option(kind, kind)));
+      if (kinds.includes(current)) select.value = current;
+    }
+    function visibleEvents() {
+      const activeSession = el('sessionId').value.trim();
+      const kindFilter = el('eventKindFilter').value;
+      const sessionFilter = el('eventSessionFilter').value;
+      return state.events.filter((event) => {
+        if (kindFilter && event.event_kind !== kindFilter) return false;
+        if (sessionFilter === 'active' && activeSession && event.carrier_session_id && event.carrier_session_id !== activeSession) return false;
+        return true;
+      });
     }
     function renderTasks(tasks = []) {
       el('taskCount').textContent = String(tasks.length);
@@ -1941,10 +1999,12 @@ export function renderCloudflareCarrierConsole() {
         const meta = document.createElement('span');
         meta.textContent = [task.status, task.carrier_session_id, task.note].filter(Boolean).join(' | ');
         node.addEventListener('click', () => {
+          state.taskFocus = task;
           el('updateTaskId').value = task.task_id;
           el('updateTaskStatus').value = task.status || 'done';
           el('updateTaskNote').value = task.note || '';
           if (task.carrier_session_id) setCurrentSession(task.carrier_session_id);
+          updateControlRoom();
         });
         node.append(title, meta);
         return node;
@@ -2019,6 +2079,7 @@ export function renderCloudflareCarrierConsole() {
       ].join(' | ');
     }
     function renderSiteProduct(product) {
+      state.operationProduct = product;
       el('siteStatus').textContent = product.site?.status || 'unknown';
       el('operationStatus').textContent = 'site scope';
       el('membershipRole').textContent = product.membership?.role || 'none';
@@ -2028,6 +2089,7 @@ export function renderCloudflareCarrierConsole() {
       el('authorityCount').textContent = String((product.authority_events || []).length);
       el('continuityCount').textContent = String((product.site_continuity_packets || []).length);
       renderTasks(product.tasks || []);
+      updateControlRoom();
       const siteItems = [
         listItem('site_id', product.site?.site_id),
         listItem('display_name', product.site?.display_name),
@@ -2056,6 +2118,7 @@ export function renderCloudflareCarrierConsole() {
         renderListBlock('Carrier Evidence', evidenceItems),
       );
       renderLastAuthority((product.authority_events || [])[0]);
+      updateControlRoom();
     }
     function renderOperationSessions(sessions = []) {
       const select = el('operationSessionSelect');
@@ -2078,6 +2141,7 @@ export function renderCloudflareCarrierConsole() {
       el('continuityCount').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length);
       renderTasks(product.tasks || []);
       renderOperationSessions(product.sessions || []);
+      updateControlRoom();
       const operationItems = [
         listItem('operation_id', product.operation?.operation_id),
         listItem('display_name', product.operation?.display_name),
@@ -2113,6 +2177,7 @@ export function renderCloudflareCarrierConsole() {
         renderListBlock('Carrier Evidence', evidenceItems),
       );
       renderLastAuthority((product.authority_events || [])[0]);
+      updateControlRoom();
     }
     function evidencePayload(event) {
       const payload = event.payload || {};
@@ -2139,11 +2204,13 @@ export function renderCloudflareCarrierConsole() {
     function renderEvents() {
       el('eventCount').textContent = String(state.events.length);
       el('cursor').textContent = String(state.afterSequence);
-      if (state.events.length === 0) {
-        el('events').innerHTML = '<div class="empty">No events read yet.</div>';
+      const events = visibleEvents();
+      updateControlRoom();
+      if (events.length === 0) {
+        el('events').innerHTML = '<div class="empty">No matching events read yet.</div>';
         return;
       }
-      el('events').replaceChildren(...state.events.map((event) => {
+      el('events').replaceChildren(...events.map((event) => {
         const node = document.createElement('article');
         node.className = 'event';
         const title = document.createElement('strong');
@@ -2201,6 +2268,8 @@ export function renderCloudflareCarrierConsole() {
     el('sessionId').addEventListener('change', saveWorkbenchState);
     el('useSelectedSession').addEventListener('click', () => setCurrentSession(el('operationSessionSelect').value));
     el('operationSessionSelect').addEventListener('change', () => setCurrentSession(el('operationSessionSelect').value));
+    el('eventKindFilter').addEventListener('change', renderEvents);
+    el('eventSessionFilter').addEventListener('change', renderEvents);
     el('start').addEventListener('click', () => run(async () => { const body = await api.start(); appendEvents([body.event].filter(Boolean)); await refreshStatus(); await refreshOperation(); }));
     el('refresh').addEventListener('click', () => run(refreshOperation));
     el('readOperation').addEventListener('click', () => run(refreshOperation));

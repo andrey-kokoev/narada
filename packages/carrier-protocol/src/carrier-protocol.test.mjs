@@ -10,7 +10,12 @@ import {
   PAYLOAD_POLICY_SCHEMA,
   PROVIDER_REQUEST_PAYLOAD_SCHEMA,
   PROVIDER_OUTPUT_PAYLOAD_SCHEMA,
+  CARRIER_DIRECTIVE_EMITTER_REGISTRY,
   OBSERVER_VISIBILITIES,
+  DIRECTIVE_KINDS,
+  DIRECTIVE_SUPPRESSION_REASONS,
+  DIRECTIVE_TARGET_KINDS,
+  DIRECTIVE_TRIGGER_KINDS,
   PAYLOAD_REF_READER_TOOLS,
   SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA,
   SESSION_EVENT_KINDS,
@@ -29,8 +34,11 @@ import {
   classifyCarrierInputHold,
   classifyCarrierInputQueueAdmission,
   classifyCarrierInputIntent,
+  classifyDirectiveEmissionRequest,
   classifyToolEffectAdmission,
   classifyInputAdmission,
+  carrierDirectiveEmitterSpec,
+  createCarrierDirectiveInput,
   createCarrierDiagnosticSessionEvent,
   createControlInputRecord,
   createInputEvent,
@@ -91,12 +99,17 @@ const baseInput = {
 
 const sessionEventFixtureManifest = readFixture('session-event-fixtures.json');
 const inputPipelineCases = readFixture('carrier-input-pipeline-cases.json');
+const directiveEmitterRegistryCases = readFixture('carrier-directive-emitter-registry-cases.json');
 const toolEffectAdmissionCases = readFixture('tool-effect-admission-cases.json');
 
 assert.equal(CARRIER_PROTOCOL_SCHEMAS.input_event.schema, INPUT_EVENT_SCHEMA);
 assert.equal(CARRIER_PROTOCOL_SCHEMAS.session_event_fixture_manifest.schema, SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA);
 assert.equal(CARRIER_PROTOCOL_SCHEMAS.tool_effect_admission_cases.schema, TOOL_EFFECT_ADMISSION_CASES_SCHEMA);
 assert.deepEqual(OBSERVER_VISIBILITIES, ['record_only', 'operator_visible', 'agent_visible', 'conversation_visible']);
+assert.deepEqual(DIRECTIVE_KINDS, ['operation_heartbeat', 'operation_attention']);
+assert.deepEqual(DIRECTIVE_TARGET_KINDS, ['carrier_session', 'operation', 'site', 'operator', 'observer']);
+assert.deepEqual(DIRECTIVE_TRIGGER_KINDS, ['cadence', 'runtime_trigger', 'operator_authorized']);
+assert.deepEqual(DIRECTIVE_SUPPRESSION_REASONS, ['directive_emission_disabled', 'directive_emission_rule_inactive', 'directive_emission_target_missing', 'directive_emission_unsupported_kind']);
 assert.deepEqual(PAYLOAD_REF_READER_TOOLS, ['mcp_payload_read', 'mcp_payload_show', 'mcp_output_show', 'carrier_host_command_output_read']);
 assert.deepEqual(TOOL_RESULT_STATUSES, ['ok', 'denied', 'failed']);
 assert.deepEqual(TOOL_EFFECT_ADMISSION_ACTIONS, ['admit', 'deny']);
@@ -104,6 +117,34 @@ assert.deepEqual(TOOL_EFFECT_ADMISSION_REASONS, ['read_only_tool_effect_admitted
 assert.equal(toolEffectAdmissionCases.schema, TOOL_EFFECT_ADMISSION_CASES_SCHEMA);
 for (const fixtureCase of toolEffectAdmissionCases.cases) {
   assert.deepEqual(classifyToolEffectAdmission(fixtureCase.tool_call, fixtureCase.state), fixtureCase.expected, fixtureCase.name);
+}
+assert.equal(directiveEmitterRegistryCases.schema, 'narada.carrier.directive_emitter_registry_cases.v1');
+for (const fixtureCase of directiveEmitterRegistryCases.cases) {
+  const decision = classifyDirectiveEmissionRequest({
+    directive_kind: fixtureCase.directive_kind,
+    enabled: fixtureCase.enabled ?? true,
+    target: fixtureCase.target,
+  });
+  assert.equal(decision.action, fixtureCase.expected.emission_action, fixtureCase.name);
+  if (decision.action === 'suppress') {
+    assert.equal(decision.reason, fixtureCase.expected.suppression_reason, fixtureCase.name);
+    continue;
+  }
+  const spec = carrierDirectiveEmitterSpec(fixtureCase.directive_kind);
+  assert.equal(spec.default_visibility, fixtureCase.expected.default_visibility, fixtureCase.name);
+  assert.equal(spec.default_cadence, fixtureCase.expected.default_cadence, fixtureCase.name);
+  assert.equal(spec.trigger_kind, fixtureCase.expected.trigger_kind, fixtureCase.name);
+  assert.equal(spec.target_kind, fixtureCase.expected.target_kind, fixtureCase.name);
+  const input = createCarrierDirectiveInput({
+    directive_kind: fixtureCase.directive_kind,
+    operation_id: fixtureCase.operation_id,
+    carrier_session_id: fixtureCase.target.kind === 'carrier_session' ? fixtureCase.target.id : null,
+    target: fixtureCase.target,
+  });
+  assert.equal(input.metadata.directive.kind, fixtureCase.directive_kind, fixtureCase.name);
+  assert.equal(input.metadata.directive.visibility, fixtureCase.expected.default_visibility, fixtureCase.name);
+  assert.equal(input.metadata.directive.trigger_kind, fixtureCase.expected.trigger_kind, fixtureCase.name);
+  assert.deepEqual(input.metadata.directive.target, fixtureCase.target, fixtureCase.name);
 }
 assert.deepEqual(classifyCarrierControlRequest({ id: 'status-1', method: 'session.status' }), {
   request_id: 'status-1',

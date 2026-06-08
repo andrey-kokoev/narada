@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  CARRIER_DIRECTIVE_EMITTER_REGISTRY,
   DIRECTIVE_KINDS,
+  DIRECTIVE_SUPPRESSION_REASONS,
+  DIRECTIVE_TARGET_KINDS,
+  DIRECTIVE_TRIGGER_KINDS,
   DIRECTIVE_VISIBILITIES,
   OBSERVER_VISIBILITIES,
   PAYLOAD_REF_READER_TOOLS,
@@ -44,6 +48,17 @@ test('carrier protocol contract exposes schemas and id prefixes', () => {
   assert.equal(contract.directive_visibility.default, 'agent_visible');
   assert.deepEqual(contract.directive_kind.values, DIRECTIVE_KINDS);
   assert.equal(contract.directive_kind.basic_test_kind, 'operation_heartbeat');
+  assert.deepEqual(contract.directive_target_kind.values, DIRECTIVE_TARGET_KINDS);
+  assert.deepEqual(contract.directive_trigger_kind.values, DIRECTIVE_TRIGGER_KINDS);
+  assert.deepEqual(contract.directive_emission_suppression_reason.values, DIRECTIVE_SUPPRESSION_REASONS);
+  assert.deepEqual(contract.directive_emitter_registry.entries.map((entry) => entry.directive_kind), DIRECTIVE_KINDS);
+  for (const entry of contract.directive_emitter_registry.entries) {
+    const spec = CARRIER_DIRECTIVE_EMITTER_REGISTRY[entry.directive_kind];
+    assert.equal(entry.default_visibility, spec.default_visibility);
+    assert.equal(entry.default_cadence, spec.default_cadence);
+    assert.equal(entry.trigger_kind, spec.trigger_kind);
+    assert.equal(entry.target_kind, spec.target_kind);
+  }
   assert.deepEqual(contract.directive_emission_event_kind.values, [
     'directive_emission_authorized',
     'directive_emission_rule_recorded',

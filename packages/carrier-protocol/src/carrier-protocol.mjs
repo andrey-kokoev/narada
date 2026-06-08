@@ -14,7 +14,45 @@ export const LEGACY_STARTUP_COMMAND_NAME = 'startup_sequence';
 export const SOURCE_KINDS = Object.freeze(['operator', 'system', 'agent', 'external']);
 export const OBSERVER_VISIBILITIES = Object.freeze(['record_only', 'operator_visible', 'agent_visible', 'conversation_visible']);
 export const DIRECTIVE_VISIBILITIES = OBSERVER_VISIBILITIES;
-export const DIRECTIVE_KINDS = Object.freeze(['operation_heartbeat']);
+export const DIRECTIVE_KINDS = Object.freeze(['operation_heartbeat', 'operation_attention']);
+export const DIRECTIVE_TARGET_KINDS = Object.freeze(['carrier_session', 'operation', 'site', 'operator', 'observer']);
+export const DIRECTIVE_TRIGGER_KINDS = Object.freeze(['cadence', 'runtime_trigger', 'operator_authorized']);
+export const DIRECTIVE_SUPPRESSION_REASONS = Object.freeze([
+  'directive_emission_disabled',
+  'directive_emission_rule_inactive',
+  'directive_emission_target_missing',
+  'directive_emission_unsupported_kind',
+]);
+export const CARRIER_DIRECTIVE_EMITTER_REGISTRY = Object.freeze({
+  operation_heartbeat: Object.freeze({
+    directive_kind: 'operation_heartbeat',
+    default_visibility: 'record_only',
+    default_cadence: 'PT1M',
+    trigger_kind: 'cadence',
+    target_kind: 'carrier_session',
+    default_source_kind: 'system',
+    default_source_id: 'narada-proper.system.directive_emitter',
+    default_authorized_emitter: Object.freeze({ kind: 'system', id: 'narada-proper.system.directive_emitter' }),
+    default_authority: Object.freeze({ locus: 'narada_proper', basis: 'operator_authorized_system_directive' }),
+    default_reason: 'operation_continuity_heartbeat',
+    delivery_mode: 'admit_for_current_turn',
+    content: '',
+  }),
+  operation_attention: Object.freeze({
+    directive_kind: 'operation_attention',
+    default_visibility: 'operator_visible',
+    default_cadence: null,
+    trigger_kind: 'runtime_trigger',
+    target_kind: 'operation',
+    default_source_kind: 'system',
+    default_source_id: 'narada-proper.system.directive_emitter',
+    default_authorized_emitter: Object.freeze({ kind: 'system', id: 'narada-proper.system.directive_emitter' }),
+    default_authority: Object.freeze({ locus: 'narada_proper', basis: 'operator_authorized_system_directive' }),
+    default_reason: 'operation_requires_attention',
+    delivery_mode: 'admit_for_current_turn',
+    content: '',
+  }),
+});
 export const OBSERVER_CONFIDENCES = Object.freeze(['low', 'medium', 'high']);
 export const PAYLOAD_REF_READER_TOOLS = Object.freeze([
   'mcp_payload_read',
@@ -573,6 +611,79 @@ export function classifyCarrierDirectiveInput(input = {}) {
   };
 }
 
+export function carrierDirectiveEmitterSpec(directive_kind = 'operation_heartbeat') {
+  const normalizedDirectiveKind = enumIncludes(DIRECTIVE_KINDS, directive_kind) ? directive_kind : 'operation_heartbeat';
+  return CARRIER_DIRECTIVE_EMITTER_REGISTRY[normalizedDirectiveKind] ?? CARRIER_DIRECTIVE_EMITTER_REGISTRY.operation_heartbeat;
+}
+
+export function classifyDirectiveEmissionRequest({ directive_kind = 'operation_heartbeat', enabled = true, rule = null, target = null } = {}) {
+  const spec = CARRIER_DIRECTIVE_EMITTER_REGISTRY[directive_kind] ?? null;
+  if (!spec) return { action: 'suppress', reason: 'directive_emission_unsupported_kind', directive_kind };
+  if (!enabled) return { action: 'suppress', reason: 'directive_emission_disabled', directive_kind };
+  if (rule && rule.status !== 'active') return { action: 'suppress', reason: 'directive_emission_rule_inactive', directive_kind };
+  if (!target?.id) return { action: 'suppress', reason: 'directive_emission_target_missing', directive_kind };
+  return { action: 'emit', reason: 'directive_emission_admitted', directive_kind, spec };
+}
+
+export function createCarrierDirectiveInput({
+  directive_kind = 'operation_heartbeat',
+  event_id,
+  directive_id,
+  authorization_id,
+  rule_id,
+  operation_id,
+  carrier_session_id = null,
+  site_id = null,
+  operator_id = null,
+  observer_id = null,
+  created_at = nowIso(),
+  source_id,
+  authority_ref = null,
+  cadence,
+  visibility,
+  reason,
+  content,
+  trigger_kind,
+  target = null,
+} = {}) {
+  const spec = carrierDirectiveEmitterSpec(directive_kind);
+  const normalizedDirectiveKind = spec.directive_kind;
+  const normalizedOperationId = String(operation_id ?? '').trim();
+  const normalizedVisibility = enumIncludes(DIRECTIVE_VISIBILITIES, visibility ?? spec.default_visibility) ? visibility ?? spec.default_visibility : spec.default_visibility;
+  const normalizedCadence = cadence ?? spec.default_cadence ?? null;
+  const normalizedTarget = target ?? { kind: spec.target_kind, id: carrier_session_id ?? operation_id ?? site_id ?? operator_id ?? observer_id ?? null };
+  return createInputEvent({
+    event_id: event_id ?? `input_${normalizedDirectiveKind}_${randomIdPart()}`,
+    source_kind: spec.default_source_kind ?? 'system',
+    source_id: source_id ?? spec.default_source_id ?? 'narada-proper.system.directive_emitter',
+    transport: 'carrier_server_api',
+    delivery_mode: spec.delivery_mode ?? 'admit_for_current_turn',
+    hold_condition: null,
+    content: content ?? spec.content ?? '',
+    created_at,
+    authority_ref: authority_ref ?? (authorization_id ? `directive_emission_authorization:${authorization_id}` : null),
+    directive_id: directive_id ?? `dir_${normalizedDirectiveKind}_${randomIdPart()}`,
+    metadata: {
+      directive_provenance: { kind: 'system_directive' },
+      directive: {
+        kind: normalizedDirectiveKind,
+        visibility: normalizedVisibility,
+        ...(normalizedCadence ? { cadence: normalizedCadence } : {}),
+        trigger_kind: trigger_kind ?? spec.trigger_kind,
+        target: normalizedTarget,
+        ...(normalizedOperationId ? { operation_id: normalizedOperationId } : {}),
+        ...(carrier_session_id ? { carrier_session_id } : {}),
+        ...(site_id ? { site_id } : {}),
+        ...(operator_id ? { operator_id } : {}),
+        ...(observer_id ? { observer_id } : {}),
+        ...(authorization_id ? { authorization_id } : {}),
+        ...(rule_id ? { rule_id } : {}),
+        reason: reason ?? spec.default_reason,
+      },
+    },
+  });
+}
+
 export function createDirectiveEmissionAuthorization({
   authorization_id,
   directive_kind = 'operation_heartbeat',
@@ -584,15 +695,16 @@ export function createDirectiveEmissionAuthorization({
   status = 'authorized',
   created_at = nowIso(),
 } = {}) {
-  const normalizedDirectiveKind = enumIncludes(DIRECTIVE_KINDS, directive_kind) ? directive_kind : 'operation_heartbeat';
+  const spec = carrierDirectiveEmitterSpec(directive_kind);
+  const normalizedDirectiveKind = spec.directive_kind;
   return {
     schema: 'narada.directive_emission_authorization.v1',
     authorization_id: authorization_id ?? `auth_${normalizedDirectiveKind}_${randomIdPart()}`,
     directive_kind: normalizedDirectiveKind,
-    cadence,
+    cadence: cadence ?? spec.default_cadence,
     authorized_by,
-    authorized_emitter,
-    authority,
+    authorized_emitter: authorized_emitter ?? spec.default_authorized_emitter,
+    authority: authority ?? spec.default_authority,
     target,
     status,
     created_at,
@@ -609,14 +721,16 @@ export function createDirectiveEmissionRule({
   status = 'active',
   created_at = nowIso(),
 } = {}) {
-  const normalizedDirectiveKind = enumIncludes(DIRECTIVE_KINDS, directive_kind) ? directive_kind : 'operation_heartbeat';
+  const spec = carrierDirectiveEmitterSpec(directive_kind);
+  const normalizedDirectiveKind = spec.directive_kind;
   return {
     schema: 'narada.directive_emission_rule.v1',
     rule_id: rule_id ?? `directive_emission_rule_${normalizedDirectiveKind}_${randomIdPart()}`,
     authorization_id: authorization_id ?? null,
     directive_kind: normalizedDirectiveKind,
-    cadence,
-    visibility: enumIncludes(DIRECTIVE_VISIBILITIES, visibility) ? visibility : 'record_only',
+    cadence: cadence ?? spec.default_cadence,
+    trigger_kind: spec.trigger_kind,
+    visibility: enumIncludes(DIRECTIVE_VISIBILITIES, visibility ?? spec.default_visibility) ? visibility ?? spec.default_visibility : spec.default_visibility,
     target,
     status,
     created_at,
@@ -636,31 +750,20 @@ export function createOperationHeartbeatDirectiveInput({
   cadence = 'PT1M',
   reason = 'operation_continuity_heartbeat',
 } = {}) {
-  const normalizedOperationId = String(operation_id ?? '').trim();
-  return createInputEvent({
-    event_id: event_id ?? `input_operation_heartbeat_${randomIdPart()}`,
-    source_kind: 'system',
-    source_id,
-    transport: 'carrier_server_api',
-    delivery_mode: 'admit_for_current_turn',
-    hold_condition: null,
-    content: '',
+  return createCarrierDirectiveInput({
+    directive_kind: 'operation_heartbeat',
+    event_id,
+    directive_id,
+    authorization_id,
+    rule_id,
+    operation_id,
+    carrier_session_id,
     created_at,
-    authority_ref: authority_ref ?? (authorization_id ? `directive_emission_authorization:${authorization_id}` : null),
-    directive_id: directive_id ?? `dir_operation_heartbeat_${randomIdPart()}`,
-    metadata: {
-      directive_provenance: { kind: 'system_directive' },
-      directive: {
-        kind: 'operation_heartbeat',
-        visibility: 'record_only',
-        cadence,
-        ...(normalizedOperationId ? { operation_id: normalizedOperationId } : {}),
-        ...(carrier_session_id ? { carrier_session_id } : {}),
-        ...(authorization_id ? { authorization_id } : {}),
-        ...(rule_id ? { rule_id } : {}),
-        reason,
-      },
-    },
+    source_id,
+    authority_ref,
+    cadence,
+    visibility: 'record_only',
+    reason,
   });
 }
 
@@ -670,7 +773,9 @@ export function directiveEmissionPayload({ authorization = null, rule = null, in
     rule_id: rule?.rule_id ?? input?.metadata?.directive?.rule_id ?? null,
     directive_kind: rule?.directive_kind ?? input?.metadata?.directive?.kind ?? null,
     cadence: rule?.cadence ?? input?.metadata?.directive?.cadence ?? null,
+    trigger_kind: rule?.trigger_kind ?? input?.metadata?.directive?.trigger_kind ?? null,
     visibility: rule?.visibility ?? directiveVisibility(input ?? {}),
+    target: rule?.target ?? input?.metadata?.directive?.target ?? null,
     input_event_id: input?.event_id ?? null,
     directive_id: input?.directive_id ?? null,
     operation_id: input?.metadata?.directive?.operation_id ?? null,

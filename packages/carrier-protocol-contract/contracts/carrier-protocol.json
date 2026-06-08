@@ -42,8 +42,35 @@
     "default": "agent_visible"
   },
   "directive_kind": {
-    "values": ["operation_heartbeat"],
+    "values": ["operation_heartbeat", "operation_attention"],
     "basic_test_kind": "operation_heartbeat"
+  },
+  "directive_target_kind": {
+    "values": ["carrier_session", "operation", "site", "operator", "observer"]
+  },
+  "directive_trigger_kind": {
+    "values": ["cadence", "runtime_trigger", "operator_authorized"]
+  },
+  "directive_emission_suppression_reason": {
+    "values": ["directive_emission_disabled", "directive_emission_rule_inactive", "directive_emission_target_missing", "directive_emission_unsupported_kind"]
+  },
+  "directive_emitter_registry": {
+    "entries": [
+      {
+        "directive_kind": "operation_heartbeat",
+        "default_visibility": "record_only",
+        "default_cadence": "PT1M",
+        "trigger_kind": "cadence",
+        "target_kind": "carrier_session"
+      },
+      {
+        "directive_kind": "operation_attention",
+        "default_visibility": "operator_visible",
+        "default_cadence": null,
+        "trigger_kind": "runtime_trigger",
+        "target_kind": "operation"
+      }
+    ]
   },
   "directive_emission_event_kind": {
     "values": ["directive_emission_authorized", "directive_emission_rule_recorded", "directive_emitted"]

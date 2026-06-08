@@ -1,0 +1,50 @@
+{
+  "schema": "narada.carrier.directive_emitter_registry_cases.v1",
+  "cases": [
+    {
+      "name": "operation_heartbeat_cadence_record_only_session_target",
+      "directive_kind": "operation_heartbeat",
+      "target": { "kind": "carrier_session", "id": "carrier_session_fixture" },
+      "operation_id": "operation_fixture",
+      "expected": {
+        "default_visibility": "record_only",
+        "default_cadence": "PT1M",
+        "trigger_kind": "cadence",
+        "target_kind": "carrier_session",
+        "emission_action": "emit"
+      }
+    },
+    {
+      "name": "operation_attention_runtime_trigger_operator_visible_operation_target",
+      "directive_kind": "operation_attention",
+      "target": { "kind": "operation", "id": "operation_fixture" },
+      "operation_id": "operation_fixture",
+      "expected": {
+        "default_visibility": "operator_visible",
+        "default_cadence": null,
+        "trigger_kind": "runtime_trigger",
+        "target_kind": "operation",
+        "emission_action": "emit"
+      }
+    },
+    {
+      "name": "unknown_directive_kind_suppressed",
+      "directive_kind": "unknown_directive",
+      "target": { "kind": "operation", "id": "operation_fixture" },
+      "expected": {
+        "emission_action": "suppress",
+        "suppression_reason": "directive_emission_unsupported_kind"
+      }
+    },
+    {
+      "name": "disabled_directive_emission_suppressed",
+      "directive_kind": "operation_heartbeat",
+      "enabled": false,
+      "target": { "kind": "carrier_session", "id": "carrier_session_fixture" },
+      "expected": {
+        "emission_action": "suppress",
+        "suppression_reason": "directive_emission_disabled"
+      }
+    }
+  ]
+}
