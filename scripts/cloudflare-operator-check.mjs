@@ -11,8 +11,10 @@ import { stderr, stdout } from 'node:process';
 import {
   classifyCloudflareAuthorityCommandState,
   classifyCloudflareEvidenceCommandState,
+  classifyCloudflareMembershipCommandState,
   classifyCloudflareOperationCommandState,
   classifyCloudflareSessionCommandState,
+  classifyCloudflareSiteCommandState,
   classifyCloudflareTaskCommandState,
 } from '../packages/cloudflare-carrier/src/cloudflare-worker.mjs';
 
@@ -426,6 +428,7 @@ assert.match(consoleCheck.body, /inspect_refusals/);
 assert.match(consoleCheck.body, /monitor_admissions/);
 assert.match(consoleCheck.body, /Site Product/);
 assert.match(consoleCheck.body, /Site Action/);
+assert.match(consoleCheck.body, /classifyCloudflareSiteCommandState/);
 assert.match(consoleCheck.body, /siteActionSummary/);
 assert.match(consoleCheck.body, /siteActionContext/);
 assert.match(consoleCheck.body, /renderSiteActionSummary/);
@@ -444,6 +447,7 @@ assert.match(consoleCheck.body, /siteFocusDetail/);
 assert.match(consoleCheck.body, /siteFocusContext/);
 assert.match(consoleCheck.body, /renderSiteFocusDetail/);
 assert.match(consoleCheck.body, /Membership Action/);
+assert.match(consoleCheck.body, /classifyCloudflareMembershipCommandState/);
 assert.match(consoleCheck.body, /membershipActionSummary/);
 assert.match(consoleCheck.body, /membershipActionContext/);
 assert.match(consoleCheck.body, /renderMembershipActionSummary/);
@@ -602,6 +606,8 @@ assert.equal((siteRead.body.site?.site_id ?? siteRead.body.site_id), siteId);
 const memberships = siteRead.body.product?.memberships ?? siteRead.body.memberships ?? [];
 const currentMembership = siteRead.body.product?.membership ?? siteRead.body.membership ?? null;
 const operations = siteRead.body.product?.operations ?? siteRead.body.operations ?? [];
+const siteAuthorityEvents = siteRead.body.product?.authority_events ?? siteRead.body.authority_events ?? [];
+const siteAuthorityDecisions = siteRead.body.product?.site_authority?.decisions ?? siteRead.body.site_authority?.decisions ?? [];
 assert.ok(Array.isArray(memberships));
 assert.ok(memberships.length > 0);
 assert.ok(Array.isArray(operations));
@@ -629,6 +635,23 @@ assert.ok(operationRead.body.operation_product_surface?.session_count >= 1);
 assert.ok(operationRead.body.operation_product_surface?.task_count >= 1);
 
 const liveCommandStates = commandStatesForOperationProduct(operationRead.body, { session_id: smoke.carrier_session_id });
+const focusedMembership = currentMembership ?? memberships[0] ?? null;
+liveCommandStates.site = classifyCloudflareSiteCommandState({
+  site_id: siteRead.body.site?.site_id ?? siteRead.body.site_id ?? siteId,
+  scope_loaded: true,
+  membership_count: memberships.length,
+  operation_count: operations.length,
+  authority_count: siteAuthorityEvents.length + siteAuthorityDecisions.length,
+});
+liveCommandStates.membership = classifyCloudflareMembershipCommandState({
+  principal: focusedMembership?.principal_id || focusedMembership?.email || '',
+  site_loaded: true,
+  known: Boolean(focusedMembership),
+  status: focusedMembership?.status || 'unknown',
+  authority_loaded: siteAuthorityEvents.length > 0 || siteAuthorityDecisions.length > 0,
+});
+assert.match(liveCommandStates.site.next_action, /^(load_or_create_membership|create_or_select_operation|read_site_authority|inspect_site_operations)$/);
+assert.match(liveCommandStates.membership.next_action, /^(put_membership|inspect_inactive_membership|focus_membership_authority|monitor_membership_authority)$/);
 assert.match(liveCommandStates.operation.next_action, /^(inspect_operation_evidence|read_operation_evidence|start_or_select_session)$/);
 assert.equal(liveCommandStates.session.next_action, 'inspect_session_evidence');
 assert.match(liveCommandStates.task.next_action, /^(mark_done_or_update|reopen_or_inspect_evidence|normalize_status_or_update)$/);

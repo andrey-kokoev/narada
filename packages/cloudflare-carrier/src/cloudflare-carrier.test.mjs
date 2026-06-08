@@ -9,8 +9,10 @@ import worker, {
   authenticateCarrierRequest,
   classifyCloudflareAuthorityCommandState,
   classifyCloudflareEvidenceCommandState,
+  classifyCloudflareMembershipCommandState,
   classifyCloudflareOperationCommandState,
   classifyCloudflareSessionCommandState,
+  classifyCloudflareSiteCommandState,
   classifyCloudflareTaskCommandState,
   classifyCloudflareToolEffectAdmission,
   CloudflareCarrierDurableObject,
@@ -173,6 +175,34 @@ test('cloudflare evidence command state classifies lane, target, and next action
     const options = maybeExpected ? optionsOrExpected : {};
     const expected = maybeExpected || optionsOrExpected;
     assert.deepEqual(classifyCloudflareEvidenceCommandState(event, options), expected);
+  }
+});
+
+test('cloudflare site command state classifies site scope, membership, operation, and authority readiness', () => {
+  const cases = [
+    [{}, { command_state: 'site_needed', command_action: 'select_site', next_action: 'select_site' }],
+    [{ site_id: 'site_1', scope_loaded: false }, { command_state: 'scope_needed', command_action: 'read_site_scope', next_action: 'read_site_scope' }],
+    [{ site_id: 'site_1', scope_loaded: true, membership_count: 0 }, { command_state: 'membership_needed', command_action: 'load_or_create_membership', next_action: 'load_or_create_membership' }],
+    [{ site_id: 'site_1', scope_loaded: true, membership_count: 1, operation_count: 0 }, { command_state: 'operation_needed', command_action: 'create_or_select_operation', next_action: 'create_or_select_operation' }],
+    [{ site_id: 'site_1', scope_loaded: true, membership_count: 1, operation_count: 1, authority_count: 0 }, { command_state: 'authority_needed', command_action: 'read_site_authority', next_action: 'read_site_authority' }],
+    [{ site_id: 'site_1', scope_loaded: true, membership_count: 1, operation_count: 1, authority_count: 2 }, { command_state: 'site_operations_ready', command_action: 'inspect_site_operations', next_action: 'inspect_site_operations' }],
+  ];
+  for (const [input, expected] of cases) {
+    assert.deepEqual(classifyCloudflareSiteCommandState(input), expected);
+  }
+});
+
+test('cloudflare membership command state classifies principal, site scope, membership, and authority readiness', () => {
+  const cases = [
+    [{}, { command_state: 'principal_needed', command_action: 'enter_principal', next_action: 'enter_principal' }],
+    [{ principal: 'p1', site_loaded: false }, { command_state: 'site_scope_needed', command_action: 'read_membership_site', next_action: 'read_membership_site' }],
+    [{ principal: 'p1', site_loaded: true, known: false }, { command_state: 'membership_write_needed', command_action: 'put_membership', next_action: 'put_membership' }],
+    [{ principal: 'p1', site_loaded: true, known: true, status: 'inactive', authority_loaded: true }, { command_state: 'membership_inactive', command_action: 'inspect_inactive_membership', next_action: 'inspect_inactive_membership' }],
+    [{ principal: 'p1', site_loaded: true, known: true, status: 'active', authority_loaded: false }, { command_state: 'authority_needed', command_action: 'focus_membership_authority', next_action: 'focus_membership_authority' }],
+    [{ principal: 'p1', site_loaded: true, known: true, status: 'active', authority_loaded: true }, { command_state: 'membership_authority_monitoring', command_action: 'monitor_membership_authority', next_action: 'monitor_membership_authority' }],
+  ];
+  for (const [input, expected] of cases) {
+    assert.deepEqual(classifyCloudflareMembershipCommandState(input), expected);
   }
 });
 
@@ -1163,6 +1193,7 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /read_operation_scope_for_active_operation/);
   assert.match(html, /Site Product/);
   assert.match(html, /Site Action/);
+  assert.match(html, /classifyCloudflareSiteCommandState/);
   assert.match(html, /siteActionSummary/);
   assert.match(html, /siteActionContext/);
   assert.match(html, /renderSiteActionSummary/);
@@ -1175,6 +1206,8 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /siteActionFocusMembership/);
   assert.match(html, /read_site_scope/);
   assert.match(html, /load_or_create_membership/);
+  assert.match(html, /Command State/);
+  assert.match(html, /Command Action/);
   assert.match(html, /inspect_site_operations/);
   assert.match(html, /Site Focus Detail/);
   assert.match(html, /siteFocusDetail/);
@@ -1182,6 +1215,7 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /renderSiteFocusDetail/);
   assert.match(html, /Site Membership/);
   assert.match(html, /Membership Action/);
+  assert.match(html, /classifyCloudflareMembershipCommandState/);
   assert.match(html, /membershipActionSummary/);
   assert.match(html, /membershipActionContext/);
   assert.match(html, /renderMembershipActionSummary/);

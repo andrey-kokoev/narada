@@ -3766,6 +3766,56 @@ export function classifyCloudflareEvidenceCommandState(event = {}, options = {})
   };
 }
 
+export function classifyCloudflareSiteCommandState(input = {}) {
+  const siteId = String(input.site_id || '').trim();
+  const scopeLoaded = input.scope_loaded === true || input.scope_loaded === 'yes';
+  const membershipCount = Number(input.membership_count ?? input.memberships ?? 0) || 0;
+  const operationCount = Number(input.operation_count ?? input.operations ?? 0) || 0;
+  const authorityCount = Number(input.authority_count ?? input.authority_items ?? 0) || 0;
+  const nextAction = !siteId ? 'select_site'
+    : !scopeLoaded ? 'read_site_scope'
+    : membershipCount === 0 ? 'load_or_create_membership'
+    : operationCount === 0 ? 'create_or_select_operation'
+    : authorityCount === 0 ? 'read_site_authority'
+    : 'inspect_site_operations';
+  const commandState = nextAction === 'select_site' ? 'site_needed'
+    : nextAction === 'read_site_scope' ? 'scope_needed'
+    : nextAction === 'load_or_create_membership' ? 'membership_needed'
+    : nextAction === 'create_or_select_operation' ? 'operation_needed'
+    : nextAction === 'read_site_authority' ? 'authority_needed'
+    : 'site_operations_ready';
+  return {
+    command_state: commandState,
+    command_action: nextAction,
+    next_action: nextAction,
+  };
+}
+
+export function classifyCloudflareMembershipCommandState(input = {}) {
+  const principal = String(input.principal || input.principal_id || input.email || '').trim();
+  const siteLoaded = input.site_loaded === true || input.site_loaded === 'yes';
+  const known = input.known === true || input.known_membership === true || input.known_membership === 'yes';
+  const status = String(input.status || 'unknown').toLowerCase();
+  const authorityLoaded = input.authority_loaded === true || input.authority_loaded === 'yes';
+  const nextAction = !principal ? 'enter_principal'
+    : !siteLoaded ? 'read_membership_site'
+    : !known ? 'put_membership'
+    : status !== 'active' ? 'inspect_inactive_membership'
+    : !authorityLoaded ? 'focus_membership_authority'
+    : 'monitor_membership_authority';
+  const commandState = nextAction === 'enter_principal' ? 'principal_needed'
+    : nextAction === 'read_membership_site' ? 'site_scope_needed'
+    : nextAction === 'put_membership' ? 'membership_write_needed'
+    : nextAction === 'inspect_inactive_membership' ? 'membership_inactive'
+    : nextAction === 'focus_membership_authority' ? 'authority_needed'
+    : 'membership_authority_monitoring';
+  return {
+    command_state: commandState,
+    command_action: nextAction,
+    next_action: nextAction,
+  };
+}
+
 function mutatesSession(operation) {
   return [
     'session.start',
@@ -4307,6 +4357,8 @@ export function renderCloudflareCarrierConsole() {
     const classifyCloudflareSessionCommandState = ${classifyCloudflareSessionCommandState.toString()};
     const classifyCloudflareTaskCommandState = ${classifyCloudflareTaskCommandState.toString()};
     const classifyCloudflareEvidenceCommandState = ${classifyCloudflareEvidenceCommandState.toString()};
+    const classifyCloudflareSiteCommandState = ${classifyCloudflareSiteCommandState.toString()};
+    const classifyCloudflareMembershipCommandState = ${classifyCloudflareMembershipCommandState.toString()};
     const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, webhookDelayDirectiveFocus: null, webhookDelayDirectiveDeliveryFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
@@ -5930,21 +5982,24 @@ export function renderCloudflareCarrierConsole() {
       const isOperator = principal && (principal === state.operatorPrincipal?.principal_id || principal === state.operatorPrincipal?.email);
       const siteLoaded = siteScopeLoaded();
       const authorityLoaded = membershipAuthorityLoaded(membership);
-      const nextAction = !principal ? 'enter_principal'
-        : !siteLoaded ? 'read_membership_site'
-        : !known ? 'put_membership'
-        : status !== 'active' ? 'inspect_inactive_membership'
-        : !authorityLoaded ? 'focus_membership_authority'
-        : 'monitor_membership_authority';
+      const command = classifyCloudflareMembershipCommandState({
+        principal,
+        site_loaded: siteLoaded,
+        known,
+        status,
+        authority_loaded: authorityLoaded,
+      });
       return [
         ['Principal', principal || 'none'],
         ['Role', role || 'unknown'],
         ['Status', status],
+        ['Command State', command.command_state],
+        ['Command Action', command.command_action],
         ['Known Membership', known ? 'yes' : 'no'],
         ['Operator Principal', isOperator ? 'yes' : 'no'],
         ['Site Scope Loaded', siteLoaded ? 'yes' : 'no'],
         ['Authority Loaded', authorityLoaded ? 'yes' : 'no'],
-        ['Next Action', nextAction],
+        ['Next Action', command.next_action],
       ];
     }
     function renderMembershipActionSummary(membership = focusedMembership()) {
@@ -7123,20 +7178,23 @@ export function renderCloudflareCarrierConsole() {
       const operations = state.operationProduct?.operations || [];
       const memberships = currentMemberships(state.operationProduct || {});
       const authorityCount = (state.operationProduct?.authority_events || []).length + (state.operationProduct?.site_authority?.decisions || []).length;
-      const nextAction = !siteId ? 'select_site'
-        : !loaded ? 'read_site_scope'
-        : memberships.length === 0 ? 'load_or_create_membership'
-        : operations.length === 0 ? 'create_or_select_operation'
-        : authorityCount === 0 ? 'read_site_authority'
-        : 'inspect_site_operations';
+      const command = classifyCloudflareSiteCommandState({
+        site_id: siteId,
+        scope_loaded: loaded,
+        operation_count: operations.length,
+        membership_count: memberships.length,
+        authority_count: authorityCount,
+      });
       return [
         ['Site', siteId || 'none'],
         ['Scope Loaded', loaded ? 'yes' : 'no'],
         ['Status', site?.status || state.operationProduct?.site?.status || 'unknown'],
+        ['Command State', command.command_state],
+        ['Command Action', command.command_action],
         ['Operations', operations.length],
         ['Memberships', memberships.length],
         ['Authority Items', authorityCount],
-        ['Next Action', nextAction],
+        ['Next Action', command.next_action],
       ];
     }
     function renderSiteActionSummary(site = focusedSite()) {
