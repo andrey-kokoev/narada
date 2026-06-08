@@ -918,6 +918,80 @@ test('worker site.read surfaces degraded carrier evidence replay when session ev
   assert.equal(body.site_product_status.next_action, 'carrier_evidence');
 });
 
+test('worker site.read can replay carrier evidence from D1 index without durable object binding', async () => {
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{
+      site_id: 'site_fixture',
+      site_ref: 'site://fixture',
+      display_name: 'Fixture Site',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+      created_by_principal_id: 'admin',
+    }],
+    memberships: [{
+      site_id: 'site_fixture',
+      principal_id: 'admin',
+      role: 'owner',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+    operations: [{
+      operation_id: 'operation_indexed_events',
+      site_id: 'site_fixture',
+      display_name: 'Indexed Evidence Operation',
+      operation_kind: 'control',
+      status: 'active',
+      created_by_principal_id: 'admin',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+  });
+  const namespace = fakeDurableObjectNamespace({ CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+  const envWithDurableObject = authEnv(namespace, { CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+  const start = await worker.fetch(jsonRequest(startRequest({
+    request_id: 'request_indexed_evidence_start',
+    params: {
+      carrier_session_id: 'carrier_session_indexed_events',
+      agent_id: 'narada.fixture.agent',
+      site_id: 'site_fixture',
+      site_root: 'cloudflare://site_fixture',
+      site_ref: 'site://fixture',
+      operation_id: 'operation_indexed_events',
+    },
+  }), { token: 'test-admin-token' }), envWithDurableObject);
+  assert.equal(start.status, 200);
+  const command = await worker.fetch(jsonRequest(commandRequest('/goal', ['indexed', 'evidence'], {
+    request_id: 'request_indexed_evidence_goal',
+    carrier_session_id: 'carrier_session_indexed_events',
+  }), { token: 'test-admin-token' }), envWithDurableObject);
+  assert.equal(command.status, 200);
+  assert.equal(siteDb.dump().carrierSessionEvents.length, 2);
+
+  const envWithoutDurableObject = authEnv(null, { CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+  const read = await worker.fetch(jsonRequest({
+    operation: 'site.read',
+    request_id: 'request_site_read_indexed_carrier_evidence',
+    params: { site_id: 'site_fixture', carrier_event_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), envWithoutDurableObject);
+  assert.equal(read.status, 200);
+  const body = await read.json();
+  assert.equal(body.carrier_evidence.length, 1);
+  assert.equal(body.carrier_evidence[0].carrier_session_id, 'carrier_session_indexed_events');
+  assert.equal(body.carrier_evidence[0].source, 'cloudflare-site-registry-d1-index');
+  assert.deepEqual(body.carrier_evidence[0].events.map((event) => event.event_kind), [
+    'carrier_session_started',
+    'carrier_command_executed',
+  ]);
+  assert.equal(body.carrier_evidence_read_status.state, 'loaded');
+  assert.equal(body.carrier_evidence_read_status.readable_session_count, 1);
+  assert.equal(body.carrier_evidence_read_status.missing_session_count, 0);
+  assert.equal(body.site_product_status.carrier_evidence_read_status.state, 'loaded');
+  assert.equal(body.site_product_status.carrier_evidence_event_count, 2);
+  assert.equal(body.site_product_status.missing.includes('carrier_evidence'), false);
+});
+
 test('worker serves minimal authenticated web console shell', async () => {
   const namespace = fakeDurableObjectNamespace();
   const env = authEnv(namespace);
@@ -3977,6 +4051,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     webhookDelayDirectiveDeliveries: clone(initial.webhookDelayDirectiveDeliveries ?? []),
     residentLoopShadowRuns: clone(initial.residentLoopShadowRuns ?? []),
     residentDispatchDecisions: clone(initial.residentDispatchDecisions ?? []),
+    carrierSessionEvents: clone(initial.carrierSessionEvents ?? []),
   };
   return {
     prepare(sql) {
@@ -4080,6 +4155,12 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const row = { dispatch_decision_id, site_id, operation_id, carrier_session_id, decision_state, dispatch_authority, fallback_authority, fallback_status, dispatch_action, dispatch_scope, session_start_status, session_start_ok, decision_json, recorded_by_principal_id, recorded_at };
         if (existing) Object.assign(existing, row);
         else state.residentDispatchDecisions.push(row);
+      } else if (normalized.startsWith('insert into cloudflare_carrier_session_events')) {
+        const [carrier_session_id, sequence, event_id, site_id, operation_id, agent_id, event_kind, occurred_at, event_json, indexed_at] = bindings;
+        const existing = state.carrierSessionEvents.find((entry) => entry.carrier_session_id === carrier_session_id && Number(entry.sequence) === Number(sequence));
+        const row = { carrier_session_id, sequence: Number(sequence), event_id, site_id, operation_id, agent_id, event_kind, occurred_at, event_json, indexed_at };
+        if (existing) Object.assign(existing, row);
+        else state.carrierSessionEvents.push(row);
       }
       return { success: true };
     },
@@ -4139,6 +4220,16 @@ function fakeD1SiteRegistryStatement(state, sql) {
           results: state.carrierSessions
             .filter((entry) => entry.site_id === siteId)
             .sort((left, right) => right.created_at.localeCompare(left.created_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_carrier_session_events')) {
+        const [carrierSessionId, limit] = bindings;
+        return {
+          results: state.carrierSessionEvents
+            .filter((entry) => entry.carrier_session_id === carrierSessionId)
+            .sort((left, right) => Number(left.sequence) - Number(right.sequence))
             .slice(0, Number(limit))
             .map((entry) => clone(entry)),
         };

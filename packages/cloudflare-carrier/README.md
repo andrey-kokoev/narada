@@ -41,7 +41,7 @@ The existing compatibility routes remain available:
 
 All JSON API routes require either bearer auth or a valid operator session cookie and accept the same operation envelope, including `session.start`, `session.status`, `carrier.input.deliver`, `carrier.command.execute`, `carrier.interrupt`, `session.events.read`, `session.close`, and Site product operations such as `site.read` and `site.membership.put`.
 
-`site.read`, `site.list`, and `operation.read` expose product status derived from durable Site registry records, D1 task state, continuity packets, and carrier session event replay. The `carrier_evidence_read_status` field makes replay posture explicit: `loaded` means all listed sessions were read from their Durable Object event snapshots, `degraded` means at least one listed session could not be replayed, and `no_sessions` means there was no session evidence to read.
+`site.read`, `site.list`, and `operation.read` expose product status derived from durable Site registry records, D1 task state, continuity packets, and carrier session event replay. Mutating carrier requests mirror appended session events into a Site Registry D1 evidence index when that binding is available, so product reads can replay evidence without directly touching each Durable Object. The `carrier_evidence_read_status` field makes replay posture explicit: `loaded` means all listed sessions were read from the D1 index or Durable Object event snapshots, `degraded` means at least one listed session could not be replayed, and `no_sessions` means there was no session evidence to read.
 
 ## Tool / Effect Boundary
 

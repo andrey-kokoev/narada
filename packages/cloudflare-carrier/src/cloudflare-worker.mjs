@@ -208,6 +208,7 @@ export class CloudflareCarrierDurableObject {
     const response = await session.handle(request);
     if (mutatesSession(request.operation)) {
       await this.#storeSnapshot(session);
+      await recordCloudflareCarrierEvidenceEvents(this.env, session, carrierEventsFromResponse(response));
       await this.#scheduleOperationHeartbeatAlarm(session);
     }
     return response;
@@ -216,7 +217,7 @@ export class CloudflareCarrierDurableObject {
   async #alarmInLane() {
     const session = await this.#loadOrCreateSession({ operation: 'session.status' });
     if (!session || session.state.closed) return;
-    await session.handle({
+    const response = await session.handle({
       operation: 'directive.heartbeat.emit',
       request_id: `request_operation_heartbeat_alarm_${Date.now()}`,
       carrier_session_id: session.state.carrier_session_id,
@@ -227,6 +228,7 @@ export class CloudflareCarrierDurableObject {
       },
     });
     await this.#storeSnapshot(session);
+    await recordCloudflareCarrierEvidenceEvents(this.env, session, carrierEventsFromResponse(response));
     await this.#scheduleOperationHeartbeatAlarm(session);
   }
 
@@ -2996,11 +2998,15 @@ async function listOperationTasks(env = {}, siteId, sessions = []) {
 }
 
 async function readCarrierEvidenceForSiteSessions(env = {}, sessions = [], principal = null, params = {}) {
-  if (!env?.CLOUDFLARE_CARRIER_SESSIONS) return [];
+  const indexedEvidence = await readCloudflareCarrierEvidenceIndex(env, sessions, params);
+  if (indexedEvidence?.complete) return indexedEvidence.evidence;
+  if (!env?.CLOUDFLARE_CARRIER_SESSIONS) return indexedEvidence?.evidence ?? [];
   const boundedLimit = clampInteger(params.carrier_event_limit, 0, 100, 25);
-  const evidence = [];
+  const evidence = indexedEvidence?.evidence ?? [];
+  const indexedSessionIds = new Set(evidence.map((entry) => entry.carrier_session_id).filter(Boolean));
   for (const session of sessions.slice(0, clampInteger(params.session_limit, 0, 50, 25))) {
     const carrierSessionId = session.carrier_session_id;
+    if (indexedSessionIds.has(carrierSessionId)) continue;
     try {
       const id = env.CLOUDFLARE_CARRIER_SESSIONS.idFromName(carrierSessionId);
       const durableResponse = await env.CLOUDFLARE_CARRIER_SESSIONS.get(id).fetch(new Request('https://carrier.site-read.local/control', {
@@ -3017,6 +3023,7 @@ async function readCarrierEvidenceForSiteSessions(env = {}, sessions = [], princ
       evidence.push({
         carrier_session_id: carrierSessionId,
         ok: body.ok === true,
+        source: 'cloudflare-durable-object',
         events: body.events ?? [],
         next_cursor: body.next_cursor ?? 0,
       });
@@ -3031,6 +3038,116 @@ async function readCarrierEvidenceForSiteSessions(env = {}, sessions = [], princ
     }
   }
   return evidence;
+}
+
+function carrierEventsFromResponse(response = {}) {
+  return (response.events ?? [response.event]).filter((event) => event?.schema && event?.carrier_session_id);
+}
+
+async function recordCloudflareCarrierEvidenceEvents(env = {}, session = null, events = []) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function' || !Array.isArray(events) || events.length === 0) return { ok: false, code: 'missing_carrier_evidence_index_input' };
+  try {
+    await ensureCloudflareCarrierEvidenceIndexSchema(db);
+    for (const event of events) {
+      await db.prepare(`
+        INSERT INTO cloudflare_carrier_session_events (
+          carrier_session_id,
+          sequence,
+          event_id,
+          site_id,
+          operation_id,
+          agent_id,
+          event_kind,
+          occurred_at,
+          event_json,
+          indexed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(carrier_session_id, sequence) DO UPDATE SET
+          event_id = excluded.event_id,
+          site_id = excluded.site_id,
+          operation_id = excluded.operation_id,
+          agent_id = excluded.agent_id,
+          event_kind = excluded.event_kind,
+          occurred_at = excluded.occurred_at,
+          event_json = excluded.event_json,
+          indexed_at = excluded.indexed_at
+      `).bind(
+        event.carrier_session_id,
+        Number(event.sequence),
+        event.event_id ?? `session_event_${event.carrier_session_id}_${event.sequence}`,
+        event.site_id ?? session?.state?.site_id ?? null,
+        event.payload?.operation_id ?? session?.state?.operation_id ?? null,
+        event.agent_id ?? session?.state?.agent_id ?? null,
+        event.event_kind,
+        event.occurred_at ?? new Date().toISOString(),
+        JSON.stringify(event),
+        new Date().toISOString(),
+      ).run();
+    }
+    return { ok: true, indexed_event_count: events.length };
+  } catch (error) {
+    return { ok: false, code: 'carrier_evidence_index_write_failed', error: error?.message ?? 'unknown_error' };
+  }
+}
+
+async function readCloudflareCarrierEvidenceIndex(env = {}, sessions = [], params = {}) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  const sessionSlice = (sessions ?? []).slice(0, clampInteger(params.session_limit, 0, 50, 25));
+  if (!db || typeof db.prepare !== 'function' || sessionSlice.length === 0) return null;
+  await ensureCloudflareCarrierEvidenceIndexSchema(db);
+  const boundedLimit = clampInteger(params.carrier_event_limit, 0, 100, 25);
+  const evidence = [];
+  const missingSessionIds = [];
+  for (const session of sessionSlice) {
+    const carrierSessionId = session.carrier_session_id;
+    if (!carrierSessionId) continue;
+    const rows = await db.prepare(`
+      SELECT event_json, sequence FROM cloudflare_carrier_session_events
+      WHERE carrier_session_id = ?
+      ORDER BY sequence ASC
+      LIMIT ?
+    `).bind(carrierSessionId, boundedLimit).all();
+    const events = (rows.results ?? []).map((row) => parseJsonObject(row.event_json)).filter((event) => event?.event_kind);
+    if (events.length === 0) {
+      missingSessionIds.push(carrierSessionId);
+      continue;
+    }
+    evidence.push({
+      carrier_session_id: carrierSessionId,
+      ok: true,
+      source: 'cloudflare-site-registry-d1-index',
+      events,
+      next_cursor: events.at(-1)?.sequence ?? 0,
+    });
+  }
+  return { evidence, complete: missingSessionIds.length === 0, missing_session_ids: missingSessionIds };
+}
+
+async function ensureCloudflareCarrierEvidenceIndexSchema(db) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS cloudflare_carrier_session_events (
+      carrier_session_id TEXT NOT NULL,
+      sequence INTEGER NOT NULL,
+      event_id TEXT NOT NULL,
+      site_id TEXT,
+      operation_id TEXT,
+      agent_id TEXT,
+      event_kind TEXT NOT NULL,
+      occurred_at TEXT NOT NULL,
+      event_json TEXT NOT NULL,
+      indexed_at TEXT NOT NULL,
+      PRIMARY KEY (carrier_session_id, sequence)
+    )
+  `).run();
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_cloudflare_carrier_session_events_site_occurred
+    ON cloudflare_carrier_session_events(site_id, occurred_at)
+  `).run();
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_cloudflare_carrier_session_events_operation_occurred
+    ON cloudflare_carrier_session_events(operation_id, occurred_at)
+  `).run();
 }
 
 async function handleOperatorAuthRequest(request, env = {}) {
