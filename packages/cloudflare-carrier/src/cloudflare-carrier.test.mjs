@@ -815,6 +815,10 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /authoritySummary/);
   assert.match(html, /renderLastAuthority/);
   assert.match(html, /renderAuthorityState/);
+  assert.match(html, /authorityPostureSummary/);
+  assert.match(html, /renderAuthorityPostureSummary/);
+  assert.match(html, /inspect_refusals/);
+  assert.match(html, /monitor_admissions/);
   assert.match(html, /authority-decision/);
   assert.match(html, /actor_role/);
   assert.match(html, /Product Overview|productOverview/);
@@ -2431,7 +2435,7 @@ function fakeD1SiteRegistryStatement(state, sql) {
         return {
           results: state.webhookDelayShadowObservations
             .filter((entry) => entry.site_id === siteId)
-            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at))
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
             .slice(0, Number(limit))
             .map((entry) => clone(entry)),
         };

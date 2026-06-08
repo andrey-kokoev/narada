@@ -776,7 +776,7 @@ async function listCloudflareWebhookDelayShadowObservations(env = {}, siteId, li
   const rows = await db.prepare(`
     SELECT * FROM cloudflare_webhook_delay_shadow_observations
     WHERE site_id = ?
-    ORDER BY recorded_at DESC
+    ORDER BY recorded_at DESC, generated_at DESC
     LIMIT ?
   `).bind(siteId, boundedLimit).all();
   return (rows.results ?? []).map((row) => ({
@@ -2094,6 +2094,7 @@ export function renderCloudflareCarrierConsole() {
       </div>
       <div class="product-panel">
         <h2>Authority State</h2>
+        <div id="authorityPostureSummary" class="evidence-summary"><div class="empty">No authority posture loaded.</div></div>
         <div id="authorityState" class="attention-items"><div class="empty">No authority state loaded.</div></div>
         <div id="authorityFocusDetail" class="evidence-summary"><div class="empty">No authority decision selected.</div></div>
       </div>
@@ -2543,6 +2544,7 @@ export function renderCloudflareCarrierConsole() {
       if (decisions.length === 0) {
         state.authorityFocus = null;
         el('authorityState').innerHTML = '<div class="empty">No authority state loaded.</div>';
+        renderAuthorityPostureSummary(decisions);
         renderAuthorityFocusDetail();
         updateControlRoom();
         return;
@@ -2560,8 +2562,41 @@ export function renderCloudflareCarrierConsole() {
         node.append(title, meta);
         return node;
       }));
+      renderAuthorityPostureSummary(decisions);
       renderAuthorityFocusDetail();
       updateControlRoom();
+    }
+    function authorityPostureSummary(decisions = []) {
+      const counts = decisions.reduce((next, decision) => {
+        const action = String(decision.action || '').toLowerCase();
+        if (action === 'admit') next.admit += 1;
+        else if (action === 'refuse' || action === 'deny') next.refuse += 1;
+        else next.other += 1;
+        if (!decision.authority_locus || decision.authority_locus === 'unresolved') next.unresolved += 1;
+        const locus = decision.authority_locus || 'unresolved';
+        next.loci.set(locus, (next.loci.get(locus) || 0) + 1);
+        return next;
+      }, { admit: 0, refuse: 0, other: 0, unresolved: 0, loci: new Map() });
+      const dominantLocus = [...counts.loci.entries()].sort((left, right) => right[1] - left[1])[0]?.[0] || 'none';
+      const nextAction = decisions.length === 0 ? 'read_site_authority'
+        : counts.refuse > 0 ? 'inspect_refusals'
+        : counts.unresolved > 0 ? 'resolve_authority_locus'
+        : 'monitor_admissions';
+      return [
+        ['Admitted', counts.admit],
+        ['Refused', counts.refuse],
+        ['Other', counts.other],
+        ['Unresolved Locus', counts.unresolved],
+        ['Dominant Locus', dominantLocus],
+        ['Next Action', nextAction],
+      ];
+    }
+    function renderAuthorityPostureSummary(decisions = []) {
+      if (!decisions.length) {
+        el('authorityPostureSummary').innerHTML = '<div class="empty">No authority posture loaded.</div>';
+        return;
+      }
+      el('authorityPostureSummary').replaceChildren(...authorityPostureSummary(decisions).map(([label, value]) => evidenceField(label, value)));
     }
     function authorityDecisionKey(decision = {}) {
       return [decision.mutation_class, decision.action, decision.reason, decision.authority_locus].filter(Boolean).join('|');
