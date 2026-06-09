@@ -1438,6 +1438,59 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(repositoryPublicationEvidenceListBody.evidence.length, 1);
   assert.equal(repositoryPublicationEvidenceListBody.evidence[0].repository_publication_evidence_id, 'repository-publication-evidence-fixture');
 
+  const repositoryPublicationProviderHeartbeat = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.provider_heartbeat.put',
+    request_id: 'request_repository_publication_provider_heartbeat_put',
+    params: {
+      site_id: 'site_fixture',
+      repository_publication_provider_heartbeat_id: 'repository-publication-provider-heartbeat-fixture',
+      generated_at: '2026-06-08T00:04:00.000Z',
+      last_run_at: '2026-06-08T00:04:00.000Z',
+      provider_id: 'windows_repository_publication_drain_loop:fixture',
+      provider_authority: 'windows_repository_publication_executor',
+      provider_embodiment: 'windows_current_user_startup_provider',
+      status: 'ready',
+      iteration_count: 1,
+      completed_publication_count: 1,
+      resolved_publication_count: 1,
+      drained: true,
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  const repositoryPublicationProviderHeartbeatBody = await repositoryPublicationProviderHeartbeat.json();
+  assert.equal(repositoryPublicationProviderHeartbeat.status, 200, JSON.stringify(repositoryPublicationProviderHeartbeatBody));
+  assert.equal(repositoryPublicationProviderHeartbeatBody.schema, 'narada.sonar.cloudflare_repository_publication_provider_heartbeat.v1');
+  assert.equal(repositoryPublicationProviderHeartbeatBody.provider_liveness_authority, 'cloudflare_repository_publication_provider_liveness_store');
+  assert.equal(repositoryPublicationProviderHeartbeatBody.heartbeat.provider_authority, 'windows_repository_publication_executor');
+  assert.equal(repositoryPublicationProviderHeartbeatBody.heartbeat.cloudflare_git_push_admission, 'not_admitted');
+  assert.equal(repositoryPublicationProviderHeartbeatBody.heartbeat.direct_cloudflare_repository_mutation_admission, 'not_admitted');
+
+  const repositoryPublicationProviderHeartbeatList = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.provider_heartbeat.list',
+    request_id: 'request_repository_publication_provider_heartbeat_list',
+    params: { site_id: 'site_fixture', repository_publication_provider_heartbeat_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(repositoryPublicationProviderHeartbeatList.status, 200);
+  const repositoryPublicationProviderHeartbeatListBody = await repositoryPublicationProviderHeartbeatList.json();
+  assert.equal(repositoryPublicationProviderHeartbeatListBody.provider_liveness_authority, 'cloudflare_repository_publication_provider_liveness_store');
+  assert.equal(repositoryPublicationProviderHeartbeatListBody.repository_publication_provider_heartbeat_count, 1);
+  assert.equal(repositoryPublicationProviderHeartbeatListBody.repository_publication_provider_heartbeats[0].repository_publication_provider_heartbeat_id, 'repository-publication-provider-heartbeat-fixture');
+  assert.equal(repositoryPublicationProviderHeartbeatListBody.repository_publication_provider_heartbeats[0].provider_authority, 'windows_repository_publication_executor');
+  assert.equal(repositoryPublicationProviderHeartbeatListBody.repository_publication_provider_heartbeats[0].cloudflare_git_push_admission, 'not_admitted');
+
+  const directRepositoryProviderHeartbeatClaim = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.provider_heartbeat.put',
+    request_id: 'request_repository_publication_provider_heartbeat_direct_cloudflare_claim',
+    params: {
+      site_id: 'site_fixture',
+      provider_id: 'windows_repository_publication_drain_loop:invalid-direct-cloudflare-claim',
+      status: 'ready',
+      cloudflare_git_push_admission: 'admitted',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(directRepositoryProviderHeartbeatClaim.status, 400);
+  const directRepositoryProviderHeartbeatClaimBody = await directRepositoryProviderHeartbeatClaim.json();
+  assert.equal(directRepositoryProviderHeartbeatClaimBody.code, 'repository_publication_provider_heartbeat_cloudflare_git_push_admission_invalid');
+
   const repositoryPublicationRequestNextAfterEvidence = await worker.fetch(jsonRequest({
     operation: 'repository_publication.request.next',
     request_id: 'request_repository_publication_request_next_after_evidence',
@@ -1458,18 +1511,24 @@ test('worker site.read composes site sessions tasks authority events and carrier
   const operationReadAfterRepositoryPublicationBody = await operationReadAfterRepositoryPublication.json();
   assert.equal(operationReadAfterRepositoryPublicationBody.repository_publication_requests.length, 1);
   assert.equal(operationReadAfterRepositoryPublicationBody.repository_publication_evidence.length, 1);
+  assert.equal(operationReadAfterRepositoryPublicationBody.repository_publication_provider_heartbeats.length, 1);
   assert.equal(operationReadAfterRepositoryPublicationBody.operation_lifecycle_status.repository_publication_request_count, 1);
   assert.equal(operationReadAfterRepositoryPublicationBody.operation_lifecycle_status.repository_publication_evidence_count, 1);
+  assert.equal(operationReadAfterRepositoryPublicationBody.operation_lifecycle_status.repository_publication_provider_heartbeat_count, 1);
+  assert.equal(operationReadAfterRepositoryPublicationBody.operation_lifecycle_status.repository_publication_provider_liveness_authority, 'cloudflare_repository_publication_provider_liveness_store');
   assert.equal(operationReadAfterRepositoryPublicationBody.operation_product_surface.repository_publication_request_count, 1);
   assert.equal(operationReadAfterRepositoryPublicationBody.operation_product_surface.repository_publication_evidence_count, 1);
+  assert.equal(operationReadAfterRepositoryPublicationBody.operation_product_surface.repository_publication_provider_heartbeat_count, 1);
   assert.equal(operationReadAfterRepositoryPublicationBody.operation_product_surface.repository_publication_request_authority, 'cloudflare_repository_publication_request_queue');
   assert.equal(operationReadAfterRepositoryPublicationBody.operation_product_surface.repository_publication_executor_authority, 'windows_repository_publication_executor');
+  assert.equal(operationReadAfterRepositoryPublicationBody.operation_product_surface.repository_publication_provider_liveness_authority, 'cloudflare_repository_publication_provider_liveness_store');
   assert.equal(operationReadAfterRepositoryPublicationBody.operation_product_surface.repository_publication_evidence_store_authority, 'cloudflare_repository_publication_evidence_store');
   assert.equal(operationReadAfterRepositoryPublicationBody.operation_product_surface.repository_publication_execution_admission, 'resolved_by_windows_repository_publication');
   assert.equal(operationReadAfterRepositoryPublicationBody.operation_product_surface.repository_publication_cloudflare_git_push_admission, 'not_admitted');
   assert.equal(operationReadAfterRepositoryPublicationBody.operation_product_surface.repository_publication_direct_cloudflare_repository_mutation_admission, 'not_admitted');
   assert.ok(operationReadAfterRepositoryPublicationBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'repository_publication_request'));
   assert.ok(operationReadAfterRepositoryPublicationBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'repository_publication_evidence'));
+  assert.ok(operationReadAfterRepositoryPublicationBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'repository_publication_provider_heartbeat'));
 
   const directRepositoryEvidenceClaim = await worker.fetch(jsonRequest({
     operation: 'repository_publication.evidence.put',
@@ -6672,6 +6731,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     localIngressEvidence: clone(initial.localIngressEvidence ?? []),
     repositoryPublicationRequests: clone(initial.repositoryPublicationRequests ?? []),
     repositoryPublicationEvidence: clone(initial.repositoryPublicationEvidence ?? []),
+    repositoryPublicationProviderHeartbeats: clone(initial.repositoryPublicationProviderHeartbeats ?? []),
     taskLifecycleShadowReads: clone(initial.taskLifecycleShadowReads ?? []),
     taskLifecycleWriteAdmissions: clone(initial.taskLifecycleWriteAdmissions ?? []),
     taskLifecycleTasks: clone(initial.taskLifecycleTasks ?? []),
@@ -6844,6 +6904,12 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const row = { repository_publication_evidence_id, site_id, generated_at, repository_publication_request_id, publication_execution_id, publication_ref, requested_action_ref, repository_ref, branch_ref, source_change_ref, windows_admission_action, windows_admission_reason, publication_status, repository_publication_executor_authority, published_commit_ref, rollback_evidence_ref, cloudflare_git_push_admission, direct_cloudflare_repository_mutation_admission, evidence_posture, evidence_json, recorded_by_principal_id, recorded_at };
         if (existing) Object.assign(existing, row);
         else state.repositoryPublicationEvidence.push(row);
+      } else if (normalized.startsWith('insert into cloudflare_repository_publication_provider_heartbeats')) {
+        const [repository_publication_provider_heartbeat_id, site_id, generated_at, last_run_at, provider_id, provider_authority, provider_embodiment, status, heartbeat_json, recorded_by_principal_id, recorded_at] = bindings;
+        const existing = state.repositoryPublicationProviderHeartbeats.find((entry) => entry.repository_publication_provider_heartbeat_id === repository_publication_provider_heartbeat_id);
+        const row = { repository_publication_provider_heartbeat_id, site_id, generated_at, last_run_at, provider_id, provider_authority, provider_embodiment, status, heartbeat_json, recorded_by_principal_id, recorded_at };
+        if (existing) Object.assign(existing, row);
+        else state.repositoryPublicationProviderHeartbeats.push(row);
       } else if (normalized.startsWith('insert into cloudflare_task_lifecycle_shadow_reads')) {
         const [read_id, site_id, source_locus, target_locus, source_url_host, source_db_path, source_schema, generated_at, task_count, status_counts_json, tasks_json, mutation_authority, shadow_read_posture, cloudflare_write_admission, dispatch_authority, shadow_mode, dispatch_action, record_json, recorded_by_principal_id, recorded_at] = bindings;
         const existing = state.taskLifecycleShadowReads.find((entry) => entry.read_id === read_id);
@@ -7177,6 +7243,16 @@ function fakeD1SiteRegistryStatement(state, sql) {
         return {
           results: state.repositoryPublicationEvidence
             .filter((entry) => entry.site_id === siteId && (!requestId || entry.repository_publication_request_id === requestId))
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_repository_publication_provider_heartbeats')) {
+        const [siteId, limit] = bindings;
+        return {
+          results: state.repositoryPublicationProviderHeartbeats
+            .filter((entry) => entry.site_id === siteId)
             .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
             .slice(0, Number(limit))
             .map((entry) => clone(entry)),
