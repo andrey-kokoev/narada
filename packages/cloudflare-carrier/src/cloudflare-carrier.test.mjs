@@ -1379,6 +1379,21 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(repositoryPublicationRequestListBody.requests.length, 1);
   assert.equal(repositoryPublicationRequestListBody.requests[0].repository_publication_request_id, 'repository-publication-request-fixture');
 
+  const repositoryPublicationRequestNext = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.request.next',
+    request_id: 'request_repository_publication_request_next',
+    params: { site_id: 'site_fixture', limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(repositoryPublicationRequestNext.status, 200);
+  const repositoryPublicationRequestNextBody = await repositoryPublicationRequestNext.json();
+  assert.equal(repositoryPublicationRequestNextBody.status, 'selected');
+  assert.equal(repositoryPublicationRequestNextBody.repository_publication_dispatch_authority, 'cloudflare_repository_publication_request_queue');
+  assert.equal(repositoryPublicationRequestNextBody.repository_publication_executor_authority, 'windows_repository_publication_executor');
+  assert.equal(repositoryPublicationRequestNextBody.cloudflare_git_push_admission, 'not_admitted');
+  assert.equal(repositoryPublicationRequestNextBody.direct_cloudflare_repository_mutation_admission, 'not_admitted');
+  assert.equal(repositoryPublicationRequestNextBody.authority_partition, 'cloudflare_selects_next_repository_publication_request_windows_admits_publishes_and_returns_evidence');
+  assert.equal(repositoryPublicationRequestNextBody.request.repository_publication_request_id, 'repository-publication-request-fixture');
+
   const repositoryPublicationEvidence = await worker.fetch(jsonRequest({
     operation: 'repository_publication.evidence.put',
     request_id: 'request_repository_publication_evidence_put',
@@ -1422,6 +1437,17 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(repositoryPublicationEvidenceListBody.authority_partition, 'windows_admits_or_refuses_repository_publication_cloudflare_records_evidence_without_direct_repository_authority');
   assert.equal(repositoryPublicationEvidenceListBody.evidence.length, 1);
   assert.equal(repositoryPublicationEvidenceListBody.evidence[0].repository_publication_evidence_id, 'repository-publication-evidence-fixture');
+
+  const repositoryPublicationRequestNextAfterEvidence = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.request.next',
+    request_id: 'request_repository_publication_request_next_after_evidence',
+    params: { site_id: 'site_fixture', limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(repositoryPublicationRequestNextAfterEvidence.status, 200);
+  const repositoryPublicationRequestNextAfterEvidenceBody = await repositoryPublicationRequestNextAfterEvidence.json();
+  assert.equal(repositoryPublicationRequestNextAfterEvidenceBody.status, 'drained');
+  assert.equal(repositoryPublicationRequestNextAfterEvidenceBody.repository_publication_dispatch_authority, 'not_observed');
+  assert.equal(repositoryPublicationRequestNextAfterEvidenceBody.request, null);
 
   const directRepositoryEvidenceClaim = await worker.fetch(jsonRequest({
     operation: 'repository_publication.evidence.put',
