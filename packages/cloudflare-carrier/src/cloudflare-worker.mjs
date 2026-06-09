@@ -2047,6 +2047,7 @@ function summarizeCloudflareOperationLifecycleStatus({
   residentLoopShadowRuns = [],
   residentDispatchDecisions = [],
   localIngressRequests = [],
+  localIngressEvidence = [],
   webhookDelayDirectiveRecords = [],
   webhookDelayDirectiveDeliveries = [],
 } = {}) {
@@ -2062,6 +2063,7 @@ function summarizeCloudflareOperationLifecycleStatus({
   const directiveRecordCount = Array.isArray(webhookDelayDirectiveRecords) ? webhookDelayDirectiveRecords.length : 0;
   const directiveDeliveryCount = Array.isArray(webhookDelayDirectiveDeliveries) ? webhookDelayDirectiveDeliveries.length : 0;
   const localIngressRequestCount = Array.isArray(localIngressRequests) ? localIngressRequests.length : 0;
+  const localIngressEvidenceCount = Array.isArray(localIngressEvidence) ? localIngressEvidence.length : 0;
   const missing = [];
   if (sessionCount === 0) missing.push('session');
   if (evidenceEventCount === 0) missing.push('carrier_evidence');
@@ -2095,6 +2097,7 @@ function summarizeCloudflareOperationLifecycleStatus({
     resident_loop_shadow_run_count: residentLoopCount,
     resident_dispatch_decision_count: residentDispatchCount,
     local_ingress_request_count: localIngressRequestCount,
+    local_ingress_evidence_count: localIngressEvidenceCount,
     directive_record_count: directiveRecordCount,
     directive_delivery_count: directiveDeliveryCount,
     carrier_evidence_read_status: carrierEvidenceReadStatus,
@@ -2143,6 +2146,7 @@ function summarizeCloudflareOperationActivityTimeline({
   mailboxDraftReplyProposals = [],
   mailboxOutlookDraftCreates = [],
   localIngressRequests = [],
+  localIngressEvidence = [],
   residentDispatchDecisions = [],
 } = {}) {
   const operationId = operation?.operation_id ?? null;
@@ -2328,6 +2332,19 @@ function summarizeCloudflareOperationActivityTimeline({
       focus_kind: 'local_ingress_request',
       focus_ref: request.local_ingress_request_id,
       principal_id: request.recorded_by_principal_id,
+    });
+  }
+  for (const evidence of localIngressEvidence || []) {
+    push({
+      activity_id: `local_ingress_evidence:${evidence.local_ingress_evidence_id}`,
+      activity_kind: 'local_ingress_evidence',
+      occurred_at: evidence.recorded_at || evidence.generated_at,
+      title: 'Local Ingress Evidence',
+      summary: [evidence.local_execution_status, evidence.local_filesystem_mutation_admission, evidence.local_executor_authority].filter(Boolean).join(' / ') || 'local ingress evidence recorded',
+      source_ref: evidence.local_ingress_evidence_id,
+      focus_kind: 'local_ingress_evidence',
+      focus_ref: evidence.local_ingress_evidence_id,
+      principal_id: evidence.recorded_by_principal_id,
     });
   }
   for (const decision of residentDispatchDecisions || []) {
@@ -3584,6 +3601,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const siteFileChangeProposals = await listCloudflareSiteFileChangeProposals(env, siteId, params.site_file_change_proposal_limit ?? params.limit);
     const siteFileMaterializations = await listCloudflareSiteFileMaterializations(env, siteId, params.site_file_materialization_limit ?? params.limit);
     const localIngressRequests = await listCloudflareLocalIngressRequests(env, siteId, params.local_ingress_request_limit ?? params.limit);
+    const localIngressEvidence = await listCloudflareLocalIngressEvidence(env, siteId, params.local_ingress_evidence_limit ?? params.limit);
     const taskLifecycleShadowReads = await listCloudflareTaskLifecycleShadowReads(env, siteId, params.task_lifecycle_shadow_limit ?? params.limit);
     const taskLifecycleWriteAdmissions = await listCloudflareTaskLifecycleWriteAdmissions(env, siteId, params.task_lifecycle_write_admission_limit ?? params.limit);
     const taskLifecycleTasks = await listCloudflareTaskLifecycleTasks(env, siteId, params.task_lifecycle_task_limit ?? params.limit, params);
@@ -3630,6 +3648,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       mailboxOutlookDraftCreates,
       siteFileChangeProposals,
       localIngressRequests,
+      localIngressEvidence,
       residentDispatchDecisions,
     });
     const localCloudContinuityBridge = summarizeLocalCloudContinuityBridge(siteId, continuityPackets, siteContinuity, siteContinuityStatus);
@@ -3644,6 +3663,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       residentLoopShadowRuns,
       residentDispatchDecisions,
       localIngressRequests,
+      localIngressEvidence,
       webhookDelayDirectiveRecords,
       webhookDelayDirectiveDeliveries,
     });
@@ -3689,6 +3709,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         site_file_change_proposals: siteFileChangeProposals,
         site_file_materializations: siteFileMaterializations,
         local_ingress_requests: localIngressRequests,
+        local_ingress_evidence: localIngressEvidence,
         task_lifecycle_shadow_reads: taskLifecycleShadowReads,
         task_lifecycle_write_admissions: taskLifecycleWriteAdmissions,
         task_lifecycle_tasks: taskLifecycleTasks,
@@ -3763,13 +3784,16 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           site_file_materialization_repository_publication_admission: siteFileMaterializations.length > 0 ? 'not_admitted' : 'retained',
           site_file_materialization_authority_partition: siteFileMaterializations.length > 0 ? 'site_file_materialization_cloudflare_owned_windows_filesystem_and_publication_not_admitted' : 'materialization_not_observed_filesystem_and_publication_windows_owned',
           local_ingress_request_count: localIngressRequests.length,
+          local_ingress_evidence_count: localIngressEvidence.length,
           local_ingress_request_authority: localIngressRequests.length > 0 ? CLOUDFLARE_LOCAL_INGRESS_REQUEST_AUTHORITY : 'not_observed',
+          local_ingress_evidence_authority: localIngressEvidence.length > 0 ? WINDOWS_LOCAL_INGRESS_EXECUTOR_AUTHORITY : 'not_observed',
+          local_ingress_evidence_store_authority: localIngressEvidence.length > 0 ? 'cloudflare_local_ingress_evidence_store' : 'not_observed',
           local_ingress_target_authority_locus: localIngressRequests.length > 0 ? 'local-windows-site-authority' : 'not_observed',
           local_ingress_executor_authority: localIngressRequests.length > 0 ? WINDOWS_LOCAL_INGRESS_EXECUTOR_AUTHORITY : 'not_observed',
-          local_ingress_execution_admission: localIngressRequests.length > 0 ? 'pending_windows_admission' : 'not_observed',
-          local_ingress_direct_cloudflare_filesystem_mutation_admission: localIngressRequests.length > 0 ? 'not_admitted' : 'retained',
-          local_ingress_repository_publication_admission: localIngressRequests.length > 0 ? 'not_admitted' : 'retained',
-          local_ingress_authority_partition: localIngressRequests.length > 0 ? 'cloudflare_queues_governed_local_ingress_request_windows_admits_executes_and_returns_evidence' : 'local_ingress_not_observed_windows_authority_retained',
+          local_ingress_execution_admission: localIngressEvidence.length > 0 ? 'completed_by_windows_local_ingress' : localIngressRequests.length > 0 ? 'pending_windows_admission' : 'not_observed',
+          local_ingress_direct_cloudflare_filesystem_mutation_admission: localIngressRequests.length > 0 || localIngressEvidence.length > 0 ? 'not_admitted' : 'retained',
+          local_ingress_repository_publication_admission: localIngressRequests.length > 0 || localIngressEvidence.length > 0 ? 'not_admitted' : 'retained',
+          local_ingress_authority_partition: localIngressEvidence.length > 0 ? 'windows_executes_local_ingress_cloudflare_records_evidence_without_direct_filesystem_authority' : localIngressRequests.length > 0 ? 'cloudflare_queues_governed_local_ingress_request_windows_admits_executes_and_returns_evidence' : 'local_ingress_not_observed_windows_authority_retained',
           task_lifecycle_shadow_read_count: taskLifecycleShadowReads.length,
           task_lifecycle_write_admission_count: taskLifecycleWriteAdmissions.length,
           task_lifecycle_write_admission_posture: taskLifecycleTasks.some((task) => task.task_lifecycle_roster_mutation_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_and_roster_mutation_admitted_remaining_external_effects_not_admitted' : taskLifecycleTasks.some((task) => task.task_lifecycle_role_resolution_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_admitted_remaining_external_effects_not_admitted' : taskLifecycleTasks.some((task) => task.task_lifecycle_assignment_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_and_assignment_admitted_remaining_external_effects_not_admitted' : taskLifecycleTasks.some((task) => task.task_lifecycle_source_state_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_admitted_remaining_external_effects_not_admitted' : taskLifecycleTasks.some((task) => task.task_lifecycle_projection_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_and_projection_write_admitted_remaining_writes_not_admitted' : taskLifecycleTasks.some((task) => task.changed_file_evidence_count > 0) ? (taskLifecycleTasks.some((task) => task.finish_id) ? 'task_create_claim_report_finish_and_changed_file_evidence_admitted_remaining_writes_not_admitted' : 'task_create_claim_report_and_changed_file_evidence_admitted_remaining_writes_not_admitted') : taskLifecycleTasks.some((task) => task.finish_id) ? 'task_create_claim_report_and_finish_admitted_remaining_writes_not_admitted' : taskLifecycleTasks.some((task) => task.report_id) ? 'task_create_claim_and_report_admitted_remaining_writes_not_admitted' : taskLifecycleTasks.some((task) => task.status === 'claimed') ? 'task_create_and_claim_admitted_remaining_writes_not_admitted' : taskLifecycleTasks.length > 0 ? 'task_create_admitted_remaining_writes_not_admitted' : 'writes_not_admitted',
@@ -10121,6 +10145,16 @@ export function renderCloudflareCarrierConsole() {
         <div id="residentDispatchFocusDetail" class="evidence-summary"><div class="empty">No resident dispatch decision selected.</div></div>
       </div>
       <div class="product-panel">
+        <h2>Local Ingress</h2>
+        <div id="localIngressRequestNavigator" class="attention-items"><div class="empty">No local ingress requests loaded.</div></div>
+        <h3>Local Ingress Request Detail</h3>
+        <div id="localIngressRequestFocusDetail" class="evidence-summary"><div class="empty">No local ingress request selected.</div></div>
+        <h3>Returned Execution Evidence</h3>
+        <div id="localIngressEvidenceNavigator" class="attention-items"><div class="empty">No local ingress evidence loaded.</div></div>
+        <h3>Local Ingress Evidence Detail</h3>
+        <div id="localIngressEvidenceFocusDetail" class="evidence-summary"><div class="empty">No local ingress evidence selected.</div></div>
+      </div>
+      <div class="product-panel">
         <h2>Mailbox Draft Create</h2>
         <div id="mailboxDraftCreateControl" class="evidence-summary"><div class="empty">No mailbox proposal selected.</div></div>
         <label>Account Ref<input id="mailboxDraftAccountRef" placeholder="user@example.com"></label>
@@ -10248,7 +10282,7 @@ export function renderCloudflareCarrierConsole() {
     const classifyCloudflareEvidenceCommandState = ${classifyCloudflareEvidenceCommandState.toString()};
     const classifyCloudflareSiteCommandState = ${classifyCloudflareSiteCommandState.toString()};
     const classifyCloudflareMembershipCommandState = ${classifyCloudflareMembershipCommandState.toString()};
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], siteList: [], siteProductStatuses: [], siteProductOverview: null, sitePostureRoute: null, consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, webhookDelayDirectiveFocus: null, webhookDelayDirectiveDeliveryFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null, mailboxDraftReplyProposalFocus: null, mailboxOutlookDraftCreateFocus: null, mailboxDraftCreateFormProposalId: null, siteFileChangeProposalFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], siteList: [], siteProductStatuses: [], siteProductOverview: null, sitePostureRoute: null, consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, webhookDelayDirectiveFocus: null, webhookDelayDirectiveDeliveryFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null, localIngressRequestFocus: null, localIngressEvidenceFocus: null, mailboxDraftReplyProposalFocus: null, mailboxOutlookDraftCreateFocus: null, mailboxDraftCreateFormProposalId: null, siteFileChangeProposalFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -10517,6 +10551,8 @@ export function renderCloudflareCarrierConsole() {
       renderLocalCloudContinuityBridge(product);
       renderContinuityLoopEvidence(product);
       renderMailboxDraftCreateControl(product);
+      renderLocalIngressRequestNavigator(product.local_ingress_requests || []);
+      renderLocalIngressEvidenceNavigator(product.local_ingress_evidence || []);
     }
     function productScopeSummary(product = state.operationProduct || {}) {
       if (state.productScope === 'site') return ['site', product.site?.site_id || el('siteId').value.trim(), String((product.operations || []).length) + ' operations'].filter(Boolean).join(' / ');
@@ -10729,6 +10765,10 @@ export function renderCloudflareCarrierConsole() {
       const siteFileChangeProposalFile = siteFileChangeProposalFocus?.record?.proposal?.files?.[0]
         || siteFileChangeProposalFocus?.proposal?.files?.[0]
         || null;
+      const localIngressRequests = product.local_ingress_requests || [];
+      const localIngressEvidence = product.local_ingress_evidence || [];
+      const localIngressRequestFocus = state.localIngressRequestFocus || localIngressRequests[0] || null;
+      const localIngressEvidenceFocus = state.localIngressEvidenceFocus || localIngressEvidence[0] || null;
       const controlDomain = contextValue(control, 'Domain') || 'none';
       const controlAction = contextValue(control, 'Action') || 'none';
       const controlTarget = contextValue(control, 'Target') || 'none';
@@ -10775,6 +10815,8 @@ export function renderCloudflareCarrierConsole() {
           listItem('mailbox_outlook_draft_creates', mailboxOutlookDraftCreates.length + ' / ' + String(surface.mailbox_outlook_draft_create_count ?? mailboxOutlookDraftCreates.length)),
           listItem('site_file_change_proposals', siteFileChangeProposals.length + ' / ' + String(surface.site_file_change_proposal_count ?? siteFileChangeProposals.length)),
           listItem('site_file_materializations', siteFileMaterializations.length + ' / ' + String(surface.site_file_materialization_count ?? siteFileMaterializations.length)),
+          listItem('local_ingress_requests', localIngressRequests.length + ' / ' + String(surface.local_ingress_request_count ?? localIngressRequests.length)),
+          listItem('local_ingress_evidence', localIngressEvidence.length + ' / ' + String(surface.local_ingress_evidence_count ?? localIngressEvidence.length)),
         ],
         evidence: [
           listItem('events_loaded', String(state.events.length)),
@@ -10791,6 +10833,8 @@ export function renderCloudflareCarrierConsole() {
           listItem('mailbox_draft_reply_proposal', mailboxDraftReplyProposalFocus?.proposal_id || 'none'),
           listItem('mailbox_outlook_draft_create', mailboxOutlookDraftCreateFocus?.draft_create_id || 'none'),
           listItem('site_file_change_proposal', siteFileChangeProposalFocus?.proposal_id || 'none'),
+          listItem('local_ingress_request', localIngressRequestFocus?.local_ingress_request_id || 'none'),
+          listItem('local_ingress_evidence', localIngressEvidenceFocus?.local_ingress_evidence_id || 'none'),
         ],
         sessionEvidence: [
           listItem('session', contextValue(sessionPath, 'Session') || 'none'),
@@ -10864,6 +10908,24 @@ export function renderCloudflareCarrierConsole() {
           listItem('site_file_materialization_authority_partition', surface.site_file_materialization_authority_partition || 'materialization_not_observed_filesystem_and_publication_windows_owned'),
           listItem('site_file_materialization_next_action', siteFileMaterializations.length > 0 ? 'review_site_file_materialization' : 'monitor_site_file_materializations'),
         ],
+        localIngressReview: [
+          listItem('local_ingress_request_count', String(surface.local_ingress_request_count ?? localIngressRequests.length)),
+          listItem('focused_request', localIngressRequestFocus?.local_ingress_request_id || 'none'),
+          listItem('request_action', localIngressRequestFocus?.requested_action_ref || 'none'),
+          listItem('local_ingress_request_authority', surface.local_ingress_request_authority || localIngressRequestFocus?.request_authority || 'not_observed'),
+          listItem('local_ingress_target_authority_locus', surface.local_ingress_target_authority_locus || localIngressRequestFocus?.target_authority_locus || 'not_observed'),
+          listItem('local_ingress_executor_authority', surface.local_ingress_executor_authority || localIngressRequestFocus?.local_executor_authority || 'not_observed'),
+          listItem('local_ingress_execution_admission', surface.local_ingress_execution_admission || localIngressRequestFocus?.local_execution_admission || 'not_observed'),
+          listItem('local_ingress_evidence_count', String(surface.local_ingress_evidence_count ?? localIngressEvidence.length)),
+          listItem('focused_evidence', localIngressEvidenceFocus?.local_ingress_evidence_id || 'none'),
+          listItem('local_ingress_evidence_authority', surface.local_ingress_evidence_authority || localIngressEvidenceFocus?.local_executor_authority || 'not_observed'),
+          listItem('local_ingress_evidence_store_authority', surface.local_ingress_evidence_store_authority || (localIngressEvidenceFocus ? 'cloudflare_local_ingress_evidence_store' : 'not_observed')),
+          listItem('local_filesystem_mutation_admission', localIngressEvidenceFocus?.local_filesystem_mutation_admission || 'not_observed'),
+          listItem('direct_cloudflare_filesystem_mutation_admission', surface.local_ingress_direct_cloudflare_filesystem_mutation_admission || localIngressEvidenceFocus?.direct_cloudflare_filesystem_mutation_admission || 'retained'),
+          listItem('repository_publication_admission', surface.local_ingress_repository_publication_admission || localIngressEvidenceFocus?.repository_publication_admission || 'retained'),
+          listItem('local_ingress_authority_partition', surface.local_ingress_authority_partition || 'local_ingress_not_observed_windows_authority_retained'),
+          listItem('local_ingress_next_action', localIngressEvidence.length > 0 ? 'review_local_ingress_evidence' : localIngressRequests.length > 0 ? 'await_windows_local_ingress_evidence' : 'monitor_local_ingress'),
+        ],
         readiness: readinessGaps.length > 0
           ? readinessGaps.slice(0, 4).map((item) => listItem(item.label, item.detail || item.action_label || item.status))
           : [listItem('ready', 'all readiness gates satisfied')],
@@ -10883,6 +10945,7 @@ export function renderCloudflareCarrierConsole() {
         renderListBlock('Mailbox Status Posture', board.mailboxStatus),
         renderListBlock('Mailbox Draft Review', board.mailboxDraftReview),
         renderListBlock('Site File Change Review', board.siteFileChangeReview),
+        renderListBlock('Local Ingress Review', board.localIngressReview),
         renderListBlock('Work Queues', board.queues),
         renderListBlock('Evidence Review', board.evidence),
         renderListBlock('Readiness Gaps', board.readiness),
@@ -11216,6 +11279,8 @@ export function renderCloudflareCarrierConsole() {
       const openTasks = (product.tasks || []).filter((task) => !['done', 'closed', 'resolved'].includes(String(task.status || '').toLowerCase()));
       const directiveDeliveries = product.webhook_delay_directive_deliveries || [];
       const siteFileChangeProposals = product.site_file_change_proposals || [];
+      const localIngressRequests = product.local_ingress_requests || [];
+      const localIngressEvidence = product.local_ingress_evidence || [];
       const nextAction = openAttention[0]
         ? 'resolve attention ' + openAttention[0].directive_id
         : openTasks[0]
@@ -11234,6 +11299,9 @@ export function renderCloudflareCarrierConsole() {
         ['Directive Deliveries', String(directiveDeliveries.length)],
         ['Site File Change Proposals', String(siteFileChangeProposals.length)],
         ['Site File Change Next Action', siteFileChangeProposals.length > 0 ? 'review_site_file_change_proposal' : 'monitor_site_file_change_proposals'],
+        ['Local Ingress Requests', String(surface.local_ingress_request_count ?? localIngressRequests.length)],
+        ['Local Ingress Evidence', String(surface.local_ingress_evidence_count ?? localIngressEvidence.length)],
+        ['Local Ingress Next Action', localIngressEvidence.length > 0 ? 'review_local_ingress_evidence' : localIngressRequests.length > 0 ? 'await_windows_local_ingress_evidence' : 'monitor_local_ingress'],
         ['Evidence Loaded', String(surface.carrier_evidence_count ?? (product.carrier_evidence || []).length) + ' groups / ' + state.events.length + ' events'],
         ['Evidence Replay State', evidenceStatus.state || 'unknown'],
         ['Evidence Replay Source', evidenceReplaySources(product)],
@@ -11261,6 +11329,8 @@ export function renderCloudflareCarrierConsole() {
       const mailboxDraftReplyProposal = state.mailboxDraftReplyProposalFocus || (product.mailbox_draft_reply_proposals || [])[0] || null;
       const mailboxOutlookDraftCreate = state.mailboxOutlookDraftCreateFocus || (product.mailbox_outlook_draft_creates || [])[0] || null;
       const siteFileChangeProposal = state.siteFileChangeProposalFocus || (product.site_file_change_proposals || [])[0] || null;
+      const localIngressRequest = state.localIngressRequestFocus || (product.local_ingress_requests || [])[0] || null;
+      const localIngressEvidence = state.localIngressEvidenceFocus || (product.local_ingress_evidence || [])[0] || null;
       return {
         session: sessions.find((session) => session.carrier_session_id === activeSession) || state.sessionFocus || sessions[0] || null,
         attention: openAttention[0] || state.attentionFocus || state.attentionItems[0] || null,
@@ -11271,6 +11341,8 @@ export function renderCloudflareCarrierConsole() {
         mailboxDraftReplyProposal,
         mailboxOutlookDraftCreate,
         siteFileChangeProposal,
+        localIngressRequest,
+        localIngressEvidence,
       };
     }
     function setEvidenceLane(key) {
@@ -14240,6 +14312,119 @@ export function renderCloudflareCarrierConsole() {
       }
       el('residentDispatchFocusDetail').replaceChildren(...residentDispatchFocusContext(item).map(([label, value]) => evidenceField(label, value)));
     }
+    function localIngressRequestKey(item = {}) {
+      return item.local_ingress_request_id || [item.site_id, item.requested_action_ref, item.recorded_at].filter(Boolean).join('|');
+    }
+    function selectLocalIngressRequest(item) {
+      if (!item) return;
+      state.localIngressRequestFocus = item;
+      renderLocalIngressRequestNavigator(state.operationProduct?.local_ingress_requests || []);
+      updateControlRoom();
+    }
+    function renderLocalIngressRequestNavigator(items = []) {
+      if (items.length === 0) {
+        state.localIngressRequestFocus = null;
+        el('localIngressRequestNavigator').innerHTML = '<div class="empty">No local ingress requests loaded.</div>';
+        renderLocalIngressRequestFocusDetail();
+        return;
+      }
+      if (state.localIngressRequestFocus) state.localIngressRequestFocus = items.find((item) => localIngressRequestKey(item) === localIngressRequestKey(state.localIngressRequestFocus)) || state.localIngressRequestFocus;
+      if (!state.localIngressRequestFocus) state.localIngressRequestFocus = items[0];
+      el('localIngressRequestNavigator').replaceChildren(...items.map((item) => {
+        const node = document.createElement('article');
+        node.className = 'shadow-read-item' + (localIngressRequestKey(item) === localIngressRequestKey(state.localIngressRequestFocus) ? ' selected' : '');
+        const title = document.createElement('strong');
+        title.textContent = [item.local_execution_admission || 'pending_windows_admission', item.local_ingress_request_id || 'local_ingress_request'].join(' ');
+        const meta = document.createElement('span');
+        meta.textContent = [item.requested_action_ref, item.target_authority_locus, item.local_executor_authority, item.direct_cloudflare_filesystem_mutation_admission].filter(Boolean).join(' | ');
+        node.addEventListener('click', () => selectLocalIngressRequest(item));
+        node.append(title, meta);
+        return node;
+      }));
+      renderLocalIngressRequestFocusDetail();
+    }
+    function localIngressRequestFocusContext(item = {}) {
+      return [
+        ['Request', item.local_ingress_request_id || 'none'],
+        ['Site', item.site_id || el('siteId').value.trim() || 'none'],
+        ['Operation', item.operation_id || el('operationId').value.trim() || 'none'],
+        ['Requested Action', item.requested_action_ref || 'none'],
+        ['Request Authority', item.request_authority || 'cloudflare_local_ingress_request_queue'],
+        ['Target Authority Locus', item.target_authority_locus || 'local-windows-site-authority'],
+        ['Executor Authority', item.local_executor_authority || 'windows_local_ingress_executor'],
+        ['Execution Admission', item.local_execution_admission || 'pending_windows_admission'],
+        ['Direct Cloudflare Filesystem Mutation', item.direct_cloudflare_filesystem_mutation_admission || 'not_admitted'],
+        ['Repository Publication', item.repository_publication_admission || 'not_admitted'],
+        ['Authority Partition', item.authority_partition || 'cloudflare_queues_governed_local_ingress_request_windows_admits_executes_and_returns_evidence'],
+        ['Recorded', item.recorded_at || 'none'],
+      ];
+    }
+    function renderLocalIngressRequestFocusDetail(item = state.localIngressRequestFocus) {
+      if (!item) {
+        el('localIngressRequestFocusDetail').innerHTML = '<div class="empty">No local ingress request selected.</div>';
+        return;
+      }
+      el('localIngressRequestFocusDetail').replaceChildren(...localIngressRequestFocusContext(item).map(([label, value]) => evidenceField(label, value)));
+    }
+    function localIngressEvidenceKey(item = {}) {
+      return item.local_ingress_evidence_id || [item.local_ingress_request_id, item.local_execution_id, item.recorded_at].filter(Boolean).join('|');
+    }
+    function selectLocalIngressEvidence(item) {
+      if (!item) return;
+      state.localIngressEvidenceFocus = item;
+      const request = (state.operationProduct?.local_ingress_requests || []).find((entry) => entry.local_ingress_request_id === item.local_ingress_request_id);
+      if (request) state.localIngressRequestFocus = request;
+      renderLocalIngressEvidenceNavigator(state.operationProduct?.local_ingress_evidence || []);
+      renderLocalIngressRequestNavigator(state.operationProduct?.local_ingress_requests || []);
+      updateControlRoom();
+    }
+    function renderLocalIngressEvidenceNavigator(items = []) {
+      if (items.length === 0) {
+        state.localIngressEvidenceFocus = null;
+        el('localIngressEvidenceNavigator').innerHTML = '<div class="empty">No local ingress evidence loaded.</div>';
+        renderLocalIngressEvidenceFocusDetail();
+        return;
+      }
+      if (state.localIngressEvidenceFocus) state.localIngressEvidenceFocus = items.find((item) => localIngressEvidenceKey(item) === localIngressEvidenceKey(state.localIngressEvidenceFocus)) || state.localIngressEvidenceFocus;
+      if (!state.localIngressEvidenceFocus) state.localIngressEvidenceFocus = items[0];
+      el('localIngressEvidenceNavigator').replaceChildren(...items.map((item) => {
+        const node = document.createElement('article');
+        node.className = 'shadow-read-item' + (localIngressEvidenceKey(item) === localIngressEvidenceKey(state.localIngressEvidenceFocus) ? ' selected' : '');
+        const title = document.createElement('strong');
+        title.textContent = [item.local_execution_status || 'unknown', item.local_ingress_evidence_id || item.local_execution_id || 'local_ingress_evidence'].join(' ');
+        const meta = document.createElement('span');
+        meta.textContent = [item.local_ingress_request_id, item.local_executor_authority, item.local_filesystem_mutation_admission, item.repository_publication_admission].filter(Boolean).join(' | ');
+        node.addEventListener('click', () => selectLocalIngressEvidence(item));
+        node.append(title, meta);
+        return node;
+      }));
+      renderLocalIngressEvidenceFocusDetail();
+    }
+    function localIngressEvidenceFocusContext(item = {}) {
+      return [
+        ['Evidence', item.local_ingress_evidence_id || 'none'],
+        ['Request', item.local_ingress_request_id || 'none'],
+        ['Local Execution', item.local_execution_id || 'none'],
+        ['Status', item.local_execution_status || 'unknown'],
+        ['Executor Authority', item.local_executor_authority || 'windows_local_ingress_executor'],
+        ['Windows Admission', [item.windows_admission_action, item.windows_admission_reason].filter(Boolean).join(' / ') || 'none'],
+        ['Local Filesystem Mutation', item.local_filesystem_mutation_admission || 'not_observed'],
+        ['Changed Files', String(item.changed_file_count ?? item.evidence?.changed_files?.length ?? 0)],
+        ['Rollback Evidence', item.rollback_evidence_ref || 'none'],
+        ['Direct Cloudflare Filesystem Mutation', item.direct_cloudflare_filesystem_mutation_admission || 'not_admitted'],
+        ['Repository Publication', item.repository_publication_admission || 'not_admitted'],
+        ['Cloudflare Evidence Store', 'cloudflare_local_ingress_evidence_store'],
+        ['Posture', item.evidence_posture || 'windows_local_ingress_executed_cloudflare_recorded_evidence'],
+        ['Recorded', item.recorded_at || 'none'],
+      ];
+    }
+    function renderLocalIngressEvidenceFocusDetail(item = state.localIngressEvidenceFocus) {
+      if (!item) {
+        el('localIngressEvidenceFocusDetail').innerHTML = '<div class="empty">No local ingress evidence selected.</div>';
+        return;
+      }
+      el('localIngressEvidenceFocusDetail').replaceChildren(...localIngressEvidenceFocusContext(item).map(([label, value]) => evidenceField(label, value)));
+    }
     function siteProductStatusSummary(status) {
       const missing = (status?.missing || []).join(', ') || 'none';
       const attention = (status?.attention || []).join(', ') || 'none';
@@ -14331,6 +14516,8 @@ export function renderCloudflareCarrierConsole() {
       renderWebhookDelayEvidenceChain(product);
       renderResidentLoopShadowNavigator(product.resident_loop_shadow_runs || []);
       renderResidentDispatchNavigator(product.resident_dispatch_decisions || []);
+      renderLocalIngressRequestNavigator(product.local_ingress_requests || []);
+      renderLocalIngressEvidenceNavigator(product.local_ingress_evidence || []);
       renderAttentionQueue(extractOperationAttention(product));
       renderAuthorityState(product);
       renderAuthorityPath(product);
@@ -14359,6 +14546,8 @@ export function renderCloudflareCarrierConsole() {
       const webhookDelayDirectiveDeliveryItems = (product.webhook_delay_directive_deliveries || []).map((entry) => listItem(entry.delivery_id || entry.directive_delivery_id, [entry.delivery_state, entry.carrier_session_id, entry.directive_authority, entry.dispatch_authority, entry.fallback_status].filter((value) => value != null && value !== '').join(' | ')));
       const residentLoopShadowItems = (product.resident_loop_shadow_runs || []).map((entry) => listItem(entry.loop_run_id || entry.run_started_at, [entry.loop_status, 'steps=' + (entry.step_count ?? 'unknown'), 'attention=' + (entry.operator_attention_count ?? 'unknown'), entry.dispatch_action || 'none'].filter((value) => value != null && value !== '').join(' | ')));
       const residentDispatchItems = (product.resident_dispatch_decisions || []).map((entry) => listItem(entry.dispatch_decision_id || entry.carrier_session_id, [entry.decision_state, entry.dispatch_authority, entry.fallback_status, entry.dispatch_action].filter((value) => value != null && value !== '').join(' | ')));
+      const localIngressRequestItems = (product.local_ingress_requests || []).map((entry) => listItem(entry.local_ingress_request_id, [entry.local_execution_admission, entry.requested_action_ref, entry.target_authority_locus].filter((value) => value != null && value !== '').join(' | ')));
+      const localIngressEvidenceItems = (product.local_ingress_evidence || []).map((entry) => listItem(entry.local_ingress_evidence_id, [entry.local_execution_status, entry.local_ingress_request_id, entry.local_filesystem_mutation_admission].filter((value) => value != null && value !== '').join(' | ')));
       const evidenceItems = (product.carrier_evidence || []).map((entry) => {
         const kinds = (entry.events || []).slice(0, 5).map((event) => event.event_kind).join(', ');
         return listItem(entry.carrier_session_id, kinds || entry.error || 'no events');
@@ -14382,6 +14571,8 @@ export function renderCloudflareCarrierConsole() {
         renderListBlock('Webhook Delay Directive Deliveries', webhookDelayDirectiveDeliveryItems),
         renderListBlock('Resident Loop Shadow Reads', residentLoopShadowItems),
         renderListBlock('Resident Dispatch', residentDispatchItems),
+        renderListBlock('Local Ingress Requests', localIngressRequestItems),
+        renderListBlock('Local Ingress Evidence', localIngressEvidenceItems),
         renderListBlock('Carrier Evidence', evidenceItems),
       );
       renderLastAuthority((product.authority_events || [])[0]);
@@ -14425,6 +14616,8 @@ export function renderCloudflareCarrierConsole() {
       renderWebhookDelayEvidenceChain(product);
       renderResidentLoopShadowNavigator(product.resident_loop_shadow_runs || []);
       renderResidentDispatchNavigator(product.resident_dispatch_decisions || []);
+      renderLocalIngressRequestNavigator(product.local_ingress_requests || []);
+      renderLocalIngressEvidenceNavigator(product.local_ingress_evidence || []);
       renderOperationNavigator(state.operations || []);
       renderOperationSessions(product.sessions || []);
       renderAttentionQueue(extractOperationAttention(product));
@@ -14455,6 +14648,8 @@ export function renderCloudflareCarrierConsole() {
         listItem('webhook_delay_directive_deliveries', surface.webhook_delay_directive_delivery_count),
         listItem('resident_loop_shadow_reads', surface.resident_loop_shadow_run_count),
         listItem('resident_dispatch_decisions', surface.resident_dispatch_decision_count),
+        listItem('local_ingress_requests', surface.local_ingress_request_count),
+        listItem('local_ingress_evidence', surface.local_ingress_evidence_count),
         listItem('dispatch_authority', surface.dispatch_authority),
       ];
       const sessionItems = (product.sessions || []).map((session) => listItem(session.carrier_session_id, session.binding_status || session.agent_id));
@@ -14469,6 +14664,8 @@ export function renderCloudflareCarrierConsole() {
       const webhookDelayDirectiveDeliveryItems = (product.webhook_delay_directive_deliveries || []).map((entry) => listItem(entry.delivery_id || entry.directive_delivery_id, [entry.delivery_state, entry.carrier_session_id, entry.directive_authority, entry.dispatch_authority, entry.fallback_status].filter((value) => value != null && value !== '').join(' | ')));
       const residentLoopShadowItems = (product.resident_loop_shadow_runs || []).map((entry) => listItem(entry.loop_run_id || entry.run_started_at, [entry.loop_status, 'steps=' + (entry.step_count ?? 'unknown'), 'attention=' + (entry.operator_attention_count ?? 'unknown'), entry.dispatch_action || 'none'].filter((value) => value != null && value !== '').join(' | ')));
       const residentDispatchItems = (product.resident_dispatch_decisions || []).map((entry) => listItem(entry.dispatch_decision_id || entry.carrier_session_id, [entry.decision_state, entry.dispatch_authority, entry.fallback_status, entry.dispatch_action].filter((value) => value != null && value !== '').join(' | ')));
+      const localIngressRequestItems = (product.local_ingress_requests || []).map((entry) => listItem(entry.local_ingress_request_id, [entry.local_execution_admission, entry.requested_action_ref, entry.target_authority_locus].filter((value) => value != null && value !== '').join(' | ')));
+      const localIngressEvidenceItems = (product.local_ingress_evidence || []).map((entry) => listItem(entry.local_ingress_evidence_id, [entry.local_execution_status, entry.local_ingress_request_id, entry.local_filesystem_mutation_admission].filter((value) => value != null && value !== '').join(' | ')));
       const evidenceItems = (product.carrier_evidence || []).map((entry) => {
         const kinds = (entry.events || []).slice(0, 5).map((event) => event.event_kind).join(', ');
         return listItem(entry.carrier_session_id, kinds || entry.error || 'no events');
@@ -14489,6 +14686,8 @@ export function renderCloudflareCarrierConsole() {
         renderListBlock('Webhook Delay Directive Deliveries', webhookDelayDirectiveDeliveryItems),
         renderListBlock('Resident Loop Shadow Reads', residentLoopShadowItems),
         renderListBlock('Resident Dispatch', residentDispatchItems),
+        renderListBlock('Local Ingress Requests', localIngressRequestItems),
+        renderListBlock('Local Ingress Evidence', localIngressEvidenceItems),
         renderListBlock('Carrier Evidence', evidenceItems),
       );
       renderLastAuthority((product.authority_events || [])[0]);
@@ -14631,6 +14830,12 @@ export function renderCloudflareCarrierConsole() {
       } else if (activity.focus_kind === 'resident_dispatch_decision') {
         const decision = (product.resident_dispatch_decisions || []).find((entry) => entry.dispatch_decision_id === ref || entry.carrier_session_id === ref);
         if (decision) selectResidentDispatch(decision);
+      } else if (activity.focus_kind === 'local_ingress_request') {
+        const request = (product.local_ingress_requests || []).find((entry) => entry.local_ingress_request_id === ref);
+        if (request) selectLocalIngressRequest(request);
+      } else if (activity.focus_kind === 'local_ingress_evidence') {
+        const evidence = (product.local_ingress_evidence || []).find((entry) => entry.local_ingress_evidence_id === ref);
+        if (evidence) selectLocalIngressEvidence(evidence);
       } else if (activity.focus_kind === 'operation_authority_event') {
         const event = (product.authority_events || []).find((entry) => entry.event_id === ref);
         if (event) renderLastAuthority(event);

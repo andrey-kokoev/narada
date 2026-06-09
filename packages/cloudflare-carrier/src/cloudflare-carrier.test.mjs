@@ -1333,6 +1333,27 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(localIngressEvidenceListBody.authority_partition, 'windows_executes_local_ingress_cloudflare_records_evidence_without_direct_filesystem_authority');
   assert.equal(localIngressEvidenceListBody.evidence.length, 1);
 
+  const operationReadAfterLocalIngressEvidence = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_operation_read_after_local_ingress_evidence',
+    params: {
+      site_id: 'site_fixture',
+      operation_id: 'operation_site_read',
+      local_ingress_request_limit: 10,
+      local_ingress_evidence_limit: 10,
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(operationReadAfterLocalIngressEvidence.status, 200);
+  const operationReadAfterLocalIngressEvidenceBody = await operationReadAfterLocalIngressEvidence.json();
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.local_ingress_evidence.length, 1);
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.local_ingress_evidence[0].local_ingress_evidence_id, 'local-ingress-evidence-fixture');
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_product_surface.local_ingress_evidence_count, 1);
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_product_surface.local_ingress_evidence_authority, 'windows_local_ingress_executor');
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_product_surface.local_ingress_evidence_store_authority, 'cloudflare_local_ingress_evidence_store');
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_product_surface.local_ingress_execution_admission, 'completed_by_windows_local_ingress');
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_lifecycle_status.local_ingress_evidence_count, 1);
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'local_ingress_evidence'), true);
+
   const publicationClaim = await worker.fetch(jsonRequest({
     operation: 'local_ingress.evidence.put',
     request_id: 'request_local_ingress_evidence_publication_claim',
@@ -2439,6 +2460,23 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Fallback Status/);
   assert.match(html, /cloudflare_primary_dispatcher/);
   assert.match(html, /windows_fallback_dispatcher/);
+  assert.match(html, /Local Ingress/);
+  assert.match(html, /localIngressRequestNavigator/);
+  assert.match(html, /localIngressRequestFocusDetail/);
+  assert.match(html, /localIngressEvidenceNavigator/);
+  assert.match(html, /localIngressEvidenceFocusDetail/);
+  assert.match(html, /renderLocalIngressRequestNavigator/);
+  assert.match(html, /renderLocalIngressEvidenceNavigator/);
+  assert.match(html, /selectLocalIngressRequest/);
+  assert.match(html, /selectLocalIngressEvidence/);
+  assert.match(html, /Local Ingress Review/);
+  assert.match(html, /local_ingress_request_count/);
+  assert.match(html, /local_ingress_evidence_count/);
+  assert.match(html, /local_ingress_authority_partition/);
+  assert.match(html, /await_windows_local_ingress_evidence/);
+  assert.match(html, /review_local_ingress_evidence/);
+  assert.match(html, /cloudflare_local_ingress_evidence_store/);
+  assert.match(html, /windows_local_ingress_executor/);
   assert.match(html, /operation_product_surface/);
   assert.match(html, /Carrier Evidence/);
   assert.match(html, /Task State/);
