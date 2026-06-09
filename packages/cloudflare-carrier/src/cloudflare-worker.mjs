@@ -2787,6 +2787,8 @@ function isSiteProductOperation(operation) {
     'local_ingress.evidence.list',
     'repository_publication.request.create',
     'repository_publication.request.list',
+    'repository_publication.evidence.put',
+    'repository_publication.evidence.list',
     'task_lifecycle.shadow_read.record',
     'task_lifecycle.shadow_read.list',
     'task_lifecycle.shadow_read.source.read',

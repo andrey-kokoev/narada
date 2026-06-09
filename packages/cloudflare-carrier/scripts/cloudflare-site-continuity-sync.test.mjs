@@ -47,6 +47,7 @@ test('site continuity sync help describes supported transports', async () => {
   assert.match(result.stdout, /pull-cloudflare/);
   assert.match(result.stdout, /push-cloudflare/);
   assert.match(result.stdout, /read-cloudflare/);
+  assert.match(result.stdout, /repository-publication-evidence-put/);
 });
 
 test('site continuity sync refuses malformed packets before push', async () => {
@@ -96,4 +97,31 @@ test('site continuity sync refuses executable mutation packets before network', 
   assert.equal(body.admission.reason, 'site_continuity_exchange_packet_executable_mutation_refused');
   assert.ok(body.admission.evidence_required.includes('authority_route_refusal'));
   assert.ok(body.admission.confirmation_required.includes('mutation_requests_not_imported'));
+});
+
+test('site continuity sync refuses direct Cloudflare repository publication evidence before network', async () => {
+  const result = await runSync(['repository-publication-evidence-put', '--site', 'site_fixture'], {
+    input: JSON.stringify({
+      evidence: {
+        repository_publication_request_id: 'repository-publication-request-fixture',
+        publication_execution_id: 'repository-publication-execution-fixture',
+        repository_ref: 'github:andrey-kokoev/narada.sonar',
+        branch_ref: 'master',
+        source_change_ref: 'local-ingress-execution:fixture',
+        windows_admission_action: 'admit',
+        publication_status: 'completed',
+        published_commit_ref: 'git:commit:fixture',
+        cloudflare_git_push_admission: 'admitted',
+      },
+    }),
+  });
+
+  assert.equal(result.code, 1);
+  assert.equal(result.stdout, '');
+  const body = JSON.parse(result.stderr);
+  assert.equal(body.ok, false);
+  assert.equal(body.code, 'repository_publication_evidence_refused_before_push');
+  assert.equal(body.admission.action, 'refuse');
+  assert.equal(body.admission.reason, 'repository_publication_evidence_invalid');
+  assert.ok(body.admission.validation_errors.includes('repository_publication_evidence_cloudflare_git_push_admission_invalid'));
 });

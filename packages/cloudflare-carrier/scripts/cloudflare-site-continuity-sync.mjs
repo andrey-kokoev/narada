@@ -76,6 +76,27 @@ if (command === 'read-cloudflare') {
   process.exit(0);
 }
 
+if (command === 'repository-publication-evidence-put') {
+  const siteId = requiredOption('--site');
+  const evidenceEnvelope = await readJsonEnvelope(option('--evidence'));
+  const evidence = evidenceEnvelope?.evidence ?? evidenceEnvelope;
+  const admission = classifyRepositoryPublicationEvidence(evidence);
+  if (admission.action === 'refuse') {
+    failJson('repository_publication_evidence_refused_before_push', { admission });
+  }
+  const pushed = await post({ operation: 'repository_publication.evidence.put', params: { site_id: siteId, source_payload: evidence } });
+  if (pushed.http_status !== 200 || pushed.body?.ok === false) failApi('cloudflare_repository_publication_evidence_push_failed', pushed);
+  await writeJson(option('--out'), {
+    schema: 'narada.repository_publication_cloudflare_evidence_push.v1',
+    status: 'ok',
+    site_id: siteId,
+    worker_url: workerUrl,
+    local_evidence_admission: admission,
+    cloudflare_response: pushed.body,
+  });
+  process.exit(0);
+}
+
 fail(`unsupported_site_continuity_sync_command:${command}`);
 
 function option(name) {
@@ -92,12 +113,42 @@ function requiredOption(name) {
 
 async function readPacketEnvelope() {
   const packetPath = option('--packet');
-  const text = packetPath ? await readFile(packetPath, 'utf8') : await readAllStdin();
+  return readJsonEnvelope(packetPath);
+}
+
+async function readJsonEnvelope(path) {
+  const text = path ? await readFile(path, 'utf8') : await readAllStdin();
   try {
     return JSON.parse(text);
   } catch (error) {
-    failJson('site_continuity_packet_json_invalid', { error: error.message });
+    failJson('site_continuity_json_invalid', { error: error.message });
   }
+}
+
+function classifyRepositoryPublicationEvidence(evidence) {
+  const errors = [];
+  if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) errors.push('repository_publication_evidence_object_required');
+  const value = evidence && typeof evidence === 'object' ? evidence : {};
+  const windowsAdmissionAction = String(value.windows_admission_action ?? '');
+  const publicationStatus = String(value.publication_status ?? '');
+  if (!value.repository_publication_request_id) errors.push('repository_publication_evidence_request_id_required');
+  if (!value.publication_execution_id) errors.push('repository_publication_evidence_execution_id_required');
+  if (!['admit', 'refuse'].includes(windowsAdmissionAction)) errors.push('repository_publication_evidence_windows_admission_action_invalid');
+  if (!['completed', 'refused', 'failed'].includes(publicationStatus)) errors.push('repository_publication_evidence_status_invalid');
+  if (windowsAdmissionAction === 'admit' && publicationStatus !== 'completed') errors.push('repository_publication_evidence_admitted_status_invalid');
+  if (windowsAdmissionAction === 'refuse' && publicationStatus === 'completed') errors.push('repository_publication_evidence_refused_status_invalid');
+  if (!value.repository_ref) errors.push('repository_publication_evidence_repository_ref_required');
+  if (!value.branch_ref) errors.push('repository_publication_evidence_branch_ref_required');
+  if (!value.source_change_ref) errors.push('repository_publication_evidence_source_change_ref_required');
+  if (windowsAdmissionAction === 'admit' && !value.published_commit_ref) errors.push('repository_publication_evidence_published_commit_ref_required');
+  if ((value.cloudflare_git_push_admission ?? 'not_admitted') !== 'not_admitted') errors.push('repository_publication_evidence_cloudflare_git_push_admission_invalid');
+  if ((value.direct_cloudflare_repository_mutation_admission ?? 'not_admitted') !== 'not_admitted') errors.push('repository_publication_evidence_direct_cloudflare_repository_mutation_admission_invalid');
+  if (errors.length > 0) return { action: 'refuse', reason: 'repository_publication_evidence_invalid', validation_errors: errors };
+  return {
+    action: 'admit',
+    reason: 'repository_publication_evidence_valid_for_cloudflare_recording',
+    authority_partition: 'windows_admits_or_refuses_repository_publication_cloudflare_records_evidence_without_direct_repository_authority',
+  };
 }
 
 async function resolveBearerToken() {
@@ -172,5 +223,5 @@ function fail(code) {
 }
 
 function printHelp() {
-  stdout.write(`Narada Cloudflare site-continuity transport\n\nCommands:\n  pull-cloudflare --site <site_id> [--out <packet.json>]\n  push-cloudflare --packet <packet.json> [--site <site_id>] [--out <result.json>]\n  read-cloudflare --site <site_id> [--out <result.json>]\n\nAuth:\n  --url <worker-url> or CLOUDFLARE_CARRIER_URL\n  --token-file <path> or CLOUDFLARE_CARRIER_TOKEN_FILE\n  --token <bearer-token> or CLOUDFLARE_CARRIER_TOKEN\n\nNotes:\n  pull-cloudflare exports the packet emitted by site.read.\n  push-cloudflare imports a packet through site.continuity.packet.put.\n  The script refuses locally invalid/executable-mutation packets before sending them.\n`);
+  stdout.write(`Narada Cloudflare site-continuity transport\n\nCommands:\n  pull-cloudflare --site <site_id> [--out <packet.json>]\n  push-cloudflare --packet <packet.json> [--site <site_id>] [--out <result.json>]\n  read-cloudflare --site <site_id> [--out <result.json>]\n  repository-publication-evidence-put --site <site_id> [--evidence <evidence.json>] [--out <result.json>]\n\nAuth:\n  --url <worker-url> or CLOUDFLARE_CARRIER_URL\n  --token-file <path> or CLOUDFLARE_CARRIER_TOKEN_FILE\n  --token <bearer-token> or CLOUDFLARE_CARRIER_TOKEN\n\nNotes:\n  pull-cloudflare exports the packet emitted by site.read.\n  push-cloudflare imports a packet through site.continuity.packet.put.\n  The script refuses locally invalid/executable-mutation packets before sending them.\n  repository-publication-evidence-put returns Windows-side publication evidence to Cloudflare without granting Cloudflare git push authority.\n`);
 }
