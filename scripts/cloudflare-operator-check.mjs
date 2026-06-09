@@ -1520,6 +1520,7 @@ assert.equal(operationPersistencePosture?.durable_boundary_count, operationPersi
 assert.ok(operationPersistencePosture?.active_boundary_count >= 1);
 assert.equal(operationPersistencePosture?.durable_boundaries.some((boundary) => boundary.key === 'site_file_materialization_store' && boundary.status === 'available'), true);
 assert.equal(operationPersistencePosture?.durable_boundaries.some((boundary) => boundary.key === 'local_ingress_request_queue' && boundary.status === 'available'), true);
+assert.equal(operationPersistencePosture?.durable_boundaries.some((boundary) => boundary.key === 'repository_publication_request_queue' && boundary.status === 'available'), true);
 assert.ok(Array.isArray(operationPersistencePosture?.missing_boundaries));
 assert.ok(Array.isArray(operationPersistencePosture?.warnings));
 assert.equal(operationPersistencePosture?.session_count, operationReadAfterContinuity.body.sessions.length);
@@ -1539,6 +1540,7 @@ assert.equal(operationRecoveryPosture?.recovery_boundary_count, operationPersist
 assert.ok(operationRecoveryPosture?.recoverable_boundary_count >= 1);
 assert.ok(Array.isArray(operationRecoveryPosture?.recovery_boundaries));
 assert.equal(operationRecoveryPosture?.recovery_boundaries.some((boundary) => boundary.key === 'site_file_materialization_store' && boundary.status === 'recoverable'), true);
+assert.equal(operationRecoveryPosture?.recovery_boundaries.some((boundary) => boundary.key === 'repository_publication_request_queue' && boundary.status === 'recoverable'), true);
 assert.ok(Array.isArray(operationRecoveryPosture?.recovery_gaps));
 assert.ok(Array.isArray(operationRecoveryPosture?.missing_evidence_session_ids));
 assert.equal(operationRecoveryPosture?.session_count, operationReadAfterContinuity.body.sessions.length);
