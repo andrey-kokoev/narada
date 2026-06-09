@@ -154,11 +154,12 @@ test('site continuity sync refuses direct Cloudflare repository publication evid
 
 test('site continuity sync executes pending repository publication requests by returning local refusal evidence without implicit push', async () => {
   const mock = await startCarrierMock((body) => {
-    if (body.operation === 'repository_publication.request.list') {
+    if (body.operation === 'repository_publication.request.next') {
       return {
         body: {
           ok: true,
-          requests: [{
+          status: 'selected',
+          request: {
             repository_publication_request_id: 'repository-publication-request-fixture',
             publication_ref: 'repository-publication:fixture',
             requested_action_ref: 'repository-publication-action:fixture',
@@ -168,7 +169,7 @@ test('site continuity sync executes pending repository publication requests by r
             repository_publication_admission: 'pending_windows_publication_admission',
             cloudflare_git_push_admission: 'not_admitted',
             direct_cloudflare_repository_mutation_admission: 'not_admitted',
-          }],
+          },
         },
       };
     }
@@ -185,10 +186,11 @@ test('site continuity sync executes pending repository publication requests by r
     assert.equal(body.schema, 'narada.repository_publication_cloudflare_pending_execution.v1');
     assert.equal(body.status, 'ok');
     assert.equal(body.request_count, 1);
+    assert.equal(body.request_selection_status, 'selected');
     assert.equal(body.evidence_recorded_count, 1);
     assert.equal(body.results[0].status, 'evidence_recorded');
     assert.equal(mock.requests.length, 2);
-    assert.equal(mock.requests[0].operation, 'repository_publication.request.list');
+    assert.equal(mock.requests[0].operation, 'repository_publication.request.next');
     assert.equal(mock.requests[1].operation, 'repository_publication.evidence.put');
     const evidence = mock.requests[1].params.source_payload;
     assert.equal(evidence.repository_publication_request_id, 'repository-publication-request-fixture');

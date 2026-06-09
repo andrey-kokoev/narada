@@ -226,9 +226,9 @@ if (command === 'repository-publication-execute-pending') {
   const requestLimit = Number(option('--limit') ?? 10);
   const remote = option('--remote') ?? 'origin';
   const shouldPush = hasFlag('--push');
-  const listed = await post({ operation: 'repository_publication.request.list', params: { site_id: siteId, limit: requestLimit } });
-  if (listed.http_status !== 200 || listed.body?.ok === false) failApi('cloudflare_repository_publication_request_list_failed', listed);
-  const requests = Array.isArray(listed.body?.requests) ? listed.body.requests : [];
+  const selected = await post({ operation: 'repository_publication.request.next', params: { site_id: siteId, limit: requestLimit } });
+  if (selected.http_status !== 200 || selected.body?.ok === false) failApi('cloudflare_repository_publication_request_next_failed', selected);
+  const requests = selected.body?.request ? [selected.body.request] : [];
   const results = [];
   for (const request of requests) {
     const evidence = await buildRepositoryPublicationExecutionEvidence(request, { repoPath, remote, shouldPush });
@@ -254,6 +254,7 @@ if (command === 'repository-publication-execute-pending') {
     worker_url: workerUrl,
     repository_path: repoPath,
     push_enabled: shouldPush,
+    request_selection_status: selected.body?.status ?? 'unknown',
     request_count: requests.length,
     evidence_recorded_count: results.filter((result) => result.status === 'evidence_recorded').length,
     results,
