@@ -1023,7 +1023,7 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(body.cloudflare_persistence_posture.schema, 'narada.cloudflare_persistence_posture.v1');
   assert.equal(body.cloudflare_persistence_posture.state, 'durable');
   assert.equal(body.cloudflare_persistence_posture.site_id, 'site_fixture');
-  assert.equal(body.cloudflare_persistence_posture.active_boundary_count, 7);
+  assert.equal(body.cloudflare_persistence_posture.active_boundary_count, 8);
   assert.equal(body.cloudflare_persistence_posture.missing_boundaries.length, 0);
   assert.equal(body.cloudflare_persistence_posture.next_action, 'monitor_persistence_posture');
   assert.equal(body.cloudflare_persistence_posture.durable_boundaries.some((boundary) => boundary.key === 'session_snapshot'), true);
@@ -1031,16 +1031,18 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(body.cloudflare_persistence_posture.durable_boundaries.some((boundary) => boundary.key === 'site_file_materialization_store'), true);
   assert.equal(body.cloudflare_persistence_posture.durable_boundaries.some((boundary) => boundary.key === 'local_ingress_request_queue'), true);
   assert.equal(body.cloudflare_persistence_posture.durable_boundaries.some((boundary) => boundary.key === 'repository_publication_request_queue'), true);
+  assert.equal(body.cloudflare_persistence_posture.durable_boundaries.some((boundary) => boundary.key === 'repository_publication_evidence_store'), true);
   assert.equal(body.cloudflare_recovery_posture.schema, 'narada.cloudflare_recovery_posture.v1');
   assert.equal(body.cloudflare_recovery_posture.state, 'reconstructable');
   assert.equal(body.cloudflare_recovery_posture.snapshot_reload, 'available');
   assert.equal(body.cloudflare_recovery_posture.evidence_replay, 'loaded');
   assert.equal(body.cloudflare_recovery_posture.evidence_sources.includes('cloudflare-durable-object'), true);
-  assert.equal(body.cloudflare_recovery_posture.recovery_boundary_count, 7);
-  assert.equal(body.cloudflare_recovery_posture.recoverable_boundary_count, 7);
+  assert.equal(body.cloudflare_recovery_posture.recovery_boundary_count, 8);
+  assert.equal(body.cloudflare_recovery_posture.recoverable_boundary_count, 8);
   assert.equal(body.cloudflare_recovery_posture.recovery_boundaries.some((boundary) => boundary.key === 'site_file_materialization_store' && boundary.status === 'recoverable'), true);
   assert.equal(body.cloudflare_recovery_posture.recovery_boundaries.some((boundary) => boundary.key === 'local_ingress_request_queue' && boundary.status === 'recoverable'), true);
   assert.equal(body.cloudflare_recovery_posture.recovery_boundaries.some((boundary) => boundary.key === 'repository_publication_request_queue' && boundary.status === 'recoverable'), true);
+  assert.equal(body.cloudflare_recovery_posture.recovery_boundaries.some((boundary) => boundary.key === 'repository_publication_evidence_store' && boundary.status === 'recoverable'), true);
   assert.equal(body.cloudflare_recovery_posture.recovery_gaps.length, 0);
   assert.equal(body.cloudflare_recovery_posture.next_action, 'monitor_recovery_posture');
   assert.equal(body.reader_principal.email, 'admin@system');
@@ -1376,6 +1378,70 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(repositoryPublicationRequestListBody.authority_partition, 'cloudflare_queues_governed_repository_publication_request_windows_admits_publishes_and_returns_evidence');
   assert.equal(repositoryPublicationRequestListBody.requests.length, 1);
   assert.equal(repositoryPublicationRequestListBody.requests[0].repository_publication_request_id, 'repository-publication-request-fixture');
+
+  const repositoryPublicationEvidence = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.evidence.put',
+    request_id: 'request_repository_publication_evidence_put',
+    params: {
+      site_id: 'site_fixture',
+      repository_publication_evidence_id: 'repository-publication-evidence-fixture',
+      repository_publication_request_id: 'repository-publication-request-fixture',
+      publication_execution_id: 'repository-publication-execution-fixture',
+      publication_ref: 'repository-publication:fixture-branch-update',
+      requested_action_ref: 'repository-publication-action:fixture-branch-update',
+      repository_ref: 'github:andrey-kokoev/narada.sonar',
+      branch_ref: 'master',
+      source_change_ref: 'local-ingress-execution:local-ingress-execution-fixture',
+      windows_admission_action: 'admit',
+      publication_status: 'completed',
+      published_commit_ref: 'git:commit:fixture-publication',
+      rollback_evidence_ref: 'rollback-evidence:repository-publication-fixture',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  const repositoryPublicationEvidenceBody = await repositoryPublicationEvidence.json();
+  assert.equal(repositoryPublicationEvidence.status, 200, JSON.stringify(repositoryPublicationEvidenceBody));
+  assert.equal(repositoryPublicationEvidenceBody.status, 'recorded');
+  assert.equal(repositoryPublicationEvidenceBody.repository_publication_evidence_authority, 'windows_repository_publication_executor');
+  assert.equal(repositoryPublicationEvidenceBody.cloudflare_evidence_store_authority, 'cloudflare_repository_publication_evidence_store');
+  assert.equal(repositoryPublicationEvidenceBody.repository_publication_admission, 'admitted_by_windows_repository_publication');
+  assert.equal(repositoryPublicationEvidenceBody.cloudflare_git_push_admission, 'not_admitted');
+  assert.equal(repositoryPublicationEvidenceBody.direct_cloudflare_repository_mutation_admission, 'not_admitted');
+
+  const repositoryPublicationEvidenceList = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.evidence.list',
+    request_id: 'request_repository_publication_evidence_list',
+    params: { site_id: 'site_fixture', repository_publication_request_id: 'repository-publication-request-fixture', limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(repositoryPublicationEvidenceList.status, 200);
+  const repositoryPublicationEvidenceListBody = await repositoryPublicationEvidenceList.json();
+  assert.equal(repositoryPublicationEvidenceListBody.repository_publication_evidence_authority, 'windows_repository_publication_executor');
+  assert.equal(repositoryPublicationEvidenceListBody.cloudflare_evidence_store_authority, 'cloudflare_repository_publication_evidence_store');
+  assert.equal(repositoryPublicationEvidenceListBody.repository_publication_admission, 'resolved_by_windows_repository_publication');
+  assert.equal(repositoryPublicationEvidenceListBody.cloudflare_git_push_admission, 'not_admitted');
+  assert.equal(repositoryPublicationEvidenceListBody.direct_cloudflare_repository_mutation_admission, 'not_admitted');
+  assert.equal(repositoryPublicationEvidenceListBody.authority_partition, 'windows_admits_or_refuses_repository_publication_cloudflare_records_evidence_without_direct_repository_authority');
+  assert.equal(repositoryPublicationEvidenceListBody.evidence.length, 1);
+  assert.equal(repositoryPublicationEvidenceListBody.evidence[0].repository_publication_evidence_id, 'repository-publication-evidence-fixture');
+
+  const directRepositoryEvidenceClaim = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.evidence.put',
+    request_id: 'request_repository_publication_evidence_direct_cloudflare_claim',
+    params: {
+      site_id: 'site_fixture',
+      repository_publication_request_id: 'repository-publication-request-fixture',
+      publication_execution_id: 'repository-publication-execution-invalid-direct-cloudflare-claim',
+      repository_ref: 'github:andrey-kokoev/narada.sonar',
+      branch_ref: 'master',
+      source_change_ref: 'local-ingress-execution:local-ingress-execution-fixture',
+      windows_admission_action: 'admit',
+      publication_status: 'completed',
+      published_commit_ref: 'git:commit:fixture-publication',
+      cloudflare_git_push_admission: 'admitted',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(directRepositoryEvidenceClaim.status, 400);
+  const directRepositoryEvidenceClaimBody = await directRepositoryEvidenceClaim.json();
+  assert.equal(directRepositoryEvidenceClaimBody.code, 'repository_publication_evidence_cloudflare_git_push_admission_invalid');
 
   const directRepositoryMutationClaim = await worker.fetch(jsonRequest({
     operation: 'repository_publication.request.create',
@@ -6541,6 +6607,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     localIngressRequests: clone(initial.localIngressRequests ?? []),
     localIngressEvidence: clone(initial.localIngressEvidence ?? []),
     repositoryPublicationRequests: clone(initial.repositoryPublicationRequests ?? []),
+    repositoryPublicationEvidence: clone(initial.repositoryPublicationEvidence ?? []),
     taskLifecycleShadowReads: clone(initial.taskLifecycleShadowReads ?? []),
     taskLifecycleWriteAdmissions: clone(initial.taskLifecycleWriteAdmissions ?? []),
     taskLifecycleTasks: clone(initial.taskLifecycleTasks ?? []),
@@ -6707,6 +6774,12 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const row = { repository_publication_request_id, site_id, generated_at, operation_id, task_id, publication_ref, requested_action_ref, requested_action_summary, repository_ref, branch_ref, source_change_ref, governed_request_contract_ref, evidence_return_contract_ref, rollback_plan_ref, authority_locus, repository_publication_executor_authority, repository_publication_admission, cloudflare_git_push_admission, direct_cloudflare_repository_mutation_admission, request_posture, request_json, recorded_by_principal_id, recorded_at };
         if (existing) Object.assign(existing, row);
         else state.repositoryPublicationRequests.push(row);
+      } else if (normalized.startsWith('insert into cloudflare_repository_publication_evidence')) {
+        const [repository_publication_evidence_id, site_id, generated_at, repository_publication_request_id, publication_execution_id, publication_ref, requested_action_ref, repository_ref, branch_ref, source_change_ref, windows_admission_action, windows_admission_reason, publication_status, repository_publication_executor_authority, published_commit_ref, rollback_evidence_ref, cloudflare_git_push_admission, direct_cloudflare_repository_mutation_admission, evidence_posture, evidence_json, recorded_by_principal_id, recorded_at] = bindings;
+        const existing = state.repositoryPublicationEvidence.find((entry) => entry.repository_publication_evidence_id === repository_publication_evidence_id);
+        const row = { repository_publication_evidence_id, site_id, generated_at, repository_publication_request_id, publication_execution_id, publication_ref, requested_action_ref, repository_ref, branch_ref, source_change_ref, windows_admission_action, windows_admission_reason, publication_status, repository_publication_executor_authority, published_commit_ref, rollback_evidence_ref, cloudflare_git_push_admission, direct_cloudflare_repository_mutation_admission, evidence_posture, evidence_json, recorded_by_principal_id, recorded_at };
+        if (existing) Object.assign(existing, row);
+        else state.repositoryPublicationEvidence.push(row);
       } else if (normalized.startsWith('insert into cloudflare_task_lifecycle_shadow_reads')) {
         const [read_id, site_id, source_locus, target_locus, source_url_host, source_db_path, source_schema, generated_at, task_count, status_counts_json, tasks_json, mutation_authority, shadow_read_posture, cloudflare_write_admission, dispatch_authority, shadow_mode, dispatch_action, record_json, recorded_by_principal_id, recorded_at] = bindings;
         const existing = state.taskLifecycleShadowReads.find((entry) => entry.read_id === read_id);
@@ -7027,6 +7100,19 @@ function fakeD1SiteRegistryStatement(state, sql) {
         return {
           results: state.repositoryPublicationRequests
             .filter((entry) => entry.site_id === siteId)
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_repository_publication_evidence')) {
+        const [siteId, maybeRequestId, maybeLimit] = bindings;
+        const hasRequestFilter = normalized.includes('repository_publication_request_id = ?');
+        const requestId = hasRequestFilter ? maybeRequestId : null;
+        const limit = hasRequestFilter ? maybeLimit : maybeRequestId;
+        return {
+          results: state.repositoryPublicationEvidence
+            .filter((entry) => entry.site_id === siteId && (!requestId || entry.repository_publication_request_id === requestId))
             .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
             .slice(0, Number(limit))
             .map((entry) => clone(entry)),

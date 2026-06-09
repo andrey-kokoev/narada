@@ -55,6 +55,7 @@ const CLOUDFLARE_SITE_FILE_MATERIALIZATION_SCHEMA = 'narada.sonar.cloudflare_sit
 const CLOUDFLARE_LOCAL_INGRESS_REQUEST_SCHEMA = 'narada.sonar.cloudflare_local_ingress_request.v1';
 const CLOUDFLARE_LOCAL_INGRESS_EVIDENCE_SCHEMA = 'narada.sonar.cloudflare_local_ingress_evidence.v1';
 const CLOUDFLARE_REPOSITORY_PUBLICATION_REQUEST_SCHEMA = 'narada.sonar.cloudflare_repository_publication_request.v1';
+const CLOUDFLARE_REPOSITORY_PUBLICATION_EVIDENCE_SCHEMA = 'narada.sonar.cloudflare_repository_publication_evidence.v1';
 const CLOUDFLARE_TASK_LIFECYCLE_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_shadow_read.v1';
 const CLOUDFLARE_TASK_LIFECYCLE_WRITE_ADMISSION_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_write_admission.v1';
 const CLOUDFLARE_TASK_LIFECYCLE_WRITE_ADMISSION_DECISION_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_write_admission_decision.v1';
@@ -87,6 +88,7 @@ const CLOUDFLARE_LOCAL_INGRESS_REQUEST_AUTHORITY = 'cloudflare_local_ingress_req
 const WINDOWS_LOCAL_INGRESS_EXECUTOR_AUTHORITY = 'windows_local_ingress_executor';
 const CLOUDFLARE_REPOSITORY_PUBLICATION_REQUEST_AUTHORITY = 'cloudflare_repository_publication_request_queue';
 const WINDOWS_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY = 'windows_repository_publication_executor';
+const CLOUDFLARE_REPOSITORY_PUBLICATION_EVIDENCE_AUTHORITY = 'cloudflare_repository_publication_evidence_store';
 const DEFAULT_WEBHOOK_DELAY_CRITICAL_MINUTES = 15;
 const CLOUDFLARE_RUNTIME_METADATA_READ_CAPABILITY = Object.freeze({
   capability_ref: CLOUDFLARE_RUNTIME_METADATA_READ_CAPABILITY_REF,
@@ -2434,6 +2436,7 @@ function summarizeCloudflarePersistencePosture(env = {}, {
     { key: 'site_file_materialization_store', substrate: 'cloudflare_d1_site_registry', status: hasSiteRegistry ? 'available' : 'missing', authority: 'cloudflare_site_file_materialization_record' },
     { key: 'local_ingress_request_queue', substrate: 'cloudflare_d1_site_registry', status: hasSiteRegistry ? 'available' : 'missing', authority: CLOUDFLARE_LOCAL_INGRESS_REQUEST_AUTHORITY },
     { key: 'repository_publication_request_queue', substrate: 'cloudflare_d1_site_registry', status: hasSiteRegistry ? 'available' : 'missing', authority: CLOUDFLARE_REPOSITORY_PUBLICATION_REQUEST_AUTHORITY },
+    { key: 'repository_publication_evidence_store', substrate: 'cloudflare_d1_site_registry', status: hasSiteRegistry ? 'available' : 'missing', authority: CLOUDFLARE_REPOSITORY_PUBLICATION_EVIDENCE_AUTHORITY },
     { key: 'task_lifecycle_store', substrate: 'cloudflare_d1_task_store', status: hasTaskStore ? 'available' : 'missing', authority: 'task_lifecycle_projection' },
   ];
   const missing = durableBoundaries.filter((boundary) => boundary.status !== 'available').map((boundary) => boundary.key);
@@ -3423,6 +3426,33 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         direct_cloudflare_repository_mutation_admission: 'not_admitted',
         authority_partition: 'cloudflare_queues_governed_repository_publication_request_windows_admits_publishes_and_returns_evidence',
         requests,
+      },
+    };
+  }
+  if (body.operation === 'repository_publication.evidence.put') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const result = await recordCloudflareRepositoryPublicationEvidence(env, requestedSiteId, params, principal);
+    return { status: result.ok ? 200 : 400, body: result };
+  }
+  if (body.operation === 'repository_publication.evidence.list') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const evidence = await listCloudflareRepositoryPublicationEvidence(env, requestedSiteId, params.repository_publication_evidence_limit ?? params.limit, params.repository_publication_request_id);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        schema: CLOUDFLARE_REPOSITORY_PUBLICATION_EVIDENCE_SCHEMA,
+        status: 'ok',
+        site_id: requestedSiteId,
+        repository_publication_evidence_authority: evidence.length > 0 ? WINDOWS_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY : 'not_observed',
+        cloudflare_evidence_store_authority: evidence.length > 0 ? CLOUDFLARE_REPOSITORY_PUBLICATION_EVIDENCE_AUTHORITY : 'not_observed',
+        repository_publication_admission: evidence.length > 0 ? 'resolved_by_windows_repository_publication' : 'not_observed',
+        cloudflare_git_push_admission: 'not_admitted',
+        direct_cloudflare_repository_mutation_admission: 'not_admitted',
+        authority_partition: 'windows_admits_or_refuses_repository_publication_cloudflare_records_evidence_without_direct_repository_authority',
+        evidence,
       },
     };
   }
@@ -7215,6 +7245,255 @@ async function listCloudflareLocalIngressEvidence(env = {}, siteId, limit, local
     rollback_evidence_ref: row.rollback_evidence_ref,
     direct_cloudflare_filesystem_mutation_admission: row.direct_cloudflare_filesystem_mutation_admission,
     repository_publication_admission: row.repository_publication_admission,
+    evidence_posture: row.evidence_posture,
+    record: parseJsonObject(row.evidence_json),
+    recorded_by_principal_id: row.recorded_by_principal_id,
+    recorded_at: row.recorded_at,
+  }));
+}
+
+function createRepositoryPublicationEvidence(siteId, params = {}) {
+  const source = params.source_payload ?? params.payload ?? params.evidence ?? {};
+  const repositoryPublicationRequestId = String(source.repository_publication_request_id ?? params.repository_publication_request_id ?? '');
+  const publicationExecutionId = String(source.publication_execution_id ?? params.publication_execution_id ?? '');
+  const windowsAdmissionAction = String(source.windows_admission_action ?? params.windows_admission_action ?? 'refuse');
+  const publicationStatus = String(source.publication_status ?? params.publication_status ?? (windowsAdmissionAction === 'admit' ? 'completed' : 'refused'));
+  const repositoryRef = String(source.repository_ref ?? params.repository_ref ?? '');
+  const branchRef = String(source.branch_ref ?? params.branch_ref ?? '');
+  const sourceChangeRef = String(source.source_change_ref ?? params.source_change_ref ?? '');
+  const publicationRef = String(source.publication_ref ?? params.publication_ref ?? repositoryPublicationRequestId);
+  const requestedActionRef = String(source.requested_action_ref ?? params.requested_action_ref ?? publicationRef);
+  const publishedCommitRef = String(source.published_commit_ref ?? params.published_commit_ref ?? '');
+  const rollbackEvidenceRef = String(source.rollback_evidence_ref ?? params.rollback_evidence_ref ?? '');
+  const cloudflareGitPushAdmission = String(source.cloudflare_git_push_admission ?? params.cloudflare_git_push_admission ?? 'not_admitted');
+  const directCloudflareRepositoryMutationAdmission = String(source.direct_cloudflare_repository_mutation_admission ?? params.direct_cloudflare_repository_mutation_admission ?? 'not_admitted');
+  if (!repositoryPublicationRequestId) return { ok: false, code: 'repository_publication_evidence_request_id_required' };
+  if (!publicationExecutionId) return { ok: false, code: 'repository_publication_evidence_execution_id_required' };
+  if (!['admit', 'refuse'].includes(windowsAdmissionAction)) return { ok: false, code: 'repository_publication_evidence_windows_admission_action_invalid', windows_admission_action: windowsAdmissionAction };
+  if (!['completed', 'refused', 'failed'].includes(publicationStatus)) return { ok: false, code: 'repository_publication_evidence_status_invalid', publication_status: publicationStatus };
+  if (windowsAdmissionAction === 'admit' && publicationStatus !== 'completed') return { ok: false, code: 'repository_publication_evidence_admitted_status_invalid', publication_status: publicationStatus };
+  if (windowsAdmissionAction === 'refuse' && publicationStatus === 'completed') return { ok: false, code: 'repository_publication_evidence_refused_status_invalid', publication_status: publicationStatus };
+  if (!repositoryRef) return { ok: false, code: 'repository_publication_evidence_repository_ref_required' };
+  if (!branchRef) return { ok: false, code: 'repository_publication_evidence_branch_ref_required' };
+  if (!sourceChangeRef) return { ok: false, code: 'repository_publication_evidence_source_change_ref_required' };
+  if (windowsAdmissionAction === 'admit' && !publishedCommitRef) return { ok: false, code: 'repository_publication_evidence_published_commit_ref_required' };
+  if (cloudflareGitPushAdmission !== 'not_admitted') return { ok: false, code: 'repository_publication_evidence_cloudflare_git_push_admission_invalid', cloudflare_git_push_admission: cloudflareGitPushAdmission };
+  if (directCloudflareRepositoryMutationAdmission !== 'not_admitted') return { ok: false, code: 'repository_publication_evidence_direct_cloudflare_repository_mutation_admission_invalid', direct_cloudflare_repository_mutation_admission: directCloudflareRepositoryMutationAdmission };
+  return {
+    ok: true,
+    evidence: {
+      schema: 'narada.sonar.cloudflare_repository_publication_evidence_record.v1',
+      site_id: siteId,
+      generated_at: String(source.generated_at ?? params.generated_at ?? new Date().toISOString()),
+      repository_publication_request_id: repositoryPublicationRequestId,
+      publication_execution_id: publicationExecutionId,
+      publication_ref: publicationRef,
+      requested_action_ref: requestedActionRef,
+      repository_ref: repositoryRef,
+      branch_ref: branchRef,
+      source_change_ref: sourceChangeRef,
+      windows_admission_action: windowsAdmissionAction,
+      windows_admission_reason: String(source.windows_admission_reason ?? params.windows_admission_reason ?? (windowsAdmissionAction === 'admit' ? 'governed_repository_publication_request_admitted' : 'governed_repository_publication_request_refused')),
+      publication_status: publicationStatus,
+      repository_publication_executor_authority: String(source.repository_publication_executor_authority ?? params.repository_publication_executor_authority ?? WINDOWS_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY),
+      published_commit_ref: publishedCommitRef,
+      rollback_evidence_ref: rollbackEvidenceRef,
+      cloudflare_git_push_admission: cloudflareGitPushAdmission,
+      direct_cloudflare_repository_mutation_admission: directCloudflareRepositoryMutationAdmission,
+      evidence_posture: 'windows_repository_publication_resolved_cloudflare_recorded_evidence',
+    },
+  };
+}
+
+async function recordCloudflareRepositoryPublicationEvidence(env = {}, siteId, params = {}, principal = null) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return { ok: false, code: 'missing_site_registry_binding' };
+  if (!siteId || siteId === 'unknown-site') return { ok: false, code: 'missing_site_id' };
+  const payload = createRepositoryPublicationEvidence(siteId, params);
+  if (!payload.ok) return payload;
+  const evidence = payload.evidence;
+  const record = {
+    repository_publication_evidence_id: params.repository_publication_evidence_id ?? `repository_publication_evidence_${safeIdToken(siteId)}_${safeIdToken(evidence.publication_execution_id)}`,
+    site_id: siteId,
+    generated_at: evidence.generated_at,
+    repository_publication_request_id: evidence.repository_publication_request_id,
+    publication_execution_id: evidence.publication_execution_id,
+    publication_ref: evidence.publication_ref,
+    requested_action_ref: evidence.requested_action_ref,
+    repository_ref: evidence.repository_ref,
+    branch_ref: evidence.branch_ref,
+    source_change_ref: evidence.source_change_ref,
+    windows_admission_action: evidence.windows_admission_action,
+    windows_admission_reason: evidence.windows_admission_reason,
+    publication_status: evidence.publication_status,
+    repository_publication_executor_authority: evidence.repository_publication_executor_authority,
+    published_commit_ref: evidence.published_commit_ref,
+    rollback_evidence_ref: evidence.rollback_evidence_ref,
+    cloudflare_git_push_admission: evidence.cloudflare_git_push_admission,
+    direct_cloudflare_repository_mutation_admission: evidence.direct_cloudflare_repository_mutation_admission,
+    evidence_posture: evidence.evidence_posture,
+    recorded_by_principal_id: principal?.principal_id ?? 'unknown-principal',
+    recorded_at: new Date().toISOString(),
+  };
+  await ensureCloudflareRepositoryPublicationEvidenceSchema(db);
+  await db.prepare(`
+    INSERT INTO cloudflare_repository_publication_evidence (
+      repository_publication_evidence_id,
+      site_id,
+      generated_at,
+      repository_publication_request_id,
+      publication_execution_id,
+      publication_ref,
+      requested_action_ref,
+      repository_ref,
+      branch_ref,
+      source_change_ref,
+      windows_admission_action,
+      windows_admission_reason,
+      publication_status,
+      repository_publication_executor_authority,
+      published_commit_ref,
+      rollback_evidence_ref,
+      cloudflare_git_push_admission,
+      direct_cloudflare_repository_mutation_admission,
+      evidence_posture,
+      evidence_json,
+      recorded_by_principal_id,
+      recorded_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(repository_publication_evidence_id) DO UPDATE SET
+      generated_at = excluded.generated_at,
+      repository_publication_request_id = excluded.repository_publication_request_id,
+      publication_execution_id = excluded.publication_execution_id,
+      publication_ref = excluded.publication_ref,
+      requested_action_ref = excluded.requested_action_ref,
+      repository_ref = excluded.repository_ref,
+      branch_ref = excluded.branch_ref,
+      source_change_ref = excluded.source_change_ref,
+      windows_admission_action = excluded.windows_admission_action,
+      windows_admission_reason = excluded.windows_admission_reason,
+      publication_status = excluded.publication_status,
+      repository_publication_executor_authority = excluded.repository_publication_executor_authority,
+      published_commit_ref = excluded.published_commit_ref,
+      rollback_evidence_ref = excluded.rollback_evidence_ref,
+      cloudflare_git_push_admission = excluded.cloudflare_git_push_admission,
+      direct_cloudflare_repository_mutation_admission = excluded.direct_cloudflare_repository_mutation_admission,
+      evidence_posture = excluded.evidence_posture,
+      evidence_json = excluded.evidence_json,
+      recorded_by_principal_id = excluded.recorded_by_principal_id,
+      recorded_at = excluded.recorded_at
+  `).bind(
+    record.repository_publication_evidence_id,
+    record.site_id,
+    record.generated_at,
+    record.repository_publication_request_id,
+    record.publication_execution_id,
+    record.publication_ref,
+    record.requested_action_ref,
+    record.repository_ref,
+    record.branch_ref,
+    record.source_change_ref,
+    record.windows_admission_action,
+    record.windows_admission_reason,
+    record.publication_status,
+    record.repository_publication_executor_authority,
+    record.published_commit_ref,
+    record.rollback_evidence_ref,
+    record.cloudflare_git_push_admission,
+    record.direct_cloudflare_repository_mutation_admission,
+    record.evidence_posture,
+    JSON.stringify({ ...record, evidence }),
+    record.recorded_by_principal_id,
+    record.recorded_at,
+  ).run();
+  return {
+    ok: true,
+    schema: CLOUDFLARE_REPOSITORY_PUBLICATION_EVIDENCE_SCHEMA,
+    status: 'recorded',
+    site_id: siteId,
+    repository_publication_evidence_authority: record.repository_publication_executor_authority,
+    cloudflare_evidence_store_authority: CLOUDFLARE_REPOSITORY_PUBLICATION_EVIDENCE_AUTHORITY,
+    repository_publication_admission: record.windows_admission_action === 'admit' ? 'admitted_by_windows_repository_publication' : 'refused_by_windows_repository_publication',
+    cloudflare_git_push_admission: record.cloudflare_git_push_admission,
+    direct_cloudflare_repository_mutation_admission: record.direct_cloudflare_repository_mutation_admission,
+    authority_partition: 'windows_admits_or_refuses_repository_publication_cloudflare_records_evidence_without_direct_repository_authority',
+    evidence,
+    record,
+  };
+}
+
+async function ensureCloudflareRepositoryPublicationEvidenceSchema(db) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS cloudflare_repository_publication_evidence (
+      repository_publication_evidence_id TEXT PRIMARY KEY,
+      site_id TEXT NOT NULL,
+      generated_at TEXT NOT NULL,
+      repository_publication_request_id TEXT NOT NULL,
+      publication_execution_id TEXT NOT NULL,
+      publication_ref TEXT NOT NULL,
+      requested_action_ref TEXT NOT NULL,
+      repository_ref TEXT NOT NULL,
+      branch_ref TEXT NOT NULL,
+      source_change_ref TEXT NOT NULL,
+      windows_admission_action TEXT NOT NULL,
+      windows_admission_reason TEXT NOT NULL,
+      publication_status TEXT NOT NULL,
+      repository_publication_executor_authority TEXT NOT NULL,
+      published_commit_ref TEXT,
+      rollback_evidence_ref TEXT,
+      cloudflare_git_push_admission TEXT NOT NULL,
+      direct_cloudflare_repository_mutation_admission TEXT NOT NULL,
+      evidence_posture TEXT NOT NULL,
+      evidence_json TEXT NOT NULL,
+      recorded_by_principal_id TEXT NOT NULL,
+      recorded_at TEXT NOT NULL
+    )
+  `).run();
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_cloudflare_repository_publication_evidence_site_recorded
+    ON cloudflare_repository_publication_evidence(site_id, recorded_at)
+  `).run();
+}
+
+async function listCloudflareRepositoryPublicationEvidence(env = {}, siteId, limit, repositoryPublicationRequestId = null) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function' || !siteId) return [];
+  await ensureCloudflareRepositoryPublicationEvidenceSchema(db);
+  const boundedLimit = clampInteger(limit, 0, 100, 25);
+  const statement = repositoryPublicationRequestId
+    ? db.prepare(`
+      SELECT * FROM cloudflare_repository_publication_evidence
+      WHERE site_id = ? AND repository_publication_request_id = ?
+      ORDER BY recorded_at DESC, generated_at DESC
+      LIMIT ?
+    `).bind(siteId, repositoryPublicationRequestId, boundedLimit)
+    : db.prepare(`
+      SELECT * FROM cloudflare_repository_publication_evidence
+      WHERE site_id = ?
+      ORDER BY recorded_at DESC, generated_at DESC
+      LIMIT ?
+    `).bind(siteId, boundedLimit);
+  const rows = await statement.all();
+  return (rows.results ?? []).map((row) => ({
+    repository_publication_evidence_id: row.repository_publication_evidence_id,
+    site_id: row.site_id,
+    schema: CLOUDFLARE_REPOSITORY_PUBLICATION_EVIDENCE_SCHEMA,
+    generated_at: row.generated_at,
+    repository_publication_request_id: row.repository_publication_request_id,
+    publication_execution_id: row.publication_execution_id,
+    publication_ref: row.publication_ref,
+    requested_action_ref: row.requested_action_ref,
+    repository_ref: row.repository_ref,
+    branch_ref: row.branch_ref,
+    source_change_ref: row.source_change_ref,
+    windows_admission_action: row.windows_admission_action,
+    windows_admission_reason: row.windows_admission_reason,
+    publication_status: row.publication_status,
+    repository_publication_executor_authority: row.repository_publication_executor_authority,
+    published_commit_ref: row.published_commit_ref,
+    rollback_evidence_ref: row.rollback_evidence_ref,
+    cloudflare_git_push_admission: row.cloudflare_git_push_admission,
+    direct_cloudflare_repository_mutation_admission: row.direct_cloudflare_repository_mutation_admission,
     evidence_posture: row.evidence_posture,
     record: parseJsonObject(row.evidence_json),
     recorded_by_principal_id: row.recorded_by_principal_id,
