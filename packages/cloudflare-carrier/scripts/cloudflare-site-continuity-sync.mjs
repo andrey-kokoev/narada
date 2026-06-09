@@ -1,7 +1,11 @@
 #!/usr/bin/env node
+import { execFile as execFileCallback } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { stdin, stdout, stderr } from 'node:process';
+import { promisify } from 'node:util';
 import { classifySiteContinuityExchangePacket } from '../../site-continuity/src/site-continuity.mjs';
+
+const execFile = promisify(execFileCallback);
 
 const args = process.argv.slice(2);
 const command = args[0] ?? 'help';
@@ -9,6 +13,146 @@ const command = args[0] ?? 'help';
 if (command === 'help' || command === '--help' || command === '-h') {
   printHelp();
   process.exit(0);
+}
+
+function classifyRepositoryPublicationRequest(request) {
+  const errors = [];
+  if (!request || typeof request !== 'object' || Array.isArray(request)) errors.push('repository_publication_request_object_required');
+  const value = request && typeof request === 'object' ? request : {};
+  if (!value.repository_publication_request_id) errors.push('repository_publication_request_id_required');
+  if (!value.publication_ref) errors.push('repository_publication_request_publication_ref_required');
+  if (!value.requested_action_ref) errors.push('repository_publication_request_action_ref_required');
+  if (!value.repository_ref) errors.push('repository_publication_request_repository_ref_required');
+  if (!value.branch_ref) errors.push('repository_publication_request_branch_ref_required');
+  if (!value.source_change_ref) errors.push('repository_publication_request_source_change_ref_required');
+  if ((value.repository_publication_admission ?? 'pending_windows_publication_admission') !== 'pending_windows_publication_admission') errors.push('repository_publication_request_admission_invalid');
+  if ((value.cloudflare_git_push_admission ?? 'not_admitted') !== 'not_admitted') errors.push('repository_publication_request_cloudflare_git_push_admission_invalid');
+  if ((value.direct_cloudflare_repository_mutation_admission ?? 'not_admitted') !== 'not_admitted') errors.push('repository_publication_request_direct_cloudflare_repository_mutation_admission_invalid');
+  if (errors.length > 0) return { action: 'refuse', reason: 'repository_publication_request_invalid', validation_errors: errors };
+  return { action: 'admit', reason: 'repository_publication_request_valid_for_windows_local_resolution' };
+}
+
+async function buildRepositoryPublicationExecutionEvidence(request, { repoPath, remote, shouldPush }) {
+  const requestAdmission = classifyRepositoryPublicationRequest(request);
+  const gitState = await readGitState(repoPath);
+  const base = {
+    repository_publication_request_id: String(request?.repository_publication_request_id ?? ''),
+    publication_execution_id: `repository-publication-execution-${safeToken(String(request?.repository_publication_request_id ?? Date.now()))}`,
+    publication_ref: String(request?.publication_ref ?? request?.repository_publication_request_id ?? ''),
+    requested_action_ref: String(request?.requested_action_ref ?? request?.publication_ref ?? ''),
+    repository_ref: String(request?.repository_ref ?? gitState.repository_ref ?? ''),
+    branch_ref: String(request?.branch_ref ?? gitState.branch_ref ?? ''),
+    source_change_ref: String(request?.source_change_ref ?? `git:commit:${gitState.head}`),
+    cloudflare_git_push_admission: 'not_admitted',
+    direct_cloudflare_repository_mutation_admission: 'not_admitted',
+  };
+  if (requestAdmission.action === 'refuse') {
+    return {
+      ...base,
+      windows_admission_action: 'refuse',
+      windows_admission_reason: requestAdmission.reason,
+      publication_status: 'refused',
+      rollback_evidence_ref: `rollback:not-needed:${base.publication_execution_id}`,
+    };
+  }
+  if (!gitState.ok) {
+    return {
+      ...base,
+      windows_admission_action: 'refuse',
+      windows_admission_reason: gitState.reason,
+      publication_status: 'failed',
+      rollback_evidence_ref: `rollback:not-needed:${base.publication_execution_id}`,
+    };
+  }
+  const branchAdmission = classifyBranchRef(request.branch_ref, gitState.branch_ref);
+  if (branchAdmission.action === 'refuse') {
+    return {
+      ...base,
+      windows_admission_action: 'refuse',
+      windows_admission_reason: branchAdmission.reason,
+      publication_status: 'refused',
+      rollback_evidence_ref: `rollback:not-needed:${base.publication_execution_id}`,
+    };
+  }
+  if (!shouldPush) {
+    return {
+      ...base,
+      windows_admission_action: 'refuse',
+      windows_admission_reason: 'repository_publication_push_not_enabled',
+      publication_status: 'refused',
+      rollback_evidence_ref: `rollback:not-needed:${base.publication_execution_id}`,
+    };
+  }
+  if (gitState.dirty) {
+    return {
+      ...base,
+      windows_admission_action: 'refuse',
+      windows_admission_reason: 'repository_publication_local_repository_dirty',
+      publication_status: 'refused',
+      rollback_evidence_ref: `rollback:not-needed:${base.publication_execution_id}`,
+    };
+  }
+  const push = await runGit(repoPath, ['push', remote, `${gitState.head}:${normalizeBranchRef(request.branch_ref)}`]);
+  if (!push.ok) {
+    return {
+      ...base,
+      windows_admission_action: 'refuse',
+      windows_admission_reason: 'repository_publication_git_push_failed',
+      publication_status: 'failed',
+      rollback_evidence_ref: `rollback:git-push-failed:${base.publication_execution_id}`,
+    };
+  }
+  return {
+    ...base,
+    windows_admission_action: 'admit',
+    windows_admission_reason: 'governed_repository_publication_request_admitted',
+    publication_status: 'completed',
+    published_commit_ref: `git:commit:${gitState.head}`,
+    rollback_evidence_ref: `rollback:published:${gitState.head}`,
+  };
+}
+
+async function readGitState(repoPath) {
+  const root = await runGit(repoPath, ['rev-parse', '--show-toplevel']);
+  if (!root.ok) return { ok: false, reason: 'repository_publication_git_root_unavailable' };
+  const head = await runGit(repoPath, ['rev-parse', 'HEAD']);
+  if (!head.ok) return { ok: false, reason: 'repository_publication_git_head_unavailable' };
+  const branch = await runGit(repoPath, ['rev-parse', '--abbrev-ref', 'HEAD']);
+  if (!branch.ok) return { ok: false, reason: 'repository_publication_git_branch_unavailable' };
+  const status = await runGit(repoPath, ['status', '--porcelain']);
+  if (!status.ok) return { ok: false, reason: 'repository_publication_git_status_unavailable' };
+  return {
+    ok: true,
+    repository_ref: `file:${root.stdout.trim()}`,
+    head: head.stdout.trim(),
+    branch_ref: branch.stdout.trim(),
+    dirty: status.stdout.trim().length > 0,
+  };
+}
+
+async function runGit(repoPath, gitArgs) {
+  try {
+    const result = await execFile('git', ['-C', repoPath, ...gitArgs], { timeout: 30000, windowsHide: true });
+    return { ok: true, stdout: result.stdout, stderr: result.stderr };
+  } catch (error) {
+    return { ok: false, stdout: error.stdout ?? '', stderr: error.stderr ?? error.message };
+  }
+}
+
+function classifyBranchRef(requestedBranchRef, localBranchRef) {
+  const requested = normalizeBranchRef(requestedBranchRef);
+  const local = normalizeBranchRef(localBranchRef);
+  if (!requested || !local) return { action: 'refuse', reason: 'repository_publication_branch_ref_unresolved' };
+  if (requested !== local) return { action: 'refuse', reason: 'repository_publication_branch_ref_mismatch' };
+  return { action: 'admit', reason: 'repository_publication_branch_ref_matches_local_repo' };
+}
+
+function normalizeBranchRef(value) {
+  return String(value ?? '').replace(/^refs\/heads\//, '');
+}
+
+function safeToken(value) {
+  return String(value).replace(/[^A-Za-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '') || 'unknown';
 }
 
 const workerUrl = option('--url') ?? process.env.CLOUDFLARE_CARRIER_URL;
@@ -76,6 +220,47 @@ if (command === 'read-cloudflare') {
   process.exit(0);
 }
 
+if (command === 'repository-publication-execute-pending') {
+  const siteId = requiredOption('--site');
+  const repoPath = option('--repo') ?? process.cwd();
+  const requestLimit = Number(option('--limit') ?? 10);
+  const remote = option('--remote') ?? 'origin';
+  const shouldPush = hasFlag('--push');
+  const listed = await post({ operation: 'repository_publication.request.list', params: { site_id: siteId, limit: requestLimit } });
+  if (listed.http_status !== 200 || listed.body?.ok === false) failApi('cloudflare_repository_publication_request_list_failed', listed);
+  const requests = Array.isArray(listed.body?.requests) ? listed.body.requests : [];
+  const results = [];
+  for (const request of requests) {
+    const evidence = await buildRepositoryPublicationExecutionEvidence(request, { repoPath, remote, shouldPush });
+    const admission = classifyRepositoryPublicationEvidence(evidence);
+    if (admission.action === 'refuse') {
+      results.push({ request_id: request.repository_publication_request_id ?? null, status: 'local_evidence_refused', admission, evidence });
+      continue;
+    }
+    const pushed = await post({ operation: 'repository_publication.evidence.put', params: { site_id: siteId, source_payload: evidence } });
+    results.push({
+      request_id: request.repository_publication_request_id ?? null,
+      status: pushed.http_status === 200 && pushed.body?.ok !== false ? 'evidence_recorded' : 'evidence_record_failed',
+      local_evidence_admission: admission,
+      cloudflare_response: pushed.body,
+      http_status: pushed.http_status,
+      evidence,
+    });
+  }
+  await writeJson(option('--out'), {
+    schema: 'narada.repository_publication_cloudflare_pending_execution.v1',
+    status: results.every((result) => result.status === 'evidence_recorded') ? 'ok' : 'needs_attention',
+    site_id: siteId,
+    worker_url: workerUrl,
+    repository_path: repoPath,
+    push_enabled: shouldPush,
+    request_count: requests.length,
+    evidence_recorded_count: results.filter((result) => result.status === 'evidence_recorded').length,
+    results,
+  });
+  process.exit(0);
+}
+
 if (command === 'repository-publication-evidence-put') {
   const siteId = requiredOption('--site');
   const evidenceEnvelope = await readJsonEnvelope(option('--evidence'));
@@ -103,6 +288,10 @@ function option(name) {
   const index = args.indexOf(name);
   if (index < 0) return null;
   return args[index + 1] ?? null;
+}
+
+function hasFlag(name) {
+  return args.includes(name);
 }
 
 function requiredOption(name) {
@@ -223,5 +412,5 @@ function fail(code) {
 }
 
 function printHelp() {
-  stdout.write(`Narada Cloudflare site-continuity transport\n\nCommands:\n  pull-cloudflare --site <site_id> [--out <packet.json>]\n  push-cloudflare --packet <packet.json> [--site <site_id>] [--out <result.json>]\n  read-cloudflare --site <site_id> [--out <result.json>]\n  repository-publication-evidence-put --site <site_id> [--evidence <evidence.json>] [--out <result.json>]\n\nAuth:\n  --url <worker-url> or CLOUDFLARE_CARRIER_URL\n  --token-file <path> or CLOUDFLARE_CARRIER_TOKEN_FILE\n  --token <bearer-token> or CLOUDFLARE_CARRIER_TOKEN\n\nNotes:\n  pull-cloudflare exports the packet emitted by site.read.\n  push-cloudflare imports a packet through site.continuity.packet.put.\n  The script refuses locally invalid/executable-mutation packets before sending them.\n  repository-publication-evidence-put returns Windows-side publication evidence to Cloudflare without granting Cloudflare git push authority.\n`);
+  stdout.write(`Narada Cloudflare site-continuity transport\n\nCommands:\n  pull-cloudflare --site <site_id> [--out <packet.json>]\n  push-cloudflare --packet <packet.json> [--site <site_id>] [--out <result.json>]\n  read-cloudflare --site <site_id> [--out <result.json>]\n  repository-publication-execute-pending --site <site_id> [--repo <path>] [--limit <n>] [--push] [--remote <name>] [--out <result.json>]\n  repository-publication-evidence-put --site <site_id> [--evidence <evidence.json>] [--out <result.json>]\n\nAuth:\n  --url <worker-url> or CLOUDFLARE_CARRIER_URL\n  --token-file <path> or CLOUDFLARE_CARRIER_TOKEN_FILE\n  --token <bearer-token> or CLOUDFLARE_CARRIER_TOKEN\n\nNotes:\n  pull-cloudflare exports the packet emitted by site.read.\n  push-cloudflare imports a packet through site.continuity.packet.put.\n  The script refuses locally invalid/executable-mutation packets before sending them.\n  repository-publication-execute-pending consumes queued Cloudflare publication requests and returns Windows-side evidence; it only runs git push when --push is explicit.\n  repository-publication-evidence-put returns Windows-side publication evidence to Cloudflare without granting Cloudflare git push authority.\n`);
 }
