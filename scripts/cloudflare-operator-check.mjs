@@ -1383,6 +1383,34 @@ assert.equal(siteFileMaterializationSmoke.repository_publication_admission, 'not
 assert.ok(siteFileMaterializationSmoke.site_file_materialization_count >= 1);
 assert.equal(siteFileMaterializationSmoke.site_file_materialization_authority_partition, 'site_file_materialization_cloudflare_owned_windows_filesystem_and_publication_not_admitted');
 
+const repositoryPublicationSmoke = await runJsonCommand('repository-publication:smoke:live', [
+  'node',
+  'packages/cloudflare-carrier/scripts/cloudflare-carrier-repository-publication-live-smoke.mjs',
+  '--url',
+  workerUrl,
+  '--token-file',
+  tokenFile,
+  '--site',
+  siteId,
+  '--operation',
+  operationId,
+]);
+assert.equal(repositoryPublicationSmoke.status, 'ok');
+assert.equal(repositoryPublicationSmoke.worker_url, workerUrl);
+assert.equal(repositoryPublicationSmoke.site_id, siteId);
+assert.equal(repositoryPublicationSmoke.operation_id, operationId);
+assert.equal(repositoryPublicationSmoke.repository_publication_request_authority, 'cloudflare_repository_publication_request_queue');
+assert.equal(repositoryPublicationSmoke.repository_publication_executor_authority, 'windows_repository_publication_executor');
+assert.equal(repositoryPublicationSmoke.repository_publication_admission, 'pending_windows_publication_admission');
+assert.equal(repositoryPublicationSmoke.cloudflare_git_push_admission, 'not_admitted');
+assert.equal(repositoryPublicationSmoke.direct_cloudflare_repository_mutation_admission, 'not_admitted');
+assert.equal(repositoryPublicationSmoke.execution_status, 'evidence_recorded');
+assert.equal(repositoryPublicationSmoke.windows_admission_action, 'refuse');
+assert.equal(repositoryPublicationSmoke.windows_admission_reason, 'repository_publication_push_not_enabled');
+assert.equal(repositoryPublicationSmoke.publication_status, 'refused');
+assert.equal(repositoryPublicationSmoke.cloudflare_evidence_store_authority, 'cloudflare_repository_publication_evidence_store');
+assert.equal(repositoryPublicationSmoke.authority_partition, 'windows_admits_or_refuses_repository_publication_cloudflare_records_evidence_without_direct_repository_authority');
+
 const webhookDelayDirectiveDeliverySuffix = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
 const webhookDelayDirectiveDelivery = await postCarrier(workerUrl, bearerToken, {
   operation: 'webhook_delay.directive.primary_with_fallback.deliver',
@@ -1938,6 +1966,17 @@ const report = {
     windows_filesystem_mutation_admission: operationSurface.windows_filesystem_mutation_admission,
     site_file_materialization_repository_publication_admission: operationSurface.site_file_materialization_repository_publication_admission,
     site_file_materialization_authority_partition: operationSurface.site_file_materialization_authority_partition,
+    repository_publication_request_id: repositoryPublicationSmoke.repository_publication_request_id,
+    repository_publication_request_authority: repositoryPublicationSmoke.repository_publication_request_authority,
+    repository_publication_executor_authority: repositoryPublicationSmoke.repository_publication_executor_authority,
+    repository_publication_cloudflare_git_push_admission: repositoryPublicationSmoke.cloudflare_git_push_admission,
+    repository_publication_direct_cloudflare_repository_mutation_admission: repositoryPublicationSmoke.direct_cloudflare_repository_mutation_admission,
+    repository_publication_execution_status: repositoryPublicationSmoke.execution_status,
+    repository_publication_windows_admission_action: repositoryPublicationSmoke.windows_admission_action,
+    repository_publication_windows_admission_reason: repositoryPublicationSmoke.windows_admission_reason,
+    repository_publication_status: repositoryPublicationSmoke.publication_status,
+    repository_publication_evidence_store_authority: repositoryPublicationSmoke.cloudflare_evidence_store_authority,
+    repository_publication_authority_partition: repositoryPublicationSmoke.authority_partition,
     resident_loop_shadow_run_count: operationSurface.resident_loop_shadow_run_count,
     resident_loop_shadow_last_status: recordedResidentLoopShadow.loop_status,
     resident_loop_shadow_dispatch_authority: recordedResidentLoopShadow.dispatch_authority,
