@@ -1438,14 +1438,15 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(repositoryPublicationEvidenceListBody.evidence.length, 1);
   assert.equal(repositoryPublicationEvidenceListBody.evidence[0].repository_publication_evidence_id, 'repository-publication-evidence-fixture');
 
+  const repositoryPublicationProviderHeartbeatAt = new Date().toISOString();
   const repositoryPublicationProviderHeartbeat = await worker.fetch(jsonRequest({
     operation: 'repository_publication.provider_heartbeat.put',
     request_id: 'request_repository_publication_provider_heartbeat_put',
     params: {
       site_id: 'site_fixture',
       repository_publication_provider_heartbeat_id: 'repository-publication-provider-heartbeat-fixture',
-      generated_at: '2026-06-08T00:04:00.000Z',
-      last_run_at: '2026-06-08T00:04:00.000Z',
+      generated_at: repositoryPublicationProviderHeartbeatAt,
+      last_run_at: repositoryPublicationProviderHeartbeatAt,
       provider_id: 'windows_repository_publication_drain_loop:fixture',
       provider_authority: 'windows_repository_publication_executor',
       provider_embodiment: 'windows_current_user_startup_provider',
@@ -1476,6 +1477,8 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(repositoryPublicationProviderHeartbeatListBody.repository_publication_provider_heartbeats[0].repository_publication_provider_heartbeat_id, 'repository-publication-provider-heartbeat-fixture');
   assert.equal(repositoryPublicationProviderHeartbeatListBody.repository_publication_provider_heartbeats[0].provider_authority, 'windows_repository_publication_executor');
   assert.equal(repositoryPublicationProviderHeartbeatListBody.repository_publication_provider_heartbeats[0].cloudflare_git_push_admission, 'not_admitted');
+  assert.equal(repositoryPublicationProviderHeartbeatListBody.repository_publication_provider_liveness.state, 'fresh');
+  assert.equal(repositoryPublicationProviderHeartbeatListBody.repository_publication_provider_liveness.provider_liveness_authority, 'cloudflare_repository_publication_provider_liveness_store');
 
   const directRepositoryProviderHeartbeatClaim = await worker.fetch(jsonRequest({
     operation: 'repository_publication.provider_heartbeat.put',
@@ -1515,6 +1518,8 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(operationReadAfterRepositoryPublicationBody.operation_lifecycle_status.repository_publication_request_count, 1);
   assert.equal(operationReadAfterRepositoryPublicationBody.operation_lifecycle_status.repository_publication_evidence_count, 1);
   assert.equal(operationReadAfterRepositoryPublicationBody.operation_lifecycle_status.repository_publication_provider_heartbeat_count, 1);
+  assert.equal(operationReadAfterRepositoryPublicationBody.operation_lifecycle_status.repository_publication_provider_liveness.state, 'fresh');
+  assert.equal(operationReadAfterRepositoryPublicationBody.operation_lifecycle_status.repository_publication_provider_liveness.provider_liveness_authority, 'cloudflare_repository_publication_provider_liveness_store');
   assert.equal(operationReadAfterRepositoryPublicationBody.operation_lifecycle_status.repository_publication_provider_liveness_authority, 'cloudflare_repository_publication_provider_liveness_store');
   assert.equal(operationReadAfterRepositoryPublicationBody.operation_product_surface.repository_publication_request_count, 1);
   assert.equal(operationReadAfterRepositoryPublicationBody.operation_product_surface.repository_publication_evidence_count, 1);

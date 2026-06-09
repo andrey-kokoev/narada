@@ -226,6 +226,9 @@ if (command === 'repository-publication-execute-pending') {
   const requestLimit = Number(option('--limit') ?? 10);
   const remote = option('--remote') ?? 'origin';
   const shouldPush = hasFlag('--push');
+  const heartbeatId = option('--heartbeat-id') ?? `repository-publication-provider-heartbeat-${safeToken(siteId)}-${Date.now()}`;
+  const providerId = option('--provider-id') ?? 'windows_repository_publication_drain_loop';
+  const startedAt = new Date().toISOString();
   const selected = await post({ operation: 'repository_publication.request.next', params: { site_id: siteId, limit: requestLimit } });
   if (selected.http_status !== 200 || selected.body?.ok === false) failApi('cloudflare_repository_publication_request_next_failed', selected);
   const requests = selected.body?.request ? [selected.body.request] : [];
@@ -247,9 +250,34 @@ if (command === 'repository-publication-execute-pending') {
       evidence,
     });
   }
+  const completedCount = results.filter((result) => result.evidence?.publication_status === 'completed').length;
+  const refusedCount = results.filter((result) => result.evidence?.publication_status === 'refused').length;
+  const resolvedCount = results.filter((result) => ['completed', 'refused', 'failed'].includes(String(result.evidence?.publication_status ?? ''))).length;
+  const heartbeat = await post({
+    operation: 'repository_publication.provider_heartbeat.put',
+    params: {
+      site_id: siteId,
+      repository_publication_provider_heartbeat_id: heartbeatId,
+      generated_at: startedAt,
+      last_run_at: new Date().toISOString(),
+      provider_id: providerId,
+      provider_authority: 'windows_repository_publication_executor',
+      provider_embodiment: 'windows_current_user_startup_provider',
+      status: results.some((result) => result.status !== 'evidence_recorded') ? 'needs_attention' : 'ready',
+      max_cycles: 1,
+      iteration_count: 1,
+      completed_publication_count: completedCount,
+      refused_publication_count: refusedCount,
+      resolved_publication_count: resolvedCount,
+      drained: selected.body?.status === 'drained' || requests.length === 0,
+      cloudflare_dispatch_authority: 'cloudflare_repository_publication_request_queue',
+      cloudflare_git_push_admission: 'not_admitted',
+      direct_cloudflare_repository_mutation_admission: 'not_admitted',
+    },
+  });
   await writeJson(option('--out'), {
     schema: 'narada.repository_publication_cloudflare_pending_execution.v1',
-    status: results.every((result) => result.status === 'evidence_recorded') ? 'ok' : 'needs_attention',
+    status: results.every((result) => result.status === 'evidence_recorded') && heartbeat.http_status === 200 && heartbeat.body?.ok !== false ? 'ok' : 'needs_attention',
     site_id: siteId,
     worker_url: workerUrl,
     repository_path: repoPath,
@@ -257,6 +285,10 @@ if (command === 'repository-publication-execute-pending') {
     request_selection_status: selected.body?.status ?? 'unknown',
     request_count: requests.length,
     evidence_recorded_count: results.filter((result) => result.status === 'evidence_recorded').length,
+    repository_publication_provider_heartbeat_id: heartbeatId,
+    provider_heartbeat_recorded: heartbeat.http_status === 200 && heartbeat.body?.ok !== false,
+    provider_heartbeat_http_status: heartbeat.http_status,
+    provider_heartbeat_response: heartbeat.body,
     results,
   });
   process.exit(0);

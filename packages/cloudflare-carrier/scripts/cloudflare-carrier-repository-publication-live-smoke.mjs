@@ -83,6 +83,7 @@ const execution = await execFile(process.execPath, [
 const executionBody = JSON.parse(execution.stdout);
 assert.equal(executionBody.schema, 'narada.repository_publication_cloudflare_pending_execution.v1');
 assert.ok(executionBody.request_count >= 1);
+assert.equal(executionBody.provider_heartbeat_recorded, true, JSON.stringify(executionBody.provider_heartbeat_response));
 const executionResult = executionBody.results.find((entry) => entry.request_id === requestId);
 assert.ok(executionResult, JSON.stringify(executionBody));
 assert.equal(executionResult.status, 'evidence_recorded');
@@ -109,6 +110,20 @@ assert.equal(evidenceList.body.repository_publication_evidence_authority, 'windo
 assert.equal(evidenceList.body.cloudflare_evidence_store_authority, 'cloudflare_repository_publication_evidence_store');
 assert.equal(evidenceList.body.authority_partition, 'windows_admits_or_refuses_repository_publication_cloudflare_records_evidence_without_direct_repository_authority');
 
+const heartbeatList = await postCarrier({
+  operation: 'repository_publication.provider_heartbeat.list',
+  request_id: `repository_publication_provider_heartbeat_list_${suffix}`,
+  params: { site_id: siteId, repository_publication_provider_heartbeat_limit: 20 },
+});
+assert.equal(heartbeatList.http_status, 200, JSON.stringify(heartbeatList.body));
+const heartbeat = heartbeatList.body.repository_publication_provider_heartbeats.find((entry) => entry.repository_publication_provider_heartbeat_id === executionBody.repository_publication_provider_heartbeat_id);
+assert.ok(heartbeat, JSON.stringify(heartbeatList.body));
+assert.equal(heartbeat.provider_authority, 'windows_repository_publication_executor');
+assert.equal(heartbeat.provider_liveness_authority, 'cloudflare_repository_publication_provider_liveness_store');
+assert.equal(heartbeat.cloudflare_git_push_admission, 'not_admitted');
+assert.equal(heartbeat.direct_cloudflare_repository_mutation_admission, 'not_admitted');
+assert.equal(heartbeatList.body.provider_liveness_authority, 'cloudflare_repository_publication_provider_liveness_store');
+
 process.stdout.write(`${JSON.stringify({
   schema: 'narada.cloudflare_carrier.repository_publication_live_smoke.v1',
   status: 'ok',
@@ -126,6 +141,9 @@ process.stdout.write(`${JSON.stringify({
   windows_admission_reason: evidence.windows_admission_reason,
   publication_status: evidence.publication_status,
   cloudflare_evidence_store_authority: evidenceList.body.cloudflare_evidence_store_authority,
+  repository_publication_provider_heartbeat_id: executionBody.repository_publication_provider_heartbeat_id,
+  provider_liveness_authority: heartbeat.provider_liveness_authority,
+  provider_heartbeat_status: heartbeat.status,
   authority_partition: evidenceList.body.authority_partition,
 }, null, 2)}\n`);
 

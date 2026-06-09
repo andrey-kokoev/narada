@@ -91,6 +91,7 @@ const CLOUDFLARE_REPOSITORY_PUBLICATION_REQUEST_AUTHORITY = 'cloudflare_reposito
 const WINDOWS_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY = 'windows_repository_publication_executor';
 const CLOUDFLARE_REPOSITORY_PUBLICATION_EVIDENCE_AUTHORITY = 'cloudflare_repository_publication_evidence_store';
 const CLOUDFLARE_REPOSITORY_PUBLICATION_PROVIDER_LIVENESS_AUTHORITY = 'cloudflare_repository_publication_provider_liveness_store';
+const DEFAULT_REPOSITORY_PUBLICATION_PROVIDER_STALE_AFTER_MS = 5 * 60 * 1000;
 const DEFAULT_WEBHOOK_DELAY_CRITICAL_MINUTES = 15;
 const CLOUDFLARE_RUNTIME_METADATA_READ_CAPABILITY = Object.freeze({
   capability_ref: CLOUDFLARE_RUNTIME_METADATA_READ_CAPABILITY_REF,
@@ -1834,6 +1835,8 @@ function summarizeCloudflareOperationWorkflowRoute({
     if (lifecycleStatus?.next_action === 'continuity_packet') return { action: 'review_continuity_packet', target: siteId ?? operationId, reason: 'operation_lifecycle_missing_continuity_packet' };
     if (lifecycleStatus?.next_action === 'continuity_loop_report') return { action: 'review_continuity_loop_report', target: siteId ?? operationId, reason: 'operation_lifecycle_missing_continuity_loop_report' };
     if (lifecycleStatus?.next_action === 'carrier_evidence_read_degraded') return { action: 'review_carrier_evidence_replay', target: operationId, reason: 'carrier_evidence_read_degraded' };
+    if (lifecycleStatus?.next_action === 'repository_publication_provider_liveness_missing') return { action: 'review_repository_publication_provider_liveness', target: siteId ?? operationId, reason: 'repository_publication_provider_liveness_missing' };
+    if (lifecycleStatus?.next_action === 'repository_publication_provider_liveness_stale') return { action: 'review_repository_publication_provider_liveness', target: siteId ?? operationId, reason: 'repository_publication_provider_liveness_stale' };
     if (lifecycleStatus?.next_action === 'undelivered_directives' || directiveRecords.length > directiveDeliveries.length) {
       return { action: 'review_directive_delivery', target: directiveRecords[0]?.directive_record_id ?? operationId, reason: 'undelivered_directives' };
     }
@@ -2077,6 +2080,8 @@ function summarizeCloudflareOperationLifecycleStatus({
   const repositoryPublicationRequestCount = Array.isArray(repositoryPublicationRequests) ? repositoryPublicationRequests.length : 0;
   const repositoryPublicationEvidenceCount = Array.isArray(repositoryPublicationEvidence) ? repositoryPublicationEvidence.length : 0;
   const repositoryPublicationProviderHeartbeatCount = Array.isArray(repositoryPublicationProviderHeartbeats) ? repositoryPublicationProviderHeartbeats.length : 0;
+  const repositoryPublicationProviderLiveness = classifyRepositoryPublicationProviderLiveness(repositoryPublicationProviderHeartbeats);
+  const repositoryPublicationObserved = repositoryPublicationRequestCount > 0 || repositoryPublicationEvidenceCount > 0 || repositoryPublicationProviderHeartbeatCount > 0;
   const missing = [];
   if (sessionCount === 0) missing.push('session');
   if (evidenceEventCount === 0) missing.push('carrier_evidence');
@@ -2086,6 +2091,8 @@ function summarizeCloudflareOperationLifecycleStatus({
   if (carrierEvidenceReadStatus?.state === 'degraded') attention.push('carrier_evidence_read_degraded');
   if (openTaskCount > 0) attention.push('open_tasks');
   if (directiveRecordCount > directiveDeliveryCount) attention.push('undelivered_directives');
+  if (repositoryPublicationObserved && repositoryPublicationProviderLiveness.state === 'missing') attention.push('repository_publication_provider_liveness_missing');
+  if (repositoryPublicationObserved && repositoryPublicationProviderLiveness.state === 'stale') attention.push('repository_publication_provider_liveness_stale');
   const phase = operation?.status === 'active'
     ? (sessionCount > 0 ? 'inhabited' : 'active_uninhabited')
     : String(operation?.status ?? 'unknown');
@@ -2115,6 +2122,7 @@ function summarizeCloudflareOperationLifecycleStatus({
     repository_publication_evidence_count: repositoryPublicationEvidenceCount,
     repository_publication_provider_heartbeat_count: repositoryPublicationProviderHeartbeatCount,
     repository_publication_provider_liveness_authority: repositoryPublicationProviderHeartbeatCount > 0 ? CLOUDFLARE_REPOSITORY_PUBLICATION_PROVIDER_LIVENESS_AUTHORITY : 'not_observed',
+    repository_publication_provider_liveness: repositoryPublicationProviderLiveness,
     directive_record_count: directiveRecordCount,
     directive_delivery_count: directiveDeliveryCount,
     carrier_evidence_read_status: carrierEvidenceReadStatus,
@@ -3555,6 +3563,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         site_id: requestedSiteId,
         repository_publication_provider_heartbeats: providerHeartbeats,
         repository_publication_provider_heartbeat_count: providerHeartbeats.length,
+        repository_publication_provider_liveness: classifyRepositoryPublicationProviderLiveness(providerHeartbeats),
         provider_liveness_authority: CLOUDFLARE_REPOSITORY_PUBLICATION_PROVIDER_LIVENESS_AUTHORITY,
       },
     };
@@ -7670,6 +7679,41 @@ function createCloudflareRepositoryPublicationProviderHeartbeat(siteId, params =
     direct_cloudflare_repository_mutation_admission: directCloudflareRepositoryMutationAdmission,
     recorded_by_principal_id: principal?.principal_id ?? params.recorded_by_principal_id ?? 'unknown-principal',
     recorded_at: new Date().toISOString(),
+  };
+}
+
+function classifyRepositoryPublicationProviderLiveness(heartbeats = [], { nowMs = Date.now(), staleAfterMs = DEFAULT_REPOSITORY_PUBLICATION_PROVIDER_STALE_AFTER_MS } = {}) {
+  const heartbeat = Array.isArray(heartbeats) ? heartbeats[0] ?? null : null;
+  if (!heartbeat) {
+    return {
+      schema: 'narada.sonar.cloudflare_repository_publication_provider_liveness.v1',
+      state: 'missing',
+      reason: 'repository_publication_provider_heartbeat_missing',
+      provider_id: 'windows_repository_publication_drain_loop',
+      provider_authority: WINDOWS_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY,
+      provider_liveness_authority: 'not_observed',
+      stale_after_ms: staleAfterMs,
+    };
+  }
+  const observedAt = Date.parse(heartbeat.last_run_at ?? heartbeat.generated_at ?? heartbeat.recorded_at ?? '');
+  const ageMs = Number.isFinite(observedAt) ? Math.max(0, nowMs - observedAt) : null;
+  const status = heartbeat.status ?? 'unknown';
+  const state = ageMs == null
+    ? 'unknown'
+    : ageMs > staleAfterMs ? 'stale' : status === 'failed' ? 'failed' : 'fresh';
+  return {
+    schema: 'narada.sonar.cloudflare_repository_publication_provider_liveness.v1',
+    state,
+    reason: state === 'fresh' ? 'repository_publication_provider_heartbeat_recent' : `repository_publication_provider_heartbeat_${state}`,
+    provider_id: heartbeat.provider_id ?? 'windows_repository_publication_drain_loop',
+    provider_authority: heartbeat.provider_authority ?? WINDOWS_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY,
+    provider_embodiment: heartbeat.provider_embodiment ?? 'windows_current_user_startup_provider',
+    provider_status: status,
+    latest_heartbeat_id: heartbeat.repository_publication_provider_heartbeat_id ?? null,
+    latest_heartbeat_at: heartbeat.last_run_at ?? heartbeat.generated_at ?? heartbeat.recorded_at ?? null,
+    latest_heartbeat_age_ms: ageMs,
+    stale_after_ms: staleAfterMs,
+    provider_liveness_authority: CLOUDFLARE_REPOSITORY_PUBLICATION_PROVIDER_LIVENESS_AUTHORITY,
   };
 }
 

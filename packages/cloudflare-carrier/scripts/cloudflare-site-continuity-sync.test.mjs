@@ -176,6 +176,9 @@ test('site continuity sync executes pending repository publication requests by r
     if (body.operation === 'repository_publication.evidence.put') {
       return { body: { ok: true, status: 'recorded', evidence: body.params.source_payload } };
     }
+    if (body.operation === 'repository_publication.provider_heartbeat.put') {
+      return { body: { ok: true, status: 'recorded', heartbeat: body.params } };
+    }
     return { status: 400, body: { ok: false, code: 'unexpected_operation' } };
   });
   try {
@@ -188,10 +191,12 @@ test('site continuity sync executes pending repository publication requests by r
     assert.equal(body.request_count, 1);
     assert.equal(body.request_selection_status, 'selected');
     assert.equal(body.evidence_recorded_count, 1);
+    assert.equal(body.provider_heartbeat_recorded, true);
     assert.equal(body.results[0].status, 'evidence_recorded');
-    assert.equal(mock.requests.length, 2);
+    assert.equal(mock.requests.length, 3);
     assert.equal(mock.requests[0].operation, 'repository_publication.request.next');
     assert.equal(mock.requests[1].operation, 'repository_publication.evidence.put');
+    assert.equal(mock.requests[2].operation, 'repository_publication.provider_heartbeat.put');
     const evidence = mock.requests[1].params.source_payload;
     assert.equal(evidence.repository_publication_request_id, 'repository-publication-request-fixture');
     assert.equal(evidence.windows_admission_action, 'refuse');
@@ -199,6 +204,15 @@ test('site continuity sync executes pending repository publication requests by r
     assert.equal(evidence.publication_status, 'refused');
     assert.equal(evidence.cloudflare_git_push_admission, 'not_admitted');
     assert.equal(evidence.direct_cloudflare_repository_mutation_admission, 'not_admitted');
+    const heartbeat = mock.requests[2].params;
+    assert.equal(heartbeat.site_id, 'site_fixture');
+    assert.equal(heartbeat.provider_authority, 'windows_repository_publication_executor');
+    assert.equal(heartbeat.status, 'ready');
+    assert.equal(heartbeat.iteration_count, 1);
+    assert.equal(heartbeat.refused_publication_count, 1);
+    assert.equal(heartbeat.resolved_publication_count, 1);
+    assert.equal(heartbeat.cloudflare_git_push_admission, 'not_admitted');
+    assert.equal(heartbeat.direct_cloudflare_repository_mutation_admission, 'not_admitted');
   } finally {
     await mock.close();
   }
