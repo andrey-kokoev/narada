@@ -2053,6 +2053,8 @@ function summarizeCloudflareOperationLifecycleStatus({
   residentDispatchDecisions = [],
   localIngressRequests = [],
   localIngressEvidence = [],
+  repositoryPublicationRequests = [],
+  repositoryPublicationEvidence = [],
   webhookDelayDirectiveRecords = [],
   webhookDelayDirectiveDeliveries = [],
 } = {}) {
@@ -2069,6 +2071,8 @@ function summarizeCloudflareOperationLifecycleStatus({
   const directiveDeliveryCount = Array.isArray(webhookDelayDirectiveDeliveries) ? webhookDelayDirectiveDeliveries.length : 0;
   const localIngressRequestCount = Array.isArray(localIngressRequests) ? localIngressRequests.length : 0;
   const localIngressEvidenceCount = Array.isArray(localIngressEvidence) ? localIngressEvidence.length : 0;
+  const repositoryPublicationRequestCount = Array.isArray(repositoryPublicationRequests) ? repositoryPublicationRequests.length : 0;
+  const repositoryPublicationEvidenceCount = Array.isArray(repositoryPublicationEvidence) ? repositoryPublicationEvidence.length : 0;
   const missing = [];
   if (sessionCount === 0) missing.push('session');
   if (evidenceEventCount === 0) missing.push('carrier_evidence');
@@ -2103,6 +2107,8 @@ function summarizeCloudflareOperationLifecycleStatus({
     resident_dispatch_decision_count: residentDispatchCount,
     local_ingress_request_count: localIngressRequestCount,
     local_ingress_evidence_count: localIngressEvidenceCount,
+    repository_publication_request_count: repositoryPublicationRequestCount,
+    repository_publication_evidence_count: repositoryPublicationEvidenceCount,
     directive_record_count: directiveRecordCount,
     directive_delivery_count: directiveDeliveryCount,
     carrier_evidence_read_status: carrierEvidenceReadStatus,
@@ -2152,6 +2158,8 @@ function summarizeCloudflareOperationActivityTimeline({
   mailboxOutlookDraftCreates = [],
   localIngressRequests = [],
   localIngressEvidence = [],
+  repositoryPublicationRequests = [],
+  repositoryPublicationEvidence = [],
   residentDispatchDecisions = [],
 } = {}) {
   const operationId = operation?.operation_id ?? null;
@@ -2349,6 +2357,32 @@ function summarizeCloudflareOperationActivityTimeline({
       source_ref: evidence.local_ingress_evidence_id,
       focus_kind: 'local_ingress_evidence',
       focus_ref: evidence.local_ingress_evidence_id,
+      principal_id: evidence.recorded_by_principal_id,
+    });
+  }
+  for (const request of repositoryPublicationRequests || []) {
+    push({
+      activity_id: `repository_publication_request:${request.repository_publication_request_id}`,
+      activity_kind: 'repository_publication_request',
+      occurred_at: request.recorded_at || request.generated_at,
+      title: 'Repository Publication Request',
+      summary: [request.repository_publication_admission, request.publication_ref, request.repository_ref].filter(Boolean).join(' / ') || 'repository publication request queued',
+      source_ref: request.repository_publication_request_id,
+      focus_kind: 'repository_publication_request',
+      focus_ref: request.repository_publication_request_id,
+      principal_id: request.recorded_by_principal_id,
+    });
+  }
+  for (const evidence of repositoryPublicationEvidence || []) {
+    push({
+      activity_id: `repository_publication_evidence:${evidence.repository_publication_evidence_id}`,
+      activity_kind: 'repository_publication_evidence',
+      occurred_at: evidence.recorded_at || evidence.generated_at,
+      title: 'Repository Publication Evidence',
+      summary: [evidence.publication_status, evidence.windows_admission_action, evidence.published_commit_ref].filter(Boolean).join(' / ') || 'repository publication evidence recorded',
+      source_ref: evidence.repository_publication_evidence_id,
+      focus_kind: 'repository_publication_evidence',
+      focus_ref: evidence.repository_publication_evidence_id,
       principal_id: evidence.recorded_by_principal_id,
     });
   }
@@ -3690,6 +3724,8 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const siteFileMaterializations = await listCloudflareSiteFileMaterializations(env, siteId, params.site_file_materialization_limit ?? params.limit);
     const localIngressRequests = await listCloudflareLocalIngressRequests(env, siteId, params.local_ingress_request_limit ?? params.limit);
     const localIngressEvidence = await listCloudflareLocalIngressEvidence(env, siteId, params.local_ingress_evidence_limit ?? params.limit);
+    const repositoryPublicationRequests = await listCloudflareRepositoryPublicationRequests(env, siteId, params.repository_publication_request_limit ?? params.limit);
+    const repositoryPublicationEvidence = await listCloudflareRepositoryPublicationEvidence(env, siteId, params.repository_publication_evidence_limit ?? params.limit);
     const taskLifecycleShadowReads = await listCloudflareTaskLifecycleShadowReads(env, siteId, params.task_lifecycle_shadow_limit ?? params.limit);
     const taskLifecycleWriteAdmissions = await listCloudflareTaskLifecycleWriteAdmissions(env, siteId, params.task_lifecycle_write_admission_limit ?? params.limit);
     const taskLifecycleTasks = await listCloudflareTaskLifecycleTasks(env, siteId, params.task_lifecycle_task_limit ?? params.limit, params);
@@ -3737,6 +3773,8 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       siteFileChangeProposals,
       localIngressRequests,
       localIngressEvidence,
+      repositoryPublicationRequests,
+      repositoryPublicationEvidence,
       residentDispatchDecisions,
     });
     const localCloudContinuityBridge = summarizeLocalCloudContinuityBridge(siteId, continuityPackets, siteContinuity, siteContinuityStatus);
@@ -3752,6 +3790,8 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       residentDispatchDecisions,
       localIngressRequests,
       localIngressEvidence,
+      repositoryPublicationRequests,
+      repositoryPublicationEvidence,
       webhookDelayDirectiveRecords,
       webhookDelayDirectiveDeliveries,
     });
@@ -3798,6 +3838,8 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         site_file_materializations: siteFileMaterializations,
         local_ingress_requests: localIngressRequests,
         local_ingress_evidence: localIngressEvidence,
+        repository_publication_requests: repositoryPublicationRequests,
+        repository_publication_evidence: repositoryPublicationEvidence,
         task_lifecycle_shadow_reads: taskLifecycleShadowReads,
         task_lifecycle_write_admissions: taskLifecycleWriteAdmissions,
         task_lifecycle_tasks: taskLifecycleTasks,
@@ -3882,6 +3924,17 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           local_ingress_direct_cloudflare_filesystem_mutation_admission: localIngressRequests.length > 0 || localIngressEvidence.length > 0 ? 'not_admitted' : 'retained',
           local_ingress_repository_publication_admission: localIngressRequests.length > 0 || localIngressEvidence.length > 0 ? 'not_admitted' : 'retained',
           local_ingress_authority_partition: localIngressEvidence.length > 0 ? 'windows_executes_local_ingress_cloudflare_records_evidence_without_direct_filesystem_authority' : localIngressRequests.length > 0 ? 'cloudflare_queues_governed_local_ingress_request_windows_admits_executes_and_returns_evidence' : 'local_ingress_not_observed_windows_authority_retained',
+          repository_publication_request_count: repositoryPublicationRequests.length,
+          repository_publication_evidence_count: repositoryPublicationEvidence.length,
+          repository_publication_request_authority: repositoryPublicationRequests.length > 0 ? CLOUDFLARE_REPOSITORY_PUBLICATION_REQUEST_AUTHORITY : 'not_observed',
+          repository_publication_dispatch_authority: repositoryPublicationRequests.length > 0 ? CLOUDFLARE_REPOSITORY_PUBLICATION_REQUEST_AUTHORITY : 'not_observed',
+          repository_publication_executor_authority: repositoryPublicationRequests.length > 0 || repositoryPublicationEvidence.length > 0 ? WINDOWS_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY : 'not_observed',
+          repository_publication_evidence_authority: repositoryPublicationEvidence.length > 0 ? WINDOWS_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY : 'not_observed',
+          repository_publication_evidence_store_authority: repositoryPublicationEvidence.length > 0 ? CLOUDFLARE_REPOSITORY_PUBLICATION_EVIDENCE_AUTHORITY : 'not_observed',
+          repository_publication_execution_admission: repositoryPublicationEvidence.length > 0 ? 'resolved_by_windows_repository_publication' : repositoryPublicationRequests.length > 0 ? 'pending_windows_publication_admission' : 'not_observed',
+          repository_publication_cloudflare_git_push_admission: repositoryPublicationRequests.length > 0 || repositoryPublicationEvidence.length > 0 ? 'not_admitted' : 'retained',
+          repository_publication_direct_cloudflare_repository_mutation_admission: repositoryPublicationRequests.length > 0 || repositoryPublicationEvidence.length > 0 ? 'not_admitted' : 'retained',
+          repository_publication_authority_partition: repositoryPublicationEvidence.length > 0 ? 'windows_admits_or_refuses_repository_publication_cloudflare_records_evidence_without_direct_repository_authority' : repositoryPublicationRequests.length > 0 ? 'cloudflare_queues_governed_repository_publication_request_windows_admits_publishes_and_returns_evidence' : 'repository_publication_not_observed_windows_authority_retained',
           task_lifecycle_shadow_read_count: taskLifecycleShadowReads.length,
           task_lifecycle_write_admission_count: taskLifecycleWriteAdmissions.length,
           task_lifecycle_write_admission_posture: taskLifecycleTasks.some((task) => task.task_lifecycle_roster_mutation_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_and_roster_mutation_admitted_remaining_external_effects_not_admitted' : taskLifecycleTasks.some((task) => task.task_lifecycle_role_resolution_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_and_role_resolution_admitted_remaining_external_effects_not_admitted' : taskLifecycleTasks.some((task) => task.task_lifecycle_assignment_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_and_assignment_admitted_remaining_external_effects_not_admitted' : taskLifecycleTasks.some((task) => task.task_lifecycle_source_state_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_projection_write_and_source_state_admitted_remaining_external_effects_not_admitted' : taskLifecycleTasks.some((task) => task.task_lifecycle_projection_write_count > 0) ? 'task_create_claim_report_finish_changed_file_evidence_and_projection_write_admitted_remaining_writes_not_admitted' : taskLifecycleTasks.some((task) => task.changed_file_evidence_count > 0) ? (taskLifecycleTasks.some((task) => task.finish_id) ? 'task_create_claim_report_finish_and_changed_file_evidence_admitted_remaining_writes_not_admitted' : 'task_create_claim_report_and_changed_file_evidence_admitted_remaining_writes_not_admitted') : taskLifecycleTasks.some((task) => task.finish_id) ? 'task_create_claim_report_and_finish_admitted_remaining_writes_not_admitted' : taskLifecycleTasks.some((task) => task.report_id) ? 'task_create_claim_and_report_admitted_remaining_writes_not_admitted' : taskLifecycleTasks.some((task) => task.status === 'claimed') ? 'task_create_and_claim_admitted_remaining_writes_not_admitted' : taskLifecycleTasks.length > 0 ? 'task_create_admitted_remaining_writes_not_admitted' : 'writes_not_admitted',

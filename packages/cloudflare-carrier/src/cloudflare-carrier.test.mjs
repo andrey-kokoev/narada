@@ -1449,6 +1449,28 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(repositoryPublicationRequestNextAfterEvidenceBody.repository_publication_dispatch_authority, 'not_observed');
   assert.equal(repositoryPublicationRequestNextAfterEvidenceBody.request, null);
 
+  const operationReadAfterRepositoryPublication = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_operation_read_after_repository_publication',
+    params: { operation_id: 'operation_site_read', repository_publication_request_limit: 10, repository_publication_evidence_limit: 10, limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(operationReadAfterRepositoryPublication.status, 200);
+  const operationReadAfterRepositoryPublicationBody = await operationReadAfterRepositoryPublication.json();
+  assert.equal(operationReadAfterRepositoryPublicationBody.repository_publication_requests.length, 1);
+  assert.equal(operationReadAfterRepositoryPublicationBody.repository_publication_evidence.length, 1);
+  assert.equal(operationReadAfterRepositoryPublicationBody.operation_lifecycle_status.repository_publication_request_count, 1);
+  assert.equal(operationReadAfterRepositoryPublicationBody.operation_lifecycle_status.repository_publication_evidence_count, 1);
+  assert.equal(operationReadAfterRepositoryPublicationBody.operation_product_surface.repository_publication_request_count, 1);
+  assert.equal(operationReadAfterRepositoryPublicationBody.operation_product_surface.repository_publication_evidence_count, 1);
+  assert.equal(operationReadAfterRepositoryPublicationBody.operation_product_surface.repository_publication_request_authority, 'cloudflare_repository_publication_request_queue');
+  assert.equal(operationReadAfterRepositoryPublicationBody.operation_product_surface.repository_publication_executor_authority, 'windows_repository_publication_executor');
+  assert.equal(operationReadAfterRepositoryPublicationBody.operation_product_surface.repository_publication_evidence_store_authority, 'cloudflare_repository_publication_evidence_store');
+  assert.equal(operationReadAfterRepositoryPublicationBody.operation_product_surface.repository_publication_execution_admission, 'resolved_by_windows_repository_publication');
+  assert.equal(operationReadAfterRepositoryPublicationBody.operation_product_surface.repository_publication_cloudflare_git_push_admission, 'not_admitted');
+  assert.equal(operationReadAfterRepositoryPublicationBody.operation_product_surface.repository_publication_direct_cloudflare_repository_mutation_admission, 'not_admitted');
+  assert.ok(operationReadAfterRepositoryPublicationBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'repository_publication_request'));
+  assert.ok(operationReadAfterRepositoryPublicationBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'repository_publication_evidence'));
+
   const directRepositoryEvidenceClaim = await worker.fetch(jsonRequest({
     operation: 'repository_publication.evidence.put',
     request_id: 'request_repository_publication_evidence_direct_cloudflare_claim',
