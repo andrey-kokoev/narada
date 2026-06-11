@@ -1801,6 +1801,256 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(publicationClaimBody.code, 'local_ingress_evidence_repository_publication_admission_invalid');
 });
 
+test('worker executes admitted repository publication through Cloudflare GitHub executor', async () => {
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{ site_id: 'site_fixture', site_ref: 'site://fixture', display_name: 'Fixture Site', status: 'active', created_at: clock(), updated_at: clock(), created_by_principal_id: 'admin' }],
+    memberships: [{ site_id: 'site_fixture', principal_id: 'admin', role: 'owner', status: 'active', created_at: clock(), updated_at: clock() }],
+    operations: [{ operation_id: 'operation_site_read', site_id: 'site_fixture', display_name: 'Site Read Operation', operation_kind: 'control', status: 'active', created_by_principal_id: 'admin', created_at: clock(), updated_at: clock() }],
+  });
+  const githubCalls = [];
+  const env = authEnv(fakeDurableObjectNamespace(), {
+    CLOUDFLARE_SITE_REGISTRY_DB: siteDb,
+    CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN: 'github-token-fixture',
+    CLOUDFLARE_REPOSITORY_PUBLICATION_ALLOWED_REPOSITORIES: 'github:andrey-kokoev/narada.sonar',
+    CLOUDFLARE_REPOSITORY_PUBLICATION_ALLOWED_BRANCHES: 'cloudflare-publication-fixture',
+    CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_FETCH: async (url, init) => {
+      githubCalls.push({ url, init });
+      return new Response(JSON.stringify({ ref: 'refs/heads/cloudflare-publication-fixture', object: { sha: '0123456789abcdef0123456789abcdef01234567', type: 'commit' } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    },
+  });
+
+  const request = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.request.create',
+    request_id: 'request_repository_publication_cloudflare_execution_create',
+    params: {
+      site_id: 'site_fixture',
+      repository_publication_request_id: 'repository-publication-request-cloudflare-execution-fixture',
+      publication_ref: 'repository-publication:cloudflare-execution-fixture',
+      requested_action_ref: 'repository-publication-action:cloudflare-execution-fixture',
+      requested_action_summary: 'publish admitted commit from Cloudflare GitHub executor',
+      repository_ref: 'github:andrey-kokoev/narada.sonar',
+      branch_ref: 'cloudflare-publication-fixture',
+      source_change_ref: 'git:commit:0123456789abcdef0123456789abcdef01234567',
+      governed_request_contract_ref: 'contract:cloudflare-github-repository-publication-request:v1',
+      evidence_return_contract_ref: 'contract:cloudflare-github-repository-publication-execution-record:v1',
+      rollback_plan_ref: 'rollback:cloudflare-github-repository-publication-fixture',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(request.status, 200, JSON.stringify(await request.clone().json()));
+
+  const beforeAdmissionExecution = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.cloudflare_execution.execute',
+    request_id: 'request_repository_publication_cloudflare_execution_before_admission',
+    params: { site_id: 'site_fixture', repository_publication_request_id: 'repository-publication-request-cloudflare-execution-fixture' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(beforeAdmissionExecution.status, 400);
+  assert.equal((await beforeAdmissionExecution.json()).code, 'cloudflare_repository_publication_execution_admission_required');
+
+  const admission = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.admission.classify',
+    request_id: 'request_repository_publication_cloudflare_execution_admission',
+    params: {
+      site_id: 'site_fixture',
+      repository_publication_admission_id: 'repository-publication-admission-cloudflare-execution-fixture',
+      repository_publication_request_id: 'repository-publication-request-cloudflare-execution-fixture',
+      admission_action: 'admit',
+      admission_reason: 'cloudflare_repository_publication_request_admitted_for_cloudflare_github_execution',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(admission.status, 200, JSON.stringify(await admission.clone().json()));
+
+  const execution = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.cloudflare_execution.execute',
+    request_id: 'request_repository_publication_cloudflare_execution_execute',
+    params: {
+      site_id: 'site_fixture',
+      repository_publication_execution_id: 'repository-publication-execution-cloudflare-fixture',
+      repository_publication_request_id: 'repository-publication-request-cloudflare-execution-fixture',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  const executionBody = await execution.json();
+  assert.equal(execution.status, 200, JSON.stringify(executionBody));
+  assert.equal(executionBody.schema, 'narada.sonar.cloudflare_github_repository_publication_execution.v1');
+  assert.equal(executionBody.publication_status, 'completed');
+  assert.equal(executionBody.repository_publication_executor_authority, 'cloudflare_github_repository_publication_executor');
+  assert.equal(executionBody.repository_publication_admission_authority, 'cloudflare_repository_publication_admission_controller');
+  assert.equal(executionBody.cloudflare_git_push_admission, 'not_admitted');
+  assert.equal(executionBody.direct_cloudflare_repository_mutation_admission, 'admitted_by_cloudflare_github_repository_publication');
+  assert.equal(githubCalls.length, 1);
+  assert.equal(githubCalls[0].url, 'https://api.github.com/repos/andrey-kokoev/narada.sonar/git/refs/heads/cloudflare-publication-fixture');
+  assert.deepEqual(JSON.parse(githubCalls[0].init.body), { sha: '0123456789abcdef0123456789abcdef01234567', force: false });
+
+  const executionList = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.cloudflare_execution.list',
+    request_id: 'request_repository_publication_cloudflare_execution_list',
+    params: { site_id: 'site_fixture', repository_publication_request_id: 'repository-publication-request-cloudflare-execution-fixture', limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  const executionListBody = await executionList.json();
+  assert.equal(executionList.status, 200, JSON.stringify(executionListBody));
+  assert.equal(executionListBody.executions.length, 1);
+  assert.equal(executionListBody.executions[0].repository_publication_execution_id, 'repository-publication-execution-cloudflare-fixture');
+
+  const nextAfterExecution = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.request.next',
+    request_id: 'request_repository_publication_cloudflare_execution_next_after_execution',
+    params: { site_id: 'site_fixture', limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  const nextAfterExecutionBody = await nextAfterExecution.json();
+  assert.equal(nextAfterExecution.status, 200, JSON.stringify(nextAfterExecutionBody));
+  assert.equal(nextAfterExecutionBody.status, 'drained');
+  assert.equal(nextAfterExecutionBody.request, null);
+
+  const read = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_operation_read_after_cloudflare_repository_publication_execution',
+    params: { operation_id: 'operation_site_read', repository_publication_request_limit: 10, repository_publication_execution_limit: 10, limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  const readBody = await read.json();
+  assert.equal(read.status, 200, JSON.stringify(readBody));
+  assert.equal(readBody.repository_publication_executions.length, 1);
+  assert.equal(readBody.repository_publication_operation_posture.repository_publication_execution_count, 1);
+  assert.equal(readBody.repository_publication_operation_posture.executor_authority, 'cloudflare_github_repository_publication_executor');
+  assert.equal(readBody.repository_publication_operation_posture.direct_cloudflare_repository_mutation_admission, 'admitted_by_cloudflare_github_repository_publication');
+  assert.equal(readBody.repository_publication_operation_posture.authority_partition, 'cloudflare_admits_and_executes_github_repository_publication');
+  assert.equal(readBody.authority_transfer_posture.domains.find((domain) => domain.domain === 'repository_publication').classification, 'cloudflare_owned');
+});
+
+test('worker repository publication selector uses per-request evidence lookup beyond global evidence window', async () => {
+  const siteId = 'site_fixture';
+  const resolvedRequestId = 'repository-publication-request-resolved-old';
+  const now = Date.parse(clock());
+  const laterIso = (offset) => new Date(now + offset * 1000).toISOString();
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{
+      site_id: siteId,
+      site_ref: 'site://fixture',
+      display_name: 'Fixture Site',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+      created_by_principal_id: 'admin',
+    }],
+    memberships: [{
+      site_id: siteId,
+      principal_id: 'admin',
+      role: 'owner',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+    repositoryPublicationRequests: [{
+      repository_publication_request_id: resolvedRequestId,
+      site_id: siteId,
+      generated_at: clock(),
+      operation_id: 'operation_site_read',
+      task_id: '',
+      publication_ref: 'repository-publication:resolved-old',
+      requested_action_ref: 'repository-publication-action:resolved-old',
+      requested_action_summary: 'already resolved request',
+      repository_ref: 'github:andrey-kokoev/narada',
+      branch_ref: 'main',
+      source_change_ref: 'git:commit:resolved-old',
+      governed_request_contract_ref: 'contract:cloudflare-to-windows-repository-publication-request:v1',
+      evidence_return_contract_ref: 'contract:windows-repository-publication-evidence-return:v1',
+      rollback_plan_ref: 'rollback:resolved-old',
+      authority_locus: 'cloudflare_carrier_site',
+      target_authority_locus: 'windows_local_repository',
+      repository_publication_executor_authority: 'windows_repository_publication_executor',
+      repository_publication_admission: 'pending_windows_publication_admission',
+      cloudflare_git_push_admission: 'not_admitted',
+      direct_cloudflare_repository_mutation_admission: 'not_admitted',
+      request_posture: 'cloudflare_queued_windows_repository_publication_request',
+      request_json: '{}',
+      recorded_by_principal_id: 'admin',
+      recorded_at: clock(),
+    }],
+    repositoryPublicationAdmissions: [{
+      repository_publication_admission_id: 'repository-publication-admission-resolved-old',
+      site_id: siteId,
+      generated_at: clock(),
+      repository_publication_request_id: resolvedRequestId,
+      admission_action: 'admit',
+      admission_reason: 'fixture_admitted',
+      repository_publication_admission: 'admitted_by_cloudflare_repository_publication',
+      authority_locus: 'cloudflare_repository_publication_admission_controller',
+      repository_publication_executor_authority: 'windows_repository_publication_executor',
+      cloudflare_git_push_admission: 'not_admitted',
+      direct_cloudflare_repository_mutation_admission: 'not_admitted',
+      admission_posture: 'cloudflare_admitted_windows_repository_publication_request',
+      admission_json: '{}',
+      recorded_by_principal_id: 'admin',
+      recorded_at: clock(),
+    }],
+    repositoryPublicationEvidence: [
+      {
+        repository_publication_evidence_id: 'repository-publication-evidence-resolved-old',
+        site_id: siteId,
+        generated_at: clock(),
+        repository_publication_request_id: resolvedRequestId,
+        publication_execution_id: 'repository-publication-execution-resolved-old',
+        publication_ref: 'repository-publication:resolved-old',
+        requested_action_ref: 'repository-publication-action:resolved-old',
+        repository_ref: 'github:andrey-kokoev/narada',
+        branch_ref: 'main',
+        source_change_ref: 'git:commit:resolved-old',
+        windows_admission_action: 'admit',
+        windows_admission_reason: 'governed_repository_publication_request_admitted',
+        publication_status: 'completed',
+        repository_publication_executor_authority: 'windows_repository_publication_executor',
+        published_commit_ref: 'git:commit:resolved-old',
+        rollback_evidence_ref: 'rollback:published:resolved-old',
+        cloudflare_git_push_admission: 'not_admitted',
+        direct_cloudflare_repository_mutation_admission: 'not_admitted',
+        evidence_posture: 'windows_repository_publication_resolved_cloudflare_recorded_evidence',
+        evidence_json: '{}',
+        recorded_by_principal_id: 'admin',
+        recorded_at: clock(),
+      },
+      ...Array.from({ length: 101 }, (_, index) => ({
+        repository_publication_evidence_id: `repository-publication-evidence-newer-${index}`,
+        site_id: siteId,
+        generated_at: laterIso(index + 1),
+        repository_publication_request_id: `repository-publication-request-newer-${index}`,
+        publication_execution_id: `repository-publication-execution-newer-${index}`,
+        publication_ref: `repository-publication:newer-${index}`,
+        requested_action_ref: `repository-publication-action:newer-${index}`,
+        repository_ref: 'github:andrey-kokoev/narada',
+        branch_ref: 'main',
+        source_change_ref: `git:commit:newer-${index}`,
+        windows_admission_action: 'admit',
+        windows_admission_reason: 'governed_repository_publication_request_admitted',
+        publication_status: 'completed',
+        repository_publication_executor_authority: 'windows_repository_publication_executor',
+        published_commit_ref: `git:commit:newer-${index}`,
+        rollback_evidence_ref: `rollback:published:newer-${index}`,
+        cloudflare_git_push_admission: 'not_admitted',
+        direct_cloudflare_repository_mutation_admission: 'not_admitted',
+        evidence_posture: 'windows_repository_publication_resolved_cloudflare_recorded_evidence',
+        evidence_json: '{}',
+        recorded_by_principal_id: 'admin',
+        recorded_at: laterIso(index + 1),
+      })),
+    ],
+  });
+  const env = authEnv(fakeDurableObjectNamespace(), { CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+
+  const response = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.request.next',
+    request_id: 'request_repository_publication_next_after_saturated_evidence_history',
+    params: { site_id: siteId, limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.status, 'drained', JSON.stringify(body, null, 2));
+  assert.equal(body.request, null);
+  assert.equal(body.repository_publication_dispatch_authority, 'not_observed');
+});
+
+
 test('worker site.read surfaces degraded carrier evidence replay when session events are unavailable', async () => {
   const siteDb = fakeD1SiteRegistryDatabase({
     sites: [{
@@ -7251,6 +7501,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     localIngressProviderHeartbeats: clone(initial.localIngressProviderHeartbeats ?? []),
     repositoryPublicationRequests: clone(initial.repositoryPublicationRequests ?? []),
     repositoryPublicationAdmissions: clone(initial.repositoryPublicationAdmissions ?? []),
+    repositoryPublicationExecutions: clone(initial.repositoryPublicationExecutions ?? []),
     repositoryPublicationEvidence: clone(initial.repositoryPublicationEvidence ?? []),
     repositoryPublicationProviderHeartbeats: clone(initial.repositoryPublicationProviderHeartbeats ?? []),
     taskLifecycleShadowReads: clone(initial.taskLifecycleShadowReads ?? []),
@@ -7455,6 +7706,12 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const row = { repository_publication_admission_id, site_id, generated_at, repository_publication_request_id, admission_action, admission_reason, authority_locus, repository_publication_admission, repository_publication_executor_authority, cloudflare_git_push_admission, direct_cloudflare_repository_mutation_admission, admission_posture, admission_json, recorded_by_principal_id, recorded_at };
         if (existing) Object.assign(existing, row);
         else state.repositoryPublicationAdmissions.push(row);
+      } else if (normalized.startsWith('insert into cloudflare_repository_publication_executions')) {
+        const [repository_publication_execution_id, site_id, generated_at, repository_publication_request_id, publication_ref, requested_action_ref, repository_ref, branch_ref, source_change_ref, publication_status, repository_publication_executor_authority, repository_publication_admission_authority, repository_publication_admission, cloudflare_repository_publication_admission_id, cloudflare_repository_publication_admission_action, cloudflare_git_push_admission, direct_cloudflare_repository_mutation_admission, published_commit_ref, github_http_status, rollback_evidence_ref, execution_posture, execution_json, recorded_by_principal_id, recorded_at] = bindings;
+        const existing = state.repositoryPublicationExecutions.find((entry) => entry.repository_publication_execution_id === repository_publication_execution_id);
+        const row = { repository_publication_execution_id, site_id, generated_at, repository_publication_request_id, publication_ref, requested_action_ref, repository_ref, branch_ref, source_change_ref, publication_status, repository_publication_executor_authority, repository_publication_admission_authority, repository_publication_admission, cloudflare_repository_publication_admission_id, cloudflare_repository_publication_admission_action, cloudflare_git_push_admission, direct_cloudflare_repository_mutation_admission, published_commit_ref, github_http_status, rollback_evidence_ref, execution_posture, execution_json, recorded_by_principal_id, recorded_at };
+        if (existing) Object.assign(existing, row);
+        else state.repositoryPublicationExecutions.push(row);
       } else if (normalized.startsWith('insert into cloudflare_repository_publication_evidence')) {
         const [repository_publication_evidence_id, site_id, generated_at, repository_publication_request_id, publication_execution_id, publication_ref, requested_action_ref, repository_ref, branch_ref, source_change_ref, windows_admission_action, windows_admission_reason, publication_status, repository_publication_executor_authority, published_commit_ref, rollback_evidence_ref, cloudflare_git_push_admission, direct_cloudflare_repository_mutation_admission, evidence_posture, evidence_json, recorded_by_principal_id, recorded_at] = bindings;
         const existing = state.repositoryPublicationEvidence.find((entry) => entry.repository_publication_evidence_id === repository_publication_evidence_id);
@@ -7853,6 +8110,19 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const limit = hasRequestFilter ? maybeLimit : maybeRequestId;
         return {
           results: state.repositoryPublicationAdmissions
+            .filter((entry) => entry.site_id === siteId && (!requestId || entry.repository_publication_request_id === requestId))
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_repository_publication_executions')) {
+        const [siteId, maybeRequestId, maybeLimit] = bindings;
+        const hasRequestFilter = normalized.includes('repository_publication_request_id = ?');
+        const requestId = hasRequestFilter ? maybeRequestId : null;
+        const limit = hasRequestFilter ? maybeLimit : maybeRequestId;
+        return {
+          results: state.repositoryPublicationExecutions
             .filter((entry) => entry.site_id === siteId && (!requestId || entry.repository_publication_request_id === requestId))
             .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
             .slice(0, Number(limit))

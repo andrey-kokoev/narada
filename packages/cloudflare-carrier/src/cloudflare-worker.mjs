@@ -61,6 +61,7 @@ const CLOUDFLARE_LOCAL_INGRESS_EVIDENCE_SCHEMA = 'narada.sonar.cloudflare_local_
 const CLOUDFLARE_LOCAL_INGRESS_PROVIDER_HEARTBEAT_SCHEMA = 'narada.sonar.cloudflare_local_ingress_provider_heartbeat.v1';
 const CLOUDFLARE_REPOSITORY_PUBLICATION_REQUEST_SCHEMA = 'narada.sonar.cloudflare_repository_publication_request.v1';
 const CLOUDFLARE_REPOSITORY_PUBLICATION_ADMISSION_SCHEMA = 'narada.sonar.cloudflare_repository_publication_admission.v1';
+const CLOUDFLARE_REPOSITORY_PUBLICATION_EXECUTION_SCHEMA = 'narada.sonar.cloudflare_github_repository_publication_execution.v1';
 const CLOUDFLARE_REPOSITORY_PUBLICATION_EVIDENCE_SCHEMA = 'narada.sonar.cloudflare_repository_publication_evidence.v1';
 const CLOUDFLARE_REPOSITORY_PUBLICATION_PROVIDER_HEARTBEAT_SCHEMA = 'narada.sonar.cloudflare_repository_publication_provider_heartbeat.v1';
 const CLOUDFLARE_TASK_LIFECYCLE_SHADOW_READ_SCHEMA = 'narada.sonar.cloudflare_task_lifecycle_shadow_read.v1';
@@ -100,6 +101,7 @@ const WINDOWS_LOCAL_INGRESS_EXECUTOR_AUTHORITY = 'windows_local_ingress_executor
 const CLOUDFLARE_LOCAL_INGRESS_PROVIDER_LIVENESS_AUTHORITY = 'cloudflare_local_ingress_provider_liveness_store';
 const CLOUDFLARE_REPOSITORY_PUBLICATION_REQUEST_AUTHORITY = 'cloudflare_repository_publication_request_queue';
 const CLOUDFLARE_REPOSITORY_PUBLICATION_ADMISSION_AUTHORITY = 'cloudflare_repository_publication_admission_controller';
+const CLOUDFLARE_GITHUB_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY = 'cloudflare_github_repository_publication_executor';
 const WINDOWS_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY = 'windows_repository_publication_executor';
 const CLOUDFLARE_REPOSITORY_PUBLICATION_EVIDENCE_AUTHORITY = 'cloudflare_repository_publication_evidence_store';
 const CLOUDFLARE_REPOSITORY_PUBLICATION_PROVIDER_LIVENESS_AUTHORITY = 'cloudflare_repository_publication_provider_liveness_store';
@@ -2156,6 +2158,7 @@ function summarizeCloudflareOperationLifecycleStatus({
   localIngressEvidence = [],
   localIngressProviderHeartbeats = [],
   repositoryPublicationRequests = [],
+  repositoryPublicationExecutions = [],
   repositoryPublicationEvidence = [],
   repositoryPublicationProviderHeartbeats = [],
   webhookDelayDirectiveRecords = [],
@@ -2178,10 +2181,11 @@ function summarizeCloudflareOperationLifecycleStatus({
   const localIngressProviderLiveness = classifyLocalIngressProviderLiveness(localIngressProviderHeartbeats);
   const localIngressObserved = localIngressRequestCount > 0 || localIngressEvidenceCount > 0 || localIngressProviderHeartbeatCount > 0;
   const repositoryPublicationRequestCount = Array.isArray(repositoryPublicationRequests) ? repositoryPublicationRequests.length : 0;
+  const repositoryPublicationExecutionCount = Array.isArray(repositoryPublicationExecutions) ? repositoryPublicationExecutions.length : 0;
   const repositoryPublicationEvidenceCount = Array.isArray(repositoryPublicationEvidence) ? repositoryPublicationEvidence.length : 0;
   const repositoryPublicationProviderHeartbeatCount = Array.isArray(repositoryPublicationProviderHeartbeats) ? repositoryPublicationProviderHeartbeats.length : 0;
   const repositoryPublicationProviderLiveness = classifyRepositoryPublicationProviderLiveness(repositoryPublicationProviderHeartbeats);
-  const repositoryPublicationObserved = repositoryPublicationRequestCount > 0 || repositoryPublicationEvidenceCount > 0 || repositoryPublicationProviderHeartbeatCount > 0;
+  const repositoryPublicationObserved = repositoryPublicationRequestCount > 0 || repositoryPublicationExecutionCount > 0 || repositoryPublicationEvidenceCount > 0 || repositoryPublicationProviderHeartbeatCount > 0;
   const missing = [];
   if (sessionCount === 0) missing.push('session');
   if (evidenceEventCount === 0) missing.push('carrier_evidence');
@@ -2224,6 +2228,7 @@ function summarizeCloudflareOperationLifecycleStatus({
     local_ingress_provider_liveness_authority: localIngressProviderHeartbeatCount > 0 ? CLOUDFLARE_LOCAL_INGRESS_PROVIDER_LIVENESS_AUTHORITY : 'not_observed',
     local_ingress_provider_liveness: localIngressProviderLiveness,
     repository_publication_request_count: repositoryPublicationRequestCount,
+    repository_publication_execution_count: repositoryPublicationExecutionCount,
     repository_publication_evidence_count: repositoryPublicationEvidenceCount,
     repository_publication_provider_heartbeat_count: repositoryPublicationProviderHeartbeatCount,
     repository_publication_provider_liveness_authority: repositoryPublicationProviderHeartbeatCount > 0 ? CLOUDFLARE_REPOSITORY_PUBLICATION_PROVIDER_LIVENESS_AUTHORITY : 'not_observed',
@@ -2305,19 +2310,26 @@ function summarizeCloudflareLocalIngressOperationPosture({
 function summarizeCloudflareRepositoryPublicationOperationPosture({
   repositoryPublicationRequests = [],
   repositoryPublicationAdmissions = [],
+  repositoryPublicationExecutions = [],
   repositoryPublicationEvidence = [],
   repositoryPublicationProviderHeartbeats = [],
 } = {}) {
   const requests = Array.isArray(repositoryPublicationRequests) ? repositoryPublicationRequests : [];
   const admissions = Array.isArray(repositoryPublicationAdmissions) ? repositoryPublicationAdmissions : [];
+  const executions = Array.isArray(repositoryPublicationExecutions) ? repositoryPublicationExecutions : [];
   const evidence = Array.isArray(repositoryPublicationEvidence) ? repositoryPublicationEvidence : [];
   const heartbeats = Array.isArray(repositoryPublicationProviderHeartbeats) ? repositoryPublicationProviderHeartbeats : [];
-  const evidenceRequestIds = new Set(evidence.map((item) => item?.repository_publication_request_id).filter(Boolean));
-  const pendingRequests = requests.filter((request) => !evidenceRequestIds.has(request?.repository_publication_request_id));
+  const resolvedRequestIds = new Set([
+    ...executions.map((item) => item?.repository_publication_request_id).filter(Boolean),
+    ...evidence.map((item) => item?.repository_publication_request_id).filter(Boolean),
+  ]);
+  const pendingRequests = requests.filter((request) => !resolvedRequestIds.has(request?.repository_publication_request_id));
   const admittedRequestIds = new Set(admissions.filter((item) => item?.admission_action === 'admit').map((item) => item.repository_publication_request_id).filter(Boolean));
   const pendingUnadmittedRequests = pendingRequests.filter((request) => !admittedRequestIds.has(request?.repository_publication_request_id));
   const providerLiveness = classifyRepositoryPublicationProviderLiveness(heartbeats);
-  const observed = requests.length > 0 || admissions.length > 0 || evidence.length > 0 || heartbeats.length > 0;
+  const observed = requests.length > 0 || admissions.length > 0 || executions.length > 0 || evidence.length > 0 || heartbeats.length > 0;
+  const completedExecutionCount = executions.filter((item) => String(item?.publication_status ?? '') === 'completed').length;
+  const failedExecutionCount = executions.filter((item) => String(item?.publication_status ?? '') === 'failed').length;
   const completedEvidenceCount = evidence.filter((item) => String(item?.publication_status ?? '') === 'completed').length;
   const refusedEvidenceCount = evidence.filter((item) => {
     const publicationStatus = String(item?.publication_status ?? '');
@@ -2326,9 +2338,12 @@ function summarizeCloudflareRepositoryPublicationOperationPosture({
   }).length;
   const latestRequest = requests[0] ?? null;
   const latestAdmission = admissions[0] ?? null;
+  const latestExecution = executions[0] ?? null;
   const latestEvidence = evidence[0] ?? null;
   const latestHeartbeat = heartbeats[0] ?? null;
-  const authorityPartition = evidence.length > 0
+  const authorityPartition = executions.length > 0
+    ? 'cloudflare_admits_and_executes_github_repository_publication'
+    : evidence.length > 0
     ? 'cloudflare_admits_repository_publication_windows_executes_and_cloudflare_records_evidence'
     : admissions.length > 0
       ? 'cloudflare_admits_repository_publication_windows_executes_and_returns_evidence'
@@ -2343,10 +2358,11 @@ function summarizeCloudflareRepositoryPublicationOperationPosture({
     state = 'waiting_for_cloudflare_publication_admission';
     nextAction = 'classify_cloudflare_repository_publication_admission';
   } else if (pendingRequests.length > 0) {
-    state = ['missing', 'stale', 'failed'].includes(providerLiveness.state) ? 'attention' : 'waiting_for_windows_publisher';
-    nextAction = ['missing', 'stale', 'failed'].includes(providerLiveness.state)
-      ? 'restore_windows_repository_publication_provider'
-      : 'run_windows_repository_publication_provider';
+    state = 'waiting_for_cloudflare_github_publication_executor';
+    nextAction = 'run_cloudflare_github_repository_publication_executor';
+  } else if (executions.length > 0) {
+    state = failedExecutionCount > 0 ? 'attention' : 'execution_recorded';
+    nextAction = failedExecutionCount > 0 ? 'review_cloudflare_github_repository_publication_execution' : 'review_repository_publication_execution';
   } else if (evidence.length > 0) {
     state = 'evidence_recorded';
     nextAction = 'review_repository_publication_evidence';
@@ -2359,14 +2375,18 @@ function summarizeCloudflareRepositoryPublicationOperationPosture({
     state,
     repository_publication_request_count: requests.length,
     repository_publication_admission_count: admissions.length,
+    repository_publication_execution_count: executions.length,
     repository_publication_evidence_count: evidence.length,
     repository_publication_provider_heartbeat_count: heartbeats.length,
     pending_request_count: pendingRequests.length,
     pending_unadmitted_request_count: pendingUnadmittedRequests.length,
     completed_evidence_count: completedEvidenceCount,
+    completed_execution_count: completedExecutionCount,
+    failed_execution_count: failedExecutionCount,
     refused_evidence_count: refusedEvidenceCount,
     latest_request_id: latestRequest?.repository_publication_request_id ?? null,
     latest_admission_id: latestAdmission?.repository_publication_admission_id ?? null,
+    latest_execution_id: latestExecution?.repository_publication_execution_id ?? null,
     latest_evidence_id: latestEvidence?.repository_publication_evidence_id ?? null,
     latest_provider_heartbeat_id: latestHeartbeat?.repository_publication_provider_heartbeat_id ?? null,
     provider_liveness_authority: heartbeats.length > 0 ? CLOUDFLARE_REPOSITORY_PUBLICATION_PROVIDER_LIVENESS_AUTHORITY : 'not_observed',
@@ -2375,11 +2395,12 @@ function summarizeCloudflareRepositoryPublicationOperationPosture({
     admission_authority: admissions.length > 0 ? CLOUDFLARE_REPOSITORY_PUBLICATION_ADMISSION_AUTHORITY : 'not_observed',
     repository_publication_admission: latestAdmission?.repository_publication_admission ?? (pendingUnadmittedRequests.length > 0 ? 'waiting_for_cloudflare_publication_admission' : 'not_observed'),
     dispatch_authority: requests.length > 0 ? CLOUDFLARE_REPOSITORY_PUBLICATION_REQUEST_AUTHORITY : 'not_observed',
+    execution_authority: executions.length > 0 ? CLOUDFLARE_GITHUB_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY : 'not_observed',
     evidence_authority: evidence.length > 0 ? WINDOWS_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY : 'not_observed',
     evidence_store_authority: evidence.length > 0 ? CLOUDFLARE_REPOSITORY_PUBLICATION_EVIDENCE_AUTHORITY : 'not_observed',
-    executor_authority: observed ? WINDOWS_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY : 'not_observed',
+    executor_authority: executions.length > 0 ? CLOUDFLARE_GITHUB_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY : observed ? WINDOWS_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY : 'not_observed',
     cloudflare_git_push_admission: observed ? 'not_admitted' : 'retained',
-    direct_cloudflare_repository_mutation_admission: observed ? 'not_admitted' : 'retained',
+    direct_cloudflare_repository_mutation_admission: executions.length > 0 ? 'admitted_by_cloudflare_github_repository_publication' : observed ? 'not_admitted' : 'retained',
     authority_partition: authorityPartition,
     next_action: nextAction,
   };
@@ -2464,10 +2485,10 @@ function summarizeCloudflareAuthorityTransferPosture({
     },
     {
       domain: 'repository_publication',
-      classification: repositoryPublicationOperationPosture?.repository_publication_request_count > 0 || repositoryPublicationOperationPosture?.repository_publication_evidence_count > 0 || repositoryPublicationOperationPosture?.repository_publication_provider_heartbeat_count > 0 ? 'cloudflare_governed_windows_executed' : 'windows_retained',
-      observed_count: Number(repositoryPublicationOperationPosture?.repository_publication_request_count ?? 0) + Number(repositoryPublicationOperationPosture?.repository_publication_evidence_count ?? 0) + Number(repositoryPublicationOperationPosture?.repository_publication_provider_heartbeat_count ?? 0),
+      classification: repositoryPublicationOperationPosture?.repository_publication_execution_count > 0 ? 'cloudflare_owned' : repositoryPublicationOperationPosture?.repository_publication_request_count > 0 || repositoryPublicationOperationPosture?.repository_publication_evidence_count > 0 || repositoryPublicationOperationPosture?.repository_publication_provider_heartbeat_count > 0 ? 'cloudflare_governed_windows_executed' : 'windows_retained',
+      observed_count: Number(repositoryPublicationOperationPosture?.repository_publication_request_count ?? 0) + Number(repositoryPublicationOperationPosture?.repository_publication_execution_count ?? 0) + Number(repositoryPublicationOperationPosture?.repository_publication_evidence_count ?? 0) + Number(repositoryPublicationOperationPosture?.repository_publication_provider_heartbeat_count ?? 0),
       authority_partition: repositoryPublicationOperationPosture?.authority_partition ?? 'repository_publication_not_observed_windows_authority_retained',
-      remaining_windows_authority: ['windows_repository_publication_executor', 'git_push'],
+      remaining_windows_authority: repositoryPublicationOperationPosture?.repository_publication_execution_count > 0 ? [] : ['windows_repository_publication_executor', 'git_push'],
     },
     {
       domain: 'task_lifecycle',
@@ -3316,6 +3337,8 @@ function isSiteProductOperation(operation) {
     'repository_publication.request.next',
     'repository_publication.admission.classify',
     'repository_publication.admission.list',
+    'repository_publication.cloudflare_execution.execute',
+    'repository_publication.cloudflare_execution.list',
     'repository_publication.evidence.put',
     'repository_publication.evidence.list',
     'repository_publication.provider_heartbeat.put',
@@ -4140,6 +4163,33 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       },
     };
   }
+  if (body.operation === 'repository_publication.cloudflare_execution.execute') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const result = await executeCloudflareGithubRepositoryPublication(env, requestedSiteId, params, principal);
+    return { status: result.ok ? 200 : 400, body: result };
+  }
+  if (body.operation === 'repository_publication.cloudflare_execution.list') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const executions = await listCloudflareRepositoryPublicationExecutions(env, requestedSiteId, params.repository_publication_execution_limit ?? params.limit, params.repository_publication_request_id);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        schema: CLOUDFLARE_REPOSITORY_PUBLICATION_EXECUTION_SCHEMA,
+        status: 'ok',
+        site_id: requestedSiteId,
+        repository_publication_executor_authority: executions.length > 0 ? CLOUDFLARE_GITHUB_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY : 'not_observed',
+        repository_publication_admission_authority: executions.length > 0 ? CLOUDFLARE_REPOSITORY_PUBLICATION_ADMISSION_AUTHORITY : 'not_observed',
+        repository_publication_admission: executions.length > 0 ? executions[0].repository_publication_admission : 'not_observed',
+        cloudflare_git_push_admission: 'not_admitted',
+        direct_cloudflare_repository_mutation_admission: executions.length > 0 ? 'admitted_by_cloudflare_github_repository_publication' : 'not_observed',
+        authority_partition: executions.length > 0 ? 'cloudflare_admits_and_executes_github_repository_publication' : 'not_observed',
+        executions,
+      },
+    };
+  }
   if (body.operation === 'repository_publication.evidence.put') {
     const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
     if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
@@ -4407,6 +4457,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const localIngressProviderHeartbeats = await listCloudflareLocalIngressProviderHeartbeats(env, siteId, params.local_ingress_provider_heartbeat_limit ?? params.limit);
     const repositoryPublicationRequests = await listCloudflareRepositoryPublicationRequests(env, siteId, params.repository_publication_request_limit ?? params.limit);
     const repositoryPublicationAdmissions = await listCloudflareRepositoryPublicationAdmissions(env, siteId, params.repository_publication_admission_limit ?? params.limit);
+    const repositoryPublicationExecutions = await listCloudflareRepositoryPublicationExecutions(env, siteId, params.repository_publication_execution_limit ?? params.limit);
     const repositoryPublicationEvidence = await listCloudflareRepositoryPublicationEvidence(env, siteId, params.repository_publication_evidence_limit ?? params.limit);
     const repositoryPublicationProviderHeartbeats = await listCloudflareRepositoryPublicationProviderHeartbeats(env, siteId, params.repository_publication_provider_heartbeat_limit ?? params.limit);
     const taskLifecycleShadowReads = await listCloudflareTaskLifecycleShadowReads(env, siteId, params.task_lifecycle_shadow_limit ?? params.limit);
@@ -4462,6 +4513,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       localIngressEvidence,
       localIngressProviderHeartbeats,
       repositoryPublicationRequests,
+      repositoryPublicationExecutions,
       repositoryPublicationEvidence,
       repositoryPublicationProviderHeartbeats,
       residentDispatchDecisions,
@@ -4481,6 +4533,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       localIngressEvidence,
       localIngressProviderHeartbeats,
       repositoryPublicationRequests,
+      repositoryPublicationExecutions,
       repositoryPublicationEvidence,
       repositoryPublicationProviderHeartbeats,
       webhookDelayDirectiveRecords,
@@ -4494,6 +4547,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const repositoryPublicationOperationPosture = summarizeCloudflareRepositoryPublicationOperationPosture({
       repositoryPublicationRequests,
       repositoryPublicationAdmissions,
+      repositoryPublicationExecutions,
       repositoryPublicationEvidence,
       repositoryPublicationProviderHeartbeats,
     });
@@ -4563,6 +4617,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         local_ingress_provider_heartbeats: localIngressProviderHeartbeats,
         repository_publication_requests: repositoryPublicationRequests,
         repository_publication_admissions: repositoryPublicationAdmissions,
+        repository_publication_executions: repositoryPublicationExecutions,
         repository_publication_evidence: repositoryPublicationEvidence,
         repository_publication_provider_heartbeats: repositoryPublicationProviderHeartbeats,
         task_lifecycle_shadow_reads: taskLifecycleShadowReads,
@@ -4671,18 +4726,19 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           local_ingress_authority_partition: localIngressEvidence.length > 0 ? 'windows_executes_local_ingress_cloudflare_records_evidence_without_direct_filesystem_authority' : localIngressRequests.length > 0 ? 'cloudflare_queues_governed_local_ingress_request_windows_admits_executes_and_returns_evidence' : localIngressProviderHeartbeats.length > 0 ? 'cloudflare_records_windows_local_ingress_provider_liveness_without_direct_filesystem_authority' : 'local_ingress_not_observed_windows_authority_retained',
           repository_publication_request_count: repositoryPublicationRequests.length,
           repository_publication_admission_count: repositoryPublicationAdmissions.length,
+          repository_publication_execution_count: repositoryPublicationExecutions.length,
           repository_publication_evidence_count: repositoryPublicationEvidence.length,
           repository_publication_provider_heartbeat_count: repositoryPublicationProviderHeartbeats.length,
           repository_publication_request_authority: repositoryPublicationRequests.length > 0 ? CLOUDFLARE_REPOSITORY_PUBLICATION_REQUEST_AUTHORITY : 'not_observed',
           repository_publication_dispatch_authority: repositoryPublicationRequests.length > 0 ? CLOUDFLARE_REPOSITORY_PUBLICATION_REQUEST_AUTHORITY : 'not_observed',
-          repository_publication_executor_authority: repositoryPublicationRequests.length > 0 || repositoryPublicationEvidence.length > 0 ? WINDOWS_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY : 'not_observed',
+          repository_publication_executor_authority: repositoryPublicationExecutions.length > 0 ? CLOUDFLARE_GITHUB_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY : repositoryPublicationRequests.length > 0 || repositoryPublicationEvidence.length > 0 ? WINDOWS_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY : 'not_observed',
           repository_publication_admission_authority: repositoryPublicationAdmissions.length > 0 ? CLOUDFLARE_REPOSITORY_PUBLICATION_ADMISSION_AUTHORITY : repositoryPublicationRequests.length > 0 ? CLOUDFLARE_REPOSITORY_PUBLICATION_ADMISSION_AUTHORITY : 'not_observed',
           repository_publication_provider_liveness_authority: repositoryPublicationProviderHeartbeats.length > 0 ? CLOUDFLARE_REPOSITORY_PUBLICATION_PROVIDER_LIVENESS_AUTHORITY : 'not_observed',
           repository_publication_evidence_authority: repositoryPublicationEvidence.length > 0 ? WINDOWS_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY : 'not_observed',
           repository_publication_evidence_store_authority: repositoryPublicationEvidence.length > 0 ? CLOUDFLARE_REPOSITORY_PUBLICATION_EVIDENCE_AUTHORITY : 'not_observed',
           repository_publication_execution_admission: repositoryPublicationOperationPosture.repository_publication_admission,
-          repository_publication_cloudflare_git_push_admission: repositoryPublicationRequests.length > 0 || repositoryPublicationAdmissions.length > 0 || repositoryPublicationEvidence.length > 0 || repositoryPublicationProviderHeartbeats.length > 0 ? 'not_admitted' : 'retained',
-          repository_publication_direct_cloudflare_repository_mutation_admission: repositoryPublicationRequests.length > 0 || repositoryPublicationAdmissions.length > 0 || repositoryPublicationEvidence.length > 0 || repositoryPublicationProviderHeartbeats.length > 0 ? 'not_admitted' : 'retained',
+          repository_publication_cloudflare_git_push_admission: repositoryPublicationRequests.length > 0 || repositoryPublicationAdmissions.length > 0 || repositoryPublicationExecutions.length > 0 || repositoryPublicationEvidence.length > 0 || repositoryPublicationProviderHeartbeats.length > 0 ? 'not_admitted' : 'retained',
+          repository_publication_direct_cloudflare_repository_mutation_admission: repositoryPublicationExecutions.length > 0 ? 'admitted_by_cloudflare_github_repository_publication' : repositoryPublicationRequests.length > 0 || repositoryPublicationAdmissions.length > 0 || repositoryPublicationEvidence.length > 0 || repositoryPublicationProviderHeartbeats.length > 0 ? 'not_admitted' : 'retained',
           repository_publication_authority_partition: repositoryPublicationOperationPosture.authority_partition,
           task_lifecycle_shadow_read_count: taskLifecycleShadowReads.length,
           task_lifecycle_write_admission_count: taskLifecycleWriteAdmissions.length,
@@ -8515,9 +8571,13 @@ function latestRepositoryPublicationAdmissionForRequest(admissions = [], request
 async function listCloudflarePendingRepositoryPublicationRequests(env = {}, siteId, limit) {
   const requests = await listCloudflareRepositoryPublicationRequests(env, siteId, limit);
   if (requests.length === 0) return [];
-  const evidence = await listCloudflareRepositoryPublicationEvidence(env, siteId, 100);
-  const resolvedRequestIds = new Set(evidence.map((entry) => entry.repository_publication_request_id).filter(Boolean));
-  return requests.filter((request) => !resolvedRequestIds.has(request.repository_publication_request_id));
+  const pending = [];
+  for (const request of requests) {
+    const executions = await listCloudflareRepositoryPublicationExecutions(env, siteId, 1, request.repository_publication_request_id);
+    const evidence = await listCloudflareRepositoryPublicationEvidence(env, siteId, 1, request.repository_publication_request_id);
+    if (executions.length === 0 && evidence.length === 0) pending.push(request);
+  }
+  return pending;
 }
 
 async function nextCloudflareRepositoryPublicationRequest(env = {}, siteId, limit) {
@@ -8531,6 +8591,309 @@ async function nextCloudflareRepositoryPublicationRequest(env = {}, siteId, limi
     pendingUnadmittedCount += 1;
   }
   return { request: null, admission: null, pending_unadmitted_count: pendingUnadmittedCount };
+}
+
+function parseGithubRepositoryRef(repositoryRef) {
+  const match = String(repositoryRef ?? '').trim().match(/^github:([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/);
+  if (!match) return null;
+  return { owner: match[1], repo: match[2], repository_ref: `github:${match[1]}/${match[2]}` };
+}
+
+function parseGitCommitRef(sourceChangeRef) {
+  const match = String(sourceChangeRef ?? '').trim().match(/^git:commit:([0-9a-f]{40})$/i);
+  return match ? match[1].toLowerCase() : null;
+}
+
+function cloudflarePublicationAllowedValues(value) {
+  return String(value ?? '').split(',').map((entry) => entry.trim()).filter(Boolean);
+}
+
+function isCloudflarePublicationValueAllowed(value, allowedValues) {
+  return allowedValues.includes(value);
+}
+
+function githubBranchRefPath(branchRef) {
+  return normalizeRepositoryBranchRef(branchRef).split('/').map((part) => encodeURIComponent(part)).join('/');
+}
+
+function normalizeRepositoryBranchRef(branchRef) {
+  return String(branchRef ?? '').trim().replace(/^refs\/heads\//, '');
+}
+
+async function executeCloudflareGithubRepositoryPublication(env = {}, siteId, params = {}, principal = null) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return { ok: false, code: 'missing_site_registry_binding' };
+  if (!siteId || siteId === 'unknown-site') return { ok: false, code: 'missing_site_id' };
+  const repositoryPublicationRequestId = String(params.repository_publication_request_id ?? params.request_id ?? '');
+  if (!repositoryPublicationRequestId) return { ok: false, code: 'cloudflare_repository_publication_execution_request_id_required' };
+  const requests = await listCloudflareRepositoryPublicationRequests(env, siteId, 100);
+  const request = requests.find((entry) => entry.repository_publication_request_id === repositoryPublicationRequestId);
+  if (!request) return { ok: false, code: 'cloudflare_repository_publication_execution_request_not_found', repository_publication_request_id: repositoryPublicationRequestId };
+  const admissions = await listCloudflareRepositoryPublicationAdmissions(env, siteId, 100, repositoryPublicationRequestId);
+  const admission = latestRepositoryPublicationAdmissionForRequest(admissions, repositoryPublicationRequestId);
+  if (!admission) return { ok: false, code: 'cloudflare_repository_publication_execution_admission_required', repository_publication_request_id: repositoryPublicationRequestId };
+  if (admission.admission_action !== 'admit') return { ok: false, code: 'cloudflare_repository_publication_execution_admission_refused', repository_publication_request_id: repositoryPublicationRequestId, repository_publication_admission: admission.repository_publication_admission };
+  const repository = parseGithubRepositoryRef(request.repository_ref);
+  if (!repository) return { ok: false, code: 'cloudflare_repository_publication_execution_repository_ref_invalid', repository_ref: request.repository_ref };
+  const branchRef = normalizeRepositoryBranchRef(request.branch_ref);
+  if (!branchRef) return { ok: false, code: 'cloudflare_repository_publication_execution_branch_ref_invalid', branch_ref: request.branch_ref };
+  const commitSha = parseGitCommitRef(request.source_change_ref);
+  if (!commitSha) return { ok: false, code: 'cloudflare_repository_publication_execution_source_change_ref_invalid', source_change_ref: request.source_change_ref };
+  const token = String(env.CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN ?? '').trim();
+  if (!token) return { ok: false, code: 'cloudflare_repository_publication_github_token_missing' };
+  const allowedRepositories = cloudflarePublicationAllowedValues(env.CLOUDFLARE_REPOSITORY_PUBLICATION_ALLOWED_REPOSITORIES);
+  const allowedBranches = cloudflarePublicationAllowedValues(env.CLOUDFLARE_REPOSITORY_PUBLICATION_ALLOWED_BRANCHES);
+  if (!isCloudflarePublicationValueAllowed(repository.repository_ref, allowedRepositories)) {
+    return { ok: false, code: 'cloudflare_repository_publication_repository_not_allowed', repository_ref: repository.repository_ref };
+  }
+  if (!isCloudflarePublicationValueAllowed(branchRef, allowedBranches)) {
+    return { ok: false, code: 'cloudflare_repository_publication_branch_not_allowed', branch_ref: branchRef };
+  }
+  const fetchImpl = typeof env.CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_FETCH === 'function'
+    ? env.CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_FETCH
+    : fetch;
+  const executionId = String(params.repository_publication_execution_id ?? `cloudflare_github_repository_publication_execution_${safeIdToken(siteId)}_${safeIdToken(repositoryPublicationRequestId)}_${Date.now()}`);
+  const generatedAt = String(params.generated_at ?? new Date().toISOString());
+  const url = `https://api.github.com/repos/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.repo)}/git/refs/heads/${githubBranchRefPath(branchRef)}`;
+  let githubStatus = 0;
+  let githubSummary = {};
+  let publicationStatus = 'failed';
+  try {
+    const response = await fetchImpl(url, {
+      method: 'PATCH',
+      headers: {
+        authorization: `Bearer ${token}`,
+        accept: 'application/vnd.github+json',
+        'content-type': 'application/json',
+        'user-agent': 'narada-cloudflare-carrier',
+        'x-github-api-version': '2022-11-28',
+      },
+      body: JSON.stringify({ sha: commitSha, force: false }),
+    });
+    githubStatus = Number(response.status ?? 0);
+    const body = await response.json().catch(() => ({}));
+    githubSummary = summarizeGithubPublicationResponse(body);
+    publicationStatus = response.ok ? 'completed' : 'failed';
+  } catch (error) {
+    githubSummary = { message: String(error?.message ?? error ?? 'github_repository_publication_request_failed') };
+  }
+  const execution = {
+    repository_publication_execution_id: executionId,
+    site_id: siteId,
+    schema: CLOUDFLARE_REPOSITORY_PUBLICATION_EXECUTION_SCHEMA,
+    generated_at: generatedAt,
+    repository_publication_request_id: repositoryPublicationRequestId,
+    publication_ref: request.publication_ref,
+    requested_action_ref: request.requested_action_ref,
+    repository_ref: repository.repository_ref,
+    branch_ref: branchRef,
+    source_change_ref: request.source_change_ref,
+    publication_status: publicationStatus,
+    repository_publication_executor_authority: CLOUDFLARE_GITHUB_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY,
+    repository_publication_admission_authority: admission.authority_locus,
+    repository_publication_admission: admission.repository_publication_admission,
+    cloudflare_repository_publication_admission_id: admission.repository_publication_admission_id,
+    cloudflare_repository_publication_admission_action: admission.admission_action,
+    cloudflare_git_push_admission: 'not_admitted',
+    direct_cloudflare_repository_mutation_admission: 'admitted_by_cloudflare_github_repository_publication',
+    published_commit_ref: publicationStatus === 'completed' ? `git:commit:${commitSha}` : '',
+    github_http_status: githubStatus,
+    github_response_summary: githubSummary,
+    rollback_evidence_ref: publicationStatus === 'completed' ? `rollback:github-ref:${repository.repository_ref}:${branchRef}` : `rollback:not-published:${executionId}`,
+    execution_posture: 'cloudflare_admitted_and_executed_github_repository_publication',
+    recorded_by_principal_id: principal?.principal_id ?? 'unknown-principal',
+    recorded_at: new Date().toISOString(),
+  };
+  await recordCloudflareGithubRepositoryPublicationExecution(db, execution);
+  return {
+    ok: true,
+    schema: CLOUDFLARE_REPOSITORY_PUBLICATION_EXECUTION_SCHEMA,
+    status: 'execution_recorded',
+    site_id: siteId,
+    repository_publication_executor_authority: execution.repository_publication_executor_authority,
+    repository_publication_admission_authority: execution.repository_publication_admission_authority,
+    repository_publication_admission: execution.repository_publication_admission,
+    cloudflare_git_push_admission: execution.cloudflare_git_push_admission,
+    direct_cloudflare_repository_mutation_admission: execution.direct_cloudflare_repository_mutation_admission,
+    publication_status: execution.publication_status,
+    authority_partition: 'cloudflare_admits_and_executes_github_repository_publication',
+    execution,
+    request,
+    admission,
+  };
+}
+
+function summarizeGithubPublicationResponse(body) {
+  if (!body || typeof body !== 'object') return {};
+  return {
+    ref: body.ref ?? null,
+    object_sha: body.object?.sha ?? null,
+    object_type: body.object?.type ?? null,
+    message: body.message ?? null,
+  };
+}
+
+async function recordCloudflareGithubRepositoryPublicationExecution(db, execution) {
+  await ensureCloudflareRepositoryPublicationExecutionSchema(db);
+  await db.prepare(`
+    INSERT INTO cloudflare_repository_publication_executions (
+      repository_publication_execution_id,
+      site_id,
+      generated_at,
+      repository_publication_request_id,
+      publication_ref,
+      requested_action_ref,
+      repository_ref,
+      branch_ref,
+      source_change_ref,
+      publication_status,
+      repository_publication_executor_authority,
+      repository_publication_admission_authority,
+      repository_publication_admission,
+      cloudflare_repository_publication_admission_id,
+      cloudflare_repository_publication_admission_action,
+      cloudflare_git_push_admission,
+      direct_cloudflare_repository_mutation_admission,
+      published_commit_ref,
+      github_http_status,
+      rollback_evidence_ref,
+      execution_posture,
+      execution_json,
+      recorded_by_principal_id,
+      recorded_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(repository_publication_execution_id) DO UPDATE SET
+      generated_at = excluded.generated_at,
+      repository_publication_request_id = excluded.repository_publication_request_id,
+      publication_ref = excluded.publication_ref,
+      requested_action_ref = excluded.requested_action_ref,
+      repository_ref = excluded.repository_ref,
+      branch_ref = excluded.branch_ref,
+      source_change_ref = excluded.source_change_ref,
+      publication_status = excluded.publication_status,
+      repository_publication_executor_authority = excluded.repository_publication_executor_authority,
+      repository_publication_admission_authority = excluded.repository_publication_admission_authority,
+      repository_publication_admission = excluded.repository_publication_admission,
+      cloudflare_repository_publication_admission_id = excluded.cloudflare_repository_publication_admission_id,
+      cloudflare_repository_publication_admission_action = excluded.cloudflare_repository_publication_admission_action,
+      cloudflare_git_push_admission = excluded.cloudflare_git_push_admission,
+      direct_cloudflare_repository_mutation_admission = excluded.direct_cloudflare_repository_mutation_admission,
+      published_commit_ref = excluded.published_commit_ref,
+      github_http_status = excluded.github_http_status,
+      rollback_evidence_ref = excluded.rollback_evidence_ref,
+      execution_posture = excluded.execution_posture,
+      execution_json = excluded.execution_json,
+      recorded_by_principal_id = excluded.recorded_by_principal_id,
+      recorded_at = excluded.recorded_at
+  `).bind(
+    execution.repository_publication_execution_id,
+    execution.site_id,
+    execution.generated_at,
+    execution.repository_publication_request_id,
+    execution.publication_ref,
+    execution.requested_action_ref,
+    execution.repository_ref,
+    execution.branch_ref,
+    execution.source_change_ref,
+    execution.publication_status,
+    execution.repository_publication_executor_authority,
+    execution.repository_publication_admission_authority,
+    execution.repository_publication_admission,
+    execution.cloudflare_repository_publication_admission_id,
+    execution.cloudflare_repository_publication_admission_action,
+    execution.cloudflare_git_push_admission,
+    execution.direct_cloudflare_repository_mutation_admission,
+    execution.published_commit_ref,
+    execution.github_http_status,
+    execution.rollback_evidence_ref,
+    execution.execution_posture,
+    JSON.stringify(execution),
+    execution.recorded_by_principal_id,
+    execution.recorded_at,
+  ).run();
+}
+
+async function ensureCloudflareRepositoryPublicationExecutionSchema(db) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS cloudflare_repository_publication_executions (
+      repository_publication_execution_id TEXT PRIMARY KEY,
+      site_id TEXT NOT NULL,
+      generated_at TEXT NOT NULL,
+      repository_publication_request_id TEXT NOT NULL,
+      publication_ref TEXT NOT NULL,
+      requested_action_ref TEXT NOT NULL,
+      repository_ref TEXT NOT NULL,
+      branch_ref TEXT NOT NULL,
+      source_change_ref TEXT NOT NULL,
+      publication_status TEXT NOT NULL,
+      repository_publication_executor_authority TEXT NOT NULL,
+      repository_publication_admission_authority TEXT NOT NULL,
+      repository_publication_admission TEXT NOT NULL,
+      cloudflare_repository_publication_admission_id TEXT NOT NULL,
+      cloudflare_repository_publication_admission_action TEXT NOT NULL,
+      cloudflare_git_push_admission TEXT NOT NULL,
+      direct_cloudflare_repository_mutation_admission TEXT NOT NULL,
+      published_commit_ref TEXT,
+      github_http_status INTEGER NOT NULL,
+      rollback_evidence_ref TEXT NOT NULL,
+      execution_posture TEXT NOT NULL,
+      execution_json TEXT NOT NULL,
+      recorded_by_principal_id TEXT NOT NULL,
+      recorded_at TEXT NOT NULL
+    )
+  `).run();
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_cloudflare_repository_publication_executions_site_recorded
+    ON cloudflare_repository_publication_executions(site_id, recorded_at)
+  `).run();
+}
+
+async function listCloudflareRepositoryPublicationExecutions(env = {}, siteId, limit, repositoryPublicationRequestId = null) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function' || !siteId) return [];
+  await ensureCloudflareRepositoryPublicationExecutionSchema(db);
+  const boundedLimit = clampInteger(limit, 0, 100, 25);
+  const statement = repositoryPublicationRequestId
+    ? db.prepare(`
+      SELECT * FROM cloudflare_repository_publication_executions
+      WHERE site_id = ? AND repository_publication_request_id = ?
+      ORDER BY recorded_at DESC, generated_at DESC
+      LIMIT ?
+    `).bind(siteId, repositoryPublicationRequestId, boundedLimit)
+    : db.prepare(`
+      SELECT * FROM cloudflare_repository_publication_executions
+      WHERE site_id = ?
+      ORDER BY recorded_at DESC, generated_at DESC
+      LIMIT ?
+    `).bind(siteId, boundedLimit);
+  const rows = await statement.all();
+  return (rows.results ?? []).map((row) => ({
+    repository_publication_execution_id: row.repository_publication_execution_id,
+    site_id: row.site_id,
+    schema: CLOUDFLARE_REPOSITORY_PUBLICATION_EXECUTION_SCHEMA,
+    generated_at: row.generated_at,
+    repository_publication_request_id: row.repository_publication_request_id,
+    publication_ref: row.publication_ref,
+    requested_action_ref: row.requested_action_ref,
+    repository_ref: row.repository_ref,
+    branch_ref: row.branch_ref,
+    source_change_ref: row.source_change_ref,
+    publication_status: row.publication_status,
+    repository_publication_executor_authority: row.repository_publication_executor_authority,
+    repository_publication_admission_authority: row.repository_publication_admission_authority,
+    repository_publication_admission: row.repository_publication_admission,
+    cloudflare_repository_publication_admission_id: row.cloudflare_repository_publication_admission_id,
+    cloudflare_repository_publication_admission_action: row.cloudflare_repository_publication_admission_action,
+    cloudflare_git_push_admission: row.cloudflare_git_push_admission,
+    direct_cloudflare_repository_mutation_admission: row.direct_cloudflare_repository_mutation_admission,
+    published_commit_ref: row.published_commit_ref,
+    github_http_status: Number(row.github_http_status),
+    rollback_evidence_ref: row.rollback_evidence_ref,
+    execution_posture: row.execution_posture,
+    record: parseJsonObject(row.execution_json),
+    recorded_by_principal_id: row.recorded_by_principal_id,
+    recorded_at: row.recorded_at,
+  }));
 }
 
 function createLocalIngressEvidence(siteId, params = {}) {
