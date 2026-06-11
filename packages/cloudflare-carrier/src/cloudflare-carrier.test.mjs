@@ -2840,6 +2840,10 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /selectRepositoryPublicationEvidence/);
   assert.match(html, /selectRepositoryPublicationProviderHeartbeat/);
   assert.match(html, /Repository Publication Review/);
+  assert.match(html, /Repository Publication Operation Posture/);
+  assert.match(html, /narada\.cloudflare_repository_publication_operation_posture\.v1/);
+  assert.match(html, /restore_windows_repository_publication_provider/);
+  assert.match(html, /repository_publication_operation_posture_requires_windows_provider/);
   assert.match(html, /flightDeckFocusRepositoryPublication/);
   assert.match(html, /repository_publication_request_count/);
   assert.match(html, /repository_publication_evidence_count/);

@@ -2279,6 +2279,112 @@ function summarizeCloudflareRepositoryPublicationOperationPosture({
   };
 }
 
+function summarizeCloudflareAuthorityTransferPosture({
+  mailboxStatusShadowReads = [],
+  mailboxStatusSourceReads = [],
+  mailboxDraftReplyProposals = [],
+  mailboxOutlookDraftCreates = [],
+  siteFileChangeProposals = [],
+  siteFileMaterializations = [],
+  localIngressOperationPosture = null,
+  repositoryPublicationOperationPosture = null,
+  taskLifecycleTasks = [],
+} = {}) {
+  const classifyCounted = (count, observedClassification, retainedClassification = 'windows_retained') => (count > 0 ? observedClassification : retainedClassification);
+  const mailboxStatusSourceCount = Array.isArray(mailboxStatusSourceReads) ? mailboxStatusSourceReads.length : 0;
+  const mailboxStatusShadowCount = Array.isArray(mailboxStatusShadowReads) ? mailboxStatusShadowReads.length : 0;
+  const mailboxStatusClassification = mailboxStatusSourceCount > 0
+    ? 'cloudflare_owned'
+    : mailboxStatusShadowCount > 0 ? 'cloudflare_recorded_windows_owned' : 'windows_retained';
+  const taskList = Array.isArray(taskLifecycleTasks) ? taskLifecycleTasks : [];
+  const taskLifecycleCloudflareWriteCount = taskList.reduce((count, task) => count
+    + Number(task.task_lifecycle_roster_mutation_write_count ?? 0)
+    + Number(task.task_lifecycle_role_resolution_write_count ?? 0)
+    + Number(task.task_lifecycle_assignment_write_count ?? 0)
+    + Number(task.task_lifecycle_source_state_write_count ?? 0)
+    + Number(task.task_lifecycle_projection_write_count ?? 0)
+    + Number(task.changed_file_evidence_count ?? 0)
+    + (task.finish_id ? 1 : 0)
+    + (task.report_id ? 1 : 0)
+    + (task.assignment_authority_ref ? 1 : 0), 0);
+  const domains = [
+    {
+      domain: 'mailbox_status',
+      classification: mailboxStatusClassification,
+      observed_count: mailboxStatusSourceCount + mailboxStatusShadowCount,
+      authority_partition: mailboxStatusSourceCount > 0 ? 'mailbox_status_source_read_cloudflare_owned_send_and_mutation_not_admitted' : mailboxStatusShadowCount > 0 ? 'mailbox_status_shadow_read_cloudflare_recorded_send_and_mutation_windows_owned' : 'mailbox_windows_owned',
+      remaining_windows_authority: mailboxStatusSourceCount > 0 ? ['mailbox_send', 'mailbox_mutation'] : ['mailbox_status_source', 'mailbox_send', 'mailbox_mutation'],
+    },
+    {
+      domain: 'mailbox_draft_reply',
+      classification: classifyCounted(Array.isArray(mailboxDraftReplyProposals) ? mailboxDraftReplyProposals.length : 0, 'cloudflare_recorded_windows_owned'),
+      observed_count: Array.isArray(mailboxDraftReplyProposals) ? mailboxDraftReplyProposals.length : 0,
+      authority_partition: Array.isArray(mailboxDraftReplyProposals) && mailboxDraftReplyProposals.length > 0 ? 'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted' : 'mailbox_draft_reply_windows_owned',
+      remaining_windows_authority: ['outlook_draft_create', 'mailbox_send', 'mailbox_mutation'],
+    },
+    {
+      domain: 'mailbox_outlook_draft_create',
+      classification: classifyCounted(Array.isArray(mailboxOutlookDraftCreates) ? mailboxOutlookDraftCreates.length : 0, 'cloudflare_owned'),
+      observed_count: Array.isArray(mailboxOutlookDraftCreates) ? mailboxOutlookDraftCreates.length : 0,
+      authority_partition: Array.isArray(mailboxOutlookDraftCreates) && mailboxOutlookDraftCreates.length > 0 ? 'mailbox_outlook_draft_create_cloudflare_owned_send_and_other_mutation_not_admitted' : 'mailbox_outlook_draft_create_not_observed',
+      remaining_windows_authority: Array.isArray(mailboxOutlookDraftCreates) && mailboxOutlookDraftCreates.length > 0 ? ['mailbox_send', 'mailbox_mutation'] : ['outlook_draft_create', 'mailbox_send', 'mailbox_mutation'],
+    },
+    {
+      domain: 'site_file_change_proposal',
+      classification: classifyCounted(Array.isArray(siteFileChangeProposals) ? siteFileChangeProposals.length : 0, 'cloudflare_recorded_windows_owned'),
+      observed_count: Array.isArray(siteFileChangeProposals) ? siteFileChangeProposals.length : 0,
+      authority_partition: Array.isArray(siteFileChangeProposals) && siteFileChangeProposals.length > 0 ? 'site_file_change_proposal_cloudflare_recorded_filesystem_and_publication_windows_owned' : 'filesystem_and_publication_windows_owned',
+      remaining_windows_authority: ['windows_filesystem_executor', 'repository_publication'],
+    },
+    {
+      domain: 'site_file_materialization',
+      classification: classifyCounted(Array.isArray(siteFileMaterializations) ? siteFileMaterializations.length : 0, 'cloudflare_owned'),
+      observed_count: Array.isArray(siteFileMaterializations) ? siteFileMaterializations.length : 0,
+      authority_partition: Array.isArray(siteFileMaterializations) && siteFileMaterializations.length > 0 ? 'site_file_materialization_cloudflare_owned_windows_filesystem_and_publication_not_admitted' : 'materialization_not_observed_filesystem_and_publication_windows_owned',
+      remaining_windows_authority: Array.isArray(siteFileMaterializations) && siteFileMaterializations.length > 0 ? ['windows_filesystem_mutation', 'repository_publication'] : ['site_file_materialization', 'windows_filesystem_mutation', 'repository_publication'],
+    },
+    {
+      domain: 'local_ingress',
+      classification: localIngressOperationPosture?.local_ingress_request_count > 0 || localIngressOperationPosture?.local_ingress_evidence_count > 0 || localIngressOperationPosture?.local_ingress_provider_heartbeat_count > 0 ? 'cloudflare_governed_windows_executed' : 'windows_retained',
+      observed_count: Number(localIngressOperationPosture?.local_ingress_request_count ?? 0) + Number(localIngressOperationPosture?.local_ingress_evidence_count ?? 0) + Number(localIngressOperationPosture?.local_ingress_provider_heartbeat_count ?? 0),
+      authority_partition: localIngressOperationPosture?.authority_partition ?? 'local_ingress_not_observed_windows_authority_retained',
+      remaining_windows_authority: ['windows_local_ingress_executor', 'local_filesystem_mutation'],
+    },
+    {
+      domain: 'repository_publication',
+      classification: repositoryPublicationOperationPosture?.repository_publication_request_count > 0 || repositoryPublicationOperationPosture?.repository_publication_evidence_count > 0 || repositoryPublicationOperationPosture?.repository_publication_provider_heartbeat_count > 0 ? 'cloudflare_governed_windows_executed' : 'windows_retained',
+      observed_count: Number(repositoryPublicationOperationPosture?.repository_publication_request_count ?? 0) + Number(repositoryPublicationOperationPosture?.repository_publication_evidence_count ?? 0) + Number(repositoryPublicationOperationPosture?.repository_publication_provider_heartbeat_count ?? 0),
+      authority_partition: repositoryPublicationOperationPosture?.authority_partition ?? 'repository_publication_not_observed_windows_authority_retained',
+      remaining_windows_authority: ['windows_repository_publication_executor', 'git_push'],
+    },
+    {
+      domain: 'task_lifecycle',
+      classification: taskLifecycleCloudflareWriteCount > 0 ? 'cloudflare_owned_partial' : 'windows_retained',
+      observed_count: taskList.length,
+      authority_partition: taskLifecycleCloudflareWriteCount > 0 ? 'task_lifecycle_cloudflare_writes_observed_remaining_windows_effects' : 'windows_all_observed_mutations',
+      remaining_windows_authority: taskLifecycleCloudflareWriteCount > 0 ? ['external_effects'] : ['task_lifecycle_sqlite', 'external_effects'],
+    },
+  ];
+  const counts = domains.reduce((acc, item) => {
+    acc[item.classification] = (acc[item.classification] ?? 0) + 1;
+    return acc;
+  }, {});
+  const remainingWindowsDomains = domains.filter((item) => item.remaining_windows_authority.length > 0).map((item) => item.domain);
+  return {
+    schema: 'narada.cloudflare_authority_transfer_posture.v1',
+    transfer_complete: remainingWindowsDomains.length === 0,
+    domain_count: domains.length,
+    cloudflare_owned_count: (counts.cloudflare_owned ?? 0) + (counts.cloudflare_owned_partial ?? 0),
+    cloudflare_governed_windows_executed_count: counts.cloudflare_governed_windows_executed ?? 0,
+    cloudflare_recorded_windows_owned_count: counts.cloudflare_recorded_windows_owned ?? 0,
+    windows_retained_count: counts.windows_retained ?? 0,
+    remaining_windows_domain_count: remainingWindowsDomains.length,
+    remaining_windows_domains: remainingWindowsDomains,
+    next_action: remainingWindowsDomains.length === 0 ? 'verify_full_cloudflare_authority' : `transfer_${remainingWindowsDomains[0]}_authority`,
+    domains,
+  };
+}
+
 function summarizeCloudflareOperationStatusHistory(authorityEvents = [], operation = null) {
   const operationId = operation?.operation_id ?? null;
   const transitions = (Array.isArray(authorityEvents) ? authorityEvents : [])
@@ -4054,6 +4160,17 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       repositoryPublicationEvidence,
       repositoryPublicationProviderHeartbeats,
     });
+    const authorityTransferPosture = summarizeCloudflareAuthorityTransferPosture({
+      mailboxStatusShadowReads,
+      mailboxStatusSourceReads,
+      mailboxDraftReplyProposals,
+      mailboxOutlookDraftCreates,
+      siteFileChangeProposals,
+      siteFileMaterializations,
+      localIngressOperationPosture,
+      repositoryPublicationOperationPosture,
+      taskLifecycleTasks,
+    });
     const operationPostureOverview = summarizeCloudflareOperationPostureOverview(siteOperations, {
       ...response,
       tasks,
@@ -4119,6 +4236,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         operation_lifecycle_status: operationLifecycleStatus,
         local_ingress_operation_posture: localIngressOperationPosture,
         repository_publication_operation_posture: repositoryPublicationOperationPosture,
+        authority_transfer_posture: authorityTransferPosture,
         operation_posture_overview: operationPostureOverview,
         operation_posture_route: operationPostureRoute,
         operation_workflow_route: operationWorkflowRoute,
@@ -4142,6 +4260,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           lifecycle_status: operationLifecycleStatus,
           local_ingress_operation_posture: localIngressOperationPosture,
           repository_publication_operation_posture: repositoryPublicationOperationPosture,
+          authority_transfer_posture: authorityTransferPosture,
           operation_posture_overview: operationPostureOverview,
           operation_posture_route: operationPostureRoute,
           operation_workflow_route: operationWorkflowRoute,
@@ -12062,6 +12181,7 @@ export function renderCloudflareCarrierConsole() {
       const repositoryPublicationEvidenceFocus = state.repositoryPublicationEvidenceFocus || repositoryPublicationEvidence[0] || null;
       const repositoryPublicationProviderHeartbeatFocus = state.repositoryPublicationProviderHeartbeatFocus || repositoryPublicationProviderHeartbeats[0] || null;
       const repositoryPublicationProviderLiveness = surface.repository_publication_provider_liveness || product.operation_lifecycle_status?.repository_publication_provider_liveness || {};
+      const repositoryPublicationOperationPosture = product.repository_publication_operation_posture || surface.repository_publication_operation_posture || {};
       const controlDomain = contextValue(control, 'Domain') || 'none';
       const controlAction = contextValue(control, 'Action') || 'none';
       const controlTarget = contextValue(control, 'Target') || 'none';
@@ -12277,7 +12397,18 @@ export function renderCloudflareCarrierConsole() {
           listItem('cloudflare_git_push_admission', surface.repository_publication_cloudflare_git_push_admission || repositoryPublicationRequestFocus?.cloudflare_git_push_admission || repositoryPublicationEvidenceFocus?.cloudflare_git_push_admission || 'retained'),
           listItem('direct_cloudflare_repository_mutation_admission', surface.repository_publication_direct_cloudflare_repository_mutation_admission || repositoryPublicationRequestFocus?.direct_cloudflare_repository_mutation_admission || repositoryPublicationEvidenceFocus?.direct_cloudflare_repository_mutation_admission || 'retained'),
           listItem('repository_publication_authority_partition', surface.repository_publication_authority_partition || 'repository_publication_not_observed_windows_authority_retained'),
-          listItem('repository_publication_next_action', ['missing', 'stale'].includes(String(repositoryPublicationProviderLiveness.state || '')) ? 'review_repository_publication_provider_liveness' : repositoryPublicationEvidence.length > 0 ? 'review_repository_publication_evidence' : repositoryPublicationRequests.length > 0 ? 'await_windows_repository_publication_evidence' : 'monitor_repository_publication'),
+          listItem('repository_publication_next_action', repositoryPublicationOperationPosture.next_action || (['missing', 'stale'].includes(String(repositoryPublicationProviderLiveness.state || '')) ? 'review_repository_publication_provider_liveness' : repositoryPublicationEvidence.length > 0 ? 'review_repository_publication_evidence' : repositoryPublicationRequests.length > 0 ? 'await_windows_repository_publication_evidence' : 'monitor_repository_publication')),
+        ],
+        repositoryPublicationOperationPosture: [
+          listItem('schema', repositoryPublicationOperationPosture.schema || 'narada.cloudflare_repository_publication_operation_posture.v1'),
+          listItem('state', repositoryPublicationOperationPosture.state || 'not_observed'),
+          listItem('pending_request_count', String(repositoryPublicationOperationPosture.pending_request_count ?? 0)),
+          listItem('completed_evidence_count', String(repositoryPublicationOperationPosture.completed_evidence_count ?? 0)),
+          listItem('provider_liveness_state', repositoryPublicationOperationPosture.provider_liveness?.state || repositoryPublicationProviderLiveness.state || 'not_observed'),
+          listItem('provider_liveness_reason', repositoryPublicationOperationPosture.provider_liveness?.reason || repositoryPublicationProviderLiveness.reason || 'not_observed'),
+          listItem('cloudflare_git_push_admission', repositoryPublicationOperationPosture.cloudflare_git_push_admission || surface.repository_publication_cloudflare_git_push_admission || 'retained'),
+          listItem('direct_cloudflare_repository_mutation_admission', repositoryPublicationOperationPosture.direct_cloudflare_repository_mutation_admission || surface.repository_publication_direct_cloudflare_repository_mutation_admission || 'retained'),
+          listItem('next_action', repositoryPublicationOperationPosture.next_action || 'monitor_repository_publication'),
         ],
         readiness: readinessGaps.length > 0
           ? readinessGaps.slice(0, 4).map((item) => listItem(item.label, item.detail || item.action_label || item.status))
@@ -12300,6 +12431,7 @@ export function renderCloudflareCarrierConsole() {
         renderListBlock('Site File Change Review', board.siteFileChangeReview),
         renderListBlock('Local Ingress Operation Posture', board.localIngressOperationPosture),
         renderListBlock('Local Ingress Review', board.localIngressReview),
+        renderListBlock('Repository Publication Operation Posture', board.repositoryPublicationOperationPosture),
         renderListBlock('Repository Publication Review', board.repositoryPublicationReview),
         renderListBlock('Work Queues', board.queues),
         renderListBlock('Evidence Review', board.evidence),
@@ -12326,6 +12458,7 @@ export function renderCloudflareCarrierConsole() {
       const surface = product.operation_product_surface || {};
       const lifecycleStatus = surface.lifecycle_status || product.operation_lifecycle_status || {};
       const localIngressOperationPosture = product.local_ingress_operation_posture || surface.local_ingress_operation_posture || {};
+      const repositoryPublicationOperationPosture = product.repository_publication_operation_posture || surface.repository_publication_operation_posture || {};
       const webhookDelayDirectiveRecords = product.webhook_delay_directive_records || [];
       const webhookDelayDirectiveDeliveries = product.webhook_delay_directive_deliveries || [];
       const webhookDelayDirectiveSurfacePresent = 'webhook_delay_directive_records' in product || 'webhook_delay_directive_record_count' in surface;
@@ -12385,6 +12518,12 @@ export function renderCloudflareCarrierConsole() {
         }
         if (['repository_publication_provider_liveness_missing', 'repository_publication_provider_liveness_stale'].includes(lifecycleStatus.next_action)) {
           return { domain: 'repository_publication_provider_liveness', action: 'review_repository_publication_provider_liveness', target: targets.repositoryPublicationProviderHeartbeat?.repository_publication_provider_heartbeat_id || siteId || operationId || 'repository_publication_provider_liveness', reason: lifecycleStatus.next_action };
+        }
+        if (repositoryPublicationOperationPosture.next_action === 'restore_windows_repository_publication_provider') {
+          return { domain: 'repository_publication_operation_posture', action: 'restore_windows_repository_publication_provider', target: targets.repositoryPublicationProviderHeartbeat?.repository_publication_provider_heartbeat_id || siteId || operationId || 'repository_publication_provider_liveness', reason: 'repository_publication_operation_posture_requires_windows_provider' };
+        }
+        if (repositoryPublicationOperationPosture.next_action === 'review_repository_publication_evidence') {
+          return { domain: 'repository_publication_operation_posture', action: 'review_repository_publication_evidence', target: targets.repositoryPublicationEvidence?.repository_publication_evidence_id || siteId || operationId || 'repository_publication_evidence', reason: 'repository_publication_operation_posture_has_returned_evidence' };
         }
         if (operationPathAction === 'inspect_attention') {
           return { domain: 'operation_path', action: 'focus_operation_path_attention', target: contextValue(operationPathContext(focusedOperation(), product), 'Operation') || operationId || 'operation', reason: 'operation_path_has_open_attention' };
@@ -12471,6 +12610,8 @@ export function renderCloudflareCarrierConsole() {
       if (action === 'restore_windows_local_ingress_executor' || action === 'monitor_local_ingress_provider') { focusLocalIngressProviderLiveness(); return; }
       if (action === 'review_local_ingress_evidence') { const targets = operationFlightDeckTargets(product); if (targets.localIngressEvidence) selectLocalIngressEvidence(targets.localIngressEvidence); else focusLocalIngressProviderLiveness(); return; }
       if (action === 'review_local_ingress_provider_liveness' || action === 'focus_local_ingress_provider_liveness') { focusLocalIngressProviderLiveness(); return; }
+      if (action === 'restore_windows_repository_publication_provider' || action === 'monitor_repository_publication_provider') { focusRepositoryPublicationProviderLiveness(); return; }
+      if (action === 'review_repository_publication_evidence') { const targets = operationFlightDeckTargets(product); if (targets.repositoryPublicationEvidence) selectRepositoryPublicationEvidence(targets.repositoryPublicationEvidence); else focusRepositoryPublicationProviderLiveness(); return; }
       if (action === 'review_repository_publication_provider_liveness' || action === 'focus_repository_publication_provider_liveness') { focusRepositoryPublicationProviderLiveness(); return; }
       if (action === 'start_resident_dispatch') { run(startResidentDispatchFromWorkbench); return; }
       if (action === 'focus_open_attention' || action === 'focus_open_task' || action === 'monitor_operation_evidence') { applyFlightDeckNextAction(); return; }
