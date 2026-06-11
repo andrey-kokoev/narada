@@ -106,6 +106,9 @@ if (cloudflarePacket.target_embodiment_kind !== SITE_CONTINUITY_EMBODIMENT_KINDS
 const cloudflarePush = skipCloudflarePush
   ? { status: 'skipped', reason: 'skip_cloudflare_push_requested' }
   : await pushCloudflarePacket(siteId, windowsPacket);
+const cloudflarePublication = skipCloudflarePush
+  ? { status: 'skipped', reason: 'skip_cloudflare_push_requested' }
+  : await publishCloudflarePacket(siteId);
 
 await mkdir(dirname(registryPath), { recursive: true });
 const cloudflareImportPacketPath = cloudflarePacketPath ?? await writeLoopPacketFile(registryPath, siteId, cloudflarePacket);
@@ -135,6 +138,7 @@ const report = {
   windows_packet_admission: windowsPacketAdmission,
   cloudflare_packet_admission: cloudflarePacketAdmission,
   cloudflare_push: summarizeCloudflarePush(cloudflarePush),
+  cloudflare_publication: summarizeCloudflarePublication(cloudflarePublication),
   windows_import: windowsImport,
   windows_packet_count: windowsPackets.length,
   windows_packets: windowsPackets,
@@ -231,6 +235,14 @@ async function pushCloudflarePacket(pushSiteId, packet) {
   return response.body;
 }
 
+async function publishCloudflarePacket(publishSiteId) {
+  const response = await postCloudflare({ operation: 'site.continuity.packet.publish', params: { site_id: publishSiteId } });
+  if (response.http_status !== 200 || response.body?.ok === false) {
+    failJson('site_continuity_loop_cloudflare_packet_publish_failed', response);
+  }
+  return response.body;
+}
+
 async function postCloudflare(body) {
   const response = await fetch(apiUrl(), {
     method: 'POST',
@@ -264,6 +276,15 @@ function summarizeCloudflarePush(push) {
     status: push.status ?? 'ok',
     site_continuity_packet_admission: push.site_continuity_packet_admission ?? null,
     packet_record: push.packet_record ?? null,
+  };
+}
+
+function summarizeCloudflarePublication(publication) {
+  if (publication.status === 'skipped') return publication;
+  return {
+    status: publication.status ?? 'ok',
+    site_continuity_packet_admission: publication.site_continuity_packet_admission ?? null,
+    packet_record: publication.packet_record ?? null,
   };
 }
 
@@ -345,5 +366,5 @@ function fail(code) {
 }
 
 function printHelp() {
-  stdout.write(`Narada site-continuity product loop\n\nCommand:\n  sync-cloudflare --site <site_id> --url <worker-url> --token-file <path> [--registry <registry.db>]\n\nOffline verification:\n  sync-cloudflare --site <site_id> --cloudflare-packet <packet.json> --skip-cloudflare-push [--registry <registry.db>]\n\nOptions:\n  --token <bearer-token>\n  --token-file <path>\n  --out <report.json>\n  --generated-at <iso8601>\n  --imported-at <iso8601>\n  --local-site-ref <ref>\n  --cloudflare-site-ref <ref>\n  --local-authority-locus <locus>\n  --cloudflare-authority-locus <locus>\n  --authority-map-ref <ref>\n\nEffect:\n  Creates a Windows-to-Cloudflare packet.\n  Reads the Cloudflare-to-Windows packet from site.read, unless --cloudflare-packet is supplied.\n  Pushes the Windows packet through site.continuity.packet.put, unless --skip-cloudflare-push is supplied.\n  Imports the Cloudflare packet into the Windows continuity ledger.\n  Emits one operator evidence report without printing secret token material.\n`);
+  stdout.write(`Narada site-continuity product loop\n\nCommand:\n  sync-cloudflare --site <site_id> --url <worker-url> --token-file <path> [--registry <registry.db>]\n\nOffline verification:\n  sync-cloudflare --site <site_id> --cloudflare-packet <packet.json> --skip-cloudflare-push [--registry <registry.db>]\n\nOptions:\n  --token <bearer-token>\n  --token-file <path>\n  --out <report.json>\n  --generated-at <iso8601>\n  --imported-at <iso8601>\n  --local-site-ref <ref>\n  --cloudflare-site-ref <ref>\n  --local-authority-locus <locus>\n  --cloudflare-authority-locus <locus>\n  --authority-map-ref <ref>\n\nEffect:\n  Creates a Windows-to-Cloudflare packet.\n  Reads the Cloudflare-to-Windows packet from site.read, unless --cloudflare-packet is supplied.\n  Pushes the Windows packet through site.continuity.packet.put, unless --skip-cloudflare-push is supplied.\n  Publishes the Cloudflare packet through site.continuity.packet.publish, unless --skip-cloudflare-push is supplied.\n  Imports the Cloudflare packet into the Windows continuity ledger.\n  Emits one operator evidence report without printing secret token material.\n`);
 }

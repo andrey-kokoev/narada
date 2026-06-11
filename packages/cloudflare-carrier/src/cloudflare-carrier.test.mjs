@@ -1117,6 +1117,35 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(packetPutBody.status, 'imported');
   assert.equal(packetPutBody.site_continuity_packet_admission.action, 'projection_only');
 
+  const publishPacket = await worker.fetch(jsonRequest({
+    operation: 'site.continuity.packet.publish',
+    request_id: 'request_site_read_continuity_packet_publish',
+    params: { site_id: 'site_fixture' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(publishPacket.status, 200);
+  const publishPacketBody = await publishPacket.json();
+  assert.equal(publishPacketBody.schema, 'narada.cloudflare_site_continuity_packet_publish.v1');
+  assert.equal(publishPacketBody.status, 'imported');
+  assert.equal(publishPacketBody.site_continuity_packet_admission.action, 'projection_only');
+  assert.equal(publishPacketBody.packet.source_embodiment_kind, 'cloudflare_carrier');
+  assert.equal(publishPacketBody.packet.target_embodiment_kind, 'local_windows');
+
+  const localWindowsPacket = {
+    ...body.site_continuity.exchange_packet,
+    packet_id: 'site-continuity-packet-v1:site_fixture:test-local-windows-cloudflare',
+    source_embodiment_kind: 'local_windows',
+    target_embodiment_kind: 'cloudflare_carrier',
+  };
+  const localWindowsPacketPut = await worker.fetch(jsonRequest({
+    operation: 'site.continuity.packet.put',
+    request_id: 'request_site_read_local_windows_continuity_packet_put',
+    params: { site_id: 'site_fixture', packet: localWindowsPacket },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(localWindowsPacketPut.status, 200);
+  const localWindowsPacketPutBody = await localWindowsPacketPut.json();
+  assert.equal(localWindowsPacketPutBody.status, 'imported');
+  assert.equal(localWindowsPacketPutBody.site_continuity_packet_admission.action, 'projection_only');
+
   const refusedPacketPut = await worker.fetch(jsonRequest({
     operation: 'site.continuity.packet.put',
     request_id: 'request_site_read_continuity_packet_refused',
@@ -1178,25 +1207,25 @@ test('worker site.read composes site sessions tasks authority events and carrier
   }, { token: 'test-admin-token', path: '/api/carrier' }), env);
   assert.equal(readAfterPacketPut.status, 200);
   const readAfterPacketPutBody = await readAfterPacketPut.json();
-  assert.equal(readAfterPacketPutBody.site_continuity_packets.length, 1);
+  assert.ok(readAfterPacketPutBody.site_continuity_packets.length >= 2);
   assert.equal(readAfterPacketPutBody.site_continuity_packets[0].admission_action, 'projection_only');
   assert.equal(readAfterPacketPutBody.site_continuity_status.schema, 'narada.cloudflare_site_continuity_status.v1');
   assert.equal(readAfterPacketPutBody.site_continuity_status.state, 'packet_observed');
-  assert.equal(readAfterPacketPutBody.site_continuity_status.packet_count, 1);
+  assert.equal(readAfterPacketPutBody.site_continuity_status.packet_count, readAfterPacketPutBody.site_continuity_packets.length);
   assert.equal(readAfterPacketPutBody.site_continuity_status.latest_packet_id, readAfterPacketPutBody.site_continuity_packets[0].packet_id);
   assert.equal(readAfterPacketPutBody.site_continuity_status.latest_admission_action, 'projection_only');
-  assert.equal(readAfterPacketPutBody.site_continuity_status.direction_counts.cloudflare_to_local_windows, 1);
-  assert.equal(readAfterPacketPutBody.site_continuity_status.direction_counts.local_windows_to_cloudflare, 0);
+  assert.ok(readAfterPacketPutBody.site_continuity_status.direction_counts.cloudflare_to_local_windows >= 1);
+  assert.equal(readAfterPacketPutBody.site_continuity_status.direction_counts.local_windows_to_cloudflare, 1);
   assert.equal(readAfterPacketPutBody.site_continuity_status.authority_boundary.executable_cross_embodiment_mutation, 'refused_by_site_continuity_classifier');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.schema, 'narada.local_cloud_continuity_bridge.v1');
-  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.state, 'cloudflare_to_local_windows_observed');
+  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.state, 'bidirectional_packets_observed');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.local_windows_site_ref, 'local-windows-site');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.cloudflare_site_ref, 'cloudflare-site');
-  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.cloudflare_to_local_windows_packets, 1);
-  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.local_windows_to_cloudflare_packets, 0);
+  assert.ok(readAfterPacketPutBody.local_cloud_continuity_bridge.cloudflare_to_local_windows_packets >= 1);
+  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.local_windows_to_cloudflare_packets, 1);
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.executable_cross_embodiment_mutation, 'refused_by_site_continuity_classifier');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.durable_mutation_authority, 'unchanged; routed_by_site_authority_map');
-  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.next_action, 'return_local_windows_continuity_packet');
+  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.next_action, 'review_continuity_packet');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.loop_command, 'pnpm site:continuity:loop -- sync-cloudflare --site site_fixture --url <worker-url> --token-file <token-file>');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.pull_command, 'pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- pull-cloudflare --site site_fixture --url <worker-url> --token-file <token-file>');
   assert.equal(readAfterPacketPutBody.site_continuity_loop_reports.length, 1);
@@ -1213,7 +1242,7 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(readAfterPacketPutBody.site_product_status.carrier_evidence_read_status.state, 'loaded');
   assert.equal(readAfterPacketPutBody.site_product_status.continuity_state, 'packet_observed');
   assert.equal(readAfterPacketPutBody.site_product_status.continuity_loop_state, 'loop_report_observed');
-  assert.equal(readAfterPacketPutBody.site_product_status.continuity_packet_count, 1);
+  assert.equal(readAfterPacketPutBody.site_product_status.continuity_packet_count, readAfterPacketPutBody.site_continuity_status.packet_count);
   assert.equal(readAfterPacketPutBody.site_product_status.continuity_loop_report_count, 1);
   assert.equal(readAfterPacketPutBody.site_product_status.next_action, 'open_tasks');
 
@@ -1281,12 +1310,12 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(operationReadAfterLocalIngressBody.local_ingress_operation_posture.next_action, 'restore_windows_local_ingress_executor');
   assert.equal(operationReadAfterLocalIngressBody.operation_product_surface.local_ingress_operation_posture.pending_request_count, 1);
   assert.equal(operationReadAfterLocalIngressBody.operation_continuity_direction_status.schema, 'narada.cloudflare_operation_continuity_direction_status.v1');
-  assert.equal(operationReadAfterLocalIngressBody.operation_continuity_direction_status.state, 'cloudflare_to_local_windows_only');
-  assert.deepEqual(operationReadAfterLocalIngressBody.operation_continuity_direction_status.missing_directions, ['local_windows_to_cloudflare']);
-  assert.equal(operationReadAfterLocalIngressBody.operation_continuity_direction_status.next_action, 'return_local_windows_continuity_packet');
+  assert.equal(operationReadAfterLocalIngressBody.operation_continuity_direction_status.state, 'bidirectional_packets_observed');
+  assert.deepEqual(operationReadAfterLocalIngressBody.operation_continuity_direction_status.missing_directions, []);
+  assert.equal(operationReadAfterLocalIngressBody.operation_continuity_direction_status.next_action, 'monitor_operation_continuity');
   assert.deepEqual(operationReadAfterLocalIngressBody.operation_product_surface.operation_continuity_direction_status, operationReadAfterLocalIngressBody.operation_continuity_direction_status);
-  assert.equal(operationReadAfterLocalIngressBody.operation_lifecycle_status.continuity_direction_state, 'cloudflare_to_local_windows_only');
-  assert.deepEqual(operationReadAfterLocalIngressBody.operation_lifecycle_status.continuity_direction_missing, ['local_windows_to_cloudflare']);
+  assert.equal(operationReadAfterLocalIngressBody.operation_lifecycle_status.continuity_direction_state, 'bidirectional_packets_observed');
+  assert.deepEqual(operationReadAfterLocalIngressBody.operation_lifecycle_status.continuity_direction_missing, []);
   assert.equal(operationReadAfterLocalIngressBody.operation_lifecycle_status.local_ingress_request_count, 1);
   assert.equal(operationReadAfterLocalIngressBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'local_ingress_request'), true);
 

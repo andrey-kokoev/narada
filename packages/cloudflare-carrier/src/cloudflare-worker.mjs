@@ -3433,6 +3433,7 @@ function isSiteProductOperation(operation) {
     'site.list',
     'site.settings.put',
     'site.membership.put',
+    'site.continuity.packet.publish',
     'site.continuity.packet.put',
     'site.continuity.loop.report.put',
     'operation.create',
@@ -4538,6 +4539,24 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
     const result = await importCloudflareContinuityPacket(env, packet, { imported_by_principal_id: principal?.principal_id ?? 'unknown-principal' });
     return { status: result.ok ? 200 : 403, body: result };
+  }
+  if (body.operation === 'site.continuity.packet.publish') {
+    const siteId = requestedSiteId;
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: siteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
+    const result = await importCloudflareContinuityPacket(env, siteContinuity.exchange_packet, {
+      imported_by_principal_id: principal?.principal_id ?? 'cloudflare-carrier',
+    });
+    return {
+      status: result.ok ? 200 : 403,
+      body: {
+        ...result,
+        schema: 'narada.cloudflare_site_continuity_packet_publish.v1',
+        site_id: siteId,
+        packet: siteContinuity.exchange_packet,
+      },
+    };
   }
   if (body.operation === 'site.continuity.loop.report.put') {
     const report = params.report ?? body.report ?? null;
