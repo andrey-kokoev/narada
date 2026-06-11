@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   createSiteContinuityBindingRegistry,
+  listSiteContinuityBindingSites,
   validateSiteContinuityBinding,
   validateSiteContinuityBindingRegistry,
 } from '@narada2/site-continuity';
@@ -19,7 +20,7 @@ async function main() {
     env: process.env,
     cwd: process.env.INIT_CWD ?? process.cwd(),
   });
-  const result = await materializeSiteContinuityBindingRegistry(plan);
+  const result = await runSiteContinuityBindingWorkflow(plan);
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
 
@@ -32,14 +33,30 @@ function buildBindingMaterializationPlan({ argv = [], env = process.env, cwd = p
 
   return {
     cwd,
+    action: args.action ?? env.NARADA_SITE_CONTINUITY_BINDING_ACTION ?? 'materialize',
     packet_paths: packetPaths,
     output_path: outputPath,
     effective_packet_paths: packetPaths.map((packetPath) => resolvePath(cwd, packetPath)),
     effective_output_path: resolvePath(cwd, outputPath),
+    registry_path: args.registry ?? outputPath,
+    effective_registry_path: resolvePath(cwd, args.registry ?? outputPath),
     registry_ref: args.registry_ref ?? env.NARADA_SITE_CONTINUITY_BINDING_REGISTRY_REF ?? 'local-cloud-site-continuity-bindings',
     generated_at: args.generated_at ?? env.NARADA_SITE_CONTINUITY_BINDING_GENERATED_AT ?? new Date().toISOString(),
     dry_run: args.dry_run === true,
   };
+}
+
+async function runSiteContinuityBindingWorkflow(plan) {
+  switch (plan.action) {
+    case 'materialize':
+      return materializeSiteContinuityBindingRegistry(plan);
+    case 'validate':
+      return validateMaterializedSiteContinuityBindingRegistry(plan);
+    case 'list':
+      return listMaterializedSiteContinuityBindingRegistry(plan);
+    default:
+      throw new Error(`unknown_site_continuity_binding_action:${plan.action}`);
+  }
 }
 
 async function materializeSiteContinuityBindingRegistry(plan) {
@@ -93,6 +110,51 @@ async function materializeSiteContinuityBindingRegistry(plan) {
   };
 }
 
+async function validateMaterializedSiteContinuityBindingRegistry(plan) {
+  const registry = await readMaterializedSiteContinuityBindingRegistry(plan);
+  return {
+    ok: true,
+    action: 'validated',
+    registry_path: plan.effective_registry_path,
+    registry_ref: registry.registry_ref,
+    binding_count: registry.bindings.length,
+    sites: listSiteContinuityBindingSites(registry),
+  };
+}
+
+async function listMaterializedSiteContinuityBindingRegistry(plan) {
+  const registry = await readMaterializedSiteContinuityBindingRegistry(plan);
+  return {
+    ok: true,
+    action: 'listed',
+    registry_path: plan.effective_registry_path,
+    registry_ref: registry.registry_ref,
+    binding_count: registry.bindings.length,
+    sites: registry.bindings
+      .map((binding) => ({
+        site_id: binding.site_id,
+        relation_id: binding.relation_id,
+        embodiments: (binding.embodiments ?? [])
+          .map((embodiment) => ({
+            embodiment_kind: embodiment.embodiment_kind,
+            site_ref: embodiment.site_ref,
+            authority_locus: embodiment.authority_locus,
+          }))
+          .sort((left, right) => left.embodiment_kind.localeCompare(right.embodiment_kind)),
+      }))
+      .sort((left, right) => left.site_id.localeCompare(right.site_id)),
+  };
+}
+
+async function readMaterializedSiteContinuityBindingRegistry(plan) {
+  const registry = JSON.parse(await readFile(plan.effective_registry_path, 'utf8'));
+  const validation = validateSiteContinuityBindingRegistry(registry);
+  if (!validation.ok) {
+    throw new Error(`site_continuity_binding_registry_invalid:${validation.errors.join(',')}`);
+  }
+  return registry;
+}
+
 function collectPacketPaths(args, env) {
   const configuredPackets = [];
   if (args.packet) configuredPackets.push(...asArray(args.packet));
@@ -110,8 +172,18 @@ function parseArgs(argv) {
       args.dry_run = true;
       continue;
     }
+    if (arg === '--action') {
+      args.action = argv[index + 1];
+      index += 1;
+      continue;
+    }
     if (arg === '--packet') {
       args.packet = [...asArray(args.packet), argv[index + 1]];
+      index += 1;
+      continue;
+    }
+    if (arg === '--registry') {
+      args.registry = argv[index + 1];
       index += 1;
       continue;
     }
@@ -163,5 +235,8 @@ export {
   DEFAULT_BINDING_REGISTRY_PATH,
   DEFAULT_PACKET_PATHS,
   buildBindingMaterializationPlan,
+  listMaterializedSiteContinuityBindingRegistry,
   materializeSiteContinuityBindingRegistry,
+  runSiteContinuityBindingWorkflow,
+  validateMaterializedSiteContinuityBindingRegistry,
 };

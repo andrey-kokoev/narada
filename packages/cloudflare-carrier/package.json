@@ -55,6 +55,8 @@
     "resident-dispatch:smoke:live": "node scripts/cloudflare-carrier-resident-dispatch-live-smoke.mjs",
     "continuity:cloudflare": "node scripts/cloudflare-site-continuity-sync.mjs",
     "continuity:bindings": "node scripts/cloudflare-site-continuity-bindings.mjs",
+    "continuity:bindings:list": "node scripts/cloudflare-site-continuity-bindings.mjs --action list",
+    "continuity:bindings:validate": "node scripts/cloudflare-site-continuity-bindings.mjs --action validate",
     "continuity:scheduler": "node scripts/cloudflare-site-continuity-scheduler.mjs",
     "continuity:status": "node scripts/cloudflare-site-continuity-scheduler.mjs --action status-all",
     "continuity:status:live": "node scripts/cloudflare-site-continuity-scheduler.mjs --action status-all --live --refresh-site-registry-projection",
