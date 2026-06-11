@@ -210,12 +210,16 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       operation_count: 1,
       active_operation_id: 'operation_live',
       next_operation_id: 'operation_live',
+      next_operation_status: 'inactive',
+      operation_status_counts: { inactive: 1 },
       next_status: 'needs_attention',
       next_action: 'review_operation',
       next_reason: 'operation_needs_review',
     },
   });
   assert.match(operationListText, /Operations: count=1 active=operation_live next=operation_live/);
+  assert.match(operationListText, /Lifecycle Statuses: inactive=1/);
+  assert.match(operationListText, /Next Operation Status: inactive/);
 
   const operationReadText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -286,7 +290,7 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
 
   assert.deepEqual(summarizeProductSurface('operation.list', {
     site_id: 'site_fixture',
-    operations: [{ site_id: 'site_fixture', operation_id: 'operation_control' }],
+    operations: [{ site_id: 'site_fixture', operation_id: 'operation_control', status: 'inactive' }],
     operation_posture_overview: {
       operation_count: 1,
       active_operation_id: 'operation_control',
@@ -302,6 +306,8 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     operation_count: 1,
     active_operation_id: 'operation_control',
     next_operation_id: 'operation_control',
+    next_operation_status: 'inactive',
+    operation_status_counts: { inactive: 1 },
     next_status: 'needs_attention',
     next_action: 'review_operation',
     next_reason: 'operation_needs_review',

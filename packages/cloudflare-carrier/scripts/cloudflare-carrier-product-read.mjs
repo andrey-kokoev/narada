@@ -111,12 +111,16 @@ export function summarizeProductSurface(operation, body) {
   if (operation === 'operation.list') {
     const operations = Array.isArray(body?.operations) ? body.operations : [];
     const overview = body?.operation_posture_overview ?? body?.operation_product_overview ?? {};
+    const nextOperationId = overview.next_operation_id ?? operations[0]?.operation_id ?? null;
+    const nextOperation = nextOperationId ? operations.find((item) => item?.operation_id === nextOperationId) ?? null : null;
     return {
       operation,
       site_id: body?.site?.site_id ?? body?.site_id ?? operations[0]?.site_id ?? null,
       operation_count: overview.operation_count ?? operations.length,
       active_operation_id: overview.active_operation_id ?? null,
-      next_operation_id: overview.next_operation_id ?? operations[0]?.operation_id ?? null,
+      next_operation_id: nextOperationId,
+      next_operation_status: nextOperation?.status ?? null,
+      operation_status_counts: countBy(operations, (item) => item?.status ?? 'unknown'),
       next_status: overview.next_status ?? null,
       next_action: overview.next_action ?? null,
       next_reason: overview.next_reason ?? null,
@@ -175,6 +179,8 @@ export function formatProductSurfaceText(result) {
   if (operation === 'operation.list') {
     lines.push(`Site: ${summary.site_id ?? 'unknown'}`);
     lines.push(`Operations: count=${summary.operation_count ?? 0} active=${summary.active_operation_id ?? 'none'} next=${summary.next_operation_id ?? 'none'}`);
+    lines.push(`Lifecycle Statuses: ${formatKeyValueMap(summary.operation_status_counts ?? {})}`);
+    if (summary.next_operation_id) lines.push(`Next Operation Status: ${summary.next_operation_status ?? 'unknown'}`);
     lines.push(`Next: status=${summary.next_status ?? 'unknown'} action=${summary.next_action ?? 'none'} reason=${summary.next_reason ?? 'none'}`);
     if (summary.health_counts) lines.push(`Health Counts: ${formatKeyValueMap(summary.health_counts)}`);
     return `${lines.join('\n')}\n`;
@@ -252,6 +258,15 @@ function parseOptionalInteger(value, label) {
   const parsed = Number.parseInt(String(value), 10);
   if (!Number.isInteger(parsed) || parsed < 1) throw new Error(`product_read_${label}_invalid`);
   return parsed;
+}
+
+function countBy(items, classifier) {
+  const counts = {};
+  for (const item of Array.isArray(items) ? items : []) {
+    const key = classifier(item) || 'unknown';
+    counts[key] = (counts[key] ?? 0) + 1;
+  }
+  return counts;
 }
 
 function normalizeWorkerUrl(value) {
