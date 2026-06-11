@@ -92,7 +92,8 @@ async function buildRepositoryPublicationExecutionEvidence(request, { repoPath, 
       rollback_evidence_ref: `rollback:not-needed:${base.publication_execution_id}`,
     };
   }
-  const push = await runGit(repoPath, ['push', remote, `${gitState.head}:${normalizeBranchRef(request.branch_ref)}`]);
+  const pushBranchRef = `refs/heads/${normalizeBranchRef(request.branch_ref)}`;
+  const push = await runGit(repoPath, ['push', remote, `${gitState.head}:${pushBranchRef}`]);
   if (!push.ok) {
     return {
       ...base,

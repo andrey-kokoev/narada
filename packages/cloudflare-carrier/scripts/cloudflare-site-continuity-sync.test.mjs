@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFile as execFileCallback, spawn } from 'node:child_process';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import {
   createSiteContinuityBinding,
   createSiteContinuityExchangePacket,
@@ -11,6 +15,7 @@ import {
 
 const SCRIPT_PATH = fileURLToPath(new URL('./cloudflare-site-continuity-sync.mjs', import.meta.url));
 const SCRIPT_CWD = fileURLToPath(new URL('..', import.meta.url));
+const execFile = promisify(execFileCallback);
 
 function runSync(args = [], { input = '', env = {} } = {}) {
   return new Promise((resolve, reject) => {
@@ -217,3 +222,92 @@ test('site continuity sync executes pending repository publication requests by r
     await mock.close();
   }
 });
+
+test('site continuity sync executes pending repository publication requests with explicit Windows push evidence', async () => {
+  const fixture = await createPublishableGitFixture();
+  const mock = await startCarrierMock((body) => {
+    if (body.operation === 'repository_publication.request.next') {
+      return {
+        body: {
+          ok: true,
+          status: 'selected',
+          request: {
+            repository_publication_request_id: 'repository-publication-request-push-fixture',
+            publication_ref: 'repository-publication:push-fixture',
+            requested_action_ref: 'repository-publication-action:push-fixture',
+            repository_ref: 'github:andrey-kokoev/narada',
+            branch_ref: 'main',
+            source_change_ref: `git:commit:${fixture.head}`,
+            repository_publication_admission: 'pending_windows_publication_admission',
+            cloudflare_git_push_admission: 'not_admitted',
+            direct_cloudflare_repository_mutation_admission: 'not_admitted',
+          },
+        },
+      };
+    }
+    if (body.operation === 'repository_publication.evidence.put') {
+      return { body: { ok: true, status: 'recorded', evidence: body.params.source_payload } };
+    }
+    if (body.operation === 'repository_publication.provider_heartbeat.put') {
+      return { body: { ok: true, status: 'recorded', heartbeat: body.params } };
+    }
+    return { status: 400, body: { ok: false, code: 'unexpected_operation' } };
+  });
+  try {
+    const result = await runSync([
+      'repository-publication-execute-pending',
+      '--site', 'site_fixture',
+      '--repo', fixture.repo,
+      '--url', mock.url,
+      '--push',
+      '--remote', 'origin',
+    ]);
+
+    assert.equal(result.code, 0, result.stderr);
+    const body = JSON.parse(result.stdout);
+    assert.equal(body.schema, 'narada.repository_publication_cloudflare_pending_execution.v1');
+    assert.equal(body.status, 'ok');
+    assert.equal(body.push_enabled, true);
+    assert.equal(body.request_count, 1);
+    assert.equal(body.evidence_recorded_count, 1);
+    assert.equal(mock.requests.length, 3);
+    assert.equal(mock.requests[1].operation, 'repository_publication.evidence.put');
+    const evidence = mock.requests[1].params.source_payload;
+    assert.equal(evidence.repository_publication_request_id, 'repository-publication-request-push-fixture');
+    assert.equal(evidence.windows_admission_action, 'admit', JSON.stringify(body, null, 2));
+    assert.equal(evidence.windows_admission_reason, 'governed_repository_publication_request_admitted');
+    assert.equal(evidence.publication_status, 'completed');
+    assert.equal(evidence.published_commit_ref, `git:commit:${fixture.head}`);
+    assert.equal(evidence.cloudflare_git_push_admission, 'not_admitted');
+    assert.equal(evidence.direct_cloudflare_repository_mutation_admission, 'not_admitted');
+    const heartbeat = mock.requests[2].params;
+    assert.equal(heartbeat.completed_publication_count, 1);
+    assert.equal(heartbeat.refused_publication_count, 0);
+    assert.equal(heartbeat.resolved_publication_count, 1);
+    const remoteHead = await git(fixture.repo, ['ls-remote', fixture.remote, 'refs/heads/main']);
+    assert.match(remoteHead.stdout, new RegExp(`^${fixture.head}\\trefs/heads/main`));
+  } finally {
+    await mock.close();
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});
+
+async function createPublishableGitFixture() {
+  const root = await mkdtemp(join(tmpdir(), 'narada-repository-publication-'));
+  const remote = join(root, 'remote.git');
+  const repo = join(root, 'repo');
+  await git(root, ['init', '--bare', remote]);
+  await git(root, ['init', repo]);
+  await git(repo, ['checkout', '-b', 'main']);
+  await writeFile(join(repo, 'README.md'), 'publication fixture\n', 'utf8');
+  await git(repo, ['add', 'README.md']);
+  await git(repo, ['-c', 'user.name=Narada Test', '-c', 'user.email=narada-test@example.invalid', 'commit', '-m', 'initial publication fixture']);
+  await git(repo, ['remote', 'add', 'origin', remote]);
+  const head = (await git(repo, ['rev-parse', 'HEAD'])).stdout.trim();
+  return { root, remote, repo, head };
+}
+
+async function git(cwd, args) {
+  const result = await execFile('git', args, { cwd, timeout: 30000, windowsHide: true });
+  return result;
+}
