@@ -15190,7 +15190,24 @@ export function renderCloudflareCarrierConsole() {
     function applyFlightDeckWorkflowRouteAction(product = state.operationProduct || {}) {
       const route = operationWorkflowRouteStage(product);
       const action = String(route.next_action || route.command_action || '');
-      if (action === 'review_persistence_posture' || action === 'review_recovery_posture') {
+      const delegatedActions = new Set([
+        'review_persistence_posture',
+        'review_recovery_posture',
+        'review_continuity_packet',
+        'observe_continuity_packet',
+        'publish_cloudflare_continuity_packet',
+        'return_local_windows_continuity_packet',
+        'monitor_operation_continuity',
+        'refresh_site_continuity_loop',
+        'review_continuity_loop_report',
+        'review_site_continuity_reconciliation_execution',
+        'review_carrier_evidence_replay',
+        'review_directive_delivery',
+        'review_local_ingress_provider_liveness',
+        'review_repository_publication_provider_liveness',
+        'start_resident_dispatch',
+      ]);
+      if (route.operator_focus || delegatedActions.has(action)) {
         applyOperationWorkflowRouteAction(route, product);
         return true;
       }
