@@ -49,9 +49,12 @@ const TERMINAL_STATES = new Set(['completed', 'completed_without_provider', 'fai
 const MAX_PROVIDER_TOOL_ITERATIONS = 3;
 
 export class CloudflareCarrierRouter {
-  constructor({ now = () => new Date().toISOString() } = {}) {
+  constructor({ now = () => new Date().toISOString(), providerAdapter = null, toolEffectAdapter = null, taskStoreAdapter = null } = {}) {
     this.sessions = new Map();
     this.now = now;
+    this.providerAdapter = providerAdapter;
+    this.toolEffectAdapter = toolEffectAdapter;
+    this.taskStoreAdapter = taskStoreAdapter;
   }
 
   handle(request) {
@@ -82,6 +85,9 @@ export class CloudflareCarrierRouter {
       site_root: params.site_root ?? params.site_ref ?? `cloudflare://${params.site_id ?? 'unknown-site'}`,
       site_ref: params.site_ref ?? null,
       now: this.now,
+      providerAdapter: this.providerAdapter,
+      toolEffectAdapter: this.toolEffectAdapter,
+      taskStoreAdapter: this.taskStoreAdapter,
     });
     this.sessions.set(carrierSessionId, session);
     return session.handle(request);

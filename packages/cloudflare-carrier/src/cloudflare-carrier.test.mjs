@@ -750,6 +750,40 @@ test('provider-unavailable posture records terminal failure evidence', () => {
   assertValidEvents(response);
 });
 
+test('router-created sessions carry configured provider and tool adapters', async () => {
+  const router = new CloudflareCarrierRouter({
+    now: clock,
+    providerAdapter: {
+      posture: 'test-provider',
+      adapter_kind: 'test-provider',
+      provider: 'test-provider',
+      model: 'test-model',
+      run: async () => ({ text: 'router provider response', tool_calls: [] }),
+    },
+    toolEffectAdapter: {
+      adapter_kind: 'test-tool-effect',
+      supported_tools: [],
+      capabilities: [],
+      execute: async () => ({ status: 'ok', admission_action: 'admit', admission_reason: 'test' }),
+    },
+  });
+  const start = router.handle(startRequest({ request_id: 'request_configured_router_start' }));
+  assert.equal(start.ok, true);
+
+  const input = inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input;
+  const response = await router.handle(inputRequest(input, { request_id: 'request_configured_router_input' }));
+
+  assert.equal(response.terminal_state, 'completed');
+  const providerEvent = response.events.find((event) => event.event_kind === 'provider_request_recorded');
+  assert.equal(providerEvent.payload.provider_execution_enabled, true);
+  assert.equal(providerEvent.payload.provider_adapter_kind, 'test-provider');
+  const textEvent = response.events.find((event) => event.event_kind === 'provider_text_delta_recorded');
+  assert.equal(textEvent.payload.text_delta, 'router provider response');
+  assert.equal(router.sessions.get('carrier_session_cloudflare_fixture').status().provider_adapter_posture, 'test-provider');
+  assert.equal(router.sessions.get('carrier_session_cloudflare_fixture').status().tool_effect_adapter_kind, 'test-tool-effect');
+  assertValidEvents(response);
+});
+
 test('event reads return ordered events by sequence cursor', () => {
   const { router } = startedSession();
   router.handle(commandRequest('/goal', ['stabilize']));
