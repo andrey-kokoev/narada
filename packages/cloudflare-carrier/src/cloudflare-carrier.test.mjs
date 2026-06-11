@@ -989,6 +989,51 @@ test('worker validates session.start site binding through configured Cloudflare 
   assert.equal(siteDb.dump().carrierSessions[0].operation_id, 'operation_needs_continuation');
 });
 
+test('worker operation.read routes needs_continuation operations to continuation resume', async () => {
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{
+      site_id: 'site_fixture',
+      site_ref: 'site://fixture',
+      display_name: 'Fixture Site',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+      created_by_principal_id: 'admin',
+    }],
+    memberships: [{
+      site_id: 'site_fixture',
+      principal_id: 'admin',
+      role: 'owner',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+    operations: [{
+      operation_id: 'operation_needs_continuation',
+      site_id: 'site_fixture',
+      display_name: 'Needs Continuation Operation',
+      operation_kind: 'control',
+      status: 'needs_continuation',
+      created_by_principal_id: 'admin',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+  });
+  const env = authEnv(fakeDurableObjectNamespace(), { CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+  const read = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_needs_continuation_operation_read',
+    params: { site_id: 'site_fixture', operation_id: 'operation_needs_continuation' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(read.status, 200);
+  const body = await read.json();
+  assert.equal(body.operation_lifecycle_status.phase, 'needs_continuation');
+  assert.equal(body.operation_lifecycle_status.health, 'attention');
+  assert.equal(body.operation_lifecycle_status.next_action, 'resume_operation_continuation');
+  assert.equal(body.operation_workflow_route.next_action, 'resume_operation_continuation');
+  assert.equal(body.operation_workflow_route.reason, 'operation_lifecycle_needs_continuation');
+});
+
 test('worker rejects session.start when configured site registry denies binding', async () => {
   const siteDb = fakeD1SiteRegistryDatabase();
   const namespace = fakeDurableObjectNamespace();
