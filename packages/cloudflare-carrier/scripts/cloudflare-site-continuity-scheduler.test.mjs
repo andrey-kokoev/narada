@@ -59,16 +59,10 @@ test('site continuity scheduler install plan is bounded and secret-free', async 
     assert.equal(plan.status.command_args_complete, true);
     assert.equal(plan.output_path, outputPath);
     assert.deepEqual(plan.status.required_env_keys_observed, ['CLOUDFLARE_CARRIER_URL', 'CLOUDFLARE_CARRIER_TOKEN_FILE']);
-    assert.deepEqual(plan.scheduled_task_command.slice(0, 7), ['schtasks', '/Create', '/TN', 'Narada Cloudflare Site Continuity Sync', '/SC', 'MINUTE', '/MO']);
+    assert.deepEqual(plan.scheduled_task_command.slice(0, 7), ['schtasks', '/Create', '/TN', '\\Narada\\CloudflareSiteContinuitySync', '/SC', 'MINUTE', '/MO']);
     assert.equal(plan.scheduled_task_command[7], '5');
     assert.match(plan.task_command, /cloudflare-site-continuity-scheduled-task\.mjs/);
-    assert.match(plan.task_command, /--site/);
-    assert.match(plan.task_command, /--sites/);
-    assert.match(plan.task_command, /site_fixture/);
-    assert.match(plan.task_command, /--packet/);
-    assert.match(plan.task_command, /local-packet\.json/);
-    assert.match(plan.task_command, /--out/);
-    assert.match(plan.task_command, /cloudflare-sync-last\.json/);
+    assert.doesNotMatch(plan.task_command, /--site|--sites|--packet|--out|site_fixture|local-packet\.json|cloudflare-sync-last\.json/);
     assert.doesNotMatch(JSON.stringify(plan), /secret-token-value/);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -108,13 +102,117 @@ test('site continuity scheduler live install executes bounded schtasks command',
     assert.equal(result.scheduler_task_execution.state, 'completed');
     assert.equal(result.scheduler_task_execution.status, 'ok');
     assert.equal(result.scheduler_task_execution.command, 'schtasks');
-    assert.deepEqual(calls[0].args.slice(0, 7), ['/Create', '/TN', 'Narada Cloudflare Site Continuity Sync', '/SC', 'MINUTE', '/MO', '5']);
+    assert.deepEqual(calls[0].args.slice(0, 7), ['/Create', '/TN', '\\Narada\\CloudflareSiteContinuitySync', '/SC', 'MINUTE', '/MO', '5']);
     assert.equal(calls[0].args.includes('/TR'), true);
     assert.match(calls[0].args[calls[0].args.indexOf('/TR') + 1], /cloudflare-site-continuity-scheduled-task\.mjs/);
-    assert.match(calls[0].args[calls[0].args.indexOf('/TR') + 1], /--sites/);
+    assert.doesNotMatch(calls[0].args[calls[0].args.indexOf('/TR') + 1], /--site|--sites|--packet|--out|site_fixture|local-packet\.json/);
     assert.equal(calls[0].options.cwd, root);
     assert.equal(calls[0].options.timeout, 5000);
     assert.doesNotMatch(JSON.stringify(result), /secret-token-value|CLOUDFLARE_CARRIER_TOKEN=/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('site continuity scheduler live status attaches parsed Task Scheduler readback', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-live-status-'));
+  const syncEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-sync.mjs');
+  const scheduledTaskEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-scheduled-task.mjs');
+  const packetPath = join(root, '.narada/site-continuity/local-packet.json');
+  await mkdir(join(root, 'packages/cloudflare-carrier/scripts'), { recursive: true });
+  await mkdir(join(root, '.narada/site-continuity'), { recursive: true });
+  await writeFile(syncEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(scheduledTaskEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(packetPath, '{"packet":{"site_id":"site_fixture"}}\n', 'utf8');
+  try {
+    const calls = [];
+    const result = await runSiteContinuitySchedulerActionWithOptionalRefresh({
+      action: 'status-all',
+      repoRoot: root,
+      intervalMinutes: 5,
+      siteId: 'site_fixture',
+      packetPath,
+      dryRun: false,
+      executionTimeoutMs: 5000,
+    }, {
+      execFileImpl: async (command, args, options) => {
+        calls.push({ command, args, options });
+        return {
+          stdout: [
+            'TaskName: \\Narada\\CloudflareSiteContinuitySync',
+            'Next Run Time: 6/11/2026 8:48:00 AM',
+            'Status: Ready',
+            'Last Run Time: 6/11/2026 7:52:45 AM',
+            'Last Result: 0',
+            `Task To Run: C:\\node\\node.exe ${scheduledTaskEntrypoint}`,
+            'Scheduled Task State: Enabled',
+            'Repeat: Every: 0 Hour(s), 5 Minute(s)',
+          ].join('\n'),
+          stderr: '',
+        };
+      },
+    });
+
+    assert.equal(result.host_scheduler_read_admission, 'bounded_schtasks_query_from_scheduler_plan');
+    assert.equal(result.scheduler_task_readback.state, 'completed');
+    assert.equal(result.scheduler_task_readback.status, 'ok');
+    assert.equal(result.scheduler_task_readback.task_name, '\\Narada\\CloudflareSiteContinuitySync');
+    assert.equal(result.scheduler_task_readback.scheduled_task_state, 'Enabled');
+    assert.equal(result.scheduler_task_readback.status_text, 'Ready');
+    assert.equal(result.scheduler_task_readback.last_result, '0');
+    assert.equal(result.scheduler_task_readback.actual_interval_minutes, 5);
+    assert.equal(result.scheduler_task_readback.expected_interval_minutes, 5);
+    assert.equal(result.scheduler_task_readback.cadence_status, 'matches_plan');
+    assert.equal(result.scheduler_task_readback.task_command_status, 'matches_plan');
+    assert.deepEqual(result.scheduler_task_readback.attention_reasons, []);
+    assert.equal(calls[0].command, 'schtasks');
+    assert.deepEqual(calls[0].args, ['/Query', '/TN', '\\Narada\\CloudflareSiteContinuitySync', '/V', '/FO', 'LIST']);
+    assert.equal(calls[0].options.cwd, root);
+    assert.equal(calls[0].options.timeout, 5000);
+    assert.doesNotMatch(JSON.stringify(result), /secret-token-value|CLOUDFLARE_CARRIER_TOKEN=/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('site continuity scheduler live status surfaces cadence mismatch as attention evidence', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-live-status-mismatch-'));
+  const syncEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-sync.mjs');
+  const scheduledTaskEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-scheduled-task.mjs');
+  const packetPath = join(root, '.narada/site-continuity/local-packet.json');
+  await mkdir(join(root, 'packages/cloudflare-carrier/scripts'), { recursive: true });
+  await mkdir(join(root, '.narada/site-continuity'), { recursive: true });
+  await writeFile(syncEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(scheduledTaskEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(packetPath, '{"packet":{"site_id":"site_fixture"}}\n', 'utf8');
+  try {
+    const result = await runSiteContinuitySchedulerActionWithOptionalRefresh({
+      action: 'status',
+      repoRoot: root,
+      intervalMinutes: 5,
+      siteId: 'site_fixture',
+      packetPath,
+      dryRun: false,
+    }, {
+      execFileImpl: async () => ({
+        stdout: [
+          'TaskName: \\Narada\\CloudflareSiteContinuitySync',
+          'Status: Ready',
+          'Last Result: 0',
+          `Task To Run: C:\\node\\node.exe ${scheduledTaskEntrypoint}`,
+          'Scheduled Task State: Enabled',
+          'Repeat: Every: 1 Hour(s), 0 Minute(s)',
+        ].join('\n'),
+        stderr: '',
+      }),
+    });
+
+    assert.equal(result.scheduler_task_readback.status, 'needs_attention');
+    assert.equal(result.scheduler_task_readback.actual_interval_minutes, 60);
+    assert.equal(result.scheduler_task_readback.expected_interval_minutes, 5);
+    assert.equal(result.scheduler_task_readback.cadence_status, 'differs_from_plan');
+    assert.equal(result.scheduler_task_readback.task_command_status, 'matches_plan');
+    assert.deepEqual(result.scheduler_task_readback.attention_reasons, ['scheduler_cadence_differs_from_plan']);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -753,6 +851,40 @@ test('site continuity scheduler CLI emits status without Cloudflare access', asy
   assert.equal(body.embeds_credentials, false);
   assert.equal(body.scheduled_task_command[0], 'schtasks');
   assert.equal(body.scheduled_task_command[1], '/Query');
+  assert.equal(body.scheduled_task_command.includes('/V'), true);
+});
+
+test('site continuity scheduler CLI loads local continuity env for operator health readback', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-cli-env-'));
+  const packetPath = join(root, '.narada/site-continuity/local-packet.json');
+  const outputPath = join(root, '.narada/site-continuity/cloudflare-sync-last.json');
+  const reconciliationExecutionOutputPath = join(root, '.narada/site-continuity/reconciliation/cloudflare-reconcile-last.json');
+  await mkdir(join(root, '.narada/site-continuity/reconciliation'), { recursive: true });
+  await writeFile(packetPath, '{"packet":{"site_id":"site_fixture"}}\n', 'utf8');
+  await writeFile(join(root, '.env'), 'CLOUDFLARE_CARRIER_URL=https://worker.example\nCLOUDFLARE_CARRIER_TOKEN_FILE=.secrets/token\n', 'utf8');
+  await writeFile(join(root, '.narada/site-continuity/cloudflare-continuity.env'), [
+    'NARADA_SITE_CONTINUITY_PACKET=.narada/site-continuity/local-packet.json',
+    'NARADA_SITE_CONTINUITY_SITES=site_fixture',
+    'NARADA_SITE_CONTINUITY_SYNC_OUT=.narada/site-continuity/cloudflare-sync-last.json',
+    'NARADA_SITE_CONTINUITY_RECONCILE_EXECUTION_OUT=.narada/site-continuity/reconciliation/cloudflare-reconcile-last.json',
+    '',
+  ].join('\n'), 'utf8');
+  try {
+    const result = await execFile(process.execPath, [SCRIPT_PATH, '--action', 'status-all', '--repo-root', root], { timeout: 30000, windowsHide: true });
+    const body = JSON.parse(result.stdout);
+
+    assert.equal(body.packet_path, packetPath);
+    assert.equal(body.output_path, outputPath);
+    assert.equal(body.reconciliation_execution_output_path, reconciliationExecutionOutputPath);
+    assert.deepEqual(body.configured_sites.sites, ['site_fixture']);
+    assert.equal(body.status.packet_path_exists, true);
+    assert.equal(body.status.packet_configured, true);
+    assert.equal(body.status.site_configured, true);
+    assert.deepEqual(body.status.required_env_keys_observed, ['CLOUDFLARE_CARRIER_URL', 'CLOUDFLARE_CARRIER_TOKEN_FILE']);
+    assert.doesNotMatch(JSON.stringify(body), /\.secrets\/token|secret-token-value/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test('site continuity scheduler read-last reports missing local sync artifact', async () => {

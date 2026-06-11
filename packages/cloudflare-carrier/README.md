@@ -191,13 +191,21 @@ pnpm --filter @narada2/cloudflare-carrier continuity:run-once
 
 `continuity:run-once` is the product-facing alias for the existing live reconciliation execution path: it plans ready configured sites, runs guarded `sync-once`, writes the reconciliation execution artifact, and records that execution evidence back to Cloudflare.
 
-Install the Windows scheduled task for the recurring continuity loop after the site and packet path are configured in environment or passed as script arguments:
+Read local-cloud continuity health, including local sync artifacts, last reconciliation execution, and live Windows Task Scheduler readback:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier continuity:health
+```
+
+`continuity:health` loads the same local `.env` and `.narada/site-continuity/cloudflare-continuity.env` configuration as the scheduled-task wrapper, then attaches bounded Task Scheduler query evidence to the status output. It reports the installed task state, last result, next run, task command, and whether the host scheduler cadence matches the package plan.
+
+Install the Windows scheduled task for the recurring continuity loop after the site and packet path are configured in the local continuity env file:
 
 ```powershell
 pnpm --filter @narada2/cloudflare-carrier continuity:install
 ```
 
-`continuity:install` creates or replaces the local Windows Task Scheduler entry with the same scheduled-task wrapper used by `continuity:run-once`; the task command carries no credential values. For unattended Windows scheduling, keep non-secret continuity inputs such as `NARADA_SITE_CONTINUITY_PACKET` and `NARADA_SITE_CONTINUITY_SITES` in `.narada/site-continuity/cloudflare-continuity.env`, while Cloudflare credentials stay in the local root `.env` token-file pointer.
+`continuity:install` creates or replaces the local Windows Task Scheduler entry with the same scheduled-task wrapper used by `continuity:run-once`; the task command carries no credential values and no long per-site argument payload. For unattended Windows scheduling, keep non-secret continuity inputs such as `NARADA_SITE_CONTINUITY_PACKET` and `NARADA_SITE_CONTINUITY_SITES` in `.narada/site-continuity/cloudflare-continuity.env`, while Cloudflare credentials stay in the local root `.env` token-file pointer.
 
 ## Deploy Check Coverage
 

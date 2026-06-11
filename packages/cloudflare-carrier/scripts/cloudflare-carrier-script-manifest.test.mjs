@@ -15,7 +15,11 @@ test('cloudflare carrier package scripts point at parseable local node scripts',
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
   assert.equal(
     packageJson.scripts?.['continuity:status:live'],
-    'node scripts/cloudflare-site-continuity-scheduler.mjs --action status-all --refresh-site-registry-projection',
+    'node scripts/cloudflare-site-continuity-scheduler.mjs --action status-all --live --refresh-site-registry-projection',
+  );
+  assert.equal(
+    packageJson.scripts?.['continuity:health'],
+    'node scripts/cloudflare-site-continuity-scheduler.mjs --action status-all --live --refresh-site-registry-projection',
   );
   assert.equal(
     packageJson.scripts?.['continuity:install'],

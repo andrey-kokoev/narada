@@ -10,11 +10,12 @@ import {
   resolveCloudflareSiteRegistryProjectionInputs,
 } from './cloudflare-carrier-site-registry-projection.mjs';
 
-const DEFAULT_TASK_NAME = 'Narada Cloudflare Site Continuity Sync';
+const DEFAULT_TASK_NAME = '\\Narada\\CloudflareSiteContinuitySync';
 const DEFAULT_INTERVAL_MINUTES = 5;
 const DEFAULT_MAX_SYNC_ARTIFACT_AGE_MINUTES = 15;
 const DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS = 120000;
 const LIVE_SCHEDULER_TASK_ACTIONS = new Set(['install', 'disable', 'pause', 'resume', 'uninstall']);
+const LIVE_SCHEDULER_READ_ACTIONS = new Set(['status', 'read-last', 'last', 'status-all', 'status-local', 'reconcile', 'reconcile-plan']);
 const execFile = promisify(execFileCallback);
 
 export function buildSiteContinuitySchedulerPlan({
@@ -138,14 +139,14 @@ export function buildSiteContinuitySchedulerPlan({
       return {
         ...base,
         plan_status: 'status_only_no_cloudflare_access',
-        scheduled_task_command: ['schtasks', '/Query', '/TN', taskName, '/FO', 'LIST'],
+        scheduled_task_command: ['schtasks', '/Query', '/TN', taskName, '/V', '/FO', 'LIST'],
       };
     case 'read-last':
     case 'last':
       return {
         ...base,
         plan_status: 'last_sync_artifact_read_only_no_cloudflare_access',
-        scheduled_task_command: ['schtasks', '/Query', '/TN', taskName, '/FO', 'LIST'],
+        scheduled_task_command: ['schtasks', '/Query', '/TN', taskName, '/V', '/FO', 'LIST'],
         last_sync: readLastSyncArtifact(effectiveOutputPath),
       };
     case 'status-all':
@@ -153,7 +154,7 @@ export function buildSiteContinuitySchedulerPlan({
       return {
         ...base,
         plan_status: 'local_sync_artifact_inventory_read_only_no_cloudflare_access',
-        scheduled_task_command: ['schtasks', '/Query', '/TN', taskName, '/FO', 'LIST'],
+        scheduled_task_command: ['schtasks', '/Query', '/TN', taskName, '/V', '/FO', 'LIST'],
         local_sync_artifacts: readLocalSyncArtifactInventory(effectiveArtifactDirectory, {
           lastOutputPath: effectiveOutputPath,
           configuredSites: localConfiguredSites.site_records,
@@ -173,7 +174,7 @@ export function buildSiteContinuitySchedulerPlan({
       return {
         ...base,
         plan_status: 'site_continuity_reconciliation_plan_read_only_no_cloudflare_access',
-        scheduled_task_command: ['schtasks', '/Query', '/TN', taskName, '/FO', 'LIST'],
+        scheduled_task_command: ['schtasks', '/Query', '/TN', taskName, '/V', '/FO', 'LIST'],
         local_sync_artifacts: localSyncArtifacts,
         reconciliation_plan: buildSiteContinuityReconciliationPlan({
           localSyncArtifacts,
@@ -187,6 +188,147 @@ export function buildSiteContinuitySchedulerPlan({
     default:
       throw new Error(`unknown_site_continuity_scheduler_action:${action}`);
   }
+}
+
+function isContinuitySyncArtifactSummary(artifact, lastOutputPath) {
+  const artifactPath = artifact?.artifact_path ?? null;
+  if (!artifactPath) return false;
+  if (lastOutputPath && artifactPath === lastOutputPath) return true;
+  if (artifact?.schema === 'narada.site_continuity_cloudflare_sync_once.v1') return true;
+  return /(?:^|[\\/])[^\\/]*cloudflare-sync(?:-last)?\.json$/i.test(artifactPath);
+}
+
+async function executeSchedulerTaskReadback(plan, { execFileImpl = execFile, executionTimeoutMs = DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS } = {}) {
+  const scheduledTaskCommand = plan?.scheduled_task_command ?? [];
+  const [command, ...args] = scheduledTaskCommand;
+  const base = {
+    ...plan,
+    dry_run: false,
+    host_scheduler_read_admission: 'bounded_schtasks_query_from_scheduler_plan',
+    embeds_credentials: false,
+  };
+  if (command !== 'schtasks' || args[0] !== '/Query') {
+    return {
+      ...base,
+      scheduler_task_readback: {
+        state: 'refused',
+        status: 'needs_attention',
+        reason: 'unsupported_scheduler_query_command',
+        command: command ?? null,
+        args,
+        embeds_credentials: false,
+      },
+    };
+  }
+  const timeout = normalizeExecutionTimeoutMs(executionTimeoutMs);
+  try {
+    const result = await execFileImpl(command, args, { cwd: plan.repo_root, timeout, windowsHide: true });
+    const parsed = parseSchedulerTaskListOutput(result?.stdout ?? '');
+    return {
+      ...base,
+      scheduler_task_readback: summarizeSchedulerTaskReadback({
+        state: 'completed',
+        command,
+        args,
+        stdout: result?.stdout ?? '',
+        stderr: result?.stderr ?? '',
+        timeout_ms: timeout,
+        parsed,
+        expectedIntervalMinutes: plan.interval_minutes,
+        expectedTaskCommand: plan.task_command,
+        expectedTaskEntrypoint: plan.scheduled_task_entrypoint,
+      }),
+    };
+  } catch (error) {
+    return {
+      ...base,
+      scheduler_task_readback: {
+        state: 'failed',
+        status: 'needs_attention',
+        command,
+        args,
+        exit_code: error.code ?? null,
+        signal: error.signal ?? null,
+        stdout: error.stdout ?? '',
+        stderr: error.stderr ?? '',
+        timeout_ms: timeout,
+        embeds_credentials: false,
+      },
+    };
+  }
+}
+
+function summarizeSchedulerTaskReadback({ state, command, args, stdout, stderr, timeout_ms: timeoutMs, parsed, expectedIntervalMinutes, expectedTaskCommand, expectedTaskEntrypoint }) {
+  const repeatEvery = parsed['Repeat: Every'] ?? null;
+  const taskToRun = parsed['Task To Run'] ?? null;
+  const actualIntervalMinutes = parseSchedulerRepeatMinutes(repeatEvery);
+  const expectedInterval = normalizeIntervalMinutes(expectedIntervalMinutes);
+  const cadenceStatus = actualIntervalMinutes === null
+    ? 'unknown'
+    : actualIntervalMinutes === expectedInterval ? 'matches_plan' : 'differs_from_plan';
+  const expectedCommandNeedle = expectedTaskEntrypoint ?? expectedTaskCommand;
+  const taskCommandMatches = taskToRun && expectedCommandNeedle
+    ? normalizeCommandForComparison(taskToRun).includes(normalizeCommandForComparison(expectedCommandNeedle))
+    : null;
+  const taskCommandStatus = taskCommandMatches === null ? 'unknown' : taskCommandMatches ? 'matches_plan' : 'differs_from_plan';
+  const attentionReasons = [
+    cadenceStatus === 'differs_from_plan' ? 'scheduler_cadence_differs_from_plan' : null,
+    taskCommandStatus === 'differs_from_plan' ? 'scheduler_task_command_differs_from_plan' : null,
+  ].filter(Boolean);
+  return {
+    state,
+    status: attentionReasons.length === 0 ? 'ok' : 'needs_attention',
+    command,
+    args,
+    stdout,
+    stderr,
+    timeout_ms: timeoutMs,
+    parsed,
+    task_name: parsed.TaskName ?? null,
+    scheduled_task_state: parsed['Scheduled Task State'] ?? null,
+    status_text: parsed.Status ?? null,
+    last_run_time: parsed['Last Run Time'] ?? null,
+    last_result: parsed['Last Result'] ?? null,
+    next_run_time: parsed['Next Run Time'] ?? null,
+    task_to_run: taskToRun,
+    repeat_every: repeatEvery,
+    expected_interval_minutes: expectedInterval,
+    actual_interval_minutes: actualIntervalMinutes,
+    cadence_status: cadenceStatus,
+    task_command_status: taskCommandStatus,
+    attention_reasons: attentionReasons,
+    embeds_credentials: false,
+  };
+}
+
+function parseSchedulerTaskListOutput(output) {
+  const parsed = {};
+  for (const line of String(output ?? '').split(/\r?\n/)) {
+    const repeatEvery = /^Repeat:\s*Every:\s*(.*)$/i.exec(line);
+    if (repeatEvery) {
+      parsed['Repeat: Every'] = repeatEvery[1].trim();
+      continue;
+    }
+    const separator = line.indexOf(':');
+    if (separator <= 0) continue;
+    const key = line.slice(0, separator).trim();
+    const value = line.slice(separator + 1).trim();
+    if (key) parsed[key] = value;
+  }
+  return parsed;
+}
+
+function parseSchedulerRepeatMinutes(value) {
+  const text = String(value ?? '').trim();
+  if (!text || /^none$/i.test(text)) return null;
+  const hours = text.match(/(\d+)\s*Hour/i);
+  const minutes = text.match(/(\d+)\s*Minute/i);
+  const total = (hours ? Number.parseInt(hours[1], 10) * 60 : 0) + (minutes ? Number.parseInt(minutes[1], 10) : 0);
+  return Number.isFinite(total) && total > 0 ? total : null;
+}
+
+function normalizeCommandForComparison(value) {
+  return String(value ?? '').replaceAll('"', '').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
 function countResultStatuses(results) {
@@ -207,6 +349,9 @@ export async function runSiteContinuitySchedulerActionWithOptionalRefresh(
     const plan = await buildSiteContinuitySchedulerPlanWithOptionalRefresh(options, { env, materializeSiteRegistryProjection });
     if (options.dryRun === false && LIVE_SCHEDULER_TASK_ACTIONS.has(action)) {
       return executeSchedulerTaskPlan(plan, { execFileImpl, executionTimeoutMs: options.executionTimeoutMs });
+    }
+    if (options.dryRun === false && LIVE_SCHEDULER_READ_ACTIONS.has(action)) {
+      return executeSchedulerTaskReadback(plan, { execFileImpl, executionTimeoutMs: options.executionTimeoutMs });
     }
     return plan;
   }
@@ -596,9 +741,11 @@ export function readLocalSyncArtifactInventory(
       last_sync: lastOutputPath ? readLastSyncArtifact(lastOutputPath) : null,
     };
   }
-  const artifacts = readdirSync(artifactDirectory, { withFileTypes: true })
+  const allArtifactSummaries = readdirSync(artifactDirectory, { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
     .map((entry) => readLastSyncArtifact(join(artifactDirectory, entry.name)))
+    .filter((artifact) => isContinuitySyncArtifactSummary(artifact, lastOutputPath));
+  const artifacts = allArtifactSummaries
     .sort(compareArtifactSummaries);
   const configuredSiteSyncStatuses = buildConfiguredSiteSyncStatuses(configuredSiteRecords, artifacts, { maxArtifactAgeMinutes: effectiveMaxArtifactAgeMinutes, now });
   const needsAttention = artifacts.some((artifact) => artifact.status !== 'synced')
@@ -837,11 +984,8 @@ export function readLocalSchedulerStatus({ root, syncEntryPoint, taskEntryPoint,
   };
 }
 
-function buildTaskCommand({ nodeCommand, entrypoint, siteId, packetPath, outputPath }) {
+function buildTaskCommand({ nodeCommand, entrypoint }) {
   const parts = [quote(nodeCommand), quote(entrypoint)];
-  if (siteId) parts.push('--site', quote(siteId), '--sites', quote(siteId));
-  if (packetPath) parts.push('--packet', quote(packetPath));
-  if (outputPath) parts.push('--out', quote(outputPath));
   return parts.join(' ');
 }
 
@@ -1096,10 +1240,29 @@ function parseArgs(argv) {
   return args;
 }
 
+function loadLocalEnvFile(envPath) {
+  if (!envPath || !existsSync(envPath)) return;
+  const content = readFileSync(envPath, 'utf8');
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq <= 0) continue;
+    const key = trimmed.slice(0, eq).trim();
+    if (!key || process.env[key] !== undefined) continue;
+    process.env[key] = stripEnvValueQuotes(trimmed.slice(eq + 1).trim());
+  }
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const result = await runSiteContinuitySchedulerActionWithOptionalRefresh(parseArgs(process.argv.slice(2)));
+  const args = parseArgs(process.argv.slice(2));
+  const repoRoot = resolve(args.repoRoot ?? resolve(dirname(fileURLToPath(import.meta.url)), '../../..'));
+  loadLocalEnvFile(resolve(repoRoot, '.env'));
+  loadLocalEnvFile(resolve(repoRoot, '.narada/site-continuity/cloudflare-continuity.env'));
+  const result = await runSiteContinuitySchedulerActionWithOptionalRefresh({ ...args, repoRoot });
   if (result.site_registry_projection_refresh?.status && result.site_registry_projection_refresh.status !== 'ok') process.exitCode = 1;
   if (result.scheduler_task_execution?.status && result.scheduler_task_execution.status !== 'ok') process.exitCode = 1;
+  if (result.scheduler_task_readback?.status && result.scheduler_task_readback.status !== 'ok') process.exitCode = 1;
   if (result.schema === 'narada.cloudflare_carrier.site_continuity_reconciliation_execution.v1' && !['completed', 'dry_run'].includes(result.status)) process.exitCode = 1;
   console.log(JSON.stringify(result, null, 2));
 }
