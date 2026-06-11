@@ -1331,6 +1331,8 @@ test('worker site.read composes site sessions tasks authority events and carrier
     params: { site_id: 'site_fixture', execution: failedReconciliationExecution },
   }, { token: 'test-admin-token', path: '/api/carrier' }), env);
   assert.equal(failedReconciliationExecutionPut.status, 200);
+  const failedReconciliationExecutionPutBody = await failedReconciliationExecutionPut.json();
+  const failedReconciliationExecutionId = failedReconciliationExecutionPutBody.execution_record.execution_id;
 
   const readAfterFailedReconciliationExecution = await worker.fetch(jsonRequest({
     operation: 'site.read',
@@ -1356,6 +1358,34 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(operationReadAfterFailedReconciliationExecutionBody.operation_lifecycle_status.next_action, 'continuity_reconciliation_execution');
   assert.equal(operationReadAfterFailedReconciliationExecutionBody.operation_workflow_route.next_action, 'review_site_continuity_reconciliation_execution');
   assert.equal(operationReadAfterFailedReconciliationExecutionBody.operation_workflow_route.reason, 'operation_lifecycle_continuity_reconciliation_execution_attention');
+  assert.equal(operationReadAfterFailedReconciliationExecutionBody.operation_workflow_route.target, failedReconciliationExecutionId);
+  assert.equal(operationReadAfterFailedReconciliationExecutionBody.operation_workflow_route.focus_kind, 'site_continuity_reconciliation_execution');
+  assert.equal(operationReadAfterFailedReconciliationExecutionBody.operation_workflow_route.focus_ref, failedReconciliationExecutionId);
+
+  const reconciliationExecutionFocusReview = await worker.fetch(jsonRequest({
+    operation: 'operation_focus_review.acknowledge',
+    request_id: 'request_operation_focus_review_reconciliation_execution',
+    params: {
+      site_id: 'site_fixture',
+      operation_id: 'operation_site_read',
+      focus_kind: 'site_continuity_reconciliation_execution',
+      focus_ref: operationReadAfterFailedReconciliationExecutionBody.operation_workflow_route.focus_ref,
+      review_id: 'operation_focus_review_reconciliation_execution_fixture_1',
+      note: 'reviewed fixture failed reconciliation execution',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(reconciliationExecutionFocusReview.status, 200);
+
+  const operationReadAfterReconciliationExecutionReview = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_operation_read_after_reconciliation_execution_review',
+    params: { site_id: 'site_fixture', operation_id: 'operation_site_read', operation_focus_review_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(operationReadAfterReconciliationExecutionReview.status, 200);
+  const operationReadAfterReconciliationExecutionReviewBody = await operationReadAfterReconciliationExecutionReview.json();
+  assert.ok(operationReadAfterReconciliationExecutionReviewBody.operation_focus_reviews.some((review) => review.review_id === 'operation_focus_review_reconciliation_execution_fixture_1'));
+  assert.equal(operationReadAfterReconciliationExecutionReviewBody.operation_workflow_route.next_action, 'focus_open_task');
+  assert.equal(operationReadAfterReconciliationExecutionReviewBody.operation_workflow_route.reason, 'open_tasks');
 
   const staleLoopReportPut = await worker.fetch(jsonRequest({
     operation: 'site.continuity.loop.report.put',

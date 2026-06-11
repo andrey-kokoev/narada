@@ -2087,6 +2087,7 @@ function summarizeCloudflareOperationWorkflowRoute({
   const directiveDeliveries = Array.isArray(webhookDelayDirectiveDeliveries) ? webhookDelayDirectiveDeliveries : [];
   const dispatchDecisions = Array.isArray(residentDispatchDecisions) ? residentDispatchDecisions : [];
   const operatorFocus = summarizeCloudflareOperationOperatorFocus(operationActivityTimeline, { mailboxSendReviews, operationFocusReviews });
+  const reviewedOperationFocusKeys = cloudflareReviewedOperationFocusKeys(operationFocusReviews);
   const continuityDirectionStatus = operationContinuityDirectionStatus ?? lifecycleStatus?.operation_continuity_direction_status ?? null;
   const next = (() => {
     if (!operationId) return { action: 'select_operation', target: siteId ?? 'none', reason: 'operation_not_loaded' };
@@ -2109,7 +2110,17 @@ function summarizeCloudflareOperationWorkflowRoute({
     if (lifecycleStatus?.next_action === 'continuity_loop_report') return { action: 'review_continuity_loop_report', target: siteId ?? operationId, reason: 'operation_lifecycle_missing_continuity_loop_report' };
     if (lifecycleStatus?.next_action === 'refresh_site_continuity_loop') return { action: 'refresh_site_continuity_loop', target: siteId ?? operationId, reason: 'operation_lifecycle_continuity_loop_stale' };
     if (lifecycleStatus?.next_action === 'continuity_reconciliation_execution') {
-      return { action: 'review_site_continuity_reconciliation_execution', target: siteId ?? operationId, reason: 'operation_lifecycle_continuity_reconciliation_execution_attention' };
+      const reconciliationFocusRef = lifecycleStatus?.site_continuity_reconciliation_execution_status?.latest_execution_id ?? null;
+      const reconciliationReviewKey = reconciliationFocusRef ? `site_continuity_reconciliation_execution:${reconciliationFocusRef}` : null;
+      if (!reconciliationReviewKey || !reviewedOperationFocusKeys.has(reconciliationReviewKey)) {
+        return {
+          action: 'review_site_continuity_reconciliation_execution',
+          target: reconciliationFocusRef ?? siteId ?? operationId,
+          reason: 'operation_lifecycle_continuity_reconciliation_execution_attention',
+          focus_kind: 'site_continuity_reconciliation_execution',
+          focus_ref: reconciliationFocusRef,
+        };
+      }
     }
     if (lifecycleStatus?.next_action === 'carrier_evidence_read_degraded') return { action: 'review_carrier_evidence_replay', target: operationId, reason: 'carrier_evidence_read_degraded' };
     if (lifecycleStatus?.next_action === 'local_ingress_provider_liveness_missing') return { action: 'review_local_ingress_provider_liveness', target: siteId ?? operationId, reason: 'local_ingress_provider_liveness_missing' };
@@ -2148,6 +2159,8 @@ function summarizeCloudflareOperationWorkflowRoute({
     command_action: routedNext.action,
     next_action: routedNext.action,
     target: routedNext.target,
+    ...(routedNext.focus_kind ? { focus_kind: routedNext.focus_kind } : {}),
+    ...(routedNext.focus_ref ? { focus_ref: routedNext.focus_ref } : {}),
     status: ready ? 'ready' : 'needs_attention',
     reason: routedNext.reason,
     lifecycle_next_action: lifecycleStatus?.next_action ?? 'unknown',
@@ -6656,6 +6669,7 @@ async function findCloudflareOperationFocusRecord(env = {}, siteId, focusKind, f
   if (focusKind === 'site_file_change_proposal') return by(await listCloudflareSiteFileChangeProposals(env, siteId, limit), 'proposal_id');
   if (focusKind === 'local_ingress_request') return by(await listCloudflareLocalIngressRequests(env, siteId, limit), 'local_ingress_request_id');
   if (focusKind === 'repository_publication_request') return by(await listCloudflareRepositoryPublicationRequests(env, siteId, limit), 'repository_publication_request_id');
+  if (focusKind === 'site_continuity_reconciliation_execution') return by(await listCloudflareContinuityReconciliationExecutions(env, siteId, limit), 'execution_id');
   return null;
 }
 
