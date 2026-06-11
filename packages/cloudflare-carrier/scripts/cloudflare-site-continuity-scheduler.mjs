@@ -746,7 +746,7 @@ export function readLocalSchedulerStatus({ root, syncEntryPoint, taskEntryPoint,
 
 function buildTaskCommand({ nodeCommand, entrypoint, siteId, packetPath, outputPath }) {
   const parts = [quote(nodeCommand), quote(entrypoint)];
-  if (siteId) parts.push('--site', quote(siteId));
+  if (siteId) parts.push('--site', quote(siteId), '--sites', quote(siteId));
   if (packetPath) parts.push('--packet', quote(packetPath));
   if (outputPath) parts.push('--out', quote(outputPath));
   return parts.join(' ');

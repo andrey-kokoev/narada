@@ -63,6 +63,7 @@ test('site continuity scheduler install plan is bounded and secret-free', async 
     assert.equal(plan.scheduled_task_command[7], '5');
     assert.match(plan.task_command, /cloudflare-site-continuity-scheduled-task\.mjs/);
     assert.match(plan.task_command, /--site/);
+    assert.match(plan.task_command, /--sites/);
     assert.match(plan.task_command, /site_fixture/);
     assert.match(plan.task_command, /--packet/);
     assert.match(plan.task_command, /local-packet\.json/);

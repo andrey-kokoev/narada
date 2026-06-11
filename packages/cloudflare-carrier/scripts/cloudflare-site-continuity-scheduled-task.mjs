@@ -7,9 +7,11 @@ process.env.NARADA_SITE_CONTINUITY_SCHEDULER_INTERVAL_MINUTES ||= '5';
 
 process.argv = [
   process.argv[0],
-  fileURLToPath(new URL('./cloudflare-site-continuity-sync.mjs', import.meta.url)),
-  'sync-once',
+  fileURLToPath(new URL('./cloudflare-site-continuity-scheduler.mjs', import.meta.url)),
+  '--action',
+  'reconcile-execute',
+  '--live',
   ...process.argv.slice(2),
 ];
 
-await import('./cloudflare-site-continuity-sync.mjs');
+await import('./cloudflare-site-continuity-scheduler.mjs');
