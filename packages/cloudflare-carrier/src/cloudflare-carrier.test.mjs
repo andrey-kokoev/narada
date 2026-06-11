@@ -2833,6 +2833,10 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Operation Flight Deck/);
   assert.match(html, /Continuity Workflow/);
   assert.match(html, /Operator Route/);
+  assert.match(html, /Operation Focus Review/);
+  assert.match(html, /acknowledgeOperationFocusReview/);
+  assert.match(html, /operation_focus_review\.acknowledge/);
+  assert.match(html, /review_site_continuity_reconciliation_execution/);
   assert.match(html, /operatorRoute/);
   assert.match(html, /operatorRouteStages/);
   assert.match(html, /sitePostureRouteStage/);

@@ -13603,6 +13603,11 @@ export function renderCloudflareCarrierConsole() {
         <div class="actions"><button id="acknowledgeMailboxSendReview" class="secondary">Acknowledge Send Review</button></div>
       </div>
       <div class="product-panel">
+        <h2>Operation Focus Review</h2>
+        <div id="operationFocusReviewDetail" class="evidence-summary"><div class="empty">No operation focus selected.</div></div>
+        <div class="actions"><button id="acknowledgeOperationFocusReview" class="secondary">Acknowledge Operation Focus</button></div>
+      </div>
+      <div class="product-panel">
         <h2>Site Membership</h2>
         <label>Principal ID<input id="memberPrincipalId" placeholder="microsoft:tenant:object-id"></label>
         <label>Role<input id="memberRole" value="viewer"></label>
@@ -13721,7 +13726,7 @@ export function renderCloudflareCarrierConsole() {
     const classifyCloudflareEvidenceCommandState = ${classifyCloudflareEvidenceCommandState.toString()};
     const classifyCloudflareSiteCommandState = ${classifyCloudflareSiteCommandState.toString()};
     const classifyCloudflareMembershipCommandState = ${classifyCloudflareMembershipCommandState.toString()};
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], siteList: [], siteProductStatuses: [], siteProductOverview: null, sitePostureRoute: null, consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, webhookDelayDirectiveFocus: null, webhookDelayDirectiveDeliveryFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null, localIngressRequestFocus: null, localIngressEvidenceFocus: null, localIngressProviderHeartbeatFocus: null, repositoryPublicationRequestFocus: null, repositoryPublicationReadinessFocus: null, repositoryPublicationEvidenceFocus: null, repositoryPublicationExecutionFocus: null, repositoryPublicationProviderHeartbeatFocus: null, mailboxDraftReplyProposalFocus: null, mailboxOutlookDraftCreateFocus: null, mailboxSendAcceptedFocus: null, mailboxSendConfirmationFocus: null, mailboxDraftCreateFormProposalId: null, siteFileChangeProposalFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], siteList: [], siteProductStatuses: [], siteProductOverview: null, sitePostureRoute: null, consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, operationFocusReviewFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, webhookDelayDirectiveFocus: null, webhookDelayDirectiveDeliveryFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null, localIngressRequestFocus: null, localIngressEvidenceFocus: null, localIngressProviderHeartbeatFocus: null, repositoryPublicationRequestFocus: null, repositoryPublicationReadinessFocus: null, repositoryPublicationEvidenceFocus: null, repositoryPublicationExecutionFocus: null, repositoryPublicationProviderHeartbeatFocus: null, mailboxDraftReplyProposalFocus: null, mailboxOutlookDraftCreateFocus: null, mailboxSendAcceptedFocus: null, mailboxSendConfirmationFocus: null, mailboxDraftCreateFormProposalId: null, siteFileChangeProposalFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -13846,6 +13851,13 @@ export function renderCloudflareCarrierConsole() {
           operation_id: el('operationId').value.trim(),
           ...params,
         }, { request_id: 'console_mailbox_send_review_acknowledge_' + Date.now() });
+      },
+      acknowledgeOperationFocusReview(params) {
+        return this.request('operation_focus_review.acknowledge', {
+          site_id: el('siteId').value.trim(),
+          operation_id: el('operationId').value.trim(),
+          ...params,
+        }, { request_id: 'console_operation_focus_review_acknowledge_' + Date.now() });
       },
       readEvents() { return this.request('session.events.read', { after_sequence: state.afterSequence }); },
       readSessionEvidence() { return this.request('session.events.read', { after_sequence: 0 }); },
@@ -14022,6 +14034,7 @@ export function renderCloudflareCarrierConsole() {
       renderContinuityLoopEvidence(product);
       renderMailboxDraftCreateControl(product);
       renderMailboxSendReviewDetail(product);
+      renderOperationFocusReviewDetail(product);
       renderLocalIngressRequestNavigator(product.local_ingress_requests || []);
       renderLocalIngressEvidenceNavigator(product.local_ingress_evidence || []);
       renderLocalIngressProviderHeartbeatNavigator(product.local_ingress_provider_heartbeats || []);
@@ -14827,6 +14840,7 @@ export function renderCloudflareCarrierConsole() {
       if (action === 'monitor_operation_continuity') { renderLocalCloudContinuityBridge(product); return; }
       if (action === 'refresh_site_continuity_loop') { focusContinuityLoopRefresh(product); return; }
       if (action === 'review_continuity_loop_report') { focusContinuityLoopReport(product); return; }
+      if (action === 'review_site_continuity_reconciliation_execution') { focusOperationReviewFromRoute(route, product); return; }
       if (action === 'review_carrier_evidence_replay') { focusRecoveryEvidence(product); return; }
       if (action === 'review_directive_delivery') { focusWebhookDelayDirectiveDelivery(); return; }
       if (action === 'review_local_ingress_provider_liveness') { focusLocalIngressProviderLiveness(); return; }
@@ -17675,6 +17689,71 @@ export function renderCloudflareCarrierConsole() {
       );
       el('mailboxSendReviewDetail').replaceChildren(...fields);
     }
+    function focusOperationReviewFromRoute(route = operationWorkflowRouteStage(), product = state.operationProduct || {}) {
+      if (!route?.focus_kind || !route?.focus_ref) throw new Error('Operation workflow route does not expose a review focus.');
+      state.operationFocusReviewFocus = {
+        focus_kind: route.focus_kind,
+        focus_ref: route.focus_ref,
+        action: route.next_action || route.command_action || 'review_operation_focus',
+        target: route.target || route.focus_ref,
+        reason: route.reason || 'operation_focus_needs_review',
+      };
+      renderOperationFocusReviewDetail(product);
+    }
+    function focusedOperationFocusReview(product = state.operationProduct || {}) {
+      const route = operationWorkflowRouteStage(product);
+      if (state.operationFocusReviewFocus?.focus_kind && state.operationFocusReviewFocus?.focus_ref) return state.operationFocusReviewFocus;
+      if (route?.focus_kind && route?.focus_ref) {
+        return {
+          focus_kind: route.focus_kind,
+          focus_ref: route.focus_ref,
+          action: route.next_action || route.command_action || 'review_operation_focus',
+          target: route.target || route.focus_ref,
+          reason: route.reason || 'operation_focus_needs_review',
+        };
+      }
+      return null;
+    }
+    function operationFocusRecordForReview(focus, product = state.operationProduct || {}) {
+      if (!focus?.focus_kind || !focus?.focus_ref) return null;
+      const focusRef = String(focus.focus_ref || '');
+      if (focus.focus_kind === 'site_continuity_reconciliation_execution') {
+        return (product.site_continuity_reconciliation_executions || []).find((entry) => String(entry.execution_id || '') === focusRef) || null;
+      }
+      return null;
+    }
+    function renderOperationFocusReviewDetail(product = state.operationProduct || {}) {
+      const focus = focusedOperationFocusReview(product);
+      if (!focus) {
+        el('operationFocusReviewDetail').innerHTML = '<div class="empty">No operation focus selected.</div>';
+        return;
+      }
+      const latestReview = (product.operation_focus_reviews || []).find((review) => review.focus_kind === focus.focus_kind && review.focus_ref === focus.focus_ref) || null;
+      const focusRecord = operationFocusRecordForReview(focus, product);
+      el('operationFocusReviewDetail').replaceChildren(
+        evidenceField('Review Kind', focus.focus_kind),
+        evidenceField('Review Focus', focus.focus_ref),
+        evidenceField('Route Action', focus.action || 'review_operation_focus'),
+        evidenceField('Route Reason', focus.reason || 'operation_focus_needs_review'),
+        evidenceField('Focus Status', focusRecord?.status || focusRecord?.latest_status || 'unknown'),
+        evidenceField('Review Status', latestReview?.review_status || 'not_acknowledged'),
+        evidenceField('Review Record', latestReview?.review_id || 'none'),
+        evidenceField('Review Operator', latestReview?.recorded_by_principal_id || 'none'),
+      );
+    }
+    async function acknowledgeFocusedOperationFocusReview() {
+      const focus = focusedOperationFocusReview();
+      if (!focus?.focus_kind || !focus?.focus_ref) throw new Error('Operation focus review is required.');
+      const body = await api.acknowledgeOperationFocusReview({
+        focus_kind: focus.focus_kind,
+        focus_ref: focus.focus_ref,
+        review_action: 'acknowledge_operation_focus_review',
+        note: 'operator_acknowledged_operation_focus_review',
+      });
+      state.operationFocusReviewFocus = null;
+      await refreshOperation();
+      return body;
+    }
     async function acknowledgeFocusedMailboxSendReview() {
       const product = state.operationProduct || {};
       const confirmation = state.mailboxSendConfirmationFocus || (!state.mailboxSendAcceptedFocus ? (product.mailbox_send_confirmations || [])[0] || null : null);
@@ -19627,6 +19706,7 @@ export function renderCloudflareCarrierConsole() {
     el('executeRepositoryPublication').addEventListener('click', () => run(executeFocusedRepositoryPublication));
     el('createOutlookDraftFromProposal').addEventListener('click', () => run(createOutlookDraftFromFocusedProposal));
     el('acknowledgeMailboxSendReview').addEventListener('click', () => run(acknowledgeFocusedMailboxSendReview));
+    el('acknowledgeOperationFocusReview').addEventListener('click', () => run(acknowledgeFocusedOperationFocusReview));
     el('continuityWorkflowNextAction').addEventListener('click', applyContinuityWorkflowNextStep);
     el('authorityNextAction').addEventListener('click', applyAuthorityNextAction);
     el('authorityReadSiteAction').addEventListener('click', () => run(refreshSiteProduct));
