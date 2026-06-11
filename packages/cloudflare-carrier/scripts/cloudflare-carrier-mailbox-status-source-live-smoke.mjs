@@ -68,11 +68,19 @@ const operationRead = await postCarrier({
 });
 assert.equal(operationRead.http_status, 200, JSON.stringify(operationRead.body));
 assert.ok(operationRead.body.mailbox_status_source_reads.some((entry) => entry.read_id === readId));
-assert.ok(operationRead.body.operation_product_surface.mailbox_status_source_read_count >= 1);
-assert.equal(operationRead.body.operation_product_surface.mailbox_status_authority, 'cloudflare_graph_mailbox_status_source');
-assert.equal(operationRead.body.operation_product_surface.mailbox_send_admission, 'not_admitted');
-assert.equal(operationRead.body.operation_product_surface.mailbox_mutation_admission, 'not_admitted');
-assert.equal(operationRead.body.operation_product_surface.mailbox_authority_partition, 'mailbox_status_source_read_cloudflare_owned_send_and_mutation_not_admitted');
+const productSurface = operationRead.body.operation_product_surface;
+assert.ok(productSurface.mailbox_status_source_read_count >= 1);
+const sendAcceptedCount = Number(productSurface.mailbox_send_accepted_count ?? 0);
+const sendConfirmationCount = Number(productSurface.mailbox_send_confirmation_count ?? 0);
+const expectedProductPartition = sendAcceptedCount > 0
+  ? sendConfirmationCount > 0
+    ? 'mailbox_status_source_read_send_and_confirmation_cloudflare_owned_mutation_not_admitted'
+    : 'mailbox_status_source_read_and_send_cloudflare_owned_confirmation_and_mutation_not_admitted'
+  : 'mailbox_status_source_read_cloudflare_owned_send_and_mutation_not_admitted';
+assert.equal(productSurface.mailbox_status_authority, 'cloudflare_graph_mailbox_status_source');
+assert.equal(productSurface.mailbox_send_admission, sendAcceptedCount > 0 ? 'admitted' : 'not_admitted');
+assert.equal(productSurface.mailbox_mutation_admission, 'not_admitted');
+assert.equal(productSurface.mailbox_authority_partition, expectedProductPartition);
 
 process.stdout.write(`${JSON.stringify({
   schema: 'narada.cloudflare_carrier.mailbox_status_source_live_smoke.v1',
