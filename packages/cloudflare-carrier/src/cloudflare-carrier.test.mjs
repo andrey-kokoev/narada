@@ -1970,6 +1970,8 @@ test('worker executes admitted repository publication through Cloudflare GitHub 
   assert.equal(readBody.repository_publication_operation_posture.direct_cloudflare_repository_mutation_admission, 'admitted_by_cloudflare_github_repository_publication');
   assert.equal(readBody.repository_publication_operation_posture.authority_partition, 'cloudflare_admits_and_executes_github_repository_publication');
   assert.equal(readBody.authority_transfer_posture.domains.find((domain) => domain.domain === 'repository_publication').classification, 'cloudflare_owned');
+  assert.deepEqual(readBody.authority_transfer_posture.domains.find((domain) => domain.domain === 'site_file_materialization').remaining_windows_authority, ['site_file_materialization']);
+  assert.equal(readBody.authority_transfer_posture.remaining_windows_authorities.some((entry) => entry.domain === 'site_file_materialization' && entry.authority === 'repository_publication'), false);
 });
 
 test('worker executes admitted repository publication with GitHub App installation authority', async () => {

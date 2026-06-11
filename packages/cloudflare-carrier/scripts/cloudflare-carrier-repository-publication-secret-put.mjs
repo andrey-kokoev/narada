@@ -14,7 +14,8 @@ const repoRoot = resolve(packageRoot, '../..');
 loadLocalEnv(join(repoRoot, '.env'));
 
 const tokenFile = option('--token-file') ?? process.env.CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN_FILE ?? '';
-const tokenValue = option('--token') ?? process.env.CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN_VALUE ?? (tokenFile ? readTokenFile(tokenFile) : '');
+const fromGhAuth = args.includes('--from-gh-auth') || process.env.CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN_FROM_GH_AUTH === '1';
+const tokenValue = option('--token') ?? process.env.CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN_VALUE ?? (tokenFile ? readTokenFile(tokenFile) : fromGhAuth ? await readGhAuthToken() : '');
 const configPath = option('--config') ?? 'wrangler.toml';
 
 if (!tokenValue) throw new Error('repository_publication_secret_put_requires_--token_or_--token-file_or_CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN_VALUE');
@@ -30,12 +31,13 @@ process.stdout.write(`${JSON.stringify({
   status: 'ok',
   secret_name: SECRET_NAME,
   config_path: configPath,
-  token_source: tokenFile ? 'token_file' : 'explicit_token_value',
+  token_source: tokenFile ? 'token_file' : fromGhAuth ? 'gh_auth_keyring' : 'explicit_token_value',
 }, null, 2)}\n`);
 
 function putSecret({ secretName, tokenValue, configPath }) {
   return new Promise((resolvePromise) => {
-    const child = spawn('wrangler', ['secret', 'put', secretName, '--config', configPath], {
+    const pnpm = pnpmInvocation();
+    const child = spawn(pnpm.command, [...pnpm.args, 'exec', 'wrangler', 'secret', 'put', secretName, '--config', configPath], {
       cwd: packageRoot,
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -46,6 +48,10 @@ function putSecret({ secretName, tokenValue, configPath }) {
     child.stderr.setEncoding('utf8');
     child.stdout.on('data', (chunk) => { stdout += chunk; });
     child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.on('error', (error) => {
+      stderr += error?.message ?? 'repository_publication_secret_put_spawn_failed';
+      resolvePromise({ exitCode: 1 });
+    });
     child.on('close', (exitCode) => {
       const sanitizedStdout = redactToken(stdout, tokenValue).trim();
       const sanitizedStderr = redactToken(stderr, tokenValue).trim();
@@ -57,6 +63,13 @@ function putSecret({ secretName, tokenValue, configPath }) {
   });
 }
 
+function pnpmInvocation() {
+  const npmExecPath = process.env.npm_execpath ?? '';
+  if (/\.[cm]?js$/i.test(npmExecPath)) return { command: process.execPath, args: [npmExecPath] };
+  if (npmExecPath) return { command: npmExecPath, args: [] };
+  return { command: process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm', args: [] };
+}
+
 function option(name) {
   const index = args.indexOf(name);
   return index >= 0 ? args[index + 1] : null;
@@ -66,6 +79,30 @@ function readTokenFile(tokenFilePath) {
   const resolved = isAbsolute(tokenFilePath) ? tokenFilePath : join(repoRoot, tokenFilePath);
   if (!existsSync(resolved)) throw new Error(`repository_publication_secret_put_token_file_missing:${resolved}`);
   return readFileSync(resolved, 'utf8').trim();
+}
+
+function readGhAuthToken() {
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn('gh', ['auth', 'token'], {
+      cwd: repoRoot,
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    child.on('error', reject);
+    child.on('close', (exitCode) => {
+      if (exitCode !== 0) {
+        reject(new Error(`repository_publication_secret_put_gh_auth_token_failed:${exitCode}:${stderr.trim()}`));
+        return;
+      }
+      resolvePromise(stdout.trim());
+    });
+  });
 }
 
 function loadLocalEnv(envPath) {

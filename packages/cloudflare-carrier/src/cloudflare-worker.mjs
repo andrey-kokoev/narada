@@ -2495,7 +2495,8 @@ function summarizeCloudflareAuthorityTransferPosture({
   const mailboxSendRemaining = mailboxSendAcceptedCount > 0 ? [] : ['mailbox_send'];
   const mailboxSendConfirmationRemaining = mailboxSendAcceptedCount > 0 && mailboxSendConfirmationCount === 0 ? ['mailbox_delivery_confirmation'] : [];
   const mailboxOutlookDraftCreateRemaining = mailboxOutlookDraftCreateCount > 0 ? [] : ['outlook_draft_create'];
-  const siteFileMaterializationRemaining = siteFileMaterializationCount > 0 ? [] : ['site_file_materialization'];
+  const repositoryPublicationRemaining = Number(repositoryPublicationOperationPosture?.repository_publication_execution_count ?? 0) > 0 ? [] : ['repository_publication'];
+  const siteFileMaterializationRemaining = [...(siteFileMaterializationCount > 0 ? [] : ['site_file_materialization']), ...repositoryPublicationRemaining];
   const mailboxStatusClassification = mailboxStatusSourceCount > 0
     ? 'cloudflare_owned'
     : mailboxStatusShadowCount > 0 ? 'cloudflare_recorded_windows_owned' : 'windows_retained';
@@ -2544,7 +2545,7 @@ function summarizeCloudflareAuthorityTransferPosture({
       classification: classifyCounted(siteFileMaterializationCount, 'cloudflare_owned'),
       observed_count: siteFileMaterializationCount,
       authority_partition: siteFileMaterializationCount > 0 ? 'site_file_materialization_cloudflare_owned_windows_filesystem_and_publication_not_admitted' : 'materialization_not_observed_filesystem_and_publication_windows_owned',
-      remaining_windows_authority: siteFileMaterializationCount > 0 ? ['repository_publication'] : ['site_file_materialization', 'repository_publication'],
+      remaining_windows_authority: siteFileMaterializationRemaining,
     },
     {
       domain: 'local_ingress',
