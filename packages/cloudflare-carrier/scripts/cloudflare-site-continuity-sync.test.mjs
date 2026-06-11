@@ -221,7 +221,16 @@ test('site continuity sync cycle pushes local packet and returns Cloudflare pack
   });
   const mock = await startCarrierMock((body) => {
     if (body.operation === 'site.continuity.packet.put') {
-      return { body: { ok: true, status: 'recorded', packet_id: body.params.packet.packet_id } };
+      return { body: {
+        ok: true,
+        status: 'imported',
+        packet_record: {
+          packet_id: body.params.packet.packet_id,
+          imported_at: '2026-06-11T09:00:00.000Z',
+          durability_action: 'refreshed_existing_packet',
+          previous_imported_at: '2026-06-11T08:59:00.000Z',
+        },
+      } };
     }
     if (body.operation === 'site.read') {
       return {
@@ -259,6 +268,10 @@ test('site continuity sync cycle pushes local packet and returns Cloudflare pack
     assert.equal(body.continuity_loop_report.cloudflare_push.status, 'imported');
     assert.equal(body.continuity_loop_report.cloudflare_push.pushed_packet_id, localPacket.packet_id);
     assert.equal(body.continuity_loop_report.cloudflare_push.returned_packet_id, cloudflarePacket.packet_id);
+    assert.equal(body.continuity_loop_report.cloudflare_push.durability_action, 'refreshed_existing_packet');
+    assert.equal(body.continuity_loop_report.cloudflare_push.imported_at, '2026-06-11T09:00:00.000Z');
+    assert.equal(body.continuity_loop_report.cloudflare_push.previous_imported_at, '2026-06-11T08:59:00.000Z');
+    assert.equal(body.continuity_loop_report.cloudflare_push.packet_record.packet_id, localPacket.packet_id);
     assert.equal(body.continuity_loop_report.windows_packet_count, 1);
     assert.equal(body.continuity_loop_report.authority_boundary.executable_cross_embodiment_mutation, 'refused_by_site_continuity_classifier');
     assert.equal(body.packet.packet_id, cloudflarePacket.packet_id);

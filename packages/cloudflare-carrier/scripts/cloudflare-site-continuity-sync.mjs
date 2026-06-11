@@ -433,6 +433,7 @@ function classifyRepositoryPublicationEvidence(evidence) {
 }
 
 function buildSiteContinuityLoopReport({ siteId, localPacket, cloudflarePacket, pushed, generatedAt }) {
+  const packetRecord = pushed.body?.packet_record ?? null;
   return {
     schema: 'narada.site_continuity_productized_loop.v1',
     site_id: siteId,
@@ -446,6 +447,10 @@ function buildSiteContinuityLoopReport({ siteId, localPacket, cloudflarePacket, 
       pushed_packet_id: localPacket.packet_id ?? null,
       returned_packet_id: cloudflarePacket.packet_id ?? null,
       http_status: pushed.http_status,
+      packet_record: packetRecord,
+      durability_action: packetRecord?.durability_action ?? null,
+      imported_at: packetRecord?.imported_at ?? null,
+      previous_imported_at: packetRecord?.previous_imported_at ?? null,
     },
     windows_packet_count: 1,
     authority_boundary: {
