@@ -3316,6 +3316,9 @@ function summarizeCloudflarePersistencePosture(env = {}, {
   tasks = [],
   carrierEvidence = [],
   continuityPackets = [],
+  continuityLoopReports = [],
+  continuityReconciliationExecutions = [],
+  operationFocusReviews = [],
   carrierEvidenceReadStatus = null,
 } = {}) {
   const hasCarrierSessions = Boolean(env.CLOUDFLARE_CARRIER_SESSIONS);
@@ -3325,11 +3328,18 @@ function summarizeCloudflarePersistencePosture(env = {}, {
   const taskList = Array.isArray(tasks) ? tasks : [];
   const evidenceGroups = Array.isArray(carrierEvidence) ? carrierEvidence : [];
   const continuityPacketList = Array.isArray(continuityPackets) ? continuityPackets : [];
+  const continuityLoopReportList = Array.isArray(continuityLoopReports) ? continuityLoopReports : [];
+  const continuityReconciliationExecutionList = Array.isArray(continuityReconciliationExecutions) ? continuityReconciliationExecutions : [];
+  const operationFocusReviewList = Array.isArray(operationFocusReviews) ? operationFocusReviews : [];
   const evidenceEventCount = evidenceGroups.reduce((count, group) => count + (Array.isArray(group?.events) ? group.events.length : 0), 0);
   const durableBoundaries = [
     { key: 'session_snapshot', substrate: 'cloudflare_durable_object_storage', status: hasCarrierSessions ? 'available' : 'missing', authority: 'carrier_session_ordered_lane' },
     { key: 'site_registry', substrate: 'cloudflare_d1_site_registry', status: hasSiteRegistry ? 'available' : 'missing', authority: 'site_membership_operation_authority' },
     { key: 'carrier_evidence_index', substrate: 'cloudflare_d1_site_registry', status: hasSiteRegistry ? 'available' : 'missing', authority: 'reconstructable_carrier_evidence_projection' },
+    { key: 'site_continuity_packet_store', substrate: 'cloudflare_d1_site_registry', status: hasSiteRegistry ? 'available' : 'missing', authority: 'local_cloud_continuity_packet_projection' },
+    { key: 'site_continuity_loop_report_store', substrate: 'cloudflare_d1_site_registry', status: hasSiteRegistry ? 'available' : 'missing', authority: 'cloudflare_site_continuity_loop_report' },
+    { key: 'site_continuity_reconciliation_execution_store', substrate: 'cloudflare_d1_site_registry', status: hasSiteRegistry ? 'available' : 'missing', authority: 'cloudflare_site_continuity_reconciliation_execution' },
+    { key: 'operation_focus_review_store', substrate: 'cloudflare_d1_site_registry', status: hasSiteRegistry ? 'available' : 'missing', authority: CLOUDFLARE_OPERATION_FOCUS_REVIEW_AUTHORITY },
     { key: 'site_file_materialization_store', substrate: 'cloudflare_d1_site_registry', status: hasSiteRegistry ? 'available' : 'missing', authority: 'cloudflare_site_file_materialization_record' },
     { key: 'local_ingress_request_queue', substrate: 'cloudflare_d1_site_registry', status: hasSiteRegistry ? 'available' : 'missing', authority: CLOUDFLARE_LOCAL_INGRESS_REQUEST_AUTHORITY },
     { key: 'repository_publication_request_queue', substrate: 'cloudflare_d1_site_registry', status: hasSiteRegistry ? 'available' : 'missing', authority: CLOUDFLARE_REPOSITORY_PUBLICATION_REQUEST_AUTHORITY },
@@ -3359,6 +3369,9 @@ function summarizeCloudflarePersistencePosture(env = {}, {
     carrier_evidence_group_count: evidenceGroups.length,
     carrier_evidence_event_count: evidenceEventCount,
     continuity_packet_count: continuityPacketList.length,
+    continuity_loop_report_count: continuityLoopReportList.length,
+    continuity_reconciliation_execution_count: continuityReconciliationExecutionList.length,
+    operation_focus_review_count: operationFocusReviewList.length,
     evidence_read_state: carrierEvidenceReadStatus?.state ?? 'unknown',
     carrier_evidence_truncated_session_count: carrierEvidenceReadStatus?.truncated_session_count ?? 0,
     next_action: missing[0] ?? warnings[0] ?? 'monitor_persistence_posture',
@@ -4921,6 +4934,9 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       tasks,
       carrierEvidence,
       continuityPackets,
+      continuityLoopReports,
+      continuityReconciliationExecutions,
+      operationFocusReviews,
       carrierEvidenceReadStatus,
     });
     const cloudflareRecoveryPosture = summarizeCloudflareRecoveryPosture({
@@ -5277,6 +5293,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
   const residentLoopShadowRuns = await listCloudflareResidentLoopShadowRuns(env, siteId, params.resident_loop_shadow_limit ?? params.limit);
   const mailboxStatusShadowReads = await listCloudflareMailboxStatusShadowReads(env, siteId, params.mailbox_status_shadow_limit ?? params.limit);
   const mailboxStatusSourceReads = await listCloudflareMailboxStatusSourceReads(env, siteId, params.mailbox_status_source_limit ?? params.limit);
+  const operationFocusReviews = await listCloudflareOperationFocusReviews(env, siteId, params.operation_focus_review_limit ?? params.limit);
   const siteFileChangeProposals = await listCloudflareSiteFileChangeProposals(env, siteId, params.site_file_change_proposal_limit ?? params.limit);
   const siteFileMaterializations = await listCloudflareSiteFileMaterializations(env, siteId, params.site_file_materialization_limit ?? params.limit);
   const localIngressRequests = await listCloudflareLocalIngressRequests(env, siteId, params.local_ingress_request_limit ?? params.limit);
@@ -5304,6 +5321,9 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     tasks,
     carrierEvidence,
     continuityPackets,
+    continuityLoopReports,
+    continuityReconciliationExecutions,
+    operationFocusReviews,
     carrierEvidenceReadStatus,
   });
   const cloudflareRecoveryPosture = summarizeCloudflareRecoveryPosture({
@@ -5340,6 +5360,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     resident_loop_shadow_runs: residentLoopShadowRuns,
     mailbox_status_shadow_reads: mailboxStatusShadowReads,
     mailbox_status_source_reads: mailboxStatusSourceReads,
+    operation_focus_reviews: operationFocusReviews,
     site_file_change_proposals: siteFileChangeProposals,
     site_file_materializations: siteFileMaterializations,
     local_ingress_requests: localIngressRequests,
