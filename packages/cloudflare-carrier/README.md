@@ -273,6 +273,14 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:read -- --url <worke
 
 The command prints a `narada.cloudflare_carrier.product_read.v1` envelope by default, including `site.list`, `site.read`, `operation.list`, or `operation.read` response evidence and a compact summary. It records only `auth_source` in the output; bearer tokens and operator-session cookies are not echoed.
 
+Create a governed Cloudflare operation from the operator CLI when the caller has Site authority:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:operation:create:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --display-name "Operator Work" --operation-kind productization --operator-session-file cloudflare-operator-session.json
+```
+
+`product:operation:create` calls `operation.create` through the same authenticated `POST /api/carrier` envelope as the console. It is a product mutation, not a readback command: the Worker still enforces Site authority, records the operation in the Site Registry, and returns a redacted `narada.cloudflare_carrier.operation_create.v1` envelope. The `:text` alias prints the worker URL, auth source, site, operation id, name, kind, and status without echoing bearer tokens or operator-session cookies.
+
 For operator-facing readback without JSON inspection, use the text aliases:
 
 ```powershell

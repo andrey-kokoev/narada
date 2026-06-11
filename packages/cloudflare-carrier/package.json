@@ -8,7 +8,7 @@
     "./worker": "./src/cloudflare-worker.mjs"
   },
   "scripts": {
-    "test": "node --test src/cloudflare-carrier.test.mjs scripts/cloudflare-site-continuity-sync.test.mjs scripts/cloudflare-site-continuity-scheduler.test.mjs scripts/cloudflare-site-continuity-bindings.test.mjs scripts/cloudflare-carrier-site-registry-projection.test.mjs scripts/cloudflare-carrier-provider-liveness-refresh.test.mjs scripts/cloudflare-carrier-provider-liveness-scheduler.test.mjs scripts/cloudflare-carrier-product-read.test.mjs scripts/cloudflare-carrier-script-manifest.test.mjs",
+    "test": "node --test src/cloudflare-carrier.test.mjs scripts/cloudflare-site-continuity-sync.test.mjs scripts/cloudflare-site-continuity-scheduler.test.mjs scripts/cloudflare-site-continuity-bindings.test.mjs scripts/cloudflare-carrier-site-registry-projection.test.mjs scripts/cloudflare-carrier-provider-liveness-refresh.test.mjs scripts/cloudflare-carrier-provider-liveness-scheduler.test.mjs scripts/cloudflare-carrier-product-read.test.mjs scripts/cloudflare-carrier-operation-create.test.mjs scripts/cloudflare-carrier-script-manifest.test.mjs",
     "deploy:check": "node scripts/cloudflare-carrier-deploy-check.mjs",
     "deploy:dry-run": "wrangler deploy --dry-run --config wrangler.toml",
     "deploy:live": "wrangler deploy --config wrangler.toml",
@@ -25,6 +25,8 @@
     "product:operation:list:text": "node scripts/cloudflare-carrier-product-read.mjs --operation operation.list --format text",
     "product:operation:read": "node scripts/cloudflare-carrier-product-read.mjs --operation operation.read",
     "product:operation:read:text": "node scripts/cloudflare-carrier-product-read.mjs --operation operation.read --format text",
+    "product:operation:create": "node scripts/cloudflare-carrier-operation-create.mjs",
+    "product:operation:create:text": "node scripts/cloudflare-carrier-operation-create.mjs --format text",
     "authority-transfer:readiness-smoke:live": "node scripts/cloudflare-carrier-authority-transfer-readiness-live-smoke.mjs",
     "webhook-delay:shadow-smoke:live": "node scripts/cloudflare-carrier-webhook-delay-shadow-live-smoke.mjs",
     "webhook-delay:observation-primary-smoke:live": "node scripts/cloudflare-carrier-webhook-delay-observation-primary-live-smoke.mjs",
