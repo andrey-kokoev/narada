@@ -48,7 +48,7 @@ export function buildSiteContinuitySchedulerPlan({
   sitesFilePath = process.env.NARADA_SITE_CONTINUITY_SITES_FILE ?? null,
   siteRegistryProjectionPath = process.env.NARADA_CLOUDFLARE_SITE_REGISTRY_PROJECTION ?? '.narada/site-registry/cloudflare-sites.json',
   maxArtifactAgeMinutes = process.env.NARADA_SITE_CONTINUITY_MAX_ARTIFACT_AGE_MINUTES ?? DEFAULT_MAX_SYNC_ARTIFACT_AGE_MINUTES,
-  nodeCommand = process.env.NARADA_NODE_COMMAND ?? 'node',
+  nodeCommand = resolveDefaultNodeCommand(),
   hiddenWrapperPath = null,
   now = () => new Date().toISOString(),
   dryRun = true,
@@ -311,6 +311,10 @@ async function executeSchedulerTaskReadback(plan, { execFileImpl = execFile, exe
       expectedIntervalMinutes: plan.interval_minutes,
       expectedTaskCommand: plan.task_command,
       expectedTaskEntrypoint: plan.scheduled_task_entrypoint,
+      hiddenWrapperReadback: readHiddenWrapperFileReadback({
+        wrapperPath: plan.hidden_wrapper_path,
+        expectedContent: plan.hidden_wrapper_content,
+      }),
     });
     const next = {
       ...base,
@@ -397,6 +401,7 @@ export function formatSiteContinuitySchedulerResultForText(result) {
   lines.push(`Status: ${status}`);
   if (result?.action) lines.push(`Action: ${result.action}`);
   if (result?.plan_status) lines.push(`Plan: ${result.plan_status}`);
+  if (result?.scheduler_task_readback?.hidden_wrapper_readback) lines.push(`Hidden Wrapper: ${result.scheduler_task_readback.hidden_wrapper_readback.status ?? 'unknown'}`);
   if (configuredSites) lines.push(`Sites: ${configuredSites.site_count ?? 0} (${configuredSites.selection_source ?? 'unknown'})`);
   if (continuityHealth) {
     lines.push(`Bindings: ${continuityHealth.binding_count ?? 0} (${continuityHealth.binding_registry_state ?? 'unknown'})`);
@@ -429,7 +434,7 @@ export function formatSiteContinuitySchedulerResultForText(result) {
   return `${lines.join('\n')}\n`;
 }
 
-function summarizeSchedulerTaskReadback({ state, command, args, stdout, stderr, timeout_ms: timeoutMs, parsed, expectedIntervalMinutes, expectedTaskCommand, expectedTaskEntrypoint }) {
+function summarizeSchedulerTaskReadback({ state, command, args, stdout, stderr, timeout_ms: timeoutMs, parsed, expectedIntervalMinutes, expectedTaskCommand, expectedTaskEntrypoint, hiddenWrapperReadback = null }) {
   const repeatEvery = parsed['Repeat: Every'] ?? null;
   const taskToRun = parsed['Task To Run'] ?? null;
   const actualIntervalMinutes = parseSchedulerRepeatMinutes(repeatEvery);
@@ -448,6 +453,7 @@ function summarizeSchedulerTaskReadback({ state, command, args, stdout, stderr, 
   const attentionReasons = [
     cadenceStatus === 'differs_from_plan' ? 'scheduler_cadence_differs_from_plan' : null,
     taskCommandStatus === 'differs_from_plan' ? 'scheduler_task_command_differs_from_plan' : null,
+    hiddenWrapperReadback && hiddenWrapperReadback.status !== 'matches_plan' ? `hidden_wrapper_${hiddenWrapperReadback.status}` : null,
     isSchedulerLastResultHealthy(lastResult, statusText) ? null : 'scheduler_last_result_nonzero',
     scheduledTaskState && !/^enabled$/i.test(scheduledTaskState) ? 'scheduler_task_disabled' : null,
   ].filter(Boolean);
@@ -472,6 +478,7 @@ function summarizeSchedulerTaskReadback({ state, command, args, stdout, stderr, 
     actual_interval_minutes: actualIntervalMinutes,
     cadence_status: cadenceStatus,
     task_command_status: taskCommandStatus,
+    hidden_wrapper_readback: hiddenWrapperReadback,
     attention_reasons: attentionReasons,
     embeds_credentials: false,
   };
@@ -512,6 +519,53 @@ function parseSchedulerRepeatMinutes(value) {
 
 function normalizeCommandForComparison(value) {
   return String(value ?? '').replaceAll('"', '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function readHiddenWrapperFileReadback({ wrapperPath, expectedContent }) {
+  if (!wrapperPath) {
+    return {
+      status: 'unknown',
+      path: null,
+      embeds_credentials: false,
+    };
+  }
+  if (!existsSync(wrapperPath)) {
+    return {
+      status: 'missing',
+      path: wrapperPath,
+      embeds_credentials: false,
+    };
+  }
+  try {
+    const actualContent = readFileSync(wrapperPath, 'utf8');
+    const matches = normalizeWrapperContentForComparison(actualContent) === normalizeWrapperContentForComparison(expectedContent);
+    return {
+      status: matches ? 'matches_plan' : 'differs_from_plan',
+      path: wrapperPath,
+      embeds_credentials: false,
+    };
+  } catch (error) {
+    return {
+      status: 'read_failed',
+      path: wrapperPath,
+      error_code: error.code ?? null,
+      embeds_credentials: false,
+    };
+  }
+}
+
+function normalizeWrapperContentForComparison(value) {
+  return String(value ?? '').replace(/\r\n/g, '\n').trimEnd();
+}
+
+function resolveDefaultNodeCommand() {
+  if (process.env.NARADA_NODE_COMMAND) return process.env.NARADA_NODE_COMMAND;
+  const fnmDir = process.env.FNM_DIR;
+  if (fnmDir) {
+    const fnmNode = join(fnmDir, 'node-versions', `v${process.versions.node}`, 'installation', process.platform === 'win32' ? 'node.exe' : 'bin/node');
+    if (existsSync(fnmNode)) return fnmNode;
+  }
+  return 'node';
 }
 
 function countResultStatuses(results) {

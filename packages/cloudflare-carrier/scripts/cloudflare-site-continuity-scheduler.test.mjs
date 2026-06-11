@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { execFile as execFileCallback } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -64,6 +64,13 @@ async function writeInboundPacketArtifact(artifactDirectory, siteId, {
   return artifactPath;
 }
 
+async function writePlannedSiteContinuityHiddenWrapper(options) {
+  const plan = buildSiteContinuitySchedulerPlan({ action: 'status', ...options });
+  await mkdir(dirname(plan.hidden_wrapper_path), { recursive: true });
+  await writeFile(plan.hidden_wrapper_path, plan.hidden_wrapper_content, 'utf8');
+  return plan;
+}
+
 test('site continuity scheduler install plan is bounded and secret-free', async () => {
   const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-scheduler-'));
   const syncEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-sync.mjs');
@@ -83,6 +90,7 @@ test('site continuity scheduler install plan is bounded and secret-free', async 
       intervalMinutes: 5,
       siteId: 'site_fixture',
       packetPath: '.narada/site-continuity/local-packet.json',
+      nodeCommand: 'node',
     });
 
     assert.equal(plan.schema, 'narada.cloudflare_carrier.site_continuity_scheduler_plan.v1');
@@ -385,6 +393,7 @@ test('site continuity scheduler live status attaches parsed Task Scheduler readb
   await writeFile(syncEntrypoint, '#!/usr/bin/env node\n', 'utf8');
   await writeFile(scheduledTaskEntrypoint, '#!/usr/bin/env node\n', 'utf8');
   await writeFile(packetPath, '{"packet":{"site_id":"site_fixture"}}\n', 'utf8');
+  await writePlannedSiteContinuityHiddenWrapper({ repoRoot: root });
   try {
     const calls = [];
     const result = await runSiteContinuitySchedulerActionWithOptionalRefresh({
@@ -425,6 +434,7 @@ test('site continuity scheduler live status attaches parsed Task Scheduler readb
     assert.equal(result.scheduler_task_readback.expected_interval_minutes, 5);
     assert.equal(result.scheduler_task_readback.cadence_status, 'matches_plan');
     assert.equal(result.scheduler_task_readback.task_command_status, 'matches_plan');
+    assert.equal(result.scheduler_task_readback.hidden_wrapper_readback.status, 'matches_plan');
     assert.deepEqual(result.scheduler_task_readback.attention_reasons, []);
     assert.equal(calls[0].command, 'schtasks');
     assert.deepEqual(calls[0].args, ['/Query', '/TN', '\\Narada\\CloudflareSiteContinuitySync', '/V', '/FO', 'LIST']);
@@ -495,12 +505,16 @@ test('site continuity scheduler text summary surfaces local and inbound continui
       configuredSites: 'site_synced,site_missing',
       now: () => '2026-06-11T10:31:00.000Z',
     });
+    plan.scheduler_task_readback = {
+      hidden_wrapper_readback: { status: 'matches_plan', path: 'hidden.vbs', embeds_credentials: false },
+    };
     const text = formatSiteContinuitySchedulerResultForText(plan);
 
     assert.match(text, /^Site Continuity\n/);
     assert.match(text, /Status: needs_attention/);
     assert.doesNotMatch(text, /\[object Object\]/);
     assert.match(text, /Sites: 2 \(explicit_sites\)/);
+    assert.match(text, /Hidden Wrapper: matches_plan/);
     assert.match(text, /Local Sync: needs_attention \(1\)/);
     assert.match(text, /Local Inbound: needs_attention \(1\)/);
     assert.match(text, /- site_missing: sync=needs_attention inbound=needs_attention/);
@@ -614,6 +628,17 @@ test('site continuity scheduler live health passes with synced artifacts and hea
   }, null, 2)}\n`, 'utf8');
   await utimes(outputPath, new Date('2026-06-11T13:45:00.000Z'), new Date('2026-06-11T13:45:00.000Z'));
   await writeInboundPacketArtifact(artifactDirectory, 'site_bound');
+  await writePlannedSiteContinuityHiddenWrapper({
+    action: 'health',
+    repoRoot: root,
+    syncEntrypoint,
+    scheduledTaskEntrypoint,
+    packetPath,
+    outputPath,
+    artifactDirectory,
+    siteContinuityBindingRegistryPath: bindingRegistryPath,
+    now: () => '2026-06-11T13:46:00.000Z',
+  });
   try {
     const result = await runSiteContinuitySchedulerActionWithOptionalRefresh({
       action: 'health',
@@ -645,6 +670,7 @@ test('site continuity scheduler live health passes with synced artifacts and hea
     assert.deepEqual(result.continuity_health.attention_reasons, []);
     assert.equal(result.continuity_health.scheduler_readback_status, 'ok');
     assert.equal(result.continuity_health.scheduler_last_result, '0');
+    assert.equal(result.scheduler_task_readback.hidden_wrapper_readback.status, 'matches_plan');
     assert.equal(result.continuity_health.local_sync_status, 'synced');
     assert.equal(result.continuity_health.local_inbound_status, 'synced');
     assert.equal(result.continuity_health.binding_count, 1);
@@ -664,6 +690,7 @@ test('site continuity scheduler live status surfaces cadence mismatch as attenti
   await writeFile(syncEntrypoint, '#!/usr/bin/env node\n', 'utf8');
   await writeFile(scheduledTaskEntrypoint, '#!/usr/bin/env node\n', 'utf8');
   await writeFile(packetPath, '{"packet":{"site_id":"site_fixture"}}\n', 'utf8');
+  await writePlannedSiteContinuityHiddenWrapper({ repoRoot: root });
   try {
     const result = await runSiteContinuitySchedulerActionWithOptionalRefresh({
       action: 'status',
@@ -707,6 +734,7 @@ test('site continuity scheduler live status surfaces nonzero last result as atte
   await writeFile(syncEntrypoint, '#!/usr/bin/env node\n', 'utf8');
   await writeFile(scheduledTaskEntrypoint, '#!/usr/bin/env node\n', 'utf8');
   await writeFile(packetPath, '{"packet":{"site_id":"site_fixture"}}\n', 'utf8');
+  await writePlannedSiteContinuityHiddenWrapper({ repoRoot: root });
   try {
     const result = await runSiteContinuitySchedulerActionWithOptionalRefresh({
       action: 'status',
@@ -749,6 +777,7 @@ test('site continuity scheduler live status accepts Windows running task result 
   await writeFile(syncEntrypoint, '#!/usr/bin/env node\n', 'utf8');
   await writeFile(scheduledTaskEntrypoint, '#!/usr/bin/env node\n', 'utf8');
   await writeFile(packetPath, '{"packet":{"site_id":"site_fixture"}}\n', 'utf8');
+  await writePlannedSiteContinuityHiddenWrapper({ repoRoot: root });
   try {
     const result = await runSiteContinuitySchedulerActionWithOptionalRefresh({
       action: 'status',
@@ -1391,6 +1420,20 @@ test('site continuity scheduled health reports remote product next-site outside 
     },
   }, null, 2)}\n`, 'utf8');
   await writeInboundPacketArtifact(artifactDirectory, 'site_alpha', { generatedAt: '2026-06-11T14:55:00.000Z' });
+  await writePlannedSiteContinuityHiddenWrapper({
+    action: 'health',
+    repoRoot: root,
+    syncEntrypoint,
+    scheduledTaskEntrypoint,
+    packetPath,
+    outputPath,
+    artifactDirectory,
+    siteContinuityBindingRegistryPath: bindingRegistryPath,
+    reconciliationExecutionOutputPath,
+    healthOutputPath,
+    configuredSites: 'site_alpha',
+    now: () => '2026-06-11T15:00:00.000Z',
+  });
   try {
     const productReadCalls = [];
     const result = await runSiteContinuitySchedulerActionWithOptionalRefresh({
@@ -1588,6 +1631,19 @@ test('site continuity reconcile-execute uses per-site packet paths from packet d
   }), null, 2)}\n`, 'utf8');
   await writeFile(join(packetDirectory, 'site_alpha-packet.json'), '{"packet":{"site_id":"site_alpha"}}\n', 'utf8');
   await writeFile(join(packetDirectory, 'site_beta-packet.json'), '{"packet":{"site_id":"site_beta"}}\n', 'utf8');
+  await writePlannedSiteContinuityHiddenWrapper({
+    action: 'health',
+    repoRoot: root,
+    syncEntrypoint,
+    scheduledTaskEntrypoint,
+    packetDirectory,
+    artifactDirectory,
+    siteContinuityBindingRegistryPath: bindingRegistryPath,
+    reconciliationExecutionOutputPath,
+    healthOutputPath,
+    configuredSites: 'site_alpha,site_beta',
+    now: () => '2026-06-11T12:45:00.000Z',
+  });
   try {
     const calls = [];
     const result = await runSiteContinuitySchedulerActionWithOptionalRefresh({
@@ -1690,6 +1746,19 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
       cloudflare_site_ref: 'cloudflare://site-missing',
     })],
   }), null, 2)}\n`, 'utf8');
+  await writePlannedSiteContinuityHiddenWrapper({
+    action: 'health',
+    repoRoot: root,
+    syncEntrypoint,
+    scheduledTaskEntrypoint,
+    packetPath,
+    artifactDirectory,
+    reconciliationExecutionOutputPath,
+    healthOutputPath,
+    siteContinuityBindingRegistryPath: bindingRegistryPath,
+    configuredSites: 'site_missing',
+    now: () => '2026-06-11T12:30:00.000Z',
+  });
   try {
     const calls = [];
     const productReadCalls = [];

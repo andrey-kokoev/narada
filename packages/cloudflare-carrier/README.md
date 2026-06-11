@@ -213,7 +213,7 @@ Read local-cloud continuity health, including local sync artifacts, last reconci
 pnpm --filter @narada2/cloudflare-carrier continuity:health
 ```
 
-`continuity:health` loads the same local `.env` and `.narada/site-continuity/cloudflare-continuity.env` configuration as the scheduled-task wrapper, then attaches bounded Task Scheduler query evidence to the status output. It reports the installed task state, last result, next run, task command, and whether the host scheduler cadence matches the package plan.
+`continuity:health` loads the same local `.env` and `.narada/site-continuity/cloudflare-continuity.env` configuration as the scheduled-task wrapper, then attaches bounded Task Scheduler query evidence to the status output. It reports the installed task state, last result, next run, whether Task Scheduler points at the hidden `wscript.exe //B` wrapper, whether that wrapper file matches the package plan, and whether the host scheduler cadence matches the package plan.
 
 Read the provider-liveness scheduler posture with the same operator-facing text style:
 
