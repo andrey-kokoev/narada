@@ -10,6 +10,7 @@ import {
   parseProductReadArgs,
   readProductSurface,
   resolveAuth,
+  summarizeProductReadFailure,
   summarizeProductSurface,
 } from './cloudflare-carrier-product-read.mjs';
 
@@ -171,6 +172,51 @@ test('readProductSurface posts operation envelope and redacts auth material from
   });
 });
 
+test('readProductSurface preserves structured Worker refusal evidence', async () => {
+  await assert.rejects(
+    async () => {
+      await readProductSurface({
+        workerUrl: 'https://carrier.example.test',
+        operation: 'operation.read',
+        requestId: 'request_denied',
+        params: { site_id: 'site_alpha', operation_id: 'operation_missing' },
+        format: 'text',
+        auth: { kind: 'bearer', value: 'secret-token', source: 'flag:--token' },
+      }, async () => ({
+        status: 404,
+        async text() {
+          return JSON.stringify({
+            ok: false,
+            code: 'operation_not_found',
+            action: 'deny',
+            reason: 'operation_read_target_missing',
+            site_id: 'site_alpha',
+            operation_id: 'operation_missing',
+          });
+        },
+      }));
+    },
+    (error) => {
+      assert.match(error.message, /product_read_request_failed:operation_not_found/);
+      assert.equal(error.code, 'operation_not_found');
+      assert.equal(error.http_status, 404);
+      assert.equal(error.response.reason, 'operation_read_target_missing');
+      assert.deepEqual(error.summary, {
+        operation: 'operation.read',
+        ok: false,
+        code: 'operation_not_found',
+        action: 'deny',
+        reason: 'operation_read_target_missing',
+        site_id: 'site_alpha',
+        operation_id: 'operation_missing',
+        status: null,
+      });
+      assert.equal(error.config.format, 'text');
+      return true;
+    },
+  );
+});
+
 test('formatProductSurfaceText renders operator-readable summaries without auth material', () => {
   const siteListText = formatProductSurfaceText({
     operation: 'site.list',
@@ -298,6 +344,32 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(operationReadText, /Recovery Next: action=monitor_recovery_posture gaps=none/);
   assert.match(operationReadText, /Recovery Boundaries: site_registry, carrier_evidence_index, site_file_materialization_store/);
   assert.match(operationReadText, /Evidence Counts: sessions=1 tasks=3/);
+});
+
+test('formatProductSurfaceText renders refused product reads without auth material', () => {
+  const text = formatProductSurfaceText({
+    status: 'refused',
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'flag:--token',
+    params: { site_id: 'site_alpha', operation_id: 'operation_missing' },
+    summary: summarizeProductReadFailure('operation.read', {
+      ok: false,
+      code: 'operation_not_found',
+      action: 'deny',
+      reason: 'operation_read_target_missing',
+      site_id: 'site_alpha',
+      operation_id: 'operation_missing',
+    }, { site_id: 'site_alpha', operation_id: 'operation_missing' }),
+    auth: { kind: 'bearer', value: 'secret-token' },
+  });
+
+  assert.match(text, /Product Read: operation\.read refused/);
+  assert.match(text, /Code: operation_not_found/);
+  assert.match(text, /Site: site_alpha/);
+  assert.match(text, /Operation: operation_missing/);
+  assert.match(text, /Refusal: action=deny reason=operation_read_target_missing/);
+  assert.equal(text.includes('secret-token'), false);
 });
 
 test('summarizeProductSurface summarizes site and operation reads', () => {

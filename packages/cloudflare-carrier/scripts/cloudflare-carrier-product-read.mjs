@@ -58,7 +58,13 @@ export async function readProductSurface(config, fetchImpl = fetch) {
   const body = parseJsonText(text);
   if (response.status < 200 || response.status >= 300) {
     const code = body?.code ?? body?.error ?? `http_${response.status}`;
-    throw new Error(`product_read_request_failed:${code}`);
+    const error = new Error(`product_read_request_failed:${code}`);
+    error.code = code;
+    error.http_status = response.status;
+    error.response = body;
+    error.summary = summarizeProductReadFailure(config.operation, body, config.params);
+    error.config = config;
+    throw error;
   }
   return {
     schema: 'narada.cloudflare_carrier.product_read.v1',
@@ -182,14 +188,36 @@ export function summarizeProductSurface(operation, body) {
   return { operation };
 }
 
+export function summarizeProductReadFailure(operation, body = {}, params = {}) {
+  return {
+    operation,
+    ok: body.ok ?? false,
+    code: body.code ?? body.error ?? null,
+    action: body.action ?? null,
+    reason: body.reason ?? null,
+    site_id: body.site?.site_id ?? body.site_id ?? params.site_id ?? null,
+    operation_id: body.operation?.operation_id ?? body.operation_id ?? params.operation_id ?? null,
+    status: body.status ?? null,
+  };
+}
+
 export function formatProductSurfaceText(result) {
   const summary = result?.summary ?? summarizeProductSurface(result?.operation, result?.response ?? {});
   const operation = summary?.operation ?? result?.operation ?? 'unknown';
+  const refused = result?.status === 'refused' || summary?.ok === false;
   const lines = [
-    `Product Read: ${operation}`,
+    `Product Read: ${operation}${refused ? ' refused' : ''}`,
     `Worker: ${result?.worker_url ?? 'unknown'}`,
     `Auth: ${result?.auth_source ?? 'unknown'}`,
   ];
+  if (refused) {
+    if (summary.code) lines.push(`Code: ${summary.code}`);
+    if (summary.site_id) lines.push(`Site: ${summary.site_id}`);
+    if (summary.operation_id) lines.push(`Operation: ${summary.operation_id}`);
+    lines.push(`Refusal: action=${summary.action ?? 'deny'} reason=${summary.reason ?? 'unknown'}`);
+    if (summary.status) lines.push(`Status: ${summary.status}`);
+    return `${lines.join('\n')}\n`;
+  }
   if (operation === 'site.list') {
     lines.push(`Sites: count=${summary.site_count ?? 0} next=${summary.next_site_id ?? 'none'} health=${summary.next_health ?? 'unknown'}`);
     lines.push(`Next Action: ${summary.next_action ?? 'none'}${summary.next_reason ? ` reason=${summary.next_reason}` : ''}`);
@@ -370,7 +398,19 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       process.stdout.write(JSON.stringify(config.format === 'summary' ? result.summary : result, null, 2) + '\n');
     }
   } catch (error) {
-    process.stderr.write(JSON.stringify({ ok: false, code: error?.message ?? String(error) }, null, 2) + '\n');
+    if (error?.response && error?.summary && error?.config?.format === 'text') {
+      process.stderr.write(formatProductSurfaceText({
+        status: 'refused',
+        operation: error.config.operation,
+        worker_url: error.config.workerUrl,
+        auth_source: error.config.auth?.source,
+        params: error.config.params,
+        response: error.response,
+        summary: error.summary,
+      }));
+    } else {
+      process.stderr.write(JSON.stringify({ ok: false, code: error?.message ?? String(error), response: error?.response }, null, 2) + '\n');
+    }
     process.exit(1);
   }
 }
