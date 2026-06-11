@@ -13626,6 +13626,11 @@ export function renderCloudflareCarrierConsole() {
         <div id="operatorRoute" class="attention-items"><div class="empty">No operator route loaded.</div></div>
       </div>
       <div class="product-panel">
+        <h2>Focused Operation Lifecycle</h2>
+        <div id="focusedOperationLifecycle" class="evidence-summary"><div class="empty">No focused operation lifecycle loaded.</div></div>
+        <div class="actions"><button id="focusedOperationLifecycleNextAction" class="secondary">Apply Lifecycle Next Action</button></div>
+      </div>
+      <div class="product-panel">
         <h2>Workbench Readiness Gate</h2>
         <div class="actions"><button id="workbenchReadinessNextAction" class="secondary">Focus Readiness Gap</button></div>
         <div id="workbenchReadinessGate" class="attention-items"><div class="empty">No workbench readiness loaded.</div></div>
@@ -14346,6 +14351,7 @@ export function renderCloudflareCarrierConsole() {
       el('controlWorkbenchReadiness').textContent = operationWorkbenchReadiness(product) + ' / ' + String(lifecycleStatus.health || 'no_lifecycle_status');
       renderControlRoomActionSummary(product);
       renderOperatorRoute(product);
+      renderFocusedOperationLifecycle(product);
       renderWorkbenchReadinessGate(product);
       renderOperationControlBoard(product);
       renderSiteActionSummary();
@@ -14422,6 +14428,41 @@ export function renderCloudflareCarrierConsole() {
         return;
       }
       el('productScopeDetail').replaceChildren(...productScopeContext(product).map(([label, value]) => evidenceField(label, value)));
+    }
+    function focusedOperationLifecycleContext(product = state.operationProduct || {}) {
+      const lifecycle = product.focused_operation_lifecycle || {};
+      const lifecycleStatus = lifecycle.lifecycle_status || product.operation_lifecycle_status || product.operation_product_surface?.lifecycle_status || {};
+      const workflowRoute = lifecycle.workflow_route || product.operation_workflow_route || product.operation_product_surface?.operation_workflow_route || {};
+      const postureOverview = lifecycle.operation_posture_overview || product.operation_posture_overview || {};
+      const postureRoute = lifecycle.operation_posture_route || product.operation_posture_route || product.operation_product_surface?.operation_posture_route || {};
+      const operatorFocus = workflowRoute.operator_focus || null;
+      return [
+        ['Schema', lifecycle.schema || 'not loaded'],
+        ['Operation', lifecycle.operation_id || product.operation?.operation_id || el('operationId').value.trim() || 'none'],
+        ['Lifecycle Health', lifecycleStatus.health || 'unknown'],
+        ['Lifecycle Next Action', lifecycleStatus.next_action || 'none'],
+        ['Workflow Status', workflowRoute.status || 'unknown'],
+        ['Workflow Next Action', workflowRoute.next_action || 'none'],
+        ['Workflow Target', workflowRoute.target || 'none'],
+        ['Workflow Reason', workflowRoute.reason || 'none'],
+        ['Operator Focus', operatorFocus ? operationOperatorFocusSummary(operatorFocus) : 'none'],
+        ['Posture Status', postureRoute.status || postureOverview.status || 'unknown'],
+        ['Posture Next Action', postureRoute.next_action || postureOverview.next_action || 'none'],
+      ];
+    }
+    function renderFocusedOperationLifecycle(product = state.operationProduct || {}) {
+      const target = el('focusedOperationLifecycle');
+      if (!target) return;
+      target.replaceChildren(...focusedOperationLifecycleContext(product).map(([label, value]) => evidenceField(label, value)));
+    }
+    function applyFocusedOperationLifecycleNextAction() {
+      const product = state.operationProduct || {};
+      const route = product.focused_operation_lifecycle?.workflow_route || operationWorkflowRouteStage(product);
+      if (route?.next_action && route.next_action !== 'monitor_operation_continuity') {
+        applyOperationWorkflowRouteAction(route, product);
+        return;
+      }
+      applyControlRoomNextAction();
     }
     function operationWorkbenchReadiness(product = {}) {
       const surface = product.operation_product_surface || {};
@@ -19447,6 +19488,7 @@ export function renderCloudflareCarrierConsole() {
       renderAuthorityState(product);
       renderAuthorityPath(product);
       renderProductScopeDetail(product);
+      renderFocusedOperationLifecycle(product);
       renderOperationFlightDeck(product);
       renderPersistencePosture(product);
       renderRecoveryPosture(product);
@@ -19570,6 +19612,7 @@ export function renderCloudflareCarrierConsole() {
       renderAuthorityState(product);
       renderAuthorityPath(product);
       renderProductScopeDetail(product);
+      renderFocusedOperationLifecycle(product);
       renderOperationFlightDeck(product);
       renderPersistencePosture(product);
       renderRecoveryPosture(product);
@@ -20208,6 +20251,7 @@ export function renderCloudflareCarrierConsole() {
     el('focusOperationPathEvidence').addEventListener('click', focusOperationPathEvidence);
     el('controlRoomNextAction').addEventListener('click', applyControlRoomNextAction);
     el('operatorRouteNextAction').addEventListener('click', applyOperatorRouteNextAction);
+    el('focusedOperationLifecycleNextAction').addEventListener('click', applyFocusedOperationLifecycleNextAction);
     el('workbenchReadinessNextAction').addEventListener('click', applyWorkbenchReadinessNextAction);
     el('operationControlBoardNextAction').addEventListener('click', applyControlRoomNextAction);
     el('operationControlBoardReadinessAction').addEventListener('click', applyWorkbenchReadinessNextAction);
