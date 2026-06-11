@@ -2958,6 +2958,7 @@ function summarizeCloudflareOperationActivityTimeline({
   carrierEvidence = [],
   continuityPackets = [],
   continuityLoopReports = [],
+  continuityReconciliationExecutions = [],
   webhookDelayDirectiveRecords = [],
   webhookDelayDirectiveDeliveries = [],
   residentLoopShadowRuns = [],
@@ -3067,6 +3068,19 @@ function summarizeCloudflareOperationActivityTimeline({
       focus_kind: 'site_continuity_loop_report',
       focus_ref: report.report_id,
       principal_id: report.recorded_by_principal_id,
+    });
+  }
+  for (const execution of continuityReconciliationExecutions || []) {
+    push({
+      activity_id: `site_continuity_reconciliation_execution:${execution.execution_id}`,
+      activity_kind: 'site_continuity_reconciliation_execution',
+      occurred_at: execution.recorded_at || execution.persisted_at || execution.generated_at,
+      title: 'Site Continuity Reconciliation Execution',
+      summary: [execution.status, String(execution.completed_site_count ?? 0) + ' completed', String(execution.failed_site_count ?? 0) + ' failed'].filter(Boolean).join(' / '),
+      source_ref: execution.execution_id,
+      focus_kind: 'site_continuity_reconciliation_execution',
+      focus_ref: execution.execution_id,
+      principal_id: execution.recorded_by_principal_id,
     });
   }
   for (const entry of carrierEvidence || []) {

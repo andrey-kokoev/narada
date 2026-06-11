@@ -1383,6 +1383,8 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(operationReadAfterFailedReconciliationExecutionBody.operation_workflow_route.target, failedReconciliationExecutionId);
   assert.equal(operationReadAfterFailedReconciliationExecutionBody.operation_workflow_route.focus_kind, 'site_continuity_reconciliation_execution');
   assert.equal(operationReadAfterFailedReconciliationExecutionBody.operation_workflow_route.focus_ref, failedReconciliationExecutionId);
+  assert.equal(operationReadAfterFailedReconciliationExecutionBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'site_continuity_reconciliation_execution' && item.focus_ref === failedReconciliationExecutionId), true, JSON.stringify(operationReadAfterFailedReconciliationExecutionBody.operation_activity_timeline.items));
+  assert.equal(operationReadAfterFailedReconciliationExecutionBody.operation_product_surface.activity_timeline.items.some((item) => item.activity_kind === 'site_continuity_reconciliation_execution' && item.focus_ref === failedReconciliationExecutionId), true, JSON.stringify(operationReadAfterFailedReconciliationExecutionBody.operation_product_surface.activity_timeline.items));
 
   const reconciliationExecutionFocusReview = await worker.fetch(jsonRequest({
     operation: 'operation_focus_review.acknowledge',
