@@ -1832,6 +1832,7 @@ function summarizeCloudflareOperationWorkflowRoute({
   webhookDelayDirectiveRecords = [],
   webhookDelayDirectiveDeliveries = [],
   residentDispatchDecisions = [],
+  mailboxSendReviews = [],
   tasks = [],
 } = {}) {
   const operationId = operation?.operation_id ?? lifecycleStatus?.operation_id ?? persistencePosture?.operation_id ?? recoveryPosture?.operation_id ?? null;
@@ -1840,7 +1841,7 @@ function summarizeCloudflareOperationWorkflowRoute({
   const directiveRecords = Array.isArray(webhookDelayDirectiveRecords) ? webhookDelayDirectiveRecords : [];
   const directiveDeliveries = Array.isArray(webhookDelayDirectiveDeliveries) ? webhookDelayDirectiveDeliveries : [];
   const dispatchDecisions = Array.isArray(residentDispatchDecisions) ? residentDispatchDecisions : [];
-  const operatorFocus = summarizeCloudflareOperationOperatorFocus(operationActivityTimeline);
+  const operatorFocus = summarizeCloudflareOperationOperatorFocus(operationActivityTimeline, { mailboxSendReviews });
   const next = (() => {
     if (!operationId) return { action: 'select_operation', target: siteId ?? 'none', reason: 'operation_not_loaded' };
     if (persistencePosture?.state && persistencePosture.state !== 'durable') {
@@ -1893,8 +1894,21 @@ function summarizeCloudflareOperationWorkflowRoute({
   };
 }
 
-function summarizeCloudflareOperationOperatorFocus(operationActivityTimeline = null) {
+function cloudflareReviewedMailboxSendFocusKeys(mailboxSendReviews = []) {
+  const reviewed = new Set();
+  for (const review of Array.isArray(mailboxSendReviews) ? mailboxSendReviews : []) {
+    if (review?.review_status !== 'acknowledged') continue;
+    if (review.focus_kind && review.focus_ref) reviewed.add(`${review.focus_kind}:${review.focus_ref}`);
+    if (review.focus_kind === 'mailbox_send_confirmation' && review.send_accepted_id) {
+      reviewed.add(`mailbox_send_accepted:${review.send_accepted_id}`);
+    }
+  }
+  return reviewed;
+}
+
+function summarizeCloudflareOperationOperatorFocus(operationActivityTimeline = null, options = {}) {
   const items = Array.isArray(operationActivityTimeline?.items) ? operationActivityTimeline.items : [];
+  const reviewedMailboxSendFocusKeys = cloudflareReviewedMailboxSendFocusKeys(options.mailboxSendReviews);
   const priorities = [
     ['mailbox_send_confirmation', 'review_mailbox_send_confirmation'],
     ['mailbox_send_accepted', 'review_mailbox_send_acceptance'],
@@ -1905,7 +1919,13 @@ function summarizeCloudflareOperationOperatorFocus(operationActivityTimeline = n
     ['site_file_change_proposal', 'review_site_file_change_proposal'],
   ];
   for (const [activityKind, action] of priorities) {
-    const item = items.find((entry) => entry?.activity_kind === activityKind);
+    const item = items.find((entry) => {
+      if (entry?.activity_kind !== activityKind) return false;
+      const focusKind = entry.focus_kind ?? entry.activity_kind;
+      const focusRef = entry.focus_ref ?? entry.source_ref ?? entry.activity_id ?? null;
+      if (focusRef && reviewedMailboxSendFocusKeys.has(`${focusKind}:${focusRef}`)) return false;
+      return true;
+    });
     if (item) {
       return {
         schema: 'narada.cloudflare_operation_operator_focus.v1',
@@ -4387,6 +4407,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       webhookDelayDirectiveRecords,
       webhookDelayDirectiveDeliveries,
       residentDispatchDecisions,
+      mailboxSendReviews,
       tasks,
     });
     return {

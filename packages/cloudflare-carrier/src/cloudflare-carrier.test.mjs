@@ -4469,6 +4469,11 @@ test('worker creates Outlook drafts through Cloudflare Graph authority without a
   assert.equal(operationReadAfterReviewBody.operation_product_surface.mailbox_send_review_authority, 'cloudflare_operator_mailbox_send_review');
   assert.equal(operationReadAfterReviewBody.operation_product_surface.mailbox_send_review_admission, 'admitted');
   assert.equal(operationReadAfterReviewBody.operation_activity_timeline.items.some((entry) => entry.activity_kind === 'mailbox_send_review_acknowledgement'), true);
+  assert.notEqual(operationReadAfterReviewBody.operation_workflow_route.operator_focus?.focus_ref, 'mailbox_send_confirmation_fixture_1');
+  assert.notEqual(operationReadAfterReviewBody.operation_workflow_route.operator_focus?.focus_ref, 'mailbox_send_accepted_fixture_1');
+  assert.notEqual(operationReadAfterReviewBody.operation_workflow_route.next_action, 'review_mailbox_send_confirmation');
+  assert.notEqual(operationReadAfterReviewBody.operation_workflow_route.next_action, 'review_mailbox_send_acceptance');
+  assert.deepEqual(operationReadAfterReviewBody.operation_product_surface.operation_workflow_route, operationReadAfterReviewBody.operation_workflow_route);
 });
 
 test('worker records site file change proposals without admitting filesystem or publication mutation', async () => {
