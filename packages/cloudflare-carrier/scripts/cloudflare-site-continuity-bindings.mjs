@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { readdirSync, statSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,7 +27,8 @@ async function main() {
 
 function buildBindingMaterializationPlan({ argv = [], env = process.env, cwd = process.cwd() } = {}) {
   const args = parseArgs(argv);
-  const packetPaths = collectPacketPaths(args, env);
+  const packetDirectories = collectPacketDirectories(args, env);
+  const packetPaths = collectPacketPaths(args, env, cwd, packetDirectories);
   const outputPath = args.output
     ?? env.NARADA_SITE_CONTINUITY_BINDINGS
     ?? DEFAULT_BINDING_REGISTRY_PATH;
@@ -35,8 +37,10 @@ function buildBindingMaterializationPlan({ argv = [], env = process.env, cwd = p
     cwd,
     action: args.action ?? env.NARADA_SITE_CONTINUITY_BINDING_ACTION ?? 'materialize',
     packet_paths: packetPaths,
+    packet_directories: packetDirectories,
     output_path: outputPath,
     effective_packet_paths: packetPaths.map((packetPath) => resolvePath(cwd, packetPath)),
+    effective_packet_directories: packetDirectories.map((packetDirectory) => resolvePath(cwd, packetDirectory)),
     effective_output_path: resolvePath(cwd, outputPath),
     registry_path: args.registry ?? outputPath,
     effective_registry_path: resolvePath(cwd, args.registry ?? outputPath),
@@ -155,13 +159,40 @@ async function readMaterializedSiteContinuityBindingRegistry(plan) {
   return registry;
 }
 
-function collectPacketPaths(args, env) {
+function collectPacketPaths(args, env, cwd, packetDirectories = []) {
   const configuredPackets = [];
   if (args.packet) configuredPackets.push(...asArray(args.packet));
   if (env.NARADA_SITE_CONTINUITY_PACKET) configuredPackets.push(...splitList(env.NARADA_SITE_CONTINUITY_PACKET));
   if (env.NARADA_SITE_CONTINUITY_PACKETS) configuredPackets.push(...splitList(env.NARADA_SITE_CONTINUITY_PACKETS));
-  const selected = configuredPackets.length > 0 ? configuredPackets : DEFAULT_PACKET_PATHS;
+  const directoryPackets = packetDirectories.flatMap((packetDirectory) => readPacketDirectoryPaths(cwd, packetDirectory));
+  const configured = [...configuredPackets, ...directoryPackets];
+  const selected = configured.length > 0 ? configured : DEFAULT_PACKET_PATHS;
   return [...new Set(selected.map((item) => String(item).trim()).filter(Boolean))];
+}
+
+function collectPacketDirectories(args, env) {
+  const configuredDirectories = [];
+  if (args.packet_dir) configuredDirectories.push(...asArray(args.packet_dir));
+  if (env.NARADA_SITE_CONTINUITY_PACKET_DIR) configuredDirectories.push(...splitList(env.NARADA_SITE_CONTINUITY_PACKET_DIR));
+  return [...new Set(configuredDirectories.map((item) => String(item).trim()).filter(Boolean))];
+}
+
+function readPacketDirectoryPaths(cwd, packetDirectory) {
+  const effectiveDirectory = resolvePath(cwd, packetDirectory);
+  let entries;
+  try {
+    entries = readdirSync(effectiveDirectory, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === 'ENOENT') throw new Error(`site_continuity_packet_directory_missing:${effectiveDirectory}`);
+    throw error;
+  }
+  const packetPaths = entries
+    .filter((entry) => entry.isFile() && entry.name.endsWith('-packet.json'))
+    .map((entry) => path.join(effectiveDirectory, entry.name))
+    .filter((packetPath) => statSync(packetPath).isFile())
+    .sort((left, right) => left.localeCompare(right));
+  if (packetPaths.length === 0) throw new Error(`site_continuity_packet_directory_empty:${effectiveDirectory}`);
+  return packetPaths;
 }
 
 function parseArgs(argv) {
@@ -179,6 +210,11 @@ function parseArgs(argv) {
     }
     if (arg === '--packet') {
       args.packet = [...asArray(args.packet), argv[index + 1]];
+      index += 1;
+      continue;
+    }
+    if (arg === '--packet-dir') {
+      args.packet_dir = [...asArray(args.packet_dir), argv[index + 1]];
       index += 1;
       continue;
     }

@@ -183,6 +183,16 @@ pnpm --filter @narada2/cloudflare-carrier ship
 
 `ship` runs tests, deploy checks, and Wrangler dry-run bundling.
 
+Materialize or validate the local Site continuity binding registry:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier continuity:bindings
+pnpm --filter @narada2/cloudflare-carrier continuity:bindings:validate
+pnpm --filter @narada2/cloudflare-carrier continuity:bindings:list
+```
+
+`continuity:bindings` reads packet `binding` evidence and writes `.narada/site-continuity/bindings.json`. It accepts `NARADA_SITE_CONTINUITY_PACKET` or repeated `--packet` for explicit packet files, and `NARADA_SITE_CONTINUITY_PACKET_DIR` or `--packet-dir` for multi-site packet directories containing `<file-safe-site-id>-packet.json` files.
+
 Run one guarded local-cloud continuity loop:
 
 ```powershell

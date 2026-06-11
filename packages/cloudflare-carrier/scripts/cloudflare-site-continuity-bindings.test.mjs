@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -41,6 +41,61 @@ test('site continuity binding materializer writes registry from packet binding',
   assert.equal(registry.schema, 'narada.site_continuity_binding_registry.v1');
   assert.equal(registry.bindings.length, 1);
   assert.equal(registry.bindings[0].site_id, 'site_bound');
+});
+
+test('site continuity binding materializer writes registry from packet directory', async () => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'narada-continuity-bindings-packet-dir-'));
+  const packetDirectory = path.join(tmp, 'packets');
+  const registryPath = path.join(tmp, 'bindings.json');
+  await writeFile(path.join(tmp, 'ignored.json'), '{}\n', 'utf8');
+  await mkdir(packetDirectory, { recursive: true });
+  await writeFile(path.join(packetDirectory, 'site_beta-packet.json'), `${JSON.stringify({
+    binding: createSiteContinuityBinding({ site_id: 'site_beta', relation_id: 'relation-beta' }),
+  }, null, 2)}\n`, 'utf8');
+  await writeFile(path.join(packetDirectory, 'site_alpha-packet.json'), `${JSON.stringify({
+    binding: createSiteContinuityBinding({ site_id: 'site_alpha', relation_id: 'relation-alpha' }),
+  }, null, 2)}\n`, 'utf8');
+  await writeFile(path.join(packetDirectory, 'not-a-continuity.json'), '{}\n', 'utf8');
+
+  const plan = buildBindingMaterializationPlan({
+    cwd: tmp,
+    argv: ['--packet-dir', packetDirectory, '--output', registryPath, '--generated-at', '2026-06-11T01:30:00.000Z'],
+    env: {},
+  });
+  const result = await materializeSiteContinuityBindingRegistry(plan);
+
+  assert.deepEqual(plan.packet_directories, [packetDirectory]);
+  assert.deepEqual(plan.packet_paths, [
+    path.join(packetDirectory, 'site_alpha-packet.json'),
+    path.join(packetDirectory, 'site_beta-packet.json'),
+  ]);
+  assert.equal(result.ok, true);
+  assert.equal(result.binding_count, 2);
+  assert.deepEqual(result.sites, ['site_alpha', 'site_beta']);
+  assert.deepEqual(result.packet_reads.map((read) => read.site_id), ['site_alpha', 'site_beta']);
+  const registry = JSON.parse(await readFile(registryPath, 'utf8'));
+  assert.deepEqual(registry.bindings.map((binding) => binding.site_id), ['site_alpha', 'site_beta']);
+});
+
+test('site continuity binding materializer refuses missing packet directory', async () => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'narada-continuity-bindings-missing-packet-dir-'));
+
+  assert.throws(
+    () => buildBindingMaterializationPlan({ cwd: tmp, argv: ['--packet-dir', path.join(tmp, 'missing-packets')], env: {} }),
+    /site_continuity_packet_directory_missing/,
+  );
+});
+
+test('site continuity binding materializer refuses empty packet directory', async () => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'narada-continuity-bindings-empty-packet-dir-'));
+  const packetDirectory = path.join(tmp, 'packets');
+  await mkdir(packetDirectory, { recursive: true });
+  await writeFile(path.join(packetDirectory, 'ignored.json'), '{}\n', 'utf8');
+
+  assert.throws(
+    () => buildBindingMaterializationPlan({ cwd: tmp, argv: ['--packet-dir', packetDirectory], env: {} }),
+    /site_continuity_packet_directory_empty/,
+  );
 });
 
 test('site continuity binding materializer refuses invalid packet binding', async () => {
