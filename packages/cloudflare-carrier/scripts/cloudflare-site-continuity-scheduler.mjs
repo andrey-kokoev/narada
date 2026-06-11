@@ -23,6 +23,7 @@ const DEFAULT_TASK_NAME = '\\Narada\\CloudflareSiteContinuitySync';
 const DEFAULT_INTERVAL_MINUTES = 5;
 const DEFAULT_MAX_SYNC_ARTIFACT_AGE_MINUTES = 15;
 const DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS = 120000;
+const DEFAULT_HIDDEN_WRAPPER_RELATIVE_PATH = '.narada/site-continuity/cloudflare-site-continuity-sync.hidden.vbs';
 const LIVE_SCHEDULER_TASK_ACTIONS = new Set(['install', 'disable', 'pause', 'resume', 'uninstall']);
 const LIVE_SCHEDULER_READ_ACTIONS = new Set(['status', 'read-last', 'last', 'read-health-last', 'health-last', 'status-all', 'status-local', 'health', 'reconcile', 'reconcile-plan']);
 const execFile = promisify(execFileCallback);
@@ -48,6 +49,7 @@ export function buildSiteContinuitySchedulerPlan({
   siteRegistryProjectionPath = process.env.NARADA_CLOUDFLARE_SITE_REGISTRY_PROJECTION ?? '.narada/site-registry/cloudflare-sites.json',
   maxArtifactAgeMinutes = process.env.NARADA_SITE_CONTINUITY_MAX_ARTIFACT_AGE_MINUTES ?? DEFAULT_MAX_SYNC_ARTIFACT_AGE_MINUTES,
   nodeCommand = process.env.NARADA_NODE_COMMAND ?? 'node',
+  hiddenWrapperPath = null,
   now = () => new Date().toISOString(),
   dryRun = true,
 } = {}) {
@@ -83,13 +85,16 @@ export function buildSiteContinuitySchedulerPlan({
     outputPath: effectiveOutputPath,
     configuredSites: localConfiguredSites,
   });
-  const taskCommand = buildTaskCommand({
+  const directTaskCommand = buildTaskCommand({
     nodeCommand,
     entrypoint: taskEntryPoint,
     siteId,
     packetPath: effectivePacketPath,
     outputPath: effectiveOutputPath,
   });
+  const wrapperPath = resolvePath(root, hiddenWrapperPath ?? DEFAULT_HIDDEN_WRAPPER_RELATIVE_PATH);
+  const hiddenWrapperContent = buildHiddenVbsWrapperContent(directTaskCommand);
+  const taskCommand = buildHiddenTaskCommand({ wrapperPath });
 
   const base = {
     schema: 'narada.cloudflare_carrier.site_continuity_scheduler_plan.v1',
@@ -113,17 +118,22 @@ export function buildSiteContinuitySchedulerPlan({
     sites_file_path: effectiveSitesFilePath,
     site_registry_projection_path: effectiveSiteRegistryProjectionPath,
     configured_sites: localConfiguredSites,
+    hidden_wrapper_path: wrapperPath,
+    hidden_wrapper_kind: 'windows_wscript_vbs_hidden',
+    hidden_wrapper_content: hiddenWrapperContent,
     credential_posture: 'external_env_file_or_process_environment_only',
     embeds_credentials: false,
     cloudflare_mutation: 'site_continuity_packet_loop_report_and_reconciliation_execution_evidence_only',
-    filesystem_mutation_admission: 'local_sync_report_artifact_write_only',
+    filesystem_mutation_admission: action === 'install' && !dryRun ? 'hidden_wrapper_file_write_and_local_sync_report_artifact_write_only' : 'local_sync_report_artifact_write_only',
     repository_publication_admission: 'not_admitted',
     task_command: taskCommand,
+    direct_task_command: directTaskCommand,
     status,
   };
 
   switch (action) {
     case 'install':
+      if (!dryRun) writeHiddenWrapper({ wrapperPath, content: hiddenWrapperContent });
       return {
         ...base,
         plan_status: dryRun ? 'dry_run_install_plan' : 'live_install_requires_operator_execution',
@@ -1839,6 +1849,27 @@ function buildTaskCommand({ nodeCommand, entrypoint }) {
   return parts.join(' ');
 }
 
+function buildHiddenTaskCommand({ wrapperPath }) {
+  return [
+    'wscript.exe',
+    '//B',
+    quote(wrapperPath),
+  ].join(' ');
+}
+
+export function buildHiddenVbsWrapperContent(command) {
+  return [
+    'Set shell = CreateObject("WScript.Shell")',
+    `shell.Run ${vbsString(command)}, 0, False`,
+    '',
+  ].join('\r\n');
+}
+
+function writeHiddenWrapper({ wrapperPath, content }) {
+  mkdirSync(dirname(wrapperPath), { recursive: true });
+  writeFileSync(wrapperPath, content, 'utf8');
+}
+
 function readEnvKeys(envPath) {
   const keys = [];
   const content = readFileSync(envPath, 'utf8');
@@ -2198,6 +2229,10 @@ function quote(value) {
   return `"${String(value).replaceAll('"', '\\"')}"`;
 }
 
+function vbsString(value) {
+  return `"${String(value).replaceAll('"', '""')}"`;
+}
+
 function parseArgs(argv) {
   const args = { action: 'status', dryRun: true };
   for (let index = 0; index < argv.length; index += 1) {
@@ -2229,6 +2264,7 @@ function parseArgs(argv) {
     else if (arg === '--projection-token-file') args.projectionTokenFile = argv[++index];
     else if (arg === '--env') args.envPath = argv[++index];
     else if (arg === '--node-command') args.nodeCommand = argv[++index];
+    else if (arg === '--hidden-wrapper-path') args.hiddenWrapperPath = argv[++index];
     else if (arg === '--format') args.format = argv[++index];
     else throw new Error(`unknown_argument:${arg}`);
   }

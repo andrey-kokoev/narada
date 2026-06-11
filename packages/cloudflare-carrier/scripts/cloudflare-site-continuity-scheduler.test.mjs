@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { createSiteContinuityBinding, createSiteContinuityBindingRegistry } from '@narada2/site-continuity';
 import {
+  buildHiddenVbsWrapperContent,
   buildSiteContinuityReconciliationPlan,
   buildSiteContinuitySchedulerPlan,
   buildSiteContinuitySchedulerPlanWithOptionalRefresh,
@@ -93,6 +94,9 @@ test('site continuity scheduler install plan is bounded and secret-free', async 
     assert.equal(plan.cloudflare_mutation, 'site_continuity_packet_loop_report_and_reconciliation_execution_evidence_only');
     assert.equal(plan.filesystem_mutation_admission, 'local_sync_report_artifact_write_only');
     assert.equal(plan.repository_publication_admission, 'not_admitted');
+    assert.equal(plan.hidden_wrapper_path, join(root, '.narada/site-continuity/cloudflare-site-continuity-sync.hidden.vbs'));
+    assert.equal(plan.hidden_wrapper_kind, 'windows_wscript_vbs_hidden');
+    assert.match(plan.hidden_wrapper_content, /WScript\.Shell/);
     assert.equal(plan.status.repo_root_exists, true);
     assert.equal(plan.status.sync_entrypoint_exists, true);
     assert.equal(plan.status.scheduled_task_entrypoint_exists, true);
@@ -104,8 +108,11 @@ test('site continuity scheduler install plan is bounded and secret-free', async 
     assert.deepEqual(plan.status.required_env_keys_observed, ['CLOUDFLARE_CARRIER_URL', 'CLOUDFLARE_CARRIER_TOKEN_FILE']);
     assert.deepEqual(plan.scheduled_task_command.slice(0, 7), ['schtasks', '/Create', '/TN', '\\Narada\\CloudflareSiteContinuitySync', '/SC', 'MINUTE', '/MO']);
     assert.equal(plan.scheduled_task_command[7], '5');
-    assert.match(plan.task_command, /cloudflare-site-continuity-scheduled-task\.mjs/);
-    assert.doesNotMatch(plan.task_command, /--site|--sites|--packet|--out|site_fixture|local-packet\.json|cloudflare-sync-last\.json/);
+    assert.equal(plan.scheduled_task_command[8], '/TR');
+    assert.match(plan.task_command, /^wscript\.exe \/\/B /);
+    assert.match(plan.task_command, /cloudflare-site-continuity-sync\.hidden\.vbs/);
+    assert.match(plan.direct_task_command, /cloudflare-site-continuity-scheduled-task\.mjs/);
+    assert.doesNotMatch(plan.direct_task_command, /--site|--sites|--packet|--out|site_fixture|local-packet\.json|cloudflare-sync-last\.json/);
     assert.doesNotMatch(JSON.stringify(plan), /secret-token-value/);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -348,13 +355,18 @@ test('site continuity scheduler live install executes bounded schtasks command',
 
     assert.equal(result.plan_status, 'live_install_completed');
     assert.equal(result.host_scheduler_mutation_admission, 'bounded_schtasks_command_from_scheduler_plan');
+    assert.equal(result.filesystem_mutation_admission, 'hidden_wrapper_file_write_and_local_sync_report_artifact_write_only');
     assert.equal(result.scheduler_task_execution.state, 'completed');
     assert.equal(result.scheduler_task_execution.status, 'ok');
     assert.equal(result.scheduler_task_execution.command, 'schtasks');
     assert.deepEqual(calls[0].args.slice(0, 7), ['/Create', '/TN', '\\Narada\\CloudflareSiteContinuitySync', '/SC', 'MINUTE', '/MO', '5']);
     assert.equal(calls[0].args.includes('/TR'), true);
-    assert.match(calls[0].args[calls[0].args.indexOf('/TR') + 1], /cloudflare-site-continuity-scheduled-task\.mjs/);
+    assert.match(calls[0].args[calls[0].args.indexOf('/TR') + 1], /^wscript\.exe \/\/B /);
+    assert.match(calls[0].args[calls[0].args.indexOf('/TR') + 1], /cloudflare-site-continuity-sync\.hidden\.vbs/);
     assert.doesNotMatch(calls[0].args[calls[0].args.indexOf('/TR') + 1], /--site|--sites|--packet|--out|site_fixture|local-packet\.json/);
+    const wrapperContent = await readFile(join(root, '.narada/site-continuity/cloudflare-site-continuity-sync.hidden.vbs'), 'utf8');
+    assert.equal(wrapperContent, buildHiddenVbsWrapperContent(result.direct_task_command));
+    assert.match(result.direct_task_command, /cloudflare-site-continuity-scheduled-task\.mjs/);
     assert.equal(calls[0].options.cwd, root);
     assert.equal(calls[0].options.timeout, 5000);
     assert.doesNotMatch(JSON.stringify(result), /secret-token-value|CLOUDFLARE_CARRIER_TOKEN=/);
