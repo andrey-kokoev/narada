@@ -1297,6 +1297,20 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(readAfterStaleLoopReportBody.site_product_status.site_continuity_loop_status.freshness_state, 'stale');
   assert.equal(readAfterStaleLoopReportBody.site_product_status.next_action, 'refresh_site_continuity_loop');
 
+  const operationReadAfterStaleLoopReport = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_operation_read_after_stale_continuity_loop_report',
+    params: { site_id: 'site_fixture', operation_id: 'operation_site_read' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(operationReadAfterStaleLoopReport.status, 200);
+  const operationReadAfterStaleLoopReportBody = await operationReadAfterStaleLoopReport.json();
+  assert.equal(operationReadAfterStaleLoopReportBody.operation_lifecycle_status.continuity_loop_freshness_state, 'stale');
+  assert.equal(operationReadAfterStaleLoopReportBody.operation_lifecycle_status.next_action, 'refresh_site_continuity_loop');
+  assert.equal(operationReadAfterStaleLoopReportBody.operation_workflow_route.next_action, 'refresh_site_continuity_loop');
+  assert.equal(operationReadAfterStaleLoopReportBody.operation_workflow_route.reason, 'operation_lifecycle_continuity_loop_stale');
+  assert.equal(operationReadAfterStaleLoopReportBody.operation_workflow_route.action_command_kind, 'site_continuity_loop_refresh');
+  assert.equal(operationReadAfterStaleLoopReportBody.operation_workflow_route.action_command, 'pnpm site:continuity:loop -- sync-cloudflare --site site_fixture --url <worker-url> --token-file <token-file>');
+
   const localIngressCreate = await worker.fetch(jsonRequest({
     operation: 'local_ingress.request.create',
     request_id: 'request_local_ingress_create',

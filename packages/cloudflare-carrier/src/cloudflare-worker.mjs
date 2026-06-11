@@ -1939,6 +1939,7 @@ function summarizeCloudflareOperationWorkflowRoute({
   operation = null,
   lifecycleStatus = null,
   operationContinuityDirectionStatus = null,
+  localCloudContinuityBridge = null,
   persistencePosture = null,
   recoveryPosture = null,
   operationActivityTimeline = null,
@@ -2001,6 +2002,10 @@ function summarizeCloudflareOperationWorkflowRoute({
       }
     : next;
   const ready = routedNext.action === 'monitor_operation';
+  const actionCommand = routedNext.action === 'refresh_site_continuity_loop'
+    ? localCloudContinuityBridge?.refresh_command || localCloudContinuityBridge?.loop_command || null
+    : null;
+  const actionCommandKind = actionCommand ? 'site_continuity_loop_refresh' : null;
   return {
     schema: 'narada.cloudflare_operation_workflow_route.v1',
     domain: 'operation_workflow',
@@ -2015,6 +2020,7 @@ function summarizeCloudflareOperationWorkflowRoute({
     lifecycle_next_action: lifecycleStatus?.next_action ?? 'unknown',
     continuity_direction_state: continuityDirectionStatus?.state ?? 'unknown',
     continuity_direction_missing: continuityDirectionStatus?.missing_directions ?? [],
+    ...(actionCommand ? { action_command: actionCommand, action_command_kind: actionCommandKind } : {}),
     operator_focus: operatorFocus,
   };
 }
@@ -4823,6 +4829,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       operation,
       lifecycleStatus: operationLifecycleStatus,
       operationContinuityDirectionStatus,
+      localCloudContinuityBridge,
       persistencePosture: cloudflarePersistencePosture,
       recoveryPosture: cloudflareRecoveryPosture,
       operationActivityTimeline,
