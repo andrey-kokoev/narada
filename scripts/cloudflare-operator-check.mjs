@@ -1565,6 +1565,10 @@ assert.match(operationLifecycleStatus?.health, /^(ready|attention)$/);
 assert.match(operationLifecycleStatus?.next_action, /^(monitor_operation|open_tasks|undelivered_directives|carrier_evidence_read_degraded|local_ingress_provider_liveness_stale)$/);
 assert.equal(operationLifecycleStatus?.continuity_loop_state, 'loop_report_observed');
 assert.ok((operationLifecycleStatus?.continuity_loop_report_count ?? 0) >= 1);
+const localIngressProviderSchedulerPosture = operationLifecycleStatus?.local_ingress_provider_scheduler_posture;
+const repositoryPublicationProviderSchedulerPosture = operationLifecycleStatus?.repository_publication_provider_scheduler_posture;
+assertProviderSchedulerPosture(localIngressProviderSchedulerPosture, 'local_ingress');
+assertProviderSchedulerPosture(repositoryPublicationProviderSchedulerPosture, 'repository_publication');
 assert.equal(operationSurface?.lifecycle_status?.health, operationLifecycleStatus.health);
 assert.equal(operationSurface?.lifecycle_status?.next_action, operationLifecycleStatus.next_action);
 assert.equal(operationWorkflowRoute?.schema, 'narada.cloudflare_operation_workflow_route.v1');
@@ -1891,6 +1895,7 @@ const report = {
     operation_continuity_packets: 'ok',
     operation_continuity_status: 'ok',
     operation_lifecycle_status: 'ok',
+    operation_provider_scheduler_posture: 'ok',
     operation_persistence_posture: 'ok',
     operation_recovery_posture: 'ok',
     webhook_delay_directive_delivery_surface: 'ok',
@@ -1913,6 +1918,10 @@ const report = {
     human_operator_action: humanOperator.action_status,
     continuity_loop: 'ok',
     continuity_idempotence: 'ok',
+  },
+  operation_provider_scheduler_posture: {
+    local_ingress: localIngressProviderSchedulerPosture,
+    repository_publication: repositoryPublicationProviderSchedulerPosture,
   },
   service_principal_ready: true,
   console_structure: consoleStructure,
@@ -2380,6 +2389,19 @@ function operationPostureRouteInvariant(overview = {}, activeOperationId = '') {
     status: needsAttention ? 'needs_attention' : 'ready',
     reason: overview.next_reason || 'all_operations_monitoring',
   };
+}
+
+function assertProviderSchedulerPosture(posture, providerKind) {
+  assert.equal(posture?.schema, 'narada.cloudflare_provider_liveness_scheduler_posture.v1');
+  assert.equal(posture?.provider_kind, providerKind);
+  assert.match(posture?.state, /^(not_observed|fresh_from_scheduled_refresh|stale_from_scheduled_refresh|failed_from_scheduled_refresh|unknown_from_scheduled_refresh)$/);
+  assert.match(posture?.reason, /^(provider_heartbeat_missing|provider_heartbeat_refresh_trigger_not_scheduled|provider_liveness_(fresh|stale|failed|unknown)_from_scheduled_refresh)$/);
+  assert.match(posture?.refresh_trigger, /^(not_observed|operator_refresh_unspecified|windows_task_scheduler)$/);
+  if (posture?.refresh_trigger === 'windows_task_scheduler') {
+    assert.ok(posture.task_name);
+    assert.ok(Number.isInteger(posture.interval_minutes));
+    assert.ok(posture.interval_minutes > 0);
+  }
 }
 
 function operationWorkQueueItemsForCheck(operations = [], product = {}, context = {}) {
