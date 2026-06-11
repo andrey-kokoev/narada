@@ -2951,6 +2951,16 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /renderPersistencePosture/);
   assert.match(html, /cloudflare_persistence_posture/);
   assert.match(html, /monitor_persistence_posture/);
+  assert.match(html, /persistenceWorkflow/);
+  assert.match(html, /persistenceWorkflowItems/);
+  assert.match(html, /renderPersistenceWorkflow/);
+  assert.match(html, /applyPersistenceNextAction/);
+  assert.match(html, /persistenceNextAction/);
+  assert.match(html, /Apply Persistence Next Action/);
+  assert.match(html, /durable_boundaries_available/);
+  assert.match(html, /missing_boundaries_reviewed/);
+  assert.match(html, /persistence_evidence_readable/);
+  assert.match(html, /continuity_packets_recorded/);
   assert.match(html, /Persistence State/);
   assert.match(html, /Persistence Next Action/);
   assert.match(html, /Recovery Posture/);

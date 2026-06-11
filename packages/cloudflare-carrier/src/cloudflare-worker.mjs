@@ -13385,6 +13385,8 @@ export function renderCloudflareCarrierConsole() {
       <div class="product-panel">
         <h2>Persistence Posture</h2>
         <div id="persistencePostureDetail" class="evidence-summary"><div class="empty">No persistence posture loaded.</div></div>
+        <div class="actions"><button id="persistenceNextAction" class="secondary">Apply Persistence Next Action</button></div>
+        <div id="persistenceWorkflow" class="attention-items"><div class="empty">No persistence workflow loaded.</div></div>
       </div>
       <div class="product-panel">
         <h2>Recovery Posture</h2>
@@ -15278,9 +15280,96 @@ export function renderCloudflareCarrierConsole() {
     function renderPersistencePosture(product = state.operationProduct || {}) {
       if (!persistencePosture(product)) {
         el('persistencePostureDetail').innerHTML = '<div class="empty">No persistence posture loaded.</div>';
+        el('persistenceWorkflow').innerHTML = '<div class="empty">No persistence workflow loaded.</div>';
         return;
       }
       el('persistencePostureDetail').replaceChildren(...persistencePostureContext(product).map(([label, value]) => evidenceField(label, value)));
+      renderPersistenceWorkflow(product);
+    }
+    function persistenceWorkflowItems(product = state.operationProduct || {}) {
+      const posture = persistencePosture(product) || {};
+      const boundaries = posture.durable_boundaries || [];
+      const missingBoundaries = posture.missing_boundaries || [];
+      const activeBoundaryCount = Number(posture.active_boundary_count ?? boundaries.filter((boundary) => boundary.status === 'available').length);
+      const durableBoundaryCount = Number(posture.durable_boundary_count ?? boundaries.length);
+      const evidenceEvents = Number(posture.carrier_evidence_event_count ?? state.events.length);
+      const continuityPacketCount = Number(posture.continuity_packet_count ?? (product.site_continuity_packets || []).length);
+      const hasProductScope = state.productScope !== 'none' && (product.operation || product.site);
+      const durableReady = String(posture.state || '') === 'durable' && missingBoundaries.length === 0;
+      const evidenceReadState = String(posture.evidence_read_state || evidenceReplayStatus(product)?.state || 'unknown');
+      const evidenceReady = evidenceReadState === 'loaded' || evidenceEvents > 0;
+      return [
+        {
+          key: 'persistence_scope_loaded',
+          label: 'Product Scope',
+          status: hasProductScope ? 'complete' : 'needs_attention',
+          detail: hasProductScope ? productScopeSummary(product) : 'read operation or site scope before persistence review',
+          action_label: product.operation || el('operationId').value.trim() ? 'Read Operation Scope' : 'Read Site Scope',
+          action: () => run(product.operation || el('operationId').value.trim() ? refreshOperation : refreshSiteProduct),
+        },
+        {
+          key: 'durable_boundaries_available',
+          label: 'Durable Boundaries',
+          status: durableReady ? 'complete' : 'needs_attention',
+          detail: String(activeBoundaryCount) + ' available / ' + String(durableBoundaryCount) + ' durable',
+          action_label: missingBoundaries.length > 0 ? 'Review Missing Boundaries' : 'Refresh Persistence State',
+          action: () => applyPersistenceMissingBoundaryAction(product),
+        },
+        {
+          key: 'missing_boundaries_reviewed',
+          label: 'Missing Boundaries',
+          status: missingBoundaries.length === 0 ? 'complete' : 'needs_attention',
+          detail: missingBoundaries.join(', ') || 'none',
+          action_label: missingBoundaries.length === 0 ? 'Review Recovery Boundaries' : 'Focus Missing Boundary',
+          action: () => { if (missingBoundaries.length === 0) renderRecoveryPosture(product); else applyPersistenceMissingBoundaryAction(product); },
+        },
+        {
+          key: 'persistence_evidence_readable',
+          label: 'Evidence Readability',
+          status: evidenceReady ? 'complete' : 'needs_attention',
+          detail: [evidenceReadState, String(evidenceEvents) + ' events'].join(' / '),
+          action_label: evidenceEvents > 0 ? 'Focus Evidence' : 'Read Session Evidence',
+          action: () => { if (evidenceEvents > 0) focusRecoveryEvidence(product); else run(readSelectedSessionEvidence); },
+        },
+        {
+          key: 'continuity_packets_recorded',
+          label: 'Continuity Packets',
+          status: continuityPacketCount > 0 ? 'complete' : 'needs_attention',
+          detail: String(continuityPacketCount) + ' packet(s)',
+          action_label: continuityPacketCount > 0 ? 'Focus Continuity' : 'Read Site Continuity',
+          action: () => { if (continuityPacketCount > 0) applyContinuityWorkflowNextStep(); else run(refreshSiteProduct); },
+        },
+      ];
+    }
+    function applyPersistenceMissingBoundaryAction(product = state.operationProduct || {}) {
+      const missing = (persistencePosture(product)?.missing_boundaries || [])[0] || '';
+      if (missing.includes('continuity')) { applyContinuityWorkflowNextStep(); return; }
+      if (missing.includes('evidence') || missing.includes('session')) { focusRecoveryEvidence(product); return; }
+      run(product.operation || el('operationId').value.trim() ? refreshOperation : refreshSiteProduct);
+    }
+    function applyPersistenceNextAction() {
+      const item = persistenceWorkflowItems().find((entry) => entry.status !== 'complete') || persistenceWorkflowItems().at(-1);
+      if (item?.action) item.action();
+    }
+    function persistenceWorkflowActionButton(item) {
+      const button = document.createElement('button');
+      button.className = 'secondary';
+      button.textContent = item.action_label || 'Focus';
+      button.addEventListener('click', item.action);
+      return button;
+    }
+    function renderPersistenceWorkflow(product = state.operationProduct || {}) {
+      const items = persistenceWorkflowItems(product);
+      el('persistenceWorkflow').replaceChildren(...items.map((item) => {
+        const node = document.createElement('article');
+        node.className = 'attention-item' + (item.status !== 'complete' ? ' selected' : '');
+        const title = document.createElement('strong');
+        title.textContent = item.label;
+        const meta = document.createElement('span');
+        meta.textContent = [item.status, item.detail].filter(Boolean).join(' | ');
+        node.append(title, meta, focusActionRow(persistenceWorkflowActionButton(item)));
+        return node;
+      }));
     }
     function recoveryPostureContext(product = state.operationProduct || {}) {
       const posture = recoveryPosture(product) || {};
@@ -19796,6 +19885,7 @@ export function renderCloudflareCarrierConsole() {
     el('operationControlTargetEvidenceAction').addEventListener('click', focusFlightDeckEvidence);
     el('operationControlTargetReadinessAction').addEventListener('click', applyWorkbenchReadinessNextAction);
     el('operationActivityApplyFocus').addEventListener('click', applyFocusedOperationActivity);
+    el('persistenceNextAction').addEventListener('click', applyPersistenceNextAction);
     el('recoveryNextAction').addEventListener('click', applyRecoveryNextAction);
     el('authorityTransferNextAction').addEventListener('click', applyAuthorityTransferNextAction);
     el('loadRecoveryEvidenceWindow').addEventListener('click', () => run(refreshOperation));
