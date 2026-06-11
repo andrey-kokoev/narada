@@ -108,6 +108,7 @@ const CLOUDFLARE_REPOSITORY_PUBLICATION_EVIDENCE_AUTHORITY = 'cloudflare_reposit
 const CLOUDFLARE_REPOSITORY_PUBLICATION_PROVIDER_LIVENESS_AUTHORITY = 'cloudflare_repository_publication_provider_liveness_store';
 const DEFAULT_LOCAL_INGRESS_PROVIDER_STALE_AFTER_MS = 5 * 60 * 1000;
 const DEFAULT_REPOSITORY_PUBLICATION_PROVIDER_STALE_AFTER_MS = 5 * 60 * 1000;
+const DEFAULT_SITE_CONTINUITY_LOOP_STALE_AFTER_MS = 5 * 60 * 1000;
 const DEFAULT_WEBHOOK_DELAY_CRITICAL_MINUTES = 15;
 const CLOUDFLARE_RUNTIME_METADATA_READ_CAPABILITY = Object.freeze({
   capability_ref: CLOUDFLARE_RUNTIME_METADATA_READ_CAPABILITY_REF,
@@ -1661,16 +1662,32 @@ function parseCloudflareTaskLifecycleVerification(value) {
   return { ok: true, value: parsed.map((item) => ({ command: String(item.command), result: String(item.result) })) };
 }
 
-function summarizeCloudflareSiteContinuityLoopStatus(siteId, loopReports = []) {
+function summarizeCloudflareSiteContinuityLoopStatus(siteId, loopReports = [], { nowMs = Date.now(), staleAfterMs = DEFAULT_SITE_CONTINUITY_LOOP_STALE_AFTER_MS } = {}) {
   const reports = Array.isArray(loopReports) ? loopReports : [];
   const latestReport = reports[0] ?? null;
+  const latestStatus = latestReport?.status ?? null;
+  const observedAtMs = Date.parse(latestReport?.generated_at ?? latestReport?.recorded_at ?? '');
+  const ageMs = latestReport && Number.isFinite(observedAtMs) ? Math.max(0, nowMs - observedAtMs) : null;
+  const freshnessState = !latestReport
+    ? 'missing'
+    : ageMs == null
+      ? 'unknown'
+      : latestStatus === 'failed'
+        ? 'failed'
+        : ageMs > staleAfterMs
+          ? 'stale'
+          : 'fresh';
   return {
     schema: 'narada.cloudflare_site_continuity_loop_status.v1',
     site_id: siteId,
     state: latestReport ? 'loop_report_observed' : 'no_loop_report_observed',
+    freshness_state: freshnessState,
+    freshness_reason: `site_continuity_loop_report_${freshnessState}`,
+    latest_report_age_ms: ageMs,
+    stale_after_ms: staleAfterMs,
     report_count: reports.length,
     latest_report_id: latestReport?.report_id ?? null,
-    latest_status: latestReport?.status ?? null,
+    latest_status: latestStatus,
     latest_generated_at: latestReport?.generated_at ?? null,
     latest_recorded_at: latestReport?.recorded_at ?? null,
     cloudflare_push_status: latestReport?.cloudflare_push_status ?? null,
@@ -1679,7 +1696,11 @@ function summarizeCloudflareSiteContinuityLoopStatus(siteId, loopReports = []) {
       executable_cross_embodiment_mutation: 'refused_by_site_continuity_classifier',
       durable_mutation_authority: 'unchanged; routed_by_site_authority_map',
     },
-    next_action: latestReport ? 'review_continuity_loop_report' : 'run_site_continuity_loop',
+    next_action: !latestReport
+      ? 'run_site_continuity_loop'
+      : freshnessState === 'fresh'
+        ? 'review_continuity_loop_report'
+        : 'refresh_site_continuity_loop',
   };
 }
 
@@ -1953,6 +1974,7 @@ function summarizeCloudflareOperationWorkflowRoute({
       };
     }
     if (lifecycleStatus?.next_action === 'continuity_loop_report') return { action: 'review_continuity_loop_report', target: siteId ?? operationId, reason: 'operation_lifecycle_missing_continuity_loop_report' };
+    if (lifecycleStatus?.next_action === 'refresh_site_continuity_loop') return { action: 'refresh_site_continuity_loop', target: siteId ?? operationId, reason: 'operation_lifecycle_continuity_loop_stale' };
     if (lifecycleStatus?.next_action === 'carrier_evidence_read_degraded') return { action: 'review_carrier_evidence_replay', target: operationId, reason: 'carrier_evidence_read_degraded' };
     if (lifecycleStatus?.next_action === 'local_ingress_provider_liveness_missing') return { action: 'review_local_ingress_provider_liveness', target: siteId ?? operationId, reason: 'local_ingress_provider_liveness_missing' };
     if (lifecycleStatus?.next_action === 'local_ingress_provider_liveness_stale') return { action: 'review_local_ingress_provider_liveness', target: siteId ?? operationId, reason: 'local_ingress_provider_liveness_stale' };
@@ -2305,6 +2327,7 @@ function summarizeCloudflareOperationLifecycleStatus({
   const evidenceEventCount = evidenceGroups.reduce((count, group) => count + (Array.isArray(group.events) ? group.events.length : 0), 0);
   const continuityState = continuityStatus?.state ?? 'unknown';
   const continuityLoopState = continuityLoopStatus?.state ?? 'unknown';
+  const continuityLoopFreshnessState = continuityLoopStatus?.freshness_state ?? 'unknown';
   const residentLoopCount = Array.isArray(residentLoopShadowRuns) ? residentLoopShadowRuns.length : 0;
   const residentDispatchCount = Array.isArray(residentDispatchDecisions) ? residentDispatchDecisions.length : 0;
   const directiveRecordCount = Array.isArray(webhookDelayDirectiveRecords) ? webhookDelayDirectiveRecords.length : 0;
@@ -2330,6 +2353,7 @@ function summarizeCloudflareOperationLifecycleStatus({
   if (recoveryPosture?.state === 'not_reconstructable') missing.push('cloudflare_recovery_posture');
   const attention = [];
   if (continuityState === 'packet_observed' && continuityLoopState !== 'loop_report_observed') attention.push('continuity_loop_report');
+  if (continuityState === 'packet_observed' && continuityLoopState === 'loop_report_observed' && ['stale', 'failed', 'unknown'].includes(continuityLoopFreshnessState)) attention.push('continuity_loop_freshness');
   if (carrierEvidenceReadStatus?.state === 'degraded') attention.push('carrier_evidence_read_degraded');
   if (persistencePosture?.state === 'degraded') attention.push('cloudflare_persistence_posture');
   if (recoveryPosture?.state === 'partially_reconstructable') attention.push('cloudflare_recovery_posture');
@@ -2359,6 +2383,9 @@ function summarizeCloudflareOperationLifecycleStatus({
     evidence_event_count: evidenceEventCount,
     continuity_state: continuityState,
     continuity_loop_state: continuityLoopState,
+    continuity_loop_freshness_state: continuityLoopFreshnessState,
+    continuity_loop_report_age_ms: continuityLoopStatus?.latest_report_age_ms ?? null,
+    site_continuity_loop_status: continuityLoopStatus,
     continuity_direction_state: operationContinuityDirectionStatus?.state ?? 'unknown',
     continuity_direction_missing: operationContinuityDirectionStatus?.missing_directions ?? [],
     operation_continuity_direction_status: operationContinuityDirectionStatus,
@@ -2383,7 +2410,7 @@ function summarizeCloudflareOperationLifecycleStatus({
     carrier_evidence_read_status: carrierEvidenceReadStatus,
     cloudflare_persistence_posture: persistencePosture,
     cloudflare_recovery_posture: recoveryPosture,
-    next_action: missing[0] ?? attention[0] ?? 'monitor_operation',
+    next_action: missing[0] ?? (attention[0] === 'continuity_loop_freshness' ? continuityLoopStatus?.next_action ?? 'refresh_site_continuity_loop' : attention[0]) ?? 'monitor_operation',
   };
 }
 
@@ -3248,6 +3275,7 @@ function summarizeCloudflareSiteProductStatus({
   const openTaskCount = taskList.filter((task) => !['done', 'closed', 'cancelled'].includes(String(task.status ?? '').toLowerCase())).length;
   const continuityState = continuityStatus?.state ?? 'unknown';
   const continuityLoopState = continuityLoopStatus?.state ?? 'unknown';
+  const continuityLoopFreshnessState = continuityLoopStatus?.freshness_state ?? 'unknown';
   const continuityDirectionState = operationContinuityDirectionStatus?.state ?? 'unknown';
   const missing = [];
   if (activeMembershipCount === 0) missing.push('active_membership');
@@ -3258,6 +3286,7 @@ function summarizeCloudflareSiteProductStatus({
   const attention = [];
   if (continuityState === 'packet_observed' && continuityDirectionState !== 'bidirectional_packets_observed') attention.push('continuity_direction');
   if (continuityState === 'packet_observed' && continuityLoopState !== 'loop_report_observed') attention.push('continuity_loop_report');
+  if (continuityState === 'packet_observed' && continuityLoopState === 'loop_report_observed' && ['stale', 'failed', 'unknown'].includes(continuityLoopFreshnessState)) attention.push('continuity_loop_freshness');
   if (carrierEvidenceReadStatus?.state === 'degraded') attention.push('carrier_evidence_read_degraded');
   if (openTaskCount > 0) attention.push('open_tasks');
   const health = missing.length === 0 && attention.length === 0
@@ -3288,7 +3317,16 @@ function summarizeCloudflareSiteProductStatus({
     continuity_loop_state: continuityLoopState,
     continuity_packet_count: continuityStatus?.packet_count ?? 0,
     continuity_loop_report_count: continuityLoopStatus?.report_count ?? 0,
-    next_action: missing[0] ?? (attention[0] === 'continuity_direction' ? operationContinuityDirectionStatus?.next_action ?? 'continuity_direction' : attention[0]) ?? 'monitor_site',
+    continuity_loop_freshness_state: continuityLoopFreshnessState,
+    continuity_loop_report_age_ms: continuityLoopStatus?.latest_report_age_ms ?? null,
+    site_continuity_loop_status: continuityLoopStatus,
+    next_action: missing[0] ?? (
+      attention[0] === 'continuity_direction'
+        ? operationContinuityDirectionStatus?.next_action ?? 'continuity_direction'
+        : attention[0] === 'continuity_loop_freshness'
+          ? continuityLoopStatus?.next_action ?? 'refresh_site_continuity_loop'
+          : attention[0]
+    ) ?? 'monitor_site',
   };
 }
 

@@ -1192,7 +1192,7 @@ test('worker site.read composes site sessions tasks authority events and carrier
     schema: 'narada.site_continuity_productized_loop.v1',
     status: 'ok',
     site_id: 'site_fixture',
-    generated_at: '2026-06-08T00:00:00.000Z',
+    generated_at: new Date().toISOString(),
     cloudflare_source: 'cloudflare.site.read',
     cloudflare_worker_url: 'https://carrier.example.test',
     cloudflare_credential_source: 'flag:--token-file',
@@ -1249,6 +1249,10 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(readAfterPacketPutBody.site_continuity_loop_status.latest_status, 'ok');
   assert.equal(readAfterPacketPutBody.site_continuity_loop_status.cloudflare_push_status, 'imported');
   assert.equal(readAfterPacketPutBody.site_continuity_loop_status.next_action, 'review_continuity_loop_report');
+  assert.equal(readAfterPacketPutBody.site_continuity_loop_status.freshness_state, 'fresh');
+  assert.equal(readAfterPacketPutBody.site_continuity_loop_status.freshness_reason, 'site_continuity_loop_report_fresh');
+  assert.equal(readAfterPacketPutBody.site_continuity_loop_status.stale_after_ms, 5 * 60 * 1000);
+  assert.equal(readAfterPacketPutBody.site_continuity_loop_status.latest_report_age_ms >= 0, true);
   assert.equal(readAfterPacketPutBody.site_product_status.schema, 'narada.cloudflare_site_product_status.v1');
   assert.deepEqual(readAfterPacketPutBody.site_product_status.missing, []);
   assert.deepEqual(readAfterPacketPutBody.site_product_status.attention, ['open_tasks']);
@@ -1258,7 +1262,39 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(readAfterPacketPutBody.site_product_status.continuity_loop_state, 'loop_report_observed');
   assert.equal(readAfterPacketPutBody.site_product_status.continuity_packet_count, readAfterPacketPutBody.site_continuity_status.packet_count);
   assert.equal(readAfterPacketPutBody.site_product_status.continuity_loop_report_count, 1);
+  assert.equal(readAfterPacketPutBody.site_product_status.continuity_loop_freshness_state, 'fresh');
+  assert.equal(readAfterPacketPutBody.site_product_status.site_continuity_loop_status.freshness_state, 'fresh');
   assert.equal(readAfterPacketPutBody.site_product_status.next_action, 'open_tasks');
+
+  const staleLoopReportPut = await worker.fetch(jsonRequest({
+    operation: 'site.continuity.loop.report.put',
+    request_id: 'request_site_continuity_loop_report_put_stale',
+    params: {
+      site_id: 'site_fixture',
+      report: {
+        ...loopReport,
+        generated_at: '2026-01-01T00:00:00.000Z',
+        cloudflare_push: { status: 'imported_stale_fixture' },
+      },
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(staleLoopReportPut.status, 200);
+
+  const readAfterStaleLoopReport = await worker.fetch(jsonRequest({
+    operation: 'site.read',
+    request_id: 'request_site_read_after_stale_continuity_loop_report',
+    params: { site_id: 'site_fixture', carrier_event_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(readAfterStaleLoopReport.status, 200);
+  const readAfterStaleLoopReportBody = await readAfterStaleLoopReport.json();
+  assert.equal(readAfterStaleLoopReportBody.site_continuity_loop_status.report_count, 2);
+  assert.equal(readAfterStaleLoopReportBody.site_continuity_loop_status.freshness_state, 'stale');
+  assert.equal(readAfterStaleLoopReportBody.site_continuity_loop_status.freshness_reason, 'site_continuity_loop_report_stale');
+  assert.equal(readAfterStaleLoopReportBody.site_continuity_loop_status.next_action, 'refresh_site_continuity_loop');
+  assert.ok(readAfterStaleLoopReportBody.site_product_status.attention.includes('continuity_loop_freshness'));
+  assert.equal(readAfterStaleLoopReportBody.site_product_status.continuity_loop_freshness_state, 'stale');
+  assert.equal(readAfterStaleLoopReportBody.site_product_status.site_continuity_loop_status.freshness_state, 'stale');
+  assert.equal(readAfterStaleLoopReportBody.site_product_status.next_action, 'refresh_site_continuity_loop');
 
   const localIngressCreate = await worker.fetch(jsonRequest({
     operation: 'local_ingress.request.create',
