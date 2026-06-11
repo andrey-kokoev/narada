@@ -141,6 +141,14 @@ https://<worker-host>/auth/microsoft/callback
 
 The Worker uses authorization code flow with PKCE, validates Microsoft ID tokens, and then creates a D1-backed Narada operator session in `CLOUDFLARE_SITE_REGISTRY_DB`. Operator sessions use a signed `HttpOnly; Secure; SameSite=Lax` cookie named `narada_operator_session`.
 
+For local live probes that must use the Microsoft operator principal rather than a service token, capture a loopback-scoped operator session cookie:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier operator-session:capture -- --url https://<worker-host> --out D:\tmp\narada-cloudflare-operator-session.json
+```
+
+The command prints a Microsoft login URL, listens only on a loopback HTTP callback, writes the signed operator-session cookie to the output JSON, and verifies `/auth/session` resolves to `auth_type: microsoft_oidc`. The capture endpoint refuses non-loopback `return_to` URLs.
+
 Microsoft identity is not Site authority. The Worker maps Microsoft claims into a Narada principal:
 
 ```text
