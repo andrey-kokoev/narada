@@ -2,14 +2,16 @@
 import { fileURLToPath } from 'node:url';
 import { authHeaders, resolveAuth } from './cloudflare-carrier-product-read.mjs';
 
-const SUPPORTED_STATUSES = new Set(['active', 'paused', 'closed']);
+const STATUS_ALIASES = new Map([['paused', 'inactive']]);
+const SUPPORTED_STATUSES = new Set(['active', 'inactive', 'closed']);
 
 export function parseOperationStatusPutArgs(argv = [], env = process.env, now = () => Date.now()) {
   const args = [...argv];
   const workerUrl = normalizeWorkerUrl(option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '');
   const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? null;
   const operationId = option(args, '--operation-id') ?? option(args, '--carrier-operation') ?? env.CLOUDFLARE_CARRIER_OPERATION_ID ?? null;
-  const status = option(args, '--status') ?? env.CLOUDFLARE_CARRIER_OPERATION_STATUS ?? null;
+  const requestedStatus = option(args, '--status') ?? env.CLOUDFLARE_CARRIER_OPERATION_STATUS ?? null;
+  const status = normalizeOperationStatus(requestedStatus);
   const requestId = option(args, '--request-id') ?? `operation_status_put_${String(operationId ?? 'operation').replace(/[^a-z0-9]+/gi, '_')}_${now()}`;
   const format = option(args, '--format') ?? env.CLOUDFLARE_CARRIER_OPERATION_STATUS_PUT_FORMAT ?? 'json';
   const auth = resolveAuth(args, env);
@@ -17,8 +19,8 @@ export function parseOperationStatusPutArgs(argv = [], env = process.env, now = 
   if (!workerUrl) throw new Error('operation_status_put_requires_--url_or_CLOUDFLARE_CARRIER_URL');
   if (!siteId) throw new Error('operation_status_put_requires_--site_or_CLOUDFLARE_CARRIER_SITE_ID');
   if (!operationId) throw new Error('operation_status_put_requires_--operation-id_or_CLOUDFLARE_CARRIER_OPERATION_ID');
-  if (!status) throw new Error('operation_status_put_requires_--status_or_CLOUDFLARE_CARRIER_OPERATION_STATUS');
-  if (!SUPPORTED_STATUSES.has(status)) throw new Error(`operation_status_put_status_unsupported:${status}`);
+  if (!requestedStatus) throw new Error('operation_status_put_requires_--status_or_CLOUDFLARE_CARRIER_OPERATION_STATUS');
+  if (!SUPPORTED_STATUSES.has(status)) throw new Error(`operation_status_put_status_unsupported:${requestedStatus}`);
   if (!['json', 'text'].includes(format)) throw new Error(`operation_status_put_format_unsupported:${format}`);
   if (!auth) throw new Error('operation_status_put_requires_bearer_token_or_operator_session');
 
@@ -94,6 +96,11 @@ export function formatOperationStatusPutText(result) {
 function option(args, name) {
   const index = args.indexOf(name);
   return index >= 0 ? args[index + 1] : null;
+}
+
+function normalizeOperationStatus(value) {
+  const text = String(value ?? '').trim();
+  return STATUS_ALIASES.get(text) ?? text;
 }
 
 function normalizeWorkerUrl(value) {

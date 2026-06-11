@@ -14,7 +14,7 @@ test('parseOperationStatusPutArgs builds governed operation.status.put params', 
     '--token', 'secret-token',
     '--site', 'site_alpha',
     '--operation-id', 'operation_alpha',
-    '--status', 'paused',
+    '--status', 'inactive',
     '--request-id', 'request_alpha_status',
     '--format', 'text',
   ], {}, () => 123);
@@ -25,22 +25,34 @@ test('parseOperationStatusPutArgs builds governed operation.status.put params', 
   assert.deepEqual(parsed.params, {
     site_id: 'site_alpha',
     operation_id: 'operation_alpha',
-    status: 'paused',
+    status: 'inactive',
   });
   assert.deepEqual(parsed.auth, { kind: 'bearer', value: 'secret-token', source: 'flag:--token' });
 });
 
+test('parseOperationStatusPutArgs normalizes paused compatibility alias to inactive', () => {
+  const parsed = parseOperationStatusPutArgs([
+    '--url', 'https://carrier.example.test/',
+    '--token', 'secret-token',
+    '--site', 'site_alpha',
+    '--operation-id', 'operation_alpha',
+    '--status', 'paused',
+  ], {}, () => 123);
+
+  assert.equal(parsed.params.status, 'inactive');
+});
+
 test('parseOperationStatusPutArgs refuses missing authority and unsupported status', () => {
   assert.throws(
-    () => parseOperationStatusPutArgs(['--token', 'secret-token', '--site', 'site_alpha', '--operation-id', 'operation_alpha', '--status', 'paused'], {}),
+    () => parseOperationStatusPutArgs(['--token', 'secret-token', '--site', 'site_alpha', '--operation-id', 'operation_alpha', '--status', 'inactive'], {}),
     /operation_status_put_requires_--url_or_CLOUDFLARE_CARRIER_URL/,
   );
   assert.throws(
-    () => parseOperationStatusPutArgs(['--url', 'https://carrier.example.test', '--token', 'secret-token', '--operation-id', 'operation_alpha', '--status', 'paused'], {}),
+    () => parseOperationStatusPutArgs(['--url', 'https://carrier.example.test', '--token', 'secret-token', '--operation-id', 'operation_alpha', '--status', 'inactive'], {}),
     /operation_status_put_requires_--site_or_CLOUDFLARE_CARRIER_SITE_ID/,
   );
   assert.throws(
-    () => parseOperationStatusPutArgs(['--url', 'https://carrier.example.test', '--token', 'secret-token', '--site', 'site_alpha', '--status', 'paused'], {}),
+    () => parseOperationStatusPutArgs(['--url', 'https://carrier.example.test', '--token', 'secret-token', '--site', 'site_alpha', '--status', 'inactive'], {}),
     /operation_status_put_requires_--operation-id_or_CLOUDFLARE_CARRIER_OPERATION_ID/,
   );
   assert.throws(
@@ -52,7 +64,7 @@ test('parseOperationStatusPutArgs refuses missing authority and unsupported stat
     /operation_status_put_status_unsupported:deleted/,
   );
   assert.throws(
-    () => parseOperationStatusPutArgs(['--url', 'https://carrier.example.test', '--site', 'site_alpha', '--operation-id', 'operation_alpha', '--status', 'paused'], {}),
+    () => parseOperationStatusPutArgs(['--url', 'https://carrier.example.test', '--site', 'site_alpha', '--operation-id', 'operation_alpha', '--status', 'inactive'], {}),
     /operation_status_put_requires_bearer_token_or_operator_session/,
   );
 });
@@ -131,10 +143,10 @@ test('formatOperationStatusPutText renders operator summary without auth materia
   const text = formatOperationStatusPutText({
     worker_url: 'https://carrier.example.test',
     auth_source: 'operator-session-file',
-    params: { site_id: 'site_alpha', operation_id: 'operation_alpha', status: 'paused' },
+    params: { site_id: 'site_alpha', operation_id: 'operation_alpha', status: 'inactive' },
     summary: summarizeOperationStatusPut({
       previous_status: 'active',
-      operation: { site_id: 'site_alpha', operation_id: 'operation_alpha', status: 'paused', updated_at: '2026-06-11T00:00:00.000Z' },
+      operation: { site_id: 'site_alpha', operation_id: 'operation_alpha', status: 'inactive', updated_at: '2026-06-11T00:00:00.000Z' },
     }),
     auth: { kind: 'bearer', value: 'secret-token' },
   });
@@ -142,7 +154,7 @@ test('formatOperationStatusPutText renders operator summary without auth materia
   assert.match(text, /Operation Status Put: ok/);
   assert.match(text, /Site: site_alpha/);
   assert.match(text, /Operation: operation_alpha/);
-  assert.match(text, /Status: paused/);
-  assert.match(text, /Transition: active -> paused/);
+  assert.match(text, /Status: inactive/);
+  assert.match(text, /Transition: active -> inactive/);
   assert.equal(text.includes('secret-token'), false);
 });
