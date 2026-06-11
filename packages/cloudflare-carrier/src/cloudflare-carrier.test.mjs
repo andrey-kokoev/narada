@@ -1148,6 +1148,15 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(body.site_product_status.continuity_loop_state, 'no_loop_report_observed');
   assert.equal(body.site_product_status.continuity_loop_report_count, 0);
   assert.equal(body.site_product_status.next_action, 'continuity_packet');
+  assert.equal(body.cloudflare_product_surface_readiness.schema, 'narada.cloudflare_product_surface_readiness.v1');
+  assert.equal(body.cloudflare_product_surface_readiness.status, 'attention');
+  assert.equal(body.cloudflare_product_surface_readiness.coverage, 'cloudflare_product_surface_worker_visible_boundaries');
+  assert.equal(body.cloudflare_product_surface_readiness.full_product_gate_command, 'pnpm cloudflare:product:readiness');
+  assert.equal(body.cloudflare_product_surface_readiness.full_product_gate_coverage, 'operator_host_cloudflare_worker_and_local_windows_schedulers');
+  assert.equal(body.cloudflare_product_surface_readiness.required_failure_count, 0);
+  assert.equal(body.cloudflare_product_surface_readiness.required_checks.some((check) => check.key === 'local_cloud_continuity_bridge' && check.status === 'attention'), true);
+  assert.equal(body.cloudflare_product_surface_readiness.next_check, 'site_product_status');
+  assert.equal(body.cloudflare_product_surface_readiness.next_action, 'continuity_packet');
 
   const packetPut = await worker.fetch(jsonRequest({
     operation: 'site.continuity.packet.put',

@@ -3610,6 +3610,57 @@ function summarizeCloudflareSiteProductStatus({
   };
 }
 
+function summarizeCloudflareProductSurfaceReadiness({
+  siteProductStatus = null,
+  persistencePosture = null,
+  recoveryPosture = null,
+  localCloudContinuityBridge = null,
+} = {}) {
+  const requiredChecks = [
+    {
+      key: 'site_product_status',
+      status: siteProductStatus?.health === 'ready' ? 'ready' : siteProductStatus?.health === 'attention' ? 'attention' : 'incomplete',
+      evidence: siteProductStatus?.schema ?? null,
+      next_action: siteProductStatus?.next_action ?? 'read_site_product_status',
+    },
+    {
+      key: 'persistence_posture',
+      status: persistencePosture?.state === 'durable' ? 'ready' : 'incomplete',
+      evidence: persistencePosture?.schema ?? null,
+      next_action: persistencePosture?.next_action ?? 'inspect_persistence_posture',
+    },
+    {
+      key: 'recovery_posture',
+      status: recoveryPosture?.state === 'reconstructable' ? 'ready' : 'incomplete',
+      evidence: recoveryPosture?.schema ?? null,
+      next_action: recoveryPosture?.next_action ?? 'inspect_recovery_posture',
+    },
+    {
+      key: 'local_cloud_continuity_bridge',
+      status: localCloudContinuityBridge?.state === 'bidirectional_packets_observed' ? 'ready' : 'attention',
+      evidence: localCloudContinuityBridge?.schema ?? null,
+      next_action: localCloudContinuityBridge?.next_action ?? 'observe_continuity_packet',
+    },
+  ];
+  const incomplete = requiredChecks.filter((check) => check.status === 'incomplete');
+  const attention = requiredChecks.filter((check) => check.status === 'attention');
+  const nextCheck = incomplete[0] ?? attention[0] ?? null;
+  const status = incomplete.length > 0 ? 'incomplete' : attention.length > 0 ? 'attention' : 'ready';
+  return {
+    schema: 'narada.cloudflare_product_surface_readiness.v1',
+    status,
+    coverage: 'cloudflare_product_surface_worker_visible_boundaries',
+    full_product_gate_command: 'pnpm cloudflare:product:readiness',
+    full_product_gate_coverage: 'operator_host_cloudflare_worker_and_local_windows_schedulers',
+    site_id: siteProductStatus?.site_id ?? localCloudContinuityBridge?.site_id ?? null,
+    required_checks: requiredChecks,
+    required_failure_count: incomplete.length,
+    attention_count: attention.length,
+    next_action: nextCheck?.next_action ?? 'monitor_product_surface_readiness',
+    next_check: nextCheck?.key ?? null,
+  };
+}
+
 function boundedContinuityPacketReadLimit(value = 100) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return 100;
@@ -5435,6 +5486,12 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     continuityReconciliationExecutionStatus: siteContinuityReconciliationExecutionStatus,
     operationContinuityDirectionStatus,
   });
+  const cloudflareProductSurfaceReadiness = summarizeCloudflareProductSurfaceReadiness({
+    siteProductStatus,
+    persistencePosture: cloudflarePersistencePosture,
+    recoveryPosture: cloudflareRecoveryPosture,
+    localCloudContinuityBridge,
+  });
   return {
     tasks,
     site_continuity_packets: continuityPackets,
@@ -5467,6 +5524,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     operation_continuity_direction_status: operationContinuityDirectionStatus,
     cloudflare_persistence_posture: cloudflarePersistencePosture,
     cloudflare_recovery_posture: cloudflareRecoveryPosture,
+    cloudflare_product_surface_readiness: cloudflareProductSurfaceReadiness,
     site_product_status: siteProductStatus,
   };
 }
@@ -19263,6 +19321,16 @@ export function renderCloudflareCarrierConsole() {
       const repositoryPublicationRequestItems = (product.repository_publication_requests || []).map((entry) => listItem(entry.repository_publication_request_id, [entry.repository_publication_admission, entry.publication_ref, entry.repository_ref].filter((value) => value != null && value !== '').join(' | ')));
       const repositoryPublicationEvidenceItems = (product.repository_publication_evidence || []).map((entry) => listItem(entry.repository_publication_evidence_id, [entry.publication_status, entry.repository_publication_request_id, entry.published_commit_ref].filter((value) => value != null && value !== '').join(' | ')));
       const repositoryPublicationProviderHeartbeatItems = (product.repository_publication_provider_heartbeats || []).map((entry) => listItem(entry.repository_publication_provider_heartbeat_id, [entry.status, entry.provider_id, entry.provider_authority, entry.recorded_at].filter((value) => value != null && value !== '').join(' | ')));
+      const productSurfaceReadiness = product.cloudflare_product_surface_readiness || {};
+      const productSurfaceReadinessItems = [
+        listItem('status', productSurfaceReadiness.status || 'unknown'),
+        listItem('coverage', productSurfaceReadiness.coverage || 'unknown'),
+        listItem('next', [productSurfaceReadiness.next_check, productSurfaceReadiness.next_action].filter(Boolean).join(' | ') || 'monitor_product_surface_readiness'),
+        listItem('required_failures', productSurfaceReadiness.required_failure_count ?? 'unknown'),
+        listItem('attention', productSurfaceReadiness.attention_count ?? 'unknown'),
+        listItem('full_gate', productSurfaceReadiness.full_product_gate_command || 'pnpm cloudflare:product:readiness'),
+        ...(productSurfaceReadiness.required_checks || []).map((check) => listItem(check.key, [check.status, check.next_action].filter(Boolean).join(' | '))),
+      ];
       const evidenceItems = (product.carrier_evidence || []).map((entry) => {
         const kinds = (entry.events || []).slice(0, 5).map((event) => event.event_kind).join(', ');
         return listItem(entry.carrier_session_id, kinds || entry.error || 'no events');
@@ -19291,6 +19359,7 @@ export function renderCloudflareCarrierConsole() {
         renderListBlock('Repository Publication Requests', repositoryPublicationRequestItems),
         renderListBlock('Repository Publication Evidence', repositoryPublicationEvidenceItems),
         renderListBlock('Repository Publication Provider Heartbeats', repositoryPublicationProviderHeartbeatItems),
+        renderListBlock('Product Surface Readiness', productSurfaceReadinessItems),
         renderListBlock('Carrier Evidence', evidenceItems),
       );
       renderLastAuthority((product.authority_events || [])[0]);
