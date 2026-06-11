@@ -76,13 +76,22 @@ export async function readProductSurface(config, fetchImpl = fetch) {
 export function summarizeProductSurface(operation, body) {
   if (operation === 'site.list') {
     const overview = body?.site_product_overview ?? {};
+    const sitePostureRoute = body?.site_posture_route ?? null;
     return {
       operation,
       site_count: overview.site_count ?? body?.sites?.length ?? 0,
       next_site_id: overview.next_site_id ?? null,
       next_health: overview.next_health ?? null,
       next_action: overview.next_action ?? null,
+      next_reason: overview.next_reason ?? null,
       health_counts: overview.health_counts ?? null,
+      route_domain: sitePostureRoute?.domain ?? null,
+      route_command_state: sitePostureRoute?.command_state ?? null,
+      route_command_action: sitePostureRoute?.command_action ?? null,
+      route_next_action: sitePostureRoute?.next_action ?? null,
+      route_target: sitePostureRoute?.target ?? null,
+      route_status: sitePostureRoute?.status ?? null,
+      route_reason: sitePostureRoute?.reason ?? null,
     };
   }
   if (operation === 'site.read') {
@@ -178,7 +187,10 @@ export function formatProductSurfaceText(result) {
   ];
   if (operation === 'site.list') {
     lines.push(`Sites: count=${summary.site_count ?? 0} next=${summary.next_site_id ?? 'none'} health=${summary.next_health ?? 'unknown'}`);
-    lines.push(`Next Action: ${summary.next_action ?? 'none'}`);
+    lines.push(`Next Action: ${summary.next_action ?? 'none'}${summary.next_reason ? ` reason=${summary.next_reason}` : ''}`);
+    if (summary.route_next_action || summary.route_command_state || summary.route_target) {
+      lines.push(`Site Route: domain=${summary.route_domain ?? 'unknown'} state=${summary.route_command_state ?? 'unknown'} action=${summary.route_next_action ?? 'none'} target=${summary.route_target ?? 'none'} status=${summary.route_status ?? 'unknown'} reason=${summary.route_reason ?? 'none'}`);
+    }
     if (summary.health_counts) lines.push(`Health Counts: ${formatKeyValueMap(summary.health_counts)}`);
     return `${lines.join('\n')}\n`;
   }

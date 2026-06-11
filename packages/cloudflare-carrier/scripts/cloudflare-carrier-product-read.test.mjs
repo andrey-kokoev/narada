@@ -113,7 +113,18 @@ test('readProductSurface posts operation envelope and redacts auth material from
             next_site_id: 'site_alpha',
             next_health: 'ready',
             next_action: 'monitor_sites',
+            next_reason: 'sites_ready',
             health_counts: { ready: 1, attention: 0, incomplete: 0, other: 0 },
+          },
+          site_posture_route: {
+            schema: 'narada.cloudflare_site_posture_route.v1',
+            domain: 'site_posture',
+            command_state: 'site_posture_ready',
+            command_action: 'monitor_sites',
+            next_action: 'monitor_sites',
+            target: 'site_alpha',
+            status: 'ready',
+            reason: 'sites_ready',
           },
         });
       },
@@ -148,7 +159,15 @@ test('readProductSurface posts operation envelope and redacts auth material from
     next_site_id: 'site_alpha',
     next_health: 'ready',
     next_action: 'monitor_sites',
+    next_reason: 'sites_ready',
     health_counts: { ready: 1, attention: 0, incomplete: 0, other: 0 },
+    route_domain: 'site_posture',
+    route_command_state: 'site_posture_ready',
+    route_command_action: 'monitor_sites',
+    route_next_action: 'monitor_sites',
+    route_target: 'site_alpha',
+    route_status: 'ready',
+    route_reason: 'sites_ready',
   });
 });
 
@@ -163,13 +182,22 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       next_site_id: 'site_alpha',
       next_health: 'attention',
       next_action: 'bind_cloudflare_product_next_site_locally',
+      next_reason: 'continuity_direction',
       health_counts: { ready: 1, attention: 1 },
+      route_domain: 'site_posture',
+      route_command_state: 'site_posture_ready',
+      route_command_action: 'monitor_sites',
+      route_next_action: 'return_local_windows_continuity_packet',
+      route_target: 'site_alpha',
+      route_status: 'ready',
+      route_reason: 'continuity_direction',
     },
     auth: { kind: 'bearer', value: 'secret-token' },
   });
   assert.match(siteListText, /Product Read: site\.list/);
   assert.match(siteListText, /Sites: count=2 next=site_alpha health=attention/);
-  assert.match(siteListText, /Next Action: bind_cloudflare_product_next_site_locally/);
+  assert.match(siteListText, /Next Action: bind_cloudflare_product_next_site_locally reason=continuity_direction/);
+  assert.match(siteListText, /Site Route: domain=site_posture state=site_posture_ready action=return_local_windows_continuity_packet target=site_alpha status=ready reason=continuity_direction/);
   assert.equal(siteListText.includes('secret-token'), false);
 
   const siteReadText = formatProductSurfaceText({
