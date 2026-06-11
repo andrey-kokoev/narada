@@ -83,9 +83,14 @@ function validateSiteContinuityBindingRegistry(registry) {
   if (!Array.isArray(registry?.bindings)) errors.push('site_continuity_binding_registry_bindings_missing');
 
   const seenRelationIds = new Set();
+  const seenSiteIds = new Set();
   for (const binding of registry?.bindings ?? []) {
     const validation = validateSiteContinuityBinding(binding);
     for (const error of validation.errors) errors.push(`binding:${binding?.relation_id ?? binding?.site_id ?? 'unknown'}:${error}`);
+    if (binding?.site_id) {
+      if (seenSiteIds.has(binding.site_id)) errors.push(`site_continuity_binding_registry_site_duplicate:${binding.site_id}`);
+      seenSiteIds.add(binding.site_id);
+    }
     if (binding?.relation_id) {
       if (seenRelationIds.has(binding.relation_id)) errors.push(`site_continuity_binding_registry_relation_duplicate:${binding.relation_id}`);
       seenRelationIds.add(binding.relation_id);

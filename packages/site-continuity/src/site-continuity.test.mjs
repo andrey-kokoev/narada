@@ -58,6 +58,19 @@ test('site continuity binding registry refuses duplicate relation ids', () => {
   assert.deepEqual(listSiteContinuityBindingSites(registry), []);
 });
 
+test('site continuity binding registry refuses duplicate site ids', () => {
+  const registry = createSiteContinuityBindingRegistry({
+    bindings: [
+      createSiteContinuityBinding({ site_id: 'site_alpha', relation_id: 'relation-1' }),
+      createSiteContinuityBinding({ site_id: 'site_alpha', relation_id: 'relation-2' }),
+    ],
+  });
+  const validation = validateSiteContinuityBindingRegistry(registry);
+  assert.equal(validation.ok, false);
+  assert.equal(validation.errors.includes('site_continuity_binding_registry_site_duplicate:site_alpha'), true);
+  assert.deepEqual(listSiteContinuityBindingSites(registry), []);
+});
+
 test('fixture cases classify stable continuity exchanges', () => {
   assert.equal(fixtureCases.schema, 'narada.site_continuity_cases.v1');
   const binding = createSiteContinuityBinding({ site_id: 'site_fixture' });

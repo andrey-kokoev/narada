@@ -51,3 +51,25 @@ test('site continuity binding materializer refuses invalid packet binding', asyn
     /site_continuity_packet_binding_invalid/,
   );
 });
+
+test('site continuity binding materializer refuses duplicate site bindings', async () => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'narada-continuity-bindings-duplicate-site-'));
+  const firstPacketPath = path.join(tmp, 'packet-1.json');
+  const secondPacketPath = path.join(tmp, 'packet-2.json');
+  await writeFile(firstPacketPath, `${JSON.stringify({
+    binding: createSiteContinuityBinding({ site_id: 'site_bound', relation_id: 'relation-1' }),
+  }, null, 2)}\n`, 'utf8');
+  await writeFile(secondPacketPath, `${JSON.stringify({
+    binding: createSiteContinuityBinding({ site_id: 'site_bound', relation_id: 'relation-2' }),
+  }, null, 2)}\n`, 'utf8');
+
+  const plan = buildBindingMaterializationPlan({
+    cwd: tmp,
+    argv: ['--packet', firstPacketPath, '--packet', secondPacketPath],
+    env: {},
+  });
+  await assert.rejects(
+    () => materializeSiteContinuityBindingRegistry(plan),
+    /site_continuity_binding_registry_invalid:site_continuity_binding_registry_site_duplicate:site_bound/,
+  );
+});
