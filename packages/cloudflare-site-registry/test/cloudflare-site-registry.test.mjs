@@ -234,6 +234,37 @@ test('updates operation status behind owner or maintainer authority', async () =
   assert.equal(archivedAlias.ok, true);
   assert.equal(archivedAlias.status, 'closed');
   assert.equal(archivedAlias.operation.status, 'closed');
+  assert.equal(archivedAlias.transition, 'closed_to_closed');
+
+  const refusedReopen = await registry.handle({
+    operation: 'operation.status.put',
+    principal: owner,
+    params: {
+      site_id: 'site_operation_status',
+      operation_id: 'operation_status_control',
+      status: 'active',
+      request_id: 'req_operation_status_reopen_closed',
+    },
+  });
+  assert.equal(refusedReopen.ok, false);
+  assert.equal(refusedReopen.code, 'operation_status_transition_denied');
+  assert.equal(refusedReopen.reason, 'closed_operation_is_terminal');
+  assert.equal(refusedReopen.previous_status, 'closed');
+  assert.equal(refusedReopen.requested_status, 'active');
+
+  const readClosed = await registry.handle({
+    operation: 'operation.read',
+    principal: owner,
+    params: { site_id: 'site_operation_status', operation_id: 'operation_status_control' },
+  });
+  assert.equal(readClosed.operation.status, 'closed');
+  const refusedEvent = readClosed.authority_events.find(
+    (event) => event.event_kind === 'site_operation_status_update_rejected'
+      && event.evidence?.request_id === 'req_operation_status_reopen_closed',
+  );
+  assert.equal(refusedEvent.reason, 'closed_operation_is_terminal');
+  assert.equal(refusedEvent.evidence.previous_status, 'closed');
+  assert.equal(refusedEvent.evidence.requested_status, 'active');
 
   const denied = await registry.handle({
     operation: 'operation.status.put',

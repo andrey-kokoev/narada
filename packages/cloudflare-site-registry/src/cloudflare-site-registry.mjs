@@ -17,6 +17,21 @@ function normalizeOperationStatus(status, fallback = '') {
   return OPERATION_STATUS_ALIASES.get(normalizedStatus) ?? normalizedStatus;
 }
 
+function classifyOperationStatusTransition(previousStatus, nextStatus) {
+  const previous = normalizeOperationStatus(previousStatus);
+  const next = normalizeOperationStatus(nextStatus);
+  if (!OPERATION_STATUSES.has(previous) || !OPERATION_STATUSES.has(next)) {
+    return { action: 'deny', reason: 'invalid_operation_status_transition' };
+  }
+  if (previous === next) {
+    return { action: 'admit', reason: 'operation_status_unchanged', transition: `${previous}_to_${next}` };
+  }
+  if (previous === 'closed') {
+    return { action: 'deny', reason: 'closed_operation_is_terminal', transition: `${previous}_to_${next}` };
+  }
+  return { action: 'admit', reason: 'operation_status_transition_admitted', transition: `${previous}_to_${next}` };
+}
+
 export function createCloudflareSiteRegistryAdapter(env = {}, { now = () => new Date().toISOString() } = {}) {
   const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
   if (!db || typeof db.prepare !== 'function') return null;
@@ -142,6 +157,35 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
         request_id,
       });
     }
+    const transitionAdmission = classifyOperationStatusTransition(existing.status, normalizedStatus);
+    if (transitionAdmission.action !== 'admit') {
+      await recordAuthorityEvent({
+        event_kind: 'site_operation_status_update_rejected',
+        site_id: existing.site_id,
+        principal_id: principalId,
+        action: 'deny',
+        reason: transitionAdmission.reason,
+        evidence: {
+          request_id,
+          operation_id: operationId,
+          previous_status: existing.status,
+          requested_status: normalizedStatus,
+          transition: transitionAdmission.transition,
+          actor_role: actorMembership.role,
+        },
+      });
+      return {
+        ok: false,
+        code: 'operation_status_transition_denied',
+        action: 'deny',
+        reason: transitionAdmission.reason,
+        site_id: existing.site_id,
+        operation_id: operationId,
+        previous_status: existing.status,
+        requested_status: normalizedStatus,
+        transition: transitionAdmission.transition,
+      };
+    }
     const timestamp = now();
     await db.prepare(`
       UPDATE cloudflare_site_operations
@@ -161,6 +205,8 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
         previous_status: existing.status,
         status: normalizedStatus,
         status_reason: statusReason,
+        transition: transitionAdmission.transition,
+        transition_reason: transitionAdmission.reason,
         actor_role: actorMembership.role,
       },
     });
@@ -173,6 +219,8 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
       previous_status: existing.status,
       status: normalizedStatus,
       reason: statusReason,
+      transition: transitionAdmission.transition,
+      transition_reason: transitionAdmission.reason,
       operation: publicOperation(operation),
       actor_membership: publicMembership(actorMembership),
     };
