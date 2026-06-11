@@ -71,6 +71,7 @@ export function summarizeOperationStatusPut(body = {}, params = {}) {
   return {
     operation_id: operation.operation_id ?? body.operation_id ?? params.operation_id ?? null,
     site_id: operation.site_id ?? body.site_id ?? params.site_id ?? null,
+    previous_status: body.previous_status ?? null,
     status: operation.status ?? body.status ?? params.status ?? null,
     updated_at: operation.updated_at ?? body.updated_at ?? null,
   };
@@ -85,6 +86,7 @@ export function formatOperationStatusPutText(result) {
     `Site: ${summary.site_id ?? result?.params?.site_id ?? 'unknown'}`,
     `Operation: ${summary.operation_id ?? result?.params?.operation_id ?? 'unknown'}`,
     `Status: ${summary.status ?? result?.params?.status ?? 'unknown'}`,
+    ...(summary.previous_status ? [`Transition: ${summary.previous_status} -> ${summary.status ?? result?.params?.status ?? 'unknown'}`] : []),
     `Updated: ${summary.updated_at ?? 'unknown'}`,
   ].join('\n') + '\n';
 }

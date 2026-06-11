@@ -66,6 +66,7 @@ test('putCloudflareOperationStatus posts operation.status.put envelope and redac
       async text() {
         return JSON.stringify({
           ok: true,
+          previous_status: 'active',
           operation: {
             site_id: 'site_alpha',
             operation_id: 'operation_alpha',
@@ -108,6 +109,7 @@ test('putCloudflareOperationStatus posts operation.status.put envelope and redac
   assert.deepEqual(result.summary, {
     site_id: 'site_alpha',
     operation_id: 'operation_alpha',
+    previous_status: 'active',
     status: 'closed',
     updated_at: '2026-06-11T00:00:00.000Z',
   });
@@ -131,6 +133,7 @@ test('formatOperationStatusPutText renders operator summary without auth materia
     auth_source: 'operator-session-file',
     params: { site_id: 'site_alpha', operation_id: 'operation_alpha', status: 'paused' },
     summary: summarizeOperationStatusPut({
+      previous_status: 'active',
       operation: { site_id: 'site_alpha', operation_id: 'operation_alpha', status: 'paused', updated_at: '2026-06-11T00:00:00.000Z' },
     }),
     auth: { kind: 'bearer', value: 'secret-token' },
@@ -140,5 +143,6 @@ test('formatOperationStatusPutText renders operator summary without auth materia
   assert.match(text, /Site: site_alpha/);
   assert.match(text, /Operation: operation_alpha/);
   assert.match(text, /Status: paused/);
+  assert.match(text, /Transition: active -> paused/);
   assert.equal(text.includes('secret-token'), false);
 });
