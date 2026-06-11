@@ -16,6 +16,7 @@ export function buildSiteContinuitySchedulerPlan({
   localRoot = null,
   siteId = process.env.CLOUDFLARE_CARRIER_SITE_ID ?? process.env.NARADA_SITE_CONTINUITY_SITE_ID ?? null,
   packetPath = process.env.NARADA_SITE_CONTINUITY_PACKET ?? null,
+  outputPath = process.env.NARADA_SITE_CONTINUITY_SYNC_OUT ?? '.narada/site-continuity/cloudflare-sync-last.json',
   nodeCommand = process.env.NARADA_NODE_COMMAND ?? 'node',
   dryRun = true,
 } = {}) {
@@ -24,6 +25,7 @@ export function buildSiteContinuitySchedulerPlan({
   const taskEntryPoint = resolve(root, scheduledTaskEntrypoint);
   const effectiveLocalRoot = resolvePath(root, localRoot ?? root);
   const effectivePacketPath = packetPath ? resolvePath(effectiveLocalRoot, packetPath) : null;
+  const effectiveOutputPath = outputPath ? resolvePath(effectiveLocalRoot, outputPath) : null;
   const interval = normalizeIntervalMinutes(intervalMinutes);
   const status = readLocalSchedulerStatus({
     root,
@@ -31,12 +33,14 @@ export function buildSiteContinuitySchedulerPlan({
     taskEntryPoint,
     localRoot: effectiveLocalRoot,
     packetPath: effectivePacketPath,
+    outputPath: effectiveOutputPath,
   });
   const taskCommand = buildTaskCommand({
     nodeCommand,
     entrypoint: taskEntryPoint,
     siteId,
     packetPath: effectivePacketPath,
+    outputPath: effectiveOutputPath,
   });
 
   const base = {
@@ -52,10 +56,11 @@ export function buildSiteContinuitySchedulerPlan({
     local_root: effectiveLocalRoot,
     site_id: siteId ?? null,
     packet_path: effectivePacketPath,
+    output_path: effectiveOutputPath,
     credential_posture: 'external_env_file_or_process_environment_only',
     embeds_credentials: false,
     cloudflare_mutation: 'site_continuity_packet_and_loop_report_only',
-    filesystem_mutation_admission: 'not_admitted',
+    filesystem_mutation_admission: 'local_sync_report_artifact_write_only',
     repository_publication_admission: 'not_admitted',
     task_command: taskCommand,
     status,
@@ -106,7 +111,7 @@ export function buildSiteContinuitySchedulerPlan({
   }
 }
 
-export function readLocalSchedulerStatus({ root, syncEntryPoint, taskEntryPoint, localRoot, packetPath }) {
+export function readLocalSchedulerStatus({ root, syncEntryPoint, taskEntryPoint, localRoot, packetPath, outputPath }) {
   const envPath = resolve(root, '.env');
   const envKeys = existsSync(envPath) ? readEnvKeys(envPath) : [];
   return {
@@ -117,6 +122,7 @@ export function readLocalSchedulerStatus({ root, syncEntryPoint, taskEntryPoint,
     scheduled_task_entrypoint_exists: existsSync(taskEntryPoint),
     local_root_exists: existsSync(localRoot),
     packet_path_exists: packetPath ? existsSync(packetPath) : false,
+    output_path_parent_exists: outputPath ? existsSync(dirname(outputPath)) : false,
     env_file_present: existsSync(envPath),
     required_env_keys_observed: [
       'CLOUDFLARE_CARRIER_URL',
@@ -124,15 +130,16 @@ export function readLocalSchedulerStatus({ root, syncEntryPoint, taskEntryPoint,
     ].filter(Boolean),
     site_configured: Boolean(process.env.CLOUDFLARE_CARRIER_SITE_ID || process.env.NARADA_SITE_CONTINUITY_SITE_ID),
     packet_configured: Boolean(process.env.NARADA_SITE_CONTINUITY_PACKET || packetPath),
-    command_args_complete: Boolean(packetPath),
+    command_args_complete: Boolean(packetPath && outputPath),
     embeds_credentials: false,
   };
 }
 
-function buildTaskCommand({ nodeCommand, entrypoint, siteId, packetPath }) {
+function buildTaskCommand({ nodeCommand, entrypoint, siteId, packetPath, outputPath }) {
   const parts = [quote(nodeCommand), quote(entrypoint)];
   if (siteId) parts.push('--site', quote(siteId));
   if (packetPath) parts.push('--packet', quote(packetPath));
+  if (outputPath) parts.push('--out', quote(outputPath));
   return parts.join(' ');
 }
 
@@ -177,6 +184,7 @@ function parseArgs(argv) {
     else if (arg === '--local-root') args.localRoot = argv[++index];
     else if (arg === '--site') args.siteId = argv[++index];
     else if (arg === '--packet') args.packetPath = argv[++index];
+    else if (arg === '--out') args.outputPath = argv[++index];
     else if (arg === '--node-command') args.nodeCommand = argv[++index];
     else throw new Error(`unknown_argument:${arg}`);
   }

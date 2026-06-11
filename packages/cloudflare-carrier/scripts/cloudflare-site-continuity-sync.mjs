@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { execFile as execFileCallback } from 'node:child_process';
-import { readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { stdin, stdout, stderr } from 'node:process';
 import { promisify } from 'node:util';
 import { classifySiteContinuityExchangePacket } from '../../site-continuity/src/site-continuity.mjs';
@@ -482,6 +483,7 @@ async function readAllStdin() {
 async function writeJson(path, value) {
   const text = `${JSON.stringify(value, null, 2)}\n`;
   if (path) {
+    await mkdir(dirname(path), { recursive: true });
     await writeFile(path, text, 'utf8');
     return;
   }

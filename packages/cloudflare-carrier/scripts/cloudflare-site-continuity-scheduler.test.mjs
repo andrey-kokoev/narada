@@ -16,6 +16,7 @@ test('site continuity scheduler install plan is bounded and secret-free', async 
   const syncEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-sync.mjs');
   const scheduledTaskEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-scheduled-task.mjs');
   const packetPath = join(root, '.narada/site-continuity/local-packet.json');
+  const outputPath = join(root, '.narada/site-continuity/cloudflare-sync-last.json');
   await mkdir(join(root, 'packages/cloudflare-carrier/scripts'), { recursive: true });
   await mkdir(join(root, '.narada/site-continuity'), { recursive: true });
   await writeFile(syncEntrypoint, '#!/usr/bin/env node\n', 'utf8');
@@ -38,14 +39,16 @@ test('site continuity scheduler install plan is bounded and secret-free', async 
     assert.equal(plan.embeds_credentials, false);
     assert.equal(plan.credential_posture, 'external_env_file_or_process_environment_only');
     assert.equal(plan.cloudflare_mutation, 'site_continuity_packet_and_loop_report_only');
-    assert.equal(plan.filesystem_mutation_admission, 'not_admitted');
+    assert.equal(plan.filesystem_mutation_admission, 'local_sync_report_artifact_write_only');
     assert.equal(plan.repository_publication_admission, 'not_admitted');
     assert.equal(plan.status.repo_root_exists, true);
     assert.equal(plan.status.sync_entrypoint_exists, true);
     assert.equal(plan.status.scheduled_task_entrypoint_exists, true);
     assert.equal(plan.status.local_root_exists, true);
     assert.equal(plan.status.packet_path_exists, true);
+    assert.equal(plan.status.output_path_parent_exists, true);
     assert.equal(plan.status.command_args_complete, true);
+    assert.equal(plan.output_path, outputPath);
     assert.deepEqual(plan.status.required_env_keys_observed, ['CLOUDFLARE_CARRIER_URL', 'CLOUDFLARE_CARRIER_TOKEN_FILE']);
     assert.deepEqual(plan.scheduled_task_command.slice(0, 7), ['schtasks', '/Create', '/TN', 'Narada Cloudflare Site Continuity Sync', '/SC', 'MINUTE', '/MO']);
     assert.equal(plan.scheduled_task_command[7], '5');
@@ -54,6 +57,8 @@ test('site continuity scheduler install plan is bounded and secret-free', async 
     assert.match(plan.task_command, /site_fixture/);
     assert.match(plan.task_command, /--packet/);
     assert.match(plan.task_command, /local-packet\.json/);
+    assert.match(plan.task_command, /--out/);
+    assert.match(plan.task_command, /cloudflare-sync-last\.json/);
     assert.doesNotMatch(JSON.stringify(plan), /secret-token-value/);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -68,6 +73,7 @@ test('site continuity scheduler CLI emits status without Cloudflare access', asy
   assert.equal(body.action, 'status');
   assert.equal(body.plan_status, 'status_only_no_cloudflare_access');
   assert.equal(body.status.task_scheduler_query_required, true);
+  assert.equal(body.output_path.endsWith('.narada\\site-continuity\\cloudflare-sync-last.json') || body.output_path.endsWith('.narada/site-continuity/cloudflare-sync-last.json'), true);
   assert.equal(body.embeds_credentials, false);
   assert.equal(body.scheduled_task_command[0], 'schtasks');
   assert.equal(body.scheduled_task_command[1], '/Query');

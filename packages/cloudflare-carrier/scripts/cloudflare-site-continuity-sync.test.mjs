@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile as execFileCallback, spawn } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -245,13 +245,16 @@ test('site continuity sync cycle pushes local packet and returns Cloudflare pack
     }
     return { status: 400, body: { ok: false, code: 'unexpected_operation' } };
   });
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-sync-out-'));
+  const outputPath = join(root, 'nested', 'cloudflare-sync-last.json');
   try {
-    const result = await runSync(['sync-once', '--site', 'site_fixture', '--url', mock.url], {
+    const result = await runSync(['sync-once', '--site', 'site_fixture', '--url', mock.url, '--out', outputPath], {
       input: JSON.stringify({ packet: localPacket }),
     });
 
     assert.equal(result.code, 0, result.stderr);
-    const body = JSON.parse(result.stdout);
+    assert.equal(result.stdout, '');
+    const body = JSON.parse(await readFile(outputPath, 'utf8'));
     assert.equal(body.schema, 'narada.site_continuity_cloudflare_sync_once.v1');
     assert.equal(body.status, 'ok');
     assert.equal(body.site_id, 'site_fixture');
@@ -286,6 +289,7 @@ test('site continuity sync cycle pushes local packet and returns Cloudflare pack
     assert.equal(mock.requests[2].params.report.schema, 'narada.site_continuity_productized_loop.v1');
   } finally {
     await mock.close();
+    await rm(root, { recursive: true, force: true });
   }
 });
 
