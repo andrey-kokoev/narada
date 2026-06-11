@@ -263,6 +263,7 @@ export function formatProductSurfaceText(result) {
       if (summary.next_continuation_operation_id) {
         lines.push(`Continuation Read: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.next_continuation_operation_id} --operator-session-file <operator-session-file>`);
         lines.push(`Continuation Resume: pnpm --filter @narada2/cloudflare-carrier product:operation:continuation:resume:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.next_continuation_operation_id} --agent-id <agent-id> --operator-session-file <operator-session-file>`);
+        lines.push('Continuation Resume Guard: operation.read must route to resume_operation_continuation before mutation; use --skip-route-check only for explicit recovery.');
       }
     }
     lines.push(`Next: status=${summary.next_status ?? 'unknown'} action=${summary.next_action ?? 'none'} reason=${summary.next_reason ?? 'none'}`);

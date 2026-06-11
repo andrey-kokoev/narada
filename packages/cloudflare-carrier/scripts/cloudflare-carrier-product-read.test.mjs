@@ -346,6 +346,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(continuationListText, /Continuation: needed=1 next=operation_continue action=read_operation_for_continuation/);
   assert.match(continuationListText, /Continuation Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_continue --operator-session-file <operator-session-file>/);
   assert.match(continuationListText, /Continuation Resume: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuation:resume:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_continue --agent-id <agent-id> --operator-session-file <operator-session-file>/);
+  assert.match(continuationListText, /Continuation Resume Guard: operation\.read must route to resume_operation_continuation before mutation; use --skip-route-check only for explicit recovery\./);
   assert.equal(continuationListText.includes('secret-token'), false);
 
   const operationReadText = formatProductSurfaceText({
