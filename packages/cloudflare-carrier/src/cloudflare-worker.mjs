@@ -407,8 +407,11 @@ async function importCloudflareContinuityPacket(env = {}, packet, { imported_by_
     return { ok: false, status: 'refused', site_continuity_packet_admission: { ...decision, action: 'refuse', reason: 'site_continuity_packet_site_id_missing' } };
   }
   await ensureCloudflareContinuityPacketSchema(db);
-  const importedAt = new Date().toISOString();
   const packetId = packet.packet_id ?? createSiteContinuityPacketId(packet);
+  const existingPacket = await db.prepare(`SELECT packet_id, imported_at
+    FROM cloudflare_site_continuity_packets WHERE packet_id = ?`).bind(packetId).first();
+  const importedAt = new Date().toISOString();
+  const durabilityAction = existingPacket ? 'refreshed_existing_packet' : 'inserted_new_packet';
   await db.prepare(`INSERT INTO cloudflare_site_continuity_packets (
     packet_id, site_id, relation_id, source_embodiment_kind, target_embodiment_kind,
     admission_action, admission_reason, packet_json, imported_by_principal_id, imported_at
@@ -443,6 +446,8 @@ async function importCloudflareContinuityPacket(env = {}, packet, { imported_by_
       admission_action: decision.action,
       admission_reason: decision.reason,
       imported_at: importedAt,
+      durability_action: durabilityAction,
+      previous_imported_at: existingPacket?.imported_at ?? null,
     },
   };
 }

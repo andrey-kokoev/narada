@@ -1116,6 +1116,8 @@ test('worker site.read composes site sessions tasks authority events and carrier
   const packetPutBody = await packetPut.json();
   assert.equal(packetPutBody.status, 'imported');
   assert.equal(packetPutBody.site_continuity_packet_admission.action, 'projection_only');
+  assert.equal(packetPutBody.packet_record.durability_action, 'inserted_new_packet');
+  assert.equal(packetPutBody.packet_record.previous_imported_at, null);
 
   const operationReadAfterCloudflareOnlyPacket = await worker.fetch(jsonRequest({
     operation: 'operation.read',
@@ -1141,6 +1143,8 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(publishPacketBody.schema, 'narada.cloudflare_site_continuity_packet_publish.v1');
   assert.equal(publishPacketBody.status, 'imported');
   assert.equal(publishPacketBody.site_continuity_packet_admission.action, 'projection_only');
+  assert.equal(publishPacketBody.packet_record.durability_action, 'refreshed_existing_packet');
+  assert.equal(publishPacketBody.packet_record.previous_imported_at, packetPutBody.packet_record.imported_at);
   assert.equal(publishPacketBody.packet.source_embodiment_kind, 'cloudflare_carrier');
   assert.equal(publishPacketBody.packet.target_embodiment_kind, 'local_windows');
 
@@ -1159,6 +1163,18 @@ test('worker site.read composes site sessions tasks authority events and carrier
   const localWindowsPacketPutBody = await localWindowsPacketPut.json();
   assert.equal(localWindowsPacketPutBody.status, 'imported');
   assert.equal(localWindowsPacketPutBody.site_continuity_packet_admission.action, 'projection_only');
+  assert.equal(localWindowsPacketPutBody.packet_record.durability_action, 'inserted_new_packet');
+
+  const localWindowsPacketReplay = await worker.fetch(jsonRequest({
+    operation: 'site.continuity.packet.put',
+    request_id: 'request_site_read_local_windows_continuity_packet_replay',
+    params: { site_id: 'site_fixture', packet: localWindowsPacket },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(localWindowsPacketReplay.status, 200);
+  const localWindowsPacketReplayBody = await localWindowsPacketReplay.json();
+  assert.equal(localWindowsPacketReplayBody.status, 'imported');
+  assert.equal(localWindowsPacketReplayBody.packet_record.durability_action, 'refreshed_existing_packet');
+  assert.equal(localWindowsPacketReplayBody.packet_record.previous_imported_at, localWindowsPacketPutBody.packet_record.imported_at);
 
   const refusedPacketPut = await worker.fetch(jsonRequest({
     operation: 'site.continuity.packet.put',
@@ -1221,7 +1237,7 @@ test('worker site.read composes site sessions tasks authority events and carrier
   }, { token: 'test-admin-token', path: '/api/carrier' }), env);
   assert.equal(readAfterPacketPut.status, 200);
   const readAfterPacketPutBody = await readAfterPacketPut.json();
-  assert.ok(readAfterPacketPutBody.site_continuity_packets.length >= 2);
+  assert.equal(readAfterPacketPutBody.site_continuity_packets.length, 2);
   assert.equal(readAfterPacketPutBody.site_continuity_packets[0].admission_action, 'projection_only');
   assert.equal(readAfterPacketPutBody.site_continuity_status.schema, 'narada.cloudflare_site_continuity_status.v1');
   assert.equal(readAfterPacketPutBody.site_continuity_status.state, 'packet_observed');
@@ -8054,7 +8070,10 @@ function fakeD1SiteRegistryStatement(state, sql) {
         state.operatorSessions.push({ operator_session_id, principal_id, auth_type, issuer, tenant_id, subject, object_id, email, display_name, created_at, expires_at, revoked_at });
       } else if (normalized.startsWith('insert into cloudflare_site_continuity_packets')) {
         const [packet_id, site_id, relation_id, source_embodiment_kind, target_embodiment_kind, admission_action, admission_reason, packet_json, imported_by_principal_id, imported_at] = bindings;
-        state.continuityPackets.push({ packet_id, site_id, relation_id, source_embodiment_kind, target_embodiment_kind, admission_action, admission_reason, packet_json, imported_by_principal_id, imported_at });
+        const existing = state.continuityPackets.find((entry) => entry.packet_id === packet_id);
+        const row = { packet_id, site_id, relation_id, source_embodiment_kind, target_embodiment_kind, admission_action, admission_reason, packet_json, imported_by_principal_id, imported_at };
+        if (existing) Object.assign(existing, row);
+        else state.continuityPackets.push(row);
       } else if (normalized.startsWith('insert into cloudflare_site_continuity_loop_reports')) {
         const [report_id, site_id, status, generated_at, cloudflare_source, cloudflare_push_status, windows_packet_count, cloudflare_credential_source, report_json, recorded_by_principal_id, recorded_at] = bindings;
         const existing = state.continuityLoopReports.find((entry) => entry.report_id === report_id);
@@ -8264,6 +8283,10 @@ function fakeD1SiteRegistryStatement(state, sql) {
       if (normalized.includes('from cloudflare_site_operations where operation_id = ?')) {
         const [operationId] = bindings;
         return clone(state.operations.find((entry) => entry.operation_id === operationId));
+      }
+      if (normalized.includes('from cloudflare_site_continuity_packets where packet_id = ?')) {
+        const [packetId] = bindings;
+        return clone(state.continuityPackets.find((entry) => entry.packet_id === packetId));
       }
       if (normalized.includes('from cloudflare_operator_sessions')) {
         const [operatorSessionId, now] = bindings;
