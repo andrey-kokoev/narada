@@ -36,6 +36,7 @@
     "repository-publication:smoke:live": "node scripts/cloudflare-carrier-repository-publication-live-smoke.mjs",
     "repository-publication:readiness-smoke:live": "node scripts/cloudflare-carrier-repository-publication-readiness-live-smoke.mjs",
     "repository-publication:secret-put:live": "node scripts/cloudflare-carrier-repository-publication-secret-put.mjs",
+    "repository-publication:github-app-secret-put:live": "node scripts/cloudflare-carrier-repository-publication-github-app-secret-put.mjs",
     "repository-publication:cloudflare-github-smoke:live": "node scripts/cloudflare-carrier-repository-publication-cloudflare-github-live-smoke.mjs",
     "task-lifecycle:shadow-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-shadow-live-smoke.mjs",
     "task-lifecycle:create-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-create-live-smoke.mjs",

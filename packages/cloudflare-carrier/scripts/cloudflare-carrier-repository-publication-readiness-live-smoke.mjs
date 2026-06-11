@@ -36,6 +36,8 @@ assert.equal(readiness.body.site_id, siteId);
 assert.equal(readiness.body.repository_publication_executor_authority, 'cloudflare_github_repository_publication_executor');
 assert.equal(readiness.body.repository_publication_admission_authority, 'cloudflare_repository_publication_admission_controller');
 assert.equal(readiness.body.github_token_secret_ref, 'CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN');
+assert.ok(['github_token', 'github_app_installation', 'missing'].includes(readiness.body.github_credential_mode), JSON.stringify(readiness.body));
+assert.equal(typeof readiness.body.github_app_configured, 'boolean', JSON.stringify(readiness.body));
 assert.equal(readiness.body.cloudflare_git_push_admission, 'not_admitted');
 assert.ok(['ready', 'not_ready'].includes(readiness.body.readiness_status), JSON.stringify(readiness.body));
 assert.ok(Array.isArray(readiness.body.missing_configuration), JSON.stringify(readiness.body));
@@ -50,8 +52,10 @@ process.stdout.write(`${JSON.stringify({
   branch_ref: readiness.body.requested_branch_ref,
   repository_publication_executor_authority: readiness.body.repository_publication_executor_authority,
   repository_publication_admission_authority: readiness.body.repository_publication_admission_authority,
+  github_credential_mode: readiness.body.github_credential_mode,
   github_token_configured: readiness.body.github_token_configured,
   github_token_secret_ref: readiness.body.github_token_secret_ref,
+  github_app_configured: readiness.body.github_app_configured,
   allowed_repository_count: readiness.body.allowed_repository_count,
   allowed_branch_count: readiness.body.allowed_branch_count,
   requested_repository_allowed: readiness.body.requested_repository_allowed,
