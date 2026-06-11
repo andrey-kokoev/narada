@@ -1315,6 +1315,48 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(readAfterPacketPutBody.site_product_status.site_continuity_loop_status.freshness_state, 'fresh');
   assert.equal(readAfterPacketPutBody.site_product_status.next_action, 'open_tasks');
 
+  const failedReconciliationExecution = {
+    ...reconciliationExecution,
+    status: 'failed',
+    generated_at: new Date(Date.now() + 1).toISOString(),
+    persisted_at: new Date(Date.now() + 1).toISOString(),
+    completed_site_count: 0,
+    failed_site_count: 1,
+    refusal_reason: 'fixture_reconciliation_failed',
+    results: [{ site_id: 'site_fixture', status: 'failed', reason: 'fixture_reconciliation_failed' }],
+  };
+  const failedReconciliationExecutionPut = await worker.fetch(jsonRequest({
+    operation: 'site.continuity.reconciliation_execution.put',
+    request_id: 'request_site_continuity_reconciliation_execution_failed_put',
+    params: { site_id: 'site_fixture', execution: failedReconciliationExecution },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(failedReconciliationExecutionPut.status, 200);
+
+  const readAfterFailedReconciliationExecution = await worker.fetch(jsonRequest({
+    operation: 'site.read',
+    request_id: 'request_site_read_after_failed_reconciliation_execution',
+    params: { site_id: 'site_fixture', carrier_event_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(readAfterFailedReconciliationExecution.status, 200);
+  const readAfterFailedReconciliationExecutionBody = await readAfterFailedReconciliationExecution.json();
+  assert.equal(readAfterFailedReconciliationExecutionBody.site_continuity_reconciliation_execution_status.latest_status, 'failed');
+  assert.equal(readAfterFailedReconciliationExecutionBody.site_continuity_reconciliation_execution_status.health, 'attention');
+  assert.equal(readAfterFailedReconciliationExecutionBody.site_continuity_reconciliation_execution_status.next_action, 'review_site_continuity_reconciliation_execution');
+  assert.ok(readAfterFailedReconciliationExecutionBody.site_product_status.attention.includes('continuity_reconciliation_execution'));
+  assert.equal(readAfterFailedReconciliationExecutionBody.site_product_status.next_action, 'review_site_continuity_reconciliation_execution');
+
+  const operationReadAfterFailedReconciliationExecution = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_operation_read_after_failed_reconciliation_execution',
+    params: { site_id: 'site_fixture', operation_id: 'operation_site_read' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(operationReadAfterFailedReconciliationExecution.status, 200);
+  const operationReadAfterFailedReconciliationExecutionBody = await operationReadAfterFailedReconciliationExecution.json();
+  assert.equal(operationReadAfterFailedReconciliationExecutionBody.operation_lifecycle_status.continuity_reconciliation_execution_health, 'attention');
+  assert.equal(operationReadAfterFailedReconciliationExecutionBody.operation_lifecycle_status.next_action, 'continuity_reconciliation_execution');
+  assert.equal(operationReadAfterFailedReconciliationExecutionBody.operation_workflow_route.next_action, 'review_site_continuity_reconciliation_execution');
+  assert.equal(operationReadAfterFailedReconciliationExecutionBody.operation_workflow_route.reason, 'operation_lifecycle_continuity_reconciliation_execution_attention');
+
   const staleLoopReportPut = await worker.fetch(jsonRequest({
     operation: 'site.continuity.loop.report.put',
     request_id: 'request_site_continuity_loop_report_put_stale',

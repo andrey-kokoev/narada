@@ -1783,13 +1783,17 @@ async function importCloudflareContinuityLoopReport(env = {}, report, { recorded
 function summarizeCloudflareSiteContinuityReconciliationExecutionStatus(siteId, executions = []) {
   const records = Array.isArray(executions) ? executions : [];
   const latest = records[0] ?? null;
+  const latestStatus = latest?.status ?? null;
+  const failedSiteCount = latest?.failed_site_count ?? 0;
+  const needsAttention = Boolean(latest && (latestStatus !== 'completed' || failedSiteCount > 0 || latest?.refusal_reason));
   return {
     schema: 'narada.cloudflare_site_continuity_reconciliation_execution_status.v1',
     site_id: siteId,
     state: latest ? 'reconciliation_execution_observed' : 'no_reconciliation_execution_observed',
+    health: !latest ? 'unknown' : needsAttention ? 'attention' : 'ready',
     execution_count: records.length,
     latest_execution_id: latest?.execution_id ?? null,
-    latest_status: latest?.status ?? null,
+    latest_status: latestStatus,
     latest_generated_at: latest?.generated_at ?? null,
     latest_persisted_at: latest?.persisted_at ?? null,
     latest_recorded_at: latest?.recorded_at ?? null,
@@ -1805,9 +1809,9 @@ function summarizeCloudflareSiteContinuityReconciliationExecutionStatus(siteId, 
     },
     next_action: !latest
       ? 'run_site_continuity_reconciliation'
-      : latest.status === 'completed'
-        ? 'monitor_site_continuity_reconciliation'
-        : 'review_site_continuity_reconciliation_execution',
+      : needsAttention
+        ? 'review_site_continuity_reconciliation_execution'
+        : 'monitor_site_continuity_reconciliation',
   };
 }
 
@@ -2104,6 +2108,9 @@ function summarizeCloudflareOperationWorkflowRoute({
     }
     if (lifecycleStatus?.next_action === 'continuity_loop_report') return { action: 'review_continuity_loop_report', target: siteId ?? operationId, reason: 'operation_lifecycle_missing_continuity_loop_report' };
     if (lifecycleStatus?.next_action === 'refresh_site_continuity_loop') return { action: 'refresh_site_continuity_loop', target: siteId ?? operationId, reason: 'operation_lifecycle_continuity_loop_stale' };
+    if (lifecycleStatus?.next_action === 'continuity_reconciliation_execution') {
+      return { action: 'review_site_continuity_reconciliation_execution', target: siteId ?? operationId, reason: 'operation_lifecycle_continuity_reconciliation_execution_attention' };
+    }
     if (lifecycleStatus?.next_action === 'carrier_evidence_read_degraded') return { action: 'review_carrier_evidence_replay', target: operationId, reason: 'carrier_evidence_read_degraded' };
     if (lifecycleStatus?.next_action === 'local_ingress_provider_liveness_missing') return { action: 'review_local_ingress_provider_liveness', target: siteId ?? operationId, reason: 'local_ingress_provider_liveness_missing' };
     if (lifecycleStatus?.next_action === 'local_ingress_provider_liveness_stale') return { action: 'review_local_ingress_provider_liveness', target: siteId ?? operationId, reason: 'local_ingress_provider_liveness_stale' };
@@ -2450,6 +2457,7 @@ function summarizeCloudflareOperationLifecycleStatus({
   carrierEvidenceReadStatus = null,
   continuityStatus = null,
   continuityLoopStatus = null,
+  continuityReconciliationExecutionStatus = null,
   operationContinuityDirectionStatus = null,
   residentLoopShadowRuns = [],
   residentDispatchDecisions = [],
@@ -2473,6 +2481,8 @@ function summarizeCloudflareOperationLifecycleStatus({
   const continuityState = continuityStatus?.state ?? 'unknown';
   const continuityLoopState = continuityLoopStatus?.state ?? 'unknown';
   const continuityLoopFreshnessState = continuityLoopStatus?.freshness_state ?? 'unknown';
+  const continuityReconciliationExecutionState = continuityReconciliationExecutionStatus?.state ?? 'unknown';
+  const continuityReconciliationExecutionHealth = continuityReconciliationExecutionStatus?.health ?? 'unknown';
   const residentLoopCount = Array.isArray(residentLoopShadowRuns) ? residentLoopShadowRuns.length : 0;
   const residentDispatchCount = Array.isArray(residentDispatchDecisions) ? residentDispatchDecisions.length : 0;
   const directiveRecordCount = Array.isArray(webhookDelayDirectiveRecords) ? webhookDelayDirectiveRecords.length : 0;
@@ -2499,6 +2509,7 @@ function summarizeCloudflareOperationLifecycleStatus({
   const attention = [];
   if (continuityState === 'packet_observed' && continuityLoopState !== 'loop_report_observed') attention.push('continuity_loop_report');
   if (continuityState === 'packet_observed' && continuityLoopState === 'loop_report_observed' && ['stale', 'failed', 'unknown'].includes(continuityLoopFreshnessState)) attention.push('continuity_loop_freshness');
+  if (continuityReconciliationExecutionState === 'reconciliation_execution_observed' && continuityReconciliationExecutionHealth === 'attention') attention.push('continuity_reconciliation_execution');
   if (carrierEvidenceReadStatus?.state === 'degraded') attention.push('carrier_evidence_read_degraded');
   if (persistencePosture?.state === 'degraded') attention.push('cloudflare_persistence_posture');
   if (recoveryPosture?.state === 'partially_reconstructable') attention.push('cloudflare_recovery_posture');
@@ -2531,6 +2542,10 @@ function summarizeCloudflareOperationLifecycleStatus({
     continuity_loop_freshness_state: continuityLoopFreshnessState,
     continuity_loop_report_age_ms: continuityLoopStatus?.latest_report_age_ms ?? null,
     site_continuity_loop_status: continuityLoopStatus,
+    continuity_reconciliation_execution_state: continuityReconciliationExecutionState,
+    continuity_reconciliation_execution_health: continuityReconciliationExecutionHealth,
+    continuity_reconciliation_execution_count: continuityReconciliationExecutionStatus?.execution_count ?? 0,
+    site_continuity_reconciliation_execution_status: continuityReconciliationExecutionStatus,
     continuity_direction_state: operationContinuityDirectionStatus?.state ?? 'unknown',
     continuity_direction_missing: operationContinuityDirectionStatus?.missing_directions ?? [],
     operation_continuity_direction_status: operationContinuityDirectionStatus,
@@ -3434,6 +3449,7 @@ function summarizeCloudflareSiteProductStatus({
   if (continuityState === 'packet_observed' && continuityDirectionState !== 'bidirectional_packets_observed') attention.push('continuity_direction');
   if (continuityState === 'packet_observed' && continuityLoopState !== 'loop_report_observed') attention.push('continuity_loop_report');
   if (continuityState === 'packet_observed' && continuityLoopState === 'loop_report_observed' && ['stale', 'failed', 'unknown'].includes(continuityLoopFreshnessState)) attention.push('continuity_loop_freshness');
+  if (continuityReconciliationExecutionState === 'reconciliation_execution_observed' && continuityReconciliationExecutionStatus?.health === 'attention') attention.push('continuity_reconciliation_execution');
   if (carrierEvidenceReadStatus?.state === 'degraded') attention.push('carrier_evidence_read_degraded');
   if (openTaskCount > 0) attention.push('open_tasks');
   const health = missing.length === 0 && attention.length === 0
@@ -3475,6 +3491,8 @@ function summarizeCloudflareSiteProductStatus({
         ? operationContinuityDirectionStatus?.next_action ?? 'continuity_direction'
         : attention[0] === 'continuity_loop_freshness'
           ? continuityLoopStatus?.next_action ?? 'refresh_site_continuity_loop'
+          : attention[0] === 'continuity_reconciliation_execution'
+            ? continuityReconciliationExecutionStatus?.next_action ?? 'review_site_continuity_reconciliation_execution'
           : attention[0]
     ) ?? 'monitor_site',
   };
@@ -4948,6 +4966,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       carrierEvidenceReadStatus,
       continuityStatus: siteContinuityStatus,
       continuityLoopStatus: siteContinuityLoopStatus,
+      continuityReconciliationExecutionStatus: siteContinuityReconciliationExecutionStatus,
       operationContinuityDirectionStatus,
       residentLoopShadowRuns,
       residentDispatchDecisions,
