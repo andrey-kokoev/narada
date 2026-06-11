@@ -120,6 +120,40 @@ async function buildRepositoryPublicationExecutionEvidence(request, { repoPath, 
   };
 }
 
+async function persistLocalInboundPacketArtifact({ siteId, packet, admission, loopReport, inboundDirectory, generatedAt }) {
+  const base = {
+    schema: 'narada.site_continuity_cloudflare_to_local_windows_inbound_packet.v1',
+    status: 'ok',
+    site_id: siteId,
+    generated_at: generatedAt,
+    source: 'cloudflare.site.read.exchange_packet',
+    target: 'local_windows_site_continuity_inbox',
+    filesystem_mutation_admission: 'local_inbound_packet_artifact_write_only',
+    cloudflare_to_local_windows_admission_action: admission?.action ?? null,
+    cloudflare_to_local_windows_admission_reason: admission?.reason ?? null,
+    packet_id: packet?.packet_id ?? null,
+    packet_source_embodiment_kind: packet?.source_embodiment_kind ?? null,
+    packet_target_embodiment_kind: packet?.target_embodiment_kind ?? null,
+    continuity_loop_report_id: loopReport?.loop_report_id ?? null,
+    packet,
+  };
+  if (!inboundDirectory) {
+    return {
+      ...base,
+      status: 'not_configured',
+      written: false,
+      reason: 'local_inbound_directory_not_configured',
+    };
+  }
+  const artifactPath = `${inboundDirectory.replace(/[\\/]+$/, '')}/${safeToken(siteId)}-${safeToken(packet?.packet_id ?? generatedAt)}-cloudflare-inbound.json`;
+  await writeJson(artifactPath, base);
+  return {
+    ...base,
+    written: true,
+    artifact_path: artifactPath,
+  };
+}
+
 async function readGitState(repoPath) {
   const root = await runGit(repoPath, ['rev-parse', '--show-toplevel']);
   if (!root.ok) return { ok: false, reason: 'repository_publication_git_root_unavailable' };
@@ -280,6 +314,14 @@ if (command === 'sync-once') {
     pushed,
     generatedAt: new Date().toISOString(),
   });
+  const localInboundArtifact = await persistLocalInboundPacketArtifact({
+    siteId,
+    packet: cloudflarePacket,
+    admission: cloudflareAdmission,
+    loopReport,
+    inboundDirectory: option('--local-inbound-dir'),
+    generatedAt: new Date().toISOString(),
+  });
   const reportPut = await post({ operation: 'site.continuity.loop.report.put', params: { site_id: siteId, report: loopReport } });
   if (reportPut.http_status !== 200 || reportPut.body?.ok === false) failApi('cloudflare_site_continuity_loop_report_push_failed', reportPut);
   await writeJson(option('--out'), {
@@ -293,7 +335,9 @@ if (command === 'sync-once') {
     pulled_packet_id: cloudflarePacket.packet_id ?? null,
     local_to_cloudflare_recorded: true,
     cloudflare_to_local_windows_returned: true,
+    cloudflare_to_local_windows_local_artifact_written: localInboundArtifact.written,
     continuity_loop_report_recorded: true,
+    local_inbound_artifact: localInboundArtifact,
     cloudflare_response: pushed.body,
     continuity_loop_report_response: reportPut.body,
     continuity_loop_report: loopReport,
@@ -559,5 +603,5 @@ function fail(code) {
 }
 
 function printHelp() {
-  stdout.write(`Narada Cloudflare site-continuity transport\n\nCommands:\n  pull-cloudflare --site <site_id> [--out <packet.json>]\n  push-cloudflare --packet <packet.json> [--site <site_id>] [--out <result.json>]\n  read-cloudflare --site <site_id> [--out <result.json>]\n  reconciliation-execution-put --site <site_id> --execution <execution.json> [--out <result.json>]\n  sync-once --packet <packet.json> [--site <site_id>] [--out <result.json>]\n  repository-publication-execute-pending --site <site_id> [--repo <path>] [--limit <n>] [--push] [--remote <name>] [--out <result.json>]\n  repository-publication-evidence-put --site <site_id> [--evidence <evidence.json>] [--out <result.json>]\n\nAuth:\n  --url <worker-url> or CLOUDFLARE_CARRIER_URL\n  --token-file <path> or CLOUDFLARE_CARRIER_TOKEN_FILE\n  --token <bearer-token> or CLOUDFLARE_CARRIER_TOKEN\n\nNotes:\n  pull-cloudflare exports the packet emitted by site.read.\n  push-cloudflare imports a packet through site.continuity.packet.put.\n  reconciliation-execution-put records Windows reconciliation execution evidence in Cloudflare without granting Cloudflare execution authority.\n  sync-once imports the local packet, then returns the Cloudflare packet for local observation.\n  The script refuses locally invalid/executable-mutation packets before sending them.\n  repository-publication-execute-pending consumes queued Cloudflare publication requests and returns Windows-side evidence; it only runs git push when --push is explicit.\n  repository-publication-evidence-put returns Windows-side publication evidence to Cloudflare without granting Cloudflare git push authority.\n`);
+  stdout.write(`Narada Cloudflare site-continuity transport\n\nCommands:\n  pull-cloudflare --site <site_id> [--out <packet.json>]\n  push-cloudflare --packet <packet.json> [--site <site_id>] [--out <result.json>]\n  read-cloudflare --site <site_id> [--out <result.json>]\n  reconciliation-execution-put --site <site_id> --execution <execution.json> [--out <result.json>]\n  sync-once --packet <packet.json> [--site <site_id>] [--out <result.json>] [--local-inbound-dir <dir>]\n  repository-publication-execute-pending --site <site_id> [--repo <path>] [--limit <n>] [--push] [--remote <name>] [--out <result.json>]\n  repository-publication-evidence-put --site <site_id> [--evidence <evidence.json>] [--out <result.json>]\n\nAuth:\n  --url <worker-url> or CLOUDFLARE_CARRIER_URL\n  --token-file <path> or CLOUDFLARE_CARRIER_TOKEN_FILE\n  --token <bearer-token> or CLOUDFLARE_CARRIER_TOKEN\n\nNotes:\n  pull-cloudflare exports the packet emitted by site.read.\n  push-cloudflare imports a packet through site.continuity.packet.put.\n  reconciliation-execution-put records Windows reconciliation execution evidence in Cloudflare without granting Cloudflare execution authority.\n  sync-once imports the local packet, then returns the Cloudflare packet for local observation.\n  The script refuses locally invalid/executable-mutation packets before sending them.\n  repository-publication-execute-pending consumes queued Cloudflare publication requests and returns Windows-side evidence; it only runs git push when --push is explicit.\n  repository-publication-evidence-put returns Windows-side publication evidence to Cloudflare without granting Cloudflare git push authority.\n`);
 }

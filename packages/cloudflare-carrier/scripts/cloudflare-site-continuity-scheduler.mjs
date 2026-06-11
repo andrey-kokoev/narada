@@ -940,7 +940,7 @@ export async function executeSiteContinuityReconciliationPlan(
     reconciliation_plan_status: reconciliationPlan?.status ?? null,
     selected_site_count: selectedSites.length,
     cloudflare_mutation_admission: dryRun ? 'not_executed_dry_run' : 'pending_guarded_sync_once_execution',
-    filesystem_mutation_admission: dryRun ? 'not_executed_dry_run' : 'pending_guarded_sync_once_artifact_write',
+    filesystem_mutation_admission: dryRun ? 'not_executed_dry_run' : 'pending_guarded_sync_once_artifact_and_inbound_packet_write',
     embeds_credentials: false,
     generated_at: now(),
     reconciliation_execution_output_path: plan?.reconciliation_execution_output_path ?? null,
@@ -1002,6 +1002,8 @@ export async function executeSiteContinuityReconciliationPlan(
       site.packet_path,
       '--out',
       site.output_path,
+      '--local-inbound-dir',
+      site.local_inbound_directory,
     ];
     try {
       await execFileImpl(process.execPath, args, { cwd: plan.repo_root, timeout, windowsHide: true });
@@ -1032,7 +1034,7 @@ export async function executeSiteContinuityReconciliationPlan(
     ...base,
     status: failedCount === 0 ? 'completed' : completedCount > 0 ? 'partial' : 'failed',
     cloudflare_mutation_admission: 'executed_via_guarded_site_continuity_sync_once_and_records_reconciliation_execution_evidence',
-    filesystem_mutation_admission: 'sync_once_artifact_and_reconciliation_execution_artifact_write_only',
+    filesystem_mutation_admission: 'sync_once_inbound_packet_and_reconciliation_execution_artifact_write_only',
     execution_timeout_ms: timeout,
     executed_site_count: results.length,
     completed_site_count: completedCount,
@@ -1841,6 +1843,7 @@ function readSiteContinuityPacketSummary(packetPath) {
 
 function buildReconciliationSiteAction(site, { nodeCommand, syncEntryPoint, packetPath, packetDirectory = null, artifactDirectory }) {
   const outputPath = artifactDirectory ? join(artifactDirectory, `${safeFileToken(site.site_id)}-cloudflare-sync.json`) : null;
+  const localInboundDirectory = artifactDirectory ? join(artifactDirectory, 'inbound') : null;
   const effectivePacketPath = resolveReconciliationPacketPath(site.site_id, { packetPath, packetDirectory });
   const packetSummary = readSiteContinuityPacketSummary(effectivePacketPath);
   const packetSiteId = packetSummary?.site_id ?? null;
@@ -1853,6 +1856,7 @@ function buildReconciliationSiteAction(site, { nodeCommand, syncEntryPoint, pack
     effectivePacketPath && packetSummary?.state === 'site_id_missing' ? 'packet_site_id_required' : null,
     packetSiteMismatch ? 'packet_site_id_mismatch' : null,
     outputPath ? null : 'artifact_directory_required',
+    localInboundDirectory ? null : 'local_inbound_directory_required',
   ].filter(Boolean);
   const commandReady = commandBlockers.length === 0;
   return {
@@ -1868,12 +1872,13 @@ function buildReconciliationSiteAction(site, { nodeCommand, syncEntryPoint, pack
     artifact_age_minutes: site.artifact_age_minutes ?? null,
     max_sync_artifact_age_minutes: site.max_sync_artifact_age_minutes ?? null,
     output_path: outputPath,
+    local_inbound_directory: localInboundDirectory,
     command_status: commandReady ? 'ready' : 'needs_configuration',
     command_blockers: commandBlockers,
     packet_site_id: packetSiteId,
     packet_path: effectivePacketPath ?? null,
     packet_path_source: packetDirectory ? 'packet_directory' : 'single_packet_path',
-    sync_command: commandReady ? buildSyncOnceCommand({ nodeCommand, syncEntryPoint, siteId: site.site_id, packetPath: effectivePacketPath, outputPath }) : null,
+    sync_command: commandReady ? buildSyncOnceCommand({ nodeCommand, syncEntryPoint, siteId: site.site_id, packetPath: effectivePacketPath, outputPath, localInboundDirectory }) : null,
   };
 }
 
@@ -1882,7 +1887,7 @@ function resolveReconciliationPacketPath(siteId, { packetPath = null, packetDire
   return packetPath;
 }
 
-function buildSyncOnceCommand({ nodeCommand, syncEntryPoint, siteId, packetPath, outputPath }) {
+function buildSyncOnceCommand({ nodeCommand, syncEntryPoint, siteId, packetPath, outputPath, localInboundDirectory }) {
   return [
     quote(nodeCommand),
     quote(syncEntryPoint),
@@ -1893,6 +1898,8 @@ function buildSyncOnceCommand({ nodeCommand, syncEntryPoint, siteId, packetPath,
     quote(packetPath),
     '--out',
     quote(outputPath),
+    '--local-inbound-dir',
+    quote(localInboundDirectory),
   ].join(' ');
 }
 

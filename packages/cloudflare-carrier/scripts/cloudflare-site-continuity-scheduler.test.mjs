@@ -266,13 +266,16 @@ test('site continuity reconciliation plan resolves one packet per configured sit
       site.packet_path,
       site.packet_path_source,
       site.packet_site_id,
+      site.local_inbound_directory,
       site.command_status,
       site.command_blockers,
     ]), [
-      ['site_alpha', join(packetDirectory, 'site_alpha-packet.json'), 'packet_directory', 'site_alpha', 'ready', []],
-      ['site_beta', join(packetDirectory, 'site_beta-packet.json'), 'packet_directory', 'site_beta', 'ready', []],
+      ['site_alpha', join(packetDirectory, 'site_alpha-packet.json'), 'packet_directory', 'site_alpha', join(artifactDirectory, 'inbound'), 'ready', []],
+      ['site_beta', join(packetDirectory, 'site_beta-packet.json'), 'packet_directory', 'site_beta', join(artifactDirectory, 'inbound'), 'ready', []],
     ]);
     assert.match(plan.reconciliation_plan.selected_sites[0].sync_command, /site_alpha-packet\.json/);
+    assert.match(plan.reconciliation_plan.selected_sites[0].sync_command, /--local-inbound-dir/);
+    assert.match(plan.reconciliation_plan.selected_sites[0].sync_command, /inbound/);
     assert.match(plan.reconciliation_plan.selected_sites[1].sync_command, /site_beta-packet\.json/);
     assert.doesNotMatch(JSON.stringify(plan), /secret|token/i);
   } finally {
@@ -1671,7 +1674,7 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
     assert.equal(result.status, 'completed');
     assert.equal(result.dry_run, false);
     assert.equal(result.cloudflare_mutation_admission, 'executed_via_guarded_site_continuity_sync_once_and_records_reconciliation_execution_evidence');
-    assert.equal(result.filesystem_mutation_admission, 'sync_once_artifact_and_reconciliation_execution_artifact_write_only');
+    assert.equal(result.filesystem_mutation_admission, 'sync_once_inbound_packet_and_reconciliation_execution_artifact_write_only');
     assert.equal(result.executed_site_count, 1);
     assert.equal(result.completed_site_count, 1);
     assert.equal(result.failed_site_count, 0);
@@ -1683,6 +1686,8 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
     assert.deepEqual(calls[0].args.slice(0, 6), [syncEntrypoint, 'sync-once', '--site', 'site_missing', '--packet', packetPath]);
     assert.equal(calls[0].args[6], '--out');
     assert.equal(calls[0].args[7], join(artifactDirectory, 'site_missing-cloudflare-sync.json'));
+    assert.equal(calls[0].args[8], '--local-inbound-dir');
+    assert.equal(calls[0].args[9], join(artifactDirectory, 'inbound'));
     assert.equal(calls[0].options.cwd, root);
     assert.equal(calls[0].options.timeout, 5000);
     assert.equal(calls[1].command, process.execPath);
