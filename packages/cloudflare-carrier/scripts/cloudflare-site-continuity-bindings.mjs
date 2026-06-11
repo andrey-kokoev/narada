@@ -1,0 +1,167 @@
+#!/usr/bin/env node
+
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import {
+  createSiteContinuityBindingRegistry,
+  validateSiteContinuityBinding,
+  validateSiteContinuityBindingRegistry,
+} from '@narada2/site-continuity';
+
+const DEFAULT_PACKET_PATHS = ['.narada/site-continuity/local-windows-packet.json'];
+const DEFAULT_BINDING_REGISTRY_PATH = '.narada/site-continuity/bindings.json';
+
+async function main() {
+  const plan = buildBindingMaterializationPlan({
+    argv: process.argv.slice(2),
+    env: process.env,
+    cwd: process.env.INIT_CWD ?? process.cwd(),
+  });
+  const result = await materializeSiteContinuityBindingRegistry(plan);
+  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+}
+
+function buildBindingMaterializationPlan({ argv = [], env = process.env, cwd = process.cwd() } = {}) {
+  const args = parseArgs(argv);
+  const packetPaths = collectPacketPaths(args, env);
+  const outputPath = args.output
+    ?? env.NARADA_SITE_CONTINUITY_BINDINGS
+    ?? DEFAULT_BINDING_REGISTRY_PATH;
+
+  return {
+    cwd,
+    packet_paths: packetPaths,
+    output_path: outputPath,
+    effective_packet_paths: packetPaths.map((packetPath) => resolvePath(cwd, packetPath)),
+    effective_output_path: resolvePath(cwd, outputPath),
+    registry_ref: args.registry_ref ?? env.NARADA_SITE_CONTINUITY_BINDING_REGISTRY_REF ?? 'local-cloud-site-continuity-bindings',
+    generated_at: args.generated_at ?? env.NARADA_SITE_CONTINUITY_BINDING_GENERATED_AT ?? new Date().toISOString(),
+    dry_run: args.dry_run === true,
+  };
+}
+
+async function materializeSiteContinuityBindingRegistry(plan) {
+  const packetReads = [];
+  const bindings = [];
+  const seenRelationIds = new Set();
+
+  for (const packetPath of plan.effective_packet_paths) {
+    const packet = JSON.parse(await readFile(packetPath, 'utf8'));
+    const binding = packet?.binding;
+    const validation = validateSiteContinuityBinding(binding);
+    packetReads.push({ path: packetPath, site_id: binding?.site_id ?? null, relation_id: binding?.relation_id ?? null, validation });
+    if (!validation.ok) {
+      throw new Error(`site_continuity_packet_binding_invalid:${packetPath}:${validation.errors.join(',')}`);
+    }
+    if (seenRelationIds.has(binding.relation_id)) {
+      throw new Error(`site_continuity_binding_relation_duplicate:${binding.relation_id}`);
+    }
+    seenRelationIds.add(binding.relation_id);
+    bindings.push(binding);
+  }
+
+  const registry = createSiteContinuityBindingRegistry({
+    bindings,
+    registry_ref: plan.registry_ref,
+    generated_at: plan.generated_at,
+  });
+  const registryValidation = validateSiteContinuityBindingRegistry(registry);
+  if (!registryValidation.ok) {
+    throw new Error(`site_continuity_binding_registry_invalid:${registryValidation.errors.join(',')}`);
+  }
+
+  if (!plan.dry_run) {
+    await mkdir(path.dirname(plan.effective_output_path), { recursive: true });
+    await writeFile(plan.effective_output_path, `${JSON.stringify(registry, null, 2)}\n`, 'utf8');
+  }
+
+  return {
+    ok: true,
+    action: plan.dry_run ? 'validated' : 'materialized',
+    output_path: plan.effective_output_path,
+    registry_ref: registry.registry_ref,
+    binding_count: registry.bindings.length,
+    sites: registry.bindings.map((binding) => binding.site_id).sort((left, right) => left.localeCompare(right)),
+    packet_reads: packetReads.map((read) => ({
+      path: read.path,
+      site_id: read.site_id,
+      relation_id: read.relation_id,
+      validation: read.validation.ok ? 'ok' : read.validation.errors,
+    })),
+  };
+}
+
+function collectPacketPaths(args, env) {
+  const configuredPackets = [];
+  if (args.packet) configuredPackets.push(...asArray(args.packet));
+  if (env.NARADA_SITE_CONTINUITY_PACKET) configuredPackets.push(...splitList(env.NARADA_SITE_CONTINUITY_PACKET));
+  if (env.NARADA_SITE_CONTINUITY_PACKETS) configuredPackets.push(...splitList(env.NARADA_SITE_CONTINUITY_PACKETS));
+  const selected = configuredPackets.length > 0 ? configuredPackets : DEFAULT_PACKET_PATHS;
+  return [...new Set(selected.map((item) => String(item).trim()).filter(Boolean))];
+}
+
+function parseArgs(argv) {
+  const args = {};
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--dry-run') {
+      args.dry_run = true;
+      continue;
+    }
+    if (arg === '--packet') {
+      args.packet = [...asArray(args.packet), argv[index + 1]];
+      index += 1;
+      continue;
+    }
+    if (arg === '--output') {
+      args.output = argv[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === '--registry-ref') {
+      args.registry_ref = argv[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === '--generated-at') {
+      args.generated_at = argv[index + 1];
+      index += 1;
+      continue;
+    }
+    throw new Error(`unknown_argument:${arg}`);
+  }
+  return args;
+}
+
+function asArray(value) {
+  if (value === undefined || value === null) return [];
+  return Array.isArray(value) ? value : [value];
+}
+
+function splitList(value) {
+  return String(value ?? '').split(/[;,]/u).map((item) => item.trim()).filter(Boolean);
+}
+
+function resolvePath(cwd, value) {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) throw new Error('path_missing');
+  return path.resolve(cwd, normalized);
+}
+
+const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : null;
+const modulePath = fileURLToPath(import.meta.url);
+if (invokedPath === modulePath) {
+  main().catch((error) => {
+    process.stderr.write(`${error.stack ?? error.message}\n`);
+    process.exitCode = 1;
+  });
+}
+
+export {
+  DEFAULT_BINDING_REGISTRY_PATH,
+  DEFAULT_PACKET_PATHS,
+  buildBindingMaterializationPlan,
+  materializeSiteContinuityBindingRegistry,
+};

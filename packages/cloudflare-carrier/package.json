@@ -8,7 +8,7 @@
     "./worker": "./src/cloudflare-worker.mjs"
   },
   "scripts": {
-    "test": "node --test src/cloudflare-carrier.test.mjs scripts/cloudflare-site-continuity-sync.test.mjs scripts/cloudflare-site-continuity-scheduler.test.mjs scripts/cloudflare-carrier-site-registry-projection.test.mjs scripts/cloudflare-carrier-provider-liveness-refresh.test.mjs scripts/cloudflare-carrier-provider-liveness-scheduler.test.mjs scripts/cloudflare-carrier-script-manifest.test.mjs",
+    "test": "node --test src/cloudflare-carrier.test.mjs scripts/cloudflare-site-continuity-sync.test.mjs scripts/cloudflare-site-continuity-scheduler.test.mjs scripts/cloudflare-site-continuity-bindings.test.mjs scripts/cloudflare-carrier-site-registry-projection.test.mjs scripts/cloudflare-carrier-provider-liveness-refresh.test.mjs scripts/cloudflare-carrier-provider-liveness-scheduler.test.mjs scripts/cloudflare-carrier-script-manifest.test.mjs",
     "deploy:check": "node scripts/cloudflare-carrier-deploy-check.mjs",
     "deploy:dry-run": "wrangler deploy --dry-run --config wrangler.toml",
     "deploy:live": "wrangler deploy --config wrangler.toml",
@@ -54,6 +54,7 @@
     "task-lifecycle:finish-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-finish-live-smoke.mjs",
     "resident-dispatch:smoke:live": "node scripts/cloudflare-carrier-resident-dispatch-live-smoke.mjs",
     "continuity:cloudflare": "node scripts/cloudflare-site-continuity-sync.mjs",
+    "continuity:bindings": "node scripts/cloudflare-site-continuity-bindings.mjs",
     "continuity:scheduler": "node scripts/cloudflare-site-continuity-scheduler.mjs",
     "continuity:status": "node scripts/cloudflare-site-continuity-scheduler.mjs --action status-all",
     "continuity:status:live": "node scripts/cloudflare-site-continuity-scheduler.mjs --action status-all --live --refresh-site-registry-projection",
