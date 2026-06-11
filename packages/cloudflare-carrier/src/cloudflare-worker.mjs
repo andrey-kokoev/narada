@@ -11314,6 +11314,12 @@ export function renderCloudflareCarrierConsole() {
         <div id="recoveryWorkflow" class="attention-items"><div class="empty">No recovery workflow loaded.</div></div>
       </div>
       <div class="product-panel">
+        <h2>Authority Transfer</h2>
+        <div id="authorityTransferDetail" class="evidence-summary"><div class="empty">No authority transfer posture loaded.</div></div>
+        <div class="actions"><button id="authorityTransferNextAction" class="secondary">Apply Authority Transfer Next Action</button></div>
+        <div id="authorityTransferWorkflow" class="attention-items"><div class="empty">No authority transfer workflow loaded.</div></div>
+      </div>
+      <div class="product-panel">
         <h2>Operation Activity Timeline</h2>
         <div id="operationActivityTimeline" class="attention-items"><div class="empty">No operation activity loaded.</div></div>
         <h3>Activity Focus</h3>
@@ -11968,6 +11974,8 @@ export function renderCloudflareCarrierConsole() {
       const evidenceStatus = evidenceReplayStatus(product) || {};
       const persistence = persistencePosture(product) || {};
       const recovery = recoveryPosture(product) || {};
+      const transferPosture = authorityTransferPosture(product) || {};
+      const transferTarget = (transferPosture.remaining_windows_authorities || [])[0] || null;
       const statusHistory = operationStatusHistory(product);
       const scope = state.productScope || 'none';
       const followUp = scope === 'operation'
@@ -11990,6 +11998,10 @@ export function renderCloudflareCarrierConsole() {
         ['Persistence Next Action', persistence.next_action || 'monitor_persistence_posture'],
         ['Recovery State', recovery.state || 'unknown'],
         ['Recovery Next Action', recovery.next_action || 'monitor_recovery_posture'],
+        ['Authority Transfer State', transferPosture.transfer_complete ? 'complete' : transferPosture.schema ? 'in_transfer' : 'unknown'],
+        ['Authority Transfer Remaining', String(transferPosture.remaining_windows_authority_count ?? (transferPosture.remaining_windows_authorities || []).length ?? 0)],
+        ['Authority Transfer Next Domain', transferTarget?.domain || 'none'],
+        ['Authority Transfer Next Action', transferPosture.next_action || 'monitor_authority_transfer'],
         ['Status Transitions', operationStatusTransitionSummary(statusHistory)],
         ['Latest Status Transition', operationLatestStatusTransitionLabel(statusHistory)],
         ['Activity Items', operationActivityTimelineSummary(product)],
@@ -12462,6 +12474,9 @@ export function renderCloudflareCarrierConsole() {
       const lifecycleStatus = surface.lifecycle_status || product.operation_lifecycle_status || {};
       const localIngressOperationPosture = product.local_ingress_operation_posture || surface.local_ingress_operation_posture || {};
       const repositoryPublicationOperationPosture = product.repository_publication_operation_posture || surface.repository_publication_operation_posture || {};
+      const transferPosture = authorityTransferPosture(product) || {};
+      const transferAction = transferPosture.next_action || '';
+      const transferTarget = (transferPosture.remaining_windows_authorities || [])[0] || null;
       const webhookDelayDirectiveRecords = product.webhook_delay_directive_records || [];
       const webhookDelayDirectiveDeliveries = product.webhook_delay_directive_deliveries || [];
       const webhookDelayDirectiveSurfacePresent = 'webhook_delay_directive_records' in product || 'webhook_delay_directive_record_count' in surface;
@@ -12491,6 +12506,9 @@ export function renderCloudflareCarrierConsole() {
         }
         if (authorityAction && !['monitor_authority_admissions'].includes(authorityAction)) {
           return { domain: 'authority', action: authorityAction, target: contextValue(authorityActionContext(product), 'Focused Decision') || 'authority', reason: 'authority_state_needs_attention' };
+        }
+        if (transferPosture.schema === 'narada.cloudflare_authority_transfer_posture.v1' && transferPosture.transfer_complete !== true) {
+          return { domain: 'authority_transfer', action: transferAction || 'continue_authority_transfer', target: transferTarget ? [transferTarget.domain, transferTarget.authority].join('/') : 'authority_transfer', reason: 'windows_authority_remains' };
         }
         if (lifecycleStatus.next_action === 'session') {
           return { domain: 'operation_lifecycle', action: 'focus_lifecycle_start_session', target: operationId || 'operation', reason: 'operation_lifecycle_missing_session' };
@@ -12594,6 +12612,7 @@ export function renderCloudflareCarrierConsole() {
       if (action === 'use_focused_session') { useFocusedSession(); return; }
       if (action === 'read_session_evidence') { run(readSelectedSessionEvidence); return; }
       if (action === 'focus_authority_evidence' || action === 'inspect_refused_authority' || action === 'resolve_authority_locus' || action === 'read_site_authority') { applyAuthorityNextAction(); return; }
+      if (action.startsWith('transfer_') || action === 'continue_authority_transfer' || action === 'verify_full_cloudflare_authority') { focusAuthorityTransferNextAction(product); return; }
       if (action === 'focus_lifecycle_start_session') { focusOperationSession(); return; }
       if (action === 'focus_lifecycle_read_evidence') { run(refreshOperation); return; }
       if (action === 'focus_lifecycle_continuity') { applyContinuityWorkflowNextStep(); return; }
@@ -12650,6 +12669,30 @@ export function renderCloudflareCarrierConsole() {
         target: selected?.task_id || 'none',
         status: ready ? 'ready' : 'needs_attention',
         action: () => { if (selected) selectTask(selected); else applyFlightDeckNextAction(); },
+      };
+    }
+    function authorityTransferRouteStage(product = state.operationProduct || {}) {
+      const posture = authorityTransferPosture(product) || {};
+      if (posture.schema !== 'narada.cloudflare_authority_transfer_posture.v1') {
+        return {
+          domain: 'authority_transfer',
+          command_state: 'authority_transfer_unloaded',
+          command_action: 'read_operation_scope',
+          next_action: 'read_operation_scope',
+          target: product.operation?.operation_id || product.site?.site_id || el('operationId').value.trim() || el('siteId').value.trim() || 'none',
+          status: 'needs_attention',
+          action: () => run(product.operation || el('operationId').value.trim() ? refreshOperation : refreshSiteProduct),
+        };
+      }
+      const firstAuthority = (posture.remaining_windows_authorities || [])[0] || null;
+      return {
+        domain: 'authority_transfer',
+        command_state: posture.transfer_complete ? 'authority_transfer_complete' : 'authority_transfer_attention',
+        command_action: posture.next_action || 'monitor_authority_transfer',
+        next_action: posture.next_action || 'monitor_authority_transfer',
+        target: firstAuthority ? [firstAuthority.domain, firstAuthority.authority].join('/') : 'cloudflare_authority',
+        status: posture.transfer_complete ? 'ready' : 'needs_attention',
+        action: () => focusAuthorityTransferNextAction(product),
       };
     }
     function sitePostureRouteStage() {
@@ -12753,6 +12796,7 @@ export function renderCloudflareCarrierConsole() {
         }),
         taskRouteStage(product),
         operatorRouteStage('authority', authorityActionContext(product), ['monitor_authority_admissions', 'admissions_monitoring'], 'Focused Decision', applyAuthorityNextAction),
+        authorityTransferRouteStage(product),
         evidenceStage,
       ];
     }
@@ -12979,6 +13023,11 @@ export function renderCloudflareCarrierConsole() {
         || product.operation_product_surface?.recovery_posture
         || null;
     }
+    function authorityTransferPosture(product = state.operationProduct || {}) {
+      return product.authority_transfer_posture
+        || product.operation_product_surface?.authority_transfer_posture
+        || null;
+    }
     function persistencePostureContext(product = state.operationProduct || {}) {
       const posture = persistencePosture(product) || {};
       const boundaries = posture.durable_boundaries || [];
@@ -13129,6 +13178,130 @@ export function renderCloudflareCarrierConsole() {
         const meta = document.createElement('span');
         meta.textContent = [item.status, item.detail].filter(Boolean).join(' | ');
         node.append(title, meta, focusActionRow(recoveryWorkflowActionButton(item)));
+        return node;
+      }));
+    }
+    function authorityTransferContext(product = state.operationProduct || {}) {
+      const posture = authorityTransferPosture(product) || {};
+      const firstAuthority = (posture.remaining_windows_authorities || [])[0] || null;
+      return [
+        ['State', posture.transfer_complete ? 'complete' : posture.schema ? 'in_transfer' : 'unknown'],
+        ['Domains', String(posture.domain_count ?? 0)],
+        ['Cloudflare Owned', String(posture.cloudflare_owned_count ?? 0)],
+        ['Cloudflare Governed Windows Executed', String(posture.cloudflare_governed_windows_executed_count ?? 0)],
+        ['Cloudflare Recorded Windows Owned', String(posture.cloudflare_recorded_windows_owned_count ?? 0)],
+        ['Windows Retained', String(posture.windows_retained_count ?? 0)],
+        ['Remaining Domains', (posture.remaining_windows_domains || []).join(', ') || 'none'],
+        ['Remaining Authorities', String(posture.remaining_windows_authority_count ?? (posture.remaining_windows_authorities || []).length)],
+        ['Next Domain', firstAuthority?.domain || 'none'],
+        ['Next Authority', firstAuthority?.authority || 'none'],
+        ['Next Action', posture.next_action || 'read_operation_scope'],
+      ];
+    }
+    function renderAuthorityTransfer(product = state.operationProduct || {}) {
+      if (!authorityTransferPosture(product)) {
+        el('authorityTransferDetail').innerHTML = '<div class="empty">No authority transfer posture loaded.</div>';
+        el('authorityTransferWorkflow').innerHTML = '<div class="empty">No authority transfer workflow loaded.</div>';
+        return;
+      }
+      el('authorityTransferDetail').replaceChildren(...authorityTransferContext(product).map(([label, value]) => evidenceField(label, value)));
+      renderAuthorityTransferWorkflow(product);
+    }
+    function focusAuthorityTransferNextAction(product = state.operationProduct || {}) {
+      const posture = authorityTransferPosture(product) || {};
+      const action = String(posture.next_action || 'read_operation_scope');
+      const targets = operationFlightDeckTargets(product);
+      if (action === 'read_operation_scope') { run(refreshOperation); return; }
+      if (action === 'verify_full_cloudflare_authority') { focusFlightDeckEvidence(); return; }
+      if (action.includes('local_ingress')) {
+        if (targets.localIngressProviderHeartbeat) selectLocalIngressProviderHeartbeat(targets.localIngressProviderHeartbeat);
+        else if (targets.localIngressEvidence) selectLocalIngressEvidence(targets.localIngressEvidence);
+        else if (targets.localIngressRequest) selectLocalIngressRequest(targets.localIngressRequest);
+        else focusLocalIngressProviderLiveness();
+        return;
+      }
+      if (action.includes('repository_publication') || action.includes('git_push')) {
+        if (targets.repositoryPublicationProviderHeartbeat) selectRepositoryPublicationProviderHeartbeat(targets.repositoryPublicationProviderHeartbeat);
+        else if (targets.repositoryPublicationEvidence) selectRepositoryPublicationEvidence(targets.repositoryPublicationEvidence);
+        else if (targets.repositoryPublicationRequest) selectRepositoryPublicationRequest(targets.repositoryPublicationRequest);
+        else focusRepositoryPublicationProviderLiveness();
+        return;
+      }
+      if (action.includes('mailbox')) {
+        if (targets.mailboxDraftReplyProposal) selectMailboxDraftReplyProposal(targets.mailboxDraftReplyProposal);
+        else if (targets.mailboxOutlookDraftCreate) selectMailboxOutlookDraftCreate(targets.mailboxOutlookDraftCreate);
+        else focusFlightDeckEvidence();
+        return;
+      }
+      if (action.includes('site_file') || action.includes('filesystem')) {
+        if (targets.siteFileChangeProposal) selectSiteFileChangeProposal(targets.siteFileChangeProposal);
+        else focusFlightDeckEvidence();
+        return;
+      }
+      if (action.includes('task_lifecycle')) { applyFlightDeckNextAction(); return; }
+      applyAuthorityNextAction();
+    }
+    function authorityTransferWorkflowItems(product = state.operationProduct || {}) {
+      const posture = authorityTransferPosture(product) || {};
+      const domains = posture.domains || [];
+      const firstAuthority = (posture.remaining_windows_authorities || [])[0] || null;
+      const hasProductScope = state.productScope !== 'none' && (product.operation || product.site);
+      return [
+        {
+          key: 'authority_transfer_scope_loaded',
+          label: 'Product Scope',
+          status: hasProductScope ? 'complete' : 'needs_attention',
+          detail: hasProductScope ? productScopeSummary(product) : 'read operation or site scope before authority transfer review',
+          action_label: product.operation || el('operationId').value.trim() ? 'Read Operation Scope' : 'Read Site Scope',
+          action: () => run(product.operation || el('operationId').value.trim() ? refreshOperation : refreshSiteProduct),
+        },
+        {
+          key: 'authority_domains_classified',
+          label: 'Authority Domains',
+          status: domains.length > 0 ? 'complete' : 'needs_attention',
+          detail: domains.length > 0 ? String(domains.length) + ' domains classified' : 'authority transfer posture not loaded',
+          action_label: 'Refresh Authority Transfer',
+          action: () => run(refreshOperation),
+        },
+        {
+          key: 'remaining_windows_authority_focused',
+          label: 'Remaining Windows Authority',
+          status: posture.transfer_complete ? 'complete' : 'needs_attention',
+          detail: firstAuthority ? [firstAuthority.domain, firstAuthority.authority].join(' / ') : 'none',
+          action_label: posture.transfer_complete ? 'Focus Authority Evidence' : 'Focus Transfer Domain',
+          action: () => focusAuthorityTransferNextAction(product),
+        },
+        {
+          key: 'cloudflare_authority_verified',
+          label: 'Cloudflare Authority Verification',
+          status: posture.transfer_complete ? 'complete' : 'needs_attention',
+          detail: posture.transfer_complete ? 'all domains transferred' : String(posture.remaining_windows_authority_count ?? (posture.remaining_windows_authorities || []).length) + ' authorities remain',
+          action_label: posture.transfer_complete ? 'Focus Evidence' : 'Continue Transfer',
+          action: () => focusAuthorityTransferNextAction(product),
+        },
+      ];
+    }
+    function applyAuthorityTransferNextAction() {
+      const item = authorityTransferWorkflowItems().find((entry) => entry.status !== 'complete') || authorityTransferWorkflowItems().at(-1);
+      if (item?.action) item.action();
+    }
+    function authorityTransferWorkflowActionButton(item) {
+      const button = document.createElement('button');
+      button.className = 'secondary';
+      button.textContent = item.action_label || 'Focus';
+      button.addEventListener('click', item.action);
+      return button;
+    }
+    function renderAuthorityTransferWorkflow(product = state.operationProduct || {}) {
+      const items = authorityTransferWorkflowItems(product);
+      el('authorityTransferWorkflow').replaceChildren(...items.map((item) => {
+        const node = document.createElement('article');
+        node.className = 'attention-item' + (item.status !== 'complete' ? ' selected' : '');
+        const title = document.createElement('strong');
+        title.textContent = item.label;
+        const meta = document.createElement('span');
+        meta.textContent = [item.status, item.detail].filter(Boolean).join(' | ');
+        node.append(title, meta, focusActionRow(authorityTransferWorkflowActionButton(item)));
         return node;
       }));
     }
@@ -16327,6 +16500,7 @@ export function renderCloudflareCarrierConsole() {
       renderOperationFlightDeck(product);
       renderPersistencePosture(product);
       renderRecoveryPosture(product);
+      renderAuthorityTransfer(product);
       renderOperationActivityTimeline(product);
       renderOperationPath(focusedOperation(), product);
       updateControlRoom();
@@ -16438,6 +16612,7 @@ export function renderCloudflareCarrierConsole() {
       renderOperationFlightDeck(product);
       renderPersistencePosture(product);
       renderRecoveryPosture(product);
+      renderAuthorityTransfer(product);
       renderOperationActivityTimeline(product);
       renderOperationPath(focusedOperation(), product);
       updateControlRoom();
@@ -17081,6 +17256,7 @@ export function renderCloudflareCarrierConsole() {
     el('operationControlTargetReadinessAction').addEventListener('click', applyWorkbenchReadinessNextAction);
     el('operationActivityApplyFocus').addEventListener('click', applyFocusedOperationActivity);
     el('recoveryNextAction').addEventListener('click', applyRecoveryNextAction);
+    el('authorityTransferNextAction').addEventListener('click', applyAuthorityTransferNextAction);
     el('loadRecoveryEvidenceWindow').addEventListener('click', () => run(refreshOperation));
     el('carrierEvidenceSessionLimit').addEventListener('change', () => { el('carrierEvidenceSessionLimit').value = String(carrierEvidenceSessionLimit()); saveWorkbenchState(); });
     el('startResidentDispatch').addEventListener('click', () => run(startResidentDispatchFromWorkbench));
