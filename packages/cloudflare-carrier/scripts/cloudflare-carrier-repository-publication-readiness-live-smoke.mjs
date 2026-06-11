@@ -16,6 +16,7 @@ const bearerToken = option('--token') ?? (tokenFile ? readTokenFile(tokenFile) :
 const siteId = option('--site') ?? process.env.CLOUDFLARE_CARRIER_SITE_ID ?? 'site_narada_cloudflare';
 const repositoryRef = option('--repository-ref') ?? process.env.CLOUDFLARE_REPOSITORY_PUBLICATION_LIVE_REPOSITORY_REF ?? 'github:andrey-kokoev/narada';
 const branchRef = option('--branch') ?? process.env.CLOUDFLARE_REPOSITORY_PUBLICATION_LIVE_BRANCH ?? 'cloudflare-publication';
+const requireGithubApp = args.includes('--require-github-app') || process.env.CLOUDFLARE_REPOSITORY_PUBLICATION_REQUIRE_GITHUB_APP === '1';
 const suffix = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
 
 if (!workerUrl) throw new Error('repository_publication_readiness_live_smoke_requires_--url_or_CLOUDFLARE_CARRIER_URL');
@@ -43,6 +44,12 @@ assert.ok(['ready', 'not_ready'].includes(readiness.body.readiness_status), JSON
 assert.ok(Array.isArray(readiness.body.missing_configuration), JSON.stringify(readiness.body));
 assert.doesNotMatch(JSON.stringify(readiness.body), /gh[pousr]_[A-Za-z0-9_]+/);
 
+if (requireGithubApp) {
+  assert.equal(readiness.body.readiness_status, 'ready', JSON.stringify(readiness.body));
+  assert.equal(readiness.body.github_credential_mode, 'github_app_installation', JSON.stringify(readiness.body));
+  assert.equal(readiness.body.github_app_configured, true, JSON.stringify(readiness.body));
+}
+
 process.stdout.write(`${JSON.stringify({
   schema: 'narada.cloudflare_carrier.repository_publication_readiness_live_smoke.v1',
   status: readiness.body.readiness_status,
@@ -56,6 +63,7 @@ process.stdout.write(`${JSON.stringify({
   github_token_configured: readiness.body.github_token_configured,
   github_token_secret_ref: readiness.body.github_token_secret_ref,
   github_app_configured: readiness.body.github_app_configured,
+  github_app_required: requireGithubApp,
   allowed_repository_count: readiness.body.allowed_repository_count,
   allowed_branch_count: readiness.body.allowed_branch_count,
   requested_repository_allowed: readiness.body.requested_repository_allowed,
