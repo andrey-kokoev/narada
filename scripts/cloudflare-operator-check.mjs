@@ -1080,6 +1080,21 @@ const continuitySecond = await runJsonCommand('site-continuity-loop:idempotent',
 assert.equal(continuitySecond.status, 'ok');
 assert.equal(continuitySecond.windows_packet_count, 1);
 
+const cloudflareContinuityPull = await runJsonCommand('site-continuity-pull-cloudflare', cloudflareContinuityPullCommand());
+assert.equal(cloudflareContinuityPull.schema, 'narada.site_continuity_cloudflare_pull.v1');
+assert.equal(cloudflareContinuityPull.status, 'ok');
+assert.equal(cloudflareContinuityPull.site_id, siteId);
+assert.equal(cloudflareContinuityPull.site_continuity_packet_admission?.action, 'projection_only');
+assert.equal(cloudflareContinuityPull.site_continuity_packet_admission?.reason, 'site_continuity_exchange_packet_projection_admitted');
+assert.equal(cloudflareContinuityPull.packet?.site_id, siteId);
+assert.equal(cloudflareContinuityPull.packet?.source_embodiment_kind, 'cloudflare_carrier');
+assert.equal(cloudflareContinuityPull.packet?.target_embodiment_kind, 'local_windows');
+assert.ok((cloudflareContinuityPull.packet?.decisions ?? []).some((decision) => (
+  decision.action === 'refuse'
+  && decision.reason === 'site_continuity_cross_embodiment_mutation_execution_refused'
+  && decision.exchange_class === 'cross_embodiment_mutation_execution'
+)));
+
 const taskLifecycleWriteAdmission = await postCarrier(workerUrl, bearerToken, {
   operation: 'task_lifecycle.write_admission.classify',
   request_id: `operator_check_task_lifecycle_write_admission_${Date.now()}`,
@@ -1551,6 +1566,7 @@ assert.equal(operationSurface?.continuity_packet_count, operationContinuityPacke
 assert.equal(operationContinuityStatus?.schema, 'narada.cloudflare_site_continuity_status.v1');
 assert.equal(operationContinuityStatus?.state, 'packet_observed');
 assert.equal(operationContinuityStatus?.packet_count, operationContinuityPackets.length);
+assert.equal(operationContinuityStatus?.expected_exchange_packet_id, cloudflareContinuityPull.packet.packet_id);
 assert.equal(operationSurface?.continuity_status?.state, operationContinuityStatus.state);
 assert.equal(operationContinuityLoopStatus?.schema, 'narada.cloudflare_site_continuity_loop_status.v1');
 assert.equal(operationContinuityLoopStatus?.state, 'loop_report_observed');
@@ -1921,6 +1937,7 @@ const report = {
     human_operator_action: humanOperator.action_status,
     continuity_loop: 'ok',
     continuity_idempotence: 'ok',
+    cloudflare_continuity_pull: 'ok',
   },
   operation_provider_scheduler_posture: {
     local_ingress: localIngressProviderSchedulerPosture,
@@ -2084,6 +2101,10 @@ const report = {
     cloudflare_push_status: continuitySecond.cloudflare_push?.status ?? null,
     windows_packet_count: continuitySecond.windows_packet_count,
     windows_packet_ids: continuitySecond.windows_packets?.map((packet) => packet.packet_id) ?? [],
+    cloudflare_pull_status: cloudflareContinuityPull.status,
+    cloudflare_packet_id: cloudflareContinuityPull.packet.packet_id,
+    cloudflare_packet_direction: `${cloudflareContinuityPull.packet.source_embodiment_kind}->${cloudflareContinuityPull.packet.target_embodiment_kind}`,
+    cloudflare_packet_admission: cloudflareContinuityPull.site_continuity_packet_admission,
     authority_boundary: continuitySecond.authority_boundary,
   },
   enter: {
@@ -2110,6 +2131,20 @@ function continuityCommand() {
     tokenFile,
     '--registry',
     registryPath,
+  ];
+}
+
+function cloudflareContinuityPullCommand() {
+  return [
+    'node',
+    'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-sync.mjs',
+    'pull-cloudflare',
+    '--site',
+    siteId,
+    '--url',
+    workerUrl,
+    '--token-file',
+    tokenFile,
   ];
 }
 

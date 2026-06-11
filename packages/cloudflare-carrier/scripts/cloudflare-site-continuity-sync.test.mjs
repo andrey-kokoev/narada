@@ -130,6 +130,63 @@ test('site continuity sync refuses executable mutation packets before network', 
   assert.ok(body.admission.confirmation_required.includes('mutation_requests_not_imported'));
 });
 
+test('site continuity sync pulls Cloudflare exchange packet before local import', async () => {
+  const binding = createSiteContinuityBinding({ site_id: 'site_fixture' });
+  const packet = createSiteContinuityExchangePacket({
+    binding,
+    source_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER,
+    target_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS,
+    decisions: [
+      {
+        action: 'refuse',
+        reason: 'site_continuity_cross_embodiment_mutation_execution_refused',
+        exchange_class: 'cross_embodiment_mutation_execution',
+      },
+    ],
+    projections: [
+      {
+        projection_class: 'site_read_model',
+        source_cursor: 'cloudflare-test-cursor',
+      },
+    ],
+  });
+  const mock = await startCarrierMock((body) => {
+    if (body.operation === 'site.read') {
+      return {
+        body: {
+          ok: true,
+          site_continuity: { exchange_packet: packet },
+        },
+      };
+    }
+    return { status: 400, body: { ok: false, code: 'unexpected_operation' } };
+  });
+  try {
+    const result = await runSync(['pull-cloudflare', '--site', 'site_fixture', '--url', mock.url]);
+
+    assert.equal(result.code, 0, result.stderr);
+    const body = JSON.parse(result.stdout);
+    assert.equal(body.schema, 'narada.site_continuity_cloudflare_pull.v1');
+    assert.equal(body.status, 'ok');
+    assert.equal(body.site_id, 'site_fixture');
+    assert.equal(body.site_continuity_packet_admission.action, 'projection_only');
+    assert.equal(body.site_continuity_packet_admission.reason, 'site_continuity_exchange_packet_projection_admitted');
+    assert.equal(body.packet.packet_id, packet.packet_id);
+    assert.equal(body.packet.source_embodiment_kind, SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER);
+    assert.equal(body.packet.target_embodiment_kind, SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS);
+    assert.ok(body.packet.decisions.some((decision) => (
+      decision.action === 'refuse'
+      && decision.reason === 'site_continuity_cross_embodiment_mutation_execution_refused'
+      && decision.exchange_class === 'cross_embodiment_mutation_execution'
+    )));
+    assert.equal(mock.requests.length, 1);
+    assert.equal(mock.requests[0].operation, 'site.read');
+    assert.equal(mock.requests[0].params.site_id, 'site_fixture');
+  } finally {
+    await mock.close();
+  }
+});
+
 test('site continuity sync refuses direct Cloudflare repository publication evidence before network', async () => {
   const result = await runSync(['repository-publication-evidence-put', '--site', 'site_fixture'], {
     input: JSON.stringify({
