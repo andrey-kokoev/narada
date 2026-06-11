@@ -6519,6 +6519,13 @@ test('worker site.list exposes product statuses across visible sites', async () 
   }), { token: 'test-admin-token' }), env);
   assert.equal(start.status, 200);
 
+  const cloudflarePacketPublish = await worker.fetch(jsonRequest({
+    operation: 'site.continuity.packet.publish',
+    request_id: 'request_site_list_cloudflare_continuity_packet_publish',
+    params: { site_id: 'site_alpha' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(cloudflarePacketPublish.status, 200);
+
   const listed = await worker.fetch(jsonRequest({
     operation: 'site.list',
     request_id: 'request_site_list_product_statuses',
@@ -6531,10 +6538,15 @@ test('worker site.list exposes product statuses across visible sites', async () 
   assert.equal(listedBody.site_product_statuses[0].schema, 'narada.cloudflare_site_product_status.v1');
   assert.equal(listedBody.site_product_statuses[0].site_id, 'site_alpha');
   assert.equal(listedBody.site_product_statuses[0].health, 'attention');
-  assert.deepEqual(listedBody.site_product_statuses[0].missing, ['continuity_packet']);
+  assert.deepEqual(listedBody.site_product_statuses[0].missing, []);
+  assert.deepEqual(listedBody.site_product_statuses[0].attention, ['continuity_direction', 'continuity_loop_report']);
   assert.equal(listedBody.site_product_statuses[0].operation_count, 1);
   assert.equal(listedBody.site_product_statuses[0].session_count, 1);
-  assert.equal(listedBody.site_product_statuses[0].next_action, 'continuity_packet');
+  assert.equal(listedBody.site_product_statuses[0].continuity_state, 'packet_observed');
+  assert.equal(listedBody.site_product_statuses[0].continuity_direction_state, 'cloudflare_to_local_windows_only');
+  assert.deepEqual(listedBody.site_product_statuses[0].continuity_direction_missing, ['local_windows_to_cloudflare']);
+  assert.equal(listedBody.site_product_statuses[0].operation_continuity_direction_status.next_action, 'return_local_windows_continuity_packet');
+  assert.equal(listedBody.site_product_statuses[0].next_action, 'return_local_windows_continuity_packet');
   assert.equal(listedBody.site_product_statuses[1].site_id, 'site_beta');
   assert.equal(listedBody.site_product_statuses[1].health, 'incomplete');
   assert.deepEqual(listedBody.site_product_statuses[1].missing, ['operation', 'session', 'carrier_evidence', 'continuity_packet']);
@@ -6542,13 +6554,13 @@ test('worker site.list exposes product statuses across visible sites', async () 
   assert.equal(listedBody.site_product_overview.schema, 'narada.cloudflare_site_product_overview.v1');
   assert.equal(listedBody.site_product_overview.site_count, 2);
   assert.deepEqual(listedBody.site_product_overview.health_counts, { ready: 0, attention: 1, incomplete: 1, other: 0 });
-  assert.deepEqual(listedBody.site_product_overview.action_counts, { continuity_packet: 1, operation: 1 });
-  assert.deepEqual(listedBody.site_product_overview.missing_counts, { continuity_packet: 2, operation: 1, session: 1, carrier_evidence: 1 });
-  assert.deepEqual(listedBody.site_product_overview.attention_counts, {});
+  assert.deepEqual(listedBody.site_product_overview.action_counts, { return_local_windows_continuity_packet: 1, operation: 1 });
+  assert.deepEqual(listedBody.site_product_overview.missing_counts, { operation: 1, session: 1, carrier_evidence: 1, continuity_packet: 1 });
+  assert.deepEqual(listedBody.site_product_overview.attention_counts, { continuity_direction: 1, continuity_loop_report: 1 });
   assert.equal(listedBody.site_product_overview.next_site_id, 'site_alpha');
   assert.equal(listedBody.site_product_overview.next_health, 'attention');
-  assert.equal(listedBody.site_product_overview.next_action, 'continuity_packet');
-  assert.equal(listedBody.site_product_overview.next_reason, 'continuity_packet');
+  assert.equal(listedBody.site_product_overview.next_action, 'return_local_windows_continuity_packet');
+  assert.equal(listedBody.site_product_overview.next_reason, 'continuity_direction');
   assert.deepEqual(listedBody.site_posture_route, {
     schema: 'narada.cloudflare_site_posture_route.v1',
     domain: 'site_posture',
@@ -6557,7 +6569,7 @@ test('worker site.list exposes product statuses across visible sites', async () 
     next_action: 'monitor_sites',
     target: 'site_alpha',
     status: 'ready',
-    reason: 'continuity_packet',
+    reason: 'continuity_direction',
   });
 });
 

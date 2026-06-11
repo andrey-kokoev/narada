@@ -3234,6 +3234,7 @@ function summarizeCloudflareSiteProductStatus({
   carrierEvidenceReadStatus = null,
   continuityStatus = null,
   continuityLoopStatus = null,
+  operationContinuityDirectionStatus = null,
 } = {}) {
   const operationList = Array.isArray(operations) ? operations : [];
   const membershipList = Array.isArray(memberships) ? memberships : [];
@@ -3247,6 +3248,7 @@ function summarizeCloudflareSiteProductStatus({
   const openTaskCount = taskList.filter((task) => !['done', 'closed', 'cancelled'].includes(String(task.status ?? '').toLowerCase())).length;
   const continuityState = continuityStatus?.state ?? 'unknown';
   const continuityLoopState = continuityLoopStatus?.state ?? 'unknown';
+  const continuityDirectionState = operationContinuityDirectionStatus?.state ?? 'unknown';
   const missing = [];
   if (activeMembershipCount === 0) missing.push('active_membership');
   if (operationList.length === 0) missing.push('operation');
@@ -3254,6 +3256,7 @@ function summarizeCloudflareSiteProductStatus({
   if (evidenceEventCount === 0) missing.push('carrier_evidence');
   if (continuityState !== 'packet_observed') missing.push('continuity_packet');
   const attention = [];
+  if (continuityState === 'packet_observed' && continuityDirectionState !== 'bidirectional_packets_observed') attention.push('continuity_direction');
   if (continuityState === 'packet_observed' && continuityLoopState !== 'loop_report_observed') attention.push('continuity_loop_report');
   if (carrierEvidenceReadStatus?.state === 'degraded') attention.push('carrier_evidence_read_degraded');
   if (openTaskCount > 0) attention.push('open_tasks');
@@ -3279,10 +3282,13 @@ function summarizeCloudflareSiteProductStatus({
     carrier_evidence_read_status: carrierEvidenceReadStatus,
     authority_event_count: authorityEventList.length,
     continuity_state: continuityState,
+    continuity_direction_state: continuityDirectionState,
+    continuity_direction_missing: operationContinuityDirectionStatus?.missing_directions ?? [],
+    operation_continuity_direction_status: operationContinuityDirectionStatus,
     continuity_loop_state: continuityLoopState,
     continuity_packet_count: continuityStatus?.packet_count ?? 0,
     continuity_loop_report_count: continuityLoopStatus?.report_count ?? 0,
-    next_action: missing[0] ?? attention[0] ?? 'monitor_site',
+    next_action: missing[0] ?? (attention[0] === 'continuity_direction' ? operationContinuityDirectionStatus?.next_action ?? 'continuity_direction' : attention[0]) ?? 'monitor_site',
   };
 }
 
@@ -5024,6 +5030,12 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
   const siteContinuityStatus = summarizeCloudflareSiteContinuityStatus(siteId, continuityPackets, siteContinuity);
   const siteContinuityLoopStatus = summarizeCloudflareSiteContinuityLoopStatus(siteId, continuityLoopReports);
   const localCloudContinuityBridge = summarizeLocalCloudContinuityBridge(siteId, continuityPackets, siteContinuity, siteContinuityStatus);
+  const operationContinuityDirectionStatus = summarizeCloudflareOperationContinuityDirectionStatus({
+    siteId,
+    continuityStatus: siteContinuityStatus,
+    continuityLoopStatus: siteContinuityLoopStatus,
+    localCloudContinuityBridge,
+  });
   const cloudflarePersistencePosture = summarizeCloudflarePersistencePosture(env, {
     siteId,
     sessions: response.sessions,
@@ -5050,6 +5062,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     carrierEvidenceReadStatus,
     continuityStatus: siteContinuityStatus,
     continuityLoopStatus: siteContinuityLoopStatus,
+    operationContinuityDirectionStatus,
   });
   return {
     tasks,
@@ -5077,6 +5090,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     site_continuity_status: siteContinuityStatus,
     site_continuity_loop_status: siteContinuityLoopStatus,
     local_cloud_continuity_bridge: localCloudContinuityBridge,
+    operation_continuity_direction_status: operationContinuityDirectionStatus,
     cloudflare_persistence_posture: cloudflarePersistencePosture,
     cloudflare_recovery_posture: cloudflareRecoveryPosture,
     site_product_status: siteProductStatus,
