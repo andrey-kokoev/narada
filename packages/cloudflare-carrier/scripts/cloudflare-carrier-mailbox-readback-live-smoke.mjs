@@ -69,7 +69,10 @@ if (operationRead.body.operation_product_surface.mailbox_status_source_read_coun
 }
 if (operationRead.body.operation_product_surface.mailbox_draft_reply_proposal_count > 0) {
   assert.equal(operationRead.body.operation_product_surface.mailbox_draft_reply_proposal_authority, 'cloudflare_carrier_site');
-  assert.equal(operationRead.body.operation_product_surface.mailbox_draft_reply_authority_partition, 'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted');
+  assert.ok([
+    'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted',
+    'mailbox_draft_reply_proposal_cloudflare_recorded_send_and_confirmation_cloudflare_owned_outlook_draft_and_mutation_not_admitted',
+  ].includes(operationRead.body.operation_product_surface.mailbox_draft_reply_authority_partition));
 }
 if (operationRead.body.operation_product_surface.mailbox_outlook_draft_create_count > 0) {
   assert.equal(operationRead.body.operation_product_surface.mailbox_outlook_draft_create_authority, 'cloudflare_graph_outlook_draft_create');
