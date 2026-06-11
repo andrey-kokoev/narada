@@ -77,6 +77,7 @@ test('site continuity sync help describes supported transports', async () => {
   assert.match(result.stdout, /pull-cloudflare/);
   assert.match(result.stdout, /push-cloudflare/);
   assert.match(result.stdout, /read-cloudflare/);
+  assert.match(result.stdout, /reconciliation-execution-put/);
   assert.match(result.stdout, /sync-once/);
   assert.match(result.stdout, /repository-publication-execute-pending/);
   assert.match(result.stdout, /repository-publication-evidence-put/);
@@ -287,6 +288,52 @@ test('site continuity sync cycle pushes local packet and returns Cloudflare pack
     assert.equal(mock.requests[2].operation, 'site.continuity.loop.report.put');
     assert.equal(mock.requests[2].params.site_id, 'site_fixture');
     assert.equal(mock.requests[2].params.report.schema, 'narada.site_continuity_productized_loop.v1');
+  } finally {
+    await mock.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('site continuity sync records reconciliation execution evidence in Cloudflare', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-reconciliation-put-'));
+  const executionPath = join(root, 'reconciliation-execution.json');
+  const outputPath = join(root, 'reconciliation-push.json');
+  const execution = {
+    schema: 'narada.cloudflare_carrier.site_continuity_reconciliation_execution.v1',
+    status: 'completed',
+    generated_at: '2026-06-11T12:30:00.000Z',
+    persisted_at: '2026-06-11T12:30:01.000Z',
+    reconciliation_plan_status: 'ready',
+    selected_site_count: 1,
+    executed_site_count: 1,
+    completed_site_count: 1,
+    failed_site_count: 0,
+    results: [{ site_id: 'site_fixture', status: 'completed' }],
+  };
+  await writeFile(executionPath, `${JSON.stringify(execution, null, 2)}\n`, 'utf8');
+  const mock = await startCarrierMock((body) => {
+    if (body.operation === 'site.continuity.reconciliation_execution.put') {
+      return { body: { ok: true, status: 'recorded', execution_record: { site_id: body.params.site_id, status: body.params.execution.status } } };
+    }
+    return { status: 400, body: { ok: false, code: 'unexpected_operation' } };
+  });
+  try {
+    const result = await runSync(['reconciliation-execution-put', '--site', 'site_fixture', '--execution', executionPath, '--url', mock.url, '--out', outputPath]);
+
+    assert.equal(result.code, 0, result.stderr);
+    assert.equal(result.stdout, '');
+    const body = JSON.parse(await readFile(outputPath, 'utf8'));
+    assert.equal(body.schema, 'narada.site_continuity_cloudflare_reconciliation_execution_push.v1');
+    assert.equal(body.status, 'ok');
+    assert.equal(body.site_id, 'site_fixture');
+    assert.equal(body.reconciliation_execution_recorded, true);
+    assert.equal(body.execution_status, 'completed');
+    assert.equal(body.cloudflare_response.status, 'recorded');
+    assert.equal(mock.requests.length, 1);
+    assert.equal(mock.requests[0].operation, 'site.continuity.reconciliation_execution.put');
+    assert.equal(mock.requests[0].params.site_id, 'site_fixture');
+    assert.equal(mock.requests[0].params.execution.schema, 'narada.cloudflare_carrier.site_continuity_reconciliation_execution.v1');
+    assert.equal(mock.requests[0].params.execution.completed_site_count, 1);
   } finally {
     await mock.close();
     await rm(root, { recursive: true, force: true });

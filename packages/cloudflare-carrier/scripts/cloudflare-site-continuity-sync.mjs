@@ -228,6 +228,29 @@ if (command === 'read-cloudflare') {
   process.exit(0);
 }
 
+if (command === 'reconciliation-execution-put') {
+  const siteId = requiredOption('--site');
+  const executionEnvelope = await readJsonEnvelope(option('--execution'));
+  const execution = executionEnvelope?.execution ?? executionEnvelope;
+  if (!execution || typeof execution !== 'object') fail('site_continuity_reconciliation_execution_required');
+  if (execution.schema !== 'narada.cloudflare_carrier.site_continuity_reconciliation_execution.v1') {
+    fail('site_continuity_reconciliation_execution_schema_unsupported');
+  }
+  const pushed = await post({ operation: 'site.continuity.reconciliation_execution.put', params: { site_id: siteId, execution } });
+  if (pushed.http_status !== 200 || pushed.body?.ok === false) failApi('cloudflare_site_continuity_reconciliation_execution_push_failed', pushed);
+  await writeJson(option('--out'), {
+    schema: 'narada.site_continuity_cloudflare_reconciliation_execution_push.v1',
+    status: 'ok',
+    site_id: siteId,
+    worker_url: workerUrl,
+    reconciliation_execution_recorded: true,
+    execution_status: execution.status ?? null,
+    execution_generated_at: execution.generated_at ?? null,
+    cloudflare_response: pushed.body,
+  });
+  process.exit(0);
+}
+
 if (command === 'sync-once') {
   const packetEnvelope = await readPacketEnvelope();
   const localPacket = packetEnvelope?.packet ?? packetEnvelope;
@@ -534,5 +557,5 @@ function fail(code) {
 }
 
 function printHelp() {
-  stdout.write(`Narada Cloudflare site-continuity transport\n\nCommands:\n  pull-cloudflare --site <site_id> [--out <packet.json>]\n  push-cloudflare --packet <packet.json> [--site <site_id>] [--out <result.json>]\n  read-cloudflare --site <site_id> [--out <result.json>]\n  sync-once --packet <packet.json> [--site <site_id>] [--out <result.json>]\n  repository-publication-execute-pending --site <site_id> [--repo <path>] [--limit <n>] [--push] [--remote <name>] [--out <result.json>]\n  repository-publication-evidence-put --site <site_id> [--evidence <evidence.json>] [--out <result.json>]\n\nAuth:\n  --url <worker-url> or CLOUDFLARE_CARRIER_URL\n  --token-file <path> or CLOUDFLARE_CARRIER_TOKEN_FILE\n  --token <bearer-token> or CLOUDFLARE_CARRIER_TOKEN\n\nNotes:\n  pull-cloudflare exports the packet emitted by site.read.\n  push-cloudflare imports a packet through site.continuity.packet.put.\n  sync-once imports the local packet, then returns the Cloudflare packet for local observation.\n  The script refuses locally invalid/executable-mutation packets before sending them.\n  repository-publication-execute-pending consumes queued Cloudflare publication requests and returns Windows-side evidence; it only runs git push when --push is explicit.\n  repository-publication-evidence-put returns Windows-side publication evidence to Cloudflare without granting Cloudflare git push authority.\n`);
+  stdout.write(`Narada Cloudflare site-continuity transport\n\nCommands:\n  pull-cloudflare --site <site_id> [--out <packet.json>]\n  push-cloudflare --packet <packet.json> [--site <site_id>] [--out <result.json>]\n  read-cloudflare --site <site_id> [--out <result.json>]\n  reconciliation-execution-put --site <site_id> --execution <execution.json> [--out <result.json>]\n  sync-once --packet <packet.json> [--site <site_id>] [--out <result.json>]\n  repository-publication-execute-pending --site <site_id> [--repo <path>] [--limit <n>] [--push] [--remote <name>] [--out <result.json>]\n  repository-publication-evidence-put --site <site_id> [--evidence <evidence.json>] [--out <result.json>]\n\nAuth:\n  --url <worker-url> or CLOUDFLARE_CARRIER_URL\n  --token-file <path> or CLOUDFLARE_CARRIER_TOKEN_FILE\n  --token <bearer-token> or CLOUDFLARE_CARRIER_TOKEN\n\nNotes:\n  pull-cloudflare exports the packet emitted by site.read.\n  push-cloudflare imports a packet through site.continuity.packet.put.\n  reconciliation-execution-put records Windows reconciliation execution evidence in Cloudflare without granting Cloudflare execution authority.\n  sync-once imports the local packet, then returns the Cloudflare packet for local observation.\n  The script refuses locally invalid/executable-mutation packets before sending them.\n  repository-publication-execute-pending consumes queued Cloudflare publication requests and returns Windows-side evidence; it only runs git push when --push is explicit.\n  repository-publication-evidence-put returns Windows-side publication evidence to Cloudflare without granting Cloudflare git push authority.\n`);
 }

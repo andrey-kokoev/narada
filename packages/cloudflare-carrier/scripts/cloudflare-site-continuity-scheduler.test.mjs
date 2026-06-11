@@ -47,7 +47,7 @@ test('site continuity scheduler install plan is bounded and secret-free', async 
     assert.equal(plan.node_command, 'node');
     assert.equal(plan.embeds_credentials, false);
     assert.equal(plan.credential_posture, 'external_env_file_or_process_environment_only');
-    assert.equal(plan.cloudflare_mutation, 'site_continuity_packet_and_loop_report_only');
+    assert.equal(plan.cloudflare_mutation, 'site_continuity_packet_loop_report_and_reconciliation_execution_evidence_only');
     assert.equal(plan.filesystem_mutation_admission, 'local_sync_report_artifact_write_only');
     assert.equal(plan.repository_publication_admission, 'not_admitted');
     assert.equal(plan.status.repo_root_exists, true);
@@ -503,6 +503,7 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
     }, {
       execFileImpl: async (command, args, options) => {
         calls.push({ command, args, options });
+        if (args[1] !== 'sync-once') return;
         const outIndex = args.indexOf('--out');
         const siteIndex = args.indexOf('--site');
         await writeFile(args[outIndex + 1], `${JSON.stringify({
@@ -524,18 +525,24 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
 
     assert.equal(result.status, 'completed');
     assert.equal(result.dry_run, false);
-    assert.equal(result.cloudflare_mutation_admission, 'executed_via_guarded_site_continuity_sync_once');
+    assert.equal(result.cloudflare_mutation_admission, 'executed_via_guarded_site_continuity_sync_once_and_records_reconciliation_execution_evidence');
     assert.equal(result.filesystem_mutation_admission, 'sync_once_artifact_and_reconciliation_execution_artifact_write_only');
     assert.equal(result.executed_site_count, 1);
     assert.equal(result.completed_site_count, 1);
     assert.equal(result.failed_site_count, 0);
-    assert.equal(calls.length, 1);
+    assert.equal(calls.length, 2);
     assert.equal(calls[0].command, process.execPath);
     assert.deepEqual(calls[0].args.slice(0, 6), [syncEntrypoint, 'sync-once', '--site', 'site_missing', '--packet', packetPath]);
     assert.equal(calls[0].args[6], '--out');
     assert.equal(calls[0].args[7], join(artifactDirectory, 'site_missing-cloudflare-sync.json'));
     assert.equal(calls[0].options.cwd, root);
     assert.equal(calls[0].options.timeout, 5000);
+    assert.equal(calls[1].command, process.execPath);
+    assert.deepEqual(calls[1].args, [syncEntrypoint, 'reconciliation-execution-put', '--site', 'site_missing', '--execution', reconciliationExecutionOutputPath]);
+    assert.equal(calls[1].options.cwd, root);
+    assert.equal(calls[1].options.timeout, 5000);
+    assert.equal(result.cloudflare_reconciliation_execution_evidence.state, 'recorded');
+    assert.equal(result.cloudflare_reconciliation_execution_evidence.recorded_count, 1);
     assert.equal(result.results[0].status, 'completed');
     assert.equal(result.results[0].output_summary.status, 'synced');
     assert.equal(result.results[0].output_summary.site_id, 'site_missing');

@@ -92,7 +92,7 @@ export function buildSiteContinuitySchedulerPlan({
     configured_sites: localConfiguredSites,
     credential_posture: 'external_env_file_or_process_environment_only',
     embeds_credentials: false,
-    cloudflare_mutation: 'site_continuity_packet_and_loop_report_only',
+    cloudflare_mutation: 'site_continuity_packet_loop_report_and_reconciliation_execution_evidence_only',
     filesystem_mutation_admission: 'local_sync_report_artifact_write_only',
     repository_publication_admission: 'not_admitted',
     task_command: taskCommand,
@@ -295,10 +295,10 @@ export async function executeSiteContinuityReconciliationPlan(
   }
   const completedCount = results.filter((result) => result.status === 'completed').length;
   const failedCount = results.filter((result) => result.status === 'failed').length;
-  return persistReconciliationExecutionResult({
+  const persisted = persistReconciliationExecutionResult({
     ...base,
     status: failedCount === 0 ? 'completed' : completedCount > 0 ? 'partial' : 'failed',
-    cloudflare_mutation_admission: 'executed_via_guarded_site_continuity_sync_once',
+    cloudflare_mutation_admission: 'executed_via_guarded_site_continuity_sync_once_and_records_reconciliation_execution_evidence',
     filesystem_mutation_admission: 'sync_once_artifact_and_reconciliation_execution_artifact_write_only',
     execution_timeout_ms: timeout,
     executed_site_count: results.length,
@@ -306,6 +306,56 @@ export async function executeSiteContinuityReconciliationPlan(
     failed_site_count: failedCount,
     results,
   }, { dryRun, now });
+  return {
+    ...persisted,
+    cloudflare_reconciliation_execution_evidence: await recordCloudflareReconciliationExecutionEvidence(persisted, plan, {
+      execFileImpl,
+      timeout,
+    }),
+  };
+}
+
+async function recordCloudflareReconciliationExecutionEvidence(result, plan, { execFileImpl = execFile, timeout = DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS } = {}) {
+  const artifactPath = result?.reconciliation_execution_artifact?.artifact_path ?? null;
+  if (!artifactPath || result?.reconciliation_execution_artifact?.state !== 'written') {
+    return { state: 'skipped', status: 'not_recorded', reason: 'reconciliation_execution_artifact_not_written' };
+  }
+  const siteIds = [...new Set((result.results ?? []).map((entry) => entry?.site_id).filter(Boolean))];
+  if (siteIds.length === 0) return { state: 'skipped', status: 'not_recorded', reason: 'reconciliation_execution_site_id_missing' };
+  const records = [];
+  for (const siteId of siteIds) {
+    const args = [
+      plan.sync_entrypoint,
+      'reconciliation-execution-put',
+      '--site',
+      siteId,
+      '--execution',
+      artifactPath,
+    ];
+    try {
+      await execFileImpl(process.execPath, args, { cwd: plan.repo_root, timeout, windowsHide: true });
+      records.push({ site_id: siteId, status: 'recorded', argv: [process.execPath, ...args] });
+    } catch (error) {
+      records.push({
+        site_id: siteId,
+        status: 'failed',
+        reason: 'reconciliation_execution_evidence_push_failed',
+        argv: [process.execPath, ...args],
+        exit_code: error.code ?? null,
+        signal: error.signal ?? null,
+      });
+    }
+  }
+  const recordedCount = records.filter((record) => record.status === 'recorded').length;
+  const failedCount = records.filter((record) => record.status === 'failed').length;
+  return {
+    state: failedCount === 0 ? 'recorded' : recordedCount > 0 ? 'partial' : 'failed',
+    status: failedCount === 0 ? 'recorded' : 'needs_attention',
+    record_count: records.length,
+    recorded_count: recordedCount,
+    failed_count: failedCount,
+    records,
+  };
 }
 
 function persistReconciliationExecutionResult(result, { dryRun = true, now = () => new Date().toISOString() } = {}) {
