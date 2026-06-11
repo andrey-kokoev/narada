@@ -183,6 +183,14 @@ pnpm --filter @narada2/cloudflare-carrier ship
 
 `ship` runs tests, deploy checks, and Wrangler dry-run bundling.
 
+Run one guarded local-cloud continuity loop:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier continuity:run-once
+```
+
+`continuity:run-once` is the product-facing alias for the existing live reconciliation execution path: it plans ready configured sites, runs guarded `sync-once`, writes the reconciliation execution artifact, and records that execution evidence back to Cloudflare.
+
 ## Deploy Check Coverage
 
 `deploy:check` verifies:
