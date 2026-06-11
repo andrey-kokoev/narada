@@ -11,6 +11,7 @@ import {
   buildSiteContinuityReconciliationPlan,
   buildSiteContinuitySchedulerPlan,
   buildSiteContinuitySchedulerPlanWithOptionalRefresh,
+  readCloudflareOperationPostureForHealthSnapshot,
   readCloudflareProductPostureForHealthSnapshot,
   readLastReconciliationExecutionArtifact,
   readLastScheduledHealthSnapshot,
@@ -83,6 +84,22 @@ test('site continuity product posture snapshot reports missing config without li
   assert.equal(posture.state, 'not_configured');
   assert.equal(posture.status, 'not_available');
   assert.deepEqual(posture.missing, ['CLOUDFLARE_CARRIER_URL']);
+  assert.equal(posture.embeds_credentials, false);
+});
+
+test('site continuity operation posture snapshot reports unselected site without live access', async () => {
+  const posture = await readCloudflareOperationPostureForHealthSnapshot({
+    env: { CLOUDFLARE_CARRIER_URL: 'https://worker.example' },
+    now: () => '2026-06-11T13:48:00.000Z',
+    siteId: null,
+    productReadSurface: async () => { throw new Error('unexpected_live_operation_read'); },
+  });
+
+  assert.equal(posture.schema, 'narada.cloudflare_carrier.operation_posture_snapshot.v1');
+  assert.equal(posture.state, 'not_selected');
+  assert.equal(posture.status, 'not_available');
+  assert.equal(posture.operation, 'operation.list');
+  assert.equal(posture.reason, 'cloudflare_product_next_site_id_not_available');
   assert.equal(posture.embeds_credentials, false);
 });
 
@@ -1294,9 +1311,43 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
       productReadSurface: async (config) => {
         productReadCalls.push(config);
         assert.equal(config.workerUrl, 'https://worker.example');
-        assert.equal(config.operation, 'site.list');
         assert.equal(config.auth.kind, 'bearer');
         assert.equal(config.auth.value, 'secret-token-value');
+        if (config.operation === 'operation.list') {
+          assert.deepEqual(config.params, { site_id: 'site_missing' });
+          return {
+            summary: {
+              operation: 'operation.list',
+              site_id: 'site_missing',
+              operation_count: 1,
+              active_operation_id: null,
+              next_operation_id: 'carrier_operation_next',
+              next_status: 'ready',
+              next_action: 'start_operation',
+              next_reason: 'operation_ready',
+              health_counts: { ready: 1, needs_attention: 0 },
+            },
+            response: {
+              operation_posture_overview: {
+                schema: 'narada.cloudflare_operation_posture_overview.v1',
+                operation_count: 1,
+                active_operation_id: null,
+                next_operation_id: 'carrier_operation_next',
+                next_status: 'ready',
+                next_action: 'start_operation',
+                next_reason: 'operation_ready',
+                health_counts: { ready: 1, needs_attention: 0 },
+              },
+              operation_posture_route: {
+                schema: 'narada.cloudflare_operation_posture_route.v1',
+                command_state: 'operation_ready',
+                next_action: 'start_operation',
+                target: 'carrier_operation_next',
+              },
+            },
+          };
+        }
+        assert.equal(config.operation, 'site.list');
         return {
           summary: {
             operation: 'site.list',
@@ -1334,7 +1385,9 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
     assert.equal(result.completed_site_count, 1);
     assert.equal(result.failed_site_count, 0);
     assert.equal(calls.length, 3);
-    assert.equal(productReadCalls.length, 1);
+    assert.equal(productReadCalls.length, 2);
+    assert.equal(productReadCalls[0].operation, 'site.list');
+    assert.equal(productReadCalls[1].operation, 'operation.list');
     assert.equal(calls[0].command, process.execPath);
     assert.deepEqual(calls[0].args.slice(0, 6), [syncEntrypoint, 'sync-once', '--site', 'site_missing', '--packet', packetPath]);
     assert.equal(calls[0].args[6], '--out');
@@ -1358,6 +1411,9 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
     assert.equal(result.scheduled_health_snapshot.cloudflare_product_posture.status, 'ok');
     assert.equal(result.scheduled_health_snapshot.cloudflare_product_posture.summary.next_site_id, 'site_missing');
     assert.equal(result.scheduled_health_snapshot.cloudflare_product_posture.site_product_overview.site_count, 1);
+    assert.equal(result.scheduled_health_snapshot.cloudflare_operation_posture.state, 'loaded');
+    assert.equal(result.scheduled_health_snapshot.cloudflare_operation_posture.status, 'ok');
+    assert.equal(result.scheduled_health_snapshot.cloudflare_operation_posture.summary.next_operation_id, 'carrier_operation_next');
     assert.equal(result.scheduled_health_snapshot.health_snapshot_artifact.state, 'written');
     assert.equal(result.scheduled_health_snapshot.health_snapshot_artifact.artifact_path, healthOutputPath);
 
@@ -1379,6 +1435,8 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
     assert.equal(healthSnapshot.continuity_health.status, 'ok');
     assert.equal(healthSnapshot.cloudflare_product_posture.state, 'loaded');
     assert.equal(healthSnapshot.cloudflare_product_posture.summary.next_action, 'monitor_sites');
+    assert.equal(healthSnapshot.cloudflare_operation_posture.state, 'loaded');
+    assert.equal(healthSnapshot.cloudflare_operation_posture.summary.next_action, 'start_operation');
     assert.equal(healthSnapshot.scheduler_task_readback.status, 'ok');
     assert.equal(healthSnapshot.embeds_credentials, false);
     assert.doesNotMatch(JSON.stringify(healthSnapshot), /secret|token/i);
@@ -1388,6 +1446,10 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
     assert.equal(healthSummary.cloudflare_product_posture_status, 'ok');
     assert.equal(healthSummary.cloudflare_product_next_site_id, 'site_missing');
     assert.equal(healthSummary.cloudflare_product_next_action, 'monitor_sites');
+    assert.equal(healthSummary.cloudflare_operation_posture_state, 'loaded');
+    assert.equal(healthSummary.cloudflare_operation_posture_status, 'ok');
+    assert.equal(healthSummary.cloudflare_operation_next_operation_id, 'carrier_operation_next');
+    assert.equal(healthSummary.cloudflare_operation_next_action, 'start_operation');
 
     const statusPlan = buildSiteContinuitySchedulerPlan({
       action: 'status-all',

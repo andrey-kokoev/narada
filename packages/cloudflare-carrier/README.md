@@ -215,7 +215,7 @@ Read the last durable scheduled health snapshot without querying Cloudflare or T
 pnpm --filter @narada2/cloudflare-carrier continuity:health:last
 ```
 
-`continuity:health:last` reads `.narada/site-continuity/health/cloudflare-continuity-health-last.json`, the snapshot written by the scheduled continuity loop. It is distinct from `continuity:last`, which reads the last sync artifact. When the scheduled loop has Cloudflare carrier URL and auth available, the snapshot also includes compact `site.list` product posture evidence under `cloudflare_product_posture` without embedding credential values.
+`continuity:health:last` reads `.narada/site-continuity/health/cloudflare-continuity-health-last.json`, the snapshot written by the scheduled continuity loop. It is distinct from `continuity:last`, which reads the last sync artifact. When the scheduled loop has Cloudflare carrier URL and auth available, the snapshot also includes compact `site.list` product posture evidence under `cloudflare_product_posture` and `operation.list` posture for the next selected site under `cloudflare_operation_posture`, without embedding credential values.
 
 Install the Windows scheduled task for the recurring continuity loop after the site and packet path are configured in the local continuity env file:
 

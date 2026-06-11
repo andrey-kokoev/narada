@@ -475,6 +475,12 @@ export async function runSiteContinuitySchedulerActionWithOptionalRefresh(
     now: options.now,
     productReadSurface,
   });
+  const cloudflareOperationPosture = await readCloudflareOperationPostureForHealthSnapshot({
+    env,
+    now: options.now,
+    productReadSurface,
+    siteId: cloudflareProductPosture.summary?.next_site_id ?? null,
+  });
   return {
     ...reconciliationExecution,
     scheduled_health_snapshot: persistSiteContinuityHealthSnapshot({
@@ -487,6 +493,7 @@ export async function runSiteContinuitySchedulerActionWithOptionalRefresh(
       reconciliation_execution: summarizeReconciliationExecutionForHealthSnapshot(reconciliationExecution),
       continuity_health: continuityHealth,
       cloudflare_product_posture: cloudflareProductPosture,
+      cloudflare_operation_posture: cloudflareOperationPosture,
       scheduler_task_readback: healthReadback.scheduler_task_readback ?? null,
     }, { dryRun: false, now: options.now }),
   };
@@ -553,6 +560,90 @@ export async function readCloudflareProductPostureForHealthSnapshot({
       generated_at: generatedAt,
       worker_url: workerUrl,
       operation: 'site.list',
+      auth_kind: auth.kind,
+      reason: sanitizeProductPostureError(error),
+      embeds_credentials: false,
+    };
+  }
+}
+
+export async function readCloudflareOperationPostureForHealthSnapshot({
+  env = process.env,
+  now = () => new Date().toISOString(),
+  productReadSurface = readProductSurface,
+  siteId = null,
+} = {}) {
+  const workerUrl = String(env.CLOUDFLARE_CARRIER_URL ?? '').replace(/\/+$/, '');
+  const generatedAt = typeof now === 'function' ? now() : new Date().toISOString();
+  if (!workerUrl) {
+    return {
+      schema: 'narada.cloudflare_carrier.operation_posture_snapshot.v1',
+      state: 'not_configured',
+      status: 'not_available',
+      generated_at: generatedAt,
+      operation: 'operation.list',
+      missing: ['CLOUDFLARE_CARRIER_URL'],
+      embeds_credentials: false,
+    };
+  }
+  if (!siteId) {
+    return {
+      schema: 'narada.cloudflare_carrier.operation_posture_snapshot.v1',
+      state: 'not_selected',
+      status: 'not_available',
+      generated_at: generatedAt,
+      worker_url: workerUrl,
+      operation: 'operation.list',
+      reason: 'cloudflare_product_next_site_id_not_available',
+      embeds_credentials: false,
+    };
+  }
+  const auth = resolveProductReadAuth([], env);
+  if (!auth) {
+    return {
+      schema: 'narada.cloudflare_carrier.operation_posture_snapshot.v1',
+      state: 'not_configured',
+      status: 'not_available',
+      generated_at: generatedAt,
+      worker_url: workerUrl,
+      operation: 'operation.list',
+      site_id: siteId,
+      missing: ['cloudflare_product_read_auth'],
+      embeds_credentials: false,
+    };
+  }
+  try {
+    const productRead = await productReadSurface({
+      workerUrl,
+      operation: 'operation.list',
+      requestId: `scheduled_health_operation_read_${Date.parse(generatedAt) || Date.now()}`,
+      params: { site_id: siteId },
+      format: 'json',
+      auth,
+    });
+    return {
+      schema: 'narada.cloudflare_carrier.operation_posture_snapshot.v1',
+      state: 'loaded',
+      status: 'ok',
+      generated_at: generatedAt,
+      worker_url: workerUrl,
+      operation: 'operation.list',
+      site_id: siteId,
+      auth_kind: auth.kind,
+      summary: productRead.summary ?? null,
+      operation_posture_overview: productRead.response?.operation_posture_overview ?? null,
+      operation_posture_route: productRead.response?.operation_posture_route ?? null,
+      embeds_credentials: false,
+    };
+  } catch (error) {
+    return {
+      schema: 'narada.cloudflare_carrier.operation_posture_snapshot.v1',
+      state: 'failed',
+      status: 'needs_attention',
+      generated_at: generatedAt,
+      worker_url: workerUrl,
+      operation: 'operation.list',
+      site_id: siteId,
       auth_kind: auth.kind,
       reason: sanitizeProductPostureError(error),
       embeds_credentials: false,
@@ -1311,6 +1402,10 @@ export function readLastScheduledHealthSnapshot(outputPath) {
     cloudflare_product_posture_status: artifact.cloudflare_product_posture?.status ?? null,
     cloudflare_product_next_site_id: artifact.cloudflare_product_posture?.summary?.next_site_id ?? null,
     cloudflare_product_next_action: artifact.cloudflare_product_posture?.summary?.next_action ?? null,
+    cloudflare_operation_posture_state: artifact.cloudflare_operation_posture?.state ?? null,
+    cloudflare_operation_posture_status: artifact.cloudflare_operation_posture?.status ?? null,
+    cloudflare_operation_next_operation_id: artifact.cloudflare_operation_posture?.summary?.next_operation_id ?? null,
+    cloudflare_operation_next_action: artifact.cloudflare_operation_posture?.summary?.next_action ?? null,
     scheduler_task_readback_status: artifact.scheduler_task_readback?.status ?? null,
     scheduler_task_status_text: artifact.scheduler_task_readback?.status_text ?? null,
     scheduler_last_result: artifact.scheduler_task_readback?.last_result ?? null,
