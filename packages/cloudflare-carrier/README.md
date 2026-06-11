@@ -279,7 +279,7 @@ Create a governed Cloudflare operation from the operator CLI when the caller has
 pnpm --filter @narada2/cloudflare-carrier product:operation:create:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --display-name "Operator Work" --operation-kind productization --operator-session-file cloudflare-operator-session.json
 ```
 
-`product:operation:create` calls `operation.create` through the same authenticated `POST /api/carrier` envelope as the console. It is a product mutation, not a readback command: the Worker still enforces Site authority, records the operation in the Site Registry, and returns a redacted `narada.cloudflare_carrier.operation_create.v1` envelope. The `:text` alias prints the worker URL, auth source, site, operation id, name, kind, and status without echoing bearer tokens or operator-session cookies.
+`product:operation:create` calls `operation.create` through the same authenticated `POST /api/carrier` envelope as the console. It is a product mutation, not a readback command: the Worker still enforces Site authority, records the operation in the Site Registry, and returns a redacted `narada.cloudflare_carrier.operation_create.v1` envelope. Operation create uses the same canonical lifecycle statuses as operation status updates: `active`, `inactive`, and `closed` (`paused` is normalized to `inactive` for compatibility). The `:text` alias prints the worker URL, auth source, site, operation id, name, kind, and status without echoing bearer tokens or operator-session cookies.
 
 Move a governed Cloudflare operation through its lifecycle from the operator CLI:
 

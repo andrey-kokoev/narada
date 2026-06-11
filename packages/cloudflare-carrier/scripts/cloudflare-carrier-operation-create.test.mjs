@@ -34,6 +34,18 @@ test('parseOperationCreateArgs builds governed operation.create params', () => {
   assert.deepEqual(parsed.auth, { kind: 'bearer', value: 'secret-token', source: 'flag:--token' });
 });
 
+test('parseOperationCreateArgs normalizes paused compatibility alias to inactive', () => {
+  const parsed = parseOperationCreateArgs([
+    '--url', 'https://carrier.example.test',
+    '--token', 'secret-token',
+    '--site', 'site_alpha',
+    '--operation-id', 'operation_alpha',
+    '--status', 'paused',
+  ], {}, () => 123);
+
+  assert.equal(parsed.params.status, 'inactive');
+});
+
 test('parseOperationCreateArgs refuses missing authority and unsupported status', () => {
   assert.throws(
     () => parseOperationCreateArgs(['--token', 'secret-token', '--site', 'site_alpha'], {}),
