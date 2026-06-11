@@ -12001,6 +12001,10 @@ export function renderCloudflareCarrierConsole() {
         <div class="actions"><button id="createOutlookDraftFromProposal" class="secondary">Create Outlook Draft</button></div>
       </div>
       <div class="product-panel">
+        <h2>Mailbox Send Review</h2>
+        <div id="mailboxSendReviewDetail" class="evidence-summary"><div class="empty">No mailbox send selected.</div></div>
+      </div>
+      <div class="product-panel">
         <h2>Site Membership</h2>
         <label>Principal ID<input id="memberPrincipalId" placeholder="microsoft:tenant:object-id"></label>
         <label>Role<input id="memberRole" value="viewer"></label>
@@ -12119,7 +12123,7 @@ export function renderCloudflareCarrierConsole() {
     const classifyCloudflareEvidenceCommandState = ${classifyCloudflareEvidenceCommandState.toString()};
     const classifyCloudflareSiteCommandState = ${classifyCloudflareSiteCommandState.toString()};
     const classifyCloudflareMembershipCommandState = ${classifyCloudflareMembershipCommandState.toString()};
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], siteList: [], siteProductStatuses: [], siteProductOverview: null, sitePostureRoute: null, consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, webhookDelayDirectiveFocus: null, webhookDelayDirectiveDeliveryFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null, localIngressRequestFocus: null, localIngressEvidenceFocus: null, localIngressProviderHeartbeatFocus: null, repositoryPublicationRequestFocus: null, repositoryPublicationEvidenceFocus: null, repositoryPublicationProviderHeartbeatFocus: null, mailboxDraftReplyProposalFocus: null, mailboxOutlookDraftCreateFocus: null, mailboxDraftCreateFormProposalId: null, siteFileChangeProposalFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], siteList: [], siteProductStatuses: [], siteProductOverview: null, sitePostureRoute: null, consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, webhookDelayDirectiveFocus: null, webhookDelayDirectiveDeliveryFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null, localIngressRequestFocus: null, localIngressEvidenceFocus: null, localIngressProviderHeartbeatFocus: null, repositoryPublicationRequestFocus: null, repositoryPublicationEvidenceFocus: null, repositoryPublicationProviderHeartbeatFocus: null, mailboxDraftReplyProposalFocus: null, mailboxOutlookDraftCreateFocus: null, mailboxSendAcceptedFocus: null, mailboxSendConfirmationFocus: null, mailboxDraftCreateFormProposalId: null, siteFileChangeProposalFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -12391,6 +12395,7 @@ export function renderCloudflareCarrierConsole() {
       renderLocalCloudContinuityBridge(product);
       renderContinuityLoopEvidence(product);
       renderMailboxDraftCreateControl(product);
+      renderMailboxSendReviewDetail(product);
       renderLocalIngressRequestNavigator(product.local_ingress_requests || []);
       renderLocalIngressEvidenceNavigator(product.local_ingress_evidence || []);
       renderLocalIngressProviderHeartbeatNavigator(product.local_ingress_provider_heartbeats || []);
@@ -13234,7 +13239,8 @@ export function renderCloudflareCarrierConsole() {
       if (focus?.focus_kind === 'site_file_change_proposal' && target) { selectSiteFileChangeProposal(target); return true; }
       if (focus?.focus_kind === 'local_ingress_request' && target) { selectLocalIngressRequest(target); return true; }
       if (focus?.focus_kind === 'repository_publication_request' && target) { selectRepositoryPublicationRequest(target); return true; }
-      if (['mailbox_send_confirmation', 'mailbox_send_accepted'].includes(String(focus?.focus_kind || ''))) { renderMailboxDraftCreateControl(product); return true; }
+      if (focus?.focus_kind === 'mailbox_send_confirmation' && target) { selectMailboxSendConfirmation(target); return true; }
+      if (focus?.focus_kind === 'mailbox_send_accepted' && target) { selectMailboxSendAccepted(target); return true; }
       return false;
     }
     function operatorRouteStages(product = state.operationProduct || {}) {
@@ -13379,6 +13385,8 @@ export function renderCloudflareCarrierConsole() {
       const directiveDelivery = state.webhookDelayDirectiveDeliveryFocus || (product.webhook_delay_directive_deliveries || [])[0] || null;
       const mailboxDraftReplyProposal = state.mailboxDraftReplyProposalFocus || (product.mailbox_draft_reply_proposals || [])[0] || null;
       const mailboxOutlookDraftCreate = state.mailboxOutlookDraftCreateFocus || (product.mailbox_outlook_draft_creates || [])[0] || null;
+      const mailboxSendConfirmation = state.mailboxSendConfirmationFocus || (product.mailbox_send_confirmations || [])[0] || null;
+      const mailboxSendAccepted = state.mailboxSendAcceptedFocus || (product.mailbox_send_accepted_records || [])[0] || null;
       const siteFileChangeProposal = state.siteFileChangeProposalFocus || (product.site_file_change_proposals || [])[0] || null;
       const localIngressRequest = state.localIngressRequestFocus || (product.local_ingress_requests || [])[0] || null;
       const localIngressEvidence = state.localIngressEvidenceFocus || (product.local_ingress_evidence || [])[0] || null;
@@ -13395,6 +13403,8 @@ export function renderCloudflareCarrierConsole() {
         directiveDelivery,
         mailboxDraftReplyProposal,
         mailboxOutlookDraftCreate,
+        mailboxSendConfirmation,
+        mailboxSendAccepted,
         siteFileChangeProposal,
         localIngressRequest,
         localIngressEvidence,
@@ -13443,6 +13453,8 @@ export function renderCloudflareCarrierConsole() {
       if (targets.authority && targets.authority.action !== 'admit') { selectAuthorityDecision(targets.authority); return; }
       if (targets.directiveDelivery) { selectWebhookDelayDirectiveDelivery(targets.directiveDelivery); return; }
       if (targets.directiveIntent) { selectWebhookDelayDirective(targets.directiveIntent); return; }
+      if (targets.mailboxSendConfirmation) { selectMailboxSendConfirmation(targets.mailboxSendConfirmation); return; }
+      if (targets.mailboxSendAccepted) { selectMailboxSendAccepted(targets.mailboxSendAccepted); return; }
       if (targets.mailboxDraftReplyProposal) { selectMailboxDraftReplyProposal(targets.mailboxDraftReplyProposal); return; }
       if (targets.mailboxOutlookDraftCreate) { selectMailboxOutlookDraftCreate(targets.mailboxOutlookDraftCreate); return; }
       if (targets.siteFileChangeProposal) { selectSiteFileChangeProposal(targets.siteFileChangeProposal); return; }
@@ -13479,6 +13491,8 @@ export function renderCloudflareCarrierConsole() {
         operationFlightDeckButton('flightDeckFocusAuthority', 'Focus Authority', () => { if (targets.authority) selectAuthorityDecision(targets.authority); }),
         operationFlightDeckButton('flightDeckFocusDirectiveIntent', 'Focus Directive Intent', () => { if (targets.directiveIntent) selectWebhookDelayDirective(targets.directiveIntent); }),
         operationFlightDeckButton('flightDeckFocusDirectiveDelivery', 'Focus Directive Delivery', () => { if (targets.directiveDelivery) selectWebhookDelayDirectiveDelivery(targets.directiveDelivery); }),
+        operationFlightDeckButton('flightDeckFocusMailboxSendConfirmation', 'Focus Send Confirmation', () => { if (targets.mailboxSendConfirmation) selectMailboxSendConfirmation(targets.mailboxSendConfirmation); }),
+        operationFlightDeckButton('flightDeckFocusMailboxSendAccepted', 'Focus Send Accepted', () => { if (targets.mailboxSendAccepted) selectMailboxSendAccepted(targets.mailboxSendAccepted); }),
         operationFlightDeckButton('flightDeckFocusMailboxDraftReplyProposal', 'Focus Mailbox Proposal', () => { if (targets.mailboxDraftReplyProposal) selectMailboxDraftReplyProposal(targets.mailboxDraftReplyProposal); }),
         operationFlightDeckButton('flightDeckFocusMailboxOutlookDraftCreate', 'Focus Outlook Draft Create', () => { if (targets.mailboxOutlookDraftCreate) selectMailboxOutlookDraftCreate(targets.mailboxOutlookDraftCreate); }),
         operationFlightDeckButton('flightDeckFocusSiteFileChangeProposal', 'Focus File Change Proposal', () => { if (targets.siteFileChangeProposal) selectSiteFileChangeProposal(targets.siteFileChangeProposal); }),
@@ -15916,6 +15930,24 @@ export function renderCloudflareCarrierConsole() {
       renderOperationFlightDeck(state.operationProduct || {});
       updateControlRoom();
     }
+    function selectMailboxSendAccepted(sendAccepted) {
+      if (!sendAccepted?.send_accepted_id) return;
+      state.mailboxSendAcceptedFocus = sendAccepted;
+      state.mailboxSendConfirmationFocus = null;
+      renderMailboxSendReviewDetail(state.operationProduct || {});
+      renderOperationControlBoard(state.operationProduct || {});
+      renderOperationFlightDeck(state.operationProduct || {});
+      updateControlRoom();
+    }
+    function selectMailboxSendConfirmation(confirmation) {
+      if (!confirmation?.send_confirmation_id) return;
+      state.mailboxSendConfirmationFocus = confirmation;
+      state.mailboxSendAcceptedFocus = null;
+      renderMailboxSendReviewDetail(state.operationProduct || {});
+      renderOperationControlBoard(state.operationProduct || {});
+      renderOperationFlightDeck(state.operationProduct || {});
+      updateControlRoom();
+    }
     function focusedMailboxDraftReplyProposal() {
       return state.mailboxDraftReplyProposalFocus || (state.operationProduct?.mailbox_draft_reply_proposals || [])[0] || null;
     }
@@ -15952,6 +15984,42 @@ export function renderCloudflareCarrierConsole() {
         evidenceField('Mutation Admission', 'not_admitted'),
         evidenceField('Linked Draft Create', linkedDraft?.draft_create_id || 'none'),
       );
+    }
+    function renderMailboxSendReviewDetail(product = state.operationProduct || {}) {
+      const confirmation = state.mailboxSendConfirmationFocus || (!state.mailboxSendAcceptedFocus ? (product.mailbox_send_confirmations || [])[0] || null : null);
+      const accepted = confirmation
+        ? (product.mailbox_send_accepted_records || []).find((entry) => entry.send_accepted_id === confirmation.send_accepted_id) || null
+        : state.mailboxSendAcceptedFocus || (product.mailbox_send_accepted_records || [])[0] || null;
+      if (!confirmation && !accepted) {
+        el('mailboxSendReviewDetail').innerHTML = '<div class="empty">No mailbox send selected.</div>';
+        return;
+      }
+      const fields = [];
+      if (confirmation) {
+        fields.push(
+          evidenceField('Review Kind', 'mailbox_send_confirmation'),
+          evidenceField('Send Confirmation', confirmation.send_confirmation_id),
+          evidenceField('Send Accepted', confirmation.send_accepted_id || 'none'),
+          evidenceField('Status', confirmation.status || 'unknown'),
+          evidenceField('Delivery Admission', confirmation.delivery_confirmation_admission || 'not_observed'),
+          evidenceField('Mutation Admission', confirmation.mailbox_mutation_admission || 'not_observed'),
+          evidenceField('Sent Message', confirmation.sent_message_ref || 'none'),
+          evidenceField('Internet Message', confirmation.internet_message_id || 'none'),
+        );
+      } else {
+        fields.push(
+          evidenceField('Review Kind', 'mailbox_send_accepted'),
+          evidenceField('Send Accepted', accepted.send_accepted_id),
+          evidenceField('Draft Create', accepted.draft_create_id || 'none'),
+          evidenceField('Proposal', accepted.proposal_id || 'none'),
+          evidenceField('Status', accepted.status || 'unknown'),
+          evidenceField('Send Admission', accepted.mailbox_send_admission || 'not_observed'),
+          evidenceField('Mutation Admission', accepted.mailbox_mutation_admission || 'not_observed'),
+          evidenceField('Graph Status', accepted.graph_status || 'none'),
+        );
+      }
+      if (accepted && confirmation) fields.push(evidenceField('Accepted Status', accepted.status || 'unknown'));
+      el('mailboxSendReviewDetail').replaceChildren(...fields);
     }
     async function createOutlookDraftFromFocusedProposal() {
       const proposal = focusedMailboxDraftReplyProposal();

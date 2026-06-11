@@ -2143,6 +2143,13 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Focus Outlook Draft Create/);
   assert.match(html, /Mailbox Draft Create/);
   assert.match(html, /mailboxDraftCreateControl/);
+  assert.match(html, /Mailbox Send Review/);
+  assert.match(html, /mailboxSendReviewDetail/);
+  assert.match(html, /selectMailboxSendConfirmation/);
+  assert.match(html, /selectMailboxSendAccepted/);
+  assert.match(html, /renderMailboxSendReviewDetail/);
+  assert.match(html, /Focus Send Confirmation/);
+  assert.match(html, /Focus Send Accepted/);
   assert.match(html, /createOutlookDraftFromProposal/);
   assert.match(html, /mailbox\.outlook_draft\.create/);
   assert.match(html, /narada\.sonar\.mailbox_outlook_draft_create_request\.v1/);
