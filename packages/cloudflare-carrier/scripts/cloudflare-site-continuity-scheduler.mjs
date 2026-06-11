@@ -440,7 +440,7 @@ function summarizeSchedulerTaskReadback({ state, command, args, stdout, stderr, 
   const cadenceStatus = actualIntervalMinutes === null
     ? 'unknown'
     : actualIntervalMinutes === expectedInterval ? 'matches_plan' : 'differs_from_plan';
-  const expectedCommandNeedle = expectedTaskEntrypoint ?? expectedTaskCommand;
+  const expectedCommandNeedle = expectedTaskCommand ?? expectedTaskEntrypoint;
   const taskCommandMatches = taskToRun && expectedCommandNeedle
     ? normalizeCommandForComparison(taskToRun).includes(normalizeCommandForComparison(expectedCommandNeedle))
     : null;
