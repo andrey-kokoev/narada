@@ -2021,7 +2021,7 @@ test('worker bootstraps missing GitHub repository publication branch', async () 
       githubCalls.push({ url, init });
       if (githubCalls.length === 1) {
         return new Response(JSON.stringify({ message: 'Reference does not exist' }), {
-          status: 404,
+          status: 422,
           headers: { 'content-type': 'application/json' },
         });
       }
@@ -6191,6 +6191,55 @@ test('worker records task lifecycle shadow reads from Windows without admitting 
   assert.equal(operationReadWithIncludedTaskBody.task_lifecycle_tasks.length, 1);
   assert.equal(operationReadWithIncludedTaskBody.task_lifecycle_tasks[0].task_id, admittedCreateBody.task.task_id);
   assert.equal(operationReadWithIncludedTaskBody.task_lifecycle_tasks[0].task_lifecycle_roster_mutation_write_count, 1);
+});
+
+test('worker clears task lifecycle external effects after dependent Cloudflare effect domains are evidenced', async () => {
+  const now = clock();
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{ site_id: 'site_fixture', site_ref: 'site://fixture', display_name: 'Fixture Site', status: 'active', created_at: now, updated_at: now, created_by_principal_id: 'admin' }],
+    memberships: [{ site_id: 'site_fixture', principal_id: 'admin', role: 'owner', status: 'active', created_at: now, updated_at: now }],
+    operations: [{ operation_id: 'operation_complete_transfer', site_id: 'site_fixture', display_name: 'Complete Transfer Operation', operation_kind: 'operating_layer_update', status: 'active', created_by_principal_id: 'admin', created_at: now, updated_at: now }],
+    mailboxStatusSourceReads: [{
+      read_id: 'mailbox-status-source-complete-transfer', site_id: 'site_fixture', source_locus: 'cloudflare_carrier_site', source_adapter: 'microsoft_graph', generated_at: now, account_ref: 'help@example.test', mailbox_status: 'ok', unread_count: 0, pending_draft_count: 0, pending_send_count: 0, latest_message_at: now, mailbox_read_authority: 'cloudflare_graph_mailbox_status_source', mailbox_send_admission: 'not_admitted', mailbox_mutation_admission: 'not_admitted', source_response_json: '{}', record_json: '{}', recorded_by_principal_id: 'admin', recorded_at: now,
+    }],
+    mailboxOutlookDraftCreates: [{
+      draft_create_id: 'mailbox-draft-complete-transfer', site_id: 'site_fixture', source_schema: 'narada.sonar.mailbox_outlook_draft_create_request.v1', generated_at: now, operation_id: 'operation_complete_transfer', account_ref: 'help@example.test', source_message_ref: 'message-complete-transfer', proposal_id: 'proposal-complete-transfer', proposal_ref: 'proposal:complete-transfer', subject: 'complete transfer', recipient_count: 1, body_preview: 'complete transfer', body_sha256: '0'.repeat(64), outlook_draft_id: 'outlook-draft-complete-transfer', outlook_change_key: 'change-key', draft_create_authority: 'cloudflare_graph_outlook_draft_create', mailbox_outlook_draft_create_admission: 'admitted', mailbox_send_admission: 'not_admitted', mailbox_mutation_admission: 'not_admitted', draft_create_posture: 'cloudflare_created_outlook_draft_send_not_admitted', graph_response_json: '{}', record_json: '{}', recorded_by_principal_id: 'admin', recorded_at: now,
+    }],
+    mailboxSendAcceptedRecords: [{
+      send_accepted_id: 'mailbox-send-complete-transfer', site_id: 'site_fixture', source_schema: 'narada.sonar.mailbox_send_request.v1', generated_at: now, operation_id: 'operation_complete_transfer', account_ref: 'help@example.test', outlook_draft_id: 'outlook-draft-complete-transfer', draft_create_id: 'mailbox-draft-complete-transfer', proposal_id: 'proposal-complete-transfer', source_message_ref: 'message-complete-transfer', send_authority: 'cloudflare_graph_mailbox_send', mailbox_send_admission: 'admitted', mailbox_mutation_admission: 'not_admitted', delivery_confirmation_admission: 'not_admitted', send_posture: 'cloudflare_sent_outlook_draft_confirmation_not_admitted', graph_status: 202, graph_response_json: '{}', cutover_point_ref: 'cutover:mailbox-send:complete-transfer', governed_write_contract_ref: 'contract:mailbox-send:complete-transfer', confirmation_evidence_ref: 'evidence:mailbox-send:complete-transfer', record_json: '{}', recorded_by_principal_id: 'admin', recorded_at: now,
+    }],
+    mailboxSendConfirmations: [{
+      send_confirmation_id: 'mailbox-confirmation-complete-transfer', site_id: 'site_fixture', source_schema: 'narada.sonar.mailbox_send_confirmation_read_request.v1', generated_at: now, operation_id: 'operation_complete_transfer', send_accepted_id: 'mailbox-send-complete-transfer', account_ref: 'help@example.test', outlook_draft_id: 'outlook-draft-complete-transfer', sent_message_ref: 'sent-message-complete-transfer', internet_message_id: '<complete-transfer@example.test>', sent_at: now, confirmation_authority: 'cloudflare_graph_sent_items_reconciliation', delivery_confirmation_admission: 'admitted', mailbox_mutation_admission: 'not_admitted', confirmation_posture: 'cloudflare_confirmed_sent_message', graph_status: 200, graph_response_json: '{}', cutover_point_ref: 'cutover:mailbox-confirmation:complete-transfer', governed_write_contract_ref: 'contract:mailbox-confirmation:complete-transfer', confirmation_evidence_ref: 'evidence:mailbox-confirmation:complete-transfer', record_json: '{}', recorded_by_principal_id: 'admin', recorded_at: now,
+    }],
+    siteFileMaterializations: [{
+      materialization_id: 'site-file-materialization-complete-transfer', site_id: 'site_fixture', generated_at: now, operation_id: 'operation_complete_transfer', task_id: 'cloudflare-task-complete-transfer', proposal_id: 'proposal-complete-transfer', proposal_ref: 'proposal:site-file:complete-transfer', file_path: 'docs/architecture/cloudflare-carrier/target.md', content_sha256: '1'.repeat(64), content_ref: 'cloudflare-site-file-store:complete-transfer', materialization_authority_ref: 'cloudflare-carrier:site-file-materialization:v1', cutover_point_ref: 'cutover:site-file:complete-transfer', governed_write_contract_ref: 'contract:site-file:complete-transfer', confirmation_evidence_ref: 'evidence:site-file:complete-transfer', authority_locus: 'cloudflare_carrier_site', filesystem_executor_authority: 'cloudflare_site_file_store', windows_filesystem_mutation_admission: 'not_admitted', repository_publication_admission: 'not_admitted', write_effect: 'cloudflare_site_file_materialization_record', materialization_posture: 'cloudflare_site_file_store_materialized', materialization_json: '{}', recorded_by_principal_id: 'admin', recorded_at: now,
+    }],
+    repositoryPublicationExecutions: [{
+      repository_publication_execution_id: 'repository-publication-complete-transfer', site_id: 'site_fixture', generated_at: now, repository_publication_request_id: 'repository-publication-request-complete-transfer', publication_ref: 'publication:complete-transfer', requested_action_ref: 'action:publish-complete-transfer', repository_ref: 'github:andrey-kokoev/narada.sonar', branch_ref: 'cloudflare-publication', source_change_ref: 'commit:complete-transfer', publication_status: 'published', repository_publication_executor_authority: 'cloudflare_github_repository_publication_executor', repository_publication_admission_authority: 'cloudflare_repository_publication_admission', repository_publication_admission: 'admitted', cloudflare_repository_publication_admission_id: 'repository-publication-admission-complete-transfer', cloudflare_repository_publication_admission_action: 'admit', cloudflare_git_push_admission: 'not_admitted', direct_cloudflare_repository_mutation_admission: 'admitted_by_cloudflare_github_repository_publication', published_commit_ref: 'commit:complete-transfer', github_http_status: 201, rollback_evidence_ref: 'rollback:complete-transfer', execution_posture: 'cloudflare_admits_and_executes_github_repository_publication', execution_json: '{}', recorded_by_principal_id: 'admin', recorded_at: now,
+    }],
+    taskLifecycleTasks: [{
+      site_id: 'site_fixture', task_id: 'cloudflare-task-complete-transfer', task_number: 1, title: 'complete transfer task', description: null, status: 'finished', source: 'cloudflare-carrier-task-lifecycle', authority_locus: 'cloudflare_carrier_site', mutation_authority: 'cloudflare_task_lifecycle_d1', cloudflare_write_admission: 'admitted', cutover_point_ref: 'cutover:task-create:complete-transfer', governed_write_contract_ref: 'contract:task-create:complete-transfer', confirmation_evidence_ref: 'evidence:task-create:complete-transfer', task_json: JSON.stringify({
+        claimed_by_agent_id: 'agent-cloudflare', assignment_authority_ref: 'assignment:complete-transfer', report_id: 'report-complete-transfer', finish_id: 'finish-complete-transfer', changed_file_evidence_records: [{ file_path: 'docs/architecture/cloudflare-carrier/target.md' }], task_lifecycle_projection_records: [{}], task_lifecycle_source_state_write_records: [{}], task_lifecycle_assignment_records: [{}], task_lifecycle_role_resolution_records: [{}], task_lifecycle_roster_mutation_records: [{}], task_lifecycle_source_state_write_admission: 'admitted', canonical_source_state_authority: 'cloudflare_task_lifecycle_d1', task_lifecycle_assignment_write_admission: 'admitted', task_lifecycle_role_resolution_write_admission: 'admitted', task_lifecycle_roster_mutation_write_admission: 'admitted', roster_mutation_admission: 'admitted', mailbox_mutation_admission: 'not_admitted', filesystem_mutation_admission: 'not_admitted', repository_publication_admission: 'not_admitted',
+      }), created_by_principal_id: 'admin', created_at: now, updated_at: now,
+    }],
+  });
+  const env = authEnv(fakeDurableObjectNamespace(), { CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+
+  const read = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_complete_authority_transfer_read',
+    params: { site_id: 'site_fixture', operation_id: 'operation_complete_transfer', mailbox_status_source_limit: 10, mailbox_outlook_draft_create_limit: 10, mailbox_send_accepted_limit: 10, mailbox_send_confirmation_limit: 10, site_file_materialization_limit: 10, repository_publication_execution_limit: 10, task_lifecycle_task_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  const body = await read.json();
+  assert.equal(read.status, 200, JSON.stringify(body));
+  assert.equal(body.authority_transfer_posture.transfer_complete, true, JSON.stringify(body.authority_transfer_posture));
+  assert.deepEqual(body.authority_transfer_posture.remaining_windows_domains, [], JSON.stringify(body.authority_transfer_posture));
+  assert.deepEqual(body.authority_transfer_posture.remaining_windows_authorities, [], JSON.stringify(body.authority_transfer_posture));
+  assert.equal(body.authority_transfer_posture.domains.find((domain) => domain.domain === 'task_lifecycle').classification, 'cloudflare_owned');
+  assert.equal(body.authority_transfer_posture.domains.find((domain) => domain.domain === 'task_lifecycle').authority_partition, 'task_lifecycle_cloudflare_writes_and_external_effects_cloudflare_owned');
+  assert.equal(body.operation_product_surface.task_lifecycle_default_cloudflare_write_admission, 'source_state_and_external_effects_admitted');
+  assert.equal(body.operation_product_surface.task_lifecycle_write_admission_posture, 'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_roster_mutation_and_external_effects_admitted');
+  assert.equal(body.operation_product_surface.task_lifecycle_authority_partition, 'task_create_claim_report_finish_changed_file_evidence_projection_write_source_state_assignment_role_resolution_roster_mutation_and_external_effects_cloudflare_owned');
 });
 
 test('worker starts controlled resident dispatch as Cloudflare primary with Windows fallback recorded', async () => {
