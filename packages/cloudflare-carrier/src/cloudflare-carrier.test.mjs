@@ -4156,6 +4156,7 @@ test('worker creates Outlook drafts through Cloudflare Graph authority without a
     GRAPH_ACCESS_TOKEN: 'cloudflare-worker-graph-token',
     CLOUDFLARE_GRAPH_FETCH: async (url, init = {}) => {
       graphCalls.push({ url, method: init.method ?? 'GET', authorization: init.headers?.Authorization, body: init.body == null ? null : JSON.parse(String(init.body)) });
+      if (String(url).endsWith('/send')) return new Response('', { status: 202 });
       return new Response(JSON.stringify({ id: 'outlook-draft-fixture-1', changeKey: 'change-key-fixture-1', webLink: 'https://example.test/draft' }), { status: 201, headers: { 'content-type': 'application/json' } });
     },
   });
@@ -4232,6 +4233,78 @@ test('worker creates Outlook drafts through Cloudflare Graph authority without a
   assert.equal(operationReadBody.operation_product_surface.mailbox_mutation_admission, 'not_admitted');
   assert.equal(operationReadBody.operation_product_surface.mailbox_outlook_draft_create_authority_partition, 'mailbox_outlook_draft_create_cloudflare_owned_send_and_other_mutation_not_admitted');
   assert.equal(operationReadBody.operation_activity_timeline.items.some((entry) => entry.activity_kind === 'mailbox_outlook_draft_create'), true);
+
+  const sendSourcePayload = {
+    schema: 'narada.sonar.mailbox_send_request.v1',
+    generated_at: '2026-06-08T14:05:00.000Z',
+    operation_id: 'operation_mailbox_draft_create',
+    account_ref: 'help@global-maxima.com',
+    outlook_draft_id: 'outlook-draft-fixture-1',
+    draft_create_id: 'mailbox_outlook_draft_create_fixture_1',
+    proposal_id: 'mailbox_draft_reply_fixture_1',
+    source_message_ref: 'graph-message-fixture-1',
+    mailbox_send_admission: 'admitted',
+    mailbox_mutation_admission: 'not_admitted',
+    cutover_point_ref: 'cutover:mailbox-send:v1',
+    governed_write_contract_ref: 'contract:graph-draft-send:v1',
+    confirmation_evidence_ref: 'evidence:graph-send-accepted:v1',
+  };
+  const refusedSendWithoutEvidence = await worker.fetch(jsonRequest({
+    operation: 'mailbox.outlook_draft.send',
+    request_id: 'request_mailbox_outlook_draft_send_refused_missing_evidence',
+    params: { site_id: 'site_fixture', source_payload: { ...sendSourcePayload, cutover_point_ref: '' } },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(refusedSendWithoutEvidence.status, 403);
+  assert.equal((await refusedSendWithoutEvidence.json()).code, 'mailbox_send_requires_cutover_point_ref');
+  assert.equal(graphCalls.length, 1);
+
+  const sent = await worker.fetch(jsonRequest({
+    operation: 'mailbox.outlook_draft.send',
+    request_id: 'request_mailbox_outlook_draft_send',
+    params: { site_id: 'site_fixture', send_accepted_id: 'mailbox_send_accepted_fixture_1', source_payload: sendSourcePayload },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(sent.status, 200);
+  const sentBody = await sent.json();
+  assert.equal(sentBody.schema, 'narada.sonar.cloudflare_mailbox_send_accepted.v1');
+  assert.equal(sentBody.status, 'accepted');
+  assert.equal(sentBody.mailbox_send_authority, 'cloudflare_graph_mailbox_send');
+  assert.equal(sentBody.mailbox_send_admission, 'admitted');
+  assert.equal(sentBody.mailbox_mutation_admission, 'not_admitted');
+  assert.equal(sentBody.delivery_confirmation_admission, 'not_admitted');
+  assert.equal(sentBody.record.graph_status, 202);
+  assert.equal(graphCalls.length, 2);
+  assert.equal(graphCalls[1].method, 'POST');
+  assert.match(graphCalls[1].url, /\/users\/help%40global-maxima\.com\/messages\/outlook-draft-fixture-1\/send$/);
+  assert.equal(graphCalls[1].authorization, 'Bearer cloudflare-worker-graph-token');
+
+  const sendListed = await worker.fetch(jsonRequest({
+    operation: 'mailbox.send_accepted.list',
+    request_id: 'request_mailbox_send_accepted_list',
+    params: { site_id: 'site_fixture', limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(sendListed.status, 200);
+  const sendListedBody = await sendListed.json();
+  assert.equal(sendListedBody.mailbox_send_authority, 'cloudflare_graph_mailbox_send');
+  assert.equal(sendListedBody.mailbox_send_admission, 'admitted');
+  assert.equal(sendListedBody.mailbox_mutation_admission, 'not_admitted');
+  assert.deepEqual(sendListedBody.sends.map((entry) => entry.send_accepted_id), ['mailbox_send_accepted_fixture_1']);
+
+  const operationReadAfterSend = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_mailbox_outlook_draft_send_operation_read',
+    params: { site_id: 'site_fixture', operation_id: 'operation_mailbox_draft_create', mailbox_outlook_draft_create_limit: 10, mailbox_send_accepted_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(operationReadAfterSend.status, 200);
+  const operationReadAfterSendBody = await operationReadAfterSend.json();
+  assert.equal(operationReadAfterSendBody.mailbox_send_accepted_records.length, 1);
+  assert.equal(operationReadAfterSendBody.operation_product_surface.mailbox_send_accepted_count, 1);
+  assert.equal(operationReadAfterSendBody.operation_product_surface.mailbox_send_admission, 'admitted');
+  assert.equal(operationReadAfterSendBody.operation_product_surface.mailbox_send_delivery_confirmation_admission, 'not_admitted');
+  assert.equal(operationReadAfterSendBody.operation_product_surface.mailbox_mutation_admission, 'not_admitted');
+  assert.equal(operationReadAfterSendBody.operation_product_surface.mailbox_outlook_draft_create_authority_partition, 'mailbox_outlook_draft_create_and_send_cloudflare_owned_other_mutation_not_admitted');
+  assert.equal(operationReadAfterSendBody.authority_transfer_posture.remaining_windows_authorities.some((entry) => entry.authority === 'mailbox_send'), false);
+  assert.equal(operationReadAfterSendBody.authority_transfer_posture.next_action, 'transfer_mailbox_status_source_authority');
+  assert.equal(operationReadAfterSendBody.operation_activity_timeline.items.some((entry) => entry.activity_kind === 'mailbox_send_accepted'), true);
 });
 
 test('worker records site file change proposals without admitting filesystem or publication mutation', async () => {
@@ -6874,6 +6947,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     mailboxStatusSourceReads: clone(initial.mailboxStatusSourceReads ?? []),
     mailboxDraftReplyProposals: clone(initial.mailboxDraftReplyProposals ?? []),
     mailboxOutlookDraftCreates: clone(initial.mailboxOutlookDraftCreates ?? []),
+    mailboxSendAcceptedRecords: clone(initial.mailboxSendAcceptedRecords ?? []),
     siteFileChangeProposals: clone(initial.siteFileChangeProposals ?? []),
     siteFileMaterializations: clone(initial.siteFileMaterializations ?? []),
     localIngressRequests: clone(initial.localIngressRequests ?? []),
@@ -7018,6 +7092,12 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const row = { draft_create_id, site_id, source_schema, generated_at, operation_id, account_ref, source_message_ref, proposal_id, proposal_ref, subject, recipient_count, body_preview, body_sha256, outlook_draft_id, outlook_change_key, draft_create_authority, mailbox_outlook_draft_create_admission, mailbox_send_admission, mailbox_mutation_admission, draft_create_posture, graph_response_json, record_json, recorded_by_principal_id, recorded_at };
         if (existing) Object.assign(existing, row);
         else state.mailboxOutlookDraftCreates.push(row);
+      } else if (normalized.startsWith('insert into cloudflare_mailbox_send_accepted_records')) {
+        const [send_accepted_id, site_id, source_schema, generated_at, operation_id, account_ref, outlook_draft_id, draft_create_id, proposal_id, source_message_ref, send_authority, mailbox_send_admission, mailbox_mutation_admission, delivery_confirmation_admission, send_posture, graph_status, graph_response_json, cutover_point_ref, governed_write_contract_ref, confirmation_evidence_ref, record_json, recorded_by_principal_id, recorded_at] = bindings;
+        const existing = state.mailboxSendAcceptedRecords.find((entry) => entry.send_accepted_id === send_accepted_id);
+        const row = { send_accepted_id, site_id, source_schema, generated_at, operation_id, account_ref, outlook_draft_id, draft_create_id, proposal_id, source_message_ref, send_authority, mailbox_send_admission, mailbox_mutation_admission, delivery_confirmation_admission, send_posture, graph_status, graph_response_json, cutover_point_ref, governed_write_contract_ref, confirmation_evidence_ref, record_json, recorded_by_principal_id, recorded_at };
+        if (existing) Object.assign(existing, row);
+        else state.mailboxSendAcceptedRecords.push(row);
       } else if (normalized.startsWith('insert into cloudflare_site_file_change_proposals')) {
         const [proposal_id, site_id, source_schema, generated_at, operation_id, task_id, proposal_ref, proposal_summary, authority_locus, filesystem_executor_authority, filesystem_mutation_admission, repository_publication_admission, proposal_posture, file_count, proposal_json, recorded_by_principal_id, recorded_at] = bindings;
         const existing = state.siteFileChangeProposals.find((entry) => entry.proposal_id === proposal_id);
@@ -7198,6 +7278,16 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const [siteId, limit] = bindings;
         return {
           results: state.mailboxOutlookDraftCreates
+            .filter((entry) => entry.site_id === siteId)
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_mailbox_send_accepted_records')) {
+        const [siteId, limit] = bindings;
+        return {
+          results: state.mailboxSendAcceptedRecords
             .filter((entry) => entry.site_id === siteId)
             .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
             .slice(0, Number(limit))
