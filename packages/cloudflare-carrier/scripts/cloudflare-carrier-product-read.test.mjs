@@ -280,7 +280,10 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       posture_reason: 'operation_needs_review',
       recovery_state: 'reconstructable',
       recovery_boundary_count: 12,
+      recovery_boundary_keys: ['site_registry', 'carrier_evidence_index', 'site_file_materialization_store'],
       recovery_gap_count: 0,
+      recovery_gap_keys: [],
+      recovery_next_action: 'monitor_recovery_posture',
     },
   });
   assert.match(operationReadText, /Status: current=paused transitions=1/);
@@ -292,6 +295,8 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(operationReadText, /Workflow Command: kind=site_continuity_reconciliation_review command=pnpm site:continuity:reconciliation -- review --id reconciliation_execution_failed/);
   assert.match(operationReadText, /Posture Route: status=needs_attention action=review_operation reason=operation_needs_review/);
   assert.match(operationReadText, /Recovery: state=reconstructable boundaries=12 gaps=0/);
+  assert.match(operationReadText, /Recovery Next: action=monitor_recovery_posture gaps=none/);
+  assert.match(operationReadText, /Recovery Boundaries: site_registry, carrier_evidence_index, site_file_materialization_store/);
   assert.match(operationReadText, /Evidence Counts: sessions=1 tasks=3/);
 });
 
@@ -393,7 +398,13 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     cloudflare_recovery_posture: {
       state: 'reconstructable',
       recovery_boundary_count: 12,
+      recovery_boundaries: [
+        { key: 'site_registry' },
+        { key: 'carrier_evidence_index' },
+        { key: 'site_file_materialization_store' },
+      ],
       recovery_gaps: [],
+      next_action: 'monitor_recovery_posture',
     },
   }), {
     operation: 'operation.read',
@@ -422,6 +433,9 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     posture_reason: 'operation_needs_review',
     recovery_state: 'reconstructable',
     recovery_boundary_count: 12,
+    recovery_boundary_keys: ['site_registry', 'carrier_evidence_index', 'site_file_materialization_store'],
     recovery_gap_count: 0,
+    recovery_gap_keys: [],
+    recovery_next_action: 'monitor_recovery_posture',
   });
 });

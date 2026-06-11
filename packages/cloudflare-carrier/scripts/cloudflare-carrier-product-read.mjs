@@ -144,6 +144,8 @@ export function summarizeProductSurface(operation, body) {
     const postureRoute = body?.operation_posture_route ?? body?.operation_product_surface?.posture_route ?? null;
     const postureOverview = body?.operation_posture_overview ?? body?.operation_product_surface?.posture_overview ?? null;
     const recoveryPosture = body?.cloudflare_recovery_posture ?? body?.operation_product_surface?.cloudflare_recovery_posture ?? null;
+    const recoveryBoundaries = Array.isArray(recoveryPosture?.recovery_boundaries) ? recoveryPosture.recovery_boundaries : [];
+    const recoveryGaps = Array.isArray(recoveryPosture?.recovery_gaps) ? recoveryPosture.recovery_gaps : [];
     return {
       operation,
       site_id: body?.operation?.site_id ?? body?.site_id ?? null,
@@ -171,7 +173,10 @@ export function summarizeProductSurface(operation, body) {
       posture_reason: postureRoute?.reason ?? postureOverview?.next_reason ?? null,
       recovery_state: recoveryPosture?.state ?? null,
       recovery_boundary_count: recoveryPosture?.recovery_boundary_count ?? null,
-      recovery_gap_count: Array.isArray(recoveryPosture?.recovery_gaps) ? recoveryPosture.recovery_gaps.length : null,
+      recovery_boundary_keys: recoveryBoundaries.map((boundary) => boundary?.key).filter(Boolean),
+      recovery_gap_count: recoveryGaps.length,
+      recovery_gap_keys: recoveryGaps.map((gap) => gap?.key ?? gap?.boundary ?? gap).filter(Boolean),
+      recovery_next_action: recoveryPosture?.next_action ?? null,
     };
   }
   return { operation };
@@ -241,6 +246,12 @@ export function formatProductSurfaceText(result) {
     }
     if (summary.recovery_state || summary.recovery_boundary_count !== null || summary.recovery_gap_count !== null) {
       lines.push(`Recovery: state=${summary.recovery_state ?? 'unknown'} boundaries=${summary.recovery_boundary_count ?? 'unknown'} gaps=${summary.recovery_gap_count ?? 'unknown'}`);
+      if (summary.recovery_next_action || summary.recovery_gap_keys?.length > 0) {
+        lines.push(`Recovery Next: action=${summary.recovery_next_action ?? 'none'} gaps=${formatList(summary.recovery_gap_keys)}`);
+      }
+      if (summary.recovery_boundary_keys?.length > 0) {
+        lines.push(`Recovery Boundaries: ${formatList(summary.recovery_boundary_keys)}`);
+      }
     }
     lines.push(`Evidence Counts: sessions=${summary.session_count ?? 0} tasks=${summary.task_count ?? 0}`);
     return `${lines.join('\n')}\n`;
