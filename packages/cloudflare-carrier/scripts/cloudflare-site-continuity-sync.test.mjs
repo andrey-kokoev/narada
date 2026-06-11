@@ -231,6 +231,9 @@ test('site continuity sync cycle pushes local packet and returns Cloudflare pack
         },
       };
     }
+    if (body.operation === 'site.continuity.loop.report.put') {
+      return { body: { ok: true, status: 'recorded', report_record: body.params.report } };
+    }
     return { status: 400, body: { ok: false, code: 'unexpected_operation' } };
   });
   try {
@@ -249,13 +252,25 @@ test('site continuity sync cycle pushes local packet and returns Cloudflare pack
     assert.equal(body.pulled_packet_id, cloudflarePacket.packet_id);
     assert.equal(body.local_to_cloudflare_recorded, true);
     assert.equal(body.cloudflare_to_local_windows_returned, true);
+    assert.equal(body.continuity_loop_report_recorded, true);
+    assert.equal(body.continuity_loop_report.schema, 'narada.site_continuity_productized_loop.v1');
+    assert.equal(body.continuity_loop_report.site_id, 'site_fixture');
+    assert.equal(body.continuity_loop_report.status, 'ok');
+    assert.equal(body.continuity_loop_report.cloudflare_push.status, 'imported');
+    assert.equal(body.continuity_loop_report.cloudflare_push.pushed_packet_id, localPacket.packet_id);
+    assert.equal(body.continuity_loop_report.cloudflare_push.returned_packet_id, cloudflarePacket.packet_id);
+    assert.equal(body.continuity_loop_report.windows_packet_count, 1);
+    assert.equal(body.continuity_loop_report.authority_boundary.executable_cross_embodiment_mutation, 'refused_by_site_continuity_classifier');
     assert.equal(body.packet.packet_id, cloudflarePacket.packet_id);
-    assert.equal(mock.requests.length, 2);
+    assert.equal(mock.requests.length, 3);
     assert.equal(mock.requests[0].operation, 'site.continuity.packet.put');
     assert.equal(mock.requests[0].params.site_id, 'site_fixture');
     assert.equal(mock.requests[0].params.packet.packet_id, localPacket.packet_id);
     assert.equal(mock.requests[1].operation, 'site.read');
     assert.equal(mock.requests[1].params.site_id, 'site_fixture');
+    assert.equal(mock.requests[2].operation, 'site.continuity.loop.report.put');
+    assert.equal(mock.requests[2].params.site_id, 'site_fixture');
+    assert.equal(mock.requests[2].params.report.schema, 'narada.site_continuity_productized_loop.v1');
   } finally {
     await mock.close();
   }

@@ -247,6 +247,15 @@ if (command === 'sync-once') {
   if (cloudflareAdmission.action === 'refuse') {
     failJson('cloudflare_site_continuity_packet_refused_after_sync_push', { admission: cloudflareAdmission });
   }
+  const loopReport = buildSiteContinuityLoopReport({
+    siteId,
+    localPacket,
+    cloudflarePacket,
+    pushed,
+    generatedAt: new Date().toISOString(),
+  });
+  const reportPut = await post({ operation: 'site.continuity.loop.report.put', params: { site_id: siteId, report: loopReport } });
+  if (reportPut.http_status !== 200 || reportPut.body?.ok === false) failApi('cloudflare_site_continuity_loop_report_push_failed', reportPut);
   await writeJson(option('--out'), {
     schema: 'narada.site_continuity_cloudflare_sync_once.v1',
     status: 'ok',
@@ -258,7 +267,10 @@ if (command === 'sync-once') {
     pulled_packet_id: cloudflarePacket.packet_id ?? null,
     local_to_cloudflare_recorded: true,
     cloudflare_to_local_windows_returned: true,
+    continuity_loop_report_recorded: true,
     cloudflare_response: pushed.body,
+    continuity_loop_report_response: reportPut.body,
+    continuity_loop_report: loopReport,
     packet: cloudflarePacket,
   });
   process.exit(0);
@@ -417,6 +429,29 @@ function classifyRepositoryPublicationEvidence(evidence) {
     action: 'admit',
     reason: 'repository_publication_evidence_valid_for_cloudflare_recording',
     authority_partition: 'windows_admits_or_refuses_repository_publication_cloudflare_records_evidence_without_direct_repository_authority',
+  };
+}
+
+function buildSiteContinuityLoopReport({ siteId, localPacket, cloudflarePacket, pushed, generatedAt }) {
+  return {
+    schema: 'narada.site_continuity_productized_loop.v1',
+    site_id: siteId,
+    status: 'ok',
+    generated_at: generatedAt,
+    cloudflare_source: 'cloudflare.site.read',
+    cloudflare_worker_url: workerUrl,
+    cloudflare_credential_source: bearerToken.source,
+    cloudflare_push: {
+      status: 'imported',
+      pushed_packet_id: localPacket.packet_id ?? null,
+      returned_packet_id: cloudflarePacket.packet_id ?? null,
+      http_status: pushed.http_status,
+    },
+    windows_packet_count: 1,
+    authority_boundary: {
+      executable_cross_embodiment_mutation: 'refused_by_site_continuity_classifier',
+      durable_mutation_authority: 'unchanged; routed_by_site_authority_map',
+    },
   };
 }
 
