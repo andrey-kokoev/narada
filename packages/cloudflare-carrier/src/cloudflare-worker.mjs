@@ -12944,6 +12944,7 @@ export function renderCloudflareCarrierConsole() {
         <div id="repositoryPublicationRequestNavigator" class="attention-items"><div class="empty">No repository publication requests loaded.</div></div>
         <h3>Repository Publication Request Detail</h3>
         <div id="repositoryPublicationRequestFocusDetail" class="evidence-summary"><div class="empty">No repository publication request selected.</div></div>
+        <div class="actions"><button id="executeRepositoryPublication" class="secondary" disabled>Execute Cloudflare GitHub Publication</button></div>
         <h3>Returned Publication Evidence</h3>
         <div id="repositoryPublicationEvidenceNavigator" class="attention-items"><div class="empty">No repository publication evidence loaded.</div></div>
         <h3>Repository Publication Evidence Detail</h3>
@@ -13145,6 +13146,16 @@ export function renderCloudflareCarrierConsole() {
           repository_publication_evidence_limit: 20,
           repository_publication_execution_limit: 20,
         });
+      },
+      executeRepositoryPublication(request) {
+        const repositoryPublicationRequestId = request?.repository_publication_request_id || '';
+        if (!repositoryPublicationRequestId) throw new Error('Repository publication request is required.');
+        const suffix = Date.now();
+        return this.request('repository_publication.cloudflare_execution.execute', {
+          site_id: el('siteId').value.trim(),
+          repository_publication_request_id: repositoryPublicationRequestId,
+          repository_publication_execution_id: 'console_repository_publication_execution_' + suffix,
+        }, { request_id: 'console_repository_publication_execute_' + suffix });
       },
       startResidentDispatch() {
         const siteId = el('siteId').value.trim();
@@ -17822,11 +17833,33 @@ export function renderCloudflareCarrierConsole() {
       ];
     }
     function renderRepositoryPublicationRequestFocusDetail(item = state.repositoryPublicationRequestFocus) {
+      const action = el('executeRepositoryPublication');
       if (!item) {
         el('repositoryPublicationRequestFocusDetail').innerHTML = '<div class="empty">No repository publication request selected.</div>';
+        if (action) action.disabled = true;
         return;
       }
+      if (action) action.disabled = false;
       el('repositoryPublicationRequestFocusDetail').replaceChildren(...repositoryPublicationRequestFocusContext(item).map(([label, value]) => evidenceField(label, value)));
+    }
+    function selectedRepositoryPublicationRequest() {
+      return state.repositoryPublicationRequestFocus || (state.operationProduct?.repository_publication_requests || [])[0] || null;
+    }
+    async function executeFocusedRepositoryPublication() {
+      const request = selectedRepositoryPublicationRequest();
+      if (!request) throw new Error('No repository publication request selected.');
+      const body = await api.executeRepositoryPublication(request);
+      appendConsoleEvidence('repository_publication_cloudflare_execution_requested', {
+        repository_publication_request_id: request.repository_publication_request_id,
+        repository_publication_execution_id: body.execution?.repository_publication_execution_id || null,
+        publication_status: body.publication_status || body.execution?.publication_status || 'unknown',
+        repository_publication_executor_authority: body.repository_publication_executor_authority || body.execution?.repository_publication_executor_authority || 'cloudflare_github_repository_publication_executor',
+        direct_cloudflare_repository_mutation_admission: body.direct_cloudflare_repository_mutation_admission || body.execution?.direct_cloudflare_repository_mutation_admission || 'admitted_by_cloudflare_github_repository_publication',
+      });
+      await refreshOperation();
+      const executionId = body.execution?.repository_publication_execution_id;
+      const execution = (state.operationProduct?.repository_publication_executions || []).find((entry) => entry.repository_publication_execution_id === executionId);
+      if (execution) selectRepositoryPublicationExecution(execution);
     }
     function repositoryPublicationEvidenceKey(item = {}) {
       return item.repository_publication_evidence_id || [item.repository_publication_request_id, item.publication_execution_id, item.recorded_at].filter(Boolean).join('|');
@@ -18880,6 +18913,7 @@ export function renderCloudflareCarrierConsole() {
     el('loadRecoveryEvidenceWindow').addEventListener('click', () => run(refreshOperation));
     el('carrierEvidenceSessionLimit').addEventListener('change', () => { el('carrierEvidenceSessionLimit').value = String(carrierEvidenceSessionLimit()); saveWorkbenchState(); });
     el('startResidentDispatch').addEventListener('click', () => run(startResidentDispatchFromWorkbench));
+    el('executeRepositoryPublication').addEventListener('click', () => run(executeFocusedRepositoryPublication));
     el('createOutlookDraftFromProposal').addEventListener('click', () => run(createOutlookDraftFromFocusedProposal));
     el('acknowledgeMailboxSendReview').addEventListener('click', () => run(acknowledgeFocusedMailboxSendReview));
     el('continuityWorkflowNextAction').addEventListener('click', applyContinuityWorkflowNextStep);

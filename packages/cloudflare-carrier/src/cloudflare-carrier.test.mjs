@@ -2311,6 +2311,9 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /review_repository_publication_provider_liveness/);
   assert.match(html, /focusRepositoryPublicationProviderLiveness/);
   assert.match(html, /Cloudflare GitHub Executions/);
+  assert.match(html, /executeRepositoryPublication/);
+  assert.match(html, /executeFocusedRepositoryPublication/);
+  assert.match(html, /repository_publication\.cloudflare_execution\.execute/);
   assert.match(html, /repositoryPublicationExecutionNavigator/);
   assert.match(html, /repositoryPublicationExecutionFocusDetail/);
   assert.match(html, /renderRepositoryPublicationExecutionNavigator/);
