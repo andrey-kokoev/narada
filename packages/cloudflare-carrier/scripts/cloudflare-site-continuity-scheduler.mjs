@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 
@@ -17,6 +17,7 @@ export function buildSiteContinuitySchedulerPlan({
   siteId = process.env.CLOUDFLARE_CARRIER_SITE_ID ?? process.env.NARADA_SITE_CONTINUITY_SITE_ID ?? null,
   packetPath = process.env.NARADA_SITE_CONTINUITY_PACKET ?? null,
   outputPath = process.env.NARADA_SITE_CONTINUITY_SYNC_OUT ?? '.narada/site-continuity/cloudflare-sync-last.json',
+  artifactDirectory = process.env.NARADA_SITE_CONTINUITY_ARTIFACT_DIR ?? null,
   nodeCommand = process.env.NARADA_NODE_COMMAND ?? 'node',
   dryRun = true,
 } = {}) {
@@ -26,6 +27,7 @@ export function buildSiteContinuitySchedulerPlan({
   const effectiveLocalRoot = resolvePath(root, localRoot ?? root);
   const effectivePacketPath = packetPath ? resolvePath(effectiveLocalRoot, packetPath) : null;
   const effectiveOutputPath = outputPath ? resolvePath(effectiveLocalRoot, outputPath) : null;
+  const effectiveArtifactDirectory = artifactDirectory ? resolvePath(effectiveLocalRoot, artifactDirectory) : effectiveOutputPath ? dirname(effectiveOutputPath) : null;
   const interval = normalizeIntervalMinutes(intervalMinutes);
   const status = readLocalSchedulerStatus({
     root,
@@ -57,6 +59,7 @@ export function buildSiteContinuitySchedulerPlan({
     site_id: siteId ?? null,
     packet_path: effectivePacketPath,
     output_path: effectiveOutputPath,
+    artifact_directory: effectiveArtifactDirectory,
     credential_posture: 'external_env_file_or_process_environment_only',
     embeds_credentials: false,
     cloudflare_mutation: 'site_continuity_packet_and_loop_report_only',
@@ -114,9 +117,53 @@ export function buildSiteContinuitySchedulerPlan({
         scheduled_task_command: ['schtasks', '/Query', '/TN', taskName, '/FO', 'LIST'],
         last_sync: readLastSyncArtifact(effectiveOutputPath),
       };
+    case 'status-all':
+    case 'status-local':
+      return {
+        ...base,
+        plan_status: 'local_sync_artifact_inventory_read_only_no_cloudflare_access',
+        scheduled_task_command: ['schtasks', '/Query', '/TN', taskName, '/FO', 'LIST'],
+        local_sync_artifacts: readLocalSyncArtifactInventory(effectiveArtifactDirectory, { lastOutputPath: effectiveOutputPath }),
+      };
     default:
       throw new Error(`unknown_site_continuity_scheduler_action:${action}`);
   }
+}
+
+export function readLocalSyncArtifactInventory(artifactDirectory, { lastOutputPath = null } = {}) {
+  if (!artifactDirectory) {
+    return {
+      state: 'not_configured',
+      artifact_directory: null,
+      artifact_count: 0,
+      status: 'needs_configuration',
+      artifacts: [],
+    };
+  }
+  if (!existsSync(artifactDirectory)) {
+    return {
+      state: 'missing_directory',
+      artifact_directory: artifactDirectory,
+      artifact_count: 0,
+      status: 'never_synced',
+      artifacts: [],
+      last_sync: lastOutputPath ? readLastSyncArtifact(lastOutputPath) : null,
+    };
+  }
+  const artifacts = readdirSync(artifactDirectory, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+    .map((entry) => readLastSyncArtifact(join(artifactDirectory, entry.name)))
+    .sort(compareArtifactSummaries);
+  const needsAttention = artifacts.some((artifact) => artifact.status !== 'synced');
+  const lastSync = lastOutputPath ? readLastSyncArtifact(lastOutputPath) : null;
+  return {
+    state: 'read',
+    artifact_directory: artifactDirectory,
+    artifact_count: artifacts.length,
+    status: artifacts.length === 0 ? 'never_synced' : needsAttention ? 'needs_attention' : 'synced',
+    last_sync: lastSync,
+    artifacts,
+  };
 }
 
 export function readLastSyncArtifact(outputPath) {
@@ -227,6 +274,13 @@ function resolvePath(root, value) {
   return isAbsolute(value) ? value : resolve(root, value);
 }
 
+function compareArtifactSummaries(left, right) {
+  const leftSite = left.site_id ?? '';
+  const rightSite = right.site_id ?? '';
+  if (leftSite !== rightSite) return leftSite.localeCompare(rightSite);
+  return String(left.artifact_path ?? '').localeCompare(String(right.artifact_path ?? ''));
+}
+
 function quote(value) {
   return `"${String(value).replaceAll('"', '\\"')}"`;
 }
@@ -247,6 +301,7 @@ function parseArgs(argv) {
     else if (arg === '--site') args.siteId = argv[++index];
     else if (arg === '--packet') args.packetPath = argv[++index];
     else if (arg === '--out') args.outputPath = argv[++index];
+    else if (arg === '--artifact-dir') args.artifactDirectory = argv[++index];
     else if (arg === '--node-command') args.nodeCommand = argv[++index];
     else throw new Error(`unknown_argument:${arg}`);
   }

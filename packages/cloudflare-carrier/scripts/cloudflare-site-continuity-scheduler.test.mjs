@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { buildSiteContinuitySchedulerPlan, readLastSyncArtifact } from './cloudflare-site-continuity-scheduler.mjs';
+import { buildSiteContinuitySchedulerPlan, readLastSyncArtifact, readLocalSyncArtifactInventory } from './cloudflare-site-continuity-scheduler.mjs';
 
 const SCRIPT_PATH = fileURLToPath(new URL('./cloudflare-site-continuity-scheduler.mjs', import.meta.url));
 const execFile = promisify(execFileCallback);
@@ -60,6 +60,68 @@ test('site continuity scheduler install plan is bounded and secret-free', async 
     assert.match(plan.task_command, /--out/);
     assert.match(plan.task_command, /cloudflare-sync-last\.json/);
     assert.doesNotMatch(JSON.stringify(plan), /secret-token-value/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('site continuity scheduler status-all inventories local sync artifacts', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-status-all-'));
+  const artifactDirectory = join(root, '.narada/site-continuity');
+  const outputPath = join(artifactDirectory, 'cloudflare-sync-last.json');
+  await mkdir(artifactDirectory, { recursive: true });
+  await writeFile(outputPath, `${JSON.stringify({
+    schema: 'narada.site_continuity_cloudflare_sync_once.v1',
+    status: 'ok',
+    site_id: 'site_alpha',
+    worker_url: 'https://worker.example',
+    pushed_packet_id: 'packet-alpha-local',
+    pulled_packet_id: 'packet-alpha-cloudflare',
+    continuity_loop_report_recorded: true,
+    continuity_loop_report: {
+      status: 'ok',
+      site_id: 'site_alpha',
+      generated_at: '2026-06-11T10:00:00.000Z',
+      cloudflare_push: {
+        status: 'imported',
+        pushed_packet_id: 'packet-alpha-local',
+        returned_packet_id: 'packet-alpha-cloudflare',
+        durability_action: 'inserted_new_packet',
+        imported_at: '2026-06-11T10:00:00.000Z',
+      },
+    },
+  }, null, 2)}\n`, 'utf8');
+  await writeFile(join(artifactDirectory, 'site-beta-sync.json'), `${JSON.stringify({
+    schema: 'narada.site_continuity_cloudflare_sync_once.v1',
+    status: 'failed',
+    site_id: 'site_beta',
+    worker_url: 'https://worker.example',
+    continuity_loop_report: {
+      status: 'failed',
+      site_id: 'site_beta',
+      generated_at: '2026-06-11T09:00:00.000Z',
+    },
+  }, null, 2)}\n`, 'utf8');
+  await writeFile(join(artifactDirectory, 'notes.txt'), 'ignored\n', 'utf8');
+  try {
+    const inventory = readLocalSyncArtifactInventory(artifactDirectory, { lastOutputPath: outputPath });
+    assert.equal(inventory.state, 'read');
+    assert.equal(inventory.status, 'needs_attention');
+    assert.equal(inventory.artifact_count, 2);
+    assert.equal(inventory.last_sync.status, 'synced');
+    assert.deepEqual(inventory.artifacts.map((artifact) => artifact.site_id), ['site_alpha', 'site_beta']);
+    assert.deepEqual(inventory.artifacts.map((artifact) => artifact.status), ['synced', 'needs_attention']);
+
+    const plan = buildSiteContinuitySchedulerPlan({
+      action: 'status-all',
+      repoRoot: root,
+      outputPath,
+      artifactDirectory,
+    });
+    assert.equal(plan.plan_status, 'local_sync_artifact_inventory_read_only_no_cloudflare_access');
+    assert.equal(plan.local_sync_artifacts.artifact_count, 2);
+    assert.equal(plan.local_sync_artifacts.status, 'needs_attention');
+    assert.equal(plan.embeds_credentials, false);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
