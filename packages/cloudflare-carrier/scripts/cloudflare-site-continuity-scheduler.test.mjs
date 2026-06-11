@@ -6,7 +6,12 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { buildSiteContinuitySchedulerPlan, readLastSyncArtifact, readLocalSyncArtifactInventory } from './cloudflare-site-continuity-scheduler.mjs';
+import {
+  buildSiteContinuitySchedulerPlan,
+  readLastSyncArtifact,
+  readLocalConfiguredSites,
+  readLocalSyncArtifactInventory,
+} from './cloudflare-site-continuity-scheduler.mjs';
 
 const SCRIPT_PATH = fileURLToPath(new URL('./cloudflare-site-continuity-scheduler.mjs', import.meta.url));
 const execFile = promisify(execFileCallback);
@@ -60,6 +65,67 @@ test('site continuity scheduler install plan is bounded and secret-free', async 
     assert.match(plan.task_command, /--out/);
     assert.match(plan.task_command, /cloudflare-sync-last\.json/);
     assert.doesNotMatch(JSON.stringify(plan), /secret-token-value/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('site continuity scheduler status-all distinguishes configured sites missing local artifacts', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-configured-status-'));
+  const artifactDirectory = join(root, '.narada/site-continuity');
+  const outputPath = join(artifactDirectory, 'cloudflare-sync-last.json');
+  const sitesFilePath = join(root, '.narada/site-continuity/sites.json');
+  await mkdir(artifactDirectory, { recursive: true });
+  await writeFile(join(root, '.env'), 'CLOUDFLARE_CARRIER_SITE_ID=site_env\nCLOUDFLARE_CARRIER_TOKEN=secret-not-read\n', 'utf8');
+  await writeFile(sitesFilePath, `${JSON.stringify({ sites: [{ site_id: 'site_file' }] }, null, 2)}\n`, 'utf8');
+  await writeFile(outputPath, `${JSON.stringify({
+    schema: 'narada.site_continuity_cloudflare_sync_once.v1',
+    status: 'ok',
+    site_id: 'site_synced',
+    worker_url: 'https://worker.example',
+    pushed_packet_id: 'packet-synced-local',
+    pulled_packet_id: 'packet-synced-cloudflare',
+    continuity_loop_report_recorded: true,
+    continuity_loop_report: {
+      status: 'ok',
+      site_id: 'site_synced',
+      generated_at: '2026-06-11T10:30:00.000Z',
+      cloudflare_push: {
+        status: 'imported',
+        pushed_packet_id: 'packet-synced-local',
+        returned_packet_id: 'packet-synced-cloudflare',
+      },
+    },
+  }, null, 2)}\n`, 'utf8');
+  try {
+    const configured = readLocalConfiguredSites({
+      root,
+      explicitSites: 'site_synced,site_missing',
+      sitesFilePath,
+    });
+    assert.equal(configured.state, 'configured');
+    assert.deepEqual(configured.sources, ['explicit_sites', 'sites_file', 'safe_env_file_site_keys']);
+    assert.deepEqual(configured.sites, ['site_env', 'site_file', 'site_missing', 'site_synced']);
+    assert.doesNotMatch(JSON.stringify(configured), /secret-not-read/);
+
+    const plan = buildSiteContinuitySchedulerPlan({
+      action: 'status-all',
+      repoRoot: root,
+      outputPath,
+      artifactDirectory,
+      configuredSites: 'site_synced,site_missing',
+      sitesFilePath,
+    });
+    assert.equal(plan.configured_sites.site_count, 4);
+    assert.equal(plan.status.site_configured, true);
+    assert.equal(plan.local_sync_artifacts.status, 'needs_attention');
+    assert.deepEqual(plan.local_sync_artifacts.configured_site_sync_statuses.map((site) => [site.site_id, site.status, site.reason]), [
+      ['site_env', 'needs_attention', 'configured_site_sync_artifact_missing'],
+      ['site_file', 'needs_attention', 'configured_site_sync_artifact_missing'],
+      ['site_missing', 'needs_attention', 'configured_site_sync_artifact_missing'],
+      ['site_synced', 'synced', 'matching_sync_artifact_synced'],
+    ]);
+    assert.doesNotMatch(JSON.stringify(plan), /secret-not-read/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -18,6 +18,8 @@ export function buildSiteContinuitySchedulerPlan({
   packetPath = process.env.NARADA_SITE_CONTINUITY_PACKET ?? null,
   outputPath = process.env.NARADA_SITE_CONTINUITY_SYNC_OUT ?? '.narada/site-continuity/cloudflare-sync-last.json',
   artifactDirectory = process.env.NARADA_SITE_CONTINUITY_ARTIFACT_DIR ?? null,
+  configuredSites = process.env.NARADA_SITE_CONTINUITY_SITES ?? null,
+  sitesFilePath = process.env.NARADA_SITE_CONTINUITY_SITES_FILE ?? null,
   nodeCommand = process.env.NARADA_NODE_COMMAND ?? 'node',
   dryRun = true,
 } = {}) {
@@ -28,6 +30,12 @@ export function buildSiteContinuitySchedulerPlan({
   const effectivePacketPath = packetPath ? resolvePath(effectiveLocalRoot, packetPath) : null;
   const effectiveOutputPath = outputPath ? resolvePath(effectiveLocalRoot, outputPath) : null;
   const effectiveArtifactDirectory = artifactDirectory ? resolvePath(effectiveLocalRoot, artifactDirectory) : effectiveOutputPath ? dirname(effectiveOutputPath) : null;
+  const effectiveSitesFilePath = sitesFilePath ? resolvePath(effectiveLocalRoot, sitesFilePath) : null;
+  const localConfiguredSites = readLocalConfiguredSites({
+    root,
+    explicitSites: configuredSites,
+    sitesFilePath: effectiveSitesFilePath,
+  });
   const interval = normalizeIntervalMinutes(intervalMinutes);
   const status = readLocalSchedulerStatus({
     root,
@@ -36,6 +44,7 @@ export function buildSiteContinuitySchedulerPlan({
     localRoot: effectiveLocalRoot,
     packetPath: effectivePacketPath,
     outputPath: effectiveOutputPath,
+    configuredSites: localConfiguredSites,
   });
   const taskCommand = buildTaskCommand({
     nodeCommand,
@@ -60,6 +69,8 @@ export function buildSiteContinuitySchedulerPlan({
     packet_path: effectivePacketPath,
     output_path: effectiveOutputPath,
     artifact_directory: effectiveArtifactDirectory,
+    sites_file_path: effectiveSitesFilePath,
+    configured_sites: localConfiguredSites,
     credential_posture: 'external_env_file_or_process_environment_only',
     embeds_credentials: false,
     cloudflare_mutation: 'site_continuity_packet_and_loop_report_only',
@@ -123,21 +134,27 @@ export function buildSiteContinuitySchedulerPlan({
         ...base,
         plan_status: 'local_sync_artifact_inventory_read_only_no_cloudflare_access',
         scheduled_task_command: ['schtasks', '/Query', '/TN', taskName, '/FO', 'LIST'],
-        local_sync_artifacts: readLocalSyncArtifactInventory(effectiveArtifactDirectory, { lastOutputPath: effectiveOutputPath }),
+        local_sync_artifacts: readLocalSyncArtifactInventory(effectiveArtifactDirectory, {
+          lastOutputPath: effectiveOutputPath,
+          configuredSites: localConfiguredSites.sites,
+        }),
       };
     default:
       throw new Error(`unknown_site_continuity_scheduler_action:${action}`);
   }
 }
 
-export function readLocalSyncArtifactInventory(artifactDirectory, { lastOutputPath = null } = {}) {
+export function readLocalSyncArtifactInventory(artifactDirectory, { lastOutputPath = null, configuredSites = [] } = {}) {
+  const normalizedConfiguredSites = normalizeConfiguredSiteList(configuredSites);
   if (!artifactDirectory) {
     return {
       state: 'not_configured',
       artifact_directory: null,
       artifact_count: 0,
+      configured_site_count: normalizedConfiguredSites.length,
       status: 'needs_configuration',
       artifacts: [],
+      configured_site_sync_statuses: buildConfiguredSiteSyncStatuses(normalizedConfiguredSites, []),
     };
   }
   if (!existsSync(artifactDirectory)) {
@@ -145,8 +162,10 @@ export function readLocalSyncArtifactInventory(artifactDirectory, { lastOutputPa
       state: 'missing_directory',
       artifact_directory: artifactDirectory,
       artifact_count: 0,
-      status: 'never_synced',
+      configured_site_count: normalizedConfiguredSites.length,
+      status: normalizedConfiguredSites.length > 0 ? 'needs_attention' : 'never_synced',
       artifacts: [],
+      configured_site_sync_statuses: buildConfiguredSiteSyncStatuses(normalizedConfiguredSites, []),
       last_sync: lastOutputPath ? readLastSyncArtifact(lastOutputPath) : null,
     };
   }
@@ -154,15 +173,56 @@ export function readLocalSyncArtifactInventory(artifactDirectory, { lastOutputPa
     .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
     .map((entry) => readLastSyncArtifact(join(artifactDirectory, entry.name)))
     .sort(compareArtifactSummaries);
-  const needsAttention = artifacts.some((artifact) => artifact.status !== 'synced');
+  const configuredSiteSyncStatuses = buildConfiguredSiteSyncStatuses(normalizedConfiguredSites, artifacts);
+  const needsAttention = artifacts.some((artifact) => artifact.status !== 'synced')
+    || configuredSiteSyncStatuses.some((site) => site.status !== 'synced');
   const lastSync = lastOutputPath ? readLastSyncArtifact(lastOutputPath) : null;
   return {
     state: 'read',
     artifact_directory: artifactDirectory,
     artifact_count: artifacts.length,
-    status: artifacts.length === 0 ? 'never_synced' : needsAttention ? 'needs_attention' : 'synced',
+    configured_site_count: normalizedConfiguredSites.length,
+    status: artifacts.length === 0 && normalizedConfiguredSites.length === 0 ? 'never_synced' : needsAttention ? 'needs_attention' : 'synced',
     last_sync: lastSync,
     artifacts,
+    configured_site_sync_statuses: configuredSiteSyncStatuses,
+  };
+}
+
+export function readLocalConfiguredSites({ root, explicitSites = null, sitesFilePath = null } = {}) {
+  const sources = [];
+  const sites = [];
+  const explicit = normalizeConfiguredSiteList(explicitSites);
+  if (explicit.length > 0) {
+    sources.push('explicit_sites');
+    sites.push(...explicit);
+  }
+  const fileSites = readConfiguredSitesFile(sitesFilePath);
+  if (fileSites.state === 'read' && fileSites.sites.length > 0) {
+    sources.push('sites_file');
+    sites.push(...fileSites.sites);
+  }
+  const envSites = readConfiguredSitesFromEnvFile(root ? resolve(root, '.env') : null);
+  if (envSites.sites.length > 0) {
+    sources.push('safe_env_file_site_keys');
+    sites.push(...envSites.sites);
+  }
+  const processSites = normalizeConfiguredSiteList([
+    process.env.CLOUDFLARE_CARRIER_SITE_ID,
+    process.env.NARADA_SITE_CONTINUITY_SITE_ID,
+    process.env.NARADA_SITE_CONTINUITY_SITES,
+  ]);
+  if (processSites.length > 0) {
+    sources.push('process_environment_site_keys');
+    sites.push(...processSites);
+  }
+  const normalizedSites = normalizeConfiguredSiteList(sites);
+  return {
+    state: normalizedSites.length > 0 ? 'configured' : 'not_configured',
+    sources,
+    site_count: normalizedSites.length,
+    sites: normalizedSites,
+    sites_file: fileSites,
   };
 }
 
@@ -220,7 +280,7 @@ export function readLastSyncArtifact(outputPath) {
   };
 }
 
-export function readLocalSchedulerStatus({ root, syncEntryPoint, taskEntryPoint, localRoot, packetPath, outputPath }) {
+export function readLocalSchedulerStatus({ root, syncEntryPoint, taskEntryPoint, localRoot, packetPath, outputPath, configuredSites = null }) {
   const envPath = resolve(root, '.env');
   const envKeys = existsSync(envPath) ? readEnvKeys(envPath) : [];
   return {
@@ -237,7 +297,7 @@ export function readLocalSchedulerStatus({ root, syncEntryPoint, taskEntryPoint,
       'CLOUDFLARE_CARRIER_URL',
       envKeys.includes('CLOUDFLARE_CARRIER_TOKEN_FILE') ? 'CLOUDFLARE_CARRIER_TOKEN_FILE' : envKeys.includes('CLOUDFLARE_CARRIER_TOKEN') ? 'CLOUDFLARE_CARRIER_TOKEN' : null,
     ].filter(Boolean),
-    site_configured: Boolean(process.env.CLOUDFLARE_CARRIER_SITE_ID || process.env.NARADA_SITE_CONTINUITY_SITE_ID),
+    site_configured: Boolean(process.env.CLOUDFLARE_CARRIER_SITE_ID || process.env.NARADA_SITE_CONTINUITY_SITE_ID || configuredSites?.site_count > 0),
     packet_configured: Boolean(process.env.NARADA_SITE_CONTINUITY_PACKET || packetPath),
     command_args_complete: Boolean(packetPath && outputPath),
     embeds_credentials: false,
@@ -262,6 +322,89 @@ function readEnvKeys(envPath) {
     if (eq > 0) keys.push(trimmed.slice(0, eq).trim());
   }
   return keys;
+}
+
+function readConfiguredSitesFromEnvFile(envPath) {
+  if (!envPath || !existsSync(envPath)) return { state: 'missing', sites: [] };
+  const values = [];
+  const content = readFileSync(envPath, 'utf8');
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq <= 0) continue;
+    const key = trimmed.slice(0, eq).trim();
+    if (!['CLOUDFLARE_CARRIER_SITE_ID', 'NARADA_SITE_CONTINUITY_SITE_ID', 'NARADA_SITE_CONTINUITY_SITES'].includes(key)) continue;
+    values.push(stripEnvValueQuotes(trimmed.slice(eq + 1).trim()));
+  }
+  return { state: 'read', sites: normalizeConfiguredSiteList(values) };
+}
+
+function readConfiguredSitesFile(sitesFilePath) {
+  if (!sitesFilePath) return { state: 'not_configured', path: null, sites: [] };
+  if (!existsSync(sitesFilePath)) return { state: 'missing', path: sitesFilePath, sites: [] };
+  let value;
+  try {
+    value = JSON.parse(readFileSync(sitesFilePath, 'utf8'));
+  } catch (error) {
+    return { state: 'invalid_json', path: sitesFilePath, sites: [], reason: 'configured_sites_file_json_invalid', error: error.message };
+  }
+  const sourceSites = Array.isArray(value) ? value : value?.sites ?? value?.configured_sites ?? [];
+  return { state: 'read', path: sitesFilePath, sites: normalizeConfiguredSiteList(sourceSites) };
+}
+
+function normalizeConfiguredSiteList(value) {
+  const values = Array.isArray(value) ? value : [value];
+  const sites = [];
+  for (const item of values) {
+    if (!item) continue;
+    if (typeof item === 'string') {
+      sites.push(...item.split(',').map((part) => part.trim()).filter(Boolean));
+    } else if (typeof item === 'object') {
+      const siteId = item.site_id ?? item.siteId ?? item.id ?? null;
+      if (siteId) sites.push(String(siteId).trim());
+    }
+  }
+  return [...new Set(sites.filter(Boolean))].sort((left, right) => left.localeCompare(right));
+}
+
+function buildConfiguredSiteSyncStatuses(configuredSites, artifacts) {
+  const artifactBySite = new Map();
+  for (const artifact of artifacts) {
+    if (!artifact?.site_id) continue;
+    const existing = artifactBySite.get(artifact.site_id);
+    if (!existing || String(artifact.artifact_updated_at ?? '') > String(existing.artifact_updated_at ?? '')) {
+      artifactBySite.set(artifact.site_id, artifact);
+    }
+  }
+  return configuredSites.map((siteId) => {
+    const artifact = artifactBySite.get(siteId) ?? null;
+    if (!artifact) {
+      return {
+        site_id: siteId,
+        status: 'needs_attention',
+        reason: 'configured_site_sync_artifact_missing',
+        artifact_present: false,
+      };
+    }
+    return {
+      site_id: siteId,
+      status: artifact.status,
+      reason: artifact.status === 'synced' ? 'matching_sync_artifact_synced' : 'matching_sync_artifact_needs_attention',
+      artifact_present: true,
+      artifact_path: artifact.artifact_path,
+      artifact_updated_at: artifact.artifact_updated_at,
+      pushed_packet_id: artifact.pushed_packet_id,
+      pulled_packet_id: artifact.pulled_packet_id,
+    };
+  });
+}
+
+function stripEnvValueQuotes(value) {
+  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    return value.slice(1, -1);
+  }
+  return value;
 }
 
 function normalizeIntervalMinutes(value) {
@@ -302,6 +445,8 @@ function parseArgs(argv) {
     else if (arg === '--packet') args.packetPath = argv[++index];
     else if (arg === '--out') args.outputPath = argv[++index];
     else if (arg === '--artifact-dir') args.artifactDirectory = argv[++index];
+    else if (arg === '--sites') args.configuredSites = argv[++index];
+    else if (arg === '--sites-file') args.sitesFilePath = argv[++index];
     else if (arg === '--node-command') args.nodeCommand = argv[++index];
     else throw new Error(`unknown_argument:${arg}`);
   }
