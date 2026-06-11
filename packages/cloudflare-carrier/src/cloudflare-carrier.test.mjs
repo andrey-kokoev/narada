@@ -1280,6 +1280,13 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(operationReadAfterLocalIngressBody.local_ingress_operation_posture.provider_liveness.state, 'missing');
   assert.equal(operationReadAfterLocalIngressBody.local_ingress_operation_posture.next_action, 'restore_windows_local_ingress_executor');
   assert.equal(operationReadAfterLocalIngressBody.operation_product_surface.local_ingress_operation_posture.pending_request_count, 1);
+  assert.equal(operationReadAfterLocalIngressBody.operation_continuity_direction_status.schema, 'narada.cloudflare_operation_continuity_direction_status.v1');
+  assert.equal(operationReadAfterLocalIngressBody.operation_continuity_direction_status.state, 'cloudflare_to_local_windows_only');
+  assert.deepEqual(operationReadAfterLocalIngressBody.operation_continuity_direction_status.missing_directions, ['local_windows_to_cloudflare']);
+  assert.equal(operationReadAfterLocalIngressBody.operation_continuity_direction_status.next_action, 'return_local_windows_continuity_packet');
+  assert.deepEqual(operationReadAfterLocalIngressBody.operation_product_surface.operation_continuity_direction_status, operationReadAfterLocalIngressBody.operation_continuity_direction_status);
+  assert.equal(operationReadAfterLocalIngressBody.operation_lifecycle_status.continuity_direction_state, 'cloudflare_to_local_windows_only');
+  assert.deepEqual(operationReadAfterLocalIngressBody.operation_lifecycle_status.continuity_direction_missing, ['local_windows_to_cloudflare']);
   assert.equal(operationReadAfterLocalIngressBody.operation_lifecycle_status.local_ingress_request_count, 1);
   assert.equal(operationReadAfterLocalIngressBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'local_ingress_request'), true);
 
@@ -3717,6 +3724,13 @@ test('worker records webhook delay observations as Cloudflare shadow-read eviden
   assert.equal(operationReadBody.operation_product_surface.continuity_status.packet_count, 0);
   assert.equal(operationReadBody.operation_product_surface.local_cloud_continuity_bridge.schema, 'narada.local_cloud_continuity_bridge.v1');
   assert.equal(operationReadBody.operation_product_surface.local_cloud_continuity_bridge.next_action, 'observe_continuity_packet');
+  assert.equal(operationReadBody.operation_continuity_direction_status.schema, 'narada.cloudflare_operation_continuity_direction_status.v1');
+  assert.equal(operationReadBody.operation_continuity_direction_status.state, 'no_packet_observed');
+  assert.deepEqual(operationReadBody.operation_continuity_direction_status.missing_directions, ['cloudflare_to_local_windows', 'local_windows_to_cloudflare']);
+  assert.equal(operationReadBody.operation_continuity_direction_status.next_action, 'observe_continuity_packet');
+  assert.deepEqual(operationReadBody.operation_product_surface.operation_continuity_direction_status, operationReadBody.operation_continuity_direction_status);
+  assert.equal(operationReadBody.operation_lifecycle_status.continuity_direction_state, 'no_packet_observed');
+  assert.deepEqual(operationReadBody.operation_lifecycle_status.continuity_direction_missing, ['cloudflare_to_local_windows', 'local_windows_to_cloudflare']);
   assert.equal(operationReadBody.operation_product_surface.dispatch_authority, 'windows_primary_dispatcher');
   assert.deepEqual(classifyCloudflareOperationCommandState({
     operation_id: operationReadBody.operation.operation_id,

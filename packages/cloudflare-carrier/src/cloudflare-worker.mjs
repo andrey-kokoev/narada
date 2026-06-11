@@ -2227,6 +2227,43 @@ function summarizeCloudflareSiteContinuityStatus(siteId, continuityPackets = [],
   };
 }
 
+function summarizeCloudflareOperationContinuityDirectionStatus({
+  operation = null,
+  siteId = null,
+  continuityStatus = null,
+  continuityLoopStatus = null,
+  localCloudContinuityBridge = null,
+} = {}) {
+  const directionCounts = continuityStatus?.direction_counts ?? {};
+  const cloudflareToLocalWindows = Number(directionCounts.cloudflare_to_local_windows ?? localCloudContinuityBridge?.cloudflare_to_local_windows_packets ?? 0);
+  const localWindowsToCloudflare = Number(directionCounts.local_windows_to_cloudflare ?? localCloudContinuityBridge?.local_windows_to_cloudflare_packets ?? 0);
+  const missingDirections = [];
+  if (cloudflareToLocalWindows <= 0) missingDirections.push('cloudflare_to_local_windows');
+  if (localWindowsToCloudflare <= 0) missingDirections.push('local_windows_to_cloudflare');
+  const state = missingDirections.length === 0
+    ? 'bidirectional_packets_observed'
+    : cloudflareToLocalWindows > 0 ? 'cloudflare_to_local_windows_only'
+      : localWindowsToCloudflare > 0 ? 'local_windows_to_cloudflare_only'
+        : 'no_packet_observed';
+  const nextAction = state === 'bidirectional_packets_observed'
+    ? (continuityLoopStatus?.state === 'loop_report_observed' ? 'monitor_operation_continuity' : 'review_continuity_loop_report')
+    : state === 'cloudflare_to_local_windows_only' ? 'return_local_windows_continuity_packet'
+      : state === 'local_windows_to_cloudflare_only' ? 'publish_cloudflare_continuity_packet'
+        : 'observe_continuity_packet';
+  return {
+    schema: 'narada.cloudflare_operation_continuity_direction_status.v1',
+    operation_id: operation?.operation_id ?? null,
+    site_id: operation?.site_id ?? siteId ?? null,
+    state,
+    cloudflare_to_local_windows_packet_count: cloudflareToLocalWindows,
+    local_windows_to_cloudflare_packet_count: localWindowsToCloudflare,
+    missing_directions: missingDirections,
+    bridge_state: localCloudContinuityBridge?.state ?? continuityStatus?.state ?? 'unknown',
+    loop_state: continuityLoopStatus?.state ?? 'unknown',
+    next_action: nextAction,
+  };
+}
+
 function summarizeCloudflareOperationLifecycleStatus({
   operation = null,
   sessions = [],
@@ -2235,6 +2272,7 @@ function summarizeCloudflareOperationLifecycleStatus({
   carrierEvidenceReadStatus = null,
   continuityStatus = null,
   continuityLoopStatus = null,
+  operationContinuityDirectionStatus = null,
   residentLoopShadowRuns = [],
   residentDispatchDecisions = [],
   localIngressRequests = [],
@@ -2310,6 +2348,9 @@ function summarizeCloudflareOperationLifecycleStatus({
     evidence_event_count: evidenceEventCount,
     continuity_state: continuityState,
     continuity_loop_state: continuityLoopState,
+    continuity_direction_state: operationContinuityDirectionStatus?.state ?? 'unknown',
+    continuity_direction_missing: operationContinuityDirectionStatus?.missing_directions ?? [],
+    operation_continuity_direction_status: operationContinuityDirectionStatus,
     continuity_loop_report_count: continuityLoopStatus?.report_count ?? 0,
     resident_loop_shadow_run_count: residentLoopCount,
     resident_dispatch_decision_count: residentDispatchCount,
@@ -4633,6 +4674,13 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       residentDispatchDecisions,
     });
     const localCloudContinuityBridge = summarizeLocalCloudContinuityBridge(siteId, continuityPackets, siteContinuity, siteContinuityStatus);
+    const operationContinuityDirectionStatus = summarizeCloudflareOperationContinuityDirectionStatus({
+      operation,
+      siteId,
+      continuityStatus: siteContinuityStatus,
+      continuityLoopStatus: siteContinuityLoopStatus,
+      localCloudContinuityBridge,
+    });
     const operationLifecycleStatus = summarizeCloudflareOperationLifecycleStatus({
       operation,
       sessions,
@@ -4641,6 +4689,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       carrierEvidenceReadStatus,
       continuityStatus: siteContinuityStatus,
       continuityLoopStatus: siteContinuityLoopStatus,
+      operationContinuityDirectionStatus,
       residentLoopShadowRuns,
       residentDispatchDecisions,
       localIngressRequests,
@@ -4750,6 +4799,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         site_continuity_status: siteContinuityStatus,
         site_continuity_loop_status: siteContinuityLoopStatus,
         local_cloud_continuity_bridge: localCloudContinuityBridge,
+        operation_continuity_direction_status: operationContinuityDirectionStatus,
         cloudflare_persistence_posture: cloudflarePersistencePosture,
         cloudflare_recovery_posture: cloudflareRecoveryPosture,
         operation_status_history: operationStatusHistory,
@@ -4776,6 +4826,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           continuity_loop_report_count: continuityLoopReports.length,
           continuity_loop_status: siteContinuityLoopStatus,
           local_cloud_continuity_bridge: localCloudContinuityBridge,
+          operation_continuity_direction_status: operationContinuityDirectionStatus,
           status_history: operationStatusHistory,
           activity_timeline: operationActivityTimeline,
           lifecycle_status: operationLifecycleStatus,
