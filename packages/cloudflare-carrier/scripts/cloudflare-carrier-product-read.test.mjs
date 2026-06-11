@@ -27,7 +27,7 @@ test('parseProductReadArgs builds site.list request with bearer token', () => {
   assert.deepEqual(parsed.auth, { kind: 'bearer', value: 'secret-token', source: 'flag:--token' });
 });
 
-test('parseProductReadArgs builds site.read and operation.read params', () => {
+test('parseProductReadArgs builds site.read operation.list and operation.read params', () => {
   const siteRead = parseProductReadArgs([
     'site.read',
     '--url', 'https://carrier.example.test',
@@ -36,6 +36,16 @@ test('parseProductReadArgs builds site.read and operation.read params', () => {
   ], {});
   assert.equal(siteRead.operation, 'site.read');
   assert.deepEqual(siteRead.params, { site_id: 'site_fixture' });
+
+  const operationList = parseProductReadArgs([
+    '--operation', 'operation.list',
+    '--url', 'https://carrier.example.test',
+    '--token', 'secret-token',
+    '--site', 'site_fixture',
+    '--limit', '3',
+  ], {});
+  assert.equal(operationList.operation, 'operation.list');
+  assert.deepEqual(operationList.params, { site_id: 'site_fixture', limit: 3 });
 
   const operationRead = parseProductReadArgs([
     '--operation', 'operation.read',
@@ -52,6 +62,10 @@ test('parseProductReadArgs refuses missing required operation identifiers', () =
   assert.throws(
     () => parseProductReadArgs(['site.read', '--url', 'https://carrier.example.test', '--token', 'secret-token'], {}),
     /product_read_site\.read_requires_--site/,
+  );
+  assert.throws(
+    () => parseProductReadArgs(['operation.list', '--url', 'https://carrier.example.test', '--token', 'secret-token'], {}),
+    /product_read_operation\.list_requires_--site/,
   );
   assert.throws(
     () => parseProductReadArgs(['operation.read', '--url', 'https://carrier.example.test', '--token', 'secret-token', '--site', 'site_fixture'], {}),
@@ -140,6 +154,30 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     next_action: 'return_local_windows_continuity_packet',
     membership_count: 2,
     session_count: 2,
+  });
+
+  assert.deepEqual(summarizeProductSurface('operation.list', {
+    site_id: 'site_fixture',
+    operations: [{ site_id: 'site_fixture', operation_id: 'operation_control' }],
+    operation_posture_overview: {
+      operation_count: 1,
+      active_operation_id: 'operation_control',
+      next_operation_id: 'operation_control',
+      next_status: 'needs_attention',
+      next_action: 'review_operation',
+      next_reason: 'operation_needs_review',
+      health_counts: { ready: 0, needs_attention: 1 },
+    },
+  }), {
+    operation: 'operation.list',
+    site_id: 'site_fixture',
+    operation_count: 1,
+    active_operation_id: 'operation_control',
+    next_operation_id: 'operation_control',
+    next_status: 'needs_attention',
+    next_action: 'review_operation',
+    next_reason: 'operation_needs_review',
+    health_counts: { ready: 0, needs_attention: 1 },
   });
 
   assert.deepEqual(summarizeProductSurface('operation.read', {

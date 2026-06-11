@@ -251,10 +251,11 @@ Use `product:read` for read-only inspection of the deployed Cloudflare carrier p
 ```powershell
 pnpm --filter @narada2/cloudflare-carrier product:site:list -- --url <worker-url> --token <token>
 pnpm --filter @narada2/cloudflare-carrier product:site:read -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada2/cloudflare-carrier product:operation:list -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json --format summary
 pnpm --filter @narada2/cloudflare-carrier product:operation:read -- --url <worker-url> --site <site-id> --operation-id <operation-id> --format summary
 ```
 
-The command prints a `narada.cloudflare_carrier.product_read.v1` envelope by default, including `site.list`, `site.read`, or `operation.read` response evidence and a compact summary. It records only `auth_source` in the output; bearer tokens and operator-session cookies are not echoed.
+The command prints a `narada.cloudflare_carrier.product_read.v1` envelope by default, including `site.list`, `site.read`, `operation.list`, or `operation.read` response evidence and a compact summary. It records only `auth_source` in the output; bearer tokens and operator-session cookies are not echoed.
 
 ## Live Smoke
 

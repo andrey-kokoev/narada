@@ -2,7 +2,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const VALID_OPERATIONS = new Set(['site.list', 'site.read', 'operation.read']);
+const VALID_OPERATIONS = new Set(['site.list', 'site.read', 'operation.list', 'operation.read']);
 
 export function parseProductReadArgs(argv = [], env = process.env) {
   const args = [...argv];
@@ -19,7 +19,7 @@ export function parseProductReadArgs(argv = [], env = process.env) {
   if (!workerUrl) throw new Error('product_read_requires_--url_or_CLOUDFLARE_CARRIER_URL');
   if (!VALID_OPERATIONS.has(operation)) throw new Error(`product_read_operation_unsupported:${operation}`);
   if (!['json', 'summary'].includes(format)) throw new Error(`product_read_format_unsupported:${format}`);
-  if ((operation === 'site.read' || operation === 'operation.read') && !siteId) throw new Error(`product_read_${operation}_requires_--site`);
+  if ((operation === 'site.read' || operation === 'operation.list' || operation === 'operation.read') && !siteId) throw new Error(`product_read_${operation}_requires_--site`);
   if (operation === 'operation.read' && !operationId) throw new Error('product_read_operation.read_requires_--operation-id_or_--carrier-operation');
   if (!auth) throw new Error('product_read_requires_bearer_token_or_operator_session');
 
@@ -35,7 +35,7 @@ export function parseProductReadArgs(argv = [], env = process.env) {
 
 export function buildParams({ operation, siteId, operationId, limit }) {
   const params = {};
-  if (operation === 'site.read' || operation === 'operation.read') params.site_id = siteId;
+  if (operation === 'site.read' || operation === 'operation.list' || operation === 'operation.read') params.site_id = siteId;
   if (operation === 'operation.read') params.operation_id = operationId;
   if (Number.isInteger(limit)) params.limit = limit;
   return params;
@@ -95,6 +95,21 @@ export function summarizeProductSurface(operation, body) {
       next_action: status?.next_action ?? null,
       membership_count: Array.isArray(body?.memberships) ? body.memberships.length : 0,
       session_count: Array.isArray(body?.sessions) ? body.sessions.length : status?.session_count ?? 0,
+    };
+  }
+  if (operation === 'operation.list') {
+    const operations = Array.isArray(body?.operations) ? body.operations : [];
+    const overview = body?.operation_posture_overview ?? body?.operation_product_overview ?? {};
+    return {
+      operation,
+      site_id: body?.site?.site_id ?? body?.site_id ?? operations[0]?.site_id ?? null,
+      operation_count: overview.operation_count ?? operations.length,
+      active_operation_id: overview.active_operation_id ?? null,
+      next_operation_id: overview.next_operation_id ?? operations[0]?.operation_id ?? null,
+      next_status: overview.next_status ?? null,
+      next_action: overview.next_action ?? null,
+      next_reason: overview.next_reason ?? null,
+      health_counts: overview.health_counts ?? null,
     };
   }
   if (operation === 'operation.read') {

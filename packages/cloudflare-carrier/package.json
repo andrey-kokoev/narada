@@ -19,6 +19,7 @@
     "product:read": "node scripts/cloudflare-carrier-product-read.mjs",
     "product:site:list": "node scripts/cloudflare-carrier-product-read.mjs --operation site.list",
     "product:site:read": "node scripts/cloudflare-carrier-product-read.mjs --operation site.read",
+    "product:operation:list": "node scripts/cloudflare-carrier-product-read.mjs --operation operation.list",
     "product:operation:read": "node scripts/cloudflare-carrier-product-read.mjs --operation operation.read",
     "authority-transfer:readiness-smoke:live": "node scripts/cloudflare-carrier-authority-transfer-readiness-live-smoke.mjs",
     "webhook-delay:shadow-smoke:live": "node scripts/cloudflare-carrier-webhook-delay-shadow-live-smoke.mjs",
