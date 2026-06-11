@@ -12991,7 +12991,12 @@ export function renderCloudflareCarrierConsole() {
         <div id="repositoryPublicationRequestNavigator" class="attention-items"><div class="empty">No repository publication requests loaded.</div></div>
         <h3>Repository Publication Request Detail</h3>
         <div id="repositoryPublicationRequestFocusDetail" class="evidence-summary"><div class="empty">No repository publication request selected.</div></div>
-        <div class="actions"><button id="executeRepositoryPublication" class="secondary" disabled>Execute Cloudflare GitHub Publication</button></div>
+        <h3>Cloudflare GitHub Readiness</h3>
+        <div id="repositoryPublicationReadinessDetail" class="evidence-summary"><div class="empty">No repository publication readiness loaded.</div></div>
+        <div class="actions">
+          <button id="readRepositoryPublicationReadiness" class="secondary" disabled>Read Cloudflare GitHub Readiness</button>
+          <button id="executeRepositoryPublication" class="secondary" disabled>Execute Cloudflare GitHub Publication</button>
+        </div>
         <h3>Returned Publication Evidence</h3>
         <div id="repositoryPublicationEvidenceNavigator" class="attention-items"><div class="empty">No repository publication evidence loaded.</div></div>
         <h3>Repository Publication Evidence Detail</h3>
@@ -13138,7 +13143,7 @@ export function renderCloudflareCarrierConsole() {
     const classifyCloudflareEvidenceCommandState = ${classifyCloudflareEvidenceCommandState.toString()};
     const classifyCloudflareSiteCommandState = ${classifyCloudflareSiteCommandState.toString()};
     const classifyCloudflareMembershipCommandState = ${classifyCloudflareMembershipCommandState.toString()};
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], siteList: [], siteProductStatuses: [], siteProductOverview: null, sitePostureRoute: null, consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, webhookDelayDirectiveFocus: null, webhookDelayDirectiveDeliveryFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null, localIngressRequestFocus: null, localIngressEvidenceFocus: null, localIngressProviderHeartbeatFocus: null, repositoryPublicationRequestFocus: null, repositoryPublicationEvidenceFocus: null, repositoryPublicationExecutionFocus: null, repositoryPublicationProviderHeartbeatFocus: null, mailboxDraftReplyProposalFocus: null, mailboxOutlookDraftCreateFocus: null, mailboxSendAcceptedFocus: null, mailboxSendConfirmationFocus: null, mailboxDraftCreateFormProposalId: null, siteFileChangeProposalFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], siteList: [], siteProductStatuses: [], siteProductOverview: null, sitePostureRoute: null, consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, webhookDelayDirectiveFocus: null, webhookDelayDirectiveDeliveryFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null, localIngressRequestFocus: null, localIngressEvidenceFocus: null, localIngressProviderHeartbeatFocus: null, repositoryPublicationRequestFocus: null, repositoryPublicationReadinessFocus: null, repositoryPublicationEvidenceFocus: null, repositoryPublicationExecutionFocus: null, repositoryPublicationProviderHeartbeatFocus: null, mailboxDraftReplyProposalFocus: null, mailboxOutlookDraftCreateFocus: null, mailboxSendAcceptedFocus: null, mailboxSendConfirmationFocus: null, mailboxDraftCreateFormProposalId: null, siteFileChangeProposalFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -13193,6 +13198,14 @@ export function renderCloudflareCarrierConsole() {
           repository_publication_evidence_limit: 20,
           repository_publication_execution_limit: 20,
         });
+      },
+      readRepositoryPublicationReadiness(request) {
+        const suffix = Date.now();
+        return this.request('repository_publication.cloudflare_execution.readiness', {
+          site_id: el('siteId').value.trim(),
+          repository_ref: request?.repository_ref || '',
+          branch_ref: request?.branch_ref || '',
+        }, { request_id: 'console_repository_publication_readiness_' + suffix });
       },
       executeRepositoryPublication(request) {
         const repositoryPublicationRequestId = request?.repository_publication_request_id || '';
@@ -17881,16 +17894,64 @@ export function renderCloudflareCarrierConsole() {
     }
     function renderRepositoryPublicationRequestFocusDetail(item = state.repositoryPublicationRequestFocus) {
       const action = el('executeRepositoryPublication');
+      const readinessAction = el('readRepositoryPublicationReadiness');
       if (!item) {
         el('repositoryPublicationRequestFocusDetail').innerHTML = '<div class="empty">No repository publication request selected.</div>';
+        renderRepositoryPublicationReadinessDetail(null);
         if (action) action.disabled = true;
+        if (readinessAction) readinessAction.disabled = true;
         return;
       }
       if (action) action.disabled = false;
+      if (readinessAction) readinessAction.disabled = false;
+      const readinessRequestId = state.repositoryPublicationReadinessFocus?.repository_publication_request_id || null;
+      if (readinessRequestId && readinessRequestId !== item.repository_publication_request_id) renderRepositoryPublicationReadinessDetail(null);
       el('repositoryPublicationRequestFocusDetail').replaceChildren(...repositoryPublicationRequestFocusContext(item).map(([label, value]) => evidenceField(label, value)));
     }
     function selectedRepositoryPublicationRequest() {
       return state.repositoryPublicationRequestFocus || (state.operationProduct?.repository_publication_requests || [])[0] || null;
+    }
+    function repositoryPublicationReadinessContext(item = {}) {
+      return [
+        ['Readiness', item.readiness_status || 'unknown'],
+        ['Request', item.repository_publication_request_id || 'none'],
+        ['Site', item.site_id || el('siteId').value.trim() || 'none'],
+        ['Repository', item.requested_repository_ref || 'none'],
+        ['Branch', item.requested_branch_ref || 'none'],
+        ['GitHub Token Configured', String(Boolean(item.github_token_configured))],
+        ['GitHub Token Secret', item.github_token_secret_ref || 'none'],
+        ['Repository Allowed', String(item.requested_repository_allowed ?? 'unknown')],
+        ['Branch Allowed', String(item.requested_branch_allowed ?? 'unknown')],
+        ['Allowed Repositories', String(item.allowed_repository_count ?? 0)],
+        ['Allowed Branches', String(item.allowed_branch_count ?? 0)],
+        ['Missing Configuration', (item.missing_configuration || []).join(', ') || 'none'],
+        ['Direct Cloudflare Repository Mutation', item.direct_cloudflare_repository_mutation_admission || 'not_admitted'],
+        ['Authority Partition', item.authority_partition || 'unknown'],
+      ];
+    }
+    function renderRepositoryPublicationReadinessDetail(item = state.repositoryPublicationReadinessFocus) {
+      if (!item) {
+        state.repositoryPublicationReadinessFocus = null;
+        el('repositoryPublicationReadinessDetail').innerHTML = '<div class="empty">No repository publication readiness loaded.</div>';
+        return;
+      }
+      state.repositoryPublicationReadinessFocus = item;
+      el('repositoryPublicationReadinessDetail').replaceChildren(...repositoryPublicationReadinessContext(item).map(([label, value]) => evidenceField(label, value)));
+    }
+    async function readFocusedRepositoryPublicationReadiness() {
+      const request = selectedRepositoryPublicationRequest();
+      if (!request) throw new Error('No repository publication request selected.');
+      const body = await api.readRepositoryPublicationReadiness(request);
+      const readiness = { ...body, repository_publication_request_id: request.repository_publication_request_id || null };
+      renderRepositoryPublicationReadinessDetail(readiness);
+      appendConsoleEvidence('repository_publication_cloudflare_execution_readiness_read', {
+        repository_publication_request_id: request.repository_publication_request_id || null,
+        readiness_status: readiness.readiness_status || 'unknown',
+        github_token_configured: Boolean(readiness.github_token_configured),
+        github_token_secret_ref: readiness.github_token_secret_ref || 'CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN',
+        missing_configuration: readiness.missing_configuration || [],
+        direct_cloudflare_repository_mutation_admission: readiness.direct_cloudflare_repository_mutation_admission || 'not_admitted',
+      });
     }
     async function executeFocusedRepositoryPublication() {
       const request = selectedRepositoryPublicationRequest();
@@ -18960,6 +19021,7 @@ export function renderCloudflareCarrierConsole() {
     el('loadRecoveryEvidenceWindow').addEventListener('click', () => run(refreshOperation));
     el('carrierEvidenceSessionLimit').addEventListener('change', () => { el('carrierEvidenceSessionLimit').value = String(carrierEvidenceSessionLimit()); saveWorkbenchState(); });
     el('startResidentDispatch').addEventListener('click', () => run(startResidentDispatchFromWorkbench));
+    el('readRepositoryPublicationReadiness').addEventListener('click', () => run(readFocusedRepositoryPublicationReadiness));
     el('executeRepositoryPublication').addEventListener('click', () => run(executeFocusedRepositoryPublication));
     el('createOutlookDraftFromProposal').addEventListener('click', () => run(createOutlookDraftFromFocusedProposal));
     el('acknowledgeMailboxSendReview').addEventListener('click', () => run(acknowledgeFocusedMailboxSendReview));
