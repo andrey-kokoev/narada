@@ -1459,6 +1459,7 @@ export function readLastScheduledHealthSnapshot(outputPath) {
       reason: 'unsupported_scheduled_health_snapshot_schema',
     };
   }
+  const operatorNextAction = summarizeScheduledHealthOperatorNextAction(artifact);
   return {
     state: 'read',
     artifact_path: outputPath,
@@ -1485,6 +1486,10 @@ export function readLastScheduledHealthSnapshot(outputPath) {
     cloudflare_product_binding_alignment_state: artifact.cloudflare_product_binding_alignment?.state ?? null,
     cloudflare_product_binding_alignment_status: artifact.cloudflare_product_binding_alignment?.status ?? null,
     cloudflare_product_binding_alignment_reason: artifact.cloudflare_product_binding_alignment?.reason ?? null,
+    operator_next_action: operatorNextAction.action,
+    operator_next_target_site_id: operatorNextAction.target_site_id,
+    operator_next_reason: operatorNextAction.reason,
+    operator_next_source: operatorNextAction.source,
     cloudflare_operation_posture_state: artifact.cloudflare_operation_posture?.state ?? null,
     cloudflare_operation_posture_status: artifact.cloudflare_operation_posture?.status ?? null,
     cloudflare_operation_next_operation_id: artifact.cloudflare_operation_posture?.summary?.next_operation_id ?? null,
@@ -1493,6 +1498,51 @@ export function readLastScheduledHealthSnapshot(outputPath) {
     scheduler_task_status_text: artifact.scheduler_task_readback?.status_text ?? null,
     scheduler_last_result: artifact.scheduler_task_readback?.last_result ?? null,
     scheduler_next_run_time: artifact.scheduler_task_readback?.next_run_time ?? null,
+  };
+}
+
+export function summarizeScheduledHealthOperatorNextAction(artifact) {
+  const bindingAlignment = artifact?.cloudflare_product_binding_alignment ?? null;
+  if (bindingAlignment?.state === 'unbound_remote_next_site') {
+    return {
+      action: 'bind_cloudflare_product_next_site_locally',
+      target_site_id: bindingAlignment.cloudflare_product_next_site_id ?? artifact?.cloudflare_product_posture?.summary?.next_site_id ?? null,
+      reason: bindingAlignment.reason ?? 'cloudflare_product_next_site_not_in_local_continuity_set',
+      source: 'cloudflare_product_binding_alignment',
+    };
+  }
+  const continuityAttentionReasons = artifact?.continuity_health?.attention_reasons ?? [];
+  if (Array.isArray(continuityAttentionReasons) && continuityAttentionReasons.length > 0) {
+    return {
+      action: 'inspect_local_continuity_health',
+      target_site_id: artifact?.cloudflare_product_posture?.summary?.next_site_id ?? null,
+      reason: continuityAttentionReasons[0],
+      source: 'continuity_health',
+    };
+  }
+  const operationNextAction = artifact?.cloudflare_operation_posture?.summary?.next_action ?? null;
+  if (operationNextAction) {
+    return {
+      action: operationNextAction,
+      target_site_id: artifact?.cloudflare_operation_posture?.summary?.site_id ?? null,
+      reason: artifact?.cloudflare_operation_posture?.summary?.next_reason ?? null,
+      source: 'cloudflare_operation_posture',
+    };
+  }
+  const productNextAction = artifact?.cloudflare_product_posture?.summary?.next_action ?? null;
+  if (productNextAction) {
+    return {
+      action: productNextAction,
+      target_site_id: artifact?.cloudflare_product_posture?.summary?.next_site_id ?? null,
+      reason: artifact?.cloudflare_product_posture?.site_product_overview?.next_reason ?? null,
+      source: 'cloudflare_product_posture',
+    };
+  }
+  return {
+    action: 'monitor_continuity_health',
+    target_site_id: null,
+    reason: artifact?.status ?? null,
+    source: 'scheduled_health_snapshot',
   };
 }
 

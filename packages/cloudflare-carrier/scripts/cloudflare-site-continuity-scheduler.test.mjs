@@ -20,6 +20,7 @@ import {
   readLocalSyncArtifactInventory,
   runSiteContinuitySchedulerActionWithOptionalRefresh,
   summarizeCloudflareProductBindingAlignment,
+  summarizeScheduledHealthOperatorNextAction,
   summarizeScheduledHealthSnapshotStatus,
 } from './cloudflare-site-continuity-scheduler.mjs';
 
@@ -155,6 +156,35 @@ test('site continuity product binding alignment classifies remote next-site cove
     cloudflareProductBindingAlignment: unbound,
     cloudflareOperationPosture: { status: 'ok' },
   }), 'needs_attention');
+});
+
+test('site continuity scheduled health operator action targets unbound remote next site first', () => {
+  const operatorNextAction = summarizeScheduledHealthOperatorNextAction({
+    status: 'needs_attention',
+    continuity_health: {
+      status: 'ok',
+      attention_reasons: [],
+    },
+    cloudflare_product_posture: {
+      summary: {
+        next_site_id: 'site_beta',
+        next_action: 'publish_cloudflare_continuity_packet',
+      },
+    },
+    cloudflare_product_binding_alignment: {
+      state: 'unbound_remote_next_site',
+      status: 'needs_attention',
+      reason: 'cloudflare_product_next_site_not_in_local_continuity_set',
+      cloudflare_product_next_site_id: 'site_beta',
+    },
+  });
+
+  assert.deepEqual(operatorNextAction, {
+    action: 'bind_cloudflare_product_next_site_locally',
+    target_site_id: 'site_beta',
+    reason: 'cloudflare_product_next_site_not_in_local_continuity_set',
+    source: 'cloudflare_product_binding_alignment',
+  });
 });
 
 test('site continuity reconciliation plan resolves one packet per configured site from packet directory', async () => {
@@ -1290,6 +1320,10 @@ test('site continuity scheduled health reports remote product next-site outside 
     assert.equal(healthSummary.cloudflare_product_binding_alignment_state, 'unbound_remote_next_site');
     assert.equal(healthSummary.cloudflare_product_binding_alignment_status, 'needs_attention');
     assert.equal(healthSummary.cloudflare_product_binding_alignment_reason, 'cloudflare_product_next_site_not_in_local_continuity_set');
+    assert.equal(healthSummary.operator_next_action, 'bind_cloudflare_product_next_site_locally');
+    assert.equal(healthSummary.operator_next_target_site_id, 'site_beta');
+    assert.equal(healthSummary.operator_next_reason, 'cloudflare_product_next_site_not_in_local_continuity_set');
+    assert.equal(healthSummary.operator_next_source, 'cloudflare_product_binding_alignment');
   } finally {
     await rm(root, { recursive: true, force: true });
   }
