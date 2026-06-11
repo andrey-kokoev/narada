@@ -5,8 +5,19 @@ import { CloudflareCarrierSession } from '../src/cloudflare-carrier.mjs';
 import worker, { classifyCloudflareToolEffectAdmission, CloudflareCarrierDurableObject } from '../src/cloudflare-worker.mjs';
 
 const configText = readFileSync(new URL('../wrangler.toml', import.meta.url), 'utf8');
+const workerSource = readFileSync(new URL('../src/cloudflare-worker.mjs', import.meta.url), 'utf8');
+const migrationSources = [
+  '../migrations/0001_narada_tasks.sql',
+  '../../cloudflare-site-registry/migrations/0001_cloudflare_site_registry.sql',
+  '../../cloudflare-site-registry/migrations/0002_cloudflare_operator_sessions.sql',
+  '../../cloudflare-site-registry/migrations/0003_cloudflare_product_stores.sql',
+].map((migrationPath) => readFileSync(new URL(migrationPath, import.meta.url), 'utf8'));
 const inputPipelineCases = JSON.parse(readFileSync(new URL('../../carrier-protocol/fixtures/carrier-input-pipeline-cases.json', import.meta.url), 'utf8'));
 const manualOperatorInput = inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input;
+
+function d1TableNamesFromSql(sql) {
+  return [...sql.matchAll(/CREATE TABLE IF NOT EXISTS\s+([a-z0-9_]+)/gi)].map((match) => match[1]).sort();
+}
 
 assert.match(configText, /^name = "narada-cloudflare-carrier"$/m);
 assert.match(configText, /^main = "src\/cloudflare-worker\.mjs"$/m);
@@ -21,6 +32,10 @@ assert.match(configText, /^database_name = "narada-cloudflare-carrier-tasks"$/m)
 assert.match(configText, /^binding = "CLOUDFLARE_SITE_REGISTRY_DB"$/m);
 assert.match(configText, /^database_name = "narada-cloudflare-site-registry"$/m);
 assert.equal(configText.includes('account_id'), false);
+const workerRuntimeTables = new Set(d1TableNamesFromSql(workerSource));
+const migrationTables = new Set(migrationSources.flatMap((source) => d1TableNamesFromSql(source)));
+assert.deepEqual([...workerRuntimeTables].filter((tableName) => !migrationTables.has(tableName)), []);
+const workerRuntimeD1TableCount = workerRuntimeTables.size;
 assert.equal(classifyCloudflareToolEffectAdmission({ tool_name: 'cloudflare_carrier_runtime_metadata_read' }).action, 'deny');
 assert.equal(classifyCloudflareToolEffectAdmission({ tool_name: 'cloudflare_carrier_runtime_metadata_read' }, { runtimeReadsEnabled: true }).action, 'admit');
 assert.equal(classifyCloudflareToolEffectAdmission({ tool_name: 'native_shell' }, { runtimeReadsEnabled: true }).reason, 'unsupported_tool_effect');
@@ -712,6 +727,8 @@ process.stdout.write(`${JSON.stringify({
   api_client_route_checked: true,
   task_tool_effect_boundary_checked: true,
   d1_task_state_persistence_checked: true,
+  d1_schema_migration_coverage_checked: true,
+  worker_runtime_d1_table_count: workerRuntimeD1TableCount,
   worker_route_checked: true,
   durable_snapshot_reload_checked: true,
   live_deploy_performed: false,
