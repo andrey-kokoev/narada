@@ -263,6 +263,8 @@ function summarizeSchedulerTaskReadback({ state, command, args, stdout, stderr, 
   const taskToRun = parsed['Task To Run'] ?? null;
   const actualIntervalMinutes = parseSchedulerRepeatMinutes(repeatEvery);
   const expectedInterval = normalizeIntervalMinutes(expectedIntervalMinutes);
+  const lastResult = parsed['Last Result'] ?? null;
+  const scheduledTaskState = parsed['Scheduled Task State'] ?? null;
   const cadenceStatus = actualIntervalMinutes === null
     ? 'unknown'
     : actualIntervalMinutes === expectedInterval ? 'matches_plan' : 'differs_from_plan';
@@ -274,6 +276,8 @@ function summarizeSchedulerTaskReadback({ state, command, args, stdout, stderr, 
   const attentionReasons = [
     cadenceStatus === 'differs_from_plan' ? 'scheduler_cadence_differs_from_plan' : null,
     taskCommandStatus === 'differs_from_plan' ? 'scheduler_task_command_differs_from_plan' : null,
+    lastResult && lastResult !== '0' ? 'scheduler_last_result_nonzero' : null,
+    scheduledTaskState && !/^enabled$/i.test(scheduledTaskState) ? 'scheduler_task_disabled' : null,
   ].filter(Boolean);
   return {
     state,
@@ -285,10 +289,10 @@ function summarizeSchedulerTaskReadback({ state, command, args, stdout, stderr, 
     timeout_ms: timeoutMs,
     parsed,
     task_name: parsed.TaskName ?? null,
-    scheduled_task_state: parsed['Scheduled Task State'] ?? null,
+    scheduled_task_state: scheduledTaskState,
     status_text: parsed.Status ?? null,
     last_run_time: parsed['Last Run Time'] ?? null,
-    last_result: parsed['Last Result'] ?? null,
+    last_result: lastResult,
     next_run_time: parsed['Next Run Time'] ?? null,
     task_to_run: taskToRun,
     repeat_every: repeatEvery,
@@ -772,9 +776,10 @@ export function buildSiteContinuityReconciliationPlan({
   artifactDirectory = null,
 } = {}) {
   const configuredStatuses = localSyncArtifacts?.configured_site_sync_statuses ?? [];
+  const packetSummary = readSiteContinuityPacketSummary(packetPath);
   const selectedSites = configuredStatuses
     .filter((site) => site.status !== 'synced')
-    .map((site) => buildReconciliationSiteAction(site, { nodeCommand, syncEntryPoint, packetPath, artifactDirectory }));
+    .map((site) => buildReconciliationSiteAction(site, { nodeCommand, syncEntryPoint, packetPath, packetSummary, artifactDirectory }));
   const commandReadyCount = selectedSites.filter((site) => site.command_status === 'ready').length;
   return {
     schema: 'narada.cloudflare_carrier.site_continuity_reconciliation_plan.v1',
@@ -786,6 +791,7 @@ export function buildSiteContinuityReconciliationPlan({
     filesystem_mutation_admission: 'not_executed_plan_only',
     selected_site_count: selectedSites.length,
     command_ready_count: commandReadyCount,
+    packet_summary: packetSummary,
     selected_reason_counts: countSelectedReasons(selectedSites),
     selected_sites: selectedSites,
   };
@@ -1113,9 +1119,38 @@ function buildConfiguredSiteMetadata(site) {
   };
 }
 
-function buildReconciliationSiteAction(site, { nodeCommand, syncEntryPoint, packetPath, artifactDirectory }) {
+function readSiteContinuityPacketSummary(packetPath) {
+  if (!packetPath) return { state: 'not_configured', packet_path: null, site_id: null };
+  if (!existsSync(packetPath)) return { state: 'missing', packet_path: packetPath, site_id: null };
+  try {
+    const envelope = JSON.parse(readFileSync(packetPath, 'utf8'));
+    const packet = envelope?.packet ?? envelope;
+    return {
+      state: packet?.site_id ? 'read' : 'site_id_missing',
+      packet_path: packetPath,
+      site_id: packet?.site_id ?? null,
+      packet_id: packet?.packet_id ?? null,
+      schema: packet?.schema ?? null,
+    };
+  } catch (error) {
+    return { state: 'invalid_json', packet_path: packetPath, site_id: null, error: error.message };
+  }
+}
+
+function buildReconciliationSiteAction(site, { nodeCommand, syncEntryPoint, packetPath, packetSummary = null, artifactDirectory }) {
   const outputPath = artifactDirectory ? join(artifactDirectory, `${safeFileToken(site.site_id)}-cloudflare-sync.json`) : null;
-  const commandReady = Boolean(syncEntryPoint && packetPath && outputPath);
+  const packetSiteId = packetSummary?.site_id ?? null;
+  const packetSiteMismatch = Boolean(packetSiteId && site.site_id && packetSiteId !== site.site_id);
+  const commandBlockers = [
+    syncEntryPoint ? null : 'sync_entrypoint_required',
+    packetPath ? null : 'packet_path_required',
+    packetPath && packetSummary?.state === 'missing' ? 'packet_path_missing' : null,
+    packetPath && packetSummary?.state === 'invalid_json' ? 'packet_json_invalid' : null,
+    packetPath && packetSummary?.state === 'site_id_missing' ? 'packet_site_id_required' : null,
+    packetSiteMismatch ? 'packet_site_id_mismatch' : null,
+    outputPath ? null : 'artifact_directory_required',
+  ].filter(Boolean);
+  const commandReady = commandBlockers.length === 0;
   return {
     site_id: site.site_id,
     display_name: site.display_name ?? null,
@@ -1130,11 +1165,9 @@ function buildReconciliationSiteAction(site, { nodeCommand, syncEntryPoint, pack
     max_sync_artifact_age_minutes: site.max_sync_artifact_age_minutes ?? null,
     output_path: outputPath,
     command_status: commandReady ? 'ready' : 'needs_configuration',
-    command_blockers: [
-      syncEntryPoint ? null : 'sync_entrypoint_required',
-      packetPath ? null : 'packet_path_required',
-      outputPath ? null : 'artifact_directory_required',
-    ].filter(Boolean),
+    command_blockers: commandBlockers,
+    packet_site_id: packetSiteId,
+    packet_path: packetPath ?? null,
     sync_command: commandReady ? buildSyncOnceCommand({ nodeCommand, syncEntryPoint, siteId: site.site_id, packetPath, outputPath }) : null,
   };
 }

@@ -200,6 +200,7 @@ if (command === 'push-cloudflare') {
   }
   const siteId = option('--site') ?? packet.site_id;
   if (!siteId) fail('site_continuity_push_requires_--site_or_packet_site_id');
+  if (packet.site_id && siteId !== packet.site_id) failJson('site_continuity_push_site_id_mismatch', { site_id: siteId, packet_site_id: packet.site_id });
   const pushed = await post({ operation: 'site.continuity.packet.put', params: { site_id: siteId, packet } });
   if (pushed.http_status !== 200 || pushed.body?.ok === false) failApi('cloudflare_site_continuity_packet_push_failed', pushed);
   await writeJson(option('--out'), {
@@ -261,6 +262,7 @@ if (command === 'sync-once') {
   }
   const siteId = option('--site') ?? localPacket.site_id;
   if (!siteId) fail('site_continuity_sync_once_requires_--site_or_packet_site_id');
+  if (localPacket.site_id && siteId !== localPacket.site_id) failJson('site_continuity_sync_once_site_id_mismatch', { site_id: siteId, packet_site_id: localPacket.site_id });
   const pushed = await post({ operation: 'site.continuity.packet.put', params: { site_id: siteId, packet: localPacket } });
   if (pushed.http_status !== 200 || pushed.body?.ok === false) failApi('cloudflare_site_continuity_packet_push_failed', pushed);
   const read = await post({ operation: 'site.read', params: { site_id: siteId } });

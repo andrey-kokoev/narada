@@ -132,6 +132,43 @@ test('site continuity sync refuses executable mutation packets before network', 
   assert.ok(body.admission.confirmation_required.includes('mutation_requests_not_imported'));
 });
 
+test('site continuity sync refuses packet site mismatch before network', async () => {
+  const binding = createSiteContinuityBinding({ site_id: 'site_packet' });
+  const packet = createSiteContinuityExchangePacket({
+    binding,
+    source_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS,
+    target_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER,
+    projections: [
+      {
+        projection_class: 'site_read_model',
+        source_cursor: 'local-test-cursor',
+      },
+    ],
+  });
+
+  const pushResult = await runSync(['push-cloudflare', '--site', 'site_other'], {
+    input: JSON.stringify({ packet }),
+  });
+  assert.equal(pushResult.code, 1);
+  assert.equal(pushResult.stdout, '');
+  const pushBody = JSON.parse(pushResult.stderr);
+  assert.equal(pushBody.ok, false);
+  assert.equal(pushBody.code, 'site_continuity_push_site_id_mismatch');
+  assert.equal(pushBody.site_id, 'site_other');
+  assert.equal(pushBody.packet_site_id, 'site_packet');
+
+  const syncResult = await runSync(['sync-once', '--site', 'site_other'], {
+    input: JSON.stringify({ packet }),
+  });
+  assert.equal(syncResult.code, 1);
+  assert.equal(syncResult.stdout, '');
+  const syncBody = JSON.parse(syncResult.stderr);
+  assert.equal(syncBody.ok, false);
+  assert.equal(syncBody.code, 'site_continuity_sync_once_site_id_mismatch');
+  assert.equal(syncBody.site_id, 'site_other');
+  assert.equal(syncBody.packet_site_id, 'site_packet');
+});
+
 test('site continuity sync pulls Cloudflare exchange packet before local import', async () => {
   const binding = createSiteContinuityBinding({ site_id: 'site_fixture' });
   const packet = createSiteContinuityExchangePacket({
