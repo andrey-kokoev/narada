@@ -125,6 +125,48 @@ test('updates operation status behind owner or maintainer authority', async () =
   assert.equal(readPaused.operation.status, 'inactive');
   assert.equal(readPaused.authority_events.some((event) => event.event_kind === 'site_operation_status_updated'), true);
 
+  const resumedFromPausedAlias = await registry.handle({
+    operation: 'operation.status.put',
+    principal: owner,
+    params: {
+      site_id: 'site_operation_status',
+      operation_id: 'operation_status_control',
+      status: 'paused',
+      request_id: 'req_operation_status_paused_alias',
+    },
+  });
+  assert.equal(resumedFromPausedAlias.ok, true);
+  assert.equal(resumedFromPausedAlias.status, 'inactive');
+  assert.equal(resumedFromPausedAlias.operation.status, 'inactive');
+
+  const closed = await registry.handle({
+    operation: 'operation.status.put',
+    principal: owner,
+    params: {
+      site_id: 'site_operation_status',
+      operation_id: 'operation_status_control',
+      status: 'closed',
+      request_id: 'req_operation_status_close',
+    },
+  });
+  assert.equal(closed.ok, true);
+  assert.equal(closed.status, 'closed');
+  assert.equal(closed.operation.status, 'closed');
+
+  const archivedAlias = await registry.handle({
+    operation: 'operation.status.put',
+    principal: owner,
+    params: {
+      site_id: 'site_operation_status',
+      operation_id: 'operation_status_control',
+      status: 'archived',
+      request_id: 'req_operation_status_archived_alias',
+    },
+  });
+  assert.equal(archivedAlias.ok, true);
+  assert.equal(archivedAlias.status, 'closed');
+  assert.equal(archivedAlias.operation.status, 'closed');
+
   const denied = await registry.handle({
     operation: 'operation.status.put',
     principal: { principal_id: 'user:viewer' },

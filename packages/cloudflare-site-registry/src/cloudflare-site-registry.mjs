@@ -5,7 +5,17 @@ export const CLOUDFLARE_SITE_REGISTRY_LOCAL_PROJECTION_SCHEMA = 'narada.cloudfla
 const SITE_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{1,127}$/;
 const SITE_ROLES = new Set(['owner', 'maintainer', 'operator', 'viewer']);
 const BINDING_ROLES = new Set(['owner', 'maintainer', 'operator']);
-const OPERATION_STATUSES = new Set(['active', 'inactive', 'archived']);
+const OPERATION_STATUSES = new Set(['active', 'inactive', 'closed']);
+const OPERATION_STATUS_ALIASES = new Map([
+  ['archived', 'closed'],
+  ['paused', 'inactive'],
+]);
+
+function normalizeOperationStatus(status, fallback = '') {
+  const rawStatus = status == null ? fallback : status;
+  const normalizedStatus = String(rawStatus ?? '').trim();
+  return OPERATION_STATUS_ALIASES.get(normalizedStatus) ?? normalizedStatus;
+}
 
 export function createCloudflareSiteRegistryAdapter(env = {}, { now = () => new Date().toISOString() } = {}) {
   const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
@@ -114,7 +124,7 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     await ensureSchema();
     const operationId = normalizeOperationId(operation_id);
     const requestedSiteId = normalizeSiteId(site_id);
-    const normalizedStatus = String(status ?? '').trim();
+    const normalizedStatus = normalizeOperationStatus(status);
     const principalId = normalizePrincipal(principal).principal_id;
     if (!operationId) return { ok: false, code: 'invalid_operation_id' };
     if (!OPERATION_STATUSES.has(normalizedStatus)) return { ok: false, code: 'invalid_operation_status', site_id: requestedSiteId || null, operation_id: operationId, status: normalizedStatus || null };
@@ -190,7 +200,7 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     const principalId = normalizePrincipal(principal).principal_id;
     const displayName = String(display_name ?? operationId ?? '').trim();
     const normalizedKind = String(operation_kind ?? '').trim();
-    const normalizedStatus = String(status ?? 'active').trim();
+    const normalizedStatus = normalizeOperationStatus(status, 'active');
     if (!siteId) return { ok: false, code: 'invalid_site_id' };
     if (!operationId) return { ok: false, code: 'invalid_operation_id', site_id: siteId };
     if (!displayName) return { ok: false, code: 'invalid_operation_display_name', site_id: siteId, operation_id: operationId };
