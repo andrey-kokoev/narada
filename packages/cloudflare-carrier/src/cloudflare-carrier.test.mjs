@@ -2802,6 +2802,8 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /directive_intent_record_needs_operator_focus/);
   assert.match(html, /directive_intent_not_recorded_from_shadow_read/);
   assert.match(html, /flightDeckFocusDirectiveIntent/);
+  assert.match(html, /operationOperatorFocusTarget/);
+  assert.match(html, /applyOperationOperatorFocus/);
   assert.match(html, /webhook_delay_directive_records/);
   assert.match(html, /webhook_delay_directive_record_count/);
   assert.match(html, /webhook-delay-directive-intent/);
@@ -4149,6 +4151,9 @@ test('worker records mailbox draft reply proposals without admitting Outlook dra
   assert.equal(operationReadBody.operation_workflow_route.operator_focus.action, 'review_mailbox_draft_reply_proposal');
   assert.equal(operationReadBody.operation_workflow_route.operator_focus.focus_kind, 'mailbox_draft_reply_proposal');
   assert.equal(operationReadBody.operation_workflow_route.operator_focus.focus_ref, 'mailbox_draft_reply_fixture_1');
+  assert.equal(operationReadBody.operation_workflow_route.next_action, 'review_mailbox_draft_reply_proposal');
+  assert.equal(operationReadBody.operation_workflow_route.target, 'mailbox_draft_reply_fixture_1');
+  assert.equal(operationReadBody.operation_workflow_route.status, 'needs_attention');
   assert.deepEqual(operationReadBody.operation_product_surface.operation_workflow_route, operationReadBody.operation_workflow_route);
 });
 
@@ -4246,6 +4251,9 @@ test('worker creates Outlook drafts through Cloudflare Graph authority without a
   assert.equal(operationReadBody.operation_workflow_route.operator_focus.action, 'review_mailbox_outlook_draft_create');
   assert.equal(operationReadBody.operation_workflow_route.operator_focus.focus_kind, 'mailbox_outlook_draft_create');
   assert.equal(operationReadBody.operation_workflow_route.operator_focus.focus_ref, 'mailbox_outlook_draft_create_fixture_1');
+  assert.equal(operationReadBody.operation_workflow_route.next_action, 'review_mailbox_outlook_draft_create');
+  assert.equal(operationReadBody.operation_workflow_route.target, 'mailbox_outlook_draft_create_fixture_1');
+  assert.equal(operationReadBody.operation_workflow_route.status, 'needs_attention');
   assert.deepEqual(operationReadBody.operation_product_surface.operation_workflow_route, operationReadBody.operation_workflow_route);
 
   const sendSourcePayload = {
@@ -4391,6 +4399,9 @@ test('worker creates Outlook drafts through Cloudflare Graph authority without a
   assert.equal(operationReadAfterConfirmationBody.operation_workflow_route.operator_focus.action, 'review_mailbox_send_confirmation');
   assert.equal(operationReadAfterConfirmationBody.operation_workflow_route.operator_focus.focus_kind, 'mailbox_send_confirmation');
   assert.equal(operationReadAfterConfirmationBody.operation_workflow_route.operator_focus.focus_ref, 'mailbox_send_confirmation_fixture_1');
+  assert.equal(operationReadAfterConfirmationBody.operation_workflow_route.next_action, 'review_mailbox_send_confirmation');
+  assert.equal(operationReadAfterConfirmationBody.operation_workflow_route.target, 'mailbox_send_confirmation_fixture_1');
+  assert.equal(operationReadAfterConfirmationBody.operation_workflow_route.status, 'needs_attention');
   assert.deepEqual(operationReadAfterConfirmationBody.operation_product_surface.operation_workflow_route, operationReadAfterConfirmationBody.operation_workflow_route);
 });
 

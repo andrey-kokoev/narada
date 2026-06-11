@@ -1867,18 +1867,25 @@ function summarizeCloudflareOperationWorkflowRoute({
     }
     return { action: 'monitor_operation', target: operationId, reason: 'operation_ready' };
   })();
-  const ready = next.action === 'monitor_operation';
+  const routedNext = operatorFocus
+    ? {
+        action: operatorFocus.action || 'review_operation_operator_focus',
+        target: operatorFocus.focus_ref || operatorFocus.source_ref || operatorFocus.activity_id || operationId,
+        reason: 'operation_operator_focus_needs_review',
+      }
+    : next;
+  const ready = routedNext.action === 'monitor_operation';
   return {
     schema: 'narada.cloudflare_operation_workflow_route.v1',
     domain: 'operation_workflow',
     site_id: siteId,
     operation_id: operationId,
     command_state: ready ? 'operation_workflow_ready' : 'operation_workflow_attention',
-    command_action: next.action,
-    next_action: next.action,
-    target: next.target,
+    command_action: routedNext.action,
+    next_action: routedNext.action,
+    target: routedNext.target,
     status: ready ? 'ready' : 'needs_attention',
-    reason: next.reason,
+    reason: routedNext.reason,
     lifecycle_next_action: lifecycleStatus?.next_action ?? 'unknown',
     operator_focus: operatorFocus,
   };
@@ -5699,6 +5706,7 @@ function createMailboxSendConfirmationRequest(siteId, params = {}) {
       account_ref: String(source.account_ref ?? params.account_ref ?? ''),
       outlook_draft_id: String(source.outlook_draft_id ?? params.outlook_draft_id ?? ''),
       sent_message_ref: sentMessageRef,
+      sent_subject: String(source.sent_subject ?? params.sent_subject ?? ''),
       delivery_confirmation_admission: deliveryConfirmationAdmission,
       mailbox_mutation_admission: mailboxMutationAdmission,
       confirmation_authority: CLOUDFLARE_MAILBOX_SEND_CONFIRMATION_AUTHORITY,
@@ -5731,10 +5739,14 @@ async function readCloudflareMailboxSendConfirmation(env = {}, siteId, params = 
   const tokenResult = await resolveCloudflareGraphAccessToken(env);
   if (!tokenResult.ok) return tokenResult;
   const baseUrl = String(env.GRAPH_BASE_URL ?? 'https://graph.microsoft.com/v1.0').replace(/\/+$/, '');
-  const graphResult = await fetchCloudflareGraphJson(env, `${baseUrl}/users/${encodeURIComponent(accountRef)}/messages/${encodeURIComponent(confirmationRequest.sent_message_ref)}`, {
+let graphResult = await fetchCloudflareGraphJson(env, `${baseUrl}/users/${encodeURIComponent(accountRef)}/messages/${encodeURIComponent(confirmationRequest.sent_message_ref)}`, {
     method: 'GET',
     headers: { Authorization: `Bearer ${tokenResult.access_token}` },
   });
+  if (!graphResult.ok && graphResult.status === 404 && confirmationRequest.sent_subject) {
+    graphResult = await resolveCloudflareMailboxSentMessageBySubject(env, baseUrl, accountRef, confirmationRequest.sent_subject, tokenResult.access_token);
+    if (graphResult.ok && graphResult.body?.id) confirmationRequest.sent_message_ref = String(graphResult.body.id);
+  }
   if (!graphResult.ok) return { ok: false, code: 'graph_mailbox_send_confirmation_read_failed', graph_status: graphResult.status, graph_error: graphResult.error };
   const graphMessage = graphResult.body && typeof graphResult.body === 'object' && !Array.isArray(graphResult.body) ? graphResult.body : {};
   const now = new Date().toISOString();
@@ -5774,6 +5786,25 @@ async function readCloudflareMailboxSendConfirmation(env = {}, siteId, params = 
   return { ok: true, schema: CLOUDFLARE_MAILBOX_SEND_CONFIRMATION_SCHEMA, status: 'confirmed_by_reconciliation_read', site_id: siteId, mailbox_send_confirmation_authority: record.confirmation_authority, delivery_confirmation_admission: record.delivery_confirmation_admission, mailbox_mutation_admission: record.mailbox_mutation_admission, confirmation_request: confirmationRequest, record };
 }
 
+async function resolveCloudflareMailboxSentMessageBySubject(env, baseUrl, accountRef, subject, accessToken) {
+  const query = new URLSearchParams({
+    '$top': '25',
+    '$orderby': 'sentDateTime desc',
+  });
+  const result = await fetchCloudflareGraphJson(env, `${baseUrl}/users/${encodeURIComponent(accountRef)}/mailFolders/SentItems/messages?${query.toString()}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!result.ok) return result;
+  const messages = Array.isArray(result.body?.value) ? result.body.value : [];
+  const message = messages.find((entry) => String(entry?.subject ?? '') === String(subject));
+  if (!message) return { ok: false, status: result.status, error: { code: 'sent_subject_not_found', subject } };
+  return { ok: true, status: result.status, body: message };
+}
+
+function escapeODataString(value) {
+  return String(value ?? '').replace(/'/g, "''");
+}
 async function ensureCloudflareMailboxSendConfirmationSchema(db) {
   await db.prepare(`
     CREATE TABLE IF NOT EXISTS cloudflare_mailbox_send_confirmation_records (
@@ -12329,7 +12360,8 @@ export function renderCloudflareCarrierConsole() {
         || null;
       el('controlOperation').textContent = product.operation?.operation_id || el('operationId').value.trim() || 'none';
       el('controlProductScope').textContent = productScopeSummary(product);
-      el('controlOperationFocus').textContent = state.operationFocus ? [state.operationFocus.operation_id, state.operationFocus.status || state.operationFocus.operation_kind].filter(Boolean).join(' / ') : 'none';
+      const workflowOperatorFocus = operationWorkflowRouteStage(product).operator_focus || null;
+      el('controlOperationFocus').textContent = workflowOperatorFocus ? operationOperatorFocusSummary(workflowOperatorFocus) : state.operationFocus ? [state.operationFocus.operation_id, state.operationFocus.status || state.operationFocus.operation_kind].filter(Boolean).join(' / ') : 'none';
       el('controlSession').textContent = activeSession || 'none';
       el('controlSessionFocus').textContent = state.sessionFocus ? [state.sessionFocus.carrier_session_id, state.sessionFocus.binding_status || state.sessionFocus.agent_id].filter(Boolean).join(' / ') : 'none';
       el('controlAuthorityLocus').textContent = activeDecision ? [activeDecision.authority_locus || 'unresolved', activeDecision.action || 'unknown'].join(' / ') : 'unknown';
@@ -13148,6 +13180,7 @@ export function renderCloudflareCarrierConsole() {
     }
     function applyOperationWorkflowRouteAction(route = operationWorkflowRouteStage(), product = state.operationProduct || {}) {
       const action = String(route.next_action || route.command_action || '');
+      if (route.operator_focus && applyOperationOperatorFocus(route.operator_focus, product)) return;
       if (action === 'select_operation') { focusSiteOperation(); return; }
       if (action === 'review_persistence_posture') { renderPersistencePosture(product); return; }
       if (action === 'review_recovery_posture') { renderRecoveryPosture(product); return; }
@@ -13162,6 +13195,47 @@ export function renderCloudflareCarrierConsole() {
       if (action === 'focus_open_task') { applyFlightDeckNextAction(); return; }
       if (action === 'start_resident_dispatch') { run(startResidentDispatchFromWorkbench); return; }
       run(refreshOperation);
+    }
+    function operationOperatorFocusSummary(focus = null) {
+      if (!focus) return '';
+      return [focus.focus_kind || focus.activity_kind || 'operator_focus', focus.focus_ref || focus.source_ref || focus.activity_id || 'none', focus.action || 'review'].filter(Boolean).join(' / ');
+    }
+    function operationOperatorFocusTarget(focus = null, product = state.operationProduct || {}) {
+      if (!focus || focus.schema !== 'narada.cloudflare_operation_operator_focus.v1') return null;
+      const focusRef = String(focus.focus_ref || focus.source_ref || focus.activity_id || '');
+      const matches = (...values) => values.some((value) => value && String(value) === focusRef);
+      if (focus.focus_kind === 'mailbox_draft_reply_proposal') {
+        return (product.mailbox_draft_reply_proposals || []).find((item) => matches(item.proposal_id, item.activity_id, item.source_ref)) || null;
+      }
+      if (focus.focus_kind === 'mailbox_outlook_draft_create') {
+        return (product.mailbox_outlook_draft_creates || []).find((item) => matches(item.draft_create_id, item.activity_id, item.source_ref)) || null;
+      }
+      if (focus.focus_kind === 'site_file_change_proposal') {
+        return (product.site_file_change_proposals || []).find((item) => matches(item.proposal_id, item.activity_id, item.source_ref)) || null;
+      }
+      if (focus.focus_kind === 'local_ingress_request') {
+        return (product.local_ingress_requests || []).find((item) => matches(item.local_ingress_request_id, item.activity_id, item.source_ref)) || null;
+      }
+      if (focus.focus_kind === 'repository_publication_request') {
+        return (product.repository_publication_requests || []).find((item) => matches(item.repository_publication_request_id, item.activity_id, item.source_ref)) || null;
+      }
+      if (focus.focus_kind === 'mailbox_send_confirmation') {
+        return (product.mailbox_send_confirmations || []).find((item) => matches(item.send_confirmation_id, item.activity_id, item.source_ref)) || null;
+      }
+      if (focus.focus_kind === 'mailbox_send_accepted') {
+        return (product.mailbox_send_accepted_records || []).find((item) => matches(item.send_acceptance_id, item.send_accepted_id, item.activity_id, item.source_ref)) || null;
+      }
+      return null;
+    }
+    function applyOperationOperatorFocus(focus = null, product = state.operationProduct || {}) {
+      const target = operationOperatorFocusTarget(focus, product);
+      if (focus?.focus_kind === 'mailbox_draft_reply_proposal' && target) { selectMailboxDraftReplyProposal(target); return true; }
+      if (focus?.focus_kind === 'mailbox_outlook_draft_create' && target) { selectMailboxOutlookDraftCreate(target); return true; }
+      if (focus?.focus_kind === 'site_file_change_proposal' && target) { selectSiteFileChangeProposal(target); return true; }
+      if (focus?.focus_kind === 'local_ingress_request' && target) { selectLocalIngressRequest(target); return true; }
+      if (focus?.focus_kind === 'repository_publication_request' && target) { selectRepositoryPublicationRequest(target); return true; }
+      if (['mailbox_send_confirmation', 'mailbox_send_accepted'].includes(String(focus?.focus_kind || ''))) { renderMailboxDraftCreateControl(product); return true; }
+      return false;
     }
     function operatorRouteStages(product = state.operationProduct || {}) {
       const evidenceContext = evidenceActionSummaryContext(state.evidenceFocus);
