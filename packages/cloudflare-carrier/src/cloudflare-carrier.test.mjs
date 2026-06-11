@@ -1611,6 +1611,9 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(operationReadAfterRepositoryPublicationBody.authority_transfer_posture.domain_count, 8);
   assert.equal(operationReadAfterRepositoryPublicationBody.authority_transfer_posture.cloudflare_governed_windows_executed_count, 2);
   assert.equal(operationReadAfterRepositoryPublicationBody.authority_transfer_posture.remaining_windows_domain_count, 8);
+  assert.equal(operationReadAfterRepositoryPublicationBody.authority_transfer_posture.remaining_windows_authorities[0].domain, 'mailbox_status');
+  assert.equal(operationReadAfterRepositoryPublicationBody.authority_transfer_posture.remaining_windows_authorities[0].authority, 'mailbox_status_source');
+  assert.equal(operationReadAfterRepositoryPublicationBody.authority_transfer_posture.next_action, 'transfer_mailbox_status_source_authority');
   assert.equal(operationReadAfterRepositoryPublicationBody.authority_transfer_posture.domains.find((domain) => domain.domain === 'local_ingress').classification, 'cloudflare_governed_windows_executed');
   assert.equal(operationReadAfterRepositoryPublicationBody.authority_transfer_posture.domains.find((domain) => domain.domain === 'repository_publication').classification, 'cloudflare_governed_windows_executed');
   assert.equal(operationReadAfterRepositoryPublicationBody.operation_product_surface.authority_transfer_posture.cloudflare_governed_windows_executed_count, 2);

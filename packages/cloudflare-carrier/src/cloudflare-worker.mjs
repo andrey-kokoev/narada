@@ -2370,6 +2370,7 @@ function summarizeCloudflareAuthorityTransferPosture({
     return acc;
   }, {});
   const remainingWindowsDomains = domains.filter((item) => item.remaining_windows_authority.length > 0).map((item) => item.domain);
+  const remainingWindowsAuthorities = domains.flatMap((item) => item.remaining_windows_authority.map((authority) => ({ domain: item.domain, authority })));
   return {
     schema: 'narada.cloudflare_authority_transfer_posture.v1',
     transfer_complete: remainingWindowsDomains.length === 0,
@@ -2380,7 +2381,9 @@ function summarizeCloudflareAuthorityTransferPosture({
     windows_retained_count: counts.windows_retained ?? 0,
     remaining_windows_domain_count: remainingWindowsDomains.length,
     remaining_windows_domains: remainingWindowsDomains,
-    next_action: remainingWindowsDomains.length === 0 ? 'verify_full_cloudflare_authority' : `transfer_${remainingWindowsDomains[0]}_authority`,
+    remaining_windows_authority_count: remainingWindowsAuthorities.length,
+    remaining_windows_authorities: remainingWindowsAuthorities,
+    next_action: remainingWindowsAuthorities.length === 0 ? 'verify_full_cloudflare_authority' : `transfer_${remainingWindowsAuthorities[0].authority}_authority`,
     domains,
   };
 }
