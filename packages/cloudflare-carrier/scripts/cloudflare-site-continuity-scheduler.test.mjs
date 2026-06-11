@@ -7,6 +7,7 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import {
+  buildSiteContinuityReconciliationPlan,
   buildSiteContinuitySchedulerPlan,
   buildSiteContinuitySchedulerPlanWithOptionalRefresh,
   readLastSyncArtifact,
@@ -278,6 +279,120 @@ test('site continuity scheduler status-all marks stale configured site artifacts
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test('site continuity scheduler reconcile plans stale and missing configured site sync commands only', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-reconcile-plan-'));
+  const artifactDirectory = join(root, '.narada/site-continuity');
+  const packetPath = join(root, '.narada/site-continuity/local-packet.json');
+  const syncEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-sync.mjs');
+  const staleArtifactPath = join(artifactDirectory, 'site-stale-sync.json');
+  const syncedArtifactPath = join(artifactDirectory, 'site-synced-sync.json');
+  await mkdir(artifactDirectory, { recursive: true });
+  await mkdir(join(root, 'packages/cloudflare-carrier/scripts'), { recursive: true });
+  await writeFile(syncEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(packetPath, '{"packet":{"site_id":"site_stale"}}\n', 'utf8');
+  await writeFile(staleArtifactPath, `${JSON.stringify({
+    schema: 'narada.site_continuity_cloudflare_sync_once.v1',
+    status: 'ok',
+    site_id: 'site_stale',
+    pushed_packet_id: 'packet-stale-local',
+    pulled_packet_id: 'packet-stale-cloudflare',
+    continuity_loop_report_recorded: true,
+    continuity_loop_report: {
+      status: 'ok',
+      site_id: 'site_stale',
+      generated_at: '2026-06-11T10:00:00.000Z',
+    },
+  }, null, 2)}\n`, 'utf8');
+  await writeFile(syncedArtifactPath, `${JSON.stringify({
+    schema: 'narada.site_continuity_cloudflare_sync_once.v1',
+    status: 'ok',
+    site_id: 'site_synced',
+    pushed_packet_id: 'packet-synced-local',
+    pulled_packet_id: 'packet-synced-cloudflare',
+    continuity_loop_report_recorded: true,
+    continuity_loop_report: {
+      status: 'ok',
+      site_id: 'site_synced',
+      generated_at: '2026-06-11T10:19:00.000Z',
+    },
+  }, null, 2)}\n`, 'utf8');
+  await utimes(staleArtifactPath, new Date('2026-06-11T10:00:00.000Z'), new Date('2026-06-11T10:00:00.000Z'));
+  await utimes(syncedArtifactPath, new Date('2026-06-11T10:19:00.000Z'), new Date('2026-06-11T10:19:00.000Z'));
+  try {
+    const plan = buildSiteContinuitySchedulerPlan({
+      action: 'reconcile',
+      repoRoot: root,
+      syncEntrypoint,
+      packetPath,
+      artifactDirectory,
+      configuredSites: 'site_stale,site_synced,site_missing',
+      maxArtifactAgeMinutes: 15,
+      now: () => '2026-06-11T10:20:00.000Z',
+    });
+
+    assert.equal(plan.plan_status, 'site_continuity_reconciliation_plan_read_only_no_cloudflare_access');
+    assert.equal(plan.reconciliation_plan.schema, 'narada.cloudflare_carrier.site_continuity_reconciliation_plan.v1');
+    assert.equal(plan.reconciliation_plan.read_only, true);
+    assert.equal(plan.reconciliation_plan.executes_cloudflare_mutation, false);
+    assert.equal(plan.reconciliation_plan.writes_local_artifacts, false);
+    assert.equal(plan.reconciliation_plan.cloudflare_mutation_admission, 'not_executed_plan_only');
+    assert.equal(plan.reconciliation_plan.filesystem_mutation_admission, 'not_executed_plan_only');
+    assert.equal(plan.reconciliation_plan.status, 'ready');
+    assert.equal(plan.reconciliation_plan.selected_site_count, 2);
+    assert.equal(plan.reconciliation_plan.command_ready_count, 2);
+    assert.deepEqual(plan.reconciliation_plan.selected_reason_counts, {
+      configured_site_sync_artifact_missing: 1,
+      configured_site_sync_artifact_stale: 1,
+    });
+    assert.deepEqual(plan.reconciliation_plan.selected_sites.map((site) => [site.site_id, site.reason]), [
+      ['site_missing', 'configured_site_sync_artifact_missing'],
+      ['site_stale', 'configured_site_sync_artifact_stale'],
+    ]);
+    assert.equal(plan.reconciliation_plan.selected_sites.some((site) => site.site_id === 'site_synced'), false);
+    for (const site of plan.reconciliation_plan.selected_sites) {
+      assert.equal(site.command_status, 'ready');
+      assert.deepEqual(site.command_blockers, []);
+      assert.match(site.sync_command, /cloudflare-site-continuity-sync\.mjs/);
+      assert.match(site.sync_command, /sync-once/);
+      assert.match(site.sync_command, /--site/);
+      assert.match(site.sync_command, new RegExp(site.site_id));
+      assert.match(site.sync_command, /--packet/);
+      assert.match(site.sync_command, /local-packet\.json/);
+      assert.match(site.sync_command, /--out/);
+      assert.equal(site.output_path, join(artifactDirectory, `${site.site_id}-cloudflare-sync.json`));
+    }
+    assert.doesNotMatch(JSON.stringify(plan), /secret|token/i);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('site continuity reconciliation plan reports configuration blockers instead of synthesizing commands', () => {
+  const plan = buildSiteContinuityReconciliationPlan({
+    localSyncArtifacts: {
+      configured_site_sync_statuses: [{
+        site_id: 'site_missing_packet',
+        status: 'needs_attention',
+        reason: 'configured_site_sync_artifact_missing',
+        artifact_present: false,
+      }],
+    },
+    syncEntryPoint: 'D:/repo/packages/cloudflare-carrier/scripts/cloudflare-site-continuity-sync.mjs',
+    artifactDirectory: 'D:/repo/.narada/site-continuity',
+    packetPath: null,
+  });
+
+  assert.equal(plan.status, 'needs_configuration');
+  assert.equal(plan.read_only, true);
+  assert.equal(plan.executes_cloudflare_mutation, false);
+  assert.equal(plan.writes_local_artifacts, false);
+  assert.equal(plan.selected_site_count, 1);
+  assert.equal(plan.command_ready_count, 0);
+  assert.equal(plan.selected_sites[0].command_status, 'needs_configuration');
+  assert.deepEqual(plan.selected_sites[0].command_blockers, ['packet_path_required']);
+  assert.equal(plan.selected_sites[0].sync_command, null);
 });
 
 test('site continuity scheduler can refresh site registry projection before status-all', async () => {

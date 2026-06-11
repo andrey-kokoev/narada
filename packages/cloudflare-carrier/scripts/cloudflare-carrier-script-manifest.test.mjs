@@ -17,6 +17,14 @@ test('cloudflare carrier package scripts point at parseable local node scripts',
     packageJson.scripts?.['continuity:status:live'],
     'node scripts/cloudflare-site-continuity-scheduler.mjs --action status-all --refresh-site-registry-projection',
   );
+  assert.equal(
+    packageJson.scripts?.['continuity:reconcile'],
+    'node scripts/cloudflare-site-continuity-scheduler.mjs --action reconcile',
+  );
+  assert.equal(
+    packageJson.scripts?.['continuity:reconcile:live'],
+    'node scripts/cloudflare-site-continuity-scheduler.mjs --action reconcile --refresh-site-registry-projection',
+  );
   const scriptEntries = Object.entries(packageJson.scripts ?? {})
     .map(([name, command]) => ({ name, command, scriptPath: localNodeScriptPath(command) }))
     .filter((entry) => entry.scriptPath);

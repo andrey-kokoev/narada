@@ -153,6 +153,28 @@ export function buildSiteContinuitySchedulerPlan({
           now,
         }),
       };
+    case 'reconcile':
+    case 'reconcile-plan': {
+      const localSyncArtifacts = readLocalSyncArtifactInventory(effectiveArtifactDirectory, {
+        lastOutputPath: effectiveOutputPath,
+        configuredSites: localConfiguredSites.site_records,
+        maxArtifactAgeMinutes,
+        now,
+      });
+      return {
+        ...base,
+        plan_status: 'site_continuity_reconciliation_plan_read_only_no_cloudflare_access',
+        scheduled_task_command: ['schtasks', '/Query', '/TN', taskName, '/FO', 'LIST'],
+        local_sync_artifacts: localSyncArtifacts,
+        reconciliation_plan: buildSiteContinuityReconciliationPlan({
+          localSyncArtifacts,
+          nodeCommand,
+          syncEntryPoint,
+          packetPath: effectivePacketPath,
+          artifactDirectory: effectiveArtifactDirectory,
+        }),
+      };
+    }
     default:
       throw new Error(`unknown_site_continuity_scheduler_action:${action}`);
   }
@@ -281,6 +303,33 @@ export function readLocalSyncArtifactInventory(
     last_sync: lastSync,
     artifacts,
     configured_site_sync_statuses: configuredSiteSyncStatuses,
+  };
+}
+
+export function buildSiteContinuityReconciliationPlan({
+  localSyncArtifacts,
+  nodeCommand = process.env.NARADA_NODE_COMMAND ?? 'node',
+  syncEntryPoint,
+  packetPath = null,
+  artifactDirectory = null,
+} = {}) {
+  const configuredStatuses = localSyncArtifacts?.configured_site_sync_statuses ?? [];
+  const selectedSites = configuredStatuses
+    .filter((site) => site.status !== 'synced')
+    .map((site) => buildReconciliationSiteAction(site, { nodeCommand, syncEntryPoint, packetPath, artifactDirectory }));
+  const commandReadyCount = selectedSites.filter((site) => site.command_status === 'ready').length;
+  return {
+    schema: 'narada.cloudflare_carrier.site_continuity_reconciliation_plan.v1',
+    status: selectedSites.length === 0 ? 'synced' : commandReadyCount === selectedSites.length ? 'ready' : 'needs_configuration',
+    read_only: true,
+    executes_cloudflare_mutation: false,
+    writes_local_artifacts: false,
+    cloudflare_mutation_admission: 'not_executed_plan_only',
+    filesystem_mutation_admission: 'not_executed_plan_only',
+    selected_site_count: selectedSites.length,
+    command_ready_count: commandReadyCount,
+    selected_reason_counts: countSelectedReasons(selectedSites),
+    selected_sites: selectedSites,
   };
 }
 
@@ -540,6 +589,59 @@ function buildConfiguredSiteMetadata(site) {
     site_ref: site.site_ref ?? null,
     site_status: site.site_status ?? null,
   };
+}
+
+function buildReconciliationSiteAction(site, { nodeCommand, syncEntryPoint, packetPath, artifactDirectory }) {
+  const outputPath = artifactDirectory ? join(artifactDirectory, `${safeFileToken(site.site_id)}-cloudflare-sync.json`) : null;
+  const commandReady = Boolean(syncEntryPoint && packetPath && outputPath);
+  return {
+    site_id: site.site_id,
+    display_name: site.display_name ?? null,
+    site_ref: site.site_ref ?? null,
+    site_status: site.site_status ?? null,
+    status: site.status,
+    reason: site.reason,
+    artifact_present: site.artifact_present,
+    artifact_path: site.artifact_path ?? null,
+    artifact_updated_at: site.artifact_updated_at ?? null,
+    artifact_age_minutes: site.artifact_age_minutes ?? null,
+    max_sync_artifact_age_minutes: site.max_sync_artifact_age_minutes ?? null,
+    output_path: outputPath,
+    command_status: commandReady ? 'ready' : 'needs_configuration',
+    command_blockers: [
+      syncEntryPoint ? null : 'sync_entrypoint_required',
+      packetPath ? null : 'packet_path_required',
+      outputPath ? null : 'artifact_directory_required',
+    ].filter(Boolean),
+    sync_command: commandReady ? buildSyncOnceCommand({ nodeCommand, syncEntryPoint, siteId: site.site_id, packetPath, outputPath }) : null,
+  };
+}
+
+function buildSyncOnceCommand({ nodeCommand, syncEntryPoint, siteId, packetPath, outputPath }) {
+  return [
+    quote(nodeCommand),
+    quote(syncEntryPoint),
+    'sync-once',
+    '--site',
+    quote(siteId),
+    '--packet',
+    quote(packetPath),
+    '--out',
+    quote(outputPath),
+  ].join(' ');
+}
+
+function countSelectedReasons(selectedSites) {
+  const counts = {};
+  for (const site of selectedSites) {
+    const reason = site.reason ?? 'unknown';
+    counts[reason] = (counts[reason] ?? 0) + 1;
+  }
+  return counts;
+}
+
+function safeFileToken(value) {
+  return String(value ?? 'site').replace(/[^A-Za-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '') || 'site';
 }
 
 function normalizeMaxArtifactAgeMinutes(value) {
