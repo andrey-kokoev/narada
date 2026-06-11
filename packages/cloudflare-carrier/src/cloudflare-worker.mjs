@@ -1760,6 +1760,22 @@ function summarizeLocalCloudContinuityBridge(siteId, continuityPackets = [], sit
   const cloudflareEmbodiment = (binding.embodiments || []).find((embodiment) => embodiment.embodiment_kind === SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER) ?? {};
   const directionCounts = continuityStatus?.direction_counts ?? {};
   const authorityBoundary = continuityStatus?.authority_boundary ?? {};
+  const cloudflareToLocalWindowsPackets = directionCounts.cloudflare_to_local_windows ?? 0;
+  const localWindowsToCloudflarePackets = directionCounts.local_windows_to_cloudflare ?? 0;
+  const bridgeState = cloudflareToLocalWindowsPackets > 0 && localWindowsToCloudflarePackets > 0
+    ? 'bidirectional_packets_observed'
+    : cloudflareToLocalWindowsPackets > 0
+      ? 'cloudflare_to_local_windows_observed'
+      : localWindowsToCloudflarePackets > 0
+        ? 'local_windows_to_cloudflare_observed'
+        : 'no_packet_observed';
+  const bridgeNextAction = bridgeState === 'bidirectional_packets_observed'
+    ? 'review_continuity_packet'
+    : bridgeState === 'cloudflare_to_local_windows_observed'
+      ? 'return_local_windows_continuity_packet'
+      : bridgeState === 'local_windows_to_cloudflare_observed'
+        ? 'publish_cloudflare_continuity_packet'
+        : 'observe_continuity_packet';
   const siteArg = siteId ? String(siteId) : '<site_id>';
   const syncCommands = {
     loop_command: `pnpm site:continuity:loop -- sync-cloudflare --site ${siteArg} --url <worker-url> --token-file <token-file>`,
@@ -1770,6 +1786,7 @@ function summarizeLocalCloudContinuityBridge(siteId, continuityPackets = [], sit
   return {
     schema: 'narada.local_cloud_continuity_bridge.v1',
     site_id: siteId,
+    state: bridgeState,
     local_windows_site_ref: binding.local_windows_site_ref ?? localWindowsEmbodiment.site_ref ?? null,
     cloudflare_site_ref: binding.cloudflare_site_ref ?? cloudflareEmbodiment.site_ref ?? null,
     authority_map_ref: binding.authority_map_ref ?? null,
@@ -1778,12 +1795,12 @@ function summarizeLocalCloudContinuityBridge(siteId, continuityPackets = [], sit
     latest_imported_at: continuityStatus?.latest_imported_at ?? continuityPackets?.[0]?.imported_at ?? null,
     latest_admission_action: continuityStatus?.latest_admission_action ?? continuityPackets?.[0]?.admission_action ?? null,
     latest_admission_reason: continuityStatus?.latest_admission_reason ?? continuityPackets?.[0]?.admission_reason ?? null,
-    cloudflare_to_local_windows_packets: directionCounts.cloudflare_to_local_windows ?? 0,
-    local_windows_to_cloudflare_packets: directionCounts.local_windows_to_cloudflare ?? 0,
+    cloudflare_to_local_windows_packets: cloudflareToLocalWindowsPackets,
+    local_windows_to_cloudflare_packets: localWindowsToCloudflarePackets,
     continuity_packet_count: continuityStatus?.packet_count ?? (Array.isArray(continuityPackets) ? continuityPackets.length : 0),
     executable_cross_embodiment_mutation: authorityBoundary.executable_cross_embodiment_mutation ?? 'refused_by_site_continuity_classifier',
     durable_mutation_authority: authorityBoundary.durable_mutation_authority ?? 'unchanged; routed_by_site_authority_map',
-    next_action: continuityStatus?.state === 'packet_observed' ? 'review_continuity_packet' : 'observe_continuity_packet',
+    next_action: bridgeNextAction,
     ...syncCommands,
   };
 }
@@ -15221,6 +15238,7 @@ export function renderCloudflareCarrierConsole() {
       const status = product.site_continuity_status || product.operation_product_surface?.continuity_status || {};
       return [
         ['Bridge Schema', bridge.schema || 'narada.local_cloud_continuity_bridge.v1'],
+        ['Bridge State', bridge.state || 'no_packet_observed'],
         ['Local Site Ref', bridge.local_windows_site_ref || binding.local_windows_site_ref || localWindowsEmbodiment.site_ref || 'none'],
         ['Cloudflare Site Ref', bridge.cloudflare_site_ref || binding.cloudflare_site_ref || cloudflareEmbodiment.site_ref || 'none'],
         ['Authority Map Ref', bridge.authority_map_ref || binding.authority_map_ref || 'none'],

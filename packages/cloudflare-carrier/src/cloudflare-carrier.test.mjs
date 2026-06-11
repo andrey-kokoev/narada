@@ -1189,13 +1189,14 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(readAfterPacketPutBody.site_continuity_status.direction_counts.local_windows_to_cloudflare, 0);
   assert.equal(readAfterPacketPutBody.site_continuity_status.authority_boundary.executable_cross_embodiment_mutation, 'refused_by_site_continuity_classifier');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.schema, 'narada.local_cloud_continuity_bridge.v1');
+  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.state, 'cloudflare_to_local_windows_observed');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.local_windows_site_ref, 'local-windows-site');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.cloudflare_site_ref, 'cloudflare-site');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.cloudflare_to_local_windows_packets, 1);
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.local_windows_to_cloudflare_packets, 0);
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.executable_cross_embodiment_mutation, 'refused_by_site_continuity_classifier');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.durable_mutation_authority, 'unchanged; routed_by_site_authority_map');
-  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.next_action, 'review_continuity_packet');
+  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.next_action, 'return_local_windows_continuity_packet');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.loop_command, 'pnpm site:continuity:loop -- sync-cloudflare --site site_fixture --url <worker-url> --token-file <token-file>');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.pull_command, 'pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- pull-cloudflare --site site_fixture --url <worker-url> --token-file <token-file>');
   assert.equal(readAfterPacketPutBody.site_continuity_loop_reports.length, 1);

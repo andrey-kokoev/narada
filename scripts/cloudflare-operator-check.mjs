@@ -676,6 +676,7 @@ assert.match(consoleCheck.body, /monitor_admissions/);
 assert.match(consoleCheck.body, /Local-Cloud Continuity/);
 assert.match(consoleCheck.body, /localCloudContinuityBridge/);
 assert.match(consoleCheck.body, /localCloudContinuityBridgeContext/);
+assert.match(consoleCheck.body, /Bridge State/);
 assert.match(consoleCheck.body, /renderLocalCloudContinuityBridge/);
 assert.match(consoleCheck.body, /local_cloud_binding_declared/);
 assert.match(consoleCheck.body, /authority_map_projection_reviewed/);
@@ -1557,7 +1558,7 @@ assert.ok(operationContinuityLoopReports.length >= 1);
 assert.equal(operationSurface?.continuity_loop_report_count, operationContinuityLoopReports.length);
 assert.equal(operationSurface?.continuity_loop_status?.state, operationContinuityLoopStatus.state);
 assert.equal(localCloudContinuityBridge?.schema, 'narada.local_cloud_continuity_bridge.v1');
-assert.equal(localCloudContinuityBridge?.next_action, 'review_continuity_packet');
+assertLocalCloudContinuityBridgeState(localCloudContinuityBridge);
 assert.equal(operationSurface?.local_cloud_continuity_bridge?.schema, localCloudContinuityBridge.schema);
 assert.equal(operationLifecycleStatus?.schema, 'narada.cloudflare_operation_lifecycle_status.v1');
 assert.equal(operationLifecycleStatus?.phase, 'inhabited');
@@ -2404,6 +2405,27 @@ function assertProviderSchedulerPosture(posture, providerKind) {
     assert.ok(Number.isInteger(posture.interval_minutes));
     assert.ok(posture.interval_minutes > 0);
   }
+}
+
+function assertLocalCloudContinuityBridgeState(bridge) {
+  const cloudflareToLocal = bridge?.cloudflare_to_local_windows_packets ?? 0;
+  const localToCloudflare = bridge?.local_windows_to_cloudflare_packets ?? 0;
+  const expectedState = cloudflareToLocal > 0 && localToCloudflare > 0
+    ? 'bidirectional_packets_observed'
+    : cloudflareToLocal > 0
+      ? 'cloudflare_to_local_windows_observed'
+      : localToCloudflare > 0
+        ? 'local_windows_to_cloudflare_observed'
+        : 'no_packet_observed';
+  const expectedNextAction = expectedState === 'bidirectional_packets_observed'
+    ? 'review_continuity_packet'
+    : expectedState === 'cloudflare_to_local_windows_observed'
+      ? 'return_local_windows_continuity_packet'
+      : expectedState === 'local_windows_to_cloudflare_observed'
+        ? 'publish_cloudflare_continuity_packet'
+        : 'observe_continuity_packet';
+  assert.equal(bridge?.state, expectedState);
+  assert.equal(bridge?.next_action, expectedNextAction);
 }
 
 function operationWorkQueueItemsForCheck(operations = [], product = {}, context = {}) {
