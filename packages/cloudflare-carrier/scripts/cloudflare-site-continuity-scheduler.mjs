@@ -14,6 +14,7 @@ const DEFAULT_TASK_NAME = 'Narada Cloudflare Site Continuity Sync';
 const DEFAULT_INTERVAL_MINUTES = 5;
 const DEFAULT_MAX_SYNC_ARTIFACT_AGE_MINUTES = 15;
 const DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS = 120000;
+const LIVE_SCHEDULER_TASK_ACTIONS = new Set(['install', 'disable', 'pause', 'resume', 'uninstall']);
 const execFile = promisify(execFileCallback);
 
 export function buildSiteContinuitySchedulerPlan({
@@ -203,7 +204,11 @@ export async function runSiteContinuitySchedulerActionWithOptionalRefresh(
 ) {
   const action = options.action ?? 'status';
   if (action !== 'reconcile-execute') {
-    return buildSiteContinuitySchedulerPlanWithOptionalRefresh(options, { env, materializeSiteRegistryProjection });
+    const plan = await buildSiteContinuitySchedulerPlanWithOptionalRefresh(options, { env, materializeSiteRegistryProjection });
+    if (options.dryRun === false && LIVE_SCHEDULER_TASK_ACTIONS.has(action)) {
+      return executeSchedulerTaskPlan(plan, { execFileImpl, executionTimeoutMs: options.executionTimeoutMs });
+    }
+    return plan;
   }
   const planningOptions = { ...options, action: 'reconcile' };
   const plan = await buildSiteContinuitySchedulerPlanWithOptionalRefresh(planningOptions, { env, materializeSiteRegistryProjection });
@@ -213,6 +218,67 @@ export async function runSiteContinuitySchedulerActionWithOptionalRefresh(
     execFileImpl,
     now: options.now,
   });
+}
+
+async function executeSchedulerTaskPlan(plan, { execFileImpl = execFile, executionTimeoutMs = DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS } = {}) {
+  const scheduledTaskCommand = plan?.scheduled_task_command ?? [];
+  const [command, ...args] = scheduledTaskCommand;
+  const action = plan?.action ?? 'unknown';
+  const base = {
+    ...plan,
+    dry_run: false,
+    host_scheduler_mutation_admission: 'bounded_schtasks_command_from_scheduler_plan',
+    embeds_credentials: false,
+  };
+  if (command !== 'schtasks' || !LIVE_SCHEDULER_TASK_ACTIONS.has(action)) {
+    return {
+      ...base,
+      plan_status: `live_${action}_refused`,
+      scheduler_task_execution: {
+        state: 'refused',
+        status: 'needs_attention',
+        reason: 'unsupported_scheduler_task_command',
+        command: command ?? null,
+        args,
+        embeds_credentials: false,
+      },
+    };
+  }
+  const timeout = normalizeExecutionTimeoutMs(executionTimeoutMs);
+  try {
+    const result = await execFileImpl(command, args, { cwd: plan.repo_root, timeout, windowsHide: true });
+    return {
+      ...base,
+      plan_status: `live_${action}_completed`,
+      scheduler_task_execution: {
+        state: 'completed',
+        status: 'ok',
+        command,
+        args,
+        stdout: result?.stdout ?? '',
+        stderr: result?.stderr ?? '',
+        timeout_ms: timeout,
+        embeds_credentials: false,
+      },
+    };
+  } catch (error) {
+    return {
+      ...base,
+      plan_status: `live_${action}_failed`,
+      scheduler_task_execution: {
+        state: 'failed',
+        status: 'needs_attention',
+        command,
+        args,
+        exit_code: error.code ?? null,
+        signal: error.signal ?? null,
+        stdout: error.stdout ?? '',
+        stderr: error.stderr ?? '',
+        timeout_ms: timeout,
+        embeds_credentials: false,
+      },
+    };
+  }
 }
 
 export async function executeSiteContinuityReconciliationPlan(
@@ -240,6 +306,28 @@ export async function executeSiteContinuityReconciliationPlan(
   }
   if (dryRun) {
     return { ...base, status: 'dry_run', refusal_reason: 'reconcile_execute_requires_live_flag', results: [] };
+  }
+  if (reconciliationPlan.status === 'synced' && selectedSites.length === 0) {
+    return persistReconciliationExecutionResult({
+      ...base,
+      status: 'completed',
+      reconciliation_plan_status: 'synced',
+      cloudflare_mutation_admission: 'not_executed_already_synced',
+      filesystem_mutation_admission: 'reconciliation_execution_artifact_write_only',
+      execution_timeout_ms: normalizeExecutionTimeoutMs(executionTimeoutMs),
+      executed_site_count: 0,
+      completed_site_count: 0,
+      failed_site_count: 0,
+      results: [],
+      cloudflare_reconciliation_execution_evidence: {
+        state: 'skipped',
+        status: 'not_recorded',
+        reason: 'reconciliation_plan_already_synced',
+        record_count: 0,
+        recorded_count: 0,
+        failed_count: 0,
+      },
+    }, { dryRun, now });
   }
   if (reconciliationPlan.status !== 'ready') {
     return persistReconciliationExecutionResult({
@@ -306,13 +394,14 @@ export async function executeSiteContinuityReconciliationPlan(
     failed_site_count: failedCount,
     results,
   }, { dryRun, now });
-  return {
+  const cloudflareReconciliationExecutionEvidence = await recordCloudflareReconciliationExecutionEvidence(persisted, plan, {
+    execFileImpl,
+    timeout,
+  });
+  return persistReconciliationExecutionResult({
     ...persisted,
-    cloudflare_reconciliation_execution_evidence: await recordCloudflareReconciliationExecutionEvidence(persisted, plan, {
-      execFileImpl,
-      timeout,
-    }),
-  };
+    cloudflare_reconciliation_execution_evidence: cloudflareReconciliationExecutionEvidence,
+  }, { dryRun, now });
 }
 
 async function recordCloudflareReconciliationExecutionEvidence(result, plan, { execFileImpl = execFile, timeout = DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS } = {}) {
@@ -716,6 +805,10 @@ export function readLastReconciliationExecutionArtifact(outputPath) {
     refusal_reason: artifact.refusal_reason ?? null,
     cloudflare_mutation_admission: artifact.cloudflare_mutation_admission ?? null,
     filesystem_mutation_admission: artifact.filesystem_mutation_admission ?? null,
+    cloudflare_reconciliation_execution_evidence_state: artifact.cloudflare_reconciliation_execution_evidence?.state ?? null,
+    cloudflare_reconciliation_execution_evidence_status: artifact.cloudflare_reconciliation_execution_evidence?.status ?? null,
+    cloudflare_reconciliation_execution_recorded_count: artifact.cloudflare_reconciliation_execution_evidence?.recorded_count ?? null,
+    cloudflare_reconciliation_execution_failed_count: artifact.cloudflare_reconciliation_execution_evidence?.failed_count ?? null,
     result_status_counts: countResultStatuses(artifact.results ?? []),
   };
 }
@@ -1006,6 +1099,7 @@ function parseArgs(argv) {
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const result = await runSiteContinuitySchedulerActionWithOptionalRefresh(parseArgs(process.argv.slice(2)));
   if (result.site_registry_projection_refresh?.status && result.site_registry_projection_refresh.status !== 'ok') process.exitCode = 1;
+  if (result.scheduler_task_execution?.status && result.scheduler_task_execution.status !== 'ok') process.exitCode = 1;
   if (result.schema === 'narada.cloudflare_carrier.site_continuity_reconciliation_execution.v1' && !['completed', 'dry_run'].includes(result.status)) process.exitCode = 1;
   console.log(JSON.stringify(result, null, 2));
 }

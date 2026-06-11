@@ -191,6 +191,14 @@ pnpm --filter @narada2/cloudflare-carrier continuity:run-once
 
 `continuity:run-once` is the product-facing alias for the existing live reconciliation execution path: it plans ready configured sites, runs guarded `sync-once`, writes the reconciliation execution artifact, and records that execution evidence back to Cloudflare.
 
+Install the Windows scheduled task for the recurring continuity loop after the site and packet path are configured in environment or passed as script arguments:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier continuity:install
+```
+
+`continuity:install` creates or replaces the local Windows Task Scheduler entry with the same scheduled-task wrapper used by `continuity:run-once`; the task command carries no credential values. For unattended Windows scheduling, keep non-secret continuity inputs such as `NARADA_SITE_CONTINUITY_PACKET` and `NARADA_SITE_CONTINUITY_SITES` in `.narada/site-continuity/cloudflare-continuity.env`, while Cloudflare credentials stay in the local root `.env` token-file pointer.
+
 ## Deploy Check Coverage
 
 `deploy:check` verifies:

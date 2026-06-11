@@ -75,6 +75,51 @@ test('site continuity scheduler install plan is bounded and secret-free', async 
   }
 });
 
+test('site continuity scheduler live install executes bounded schtasks command', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-live-install-'));
+  const syncEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-sync.mjs');
+  const scheduledTaskEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-scheduled-task.mjs');
+  const packetPath = join(root, '.narada/site-continuity/local-packet.json');
+  await mkdir(join(root, 'packages/cloudflare-carrier/scripts'), { recursive: true });
+  await mkdir(join(root, '.narada/site-continuity'), { recursive: true });
+  await writeFile(syncEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(scheduledTaskEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(packetPath, '{"packet":{"site_id":"site_fixture"}}\n', 'utf8');
+  await writeFile(join(root, '.env'), 'CLOUDFLARE_CARRIER_URL=https://worker.example\nCLOUDFLARE_CARRIER_TOKEN_FILE=.secrets/token\n', 'utf8');
+  try {
+    const calls = [];
+    const result = await runSiteContinuitySchedulerActionWithOptionalRefresh({
+      action: 'install',
+      repoRoot: root,
+      intervalMinutes: 5,
+      siteId: 'site_fixture',
+      packetPath,
+      dryRun: false,
+      executionTimeoutMs: 5000,
+    }, {
+      execFileImpl: async (command, args, options) => {
+        calls.push({ command, args, options });
+        return { stdout: 'SUCCESS: scheduled task created', stderr: '' };
+      },
+    });
+
+    assert.equal(result.plan_status, 'live_install_completed');
+    assert.equal(result.host_scheduler_mutation_admission, 'bounded_schtasks_command_from_scheduler_plan');
+    assert.equal(result.scheduler_task_execution.state, 'completed');
+    assert.equal(result.scheduler_task_execution.status, 'ok');
+    assert.equal(result.scheduler_task_execution.command, 'schtasks');
+    assert.deepEqual(calls[0].args.slice(0, 7), ['/Create', '/TN', 'Narada Cloudflare Site Continuity Sync', '/SC', 'MINUTE', '/MO', '5']);
+    assert.equal(calls[0].args.includes('/TR'), true);
+    assert.match(calls[0].args[calls[0].args.indexOf('/TR') + 1], /cloudflare-site-continuity-scheduled-task\.mjs/);
+    assert.match(calls[0].args[calls[0].args.indexOf('/TR') + 1], /--sites/);
+    assert.equal(calls[0].options.cwd, root);
+    assert.equal(calls[0].options.timeout, 5000);
+    assert.doesNotMatch(JSON.stringify(result), /secret-token-value|CLOUDFLARE_CARRIER_TOKEN=/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('site continuity scheduler status-all distinguishes configured sites missing local artifacts', async () => {
   const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-configured-status-'));
   const artifactDirectory = join(root, '.narada/site-continuity');
@@ -433,6 +478,67 @@ test('site continuity reconcile-execute defaults to dry-run refusal without exec
   }
 });
 
+test('site continuity reconcile-execute treats already synced plans as successful no-op', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-reconcile-execute-synced-'));
+  const artifactDirectory = join(root, '.narada/site-continuity');
+  const outputPath = join(artifactDirectory, 'site_synced-cloudflare-sync.json');
+  const reconciliationExecutionOutputPath = join(root, '.narada/site-continuity/reconciliation/cloudflare-reconcile-last.json');
+  const packetPath = join(root, '.narada/site-continuity-packets/local-packet.json');
+  const syncEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-sync.mjs');
+  await mkdir(artifactDirectory, { recursive: true });
+  await mkdir(join(root, '.narada/site-continuity-packets'), { recursive: true });
+  await mkdir(join(root, 'packages/cloudflare-carrier/scripts'), { recursive: true });
+  await writeFile(packetPath, '{"packet":{"site_id":"site_synced"}}\n', 'utf8');
+  await writeFile(syncEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(outputPath, `${JSON.stringify({
+    schema: 'narada.site_continuity_cloudflare_sync_once.v1',
+    status: 'ok',
+    site_id: 'site_synced',
+    worker_url: 'https://worker.example',
+    pushed_packet_id: 'packet-local',
+    pulled_packet_id: 'packet-cloudflare',
+    continuity_loop_report_recorded: true,
+    continuity_loop_report: {
+      status: 'ok',
+      site_id: 'site_synced',
+      generated_at: '2026-06-11T12:00:00.000Z',
+    },
+  }, null, 2)}\n`, 'utf8');
+  try {
+    const calls = [];
+    const result = await runSiteContinuitySchedulerActionWithOptionalRefresh({
+      action: 'reconcile-execute',
+      repoRoot: root,
+      syncEntrypoint,
+      packetPath,
+      artifactDirectory,
+      reconciliationExecutionOutputPath,
+      configuredSites: 'site_synced',
+      dryRun: false,
+      now: () => '2026-06-11T12:05:00.000Z',
+    }, {
+      execFileImpl: async (command, args, options) => {
+        calls.push({ command, args, options });
+      },
+    });
+
+    assert.equal(result.status, 'completed');
+    assert.equal(result.reconciliation_plan_status, 'synced');
+    assert.equal(result.cloudflare_mutation_admission, 'not_executed_already_synced');
+    assert.equal(result.executed_site_count, 0);
+    assert.equal(result.cloudflare_reconciliation_execution_evidence.reason, 'reconciliation_plan_already_synced');
+    assert.equal(calls.length, 0);
+
+    const executionSummary = readLastReconciliationExecutionArtifact(reconciliationExecutionOutputPath);
+    assert.equal(executionSummary.state, 'read');
+    assert.equal(executionSummary.status, 'completed');
+    assert.equal(executionSummary.cloudflare_reconciliation_execution_evidence_state, 'skipped');
+    assert.equal(executionSummary.cloudflare_reconciliation_execution_evidence_status, 'not_recorded');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('site continuity reconcile-execute refuses not-ready plans before sync execution', async () => {
   const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-reconcile-not-ready-'));
   const artifactDirectory = join(root, '.narada/site-continuity');
@@ -554,6 +660,10 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
     assert.equal(executionSummary.status, 'completed');
     assert.equal(executionSummary.persisted_at, '2026-06-11T12:30:00.000Z');
     assert.equal(executionSummary.completed_site_count, 1);
+    assert.equal(executionSummary.cloudflare_reconciliation_execution_evidence_state, 'recorded');
+    assert.equal(executionSummary.cloudflare_reconciliation_execution_evidence_status, 'recorded');
+    assert.equal(executionSummary.cloudflare_reconciliation_execution_recorded_count, 1);
+    assert.equal(executionSummary.cloudflare_reconciliation_execution_failed_count, 0);
     assert.deepEqual(executionSummary.result_status_counts, { completed: 1 });
 
     const statusPlan = buildSiteContinuitySchedulerPlan({
