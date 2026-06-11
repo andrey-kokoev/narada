@@ -1,28 +1,29 @@
 #!/usr/bin/env node
 import { createServer } from 'node:http';
 import { writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 
-const args = process.argv.slice(2);
-const option = (name) => {
-  const index = args.indexOf(name);
-  return index >= 0 ? args[index + 1] : undefined;
-};
+export function parseOperatorSessionCaptureArgs(argv = [], env = process.env) {
+  const args = [...argv];
+  const option = (name) => {
+    const index = args.indexOf(name);
+    return index >= 0 ? args[index + 1] : undefined;
+  };
 
-const workerUrl = String(option('--url') ?? process.env.CLOUDFLARE_CARRIER_URL ?? '').replace(/\/+$/, '');
-const outPath = option('--out') ?? process.env.CLOUDFLARE_OPERATOR_SESSION_OUT ?? 'cloudflare-operator-session.json';
-const host = option('--host') ?? '127.0.0.1';
-const requestedPort = Number.parseInt(option('--port') ?? '0', 10);
-const timeoutMs = Number.parseInt(option('--timeout-ms') ?? '300000', 10);
+  const workerUrl = String(option('--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '').replace(/\/+$/, '');
+  const outPath = option('--out') ?? env.CLOUDFLARE_OPERATOR_SESSION_OUT ?? 'cloudflare-operator-session.json';
+  const host = option('--host') ?? '127.0.0.1';
+  const requestedPort = Number.parseInt(option('--port') ?? '0', 10);
+  const timeoutMs = Number.parseInt(option('--timeout-ms') ?? '300000', 10);
 
-if (!workerUrl) fail('operator_session_capture_requires_--url_or_CLOUDFLARE_CARRIER_URL');
-if (!Number.isInteger(requestedPort) || requestedPort < 0 || requestedPort > 65535) fail('operator_session_capture_port_invalid');
-if (!Number.isInteger(timeoutMs) || timeoutMs < 1000) fail('operator_session_capture_timeout_invalid');
+  if (!workerUrl) throw new Error('operator_session_capture_requires_--url_or_CLOUDFLARE_CARRIER_URL');
+  if (!Number.isInteger(requestedPort) || requestedPort < 0 || requestedPort > 65535) throw new Error('operator_session_capture_port_invalid');
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1000) throw new Error('operator_session_capture_timeout_invalid');
 
-const result = await captureOperatorSession({ workerUrl, host, port: requestedPort, timeoutMs });
-await writeFile(outPath, JSON.stringify(result, null, 2) + '\n', 'utf8');
-process.stdout.write(JSON.stringify({ ok: true, out: outPath, principal: result.principal }, null, 2) + '\n');
+  return { workerUrl, outPath, host, port: requestedPort, timeoutMs };
+}
 
-async function captureOperatorSession({ workerUrl, host, port, timeoutMs }) {
+export async function captureOperatorSession({ workerUrl, host, port, timeoutMs }, fetchImpl = fetch) {
   let server;
   const received = new Promise((resolve, reject) => {
     server = createServer((request, response) => {
@@ -58,7 +59,7 @@ async function captureOperatorSession({ workerUrl, host, port, timeoutMs }) {
 
   try {
     const captured = await Promise.race([received, timeout]);
-    const session = await verifyOperatorSession(workerUrl, captured.cookie);
+    const session = await verifyOperatorSession(workerUrl, captured.cookie, fetchImpl);
     return {
       schema: 'narada.cloudflare_carrier.operator_session_capture.v1',
       captured_at: new Date().toISOString(),
@@ -73,22 +74,60 @@ async function captureOperatorSession({ workerUrl, host, port, timeoutMs }) {
   }
 }
 
-async function verifyOperatorSession(workerUrl, cookie) {
-  const response = await fetch(new URL('/auth/session', workerUrl), {
+export async function verifyOperatorSession(workerUrl, cookie, fetchImpl = fetch) {
+  const response = await fetchImpl(new URL('/auth/session', workerUrl), {
     headers: { cookie: `narada_operator_session=${cookie}` },
   });
   const body = await response.json().catch(() => ({}));
   if (response.status !== 200 || body?.ok === false) {
     const code = body?.code ?? `http_${response.status}`;
-    throw new Error(`operator_session_verify_failed:${code}`);
+    const error = new Error(`operator_session_verify_failed:${code}`);
+    error.code = code;
+    error.http_status = response.status;
+    error.response = body;
+    error.summary = summarizeOperatorSessionVerifyFailure(body);
+    throw error;
   }
   if (body?.principal?.auth_type !== 'microsoft_oidc') {
-    throw new Error(`operator_session_verify_principal_not_microsoft:${body?.principal?.auth_type ?? 'unknown'}`);
+    const code = `operator_session_verify_principal_not_microsoft:${body?.principal?.auth_type ?? 'unknown'}`;
+    const error = new Error(code);
+    error.code = code;
+    error.http_status = response.status;
+    error.response = body;
+    error.summary = summarizeOperatorSessionVerifyFailure(body);
+    throw error;
   }
   return body;
 }
 
-function fail(code) {
-  process.stderr.write(JSON.stringify({ ok: false, code }, null, 2) + '\n');
-  process.exit(1);
+export function summarizeOperatorSessionVerifyFailure(body = {}) {
+  return {
+    ok: body?.ok ?? false,
+    code: body?.code ?? body?.error ?? null,
+    auth_type: body?.principal?.auth_type ?? null,
+    principal_id: body?.principal?.principal_id ?? null,
+    email: body?.principal?.email ?? null,
+  };
+}
+
+export function formatOperatorSessionCaptureError(error) {
+  return JSON.stringify({
+    ok: false,
+    code: error?.message ?? String(error),
+    http_status: error?.http_status,
+    response: error?.response,
+    summary: error?.summary,
+  }, null, 2) + '\n';
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  try {
+    const config = parseOperatorSessionCaptureArgs(process.argv.slice(2));
+    const result = await captureOperatorSession(config);
+    await writeFile(config.outPath, JSON.stringify(result, null, 2) + '\n', 'utf8');
+    process.stdout.write(JSON.stringify({ ok: true, out: config.outPath, principal: result.principal }, null, 2) + '\n');
+  } catch (error) {
+    process.stderr.write(formatOperatorSessionCaptureError(error));
+    process.exit(1);
+  }
 }
