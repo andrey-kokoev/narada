@@ -71,6 +71,9 @@ const authorityTransferPosture = operationRead.body.authority_transfer_posture;
 const remainingWindowsDomains = Array.isArray(authorityTransferPosture.remaining_windows_domains)
   ? authorityTransferPosture.remaining_windows_domains
   : [];
+const remainingWindowsAuthorities = Array.isArray(authorityTransferPosture.remaining_windows_authorities)
+  ? authorityTransferPosture.remaining_windows_authorities
+  : [];
 const incompleteReasons = [];
 if (remainingWindowsDomains.length > 0) incompleteReasons.push('remaining_windows_domains_present');
 if (repositoryReadiness.body.readiness_status !== 'ready') incompleteReasons.push('repository_publication_cloudflare_github_not_ready');
@@ -84,9 +87,17 @@ process.stdout.write(`${JSON.stringify({
   site_id: siteId,
   operation_id: operationId,
   authority_transfer_posture: {
-    status: authorityTransferPosture.status ?? null,
+    transfer_complete: authorityTransferPosture.transfer_complete === true,
+    domain_count: authorityTransferPosture.domain_count ?? null,
+    cloudflare_owned_count: authorityTransferPosture.cloudflare_owned_count ?? 0,
+    cloudflare_governed_windows_executed_count: authorityTransferPosture.cloudflare_governed_windows_executed_count ?? 0,
+    cloudflare_recorded_windows_owned_count: authorityTransferPosture.cloudflare_recorded_windows_owned_count ?? 0,
+    windows_retained_count: authorityTransferPosture.windows_retained_count ?? 0,
+    remaining_windows_domain_count: authorityTransferPosture.remaining_windows_domain_count ?? remainingWindowsDomains.length,
+    remaining_windows_authority_count: authorityTransferPosture.remaining_windows_authority_count ?? remainingWindowsAuthorities.length,
     remaining_windows_domains: remainingWindowsDomains,
-    attention: authorityTransferPosture.attention ?? [],
+    remaining_windows_authorities: remainingWindowsAuthorities.slice(0, 20),
+    next_action: authorityTransferPosture.next_action ?? null,
   },
   slices: {
     mailbox: {
