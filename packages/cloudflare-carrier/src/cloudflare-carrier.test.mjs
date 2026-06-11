@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { generateKeyPairSync } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
@@ -1835,8 +1836,10 @@ test('worker executes admitted repository publication through Cloudflare GitHub 
   assert.equal(ready.status, 200, JSON.stringify(readyBody));
   assert.equal(readyBody.schema, 'narada.sonar.cloudflare_github_repository_publication_readiness.v1');
   assert.equal(readyBody.readiness_status, 'ready');
+  assert.equal(readyBody.github_credential_mode, 'github_token');
   assert.equal(readyBody.github_token_configured, true);
   assert.equal(readyBody.github_token_secret_ref, 'CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN');
+  assert.equal(readyBody.github_app_configured, false);
   assert.equal(readyBody.allowed_repository_count, 1);
   assert.equal(readyBody.allowed_branch_count, 1);
   assert.equal(readyBody.requested_repository_allowed, true);
@@ -1862,8 +1865,14 @@ test('worker executes admitted repository publication through Cloudflare GitHub 
   const notReadyBody = await notReady.json();
   assert.equal(notReady.status, 200, JSON.stringify(notReadyBody));
   assert.equal(notReadyBody.readiness_status, 'not_ready');
+  assert.equal(notReadyBody.github_credential_mode, 'missing');
   assert.equal(notReadyBody.github_token_configured, false);
-  assert.deepEqual(notReadyBody.missing_configuration, ['CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN']);
+  assert.deepEqual(notReadyBody.missing_configuration, [
+    'CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN',
+    'CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_ID',
+    'CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_INSTALLATION_ID',
+    'CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_PRIVATE_KEY',
+  ]);
   assert.equal(notReadyBody.direct_cloudflare_repository_mutation_admission, 'not_admitted');
 
   const request = await worker.fetch(jsonRequest({
@@ -1920,6 +1929,7 @@ test('worker executes admitted repository publication through Cloudflare GitHub 
   assert.equal(executionBody.schema, 'narada.sonar.cloudflare_github_repository_publication_execution.v1');
   assert.equal(executionBody.publication_status, 'completed');
   assert.equal(executionBody.repository_publication_executor_authority, 'cloudflare_github_repository_publication_executor');
+  assert.equal(executionBody.execution.github_credential_mode, 'github_token');
   assert.equal(executionBody.repository_publication_admission_authority, 'cloudflare_repository_publication_admission_controller');
   assert.equal(executionBody.cloudflare_git_push_admission, 'not_admitted');
   assert.equal(executionBody.direct_cloudflare_repository_mutation_admission, 'admitted_by_cloudflare_github_repository_publication');
@@ -1960,6 +1970,107 @@ test('worker executes admitted repository publication through Cloudflare GitHub 
   assert.equal(readBody.repository_publication_operation_posture.direct_cloudflare_repository_mutation_admission, 'admitted_by_cloudflare_github_repository_publication');
   assert.equal(readBody.repository_publication_operation_posture.authority_partition, 'cloudflare_admits_and_executes_github_repository_publication');
   assert.equal(readBody.authority_transfer_posture.domains.find((domain) => domain.domain === 'repository_publication').classification, 'cloudflare_owned');
+});
+
+test('worker executes admitted repository publication with GitHub App installation authority', async () => {
+  const { privateKey } = generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    publicKeyEncoding: { type: 'spki', format: 'pem' },
+  });
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{ site_id: 'site_fixture', site_ref: 'site://fixture', display_name: 'Fixture Site', status: 'active', created_at: clock(), updated_at: clock(), created_by_principal_id: 'admin' }],
+    memberships: [{ site_id: 'site_fixture', principal_id: 'admin', role: 'owner', status: 'active', created_at: clock(), updated_at: clock() }],
+  });
+  const githubCalls = [];
+  const env = authEnv(fakeDurableObjectNamespace(), {
+    CLOUDFLARE_SITE_REGISTRY_DB: siteDb,
+    CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_ID: '12345',
+    CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_INSTALLATION_ID: '67890',
+    CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_PRIVATE_KEY: privateKey,
+    CLOUDFLARE_REPOSITORY_PUBLICATION_ALLOWED_REPOSITORIES: 'github:andrey-kokoev/narada.sonar',
+    CLOUDFLARE_REPOSITORY_PUBLICATION_ALLOWED_BRANCHES: 'cloudflare-publication-fixture',
+    CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_FETCH: async (url, init) => {
+      githubCalls.push({ url, init });
+      if (url === 'https://api.github.com/app/installations/67890/access_tokens') {
+        assert.equal(init.method, 'POST');
+        assert.match(init.headers.authorization, /^Bearer [^.]+\.[^.]+\.[^.]+$/);
+        return new Response(JSON.stringify({ token: 'github-app-installation-token-fixture' }), {
+          status: 201,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ ref: 'refs/heads/cloudflare-publication-fixture', object: { sha: '0123456789abcdef0123456789abcdef01234567', type: 'commit' } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    },
+  });
+
+  const ready = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.cloudflare_execution.readiness',
+    request_id: 'request_repository_publication_github_app_readiness_ready',
+    params: { site_id: 'site_fixture', repository_ref: 'github:andrey-kokoev/narada.sonar', branch_ref: 'cloudflare-publication-fixture' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  const readyBody = await ready.json();
+  assert.equal(ready.status, 200, JSON.stringify(readyBody));
+  assert.equal(readyBody.readiness_status, 'ready');
+  assert.equal(readyBody.github_credential_mode, 'github_app_installation');
+  assert.equal(readyBody.github_token_configured, false);
+  assert.equal(readyBody.github_app_configured, true);
+  assert.deepEqual(readyBody.missing_configuration, []);
+  assert.doesNotMatch(JSON.stringify(readyBody), /PRIVATE KEY|github-app-installation-token-fixture/);
+
+  const request = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.request.create',
+    request_id: 'request_repository_publication_github_app_create',
+    params: {
+      site_id: 'site_fixture',
+      repository_publication_request_id: 'repository-publication-request-github-app-fixture',
+      publication_ref: 'repository-publication:github-app-fixture',
+      requested_action_ref: 'repository-publication-action:github-app-fixture',
+      requested_action_summary: 'publish admitted commit from Cloudflare GitHub App executor',
+      repository_ref: 'github:andrey-kokoev/narada.sonar',
+      branch_ref: 'cloudflare-publication-fixture',
+      source_change_ref: 'git:commit:0123456789abcdef0123456789abcdef01234567',
+      governed_request_contract_ref: 'contract:cloudflare-github-app-repository-publication-request:v1',
+      evidence_return_contract_ref: 'contract:cloudflare-github-repository-publication-execution-record:v1',
+      rollback_plan_ref: 'rollback:cloudflare-github-app-repository-publication-fixture',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(request.status, 200, JSON.stringify(await request.clone().json()));
+
+  const admission = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.admission.classify',
+    request_id: 'request_repository_publication_github_app_admission',
+    params: {
+      site_id: 'site_fixture',
+      repository_publication_admission_id: 'repository-publication-admission-github-app-fixture',
+      repository_publication_request_id: 'repository-publication-request-github-app-fixture',
+      admission_action: 'admit',
+      admission_reason: 'cloudflare_repository_publication_request_admitted_for_cloudflare_github_app_execution',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(admission.status, 200, JSON.stringify(await admission.clone().json()));
+
+  const execution = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.cloudflare_execution.execute',
+    request_id: 'request_repository_publication_github_app_execute',
+    params: {
+      site_id: 'site_fixture',
+      repository_publication_execution_id: 'repository-publication-execution-github-app-fixture',
+      repository_publication_request_id: 'repository-publication-request-github-app-fixture',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  const executionBody = await execution.json();
+  assert.equal(execution.status, 200, JSON.stringify(executionBody));
+  assert.equal(executionBody.publication_status, 'completed');
+  assert.equal(executionBody.execution.github_credential_mode, 'github_app_installation');
+  assert.equal(githubCalls.length, 2);
+  assert.equal(githubCalls[0].url, 'https://api.github.com/app/installations/67890/access_tokens');
+  assert.equal(githubCalls[1].url, 'https://api.github.com/repos/andrey-kokoev/narada.sonar/git/refs/heads/cloudflare-publication-fixture');
+  assert.equal(githubCalls[1].init.headers.authorization, 'Bearer github-app-installation-token-fixture');
+  assert.deepEqual(JSON.parse(githubCalls[1].init.body), { sha: '0123456789abcdef0123456789abcdef01234567', force: false });
 });
 
 test('worker repository publication selector uses per-request evidence lookup beyond global evidence window', async () => {

@@ -323,6 +323,71 @@ export class CloudflareCarrierDurableObject {
   }
 }
 
+async function resolveCloudflareGithubRepositoryPublicationCredential(env = {}, fetchImpl = fetch) {
+  const token = String(env.CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN ?? '').trim();
+  if (token) return { ok: true, accessToken: token, mode: 'github_token' };
+  const config = readCloudflareGithubRepositoryPublicationCredentialConfig(env);
+  if (!config.appConfigured) {
+    return { ok: false, code: 'cloudflare_repository_publication_github_credential_missing', missing_configuration: config.missingConfiguration };
+  }
+  const appId = String(env.CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_ID).trim();
+  const installationId = String(env.CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_INSTALLATION_ID).trim();
+  const privateKey = String(env.CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_PRIVATE_KEY).trim();
+  const jwt = await createGithubAppJwt(appId, privateKey);
+  const response = await fetchImpl(`https://api.github.com/app/installations/${encodeURIComponent(installationId)}/access_tokens`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${jwt}`,
+      accept: 'application/vnd.github+json',
+      'content-type': 'application/json',
+      'user-agent': 'narada-cloudflare-carrier',
+      'x-github-api-version': '2022-11-28',
+    },
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok || !body.token) {
+    return {
+      ok: false,
+      code: 'cloudflare_repository_publication_github_app_installation_token_failed',
+      github_http_status: Number(response.status ?? 0),
+      github_response_summary: summarizeGithubPublicationResponse(body),
+    };
+  }
+  return { ok: true, accessToken: String(body.token), mode: 'github_app_installation' };
+}
+
+async function createGithubAppJwt(appId, privateKeyPem) {
+  const issuedAt = Math.floor(Date.now() / 1000) - 60;
+  const payload = {
+    iat: issuedAt,
+    exp: issuedAt + 540,
+    iss: String(appId),
+  };
+  const signingInput = `${base64UrlJson({ alg: 'RS256', typ: 'JWT' })}.${base64UrlJson(payload)}`;
+  const key = await crypto.subtle.importKey(
+    'pkcs8',
+    pemToPkcs8Bytes(privateKeyPem),
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const signature = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, new TextEncoder().encode(signingInput));
+  return `${signingInput}.${base64UrlEncode(new Uint8Array(signature))}`;
+}
+
+function base64UrlJson(value) {
+  return base64UrlEncode(new TextEncoder().encode(JSON.stringify(value)));
+}
+
+function pemToPkcs8Bytes(pem) {
+  const normalized = String(pem ?? '').replace(/\\n/g, '\n');
+  const base64 = normalized
+    .replace(/-----BEGIN PRIVATE KEY-----/g, '')
+    .replace(/-----END PRIVATE KEY-----/g, '')
+    .replace(/\s+/g, '');
+  return base64UrlToBytes(base64.replace(/\+/g, '-').replace(/\//g, '_'));
+}
+
 async function getCloudflareTaskLifecycleTask(db, siteId, taskId) {
   const row = await db.prepare('SELECT * FROM cloudflare_task_lifecycle_tasks WHERE site_id = ? AND task_id = ?')
     .bind(siteId, taskId)
@@ -8628,7 +8693,7 @@ function normalizeRepositoryBranchRef(branchRef) {
 }
 
 function readCloudflareGithubRepositoryPublicationReadiness(env = {}, siteId, params = {}) {
-  const tokenConfigured = Boolean(String(env.CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN ?? '').trim());
+  const credential = readCloudflareGithubRepositoryPublicationCredentialConfig(env);
   const allowedRepositories = cloudflarePublicationAllowedValues(env.CLOUDFLARE_REPOSITORY_PUBLICATION_ALLOWED_REPOSITORIES);
   const allowedBranches = cloudflarePublicationAllowedValues(env.CLOUDFLARE_REPOSITORY_PUBLICATION_ALLOWED_BRANCHES);
   const requestedRepositoryRef = String(params.repository_ref ?? params.repository ?? '').trim();
@@ -8636,7 +8701,7 @@ function readCloudflareGithubRepositoryPublicationReadiness(env = {}, siteId, pa
   const requestedRepositoryAllowed = requestedRepositoryRef ? isCloudflarePublicationValueAllowed(requestedRepositoryRef, allowedRepositories) : null;
   const requestedBranchAllowed = requestedBranchRef ? isCloudflarePublicationValueAllowed(requestedBranchRef, allowedBranches) : null;
   const missingConfiguration = [];
-  if (!tokenConfigured) missingConfiguration.push('CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN');
+  if (!credential.configured) missingConfiguration.push(...credential.missingConfiguration);
   if (allowedRepositories.length === 0) missingConfiguration.push('CLOUDFLARE_REPOSITORY_PUBLICATION_ALLOWED_REPOSITORIES');
   if (allowedBranches.length === 0) missingConfiguration.push('CLOUDFLARE_REPOSITORY_PUBLICATION_ALLOWED_BRANCHES');
   if (requestedRepositoryAllowed === false) missingConfiguration.push('requested_repository_not_allowed');
@@ -8650,8 +8715,14 @@ function readCloudflareGithubRepositoryPublicationReadiness(env = {}, siteId, pa
     readiness_status: ready ? 'ready' : 'not_ready',
     repository_publication_executor_authority: CLOUDFLARE_GITHUB_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY,
     repository_publication_admission_authority: CLOUDFLARE_REPOSITORY_PUBLICATION_ADMISSION_AUTHORITY,
-    github_token_configured: tokenConfigured,
+    github_credential_mode: credential.mode,
+    github_token_configured: credential.tokenConfigured,
     github_token_secret_ref: 'CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN',
+    github_app_configured: credential.appConfigured,
+    github_app_id_configured: credential.appIdConfigured,
+    github_app_installation_id_configured: credential.appInstallationIdConfigured,
+    github_app_private_key_configured: credential.appPrivateKeyConfigured,
+    github_app_secret_refs: credential.appSecretRefs,
     allowed_repository_count: allowedRepositories.length,
     allowed_branch_count: allowedBranches.length,
     allowed_repositories: allowedRepositories,
@@ -8664,6 +8735,35 @@ function readCloudflareGithubRepositoryPublicationReadiness(env = {}, siteId, pa
     cloudflare_git_push_admission: 'not_admitted',
     direct_cloudflare_repository_mutation_admission: ready ? 'admitted_by_cloudflare_github_repository_publication_ready' : 'not_admitted',
     authority_partition: ready ? 'cloudflare_repository_publication_executor_configured' : 'cloudflare_repository_publication_executor_not_ready',
+  };
+}
+
+function readCloudflareGithubRepositoryPublicationCredentialConfig(env = {}) {
+  const tokenConfigured = Boolean(String(env.CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN ?? '').trim());
+  const appIdConfigured = Boolean(String(env.CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_ID ?? '').trim());
+  const appInstallationIdConfigured = Boolean(String(env.CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_INSTALLATION_ID ?? '').trim());
+  const appPrivateKeyConfigured = Boolean(String(env.CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_PRIVATE_KEY ?? '').trim());
+  const appConfigured = appIdConfigured && appInstallationIdConfigured && appPrivateKeyConfigured;
+  const appSecretRefs = [
+    'CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_ID',
+    'CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_INSTALLATION_ID',
+    'CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_PRIVATE_KEY',
+  ];
+  const missingAppConfiguration = [
+    appIdConfigured ? null : 'CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_ID',
+    appInstallationIdConfigured ? null : 'CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_INSTALLATION_ID',
+    appPrivateKeyConfigured ? null : 'CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_PRIVATE_KEY',
+  ].filter(Boolean);
+  return {
+    configured: tokenConfigured || appConfigured,
+    mode: tokenConfigured ? 'github_token' : appConfigured ? 'github_app_installation' : 'missing',
+    tokenConfigured,
+    appConfigured,
+    appIdConfigured,
+    appInstallationIdConfigured,
+    appPrivateKeyConfigured,
+    appSecretRefs,
+    missingConfiguration: tokenConfigured ? [] : (appConfigured ? [] : ['CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN', ...missingAppConfiguration]),
   };
 }
 
@@ -8686,8 +8786,6 @@ async function executeCloudflareGithubRepositoryPublication(env = {}, siteId, pa
   if (!branchRef) return { ok: false, code: 'cloudflare_repository_publication_execution_branch_ref_invalid', branch_ref: request.branch_ref };
   const commitSha = parseGitCommitRef(request.source_change_ref);
   if (!commitSha) return { ok: false, code: 'cloudflare_repository_publication_execution_source_change_ref_invalid', source_change_ref: request.source_change_ref };
-  const token = String(env.CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN ?? '').trim();
-  if (!token) return { ok: false, code: 'cloudflare_repository_publication_github_token_missing' };
   const allowedRepositories = cloudflarePublicationAllowedValues(env.CLOUDFLARE_REPOSITORY_PUBLICATION_ALLOWED_REPOSITORIES);
   const allowedBranches = cloudflarePublicationAllowedValues(env.CLOUDFLARE_REPOSITORY_PUBLICATION_ALLOWED_BRANCHES);
   if (!isCloudflarePublicationValueAllowed(repository.repository_ref, allowedRepositories)) {
@@ -8699,6 +8797,8 @@ async function executeCloudflareGithubRepositoryPublication(env = {}, siteId, pa
   const fetchImpl = typeof env.CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_FETCH === 'function'
     ? env.CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_FETCH
     : fetch;
+  const credential = await resolveCloudflareGithubRepositoryPublicationCredential(env, fetchImpl);
+  if (!credential.ok) return credential;
   const executionId = String(params.repository_publication_execution_id ?? `cloudflare_github_repository_publication_execution_${safeIdToken(siteId)}_${safeIdToken(repositoryPublicationRequestId)}_${Date.now()}`);
   const generatedAt = String(params.generated_at ?? new Date().toISOString());
   const url = `https://api.github.com/repos/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.repo)}/git/refs/heads/${githubBranchRefPath(branchRef)}`;
@@ -8709,7 +8809,7 @@ async function executeCloudflareGithubRepositoryPublication(env = {}, siteId, pa
     const response = await fetchImpl(url, {
       method: 'PATCH',
       headers: {
-        authorization: `Bearer ${token}`,
+        authorization: `Bearer ${credential.accessToken}`,
         accept: 'application/vnd.github+json',
         'content-type': 'application/json',
         'user-agent': 'narada-cloudflare-carrier',
@@ -8737,6 +8837,7 @@ async function executeCloudflareGithubRepositoryPublication(env = {}, siteId, pa
     source_change_ref: request.source_change_ref,
     publication_status: publicationStatus,
     repository_publication_executor_authority: CLOUDFLARE_GITHUB_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY,
+    github_credential_mode: credential.mode,
     repository_publication_admission_authority: admission.authority_locus,
     repository_publication_admission: admission.repository_publication_admission,
     cloudflare_repository_publication_admission_id: admission.repository_publication_admission_id,
@@ -17918,8 +18019,10 @@ export function renderCloudflareCarrierConsole() {
         ['Site', item.site_id || el('siteId').value.trim() || 'none'],
         ['Repository', item.requested_repository_ref || 'none'],
         ['Branch', item.requested_branch_ref || 'none'],
+        ['GitHub Credential Mode', item.github_credential_mode || 'unknown'],
         ['GitHub Token Configured', String(Boolean(item.github_token_configured))],
         ['GitHub Token Secret', item.github_token_secret_ref || 'none'],
+        ['GitHub App Configured', String(Boolean(item.github_app_configured))],
         ['Repository Allowed', String(item.requested_repository_allowed ?? 'unknown')],
         ['Branch Allowed', String(item.requested_branch_allowed ?? 'unknown')],
         ['Allowed Repositories', String(item.allowed_repository_count ?? 0)],
@@ -17947,7 +18050,9 @@ export function renderCloudflareCarrierConsole() {
       appendConsoleEvidence('repository_publication_cloudflare_execution_readiness_read', {
         repository_publication_request_id: request.repository_publication_request_id || null,
         readiness_status: readiness.readiness_status || 'unknown',
+        github_credential_mode: readiness.github_credential_mode || 'unknown',
         github_token_configured: Boolean(readiness.github_token_configured),
+        github_app_configured: Boolean(readiness.github_app_configured),
         github_token_secret_ref: readiness.github_token_secret_ref || 'CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN',
         missing_configuration: readiness.missing_configuration || [],
         direct_cloudflare_repository_mutation_admission: readiness.direct_cloudflare_repository_mutation_admission || 'not_admitted',
