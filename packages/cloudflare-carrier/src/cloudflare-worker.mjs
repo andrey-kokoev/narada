@@ -1915,6 +1915,7 @@ function summarizeCloudflareOperationPostureRoute(overview = {}, activeOperation
 function summarizeCloudflareOperationWorkflowRoute({
   operation = null,
   lifecycleStatus = null,
+  operationContinuityDirectionStatus = null,
   persistencePosture = null,
   recoveryPosture = null,
   operationActivityTimeline = null,
@@ -1932,6 +1933,7 @@ function summarizeCloudflareOperationWorkflowRoute({
   const directiveDeliveries = Array.isArray(webhookDelayDirectiveDeliveries) ? webhookDelayDirectiveDeliveries : [];
   const dispatchDecisions = Array.isArray(residentDispatchDecisions) ? residentDispatchDecisions : [];
   const operatorFocus = summarizeCloudflareOperationOperatorFocus(operationActivityTimeline, { mailboxSendReviews, operationFocusReviews });
+  const continuityDirectionStatus = operationContinuityDirectionStatus ?? lifecycleStatus?.operation_continuity_direction_status ?? null;
   const next = (() => {
     if (!operationId) return { action: 'select_operation', target: siteId ?? 'none', reason: 'operation_not_loaded' };
     if (persistencePosture?.state && persistencePosture.state !== 'durable') {
@@ -1943,6 +1945,13 @@ function summarizeCloudflareOperationWorkflowRoute({
     if (lifecycleStatus?.next_action === 'session') return { action: 'start_or_select_session', target: operationId, reason: 'operation_lifecycle_missing_session' };
     if (lifecycleStatus?.next_action === 'carrier_evidence') return { action: 'read_operation_evidence', target: operationId, reason: 'operation_lifecycle_missing_carrier_evidence' };
     if (lifecycleStatus?.next_action === 'continuity_packet') return { action: 'review_continuity_packet', target: siteId ?? operationId, reason: 'operation_lifecycle_missing_continuity_packet' };
+    if (continuityDirectionStatus?.state && continuityDirectionStatus.state !== 'bidirectional_packets_observed') {
+      return {
+        action: continuityDirectionStatus.next_action || 'observe_continuity_packet',
+        target: siteId ?? operationId,
+        reason: 'operation_continuity_direction_needs_attention',
+      };
+    }
     if (lifecycleStatus?.next_action === 'continuity_loop_report') return { action: 'review_continuity_loop_report', target: siteId ?? operationId, reason: 'operation_lifecycle_missing_continuity_loop_report' };
     if (lifecycleStatus?.next_action === 'carrier_evidence_read_degraded') return { action: 'review_carrier_evidence_replay', target: operationId, reason: 'carrier_evidence_read_degraded' };
     if (lifecycleStatus?.next_action === 'local_ingress_provider_liveness_missing') return { action: 'review_local_ingress_provider_liveness', target: siteId ?? operationId, reason: 'local_ingress_provider_liveness_missing' };
@@ -1980,6 +1989,8 @@ function summarizeCloudflareOperationWorkflowRoute({
     status: ready ? 'ready' : 'needs_attention',
     reason: routedNext.reason,
     lifecycle_next_action: lifecycleStatus?.next_action ?? 'unknown',
+    continuity_direction_state: continuityDirectionStatus?.state ?? 'unknown',
+    continuity_direction_missing: continuityDirectionStatus?.missing_directions ?? [],
     operator_focus: operatorFocus,
   };
 }
@@ -4765,6 +4776,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const operationWorkflowRoute = summarizeCloudflareOperationWorkflowRoute({
       operation,
       lifecycleStatus: operationLifecycleStatus,
+      operationContinuityDirectionStatus,
       persistencePosture: cloudflarePersistencePosture,
       recoveryPosture: cloudflareRecoveryPosture,
       operationActivityTimeline,
@@ -14526,6 +14538,10 @@ export function renderCloudflareCarrierConsole() {
       if (action === 'start_or_select_session') { focusOperationSession(); return; }
       if (action === 'read_operation_evidence') { run(refreshOperation); return; }
       if (action === 'review_continuity_packet') { applyContinuityWorkflowNextStep(); return; }
+      if (action === 'observe_continuity_packet') { applyContinuityWorkflowNextStep(); return; }
+      if (action === 'publish_cloudflare_continuity_packet') { applyContinuityWorkflowNextStep(); return; }
+      if (action === 'return_local_windows_continuity_packet') { applyContinuityWorkflowNextStep(); return; }
+      if (action === 'monitor_operation_continuity') { renderLocalCloudContinuityBridge(product); return; }
       if (action === 'review_continuity_loop_report') { focusContinuityLoopReport(product); return; }
       if (action === 'review_carrier_evidence_replay') { focusRecoveryEvidence(product); return; }
       if (action === 'review_directive_delivery') { focusWebhookDelayDirectiveDelivery(); return; }

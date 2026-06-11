@@ -1117,6 +1117,20 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(packetPutBody.status, 'imported');
   assert.equal(packetPutBody.site_continuity_packet_admission.action, 'projection_only');
 
+  const operationReadAfterCloudflareOnlyPacket = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_operation_read_after_cloudflare_only_continuity_packet',
+    params: { site_id: 'site_fixture', operation_id: 'operation_site_read' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(operationReadAfterCloudflareOnlyPacket.status, 200);
+  const operationReadAfterCloudflareOnlyPacketBody = await operationReadAfterCloudflareOnlyPacket.json();
+  assert.equal(operationReadAfterCloudflareOnlyPacketBody.operation_continuity_direction_status.state, 'cloudflare_to_local_windows_only');
+  assert.deepEqual(operationReadAfterCloudflareOnlyPacketBody.operation_continuity_direction_status.missing_directions, ['local_windows_to_cloudflare']);
+  assert.equal(operationReadAfterCloudflareOnlyPacketBody.operation_workflow_route.next_action, 'return_local_windows_continuity_packet');
+  assert.equal(operationReadAfterCloudflareOnlyPacketBody.operation_workflow_route.reason, 'operation_continuity_direction_needs_attention');
+  assert.equal(operationReadAfterCloudflareOnlyPacketBody.operation_workflow_route.continuity_direction_state, 'cloudflare_to_local_windows_only');
+  assert.deepEqual(operationReadAfterCloudflareOnlyPacketBody.operation_workflow_route.continuity_direction_missing, ['local_windows_to_cloudflare']);
+
   const publishPacket = await worker.fetch(jsonRequest({
     operation: 'site.continuity.packet.publish',
     request_id: 'request_site_read_continuity_packet_publish',
@@ -3745,6 +3759,8 @@ test('worker records webhook delay observations as Cloudflare shadow-read eviden
     status: 'needs_attention',
     reason: 'persistence_posture_needs_attention',
     lifecycle_next_action: 'session',
+    continuity_direction_state: 'no_packet_observed',
+    continuity_direction_missing: ['cloudflare_to_local_windows', 'local_windows_to_cloudflare'],
     operator_focus: null,
   });
   assert.deepEqual(operationReadBody.operation_product_surface.operation_workflow_route, operationReadBody.operation_workflow_route);
