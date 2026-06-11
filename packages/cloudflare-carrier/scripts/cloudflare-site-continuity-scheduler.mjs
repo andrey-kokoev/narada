@@ -1527,7 +1527,7 @@ export function readLocalInboundPacketArtifact(outputPath) {
 
 export function buildSiteContinuityReconciliationPlan({
   localSyncArtifacts,
-  nodeCommand = process.env.NARADA_NODE_COMMAND ?? 'node',
+  nodeCommand = resolveDefaultNodeCommand(),
   syncEntryPoint,
   packetPath = null,
   packetDirectory = null,

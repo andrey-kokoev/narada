@@ -333,6 +333,47 @@ test('site continuity reconciliation plan resolves one packet per configured sit
   }
 });
 
+test('site continuity reconciliation plan resolves default FNM node command for scheduled health parity', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-reconcile-fnm-node-'));
+  const artifactDirectory = join(root, '.narada/site-continuity');
+  const packetDirectory = join(root, '.narada/site-continuity-packets');
+  const syncEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-sync.mjs');
+  const fnmDir = join(root, '.fnm');
+  const fnmNode = join(fnmDir, 'node-versions', `v${process.versions.node}`, 'installation', process.platform === 'win32' ? 'node.exe' : 'bin/node');
+  const originalFnmDir = process.env.FNM_DIR;
+  const originalNaradaNodeCommand = process.env.NARADA_NODE_COMMAND;
+  await mkdir(artifactDirectory, { recursive: true });
+  await mkdir(packetDirectory, { recursive: true });
+  await mkdir(join(root, 'packages/cloudflare-carrier/scripts'), { recursive: true });
+  await mkdir(dirname(fnmNode), { recursive: true });
+  await writeFile(syncEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(fnmNode, '', 'utf8');
+  await writeFile(join(packetDirectory, 'site_alpha-packet.json'), '{"packet":{"site_id":"site_alpha","packet_id":"packet-alpha"}}\n', 'utf8');
+  try {
+    process.env.FNM_DIR = fnmDir;
+    delete process.env.NARADA_NODE_COMMAND;
+    const plan = buildSiteContinuitySchedulerPlan({
+      action: 'reconcile',
+      repoRoot: root,
+      syncEntrypoint,
+      packetDirectory,
+      artifactDirectory,
+      configuredSites: 'site_alpha',
+    });
+
+    assert.equal(plan.node_command, fnmNode);
+    assert.equal(plan.reconciliation_plan.status, 'ready');
+    assert.equal(plan.reconciliation_plan.selected_sites[0].sync_command.includes(fnmNode), true);
+    assert.doesNotMatch(plan.reconciliation_plan.selected_sites[0].sync_command, /^"?node"?\s/);
+  } finally {
+    if (originalFnmDir === undefined) delete process.env.FNM_DIR;
+    else process.env.FNM_DIR = originalFnmDir;
+    if (originalNaradaNodeCommand === undefined) delete process.env.NARADA_NODE_COMMAND;
+    else process.env.NARADA_NODE_COMMAND = originalNaradaNodeCommand;
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('site continuity scheduler live install executes bounded schtasks command', async () => {
   const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-live-install-'));
   const syncEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-sync.mjs');
