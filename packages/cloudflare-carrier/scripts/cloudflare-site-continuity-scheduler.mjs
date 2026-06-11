@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFile as execFileCallback } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -692,6 +692,9 @@ function resolveDefaultNodeCommand() {
     const fnmNode = join(fnmDir, 'node-versions', `v${process.versions.node}`, 'installation', process.platform === 'win32' ? 'node.exe' : 'bin/node');
     if (existsSync(fnmNode)) return fnmNode;
   }
+  try {
+    if (isAbsolute(process.execPath) && existsSync(process.execPath)) return realpathSync(process.execPath);
+  } catch {}
   return 'node';
 }
 

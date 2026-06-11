@@ -3378,11 +3378,13 @@ function summarizeCloudflareCarrierEvidenceReadStatus({ sessions = [], carrierEv
   const sessionList = Array.isArray(sessions) ? sessions : [];
   const evidenceGroups = Array.isArray(carrierEvidence) ? carrierEvidence : [];
   const sessionIds = sessionList.map((session) => session.carrier_session_id).filter(Boolean);
+  const boundedSessionOffset = clampInteger(params.session_offset, 0, sessionIds.length, 0);
   const boundedSessionLimit = clampInteger(params.session_limit, 0, 50, 25);
-  const attemptedSessionIds = sessionIds.slice(0, boundedSessionLimit);
+  const attemptedSessionIds = sessionIds.slice(boundedSessionOffset, boundedSessionOffset + boundedSessionLimit);
   const evidenceBySession = new Map(evidenceGroups.map((entry) => [entry?.carrier_session_id, entry]).filter(([id]) => Boolean(id)));
   const missingSessionIds = attemptedSessionIds.filter((sessionId) => !evidenceBySession.has(sessionId));
-  const truncatedSessionCount = Math.max(0, sessionIds.length - attemptedSessionIds.length);
+  const nextSessionOffset = boundedSessionOffset + attemptedSessionIds.length;
+  const truncatedSessionCount = Math.max(0, sessionIds.length - nextSessionOffset);
   const failed = evidenceGroups.filter((entry) => entry?.ok !== true);
   const readable = evidenceGroups.filter((entry) => entry?.ok === true);
   const eventCount = evidenceGroups.reduce((count, group) => count + (Array.isArray(group?.events) ? group.events.length : 0), 0);
@@ -3393,12 +3395,14 @@ function summarizeCloudflareCarrierEvidenceReadStatus({ sessions = [], carrierEv
     schema: 'narada.cloudflare_carrier_evidence_read_status.v1',
     state,
     session_count: sessionIds.length,
-    attempted_session_count: evidenceGroups.length,
+    attempted_session_count: attemptedSessionIds.length,
     readable_session_count: readable.length,
     failed_session_count: failed.length,
     missing_session_count: missingSessionIds.length,
     truncated_session_count: truncatedSessionCount,
+    session_read_offset: boundedSessionOffset,
     session_read_limit: boundedSessionLimit,
+    next_session_offset: truncatedSessionCount > 0 ? nextSessionOffset : null,
     event_count: eventCount,
     missing_session_ids: missingSessionIds,
     failures: failed.map((entry) => ({
@@ -12138,7 +12142,9 @@ async function readCarrierEvidenceForSiteSessions(env = {}, sessions = [], princ
   const boundedLimit = clampInteger(params.carrier_event_limit, 0, 100, 25);
   const evidence = indexedEvidence?.evidence ?? [];
   const indexedSessionIds = new Set(evidence.map((entry) => entry.carrier_session_id).filter(Boolean));
-  for (const session of sessions.slice(0, clampInteger(params.session_limit, 0, 50, 25))) {
+  const sessionOffset = clampInteger(params.session_offset, 0, sessions.length, 0);
+  const sessionLimit = clampInteger(params.session_limit, 0, 50, 25);
+  for (const session of sessions.slice(sessionOffset, sessionOffset + sessionLimit)) {
     const carrierSessionId = session.carrier_session_id;
     if (indexedSessionIds.has(carrierSessionId)) continue;
     try {
@@ -12227,7 +12233,10 @@ async function recordCloudflareCarrierEvidenceEvents(env = {}, session = null, e
 
 async function readCloudflareCarrierEvidenceIndex(env = {}, sessions = [], params = {}) {
   const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
-  const sessionSlice = (sessions ?? []).slice(0, clampInteger(params.session_limit, 0, 50, 25));
+  const sessionList = sessions ?? [];
+  const sessionOffset = clampInteger(params.session_offset, 0, sessionList.length, 0);
+  const sessionLimit = clampInteger(params.session_limit, 0, 50, 25);
+  const sessionSlice = sessionList.slice(sessionOffset, sessionOffset + sessionLimit);
   if (!db || typeof db.prepare !== 'function' || sessionSlice.length === 0) return null;
   await ensureCloudflareCarrierEvidenceIndexSchema(db);
   const boundedLimit = clampInteger(params.carrier_event_limit, 0, 100, 25);
@@ -13657,8 +13666,10 @@ export function renderCloudflareCarrierConsole() {
         <h2>Recovery Posture</h2>
         <div id="recoveryPostureDetail" class="evidence-summary"><div class="empty">No recovery posture loaded.</div></div>
         <label>Evidence Session Window<input id="carrierEvidenceSessionLimit" type="number" min="1" max="50" value="10"></label>
+        <label>Evidence Session Offset<input id="carrierEvidenceSessionOffset" type="number" min="0" value="0"></label>
         <div class="actions">
           <button id="recoveryNextAction" class="secondary">Apply Recovery Next Action</button>
+          <button id="loadNextRecoveryEvidenceWindow" class="secondary">Load Next Evidence Window</button>
           <button id="loadRecoveryEvidenceWindow" class="secondary">Load Evidence Window</button>
         </div>
         <div id="recoveryWorkflow" class="attention-items"><div class="empty">No recovery workflow loaded.</div></div>
@@ -14096,7 +14107,7 @@ export function renderCloudflareCarrierConsole() {
         }, { request_id: 'console_start_' + carrierSessionId });
       },
       status() { return this.request('session.status'); },
-      readSite() { return this.request('site.read', { site_id: el('siteId').value.trim(), carrier_event_limit: 20, session_limit: 10 }); },
+      readSite() { return this.request('site.read', { site_id: el('siteId').value.trim(), carrier_event_limit: 20, session_limit: carrierEvidenceSessionLimit(), session_offset: carrierEvidenceSessionOffset() }); },
       readSites() { return this.request('site.list', { limit: 20, site_status_limit: 20 }); },
       readOperation() {
         return this.request('operation.read', {
@@ -14104,6 +14115,7 @@ export function renderCloudflareCarrierConsole() {
           operation_id: el('operationId').value.trim(),
           carrier_event_limit: 20,
           session_limit: carrierEvidenceSessionLimit(),
+          session_offset: carrierEvidenceSessionOffset(),
           mailbox_draft_reply_proposal_limit: 20,
           mailbox_outlook_draft_create_limit: 20,
           mailbox_send_review_limit: 20,
@@ -14217,6 +14229,7 @@ export function renderCloudflareCarrierConsole() {
         if (saved.operation_id) el('operationId').value = saved.operation_id;
         if (saved.carrier_session_id) el('sessionId').value = saved.carrier_session_id;
         if (saved.carrier_evidence_session_limit) el('carrierEvidenceSessionLimit').value = String(saved.carrier_evidence_session_limit);
+        if (saved.carrier_evidence_session_offset != null) el('carrierEvidenceSessionOffset').value = String(saved.carrier_evidence_session_offset);
       } catch {}
       renderActiveSession();
     }
@@ -14226,6 +14239,7 @@ export function renderCloudflareCarrierConsole() {
         operation_id: el('operationId').value.trim(),
         carrier_session_id: el('sessionId').value.trim(),
         carrier_evidence_session_limit: carrierEvidenceSessionLimit(),
+        carrier_evidence_session_offset: carrierEvidenceSessionOffset(),
       }));
       renderActiveSession();
     }
@@ -19728,9 +19742,13 @@ export function renderCloudflareCarrierConsole() {
     function evidenceReplaySessionSummary(status = evidenceReplayStatus() || {}) {
       if (!status) return 'unknown';
       return [
+        'offset=' + (status.session_read_offset ?? 0),
+        'limit=' + (status.session_read_limit ?? 'unknown'),
         'readable=' + (status.readable_session_count ?? 0),
         'missing=' + (status.missing_session_count ?? 0),
         'failed=' + (status.failed_session_count ?? 0),
+        'truncated=' + (status.truncated_session_count ?? 0),
+        'next=' + (status.next_session_offset ?? 'none'),
       ].join(' / ');
     }
     function operationStatusHistory(product = state.operationProduct || {}) {
@@ -20114,6 +20132,18 @@ export function renderCloudflareCarrierConsole() {
       if (!Number.isFinite(parsed)) return 10;
       return Math.max(1, Math.min(50, parsed));
     }
+    function carrierEvidenceSessionOffset() {
+      const parsed = Number.parseInt(el('carrierEvidenceSessionOffset').value, 10);
+      if (!Number.isFinite(parsed)) return 0;
+      return Math.max(0, parsed);
+    }
+    async function loadNextRecoveryEvidenceWindow() {
+      const status = evidenceReplayStatus(state.operationProduct || {}) || {};
+      if (status.next_session_offset == null) return refreshOperation();
+      el('carrierEvidenceSessionOffset').value = String(status.next_session_offset);
+      saveWorkbenchState();
+      return refreshOperation();
+    }
     async function refreshOperation() {
       saveWorkbenchState();
       const body = await api.readOperation();
@@ -20263,8 +20293,10 @@ export function renderCloudflareCarrierConsole() {
     el('persistenceNextAction').addEventListener('click', applyPersistenceNextAction);
     el('recoveryNextAction').addEventListener('click', applyRecoveryNextAction);
     el('authorityTransferNextAction').addEventListener('click', applyAuthorityTransferNextAction);
+    el('loadNextRecoveryEvidenceWindow').addEventListener('click', () => run(loadNextRecoveryEvidenceWindow));
     el('loadRecoveryEvidenceWindow').addEventListener('click', () => run(refreshOperation));
     el('carrierEvidenceSessionLimit').addEventListener('change', () => { el('carrierEvidenceSessionLimit').value = String(carrierEvidenceSessionLimit()); saveWorkbenchState(); });
+    el('carrierEvidenceSessionOffset').addEventListener('change', () => { el('carrierEvidenceSessionOffset').value = String(carrierEvidenceSessionOffset()); saveWorkbenchState(); });
     el('startResidentDispatch').addEventListener('click', () => run(startResidentDispatchFromWorkbench));
     el('readRepositoryPublicationReadiness').addEventListener('click', () => run(readFocusedRepositoryPublicationReadiness));
     el('executeRepositoryPublication').addEventListener('click', () => run(executeFocusedRepositoryPublication));

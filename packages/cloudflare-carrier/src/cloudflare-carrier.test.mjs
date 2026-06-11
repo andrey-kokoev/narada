@@ -2686,7 +2686,7 @@ test('worker site.read surfaces degraded carrier evidence replay when session ev
   assert.equal(body.carrier_evidence_read_status.schema, 'narada.cloudflare_carrier_evidence_read_status.v1');
   assert.equal(body.carrier_evidence_read_status.state, 'degraded');
   assert.equal(body.carrier_evidence_read_status.session_count, 1);
-  assert.equal(body.carrier_evidence_read_status.attempted_session_count, 0);
+  assert.equal(body.carrier_evidence_read_status.attempted_session_count, 1);
   assert.equal(body.carrier_evidence_read_status.readable_session_count, 0);
   assert.equal(body.carrier_evidence_read_status.failed_session_count, 0);
   assert.equal(body.carrier_evidence_read_status.missing_session_count, 1);
@@ -2829,7 +2829,9 @@ test('worker site.read reports bounded carrier evidence reads as partial rather 
   assert.equal(body.carrier_evidence.length, 1);
   assert.equal(body.carrier_evidence_read_status.state, 'partial');
   assert.equal(body.carrier_evidence_read_status.session_count, 2);
+  assert.equal(body.carrier_evidence_read_status.session_read_offset, 0);
   assert.equal(body.carrier_evidence_read_status.session_read_limit, 1);
+  assert.equal(body.carrier_evidence_read_status.next_session_offset, 1);
   assert.equal(body.carrier_evidence_read_status.truncated_session_count, 1);
   assert.equal(body.carrier_evidence_read_status.missing_session_count, 0);
   assert.deepEqual(body.carrier_evidence_read_status.missing_session_ids, []);
@@ -2838,6 +2840,25 @@ test('worker site.read reports bounded carrier evidence reads as partial rather 
   assert.equal(body.cloudflare_persistence_posture.state, 'durable');
   assert.equal(body.cloudflare_persistence_posture.evidence_read_state, 'partial');
   assert.equal(body.cloudflare_persistence_posture.carrier_evidence_truncated_session_count, 1);
+
+  const secondRead = await worker.fetch(jsonRequest({
+    operation: 'site.read',
+    request_id: 'request_site_read_second_carrier_evidence_window',
+    params: { site_id: 'site_fixture', carrier_event_limit: 10, session_limit: 1, session_offset: 1 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(secondRead.status, 200);
+  const secondBody = await secondRead.json();
+  assert.equal(secondBody.carrier_evidence.length, 1);
+  assert.notEqual(secondBody.carrier_evidence[0].carrier_session_id, body.carrier_evidence[0].carrier_session_id);
+  assert.equal(new Set([
+    body.carrier_evidence[0].carrier_session_id,
+    secondBody.carrier_evidence[0].carrier_session_id,
+  ]).size, 2);
+  assert.equal(secondBody.carrier_evidence_read_status.state, 'loaded');
+  assert.equal(secondBody.carrier_evidence_read_status.session_read_offset, 1);
+  assert.equal(secondBody.carrier_evidence_read_status.session_read_limit, 1);
+  assert.equal(secondBody.carrier_evidence_read_status.next_session_offset, null);
+  assert.equal(secondBody.carrier_evidence_read_status.truncated_session_count, 0);
   assert.equal(body.cloudflare_recovery_posture.state, 'reconstructable');
   assert.equal(body.cloudflare_recovery_posture.evidence_replay, 'partial');
   assert.equal(body.cloudflare_recovery_posture.truncated_evidence_session_count, 1);
@@ -3029,8 +3050,13 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /recoveryPostureDetail/);
   assert.match(html, /Evidence Session Window/);
   assert.match(html, /carrierEvidenceSessionLimit/);
+  assert.match(html, /Evidence Session Offset/);
+  assert.match(html, /carrierEvidenceSessionOffset/);
+  assert.match(html, /loadNextRecoveryEvidenceWindow/);
+  assert.match(html, /Load Next Evidence Window/);
   assert.match(html, /loadRecoveryEvidenceWindow/);
   assert.match(html, /carrierEvidenceSessionLimit\(\)/);
+  assert.match(html, /carrierEvidenceSessionOffset\(\)/);
   assert.match(html, /recoveryPostureContext/);
   assert.match(html, /recoveryPostureItemLabel/);
   assert.match(html, /recoveryPostureItemSummary/);
