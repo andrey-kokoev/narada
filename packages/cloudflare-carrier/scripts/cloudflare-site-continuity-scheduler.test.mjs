@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { createSiteContinuityBinding, createSiteContinuityBindingRegistry } from '@narada2/site-continuity';
 import {
   buildSiteContinuityReconciliationPlan,
   buildSiteContinuitySchedulerPlan,
@@ -348,6 +349,48 @@ test('site continuity scheduler status-all distinguishes configured sites missin
     });
     assert.doesNotMatch(JSON.stringify(plan), /secret-not-read/);
     assert.doesNotMatch(JSON.stringify(plan), /registry-secret-not-read/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('site continuity scheduler uses binding registry as managed site set before discovery registry', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-binding-registry-'));
+  const artifactDirectory = join(root, '.narada/site-continuity');
+  const bindingRegistryPath = join(artifactDirectory, 'bindings.json');
+  const siteRegistryProjectionPath = join(root, '.narada/site-registry/cloudflare-sites.json');
+  await mkdir(artifactDirectory, { recursive: true });
+  await mkdir(join(root, '.narada/site-registry'), { recursive: true });
+  await writeFile(bindingRegistryPath, `${JSON.stringify(createSiteContinuityBindingRegistry({
+    registry_ref: 'file:.narada/site-continuity/bindings.json',
+    generated_at: '2026-06-11T13:30:00.000Z',
+    bindings: [createSiteContinuityBinding({
+      site_id: 'site_bound',
+      cloudflare_site_ref: 'cloudflare://site-bound',
+    })],
+  }), null, 2)}\n`, 'utf8');
+  await writeFile(siteRegistryProjectionPath, `${JSON.stringify({
+    schema: 'narada.cloudflare_site_registry.snapshot.v1',
+    sites: [
+      { site_id: 'site_bound', display_name: 'Bound Site From Registry', site_ref: 'cloudflare://site-bound', status: 'active' },
+      { site_id: 'site_discovered', display_name: 'Discovered Only Site', site_ref: 'cloudflare://site-discovered', status: 'active' },
+    ],
+  }, null, 2)}\n`, 'utf8');
+  try {
+    const plan = buildSiteContinuitySchedulerPlan({
+      action: 'status-all',
+      repoRoot: root,
+      artifactDirectory,
+      siteContinuityBindingRegistryPath: bindingRegistryPath,
+      siteRegistryProjectionPath,
+    });
+    assert.equal(plan.configured_sites.selection_source, 'site_continuity_binding_registry');
+    assert.deepEqual(plan.configured_sites.sites, ['site_bound']);
+    assert.equal(plan.configured_sites.site_count, 1);
+    assert.equal(plan.configured_sites.site_continuity_binding_registry.state, 'read');
+    assert.equal(plan.configured_sites.site_registry_projection.site_count, 2);
+    assert.deepEqual(plan.local_sync_artifacts.configured_site_sync_statuses.map((site) => site.site_id), ['site_bound']);
+    assert.equal(plan.local_sync_artifacts.configured_site_sync_statuses[0].display_name, 'Bound Site From Registry');
   } finally {
     await rm(root, { recursive: true, force: true });
   }

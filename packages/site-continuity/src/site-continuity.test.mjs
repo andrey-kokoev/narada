@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import {
   SITE_CONTINUITY_ACTIONS,
   SITE_CONTINUITY_BINDING_SCHEMA,
+  SITE_CONTINUITY_BINDING_REGISTRY_SCHEMA,
   SITE_CONTINUITY_EMBODIMENT_KINDS,
   SITE_CONTINUITY_EXCHANGE_CLASSES,
   SITE_CONTINUITY_EXCHANGE_PACKET_SCHEMA,
@@ -12,8 +13,11 @@ import {
   createSiteContinuityExchangePacket,
   createSiteContinuityPacketId,
   createSiteContinuityBinding,
+  createSiteContinuityBindingRegistry,
+  listSiteContinuityBindingSites,
   validateSiteContinuityExchangePacket,
   validateSiteContinuityBinding,
+  validateSiteContinuityBindingRegistry,
 } from './site-continuity.mjs';
 
 const fixtureCases = JSON.parse(readFileSync(new URL('../fixtures/site-continuity-cases.json', import.meta.url), 'utf8'));
@@ -25,6 +29,33 @@ test('site continuity binding validates local Windows and Cloudflare embodiments
   assert.deepEqual(validateSiteContinuityBinding(binding), { ok: true, errors: [] });
   assert.equal(binding.embodiments.some((embodiment) => embodiment.embodiment_kind === SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS), true);
   assert.equal(binding.embodiments.some((embodiment) => embodiment.embodiment_kind === SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER), true);
+});
+
+test('site continuity binding registry records managed local Windows to Cloudflare bindings', () => {
+  const registry = createSiteContinuityBindingRegistry({
+    registry_ref: 'file:.narada/site-continuity/bindings.json',
+    generated_at: '2026-06-11T00:00:00.000Z',
+    bindings: [
+      createSiteContinuityBinding({ site_id: 'site_alpha' }),
+      createSiteContinuityBinding({ site_id: 'site_beta' }),
+    ],
+  });
+  assert.equal(registry.schema, SITE_CONTINUITY_BINDING_REGISTRY_SCHEMA);
+  assert.deepEqual(validateSiteContinuityBindingRegistry(registry), { ok: true, errors: [] });
+  assert.deepEqual(listSiteContinuityBindingSites(registry), ['site_alpha', 'site_beta']);
+});
+
+test('site continuity binding registry refuses duplicate relation ids', () => {
+  const registry = createSiteContinuityBindingRegistry({
+    bindings: [
+      createSiteContinuityBinding({ site_id: 'site_alpha', relation_id: 'relation-1' }),
+      createSiteContinuityBinding({ site_id: 'site_beta', relation_id: 'relation-1' }),
+    ],
+  });
+  const validation = validateSiteContinuityBindingRegistry(registry);
+  assert.equal(validation.ok, false);
+  assert.equal(validation.errors.includes('site_continuity_binding_registry_relation_duplicate:relation-1'), true);
+  assert.deepEqual(listSiteContinuityBindingSites(registry), []);
 });
 
 test('fixture cases classify stable continuity exchanges', () => {

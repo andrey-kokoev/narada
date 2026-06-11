@@ -6,6 +6,11 @@ import { pathToFileURL, fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { readCloudflareSiteRegistryLocalProjection } from '@narada2/cloudflare-site-registry/local-projection';
 import {
+  SITE_CONTINUITY_EMBODIMENT_KINDS,
+  listSiteContinuityBindingSites,
+  validateSiteContinuityBindingRegistry,
+} from '@narada2/site-continuity';
+import {
   materializeCloudflareSiteRegistryProjection,
   resolveCloudflareSiteRegistryProjectionInputs,
 } from './cloudflare-carrier-site-registry-projection.mjs';
@@ -32,6 +37,7 @@ export function buildSiteContinuitySchedulerPlan({
   reconciliationExecutionOutputPath = process.env.NARADA_SITE_CONTINUITY_RECONCILE_EXECUTION_OUT ?? '.narada/site-continuity/reconciliation/cloudflare-reconcile-last.json',
   artifactDirectory = process.env.NARADA_SITE_CONTINUITY_ARTIFACT_DIR ?? null,
   configuredSites = process.env.NARADA_SITE_CONTINUITY_SITES ?? null,
+  siteContinuityBindingRegistryPath = process.env.NARADA_SITE_CONTINUITY_BINDINGS ?? '.narada/site-continuity/bindings.json',
   sitesFilePath = process.env.NARADA_SITE_CONTINUITY_SITES_FILE ?? null,
   siteRegistryProjectionPath = process.env.NARADA_CLOUDFLARE_SITE_REGISTRY_PROJECTION ?? '.narada/site-registry/cloudflare-sites.json',
   maxArtifactAgeMinutes = process.env.NARADA_SITE_CONTINUITY_MAX_ARTIFACT_AGE_MINUTES ?? DEFAULT_MAX_SYNC_ARTIFACT_AGE_MINUTES,
@@ -47,11 +53,13 @@ export function buildSiteContinuitySchedulerPlan({
   const effectiveOutputPath = outputPath ? resolvePath(effectiveLocalRoot, outputPath) : null;
   const effectiveReconciliationExecutionOutputPath = reconciliationExecutionOutputPath ? resolvePath(effectiveLocalRoot, reconciliationExecutionOutputPath) : null;
   const effectiveArtifactDirectory = artifactDirectory ? resolvePath(effectiveLocalRoot, artifactDirectory) : effectiveOutputPath ? dirname(effectiveOutputPath) : null;
+  const effectiveSiteContinuityBindingRegistryPath = siteContinuityBindingRegistryPath ? resolvePath(effectiveLocalRoot, siteContinuityBindingRegistryPath) : null;
   const effectiveSitesFilePath = sitesFilePath ? resolvePath(effectiveLocalRoot, sitesFilePath) : null;
   const effectiveSiteRegistryProjectionPath = siteRegistryProjectionPath ? resolvePath(effectiveLocalRoot, siteRegistryProjectionPath) : null;
   const localConfiguredSites = readLocalConfiguredSites({
     root,
     explicitSites: configuredSites,
+    siteContinuityBindingRegistryPath: effectiveSiteContinuityBindingRegistryPath,
     sitesFilePath: effectiveSitesFilePath,
     siteRegistryProjectionPath: effectiveSiteRegistryProjectionPath,
   });
@@ -89,6 +97,7 @@ export function buildSiteContinuitySchedulerPlan({
     output_path: effectiveOutputPath,
     reconciliation_execution_output_path: effectiveReconciliationExecutionOutputPath,
     artifact_directory: effectiveArtifactDirectory,
+    site_continuity_binding_registry_path: effectiveSiteContinuityBindingRegistryPath,
     sites_file_path: effectiveSitesFilePath,
     site_registry_projection_path: effectiveSiteRegistryProjectionPath,
     configured_sites: localConfiguredSites,
@@ -797,11 +806,15 @@ export function buildSiteContinuityReconciliationPlan({
   };
 }
 
-export function readLocalConfiguredSites({ root, explicitSites = null, sitesFilePath = null, siteRegistryProjectionPath = null } = {}) {
+export function readLocalConfiguredSites({ root, explicitSites = null, siteContinuityBindingRegistryPath = null, sitesFilePath = null, siteRegistryProjectionPath = null } = {}) {
   const sources = [];
   const explicit = normalizeConfiguredSiteList(explicitSites);
   if (explicit.length > 0) {
     sources.push('explicit_sites');
+  }
+  const siteContinuityBindingRegistry = readSiteContinuityBindingRegistryFile(siteContinuityBindingRegistryPath);
+  if (siteContinuityBindingRegistry.state === 'read' && siteContinuityBindingRegistry.sites.length > 0) {
+    sources.push('site_continuity_binding_registry');
   }
   const fileSites = readConfiguredSitesFile(sitesFilePath);
   if (fileSites.state === 'read' && fileSites.sites.length > 0) {
@@ -825,6 +838,7 @@ export function readLocalConfiguredSites({ root, explicitSites = null, sitesFile
   }
   const selectedSource = [
     ['explicit_sites', explicit],
+    ['site_continuity_binding_registry', siteContinuityBindingRegistry.sites],
     ['sites_file', fileSites.sites],
     ['safe_env_file_site_keys', envSites.sites],
     ['process_environment_site_keys', processSites],
@@ -832,9 +846,12 @@ export function readLocalConfiguredSites({ root, explicitSites = null, sitesFile
   ].find(([, sites]) => sites.length > 0) ?? ['not_configured', []];
   const [selectionSource, selectedSites] = selectedSource;
   const normalizedSites = normalizeConfiguredSiteList(selectedSites);
+  const bindingRecordBySiteId = new Map(normalizeConfiguredSiteRecords(siteContinuityBindingRegistry.site_records ?? [])
+    .map((site) => [site.site_id, site]));
   const registryRecordBySiteId = new Map(normalizeConfiguredSiteRecords(siteRegistryProjection.site_records ?? [])
     .map((site) => [site.site_id, site]));
   const siteRecords = normalizeConfiguredSiteRecords(normalizedSites.map((siteId) => ({
+    ...(bindingRecordBySiteId.get(siteId) ?? {}),
     ...(registryRecordBySiteId.get(siteId) ?? {}),
     site_id: siteId,
   })));
@@ -845,6 +862,7 @@ export function readLocalConfiguredSites({ root, explicitSites = null, sitesFile
     site_count: normalizedSites.length,
     sites: normalizedSites,
     site_records: siteRecords,
+    site_continuity_binding_registry: siteContinuityBindingRegistry,
     sites_file: fileSites,
     site_registry_projection: siteRegistryProjection,
   };
@@ -1039,6 +1057,51 @@ function readConfiguredSitesFile(sitesFilePath) {
   }
   const sourceSites = Array.isArray(value) ? value : value?.sites ?? value?.configured_sites ?? [];
   return { state: 'read', path: sitesFilePath, sites: normalizeConfiguredSiteList(sourceSites) };
+}
+
+function readSiteContinuityBindingRegistryFile(bindingRegistryPath) {
+  if (!bindingRegistryPath) return { state: 'not_configured', path: null, sites: [], site_records: [] };
+  if (!existsSync(bindingRegistryPath)) return { state: 'missing', path: bindingRegistryPath, sites: [], site_records: [] };
+  let registry;
+  try {
+    registry = JSON.parse(readFileSync(bindingRegistryPath, 'utf8'));
+  } catch (error) {
+    return { state: 'invalid_json', path: bindingRegistryPath, sites: [], site_records: [], reason: 'site_continuity_binding_registry_json_invalid', error: error.message };
+  }
+  const validation = validateSiteContinuityBindingRegistry(registry);
+  if (!validation.ok) {
+    return {
+      state: 'invalid',
+      path: bindingRegistryPath,
+      sites: [],
+      site_records: [],
+      reason: 'site_continuity_binding_registry_invalid',
+      validation_errors: validation.errors,
+    };
+  }
+  const sites = listSiteContinuityBindingSites(registry);
+  const siteRecords = registry.bindings
+    .filter((binding) => sites.includes(binding.site_id))
+    .map((binding) => {
+      const cloudflareEmbodiment = findSiteContinuityEmbodiment(binding, SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER);
+      return {
+        site_id: binding.site_id,
+        site_ref: cloudflareEmbodiment?.site_ref ?? null,
+        site_status: 'active',
+      };
+    });
+  return {
+    state: 'read',
+    path: bindingRegistryPath,
+    schema: registry.schema ?? null,
+    binding_count: registry.bindings.length,
+    sites,
+    site_records: siteRecords,
+  };
+}
+
+function findSiteContinuityEmbodiment(binding, embodimentKind) {
+  return binding?.embodiments?.find((embodiment) => embodiment.embodiment_kind === embodimentKind) ?? null;
 }
 
 function normalizeConfiguredSiteList(value) {

@@ -1,4 +1,5 @@
 const SITE_CONTINUITY_BINDING_SCHEMA = 'narada.site_continuity_binding.v1';
+const SITE_CONTINUITY_BINDING_REGISTRY_SCHEMA = 'narada.site_continuity_binding_registry.v1';
 const SITE_CONTINUITY_DECISION_SCHEMA = 'narada.site_continuity_decision.v1';
 const SITE_CONTINUITY_EXCHANGE_PACKET_SCHEMA = 'narada.site_continuity_exchange_packet.v1';
 const SITE_CONTINUITY_CLASSIFIER_VERSION = 'site_continuity.v1';
@@ -62,6 +63,48 @@ function createSiteContinuityBinding({
       },
     ],
   };
+}
+
+function createSiteContinuityBindingRegistry({ bindings = [], registry_ref = null, generated_at = null } = {}) {
+  return {
+    schema: SITE_CONTINUITY_BINDING_REGISTRY_SCHEMA,
+    classifier_version: SITE_CONTINUITY_CLASSIFIER_VERSION,
+    registry_ref,
+    generated_at,
+    bindings: bindings.map((binding) => ({ ...binding, embodiments: [...(binding.embodiments ?? [])] })),
+  };
+}
+
+function validateSiteContinuityBindingRegistry(registry) {
+  const errors = [];
+  if (!registry || typeof registry !== 'object') errors.push('site_continuity_binding_registry_not_object');
+  if (registry?.schema !== SITE_CONTINUITY_BINDING_REGISTRY_SCHEMA) errors.push('site_continuity_binding_registry_schema_mismatch');
+  if (registry?.classifier_version !== SITE_CONTINUITY_CLASSIFIER_VERSION) errors.push('site_continuity_binding_registry_classifier_version_mismatch');
+  if (!Array.isArray(registry?.bindings)) errors.push('site_continuity_binding_registry_bindings_missing');
+
+  const seenRelationIds = new Set();
+  for (const binding of registry?.bindings ?? []) {
+    const validation = validateSiteContinuityBinding(binding);
+    for (const error of validation.errors) errors.push(`binding:${binding?.relation_id ?? binding?.site_id ?? 'unknown'}:${error}`);
+    if (binding?.relation_id) {
+      if (seenRelationIds.has(binding.relation_id)) errors.push(`site_continuity_binding_registry_relation_duplicate:${binding.relation_id}`);
+      seenRelationIds.add(binding.relation_id);
+    }
+  }
+  return { ok: errors.length === 0, errors };
+}
+
+function listSiteContinuityBindingSites(registry, {
+  required_embodiment_kinds = [
+    SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS,
+    SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER,
+  ],
+} = {}) {
+  const validation = validateSiteContinuityBindingRegistry(registry);
+  if (!validation.ok) return [];
+  return [...new Set(registry.bindings
+    .filter((binding) => required_embodiment_kinds.every((kind) => Boolean(findEmbodiment(binding, kind))))
+    .map((binding) => binding.site_id))].sort((left, right) => left.localeCompare(right));
 }
 
 function packetDecision({
@@ -370,6 +413,7 @@ function decision({
 export {
   SITE_CONTINUITY_ACTIONS,
   SITE_CONTINUITY_BINDING_SCHEMA,
+  SITE_CONTINUITY_BINDING_REGISTRY_SCHEMA,
   SITE_CONTINUITY_CLASSIFIER_VERSION,
   SITE_CONTINUITY_DECISION_SCHEMA,
   SITE_CONTINUITY_EMBODIMENT_KINDS,
@@ -381,6 +425,9 @@ export {
   createSiteContinuityExchangePacket,
   createSiteContinuityPacketId,
   createSiteContinuityBinding,
+  createSiteContinuityBindingRegistry,
+  listSiteContinuityBindingSites,
   validateSiteContinuityExchangePacket,
   validateSiteContinuityBinding,
+  validateSiteContinuityBindingRegistry,
 };

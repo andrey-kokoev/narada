@@ -1,4 +1,5 @@
 export const SITE_CONTINUITY_BINDING_SCHEMA: 'narada.site_continuity_binding.v1';
+export const SITE_CONTINUITY_BINDING_REGISTRY_SCHEMA: 'narada.site_continuity_binding_registry.v1';
 export const SITE_CONTINUITY_DECISION_SCHEMA: 'narada.site_continuity_decision.v1';
 export const SITE_CONTINUITY_EXCHANGE_PACKET_SCHEMA: 'narada.site_continuity_exchange_packet.v1';
 export const SITE_CONTINUITY_CLASSIFIER_VERSION: 'site_continuity.v1';
@@ -90,6 +91,16 @@ export interface CreateSiteContinuityExchangePacketInput {
   generated_at?: string | null;
 }
 
+export interface CreateSiteContinuityBindingRegistryInput {
+  bindings?: SiteContinuityBinding[];
+  registry_ref?: string | null;
+  generated_at?: string | null;
+}
+
+export interface ListSiteContinuityBindingSitesInput {
+  required_embodiment_kinds?: Array<SiteContinuityEmbodimentKind | string>;
+}
+
 export interface SiteContinuityBinding {
   schema: typeof SITE_CONTINUITY_BINDING_SCHEMA;
   classifier_version: typeof SITE_CONTINUITY_CLASSIFIER_VERSION;
@@ -99,6 +110,14 @@ export interface SiteContinuityBinding {
   authority_map_ref: string | null;
   generated_at: string | null;
   embodiments: SiteContinuityEmbodiment[];
+}
+
+export interface SiteContinuityBindingRegistry {
+  schema: typeof SITE_CONTINUITY_BINDING_REGISTRY_SCHEMA;
+  classifier_version: typeof SITE_CONTINUITY_CLASSIFIER_VERSION;
+  registry_ref: string | null;
+  generated_at: string | null;
+  bindings: SiteContinuityBinding[];
 }
 
 export interface CreateSiteContinuityBindingInput {
@@ -144,6 +163,9 @@ export interface SiteContinuityValidationResult {
 
 export function createSiteContinuityBinding(input?: CreateSiteContinuityBindingInput): SiteContinuityBinding;
 export function validateSiteContinuityBinding(binding: unknown): SiteContinuityValidationResult;
+export function createSiteContinuityBindingRegistry(input?: CreateSiteContinuityBindingRegistryInput): SiteContinuityBindingRegistry;
+export function validateSiteContinuityBindingRegistry(registry: unknown): SiteContinuityValidationResult;
+export function listSiteContinuityBindingSites(registry: SiteContinuityBindingRegistry, input?: ListSiteContinuityBindingSitesInput): string[];
 export function classifySiteContinuityExchange(binding: SiteContinuityBinding, request?: SiteContinuityExchangeRequest): SiteContinuityDecision;
 export function createSiteContinuityExchangePacket(input: CreateSiteContinuityExchangePacketInput): SiteContinuityExchangePacket;
 export function createSiteContinuityPacketId(packet: Partial<SiteContinuityExchangePacket>): string;
