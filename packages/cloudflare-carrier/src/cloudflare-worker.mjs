@@ -2284,6 +2284,19 @@ function cloudflareOperationWorkQueueItems(operations = [], product = {}, contex
   });
 }
 
+function selectCloudflareFocusedOperation(operations = [], params = {}, response = {}) {
+  const requestedOperationId = String(params.operation_id ?? response.operation?.operation_id ?? '').trim();
+  const candidates = Array.isArray(operations) ? operations : [];
+  if (requestedOperationId) {
+    const requested = candidates.find((operation) => operation.operation_id === requestedOperationId);
+    if (requested) return requested;
+  }
+  return candidates.find((operation) => operation.status === 'active')
+    ?? candidates[0]
+    ?? response.operation
+    ?? null;
+}
+
 function cloudflareOperationPathContext(operation = {}, product = {}, context = {}) {
   const operationId = operation.operation_id || context.active_operation_id || product.operation?.operation_id || '';
   const sessions = cloudflareOperationSessions(operationId, product);
@@ -5432,10 +5445,22 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
   const residentLoopShadowRuns = await listCloudflareResidentLoopShadowRuns(env, siteId, params.resident_loop_shadow_limit ?? params.limit);
   const mailboxStatusShadowReads = await listCloudflareMailboxStatusShadowReads(env, siteId, params.mailbox_status_shadow_limit ?? params.limit);
   const mailboxStatusSourceReads = await listCloudflareMailboxStatusSourceReads(env, siteId, params.mailbox_status_source_limit ?? params.limit);
+  const mailboxDraftReplyProposals = await listCloudflareMailboxDraftReplyProposals(env, siteId, params.mailbox_draft_reply_proposal_limit ?? params.limit);
+  const mailboxOutlookDraftCreates = await listCloudflareMailboxOutlookDraftCreates(env, siteId, params.mailbox_outlook_draft_create_limit ?? params.limit);
+  const mailboxSendAcceptedRecords = await listCloudflareMailboxSendAcceptedRecords(env, siteId, params.mailbox_send_accepted_limit ?? params.limit);
+  const mailboxSendConfirmations = await listCloudflareMailboxSendConfirmations(env, siteId, params.mailbox_send_confirmation_limit ?? params.limit);
+  const mailboxSendReviews = await listCloudflareMailboxSendReviews(env, siteId, params.mailbox_send_review_limit ?? params.limit);
   const operationFocusReviews = await listCloudflareOperationFocusReviews(env, siteId, params.operation_focus_review_limit ?? params.limit);
   const siteFileChangeProposals = await listCloudflareSiteFileChangeProposals(env, siteId, params.site_file_change_proposal_limit ?? params.limit);
   const siteFileMaterializations = await listCloudflareSiteFileMaterializations(env, siteId, params.site_file_materialization_limit ?? params.limit);
   const localIngressRequests = await listCloudflareLocalIngressRequests(env, siteId, params.local_ingress_request_limit ?? params.limit);
+  const localIngressEvidence = await listCloudflareLocalIngressEvidence(env, siteId, params.local_ingress_evidence_limit ?? params.limit);
+  const localIngressProviderHeartbeats = await listCloudflareLocalIngressProviderHeartbeats(env, siteId, params.local_ingress_provider_heartbeat_limit ?? params.limit);
+  const repositoryPublicationRequests = await listCloudflareRepositoryPublicationRequests(env, siteId, params.repository_publication_request_limit ?? params.limit);
+  const repositoryPublicationAdmissions = await listCloudflareRepositoryPublicationAdmissions(env, siteId, params.repository_publication_admission_limit ?? params.limit);
+  const repositoryPublicationExecutions = await listCloudflareRepositoryPublicationExecutions(env, siteId, params.repository_publication_execution_limit ?? params.limit);
+  const repositoryPublicationEvidence = await listCloudflareRepositoryPublicationEvidence(env, siteId, params.repository_publication_evidence_limit ?? params.limit);
+  const repositoryPublicationProviderHeartbeats = await listCloudflareRepositoryPublicationProviderHeartbeats(env, siteId, params.repository_publication_provider_heartbeat_limit ?? params.limit);
   const taskLifecycleShadowReads = await listCloudflareTaskLifecycleShadowReads(env, siteId, params.task_lifecycle_shadow_limit ?? params.limit);
   const taskLifecycleWriteAdmissions = await listCloudflareTaskLifecycleWriteAdmissions(env, siteId, params.task_lifecycle_write_admission_limit ?? params.limit);
   const taskLifecycleTasks = await listCloudflareTaskLifecycleTasks(env, siteId, params.task_lifecycle_task_limit ?? params.limit, params);
@@ -5492,6 +5517,116 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     recoveryPosture: cloudflareRecoveryPosture,
     localCloudContinuityBridge,
   });
+  const focusedOperation = selectCloudflareFocusedOperation(response.operations ?? [], params, response);
+  const focusedOperationStatusHistory = summarizeCloudflareOperationStatusHistory(response.authority_events, focusedOperation);
+  const focusedOperationActivityTimeline = summarizeCloudflareOperationActivityTimeline({
+    operation: focusedOperation,
+    statusHistory: focusedOperationStatusHistory,
+    authorityEvents: response.authority_events,
+    sessions: response.sessions ?? [],
+    tasks,
+    carrierEvidence,
+    continuityPackets,
+    continuityLoopReports,
+    continuityReconciliationExecutions,
+    webhookDelayDirectiveRecords,
+    webhookDelayDirectiveDeliveries,
+    residentLoopShadowRuns,
+    mailboxStatusShadowReads,
+    mailboxStatusSourceReads,
+    mailboxDraftReplyProposals,
+    mailboxOutlookDraftCreates,
+    mailboxSendAcceptedRecords,
+    mailboxSendConfirmations,
+    mailboxSendReviews,
+    operationFocusReviews,
+    siteFileChangeProposals,
+    localIngressRequests,
+    localIngressEvidence,
+    localIngressProviderHeartbeats,
+    repositoryPublicationRequests,
+    repositoryPublicationExecutions,
+    repositoryPublicationEvidence,
+    repositoryPublicationProviderHeartbeats,
+    residentDispatchDecisions,
+  });
+  const focusedOperationLifecycleStatus = summarizeCloudflareOperationLifecycleStatus({
+    operation: focusedOperation,
+    sessions: response.sessions ?? [],
+    tasks,
+    carrierEvidence,
+    carrierEvidenceReadStatus,
+    continuityStatus: siteContinuityStatus,
+    continuityLoopStatus: siteContinuityLoopStatus,
+    continuityReconciliationExecutionStatus: siteContinuityReconciliationExecutionStatus,
+    operationContinuityDirectionStatus,
+    residentLoopShadowRuns,
+    residentDispatchDecisions,
+    localIngressRequests,
+    localIngressEvidence,
+    localIngressProviderHeartbeats,
+    repositoryPublicationRequests,
+    repositoryPublicationExecutions,
+    repositoryPublicationEvidence,
+    repositoryPublicationProviderHeartbeats,
+    webhookDelayDirectiveRecords,
+    webhookDelayDirectiveDeliveries,
+    persistencePosture: cloudflarePersistencePosture,
+    recoveryPosture: cloudflareRecoveryPosture,
+  });
+  const localIngressOperationPosture = summarizeCloudflareLocalIngressOperationPosture({
+    localIngressRequests,
+    localIngressEvidence,
+    localIngressProviderHeartbeats,
+  });
+  const repositoryPublicationOperationPosture = summarizeCloudflareRepositoryPublicationOperationPosture({
+    repositoryPublicationRequests,
+    repositoryPublicationAdmissions,
+    repositoryPublicationExecutions,
+    repositoryPublicationEvidence,
+    repositoryPublicationProviderHeartbeats,
+  });
+  const focusedOperationWorkflowRoute = summarizeCloudflareOperationWorkflowRoute({
+    operation: focusedOperation,
+    lifecycleStatus: focusedOperationLifecycleStatus,
+    operationContinuityDirectionStatus,
+    localCloudContinuityBridge,
+    persistencePosture: cloudflarePersistencePosture,
+    recoveryPosture: cloudflareRecoveryPosture,
+    operationActivityTimeline: focusedOperationActivityTimeline,
+    webhookDelayDirectiveRecords,
+    webhookDelayDirectiveDeliveries,
+    residentDispatchDecisions,
+    mailboxSendReviews,
+    operationFocusReviews,
+    tasks,
+  });
+  const operationPostureOverview = summarizeCloudflareOperationPostureOverview(response.operations ?? [], {
+    ...response,
+    tasks,
+    carrier_evidence: carrierEvidence,
+    site_continuity_packets: continuityPackets,
+    site_continuity_loop_reports: continuityLoopReports,
+    operation: focusedOperation,
+  }, {
+    active_operation_id: focusedOperation?.operation_id ?? params.operation_id,
+    site_id: siteId,
+  });
+  const operationPostureRoute = summarizeCloudflareOperationPostureRoute(operationPostureOverview, focusedOperation?.operation_id ?? params.operation_id ?? '');
+  const focusedOperationLifecycle = {
+    schema: 'narada.cloudflare_focused_operation_lifecycle.v1',
+    site_id: siteId,
+    operation_id: focusedOperation?.operation_id ?? null,
+    operation: focusedOperation,
+    lifecycle_status: focusedOperationLifecycleStatus,
+    workflow_route: focusedOperationWorkflowRoute,
+    operation_posture_overview: operationPostureOverview,
+    operation_posture_route: operationPostureRoute,
+    status_history: focusedOperationStatusHistory,
+    activity_timeline: focusedOperationActivityTimeline,
+    local_ingress_operation_posture: localIngressOperationPosture,
+    repository_publication_operation_posture: repositoryPublicationOperationPosture,
+  };
   return {
     tasks,
     site_continuity_packets: continuityPackets,
@@ -5505,10 +5640,22 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     resident_loop_shadow_runs: residentLoopShadowRuns,
     mailbox_status_shadow_reads: mailboxStatusShadowReads,
     mailbox_status_source_reads: mailboxStatusSourceReads,
+    mailbox_draft_reply_proposals: mailboxDraftReplyProposals,
+    mailbox_outlook_draft_creates: mailboxOutlookDraftCreates,
+    mailbox_send_accepted_records: mailboxSendAcceptedRecords,
+    mailbox_send_confirmations: mailboxSendConfirmations,
+    mailbox_send_reviews: mailboxSendReviews,
     operation_focus_reviews: operationFocusReviews,
     site_file_change_proposals: siteFileChangeProposals,
     site_file_materializations: siteFileMaterializations,
     local_ingress_requests: localIngressRequests,
+    local_ingress_evidence: localIngressEvidence,
+    local_ingress_provider_heartbeats: localIngressProviderHeartbeats,
+    repository_publication_requests: repositoryPublicationRequests,
+    repository_publication_admissions: repositoryPublicationAdmissions,
+    repository_publication_executions: repositoryPublicationExecutions,
+    repository_publication_evidence: repositoryPublicationEvidence,
+    repository_publication_provider_heartbeats: repositoryPublicationProviderHeartbeats,
     task_lifecycle_shadow_reads: taskLifecycleShadowReads,
     task_lifecycle_write_admissions: taskLifecycleWriteAdmissions,
     task_lifecycle_tasks: taskLifecycleTasks,
@@ -5526,6 +5673,15 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     cloudflare_recovery_posture: cloudflareRecoveryPosture,
     cloudflare_product_surface_readiness: cloudflareProductSurfaceReadiness,
     site_product_status: siteProductStatus,
+    focused_operation_lifecycle: focusedOperationLifecycle,
+    operation_status_history: focusedOperationStatusHistory,
+    operation_activity_timeline: focusedOperationActivityTimeline,
+    operation_lifecycle_status: focusedOperationLifecycleStatus,
+    local_ingress_operation_posture: localIngressOperationPosture,
+    repository_publication_operation_posture: repositoryPublicationOperationPosture,
+    operation_posture_overview: operationPostureOverview,
+    operation_posture_route: operationPostureRoute,
+    operation_workflow_route: focusedOperationWorkflowRoute,
   };
 }
 

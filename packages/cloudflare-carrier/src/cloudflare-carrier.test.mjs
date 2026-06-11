@@ -1148,6 +1148,14 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(body.site_product_status.continuity_loop_state, 'no_loop_report_observed');
   assert.equal(body.site_product_status.continuity_loop_report_count, 0);
   assert.equal(body.site_product_status.next_action, 'continuity_packet');
+  assert.equal(body.focused_operation_lifecycle.schema, 'narada.cloudflare_focused_operation_lifecycle.v1');
+  assert.equal(body.focused_operation_lifecycle.operation_id, 'operation_site_read');
+  assert.equal(body.operation_lifecycle_status.operation_id, 'operation_site_read');
+  assert.equal(body.operation_workflow_route.operation_id, 'operation_site_read');
+  assert.equal(body.focused_operation_lifecycle.lifecycle_status.operation_id, 'operation_site_read');
+  assert.equal(body.focused_operation_lifecycle.workflow_route.operation_id, 'operation_site_read');
+  assert.equal(body.focused_operation_lifecycle.operation_posture_overview.active_operation_id, 'operation_site_read');
+  assert.equal(body.focused_operation_lifecycle.operation_posture_route.status, 'ready');
   assert.equal(body.cloudflare_product_surface_readiness.schema, 'narada.cloudflare_product_surface_readiness.v1');
   assert.equal(body.cloudflare_product_surface_readiness.status, 'attention');
   assert.equal(body.cloudflare_product_surface_readiness.coverage, 'cloudflare_product_surface_worker_visible_boundaries');
@@ -1411,6 +1419,11 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(readAfterFailedReconciliationExecutionBody.site_continuity_reconciliation_execution_status.next_action, 'review_site_continuity_reconciliation_execution');
   assert.ok(readAfterFailedReconciliationExecutionBody.site_product_status.attention.includes('continuity_reconciliation_execution'));
   assert.equal(readAfterFailedReconciliationExecutionBody.site_product_status.next_action, 'review_site_continuity_reconciliation_execution');
+  assert.equal(readAfterFailedReconciliationExecutionBody.focused_operation_lifecycle.operation_id, 'operation_site_read');
+  assert.equal(readAfterFailedReconciliationExecutionBody.focused_operation_lifecycle.lifecycle_status.next_action, 'continuity_reconciliation_execution');
+  assert.equal(readAfterFailedReconciliationExecutionBody.focused_operation_lifecycle.workflow_route.next_action, 'review_site_continuity_reconciliation_execution');
+  assert.equal(readAfterFailedReconciliationExecutionBody.focused_operation_lifecycle.workflow_route.target, failedReconciliationExecutionId);
+  assert.equal(readAfterFailedReconciliationExecutionBody.operation_workflow_route.next_action, 'review_site_continuity_reconciliation_execution');
 
   const operationReadAfterFailedReconciliationExecution = await worker.fetch(jsonRequest({
     operation: 'operation.read',
