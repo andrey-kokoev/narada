@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execFile as execFileCallback } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -27,6 +27,7 @@ export function buildSiteContinuitySchedulerPlan({
   siteId = process.env.CLOUDFLARE_CARRIER_SITE_ID ?? process.env.NARADA_SITE_CONTINUITY_SITE_ID ?? null,
   packetPath = process.env.NARADA_SITE_CONTINUITY_PACKET ?? null,
   outputPath = process.env.NARADA_SITE_CONTINUITY_SYNC_OUT ?? '.narada/site-continuity/cloudflare-sync-last.json',
+  reconciliationExecutionOutputPath = process.env.NARADA_SITE_CONTINUITY_RECONCILE_EXECUTION_OUT ?? '.narada/site-continuity/reconciliation/cloudflare-reconcile-last.json',
   artifactDirectory = process.env.NARADA_SITE_CONTINUITY_ARTIFACT_DIR ?? null,
   configuredSites = process.env.NARADA_SITE_CONTINUITY_SITES ?? null,
   sitesFilePath = process.env.NARADA_SITE_CONTINUITY_SITES_FILE ?? null,
@@ -42,6 +43,7 @@ export function buildSiteContinuitySchedulerPlan({
   const effectiveLocalRoot = resolvePath(root, localRoot ?? root);
   const effectivePacketPath = packetPath ? resolvePath(effectiveLocalRoot, packetPath) : null;
   const effectiveOutputPath = outputPath ? resolvePath(effectiveLocalRoot, outputPath) : null;
+  const effectiveReconciliationExecutionOutputPath = reconciliationExecutionOutputPath ? resolvePath(effectiveLocalRoot, reconciliationExecutionOutputPath) : null;
   const effectiveArtifactDirectory = artifactDirectory ? resolvePath(effectiveLocalRoot, artifactDirectory) : effectiveOutputPath ? dirname(effectiveOutputPath) : null;
   const effectiveSitesFilePath = sitesFilePath ? resolvePath(effectiveLocalRoot, sitesFilePath) : null;
   const effectiveSiteRegistryProjectionPath = siteRegistryProjectionPath ? resolvePath(effectiveLocalRoot, siteRegistryProjectionPath) : null;
@@ -83,6 +85,7 @@ export function buildSiteContinuitySchedulerPlan({
     site_id: siteId ?? null,
     packet_path: effectivePacketPath,
     output_path: effectiveOutputPath,
+    reconciliation_execution_output_path: effectiveReconciliationExecutionOutputPath,
     artifact_directory: effectiveArtifactDirectory,
     sites_file_path: effectiveSitesFilePath,
     site_registry_projection_path: effectiveSiteRegistryProjectionPath,
@@ -156,6 +159,7 @@ export function buildSiteContinuitySchedulerPlan({
           maxArtifactAgeMinutes,
           now,
         }),
+        last_reconciliation_execution: readLastReconciliationExecutionArtifact(effectiveReconciliationExecutionOutputPath),
       };
     case 'reconcile':
     case 'reconcile-plan': {
@@ -184,6 +188,15 @@ export function buildSiteContinuitySchedulerPlan({
   }
 }
 
+function countResultStatuses(results) {
+  const counts = {};
+  for (const result of results) {
+    const status = result?.status ?? 'unknown';
+    counts[status] = (counts[status] ?? 0) + 1;
+  }
+  return counts;
+}
+
 export async function runSiteContinuitySchedulerActionWithOptionalRefresh(
   options = {},
   { env = process.env, materializeSiteRegistryProjection = materializeCloudflareSiteRegistryProjection, execFileImpl = execFile } = {},
@@ -198,12 +211,13 @@ export async function runSiteContinuitySchedulerActionWithOptionalRefresh(
     dryRun: options.dryRun !== false,
     executionTimeoutMs: options.executionTimeoutMs,
     execFileImpl,
+    now: options.now,
   });
 }
 
 export async function executeSiteContinuityReconciliationPlan(
   plan,
-  { dryRun = true, executionTimeoutMs = DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS, execFileImpl = execFile } = {},
+  { dryRun = true, executionTimeoutMs = DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS, execFileImpl = execFile, now = () => new Date().toISOString() } = {},
 ) {
   const reconciliationPlan = plan?.reconciliation_plan ?? null;
   const selectedSites = reconciliationPlan?.selected_sites ?? [];
@@ -217,19 +231,22 @@ export async function executeSiteContinuityReconciliationPlan(
     cloudflare_mutation_admission: dryRun ? 'not_executed_dry_run' : 'pending_guarded_sync_once_execution',
     filesystem_mutation_admission: dryRun ? 'not_executed_dry_run' : 'pending_guarded_sync_once_artifact_write',
     embeds_credentials: false,
+    generated_at: now(),
+    reconciliation_execution_output_path: plan?.reconciliation_execution_output_path ?? null,
     plan,
   };
   if (!reconciliationPlan) {
-    return { ...base, refusal_reason: 'reconciliation_plan_required', results: [] };
+    return persistReconciliationExecutionResult({ ...base, refusal_reason: 'reconciliation_plan_required', results: [] }, { dryRun, now });
   }
   if (dryRun) {
     return { ...base, status: 'dry_run', refusal_reason: 'reconcile_execute_requires_live_flag', results: [] };
   }
   if (reconciliationPlan.status !== 'ready') {
-    return {
+    return persistReconciliationExecutionResult({
       ...base,
       status: 'refused',
       refusal_reason: 'reconciliation_plan_not_ready',
+      filesystem_mutation_admission: 'reconciliation_execution_artifact_write_only',
       command_blockers: selectedSites.flatMap((site) => site.command_blockers ?? []),
       results: selectedSites.map((site) => ({
         site_id: site.site_id,
@@ -238,7 +255,7 @@ export async function executeSiteContinuityReconciliationPlan(
         command_status: site.command_status,
         command_blockers: site.command_blockers ?? [],
       })),
-    };
+    }, { dryRun, now });
   }
   const timeout = normalizeExecutionTimeoutMs(executionTimeoutMs);
   const results = [];
@@ -278,17 +295,61 @@ export async function executeSiteContinuityReconciliationPlan(
   }
   const completedCount = results.filter((result) => result.status === 'completed').length;
   const failedCount = results.filter((result) => result.status === 'failed').length;
-  return {
+  return persistReconciliationExecutionResult({
     ...base,
     status: failedCount === 0 ? 'completed' : completedCount > 0 ? 'partial' : 'failed',
     cloudflare_mutation_admission: 'executed_via_guarded_site_continuity_sync_once',
-    filesystem_mutation_admission: 'sync_once_artifact_write_only',
+    filesystem_mutation_admission: 'sync_once_artifact_and_reconciliation_execution_artifact_write_only',
     execution_timeout_ms: timeout,
     executed_site_count: results.length,
     completed_site_count: completedCount,
     failed_site_count: failedCount,
     results,
-  };
+  }, { dryRun, now });
+}
+
+function persistReconciliationExecutionResult(result, { dryRun = true, now = () => new Date().toISOString() } = {}) {
+  if (dryRun) return result;
+  const outputPath = result.reconciliation_execution_output_path;
+  if (!outputPath) {
+    return {
+      ...result,
+      reconciliation_execution_artifact: {
+        state: 'not_configured',
+        written: false,
+        status: 'needs_configuration',
+      },
+    };
+  }
+  try {
+    mkdirSync(dirname(outputPath), { recursive: true });
+    const artifact = {
+      ...result,
+      persisted_at: now(),
+    };
+    writeFileSync(outputPath, `${JSON.stringify(artifact, null, 2)}\n`, 'utf8');
+    return {
+      ...result,
+      reconciliation_execution_artifact: {
+        state: 'written',
+        written: true,
+        artifact_path: outputPath,
+        status: 'recorded',
+        persisted_at: artifact.persisted_at,
+      },
+    };
+  } catch (error) {
+    return {
+      ...result,
+      reconciliation_execution_artifact: {
+        state: 'write_failed',
+        written: false,
+        artifact_path: outputPath,
+        status: 'needs_attention',
+        error: error.message,
+      },
+    };
+  }
 }
 
 export async function buildSiteContinuitySchedulerPlanWithOptionalRefresh(
@@ -543,6 +604,69 @@ export function readLastSyncArtifact(outputPath) {
     cloudflare_push_imported_at: cloudflarePush?.imported_at ?? null,
     cloudflare_push_previous_imported_at: cloudflarePush?.previous_imported_at ?? null,
     continuity_loop_report_recorded: artifact?.continuity_loop_report_recorded ?? null,
+  };
+}
+
+export function readLastReconciliationExecutionArtifact(outputPath) {
+  if (!outputPath) {
+    return {
+      state: 'not_configured',
+      artifact_present: false,
+      status: 'needs_configuration',
+    };
+  }
+  if (!existsSync(outputPath)) {
+    return {
+      state: 'missing',
+      artifact_path: outputPath,
+      artifact_present: false,
+      status: 'never_executed',
+    };
+  }
+  const stat = statSync(outputPath);
+  let artifact;
+  try {
+    artifact = JSON.parse(readFileSync(outputPath, 'utf8'));
+  } catch (error) {
+    return {
+      state: 'invalid_json',
+      artifact_path: outputPath,
+      artifact_present: true,
+      artifact_updated_at: stat.mtime.toISOString(),
+      status: 'needs_attention',
+      reason: 'reconciliation_execution_artifact_json_invalid',
+      error: error.message,
+    };
+  }
+  if (artifact?.schema !== 'narada.cloudflare_carrier.site_continuity_reconciliation_execution.v1') {
+    return {
+      state: 'unsupported_schema',
+      artifact_path: outputPath,
+      artifact_present: true,
+      artifact_updated_at: stat.mtime.toISOString(),
+      status: 'needs_attention',
+      schema: artifact?.schema ?? null,
+      reason: 'unsupported_reconciliation_execution_artifact_schema',
+    };
+  }
+  return {
+    state: 'read',
+    artifact_path: outputPath,
+    artifact_present: true,
+    artifact_updated_at: stat.mtime.toISOString(),
+    status: artifact.status ?? 'unknown',
+    schema: artifact.schema,
+    generated_at: artifact.generated_at ?? null,
+    persisted_at: artifact.persisted_at ?? null,
+    reconciliation_plan_status: artifact.reconciliation_plan_status ?? null,
+    selected_site_count: artifact.selected_site_count ?? 0,
+    executed_site_count: artifact.executed_site_count ?? 0,
+    completed_site_count: artifact.completed_site_count ?? 0,
+    failed_site_count: artifact.failed_site_count ?? 0,
+    refusal_reason: artifact.refusal_reason ?? null,
+    cloudflare_mutation_admission: artifact.cloudflare_mutation_admission ?? null,
+    filesystem_mutation_admission: artifact.filesystem_mutation_admission ?? null,
+    result_status_counts: countResultStatuses(artifact.results ?? []),
   };
 }
 
@@ -811,6 +935,7 @@ function parseArgs(argv) {
     else if (arg === '--site') args.siteId = argv[++index];
     else if (arg === '--packet') args.packetPath = argv[++index];
     else if (arg === '--out') args.outputPath = argv[++index];
+    else if (arg === '--reconciliation-execution-out') args.reconciliationExecutionOutputPath = argv[++index];
     else if (arg === '--artifact-dir') args.artifactDirectory = argv[++index];
     else if (arg === '--sites') args.configuredSites = argv[++index];
     else if (arg === '--sites-file') args.sitesFilePath = argv[++index];

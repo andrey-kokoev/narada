@@ -10,6 +10,7 @@ import {
   buildSiteContinuityReconciliationPlan,
   buildSiteContinuitySchedulerPlan,
   buildSiteContinuitySchedulerPlanWithOptionalRefresh,
+  readLastReconciliationExecutionArtifact,
   readLastSyncArtifact,
   readLocalConfiguredSites,
   readLocalSyncArtifactInventory,
@@ -434,6 +435,7 @@ test('site continuity reconcile-execute defaults to dry-run refusal without exec
 test('site continuity reconcile-execute refuses not-ready plans before sync execution', async () => {
   const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-reconcile-not-ready-'));
   const artifactDirectory = join(root, '.narada/site-continuity');
+  const reconciliationExecutionOutputPath = join(root, '.narada/site-continuity/reconciliation/cloudflare-reconcile-last.json');
   await mkdir(artifactDirectory, { recursive: true });
   try {
     let executed = false;
@@ -441,8 +443,10 @@ test('site continuity reconcile-execute refuses not-ready plans before sync exec
       action: 'reconcile-execute',
       repoRoot: root,
       artifactDirectory,
+      reconciliationExecutionOutputPath,
       configuredSites: 'site_missing_packet',
       dryRun: false,
+      now: () => '2026-06-11T12:30:00.000Z',
     }, {
       execFileImpl: async () => { executed = true; },
     });
@@ -459,6 +463,14 @@ test('site continuity reconcile-execute refuses not-ready plans before sync exec
       command_blockers: ['packet_path_required'],
     }]);
     assert.equal(executed, false);
+    assert.equal(result.filesystem_mutation_admission, 'reconciliation_execution_artifact_write_only');
+    assert.equal(result.reconciliation_execution_artifact.state, 'written');
+
+    const executionSummary = readLastReconciliationExecutionArtifact(reconciliationExecutionOutputPath);
+    assert.equal(executionSummary.state, 'read');
+    assert.equal(executionSummary.status, 'refused');
+    assert.equal(executionSummary.refusal_reason, 'reconciliation_plan_not_ready');
+    assert.deepEqual(executionSummary.result_status_counts, { refused: 1 });
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -467,9 +479,11 @@ test('site continuity reconcile-execute refuses not-ready plans before sync exec
 test('site continuity reconcile-execute runs ready sites through sync-once argv and records artifacts', async () => {
   const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-reconcile-execute-'));
   const artifactDirectory = join(root, '.narada/site-continuity');
-  const packetPath = join(root, '.narada/site-continuity/local-packet.json');
+  const reconciliationExecutionOutputPath = join(root, '.narada/site-continuity/reconciliation/cloudflare-reconcile-last.json');
+  const packetPath = join(root, '.narada/site-continuity-packets/local-packet.json');
   const syncEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-sync.mjs');
   await mkdir(artifactDirectory, { recursive: true });
+  await mkdir(join(root, '.narada/site-continuity-packets'), { recursive: true });
   await mkdir(join(root, 'packages/cloudflare-carrier/scripts'), { recursive: true });
   await writeFile(packetPath, '{"packet":{"site_id":"site_missing"}}\n', 'utf8');
   await writeFile(syncEntrypoint, '#!/usr/bin/env node\n', 'utf8');
@@ -481,9 +495,11 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
       syncEntrypoint,
       packetPath,
       artifactDirectory,
+      reconciliationExecutionOutputPath,
       configuredSites: 'site_missing',
       dryRun: false,
       executionTimeoutMs: 5000,
+      now: () => '2026-06-11T12:30:00.000Z',
     }, {
       execFileImpl: async (command, args, options) => {
         calls.push({ command, args, options });
@@ -509,7 +525,7 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
     assert.equal(result.status, 'completed');
     assert.equal(result.dry_run, false);
     assert.equal(result.cloudflare_mutation_admission, 'executed_via_guarded_site_continuity_sync_once');
-    assert.equal(result.filesystem_mutation_admission, 'sync_once_artifact_write_only');
+    assert.equal(result.filesystem_mutation_admission, 'sync_once_artifact_and_reconciliation_execution_artifact_write_only');
     assert.equal(result.executed_site_count, 1);
     assert.equal(result.completed_site_count, 1);
     assert.equal(result.failed_site_count, 0);
@@ -523,6 +539,26 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
     assert.equal(result.results[0].status, 'completed');
     assert.equal(result.results[0].output_summary.status, 'synced');
     assert.equal(result.results[0].output_summary.site_id, 'site_missing');
+    assert.equal(result.reconciliation_execution_artifact.state, 'written');
+
+    const executionSummary = readLastReconciliationExecutionArtifact(reconciliationExecutionOutputPath);
+    assert.equal(executionSummary.state, 'read');
+    assert.equal(executionSummary.status, 'completed');
+    assert.equal(executionSummary.persisted_at, '2026-06-11T12:30:00.000Z');
+    assert.equal(executionSummary.completed_site_count, 1);
+    assert.deepEqual(executionSummary.result_status_counts, { completed: 1 });
+
+    const statusPlan = buildSiteContinuitySchedulerPlan({
+      action: 'status-all',
+      repoRoot: root,
+      outputPath: join(artifactDirectory, 'site_missing-cloudflare-sync.json'),
+      artifactDirectory,
+      reconciliationExecutionOutputPath,
+      configuredSites: 'site_missing',
+    });
+    assert.equal(statusPlan.local_sync_artifacts.artifact_count, 1);
+    assert.equal(statusPlan.last_reconciliation_execution.status, 'completed');
+    assert.deepEqual(statusPlan.last_reconciliation_execution.result_status_counts, { completed: 1 });
     assert.doesNotMatch(JSON.stringify(result), /secret-token-value/);
   } finally {
     await rm(root, { recursive: true, force: true });
