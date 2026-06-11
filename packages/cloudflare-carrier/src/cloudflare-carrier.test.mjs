@@ -1337,6 +1337,63 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(localIngressEvidenceListBody.authority_partition, 'windows_executes_local_ingress_cloudflare_records_evidence_without_direct_filesystem_authority');
   assert.equal(localIngressEvidenceListBody.evidence.length, 1);
 
+  const localIngressProviderHeartbeat = await worker.fetch(jsonRequest({
+    operation: 'local_ingress.provider_heartbeat.put',
+    request_id: 'request_local_ingress_provider_heartbeat_put',
+    params: {
+      site_id: 'site_fixture',
+      local_ingress_provider_heartbeat_id: 'local-ingress-provider-heartbeat-fixture',
+      generated_at: new Date().toISOString(),
+      provider_id: 'windows_local_ingress_executor',
+      provider_authority: 'windows_local_ingress_executor',
+      provider_embodiment: 'windows_current_user_local_ingress_executor',
+      status: 'completed_and_recorded',
+      local_ingress_request_id: 'local-ingress-request-fixture',
+      local_execution_id: 'local-ingress-execution-fixture',
+      evidence_record_status: 'recorded',
+      cloudflare_evidence_http_status: 200,
+      completed_execution_count: 1,
+      resolved_execution_count: 1,
+      direct_cloudflare_filesystem_mutation_admission: 'not_admitted',
+      repository_publication_admission: 'not_admitted',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(localIngressProviderHeartbeat.status, 200);
+  const localIngressProviderHeartbeatBody = await localIngressProviderHeartbeat.json();
+  assert.equal(localIngressProviderHeartbeatBody.schema, 'narada.sonar.cloudflare_local_ingress_provider_heartbeat.v1');
+  assert.equal(localIngressProviderHeartbeatBody.provider_liveness_authority, 'cloudflare_local_ingress_provider_liveness_store');
+  assert.equal(localIngressProviderHeartbeatBody.direct_cloudflare_filesystem_mutation_admission, 'not_admitted');
+  assert.equal(localIngressProviderHeartbeatBody.repository_publication_admission, 'not_admitted');
+
+  const localIngressProviderHeartbeatList = await worker.fetch(jsonRequest({
+    operation: 'local_ingress.provider_heartbeat.list',
+    request_id: 'request_local_ingress_provider_heartbeat_list',
+    params: { site_id: 'site_fixture', limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(localIngressProviderHeartbeatList.status, 200);
+  const localIngressProviderHeartbeatListBody = await localIngressProviderHeartbeatList.json();
+  assert.equal(localIngressProviderHeartbeatListBody.local_ingress_provider_heartbeat_count, 1);
+  assert.equal(localIngressProviderHeartbeatListBody.local_ingress_provider_heartbeats[0].local_ingress_provider_heartbeat_id, 'local-ingress-provider-heartbeat-fixture');
+  assert.equal(localIngressProviderHeartbeatListBody.local_ingress_provider_liveness.state, 'fresh');
+  assert.equal(localIngressProviderHeartbeatListBody.local_ingress_provider_liveness.provider_authority, 'windows_local_ingress_executor');
+  assert.equal(localIngressProviderHeartbeatListBody.direct_cloudflare_filesystem_mutation_admission, 'not_admitted');
+  assert.equal(localIngressProviderHeartbeatListBody.repository_publication_admission, 'not_admitted');
+
+  const localIngressProviderDirectMutationClaim = await worker.fetch(jsonRequest({
+    operation: 'local_ingress.provider_heartbeat.put',
+    request_id: 'request_local_ingress_provider_heartbeat_direct_mutation_claim',
+    params: {
+      site_id: 'site_fixture',
+      local_ingress_provider_heartbeat_id: 'local-ingress-provider-heartbeat-direct-mutation-claim',
+      provider_id: 'windows_local_ingress_executor',
+      status: 'completed_and_recorded',
+      direct_cloudflare_filesystem_mutation_admission: 'admitted',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(localIngressProviderDirectMutationClaim.status, 400);
+  const localIngressProviderDirectMutationClaimBody = await localIngressProviderDirectMutationClaim.json();
+  assert.equal(localIngressProviderDirectMutationClaimBody.code, 'local_ingress_provider_heartbeat_direct_cloudflare_filesystem_mutation_admission_invalid');
+
   const repositoryPublicationRequest = await worker.fetch(jsonRequest({
     operation: 'repository_publication.request.create',
     request_id: 'request_repository_publication_request_create',
@@ -1583,18 +1640,27 @@ test('worker site.read composes site sessions tasks authority events and carrier
       operation_id: 'operation_site_read',
       local_ingress_request_limit: 10,
       local_ingress_evidence_limit: 10,
+      local_ingress_provider_heartbeat_limit: 10,
     },
   }, { token: 'test-admin-token', path: '/api/carrier' }), env);
   assert.equal(operationReadAfterLocalIngressEvidence.status, 200);
   const operationReadAfterLocalIngressEvidenceBody = await operationReadAfterLocalIngressEvidence.json();
   assert.equal(operationReadAfterLocalIngressEvidenceBody.local_ingress_evidence.length, 1);
   assert.equal(operationReadAfterLocalIngressEvidenceBody.local_ingress_evidence[0].local_ingress_evidence_id, 'local-ingress-evidence-fixture');
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.local_ingress_provider_heartbeats.length, 1);
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.local_ingress_provider_heartbeats[0].local_ingress_provider_heartbeat_id, 'local-ingress-provider-heartbeat-fixture');
   assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_product_surface.local_ingress_evidence_count, 1);
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_product_surface.local_ingress_provider_heartbeat_count, 1);
   assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_product_surface.local_ingress_evidence_authority, 'windows_local_ingress_executor');
   assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_product_surface.local_ingress_evidence_store_authority, 'cloudflare_local_ingress_evidence_store');
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_product_surface.local_ingress_provider_liveness_authority, 'cloudflare_local_ingress_provider_liveness_store');
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_product_surface.local_ingress_provider_liveness.state, 'fresh');
   assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_product_surface.local_ingress_execution_admission, 'completed_by_windows_local_ingress');
   assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_lifecycle_status.local_ingress_evidence_count, 1);
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_lifecycle_status.local_ingress_provider_heartbeat_count, 1);
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_lifecycle_status.local_ingress_provider_liveness.state, 'fresh');
   assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'local_ingress_evidence'), true);
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'local_ingress_provider_heartbeat'), true);
 
   const publicationClaim = await worker.fetch(jsonRequest({
     operation: 'local_ingress.evidence.put',
@@ -1869,6 +1935,8 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /focus_lifecycle_continuity_loop_report/);
   assert.match(html, /focus_lifecycle_open_task/);
   assert.match(html, /focus_lifecycle_directive_delivery/);
+  assert.match(html, /review_repository_publication_provider_liveness/);
+  assert.match(html, /focusRepositoryPublicationProviderLiveness/);
   assert.match(html, /operation_lifecycle_missing_continuity_packet/);
   assert.match(html, /operation_lifecycle_missing_continuity_loop_report/);
   assert.match(html, /select_site_or_operation/);
@@ -2722,14 +2790,20 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /repositoryPublicationRequestFocusDetail/);
   assert.match(html, /repositoryPublicationEvidenceNavigator/);
   assert.match(html, /repositoryPublicationEvidenceFocusDetail/);
+  assert.match(html, /repositoryPublicationProviderHeartbeatNavigator/);
+  assert.match(html, /repositoryPublicationProviderHeartbeatFocusDetail/);
   assert.match(html, /renderRepositoryPublicationRequestNavigator/);
   assert.match(html, /renderRepositoryPublicationEvidenceNavigator/);
+  assert.match(html, /renderRepositoryPublicationProviderHeartbeatNavigator/);
   assert.match(html, /selectRepositoryPublicationRequest/);
   assert.match(html, /selectRepositoryPublicationEvidence/);
+  assert.match(html, /selectRepositoryPublicationProviderHeartbeat/);
   assert.match(html, /Repository Publication Review/);
   assert.match(html, /flightDeckFocusRepositoryPublication/);
   assert.match(html, /repository_publication_request_count/);
   assert.match(html, /repository_publication_evidence_count/);
+  assert.match(html, /repository_publication_provider_heartbeat_count/);
+  assert.match(html, /provider_liveness_state/);
   assert.match(html, /repository_publication_authority_partition/);
   assert.match(html, /await_windows_repository_publication_evidence/);
   assert.match(html, /review_repository_publication_evidence/);
@@ -6734,6 +6808,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     siteFileMaterializations: clone(initial.siteFileMaterializations ?? []),
     localIngressRequests: clone(initial.localIngressRequests ?? []),
     localIngressEvidence: clone(initial.localIngressEvidence ?? []),
+    localIngressProviderHeartbeats: clone(initial.localIngressProviderHeartbeats ?? []),
     repositoryPublicationRequests: clone(initial.repositoryPublicationRequests ?? []),
     repositoryPublicationEvidence: clone(initial.repositoryPublicationEvidence ?? []),
     repositoryPublicationProviderHeartbeats: clone(initial.repositoryPublicationProviderHeartbeats ?? []),
@@ -6897,6 +6972,12 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const row = { local_ingress_evidence_id, site_id, generated_at, local_ingress_request_id, local_execution_id, requested_mutation_class, windows_admission_action, windows_admission_reason, local_execution_status, local_executor_authority, local_filesystem_mutation_admission, changed_file_count, rollback_evidence_ref, direct_cloudflare_filesystem_mutation_admission, repository_publication_admission, evidence_posture, evidence_json, recorded_by_principal_id, recorded_at };
         if (existing) Object.assign(existing, row);
         else state.localIngressEvidence.push(row);
+      } else if (normalized.startsWith('insert into cloudflare_local_ingress_provider_heartbeats')) {
+        const [local_ingress_provider_heartbeat_id, site_id, generated_at, last_run_at, provider_id, provider_authority, provider_embodiment, status, heartbeat_json, recorded_by_principal_id, recorded_at] = bindings;
+        const existing = state.localIngressProviderHeartbeats.find((entry) => entry.local_ingress_provider_heartbeat_id === local_ingress_provider_heartbeat_id);
+        const row = { local_ingress_provider_heartbeat_id, site_id, generated_at, last_run_at, provider_id, provider_authority, provider_embodiment, status, heartbeat_json, recorded_by_principal_id, recorded_at };
+        if (existing) Object.assign(existing, row);
+        else state.localIngressProviderHeartbeats.push(row);
       } else if (normalized.startsWith('insert into cloudflare_repository_publication_requests')) {
         const [repository_publication_request_id, site_id, generated_at, operation_id, task_id, publication_ref, requested_action_ref, requested_action_summary, repository_ref, branch_ref, source_change_ref, governed_request_contract_ref, evidence_return_contract_ref, rollback_plan_ref, authority_locus, repository_publication_executor_authority, repository_publication_admission, cloudflare_git_push_admission, direct_cloudflare_repository_mutation_admission, request_posture, request_json, recorded_by_principal_id, recorded_at] = bindings;
         const existing = state.repositoryPublicationRequests.find((entry) => entry.repository_publication_request_id === repository_publication_request_id);
@@ -7225,6 +7306,16 @@ function fakeD1SiteRegistryStatement(state, sql) {
         return {
           results: state.localIngressEvidence
             .filter((entry) => entry.site_id === siteId && (!requestId || entry.local_ingress_request_id === requestId))
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_local_ingress_provider_heartbeats')) {
+        const [siteId, limit] = bindings;
+        return {
+          results: state.localIngressProviderHeartbeats
+            .filter((entry) => entry.site_id === siteId)
             .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
             .slice(0, Number(limit))
             .map((entry) => clone(entry)),

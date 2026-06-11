@@ -54,6 +54,7 @@ const CLOUDFLARE_SITE_FILE_CHANGE_PROPOSAL_SCHEMA = 'narada.sonar.cloudflare_sit
 const CLOUDFLARE_SITE_FILE_MATERIALIZATION_SCHEMA = 'narada.sonar.cloudflare_site_file_materialization.v1';
 const CLOUDFLARE_LOCAL_INGRESS_REQUEST_SCHEMA = 'narada.sonar.cloudflare_local_ingress_request.v1';
 const CLOUDFLARE_LOCAL_INGRESS_EVIDENCE_SCHEMA = 'narada.sonar.cloudflare_local_ingress_evidence.v1';
+const CLOUDFLARE_LOCAL_INGRESS_PROVIDER_HEARTBEAT_SCHEMA = 'narada.sonar.cloudflare_local_ingress_provider_heartbeat.v1';
 const CLOUDFLARE_REPOSITORY_PUBLICATION_REQUEST_SCHEMA = 'narada.sonar.cloudflare_repository_publication_request.v1';
 const CLOUDFLARE_REPOSITORY_PUBLICATION_EVIDENCE_SCHEMA = 'narada.sonar.cloudflare_repository_publication_evidence.v1';
 const CLOUDFLARE_REPOSITORY_PUBLICATION_PROVIDER_HEARTBEAT_SCHEMA = 'narada.sonar.cloudflare_repository_publication_provider_heartbeat.v1';
@@ -87,10 +88,12 @@ const CLOUDFLARE_MAILBOX_DRAFT_REPLY_PROPOSAL_AUTHORITY = 'cloudflare_carrier_si
 const CLOUDFLARE_MAILBOX_OUTLOOK_DRAFT_CREATE_AUTHORITY = 'cloudflare_graph_outlook_draft_create';
 const CLOUDFLARE_LOCAL_INGRESS_REQUEST_AUTHORITY = 'cloudflare_local_ingress_request_queue';
 const WINDOWS_LOCAL_INGRESS_EXECUTOR_AUTHORITY = 'windows_local_ingress_executor';
+const CLOUDFLARE_LOCAL_INGRESS_PROVIDER_LIVENESS_AUTHORITY = 'cloudflare_local_ingress_provider_liveness_store';
 const CLOUDFLARE_REPOSITORY_PUBLICATION_REQUEST_AUTHORITY = 'cloudflare_repository_publication_request_queue';
 const WINDOWS_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY = 'windows_repository_publication_executor';
 const CLOUDFLARE_REPOSITORY_PUBLICATION_EVIDENCE_AUTHORITY = 'cloudflare_repository_publication_evidence_store';
 const CLOUDFLARE_REPOSITORY_PUBLICATION_PROVIDER_LIVENESS_AUTHORITY = 'cloudflare_repository_publication_provider_liveness_store';
+const DEFAULT_LOCAL_INGRESS_PROVIDER_STALE_AFTER_MS = 5 * 60 * 1000;
 const DEFAULT_REPOSITORY_PUBLICATION_PROVIDER_STALE_AFTER_MS = 5 * 60 * 1000;
 const DEFAULT_WEBHOOK_DELAY_CRITICAL_MINUTES = 15;
 const CLOUDFLARE_RUNTIME_METADATA_READ_CAPABILITY = Object.freeze({
@@ -2058,6 +2061,7 @@ function summarizeCloudflareOperationLifecycleStatus({
   residentDispatchDecisions = [],
   localIngressRequests = [],
   localIngressEvidence = [],
+  localIngressProviderHeartbeats = [],
   repositoryPublicationRequests = [],
   repositoryPublicationEvidence = [],
   repositoryPublicationProviderHeartbeats = [],
@@ -2077,6 +2081,9 @@ function summarizeCloudflareOperationLifecycleStatus({
   const directiveDeliveryCount = Array.isArray(webhookDelayDirectiveDeliveries) ? webhookDelayDirectiveDeliveries.length : 0;
   const localIngressRequestCount = Array.isArray(localIngressRequests) ? localIngressRequests.length : 0;
   const localIngressEvidenceCount = Array.isArray(localIngressEvidence) ? localIngressEvidence.length : 0;
+  const localIngressProviderHeartbeatCount = Array.isArray(localIngressProviderHeartbeats) ? localIngressProviderHeartbeats.length : 0;
+  const localIngressProviderLiveness = classifyLocalIngressProviderLiveness(localIngressProviderHeartbeats);
+  const localIngressObserved = localIngressRequestCount > 0 || localIngressEvidenceCount > 0 || localIngressProviderHeartbeatCount > 0;
   const repositoryPublicationRequestCount = Array.isArray(repositoryPublicationRequests) ? repositoryPublicationRequests.length : 0;
   const repositoryPublicationEvidenceCount = Array.isArray(repositoryPublicationEvidence) ? repositoryPublicationEvidence.length : 0;
   const repositoryPublicationProviderHeartbeatCount = Array.isArray(repositoryPublicationProviderHeartbeats) ? repositoryPublicationProviderHeartbeats.length : 0;
@@ -2091,6 +2098,8 @@ function summarizeCloudflareOperationLifecycleStatus({
   if (carrierEvidenceReadStatus?.state === 'degraded') attention.push('carrier_evidence_read_degraded');
   if (openTaskCount > 0) attention.push('open_tasks');
   if (directiveRecordCount > directiveDeliveryCount) attention.push('undelivered_directives');
+  if (localIngressObserved && localIngressProviderLiveness.state === 'missing') attention.push('local_ingress_provider_liveness_missing');
+  if (localIngressObserved && localIngressProviderLiveness.state === 'stale') attention.push('local_ingress_provider_liveness_stale');
   if (repositoryPublicationObserved && repositoryPublicationProviderLiveness.state === 'missing') attention.push('repository_publication_provider_liveness_missing');
   if (repositoryPublicationObserved && repositoryPublicationProviderLiveness.state === 'stale') attention.push('repository_publication_provider_liveness_stale');
   const phase = operation?.status === 'active'
@@ -2118,6 +2127,9 @@ function summarizeCloudflareOperationLifecycleStatus({
     resident_dispatch_decision_count: residentDispatchCount,
     local_ingress_request_count: localIngressRequestCount,
     local_ingress_evidence_count: localIngressEvidenceCount,
+    local_ingress_provider_heartbeat_count: localIngressProviderHeartbeatCount,
+    local_ingress_provider_liveness_authority: localIngressProviderHeartbeatCount > 0 ? CLOUDFLARE_LOCAL_INGRESS_PROVIDER_LIVENESS_AUTHORITY : 'not_observed',
+    local_ingress_provider_liveness: localIngressProviderLiveness,
     repository_publication_request_count: repositoryPublicationRequestCount,
     repository_publication_evidence_count: repositoryPublicationEvidenceCount,
     repository_publication_provider_heartbeat_count: repositoryPublicationProviderHeartbeatCount,
@@ -2172,6 +2184,7 @@ function summarizeCloudflareOperationActivityTimeline({
   mailboxOutlookDraftCreates = [],
   localIngressRequests = [],
   localIngressEvidence = [],
+  localIngressProviderHeartbeats = [],
   repositoryPublicationRequests = [],
   repositoryPublicationEvidence = [],
   repositoryPublicationProviderHeartbeats = [],
@@ -2373,6 +2386,19 @@ function summarizeCloudflareOperationActivityTimeline({
       focus_kind: 'local_ingress_evidence',
       focus_ref: evidence.local_ingress_evidence_id,
       principal_id: evidence.recorded_by_principal_id,
+    });
+  }
+  for (const heartbeat of localIngressProviderHeartbeats || []) {
+    push({
+      activity_id: `local_ingress_provider_heartbeat:${heartbeat.local_ingress_provider_heartbeat_id}`,
+      activity_kind: 'local_ingress_provider_heartbeat',
+      occurred_at: heartbeat.recorded_at || heartbeat.last_run_at || heartbeat.generated_at,
+      title: 'Local Ingress Provider Heartbeat',
+      summary: [heartbeat.status, heartbeat.provider_id, heartbeat.provider_authority].filter(Boolean).join(' / ') || 'local ingress provider liveness recorded',
+      source_ref: heartbeat.local_ingress_provider_heartbeat_id,
+      focus_kind: 'local_ingress_provider_heartbeat',
+      focus_ref: heartbeat.local_ingress_provider_heartbeat_id,
+      principal_id: heartbeat.recorded_by_principal_id,
     });
   }
   for (const request of repositoryPublicationRequests || []) {
@@ -2847,6 +2873,8 @@ function isSiteProductOperation(operation) {
     'local_ingress.request.list',
     'local_ingress.evidence.put',
     'local_ingress.evidence.list',
+    'local_ingress.provider_heartbeat.put',
+    'local_ingress.provider_heartbeat.list',
     'repository_publication.request.create',
     'repository_publication.request.list',
     'repository_publication.request.next',
@@ -3469,6 +3497,31 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       },
     };
   }
+  if (body.operation === 'local_ingress.provider_heartbeat.put') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const result = await recordCloudflareLocalIngressProviderHeartbeat(env, requestedSiteId, params, principal);
+    return { status: result.ok ? 200 : 400, body: result };
+  }
+  if (body.operation === 'local_ingress.provider_heartbeat.list') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const providerHeartbeats = await listCloudflareLocalIngressProviderHeartbeats(env, requestedSiteId, params.local_ingress_provider_heartbeat_limit ?? params.limit);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        schema: CLOUDFLARE_LOCAL_INGRESS_PROVIDER_HEARTBEAT_SCHEMA,
+        site_id: requestedSiteId,
+        local_ingress_provider_heartbeats: providerHeartbeats,
+        local_ingress_provider_heartbeat_count: providerHeartbeats.length,
+        local_ingress_provider_liveness: classifyLocalIngressProviderLiveness(providerHeartbeats),
+        provider_liveness_authority: CLOUDFLARE_LOCAL_INGRESS_PROVIDER_LIVENESS_AUTHORITY,
+        direct_cloudflare_filesystem_mutation_admission: 'not_admitted',
+        repository_publication_admission: 'not_admitted',
+      },
+    };
+  }
   if (body.operation === 'repository_publication.request.create') {
     const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
     if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
@@ -3777,6 +3830,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const siteFileMaterializations = await listCloudflareSiteFileMaterializations(env, siteId, params.site_file_materialization_limit ?? params.limit);
     const localIngressRequests = await listCloudflareLocalIngressRequests(env, siteId, params.local_ingress_request_limit ?? params.limit);
     const localIngressEvidence = await listCloudflareLocalIngressEvidence(env, siteId, params.local_ingress_evidence_limit ?? params.limit);
+    const localIngressProviderHeartbeats = await listCloudflareLocalIngressProviderHeartbeats(env, siteId, params.local_ingress_provider_heartbeat_limit ?? params.limit);
     const repositoryPublicationRequests = await listCloudflareRepositoryPublicationRequests(env, siteId, params.repository_publication_request_limit ?? params.limit);
     const repositoryPublicationEvidence = await listCloudflareRepositoryPublicationEvidence(env, siteId, params.repository_publication_evidence_limit ?? params.limit);
     const repositoryPublicationProviderHeartbeats = await listCloudflareRepositoryPublicationProviderHeartbeats(env, siteId, params.repository_publication_provider_heartbeat_limit ?? params.limit);
@@ -3827,6 +3881,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       siteFileChangeProposals,
       localIngressRequests,
       localIngressEvidence,
+      localIngressProviderHeartbeats,
       repositoryPublicationRequests,
       repositoryPublicationEvidence,
       repositoryPublicationProviderHeartbeats,
@@ -3845,6 +3900,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       residentDispatchDecisions,
       localIngressRequests,
       localIngressEvidence,
+      localIngressProviderHeartbeats,
       repositoryPublicationRequests,
       repositoryPublicationEvidence,
       repositoryPublicationProviderHeartbeats,
@@ -3894,6 +3950,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         site_file_materializations: siteFileMaterializations,
         local_ingress_requests: localIngressRequests,
         local_ingress_evidence: localIngressEvidence,
+        local_ingress_provider_heartbeats: localIngressProviderHeartbeats,
         repository_publication_requests: repositoryPublicationRequests,
         repository_publication_evidence: repositoryPublicationEvidence,
         repository_publication_provider_heartbeats: repositoryPublicationProviderHeartbeats,
@@ -3972,15 +4029,18 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           site_file_materialization_authority_partition: siteFileMaterializations.length > 0 ? 'site_file_materialization_cloudflare_owned_windows_filesystem_and_publication_not_admitted' : 'materialization_not_observed_filesystem_and_publication_windows_owned',
           local_ingress_request_count: localIngressRequests.length,
           local_ingress_evidence_count: localIngressEvidence.length,
+          local_ingress_provider_heartbeat_count: localIngressProviderHeartbeats.length,
           local_ingress_request_authority: localIngressRequests.length > 0 ? CLOUDFLARE_LOCAL_INGRESS_REQUEST_AUTHORITY : 'not_observed',
           local_ingress_evidence_authority: localIngressEvidence.length > 0 ? WINDOWS_LOCAL_INGRESS_EXECUTOR_AUTHORITY : 'not_observed',
           local_ingress_evidence_store_authority: localIngressEvidence.length > 0 ? 'cloudflare_local_ingress_evidence_store' : 'not_observed',
+          local_ingress_provider_liveness_authority: localIngressProviderHeartbeats.length > 0 ? CLOUDFLARE_LOCAL_INGRESS_PROVIDER_LIVENESS_AUTHORITY : 'not_observed',
+          local_ingress_provider_liveness: classifyLocalIngressProviderLiveness(localIngressProviderHeartbeats),
           local_ingress_target_authority_locus: localIngressRequests.length > 0 ? 'local-windows-site-authority' : 'not_observed',
-          local_ingress_executor_authority: localIngressRequests.length > 0 ? WINDOWS_LOCAL_INGRESS_EXECUTOR_AUTHORITY : 'not_observed',
+          local_ingress_executor_authority: localIngressRequests.length > 0 || localIngressEvidence.length > 0 || localIngressProviderHeartbeats.length > 0 ? WINDOWS_LOCAL_INGRESS_EXECUTOR_AUTHORITY : 'not_observed',
           local_ingress_execution_admission: localIngressEvidence.length > 0 ? 'completed_by_windows_local_ingress' : localIngressRequests.length > 0 ? 'pending_windows_admission' : 'not_observed',
-          local_ingress_direct_cloudflare_filesystem_mutation_admission: localIngressRequests.length > 0 || localIngressEvidence.length > 0 ? 'not_admitted' : 'retained',
-          local_ingress_repository_publication_admission: localIngressRequests.length > 0 || localIngressEvidence.length > 0 ? 'not_admitted' : 'retained',
-          local_ingress_authority_partition: localIngressEvidence.length > 0 ? 'windows_executes_local_ingress_cloudflare_records_evidence_without_direct_filesystem_authority' : localIngressRequests.length > 0 ? 'cloudflare_queues_governed_local_ingress_request_windows_admits_executes_and_returns_evidence' : 'local_ingress_not_observed_windows_authority_retained',
+          local_ingress_direct_cloudflare_filesystem_mutation_admission: localIngressRequests.length > 0 || localIngressEvidence.length > 0 || localIngressProviderHeartbeats.length > 0 ? 'not_admitted' : 'retained',
+          local_ingress_repository_publication_admission: localIngressRequests.length > 0 || localIngressEvidence.length > 0 || localIngressProviderHeartbeats.length > 0 ? 'not_admitted' : 'retained',
+          local_ingress_authority_partition: localIngressEvidence.length > 0 ? 'windows_executes_local_ingress_cloudflare_records_evidence_without_direct_filesystem_authority' : localIngressRequests.length > 0 ? 'cloudflare_queues_governed_local_ingress_request_windows_admits_executes_and_returns_evidence' : localIngressProviderHeartbeats.length > 0 ? 'cloudflare_records_windows_local_ingress_provider_liveness_without_direct_filesystem_authority' : 'local_ingress_not_observed_windows_authority_retained',
           repository_publication_request_count: repositoryPublicationRequests.length,
           repository_publication_evidence_count: repositoryPublicationEvidence.length,
           repository_publication_provider_heartbeat_count: repositoryPublicationProviderHeartbeats.length,
@@ -7400,6 +7460,176 @@ async function listCloudflareLocalIngressEvidence(env = {}, siteId, limit, local
     recorded_by_principal_id: row.recorded_by_principal_id,
     recorded_at: row.recorded_at,
   }));
+}
+
+function createCloudflareLocalIngressProviderHeartbeat(siteId, params = {}, principal = null) {
+  const generatedAt = params.generated_at ?? params.last_run_at ?? new Date().toISOString();
+  const providerId = String(params.provider_id ?? 'windows_local_ingress_executor').trim();
+  const status = String(params.status ?? '').trim();
+  const directCloudflareFilesystemMutationAdmission = String(params.direct_cloudflare_filesystem_mutation_admission ?? 'not_admitted');
+  const repositoryPublicationAdmission = String(params.repository_publication_admission ?? 'not_admitted');
+  return {
+    local_ingress_provider_heartbeat_id: params.local_ingress_provider_heartbeat_id ?? `local_ingress_provider_heartbeat_${providerId}_${Date.now()}`,
+    site_id: siteId,
+    schema: CLOUDFLARE_LOCAL_INGRESS_PROVIDER_HEARTBEAT_SCHEMA,
+    generated_at: generatedAt,
+    last_run_at: params.last_run_at ?? generatedAt,
+    provider_id: providerId,
+    provider_authority: params.provider_authority ?? WINDOWS_LOCAL_INGRESS_EXECUTOR_AUTHORITY,
+    provider_embodiment: params.provider_embodiment ?? params.embodiment ?? 'windows_current_user_local_ingress_executor',
+    status,
+    local_ingress_request_id: params.local_ingress_request_id ?? null,
+    local_execution_id: params.local_execution_id ?? null,
+    evidence_record_status: params.evidence_record_status ?? null,
+    cloudflare_evidence_http_status: Number.isFinite(Number(params.cloudflare_evidence_http_status)) ? Number(params.cloudflare_evidence_http_status) : null,
+    completed_execution_count: Number.isFinite(Number(params.completed_execution_count)) ? Number(params.completed_execution_count) : 0,
+    refused_execution_count: Number.isFinite(Number(params.refused_execution_count)) ? Number(params.refused_execution_count) : 0,
+    resolved_execution_count: Number.isFinite(Number(params.resolved_execution_count)) ? Number(params.resolved_execution_count) : 0,
+    cloudflare_dispatch_authority: params.cloudflare_dispatch_authority ?? CLOUDFLARE_LOCAL_INGRESS_REQUEST_AUTHORITY,
+    provider_liveness_authority: CLOUDFLARE_LOCAL_INGRESS_PROVIDER_LIVENESS_AUTHORITY,
+    direct_cloudflare_filesystem_mutation_admission: directCloudflareFilesystemMutationAdmission,
+    repository_publication_admission: repositoryPublicationAdmission,
+    recorded_by_principal_id: principal?.principal_id ?? params.recorded_by_principal_id ?? 'unknown-principal',
+    recorded_at: new Date().toISOString(),
+  };
+}
+
+function classifyLocalIngressProviderLiveness(heartbeats = [], { nowMs = Date.now(), staleAfterMs = DEFAULT_LOCAL_INGRESS_PROVIDER_STALE_AFTER_MS } = {}) {
+  const heartbeat = Array.isArray(heartbeats) ? heartbeats[0] ?? null : null;
+  if (!heartbeat) {
+    return {
+      schema: 'narada.sonar.cloudflare_local_ingress_provider_liveness.v1',
+      state: 'missing',
+      reason: 'local_ingress_provider_heartbeat_missing',
+      provider_id: 'windows_local_ingress_executor',
+      provider_authority: WINDOWS_LOCAL_INGRESS_EXECUTOR_AUTHORITY,
+      provider_liveness_authority: 'not_observed',
+      stale_after_ms: staleAfterMs,
+    };
+  }
+  const observedAt = Date.parse(heartbeat.last_run_at ?? heartbeat.generated_at ?? heartbeat.recorded_at ?? '');
+  const ageMs = Number.isFinite(observedAt) ? Math.max(0, nowMs - observedAt) : null;
+  const status = heartbeat.status ?? 'unknown';
+  const state = ageMs == null
+    ? 'unknown'
+    : ageMs > staleAfterMs ? 'stale' : status === 'failed' ? 'failed' : 'fresh';
+  return {
+    schema: 'narada.sonar.cloudflare_local_ingress_provider_liveness.v1',
+    state,
+    reason: state === 'fresh' ? 'local_ingress_provider_heartbeat_recent' : `local_ingress_provider_heartbeat_${state}`,
+    provider_id: heartbeat.provider_id ?? 'windows_local_ingress_executor',
+    provider_authority: heartbeat.provider_authority ?? WINDOWS_LOCAL_INGRESS_EXECUTOR_AUTHORITY,
+    provider_embodiment: heartbeat.provider_embodiment ?? 'windows_current_user_local_ingress_executor',
+    provider_status: status,
+    latest_heartbeat_id: heartbeat.local_ingress_provider_heartbeat_id ?? null,
+    latest_heartbeat_at: heartbeat.last_run_at ?? heartbeat.generated_at ?? heartbeat.recorded_at ?? null,
+    latest_heartbeat_age_ms: ageMs,
+    stale_after_ms: staleAfterMs,
+    provider_liveness_authority: CLOUDFLARE_LOCAL_INGRESS_PROVIDER_LIVENESS_AUTHORITY,
+  };
+}
+
+async function recordCloudflareLocalIngressProviderHeartbeat(env = {}, siteId, params = {}, principal = null) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return { ok: false, code: 'missing_site_registry_binding' };
+  if (!siteId || siteId === 'unknown-site') return { ok: false, code: 'missing_site_id' };
+  const heartbeat = createCloudflareLocalIngressProviderHeartbeat(siteId, params, principal);
+  if (!heartbeat.provider_id) return { ok: false, code: 'local_ingress_provider_heartbeat_provider_id_required' };
+  if (!heartbeat.status) return { ok: false, code: 'local_ingress_provider_heartbeat_status_required' };
+  if (heartbeat.direct_cloudflare_filesystem_mutation_admission !== 'not_admitted') return { ok: false, code: 'local_ingress_provider_heartbeat_direct_cloudflare_filesystem_mutation_admission_invalid', direct_cloudflare_filesystem_mutation_admission: heartbeat.direct_cloudflare_filesystem_mutation_admission };
+  if (heartbeat.repository_publication_admission !== 'not_admitted') return { ok: false, code: 'local_ingress_provider_heartbeat_repository_publication_admission_invalid', repository_publication_admission: heartbeat.repository_publication_admission };
+  await ensureCloudflareLocalIngressProviderHeartbeatSchema(db);
+  await db.prepare(`
+    INSERT INTO cloudflare_local_ingress_provider_heartbeats (
+      local_ingress_provider_heartbeat_id, site_id, generated_at, last_run_at,
+      provider_id, provider_authority, provider_embodiment, status, heartbeat_json, recorded_by_principal_id, recorded_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(local_ingress_provider_heartbeat_id) DO UPDATE SET
+      last_run_at = excluded.last_run_at,
+      status = excluded.status,
+      heartbeat_json = excluded.heartbeat_json,
+      recorded_by_principal_id = excluded.recorded_by_principal_id,
+      recorded_at = excluded.recorded_at
+  `).bind(
+    heartbeat.local_ingress_provider_heartbeat_id,
+    heartbeat.site_id,
+    heartbeat.generated_at,
+    heartbeat.last_run_at,
+    heartbeat.provider_id,
+    heartbeat.provider_authority,
+    heartbeat.provider_embodiment,
+    heartbeat.status,
+    JSON.stringify(heartbeat),
+    heartbeat.recorded_by_principal_id,
+    heartbeat.recorded_at,
+  ).run();
+  return {
+    ok: true,
+    schema: CLOUDFLARE_LOCAL_INGRESS_PROVIDER_HEARTBEAT_SCHEMA,
+    site_id: siteId,
+    provider_liveness_authority: CLOUDFLARE_LOCAL_INGRESS_PROVIDER_LIVENESS_AUTHORITY,
+    direct_cloudflare_filesystem_mutation_admission: heartbeat.direct_cloudflare_filesystem_mutation_admission,
+    repository_publication_admission: heartbeat.repository_publication_admission,
+    heartbeat,
+  };
+}
+
+async function ensureCloudflareLocalIngressProviderHeartbeatSchema(db) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS cloudflare_local_ingress_provider_heartbeats (
+      local_ingress_provider_heartbeat_id TEXT PRIMARY KEY,
+      site_id TEXT NOT NULL,
+      generated_at TEXT NOT NULL,
+      last_run_at TEXT NOT NULL,
+      provider_id TEXT NOT NULL,
+      provider_authority TEXT NOT NULL,
+      provider_embodiment TEXT NOT NULL,
+      status TEXT NOT NULL,
+      heartbeat_json TEXT NOT NULL,
+      recorded_by_principal_id TEXT NOT NULL,
+      recorded_at TEXT NOT NULL
+    )
+  `).run();
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_cloudflare_local_ingress_provider_heartbeats_site_recorded
+    ON cloudflare_local_ingress_provider_heartbeats(site_id, recorded_at)
+  `).run();
+}
+
+async function listCloudflareLocalIngressProviderHeartbeats(env = {}, siteId, limit = 20) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return [];
+  if (!siteId || siteId === 'unknown-site') return [];
+  await ensureCloudflareLocalIngressProviderHeartbeatSchema(db);
+  const boundedLimit = Math.max(1, Math.min(100, Number.parseInt(limit ?? 20, 10) || 20));
+  const rows = await db.prepare(`
+    SELECT * FROM cloudflare_local_ingress_provider_heartbeats
+    WHERE site_id = ?
+    ORDER BY recorded_at DESC, generated_at DESC
+    LIMIT ?
+  `).bind(siteId, boundedLimit).all();
+  return (rows.results ?? []).map((row) => {
+    try {
+      return JSON.parse(row.heartbeat_json);
+    } catch {
+      return {
+        local_ingress_provider_heartbeat_id: row.local_ingress_provider_heartbeat_id,
+        site_id: row.site_id,
+        schema: CLOUDFLARE_LOCAL_INGRESS_PROVIDER_HEARTBEAT_SCHEMA,
+        generated_at: row.generated_at,
+        last_run_at: row.last_run_at,
+        provider_id: row.provider_id,
+        provider_authority: row.provider_authority,
+        provider_embodiment: row.provider_embodiment,
+        status: row.status,
+        provider_liveness_authority: CLOUDFLARE_LOCAL_INGRESS_PROVIDER_LIVENESS_AUTHORITY,
+        direct_cloudflare_filesystem_mutation_admission: 'not_admitted',
+        repository_publication_admission: 'not_admitted',
+        recorded_by_principal_id: row.recorded_by_principal_id,
+        recorded_at: row.recorded_at,
+      };
+    }
+  });
 }
 
 function createRepositoryPublicationEvidence(siteId, params = {}) {
@@ -11040,6 +11270,10 @@ export function renderCloudflareCarrierConsole() {
         <div id="repositoryPublicationEvidenceNavigator" class="attention-items"><div class="empty">No repository publication evidence loaded.</div></div>
         <h3>Repository Publication Evidence Detail</h3>
         <div id="repositoryPublicationEvidenceFocusDetail" class="evidence-summary"><div class="empty">No repository publication evidence selected.</div></div>
+        <h3>Provider Liveness</h3>
+        <div id="repositoryPublicationProviderHeartbeatNavigator" class="attention-items"><div class="empty">No repository publication provider heartbeats loaded.</div></div>
+        <h3>Provider Liveness Detail</h3>
+        <div id="repositoryPublicationProviderHeartbeatFocusDetail" class="evidence-summary"><div class="empty">No repository publication provider heartbeat selected.</div></div>
       </div>
       <div class="product-panel">
         <h2>Mailbox Draft Create</h2>
@@ -11169,7 +11403,7 @@ export function renderCloudflareCarrierConsole() {
     const classifyCloudflareEvidenceCommandState = ${classifyCloudflareEvidenceCommandState.toString()};
     const classifyCloudflareSiteCommandState = ${classifyCloudflareSiteCommandState.toString()};
     const classifyCloudflareMembershipCommandState = ${classifyCloudflareMembershipCommandState.toString()};
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], siteList: [], siteProductStatuses: [], siteProductOverview: null, sitePostureRoute: null, consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, webhookDelayDirectiveFocus: null, webhookDelayDirectiveDeliveryFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null, localIngressRequestFocus: null, localIngressEvidenceFocus: null, repositoryPublicationRequestFocus: null, repositoryPublicationEvidenceFocus: null, mailboxDraftReplyProposalFocus: null, mailboxOutlookDraftCreateFocus: null, mailboxDraftCreateFormProposalId: null, siteFileChangeProposalFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], siteList: [], siteProductStatuses: [], siteProductOverview: null, sitePostureRoute: null, consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, webhookDelayDirectiveFocus: null, webhookDelayDirectiveDeliveryFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null, localIngressRequestFocus: null, localIngressEvidenceFocus: null, repositoryPublicationRequestFocus: null, repositoryPublicationEvidenceFocus: null, repositoryPublicationProviderHeartbeatFocus: null, mailboxDraftReplyProposalFocus: null, mailboxOutlookDraftCreateFocus: null, mailboxDraftCreateFormProposalId: null, siteFileChangeProposalFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -11444,6 +11678,7 @@ export function renderCloudflareCarrierConsole() {
       renderLocalIngressEvidenceNavigator(product.local_ingress_evidence || []);
       renderRepositoryPublicationRequestNavigator(product.repository_publication_requests || []);
       renderRepositoryPublicationEvidenceNavigator(product.repository_publication_evidence || []);
+      renderRepositoryPublicationProviderHeartbeatNavigator(product.repository_publication_provider_heartbeats || []);
     }
     function productScopeSummary(product = state.operationProduct || {}) {
       if (state.productScope === 'site') return ['site', product.site?.site_id || el('siteId').value.trim(), String((product.operations || []).length) + ' operations'].filter(Boolean).join(' / ');
@@ -11662,8 +11897,11 @@ export function renderCloudflareCarrierConsole() {
       const localIngressEvidenceFocus = state.localIngressEvidenceFocus || localIngressEvidence[0] || null;
       const repositoryPublicationRequests = product.repository_publication_requests || [];
       const repositoryPublicationEvidence = product.repository_publication_evidence || [];
+      const repositoryPublicationProviderHeartbeats = product.repository_publication_provider_heartbeats || [];
       const repositoryPublicationRequestFocus = state.repositoryPublicationRequestFocus || repositoryPublicationRequests[0] || null;
       const repositoryPublicationEvidenceFocus = state.repositoryPublicationEvidenceFocus || repositoryPublicationEvidence[0] || null;
+      const repositoryPublicationProviderHeartbeatFocus = state.repositoryPublicationProviderHeartbeatFocus || repositoryPublicationProviderHeartbeats[0] || null;
+      const repositoryPublicationProviderLiveness = surface.repository_publication_provider_liveness || product.operation_lifecycle_status?.repository_publication_provider_liveness || {};
       const controlDomain = contextValue(control, 'Domain') || 'none';
       const controlAction = contextValue(control, 'Action') || 'none';
       const controlTarget = contextValue(control, 'Target') || 'none';
@@ -11716,6 +11954,7 @@ export function renderCloudflareCarrierConsole() {
           listItem('local_ingress_evidence', localIngressEvidence.length + ' / ' + String(surface.local_ingress_evidence_count ?? localIngressEvidence.length)),
           listItem('repository_publication_requests', repositoryPublicationRequests.length + ' / ' + String(surface.repository_publication_request_count ?? repositoryPublicationRequests.length)),
           listItem('repository_publication_evidence', repositoryPublicationEvidence.length + ' / ' + String(surface.repository_publication_evidence_count ?? repositoryPublicationEvidence.length)),
+          listItem('repository_publication_provider_heartbeats', repositoryPublicationProviderHeartbeats.length + ' / ' + String(surface.repository_publication_provider_heartbeat_count ?? repositoryPublicationProviderHeartbeats.length)),
         ],
         evidence: [
           listItem('events_loaded', String(state.events.length)),
@@ -11736,6 +11975,7 @@ export function renderCloudflareCarrierConsole() {
           listItem('local_ingress_evidence', localIngressEvidenceFocus?.local_ingress_evidence_id || 'none'),
           listItem('repository_publication_request', repositoryPublicationRequestFocus?.repository_publication_request_id || 'none'),
           listItem('repository_publication_evidence', repositoryPublicationEvidenceFocus?.repository_publication_evidence_id || 'none'),
+          listItem('repository_publication_provider_heartbeat', repositoryPublicationProviderHeartbeatFocus?.repository_publication_provider_heartbeat_id || 'none'),
         ],
         sessionEvidence: [
           listItem('session', contextValue(sessionPath, 'Session') || 'none'),
@@ -11842,10 +12082,18 @@ export function renderCloudflareCarrierConsole() {
           listItem('published_commit_ref', repositoryPublicationEvidenceFocus?.published_commit_ref || 'none'),
           listItem('repository_publication_evidence_authority', surface.repository_publication_evidence_authority || repositoryPublicationEvidenceFocus?.repository_publication_evidence_authority || 'not_observed'),
           listItem('repository_publication_evidence_store_authority', surface.repository_publication_evidence_store_authority || (repositoryPublicationEvidenceFocus ? 'cloudflare_repository_publication_evidence_store' : 'not_observed')),
+          listItem('repository_publication_provider_heartbeat_count', String(surface.repository_publication_provider_heartbeat_count ?? repositoryPublicationProviderHeartbeats.length)),
+          listItem('focused_provider_heartbeat', repositoryPublicationProviderHeartbeatFocus?.repository_publication_provider_heartbeat_id || 'none'),
+          listItem('provider_liveness_state', repositoryPublicationProviderLiveness.state || 'not_observed'),
+          listItem('provider_liveness_reason', repositoryPublicationProviderLiveness.reason || 'not_observed'),
+          listItem('provider_liveness_authority', surface.repository_publication_provider_liveness_authority || repositoryPublicationProviderLiveness.provider_liveness_authority || 'not_observed'),
+          listItem('latest_provider_heartbeat_at', repositoryPublicationProviderLiveness.latest_heartbeat_at || repositoryPublicationProviderHeartbeatFocus?.recorded_at || 'none'),
+          listItem('provider_authority', repositoryPublicationProviderHeartbeatFocus?.provider_authority || 'not_observed'),
+          listItem('provider_status', repositoryPublicationProviderHeartbeatFocus?.status || 'not_observed'),
           listItem('cloudflare_git_push_admission', surface.repository_publication_cloudflare_git_push_admission || repositoryPublicationRequestFocus?.cloudflare_git_push_admission || repositoryPublicationEvidenceFocus?.cloudflare_git_push_admission || 'retained'),
           listItem('direct_cloudflare_repository_mutation_admission', surface.repository_publication_direct_cloudflare_repository_mutation_admission || repositoryPublicationRequestFocus?.direct_cloudflare_repository_mutation_admission || repositoryPublicationEvidenceFocus?.direct_cloudflare_repository_mutation_admission || 'retained'),
           listItem('repository_publication_authority_partition', surface.repository_publication_authority_partition || 'repository_publication_not_observed_windows_authority_retained'),
-          listItem('repository_publication_next_action', repositoryPublicationEvidence.length > 0 ? 'review_repository_publication_evidence' : repositoryPublicationRequests.length > 0 ? 'await_windows_repository_publication_evidence' : 'monitor_repository_publication'),
+          listItem('repository_publication_next_action', ['missing', 'stale'].includes(String(repositoryPublicationProviderLiveness.state || '')) ? 'review_repository_publication_provider_liveness' : repositoryPublicationEvidence.length > 0 ? 'review_repository_publication_evidence' : repositoryPublicationRequests.length > 0 ? 'await_windows_repository_publication_evidence' : 'monitor_repository_publication'),
         ],
         readiness: readinessGaps.length > 0
           ? readinessGaps.slice(0, 4).map((item) => listItem(item.label, item.detail || item.action_label || item.status))
@@ -11940,6 +12188,9 @@ export function renderCloudflareCarrierConsole() {
         if (lifecycleStatus.next_action === 'undelivered_directives') {
           return { domain: 'operation_lifecycle', action: 'focus_lifecycle_directive_delivery', target: (webhookDelayDirectiveRecords[0]?.directive_record_id || 'directive'), reason: 'operation_lifecycle_undelivered_directives' };
         }
+        if (['repository_publication_provider_liveness_missing', 'repository_publication_provider_liveness_stale'].includes(lifecycleStatus.next_action)) {
+          return { domain: 'repository_publication_provider_liveness', action: 'review_repository_publication_provider_liveness', target: targets.repositoryPublicationProviderHeartbeat?.repository_publication_provider_heartbeat_id || siteId || operationId || 'repository_publication_provider_liveness', reason: lifecycleStatus.next_action };
+        }
         if (operationPathAction === 'inspect_attention') {
           return { domain: 'operation_path', action: 'focus_operation_path_attention', target: contextValue(operationPathContext(focusedOperation(), product), 'Operation') || operationId || 'operation', reason: 'operation_path_has_open_attention' };
         }
@@ -12022,6 +12273,7 @@ export function renderCloudflareCarrierConsole() {
       if (action === 'create_task_from_directive_intent') { run(createTaskFromFocusedDirectiveIntent); return; }
       if (action === 'focus_webhook_delay_directive_delivery') { focusWebhookDelayDirectiveDelivery(); return; }
       if (action === 'focus_webhook_delay_shadow_read') { focusWebhookDelayShadow(); return; }
+      if (action === 'review_repository_publication_provider_liveness' || action === 'focus_repository_publication_provider_liveness') { focusRepositoryPublicationProviderLiveness(); return; }
       if (action === 'start_resident_dispatch') { run(startResidentDispatchFromWorkbench); return; }
       if (action === 'focus_open_attention' || action === 'focus_open_task' || action === 'monitor_operation_evidence') { applyFlightDeckNextAction(); return; }
       applyFlightDeckNextAction();
@@ -12118,6 +12370,7 @@ export function renderCloudflareCarrierConsole() {
       if (action === 'review_continuity_loop_report') { focusContinuityLoopReport(product); return; }
       if (action === 'review_carrier_evidence_replay') { focusRecoveryEvidence(product); return; }
       if (action === 'review_directive_delivery') { focusWebhookDelayDirectiveDelivery(); return; }
+      if (action === 'review_repository_publication_provider_liveness') { focusRepositoryPublicationProviderLiveness(); return; }
       if (action === 'focus_open_task') { applyFlightDeckNextAction(); return; }
       if (action === 'start_resident_dispatch') { run(startResidentDispatchFromWorkbench); return; }
       run(refreshOperation);
@@ -12205,6 +12458,8 @@ export function renderCloudflareCarrierConsole() {
       const localIngressEvidence = product.local_ingress_evidence || [];
       const repositoryPublicationRequests = product.repository_publication_requests || [];
       const repositoryPublicationEvidence = product.repository_publication_evidence || [];
+      const repositoryPublicationProviderHeartbeats = product.repository_publication_provider_heartbeats || [];
+      const repositoryPublicationProviderLiveness = surface.repository_publication_provider_liveness || product.operation_lifecycle_status?.repository_publication_provider_liveness || {};
       const nextAction = openAttention[0]
         ? 'resolve attention ' + openAttention[0].directive_id
         : openTasks[0]
@@ -12228,7 +12483,9 @@ export function renderCloudflareCarrierConsole() {
         ['Local Ingress Next Action', localIngressEvidence.length > 0 ? 'review_local_ingress_evidence' : localIngressRequests.length > 0 ? 'await_windows_local_ingress_evidence' : 'monitor_local_ingress'],
         ['Repository Publication Requests', String(surface.repository_publication_request_count ?? repositoryPublicationRequests.length)],
         ['Repository Publication Evidence', String(surface.repository_publication_evidence_count ?? repositoryPublicationEvidence.length)],
-        ['Repository Publication Next Action', repositoryPublicationEvidence.length > 0 ? 'review_repository_publication_evidence' : repositoryPublicationRequests.length > 0 ? 'await_windows_repository_publication_evidence' : 'monitor_repository_publication'],
+        ['Repository Publication Provider Heartbeats', String(surface.repository_publication_provider_heartbeat_count ?? repositoryPublicationProviderHeartbeats.length)],
+        ['Repository Publication Provider Liveness', repositoryPublicationProviderLiveness.state || 'not_observed'],
+        ['Repository Publication Next Action', ['missing', 'stale'].includes(String(repositoryPublicationProviderLiveness.state || '')) ? 'review_repository_publication_provider_liveness' : repositoryPublicationEvidence.length > 0 ? 'review_repository_publication_evidence' : repositoryPublicationRequests.length > 0 ? 'await_windows_repository_publication_evidence' : 'monitor_repository_publication'],
         ['Evidence Loaded', String(surface.carrier_evidence_count ?? (product.carrier_evidence || []).length) + ' groups / ' + state.events.length + ' events'],
         ['Evidence Replay State', evidenceStatus.state || 'unknown'],
         ['Evidence Replay Source', evidenceReplaySources(product)],
@@ -12260,6 +12517,7 @@ export function renderCloudflareCarrierConsole() {
       const localIngressEvidence = state.localIngressEvidenceFocus || (product.local_ingress_evidence || [])[0] || null;
       const repositoryPublicationRequest = state.repositoryPublicationRequestFocus || (product.repository_publication_requests || [])[0] || null;
       const repositoryPublicationEvidence = state.repositoryPublicationEvidenceFocus || (product.repository_publication_evidence || [])[0] || null;
+      const repositoryPublicationProviderHeartbeat = state.repositoryPublicationProviderHeartbeatFocus || (product.repository_publication_provider_heartbeats || [])[0] || null;
       return {
         session: sessions.find((session) => session.carrier_session_id === activeSession) || state.sessionFocus || sessions[0] || null,
         attention: openAttention[0] || state.attentionFocus || state.attentionItems[0] || null,
@@ -12274,6 +12532,7 @@ export function renderCloudflareCarrierConsole() {
         localIngressEvidence,
         repositoryPublicationRequest,
         repositoryPublicationEvidence,
+        repositoryPublicationProviderHeartbeat,
       };
     }
     function setEvidenceLane(key) {
@@ -12297,6 +12556,11 @@ export function renderCloudflareCarrierConsole() {
       if (targets.directiveIntent) { selectWebhookDelayDirective(targets.directiveIntent); return; }
       focusWebhookDelayChainObservation();
     }
+    function focusRepositoryPublicationProviderLiveness() {
+      const targets = operationFlightDeckTargets();
+      if (targets.repositoryPublicationProviderHeartbeat) selectRepositoryPublicationProviderHeartbeat(targets.repositoryPublicationProviderHeartbeat);
+      else renderRepositoryPublicationProviderHeartbeatFocusDetail(null);
+    }
     function applyFlightDeckNextAction() {
       const targets = operationFlightDeckTargets();
       if (targets.attention && targets.attention.status !== 'resolved') { selectAttentionItem(targets.attention); return; }
@@ -12310,6 +12574,7 @@ export function renderCloudflareCarrierConsole() {
       if (targets.siteFileChangeProposal) { selectSiteFileChangeProposal(targets.siteFileChangeProposal); return; }
       if (targets.localIngressEvidence) { selectLocalIngressEvidence(targets.localIngressEvidence); return; }
       if (targets.localIngressRequest) { selectLocalIngressRequest(targets.localIngressRequest); return; }
+      if (targets.repositoryPublicationProviderHeartbeat) { selectRepositoryPublicationProviderHeartbeat(targets.repositoryPublicationProviderHeartbeat); return; }
       if (targets.repositoryPublicationEvidence) { selectRepositoryPublicationEvidence(targets.repositoryPublicationEvidence); return; }
       if (targets.repositoryPublicationRequest) { selectRepositoryPublicationRequest(targets.repositoryPublicationRequest); return; }
       focusFlightDeckEvidence();
@@ -12343,7 +12608,7 @@ export function renderCloudflareCarrierConsole() {
         operationFlightDeckButton('flightDeckFocusMailboxOutlookDraftCreate', 'Focus Outlook Draft Create', () => { if (targets.mailboxOutlookDraftCreate) selectMailboxOutlookDraftCreate(targets.mailboxOutlookDraftCreate); }),
         operationFlightDeckButton('flightDeckFocusSiteFileChangeProposal', 'Focus File Change Proposal', () => { if (targets.siteFileChangeProposal) selectSiteFileChangeProposal(targets.siteFileChangeProposal); }),
         operationFlightDeckButton('flightDeckFocusLocalIngressRequest', 'Focus Local Ingress', () => { if (targets.localIngressEvidence) selectLocalIngressEvidence(targets.localIngressEvidence); else if (targets.localIngressRequest) selectLocalIngressRequest(targets.localIngressRequest); }),
-        operationFlightDeckButton('flightDeckFocusRepositoryPublication', 'Focus Repository Publication', () => { if (targets.repositoryPublicationEvidence) selectRepositoryPublicationEvidence(targets.repositoryPublicationEvidence); else if (targets.repositoryPublicationRequest) selectRepositoryPublicationRequest(targets.repositoryPublicationRequest); }),
+        operationFlightDeckButton('flightDeckFocusRepositoryPublication', 'Focus Repository Publication', () => { if (targets.repositoryPublicationProviderHeartbeat) selectRepositoryPublicationProviderHeartbeat(targets.repositoryPublicationProviderHeartbeat); else if (targets.repositoryPublicationEvidence) selectRepositoryPublicationEvidence(targets.repositoryPublicationEvidence); else if (targets.repositoryPublicationRequest) selectRepositoryPublicationRequest(targets.repositoryPublicationRequest); }),
         operationFlightDeckButton('flightDeckFocusEvidenceChain', 'Focus Evidence Chain', focusFlightDeckEvidenceChain),
         operationFlightDeckButton('flightDeckFocusEvidence', 'Focus Evidence', focusFlightDeckEvidence),
       );
@@ -15483,6 +15748,66 @@ export function renderCloudflareCarrierConsole() {
       }
       el('repositoryPublicationEvidenceFocusDetail').replaceChildren(...repositoryPublicationEvidenceFocusContext(item).map(([label, value]) => evidenceField(label, value)));
     }
+    function repositoryPublicationProviderHeartbeatKey(item = {}) {
+      return item.repository_publication_provider_heartbeat_id || [item.provider_id, item.recorded_at, item.last_run_at].filter(Boolean).join('|');
+    }
+    function selectRepositoryPublicationProviderHeartbeat(item) {
+      if (!item) return;
+      state.repositoryPublicationProviderHeartbeatFocus = item;
+      renderRepositoryPublicationProviderHeartbeatNavigator(state.operationProduct?.repository_publication_provider_heartbeats || []);
+      updateControlRoom();
+    }
+    function renderRepositoryPublicationProviderHeartbeatNavigator(items = []) {
+      if (items.length === 0) {
+        state.repositoryPublicationProviderHeartbeatFocus = null;
+        el('repositoryPublicationProviderHeartbeatNavigator').innerHTML = '<div class="empty">No repository publication provider heartbeats loaded.</div>';
+        renderRepositoryPublicationProviderHeartbeatFocusDetail();
+        return;
+      }
+      if (state.repositoryPublicationProviderHeartbeatFocus) state.repositoryPublicationProviderHeartbeatFocus = items.find((item) => repositoryPublicationProviderHeartbeatKey(item) === repositoryPublicationProviderHeartbeatKey(state.repositoryPublicationProviderHeartbeatFocus)) || state.repositoryPublicationProviderHeartbeatFocus;
+      if (!state.repositoryPublicationProviderHeartbeatFocus) state.repositoryPublicationProviderHeartbeatFocus = items[0];
+      el('repositoryPublicationProviderHeartbeatNavigator').replaceChildren(...items.map((item) => {
+        const node = document.createElement('article');
+        node.className = 'shadow-read-item' + (repositoryPublicationProviderHeartbeatKey(item) === repositoryPublicationProviderHeartbeatKey(state.repositoryPublicationProviderHeartbeatFocus) ? ' selected' : '');
+        const title = document.createElement('strong');
+        title.textContent = [item.status || 'unknown', item.repository_publication_provider_heartbeat_id || item.provider_id || 'repository_publication_provider_heartbeat'].join(' ');
+        const meta = document.createElement('span');
+        meta.textContent = [item.provider_authority, item.cloudflare_git_push_admission, item.direct_cloudflare_repository_mutation_admission, item.recorded_at || item.last_run_at].filter(Boolean).join(' | ');
+        node.addEventListener('click', () => selectRepositoryPublicationProviderHeartbeat(item));
+        node.append(title, meta);
+        return node;
+      }));
+      renderRepositoryPublicationProviderHeartbeatFocusDetail();
+    }
+    function repositoryPublicationProviderHeartbeatFocusContext(item = state.repositoryPublicationProviderHeartbeatFocus) {
+      const product = state.operationProduct || {};
+      const surface = product.operation_product_surface || {};
+      const liveness = surface.repository_publication_provider_liveness || product.operation_lifecycle_status?.repository_publication_provider_liveness || {};
+      return [
+        ['Heartbeat', item?.repository_publication_provider_heartbeat_id || 'none'],
+        ['Site', item?.site_id || product.site?.site_id || el('siteId').value.trim() || 'none'],
+        ['Operation', item?.operation_id || product.operation?.operation_id || el('operationId').value.trim() || 'none'],
+        ['Provider', item?.provider_id || 'none'],
+        ['Provider Authority', item?.provider_authority || 'windows_repository_publication_executor'],
+        ['Provider Status', item?.status || 'unknown'],
+        ['Last Run', item?.last_run_at || 'none'],
+        ['Recorded', item?.recorded_at || 'none'],
+        ['Liveness State', liveness.state || 'not_observed'],
+        ['Liveness Reason', liveness.reason || 'not_observed'],
+        ['Liveness Authority', surface.repository_publication_provider_liveness_authority || liveness.provider_liveness_authority || 'not_observed'],
+        ['Heartbeat Count', String(surface.repository_publication_provider_heartbeat_count ?? (product.repository_publication_provider_heartbeats || []).length)],
+        ['Cloudflare Git Push', item?.cloudflare_git_push_admission || surface.repository_publication_cloudflare_git_push_admission || 'not_admitted'],
+        ['Direct Cloudflare Repository Mutation', item?.direct_cloudflare_repository_mutation_admission || surface.repository_publication_direct_cloudflare_repository_mutation_admission || 'not_admitted'],
+        ['Authority Partition', item?.authority_partition || surface.repository_publication_authority_partition || 'cloudflare_records_windows_repository_publication_provider_liveness_without_direct_repository_authority'],
+      ];
+    }
+    function renderRepositoryPublicationProviderHeartbeatFocusDetail(item = state.repositoryPublicationProviderHeartbeatFocus) {
+      if (!item && (state.operationProduct?.repository_publication_provider_heartbeats || []).length === 0) {
+        el('repositoryPublicationProviderHeartbeatFocusDetail').innerHTML = '<div class="empty">No repository publication provider heartbeat selected.</div>';
+        return;
+      }
+      el('repositoryPublicationProviderHeartbeatFocusDetail').replaceChildren(...repositoryPublicationProviderHeartbeatFocusContext(item).map(([label, value]) => evidenceField(label, value)));
+    }
     function siteProductStatusSummary(status) {
       const missing = (status?.missing || []).join(', ') || 'none';
       const attention = (status?.attention || []).join(', ') || 'none';
@@ -15576,6 +15901,9 @@ export function renderCloudflareCarrierConsole() {
       renderResidentDispatchNavigator(product.resident_dispatch_decisions || []);
       renderLocalIngressRequestNavigator(product.local_ingress_requests || []);
       renderLocalIngressEvidenceNavigator(product.local_ingress_evidence || []);
+      renderRepositoryPublicationRequestNavigator(product.repository_publication_requests || []);
+      renderRepositoryPublicationEvidenceNavigator(product.repository_publication_evidence || []);
+      renderRepositoryPublicationProviderHeartbeatNavigator(product.repository_publication_provider_heartbeats || []);
       renderAttentionQueue(extractOperationAttention(product));
       renderAuthorityState(product);
       renderAuthorityPath(product);
@@ -15606,6 +15934,9 @@ export function renderCloudflareCarrierConsole() {
       const residentDispatchItems = (product.resident_dispatch_decisions || []).map((entry) => listItem(entry.dispatch_decision_id || entry.carrier_session_id, [entry.decision_state, entry.dispatch_authority, entry.fallback_status, entry.dispatch_action].filter((value) => value != null && value !== '').join(' | ')));
       const localIngressRequestItems = (product.local_ingress_requests || []).map((entry) => listItem(entry.local_ingress_request_id, [entry.local_execution_admission, entry.requested_action_ref, entry.target_authority_locus].filter((value) => value != null && value !== '').join(' | ')));
       const localIngressEvidenceItems = (product.local_ingress_evidence || []).map((entry) => listItem(entry.local_ingress_evidence_id, [entry.local_execution_status, entry.local_ingress_request_id, entry.local_filesystem_mutation_admission].filter((value) => value != null && value !== '').join(' | ')));
+      const repositoryPublicationRequestItems = (product.repository_publication_requests || []).map((entry) => listItem(entry.repository_publication_request_id, [entry.repository_publication_admission, entry.publication_ref, entry.repository_ref].filter((value) => value != null && value !== '').join(' | ')));
+      const repositoryPublicationEvidenceItems = (product.repository_publication_evidence || []).map((entry) => listItem(entry.repository_publication_evidence_id, [entry.publication_status, entry.repository_publication_request_id, entry.published_commit_ref].filter((value) => value != null && value !== '').join(' | ')));
+      const repositoryPublicationProviderHeartbeatItems = (product.repository_publication_provider_heartbeats || []).map((entry) => listItem(entry.repository_publication_provider_heartbeat_id, [entry.status, entry.provider_id, entry.provider_authority, entry.recorded_at].filter((value) => value != null && value !== '').join(' | ')));
       const evidenceItems = (product.carrier_evidence || []).map((entry) => {
         const kinds = (entry.events || []).slice(0, 5).map((event) => event.event_kind).join(', ');
         return listItem(entry.carrier_session_id, kinds || entry.error || 'no events');
@@ -15631,6 +15962,9 @@ export function renderCloudflareCarrierConsole() {
         renderListBlock('Resident Dispatch', residentDispatchItems),
         renderListBlock('Local Ingress Requests', localIngressRequestItems),
         renderListBlock('Local Ingress Evidence', localIngressEvidenceItems),
+        renderListBlock('Repository Publication Requests', repositoryPublicationRequestItems),
+        renderListBlock('Repository Publication Evidence', repositoryPublicationEvidenceItems),
+        renderListBlock('Repository Publication Provider Heartbeats', repositoryPublicationProviderHeartbeatItems),
         renderListBlock('Carrier Evidence', evidenceItems),
       );
       renderLastAuthority((product.authority_events || [])[0]);
@@ -15676,6 +16010,9 @@ export function renderCloudflareCarrierConsole() {
       renderResidentDispatchNavigator(product.resident_dispatch_decisions || []);
       renderLocalIngressRequestNavigator(product.local_ingress_requests || []);
       renderLocalIngressEvidenceNavigator(product.local_ingress_evidence || []);
+      renderRepositoryPublicationRequestNavigator(product.repository_publication_requests || []);
+      renderRepositoryPublicationEvidenceNavigator(product.repository_publication_evidence || []);
+      renderRepositoryPublicationProviderHeartbeatNavigator(product.repository_publication_provider_heartbeats || []);
       renderOperationNavigator(state.operations || []);
       renderOperationSessions(product.sessions || []);
       renderAttentionQueue(extractOperationAttention(product));
