@@ -5258,6 +5258,10 @@ test('worker admits Cloudflare site file materialization records without Windows
   assert.equal(operationReadBody.operation_product_surface.windows_filesystem_mutation_admission, 'not_admitted');
   assert.equal(operationReadBody.operation_product_surface.site_file_materialization_repository_publication_admission, 'not_admitted');
   assert.equal(operationReadBody.operation_product_surface.site_file_materialization_authority_partition, 'site_file_materialization_cloudflare_owned_windows_filesystem_and_publication_not_admitted');
+  assert.equal(operationReadBody.authority_transfer_posture.domains.find((domain) => domain.domain === 'site_file_materialization').classification, 'cloudflare_owned');
+  assert.equal(operationReadBody.authority_transfer_posture.remaining_windows_authorities.some((entry) => entry.authority === 'windows_filesystem_executor'), false);
+  assert.equal(operationReadBody.authority_transfer_posture.remaining_windows_authorities.some((entry) => entry.authority === 'windows_filesystem_mutation'), false);
+  assert.equal(operationReadBody.authority_transfer_posture.remaining_windows_authorities.some((entry) => entry.domain === 'site_file_materialization' && entry.authority === 'repository_publication'), true);
 });
 
 test('worker records task lifecycle shadow reads from Windows without admitting Cloudflare writes', async () => {

@@ -2491,9 +2491,11 @@ function summarizeCloudflareAuthorityTransferPosture({
   const mailboxSendAcceptedCount = Array.isArray(mailboxSendAcceptedRecords) ? mailboxSendAcceptedRecords.length : 0;
   const mailboxSendConfirmationCount = Array.isArray(mailboxSendConfirmations) ? mailboxSendConfirmations.length : 0;
   const mailboxOutlookDraftCreateCount = Array.isArray(mailboxOutlookDraftCreates) ? mailboxOutlookDraftCreates.length : 0;
+  const siteFileMaterializationCount = Array.isArray(siteFileMaterializations) ? siteFileMaterializations.length : 0;
   const mailboxSendRemaining = mailboxSendAcceptedCount > 0 ? [] : ['mailbox_send'];
   const mailboxSendConfirmationRemaining = mailboxSendAcceptedCount > 0 && mailboxSendConfirmationCount === 0 ? ['mailbox_delivery_confirmation'] : [];
   const mailboxOutlookDraftCreateRemaining = mailboxOutlookDraftCreateCount > 0 ? [] : ['outlook_draft_create'];
+  const siteFileMaterializationRemaining = siteFileMaterializationCount > 0 ? [] : ['site_file_materialization'];
   const mailboxStatusClassification = mailboxStatusSourceCount > 0
     ? 'cloudflare_owned'
     : mailboxStatusShadowCount > 0 ? 'cloudflare_recorded_windows_owned' : 'windows_retained';
@@ -2535,14 +2537,14 @@ function summarizeCloudflareAuthorityTransferPosture({
       classification: classifyCounted(Array.isArray(siteFileChangeProposals) ? siteFileChangeProposals.length : 0, 'cloudflare_recorded_windows_owned'),
       observed_count: Array.isArray(siteFileChangeProposals) ? siteFileChangeProposals.length : 0,
       authority_partition: Array.isArray(siteFileChangeProposals) && siteFileChangeProposals.length > 0 ? 'site_file_change_proposal_cloudflare_recorded_filesystem_and_publication_windows_owned' : 'filesystem_and_publication_windows_owned',
-      remaining_windows_authority: ['windows_filesystem_executor', 'repository_publication'],
+      remaining_windows_authority: siteFileMaterializationRemaining,
     },
     {
       domain: 'site_file_materialization',
-      classification: classifyCounted(Array.isArray(siteFileMaterializations) ? siteFileMaterializations.length : 0, 'cloudflare_owned'),
-      observed_count: Array.isArray(siteFileMaterializations) ? siteFileMaterializations.length : 0,
-      authority_partition: Array.isArray(siteFileMaterializations) && siteFileMaterializations.length > 0 ? 'site_file_materialization_cloudflare_owned_windows_filesystem_and_publication_not_admitted' : 'materialization_not_observed_filesystem_and_publication_windows_owned',
-      remaining_windows_authority: Array.isArray(siteFileMaterializations) && siteFileMaterializations.length > 0 ? ['windows_filesystem_mutation', 'repository_publication'] : ['site_file_materialization', 'windows_filesystem_mutation', 'repository_publication'],
+      classification: classifyCounted(siteFileMaterializationCount, 'cloudflare_owned'),
+      observed_count: siteFileMaterializationCount,
+      authority_partition: siteFileMaterializationCount > 0 ? 'site_file_materialization_cloudflare_owned_windows_filesystem_and_publication_not_admitted' : 'materialization_not_observed_filesystem_and_publication_windows_owned',
+      remaining_windows_authority: siteFileMaterializationCount > 0 ? ['repository_publication'] : ['site_file_materialization', 'repository_publication'],
     },
     {
       domain: 'local_ingress',
