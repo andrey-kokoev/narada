@@ -9,6 +9,8 @@ import { promisify } from 'node:util';
 import {
   buildHiddenVbsWrapperContent,
   buildProviderLivenessSchedulerPlan,
+  runProviderLivenessSchedulerAction,
+  summarizeProviderLivenessSchedulerReadback,
 } from './cloudflare-carrier-provider-liveness-scheduler.mjs';
 
 const SCRIPT_PATH = fileURLToPath(new URL('./cloudflare-carrier-provider-liveness-scheduler.mjs', import.meta.url));
@@ -88,5 +90,77 @@ test('provider liveness scheduler CLI emits status without Cloudflare access', a
   assert.equal(body.embeds_credentials, false);
   assert.equal(body.scheduled_task_command[0], 'schtasks');
   assert.equal(body.scheduled_task_command[1], '/Query');
+  assert.deepEqual(body.scheduled_task_command.slice(-3), ['/V', '/FO', 'LIST']);
   assert.equal(body.task_command.startsWith('wscript.exe //B '), true);
+});
+
+test('provider liveness scheduler live status reads hidden wrapper task posture', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-provider-liveness-readback-'));
+  const entrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-carrier-provider-liveness-refresh.mjs');
+  const scheduledTaskEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-carrier-provider-liveness-scheduled-task.mjs');
+  const wrapperPath = join(root, '.narada/site-continuity/cloudflare-provider-liveness-refresh.hidden.vbs');
+  await mkdir(join(root, 'packages/cloudflare-carrier/scripts'), { recursive: true });
+  await writeFile(entrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(scheduledTaskEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  try {
+    const result = await runProviderLivenessSchedulerAction({ action: 'status', repoRoot: root, dryRun: false }, {
+      execFileImpl: async (command, args, options) => {
+        assert.equal(command, 'schtasks');
+        assert.deepEqual(args, ['/Query', '/TN', '\\Narada\\CloudflareProviderLivenessRefresh', '/V', '/FO', 'LIST']);
+        assert.equal(options.windowsHide, true);
+        return {
+          stdout: [
+            'TaskName: \\Narada\\CloudflareProviderLivenessRefresh',
+            'Next Run Time: 6/11/2026 11:39:00 AM',
+            'Status: Ready',
+            'Last Run Time: 6/11/2026 11:37:01 AM',
+            'Last Result: 0',
+            `Task To Run: wscript.exe //B "${wrapperPath}"`,
+            'Scheduled Task State: Enabled',
+            'Repeat: Every: 0 Hour(s), 2 Minute(s)',
+            '',
+          ].join('\n'),
+          stderr: '',
+        };
+      },
+    });
+
+    assert.equal(result.host_scheduler_read_admission, 'bounded_schtasks_query_from_scheduler_plan');
+    assert.equal(result.scheduler_task_readback.status, 'ok');
+    assert.equal(result.scheduler_task_readback.cadence_status, 'matches_plan');
+    assert.equal(result.scheduler_task_readback.task_command_status, 'matches_plan');
+    assert.deepEqual(result.scheduler_task_readback.attention_reasons, []);
+    assert.equal(result.scheduler_task_readback.task_to_run, `wscript.exe //B "${wrapperPath}"`);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('provider liveness scheduler readback surfaces drift', () => {
+  const readback = summarizeProviderLivenessSchedulerReadback({
+    state: 'completed',
+    command: 'schtasks',
+    args: ['/Query'],
+    stdout: '',
+    stderr: '',
+    timeout_ms: 30000,
+    parsed: {
+      Status: 'Ready',
+      'Last Result': '1',
+      'Scheduled Task State': 'Enabled',
+      'Task To Run': 'node old-entrypoint.mjs',
+      'Repeat: Every': '0 Hour(s), 10 Minute(s)',
+    },
+    expectedIntervalMinutes: 2,
+    expectedTaskCommand: 'wscript.exe //B hidden.vbs',
+  });
+
+  assert.equal(readback.status, 'needs_attention');
+  assert.equal(readback.cadence_status, 'differs_from_plan');
+  assert.equal(readback.task_command_status, 'differs_from_plan');
+  assert.deepEqual(readback.attention_reasons, [
+    'scheduler_cadence_differs_from_plan',
+    'scheduler_task_command_differs_from_plan',
+    'scheduler_last_result_nonzero',
+  ]);
 });
