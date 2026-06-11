@@ -190,11 +190,14 @@ pnpm --filter @narada2/cloudflare-carrier continuity:bindings
 pnpm --filter @narada2/cloudflare-carrier continuity:bindings:validate
 pnpm --filter @narada2/cloudflare-carrier continuity:bindings:list
 pnpm --filter @narada2/cloudflare-carrier continuity:bindings:prepare-next
+pnpm --filter @narada2/cloudflare-carrier continuity:bindings:admit-next -- --local-site-ref file:///D:/code/narada --cloudflare-site-ref cloudflare://<site-ref> --execute
 ```
 
 `continuity:bindings` reads packet `binding` evidence and writes `.narada/site-continuity/bindings.json`. It accepts `NARADA_SITE_CONTINUITY_PACKET` or repeated `--packet` for explicit packet files, and `NARADA_SITE_CONTINUITY_PACKET_DIR` or `--packet-dir` for multi-site packet directories containing `<file-safe-site-id>-packet.json` files.
 
 `continuity:bindings:prepare-next` reads the last scheduled health snapshot and prepares a standard Site continuity exchange packet when the snapshot's next operator action is `bind_cloudflare_product_next_site_locally`. It refuses to invent missing authority refs; provide `--local-site-ref` and `--cloudflare-site-ref` when the target site is not already projected with an explicit Cloudflare site ref. The prepared packet carries no executable mutation requests and can then be materialized with `continuity:bindings -- --packet <prepared-packet-path>`.
+
+`continuity:bindings:admit-next` is the direct operator admission path for that same next-site action. It reads the last scheduled health snapshot, requires explicit `file://` local and `cloudflare://` Cloudflare refs, refuses projection conflicts, preserves existing local continuity bindings, and only writes `.narada/site-continuity/bindings.json` when `--execute` is present.
 
 Run one guarded local-cloud continuity loop:
 

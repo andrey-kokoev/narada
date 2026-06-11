@@ -99,6 +99,7 @@ function buildBindingMaterializationPlan({ argv = [], env = process.env, cwd = p
     registry_ref: args.registry_ref ?? env.NARADA_SITE_CONTINUITY_BINDING_REGISTRY_REF ?? 'local-cloud-site-continuity-bindings',
     generated_at: args.generated_at ?? env.NARADA_SITE_CONTINUITY_BINDING_GENERATED_AT ?? new Date().toISOString(),
     dry_run: args.dry_run === true,
+    execute: args.execute === true,
   };
 }
 
@@ -112,9 +113,132 @@ async function runSiteContinuityBindingWorkflow(plan) {
       return listMaterializedSiteContinuityBindingRegistry(plan);
     case 'prepare-next-binding-packet':
       return prepareNextSiteContinuityBindingPacket(plan);
+    case 'admit-next-binding':
+      return admitNextSiteContinuityBinding(plan);
     default:
       throw new Error(`unknown_site_continuity_binding_action:${plan.action}`);
   }
+}
+
+function validateExplicitSiteContinuityRefs({ localSiteRef, cloudflareSiteRef, siteRecord }) {
+  const errors = [];
+  if (!String(localSiteRef ?? '').startsWith('file://')) errors.push('local_site_ref_scheme_invalid');
+  if (!String(cloudflareSiteRef ?? '').startsWith('cloudflare://')) errors.push('cloudflare_site_ref_scheme_invalid');
+  if (siteRecord?.site_ref && siteRecord.site_ref !== cloudflareSiteRef) {
+    errors.push('cloudflare_site_ref_conflicts_with_projection');
+  }
+  return errors;
+}
+
+async function admitNextSiteContinuityBinding(plan) {
+  const health = await readScheduledHealthSnapshotForBindingPreparation(plan.effective_health_snapshot_path);
+  const targetSiteId = plan.target_site_id ?? health.operator_next_target_site_id ?? health.cloudflare_product_next_site_id ?? null;
+  const operatorAction = health.operator_next_action ?? null;
+  if (operatorAction && operatorAction !== 'bind_cloudflare_product_next_site_locally') {
+    return {
+      ok: false,
+      action: 'refused',
+      reason: 'scheduled_health_next_action_not_site_binding',
+      operator_next_action: operatorAction,
+      target_site_id: targetSiteId,
+      health_snapshot_path: plan.effective_health_snapshot_path,
+      embeds_credentials: false,
+    };
+  }
+  if (!targetSiteId) {
+    return {
+      ok: false,
+      action: 'refused',
+      reason: 'scheduled_health_next_site_missing',
+      health_snapshot_path: plan.effective_health_snapshot_path,
+      embeds_credentials: false,
+    };
+  }
+
+  const siteRecord = readCloudflareSiteProjectionRecord(plan, targetSiteId);
+  const localSiteRef = plan.local_site_ref;
+  const cloudflareSiteRef = plan.cloudflare_site_ref ?? siteRecord?.site_ref ?? null;
+  const missingInputs = [
+    localSiteRef ? null : 'local_site_ref',
+    cloudflareSiteRef ? null : 'cloudflare_site_ref',
+  ].filter(Boolean);
+  if (missingInputs.length > 0) {
+    return {
+      ok: false,
+      action: 'refused',
+      reason: 'site_continuity_binding_refs_missing',
+      target_site_id: targetSiteId,
+      required_inputs: missingInputs,
+      operator_next_action: operatorAction,
+      operator_next_reason: health.operator_next_reason ?? null,
+      cloudflare_site_projection_state: siteRecord ? 'found' : 'missing',
+      cloudflare_site_ref_from_projection: siteRecord?.site_ref ?? null,
+      command_hint: 'pnpm --filter @narada2/cloudflare-carrier continuity:bindings:admit-next -- --local-site-ref file:///D:/code/narada --cloudflare-site-ref cloudflare://<site-ref> --execute',
+      embeds_credentials: false,
+    };
+  }
+
+  const refErrors = validateExplicitSiteContinuityRefs({ localSiteRef, cloudflareSiteRef, siteRecord });
+  if (refErrors.length > 0) {
+    return {
+      ok: false,
+      action: 'refused',
+      reason: 'site_continuity_binding_refs_invalid',
+      target_site_id: targetSiteId,
+      errors: refErrors,
+      cloudflare_site_ref_from_projection: siteRecord?.site_ref ?? null,
+      embeds_credentials: false,
+    };
+  }
+
+  const nextBinding = createSiteContinuityBinding({
+    site_id: targetSiteId,
+    local_windows_site_ref: localSiteRef,
+    cloudflare_site_ref: cloudflareSiteRef,
+    authority_map_ref: plan.authority_map_ref ?? `narada:site-authority-map:${targetSiteId}`,
+    generated_at: plan.generated_at,
+  });
+  const nextBindingValidation = validateSiteContinuityBinding(nextBinding);
+  if (!nextBindingValidation.ok) {
+    throw new Error(`site_continuity_binding_invalid:${nextBindingValidation.errors.join(',')}`);
+  }
+
+  const existingRegistry = existsSync(plan.effective_registry_path)
+    ? await readMaterializedSiteContinuityBindingRegistry(plan)
+    : createSiteContinuityBindingRegistry({ bindings: [], registry_ref: plan.registry_ref, generated_at: plan.generated_at });
+  const preservedBindings = (existingRegistry.bindings ?? [])
+    .filter((binding) => binding.site_id !== targetSiteId && binding.relation_id !== nextBinding.relation_id);
+  const existingBinding = (existingRegistry.bindings ?? [])
+    .find((binding) => binding.site_id === targetSiteId || binding.relation_id === nextBinding.relation_id) ?? null;
+  const nextRegistry = createSiteContinuityBindingRegistry({
+    bindings: [...preservedBindings, nextBinding]
+      .sort((left, right) => left.site_id.localeCompare(right.site_id)),
+    registry_ref: existingRegistry.registry_ref ?? plan.registry_ref,
+    generated_at: plan.generated_at,
+  });
+  const registryValidation = validateSiteContinuityBindingRegistry(nextRegistry);
+  if (!registryValidation.ok) {
+    throw new Error(`site_continuity_binding_registry_invalid:${registryValidation.errors.join(',')}`);
+  }
+
+  if (plan.execute) {
+    await mkdir(path.dirname(plan.effective_registry_path), { recursive: true });
+    await writeFile(plan.effective_registry_path, `${JSON.stringify(nextRegistry, null, 2)}\n`, 'utf8');
+  }
+
+  return {
+    ok: true,
+    action: plan.execute ? 'admitted' : 'planned',
+    reason: existingBinding ? 'site_continuity_binding_updated' : 'site_continuity_binding_created',
+    target_site_id: targetSiteId,
+    registry_path: plan.effective_registry_path,
+    registry_ref: nextRegistry.registry_ref,
+    binding_count: nextRegistry.bindings.length,
+    existing_binding_state: existingBinding ? 'replaced' : 'absent',
+    required_execution_flag: plan.execute ? null : '--execute',
+    sites: listSiteContinuityBindingSites(nextRegistry),
+    embeds_credentials: false,
+  };
 }
 
 async function prepareNextSiteContinuityBindingPacket(plan) {
@@ -342,6 +466,10 @@ function parseArgs(argv) {
       args.dry_run = true;
       continue;
     }
+    if (arg === '--execute') {
+      args.execute = true;
+      continue;
+    }
     if (arg === '--health') {
       args.health = argv[index + 1];
       index += 1;
@@ -446,6 +574,7 @@ export {
   DEFAULT_HEALTH_SNAPSHOT_PATH,
   DEFAULT_PACKET_PATHS,
   DEFAULT_PREPARED_PACKET_DIRECTORY,
+  admitNextSiteContinuityBinding,
   buildBindingMaterializationPlan,
   listMaterializedSiteContinuityBindingRegistry,
   materializeSiteContinuityBindingRegistry,

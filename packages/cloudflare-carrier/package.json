@@ -62,6 +62,7 @@
     "continuity:bindings": "node scripts/cloudflare-site-continuity-bindings.mjs",
     "continuity:bindings:list": "node scripts/cloudflare-site-continuity-bindings.mjs --action list",
     "continuity:bindings:prepare-next": "node scripts/cloudflare-site-continuity-bindings.mjs --action prepare-next-binding-packet",
+    "continuity:bindings:admit-next": "node scripts/cloudflare-site-continuity-bindings.mjs --action admit-next-binding",
     "continuity:bindings:validate": "node scripts/cloudflare-site-continuity-bindings.mjs --action validate",
     "continuity:scheduler": "node scripts/cloudflare-site-continuity-scheduler.mjs",
     "continuity:status": "node scripts/cloudflare-site-continuity-scheduler.mjs --action status-all",

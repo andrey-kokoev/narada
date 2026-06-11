@@ -7,6 +7,7 @@ import test from 'node:test';
 import { createSiteContinuityBinding } from '@narada2/site-continuity';
 
 import {
+  admitNextSiteContinuityBinding,
   buildBindingMaterializationPlan,
   listMaterializedSiteContinuityBindingRegistry,
   materializeSiteContinuityBindingRegistry,
@@ -185,6 +186,114 @@ test('site continuity binding packet preparation writes packet consumable by mat
 
   assert.equal(materializeResult.ok, true);
   assert.deepEqual(materializeResult.sites, ['site_beta']);
+});
+
+test('site continuity binding admission plans without execute and preserves existing bindings', async () => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'narada-continuity-binding-admit-plan-'));
+  const healthPath = path.join(tmp, 'health.json');
+  const registryPath = path.join(tmp, 'bindings.json');
+  const existingBinding = createSiteContinuityBinding({
+    site_id: 'site_alpha',
+    local_windows_site_ref: 'file:///D:/code/narada-alpha',
+    cloudflare_site_ref: 'cloudflare://site-alpha',
+    generated_at: '2026-06-11T02:00:00.000Z',
+  });
+  await writeFile(healthPath, `${JSON.stringify(scheduledHealthSnapshot(), null, 2)}\n`, 'utf8');
+  await writeFile(registryPath, `${JSON.stringify({
+    schema: 'narada.site_continuity_binding_registry.v1',
+    classifier_version: 'site_continuity.v1',
+    registry_ref: 'operator-registry',
+    generated_at: '2026-06-11T02:00:00.000Z',
+    bindings: [existingBinding],
+  }, null, 2)}\n`, 'utf8');
+
+  const result = await admitNextSiteContinuityBinding(buildBindingMaterializationPlan({
+    cwd: tmp,
+    argv: [
+      '--action', 'admit-next-binding',
+      '--health', healthPath,
+      '--registry', registryPath,
+      '--local-site-ref', 'file:///D:/code/narada',
+      '--cloudflare-site-ref', 'cloudflare://site-beta',
+      '--generated-at', '2026-06-11T04:00:00.000Z',
+    ],
+    env: {},
+  }));
+
+  assert.equal(result.ok, true);
+  assert.equal(result.action, 'planned');
+  assert.equal(result.reason, 'site_continuity_binding_created');
+  assert.equal(result.required_execution_flag, '--execute');
+  assert.deepEqual(result.sites, ['site_alpha', 'site_beta']);
+  const unchangedRegistry = JSON.parse(await readFile(registryPath, 'utf8'));
+  assert.deepEqual(unchangedRegistry.bindings.map((binding) => binding.site_id), ['site_alpha']);
+});
+
+test('site continuity binding admission executes append/update into registry', async () => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'narada-continuity-binding-admit-execute-'));
+  const healthPath = path.join(tmp, 'health.json');
+  const registryPath = path.join(tmp, 'bindings.json');
+  const existingBinding = createSiteContinuityBinding({
+    site_id: 'site_alpha',
+    local_windows_site_ref: 'file:///D:/code/narada-alpha',
+    cloudflare_site_ref: 'cloudflare://site-alpha',
+    generated_at: '2026-06-11T02:00:00.000Z',
+  });
+  await writeFile(healthPath, `${JSON.stringify(scheduledHealthSnapshot(), null, 2)}\n`, 'utf8');
+  await writeFile(registryPath, `${JSON.stringify({
+    schema: 'narada.site_continuity_binding_registry.v1',
+    classifier_version: 'site_continuity.v1',
+    registry_ref: 'operator-registry',
+    generated_at: '2026-06-11T02:00:00.000Z',
+    bindings: [existingBinding],
+  }, null, 2)}\n`, 'utf8');
+
+  const result = await runSiteContinuityBindingWorkflow(buildBindingMaterializationPlan({
+    cwd: tmp,
+    argv: [
+      '--action', 'admit-next-binding',
+      '--health', healthPath,
+      '--registry', registryPath,
+      '--local-site-ref', 'file:///D:/code/narada',
+      '--cloudflare-site-ref', 'cloudflare://site-beta',
+      '--generated-at', '2026-06-11T04:05:00.000Z',
+      '--execute',
+    ],
+    env: {},
+  }));
+
+  assert.equal(result.ok, true);
+  assert.equal(result.action, 'admitted');
+  assert.equal(result.required_execution_flag, null);
+  assert.deepEqual(result.sites, ['site_alpha', 'site_beta']);
+  const registry = JSON.parse(await readFile(registryPath, 'utf8'));
+  assert.equal(registry.registry_ref, 'operator-registry');
+  assert.deepEqual(registry.bindings.map((binding) => binding.site_id), ['site_alpha', 'site_beta']);
+  const beta = registry.bindings.find((binding) => binding.site_id === 'site_beta');
+  assert.equal(beta.embodiments.find((embodiment) => embodiment.embodiment_kind === 'local_windows').site_ref, 'file:///D:/code/narada');
+  assert.equal(beta.embodiments.find((embodiment) => embodiment.embodiment_kind === 'cloudflare_carrier').site_ref, 'cloudflare://site-beta');
+});
+
+test('site continuity binding admission refuses smeared ref schemes', async () => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'narada-continuity-binding-admit-invalid-'));
+  const healthPath = path.join(tmp, 'health.json');
+  await writeFile(healthPath, `${JSON.stringify(scheduledHealthSnapshot(), null, 2)}\n`, 'utf8');
+
+  const result = await admitNextSiteContinuityBinding(buildBindingMaterializationPlan({
+    cwd: tmp,
+    argv: [
+      '--action', 'admit-next-binding',
+      '--health', healthPath,
+      '--local-site-ref', 'D:/code/narada',
+      '--cloudflare-site-ref', 'https://example.com/site-beta',
+    ],
+    env: {},
+  }));
+
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'site_continuity_binding_refs_invalid');
+  assert.deepEqual(result.errors, ['local_site_ref_scheme_invalid', 'cloudflare_site_ref_scheme_invalid']);
+  assert.equal(result.embeds_credentials, false);
 });
 
 test('site continuity binding materializer refuses invalid packet binding', async () => {
