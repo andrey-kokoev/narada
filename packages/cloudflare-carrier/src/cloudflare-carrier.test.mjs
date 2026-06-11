@@ -1195,6 +1195,8 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.executable_cross_embodiment_mutation, 'refused_by_site_continuity_classifier');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.durable_mutation_authority, 'unchanged; routed_by_site_authority_map');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.next_action, 'review_continuity_packet');
+  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.loop_command, 'pnpm site:continuity:loop -- sync-cloudflare --site site_fixture --url <worker-url> --token-file <token-file>');
+  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.pull_command, 'pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- pull-cloudflare --site site_fixture --url <worker-url> --token-file <token-file>');
   assert.equal(readAfterPacketPutBody.site_continuity_loop_reports.length, 1);
   assert.equal(readAfterPacketPutBody.site_continuity_loop_status.schema, 'narada.cloudflare_site_continuity_loop_status.v1');
   assert.equal(readAfterPacketPutBody.site_continuity_loop_status.state, 'loop_report_observed');

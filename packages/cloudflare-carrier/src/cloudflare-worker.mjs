@@ -1684,6 +1684,13 @@ function summarizeLocalCloudContinuityBridge(siteId, continuityPackets = [], sit
   const cloudflareEmbodiment = (binding.embodiments || []).find((embodiment) => embodiment.embodiment_kind === SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER) ?? {};
   const directionCounts = continuityStatus?.direction_counts ?? {};
   const authorityBoundary = continuityStatus?.authority_boundary ?? {};
+  const siteArg = siteId ? String(siteId) : '<site_id>';
+  const syncCommands = {
+    loop_command: `pnpm site:continuity:loop -- sync-cloudflare --site ${siteArg} --url <worker-url> --token-file <token-file>`,
+    pull_command: `pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- pull-cloudflare --site ${siteArg} --url <worker-url> --token-file <token-file>`,
+    push_command: `pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- push-cloudflare --site ${siteArg} --url <worker-url> --token-file <token-file> < packet.json`,
+    read_command: `pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- read-cloudflare --site ${siteArg} --url <worker-url> --token-file <token-file>`,
+  };
   return {
     schema: 'narada.local_cloud_continuity_bridge.v1',
     site_id: siteId,
@@ -1701,6 +1708,7 @@ function summarizeLocalCloudContinuityBridge(siteId, continuityPackets = [], sit
     executable_cross_embodiment_mutation: authorityBoundary.executable_cross_embodiment_mutation ?? 'refused_by_site_continuity_classifier',
     durable_mutation_authority: authorityBoundary.durable_mutation_authority ?? 'unchanged; routed_by_site_authority_map',
     next_action: continuityStatus?.state === 'packet_observed' ? 'review_continuity_packet' : 'observe_continuity_packet',
+    ...syncCommands,
   };
 }
 
@@ -13500,8 +13508,9 @@ export function renderCloudflareCarrierConsole() {
       const continuityPacketCount = Number(product.site_continuity_status?.packet_count ?? (product.site_continuity_packets || []).length ?? 0);
       const continuityLoopReportCount = Number(product.site_continuity_loop_status?.report_count ?? product.operation_product_surface?.continuity_loop_report_count ?? (product.site_continuity_loop_reports || []).length ?? 0);
       const continuityLoopReport = (product.site_continuity_loop_reports || [])[0] || null;
+      const localCloudBridge = product.local_cloud_continuity_bridge || product.operation_product_surface?.local_cloud_continuity_bridge || {};
       const continuityLoopCommand = siteId
-        ? 'pnpm site:continuity:loop -- sync-cloudflare --site ' + siteId + ' --url <worker-url> --token-file <token-file>'
+        ? (localCloudBridge.loop_command || 'pnpm site:continuity:loop -- sync-cloudflare --site ' + siteId + ' --url <worker-url> --token-file <token-file>')
         : 'pnpm site:continuity:loop -- sync-cloudflare --site <site_id> --url <worker-url> --token-file <token-file>';
       return [
         {
@@ -13676,6 +13685,10 @@ export function renderCloudflareCarrierConsole() {
         ['Executable Cross-Embodiment Mutation', bridge.executable_cross_embodiment_mutation || status.authority_boundary?.executable_cross_embodiment_mutation || 'refused_by_site_continuity_classifier'],
         ['Durable Mutation Authority', bridge.durable_mutation_authority || status.authority_boundary?.durable_mutation_authority || 'unchanged; routed_by_site_authority_map'],
         ['Next Action', bridge.next_action || 'observe_continuity_packet'],
+        ['Loop Command', bridge.loop_command || 'pnpm site:continuity:loop -- sync-cloudflare --site <site_id> --url <worker-url> --token-file <token-file>'],
+        ['Pull Command', bridge.pull_command || 'pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- pull-cloudflare --site <site_id> --url <worker-url> --token-file <token-file>'],
+        ['Push Command', bridge.push_command || 'pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- push-cloudflare --site <site_id> --url <worker-url> --token-file <token-file> < packet.json'],
+        ['Read Command', bridge.read_command || 'pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- read-cloudflare --site <site_id> --url <worker-url> --token-file <token-file>'],
       ];
     }
     function renderLocalCloudContinuityBridge(product = state.operationProduct || {}) {
