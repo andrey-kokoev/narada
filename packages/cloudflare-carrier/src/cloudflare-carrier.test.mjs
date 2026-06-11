@@ -1935,6 +1935,8 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /focus_lifecycle_continuity_loop_report/);
   assert.match(html, /focus_lifecycle_open_task/);
   assert.match(html, /focus_lifecycle_directive_delivery/);
+  assert.match(html, /review_local_ingress_provider_liveness/);
+  assert.match(html, /focusLocalIngressProviderLiveness/);
   assert.match(html, /review_repository_publication_provider_liveness/);
   assert.match(html, /focusRepositoryPublicationProviderLiveness/);
   assert.match(html, /operation_lifecycle_missing_continuity_packet/);
@@ -2775,13 +2777,19 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /localIngressRequestFocusDetail/);
   assert.match(html, /localIngressEvidenceNavigator/);
   assert.match(html, /localIngressEvidenceFocusDetail/);
+  assert.match(html, /localIngressProviderHeartbeatNavigator/);
+  assert.match(html, /localIngressProviderHeartbeatFocusDetail/);
   assert.match(html, /renderLocalIngressRequestNavigator/);
   assert.match(html, /renderLocalIngressEvidenceNavigator/);
+  assert.match(html, /renderLocalIngressProviderHeartbeatNavigator/);
   assert.match(html, /selectLocalIngressRequest/);
   assert.match(html, /selectLocalIngressEvidence/);
+  assert.match(html, /selectLocalIngressProviderHeartbeat/);
   assert.match(html, /Local Ingress Review/);
   assert.match(html, /local_ingress_request_count/);
   assert.match(html, /local_ingress_evidence_count/);
+  assert.match(html, /local_ingress_provider_heartbeat_count/);
+  assert.match(html, /review_local_ingress_provider_liveness/);
   assert.match(html, /local_ingress_authority_partition/);
   assert.match(html, /await_windows_local_ingress_evidence/);
   assert.match(html, /review_local_ingress_evidence/);
