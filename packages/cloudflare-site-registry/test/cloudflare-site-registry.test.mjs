@@ -42,6 +42,52 @@ test('owns Cloudflare D1 migration apply surface', async () => {
   assert.match(wranglerConfig, /^migrations_dir = "migrations"$/m);
 });
 
+test('product store migration carries Worker read-path indexes', async () => {
+  const migrationSql = await readFile(new URL('../migrations/0003_cloudflare_product_stores.sql', import.meta.url), 'utf8');
+  const workerSource = await readFile(new URL('../../cloudflare-carrier/src/cloudflare-worker.mjs', import.meta.url), 'utf8');
+  const expectedIndexNames = [
+    'cloudflare_site_continuity_loop_reports_site_idx',
+    'cloudflare_site_continuity_reconciliation_executions_site_idx',
+    'idx_cloudflare_resident_dispatch_decisions_site_recorded',
+    'idx_cloudflare_mailbox_status_shadow_reads_site_recorded',
+    'idx_cloudflare_mailbox_status_source_reads_site_recorded',
+    'idx_cloudflare_mailbox_draft_reply_proposals_site_recorded',
+    'idx_cloudflare_mailbox_outlook_draft_creates_site_recorded',
+    'idx_cloudflare_mailbox_send_accepted_site_recorded',
+    'idx_cloudflare_mailbox_send_confirmation_site_recorded',
+    'idx_cloudflare_mailbox_send_review_site_recorded',
+    'idx_cloudflare_operation_focus_review_records_site_recorded',
+    'idx_cloudflare_resident_loop_shadow_runs_site_recorded',
+    'idx_cloudflare_task_lifecycle_shadow_reads_site_recorded',
+    'idx_cloudflare_task_lifecycle_write_admissions_site_recorded',
+    'idx_cloudflare_task_lifecycle_tasks_site_number',
+    'idx_cloudflare_site_file_change_proposals_site_recorded',
+    'idx_cloudflare_site_file_materializations_site_recorded',
+    'idx_cloudflare_local_ingress_requests_site_recorded',
+    'idx_cloudflare_repository_publication_requests_site_recorded',
+    'idx_cloudflare_repository_publication_admissions_site_recorded',
+    'idx_cloudflare_repository_publication_admissions_request_recorded',
+    'idx_cloudflare_repository_publication_executions_site_recorded',
+    'idx_cloudflare_local_ingress_evidence_site_recorded',
+    'idx_cloudflare_local_ingress_provider_heartbeats_site_recorded',
+    'idx_cloudflare_repository_publication_evidence_site_recorded',
+    'idx_cloudflare_repository_publication_provider_heartbeats_site_recorded',
+    'idx_cloudflare_webhook_delay_shadow_observations_site_recorded',
+    'idx_cloudflare_webhook_delay_observation_primary_reads_site_recorded',
+    'idx_cloudflare_webhook_delay_scheduled_source_reads_site_recorded',
+    'idx_cloudflare_webhook_delay_remote_source_samples_site_adapter_observed',
+    'idx_cloudflare_webhook_delay_directive_dual_records_site_recorded',
+    'idx_cloudflare_webhook_delay_directive_deliveries_site_recorded',
+    'idx_cloudflare_carrier_session_events_site_occurred',
+    'idx_cloudflare_carrier_session_events_operation_occurred',
+  ];
+
+  for (const indexName of expectedIndexNames) {
+    assert.match(migrationSql, new RegExp(`CREATE INDEX IF NOT EXISTS ${indexName}\\b`));
+    assert.match(workerSource, new RegExp(`CREATE INDEX IF NOT EXISTS ${indexName}\\b`));
+  }
+});
+
 test('creates reads and lists site operations behind site authority', async () => {
   const db = fakeD1SiteRegistryDatabase();
   const registry = createD1CloudflareSiteRegistry(db, { now: fixedNow });

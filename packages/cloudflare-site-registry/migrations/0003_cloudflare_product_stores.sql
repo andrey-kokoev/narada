@@ -620,3 +620,73 @@ CREATE TABLE IF NOT EXISTS cloudflare_carrier_session_events (
       indexed_at TEXT NOT NULL,
       PRIMARY KEY (carrier_session_id, sequence)
     );
+
+-- Read-path indexes matching the Worker self-heal schema posture.
+CREATE INDEX IF NOT EXISTS cloudflare_site_continuity_loop_reports_site_idx
+    ON cloudflare_site_continuity_loop_reports(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS cloudflare_site_continuity_reconciliation_executions_site_idx
+    ON cloudflare_site_continuity_reconciliation_executions(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_resident_dispatch_decisions_site_recorded
+    ON cloudflare_resident_dispatch_decisions(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_mailbox_status_shadow_reads_site_recorded
+    ON cloudflare_mailbox_status_shadow_reads(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_mailbox_status_source_reads_site_recorded
+    ON cloudflare_mailbox_status_source_reads(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_mailbox_draft_reply_proposals_site_recorded
+    ON cloudflare_mailbox_draft_reply_proposals(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_mailbox_outlook_draft_creates_site_recorded
+    ON cloudflare_mailbox_outlook_draft_creates(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_mailbox_send_accepted_site_recorded
+    ON cloudflare_mailbox_send_accepted_records(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_mailbox_send_confirmation_site_recorded
+    ON cloudflare_mailbox_send_confirmation_records(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_mailbox_send_review_site_recorded
+    ON cloudflare_mailbox_send_review_records(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_operation_focus_review_records_site_recorded
+    ON cloudflare_operation_focus_review_records(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_resident_loop_shadow_runs_site_recorded
+    ON cloudflare_resident_loop_shadow_runs(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_task_lifecycle_shadow_reads_site_recorded
+    ON cloudflare_task_lifecycle_shadow_reads(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_task_lifecycle_write_admissions_site_recorded
+    ON cloudflare_task_lifecycle_write_admissions(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_task_lifecycle_tasks_site_number
+    ON cloudflare_task_lifecycle_tasks(site_id, task_number);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_site_file_change_proposals_site_recorded
+    ON cloudflare_site_file_change_proposals(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_site_file_materializations_site_recorded
+    ON cloudflare_site_file_materializations(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_local_ingress_requests_site_recorded
+    ON cloudflare_local_ingress_requests(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_repository_publication_requests_site_recorded
+    ON cloudflare_repository_publication_requests(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_repository_publication_admissions_site_recorded
+    ON cloudflare_repository_publication_admissions(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_repository_publication_admissions_request_recorded
+    ON cloudflare_repository_publication_admissions(site_id, repository_publication_request_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_repository_publication_executions_site_recorded
+    ON cloudflare_repository_publication_executions(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_local_ingress_evidence_site_recorded
+    ON cloudflare_local_ingress_evidence(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_local_ingress_provider_heartbeats_site_recorded
+    ON cloudflare_local_ingress_provider_heartbeats(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_repository_publication_evidence_site_recorded
+    ON cloudflare_repository_publication_evidence(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_repository_publication_provider_heartbeats_site_recorded
+    ON cloudflare_repository_publication_provider_heartbeats(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_webhook_delay_shadow_observations_site_recorded
+    ON cloudflare_webhook_delay_shadow_observations(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_webhook_delay_observation_primary_reads_site_recorded
+    ON cloudflare_webhook_delay_observation_primary_reads(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_webhook_delay_scheduled_source_reads_site_recorded
+    ON cloudflare_webhook_delay_scheduled_source_reads(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_webhook_delay_remote_source_samples_site_adapter_observed
+    ON cloudflare_webhook_delay_remote_source_samples(site_id, source_adapter_id, observed_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_webhook_delay_directive_dual_records_site_recorded
+    ON cloudflare_webhook_delay_directive_dual_records(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_webhook_delay_directive_deliveries_site_recorded
+    ON cloudflare_webhook_delay_directive_deliveries(site_id, recorded_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_carrier_session_events_site_occurred
+    ON cloudflare_carrier_session_events(site_id, occurred_at);
+CREATE INDEX IF NOT EXISTS idx_cloudflare_carrier_session_events_operation_occurred
+    ON cloudflare_carrier_session_events(operation_id, occurred_at);
