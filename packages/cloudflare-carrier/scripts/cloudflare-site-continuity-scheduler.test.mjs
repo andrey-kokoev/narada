@@ -19,6 +19,8 @@ import {
   readLocalConfiguredSites,
   readLocalSyncArtifactInventory,
   runSiteContinuitySchedulerActionWithOptionalRefresh,
+  summarizeCloudflareProductBindingAlignment,
+  summarizeScheduledHealthSnapshotStatus,
 } from './cloudflare-site-continuity-scheduler.mjs';
 
 const SCRIPT_PATH = fileURLToPath(new URL('./cloudflare-site-continuity-scheduler.mjs', import.meta.url));
@@ -101,6 +103,58 @@ test('site continuity operation posture snapshot reports unselected site without
   assert.equal(posture.operation, 'operation.list');
   assert.equal(posture.reason, 'cloudflare_product_next_site_id_not_available');
   assert.equal(posture.embeds_credentials, false);
+});
+
+test('site continuity product binding alignment classifies remote next-site coverage', () => {
+  const aligned = summarizeCloudflareProductBindingAlignment({
+    configuredSites: {
+      selection_source: 'site_continuity_binding_registry',
+      sites: ['site_alpha'],
+      site_records: [{ site_id: 'site_alpha' }],
+    },
+    cloudflareProductPosture: {
+      state: 'loaded',
+      status: 'ok',
+      summary: {
+        next_site_id: 'site_alpha',
+        next_action: 'refresh_site_continuity_loop',
+        next_health: 'attention',
+      },
+    },
+  });
+
+  assert.equal(aligned.schema, 'narada.cloudflare_carrier.product_binding_alignment.v1');
+  assert.equal(aligned.state, 'aligned');
+  assert.equal(aligned.status, 'ok');
+  assert.equal(aligned.reason, 'cloudflare_product_next_site_in_local_continuity_set');
+  assert.deepEqual(aligned.local_site_ids, ['site_alpha']);
+
+  const unbound = summarizeCloudflareProductBindingAlignment({
+    configuredSites: {
+      selection_source: 'site_continuity_binding_registry',
+      sites: ['site_alpha'],
+      site_records: [{ site_id: 'site_alpha' }],
+    },
+    cloudflareProductPosture: {
+      state: 'loaded',
+      status: 'ok',
+      summary: {
+        next_site_id: 'site_beta',
+        next_action: 'publish_cloudflare_continuity_packet',
+        next_health: 'attention',
+      },
+    },
+  });
+
+  assert.equal(unbound.state, 'unbound_remote_next_site');
+  assert.equal(unbound.status, 'needs_attention');
+  assert.equal(unbound.reason, 'cloudflare_product_next_site_not_in_local_continuity_set');
+  assert.equal(summarizeScheduledHealthSnapshotStatus({
+    continuityHealth: { status: 'ok' },
+    cloudflareProductPosture: { status: 'ok' },
+    cloudflareProductBindingAlignment: unbound,
+    cloudflareOperationPosture: { status: 'ok' },
+  }), 'needs_attention');
 });
 
 test('site continuity reconciliation plan resolves one packet per configured site from packet directory', async () => {
@@ -1091,6 +1145,156 @@ test('site continuity reconcile-execute treats already synced plans as successfu
   }
 });
 
+test('site continuity scheduled health reports remote product next-site outside local binding set', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-remote-unbound-next-site-'));
+  const artifactDirectory = join(root, '.narada/site-continuity');
+  const bindingRegistryPath = join(artifactDirectory, 'bindings.json');
+  const packetPath = join(root, '.narada/site-continuity/site_alpha-packet.json');
+  const outputPath = join(artifactDirectory, 'site_alpha-cloudflare-sync.json');
+  const reconciliationExecutionOutputPath = join(root, '.narada/site-continuity/reconciliation/cloudflare-reconcile-last.json');
+  const healthOutputPath = join(root, '.narada/site-continuity/health/cloudflare-continuity-health-last.json');
+  const syncEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-sync.mjs');
+  const scheduledTaskEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-scheduled-task.mjs');
+  await mkdir(artifactDirectory, { recursive: true });
+  await mkdir(join(root, '.narada/site-continuity'), { recursive: true });
+  await mkdir(join(root, 'packages/cloudflare-carrier/scripts'), { recursive: true });
+  await writeFile(syncEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(scheduledTaskEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(packetPath, '{"packet":{"site_id":"site_alpha"}}\n', 'utf8');
+  await writeFile(bindingRegistryPath, `${JSON.stringify(createSiteContinuityBindingRegistry({
+    registry_ref: 'file:.narada/site-continuity/bindings.json',
+    generated_at: '2026-06-11T14:58:00.000Z',
+    bindings: [createSiteContinuityBinding({ site_id: 'site_alpha', cloudflare_site_ref: 'cloudflare://site-alpha' })],
+  }), null, 2)}\n`, 'utf8');
+  await writeFile(outputPath, `${JSON.stringify({
+    schema: 'narada.site_continuity_cloudflare_sync_once.v1',
+    status: 'ok',
+    site_id: 'site_alpha',
+    worker_url: 'https://worker.example',
+    pushed_packet_id: 'packet-alpha-local',
+    pulled_packet_id: 'packet-alpha-cloudflare',
+    continuity_loop_report_recorded: true,
+    continuity_loop_report: {
+      status: 'ok',
+      site_id: 'site_alpha',
+      generated_at: '2026-06-11T14:55:00.000Z',
+    },
+  }, null, 2)}\n`, 'utf8');
+  try {
+    const productReadCalls = [];
+    const result = await runSiteContinuitySchedulerActionWithOptionalRefresh({
+      action: 'reconcile-execute',
+      repoRoot: root,
+      syncEntrypoint,
+      scheduledTaskEntrypoint,
+      packetPath,
+      outputPath,
+      artifactDirectory,
+      siteContinuityBindingRegistryPath: bindingRegistryPath,
+      reconciliationExecutionOutputPath,
+      healthOutputPath,
+      configuredSites: 'site_alpha',
+      dryRun: false,
+      executionTimeoutMs: 5000,
+      now: () => '2026-06-11T15:00:00.000Z',
+    }, {
+      env: {
+        CLOUDFLARE_CARRIER_URL: 'https://worker.example',
+        CLOUDFLARE_CARRIER_TOKEN: 'secret-token-value',
+      },
+      execFileImpl: async (command) => {
+        if (command === 'schtasks') {
+          return {
+            stdout: [
+              'TaskName: \\Narada\\CloudflareSiteContinuitySync',
+              'Status: Ready',
+              'Last Result: 0',
+              `Task To Run: C:\\node\\node.exe ${scheduledTaskEntrypoint}`,
+              'Scheduled Task State: Enabled',
+              'Repeat: Every: 0 Hour(s), 5 Minute(s)',
+            ].join('\n'),
+            stderr: '',
+          };
+        }
+        throw new Error(`unexpected_command:${command}`);
+      },
+      productReadSurface: async (config) => {
+        productReadCalls.push(config);
+        assert.equal(config.auth.kind, 'bearer');
+        assert.equal(config.auth.value, 'secret-token-value');
+        if (config.operation === 'operation.list') {
+          assert.deepEqual(config.params, { site_id: 'site_beta' });
+          return {
+            summary: {
+              operation: 'operation.list',
+              site_id: 'site_beta',
+              operation_count: 0,
+              active_operation_id: null,
+              next_operation_id: null,
+              next_status: null,
+              next_action: null,
+              next_reason: null,
+              health_counts: { ready: 0, needs_attention: 0 },
+            },
+            response: {
+              operation_posture_overview: {
+                schema: 'narada.cloudflare_operation_posture_overview.v1',
+                operation_count: 0,
+                health_counts: { ready: 0, needs_attention: 0 },
+              },
+            },
+          };
+        }
+        assert.equal(config.operation, 'site.list');
+        return {
+          summary: {
+            operation: 'site.list',
+            site_count: 2,
+            next_site_id: 'site_beta',
+            next_health: 'attention',
+            next_action: 'publish_cloudflare_continuity_packet',
+            health_counts: { ready: 1, attention: 1, incomplete: 0, other: 0 },
+          },
+          response: {
+            site_product_overview: {
+              schema: 'narada.cloudflare_site_product_overview.v1',
+              site_count: 2,
+              health_counts: { ready: 1, attention: 1, incomplete: 0, other: 0 },
+              next_site_id: 'site_beta',
+              next_health: 'attention',
+              next_action: 'publish_cloudflare_continuity_packet',
+              next_reason: 'continuity_direction',
+            },
+          },
+        };
+      },
+    });
+
+    assert.equal(result.status, 'completed');
+    assert.equal(result.reconciliation_plan_status, 'synced');
+    assert.equal(productReadCalls.length, 2);
+    assert.equal(result.scheduled_health_snapshot.status, 'needs_attention');
+    assert.equal(result.scheduled_health_snapshot.continuity_health.status, 'ok');
+    assert.equal(result.scheduled_health_snapshot.cloudflare_product_binding_alignment.state, 'unbound_remote_next_site');
+    assert.equal(result.scheduled_health_snapshot.cloudflare_product_binding_alignment.status, 'needs_attention');
+    assert.equal(result.scheduled_health_snapshot.cloudflare_product_binding_alignment.reason, 'cloudflare_product_next_site_not_in_local_continuity_set');
+    assert.deepEqual(result.scheduled_health_snapshot.cloudflare_product_binding_alignment.local_site_ids, ['site_alpha']);
+
+    const healthSnapshot = JSON.parse(await readFile(healthOutputPath, 'utf8'));
+    assert.equal(healthSnapshot.status, 'needs_attention');
+    assert.equal(healthSnapshot.cloudflare_product_binding_alignment.cloudflare_product_next_site_id, 'site_beta');
+    assert.doesNotMatch(JSON.stringify(healthSnapshot), /secret-token-value/);
+
+    const healthSummary = readLastScheduledHealthSnapshot(healthOutputPath);
+    assert.equal(healthSummary.status, 'needs_attention');
+    assert.equal(healthSummary.cloudflare_product_binding_alignment_state, 'unbound_remote_next_site');
+    assert.equal(healthSummary.cloudflare_product_binding_alignment_status, 'needs_attention');
+    assert.equal(healthSummary.cloudflare_product_binding_alignment_reason, 'cloudflare_product_next_site_not_in_local_continuity_set');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('site continuity reconcile-execute refuses not-ready plans before sync execution', async () => {
   const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-reconcile-not-ready-'));
   const artifactDirectory = join(root, '.narada/site-continuity');
@@ -1411,6 +1615,9 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
     assert.equal(result.scheduled_health_snapshot.cloudflare_product_posture.status, 'ok');
     assert.equal(result.scheduled_health_snapshot.cloudflare_product_posture.summary.next_site_id, 'site_missing');
     assert.equal(result.scheduled_health_snapshot.cloudflare_product_posture.site_product_overview.site_count, 1);
+    assert.equal(result.scheduled_health_snapshot.cloudflare_product_binding_alignment.state, 'aligned');
+    assert.equal(result.scheduled_health_snapshot.cloudflare_product_binding_alignment.status, 'ok');
+    assert.equal(result.scheduled_health_snapshot.cloudflare_product_binding_alignment.reason, 'cloudflare_product_next_site_in_local_continuity_set');
     assert.equal(result.scheduled_health_snapshot.cloudflare_operation_posture.state, 'loaded');
     assert.equal(result.scheduled_health_snapshot.cloudflare_operation_posture.status, 'ok');
     assert.equal(result.scheduled_health_snapshot.cloudflare_operation_posture.summary.next_operation_id, 'carrier_operation_next');
@@ -1435,6 +1642,7 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
     assert.equal(healthSnapshot.continuity_health.status, 'ok');
     assert.equal(healthSnapshot.cloudflare_product_posture.state, 'loaded');
     assert.equal(healthSnapshot.cloudflare_product_posture.summary.next_action, 'monitor_sites');
+    assert.equal(healthSnapshot.cloudflare_product_binding_alignment.state, 'aligned');
     assert.equal(healthSnapshot.cloudflare_operation_posture.state, 'loaded');
     assert.equal(healthSnapshot.cloudflare_operation_posture.summary.next_action, 'start_operation');
     assert.equal(healthSnapshot.scheduler_task_readback.status, 'ok');
@@ -1446,6 +1654,9 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
     assert.equal(healthSummary.cloudflare_product_posture_status, 'ok');
     assert.equal(healthSummary.cloudflare_product_next_site_id, 'site_missing');
     assert.equal(healthSummary.cloudflare_product_next_action, 'monitor_sites');
+    assert.equal(healthSummary.cloudflare_product_binding_alignment_state, 'aligned');
+    assert.equal(healthSummary.cloudflare_product_binding_alignment_status, 'ok');
+    assert.equal(healthSummary.cloudflare_product_binding_alignment_reason, 'cloudflare_product_next_site_in_local_continuity_set');
     assert.equal(healthSummary.cloudflare_operation_posture_state, 'loaded');
     assert.equal(healthSummary.cloudflare_operation_posture_status, 'ok');
     assert.equal(healthSummary.cloudflare_operation_next_operation_id, 'carrier_operation_next');
