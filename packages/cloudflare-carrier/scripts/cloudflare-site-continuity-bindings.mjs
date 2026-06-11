@@ -1,19 +1,26 @@
 #!/usr/bin/env node
 
-import { readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+  SITE_CONTINUITY_EMBODIMENT_KINDS,
+  classifySiteContinuityExchangePacket,
+  createSiteContinuityBinding,
+  createSiteContinuityExchangePacket,
   createSiteContinuityBindingRegistry,
   listSiteContinuityBindingSites,
   validateSiteContinuityBinding,
+  validateSiteContinuityExchangePacket,
   validateSiteContinuityBindingRegistry,
 } from '@narada2/site-continuity';
 
 const DEFAULT_PACKET_PATHS = ['.narada/site-continuity/local-windows-packet.json'];
 const DEFAULT_BINDING_REGISTRY_PATH = '.narada/site-continuity/bindings.json';
+const DEFAULT_HEALTH_SNAPSHOT_PATH = '.narada/site-continuity/health/cloudflare-continuity-health-last.json';
+const DEFAULT_PREPARED_PACKET_DIRECTORY = '.narada/site-continuity/prepared-bindings';
 
 async function main() {
   const plan = buildBindingMaterializationPlan({
@@ -23,6 +30,39 @@ async function main() {
   });
   const result = await runSiteContinuityBindingWorkflow(plan);
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+}
+
+async function readScheduledHealthSnapshotForBindingPreparation(healthSnapshotPath) {
+  if (!existsSync(healthSnapshotPath)) throw new Error(`scheduled_health_snapshot_missing:${healthSnapshotPath}`);
+  const snapshot = JSON.parse(await readFile(healthSnapshotPath, 'utf8'));
+  if (snapshot?.schema !== 'narada.cloudflare_carrier.site_continuity_scheduled_health_snapshot.v1') {
+    throw new Error(`scheduled_health_snapshot_schema_mismatch:${snapshot?.schema ?? 'missing'}`);
+  }
+  const bindingAlignment = snapshot.cloudflare_product_binding_alignment ?? null;
+  const operatorNextAction = bindingAlignment?.state === 'unbound_remote_next_site'
+    ? 'bind_cloudflare_product_next_site_locally'
+    : null;
+  return {
+    operator_next_action: operatorNextAction,
+    operator_next_target_site_id: bindingAlignment?.cloudflare_product_next_site_id ?? null,
+    operator_next_reason: bindingAlignment?.reason ?? null,
+    cloudflare_product_next_site_id: snapshot.cloudflare_product_posture?.summary?.next_site_id ?? null,
+  };
+}
+
+function readCloudflareSiteProjectionRecord(plan, siteId) {
+  const projectionPath = path.resolve(plan.cwd, '.narada/site-registry/cloudflare-sites.json');
+  if (!existsSync(projectionPath)) return null;
+  try {
+    const projection = JSON.parse(readFileSync(projectionPath, 'utf8'));
+    return (projection?.sites ?? []).find((site) => site?.site_id === siteId) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function fileSafeId(value) {
+  return String(value ?? 'unknown-site').replace(/[^A-Za-z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '') || 'unknown-site';
 }
 
 function buildBindingMaterializationPlan({ argv = [], env = process.env, cwd = process.cwd() } = {}) {
@@ -44,6 +84,18 @@ function buildBindingMaterializationPlan({ argv = [], env = process.env, cwd = p
     effective_output_path: resolvePath(cwd, outputPath),
     registry_path: args.registry ?? outputPath,
     effective_registry_path: resolvePath(cwd, args.registry ?? outputPath),
+    health_snapshot_path: args.health ?? env.NARADA_SITE_CONTINUITY_HEALTH_SNAPSHOT ?? DEFAULT_HEALTH_SNAPSHOT_PATH,
+    effective_health_snapshot_path: resolvePath(cwd, args.health ?? env.NARADA_SITE_CONTINUITY_HEALTH_SNAPSHOT ?? DEFAULT_HEALTH_SNAPSHOT_PATH),
+    packet_output_path: args.packet_output ?? env.NARADA_SITE_CONTINUITY_PREPARED_PACKET ?? null,
+    effective_packet_output_path: args.packet_output || env.NARADA_SITE_CONTINUITY_PREPARED_PACKET
+      ? resolvePath(cwd, args.packet_output ?? env.NARADA_SITE_CONTINUITY_PREPARED_PACKET)
+      : null,
+    prepared_packet_directory: args.packet_output_dir ?? env.NARADA_SITE_CONTINUITY_PREPARED_PACKET_DIR ?? DEFAULT_PREPARED_PACKET_DIRECTORY,
+    effective_prepared_packet_directory: resolvePath(cwd, args.packet_output_dir ?? env.NARADA_SITE_CONTINUITY_PREPARED_PACKET_DIR ?? DEFAULT_PREPARED_PACKET_DIRECTORY),
+    target_site_id: args.site ?? env.NARADA_SITE_CONTINUITY_TARGET_SITE ?? null,
+    local_site_ref: args.local_site_ref ?? env.NARADA_SITE_CONTINUITY_LOCAL_SITE_REF ?? null,
+    cloudflare_site_ref: args.cloudflare_site_ref ?? env.NARADA_SITE_CONTINUITY_CLOUDFLARE_SITE_REF ?? null,
+    authority_map_ref: args.authority_map_ref ?? env.NARADA_SITE_CONTINUITY_AUTHORITY_MAP_REF ?? null,
     registry_ref: args.registry_ref ?? env.NARADA_SITE_CONTINUITY_BINDING_REGISTRY_REF ?? 'local-cloud-site-continuity-bindings',
     generated_at: args.generated_at ?? env.NARADA_SITE_CONTINUITY_BINDING_GENERATED_AT ?? new Date().toISOString(),
     dry_run: args.dry_run === true,
@@ -58,9 +110,96 @@ async function runSiteContinuityBindingWorkflow(plan) {
       return validateMaterializedSiteContinuityBindingRegistry(plan);
     case 'list':
       return listMaterializedSiteContinuityBindingRegistry(plan);
+    case 'prepare-next-binding-packet':
+      return prepareNextSiteContinuityBindingPacket(plan);
     default:
       throw new Error(`unknown_site_continuity_binding_action:${plan.action}`);
   }
+}
+
+async function prepareNextSiteContinuityBindingPacket(plan) {
+  const health = await readScheduledHealthSnapshotForBindingPreparation(plan.effective_health_snapshot_path);
+  const targetSiteId = plan.target_site_id ?? health.operator_next_target_site_id ?? health.cloudflare_product_next_site_id ?? null;
+  const operatorAction = health.operator_next_action ?? null;
+  if (operatorAction && operatorAction !== 'bind_cloudflare_product_next_site_locally') {
+    return {
+      ok: false,
+      action: 'refused',
+      reason: 'scheduled_health_next_action_not_site_binding',
+      operator_next_action: operatorAction,
+      target_site_id: targetSiteId,
+      health_snapshot_path: plan.effective_health_snapshot_path,
+      embeds_credentials: false,
+    };
+  }
+  if (!targetSiteId) {
+    return {
+      ok: false,
+      action: 'refused',
+      reason: 'scheduled_health_next_site_missing',
+      health_snapshot_path: plan.effective_health_snapshot_path,
+      embeds_credentials: false,
+    };
+  }
+  const siteRecord = readCloudflareSiteProjectionRecord(plan, targetSiteId);
+  const localSiteRef = plan.local_site_ref;
+  const cloudflareSiteRef = plan.cloudflare_site_ref ?? siteRecord?.site_ref ?? null;
+  const missingInputs = [
+    localSiteRef ? null : 'local_site_ref',
+    cloudflareSiteRef ? null : 'cloudflare_site_ref',
+  ].filter(Boolean);
+  if (missingInputs.length > 0) {
+    return {
+      ok: false,
+      action: 'refused',
+      reason: 'site_continuity_binding_refs_missing',
+      target_site_id: targetSiteId,
+      required_inputs: missingInputs,
+      operator_next_action: operatorAction,
+      operator_next_reason: health.operator_next_reason ?? null,
+      cloudflare_site_projection_state: siteRecord ? 'found' : 'missing',
+      cloudflare_site_ref_from_projection: siteRecord?.site_ref ?? null,
+      command_hint: 'pnpm --filter @narada2/cloudflare-carrier continuity:bindings:prepare-next -- --local-site-ref <file-or-site-ref> --cloudflare-site-ref <cloudflare-site-ref>',
+      embeds_credentials: false,
+    };
+  }
+  const binding = createSiteContinuityBinding({
+    site_id: targetSiteId,
+    local_windows_site_ref: localSiteRef,
+    cloudflare_site_ref: cloudflareSiteRef,
+    authority_map_ref: plan.authority_map_ref ?? `narada:site-authority-map:${targetSiteId}`,
+    generated_at: plan.generated_at,
+  });
+  const packet = createSiteContinuityExchangePacket({
+    binding,
+    source_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER,
+    target_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS,
+    generated_at: plan.generated_at,
+  });
+  const packetValidation = validateSiteContinuityExchangePacket(packet);
+  if (!packetValidation.ok) {
+    throw new Error(`site_continuity_prepared_packet_invalid:${packetValidation.errors.join(',')}`);
+  }
+  const admission = classifySiteContinuityExchangePacket(packet);
+  const outputPath = plan.effective_packet_output_path
+    ?? path.join(plan.effective_prepared_packet_directory, `${fileSafeId(targetSiteId)}-packet.json`);
+  if (!plan.dry_run) {
+    await mkdir(path.dirname(outputPath), { recursive: true });
+    await writeFile(outputPath, `${JSON.stringify(packet, null, 2)}\n`, 'utf8');
+  }
+  return {
+    ok: true,
+    action: plan.dry_run ? 'prepared' : 'written',
+    reason: 'site_continuity_binding_packet_prepared',
+    target_site_id: targetSiteId,
+    output_path: outputPath,
+    packet_id: packet.packet_id,
+    relation_id: packet.relation_id,
+    admission_action: admission.action,
+    admission_reason: admission.reason,
+    materialize_hint: `pnpm --filter @narada2/cloudflare-carrier continuity:bindings -- --packet ${outputPath}`,
+    embeds_credentials: false,
+  };
 }
 
 async function materializeSiteContinuityBindingRegistry(plan) {
@@ -203,6 +342,41 @@ function parseArgs(argv) {
       args.dry_run = true;
       continue;
     }
+    if (arg === '--health') {
+      args.health = argv[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === '--site') {
+      args.site = argv[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === '--local-site-ref') {
+      args.local_site_ref = argv[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === '--cloudflare-site-ref') {
+      args.cloudflare_site_ref = argv[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === '--authority-map-ref') {
+      args.authority_map_ref = argv[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === '--packet-output') {
+      args.packet_output = argv[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === '--packet-output-dir') {
+      args.packet_output_dir = argv[index + 1];
+      index += 1;
+      continue;
+    }
     if (arg === '--action') {
       args.action = argv[index + 1];
       index += 1;
@@ -269,10 +443,13 @@ if (invokedPath === modulePath) {
 
 export {
   DEFAULT_BINDING_REGISTRY_PATH,
+  DEFAULT_HEALTH_SNAPSHOT_PATH,
   DEFAULT_PACKET_PATHS,
+  DEFAULT_PREPARED_PACKET_DIRECTORY,
   buildBindingMaterializationPlan,
   listMaterializedSiteContinuityBindingRegistry,
   materializeSiteContinuityBindingRegistry,
+  prepareNextSiteContinuityBindingPacket,
   runSiteContinuityBindingWorkflow,
   validateMaterializedSiteContinuityBindingRegistry,
 };

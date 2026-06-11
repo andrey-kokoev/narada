@@ -10,9 +10,28 @@ import {
   buildBindingMaterializationPlan,
   listMaterializedSiteContinuityBindingRegistry,
   materializeSiteContinuityBindingRegistry,
+  prepareNextSiteContinuityBindingPacket,
   runSiteContinuityBindingWorkflow,
   validateMaterializedSiteContinuityBindingRegistry,
 } from './cloudflare-site-continuity-bindings.mjs';
+
+function scheduledHealthSnapshot(overrides = {}) {
+  return {
+    schema: 'narada.cloudflare_carrier.site_continuity_scheduled_health_snapshot.v1',
+    generated_at: '2026-06-11T03:00:00.000Z',
+    cloudflare_product_posture: {
+      summary: {
+        next_site_id: 'site_beta',
+      },
+    },
+    cloudflare_product_binding_alignment: {
+      state: 'unbound_remote_next_site',
+      cloudflare_product_next_site_id: 'site_beta',
+      reason: 'cloudflare_product_next_site_not_in_local_continuity_set',
+    },
+    ...overrides,
+  };
+}
 
 test('site continuity binding materializer writes registry from packet binding', async () => {
   const tmp = await mkdtemp(path.join(os.tmpdir(), 'narada-continuity-bindings-'));
@@ -96,6 +115,76 @@ test('site continuity binding materializer refuses empty packet directory', asyn
     () => buildBindingMaterializationPlan({ cwd: tmp, argv: ['--packet-dir', packetDirectory], env: {} }),
     /site_continuity_packet_directory_empty/,
   );
+});
+
+test('site continuity binding packet preparation refuses missing explicit refs', async () => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'narada-continuity-binding-prepare-missing-'));
+  const healthPath = path.join(tmp, 'health.json');
+  const projectionPath = path.join(tmp, '.narada', 'site-registry', 'cloudflare-sites.json');
+  await mkdir(path.dirname(projectionPath), { recursive: true });
+  await writeFile(healthPath, `${JSON.stringify(scheduledHealthSnapshot(), null, 2)}\n`, 'utf8');
+  await writeFile(projectionPath, `${JSON.stringify({
+    schema: 'narada.cloudflare_carrier.site_registry_projection.v1',
+    sites: [{ site_id: 'site_beta', display_name: 'Beta Site', site_ref: null }],
+  }, null, 2)}\n`, 'utf8');
+
+  const result = await prepareNextSiteContinuityBindingPacket(buildBindingMaterializationPlan({
+    cwd: tmp,
+    argv: ['--action', 'prepare-next-binding-packet', '--health', healthPath],
+    env: {},
+  }));
+
+  assert.equal(result.ok, false);
+  assert.equal(result.action, 'refused');
+  assert.equal(result.reason, 'site_continuity_binding_refs_missing');
+  assert.equal(result.target_site_id, 'site_beta');
+  assert.deepEqual(result.required_inputs, ['local_site_ref', 'cloudflare_site_ref']);
+  assert.equal(result.embeds_credentials, false);
+});
+
+test('site continuity binding packet preparation writes packet consumable by materializer', async () => {
+  const tmp = await mkdtemp(path.join(os.tmpdir(), 'narada-continuity-binding-prepare-write-'));
+  const healthPath = path.join(tmp, 'health.json');
+  const packetPath = path.join(tmp, 'prepared', 'site_beta-packet.json');
+  const registryPath = path.join(tmp, 'bindings.json');
+  await writeFile(healthPath, `${JSON.stringify(scheduledHealthSnapshot(), null, 2)}\n`, 'utf8');
+
+  const result = await runSiteContinuityBindingWorkflow(buildBindingMaterializationPlan({
+    cwd: tmp,
+    argv: [
+      '--action', 'prepare-next-binding-packet',
+      '--health', healthPath,
+      '--local-site-ref', 'file:///D:/code/narada',
+      '--cloudflare-site-ref', 'cloudflare://site-beta',
+      '--packet-output', packetPath,
+      '--generated-at', '2026-06-11T03:15:00.000Z',
+    ],
+    env: {},
+  }));
+
+  assert.equal(result.ok, true);
+  assert.equal(result.action, 'written');
+  assert.equal(result.reason, 'site_continuity_binding_packet_prepared');
+  assert.equal(result.target_site_id, 'site_beta');
+  assert.equal(result.embeds_credentials, false);
+  const packet = JSON.parse(await readFile(packetPath, 'utf8'));
+  assert.equal(packet.schema, 'narada.site_continuity_exchange_packet.v1');
+  assert.equal(packet.site_id, 'site_beta');
+  assert.equal(packet.binding.site_id, 'site_beta');
+  assert.deepEqual(packet.executable_mutation_requests, []);
+  assert.deepEqual(packet.binding.embodiments.map((embodiment) => embodiment.embodiment_kind).sort(), [
+    'cloudflare_carrier',
+    'local_windows',
+  ]);
+
+  const materializeResult = await materializeSiteContinuityBindingRegistry(buildBindingMaterializationPlan({
+    cwd: tmp,
+    argv: ['--packet', packetPath, '--output', registryPath, '--generated-at', '2026-06-11T03:16:00.000Z'],
+    env: {},
+  }));
+
+  assert.equal(materializeResult.ok, true);
+  assert.deepEqual(materializeResult.sites, ['site_beta']);
 });
 
 test('site continuity binding materializer refuses invalid packet binding', async () => {
