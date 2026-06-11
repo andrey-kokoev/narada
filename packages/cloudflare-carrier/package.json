@@ -54,6 +54,7 @@
     "resident-dispatch:smoke:live": "node scripts/cloudflare-carrier-resident-dispatch-live-smoke.mjs",
     "continuity:cloudflare": "node scripts/cloudflare-site-continuity-sync.mjs",
     "continuity:scheduler": "node scripts/cloudflare-site-continuity-scheduler.mjs",
+    "continuity:last": "node scripts/cloudflare-site-continuity-scheduler.mjs --action read-last",
     "ship": "pnpm test && pnpm deploy:check && pnpm deploy:dry-run"
   },
   "dependencies": {

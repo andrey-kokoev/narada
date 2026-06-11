@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 
@@ -106,9 +106,71 @@ export function buildSiteContinuitySchedulerPlan({
         plan_status: 'status_only_no_cloudflare_access',
         scheduled_task_command: ['schtasks', '/Query', '/TN', taskName, '/FO', 'LIST'],
       };
+    case 'read-last':
+    case 'last':
+      return {
+        ...base,
+        plan_status: 'last_sync_artifact_read_only_no_cloudflare_access',
+        scheduled_task_command: ['schtasks', '/Query', '/TN', taskName, '/FO', 'LIST'],
+        last_sync: readLastSyncArtifact(effectiveOutputPath),
+      };
     default:
       throw new Error(`unknown_site_continuity_scheduler_action:${action}`);
   }
+}
+
+export function readLastSyncArtifact(outputPath) {
+  if (!outputPath) {
+    return {
+      state: 'not_configured',
+      artifact_present: false,
+      status: 'needs_configuration',
+    };
+  }
+  if (!existsSync(outputPath)) {
+    return {
+      state: 'missing',
+      artifact_path: outputPath,
+      artifact_present: false,
+      status: 'never_synced',
+    };
+  }
+  const stat = statSync(outputPath);
+  let artifact;
+  try {
+    artifact = JSON.parse(readFileSync(outputPath, 'utf8'));
+  } catch (error) {
+    return {
+      state: 'invalid_json',
+      artifact_path: outputPath,
+      artifact_present: true,
+      artifact_updated_at: stat.mtime.toISOString(),
+      status: 'needs_attention',
+      reason: 'last_sync_artifact_json_invalid',
+      error: error.message,
+    };
+  }
+  const loopReport = artifact?.continuity_loop_report ?? null;
+  const cloudflarePush = loopReport?.cloudflare_push ?? null;
+  const status = artifact?.status === 'ok' && loopReport?.status === 'ok' ? 'synced' : 'needs_attention';
+  return {
+    state: 'read',
+    artifact_path: outputPath,
+    artifact_present: true,
+    artifact_updated_at: stat.mtime.toISOString(),
+    status,
+    schema: artifact?.schema ?? null,
+    site_id: artifact?.site_id ?? loopReport?.site_id ?? null,
+    worker_url: artifact?.worker_url ?? loopReport?.cloudflare_worker_url ?? null,
+    generated_at: loopReport?.generated_at ?? null,
+    pushed_packet_id: artifact?.pushed_packet_id ?? cloudflarePush?.pushed_packet_id ?? null,
+    pulled_packet_id: artifact?.pulled_packet_id ?? cloudflarePush?.returned_packet_id ?? null,
+    cloudflare_push_status: cloudflarePush?.status ?? null,
+    cloudflare_push_durability_action: cloudflarePush?.durability_action ?? null,
+    cloudflare_push_imported_at: cloudflarePush?.imported_at ?? null,
+    cloudflare_push_previous_imported_at: cloudflarePush?.previous_imported_at ?? null,
+    continuity_loop_report_recorded: artifact?.continuity_loop_report_recorded ?? null,
+  };
 }
 
 export function readLocalSchedulerStatus({ root, syncEntryPoint, taskEntryPoint, localRoot, packetPath, outputPath }) {

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { buildSiteContinuitySchedulerPlan } from './cloudflare-site-continuity-scheduler.mjs';
+import { buildSiteContinuitySchedulerPlan, readLastSyncArtifact } from './cloudflare-site-continuity-scheduler.mjs';
 
 const SCRIPT_PATH = fileURLToPath(new URL('./cloudflare-site-continuity-scheduler.mjs', import.meta.url));
 const execFile = promisify(execFileCallback);
@@ -77,4 +77,72 @@ test('site continuity scheduler CLI emits status without Cloudflare access', asy
   assert.equal(body.embeds_credentials, false);
   assert.equal(body.scheduled_task_command[0], 'schtasks');
   assert.equal(body.scheduled_task_command[1], '/Query');
+});
+
+test('site continuity scheduler read-last reports missing local sync artifact', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-read-last-missing-'));
+  try {
+    const outputPath = join(root, '.narada/site-continuity/cloudflare-sync-last.json');
+    const plan = buildSiteContinuitySchedulerPlan({
+      action: 'read-last',
+      repoRoot: root,
+      outputPath,
+    });
+
+    assert.equal(plan.plan_status, 'last_sync_artifact_read_only_no_cloudflare_access');
+    assert.equal(plan.last_sync.state, 'missing');
+    assert.equal(plan.last_sync.artifact_present, false);
+    assert.equal(plan.last_sync.status, 'never_synced');
+    assert.equal(plan.last_sync.artifact_path, outputPath);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('site continuity scheduler read-last summarizes local sync artifact', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-read-last-'));
+  const outputPath = join(root, '.narada/site-continuity/cloudflare-sync-last.json');
+  await mkdir(join(root, '.narada/site-continuity'), { recursive: true });
+  await writeFile(outputPath, `${JSON.stringify({
+    schema: 'narada.site_continuity_cloudflare_sync_once.v1',
+    status: 'ok',
+    site_id: 'site_fixture',
+    worker_url: 'https://worker.example',
+    pushed_packet_id: 'packet-local',
+    pulled_packet_id: 'packet-cloudflare',
+    continuity_loop_report_recorded: true,
+    continuity_loop_report: {
+      schema: 'narada.site_continuity_productized_loop.v1',
+      site_id: 'site_fixture',
+      status: 'ok',
+      generated_at: '2026-06-11T09:00:00.000Z',
+      cloudflare_push: {
+        status: 'imported',
+        pushed_packet_id: 'packet-local',
+        returned_packet_id: 'packet-cloudflare',
+        durability_action: 'refreshed_existing_packet',
+        imported_at: '2026-06-11T09:00:00.000Z',
+        previous_imported_at: '2026-06-11T08:59:00.000Z',
+      },
+    },
+  }, null, 2)}\n`, 'utf8');
+  try {
+    const summary = readLastSyncArtifact(outputPath);
+    assert.equal(summary.state, 'read');
+    assert.equal(summary.artifact_present, true);
+    assert.equal(summary.status, 'synced');
+    assert.equal(summary.schema, 'narada.site_continuity_cloudflare_sync_once.v1');
+    assert.equal(summary.site_id, 'site_fixture');
+    assert.equal(summary.worker_url, 'https://worker.example');
+    assert.equal(summary.generated_at, '2026-06-11T09:00:00.000Z');
+    assert.equal(summary.pushed_packet_id, 'packet-local');
+    assert.equal(summary.pulled_packet_id, 'packet-cloudflare');
+    assert.equal(summary.cloudflare_push_status, 'imported');
+    assert.equal(summary.cloudflare_push_durability_action, 'refreshed_existing_packet');
+    assert.equal(summary.cloudflare_push_imported_at, '2026-06-11T09:00:00.000Z');
+    assert.equal(summary.cloudflare_push_previous_imported_at, '2026-06-11T08:59:00.000Z');
+    assert.equal(summary.continuity_loop_report_recorded, true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
