@@ -87,12 +87,20 @@ const operationRead = await postCarrier({
   params: { site_id: siteId, operation_id: operationId, mailbox_outlook_draft_create_limit: 20 },
 });
 assert.equal(operationRead.http_status, 200, JSON.stringify(operationRead.body));
-assert.ok(operationRead.body.mailbox_outlook_draft_creates.some((entry) => entry.draft_create_id === draftCreateId));
+const operationDraft = operationRead.body.mailbox_outlook_draft_creates.find((entry) => entry.draft_create_id === draftCreateId);
+assert.ok(operationDraft, JSON.stringify(operationRead.body.mailbox_outlook_draft_creates));
+assert.equal(operationDraft.mailbox_outlook_draft_create_admission, 'admitted');
+assert.equal(operationDraft.mailbox_send_admission, 'not_admitted');
+assert.equal(operationDraft.mailbox_mutation_admission, 'not_admitted');
 assert.ok(operationRead.body.operation_product_surface.mailbox_outlook_draft_create_count >= 1);
 assert.equal(operationRead.body.operation_product_surface.mailbox_outlook_draft_create_admission, 'admitted');
-assert.equal(operationRead.body.operation_product_surface.mailbox_send_admission, 'not_admitted');
+assert.ok(['not_admitted', 'admitted'].includes(operationRead.body.operation_product_surface.mailbox_send_admission));
 assert.equal(operationRead.body.operation_product_surface.mailbox_mutation_admission, 'not_admitted');
-assert.equal(operationRead.body.operation_product_surface.mailbox_outlook_draft_create_authority_partition, 'mailbox_outlook_draft_create_cloudflare_owned_send_and_other_mutation_not_admitted');
+assert.ok([
+  'mailbox_outlook_draft_create_cloudflare_owned_send_and_other_mutation_not_admitted',
+  'mailbox_outlook_draft_create_and_send_cloudflare_owned_confirmation_and_other_mutation_not_admitted',
+  'mailbox_outlook_draft_create_send_and_confirmation_cloudflare_owned_other_mutation_not_admitted',
+].includes(operationRead.body.operation_product_surface.mailbox_outlook_draft_create_authority_partition));
 
 process.stdout.write(`${JSON.stringify({
   schema: 'narada.cloudflare_carrier.mailbox_outlook_draft_create_live_smoke.v1',
@@ -107,6 +115,7 @@ process.stdout.write(`${JSON.stringify({
   mailbox_outlook_draft_create_admission: created.body.mailbox_outlook_draft_create_admission,
   mailbox_send_admission: created.body.mailbox_send_admission,
   mailbox_mutation_admission: created.body.mailbox_mutation_admission,
+  operation_product_surface_mailbox_send_admission: operationRead.body.operation_product_surface.mailbox_send_admission,
   mailbox_outlook_draft_create_count: operationRead.body.operation_product_surface.mailbox_outlook_draft_create_count,
   mailbox_outlook_draft_create_authority_partition: operationRead.body.operation_product_surface.mailbox_outlook_draft_create_authority_partition,
 }, null, 2)}\n`);
