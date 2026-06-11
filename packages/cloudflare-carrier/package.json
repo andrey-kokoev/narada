@@ -8,7 +8,7 @@
     "./worker": "./src/cloudflare-worker.mjs"
   },
   "scripts": {
-    "test": "node --test src/cloudflare-carrier.test.mjs scripts/cloudflare-site-continuity-sync.test.mjs",
+    "test": "node --test src/cloudflare-carrier.test.mjs scripts/cloudflare-site-continuity-sync.test.mjs scripts/cloudflare-carrier-script-manifest.test.mjs",
     "deploy:check": "node scripts/cloudflare-carrier-deploy-check.mjs",
     "deploy:dry-run": "wrangler deploy --dry-run --config wrangler.toml",
     "deploy:live": "wrangler deploy --config wrangler.toml",
