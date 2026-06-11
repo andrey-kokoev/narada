@@ -500,7 +500,51 @@ test('validates and records carrier session binding to registered site', async (
   assert.equal(operationRead.ok, true);
   assert.equal(operationRead.sessions[0].carrier_session_id, 'carrier_session_bound');
 
-  assert.equal(db.dump().carrierSessions.length, 1);
+  const needsContinuation = await registry.handle({
+    operation: 'operation.status.put',
+    principal,
+    params: {
+      site_id: 'site_bound',
+      operation_id: 'operation_bound',
+      status: 'needs_continuation',
+      reason: 'operation_needs_continuation_by_operator',
+    },
+  });
+  assert.equal(needsContinuation.ok, true);
+  const continuationBinding = await registry.validateCarrierSiteBinding({
+    site_id: 'site_bound',
+    operation_id: 'operation_bound',
+    carrier_session_id: 'carrier_session_bound_continuation',
+    agent_id: 'narada.agent.bound',
+    principal,
+    request_id: 'req_bind_site_continuation',
+  });
+  assert.equal(continuationBinding.ok, true);
+  assert.equal(continuationBinding.binding.operation_id, 'operation_bound');
+
+  const inactive = await registry.handle({
+    operation: 'operation.status.put',
+    principal,
+    params: {
+      site_id: 'site_bound',
+      operation_id: 'operation_bound',
+      status: 'inactive',
+      reason: 'operation_paused_by_operator',
+    },
+  });
+  assert.equal(inactive.ok, true);
+  const inactiveBinding = await registry.validateCarrierSiteBinding({
+    site_id: 'site_bound',
+    operation_id: 'operation_bound',
+    carrier_session_id: 'carrier_session_bound_inactive',
+    agent_id: 'narada.agent.bound',
+    principal,
+    request_id: 'req_bind_site_inactive',
+  });
+  assert.equal(inactiveBinding.ok, false);
+  assert.equal(inactiveBinding.code, 'operation_not_bindable');
+
+  assert.equal(db.dump().carrierSessions.length, 2);
   assert.equal(db.dump().authorityEvents.some((event) => event.event_kind === 'carrier_site_binding_admitted'), true);
 });
 

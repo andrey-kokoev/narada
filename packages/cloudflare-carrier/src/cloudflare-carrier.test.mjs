@@ -953,10 +953,30 @@ test('worker validates session.start site binding through configured Cloudflare 
       created_at: clock(),
       updated_at: clock(),
     }],
+    operations: [{
+      operation_id: 'operation_needs_continuation',
+      site_id: 'site_fixture',
+      display_name: 'Needs Continuation Operation',
+      operation_kind: 'control',
+      status: 'needs_continuation',
+      created_by_principal_id: 'admin',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
   });
   const namespace = fakeDurableObjectNamespace();
   const env = authEnv(namespace, { CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
-  const start = await worker.fetch(jsonRequest(startRequest({ request_id: 'request_registry_bound_start' }), { token: 'test-admin-token' }), env);
+  const start = await worker.fetch(jsonRequest(startRequest({
+    request_id: 'request_registry_bound_start',
+    params: {
+      carrier_session_id: 'carrier_session_cloudflare_fixture',
+      agent_id: 'narada.fixture.agent',
+      site_id: 'site_fixture',
+      site_root: 'cloudflare://site_fixture',
+      site_ref: 'site://fixture',
+      operation_id: 'operation_needs_continuation',
+    },
+  }), { token: 'test-admin-token' }), env);
   assert.equal(start.status, 200);
   const startBody = await start.json();
   assert.equal(startBody.event.payload.site_binding_evidence.schema, 'narada.cloudflare_site_registry.v1');
@@ -966,6 +986,7 @@ test('worker validates session.start site binding through configured Cloudflare 
   assert.equal(startBody.event.payload.site_authority_decision.mutation_class, 'hosted_carrier_session_events');
   assert.equal(startBody.event.payload.site_authority_decision.authority_locus_kind, 'cloudflare_carrier_session_event_store');
   assert.equal(siteDb.dump().carrierSessions[0].carrier_session_id, 'carrier_session_cloudflare_fixture');
+  assert.equal(siteDb.dump().carrierSessions[0].operation_id, 'operation_needs_continuation');
 });
 
 test('worker rejects session.start when configured site registry denies binding', async () => {

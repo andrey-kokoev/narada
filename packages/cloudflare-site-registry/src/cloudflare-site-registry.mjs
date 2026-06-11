@@ -6,6 +6,7 @@ const SITE_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{1,127}$/;
 const SITE_ROLES = new Set(['owner', 'maintainer', 'operator', 'viewer']);
 const BINDING_ROLES = new Set(['owner', 'maintainer', 'operator']);
 const OPERATION_STATUSES = new Set(['active', 'inactive', 'needs_continuation', 'closed']);
+const BINDABLE_OPERATION_STATUSES = new Set(['active', 'needs_continuation']);
 const OPERATION_STATUS_ALIASES = new Map([
   ['archived', 'closed'],
   ['paused', 'inactive'],
@@ -545,8 +546,14 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     const operationId = rawOperationId ? normalizeOperationId(rawOperationId) : null;
     if (rawOperationId && !operationId) return denied('carrier_site_binding_rejected', { site_id: siteId, carrier_session_id: carrierSessionId, principal_id: principalId, reason: 'invalid_operation_id', request_id });
     const operation = operationId ? await findOperation(operationId) : null;
-    if (operationId && (!operation || operation.site_id !== siteId || operation.status !== 'active')) {
-      return denied('carrier_site_binding_rejected', { site_id: siteId, carrier_session_id: carrierSessionId, principal_id: principalId, reason: operation ? 'operation_site_mismatch' : 'operation_not_found', request_id });
+    if (operationId && !operation) {
+      return denied('carrier_site_binding_rejected', { site_id: siteId, carrier_session_id: carrierSessionId, principal_id: principalId, reason: 'operation_not_found', request_id });
+    }
+    if (operation && operation.site_id !== siteId) {
+      return denied('carrier_site_binding_rejected', { site_id: siteId, carrier_session_id: carrierSessionId, principal_id: principalId, reason: 'operation_site_mismatch', request_id });
+    }
+    if (operation && !BINDABLE_OPERATION_STATUSES.has(operation.status)) {
+      return denied('carrier_site_binding_rejected', { site_id: siteId, carrier_session_id: carrierSessionId, principal_id: principalId, reason: 'operation_not_bindable', request_id });
     }
     const membership = await findMembership(siteId, principalId);
     if (!membership || membership.status !== 'active' || !BINDING_ROLES.has(membership.role)) {
