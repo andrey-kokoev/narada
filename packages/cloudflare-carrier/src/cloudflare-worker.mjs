@@ -12948,6 +12948,10 @@ export function renderCloudflareCarrierConsole() {
         <div id="repositoryPublicationEvidenceNavigator" class="attention-items"><div class="empty">No repository publication evidence loaded.</div></div>
         <h3>Repository Publication Evidence Detail</h3>
         <div id="repositoryPublicationEvidenceFocusDetail" class="evidence-summary"><div class="empty">No repository publication evidence selected.</div></div>
+        <h3>Cloudflare GitHub Executions</h3>
+        <div id="repositoryPublicationExecutionNavigator" class="attention-items"><div class="empty">No Cloudflare repository publication executions loaded.</div></div>
+        <h3>Cloudflare GitHub Execution Detail</h3>
+        <div id="repositoryPublicationExecutionFocusDetail" class="evidence-summary"><div class="empty">No Cloudflare repository publication execution selected.</div></div>
         <h3>Provider Liveness</h3>
         <div id="repositoryPublicationProviderHeartbeatNavigator" class="attention-items"><div class="empty">No repository publication provider heartbeats loaded.</div></div>
         <h3>Provider Liveness Detail</h3>
@@ -13086,7 +13090,7 @@ export function renderCloudflareCarrierConsole() {
     const classifyCloudflareEvidenceCommandState = ${classifyCloudflareEvidenceCommandState.toString()};
     const classifyCloudflareSiteCommandState = ${classifyCloudflareSiteCommandState.toString()};
     const classifyCloudflareMembershipCommandState = ${classifyCloudflareMembershipCommandState.toString()};
-    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], siteList: [], siteProductStatuses: [], siteProductOverview: null, sitePostureRoute: null, consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, webhookDelayDirectiveFocus: null, webhookDelayDirectiveDeliveryFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null, localIngressRequestFocus: null, localIngressEvidenceFocus: null, localIngressProviderHeartbeatFocus: null, repositoryPublicationRequestFocus: null, repositoryPublicationEvidenceFocus: null, repositoryPublicationProviderHeartbeatFocus: null, mailboxDraftReplyProposalFocus: null, mailboxOutlookDraftCreateFocus: null, mailboxSendAcceptedFocus: null, mailboxSendConfirmationFocus: null, mailboxDraftCreateFormProposalId: null, siteFileChangeProposalFocus: null };
+    const state = { events: [], afterSequence: 0, autoRefreshTimer: null, operationProduct: null, productScope: 'none', operations: [], siteList: [], siteProductStatuses: [], siteProductOverview: null, sitePostureRoute: null, consoleSequence: 0, operatorPrincipal: null, runtimeStatus: null, siteFocus: null, taskFocus: null, attentionItems: [], attentionFocus: null, evidenceFocus: null, evidenceLane: '', authorityFocus: null, operationFocus: null, sessionFocus: null, membershipFocus: null, continuityFocus: null, webhookDelayShadowFocus: null, webhookDelayDirectiveFocus: null, webhookDelayDirectiveDeliveryFocus: null, residentLoopShadowFocus: null, residentDispatchFocus: null, localIngressRequestFocus: null, localIngressEvidenceFocus: null, localIngressProviderHeartbeatFocus: null, repositoryPublicationRequestFocus: null, repositoryPublicationEvidenceFocus: null, repositoryPublicationExecutionFocus: null, repositoryPublicationProviderHeartbeatFocus: null, mailboxDraftReplyProposalFocus: null, mailboxOutlookDraftCreateFocus: null, mailboxSendAcceptedFocus: null, mailboxSendConfirmationFocus: null, mailboxDraftCreateFormProposalId: null, siteFileChangeProposalFocus: null };
     const el = (id) => document.getElementById(id);
     const api = {
       async request(operation, params = {}, extra = {}) {
@@ -13139,6 +13143,7 @@ export function renderCloudflareCarrierConsole() {
           mailbox_send_review_limit: 20,
           repository_publication_request_limit: 20,
           repository_publication_evidence_limit: 20,
+          repository_publication_execution_limit: 20,
         });
       },
       startResidentDispatch() {
@@ -13372,6 +13377,7 @@ export function renderCloudflareCarrierConsole() {
       renderLocalIngressProviderHeartbeatNavigator(product.local_ingress_provider_heartbeats || []);
       renderRepositoryPublicationRequestNavigator(product.repository_publication_requests || []);
       renderRepositoryPublicationEvidenceNavigator(product.repository_publication_evidence || []);
+      renderRepositoryPublicationExecutionNavigator(product.repository_publication_executions || []);
       renderRepositoryPublicationProviderHeartbeatNavigator(product.repository_publication_provider_heartbeats || []);
     }
     function productScopeSummary(product = state.operationProduct || {}) {
@@ -17883,6 +17889,72 @@ export function renderCloudflareCarrierConsole() {
         return;
       }
       el('repositoryPublicationEvidenceFocusDetail').replaceChildren(...repositoryPublicationEvidenceFocusContext(item).map(([label, value]) => evidenceField(label, value)));
+    }
+    function repositoryPublicationExecutionKey(item = {}) {
+      return item.repository_publication_execution_id || [item.repository_publication_request_id, item.github_ref, item.recorded_at].filter(Boolean).join('|');
+    }
+    function selectRepositoryPublicationExecution(item) {
+      if (!item) return;
+      state.repositoryPublicationExecutionFocus = item;
+      const request = (state.operationProduct?.repository_publication_requests || []).find((entry) => entry.repository_publication_request_id === item.repository_publication_request_id);
+      if (request) state.repositoryPublicationRequestFocus = request;
+      renderRepositoryPublicationExecutionNavigator(state.operationProduct?.repository_publication_executions || []);
+      renderRepositoryPublicationRequestNavigator(state.operationProduct?.repository_publication_requests || []);
+      updateControlRoom();
+    }
+    function renderRepositoryPublicationExecutionNavigator(items = []) {
+      if (items.length === 0) {
+        state.repositoryPublicationExecutionFocus = null;
+        el('repositoryPublicationExecutionNavigator').innerHTML = '<div class="empty">No Cloudflare repository publication executions loaded.</div>';
+        renderRepositoryPublicationExecutionFocusDetail();
+        return;
+      }
+      if (state.repositoryPublicationExecutionFocus) state.repositoryPublicationExecutionFocus = items.find((item) => repositoryPublicationExecutionKey(item) === repositoryPublicationExecutionKey(state.repositoryPublicationExecutionFocus)) || state.repositoryPublicationExecutionFocus;
+      if (!state.repositoryPublicationExecutionFocus) state.repositoryPublicationExecutionFocus = items[0];
+      el('repositoryPublicationExecutionNavigator').replaceChildren(...items.map((item) => {
+        const node = document.createElement('article');
+        node.className = 'shadow-read-item' + (repositoryPublicationExecutionKey(item) === repositoryPublicationExecutionKey(state.repositoryPublicationExecutionFocus) ? ' selected' : '');
+        const title = document.createElement('strong');
+        title.textContent = [item.publication_status || 'unknown', item.repository_publication_execution_id || 'repository_publication_execution'].join(' ');
+        const meta = document.createElement('span');
+        meta.textContent = [item.repository_publication_request_id, item.repository_ref, item.branch_ref, item.published_commit_ref || item.source_change_ref].filter(Boolean).join(' | ');
+        node.addEventListener('click', () => selectRepositoryPublicationExecution(item));
+        node.append(title, meta);
+        return node;
+      }));
+      renderRepositoryPublicationExecutionFocusDetail();
+    }
+    function repositoryPublicationExecutionFocusContext(item = {}) {
+      const product = state.operationProduct || {};
+      const surface = product.operation_product_surface || {};
+      return [
+        ['Execution', item.repository_publication_execution_id || 'none'],
+        ['Request', item.repository_publication_request_id || 'none'],
+        ['Publication Ref', item.publication_ref || 'none'],
+        ['Requested Action', item.requested_action_ref || 'none'],
+        ['Repository', item.repository_ref || 'none'],
+        ['Branch', item.branch_ref || 'none'],
+        ['Source Change', item.source_change_ref || 'none'],
+        ['Publication Status', item.publication_status || 'unknown'],
+        ['Published Commit', item.published_commit_ref || 'none'],
+        ['GitHub Ref', item.github_ref || 'none'],
+        ['GitHub Status', item.github_status || 'none'],
+        ['Executor Authority', item.repository_publication_executor_authority || 'cloudflare_github_repository_publication_executor'],
+        ['Admission Authority', item.repository_publication_admission_authority || 'cloudflare_repository_publication_admission_controller'],
+        ['Publication Admission', item.repository_publication_admission || 'admitted_by_cloudflare_repository_publication'],
+        ['Cloudflare Git Push', item.cloudflare_git_push_admission || 'not_admitted'],
+        ['Direct Cloudflare Repository Mutation', item.direct_cloudflare_repository_mutation_admission || 'admitted_by_cloudflare_github_repository_publication'],
+        ['Execution Count', String(surface.repository_publication_execution_count ?? (product.repository_publication_executions || []).length)],
+        ['Authority Partition', item.authority_partition || surface.repository_publication_authority_partition || 'cloudflare_admits_and_executes_github_repository_publication'],
+        ['Recorded', item.recorded_at || 'none'],
+      ];
+    }
+    function renderRepositoryPublicationExecutionFocusDetail(item = state.repositoryPublicationExecutionFocus) {
+      if (!item) {
+        el('repositoryPublicationExecutionFocusDetail').innerHTML = '<div class="empty">No Cloudflare repository publication execution selected.</div>';
+        return;
+      }
+      el('repositoryPublicationExecutionFocusDetail').replaceChildren(...repositoryPublicationExecutionFocusContext(item).map(([label, value]) => evidenceField(label, value)));
     }
     function repositoryPublicationProviderHeartbeatKey(item = {}) {
       return item.repository_publication_provider_heartbeat_id || [item.provider_id, item.recorded_at, item.last_run_at].filter(Boolean).join('|');

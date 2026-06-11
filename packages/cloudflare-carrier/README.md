@@ -28,7 +28,7 @@ The deployed Worker serves a minimal authenticated operator console at:
 - `GET /`
 - `GET /console`
 
-The console is intentionally Worker-native HTML and browser JavaScript, so no separate asset build or static hosting step is required. It lets an operator sign in with Microsoft, optionally provide an automation bearer token, start or resume a carrier session, send carrier input, read session events, inspect provider/tool/effect evidence from event payloads, read the Site product model, govern Site membership, and view or create Cloudflare-backed Narada tasks.
+The console is intentionally Worker-native HTML and browser JavaScript, so no separate asset build or static hosting step is required. It lets an operator sign in with Microsoft, optionally provide an automation bearer token, start or resume a carrier session, send carrier input, read session events, inspect provider/tool/effect evidence from event payloads, read the Site product model, govern Site membership, view or create Cloudflare-backed Narada tasks, and review repository publication requests, returned evidence, Cloudflare GitHub executions, and provider liveness.
 
 Browser and API clients can call the carrier JSON API at:
 

@@ -2310,6 +2310,11 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /focusLocalIngressProviderLiveness/);
   assert.match(html, /review_repository_publication_provider_liveness/);
   assert.match(html, /focusRepositoryPublicationProviderLiveness/);
+  assert.match(html, /Cloudflare GitHub Executions/);
+  assert.match(html, /repositoryPublicationExecutionNavigator/);
+  assert.match(html, /repositoryPublicationExecutionFocusDetail/);
+  assert.match(html, /renderRepositoryPublicationExecutionNavigator/);
+  assert.match(html, /repository_publication_execution_limit/);
   assert.match(html, /operation_lifecycle_missing_continuity_packet/);
   assert.match(html, /operation_lifecycle_missing_continuity_loop_report/);
   assert.match(html, /select_site_or_operation/);
