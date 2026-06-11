@@ -75,9 +75,19 @@ test('site continuity scheduler status-all distinguishes configured sites missin
   const artifactDirectory = join(root, '.narada/site-continuity');
   const outputPath = join(artifactDirectory, 'cloudflare-sync-last.json');
   const sitesFilePath = join(root, '.narada/site-continuity/sites.json');
+  const siteRegistryProjectionPath = join(root, '.narada/site-registry/cloudflare-sites.json');
   await mkdir(artifactDirectory, { recursive: true });
+  await mkdir(join(root, '.narada/site-registry'), { recursive: true });
   await writeFile(join(root, '.env'), 'CLOUDFLARE_CARRIER_SITE_ID=site_env\nCLOUDFLARE_CARRIER_TOKEN=secret-not-read\n', 'utf8');
   await writeFile(sitesFilePath, `${JSON.stringify({ sites: [{ site_id: 'site_file' }] }, null, 2)}\n`, 'utf8');
+  await writeFile(siteRegistryProjectionPath, `${JSON.stringify({
+    schema: 'narada.cloudflare_site_registry.snapshot.v1',
+    sites: [
+      { site_id: 'site_registry', display_name: 'Registry Site', status: 'active' },
+      { site_id: 'site_registry_inactive', status: 'inactive' },
+    ],
+    token: 'registry-secret-not-read',
+  }, null, 2)}\n`, 'utf8');
   await writeFile(outputPath, `${JSON.stringify({
     schema: 'narada.site_continuity_cloudflare_sync_once.v1',
     status: 'ok',
@@ -102,11 +112,14 @@ test('site continuity scheduler status-all distinguishes configured sites missin
       root,
       explicitSites: 'site_synced,site_missing',
       sitesFilePath,
+      siteRegistryProjectionPath,
     });
     assert.equal(configured.state, 'configured');
-    assert.deepEqual(configured.sources, ['explicit_sites', 'sites_file', 'safe_env_file_site_keys']);
-    assert.deepEqual(configured.sites, ['site_env', 'site_file', 'site_missing', 'site_synced']);
+    assert.deepEqual(configured.sources, ['explicit_sites', 'sites_file', 'cloudflare_site_registry_local_projection', 'safe_env_file_site_keys']);
+    assert.deepEqual(configured.sites, ['site_env', 'site_file', 'site_missing', 'site_registry', 'site_synced']);
+    assert.equal(configured.site_registry_projection.state, 'read');
     assert.doesNotMatch(JSON.stringify(configured), /secret-not-read/);
+    assert.doesNotMatch(JSON.stringify(configured), /registry-secret-not-read/);
 
     const plan = buildSiteContinuitySchedulerPlan({
       action: 'status-all',
@@ -115,17 +128,20 @@ test('site continuity scheduler status-all distinguishes configured sites missin
       artifactDirectory,
       configuredSites: 'site_synced,site_missing',
       sitesFilePath,
+      siteRegistryProjectionPath,
     });
-    assert.equal(plan.configured_sites.site_count, 4);
+    assert.equal(plan.configured_sites.site_count, 5);
     assert.equal(plan.status.site_configured, true);
     assert.equal(plan.local_sync_artifacts.status, 'needs_attention');
     assert.deepEqual(plan.local_sync_artifacts.configured_site_sync_statuses.map((site) => [site.site_id, site.status, site.reason]), [
       ['site_env', 'needs_attention', 'configured_site_sync_artifact_missing'],
       ['site_file', 'needs_attention', 'configured_site_sync_artifact_missing'],
       ['site_missing', 'needs_attention', 'configured_site_sync_artifact_missing'],
+      ['site_registry', 'needs_attention', 'configured_site_sync_artifact_missing'],
       ['site_synced', 'synced', 'matching_sync_artifact_synced'],
     ]);
     assert.doesNotMatch(JSON.stringify(plan), /secret-not-read/);
+    assert.doesNotMatch(JSON.stringify(plan), /registry-secret-not-read/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

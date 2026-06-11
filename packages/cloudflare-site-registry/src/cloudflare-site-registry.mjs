@@ -1,5 +1,8 @@
+import { existsSync, readFileSync } from 'node:fs';
+
 export const CLOUDFLARE_SITE_REGISTRY_SCHEMA = 'narada.cloudflare_site_registry.v1';
 export const CLOUDFLARE_SITE_REGISTRY_ADAPTER_KIND = 'cloudflare-d1-site-registry';
+export const CLOUDFLARE_SITE_REGISTRY_LOCAL_PROJECTION_SCHEMA = 'narada.cloudflare_site_registry.local_projection.v1';
 
 const SITE_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{1,127}$/;
 const SITE_ROLES = new Set(['owner', 'maintainer', 'operator', 'viewer']);
@@ -658,6 +661,78 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
 export function normalizeSiteId(value) {
   const siteId = String(value ?? '').trim();
   return SITE_ID_PATTERN.test(siteId) ? siteId : null;
+}
+
+export function readCloudflareSiteRegistryLocalProjection(projectionPath) {
+  if (!projectionPath) {
+    return {
+      schema: CLOUDFLARE_SITE_REGISTRY_LOCAL_PROJECTION_SCHEMA,
+      state: 'not_configured',
+      path: null,
+      site_count: 0,
+      sites: [],
+      site_records: [],
+    };
+  }
+  if (!existsSync(projectionPath)) {
+    return {
+      schema: CLOUDFLARE_SITE_REGISTRY_LOCAL_PROJECTION_SCHEMA,
+      state: 'missing',
+      path: projectionPath,
+      site_count: 0,
+      sites: [],
+      site_records: [],
+    };
+  }
+  let projection;
+  try {
+    projection = JSON.parse(readFileSync(projectionPath, 'utf8'));
+  } catch (error) {
+    return {
+      schema: CLOUDFLARE_SITE_REGISTRY_LOCAL_PROJECTION_SCHEMA,
+      state: 'invalid_json',
+      path: projectionPath,
+      site_count: 0,
+      sites: [],
+      site_records: [],
+      reason: 'cloudflare_site_registry_projection_json_invalid',
+      error: error.message,
+    };
+  }
+  return {
+    schema: CLOUDFLARE_SITE_REGISTRY_LOCAL_PROJECTION_SCHEMA,
+    state: 'read',
+    path: projectionPath,
+    source_schema: projection?.schema ?? null,
+    ...projectCloudflareSiteRegistrySites(projection),
+  };
+}
+
+export function projectCloudflareSiteRegistrySites(projection) {
+  const rawSites = Array.isArray(projection)
+    ? projection
+    : projection?.sites ?? projection?.site_registry?.sites ?? projection?.cloudflare_sites ?? [];
+  const siteRecords = [];
+  const seen = new Set();
+  for (const item of Array.isArray(rawSites) ? rawSites : []) {
+    const siteId = normalizeSiteId(typeof item === 'string' ? item : item?.site_id ?? item?.siteId ?? item?.id);
+    if (!siteId || seen.has(siteId)) continue;
+    const status = typeof item === 'object' && item ? String(item.status ?? 'active') : 'active';
+    if (status !== 'active') continue;
+    seen.add(siteId);
+    siteRecords.push({
+      site_id: siteId,
+      display_name: typeof item === 'object' && item ? item.display_name ?? item.displayName ?? null : null,
+      site_ref: typeof item === 'object' && item ? item.site_ref ?? item.siteRef ?? null : null,
+      status,
+    });
+  }
+  siteRecords.sort((left, right) => left.site_id.localeCompare(right.site_id));
+  return {
+    site_count: siteRecords.length,
+    sites: siteRecords.map((site) => site.site_id),
+    site_records: siteRecords,
+  };
 }
 
 export function normalizeOperationId(value) {

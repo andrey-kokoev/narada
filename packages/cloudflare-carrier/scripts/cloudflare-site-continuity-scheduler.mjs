@@ -2,6 +2,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
+import { readCloudflareSiteRegistryLocalProjection } from '@narada2/cloudflare-site-registry';
 
 const DEFAULT_TASK_NAME = 'Narada Cloudflare Site Continuity Sync';
 const DEFAULT_INTERVAL_MINUTES = 5;
@@ -20,6 +21,7 @@ export function buildSiteContinuitySchedulerPlan({
   artifactDirectory = process.env.NARADA_SITE_CONTINUITY_ARTIFACT_DIR ?? null,
   configuredSites = process.env.NARADA_SITE_CONTINUITY_SITES ?? null,
   sitesFilePath = process.env.NARADA_SITE_CONTINUITY_SITES_FILE ?? null,
+  siteRegistryProjectionPath = process.env.NARADA_CLOUDFLARE_SITE_REGISTRY_PROJECTION ?? '.narada/site-registry/cloudflare-sites.json',
   nodeCommand = process.env.NARADA_NODE_COMMAND ?? 'node',
   dryRun = true,
 } = {}) {
@@ -31,10 +33,12 @@ export function buildSiteContinuitySchedulerPlan({
   const effectiveOutputPath = outputPath ? resolvePath(effectiveLocalRoot, outputPath) : null;
   const effectiveArtifactDirectory = artifactDirectory ? resolvePath(effectiveLocalRoot, artifactDirectory) : effectiveOutputPath ? dirname(effectiveOutputPath) : null;
   const effectiveSitesFilePath = sitesFilePath ? resolvePath(effectiveLocalRoot, sitesFilePath) : null;
+  const effectiveSiteRegistryProjectionPath = siteRegistryProjectionPath ? resolvePath(effectiveLocalRoot, siteRegistryProjectionPath) : null;
   const localConfiguredSites = readLocalConfiguredSites({
     root,
     explicitSites: configuredSites,
     sitesFilePath: effectiveSitesFilePath,
+    siteRegistryProjectionPath: effectiveSiteRegistryProjectionPath,
   });
   const interval = normalizeIntervalMinutes(intervalMinutes);
   const status = readLocalSchedulerStatus({
@@ -70,6 +74,7 @@ export function buildSiteContinuitySchedulerPlan({
     output_path: effectiveOutputPath,
     artifact_directory: effectiveArtifactDirectory,
     sites_file_path: effectiveSitesFilePath,
+    site_registry_projection_path: effectiveSiteRegistryProjectionPath,
     configured_sites: localConfiguredSites,
     credential_posture: 'external_env_file_or_process_environment_only',
     embeds_credentials: false,
@@ -189,7 +194,7 @@ export function readLocalSyncArtifactInventory(artifactDirectory, { lastOutputPa
   };
 }
 
-export function readLocalConfiguredSites({ root, explicitSites = null, sitesFilePath = null } = {}) {
+export function readLocalConfiguredSites({ root, explicitSites = null, sitesFilePath = null, siteRegistryProjectionPath = null } = {}) {
   const sources = [];
   const sites = [];
   const explicit = normalizeConfiguredSiteList(explicitSites);
@@ -201,6 +206,11 @@ export function readLocalConfiguredSites({ root, explicitSites = null, sitesFile
   if (fileSites.state === 'read' && fileSites.sites.length > 0) {
     sources.push('sites_file');
     sites.push(...fileSites.sites);
+  }
+  const siteRegistryProjection = readCloudflareSiteRegistryLocalProjection(siteRegistryProjectionPath);
+  if (siteRegistryProjection.state === 'read' && siteRegistryProjection.sites.length > 0) {
+    sources.push('cloudflare_site_registry_local_projection');
+    sites.push(...siteRegistryProjection.sites);
   }
   const envSites = readConfiguredSitesFromEnvFile(root ? resolve(root, '.env') : null);
   if (envSites.sites.length > 0) {
@@ -223,6 +233,7 @@ export function readLocalConfiguredSites({ root, explicitSites = null, sitesFile
     site_count: normalizedSites.length,
     sites: normalizedSites,
     sites_file: fileSites,
+    site_registry_projection: siteRegistryProjection,
   };
 }
 
@@ -447,6 +458,7 @@ function parseArgs(argv) {
     else if (arg === '--artifact-dir') args.artifactDirectory = argv[++index];
     else if (arg === '--sites') args.configuredSites = argv[++index];
     else if (arg === '--sites-file') args.sitesFilePath = argv[++index];
+    else if (arg === '--site-registry-projection') args.siteRegistryProjectionPath = argv[++index];
     else if (arg === '--node-command') args.nodeCommand = argv[++index];
     else throw new Error(`unknown_argument:${arg}`);
   }

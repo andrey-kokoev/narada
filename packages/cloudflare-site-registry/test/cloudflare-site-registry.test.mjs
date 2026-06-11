@@ -1,12 +1,18 @@
 import assert from 'node:assert/strict';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 import {
   CLOUDFLARE_SITE_REGISTRY_ADAPTER_KIND,
+  CLOUDFLARE_SITE_REGISTRY_LOCAL_PROJECTION_SCHEMA,
   CLOUDFLARE_SITE_REGISTRY_SCHEMA,
   createCloudflareSiteRegistryAdapter,
   createD1CloudflareSiteRegistry,
   normalizeOperationId,
   normalizeSiteId,
+  projectCloudflareSiteRegistrySites,
+  readCloudflareSiteRegistryLocalProjection,
 } from '../src/cloudflare-site-registry.mjs';
 
 test('normalizes bounded site identifiers', () => {
@@ -369,6 +375,35 @@ test('creates adapter only when a D1 binding is present', async () => {
     params: { site_id: 'site_adapter', display_name: 'Adapter Site' },
   });
   assert.equal(created.ok, true);
+});
+
+test('reads secret-free local site registry projection', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-cloudflare-site-registry-projection-'));
+  const projectionPath = join(root, 'cloudflare-sites.json');
+  await writeFile(projectionPath, `${JSON.stringify({
+    schema: 'narada.cloudflare_site_registry.snapshot.v1',
+    sites: [
+      { site_id: 'site_beta', display_name: 'Beta', status: 'active', site_ref: 'cloudflare://site_beta' },
+      { site_id: 'site_alpha', display_name: 'Alpha', status: 'active' },
+      { site_id: 'site_inactive', status: 'inactive' },
+      { site_id: '../escape', status: 'active' },
+    ],
+    token: 'secret-not-projected',
+  }, null, 2)}\n`, 'utf8');
+  try {
+    const projection = readCloudflareSiteRegistryLocalProjection(projectionPath);
+    assert.equal(projection.schema, CLOUDFLARE_SITE_REGISTRY_LOCAL_PROJECTION_SCHEMA);
+    assert.equal(projection.state, 'read');
+    assert.equal(projection.source_schema, 'narada.cloudflare_site_registry.snapshot.v1');
+    assert.deepEqual(projection.sites, ['site_alpha', 'site_beta']);
+    assert.deepEqual(projection.site_records.map((site) => site.site_id), ['site_alpha', 'site_beta']);
+    assert.doesNotMatch(JSON.stringify(projection), /secret-not-projected/);
+
+    assert.deepEqual(projectCloudflareSiteRegistrySites(['site_array']).sites, ['site_array']);
+    assert.equal(readCloudflareSiteRegistryLocalProjection(join(root, 'missing.json')).state, 'missing');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 function fixedNow() {
