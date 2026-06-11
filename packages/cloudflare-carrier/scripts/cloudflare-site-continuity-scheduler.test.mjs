@@ -20,6 +20,7 @@ import {
   readLocalSyncArtifactInventory,
   runSiteContinuitySchedulerActionWithOptionalRefresh,
   summarizeCloudflareProductBindingAlignment,
+  summarizeCloudflareProductBindingPreparation,
   summarizeScheduledHealthOperatorNextAction,
   summarizeScheduledHealthSnapshotStatus,
 } from './cloudflare-site-continuity-scheduler.mjs';
@@ -185,6 +186,48 @@ test('site continuity scheduled health operator action targets unbound remote ne
     reason: 'cloudflare_product_next_site_not_in_local_continuity_set',
     source: 'cloudflare_product_binding_alignment',
   });
+});
+
+test('site continuity scheduled health reports binding preparation readiness without synthesizing refs', () => {
+  const missingRefs = summarizeCloudflareProductBindingPreparation({
+    configuredSites: {
+      site_records: [{ site_id: 'site_alpha', local_site_ref: 'file:///D:/code/narada', cloudflare_site_ref: 'cloudflare://site-alpha' }],
+      site_registry_projection: {
+        site_records: [{ site_id: 'site_beta', site_ref: null }],
+      },
+    },
+    cloudflareProductPosture: { summary: { next_site_id: 'site_beta' } },
+    cloudflareProductBindingAlignment: {
+      state: 'unbound_remote_next_site',
+      cloudflare_product_next_site_id: 'site_beta',
+    },
+  });
+
+  assert.equal(missingRefs.state, 'blocked_missing_refs');
+  assert.equal(missingRefs.status, 'needs_attention');
+  assert.equal(missingRefs.reason, 'site_continuity_binding_refs_missing');
+  assert.equal(missingRefs.target_site_id, 'site_beta');
+  assert.deepEqual(missingRefs.required_inputs, ['local_site_ref', 'cloudflare_site_ref']);
+  assert.equal(missingRefs.local_site_ref_available, false);
+  assert.equal(missingRefs.cloudflare_site_ref_available, false);
+  assert.equal(missingRefs.embeds_credentials, false);
+
+  const ready = summarizeCloudflareProductBindingPreparation({
+    configuredSites: {
+      site_records: [{ site_id: 'site_beta', local_site_ref: 'file:///D:/code/narada', cloudflare_site_ref: 'cloudflare://site-beta' }],
+    },
+    cloudflareProductPosture: { summary: { next_site_id: 'site_beta' } },
+    cloudflareProductBindingAlignment: {
+      state: 'unbound_remote_next_site',
+      cloudflare_product_next_site_id: 'site_beta',
+    },
+  });
+
+  assert.equal(ready.state, 'ready');
+  assert.equal(ready.status, 'ok');
+  assert.deepEqual(ready.required_inputs, []);
+  assert.equal(ready.local_site_ref_available, true);
+  assert.equal(ready.cloudflare_site_ref_available, true);
 });
 
 test('site continuity reconciliation plan resolves one packet per configured site from packet directory', async () => {
@@ -1309,10 +1352,16 @@ test('site continuity scheduled health reports remote product next-site outside 
     assert.equal(result.scheduled_health_snapshot.cloudflare_product_binding_alignment.status, 'needs_attention');
     assert.equal(result.scheduled_health_snapshot.cloudflare_product_binding_alignment.reason, 'cloudflare_product_next_site_not_in_local_continuity_set');
     assert.deepEqual(result.scheduled_health_snapshot.cloudflare_product_binding_alignment.local_site_ids, ['site_alpha']);
+    assert.equal(result.scheduled_health_snapshot.cloudflare_product_binding_preparation.state, 'blocked_missing_refs');
+    assert.equal(result.scheduled_health_snapshot.cloudflare_product_binding_preparation.status, 'needs_attention');
+    assert.equal(result.scheduled_health_snapshot.cloudflare_product_binding_preparation.reason, 'site_continuity_binding_refs_missing');
+    assert.deepEqual(result.scheduled_health_snapshot.cloudflare_product_binding_preparation.required_inputs, ['local_site_ref', 'cloudflare_site_ref']);
 
     const healthSnapshot = JSON.parse(await readFile(healthOutputPath, 'utf8'));
     assert.equal(healthSnapshot.status, 'needs_attention');
     assert.equal(healthSnapshot.cloudflare_product_binding_alignment.cloudflare_product_next_site_id, 'site_beta');
+    assert.equal(healthSnapshot.cloudflare_product_binding_preparation.target_site_id, 'site_beta');
+    assert.equal(healthSnapshot.cloudflare_product_binding_preparation.embeds_credentials, false);
     assert.doesNotMatch(JSON.stringify(healthSnapshot), /secret-token-value/);
 
     const healthSummary = readLastScheduledHealthSnapshot(healthOutputPath);
@@ -1320,6 +1369,10 @@ test('site continuity scheduled health reports remote product next-site outside 
     assert.equal(healthSummary.cloudflare_product_binding_alignment_state, 'unbound_remote_next_site');
     assert.equal(healthSummary.cloudflare_product_binding_alignment_status, 'needs_attention');
     assert.equal(healthSummary.cloudflare_product_binding_alignment_reason, 'cloudflare_product_next_site_not_in_local_continuity_set');
+    assert.equal(healthSummary.cloudflare_product_binding_preparation_state, 'blocked_missing_refs');
+    assert.equal(healthSummary.cloudflare_product_binding_preparation_status, 'needs_attention');
+    assert.equal(healthSummary.cloudflare_product_binding_preparation_reason, 'site_continuity_binding_refs_missing');
+    assert.deepEqual(healthSummary.cloudflare_product_binding_preparation_required_inputs, ['local_site_ref', 'cloudflare_site_ref']);
     assert.equal(healthSummary.operator_next_action, 'bind_cloudflare_product_next_site_locally');
     assert.equal(healthSummary.operator_next_target_site_id, 'site_beta');
     assert.equal(healthSummary.operator_next_reason, 'cloudflare_product_next_site_not_in_local_continuity_set');
@@ -1652,6 +1705,8 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
     assert.equal(result.scheduled_health_snapshot.cloudflare_product_binding_alignment.state, 'aligned');
     assert.equal(result.scheduled_health_snapshot.cloudflare_product_binding_alignment.status, 'ok');
     assert.equal(result.scheduled_health_snapshot.cloudflare_product_binding_alignment.reason, 'cloudflare_product_next_site_in_local_continuity_set');
+    assert.equal(result.scheduled_health_snapshot.cloudflare_product_binding_preparation.state, 'not_required');
+    assert.equal(result.scheduled_health_snapshot.cloudflare_product_binding_preparation.status, 'ok');
     assert.equal(result.scheduled_health_snapshot.cloudflare_operation_posture.state, 'loaded');
     assert.equal(result.scheduled_health_snapshot.cloudflare_operation_posture.status, 'ok');
     assert.equal(result.scheduled_health_snapshot.cloudflare_operation_posture.summary.next_operation_id, 'carrier_operation_next');
@@ -1677,6 +1732,7 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
     assert.equal(healthSnapshot.cloudflare_product_posture.state, 'loaded');
     assert.equal(healthSnapshot.cloudflare_product_posture.summary.next_action, 'monitor_sites');
     assert.equal(healthSnapshot.cloudflare_product_binding_alignment.state, 'aligned');
+    assert.equal(healthSnapshot.cloudflare_product_binding_preparation.reason, 'cloudflare_product_binding_preparation_not_required');
     assert.equal(healthSnapshot.cloudflare_operation_posture.state, 'loaded');
     assert.equal(healthSnapshot.cloudflare_operation_posture.summary.next_action, 'start_operation');
     assert.equal(healthSnapshot.scheduler_task_readback.status, 'ok');

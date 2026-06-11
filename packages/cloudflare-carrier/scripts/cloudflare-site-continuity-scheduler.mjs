@@ -479,6 +479,11 @@ export async function runSiteContinuitySchedulerActionWithOptionalRefresh(
     configuredSites: healthPlan.configured_sites,
     cloudflareProductPosture,
   });
+  const cloudflareProductBindingPreparation = summarizeCloudflareProductBindingPreparation({
+    configuredSites: healthPlan.configured_sites,
+    cloudflareProductPosture,
+    cloudflareProductBindingAlignment,
+  });
   const cloudflareOperationPosture = await readCloudflareOperationPostureForHealthSnapshot({
     env,
     now: options.now,
@@ -493,6 +498,7 @@ export async function runSiteContinuitySchedulerActionWithOptionalRefresh(
         continuityHealth,
         cloudflareProductPosture,
         cloudflareProductBindingAlignment,
+        cloudflareProductBindingPreparation,
         cloudflareOperationPosture,
       }),
       generated_at: options.now?.() ?? new Date().toISOString(),
@@ -503,6 +509,7 @@ export async function runSiteContinuitySchedulerActionWithOptionalRefresh(
       continuity_health: continuityHealth,
       cloudflare_product_posture: cloudflareProductPosture,
       cloudflare_product_binding_alignment: cloudflareProductBindingAlignment,
+      cloudflare_product_binding_preparation: cloudflareProductBindingPreparation,
       cloudflare_operation_posture: cloudflareOperationPosture,
       scheduler_task_readback: healthReadback.scheduler_task_readback ?? null,
     }, { dryRun: false, now: options.now }),
@@ -513,12 +520,14 @@ export function summarizeScheduledHealthSnapshotStatus({
   continuityHealth = null,
   cloudflareProductPosture = null,
   cloudflareProductBindingAlignment = null,
+  cloudflareProductBindingPreparation = null,
   cloudflareOperationPosture = null,
 } = {}) {
   const statuses = [
     continuityHealth?.status,
     cloudflareProductPosture?.status,
     cloudflareProductBindingAlignment?.status,
+    cloudflareProductBindingPreparation?.status,
     cloudflareOperationPosture?.status,
   ].filter(Boolean);
   return statuses.includes('needs_attention') ? 'needs_attention' : 'ok';
@@ -576,6 +585,59 @@ export function summarizeCloudflareProductBindingAlignment({
     state: 'unbound_remote_next_site',
     status: 'needs_attention',
     reason: 'cloudflare_product_next_site_not_in_local_continuity_set',
+  };
+}
+
+export function summarizeCloudflareProductBindingPreparation({
+  configuredSites = {},
+  cloudflareProductPosture = null,
+  cloudflareProductBindingAlignment = null,
+} = {}) {
+  const targetSiteId = cloudflareProductBindingAlignment?.cloudflare_product_next_site_id
+    ?? cloudflareProductPosture?.summary?.next_site_id
+    ?? null;
+  const operatorAction = cloudflareProductBindingAlignment?.state === 'unbound_remote_next_site'
+    ? 'bind_cloudflare_product_next_site_locally'
+    : null;
+  const localSiteRecords = normalizeConfiguredSiteRecords([
+    ...(Array.isArray(configuredSites?.site_records) ? configuredSites.site_records : []),
+    ...(Array.isArray(configuredSites?.site_continuity_binding_registry?.site_records) ? configuredSites.site_continuity_binding_registry.site_records : []),
+  ]);
+  const projectedSiteRecords = normalizeConfiguredSiteRecords([
+    ...(Array.isArray(configuredSites?.site_registry_projection?.site_records) ? configuredSites.site_registry_projection.site_records : []),
+  ]);
+  const localRecord = localSiteRecords.find((site) => site.site_id === targetSiteId) ?? null;
+  const projectedRecord = projectedSiteRecords.find((site) => site.site_id === targetSiteId) ?? null;
+  const localSiteRef = localRecord?.local_site_ref ?? null;
+  const cloudflareSiteRef = localRecord?.cloudflare_site_ref ?? localRecord?.site_ref ?? projectedRecord?.cloudflare_site_ref ?? projectedRecord?.site_ref ?? null;
+  const missingInputs = operatorAction
+    ? [localSiteRef ? null : 'local_site_ref', cloudflareSiteRef ? null : 'cloudflare_site_ref'].filter(Boolean)
+    : [];
+  const state = !operatorAction
+    ? 'not_required'
+    : missingInputs.length > 0
+      ? 'blocked_missing_refs'
+      : 'ready';
+  return {
+    schema: 'narada.cloudflare_carrier.product_binding_preparation.v1',
+    state,
+    status: state === 'blocked_missing_refs' ? 'needs_attention' : 'ok',
+    reason: state === 'not_required'
+      ? 'cloudflare_product_binding_preparation_not_required'
+      : state === 'ready'
+        ? 'site_continuity_binding_refs_available'
+        : 'site_continuity_binding_refs_missing',
+    target_site_id: targetSiteId,
+    operator_action: operatorAction,
+    required_inputs: missingInputs,
+    local_site_ref_available: Boolean(localSiteRef),
+    cloudflare_site_ref_available: Boolean(cloudflareSiteRef),
+    local_site_record_state: localRecord ? 'found' : 'missing',
+    cloudflare_site_projection_state: projectedRecord ? 'found' : 'missing',
+    command_hint: operatorAction
+      ? 'pnpm --filter @narada2/cloudflare-carrier continuity:bindings:prepare-next -- --local-site-ref <file-or-site-ref> --cloudflare-site-ref <cloudflare-site-ref>'
+      : null,
+    embeds_credentials: false,
   };
 }
 
@@ -1486,6 +1548,10 @@ export function readLastScheduledHealthSnapshot(outputPath) {
     cloudflare_product_binding_alignment_state: artifact.cloudflare_product_binding_alignment?.state ?? null,
     cloudflare_product_binding_alignment_status: artifact.cloudflare_product_binding_alignment?.status ?? null,
     cloudflare_product_binding_alignment_reason: artifact.cloudflare_product_binding_alignment?.reason ?? null,
+    cloudflare_product_binding_preparation_state: artifact.cloudflare_product_binding_preparation?.state ?? null,
+    cloudflare_product_binding_preparation_status: artifact.cloudflare_product_binding_preparation?.status ?? null,
+    cloudflare_product_binding_preparation_reason: artifact.cloudflare_product_binding_preparation?.reason ?? null,
+    cloudflare_product_binding_preparation_required_inputs: artifact.cloudflare_product_binding_preparation?.required_inputs ?? [],
     operator_next_action: operatorNextAction.action,
     operator_next_target_site_id: operatorNextAction.target_site_id,
     operator_next_reason: operatorNextAction.reason,
@@ -1642,9 +1708,12 @@ function readSiteContinuityBindingRegistryFile(bindingRegistryPath) {
     .filter((binding) => sites.includes(binding.site_id))
     .map((binding) => {
       const cloudflareEmbodiment = findSiteContinuityEmbodiment(binding, SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER);
+      const localEmbodiment = findSiteContinuityEmbodiment(binding, SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS);
       return {
         site_id: binding.site_id,
         site_ref: cloudflareEmbodiment?.site_ref ?? null,
+        ...(cloudflareEmbodiment?.site_ref ? { cloudflare_site_ref: cloudflareEmbodiment.site_ref } : {}),
+        ...(localEmbodiment?.site_ref ? { local_site_ref: localEmbodiment.site_ref } : {}),
         site_status: 'active',
       };
     });
@@ -1683,11 +1752,18 @@ function normalizeConfiguredSiteRecords(value) {
         ...existing,
         display_name: item.display_name ?? item.displayName ?? existing.display_name ?? null,
         site_ref: item.site_ref ?? item.siteRef ?? existing.site_ref ?? null,
+        ...firstPresentObject('cloudflare_site_ref', item.cloudflare_site_ref, item.cloudflareSiteRef, existing.cloudflare_site_ref),
+        ...firstPresentObject('local_site_ref', item.local_site_ref, item.localSiteRef, existing.local_site_ref),
         site_status: item.site_status ?? item.status ?? existing.site_status ?? null,
       });
     }
   }
   return [...siteById.values()].sort((left, right) => left.site_id.localeCompare(right.site_id));
+}
+
+function firstPresentObject(key, ...values) {
+  const value = values.find((candidate) => candidate !== undefined && candidate !== null && candidate !== '');
+  return value === undefined ? {} : { [key]: value };
 }
 
 function buildConfiguredSiteSyncStatuses(configuredSites, artifacts, { maxArtifactAgeMinutes = DEFAULT_MAX_SYNC_ARTIFACT_AGE_MINUTES, now = () => new Date().toISOString() } = {}) {
