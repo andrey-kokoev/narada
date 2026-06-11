@@ -9,6 +9,7 @@ import { promisify } from 'node:util';
 import {
   buildHiddenVbsWrapperContent,
   buildProviderLivenessSchedulerPlan,
+  formatProviderLivenessSchedulerText,
   runProviderLivenessSchedulerAction,
   summarizeProviderLivenessSchedulerReadback,
 } from './cloudflare-carrier-provider-liveness-scheduler.mjs';
@@ -163,4 +164,37 @@ test('provider liveness scheduler readback surfaces drift', () => {
     'scheduler_task_command_differs_from_plan',
     'scheduler_last_result_nonzero',
   ]);
+});
+
+test('provider liveness scheduler text output summarizes operator posture', () => {
+  const text = formatProviderLivenessSchedulerText({
+    task_name: '\\Narada\\CloudflareProviderLivenessRefresh',
+    plan_status: 'status_only_no_cloudflare_access',
+    scheduler_task_readback: {
+      status: 'ok',
+      scheduled_task_state: 'Enabled',
+      status_text: 'Ready',
+      last_result: '0',
+      next_run_time: '6/11/2026 11:43:00 AM',
+      expected_interval_minutes: 2,
+      actual_interval_minutes: 2,
+      cadence_status: 'matches_plan',
+      task_command_status: 'matches_plan',
+      task_to_run: 'wscript.exe //B hidden.vbs',
+      attention_reasons: [],
+    },
+  });
+
+  assert.match(text, /Provider Liveness: ok/);
+  assert.match(text, /Scheduler: state=Enabled status=Ready last=0/);
+  assert.match(text, /Cadence: expected=2m actual=2m matches_plan/);
+  assert.match(text, /Command: matches_plan/);
+});
+
+test('provider liveness scheduler CLI emits operator text status', async () => {
+  const result = await execFile(process.execPath, [SCRIPT_PATH, '--action', 'status', '--format', 'text'], { timeout: 30000, windowsHide: true });
+
+  assert.match(result.stdout, /Provider Liveness:/);
+  assert.match(result.stdout, /Task: \\Narada\\CloudflareProviderLivenessRefresh/);
+  assert.match(result.stdout, /Task Scheduler: live readback required/);
 });

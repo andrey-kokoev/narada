@@ -215,6 +215,14 @@ pnpm --filter @narada2/cloudflare-carrier continuity:health
 
 `continuity:health` loads the same local `.env` and `.narada/site-continuity/cloudflare-continuity.env` configuration as the scheduled-task wrapper, then attaches bounded Task Scheduler query evidence to the status output. It reports the installed task state, last result, next run, task command, and whether the host scheduler cadence matches the package plan.
 
+Read the provider-liveness scheduler posture with the same operator-facing text style:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier provider-liveness:status:live:text
+```
+
+`provider-liveness:status:live:text` performs a bounded live Task Scheduler readback for `\Narada\CloudflareProviderLivenessRefresh`. It reports whether the hidden `wscript.exe //B` wrapper is installed, whether the two-minute cadence matches the package plan, the last run result, the next run time, and any attention reasons without exposing credential values.
+
 Read the last durable scheduled health snapshot without querying Cloudflare or Task Scheduler:
 
 ```powershell

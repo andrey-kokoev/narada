@@ -226,6 +226,27 @@ export function summarizeProviderLivenessSchedulerReadback({ state, command, arg
   };
 }
 
+export function formatProviderLivenessSchedulerText(result) {
+  const readback = result?.scheduler_task_readback ?? null;
+  const status = readback?.status ?? result?.status?.state ?? 'unknown';
+  const lines = [
+    `Provider Liveness: ${status}`,
+    `Task: ${result?.task_name ?? 'unknown'}`,
+    `Plan: ${result?.plan_status ?? 'unknown'}`,
+  ];
+  if (readback) {
+    lines.push(`Scheduler: state=${readback.scheduled_task_state ?? 'unknown'} status=${readback.status_text ?? 'unknown'} last=${readback.last_result ?? 'unknown'} next=${readback.next_run_time ?? 'unknown'}`);
+    lines.push(`Cadence: expected=${readback.expected_interval_minutes ?? 'unknown'}m actual=${readback.actual_interval_minutes ?? 'unknown'}m ${readback.cadence_status ?? 'unknown'}`);
+    lines.push(`Command: ${readback.task_command_status ?? 'unknown'}`);
+    if (readback.task_to_run) lines.push(`Task To Run: ${readback.task_to_run}`);
+    if (readback.attention_reasons?.length > 0) lines.push(`Attention: ${readback.attention_reasons.join(', ')}`);
+  } else {
+    lines.push(`Local Root: ${result?.local_root ?? 'unknown'}`);
+    lines.push(`Task Scheduler: ${result?.status?.task_scheduler_query_required ? 'live readback required' : 'not required'}`);
+  }
+  return `${lines.join('\n')}\n`;
+}
+
 function isSchedulerLastResultHealthy(lastResult, statusText) {
   if (!lastResult || lastResult === '0') return true;
   const normalizedLastResult = String(lastResult).trim().toLowerCase();
@@ -355,7 +376,7 @@ function vbsString(value) {
 }
 
 function parseArgs(argv) {
-  const args = { action: 'status', dryRun: true };
+  const args = { action: 'status', dryRun: true, format: 'json' };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === '--live') args.dryRun = false;
@@ -369,14 +390,19 @@ function parseArgs(argv) {
     else if (arg === '--local-root') args.localRoot = argv[++index];
     else if (arg === '--node-command') args.nodeCommand = argv[++index];
     else if (arg === '--hidden-wrapper-path') args.hiddenWrapperPath = argv[++index];
+    else if (arg === '--format') args.format = argv[++index];
     else throw new Error(`unknown_argument:${arg}`);
   }
   return args;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  runProviderLivenessSchedulerAction(parseArgs(process.argv.slice(2)))
-    .then((plan) => console.log(JSON.stringify(plan, null, 2)))
+  const args = parseArgs(process.argv.slice(2));
+  runProviderLivenessSchedulerAction(args)
+    .then((plan) => {
+      if (args.format === 'text') process.stdout.write(formatProviderLivenessSchedulerText(plan));
+      else console.log(JSON.stringify(plan, null, 2));
+    })
     .catch((error) => {
       console.error(error.stack ?? error.message);
       process.exitCode = 1;
