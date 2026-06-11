@@ -90,6 +90,7 @@ pnpm cloudflare:operator:check -- --url <worker-url> --token-file <path> --write
 | Mailbox status shadow-read surface | `mailbox:status-shadow-smoke:live` records mailbox status visibility in Cloudflare operation state while proving mailbox send and mutation remain `not_admitted` and Windows-owned. |
 | Site file change proposal surface | `site-file-change:proposal-smoke:live` records proposed site-file change evidence in Cloudflare operation state while proving filesystem mutation and repository publication remain `not_admitted` and Windows-owned. |
 | Site file materialization surface | `site-file:materialization-smoke:live` admits a Cloudflare site-file-store materialization record with explicit cutover evidence while proving Windows filesystem mutation and repository publication remain `not_admitted`. |
+| Repository publication credential posture | The lower-level `repository-publication:readiness-smoke:live` gate proves whether the Cloudflare GitHub publication executor has an admitted credential substrate, preferably GitHub App installation authority. |
 | Resident loop shadow surface | `resident_loop.shadow_read.record` records a Windows-primary resident loop shadow run as read-model evidence and `operation.read` exposes its count/status/dispatch posture. |
 | Resident dispatch surface | `resident_dispatch.primary_with_fallback.start` starts a Cloudflare primary carrier session, records the dispatch decision, and keeps Windows fallback authority visible in `operation.read`. |
 | Continuity loop | Windows and Cloudflare exchange site-continuity packets through the productized loop. |
@@ -102,6 +103,17 @@ It also includes `operation.site_file_materialization_count`, `operation.site_fi
 Carrier evidence replay can be `loaded`, `partial`, `degraded`, or `no_sessions`. `partial` means the report hit its bounded session read limit and carries `truncated_session_count`; it is not evidence loss. `degraded` remains reserved for attempted sessions with missing or failed evidence reads.
 
 Task lifecycle task reads remain bounded and keep their default order. Live cutover smokes and the root operator gate use `task_lifecycle_include_task_ids` to append named task rows to the bounded result when the check must prove a specific freshly written task on a populated site.
+
+## Repository Publication Credentials
+
+GitHub App installation authority is the preferred credential substrate for Cloudflare repository publication because the Worker mints short-lived installation tokens inside the executor boundary:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier run repository-publication:github-app-secret-put:live -- --app-id <id> --installation-id <id> --private-key-file <path>
+pnpm --filter @narada2/cloudflare-carrier run repository-publication:readiness-smoke:live
+```
+
+The legacy PAT substrate remains available through `repository-publication:secret-put:live`, but both paths are credentials only. They do not admit publication authority by themselves. The readiness smoke must report `ready` with `github_credential_mode = github_app_installation` or `github_token`, the requested repository and branch must be allowlisted, and only then may an operator run `repository-publication:cloudflare-github-smoke:live`. A `not_ready` result is a refusal boundary, not a fallback to Windows publication.
 
 ## Boundary
 
@@ -126,6 +138,8 @@ pnpm --filter @narada2/cloudflare-carrier task-lifecycle:assignment-write-smoke:
 pnpm --filter @narada2/cloudflare-carrier task-lifecycle:role-resolution-write-smoke:live -- --url <worker-url> --token-file <path>
 pnpm --filter @narada2/cloudflare-carrier task-lifecycle:roster-mutation-write-smoke:live -- --url <worker-url> --token-file <path>
 pnpm --filter @narada2/cloudflare-carrier site-file-change:proposal-smoke:live -- --url <worker-url> --token-file <path>
+pnpm --filter @narada2/cloudflare-carrier repository-publication:readiness-smoke:live -- --url <worker-url> --token-file <path>
+pnpm --filter @narada2/cloudflare-carrier repository-publication:cloudflare-github-smoke:live -- --url <worker-url> --token-file <path>
 ```
 
 The task-lifecycle shadow smoke records Windows task lifecycle state as Cloudflare read-model evidence only. It must report `mutation_authority = windows_task_lifecycle_sqlite` and `cloudflare_write_admission = not_admitted`.
