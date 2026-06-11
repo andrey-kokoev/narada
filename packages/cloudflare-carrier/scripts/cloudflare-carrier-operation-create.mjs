@@ -57,7 +57,13 @@ export async function createCloudflareOperation(config, fetchImpl = fetch) {
   const body = parseJsonText(text);
   if (response.status < 200 || response.status >= 300) {
     const code = body?.code ?? body?.error ?? `http_${response.status}`;
-    throw new Error(`operation_create_request_failed:${code}`);
+    const error = new Error(`operation_create_request_failed:${code}`);
+    error.code = code;
+    error.http_status = response.status;
+    error.response = body;
+    error.summary = summarizeOperationCreateFailure(body, config.params);
+    error.config = config;
+    throw error;
   }
   return {
     schema: 'narada.cloudflare_carrier.operation_create.v1',
@@ -84,8 +90,33 @@ export function summarizeOperationCreate(body = {}) {
   };
 }
 
+export function summarizeOperationCreateFailure(body = {}, params = {}) {
+  return {
+    ok: body?.ok ?? false,
+    code: body?.code ?? body?.error ?? null,
+    action: body?.action ?? null,
+    reason: body?.reason ?? null,
+    site_id: body?.site_id ?? params.site_id ?? null,
+    operation_id: body?.operation_id ?? params.operation_id ?? null,
+    status: body?.status ?? params.status ?? null,
+  };
+}
+
 export function formatOperationCreateText(result) {
   const summary = result?.summary ?? summarizeOperationCreate(result?.response ?? {});
+  const refused = result?.status === 'refused' || summary?.ok === false;
+  if (refused) {
+    return [
+      'Operation Create: refused',
+      `Worker: ${result?.worker_url ?? 'unknown'}`,
+      `Auth: ${result?.auth_source ?? 'unknown'}`,
+      `Code: ${summary.code ?? 'unknown'}`,
+      `Site: ${summary.site_id ?? result?.params?.site_id ?? 'unknown'}`,
+      `Operation: ${summary.operation_id ?? result?.params?.operation_id ?? 'unknown'}`,
+      `Refusal: action=${summary.action ?? 'unknown'} reason=${summary.reason ?? 'unknown'}`,
+      `Status: ${summary.status ?? result?.params?.status ?? 'unknown'}`,
+    ].join('\n') + '\n';
+  }
   return [
     'Operation Create: ok',
     `Worker: ${result?.worker_url ?? 'unknown'}`,
@@ -134,7 +165,18 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       process.stdout.write(JSON.stringify(result, null, 2) + '\n');
     }
   } catch (error) {
-    process.stderr.write(JSON.stringify({ ok: false, code: error?.message ?? String(error) }, null, 2) + '\n');
+    if (error?.response && error?.summary && error?.config?.format === 'text') {
+      process.stderr.write(formatOperationCreateText({
+        status: 'refused',
+        worker_url: error.config.workerUrl,
+        auth_source: error.config.auth?.source,
+        params: error.config.params,
+        response: error.response,
+        summary: error.summary,
+      }));
+    } else {
+      process.stderr.write(JSON.stringify({ ok: false, code: error?.message ?? String(error), response: error?.response }, null, 2) + '\n');
+    }
     process.exit(1);
   }
 }

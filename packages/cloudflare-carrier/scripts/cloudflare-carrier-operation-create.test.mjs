@@ -6,6 +6,7 @@ import {
   formatOperationCreateText,
   parseOperationCreateArgs,
   summarizeOperationCreate,
+  summarizeOperationCreateFailure,
 } from './cloudflare-carrier-operation-create.mjs';
 
 test('parseOperationCreateArgs builds governed operation.create params', () => {
@@ -131,15 +132,50 @@ test('createCloudflareOperation posts operation.create envelope and redacts auth
   });
 });
 
-test('createCloudflareOperation surfaces worker refusal code', async () => {
+test('createCloudflareOperation preserves structured Worker refusal evidence', async () => {
   await assert.rejects(
-    () => createCloudflareOperation({
+    async () => createCloudflareOperation({
       workerUrl: 'https://carrier.example.test',
       requestId: 'request_denied',
       params: { site_id: 'site_alpha', operation_id: 'operation_alpha', display_name: 'Alpha', operation_kind: 'operator', status: 'active' },
       auth: { kind: 'bearer', value: 'secret-token', source: 'flag:--token' },
-    }, async () => ({ status: 403, async text() { return JSON.stringify({ code: 'site_authority_denied' }); } })),
-    /operation_create_request_failed:site_authority_denied/,
+    }, async () => ({
+      status: 403,
+      async text() {
+        return JSON.stringify({
+          ok: false,
+          code: 'site_authority_denied',
+          action: 'deny',
+          reason: 'operator_lacks_site_role',
+          site_id: 'site_alpha',
+          operation_id: 'operation_alpha',
+        });
+      },
+    })),
+    (error) => {
+      assert.match(error.message, /operation_create_request_failed:site_authority_denied/);
+      assert.equal(error.code, 'site_authority_denied');
+      assert.equal(error.http_status, 403);
+      assert.deepEqual(error.response, {
+        ok: false,
+        code: 'site_authority_denied',
+        action: 'deny',
+        reason: 'operator_lacks_site_role',
+        site_id: 'site_alpha',
+        operation_id: 'operation_alpha',
+      });
+      assert.deepEqual(error.summary, {
+        ok: false,
+        code: 'site_authority_denied',
+        action: 'deny',
+        reason: 'operator_lacks_site_role',
+        site_id: 'site_alpha',
+        operation_id: 'operation_alpha',
+        status: 'active',
+      });
+      assert.equal(error.config.auth.value, 'secret-token');
+      return true;
+    },
   );
 });
 
@@ -158,5 +194,30 @@ test('formatOperationCreateText renders operator summary without auth material',
   assert.match(text, /Site: site_alpha/);
   assert.match(text, /Operation: operation_alpha/);
   assert.match(text, /Kind: productization/);
+  assert.equal(text.includes('secret-token'), false);
+});
+
+test('formatOperationCreateText renders refused operation creates without auth material', () => {
+  const text = formatOperationCreateText({
+    status: 'refused',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'flag:--token',
+    params: { site_id: 'site_alpha', operation_id: 'operation_alpha', status: 'active' },
+    summary: summarizeOperationCreateFailure({
+      ok: false,
+      code: 'site_authority_denied',
+      action: 'deny',
+      reason: 'operator_lacks_site_role',
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+    }, { status: 'active' }),
+    auth: { kind: 'bearer', value: 'secret-token' },
+  });
+
+  assert.match(text, /Operation Create: refused/);
+  assert.match(text, /Code: site_authority_denied/);
+  assert.match(text, /Site: site_alpha/);
+  assert.match(text, /Operation: operation_alpha/);
+  assert.match(text, /Refusal: action=deny reason=operator_lacks_site_role/);
   assert.equal(text.includes('secret-token'), false);
 });
