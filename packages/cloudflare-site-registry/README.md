@@ -40,3 +40,13 @@ Use one of these D1 bindings:
 pnpm --filter @narada2/cloudflare-site-registry test
 pnpm --filter @narada2/cloudflare-site-registry ship
 ```
+
+## D1 Migrations
+
+The site registry owns the D1 schema for `narada-cloudflare-site-registry`.
+Apply these migrations from this package boundary, not from the carrier task database:
+
+```powershell
+pnpm --filter @narada2/cloudflare-site-registry d1:migrations:local
+pnpm --filter @narada2/cloudflare-site-registry d1:migrations:remote
+```

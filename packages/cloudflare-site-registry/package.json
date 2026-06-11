@@ -4,11 +4,14 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/cloudflare-site-registry.mjs"
+    ".": "./src/cloudflare-site-registry.mjs",
+    "./local-projection": "./src/cloudflare-site-registry-local-projection.mjs"
   },
   "scripts": {
     "test": "node --test test/cloudflare-site-registry.test.mjs",
     "deploy:check": "node --test test/cloudflare-site-registry.test.mjs",
+    "d1:migrations:local": "wrangler d1 migrations apply narada-cloudflare-site-registry --local --config wrangler.toml",
+    "d1:migrations:remote": "wrangler d1 migrations apply narada-cloudflare-site-registry --remote --config wrangler.toml",
     "ship": "pnpm test && pnpm deploy:check"
   }
 }

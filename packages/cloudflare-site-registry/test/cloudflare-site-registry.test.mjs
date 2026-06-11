@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -12,8 +12,8 @@ import {
   normalizeOperationId,
   normalizeSiteId,
   projectCloudflareSiteRegistrySites,
-  readCloudflareSiteRegistryLocalProjection,
 } from '../src/cloudflare-site-registry.mjs';
+import { readCloudflareSiteRegistryLocalProjection } from '../src/cloudflare-site-registry-local-projection.mjs';
 
 test('normalizes bounded site identifiers', () => {
   assert.equal(normalizeSiteId('site_alpha'), 'site_alpha');
@@ -22,6 +22,24 @@ test('normalizes bounded site identifiers', () => {
   assert.equal(normalizeSiteId('../escape'), null);
   assert.equal(normalizeOperationId('operation_alpha'), 'operation_alpha');
   assert.equal(normalizeOperationId('x'), null);
+});
+
+test('owns Cloudflare D1 migration apply surface', async () => {
+  const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.equal(
+    packageJson.scripts['d1:migrations:local'],
+    'wrangler d1 migrations apply narada-cloudflare-site-registry --local --config wrangler.toml',
+  );
+  assert.equal(
+    packageJson.scripts['d1:migrations:remote'],
+    'wrangler d1 migrations apply narada-cloudflare-site-registry --remote --config wrangler.toml',
+  );
+
+  const wranglerConfig = await readFile(new URL('../wrangler.toml', import.meta.url), 'utf8');
+  assert.match(wranglerConfig, /^name = "narada-cloudflare-site-registry"$/m);
+  assert.match(wranglerConfig, /^binding = "CLOUDFLARE_SITE_REGISTRY_DB"$/m);
+  assert.match(wranglerConfig, /^database_name = "narada-cloudflare-site-registry"$/m);
+  assert.match(wranglerConfig, /^migrations_dir = "migrations"$/m);
 });
 
 test('creates reads and lists site operations behind site authority', async () => {

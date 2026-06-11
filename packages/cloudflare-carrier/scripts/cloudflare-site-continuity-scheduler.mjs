@@ -4,7 +4,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSy
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { readCloudflareSiteRegistryLocalProjection } from '@narada2/cloudflare-site-registry';
+import { readCloudflareSiteRegistryLocalProjection } from '@narada2/cloudflare-site-registry/local-projection';
 import {
   materializeCloudflareSiteRegistryProjection,
   resolveCloudflareSiteRegistryProjectionInputs,

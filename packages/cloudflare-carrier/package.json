@@ -61,7 +61,7 @@
     "continuity:reconcile:execute": "node scripts/cloudflare-site-continuity-scheduler.mjs --action reconcile-execute --live",
     "continuity:last": "node scripts/cloudflare-site-continuity-scheduler.mjs --action read-last",
     "site-registry:projection": "node scripts/cloudflare-carrier-site-registry-projection.mjs",
-    "ship": "pnpm test && pnpm deploy:check && pnpm deploy:dry-run"
+    "ship": "pnpm --filter @narada2/cloudflare-site-registry ship && pnpm test && pnpm deploy:check && pnpm deploy:dry-run"
   },
   "dependencies": {
     "@narada2/carrier-command-contract": "workspace:*",

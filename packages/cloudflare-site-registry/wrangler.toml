@@ -1,0 +1,8 @@
+name = "narada-cloudflare-site-registry"
+compatibility_date = "2026-06-06"
+
+[[d1_databases]]
+binding = "CLOUDFLARE_SITE_REGISTRY_DB"
+database_name = "narada-cloudflare-site-registry"
+database_id = "170ca715-9c9e-4c48-896f-0e8daba72217"
+migrations_dir = "migrations"
