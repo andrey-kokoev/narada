@@ -56,7 +56,13 @@ export async function putCloudflareOperationStatus(config, fetchImpl = fetch) {
   const body = parseJsonText(text);
   if (response.status < 200 || response.status >= 300) {
     const code = body?.code ?? body?.error ?? `http_${response.status}`;
-    throw new Error(`operation_status_put_request_failed:${code}`);
+    const error = new Error(`operation_status_put_request_failed:${code}`);
+    error.code = code;
+    error.http_status = response.status;
+    error.response = body;
+    error.summary = summarizeOperationStatusPut(body, config.params);
+    error.config = config;
+    throw error;
   }
   return {
     schema: 'narada.cloudflare_carrier.operation_status_put.v1',
@@ -75,24 +81,33 @@ export function summarizeOperationStatusPut(body = {}, params = {}) {
   return {
     operation_id: operation.operation_id ?? body.operation_id ?? params.operation_id ?? null,
     site_id: operation.site_id ?? body.site_id ?? params.site_id ?? null,
+    ok: body.ok ?? null,
+    code: body.code ?? null,
+    action: body.action ?? null,
     previous_status: body.previous_status ?? null,
     status: operation.status ?? body.status ?? params.status ?? null,
+    requested_status: body.requested_status ?? params.status ?? null,
     reason: body.reason ?? operation.status_reason ?? params.reason ?? null,
+    transition: body.transition ?? null,
     updated_at: operation.updated_at ?? body.updated_at ?? null,
   };
 }
 
 export function formatOperationStatusPutText(result) {
   const summary = result?.summary ?? summarizeOperationStatusPut(result?.response ?? {}, result?.params ?? {});
+  const ok = summary.ok === false || result?.status === 'refused' ? false : true;
   return [
-    'Operation Status Put: ok',
+    `Operation Status Put: ${ok === false ? 'refused' : 'ok'}`,
     `Worker: ${result?.worker_url ?? 'unknown'}`,
     `Auth: ${result?.auth_source ?? 'unknown'}`,
     `Site: ${summary.site_id ?? result?.params?.site_id ?? 'unknown'}`,
     `Operation: ${summary.operation_id ?? result?.params?.operation_id ?? 'unknown'}`,
-    `Status: ${summary.status ?? result?.params?.status ?? 'unknown'}`,
+    ...(summary.code ? [`Code: ${summary.code}`] : []),
+    `Status: ${summary.status ?? summary.requested_status ?? result?.params?.status ?? 'unknown'}`,
+    ...(summary.requested_status && summary.requested_status !== summary.status ? [`Requested Status: ${summary.requested_status}`] : []),
     ...(summary.reason ? [`Reason: ${summary.reason}`] : []),
-    ...(summary.previous_status ? [`Transition: ${summary.previous_status} -> ${summary.status ?? result?.params?.status ?? 'unknown'}`] : []),
+    ...(summary.previous_status ? [`Transition: ${summary.previous_status} -> ${summary.status ?? summary.requested_status ?? result?.params?.status ?? 'unknown'}`] : []),
+    ...(summary.transition ? [`Transition Evidence: ${summary.transition}`] : []),
     `Updated: ${summary.updated_at ?? 'unknown'}`,
   ].join('\n') + '\n';
 }
@@ -138,7 +153,18 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       process.stdout.write(JSON.stringify(result, null, 2) + '\n');
     }
   } catch (error) {
-    process.stderr.write(JSON.stringify({ ok: false, code: error?.message ?? String(error) }, null, 2) + '\n');
+    if (error?.response && error?.summary && error?.config?.format === 'text') {
+      process.stderr.write(formatOperationStatusPutText({
+        status: 'refused',
+        worker_url: error.config.workerUrl,
+        auth_source: error.config.auth?.source,
+        params: error.config.params,
+        response: error.response,
+        summary: error.summary,
+      }));
+    } else {
+      process.stderr.write(JSON.stringify({ ok: false, code: error?.message ?? String(error), response: error?.response }, null, 2) + '\n');
+    }
     process.exit(1);
   }
 }

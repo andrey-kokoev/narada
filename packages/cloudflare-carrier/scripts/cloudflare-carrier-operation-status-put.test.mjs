@@ -126,22 +126,65 @@ test('putCloudflareOperationStatus posts operation.status.put envelope and redac
   assert.deepEqual(result.summary, {
     site_id: 'site_alpha',
     operation_id: 'operation_alpha',
+    ok: true,
+    code: null,
+    action: null,
     previous_status: 'active',
     status: 'closed',
+    requested_status: 'closed',
     reason: 'operation_closed_by_operator',
+    transition: null,
     updated_at: '2026-06-11T00:00:00.000Z',
   });
 });
 
-test('putCloudflareOperationStatus surfaces worker refusal code', async () => {
+test('putCloudflareOperationStatus surfaces structured worker refusal evidence', async () => {
   await assert.rejects(
-    () => putCloudflareOperationStatus({
-      workerUrl: 'https://carrier.example.test',
-      requestId: 'request_denied',
-      params: { site_id: 'site_alpha', operation_id: 'operation_alpha', status: 'closed' },
-      auth: { kind: 'bearer', value: 'secret-token', source: 'flag:--token' },
-    }, async () => ({ status: 403, async text() { return JSON.stringify({ code: 'site_authority_denied' }); } })),
-    /operation_status_put_request_failed:site_authority_denied/,
+    async () => {
+      await putCloudflareOperationStatus({
+        workerUrl: 'https://carrier.example.test',
+        requestId: 'request_denied',
+        format: 'text',
+        params: { site_id: 'site_alpha', operation_id: 'operation_alpha', status: 'active' },
+        auth: { kind: 'bearer', value: 'secret-token', source: 'flag:--token' },
+      }, async () => ({
+        status: 400,
+        async text() {
+          return JSON.stringify({
+            ok: false,
+            code: 'operation_status_transition_denied',
+            action: 'deny',
+            reason: 'closed_operation_is_terminal',
+            site_id: 'site_alpha',
+            operation_id: 'operation_alpha',
+            previous_status: 'closed',
+            requested_status: 'active',
+            transition: 'closed_to_active',
+          });
+        },
+      }));
+    },
+    (error) => {
+      assert.match(error.message, /operation_status_put_request_failed:operation_status_transition_denied/);
+      assert.equal(error.code, 'operation_status_transition_denied');
+      assert.equal(error.http_status, 400);
+      assert.equal(error.response.reason, 'closed_operation_is_terminal');
+      assert.deepEqual(error.summary, {
+        site_id: 'site_alpha',
+        operation_id: 'operation_alpha',
+        ok: false,
+        code: 'operation_status_transition_denied',
+        action: 'deny',
+        previous_status: 'closed',
+        status: 'active',
+        requested_status: 'active',
+        reason: 'closed_operation_is_terminal',
+        transition: 'closed_to_active',
+        updated_at: null,
+      });
+      assert.equal(error.config.format, 'text');
+      return true;
+    },
   );
 });
 
@@ -164,5 +207,34 @@ test('formatOperationStatusPutText renders operator summary without auth materia
   assert.match(text, /Status: inactive/);
   assert.match(text, /Reason: operation_paused_by_operator/);
   assert.match(text, /Transition: active -> inactive/);
+  assert.equal(text.includes('secret-token'), false);
+});
+
+test('formatOperationStatusPutText renders refused lifecycle transition evidence', () => {
+  const text = formatOperationStatusPutText({
+    status: 'refused',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    params: { site_id: 'site_alpha', operation_id: 'operation_alpha', status: 'active' },
+    summary: summarizeOperationStatusPut({
+      ok: false,
+      code: 'operation_status_transition_denied',
+      action: 'deny',
+      reason: 'closed_operation_is_terminal',
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      previous_status: 'closed',
+      requested_status: 'active',
+      transition: 'closed_to_active',
+    }, { status: 'active' }),
+    auth: { kind: 'bearer', value: 'secret-token' },
+  });
+
+  assert.match(text, /Operation Status Put: refused/);
+  assert.match(text, /Code: operation_status_transition_denied/);
+  assert.match(text, /Status: active/);
+  assert.match(text, /Reason: closed_operation_is_terminal/);
+  assert.match(text, /Transition: closed -> active/);
+  assert.match(text, /Transition Evidence: closed_to_active/);
   assert.equal(text.includes('secret-token'), false);
 });
