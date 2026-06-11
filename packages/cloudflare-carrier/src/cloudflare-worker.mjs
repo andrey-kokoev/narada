@@ -52,6 +52,7 @@ const CLOUDFLARE_MAILBOX_DRAFT_REPLY_PROPOSAL_SCHEMA = 'narada.sonar.cloudflare_
 const CLOUDFLARE_MAILBOX_OUTLOOK_DRAFT_CREATE_SCHEMA = 'narada.sonar.cloudflare_mailbox_outlook_draft_create.v1';
 const CLOUDFLARE_MAILBOX_SEND_ACCEPTED_SCHEMA = 'narada.sonar.cloudflare_mailbox_send_accepted.v1';
 const CLOUDFLARE_MAILBOX_SEND_CONFIRMATION_SCHEMA = 'narada.sonar.cloudflare_mailbox_send_confirmation.v1';
+const CLOUDFLARE_MAILBOX_SEND_REVIEW_SCHEMA = 'narada.sonar.cloudflare_mailbox_send_review.v1';
 const CLOUDFLARE_SITE_FILE_CHANGE_PROPOSAL_SCHEMA = 'narada.sonar.cloudflare_site_file_change_proposal.v1';
 const CLOUDFLARE_SITE_FILE_MATERIALIZATION_SCHEMA = 'narada.sonar.cloudflare_site_file_materialization.v1';
 const CLOUDFLARE_LOCAL_INGRESS_REQUEST_SCHEMA = 'narada.sonar.cloudflare_local_ingress_request.v1';
@@ -90,6 +91,7 @@ const CLOUDFLARE_MAILBOX_DRAFT_REPLY_PROPOSAL_AUTHORITY = 'cloudflare_carrier_si
 const CLOUDFLARE_MAILBOX_OUTLOOK_DRAFT_CREATE_AUTHORITY = 'cloudflare_graph_outlook_draft_create';
 const CLOUDFLARE_MAILBOX_SEND_AUTHORITY = 'cloudflare_graph_mailbox_send';
 const CLOUDFLARE_MAILBOX_SEND_CONFIRMATION_AUTHORITY = 'cloudflare_graph_sent_items_reconciliation';
+const CLOUDFLARE_MAILBOX_SEND_REVIEW_AUTHORITY = 'cloudflare_operator_mailbox_send_review';
 const CLOUDFLARE_LOCAL_INGRESS_REQUEST_AUTHORITY = 'cloudflare_local_ingress_request_queue';
 const WINDOWS_LOCAL_INGRESS_EXECUTOR_AUTHORITY = 'windows_local_ingress_executor';
 const CLOUDFLARE_LOCAL_INGRESS_PROVIDER_LIVENESS_AUTHORITY = 'cloudflare_local_ingress_provider_liveness_store';
@@ -2489,6 +2491,7 @@ function summarizeCloudflareOperationActivityTimeline({
   mailboxOutlookDraftCreates = [],
   mailboxSendAcceptedRecords = [],
   mailboxSendConfirmations = [],
+  mailboxSendReviews = [],
   localIngressRequests = [],
   localIngressEvidence = [],
   localIngressProviderHeartbeats = [],
@@ -2693,6 +2696,19 @@ function summarizeCloudflareOperationActivityTimeline({
       focus_kind: 'mailbox_send_confirmation',
       focus_ref: confirmation.send_confirmation_id,
       principal_id: confirmation.recorded_by_principal_id,
+    });
+  }
+  for (const review of mailboxSendReviews || []) {
+    push({
+      activity_id: `mailbox_send_review:${review.review_id}`,
+      activity_kind: 'mailbox_send_review_acknowledgement',
+      occurred_at: review.recorded_at || review.generated_at,
+      title: 'Mailbox Send Review Acknowledged',
+      summary: [review.review_status, review.focus_kind, review.focus_ref].filter(Boolean).join(' / ') || 'mailbox send review acknowledged',
+      source_ref: review.review_id,
+      focus_kind: 'mailbox_send_review',
+      focus_ref: review.review_id,
+      principal_id: review.recorded_by_principal_id,
     });
   }
   for (const request of localIngressRequests || []) {
@@ -3202,6 +3218,8 @@ function isSiteProductOperation(operation) {
     'mailbox.send_accepted.list',
     'mailbox.send_confirmation.read',
     'mailbox.send_confirmation.list',
+    'mailbox.send_review.acknowledge',
+    'mailbox.send_review.list',
     'site_file_change_proposal.record',
     'site_file_change_proposal.list',
     'site_file_materialization.admit',
@@ -3778,6 +3796,31 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       },
     };
   }
+  if (body.operation === 'mailbox.send_review.acknowledge') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const result = await recordCloudflareMailboxSendReview(env, requestedSiteId, params, principal);
+    return { status: result.ok ? 200 : result.code?.startsWith?.('mailbox_send_review_requires') ? 403 : 400, body: result };
+  }
+  if (body.operation === 'mailbox.send_review.list') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const reviews = await listCloudflareMailboxSendReviews(env, requestedSiteId, params.mailbox_send_review_limit ?? params.limit);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        schema: CLOUDFLARE_MAILBOX_SEND_REVIEW_SCHEMA,
+        status: 'ok',
+        site_id: requestedSiteId,
+        mailbox_send_review_authority: reviews.length > 0 ? CLOUDFLARE_MAILBOX_SEND_REVIEW_AUTHORITY : 'not_observed',
+        review_admission: reviews.length > 0 ? 'admitted' : 'not_observed',
+        mailbox_mutation_admission: 'not_admitted',
+        authority_partition: reviews.length > 0 ? 'mailbox_send_review_cloudflare_operator_owned_mailbox_mutation_not_admitted' : 'mailbox_send_review_not_observed',
+        reviews,
+      },
+    };
+  }
   if (body.operation === 'site_file_change_proposal.record') {
     const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
     if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
@@ -4216,6 +4259,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const mailboxOutlookDraftCreates = await listCloudflareMailboxOutlookDraftCreates(env, siteId, params.mailbox_outlook_draft_create_limit ?? params.limit);
     const mailboxSendAcceptedRecords = await listCloudflareMailboxSendAcceptedRecords(env, siteId, params.mailbox_send_accepted_limit ?? params.limit);
     const mailboxSendConfirmations = await listCloudflareMailboxSendConfirmations(env, siteId, params.mailbox_send_confirmation_limit ?? params.limit);
+    const mailboxSendReviews = await listCloudflareMailboxSendReviews(env, siteId, params.mailbox_send_review_limit ?? params.limit);
     const siteFileChangeProposals = await listCloudflareSiteFileChangeProposals(env, siteId, params.site_file_change_proposal_limit ?? params.limit);
     const siteFileMaterializations = await listCloudflareSiteFileMaterializations(env, siteId, params.site_file_materialization_limit ?? params.limit);
     const localIngressRequests = await listCloudflareLocalIngressRequests(env, siteId, params.local_ingress_request_limit ?? params.limit);
@@ -4270,6 +4314,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       mailboxOutlookDraftCreates,
       mailboxSendAcceptedRecords,
       mailboxSendConfirmations,
+      mailboxSendReviews,
       siteFileChangeProposals,
       localIngressRequests,
       localIngressEvidence,
@@ -4364,6 +4409,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         mailbox_outlook_draft_creates: mailboxOutlookDraftCreates,
         mailbox_send_accepted_records: mailboxSendAcceptedRecords,
         mailbox_send_confirmations: mailboxSendConfirmations,
+        mailbox_send_reviews: mailboxSendReviews,
         site_file_change_proposals: siteFileChangeProposals,
         site_file_materializations: siteFileMaterializations,
         local_ingress_requests: localIngressRequests,
@@ -4439,6 +4485,9 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           mailbox_send_confirmation_count: mailboxSendConfirmations.length,
           mailbox_send_confirmation_authority: mailboxSendConfirmations.length > 0 ? CLOUDFLARE_MAILBOX_SEND_CONFIRMATION_AUTHORITY : 'not_observed',
           mailbox_send_delivery_confirmation_admission: mailboxSendConfirmations.length > 0 ? 'admitted' : mailboxSendAcceptedRecords.length > 0 ? 'not_admitted' : 'retained',
+          mailbox_send_review_count: mailboxSendReviews.length,
+          mailbox_send_review_authority: mailboxSendReviews.length > 0 ? CLOUDFLARE_MAILBOX_SEND_REVIEW_AUTHORITY : 'not_observed',
+          mailbox_send_review_admission: mailboxSendReviews.length > 0 ? 'admitted' : 'not_observed',
           mailbox_mutation_admission: mailboxStatusSourceReads.length > 0 || mailboxStatusShadowReads.length > 0 || mailboxDraftReplyProposals.length > 0 || mailboxOutlookDraftCreates.length > 0 || mailboxSendAcceptedRecords.length > 0 ? 'not_admitted' : 'retained',
           mailbox_authority_partition: mailboxStatusSourceReads.length > 0 ? (mailboxSendAcceptedRecords.length > 0 ? (mailboxSendConfirmations.length > 0 ? 'mailbox_status_source_read_send_and_confirmation_cloudflare_owned_mutation_not_admitted' : 'mailbox_status_source_read_and_send_cloudflare_owned_confirmation_and_mutation_not_admitted') : 'mailbox_status_source_read_cloudflare_owned_send_and_mutation_not_admitted') : mailboxStatusShadowReads.length > 0 ? (mailboxSendAcceptedRecords.length > 0 ? (mailboxSendConfirmations.length > 0 ? 'mailbox_status_shadow_read_cloudflare_recorded_send_and_confirmation_cloudflare_owned_mutation_windows_owned' : 'mailbox_status_shadow_read_cloudflare_recorded_send_cloudflare_owned_confirmation_and_mutation_windows_owned') : 'mailbox_status_shadow_read_cloudflare_recorded_send_and_mutation_windows_owned') : 'mailbox_windows_owned',
           mailbox_draft_reply_authority_partition: mailboxDraftReplyProposals.length > 0 ? (mailboxSendAcceptedRecords.length > 0 ? (mailboxSendConfirmations.length > 0 ? 'mailbox_draft_reply_proposal_cloudflare_recorded_send_and_confirmation_cloudflare_owned_outlook_draft_and_mutation_not_admitted' : 'mailbox_draft_reply_proposal_cloudflare_recorded_send_cloudflare_owned_confirmation_outlook_draft_and_mutation_not_admitted') : 'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted') : 'mailbox_draft_reply_windows_owned',
@@ -5827,6 +5876,94 @@ async function listCloudflareMailboxSendConfirmations(env = {}, siteId, limit) {
   `).bind(siteId, boundedLimit).all();
   return (rows.results ?? []).map((row) => ({
     send_confirmation_id: row.send_confirmation_id, site_id: row.site_id, schema: CLOUDFLARE_MAILBOX_SEND_CONFIRMATION_SCHEMA, source_schema: row.source_schema, generated_at: row.generated_at, operation_id: row.operation_id, send_accepted_id: row.send_accepted_id, account_ref: row.account_ref, outlook_draft_id: row.outlook_draft_id, sent_message_ref: row.sent_message_ref, internet_message_id: row.internet_message_id, sent_at: row.sent_at, confirmation_authority: row.confirmation_authority, delivery_confirmation_admission: row.delivery_confirmation_admission, mailbox_mutation_admission: row.mailbox_mutation_admission, confirmation_posture: row.confirmation_posture, graph_status: Number(row.graph_status), graph_response: parseJsonObject(row.graph_response_json), record: parseJsonObject(row.record_json), recorded_by_principal_id: row.recorded_by_principal_id, recorded_at: row.recorded_at,
+  }));
+}
+
+function mailboxSendReviewId(siteId, focusKind, focusRef, generatedAt) {
+  return `mailbox_send_review_${safeIdToken(siteId)}_${safeIdToken(focusKind)}_${safeIdToken(focusRef)}_${safeIdToken(generatedAt)}`;
+}
+
+async function ensureCloudflareMailboxSendReviewSchema(db) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS cloudflare_mailbox_send_review_records (
+      review_id TEXT PRIMARY KEY, site_id TEXT NOT NULL, source_schema TEXT NOT NULL, generated_at TEXT NOT NULL, operation_id TEXT, focus_kind TEXT NOT NULL, focus_ref TEXT NOT NULL, send_accepted_id TEXT, send_confirmation_id TEXT, review_action TEXT NOT NULL, review_status TEXT NOT NULL, review_authority TEXT NOT NULL, mailbox_mutation_admission TEXT NOT NULL, note TEXT, record_json TEXT NOT NULL, recorded_by_principal_id TEXT NOT NULL, recorded_at TEXT NOT NULL
+    )
+  `).run();
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_cloudflare_mailbox_send_review_site_recorded
+    ON cloudflare_mailbox_send_review_records(site_id, recorded_at)
+  `).run();
+}
+
+async function recordCloudflareMailboxSendReview(env = {}, siteId, params = {}, principal = null) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return { ok: false, code: 'missing_site_registry_binding' };
+  if (!siteId || siteId === 'unknown-site') return { ok: false, code: 'missing_site_id' };
+  const now = new Date().toISOString();
+  const focusKind = String(params.focus_kind ?? '');
+  const focusRef = String(params.focus_ref ?? params.send_confirmation_id ?? params.send_accepted_id ?? '');
+  if (!['mailbox_send_confirmation', 'mailbox_send_accepted'].includes(focusKind)) return { ok: false, code: 'mailbox_send_review_requires_supported_focus_kind', schema: CLOUDFLARE_MAILBOX_SEND_REVIEW_SCHEMA, focus_kind: focusKind || null };
+  if (!focusRef) return { ok: false, code: 'mailbox_send_review_requires_focus_ref', schema: CLOUDFLARE_MAILBOX_SEND_REVIEW_SCHEMA };
+  let sendAcceptedId = String(params.send_accepted_id ?? '');
+  let sendConfirmationId = String(params.send_confirmation_id ?? '');
+  let operationId = String(params.operation_id ?? '');
+  await ensureCloudflareMailboxSendAcceptedSchema(db);
+  await ensureCloudflareMailboxSendConfirmationSchema(db);
+  if (focusKind === 'mailbox_send_confirmation') {
+    const confirmation = (await listCloudflareMailboxSendConfirmations(env, siteId, 100))
+      .find((entry) => entry.send_confirmation_id === focusRef);
+    if (!confirmation) return { ok: false, code: 'mailbox_send_review_requires_existing_confirmation', schema: CLOUDFLARE_MAILBOX_SEND_REVIEW_SCHEMA, focus_ref: focusRef };
+    sendConfirmationId = String(confirmation.send_confirmation_id ?? focusRef);
+    sendAcceptedId = String(confirmation.send_accepted_id ?? sendAcceptedId);
+    operationId = operationId || String(confirmation.operation_id ?? '');
+  } else {
+    const accepted = (await listCloudflareMailboxSendAcceptedRecords(env, siteId, 100))
+      .find((entry) => entry.send_accepted_id === focusRef);
+    if (!accepted) return { ok: false, code: 'mailbox_send_review_requires_existing_send_accepted', schema: CLOUDFLARE_MAILBOX_SEND_REVIEW_SCHEMA, focus_ref: focusRef };
+    sendAcceptedId = String(accepted.send_accepted_id ?? focusRef);
+    operationId = operationId || String(accepted.operation_id ?? '');
+  }
+  const generatedAt = String(params.generated_at ?? now);
+  const record = {
+    review_id: params.review_id ?? mailboxSendReviewId(siteId, focusKind, focusRef, generatedAt),
+    site_id: siteId,
+    schema: CLOUDFLARE_MAILBOX_SEND_REVIEW_SCHEMA,
+    source_schema: String(params.source_schema ?? CLOUDFLARE_MAILBOX_SEND_REVIEW_SCHEMA),
+    generated_at: generatedAt,
+    operation_id: operationId,
+    focus_kind: focusKind,
+    focus_ref: focusRef,
+    send_accepted_id: sendAcceptedId,
+    send_confirmation_id: sendConfirmationId,
+    review_action: String(params.review_action ?? 'acknowledge_mailbox_send_review'),
+    review_status: String(params.review_status ?? 'acknowledged'),
+    review_authority: CLOUDFLARE_MAILBOX_SEND_REVIEW_AUTHORITY,
+    mailbox_mutation_admission: 'not_admitted',
+    note: String(params.note ?? ''),
+    recorded_by_principal_id: principal?.principal_id ?? 'unknown-principal',
+    recorded_at: now,
+  };
+  await ensureCloudflareMailboxSendReviewSchema(db);
+  await db.prepare(`
+    INSERT INTO cloudflare_mailbox_send_review_records (
+      review_id, site_id, source_schema, generated_at, operation_id, focus_kind, focus_ref, send_accepted_id, send_confirmation_id, review_action, review_status, review_authority, mailbox_mutation_admission, note, record_json, recorded_by_principal_id, recorded_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(review_id) DO UPDATE SET
+      source_schema = excluded.source_schema, generated_at = excluded.generated_at, operation_id = excluded.operation_id, focus_kind = excluded.focus_kind, focus_ref = excluded.focus_ref, send_accepted_id = excluded.send_accepted_id, send_confirmation_id = excluded.send_confirmation_id, review_action = excluded.review_action, review_status = excluded.review_status, review_authority = excluded.review_authority, mailbox_mutation_admission = excluded.mailbox_mutation_admission, note = excluded.note, record_json = excluded.record_json, recorded_by_principal_id = excluded.recorded_by_principal_id, recorded_at = excluded.recorded_at
+  `).bind(record.review_id, record.site_id, record.source_schema, record.generated_at, record.operation_id, record.focus_kind, record.focus_ref, record.send_accepted_id, record.send_confirmation_id, record.review_action, record.review_status, record.review_authority, record.mailbox_mutation_admission, record.note, JSON.stringify(record), record.recorded_by_principal_id, record.recorded_at).run();
+  return { ok: true, schema: CLOUDFLARE_MAILBOX_SEND_REVIEW_SCHEMA, status: record.review_status, site_id: siteId, mailbox_send_review_authority: record.review_authority, review_admission: 'admitted', mailbox_mutation_admission: record.mailbox_mutation_admission, record };
+}
+
+async function listCloudflareMailboxSendReviews(env = {}, siteId, limit) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function' || !siteId) return [];
+  await ensureCloudflareMailboxSendReviewSchema(db);
+  const boundedLimit = clampInteger(limit, 0, 100, 25);
+  const rows = await db.prepare(`
+    SELECT * FROM cloudflare_mailbox_send_review_records WHERE site_id = ? ORDER BY recorded_at DESC, generated_at DESC LIMIT ?
+  `).bind(siteId, boundedLimit).all();
+  return (rows.results ?? []).map((row) => ({
+    review_id: row.review_id, site_id: row.site_id, schema: CLOUDFLARE_MAILBOX_SEND_REVIEW_SCHEMA, source_schema: row.source_schema, generated_at: row.generated_at, operation_id: row.operation_id, focus_kind: row.focus_kind, focus_ref: row.focus_ref, send_accepted_id: row.send_accepted_id, send_confirmation_id: row.send_confirmation_id, review_action: row.review_action, review_status: row.review_status, review_authority: row.review_authority, mailbox_mutation_admission: row.mailbox_mutation_admission, note: row.note, record: parseJsonObject(row.record_json), recorded_by_principal_id: row.recorded_by_principal_id, recorded_at: row.recorded_at,
   }));
 }
 
@@ -12003,6 +12140,7 @@ export function renderCloudflareCarrierConsole() {
       <div class="product-panel">
         <h2>Mailbox Send Review</h2>
         <div id="mailboxSendReviewDetail" class="evidence-summary"><div class="empty">No mailbox send selected.</div></div>
+        <div class="actions"><button id="acknowledgeMailboxSendReview" class="secondary">Acknowledge Send Review</button></div>
       </div>
       <div class="product-panel">
         <h2>Site Membership</h2>
@@ -12173,6 +12311,7 @@ export function renderCloudflareCarrierConsole() {
           session_limit: carrierEvidenceSessionLimit(),
           mailbox_draft_reply_proposal_limit: 20,
           mailbox_outlook_draft_create_limit: 20,
+          mailbox_send_review_limit: 20,
           repository_publication_request_limit: 20,
           repository_publication_evidence_limit: 20,
         });
@@ -12221,6 +12360,13 @@ export function renderCloudflareCarrierConsole() {
           site_id: el('siteId').value.trim(),
           ...params,
         }, { request_id: 'console_mailbox_outlook_draft_create_' + Date.now() });
+      },
+      acknowledgeMailboxSendReview(params) {
+        return this.request('mailbox.send_review.acknowledge', {
+          site_id: el('siteId').value.trim(),
+          operation_id: el('operationId').value.trim(),
+          ...params,
+        }, { request_id: 'console_mailbox_send_review_acknowledge_' + Date.now() });
       },
       readEvents() { return this.request('session.events.read', { after_sequence: state.afterSequence }); },
       readSessionEvidence() { return this.request('session.events.read', { after_sequence: 0 }); },
@@ -16018,8 +16164,36 @@ export function renderCloudflareCarrierConsole() {
           evidenceField('Graph Status', accepted.graph_status || 'none'),
         );
       }
+      const focusKind = confirmation ? 'mailbox_send_confirmation' : 'mailbox_send_accepted';
+      const focusRef = confirmation?.send_confirmation_id || accepted?.send_accepted_id || '';
+      const latestReview = (product.mailbox_send_reviews || []).find((review) => review.focus_kind === focusKind && review.focus_ref === focusRef) || null;
       if (accepted && confirmation) fields.push(evidenceField('Accepted Status', accepted.status || 'unknown'));
+      fields.push(
+        evidenceField('Review Status', latestReview?.review_status || 'not_acknowledged'),
+        evidenceField('Review Record', latestReview?.review_id || 'none'),
+        evidenceField('Review Operator', latestReview?.recorded_by_principal_id || 'none'),
+      );
       el('mailboxSendReviewDetail').replaceChildren(...fields);
+    }
+    async function acknowledgeFocusedMailboxSendReview() {
+      const product = state.operationProduct || {};
+      const confirmation = state.mailboxSendConfirmationFocus || (!state.mailboxSendAcceptedFocus ? (product.mailbox_send_confirmations || [])[0] || null : null);
+      const accepted = confirmation
+        ? (product.mailbox_send_accepted_records || []).find((entry) => entry.send_accepted_id === confirmation.send_accepted_id) || null
+        : state.mailboxSendAcceptedFocus || (product.mailbox_send_accepted_records || [])[0] || null;
+      if (!confirmation && !accepted) throw new Error('Mailbox send review focus is required.');
+      const focusKind = confirmation ? 'mailbox_send_confirmation' : 'mailbox_send_accepted';
+      const focusRef = confirmation?.send_confirmation_id || accepted?.send_accepted_id || '';
+      const body = await api.acknowledgeMailboxSendReview({
+        focus_kind: focusKind,
+        focus_ref: focusRef,
+        send_confirmation_id: confirmation?.send_confirmation_id || '',
+        send_accepted_id: confirmation?.send_accepted_id || accepted?.send_accepted_id || '',
+        review_action: 'acknowledge_mailbox_send_review',
+        note: 'operator_acknowledged_mailbox_send_review',
+      });
+      await refreshOperation();
+      return body;
     }
     async function createOutlookDraftFromFocusedProposal() {
       const proposal = focusedMailboxDraftReplyProposal();
@@ -17810,6 +17984,7 @@ export function renderCloudflareCarrierConsole() {
     el('carrierEvidenceSessionLimit').addEventListener('change', () => { el('carrierEvidenceSessionLimit').value = String(carrierEvidenceSessionLimit()); saveWorkbenchState(); });
     el('startResidentDispatch').addEventListener('click', () => run(startResidentDispatchFromWorkbench));
     el('createOutlookDraftFromProposal').addEventListener('click', () => run(createOutlookDraftFromFocusedProposal));
+    el('acknowledgeMailboxSendReview').addEventListener('click', () => run(acknowledgeFocusedMailboxSendReview));
     el('continuityWorkflowNextAction').addEventListener('click', applyContinuityWorkflowNextStep);
     el('authorityNextAction').addEventListener('click', applyAuthorityNextAction);
     el('authorityReadSiteAction').addEventListener('click', () => run(refreshSiteProduct));

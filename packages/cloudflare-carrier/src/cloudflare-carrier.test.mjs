@@ -2145,9 +2145,11 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /mailboxDraftCreateControl/);
   assert.match(html, /Mailbox Send Review/);
   assert.match(html, /mailboxSendReviewDetail/);
+  assert.match(html, /acknowledgeMailboxSendReview/);
   assert.match(html, /selectMailboxSendConfirmation/);
   assert.match(html, /selectMailboxSendAccepted/);
   assert.match(html, /renderMailboxSendReviewDetail/);
+  assert.match(html, /mailbox\.send_review\.acknowledge/);
   assert.match(html, /Focus Send Confirmation/);
   assert.match(html, /Focus Send Accepted/);
   assert.match(html, /createOutlookDraftFromProposal/);
@@ -4410,6 +4412,63 @@ test('worker creates Outlook drafts through Cloudflare Graph authority without a
   assert.equal(operationReadAfterConfirmationBody.operation_workflow_route.target, 'mailbox_send_confirmation_fixture_1');
   assert.equal(operationReadAfterConfirmationBody.operation_workflow_route.status, 'needs_attention');
   assert.deepEqual(operationReadAfterConfirmationBody.operation_product_surface.operation_workflow_route, operationReadAfterConfirmationBody.operation_workflow_route);
+
+  const refusedReviewWithoutConfirmation = await worker.fetch(jsonRequest({
+    operation: 'mailbox.send_review.acknowledge',
+    request_id: 'request_mailbox_send_review_refused_missing_confirmation',
+    params: { site_id: 'site_fixture', focus_kind: 'mailbox_send_confirmation', focus_ref: 'missing-confirmation' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(refusedReviewWithoutConfirmation.status, 403);
+  assert.equal((await refusedReviewWithoutConfirmation.json()).code, 'mailbox_send_review_requires_existing_confirmation');
+
+  const review = await worker.fetch(jsonRequest({
+    operation: 'mailbox.send_review.acknowledge',
+    request_id: 'request_mailbox_send_review_acknowledge',
+    params: {
+      site_id: 'site_fixture',
+      review_id: 'mailbox_send_review_fixture_1',
+      focus_kind: 'mailbox_send_confirmation',
+      focus_ref: 'mailbox_send_confirmation_fixture_1',
+      review_action: 'acknowledge_mailbox_send_review',
+      note: 'operator reviewed confirmed send without mailbox mutation',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  const reviewBody = await review.json();
+  assert.equal(review.status, 200, JSON.stringify(reviewBody));
+  assert.equal(reviewBody.schema, 'narada.sonar.cloudflare_mailbox_send_review.v1');
+  assert.equal(reviewBody.status, 'acknowledged');
+  assert.equal(reviewBody.mailbox_send_review_authority, 'cloudflare_operator_mailbox_send_review');
+  assert.equal(reviewBody.review_admission, 'admitted');
+  assert.equal(reviewBody.mailbox_mutation_admission, 'not_admitted');
+  assert.equal(reviewBody.record.focus_kind, 'mailbox_send_confirmation');
+  assert.equal(reviewBody.record.send_confirmation_id, 'mailbox_send_confirmation_fixture_1');
+  assert.equal(reviewBody.record.send_accepted_id, 'mailbox_send_accepted_fixture_1');
+
+  const reviewListed = await worker.fetch(jsonRequest({
+    operation: 'mailbox.send_review.list',
+    request_id: 'request_mailbox_send_review_list',
+    params: { site_id: 'site_fixture', mailbox_send_review_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(reviewListed.status, 200);
+  const reviewListedBody = await reviewListed.json();
+  assert.equal(reviewListedBody.mailbox_send_review_authority, 'cloudflare_operator_mailbox_send_review');
+  assert.equal(reviewListedBody.review_admission, 'admitted');
+  assert.equal(reviewListedBody.mailbox_mutation_admission, 'not_admitted');
+  assert.equal(reviewListedBody.authority_partition, 'mailbox_send_review_cloudflare_operator_owned_mailbox_mutation_not_admitted');
+  assert.deepEqual(reviewListedBody.reviews.map((entry) => entry.review_id), ['mailbox_send_review_fixture_1']);
+
+  const operationReadAfterReview = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_mailbox_send_review_operation_read',
+    params: { site_id: 'site_fixture', operation_id: 'operation_mailbox_draft_create', mailbox_outlook_draft_create_limit: 10, mailbox_send_accepted_limit: 10, mailbox_send_confirmation_limit: 10, mailbox_send_review_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(operationReadAfterReview.status, 200);
+  const operationReadAfterReviewBody = await operationReadAfterReview.json();
+  assert.equal(operationReadAfterReviewBody.mailbox_send_reviews.length, 1);
+  assert.equal(operationReadAfterReviewBody.operation_product_surface.mailbox_send_review_count, 1);
+  assert.equal(operationReadAfterReviewBody.operation_product_surface.mailbox_send_review_authority, 'cloudflare_operator_mailbox_send_review');
+  assert.equal(operationReadAfterReviewBody.operation_product_surface.mailbox_send_review_admission, 'admitted');
+  assert.equal(operationReadAfterReviewBody.operation_activity_timeline.items.some((entry) => entry.activity_kind === 'mailbox_send_review_acknowledgement'), true);
 });
 
 test('worker records site file change proposals without admitting filesystem or publication mutation', async () => {
@@ -7054,6 +7113,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     mailboxOutlookDraftCreates: clone(initial.mailboxOutlookDraftCreates ?? []),
     mailboxSendAcceptedRecords: clone(initial.mailboxSendAcceptedRecords ?? []),
     mailboxSendConfirmations: clone(initial.mailboxSendConfirmations ?? []),
+    mailboxSendReviews: clone(initial.mailboxSendReviews ?? []),
     siteFileChangeProposals: clone(initial.siteFileChangeProposals ?? []),
     siteFileMaterializations: clone(initial.siteFileMaterializations ?? []),
     localIngressRequests: clone(initial.localIngressRequests ?? []),
@@ -7210,6 +7270,12 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const row = { send_confirmation_id, site_id, source_schema, generated_at, operation_id, send_accepted_id, account_ref, outlook_draft_id, sent_message_ref, internet_message_id, sent_at, confirmation_authority, delivery_confirmation_admission, mailbox_mutation_admission, confirmation_posture, graph_status, graph_response_json, cutover_point_ref, governed_write_contract_ref, confirmation_evidence_ref, record_json, recorded_by_principal_id, recorded_at };
         if (existing) Object.assign(existing, row);
         else state.mailboxSendConfirmations.push(row);
+      } else if (normalized.startsWith('insert into cloudflare_mailbox_send_review_records')) {
+        const [review_id, site_id, source_schema, generated_at, operation_id, focus_kind, focus_ref, send_accepted_id, send_confirmation_id, review_action, review_status, review_authority, mailbox_mutation_admission, note, record_json, recorded_by_principal_id, recorded_at] = bindings;
+        const existing = state.mailboxSendReviews.find((entry) => entry.review_id === review_id);
+        const row = { review_id, site_id, source_schema, generated_at, operation_id, focus_kind, focus_ref, send_accepted_id, send_confirmation_id, review_action, review_status, review_authority, mailbox_mutation_admission, note, record_json, recorded_by_principal_id, recorded_at };
+        if (existing) Object.assign(existing, row);
+        else state.mailboxSendReviews.push(row);
       } else if (normalized.startsWith('insert into cloudflare_site_file_change_proposals')) {
         const [proposal_id, site_id, source_schema, generated_at, operation_id, task_id, proposal_ref, proposal_summary, authority_locus, filesystem_executor_authority, filesystem_mutation_admission, repository_publication_admission, proposal_posture, file_count, proposal_json, recorded_by_principal_id, recorded_at] = bindings;
         const existing = state.siteFileChangeProposals.find((entry) => entry.proposal_id === proposal_id);
@@ -7414,6 +7480,16 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const [siteId, limit] = bindings;
         return {
           results: state.mailboxSendConfirmations
+            .filter((entry) => entry.site_id === siteId)
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_mailbox_send_review_records')) {
+        const [siteId, limit] = bindings;
+        return {
+          results: state.mailboxSendReviews
             .filter((entry) => entry.site_id === siteId)
             .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
             .slice(0, Number(limit))
