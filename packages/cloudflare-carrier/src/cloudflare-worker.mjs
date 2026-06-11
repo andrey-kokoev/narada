@@ -1780,6 +1780,127 @@ async function importCloudflareContinuityLoopReport(env = {}, report, { recorded
   };
 }
 
+function summarizeCloudflareSiteContinuityReconciliationExecutionStatus(siteId, executions = []) {
+  const records = Array.isArray(executions) ? executions : [];
+  const latest = records[0] ?? null;
+  return {
+    schema: 'narada.cloudflare_site_continuity_reconciliation_execution_status.v1',
+    site_id: siteId,
+    state: latest ? 'reconciliation_execution_observed' : 'no_reconciliation_execution_observed',
+    execution_count: records.length,
+    latest_execution_id: latest?.execution_id ?? null,
+    latest_status: latest?.status ?? null,
+    latest_generated_at: latest?.generated_at ?? null,
+    latest_persisted_at: latest?.persisted_at ?? null,
+    latest_recorded_at: latest?.recorded_at ?? null,
+    reconciliation_plan_status: latest?.reconciliation_plan_status ?? null,
+    selected_site_count: latest?.selected_site_count ?? 0,
+    executed_site_count: latest?.executed_site_count ?? 0,
+    completed_site_count: latest?.completed_site_count ?? 0,
+    failed_site_count: latest?.failed_site_count ?? 0,
+    refusal_reason: latest?.refusal_reason ?? null,
+    authority_boundary: {
+      executable_cross_embodiment_mutation: 'not_admitted_cloudflare_records_windows_reconciliation_evidence_only',
+      durable_mutation_authority: 'cloudflare_records_reconciliation_evidence_windows_executes_sync_once',
+    },
+    next_action: !latest
+      ? 'run_site_continuity_reconciliation'
+      : latest.status === 'completed'
+        ? 'monitor_site_continuity_reconciliation'
+        : 'review_site_continuity_reconciliation_execution',
+  };
+}
+
+function createSiteContinuityReconciliationExecutionId(execution = {}, siteId = null) {
+  return [
+    'site-continuity-reconciliation-execution',
+    siteId || execution.site_id || execution.plan?.site_id || 'unknown-site',
+    execution.generated_at || execution.persisted_at || 'unknown-time',
+    execution.status || 'unknown-status',
+  ].map((part) => String(part).replace(/[^A-Za-z0-9_.:-]/g, '_')).join(':');
+}
+
+function inferSiteIdForReconciliationExecution(execution = {}, fallbackSiteId = null) {
+  if (fallbackSiteId) return fallbackSiteId;
+  if (execution.site_id) return execution.site_id;
+  if (execution.plan?.site_id) return execution.plan.site_id;
+  const resultSites = [...new Set((execution.results ?? []).map((result) => result?.site_id).filter(Boolean))];
+  if (resultSites.length === 1) return resultSites[0];
+  const selectedSites = [...new Set((execution.plan?.reconciliation_plan?.selected_sites ?? []).map((site) => site?.site_id).filter(Boolean))];
+  if (selectedSites.length === 1) return selectedSites[0];
+  return null;
+}
+
+function summarizeSiteContinuityReconciliationExecution(execution = {}, siteId = null) {
+  const effectiveSiteId = inferSiteIdForReconciliationExecution(execution, siteId);
+  return {
+    execution_id: execution.execution_id ?? createSiteContinuityReconciliationExecutionId(execution, effectiveSiteId),
+    site_id: effectiveSiteId,
+    status: execution.status ?? 'unknown',
+    generated_at: execution.generated_at ?? null,
+    persisted_at: execution.persisted_at ?? null,
+    reconciliation_plan_status: execution.reconciliation_plan_status ?? null,
+    selected_site_count: execution.selected_site_count ?? 0,
+    executed_site_count: execution.executed_site_count ?? 0,
+    completed_site_count: execution.completed_site_count ?? 0,
+    failed_site_count: execution.failed_site_count ?? 0,
+    refusal_reason: execution.refusal_reason ?? null,
+  };
+}
+
+async function importCloudflareContinuityReconciliationExecution(env = {}, execution, { site_id = null, recorded_by_principal_id = 'unknown-principal' } = {}) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return { ok: false, code: 'missing_site_registry_binding' };
+  if (!execution || typeof execution !== 'object') return { ok: false, code: 'missing_site_continuity_reconciliation_execution' };
+  if (execution.schema !== 'narada.cloudflare_carrier.site_continuity_reconciliation_execution.v1') return { ok: false, code: 'unsupported_site_continuity_reconciliation_execution_schema' };
+  const summary = summarizeSiteContinuityReconciliationExecution(execution, site_id);
+  if (!summary.site_id) return { ok: false, code: 'site_continuity_reconciliation_execution_site_id_missing' };
+  await ensureCloudflareContinuityReconciliationExecutionSchema(db);
+  const recordedAt = new Date().toISOString();
+  await db.prepare(`INSERT INTO cloudflare_site_continuity_reconciliation_executions (
+    execution_id, site_id, status, generated_at, persisted_at, reconciliation_plan_status,
+    selected_site_count, executed_site_count, completed_site_count, failed_site_count,
+    refusal_reason, execution_json, recorded_by_principal_id, recorded_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT(execution_id) DO UPDATE SET
+    status = excluded.status,
+    generated_at = excluded.generated_at,
+    persisted_at = excluded.persisted_at,
+    reconciliation_plan_status = excluded.reconciliation_plan_status,
+    selected_site_count = excluded.selected_site_count,
+    executed_site_count = excluded.executed_site_count,
+    completed_site_count = excluded.completed_site_count,
+    failed_site_count = excluded.failed_site_count,
+    refusal_reason = excluded.refusal_reason,
+    execution_json = excluded.execution_json,
+    recorded_by_principal_id = excluded.recorded_by_principal_id,
+    recorded_at = excluded.recorded_at`).bind(
+    summary.execution_id,
+    summary.site_id,
+    summary.status,
+    summary.generated_at,
+    summary.persisted_at,
+    summary.reconciliation_plan_status,
+    summary.selected_site_count,
+    summary.executed_site_count,
+    summary.completed_site_count,
+    summary.failed_site_count,
+    summary.refusal_reason,
+    JSON.stringify(execution),
+    recorded_by_principal_id,
+    recordedAt,
+  ).run();
+  return {
+    ok: true,
+    status: 'recorded',
+    execution_record: {
+      ...summary,
+      recorded_by_principal_id,
+      recorded_at: recordedAt,
+    },
+  };
+}
+
 function summarizeLocalCloudContinuityBridge(siteId, continuityPackets = [], siteContinuity = null, continuityStatus = null) {
   const binding = siteContinuity?.binding ?? {};
   const localWindowsEmbodiment = (binding.embodiments || []).find((embodiment) => embodiment.embodiment_kind === SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS) ?? {};
@@ -2229,6 +2350,17 @@ async function listCloudflareContinuityLoopReports(env = {}, siteId, limit = 20)
   const result = await db.prepare(`SELECT report_id, site_id, status, generated_at, cloudflare_source, cloudflare_push_status,
     windows_packet_count, cloudflare_credential_source, recorded_by_principal_id, recorded_at
     FROM cloudflare_site_continuity_loop_reports WHERE site_id = ? ORDER BY recorded_at DESC LIMIT ?`).bind(siteId, boundedContinuityPacketReadLimit(limit)).all();
+  return result.results ?? [];
+}
+
+async function listCloudflareContinuityReconciliationExecutions(env = {}, siteId, limit = 20) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function' || !siteId) return [];
+  await ensureCloudflareContinuityReconciliationExecutionSchema(db);
+  const result = await db.prepare(`SELECT execution_id, site_id, status, generated_at, persisted_at,
+    reconciliation_plan_status, selected_site_count, executed_site_count, completed_site_count,
+    failed_site_count, refusal_reason, recorded_by_principal_id, recorded_at
+    FROM cloudflare_site_continuity_reconciliation_executions WHERE site_id = ? ORDER BY recorded_at DESC LIMIT ?`).bind(siteId, boundedContinuityPacketReadLimit(limit)).all();
   return result.results ?? [];
 }
 
@@ -3274,6 +3406,7 @@ function summarizeCloudflareSiteProductStatus({
   carrierEvidenceReadStatus = null,
   continuityStatus = null,
   continuityLoopStatus = null,
+  continuityReconciliationExecutionStatus = null,
   operationContinuityDirectionStatus = null,
 } = {}) {
   const operationList = Array.isArray(operations) ? operations : [];
@@ -3289,6 +3422,7 @@ function summarizeCloudflareSiteProductStatus({
   const continuityState = continuityStatus?.state ?? 'unknown';
   const continuityLoopState = continuityLoopStatus?.state ?? 'unknown';
   const continuityLoopFreshnessState = continuityLoopStatus?.freshness_state ?? 'unknown';
+  const continuityReconciliationExecutionState = continuityReconciliationExecutionStatus?.state ?? 'unknown';
   const continuityDirectionState = operationContinuityDirectionStatus?.state ?? 'unknown';
   const missing = [];
   if (activeMembershipCount === 0) missing.push('active_membership');
@@ -3330,6 +3464,9 @@ function summarizeCloudflareSiteProductStatus({
     continuity_loop_state: continuityLoopState,
     continuity_packet_count: continuityStatus?.packet_count ?? 0,
     continuity_loop_report_count: continuityLoopStatus?.report_count ?? 0,
+    continuity_reconciliation_execution_count: continuityReconciliationExecutionStatus?.execution_count ?? 0,
+    continuity_reconciliation_execution_state: continuityReconciliationExecutionState,
+    site_continuity_reconciliation_execution_status: continuityReconciliationExecutionStatus,
     continuity_loop_freshness_state: continuityLoopFreshnessState,
     continuity_loop_report_age_ms: continuityLoopStatus?.latest_report_age_ms ?? null,
     site_continuity_loop_status: continuityLoopStatus,
@@ -3380,6 +3517,26 @@ async function ensureCloudflareContinuityLoopReportSchema(db) {
     recorded_at TEXT NOT NULL
   )`).run();
   await db.prepare('CREATE INDEX IF NOT EXISTS cloudflare_site_continuity_loop_reports_site_idx ON cloudflare_site_continuity_loop_reports(site_id, recorded_at)').run();
+}
+
+async function ensureCloudflareContinuityReconciliationExecutionSchema(db) {
+  await db.prepare(`CREATE TABLE IF NOT EXISTS cloudflare_site_continuity_reconciliation_executions (
+    execution_id TEXT PRIMARY KEY,
+    site_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    generated_at TEXT,
+    persisted_at TEXT,
+    reconciliation_plan_status TEXT,
+    selected_site_count INTEGER NOT NULL,
+    executed_site_count INTEGER NOT NULL,
+    completed_site_count INTEGER NOT NULL,
+    failed_site_count INTEGER NOT NULL,
+    refusal_reason TEXT,
+    execution_json TEXT NOT NULL,
+    recorded_by_principal_id TEXT NOT NULL,
+    recorded_at TEXT NOT NULL
+  )`).run();
+  await db.prepare('CREATE INDEX IF NOT EXISTS cloudflare_site_continuity_reconciliation_executions_site_idx ON cloudflare_site_continuity_reconciliation_executions(site_id, recorded_at)').run();
 }
 
 async function validateCarrierSiteBindingForRequest(body, principal, env = {}) {
@@ -3504,6 +3661,7 @@ function isSiteProductOperation(operation) {
     'site.continuity.packet.publish',
     'site.continuity.packet.put',
     'site.continuity.loop.report.put',
+    'site.continuity.reconciliation_execution.put',
     'operation.create',
     'operation.status.put',
     'operation.read',
@@ -4634,6 +4792,17 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const result = await importCloudflareContinuityLoopReport(env, report, { recorded_by_principal_id: principal?.principal_id ?? 'unknown-principal' });
     return { status: result.ok ? 200 : 400, body: result };
   }
+  if (body.operation === 'site.continuity.reconciliation_execution.put') {
+    const execution = params.execution ?? body.execution ?? null;
+    const executionSiteId = params.site_id ?? inferSiteIdForReconciliationExecution(execution, requestedSiteId);
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: executionSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const result = await importCloudflareContinuityReconciliationExecution(env, execution, {
+      site_id: executionSiteId,
+      recorded_by_principal_id: principal?.principal_id ?? 'unknown-principal',
+    });
+    return { status: result.ok ? 200 : 400, body: result };
+  }
   if (body.operation === 'site.membership.put') {
     const { decision } = classifyCloudflareSiteAuthority(env, requestedSiteId, SITE_MUTATION_CLASSES.HOSTED_SITE_MEMBERSHIP);
     if (decision.action !== SITE_AUTHORITY_ACTIONS.ADMIT) {
@@ -4678,6 +4847,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const tasks = await listOperationTasks(env, siteId, sessions);
     const continuityPackets = await listCloudflareContinuityPackets(env, siteId);
     const continuityLoopReports = await listCloudflareContinuityLoopReports(env, siteId, params.continuity_loop_report_limit ?? params.limit);
+    const continuityReconciliationExecutions = await listCloudflareContinuityReconciliationExecutions(env, siteId, params.continuity_reconciliation_execution_limit ?? params.limit);
     const webhookDelayShadowObservations = await listCloudflareWebhookDelayShadowObservations(env, siteId, params.webhook_delay_shadow_limit ?? params.limit);
     const webhookDelayObservationPrimaryReads = await listCloudflareWebhookDelayObservationPrimaryReads(env, siteId, params.webhook_delay_observation_primary_limit ?? params.limit);
     const webhookDelayScheduledSourceReads = await listCloudflareWebhookDelayScheduledSourceReads(env, siteId, params.webhook_delay_scheduled_source_read_limit ?? params.limit);
@@ -4712,6 +4882,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
     const siteContinuityStatus = summarizeCloudflareSiteContinuityStatus(siteId, continuityPackets, siteContinuity);
     const siteContinuityLoopStatus = summarizeCloudflareSiteContinuityLoopStatus(siteId, continuityLoopReports);
+    const siteContinuityReconciliationExecutionStatus = summarizeCloudflareSiteContinuityReconciliationExecutionStatus(siteId, continuityReconciliationExecutions);
     const cloudflarePersistencePosture = summarizeCloudflarePersistencePosture(env, {
       siteId,
       operation,
@@ -4739,6 +4910,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       carrierEvidence,
       continuityPackets,
       continuityLoopReports,
+      continuityReconciliationExecutions,
       webhookDelayDirectiveRecords,
       webhookDelayDirectiveDeliveries,
       residentLoopShadowRuns,
@@ -4853,6 +5025,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         tasks,
         site_continuity_packets: continuityPackets,
         site_continuity_loop_reports: continuityLoopReports,
+        site_continuity_reconciliation_executions: continuityReconciliationExecutions,
         webhook_delay_shadow_observations: webhookDelayShadowObservations,
         webhook_delay_observation_primary_reads: webhookDelayObservationPrimaryReads,
         webhook_delay_scheduled_source_reads: webhookDelayScheduledSourceReads,
@@ -4887,6 +5060,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         site_continuity: siteContinuity,
         site_continuity_status: siteContinuityStatus,
         site_continuity_loop_status: siteContinuityLoopStatus,
+        site_continuity_reconciliation_execution_status: siteContinuityReconciliationExecutionStatus,
         local_cloud_continuity_bridge: localCloudContinuityBridge,
         operation_continuity_direction_status: operationContinuityDirectionStatus,
         cloudflare_persistence_posture: cloudflarePersistencePosture,
@@ -4914,6 +5088,8 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           continuity_status: siteContinuityStatus,
           continuity_loop_report_count: continuityLoopReports.length,
           continuity_loop_status: siteContinuityLoopStatus,
+          continuity_reconciliation_execution_count: continuityReconciliationExecutions.length,
+          continuity_reconciliation_execution_status: siteContinuityReconciliationExecutionStatus,
           local_cloud_continuity_bridge: localCloudContinuityBridge,
           operation_continuity_direction_status: operationContinuityDirectionStatus,
           status_history: operationStatusHistory,
@@ -5060,6 +5236,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
   const tasks = await listSiteTasks(env, siteId);
   const continuityPackets = await listCloudflareContinuityPackets(env, siteId);
   const continuityLoopReports = await listCloudflareContinuityLoopReports(env, siteId, params.continuity_loop_report_limit ?? params.limit);
+  const continuityReconciliationExecutions = await listCloudflareContinuityReconciliationExecutions(env, siteId, params.continuity_reconciliation_execution_limit ?? params.limit);
   const webhookDelayShadowObservations = await listCloudflareWebhookDelayShadowObservations(env, siteId, params.webhook_delay_shadow_limit ?? params.limit);
   const webhookDelayObservationPrimaryReads = await listCloudflareWebhookDelayObservationPrimaryReads(env, siteId, params.webhook_delay_observation_primary_limit ?? params.limit);
   const webhookDelayScheduledSourceReads = await listCloudflareWebhookDelayScheduledSourceReads(env, siteId, params.webhook_delay_scheduled_source_read_limit ?? params.limit);
@@ -5081,6 +5258,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
   const siteContinuity = cloudflareSiteContinuityReadModel(env, siteId);
   const siteContinuityStatus = summarizeCloudflareSiteContinuityStatus(siteId, continuityPackets, siteContinuity);
   const siteContinuityLoopStatus = summarizeCloudflareSiteContinuityLoopStatus(siteId, continuityLoopReports);
+  const siteContinuityReconciliationExecutionStatus = summarizeCloudflareSiteContinuityReconciliationExecutionStatus(siteId, continuityReconciliationExecutions);
   const localCloudContinuityBridge = summarizeLocalCloudContinuityBridge(siteId, continuityPackets, siteContinuity, siteContinuityStatus);
   const operationContinuityDirectionStatus = summarizeCloudflareOperationContinuityDirectionStatus({
     siteId,
@@ -5114,12 +5292,14 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     carrierEvidenceReadStatus,
     continuityStatus: siteContinuityStatus,
     continuityLoopStatus: siteContinuityLoopStatus,
+    continuityReconciliationExecutionStatus: siteContinuityReconciliationExecutionStatus,
     operationContinuityDirectionStatus,
   });
   return {
     tasks,
     site_continuity_packets: continuityPackets,
     site_continuity_loop_reports: continuityLoopReports,
+    site_continuity_reconciliation_executions: continuityReconciliationExecutions,
     webhook_delay_shadow_observations: webhookDelayShadowObservations,
     webhook_delay_observation_primary_reads: webhookDelayObservationPrimaryReads,
     webhook_delay_scheduled_source_reads: webhookDelayScheduledSourceReads,
@@ -5141,6 +5321,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     site_continuity: siteContinuity,
     site_continuity_status: siteContinuityStatus,
     site_continuity_loop_status: siteContinuityLoopStatus,
+    site_continuity_reconciliation_execution_status: siteContinuityReconciliationExecutionStatus,
     local_cloud_continuity_bridge: localCloudContinuityBridge,
     operation_continuity_direction_status: operationContinuityDirectionStatus,
     cloudflare_persistence_posture: cloudflarePersistencePosture,
@@ -13788,7 +13969,8 @@ export function renderCloudflareCarrierConsole() {
       el('controlEvidenceFocus').textContent = state.evidenceFocus ? eventTitle(state.evidenceFocus) : 'none';
       el('controlEvidenceWindow').textContent = String(surface.carrier_evidence_count ?? state.events.length) + ' evidence groups / ' + state.events.length + ' loaded events';
       const continuityStatus = surface.continuity_status || product.site_continuity_status || {};
-      el('controlContinuity').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length ?? 0) + ' packets / ' + String(continuityStatus.state || 'no_status') + ' / ' + String(surface.webhook_delay_directive_record_count ?? (product.webhook_delay_directive_records || []).length ?? 0) + ' directive intents';
+      const reconciliationStatus = surface.continuity_reconciliation_execution_status || product.site_continuity_reconciliation_execution_status || {};
+      el('controlContinuity').textContent = String(surface.continuity_packet_count ?? (product.site_continuity_packets || []).length ?? 0) + ' packets / ' + String(continuityStatus.state || 'no_status') + ' / ' + String(reconciliationStatus.latest_status || reconciliationStatus.state || 'no_reconcile') + ' reconcile / ' + String(surface.webhook_delay_directive_record_count ?? (product.webhook_delay_directive_records || []).length ?? 0) + ' directive intents';
       const lifecycleStatus = surface.lifecycle_status || product.operation_lifecycle_status || {};
       el('controlWorkbenchReadiness').textContent = operationWorkbenchReadiness(product) + ' / ' + String(lifecycleStatus.health || 'no_lifecycle_status');
       renderControlRoomActionSummary(product);
@@ -13845,6 +14027,8 @@ export function renderCloudflareCarrierConsole() {
         ['Evidence Replay State', evidenceStatus.state || 'unknown'],
         ['Evidence Replay Source', evidenceReplaySources(product)],
         ['Evidence Replay Sessions', evidenceReplaySessionSummary(evidenceStatus)],
+        ['Continuity Reconciliation Executions', String((product.site_continuity_reconciliation_executions || []).length)],
+        ['Continuity Reconciliation Status', (product.site_continuity_reconciliation_execution_status || surface.continuity_reconciliation_execution_status || {}).latest_status || (product.site_continuity_reconciliation_execution_status || surface.continuity_reconciliation_execution_status || {}).state || 'unknown'],
         ['Persistence State', persistence.state || 'unknown'],
         ['Persistence Next Action', persistence.next_action || 'monitor_persistence_posture'],
         ['Recovery State', recovery.state || 'unknown'],

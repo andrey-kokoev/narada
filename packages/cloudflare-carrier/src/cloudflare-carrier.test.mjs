@@ -1230,6 +1230,29 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.match(loopReportPutBody.report_record.report_id, /^site-continuity-loop:site_fixture:/);
   assert.equal(loopReportPutBody.report_record.windows_packet_count, 1);
 
+  const reconciliationExecution = {
+    schema: 'narada.cloudflare_carrier.site_continuity_reconciliation_execution.v1',
+    status: 'completed',
+    generated_at: new Date().toISOString(),
+    persisted_at: new Date().toISOString(),
+    reconciliation_plan_status: 'ready',
+    selected_site_count: 1,
+    executed_site_count: 1,
+    completed_site_count: 1,
+    failed_site_count: 0,
+    results: [{ site_id: 'site_fixture', status: 'completed' }],
+  };
+  const reconciliationExecutionPut = await worker.fetch(jsonRequest({
+    operation: 'site.continuity.reconciliation_execution.put',
+    request_id: 'request_site_continuity_reconciliation_execution_put',
+    params: { site_id: 'site_fixture', execution: reconciliationExecution },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(reconciliationExecutionPut.status, 200);
+  const reconciliationExecutionPutBody = await reconciliationExecutionPut.json();
+  assert.equal(reconciliationExecutionPutBody.status, 'recorded');
+  assert.match(reconciliationExecutionPutBody.execution_record.execution_id, /^site-continuity-reconciliation-execution:site_fixture:/);
+  assert.equal(reconciliationExecutionPutBody.execution_record.completed_site_count, 1);
+
   const readAfterPacketPut = await worker.fetch(jsonRequest({
     operation: 'site.read',
     request_id: 'request_site_read_after_continuity_packet_put',
@@ -1260,6 +1283,12 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.refresh_command, 'pnpm site:continuity:loop -- sync-cloudflare --site site_fixture --url <worker-url> --token-file <token-file>');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.pull_command, 'pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- pull-cloudflare --site site_fixture --url <worker-url> --token-file <token-file>');
   assert.equal(readAfterPacketPutBody.site_continuity_loop_reports.length, 1);
+  assert.equal(readAfterPacketPutBody.site_continuity_reconciliation_executions.length, 1);
+  assert.equal(readAfterPacketPutBody.site_continuity_reconciliation_execution_status.schema, 'narada.cloudflare_site_continuity_reconciliation_execution_status.v1');
+  assert.equal(readAfterPacketPutBody.site_continuity_reconciliation_execution_status.state, 'reconciliation_execution_observed');
+  assert.equal(readAfterPacketPutBody.site_continuity_reconciliation_execution_status.latest_status, 'completed');
+  assert.equal(readAfterPacketPutBody.site_continuity_reconciliation_execution_status.completed_site_count, 1);
+  assert.equal(readAfterPacketPutBody.site_continuity_reconciliation_execution_status.next_action, 'monitor_site_continuity_reconciliation');
   assert.equal(readAfterPacketPutBody.site_continuity_loop_status.schema, 'narada.cloudflare_site_continuity_loop_status.v1');
   assert.equal(readAfterPacketPutBody.site_continuity_loop_status.state, 'loop_report_observed');
   assert.equal(readAfterPacketPutBody.site_continuity_loop_status.report_count, 1);
@@ -1279,6 +1308,9 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(readAfterPacketPutBody.site_product_status.continuity_loop_state, 'loop_report_observed');
   assert.equal(readAfterPacketPutBody.site_product_status.continuity_packet_count, readAfterPacketPutBody.site_continuity_status.packet_count);
   assert.equal(readAfterPacketPutBody.site_product_status.continuity_loop_report_count, 1);
+  assert.equal(readAfterPacketPutBody.site_product_status.continuity_reconciliation_execution_count, 1);
+  assert.equal(readAfterPacketPutBody.site_product_status.continuity_reconciliation_execution_state, 'reconciliation_execution_observed');
+  assert.equal(readAfterPacketPutBody.site_product_status.site_continuity_reconciliation_execution_status.latest_status, 'completed');
   assert.equal(readAfterPacketPutBody.site_product_status.continuity_loop_freshness_state, 'fresh');
   assert.equal(readAfterPacketPutBody.site_product_status.site_continuity_loop_status.freshness_state, 'fresh');
   assert.equal(readAfterPacketPutBody.site_product_status.next_action, 'open_tasks');
@@ -3467,6 +3499,8 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Continuity Loop Reports/);
   assert.match(html, /continuity_packet_count/);
   assert.match(html, /continuity_loop_reports/);
+  assert.match(html, /site_continuity_reconciliation_executions/);
+  assert.match(html, /continuity_reconciliation_execution_status/);
   assert.match(html, /loop_report/);
   assert.match(html, /continuitySummary/);
   assert.match(html, /site_continuity/);
@@ -7982,6 +8016,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     operatorSessions: clone(initial.operatorSessions ?? []),
     continuityPackets: clone(initial.continuityPackets ?? []),
     continuityLoopReports: clone(initial.continuityLoopReports ?? []),
+    continuityReconciliationExecutions: clone(initial.continuityReconciliationExecutions ?? []),
     webhookDelayRemoteSourceSamples: clone(initial.webhookDelayRemoteSourceSamples ?? []),
     webhookDelayScheduledSourceReads: clone(initial.webhookDelayScheduledSourceReads ?? []),
     webhookDelayShadowObservations: clone(initial.webhookDelayShadowObservations ?? []),
@@ -8080,6 +8115,12 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const row = { report_id, site_id, status, generated_at, cloudflare_source, cloudflare_push_status, windows_packet_count, cloudflare_credential_source, report_json, recorded_by_principal_id, recorded_at };
         if (existing) Object.assign(existing, row);
         else state.continuityLoopReports.push(row);
+      } else if (normalized.startsWith('insert into cloudflare_site_continuity_reconciliation_executions')) {
+        const [execution_id, site_id, status, generated_at, persisted_at, reconciliation_plan_status, selected_site_count, executed_site_count, completed_site_count, failed_site_count, refusal_reason, execution_json, recorded_by_principal_id, recorded_at] = bindings;
+        const existing = state.continuityReconciliationExecutions.find((entry) => entry.execution_id === execution_id);
+        const row = { execution_id, site_id, status, generated_at, persisted_at, reconciliation_plan_status, selected_site_count, executed_site_count, completed_site_count, failed_site_count, refusal_reason, execution_json, recorded_by_principal_id, recorded_at };
+        if (existing) Object.assign(existing, row);
+        else state.continuityReconciliationExecutions.push(row);
       } else if (normalized.startsWith('insert into cloudflare_webhook_delay_shadow_observations')) {
         const [observation_id, site_id, source_locus, target_locus, generated_at, latest_delay_minutes, critical_minutes, classification_state, dispatch_authority, shadow_mode, dispatch_action, observation_json, classification_json, recorded_by_principal_id, recorded_at] = bindings;
         const existing = state.webhookDelayShadowObservations.find((entry) => entry.observation_id === observation_id);
@@ -8412,6 +8453,16 @@ function fakeD1SiteRegistryStatement(state, sql) {
           results: state.operationFocusReviews
             .filter((entry) => entry.site_id === siteId)
             .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_site_continuity_reconciliation_executions')) {
+        const [siteId, limit] = bindings;
+        return {
+          results: state.continuityReconciliationExecutions
+            .filter((entry) => entry.site_id === siteId)
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at))
             .slice(0, Number(limit))
             .map((entry) => clone(entry)),
         };
