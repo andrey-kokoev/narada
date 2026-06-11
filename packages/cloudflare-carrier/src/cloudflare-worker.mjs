@@ -1905,10 +1905,39 @@ async function importCloudflareContinuityReconciliationExecution(env = {}, execu
   };
 }
 
+function continuityBindingEmbodiment(binding = {}, embodimentKind) {
+  return (binding.embodiments || []).find((embodiment) => embodiment.embodiment_kind === embodimentKind) ?? {};
+}
+
+function isDefaultContinuityBridgeRef(value) {
+  return ['local-windows-site', 'cloudflare-site', 'site-authority-map:v1'].includes(String(value ?? ''));
+}
+
+function continuityBridgeRefQuality(binding = {}) {
+  binding = binding ?? {};
+  const localWindowsEmbodiment = continuityBindingEmbodiment(binding, SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS);
+  const cloudflareEmbodiment = continuityBindingEmbodiment(binding, SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER);
+  const refs = [
+    binding.local_windows_site_ref ?? localWindowsEmbodiment.site_ref,
+    binding.cloudflare_site_ref ?? cloudflareEmbodiment.site_ref,
+    binding.authority_map_ref,
+  ].filter((ref) => ref != null && ref !== '');
+  return refs.filter((ref) => !isDefaultContinuityBridgeRef(ref)).length;
+}
+
+function observedContinuityPacketBinding(continuityPackets = []) {
+  const packetBindings = (Array.isArray(continuityPackets) ? continuityPackets : [])
+    .map((record) => record?.packet?.binding)
+    .filter(Boolean);
+  return packetBindings.find((binding) => continuityBridgeRefQuality(binding) > 0) ?? packetBindings[0] ?? null;
+}
+
 function summarizeLocalCloudContinuityBridge(siteId, continuityPackets = [], siteContinuity = null, continuityStatus = null) {
-  const binding = siteContinuity?.binding ?? {};
-  const localWindowsEmbodiment = (binding.embodiments || []).find((embodiment) => embodiment.embodiment_kind === SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS) ?? {};
-  const cloudflareEmbodiment = (binding.embodiments || []).find((embodiment) => embodiment.embodiment_kind === SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER) ?? {};
+  const observedBinding = observedContinuityPacketBinding(continuityPackets);
+  const fallbackBinding = siteContinuity?.binding ?? {};
+  const binding = continuityBridgeRefQuality(observedBinding) >= continuityBridgeRefQuality(fallbackBinding) ? (observedBinding ?? fallbackBinding) : fallbackBinding;
+  const localWindowsEmbodiment = continuityBindingEmbodiment(binding, SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS);
+  const cloudflareEmbodiment = continuityBindingEmbodiment(binding, SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER);
   const directionCounts = continuityStatus?.direction_counts ?? {};
   const authorityBoundary = continuityStatus?.authority_boundary ?? {};
   const cloudflareToLocalWindowsPackets = directionCounts.cloudflare_to_local_windows ?? 0;
@@ -2358,9 +2387,22 @@ async function listCloudflareContinuityPackets(env = {}, siteId, limit = 100) {
   if (!db || typeof db.prepare !== 'function' || !siteId) return [];
   await ensureCloudflareContinuityPacketSchema(db);
   const result = await db.prepare(`SELECT packet_id, site_id, relation_id, source_embodiment_kind, target_embodiment_kind,
-    admission_action, admission_reason, imported_by_principal_id, imported_at
+    admission_action, admission_reason, packet_json, imported_by_principal_id, imported_at
     FROM cloudflare_site_continuity_packets WHERE site_id = ? ORDER BY imported_at DESC LIMIT ?`).bind(siteId, boundedContinuityPacketReadLimit(limit)).all();
-  return result.results ?? [];
+  return (result.results ?? []).map((row) => ({
+    ...row,
+    packet: parseCloudflareContinuityPacketJson(row.packet_json),
+  }));
+}
+
+function parseCloudflareContinuityPacketJson(packetJson) {
+  if (!packetJson) return null;
+  if (typeof packetJson === 'object') return packetJson;
+  try {
+    return JSON.parse(packetJson);
+  } catch {
+    return null;
+  }
 }
 
 async function listCloudflareContinuityLoopReports(env = {}, siteId, limit = 20) {

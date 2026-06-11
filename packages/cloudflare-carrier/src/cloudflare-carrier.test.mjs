@@ -1161,6 +1161,16 @@ test('worker site.read composes site sessions tasks authority events and carrier
     packet_id: 'site-continuity-packet-v1:site_fixture:test-local-windows-cloudflare',
     source_embodiment_kind: 'local_windows',
     target_embodiment_kind: 'cloudflare_carrier',
+    binding: {
+      ...body.site_continuity.exchange_packet.binding,
+      local_windows_site_ref: 'file:///D:/code/narada',
+      cloudflare_site_ref: 'cloudflare://site_fixture',
+      authority_map_ref: 'narada:site-authority-map:site_fixture',
+      embodiments: body.site_continuity.exchange_packet.binding.embodiments.map((embodiment) => ({
+        ...embodiment,
+        site_ref: embodiment.embodiment_kind === 'local_windows' ? 'file:///D:/code/narada' : 'cloudflare://site_fixture',
+      })),
+    },
   };
   const localWindowsPacketPut = await worker.fetch(jsonRequest({
     operation: 'site.continuity.packet.put',
@@ -1211,6 +1221,9 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(readAfterPacketOnlyBody.site_product_status.continuity_loop_state, 'no_loop_report_observed');
   assert.deepEqual(readAfterPacketOnlyBody.site_product_status.attention, ['continuity_loop_report', 'open_tasks']);
   assert.equal(readAfterPacketOnlyBody.site_product_status.next_action, 'continuity_loop_report');
+  assert.equal(readAfterPacketOnlyBody.local_cloud_continuity_bridge.local_windows_site_ref, 'file:///D:/code/narada');
+  assert.equal(readAfterPacketOnlyBody.local_cloud_continuity_bridge.cloudflare_site_ref, 'cloudflare://site_fixture');
+  assert.equal(readAfterPacketOnlyBody.local_cloud_continuity_bridge.authority_map_ref, 'narada:site-authority-map:site_fixture');
 
   const loopReport = {
     schema: 'narada.site_continuity_productized_loop.v1',
@@ -1280,8 +1293,9 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(readAfterPacketPutBody.site_continuity_status.authority_boundary.executable_cross_embodiment_mutation, 'refused_by_site_continuity_classifier');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.schema, 'narada.local_cloud_continuity_bridge.v1');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.state, 'bidirectional_packets_observed');
-  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.local_windows_site_ref, 'local-windows-site');
-  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.cloudflare_site_ref, 'cloudflare-site');
+  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.local_windows_site_ref, 'file:///D:/code/narada');
+  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.cloudflare_site_ref, 'cloudflare://site_fixture');
+  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.authority_map_ref, 'narada:site-authority-map:site_fixture');
   assert.ok(readAfterPacketPutBody.local_cloud_continuity_bridge.cloudflare_to_local_windows_packets >= 1);
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.local_windows_to_cloudflare_packets, 1);
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.executable_cross_embodiment_mutation, 'refused_by_site_continuity_classifier');
