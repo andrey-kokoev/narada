@@ -1822,6 +1822,50 @@ test('worker executes admitted repository publication through Cloudflare GitHub 
     },
   });
 
+  const ready = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.cloudflare_execution.readiness',
+    request_id: 'request_repository_publication_cloudflare_execution_readiness_ready',
+    params: {
+      site_id: 'site_fixture',
+      repository_ref: 'github:andrey-kokoev/narada.sonar',
+      branch_ref: 'cloudflare-publication-fixture',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  const readyBody = await ready.json();
+  assert.equal(ready.status, 200, JSON.stringify(readyBody));
+  assert.equal(readyBody.schema, 'narada.sonar.cloudflare_github_repository_publication_readiness.v1');
+  assert.equal(readyBody.readiness_status, 'ready');
+  assert.equal(readyBody.github_token_configured, true);
+  assert.equal(readyBody.github_token_secret_ref, 'CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN');
+  assert.equal(readyBody.allowed_repository_count, 1);
+  assert.equal(readyBody.allowed_branch_count, 1);
+  assert.equal(readyBody.requested_repository_allowed, true);
+  assert.equal(readyBody.requested_branch_allowed, true);
+  assert.deepEqual(readyBody.missing_configuration, []);
+  assert.equal(readyBody.cloudflare_git_push_admission, 'not_admitted');
+  assert.equal(readyBody.direct_cloudflare_repository_mutation_admission, 'admitted_by_cloudflare_github_repository_publication_ready');
+  assert.doesNotMatch(JSON.stringify(readyBody), /github-token-fixture/);
+
+  const notReady = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.cloudflare_execution.readiness',
+    request_id: 'request_repository_publication_cloudflare_execution_readiness_missing_token',
+    params: {
+      site_id: 'site_fixture',
+      repository_ref: 'github:andrey-kokoev/narada.sonar',
+      branch_ref: 'cloudflare-publication-fixture',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), authEnv(fakeDurableObjectNamespace(), {
+    CLOUDFLARE_SITE_REGISTRY_DB: siteDb,
+    CLOUDFLARE_REPOSITORY_PUBLICATION_ALLOWED_REPOSITORIES: 'github:andrey-kokoev/narada.sonar',
+    CLOUDFLARE_REPOSITORY_PUBLICATION_ALLOWED_BRANCHES: 'cloudflare-publication-fixture',
+  }));
+  const notReadyBody = await notReady.json();
+  assert.equal(notReady.status, 200, JSON.stringify(notReadyBody));
+  assert.equal(notReadyBody.readiness_status, 'not_ready');
+  assert.equal(notReadyBody.github_token_configured, false);
+  assert.deepEqual(notReadyBody.missing_configuration, ['CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN']);
+  assert.equal(notReadyBody.direct_cloudflare_repository_mutation_admission, 'not_admitted');
+
   const request = await worker.fetch(jsonRequest({
     operation: 'repository_publication.request.create',
     request_id: 'request_repository_publication_cloudflare_execution_create',
