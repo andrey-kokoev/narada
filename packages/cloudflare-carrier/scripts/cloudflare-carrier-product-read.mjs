@@ -131,6 +131,10 @@ export function summarizeProductSurface(operation, body) {
     const lifecycle = body?.operation_lifecycle_status ?? null;
     const statusHistory = body?.operation_status_history ?? body?.operation_product_surface?.status_history ?? null;
     const latestStatusTransition = statusHistory?.latest_transition ?? null;
+    const workflowRoute = body?.operation_workflow_route ?? body?.operation_product_surface?.workflow_route ?? null;
+    const postureRoute = body?.operation_posture_route ?? body?.operation_product_surface?.posture_route ?? null;
+    const postureOverview = body?.operation_posture_overview ?? body?.operation_product_surface?.posture_overview ?? null;
+    const recoveryPosture = body?.cloudflare_recovery_posture ?? body?.operation_product_surface?.cloudflare_recovery_posture ?? null;
     return {
       operation,
       site_id: body?.operation?.site_id ?? body?.site_id ?? null,
@@ -145,6 +149,20 @@ export function summarizeProductSurface(operation, body) {
       next_action: lifecycle?.next_action ?? body?.operation_product_surface?.next_action ?? null,
       session_count: lifecycle?.session_count ?? body?.operation_product_surface?.session_count ?? 0,
       task_count: lifecycle?.task_count ?? body?.operation_product_surface?.task_count ?? 0,
+      workflow_next_action: workflowRoute?.next_action ?? null,
+      workflow_reason: workflowRoute?.reason ?? null,
+      workflow_focus_kind: workflowRoute?.focus_kind ?? null,
+      workflow_focus_ref: workflowRoute?.focus_ref ?? workflowRoute?.target ?? null,
+      workflow_action_command_kind: workflowRoute?.action_command_kind ?? null,
+      workflow_action_command: workflowRoute?.action_command ?? null,
+      workflow_continuity_direction_state: workflowRoute?.continuity_direction_state ?? null,
+      workflow_continuity_direction_missing: workflowRoute?.continuity_direction_missing ?? null,
+      posture_next_status: postureRoute?.next_status ?? postureOverview?.next_status ?? null,
+      posture_next_action: postureRoute?.next_action ?? postureOverview?.next_action ?? null,
+      posture_reason: postureRoute?.reason ?? postureOverview?.next_reason ?? null,
+      recovery_state: recoveryPosture?.state ?? null,
+      recovery_boundary_count: recoveryPosture?.recovery_boundary_count ?? null,
+      recovery_gap_count: Array.isArray(recoveryPosture?.recovery_gaps) ? recoveryPosture.recovery_gaps.length : null,
     };
   }
   return { operation };
@@ -194,6 +212,24 @@ export function formatProductSurfaceText(result) {
     }
     lines.push(`Lifecycle: phase=${summary.phase ?? 'unknown'} health=${summary.health ?? 'unknown'}`);
     lines.push(`Next Action: ${summary.next_action ?? 'none'}`);
+    if (summary.workflow_next_action || summary.workflow_reason) {
+      lines.push(`Workflow Route: action=${summary.workflow_next_action ?? 'none'} reason=${summary.workflow_reason ?? 'none'}`);
+    }
+    if (summary.workflow_focus_kind || summary.workflow_focus_ref) {
+      lines.push(`Workflow Focus: kind=${summary.workflow_focus_kind ?? 'unknown'} ref=${summary.workflow_focus_ref ?? 'unknown'}`);
+    }
+    if (summary.workflow_continuity_direction_state || summary.workflow_continuity_direction_missing?.length > 0) {
+      lines.push(`Workflow Continuity: direction=${summary.workflow_continuity_direction_state ?? 'unknown'} missing=${formatList(summary.workflow_continuity_direction_missing)}`);
+    }
+    if (summary.workflow_action_command_kind || summary.workflow_action_command) {
+      lines.push(`Workflow Command: kind=${summary.workflow_action_command_kind ?? 'unknown'} command=${summary.workflow_action_command ?? 'none'}`);
+    }
+    if (summary.posture_next_status || summary.posture_next_action || summary.posture_reason) {
+      lines.push(`Posture Route: status=${summary.posture_next_status ?? 'unknown'} action=${summary.posture_next_action ?? 'none'} reason=${summary.posture_reason ?? 'none'}`);
+    }
+    if (summary.recovery_state || summary.recovery_boundary_count !== null || summary.recovery_gap_count !== null) {
+      lines.push(`Recovery: state=${summary.recovery_state ?? 'unknown'} boundaries=${summary.recovery_boundary_count ?? 'unknown'} gaps=${summary.recovery_gap_count ?? 'unknown'}`);
+    }
     lines.push(`Evidence Counts: sessions=${summary.session_count ?? 0} tasks=${summary.task_count ?? 0}`);
     return `${lines.join('\n')}\n`;
   }
@@ -295,6 +331,10 @@ function formatKeyValueMap(value) {
   return Object.entries(value ?? {})
     .map(([key, count]) => `${key}=${count}`)
     .join(' ');
+}
+
+function formatList(value) {
+  return Array.isArray(value) && value.length > 0 ? value.join(', ') : 'none';
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

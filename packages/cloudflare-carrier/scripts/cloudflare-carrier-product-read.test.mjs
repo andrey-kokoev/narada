@@ -239,11 +239,31 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       next_action: 'continuity_packet',
       session_count: 1,
       task_count: 3,
+      workflow_next_action: 'review_site_continuity_reconciliation_execution',
+      workflow_reason: 'operation_lifecycle_continuity_reconciliation_execution_attention',
+      workflow_focus_kind: 'site_continuity_reconciliation_execution',
+      workflow_focus_ref: 'reconciliation_execution_failed',
+      workflow_action_command_kind: 'site_continuity_reconciliation_review',
+      workflow_action_command: 'pnpm site:continuity:reconciliation -- review --id reconciliation_execution_failed',
+      workflow_continuity_direction_state: 'cloudflare_to_local_windows_only',
+      workflow_continuity_direction_missing: ['local_windows_to_cloudflare'],
+      posture_next_status: 'needs_attention',
+      posture_next_action: 'review_operation',
+      posture_reason: 'operation_needs_review',
+      recovery_state: 'reconstructable',
+      recovery_boundary_count: 12,
+      recovery_gap_count: 0,
     },
   });
   assert.match(operationReadText, /Status: current=paused transitions=1/);
   assert.match(operationReadText, /Latest Status: active -> paused at 2026-06-11T00:00:00\.000Z/);
   assert.match(operationReadText, /Lifecycle: phase=inhabited health=attention/);
+  assert.match(operationReadText, /Workflow Route: action=review_site_continuity_reconciliation_execution reason=operation_lifecycle_continuity_reconciliation_execution_attention/);
+  assert.match(operationReadText, /Workflow Focus: kind=site_continuity_reconciliation_execution ref=reconciliation_execution_failed/);
+  assert.match(operationReadText, /Workflow Continuity: direction=cloudflare_to_local_windows_only missing=local_windows_to_cloudflare/);
+  assert.match(operationReadText, /Workflow Command: kind=site_continuity_reconciliation_review command=pnpm site:continuity:reconciliation -- review --id reconciliation_execution_failed/);
+  assert.match(operationReadText, /Posture Route: status=needs_attention action=review_operation reason=operation_needs_review/);
+  assert.match(operationReadText, /Recovery: state=reconstructable boundaries=12 gaps=0/);
   assert.match(operationReadText, /Evidence Counts: sessions=1 tasks=3/);
 });
 
@@ -326,6 +346,27 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
       },
     },
     operation_lifecycle_status: { phase: 'inhabited', health: 'attention', next_action: 'continuity_packet', session_count: 1, task_count: 3 },
+    operation_workflow_route: {
+      next_action: 'review_site_continuity_reconciliation_execution',
+      reason: 'operation_lifecycle_continuity_reconciliation_execution_attention',
+      target: 'reconciliation_execution_failed',
+      focus_kind: 'site_continuity_reconciliation_execution',
+      focus_ref: 'reconciliation_execution_failed',
+      action_command_kind: 'site_continuity_reconciliation_review',
+      action_command: 'pnpm site:continuity:reconciliation -- review --id reconciliation_execution_failed',
+      continuity_direction_state: 'cloudflare_to_local_windows_only',
+      continuity_direction_missing: ['local_windows_to_cloudflare'],
+    },
+    operation_posture_route: {
+      next_status: 'needs_attention',
+      next_action: 'review_operation',
+      reason: 'operation_needs_review',
+    },
+    cloudflare_recovery_posture: {
+      state: 'reconstructable',
+      recovery_boundary_count: 12,
+      recovery_gaps: [],
+    },
   }), {
     operation: 'operation.read',
     site_id: 'site_fixture',
@@ -340,5 +381,19 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     next_action: 'continuity_packet',
     session_count: 1,
     task_count: 3,
+    workflow_next_action: 'review_site_continuity_reconciliation_execution',
+    workflow_reason: 'operation_lifecycle_continuity_reconciliation_execution_attention',
+    workflow_focus_kind: 'site_continuity_reconciliation_execution',
+    workflow_focus_ref: 'reconciliation_execution_failed',
+    workflow_action_command_kind: 'site_continuity_reconciliation_review',
+    workflow_action_command: 'pnpm site:continuity:reconciliation -- review --id reconciliation_execution_failed',
+    workflow_continuity_direction_state: 'cloudflare_to_local_windows_only',
+    workflow_continuity_direction_missing: ['local_windows_to_cloudflare'],
+    posture_next_status: 'needs_attention',
+    posture_next_action: 'review_operation',
+    posture_reason: 'operation_needs_review',
+    recovery_state: 'reconstructable',
+    recovery_boundary_count: 12,
+    recovery_gap_count: 0,
   });
 });
