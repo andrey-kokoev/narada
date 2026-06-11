@@ -17,6 +17,8 @@ import {
   readLastScheduledHealthSnapshot,
   readLastSyncArtifact,
   readLocalConfiguredSites,
+  readLocalInboundPacketArtifact,
+  readLocalInboundPacketInventory,
   readLocalSyncArtifactInventory,
   runSiteContinuitySchedulerActionWithOptionalRefresh,
   summarizeCloudflareProductBindingAlignment,
@@ -27,6 +29,38 @@ import {
 
 const SCRIPT_PATH = fileURLToPath(new URL('./cloudflare-site-continuity-scheduler.mjs', import.meta.url));
 const execFile = promisify(execFileCallback);
+
+async function writeInboundPacketArtifact(artifactDirectory, siteId, {
+  packetId = `packet-${siteId}-cloudflare`,
+  generatedAt = '2026-06-11T13:45:00.000Z',
+} = {}) {
+  const inboundDirectory = join(artifactDirectory, 'inbound');
+  await mkdir(inboundDirectory, { recursive: true });
+  const artifactPath = join(inboundDirectory, `${siteId}-cloudflare-inbound.json`);
+  await writeFile(artifactPath, `${JSON.stringify({
+    schema: 'narada.site_continuity_cloudflare_to_local_windows_inbound_packet.v1',
+    status: 'ok',
+    site_id: siteId,
+    generated_at: generatedAt,
+    source: 'cloudflare.site.read.exchange_packet',
+    target: 'local_windows_site_continuity_inbox',
+    filesystem_mutation_admission: 'local_inbound_packet_artifact_write_only',
+    cloudflare_to_local_windows_admission_action: 'projection_only',
+    cloudflare_to_local_windows_admission_reason: 'site_continuity_exchange_packet_projection_admitted',
+    packet_id: packetId,
+    packet_source_embodiment_kind: 'cloudflare_carrier',
+    packet_target_embodiment_kind: 'local_windows',
+    packet: {
+      schema: 'narada.site_continuity_exchange_packet.v1',
+      site_id: siteId,
+      packet_id: packetId,
+      source_embodiment_kind: 'cloudflare_carrier',
+      target_embodiment_kind: 'local_windows',
+    },
+  }, null, 2)}\n`, 'utf8');
+  await utimes(artifactPath, new Date(generatedAt), new Date(generatedAt));
+  return artifactPath;
+}
 
 test('site continuity scheduler install plan is bounded and secret-free', async () => {
   const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-scheduler-'));
@@ -389,6 +423,34 @@ test('site continuity scheduler live status attaches parsed Task Scheduler readb
   }
 });
 
+test('site continuity scheduler reads local inbound packet inventory per configured site', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-inbound-inventory-'));
+  const artifactDirectory = join(root, '.narada/site-continuity');
+  try {
+    const inboundPath = await writeInboundPacketArtifact(artifactDirectory, 'site_synced', {
+      generatedAt: '2026-06-11T10:30:00.000Z',
+    });
+
+    const artifact = readLocalInboundPacketArtifact(inboundPath);
+    assert.equal(artifact.status, 'synced');
+    assert.equal(artifact.site_id, 'site_synced');
+    assert.equal(artifact.cloudflare_to_local_windows_admission_action, 'projection_only');
+
+    const inventory = readLocalInboundPacketInventory(join(artifactDirectory, 'inbound'), {
+      configuredSites: [{ site_id: 'site_synced' }, { site_id: 'site_missing' }],
+      now: () => '2026-06-11T10:31:00.000Z',
+    });
+    assert.equal(inventory.status, 'needs_attention');
+    assert.equal(inventory.artifact_count, 1);
+    assert.deepEqual(inventory.configured_site_inbound_statuses.map((site) => [site.site_id, site.status, site.reason]), [
+      ['site_missing', 'needs_attention', 'configured_site_inbound_packet_missing'],
+      ['site_synced', 'synced', 'matching_inbound_packet_observed'],
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('site continuity scheduler health summarizes binding, sync, and scheduler posture', async () => {
   const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-health-'));
   const artifactDirectory = join(root, '.narada/site-continuity');
@@ -427,6 +489,7 @@ test('site continuity scheduler health summarizes binding, sync, and scheduler p
     },
   }, null, 2)}\n`, 'utf8');
   await utimes(outputPath, new Date('2026-06-11T13:45:00.000Z'), new Date('2026-06-11T13:45:00.000Z'));
+  await writeInboundPacketArtifact(artifactDirectory, 'site_bound');
   try {
     const plan = buildSiteContinuitySchedulerPlan({
       action: 'health',
@@ -442,12 +505,14 @@ test('site continuity scheduler health summarizes binding, sync, and scheduler p
 
     assert.equal(plan.plan_status, 'site_continuity_health_gate_read_only');
     assert.equal(plan.local_sync_artifacts.status, 'synced');
+    assert.equal(plan.local_inbound_packets.status, 'synced');
     assert.equal(plan.continuity_health.status, 'needs_attention');
     assert.deepEqual(plan.continuity_health.attention_reasons, ['site_continuity_scheduler_live_readback_required']);
     assert.equal(plan.continuity_health.site_count, 1);
     assert.equal(plan.continuity_health.selection_source, 'site_continuity_binding_registry');
     assert.equal(plan.continuity_health.binding_registry_state, 'read');
     assert.equal(plan.continuity_health.local_sync_status, 'synced');
+    assert.equal(plan.continuity_health.local_inbound_status, 'synced');
     assert.equal(plan.continuity_health.embeds_credentials, false);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -489,6 +554,7 @@ test('site continuity scheduler live health passes with synced artifacts and hea
     },
   }, null, 2)}\n`, 'utf8');
   await utimes(outputPath, new Date('2026-06-11T13:45:00.000Z'), new Date('2026-06-11T13:45:00.000Z'));
+  await writeInboundPacketArtifact(artifactDirectory, 'site_bound');
   try {
     const result = await runSiteContinuitySchedulerActionWithOptionalRefresh({
       action: 'health',
@@ -521,6 +587,7 @@ test('site continuity scheduler live health passes with synced artifacts and hea
     assert.equal(result.continuity_health.scheduler_readback_status, 'ok');
     assert.equal(result.continuity_health.scheduler_last_result, '0');
     assert.equal(result.continuity_health.local_sync_status, 'synced');
+    assert.equal(result.continuity_health.local_inbound_status, 'synced');
     assert.equal(result.continuity_health.binding_count, 1);
     assert.doesNotMatch(JSON.stringify(result), /secret|token/i);
   } finally {
@@ -691,6 +758,7 @@ test('site continuity scheduler status-all distinguishes configured sites missin
       },
     },
   }, null, 2)}\n`, 'utf8');
+  await writeInboundPacketArtifact(artifactDirectory, 'site_synced', { generatedAt: '2026-06-11T10:30:00.000Z' });
   try {
     const configured = readLocalConfiguredSites({
       root,
@@ -720,6 +788,7 @@ test('site continuity scheduler status-all distinguishes configured sites missin
       configuredSites: 'site_synced,site_missing,site_registry',
       sitesFilePath,
       siteRegistryProjectionPath,
+      now: () => '2026-06-11T10:31:00.000Z',
     });
     assert.equal(plan.configured_sites.site_count, 3);
     assert.equal(plan.configured_sites.selection_source, 'explicit_sites');
@@ -740,6 +809,12 @@ test('site continuity scheduler status-all distinguishes configured sites missin
       reason: 'configured_site_sync_artifact_missing',
       artifact_present: false,
     });
+    assert.equal(plan.local_inbound_packets.status, 'needs_attention');
+    assert.deepEqual(plan.local_inbound_packets.configured_site_inbound_statuses.map((site) => [site.site_id, site.status, site.reason]), [
+      ['site_missing', 'needs_attention', 'configured_site_inbound_packet_missing'],
+      ['site_registry', 'needs_attention', 'configured_site_inbound_packet_missing'],
+      ['site_synced', 'synced', 'matching_inbound_packet_observed'],
+    ]);
     assert.doesNotMatch(JSON.stringify(plan), /secret-not-read/);
     assert.doesNotMatch(JSON.stringify(plan), /registry-secret-not-read/);
   } finally {
@@ -1256,6 +1331,7 @@ test('site continuity scheduled health reports remote product next-site outside 
       generated_at: '2026-06-11T14:55:00.000Z',
     },
   }, null, 2)}\n`, 'utf8');
+  await writeInboundPacketArtifact(artifactDirectory, 'site_alpha', { generatedAt: '2026-06-11T14:55:00.000Z' });
   try {
     const productReadCalls = [];
     const result = await runSiteContinuitySchedulerActionWithOptionalRefresh({
@@ -1488,19 +1564,27 @@ test('site continuity reconcile-execute uses per-site packet paths from packet d
         if (args[1] !== 'sync-once') return;
         const outIndex = args.indexOf('--out');
         const siteIndex = args.indexOf('--site');
+        const localInboundDirIndex = args.indexOf('--local-inbound-dir');
+        const siteId = args[siteIndex + 1];
         await writeFile(args[outIndex + 1], `${JSON.stringify({
           schema: 'narada.site_continuity_cloudflare_sync_once.v1',
           status: 'ok',
-          site_id: args[siteIndex + 1],
-          pushed_packet_id: `packet-${args[siteIndex + 1]}-local`,
-          pulled_packet_id: `packet-${args[siteIndex + 1]}-cloudflare`,
+          site_id: siteId,
+          pushed_packet_id: `packet-${siteId}-local`,
+          pulled_packet_id: `packet-${siteId}-cloudflare`,
           continuity_loop_report_recorded: true,
           continuity_loop_report: {
             status: 'ok',
-            site_id: args[siteIndex + 1],
+            site_id: siteId,
             generated_at: '2026-06-11T12:45:00.000Z',
           },
         }, null, 2)}\n`, 'utf8');
+        if (localInboundDirIndex >= 0) {
+          await writeInboundPacketArtifact(join(args[localInboundDirIndex + 1], '..'), siteId, {
+            packetId: `packet-${siteId}-cloudflare`,
+            generatedAt: '2026-06-11T12:45:00.000Z',
+          });
+        }
       },
     });
     const syncCalls = calls.filter((call) => call.command === process.execPath && call.args[1] === 'sync-once');
@@ -1587,20 +1671,28 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
         if (args[1] !== 'sync-once') return;
         const outIndex = args.indexOf('--out');
         const siteIndex = args.indexOf('--site');
+        const localInboundDirIndex = args.indexOf('--local-inbound-dir');
+        const siteId = args[siteIndex + 1];
         await writeFile(args[outIndex + 1], `${JSON.stringify({
           schema: 'narada.site_continuity_cloudflare_sync_once.v1',
           status: 'ok',
-          site_id: args[siteIndex + 1],
+          site_id: siteId,
           worker_url: 'https://worker.example',
           pushed_packet_id: 'packet-local',
           pulled_packet_id: 'packet-cloudflare',
           continuity_loop_report_recorded: true,
           continuity_loop_report: {
             status: 'ok',
-            site_id: args[siteIndex + 1],
+            site_id: siteId,
             generated_at: '2026-06-11T12:00:00.000Z',
           },
         }, null, 2)}\n`, 'utf8');
+        if (localInboundDirIndex >= 0) {
+          await writeInboundPacketArtifact(join(args[localInboundDirIndex + 1], '..'), siteId, {
+            packetId: 'packet-cloudflare',
+            generatedAt: '2026-06-11T12:30:00.000Z',
+          });
+        }
       },
       productReadSurface: async (config) => {
         productReadCalls.push(config);

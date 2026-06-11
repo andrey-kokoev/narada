@@ -61,6 +61,7 @@ export function buildSiteContinuitySchedulerPlan({
   const effectiveReconciliationExecutionOutputPath = reconciliationExecutionOutputPath ? resolvePath(effectiveLocalRoot, reconciliationExecutionOutputPath) : null;
   const effectiveHealthOutputPath = healthOutputPath ? resolvePath(effectiveLocalRoot, healthOutputPath) : null;
   const effectiveArtifactDirectory = artifactDirectory ? resolvePath(effectiveLocalRoot, artifactDirectory) : effectiveOutputPath ? dirname(effectiveOutputPath) : null;
+  const effectiveLocalInboundDirectory = effectiveArtifactDirectory ? join(effectiveArtifactDirectory, 'inbound') : null;
   const effectiveSiteContinuityBindingRegistryPath = siteContinuityBindingRegistryPath ? resolvePath(effectiveLocalRoot, siteContinuityBindingRegistryPath) : null;
   const effectiveSitesFilePath = sitesFilePath ? resolvePath(effectiveLocalRoot, sitesFilePath) : null;
   const effectiveSiteRegistryProjectionPath = siteRegistryProjectionPath ? resolvePath(effectiveLocalRoot, siteRegistryProjectionPath) : null;
@@ -189,6 +190,11 @@ export function buildSiteContinuitySchedulerPlan({
           maxArtifactAgeMinutes,
           now,
         }),
+        local_inbound_packets: readLocalInboundPacketInventory(effectiveLocalInboundDirectory, {
+          configuredSites: localConfiguredSites.site_records,
+          maxArtifactAgeMinutes,
+          now,
+        }),
         last_reconciliation_execution: readLastReconciliationExecutionArtifact(effectiveReconciliationExecutionOutputPath),
       };
     case 'health': {
@@ -198,11 +204,17 @@ export function buildSiteContinuitySchedulerPlan({
         maxArtifactAgeMinutes,
         now,
       });
+      const localInboundPackets = readLocalInboundPacketInventory(effectiveLocalInboundDirectory, {
+        configuredSites: localConfiguredSites.site_records,
+        maxArtifactAgeMinutes,
+        now,
+      });
       const healthPlan = {
         ...base,
         plan_status: 'site_continuity_health_gate_read_only',
         scheduled_task_command: ['schtasks', '/Query', '/TN', taskName, '/V', '/FO', 'LIST'],
         local_sync_artifacts: localSyncArtifacts,
+        local_inbound_packets: localInboundPackets,
         last_reconciliation_execution: readLastReconciliationExecutionArtifact(effectiveReconciliationExecutionOutputPath),
       };
       return {
@@ -218,11 +230,17 @@ export function buildSiteContinuitySchedulerPlan({
         maxArtifactAgeMinutes,
         now,
       });
+      const localInboundPackets = readLocalInboundPacketInventory(effectiveLocalInboundDirectory, {
+        configuredSites: localConfiguredSites.site_records,
+        maxArtifactAgeMinutes,
+        now,
+      });
       return {
         ...base,
         plan_status: 'site_continuity_reconciliation_plan_read_only_no_cloudflare_access',
         scheduled_task_command: ['schtasks', '/Query', '/TN', taskName, '/V', '/FO', 'LIST'],
         local_sync_artifacts: localSyncArtifacts,
+        local_inbound_packets: localInboundPackets,
         reconciliation_plan: buildSiteContinuityReconciliationPlan({
           localSyncArtifacts,
           nodeCommand,
@@ -318,6 +336,7 @@ function summarizeSiteContinuityHealth(plan, schedulerTaskReadback = plan?.sched
   const configuredSites = plan?.configured_sites ?? {};
   const bindingRegistry = configuredSites.site_continuity_binding_registry ?? {};
   const localSyncArtifacts = plan?.local_sync_artifacts ?? null;
+  const localInboundPackets = plan?.local_inbound_packets ?? null;
   const status = plan?.status ?? {};
   const attentionReasons = [
     configuredSites.state !== 'configured' ? 'site_continuity_sites_not_configured' : null,
@@ -325,6 +344,7 @@ function summarizeSiteContinuityHealth(plan, schedulerTaskReadback = plan?.sched
     bindingRegistry.state !== 'read' ? `site_continuity_binding_registry_${bindingRegistry.state ?? 'unread'}` : null,
     status.command_args_complete !== true ? 'site_continuity_scheduler_command_args_incomplete' : null,
     localSyncArtifacts?.status && localSyncArtifacts.status !== 'synced' ? `site_continuity_local_sync_${localSyncArtifacts.status}` : null,
+    localInboundPackets?.status && localInboundPackets.status !== 'synced' ? `site_continuity_local_inbound_${localInboundPackets.status}` : null,
     schedulerTaskReadback ? schedulerTaskReadback.status !== 'ok' ? 'site_continuity_scheduler_readback_needs_attention' : null : 'site_continuity_scheduler_live_readback_required',
   ].filter(Boolean);
   return {
@@ -337,6 +357,8 @@ function summarizeSiteContinuityHealth(plan, schedulerTaskReadback = plan?.sched
     binding_count: bindingRegistry.binding_count ?? 0,
     local_sync_status: localSyncArtifacts?.status ?? null,
     local_sync_artifact_count: localSyncArtifacts?.artifact_count ?? 0,
+    local_inbound_status: localInboundPackets?.status ?? null,
+    local_inbound_artifact_count: localInboundPackets?.artifact_count ?? 0,
     scheduler_readback_status: schedulerTaskReadback?.status ?? null,
     scheduler_last_result: schedulerTaskReadback?.last_result ?? null,
     scheduler_task_state: schedulerTaskReadback?.scheduled_task_state ?? null,
@@ -1266,6 +1288,126 @@ export function readLocalSyncArtifactInventory(
   };
 }
 
+export function readLocalInboundPacketInventory(
+  inboundDirectory,
+  { configuredSites = [], maxArtifactAgeMinutes = DEFAULT_MAX_SYNC_ARTIFACT_AGE_MINUTES, now = () => new Date().toISOString() } = {},
+) {
+  const configuredSiteRecords = normalizeConfiguredSiteRecords(configuredSites);
+  const normalizedConfiguredSites = configuredSiteRecords.map((site) => site.site_id);
+  const effectiveMaxArtifactAgeMinutes = normalizeMaxArtifactAgeMinutes(maxArtifactAgeMinutes);
+  if (!inboundDirectory) {
+    return {
+      state: 'not_configured',
+      artifact_directory: null,
+      artifact_count: 0,
+      configured_site_count: normalizedConfiguredSites.length,
+      max_inbound_artifact_age_minutes: effectiveMaxArtifactAgeMinutes,
+      status: 'needs_configuration',
+      artifacts: [],
+      configured_site_inbound_statuses: buildConfiguredSiteInboundStatuses(configuredSiteRecords, [], { maxArtifactAgeMinutes: effectiveMaxArtifactAgeMinutes, now }),
+    };
+  }
+  if (!existsSync(inboundDirectory)) {
+    return {
+      state: 'missing_directory',
+      artifact_directory: inboundDirectory,
+      artifact_count: 0,
+      configured_site_count: normalizedConfiguredSites.length,
+      max_inbound_artifact_age_minutes: effectiveMaxArtifactAgeMinutes,
+      status: normalizedConfiguredSites.length > 0 ? 'needs_attention' : 'never_observed',
+      artifacts: [],
+      configured_site_inbound_statuses: buildConfiguredSiteInboundStatuses(configuredSiteRecords, [], { maxArtifactAgeMinutes: effectiveMaxArtifactAgeMinutes, now }),
+    };
+  }
+  const artifacts = readdirSync(inboundDirectory, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
+    .map((entry) => readLocalInboundPacketArtifact(join(inboundDirectory, entry.name)))
+    .filter((artifact) => artifact.artifact_present)
+    .sort(compareArtifactSummaries);
+  const configuredSiteInboundStatuses = buildConfiguredSiteInboundStatuses(configuredSiteRecords, artifacts, { maxArtifactAgeMinutes: effectiveMaxArtifactAgeMinutes, now });
+  const needsAttention = artifacts.some((artifact) => artifact.status !== 'synced')
+    || configuredSiteInboundStatuses.some((site) => site.status !== 'synced');
+  return {
+    schema: 'narada.cloudflare_carrier.local_inbound_packet_inventory.v1',
+    state: 'read',
+    artifact_directory: inboundDirectory,
+    artifact_count: artifacts.length,
+    configured_site_count: normalizedConfiguredSites.length,
+    max_inbound_artifact_age_minutes: effectiveMaxArtifactAgeMinutes,
+    status: artifacts.length === 0 && normalizedConfiguredSites.length === 0 ? 'never_observed' : needsAttention ? 'needs_attention' : 'synced',
+    artifacts,
+    configured_site_inbound_statuses: configuredSiteInboundStatuses,
+  };
+}
+
+export function readLocalInboundPacketArtifact(outputPath) {
+  if (!outputPath) {
+    return {
+      state: 'not_configured',
+      artifact_present: false,
+      status: 'needs_configuration',
+    };
+  }
+  if (!existsSync(outputPath)) {
+    return {
+      state: 'missing',
+      artifact_path: outputPath,
+      artifact_present: false,
+      status: 'never_observed',
+    };
+  }
+  const stat = statSync(outputPath);
+  let artifact;
+  try {
+    artifact = JSON.parse(readFileSync(outputPath, 'utf8'));
+  } catch (error) {
+    return {
+      state: 'invalid_json',
+      artifact_path: outputPath,
+      artifact_present: true,
+      artifact_updated_at: stat.mtime.toISOString(),
+      status: 'needs_attention',
+      reason: 'local_inbound_packet_artifact_json_invalid',
+      error: error.message,
+    };
+  }
+  if (artifact?.schema !== 'narada.site_continuity_cloudflare_to_local_windows_inbound_packet.v1') {
+    return {
+      state: 'unsupported_schema',
+      artifact_path: outputPath,
+      artifact_present: true,
+      artifact_updated_at: stat.mtime.toISOString(),
+      status: 'needs_attention',
+      schema: artifact?.schema ?? null,
+      site_id: artifact?.site_id ?? null,
+      reason: 'unsupported_local_inbound_packet_artifact_schema',
+    };
+  }
+  const packet = artifact.packet ?? null;
+  const status = artifact.status === 'ok'
+    && artifact.cloudflare_to_local_windows_admission_action === 'projection_only'
+    && artifact.packet_source_embodiment_kind === SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER
+    && artifact.packet_target_embodiment_kind === SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS
+    ? 'synced'
+    : 'needs_attention';
+  return {
+    state: 'read',
+    artifact_path: outputPath,
+    artifact_present: true,
+    artifact_updated_at: stat.mtime.toISOString(),
+    status,
+    schema: artifact.schema,
+    site_id: artifact.site_id ?? packet?.site_id ?? null,
+    generated_at: artifact.generated_at ?? null,
+    packet_id: artifact.packet_id ?? packet?.packet_id ?? null,
+    cloudflare_to_local_windows_admission_action: artifact.cloudflare_to_local_windows_admission_action ?? null,
+    cloudflare_to_local_windows_admission_reason: artifact.cloudflare_to_local_windows_admission_reason ?? null,
+    packet_source_embodiment_kind: artifact.packet_source_embodiment_kind ?? packet?.source_embodiment_kind ?? null,
+    packet_target_embodiment_kind: artifact.packet_target_embodiment_kind ?? packet?.target_embodiment_kind ?? null,
+    filesystem_mutation_admission: artifact.filesystem_mutation_admission ?? null,
+  };
+}
+
 export function buildSiteContinuityReconciliationPlan({
   localSyncArtifacts,
   nodeCommand = process.env.NARADA_NODE_COMMAND ?? 'node',
@@ -1811,6 +1953,53 @@ function buildConfiguredSiteSyncStatuses(configuredSites, artifacts, { maxArtifa
       max_sync_artifact_age_minutes: normalizeMaxArtifactAgeMinutes(maxArtifactAgeMinutes),
       pushed_packet_id: artifact.pushed_packet_id,
       pulled_packet_id: artifact.pulled_packet_id,
+    };
+  });
+}
+
+function buildConfiguredSiteInboundStatuses(configuredSites, artifacts, { maxArtifactAgeMinutes = DEFAULT_MAX_SYNC_ARTIFACT_AGE_MINUTES, now = () => new Date().toISOString() } = {}) {
+  const configuredSiteRecords = normalizeConfiguredSiteRecords(configuredSites);
+  const artifactBySite = new Map();
+  for (const artifact of artifacts) {
+    if (!artifact?.site_id) continue;
+    const existing = artifactBySite.get(artifact.site_id);
+    if (!existing || String(artifact.artifact_updated_at ?? '') > String(existing.artifact_updated_at ?? '')) {
+      artifactBySite.set(artifact.site_id, artifact);
+    }
+  }
+  const maxArtifactAgeMilliseconds = normalizeMaxArtifactAgeMinutes(maxArtifactAgeMinutes) * 60 * 1000;
+  const nowMilliseconds = Date.parse(now());
+  return configuredSiteRecords.map((site) => {
+    const siteId = site.site_id;
+    const artifact = artifactBySite.get(siteId) ?? null;
+    const siteMetadata = buildConfiguredSiteMetadata(site);
+    if (!artifact) {
+      return {
+        site_id: siteId,
+        ...siteMetadata,
+        status: 'needs_attention',
+        reason: 'configured_site_inbound_packet_missing',
+        artifact_present: false,
+      };
+    }
+    const artifactAgeMilliseconds = Number.isFinite(nowMilliseconds) && artifact.artifact_updated_at
+      ? nowMilliseconds - Date.parse(artifact.artifact_updated_at)
+      : null;
+    const artifactIsStale = artifact.status === 'synced'
+      && Number.isFinite(artifactAgeMilliseconds)
+      && artifactAgeMilliseconds > maxArtifactAgeMilliseconds;
+    return {
+      site_id: siteId,
+      ...siteMetadata,
+      status: artifactIsStale ? 'needs_attention' : artifact.status,
+      reason: artifactIsStale ? 'configured_site_inbound_packet_stale' : artifact.status === 'synced' ? 'matching_inbound_packet_observed' : 'matching_inbound_packet_needs_attention',
+      artifact_present: true,
+      artifact_path: artifact.artifact_path,
+      artifact_updated_at: artifact.artifact_updated_at,
+      artifact_age_minutes: Number.isFinite(artifactAgeMilliseconds) ? Math.max(0, Math.floor(artifactAgeMilliseconds / 60000)) : null,
+      max_inbound_artifact_age_minutes: normalizeMaxArtifactAgeMinutes(maxArtifactAgeMinutes),
+      packet_id: artifact.packet_id,
+      cloudflare_to_local_windows_admission_action: artifact.cloudflare_to_local_windows_admission_action,
     };
   });
 }
