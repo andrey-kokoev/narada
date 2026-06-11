@@ -273,6 +273,17 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:read -- --url <worke
 
 The command prints a `narada.cloudflare_carrier.product_read.v1` envelope by default, including `site.list`, `site.read`, `operation.list`, or `operation.read` response evidence and a compact summary. It records only `auth_source` in the output; bearer tokens and operator-session cookies are not echoed.
 
+For operator-facing readback without JSON inspection, use the text aliases:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:site:list:text -- --url <worker-url> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada2/cloudflare-carrier product:operation:list:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
+```
+
+The text output names the operation, worker URL, auth source, selected site or operation, health, next action, continuity/reconciliation posture, durability posture, and evidence counts while preserving the same credential redaction rule as the JSON envelope.
+
 ## Live Smoke
 
 `smoke:live` requires a deployed Worker URL and a bearer token:

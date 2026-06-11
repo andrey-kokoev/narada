@@ -6,6 +6,7 @@ import test from 'node:test';
 
 import {
   authHeaders,
+  formatProductSurfaceText,
   parseProductReadArgs,
   readProductSurface,
   resolveAuth,
@@ -25,6 +26,16 @@ test('parseProductReadArgs builds site.list request with bearer token', () => {
   assert.equal(parsed.requestId, 'request_fixture');
   assert.deepEqual(parsed.params, { limit: 5 });
   assert.deepEqual(parsed.auth, { kind: 'bearer', value: 'secret-token', source: 'flag:--token' });
+});
+
+test('parseProductReadArgs accepts operator text format', () => {
+  const parsed = parseProductReadArgs([
+    '--url', 'https://carrier.example.test',
+    '--token', 'secret-token',
+    '--format', 'text',
+  ], {});
+
+  assert.equal(parsed.format, 'text');
 });
 
 test('parseProductReadArgs builds site.read operation.list and operation.read params', () => {
@@ -139,6 +150,90 @@ test('readProductSurface posts operation envelope and redacts auth material from
     next_action: 'monitor_sites',
     health_counts: { ready: 1, attention: 0, incomplete: 0, other: 0 },
   });
+});
+
+test('formatProductSurfaceText renders operator-readable summaries without auth material', () => {
+  const siteListText = formatProductSurfaceText({
+    operation: 'site.list',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'flag:--token',
+    summary: {
+      operation: 'site.list',
+      site_count: 2,
+      next_site_id: 'site_alpha',
+      next_health: 'attention',
+      next_action: 'bind_cloudflare_product_next_site_locally',
+      health_counts: { ready: 1, attention: 1 },
+    },
+    auth: { kind: 'bearer', value: 'secret-token' },
+  });
+  assert.match(siteListText, /Product Read: site\.list/);
+  assert.match(siteListText, /Sites: count=2 next=site_alpha health=attention/);
+  assert.match(siteListText, /Next Action: bind_cloudflare_product_next_site_locally/);
+  assert.equal(siteListText.includes('secret-token'), false);
+
+  const siteReadText = formatProductSurfaceText({
+    operation: 'site.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'site.read',
+      site_id: 'site_alpha',
+      display_name: 'Alpha Site',
+      health: 'ready',
+      next_action: 'monitor_sites',
+      continuity_state: 'packet_observed',
+      continuity_direction_state: 'bidirectional',
+      continuity_direction_missing: [],
+      continuity_loop_state: 'loop_report_observed',
+      continuity_reconciliation_execution_state: 'reconciliation_execution_observed',
+      continuity_reconciliation_execution_health: 'ready',
+      continuity_packet_count: 2,
+      continuity_loop_report_count: 1,
+      continuity_reconciliation_execution_count: 1,
+      persistence_state: 'durable',
+      recovery_state: 'reconstructable',
+      membership_count: 2,
+      session_count: 3,
+    },
+  });
+  assert.match(siteReadText, /Site: site_alpha \(Alpha Site\)/);
+  assert.match(siteReadText, /Durability: persistence=durable recovery=reconstructable/);
+
+  const operationListText = formatProductSurfaceText({
+    operation: 'operation.list',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.list',
+      site_id: 'site_alpha',
+      operation_count: 1,
+      active_operation_id: 'operation_live',
+      next_operation_id: 'operation_live',
+      next_status: 'needs_attention',
+      next_action: 'review_operation',
+      next_reason: 'operation_needs_review',
+    },
+  });
+  assert.match(operationListText, /Operations: count=1 active=operation_live next=operation_live/);
+
+  const operationReadText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_live',
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'continuity_packet',
+      session_count: 1,
+      task_count: 3,
+    },
+  });
+  assert.match(operationReadText, /Lifecycle: phase=inhabited health=attention/);
+  assert.match(operationReadText, /Evidence Counts: sessions=1 tasks=3/);
 });
 
 test('summarizeProductSurface summarizes site and operation reads', () => {

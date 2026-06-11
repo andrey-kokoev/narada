@@ -18,7 +18,7 @@ export function parseProductReadArgs(argv = [], env = process.env) {
 
   if (!workerUrl) throw new Error('product_read_requires_--url_or_CLOUDFLARE_CARRIER_URL');
   if (!VALID_OPERATIONS.has(operation)) throw new Error(`product_read_operation_unsupported:${operation}`);
-  if (!['json', 'summary'].includes(format)) throw new Error(`product_read_format_unsupported:${format}`);
+  if (!['json', 'summary', 'text'].includes(format)) throw new Error(`product_read_format_unsupported:${format}`);
   if ((operation === 'site.read' || operation === 'operation.list' || operation === 'operation.read') && !siteId) throw new Error(`product_read_${operation}_requires_--site`);
   if (operation === 'operation.read' && !operationId) throw new Error('product_read_operation.read_requires_--operation-id_or_--carrier-operation');
   if (!auth) throw new Error('product_read_requires_bearer_token_or_operator_session');
@@ -139,6 +139,50 @@ export function summarizeProductSurface(operation, body) {
   return { operation };
 }
 
+export function formatProductSurfaceText(result) {
+  const summary = result?.summary ?? summarizeProductSurface(result?.operation, result?.response ?? {});
+  const operation = summary?.operation ?? result?.operation ?? 'unknown';
+  const lines = [
+    `Product Read: ${operation}`,
+    `Worker: ${result?.worker_url ?? 'unknown'}`,
+    `Auth: ${result?.auth_source ?? 'unknown'}`,
+  ];
+  if (operation === 'site.list') {
+    lines.push(`Sites: count=${summary.site_count ?? 0} next=${summary.next_site_id ?? 'none'} health=${summary.next_health ?? 'unknown'}`);
+    lines.push(`Next Action: ${summary.next_action ?? 'none'}`);
+    if (summary.health_counts) lines.push(`Health Counts: ${formatKeyValueMap(summary.health_counts)}`);
+    return `${lines.join('\n')}\n`;
+  }
+  if (operation === 'site.read') {
+    lines.push(`Site: ${summary.site_id ?? 'unknown'}${summary.display_name ? ` (${summary.display_name})` : ''}`);
+    lines.push(`Health: ${summary.health ?? 'unknown'}`);
+    lines.push(`Next Action: ${summary.next_action ?? 'none'}`);
+    lines.push(`Continuity: state=${summary.continuity_state ?? 'unknown'} direction=${summary.continuity_direction_state ?? 'unknown'} loop=${summary.continuity_loop_state ?? 'unknown'}`);
+    if (summary.continuity_direction_missing?.length > 0) lines.push(`Continuity Missing: ${summary.continuity_direction_missing.join(', ')}`);
+    lines.push(`Reconciliation: state=${summary.continuity_reconciliation_execution_state ?? 'unknown'} health=${summary.continuity_reconciliation_execution_health ?? 'unknown'}`);
+    lines.push(`Evidence Counts: packets=${summary.continuity_packet_count ?? 0} loops=${summary.continuity_loop_report_count ?? 0} reconciliations=${summary.continuity_reconciliation_execution_count ?? 0}`);
+    lines.push(`Durability: persistence=${summary.persistence_state ?? 'unknown'} recovery=${summary.recovery_state ?? 'unknown'}`);
+    lines.push(`Authority: memberships=${summary.membership_count ?? 0} sessions=${summary.session_count ?? 0}`);
+    return `${lines.join('\n')}\n`;
+  }
+  if (operation === 'operation.list') {
+    lines.push(`Site: ${summary.site_id ?? 'unknown'}`);
+    lines.push(`Operations: count=${summary.operation_count ?? 0} active=${summary.active_operation_id ?? 'none'} next=${summary.next_operation_id ?? 'none'}`);
+    lines.push(`Next: status=${summary.next_status ?? 'unknown'} action=${summary.next_action ?? 'none'} reason=${summary.next_reason ?? 'none'}`);
+    if (summary.health_counts) lines.push(`Health Counts: ${formatKeyValueMap(summary.health_counts)}`);
+    return `${lines.join('\n')}\n`;
+  }
+  if (operation === 'operation.read') {
+    lines.push(`Site: ${summary.site_id ?? 'unknown'}`);
+    lines.push(`Operation: ${summary.operation_id ?? 'unknown'}`);
+    lines.push(`Lifecycle: phase=${summary.phase ?? 'unknown'} health=${summary.health ?? 'unknown'}`);
+    lines.push(`Next Action: ${summary.next_action ?? 'none'}`);
+    lines.push(`Evidence Counts: sessions=${summary.session_count ?? 0} tasks=${summary.task_count ?? 0}`);
+    return `${lines.join('\n')}\n`;
+  }
+  return `${lines.join('\n')}\n`;
+}
+
 export function resolveAuth(args = [], env = process.env) {
   const token = option(args, '--token') ?? null;
   if (token) return { kind: 'bearer', value: token, source: 'flag:--token' };
@@ -221,11 +265,21 @@ function parseJsonText(text) {
   }
 }
 
+function formatKeyValueMap(value) {
+  return Object.entries(value ?? {})
+    .map(([key, count]) => `${key}=${count}`)
+    .join(' ');
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   try {
     const config = parseProductReadArgs(process.argv.slice(2));
     const result = await readProductSurface(config);
-    process.stdout.write(JSON.stringify(config.format === 'summary' ? result.summary : result, null, 2) + '\n');
+    if (config.format === 'text') {
+      process.stdout.write(formatProductSurfaceText(result));
+    } else {
+      process.stdout.write(JSON.stringify(config.format === 'summary' ? result.summary : result, null, 2) + '\n');
+    }
   } catch (error) {
     process.stderr.write(JSON.stringify({ ok: false, code: error?.message ?? String(error) }, null, 2) + '\n');
     process.exit(1);
