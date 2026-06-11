@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile as execFileCallback } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -119,6 +119,12 @@ test('site continuity scheduler status-all distinguishes configured sites missin
     assert.deepEqual(configured.sources, ['explicit_sites', 'sites_file', 'cloudflare_site_registry_local_projection', 'safe_env_file_site_keys']);
     assert.deepEqual(configured.sites, ['site_env', 'site_file', 'site_missing', 'site_registry', 'site_synced']);
     assert.equal(configured.site_registry_projection.state, 'read');
+    assert.deepEqual(configured.site_records.find((site) => site.site_id === 'site_registry'), {
+      site_id: 'site_registry',
+      display_name: 'Registry Site',
+      site_ref: null,
+      site_status: 'active',
+    });
     assert.doesNotMatch(JSON.stringify(configured), /secret-not-read/);
     assert.doesNotMatch(JSON.stringify(configured), /registry-secret-not-read/);
 
@@ -134,6 +140,7 @@ test('site continuity scheduler status-all distinguishes configured sites missin
     assert.equal(plan.configured_sites.site_count, 5);
     assert.equal(plan.status.site_configured, true);
     assert.equal(plan.local_sync_artifacts.status, 'needs_attention');
+    assert.equal(plan.local_sync_artifacts.max_sync_artifact_age_minutes, 15);
     assert.deepEqual(plan.local_sync_artifacts.configured_site_sync_statuses.map((site) => [site.site_id, site.status, site.reason]), [
       ['site_env', 'needs_attention', 'configured_site_sync_artifact_missing'],
       ['site_file', 'needs_attention', 'configured_site_sync_artifact_missing'],
@@ -141,6 +148,15 @@ test('site continuity scheduler status-all distinguishes configured sites missin
       ['site_registry', 'needs_attention', 'configured_site_sync_artifact_missing'],
       ['site_synced', 'synced', 'matching_sync_artifact_synced'],
     ]);
+    assert.deepEqual(plan.local_sync_artifacts.configured_site_sync_statuses.find((site) => site.site_id === 'site_registry'), {
+      site_id: 'site_registry',
+      display_name: 'Registry Site',
+      site_ref: null,
+      site_status: 'active',
+      status: 'needs_attention',
+      reason: 'configured_site_sync_artifact_missing',
+      artifact_present: false,
+    });
     assert.doesNotMatch(JSON.stringify(plan), /secret-not-read/);
     assert.doesNotMatch(JSON.stringify(plan), /registry-secret-not-read/);
   } finally {
@@ -205,6 +221,60 @@ test('site continuity scheduler status-all inventories local sync artifacts', as
     assert.equal(plan.local_sync_artifacts.artifact_count, 2);
     assert.equal(plan.local_sync_artifacts.status, 'needs_attention');
     assert.equal(plan.embeds_credentials, false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('site continuity scheduler status-all marks stale configured site artifacts', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-stale-artifact-'));
+  const artifactDirectory = join(root, '.narada/site-continuity');
+  const outputPath = join(artifactDirectory, 'cloudflare-sync-last.json');
+  await mkdir(artifactDirectory, { recursive: true });
+  await writeFile(outputPath, `${JSON.stringify({
+    schema: 'narada.site_continuity_cloudflare_sync_once.v1',
+    status: 'ok',
+    site_id: 'site_stale',
+    worker_url: 'https://worker.example',
+    pushed_packet_id: 'packet-stale-local',
+    pulled_packet_id: 'packet-stale-cloudflare',
+    continuity_loop_report_recorded: true,
+    continuity_loop_report: {
+      status: 'ok',
+      site_id: 'site_stale',
+      generated_at: '2026-06-11T10:00:00.000Z',
+      cloudflare_push: {
+        status: 'imported',
+        pushed_packet_id: 'packet-stale-local',
+        returned_packet_id: 'packet-stale-cloudflare',
+      },
+    },
+  }, null, 2)}\n`, 'utf8');
+  await utimes(outputPath, new Date('2026-06-11T10:00:00.000Z'), new Date('2026-06-11T10:00:00.000Z'));
+  try {
+    const inventory = readLocalSyncArtifactInventory(artifactDirectory, {
+      lastOutputPath: outputPath,
+      configuredSites: [{ site_id: 'site_stale', display_name: 'Stale Site', site_ref: 'site-ref:stale', status: 'active' }],
+      maxArtifactAgeMinutes: 15,
+      now: () => '2026-06-11T10:20:00.000Z',
+    });
+    assert.equal(inventory.status, 'needs_attention');
+    assert.equal(inventory.max_sync_artifact_age_minutes, 15);
+    assert.deepEqual(inventory.configured_site_sync_statuses, [{
+      site_id: 'site_stale',
+      display_name: 'Stale Site',
+      site_ref: 'site-ref:stale',
+      site_status: 'active',
+      status: 'needs_attention',
+      reason: 'configured_site_sync_artifact_stale',
+      artifact_present: true,
+      artifact_path: outputPath,
+      artifact_updated_at: '2026-06-11T10:00:00.000Z',
+      artifact_age_minutes: 20,
+      max_sync_artifact_age_minutes: 15,
+      pushed_packet_id: 'packet-stale-local',
+      pulled_packet_id: 'packet-stale-cloudflare',
+    }]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

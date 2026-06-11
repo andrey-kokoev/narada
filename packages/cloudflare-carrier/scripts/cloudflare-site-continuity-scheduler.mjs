@@ -10,6 +10,7 @@ import {
 
 const DEFAULT_TASK_NAME = 'Narada Cloudflare Site Continuity Sync';
 const DEFAULT_INTERVAL_MINUTES = 5;
+const DEFAULT_MAX_SYNC_ARTIFACT_AGE_MINUTES = 15;
 
 export function buildSiteContinuitySchedulerPlan({
   action = 'status',
@@ -26,7 +27,9 @@ export function buildSiteContinuitySchedulerPlan({
   configuredSites = process.env.NARADA_SITE_CONTINUITY_SITES ?? null,
   sitesFilePath = process.env.NARADA_SITE_CONTINUITY_SITES_FILE ?? null,
   siteRegistryProjectionPath = process.env.NARADA_CLOUDFLARE_SITE_REGISTRY_PROJECTION ?? '.narada/site-registry/cloudflare-sites.json',
+  maxArtifactAgeMinutes = process.env.NARADA_SITE_CONTINUITY_MAX_ARTIFACT_AGE_MINUTES ?? DEFAULT_MAX_SYNC_ARTIFACT_AGE_MINUTES,
   nodeCommand = process.env.NARADA_NODE_COMMAND ?? 'node',
+  now = () => new Date().toISOString(),
   dryRun = true,
 } = {}) {
   const root = resolve(repoRoot);
@@ -145,7 +148,9 @@ export function buildSiteContinuitySchedulerPlan({
         scheduled_task_command: ['schtasks', '/Query', '/TN', taskName, '/FO', 'LIST'],
         local_sync_artifacts: readLocalSyncArtifactInventory(effectiveArtifactDirectory, {
           lastOutputPath: effectiveOutputPath,
-          configuredSites: localConfiguredSites.sites,
+          configuredSites: localConfiguredSites.site_records,
+          maxArtifactAgeMinutes,
+          now,
         }),
       };
     default:
@@ -226,17 +231,23 @@ function summarizeSiteRegistryProjectionRefresh(result) {
   };
 }
 
-export function readLocalSyncArtifactInventory(artifactDirectory, { lastOutputPath = null, configuredSites = [] } = {}) {
-  const normalizedConfiguredSites = normalizeConfiguredSiteList(configuredSites);
+export function readLocalSyncArtifactInventory(
+  artifactDirectory,
+  { lastOutputPath = null, configuredSites = [], maxArtifactAgeMinutes = DEFAULT_MAX_SYNC_ARTIFACT_AGE_MINUTES, now = () => new Date().toISOString() } = {},
+) {
+  const configuredSiteRecords = normalizeConfiguredSiteRecords(configuredSites);
+  const normalizedConfiguredSites = configuredSiteRecords.map((site) => site.site_id);
+  const effectiveMaxArtifactAgeMinutes = normalizeMaxArtifactAgeMinutes(maxArtifactAgeMinutes);
   if (!artifactDirectory) {
     return {
       state: 'not_configured',
       artifact_directory: null,
       artifact_count: 0,
       configured_site_count: normalizedConfiguredSites.length,
+      max_sync_artifact_age_minutes: effectiveMaxArtifactAgeMinutes,
       status: 'needs_configuration',
       artifacts: [],
-      configured_site_sync_statuses: buildConfiguredSiteSyncStatuses(normalizedConfiguredSites, []),
+      configured_site_sync_statuses: buildConfiguredSiteSyncStatuses(configuredSiteRecords, [], { maxArtifactAgeMinutes: effectiveMaxArtifactAgeMinutes, now }),
     };
   }
   if (!existsSync(artifactDirectory)) {
@@ -245,9 +256,10 @@ export function readLocalSyncArtifactInventory(artifactDirectory, { lastOutputPa
       artifact_directory: artifactDirectory,
       artifact_count: 0,
       configured_site_count: normalizedConfiguredSites.length,
+      max_sync_artifact_age_minutes: effectiveMaxArtifactAgeMinutes,
       status: normalizedConfiguredSites.length > 0 ? 'needs_attention' : 'never_synced',
       artifacts: [],
-      configured_site_sync_statuses: buildConfiguredSiteSyncStatuses(normalizedConfiguredSites, []),
+      configured_site_sync_statuses: buildConfiguredSiteSyncStatuses(configuredSiteRecords, [], { maxArtifactAgeMinutes: effectiveMaxArtifactAgeMinutes, now }),
       last_sync: lastOutputPath ? readLastSyncArtifact(lastOutputPath) : null,
     };
   }
@@ -255,7 +267,7 @@ export function readLocalSyncArtifactInventory(artifactDirectory, { lastOutputPa
     .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
     .map((entry) => readLastSyncArtifact(join(artifactDirectory, entry.name)))
     .sort(compareArtifactSummaries);
-  const configuredSiteSyncStatuses = buildConfiguredSiteSyncStatuses(normalizedConfiguredSites, artifacts);
+  const configuredSiteSyncStatuses = buildConfiguredSiteSyncStatuses(configuredSiteRecords, artifacts, { maxArtifactAgeMinutes: effectiveMaxArtifactAgeMinutes, now });
   const needsAttention = artifacts.some((artifact) => artifact.status !== 'synced')
     || configuredSiteSyncStatuses.some((site) => site.status !== 'synced');
   const lastSync = lastOutputPath ? readLastSyncArtifact(lastOutputPath) : null;
@@ -264,6 +276,7 @@ export function readLocalSyncArtifactInventory(artifactDirectory, { lastOutputPa
     artifact_directory: artifactDirectory,
     artifact_count: artifacts.length,
     configured_site_count: normalizedConfiguredSites.length,
+    max_sync_artifact_age_minutes: effectiveMaxArtifactAgeMinutes,
     status: artifacts.length === 0 && normalizedConfiguredSites.length === 0 ? 'never_synced' : needsAttention ? 'needs_attention' : 'synced',
     last_sync: lastSync,
     artifacts,
@@ -304,11 +317,16 @@ export function readLocalConfiguredSites({ root, explicitSites = null, sitesFile
     sites.push(...processSites);
   }
   const normalizedSites = normalizeConfiguredSiteList(sites);
+  const siteRecords = normalizeConfiguredSiteRecords([
+    ...normalizedSites,
+    ...(siteRegistryProjection.site_records ?? []),
+  ]);
   return {
     state: normalizedSites.length > 0 ? 'configured' : 'not_configured',
     sources,
     site_count: normalizedSites.length,
     sites: normalizedSites,
+    site_records: siteRecords,
     sites_file: fileSites,
     site_registry_projection: siteRegistryProjection,
   };
@@ -442,21 +460,35 @@ function readConfiguredSitesFile(sitesFilePath) {
 }
 
 function normalizeConfiguredSiteList(value) {
+  return normalizeConfiguredSiteRecords(value).map((site) => site.site_id);
+}
+
+function normalizeConfiguredSiteRecords(value) {
   const values = Array.isArray(value) ? value : [value];
-  const sites = [];
+  const siteById = new Map();
   for (const item of values) {
     if (!item) continue;
     if (typeof item === 'string') {
-      sites.push(...item.split(',').map((part) => part.trim()).filter(Boolean));
+      for (const siteId of item.split(',').map((part) => part.trim()).filter(Boolean)) {
+        if (!siteById.has(siteId)) siteById.set(siteId, { site_id: siteId });
+      }
     } else if (typeof item === 'object') {
-      const siteId = item.site_id ?? item.siteId ?? item.id ?? null;
-      if (siteId) sites.push(String(siteId).trim());
+      const siteId = String(item.site_id ?? item.siteId ?? item.id ?? '').trim();
+      if (!siteId) continue;
+      const existing = siteById.get(siteId) ?? { site_id: siteId };
+      siteById.set(siteId, {
+        ...existing,
+        display_name: item.display_name ?? item.displayName ?? existing.display_name ?? null,
+        site_ref: item.site_ref ?? item.siteRef ?? existing.site_ref ?? null,
+        site_status: item.site_status ?? item.status ?? existing.site_status ?? null,
+      });
     }
   }
-  return [...new Set(sites.filter(Boolean))].sort((left, right) => left.localeCompare(right));
+  return [...siteById.values()].sort((left, right) => left.site_id.localeCompare(right.site_id));
 }
 
-function buildConfiguredSiteSyncStatuses(configuredSites, artifacts) {
+function buildConfiguredSiteSyncStatuses(configuredSites, artifacts, { maxArtifactAgeMinutes = DEFAULT_MAX_SYNC_ARTIFACT_AGE_MINUTES, now = () => new Date().toISOString() } = {}) {
+  const configuredSiteRecords = normalizeConfiguredSiteRecords(configuredSites);
   const artifactBySite = new Map();
   for (const artifact of artifacts) {
     if (!artifact?.site_id) continue;
@@ -465,27 +497,55 @@ function buildConfiguredSiteSyncStatuses(configuredSites, artifacts) {
       artifactBySite.set(artifact.site_id, artifact);
     }
   }
-  return configuredSites.map((siteId) => {
+  const maxArtifactAgeMilliseconds = normalizeMaxArtifactAgeMinutes(maxArtifactAgeMinutes) * 60 * 1000;
+  const nowMilliseconds = Date.parse(now());
+  return configuredSiteRecords.map((site) => {
+    const siteId = site.site_id;
     const artifact = artifactBySite.get(siteId) ?? null;
+    const siteMetadata = buildConfiguredSiteMetadata(site);
     if (!artifact) {
       return {
         site_id: siteId,
+        ...siteMetadata,
         status: 'needs_attention',
         reason: 'configured_site_sync_artifact_missing',
         artifact_present: false,
       };
     }
+    const artifactAgeMilliseconds = Number.isFinite(nowMilliseconds) && artifact.artifact_updated_at
+      ? nowMilliseconds - Date.parse(artifact.artifact_updated_at)
+      : null;
+    const artifactIsStale = artifact.status === 'synced'
+      && Number.isFinite(artifactAgeMilliseconds)
+      && artifactAgeMilliseconds > maxArtifactAgeMilliseconds;
     return {
       site_id: siteId,
-      status: artifact.status,
-      reason: artifact.status === 'synced' ? 'matching_sync_artifact_synced' : 'matching_sync_artifact_needs_attention',
+      ...siteMetadata,
+      status: artifactIsStale ? 'needs_attention' : artifact.status,
+      reason: artifactIsStale ? 'configured_site_sync_artifact_stale' : artifact.status === 'synced' ? 'matching_sync_artifact_synced' : 'matching_sync_artifact_needs_attention',
       artifact_present: true,
       artifact_path: artifact.artifact_path,
       artifact_updated_at: artifact.artifact_updated_at,
+      artifact_age_minutes: Number.isFinite(artifactAgeMilliseconds) ? Math.max(0, Math.floor(artifactAgeMilliseconds / 60000)) : null,
+      max_sync_artifact_age_minutes: normalizeMaxArtifactAgeMinutes(maxArtifactAgeMinutes),
       pushed_packet_id: artifact.pushed_packet_id,
       pulled_packet_id: artifact.pulled_packet_id,
     };
   });
+}
+
+function buildConfiguredSiteMetadata(site) {
+  return {
+    display_name: site.display_name ?? null,
+    site_ref: site.site_ref ?? null,
+    site_status: site.site_status ?? null,
+  };
+}
+
+function normalizeMaxArtifactAgeMinutes(value) {
+  const parsed = Number.parseInt(value ?? DEFAULT_MAX_SYNC_ARTIFACT_AGE_MINUTES, 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return DEFAULT_MAX_SYNC_ARTIFACT_AGE_MINUTES;
+  return Math.min(parsed, 24 * 60);
 }
 
 function stripEnvValueQuotes(value) {
