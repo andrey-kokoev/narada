@@ -394,14 +394,26 @@ function summarizeSiteContinuityHealth(plan, schedulerTaskReadback = plan?.sched
   const bindingRegistry = configuredSites.site_continuity_binding_registry ?? {};
   const localSyncArtifacts = plan?.local_sync_artifacts ?? null;
   const localInboundPackets = plan?.local_inbound_packets ?? null;
+  const reconciliationExecution = plan?.last_reconciliation_execution ?? null;
+  const reconciliationCoversLocalArtifactStaleness = freshCompletedNoopReconciliationCoversLocalArtifactStaleness({
+    reconciliationExecution,
+    localSyncArtifacts,
+    localInboundPackets,
+  });
+  const effectiveLocalSyncStatus = reconciliationCoversLocalArtifactStaleness && localSyncArtifacts?.status === 'needs_attention'
+    ? 'synced'
+    : localSyncArtifacts?.status ?? null;
+  const effectiveLocalInboundStatus = reconciliationCoversLocalArtifactStaleness && localInboundPackets?.status === 'needs_attention'
+    ? 'synced'
+    : localInboundPackets?.status ?? null;
   const status = plan?.status ?? {};
   const attentionReasons = [
     configuredSites.state !== 'configured' ? 'site_continuity_sites_not_configured' : null,
     configuredSites.site_count <= 0 ? 'site_continuity_no_sites_selected' : null,
     bindingRegistry.state !== 'read' ? `site_continuity_binding_registry_${bindingRegistry.state ?? 'unread'}` : null,
     status.command_args_complete !== true ? 'site_continuity_scheduler_command_args_incomplete' : null,
-    localSyncArtifacts?.status && localSyncArtifacts.status !== 'synced' ? `site_continuity_local_sync_${localSyncArtifacts.status}` : null,
-    localInboundPackets?.status && localInboundPackets.status !== 'synced' ? `site_continuity_local_inbound_${localInboundPackets.status}` : null,
+    effectiveLocalSyncStatus && effectiveLocalSyncStatus !== 'synced' ? `site_continuity_local_sync_${effectiveLocalSyncStatus}` : null,
+    effectiveLocalInboundStatus && effectiveLocalInboundStatus !== 'synced' ? `site_continuity_local_inbound_${effectiveLocalInboundStatus}` : null,
     schedulerTaskReadback ? schedulerTaskReadback.status !== 'ok' ? 'site_continuity_scheduler_readback_needs_attention' : null : 'site_continuity_scheduler_live_readback_required',
   ].filter(Boolean);
   return {
@@ -412,16 +424,73 @@ function summarizeSiteContinuityHealth(plan, schedulerTaskReadback = plan?.sched
     selection_source: configuredSites.selection_source ?? 'unknown',
     binding_registry_state: bindingRegistry.state ?? null,
     binding_count: bindingRegistry.binding_count ?? 0,
-    local_sync_status: localSyncArtifacts?.status ?? null,
+    local_sync_status: effectiveLocalSyncStatus,
     local_sync_artifact_count: localSyncArtifacts?.artifact_count ?? 0,
-    local_inbound_status: localInboundPackets?.status ?? null,
+    local_inbound_status: effectiveLocalInboundStatus,
     local_inbound_artifact_count: localInboundPackets?.artifact_count ?? 0,
+    local_artifact_freshness_source: reconciliationCoversLocalArtifactStaleness
+      ? 'fresh_completed_noop_reconciliation_execution'
+      : 'artifact_mtime',
+    reconciliation_execution_status: reconciliationExecution?.status ?? null,
+    reconciliation_execution_plan_status: reconciliationExecution?.reconciliation_plan_status ?? null,
     scheduler_readback_status: schedulerTaskReadback?.status ?? null,
     scheduler_last_result: schedulerTaskReadback?.last_result ?? null,
     scheduler_task_state: schedulerTaskReadback?.scheduled_task_state ?? null,
     scheduler_power_management_status: schedulerTaskReadback?.power_management_status ?? null,
     embeds_credentials: false,
   };
+}
+
+function freshCompletedNoopReconciliationCoversLocalArtifactStaleness({
+  reconciliationExecution,
+  localSyncArtifacts,
+  localInboundPackets,
+} = {}) {
+  if (!reconciliationExecution || reconciliationExecution.state !== 'read') return false;
+  if (reconciliationExecution.status !== 'completed') return false;
+  if (reconciliationExecution.reconciliation_plan_status !== 'synced') return false;
+  if (Number(reconciliationExecution.selected_site_count ?? 0) !== 0) return false;
+  if (Number(reconciliationExecution.failed_site_count ?? 0) !== 0) return false;
+  if (!onlyConfiguredSiteStaleness(localSyncArtifacts?.configured_site_sync_statuses, 'configured_site_sync_artifact_stale')) return false;
+  if (!onlyConfiguredSiteStaleness(localInboundPackets?.configured_site_inbound_statuses, 'configured_site_inbound_packet_stale')) return false;
+  const hasLocalArtifactStaleness = hasConfiguredSiteStaleness(
+    localSyncArtifacts?.configured_site_sync_statuses,
+    'configured_site_sync_artifact_stale',
+  ) || hasConfiguredSiteStaleness(
+    localInboundPackets?.configured_site_inbound_statuses,
+    'configured_site_inbound_packet_stale',
+  );
+  if (!hasLocalArtifactStaleness) return false;
+
+  const syncMaxAge = Number(localSyncArtifacts?.max_sync_artifact_age_minutes);
+  const inboundMaxAge = Number(localInboundPackets?.max_inbound_artifact_age_minutes);
+  const maxAgeMinutes = Math.max(
+    Number.isFinite(syncMaxAge) ? syncMaxAge : 0,
+    Number.isFinite(inboundMaxAge) ? inboundMaxAge : 0,
+  );
+  const observedAt = reconciliationExecution.artifact_updated_at
+    ?? reconciliationExecution.persisted_at
+    ?? reconciliationExecution.generated_at
+    ?? null;
+  const observedAtMs = Date.parse(observedAt);
+  if (!Number.isFinite(observedAtMs) || maxAgeMinutes <= 0) return false;
+  return Date.now() - observedAtMs <= maxAgeMinutes * 60 * 1000;
+}
+
+function onlyConfiguredSiteStaleness(statuses = [], staleReason) {
+  if (!Array.isArray(statuses) || statuses.length === 0) return false;
+  return statuses.every((site) => (
+    site?.artifact_present === true
+    && (site.status === 'synced' || (site.status === 'needs_attention' && site.reason === staleReason))
+  ));
+}
+
+function hasConfiguredSiteStaleness(statuses = [], staleReason) {
+  return Array.isArray(statuses) && statuses.some((site) => (
+    site?.artifact_present === true
+    && site.status === 'needs_attention'
+    && site.reason === staleReason
+  ));
 }
 
 export function formatSiteContinuitySchedulerResultForText(result) {

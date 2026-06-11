@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile as execFileCallback } from 'node:child_process';
+import { readdirSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -1265,6 +1266,103 @@ test('site continuity scheduler status-all marks stale configured site artifacts
       pushed_packet_id: 'packet-stale-local',
       pulled_packet_id: 'packet-stale-cloudflare',
     }]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('site continuity health accepts fresh no-op reconciliation over stale local packet mtimes', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-noop-reconcile-'));
+  const artifactDirectory = join(root, '.narada/site-continuity');
+  const inboundDirectory = join(artifactDirectory, 'inbound');
+  const outputPath = join(artifactDirectory, 'site_fresh-cloudflare-sync.json');
+  const reconciliationExecutionOutputPath = join(artifactDirectory, 'reconciliation/cloudflare-reconcile-last.json');
+  const bindingRegistryPath = join(artifactDirectory, 'bindings.json');
+  await mkdir(dirname(reconciliationExecutionOutputPath), { recursive: true });
+  await mkdir(inboundDirectory, { recursive: true });
+  await writeFile(bindingRegistryPath, `${JSON.stringify(createSiteContinuityBindingRegistry({
+    registry_ref: 'file:.narada/site-continuity/bindings.json',
+    bindings: [
+      createSiteContinuityBinding({
+        site_id: 'site_fresh',
+        site_ref: 'site-ref:fresh',
+        cloudflare_site_ref: 'cloudflare://site_fresh',
+        local_site_ref: 'file:///tmp/site_fresh',
+        site_status: 'active',
+      }),
+    ],
+  }), null, 2)}\n`, 'utf8');
+  await writeFile(outputPath, `${JSON.stringify({
+    schema: 'narada.site_continuity_cloudflare_sync_once.v1',
+    status: 'ok',
+    site_id: 'site_fresh',
+    worker_url: 'https://worker.example',
+    pushed_packet_id: 'packet-fresh-local',
+    pulled_packet_id: 'packet-fresh-cloudflare',
+    cloudflare_push_status: 'imported',
+    continuity_loop_report_recorded: true,
+    generated_at: '2026-06-11T10:00:00.000Z',
+    continuity_loop_report: {
+      status: 'ok',
+      site_id: 'site_fresh',
+      generated_at: '2026-06-11T10:00:00.000Z',
+      cloudflare_worker_url: 'https://worker.example',
+      cloudflare_push: {
+        status: 'imported',
+        pushed_packet_id: 'packet-fresh-local',
+        returned_packet_id: 'packet-fresh-cloudflare',
+      },
+    },
+    cloudflare_push: {
+      status: 'imported',
+      pushed_packet_id: 'packet-fresh-local',
+      returned_packet_id: 'packet-fresh-cloudflare',
+    },
+  }, null, 2)}\n`, 'utf8');
+  await writeInboundPacketArtifact(artifactDirectory, 'site_fresh', {
+    packetId: 'packet-fresh-cloudflare',
+    generatedAt: '2026-06-11T10:00:00.000Z',
+  });
+  const staleDate = new Date(Date.now() - 20 * 60 * 1000);
+  await utimes(outputPath, staleDate, staleDate);
+  const inboundFile = join(inboundDirectory, readdirSync(inboundDirectory)[0]);
+  await utimes(inboundFile, staleDate, staleDate);
+  await writeFile(reconciliationExecutionOutputPath, `${JSON.stringify({
+    schema: 'narada.cloudflare_carrier.site_continuity_reconciliation_execution.v1',
+    status: 'completed',
+    generated_at: new Date().toISOString(),
+    persisted_at: new Date().toISOString(),
+    reconciliation_plan_status: 'synced',
+    selected_site_count: 0,
+    executed_site_count: 0,
+    completed_site_count: 0,
+    failed_site_count: 0,
+    refusal_reason: null,
+    cloudflare_mutation_admission: 'not_executed_already_synced',
+    filesystem_mutation_admission: 'reconciliation_execution_artifact_write_only',
+    results: [],
+  }, null, 2)}\n`, 'utf8');
+  try {
+    const plan = buildSiteContinuitySchedulerPlan({
+      action: 'health',
+      repoRoot: root,
+      artifactDirectory,
+      localInboundDirectory: inboundDirectory,
+      outputPath,
+      reconciliationExecutionOutputPath,
+      siteContinuityBindingRegistryPath: bindingRegistryPath,
+      configuredSites: [{ site_id: 'site_fresh', display_name: 'Fresh Site', site_ref: 'site-ref:fresh', status: 'active' }],
+      maxArtifactAgeMinutes: 15,
+    });
+    assert.equal(plan.local_sync_artifacts.status, 'needs_attention');
+    assert.equal(plan.local_inbound_packets.status, 'needs_attention');
+    assert.equal(plan.last_reconciliation_execution.status, 'completed');
+    assert.equal(plan.last_reconciliation_execution.reconciliation_plan_status, 'synced');
+    assert.equal(plan.continuity_health.status, 'needs_attention');
+    assert.doesNotMatch(JSON.stringify(plan.continuity_health.attention_reasons), /local_(sync|inbound)_needs_attention/);
+    assert.equal(plan.continuity_health.local_sync_status, 'synced');
+    assert.equal(plan.continuity_health.local_inbound_status, 'synced');
+    assert.equal(plan.continuity_health.local_artifact_freshness_source, 'fresh_completed_noop_reconciliation_execution');
   } finally {
     await rm(root, { recursive: true, force: true });
   }
