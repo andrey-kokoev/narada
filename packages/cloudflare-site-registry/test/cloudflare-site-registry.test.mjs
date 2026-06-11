@@ -119,6 +119,23 @@ test('updates operation status behind owner or maintainer authority', async () =
   assert.equal(paused.reason, 'operation_paused_by_operator');
   assert.equal(paused.operation.status, 'inactive');
 
+  const metadataUpdate = await registry.handle({
+    operation: 'operation.create',
+    principal: owner,
+    params: {
+      site_id: 'site_operation_status',
+      operation_id: 'operation_status_control',
+      display_name: 'Renamed Status Control Operation',
+      operation_kind: 'control',
+      status: 'active',
+      request_id: 'req_operation_metadata_update',
+    },
+  });
+  assert.equal(metadataUpdate.ok, true);
+  assert.equal(metadataUpdate.action, 'updated');
+  assert.equal(metadataUpdate.operation.display_name, 'Renamed Status Control Operation');
+  assert.equal(metadataUpdate.operation.status, 'inactive');
+
   const readPaused = await registry.handle({
     operation: 'operation.read',
     principal: owner,

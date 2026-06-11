@@ -223,6 +223,7 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     const existing = await findOperation(operationId);
     const timestamp = now();
     if (existing && existing.site_id !== siteId) return { ok: false, code: 'operation_site_mismatch', site_id: siteId, operation_id: operationId };
+    const operationStatus = existing?.status ?? normalizedStatus;
     await db.prepare(`INSERT INTO cloudflare_site_operations (
       operation_id, site_id, display_name, operation_kind, status, created_by_principal_id, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -235,7 +236,7 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
       siteId,
       displayName,
       normalizedKind,
-      normalizedStatus,
+      operationStatus,
       existing?.created_by_principal_id ?? principalId,
       existing?.created_at ?? timestamp,
       timestamp,
@@ -247,7 +248,7 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
       principal_id: principalId,
       action: 'admit',
       reason: existing ? 'site_operation_updated' : 'site_operation_created',
-      evidence: { request_id, operation_id: operationId, operation_kind: normalizedKind, status: normalizedStatus, actor_role: actorMembership.role },
+      evidence: { request_id, operation_id: operationId, operation_kind: normalizedKind, status: operationStatus, actor_role: actorMembership.role },
     });
     return {
       ok: true,
