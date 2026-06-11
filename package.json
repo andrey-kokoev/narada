@@ -11,6 +11,7 @@
     "site:continuity:loop": "node scripts/site-continuity-loop.mjs",
     "site:continuity:loop:test": "node --test scripts/site-continuity-loop.test.mjs",
     "cloudflare:operator:check": "node scripts/cloudflare-operator-check.mjs",
+    "cloudflare:operator:check:test": "node --test scripts/cloudflare-operator-check.test.mjs",
     "cloudflare:operator:login": "node scripts/cloudflare-operator-login.mjs",
     "cloudflare:operator:site:bootstrap": "node scripts/cloudflare-operator-site-bootstrap.mjs",
     "cloudflare:operator:operation:bootstrap": "node scripts/cloudflare-operator-operation-bootstrap.mjs",

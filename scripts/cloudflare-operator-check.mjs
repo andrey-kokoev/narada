@@ -2931,5 +2931,31 @@ function fail(code, detail = {}) {
 }
 
 function printHelp() {
-  stdout.write(`Narada Cloudflare operator check\n\nCommand:\n  pnpm cloudflare:operator:check [--site <site_id>]\n\nConfiguration:\n  --url <worker-url> or CLOUDFLARE_CARRIER_URL\n  --token-file <path> or CLOUDFLARE_CARRIER_TOKEN_FILE\n  --operator-cookie-file <path> or CLOUDFLARE_OPERATOR_COOKIE_FILE\n  --operation <operation_id> or CLOUDFLARE_CARRIER_OPERATION_ID\n  --require-operator-session fails when no operator cookie file is supplied\n  --require-human-operator-action verifies a cookie-backed resident dispatch action and readback\n  --registry <registry.db> or NARADA_SITE_CONTINUITY_REGISTRY\n  --write-env writes --url and --token-file into the ignored root .env file\n\nEffect:\n  Loads the ignored root .env file.\n  Verifies the console and Microsoft login surface.\n  Optionally verifies the current Microsoft operator session, site membership, and Operation visibility from a browser cookie file.\n  With --require-human-operator-action, records a real resident dispatch as the Microsoft operator and proves it is visible in Operation readback.\n  Runs the live carrier smoke through Workers AI and Cloudflare task effects.\n  Reads site membership/product state and the canonical active Operation from the live Worker.\n  Runs the Windows/Cloudflare continuity loop twice to prove idempotent packet exchange.\n  Emits one JSON readiness report with console and login URLs, without printing token material.\n`);
+  stdout.write(`Narada Cloudflare operator check
+
+Command:
+  pnpm cloudflare:operator:check [--site <site_id>]
+
+Configuration:
+  --url <worker-url> or CLOUDFLARE_CARRIER_URL
+  --token-file <path> or CLOUDFLARE_CARRIER_TOKEN_FILE
+  --operator-cookie-file <path> or CLOUDFLARE_OPERATOR_COOKIE_FILE
+  --operation <operation_id> or CLOUDFLARE_CARRIER_OPERATION_ID
+  --require-operator-session fails when no operator cookie file is supplied
+  --require-human-operator-action verifies a cookie-backed resident dispatch action and readback
+  --expect-tool-effect-posture <posture> verifies live carrier task-effect posture
+  --registry <registry.db> or NARADA_SITE_CONTINUITY_REGISTRY
+  --write-env writes --url and --token-file into the ignored root .env file
+
+Effect:
+  Loads the ignored root .env file.
+  Verifies the console, API client, Microsoft login surface, canonical Site, and canonical Operation.
+  Optionally verifies the current Microsoft operator session, active Site membership, Operation visibility, and a real cookie-backed resident dispatch action.
+  Runs the live carrier smoke through Workers AI and Cloudflare task effects.
+  Reads site and operation product surfaces, including posture routes, persistence posture, recovery posture, and carrier evidence replay posture.
+  Runs the task lifecycle cutover gates that are part of the root readiness surface: projection write, role resolution, roster mutation, and source-state refusal posture.
+  Reads mailbox, site-file, resident-loop, resident-dispatch, webhook-delay, and repository-publication readiness boundaries without granting hidden mutation authority.
+  Runs the Windows/Cloudflare continuity loop twice to prove idempotent packet exchange.
+  Emits one JSON readiness report with console and login URLs, credential sources, product posture, and boundary evidence without printing token material.
+`);
 }
