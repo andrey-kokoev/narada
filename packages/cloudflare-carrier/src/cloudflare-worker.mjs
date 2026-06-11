@@ -14106,6 +14106,18 @@ export function renderCloudflareCarrierConsole() {
           site_ref: 'site://' + el('siteId').value.trim(),
         }, { request_id: 'console_start_' + carrierSessionId });
       },
+      resumeContinuation(operationId, carrierSessionId) {
+        const siteId = el('siteId').value.trim();
+        const sessionId = carrierSessionId || el('sessionId').value.trim();
+        return this.request('session.start', {
+          carrier_session_id: sessionId,
+          agent_id: el('agentId').value.trim(),
+          site_id: siteId,
+          operation_id: operationId,
+          site_root: 'cloudflare://' + siteId,
+          site_ref: 'site://' + siteId,
+        }, { request_id: 'console_operation_continuation_resume_' + Date.now() });
+      },
       status() { return this.request('session.status'); },
       readSite() { return this.request('site.read', { site_id: el('siteId').value.trim(), carrier_event_limit: 20, session_limit: carrierEvidenceSessionLimit(), session_offset: carrierEvidenceSessionOffset() }); },
       readSites() { return this.request('site.list', { limit: 20, site_status_limit: 20 }); },
@@ -17165,10 +17177,39 @@ export function renderCloudflareCarrierConsole() {
     function operationLifecycleActionRow(operation = focusedOperation()) {
       return focusActionRow(
         focusActionButton('operationLifecycleResume', 'Resume', () => run(() => putFocusedOperationStatus('active', 'operation_resumed_by_operator'))),
+        focusActionButton('operationLifecycleResumeContinuation', 'Resume Continuation', () => run(() => resumeFocusedOperationContinuation(operation))),
         focusActionButton('operationLifecyclePause', 'Pause', () => run(() => putFocusedOperationStatus('inactive', 'operation_paused_by_operator'))),
         focusActionButton('operationLifecycleNeedsContinuation', 'Needs Continuation', () => run(() => putFocusedOperationStatus('needs_continuation', 'operation_needs_continuation_by_operator'))),
         focusActionButton('operationLifecycleArchive', 'Archive', () => run(() => putFocusedOperationStatus('closed', 'operation_closed_by_operator'))),
       );
+    }
+    function continuationSessionIdForOperation(operationId) {
+      return 'carrier_session_' + String(operationId || 'operation').replace(/[^a-z0-9_:-]+/gi, '_') + '_' + Date.now();
+    }
+    async function resumeFocusedOperationContinuation(operation = focusedOperation()) {
+      const operationId = operation?.operation_id || el('operationId').value.trim();
+      if (!operationId) throw new Error('Operation ID is required.');
+      setCurrentOperation(operationId);
+      const currentStatus = operation?.status || state.operationProduct?.operation?.status || '';
+      if (currentStatus === 'needs_continuation') {
+        await putFocusedOperationStatus('active', 'operation_continuation_resumed_by_operator');
+      }
+      const carrierSessionId = continuationSessionIdForOperation(operationId);
+      setCurrentSession(carrierSessionId);
+      const body = await api.resumeContinuation(operationId, carrierSessionId);
+      appendEvents([body.event].filter(Boolean));
+      renderLastAuthority(null, {
+        event_kind: 'session.start',
+        action: 'operation_continuation_resumed',
+        reason: 'operation_continuation_resumed_by_operator',
+        evidence: {
+          operation_id: operationId,
+          carrier_session_id: body.carrier_session_id || carrierSessionId,
+          status: currentStatus === 'needs_continuation' ? 'active' : currentStatus || null,
+        },
+      });
+      await refreshStatus();
+      await refreshOperation();
     }
     async function putFocusedOperationStatus(status, reason) {
       const operation = focusedOperation();
