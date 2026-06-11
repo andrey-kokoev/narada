@@ -12,16 +12,18 @@ export function buildProviderLivenessSchedulerPlan({
   taskName = DEFAULT_TASK_NAME,
   intervalMinutes = DEFAULT_INTERVAL_MINUTES,
   refreshEntrypoint = 'packages/cloudflare-carrier/scripts/cloudflare-carrier-provider-liveness-refresh.mjs',
+  scheduledTaskEntrypoint = 'packages/cloudflare-carrier/scripts/cloudflare-carrier-provider-liveness-scheduled-task.mjs',
   localRoot = null,
   nodeCommand = process.env.NARADA_NODE_COMMAND ?? 'node',
   dryRun = true,
 } = {}) {
   const root = resolve(repoRoot);
-  const entrypoint = resolve(root, refreshEntrypoint);
+  const refreshEntryPoint = resolve(root, refreshEntrypoint);
+  const taskEntryPoint = resolve(root, scheduledTaskEntrypoint);
   const effectiveLocalRoot = resolvePath(root, localRoot ?? root);
   const interval = normalizeIntervalMinutes(intervalMinutes);
-  const taskCommand = buildTaskCommand({ nodeCommand, entrypoint, localRoot: effectiveLocalRoot });
-  const status = readLocalSchedulerStatus({ root, entrypoint, localRoot: effectiveLocalRoot });
+  const taskCommand = buildTaskCommand({ nodeCommand, entrypoint: taskEntryPoint, localRoot: effectiveLocalRoot });
+  const status = readLocalSchedulerStatus({ root, refreshEntryPoint, taskEntryPoint, localRoot: effectiveLocalRoot });
 
   const base = {
     schema: 'narada.cloudflare_carrier.provider_liveness_scheduler_plan.v1',
@@ -31,7 +33,8 @@ export function buildProviderLivenessSchedulerPlan({
     interval_minutes: interval,
     node_command: nodeCommand,
     repo_root: root,
-    refresh_entrypoint: entrypoint,
+    refresh_entrypoint: refreshEntryPoint,
+    scheduled_task_entrypoint: taskEntryPoint,
     local_root: effectiveLocalRoot,
     credential_posture: 'external_env_file_or_process_environment_only',
     embeds_credentials: false,
@@ -87,14 +90,15 @@ export function buildProviderLivenessSchedulerPlan({
   }
 }
 
-export function readLocalSchedulerStatus({ root, entrypoint, localRoot }) {
+export function readLocalSchedulerStatus({ root, refreshEntryPoint, taskEntryPoint, localRoot }) {
   const envPath = resolve(root, '.env');
   const envKeys = existsSync(envPath) ? readEnvKeys(envPath) : [];
   return {
     state: 'not_queried',
     task_scheduler_query_required: true,
     repo_root_exists: existsSync(root),
-    refresh_entrypoint_exists: existsSync(entrypoint),
+    refresh_entrypoint_exists: existsSync(refreshEntryPoint),
+    scheduled_task_entrypoint_exists: existsSync(taskEntryPoint),
     local_root_exists: existsSync(localRoot),
     env_file_present: existsSync(envPath),
     required_env_keys_observed: [
@@ -150,6 +154,7 @@ function parseArgs(argv) {
     else if (arg === '--task-name') args.taskName = argv[++index];
     else if (arg === '--interval-minutes') args.intervalMinutes = argv[++index];
     else if (arg === '--refresh-entrypoint') args.refreshEntrypoint = argv[++index];
+    else if (arg === '--scheduled-task-entrypoint') args.scheduledTaskEntrypoint = argv[++index];
     else if (arg === '--local-root') args.localRoot = argv[++index];
     else if (arg === '--node-command') args.nodeCommand = argv[++index];
     else throw new Error(`unknown_argument:${arg}`);

@@ -2245,12 +2245,14 @@ function summarizeCloudflareOperationLifecycleStatus({
   const localIngressEvidenceCount = Array.isArray(localIngressEvidence) ? localIngressEvidence.length : 0;
   const localIngressProviderHeartbeatCount = Array.isArray(localIngressProviderHeartbeats) ? localIngressProviderHeartbeats.length : 0;
   const localIngressProviderLiveness = classifyLocalIngressProviderLiveness(localIngressProviderHeartbeats);
+  const localIngressProviderSchedulerPosture = localIngressProviderLiveness.scheduler_posture;
   const localIngressObserved = localIngressRequestCount > 0 || localIngressEvidenceCount > 0 || localIngressProviderHeartbeatCount > 0;
   const repositoryPublicationRequestCount = Array.isArray(repositoryPublicationRequests) ? repositoryPublicationRequests.length : 0;
   const repositoryPublicationExecutionCount = Array.isArray(repositoryPublicationExecutions) ? repositoryPublicationExecutions.length : 0;
   const repositoryPublicationEvidenceCount = Array.isArray(repositoryPublicationEvidence) ? repositoryPublicationEvidence.length : 0;
   const repositoryPublicationProviderHeartbeatCount = Array.isArray(repositoryPublicationProviderHeartbeats) ? repositoryPublicationProviderHeartbeats.length : 0;
   const repositoryPublicationProviderLiveness = classifyRepositoryPublicationProviderLiveness(repositoryPublicationProviderHeartbeats);
+  const repositoryPublicationProviderSchedulerPosture = repositoryPublicationProviderLiveness.scheduler_posture;
   const repositoryPublicationObserved = repositoryPublicationRequestCount > 0 || repositoryPublicationExecutionCount > 0 || repositoryPublicationEvidenceCount > 0 || repositoryPublicationProviderHeartbeatCount > 0;
   const missing = [];
   if (sessionCount === 0) missing.push('session');
@@ -2293,12 +2295,14 @@ function summarizeCloudflareOperationLifecycleStatus({
     local_ingress_provider_heartbeat_count: localIngressProviderHeartbeatCount,
     local_ingress_provider_liveness_authority: localIngressProviderHeartbeatCount > 0 ? CLOUDFLARE_LOCAL_INGRESS_PROVIDER_LIVENESS_AUTHORITY : 'not_observed',
     local_ingress_provider_liveness: localIngressProviderLiveness,
+    local_ingress_provider_scheduler_posture: localIngressProviderSchedulerPosture,
     repository_publication_request_count: repositoryPublicationRequestCount,
     repository_publication_execution_count: repositoryPublicationExecutionCount,
     repository_publication_evidence_count: repositoryPublicationEvidenceCount,
     repository_publication_provider_heartbeat_count: repositoryPublicationProviderHeartbeatCount,
     repository_publication_provider_liveness_authority: repositoryPublicationProviderHeartbeatCount > 0 ? CLOUDFLARE_REPOSITORY_PUBLICATION_PROVIDER_LIVENESS_AUTHORITY : 'not_observed',
     repository_publication_provider_liveness: repositoryPublicationProviderLiveness,
+    repository_publication_provider_scheduler_posture: repositoryPublicationProviderSchedulerPosture,
     directive_record_count: directiveRecordCount,
     directive_delivery_count: directiveDeliveryCount,
     carrier_evidence_read_status: carrierEvidenceReadStatus,
@@ -9317,6 +9321,9 @@ function createCloudflareLocalIngressProviderHeartbeat(siteId, params = {}, prin
     provider_id: providerId,
     provider_authority: params.provider_authority ?? WINDOWS_LOCAL_INGRESS_EXECUTOR_AUTHORITY,
     provider_embodiment: params.provider_embodiment ?? params.embodiment ?? 'windows_current_user_local_ingress_executor',
+    provider_refresh_trigger: params.provider_refresh_trigger ?? 'not_observed',
+    scheduler_task_name: params.scheduler_task_name ?? null,
+    scheduler_interval_minutes: Number.isFinite(Number(params.scheduler_interval_minutes)) ? Number(params.scheduler_interval_minutes) : null,
     status,
     local_ingress_request_id: params.local_ingress_request_id ?? null,
     local_execution_id: params.local_execution_id ?? null,
@@ -9345,6 +9352,7 @@ function classifyLocalIngressProviderLiveness(heartbeats = [], { nowMs = Date.no
       provider_authority: WINDOWS_LOCAL_INGRESS_EXECUTOR_AUTHORITY,
       provider_liveness_authority: 'not_observed',
       stale_after_ms: staleAfterMs,
+      scheduler_posture: classifyProviderHeartbeatSchedulerPosture(null, { providerKind: 'local_ingress', providerLivenessState: 'missing' }),
     };
   }
   const observedAt = Date.parse(heartbeat.last_run_at ?? heartbeat.generated_at ?? heartbeat.recorded_at ?? '');
@@ -9353,6 +9361,10 @@ function classifyLocalIngressProviderLiveness(heartbeats = [], { nowMs = Date.no
   const state = ageMs == null
     ? 'unknown'
     : ageMs > staleAfterMs ? 'stale' : status === 'failed' ? 'failed' : 'fresh';
+  const schedulerPosture = classifyProviderHeartbeatSchedulerPosture(heartbeat, {
+    providerKind: 'local_ingress',
+    providerLivenessState: state,
+  });
   return {
     schema: 'narada.sonar.cloudflare_local_ingress_provider_liveness.v1',
     state,
@@ -9366,6 +9378,36 @@ function classifyLocalIngressProviderLiveness(heartbeats = [], { nowMs = Date.no
     latest_heartbeat_age_ms: ageMs,
     stale_after_ms: staleAfterMs,
     provider_liveness_authority: CLOUDFLARE_LOCAL_INGRESS_PROVIDER_LIVENESS_AUTHORITY,
+    scheduler_posture: schedulerPosture,
+  };
+}
+
+function classifyProviderHeartbeatSchedulerPosture(heartbeat = null, { providerKind = 'provider', providerLivenessState = 'unknown' } = {}) {
+  if (!heartbeat) {
+    return {
+      schema: 'narada.cloudflare_provider_liveness_scheduler_posture.v1',
+      provider_kind: providerKind,
+      state: 'not_observed',
+      reason: 'provider_heartbeat_missing',
+      refresh_trigger: 'not_observed',
+      task_name: null,
+      interval_minutes: null,
+    };
+  }
+  const refreshTrigger = heartbeat.provider_refresh_trigger ?? 'not_observed';
+  const scheduled = refreshTrigger === 'windows_task_scheduler';
+  const intervalMinutes = Number.isFinite(Number(heartbeat.scheduler_interval_minutes)) ? Number(heartbeat.scheduler_interval_minutes) : null;
+  const state = scheduled
+    ? (providerLivenessState === 'fresh' ? 'fresh_from_scheduled_refresh' : `${providerLivenessState}_from_scheduled_refresh`)
+    : 'not_observed';
+  return {
+    schema: 'narada.cloudflare_provider_liveness_scheduler_posture.v1',
+    provider_kind: providerKind,
+    state,
+    reason: scheduled ? `provider_liveness_${state}` : 'provider_heartbeat_refresh_trigger_not_scheduled',
+    refresh_trigger: refreshTrigger,
+    task_name: heartbeat.scheduler_task_name ?? null,
+    interval_minutes: intervalMinutes,
   };
 }
 
@@ -9749,6 +9791,9 @@ function createCloudflareRepositoryPublicationProviderHeartbeat(siteId, params =
     provider_id: providerId,
     provider_authority: params.provider_authority ?? WINDOWS_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY,
     provider_embodiment: params.provider_embodiment ?? params.embodiment ?? 'windows_current_user_startup_provider',
+    provider_refresh_trigger: params.provider_refresh_trigger ?? 'not_observed',
+    scheduler_task_name: params.scheduler_task_name ?? null,
+    scheduler_interval_minutes: Number.isFinite(Number(params.scheduler_interval_minutes)) ? Number(params.scheduler_interval_minutes) : null,
     status,
     max_cycles: Number.isFinite(Number(params.max_cycles)) ? Number(params.max_cycles) : null,
     iteration_count: Number.isFinite(Number(params.iteration_count)) ? Number(params.iteration_count) : 0,
@@ -9776,6 +9821,7 @@ function classifyRepositoryPublicationProviderLiveness(heartbeats = [], { nowMs 
       provider_authority: WINDOWS_REPOSITORY_PUBLICATION_EXECUTOR_AUTHORITY,
       provider_liveness_authority: 'not_observed',
       stale_after_ms: staleAfterMs,
+      scheduler_posture: classifyProviderHeartbeatSchedulerPosture(null, { providerKind: 'repository_publication', providerLivenessState: 'missing' }),
     };
   }
   const observedAt = Date.parse(heartbeat.last_run_at ?? heartbeat.generated_at ?? heartbeat.recorded_at ?? '');
@@ -9784,6 +9830,10 @@ function classifyRepositoryPublicationProviderLiveness(heartbeats = [], { nowMs 
   const state = ageMs == null
     ? 'unknown'
     : ageMs > staleAfterMs ? 'stale' : status === 'failed' ? 'failed' : 'fresh';
+  const schedulerPosture = classifyProviderHeartbeatSchedulerPosture(heartbeat, {
+    providerKind: 'repository_publication',
+    providerLivenessState: state,
+  });
   return {
     schema: 'narada.sonar.cloudflare_repository_publication_provider_liveness.v1',
     state,
@@ -9797,6 +9847,7 @@ function classifyRepositoryPublicationProviderLiveness(heartbeats = [], { nowMs 
     latest_heartbeat_age_ms: ageMs,
     stale_after_ms: staleAfterMs,
     provider_liveness_authority: CLOUDFLARE_REPOSITORY_PUBLICATION_PROVIDER_LIVENESS_AUTHORITY,
+    scheduler_posture: schedulerPosture,
   };
 }
 

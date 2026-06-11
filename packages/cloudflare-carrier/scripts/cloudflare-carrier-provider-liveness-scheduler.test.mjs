@@ -14,8 +14,10 @@ const execFile = promisify(execFileCallback);
 test('provider liveness scheduler install plan is bounded and secret-free', async () => {
   const root = await mkdtemp(join(tmpdir(), 'narada-provider-liveness-scheduler-'));
   const entrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-carrier-provider-liveness-refresh.mjs');
+  const scheduledTaskEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-carrier-provider-liveness-scheduled-task.mjs');
   await mkdir(join(root, 'packages/cloudflare-carrier/scripts'), { recursive: true });
   await writeFile(entrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(scheduledTaskEntrypoint, '#!/usr/bin/env node\n', 'utf8');
   await writeFile(join(root, '.env'), 'CLOUDFLARE_CARRIER_URL=https://worker.example\nCLOUDFLARE_CARRIER_TOKEN_FILE=.secrets/token\n', 'utf8');
   try {
     const plan = buildProviderLivenessSchedulerPlan({ action: 'install', repoRoot: root, intervalMinutes: 2 });
@@ -31,12 +33,14 @@ test('provider liveness scheduler install plan is bounded and secret-free', asyn
     assert.equal(plan.repository_publication_admission, 'not_admitted');
     assert.equal(plan.status.repo_root_exists, true);
     assert.equal(plan.status.refresh_entrypoint_exists, true);
+    assert.equal(plan.status.scheduled_task_entrypoint_exists, true);
     assert.equal(plan.status.local_root_exists, true);
     assert.deepEqual(plan.status.required_env_keys_observed, ['CLOUDFLARE_CARRIER_URL', 'CLOUDFLARE_CARRIER_TOKEN_FILE']);
     assert.deepEqual(plan.scheduled_task_command.slice(0, 7), ['schtasks', '/Create', '/TN', 'Narada Cloudflare Provider Liveness Refresh', '/SC', 'MINUTE', '/MO']);
     assert.equal(plan.scheduled_task_command[7], '2');
-    assert.match(plan.task_command, /cloudflare-carrier-provider-liveness-refresh\.mjs/);
+    assert.match(plan.task_command, /cloudflare-carrier-provider-liveness-scheduled-task\.mjs/);
     assert.match(plan.task_command, /--local-root/);
+    assert.equal(plan.task_command.includes('--refresh-trigger'), false);
     assert.doesNotMatch(JSON.stringify(plan), /secret-token-value/);
   } finally {
     await rm(root, { recursive: true, force: true });

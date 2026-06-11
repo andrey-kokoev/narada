@@ -96,6 +96,9 @@ test('provider liveness refresh records local and repository heartbeats without 
     const localIngressHeartbeat = mock.requests[0].params;
     assert.equal(localIngressHeartbeat.status, 'ready');
     assert.equal(localIngressHeartbeat.provider_authority, 'windows_local_ingress_executor');
+    assert.equal(localIngressHeartbeat.provider_refresh_trigger, 'operator_refresh_unspecified');
+    assert.equal(localIngressHeartbeat.scheduler_task_name, null);
+    assert.equal(localIngressHeartbeat.scheduler_interval_minutes, null);
     assert.equal(localIngressHeartbeat.direct_cloudflare_filesystem_mutation_admission, 'not_admitted');
     assert.equal(localIngressHeartbeat.repository_publication_admission, 'not_admitted');
     assert.equal(localIngressHeartbeat.completed_execution_count, 0);
@@ -104,6 +107,9 @@ test('provider liveness refresh records local and repository heartbeats without 
     const repositoryHeartbeat = mock.requests[1].params;
     assert.equal(repositoryHeartbeat.status, 'ready');
     assert.equal(repositoryHeartbeat.provider_authority, 'windows_repository_publication_executor');
+    assert.equal(repositoryHeartbeat.provider_refresh_trigger, 'operator_refresh_unspecified');
+    assert.equal(repositoryHeartbeat.scheduler_task_name, null);
+    assert.equal(repositoryHeartbeat.scheduler_interval_minutes, null);
     assert.equal(repositoryHeartbeat.cloudflare_git_push_admission, 'not_admitted');
     assert.equal(repositoryHeartbeat.direct_cloudflare_repository_mutation_admission, 'not_admitted');
     assert.equal(repositoryHeartbeat.completed_publication_count, 0);
@@ -137,6 +143,7 @@ test('provider liveness refresh can refresh only local ingress', async () => {
     assert.equal(body.status, 'ok');
     assert.equal(body.provider_count, 1);
     assert.equal(body.providers[0].provider, 'local_ingress');
+    assert.equal(body.refresh_source.provider_refresh_trigger, 'operator_refresh_unspecified');
     assert.equal(mock.requests.length, 1);
     assert.equal(mock.requests[0].operation, 'local_ingress.provider_heartbeat.put');
   } finally {

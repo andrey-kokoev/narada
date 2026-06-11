@@ -1356,6 +1356,9 @@ test('worker site.read composes site sessions tasks authority events and carrier
       provider_id: 'windows_local_ingress_executor',
       provider_authority: 'windows_local_ingress_executor',
       provider_embodiment: 'windows_current_user_local_ingress_executor',
+      provider_refresh_trigger: 'windows_task_scheduler',
+      scheduler_task_name: '\\Narada\\CloudflareProviderLivenessRefresh',
+      scheduler_interval_minutes: 2,
       status: 'completed_and_recorded',
       local_ingress_request_id: 'local-ingress-request-fixture',
       local_execution_id: 'local-ingress-execution-fixture',
@@ -1371,6 +1374,9 @@ test('worker site.read composes site sessions tasks authority events and carrier
   const localIngressProviderHeartbeatBody = await localIngressProviderHeartbeat.json();
   assert.equal(localIngressProviderHeartbeatBody.schema, 'narada.sonar.cloudflare_local_ingress_provider_heartbeat.v1');
   assert.equal(localIngressProviderHeartbeatBody.provider_liveness_authority, 'cloudflare_local_ingress_provider_liveness_store');
+  assert.equal(localIngressProviderHeartbeatBody.heartbeat.provider_refresh_trigger, 'windows_task_scheduler');
+  assert.equal(localIngressProviderHeartbeatBody.heartbeat.scheduler_task_name, '\\Narada\\CloudflareProviderLivenessRefresh');
+  assert.equal(localIngressProviderHeartbeatBody.heartbeat.scheduler_interval_minutes, 2);
   assert.equal(localIngressProviderHeartbeatBody.direct_cloudflare_filesystem_mutation_admission, 'not_admitted');
   assert.equal(localIngressProviderHeartbeatBody.repository_publication_admission, 'not_admitted');
 
@@ -1384,6 +1390,8 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(localIngressProviderHeartbeatListBody.local_ingress_provider_heartbeat_count, 1);
   assert.equal(localIngressProviderHeartbeatListBody.local_ingress_provider_heartbeats[0].local_ingress_provider_heartbeat_id, 'local-ingress-provider-heartbeat-fixture');
   assert.equal(localIngressProviderHeartbeatListBody.local_ingress_provider_liveness.state, 'fresh');
+  assert.equal(localIngressProviderHeartbeatListBody.local_ingress_provider_liveness.scheduler_posture.state, 'fresh_from_scheduled_refresh');
+  assert.equal(localIngressProviderHeartbeatListBody.local_ingress_provider_liveness.scheduler_posture.task_name, '\\Narada\\CloudflareProviderLivenessRefresh');
   assert.equal(localIngressProviderHeartbeatListBody.local_ingress_provider_liveness.provider_authority, 'windows_local_ingress_executor');
   assert.equal(localIngressProviderHeartbeatListBody.direct_cloudflare_filesystem_mutation_admission, 'not_admitted');
   assert.equal(localIngressProviderHeartbeatListBody.repository_publication_admission, 'not_admitted');
@@ -1781,6 +1789,8 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_lifecycle_status.local_ingress_evidence_count, 1);
   assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_lifecycle_status.local_ingress_provider_heartbeat_count, 1);
   assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_lifecycle_status.local_ingress_provider_liveness.state, 'fresh');
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_lifecycle_status.local_ingress_provider_scheduler_posture.state, 'fresh_from_scheduled_refresh');
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_lifecycle_status.local_ingress_provider_scheduler_posture.interval_minutes, 2);
   assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'local_ingress_evidence'), true);
   assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'local_ingress_provider_heartbeat'), true);
 

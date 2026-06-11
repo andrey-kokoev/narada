@@ -10,7 +10,7 @@ const repoRoot = resolve(scriptDir, '../../..');
 loadLocalEnv(join(repoRoot, '.env'));
 
 if (flag('--help') || args[0] === 'help') {
-  process.stdout.write(`Usage: node scripts/cloudflare-carrier-provider-liveness-refresh.mjs [options]\n\nRecords Cloudflare-visible liveness for local Windows providers.\n\nOptions:\n  --url <url>              Cloudflare carrier URL, or CLOUDFLARE_CARRIER_URL\n  --token <token>          Bearer token, or CLOUDFLARE_CARRIER_TOKEN\n  --token-file <path>      Bearer token file, or CLOUDFLARE_CARRIER_TOKEN_FILE\n  --site <site-id>         Site id, default CLOUDFLARE_CARRIER_SITE_ID or site_narada_cloudflare\n  --local-root <path>      Local site root that proves local provider presence, default repo root\n  --skip-local-ingress     Do not record local ingress provider liveness\n  --skip-repository        Do not record repository publication provider liveness\n`);
+  process.stdout.write(`Usage: node scripts/cloudflare-carrier-provider-liveness-refresh.mjs [options]\n\nRecords Cloudflare-visible liveness for local Windows providers.\n\nOptions:\n  --url <url>              Cloudflare carrier URL, or CLOUDFLARE_CARRIER_URL\n  --token <token>          Bearer token, or CLOUDFLARE_CARRIER_TOKEN\n  --token-file <path>      Bearer token file, or CLOUDFLARE_CARRIER_TOKEN_FILE\n  --site <site-id>         Site id, default CLOUDFLARE_CARRIER_SITE_ID or site_narada_cloudflare\n  --local-root <path>      Local site root that proves local provider presence, default repo root\n  --refresh-trigger <id>   Refresh source, default NARADA_PROVIDER_LIVENESS_REFRESH_TRIGGER or operator_refresh_unspecified\n  --scheduler-task-name <name>  Windows task name when invoked by Task Scheduler\n  --scheduler-interval-minutes <n> Expected scheduler cadence when invoked by Task Scheduler\n  --skip-local-ingress     Do not record local ingress provider liveness\n  --skip-repository        Do not record repository publication provider liveness\n`);
   process.exit(0);
 }
 
@@ -19,6 +19,9 @@ const tokenFile = option('--token-file') ?? process.env.CLOUDFLARE_CARRIER_TOKEN
 const bearerToken = option('--token') ?? (tokenFile ? readTokenFile(tokenFile) : process.env.CLOUDFLARE_CARRIER_TOKEN ?? '');
 const siteId = option('--site') ?? process.env.CLOUDFLARE_CARRIER_SITE_ID ?? 'site_narada_cloudflare';
 const localRoot = resolvePath(option('--local-root') ?? process.env.NARADA_LOCAL_SITE_ROOT ?? repoRoot);
+const refreshTrigger = option('--refresh-trigger') ?? process.env.NARADA_PROVIDER_LIVENESS_REFRESH_TRIGGER ?? 'operator_refresh_unspecified';
+const schedulerTaskName = option('--scheduler-task-name') ?? process.env.NARADA_PROVIDER_LIVENESS_SCHEDULER_TASK_NAME ?? null;
+const schedulerIntervalMinutes = parseOptionalPositiveInt(option('--scheduler-interval-minutes') ?? process.env.NARADA_PROVIDER_LIVENESS_SCHEDULER_INTERVAL_MINUTES ?? null);
 const includeLocalIngress = !flag('--skip-local-ingress');
 const includeRepository = !flag('--skip-repository');
 
@@ -30,6 +33,7 @@ if (!includeLocalIngress && !includeRepository) throw new Error('provider_livene
 const localRootStatus = inspectLocalRoot(localRoot);
 const generatedAt = new Date().toISOString();
 const suffix = generatedAt.replace(/[-:.TZ]/g, '').slice(0, 14);
+const refreshSource = buildRefreshSource();
 const results = [];
 
 if (includeLocalIngress) {
@@ -44,6 +48,9 @@ if (includeLocalIngress) {
       provider_id: 'windows_local_ingress_executor',
       provider_authority: 'windows_local_ingress_executor',
       provider_embodiment: 'windows_current_user_local_ingress_executor',
+      provider_refresh_trigger: refreshSource.provider_refresh_trigger,
+      scheduler_task_name: refreshSource.scheduler_task_name,
+      scheduler_interval_minutes: refreshSource.scheduler_interval_minutes,
       status: localRootStatus.ok ? 'ready' : 'failed',
       evidence_record_status: localRootStatus.ok ? 'local_root_available' : 'local_root_unavailable',
       completed_execution_count: 0,
@@ -72,6 +79,9 @@ if (includeRepository) {
       provider_id: 'windows_repository_publication_drain_loop',
       provider_authority: 'windows_repository_publication_executor',
       provider_embodiment: 'windows_current_user_startup_provider',
+      provider_refresh_trigger: refreshSource.provider_refresh_trigger,
+      scheduler_task_name: refreshSource.scheduler_task_name,
+      scheduler_interval_minutes: refreshSource.scheduler_interval_minutes,
       status: localRootStatus.ok ? 'ready' : 'failed',
       max_cycles: 0,
       iteration_count: 0,
@@ -96,6 +106,7 @@ process.stdout.write(`${JSON.stringify({
   worker_url: workerUrl,
   site_id: siteId,
   local_root: localRootStatus,
+  refresh_source: refreshSource,
   provider_count: results.length,
   providers: results.map((result) => ({ provider: result.provider, status: result.status, http_status: result.http_status })),
 }, null, 2)}\n`);
@@ -125,6 +136,21 @@ function option(name) {
 
 function flag(name) {
   return args.includes(name);
+}
+
+function buildRefreshSource() {
+  return {
+    schema: 'narada.cloudflare_carrier.provider_liveness_refresh_source.v1',
+    provider_refresh_trigger: refreshTrigger,
+    scheduler_task_name: schedulerTaskName || null,
+    scheduler_interval_minutes: schedulerIntervalMinutes,
+  };
+}
+
+function parseOptionalPositiveInt(value) {
+  if (value == null || value === '') return null;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
 function readTokenFile(tokenFilePath) {
