@@ -100,17 +100,11 @@ test('provider liveness scheduler live install materializes hidden VBS wrapper a
   await writeFile(entrypoint, '#!/usr/bin/env node\n', 'utf8');
   await writeFile(scheduledTaskEntrypoint, '#!/usr/bin/env node\n', 'utf8');
   try {
+    const calls = [];
     const plan = await runProviderLivenessSchedulerAction({ action: 'install', repoRoot: root, dryRun: false }, {
       execFileImpl: async (command, args, options) => {
-        assert.equal(command, 'schtasks');
-        assert.deepEqual(args.slice(0, 6), ['/Create', '/TN', '\\Narada\\CloudflareProviderLivenessRefresh', '/SC', 'MINUTE', '/MO']);
-        assert.equal(args[6], '2');
-        assert.equal(args[7], '/TR');
-        assert.equal(args[8].startsWith('wscript.exe //B '), true);
-        assert.equal(args[9], '/F');
-        assert.equal(options.cwd, root);
-        assert.equal(options.windowsHide, true);
-        return { stdout: 'SUCCESS: The scheduled task was created.\n', stderr: '' };
+        calls.push({ command, args, options });
+        return { stdout: command === 'schtasks' ? 'SUCCESS: The scheduled task was created.\n' : '', stderr: '' };
       },
     });
 
@@ -119,6 +113,26 @@ test('provider liveness scheduler live install materializes hidden VBS wrapper a
     assert.equal(plan.scheduler_task_execution.status, 'ok');
     assert.equal(plan.scheduler_task_execution.command, 'schtasks');
     assert.equal(plan.scheduler_task_execution.args[0], '/Create');
+    assert.equal(plan.scheduler_task_settings_execution.status, 'ok');
+    assert.equal(plan.scheduler_task_settings_execution.command, 'powershell.exe');
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0].command, 'schtasks');
+    assert.deepEqual(calls[0].args.slice(0, 6), ['/Create', '/TN', '\\Narada\\CloudflareProviderLivenessRefresh', '/SC', 'MINUTE', '/MO']);
+    assert.equal(calls[0].args[6], '2');
+    assert.equal(calls[0].args[7], '/TR');
+    assert.equal(calls[0].args[8].startsWith('wscript.exe //B '), true);
+    assert.equal(calls[0].args[9], '/F');
+    assert.equal(calls[0].options.cwd, root);
+    assert.equal(calls[0].options.windowsHide, true);
+    assert.equal(calls[1].command, 'powershell.exe');
+    assert.deepEqual(calls[1].args.slice(0, 4), ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command']);
+    assert.match(calls[1].args[4], /Get-ScheduledTask -TaskPath '\\Narada\\' -TaskName 'CloudflareProviderLivenessRefresh'/);
+    assert.match(calls[1].args[4], /DisallowStartIfOnBatteries = \$false/);
+    assert.match(calls[1].args[4], /StopIfGoingOnBatteries = \$false/);
+    assert.match(calls[1].args[4], /StartWhenAvailable = \$true/);
+    assert.match(calls[1].args[4], /Set-ScheduledTask -InputObject \$task/);
+    assert.equal(calls[1].options.cwd, root);
+    assert.equal(calls[1].options.windowsHide, true);
     assert.equal(plan.filesystem_mutation_admission, 'hidden_wrapper_file_write_admitted');
     assert.equal(plan.task_command.startsWith('wscript.exe //B '), true);
     const wrapperContent = await import('node:fs/promises').then(({ readFile }) => readFile(plan.hidden_wrapper_path, 'utf8'));
@@ -222,6 +236,32 @@ test('provider liveness scheduler readback surfaces drift', () => {
     'scheduler_power_policy_blocks_battery_execution',
   ]);
   assert.equal(readback.power_management_status, 'blocks_battery_execution');
+});
+
+test('provider liveness scheduler treats empty Task Scheduler power policy as battery-safe', () => {
+  const readback = summarizeProviderLivenessSchedulerReadback({
+    state: 'completed',
+    command: 'schtasks',
+    args: ['/Query'],
+    stdout: '',
+    stderr: '',
+    timeout_ms: 30000,
+    parsed: {
+      Status: 'Ready',
+      'Last Result': '0',
+      'Scheduled Task State': 'Enabled',
+      'Task To Run': 'wscript.exe //B hidden.vbs',
+      'Repeat: Every': '0 Hour(s), 2 Minute(s)',
+      'Power Management': '',
+    },
+    expectedIntervalMinutes: 2,
+    expectedTaskCommand: 'wscript.exe //B hidden.vbs',
+    hiddenWrapperReadback: { status: 'matches_plan', path: 'hidden.vbs', embeds_credentials: false },
+  });
+
+  assert.equal(readback.status, 'ok');
+  assert.equal(readback.power_management_status, 'allows_battery_execution');
+  assert.deepEqual(readback.attention_reasons, []);
 });
 
 test('provider liveness scheduler text output summarizes operator posture', () => {

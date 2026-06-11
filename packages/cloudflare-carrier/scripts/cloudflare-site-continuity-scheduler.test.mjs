@@ -407,6 +407,9 @@ test('site continuity scheduler live install executes bounded schtasks command',
     assert.equal(result.filesystem_mutation_admission, 'hidden_wrapper_file_write_and_local_sync_report_artifact_write_only');
     assert.equal(result.scheduler_task_execution.state, 'completed');
     assert.equal(result.scheduler_task_execution.status, 'ok');
+    assert.equal(result.scheduler_task_settings_execution.status, 'ok');
+    assert.equal(result.scheduler_task_settings_execution.command, 'powershell.exe');
+    assert.equal(calls.length, 2);
     assert.equal(result.scheduler_task_execution.command, 'schtasks');
     assert.deepEqual(calls[0].args.slice(0, 7), ['/Create', '/TN', '\\Narada\\CloudflareSiteContinuitySync', '/SC', 'MINUTE', '/MO', '5']);
     assert.equal(calls[0].args.includes('/TR'), true);
@@ -418,6 +421,16 @@ test('site continuity scheduler live install executes bounded schtasks command',
     assert.match(result.direct_task_command, /cloudflare-site-continuity-scheduled-task\.mjs/);
     assert.equal(calls[0].options.cwd, root);
     assert.equal(calls[0].options.timeout, 5000);
+    assert.equal(calls[1].command, 'powershell.exe');
+    assert.deepEqual(calls[1].args.slice(0, 4), ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command']);
+    assert.match(calls[1].args[4], /Get-ScheduledTask -TaskPath '\\Narada\\' -TaskName 'CloudflareSiteContinuitySync'/);
+    assert.match(calls[1].args[4], /DisallowStartIfOnBatteries = \$false/);
+    assert.match(calls[1].args[4], /StopIfGoingOnBatteries = \$false/);
+    assert.match(calls[1].args[4], /StartWhenAvailable = \$true/);
+    assert.match(calls[1].args[4], /Set-ScheduledTask -InputObject \$task/);
+    assert.equal(calls[1].options.cwd, root);
+    assert.equal(calls[1].options.timeout, 5000);
+    assert.equal(calls[1].options.windowsHide, true);
     assert.doesNotMatch(JSON.stringify(result), /secret-token-value|CLOUDFLARE_CARRIER_TOKEN=/);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -805,6 +818,48 @@ test('site continuity scheduler live status surfaces battery-blocking power poli
     assert.equal(result.scheduler_task_readback.task_command_status, 'matches_plan');
     assert.equal(result.scheduler_task_readback.power_management_status, 'blocks_battery_execution');
     assert.deepEqual(result.scheduler_task_readback.attention_reasons, ['scheduler_power_policy_blocks_battery_execution']);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('site continuity scheduler treats empty Task Scheduler power policy as battery-safe', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-live-status-power-empty-'));
+  const syncEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-sync.mjs');
+  const scheduledTaskEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-scheduled-task.mjs');
+  const packetPath = join(root, '.narada/site-continuity/local-packet.json');
+  await mkdir(join(root, 'packages/cloudflare-carrier/scripts'), { recursive: true });
+  await mkdir(join(root, '.narada/site-continuity'), { recursive: true });
+  await writeFile(syncEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(scheduledTaskEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(packetPath, '{"packet":{"site_id":"site_fixture"}}\n', 'utf8');
+  await writePlannedSiteContinuityHiddenWrapper({ repoRoot: root });
+  try {
+    const result = await runSiteContinuitySchedulerActionWithOptionalRefresh({
+      action: 'status',
+      repoRoot: root,
+      intervalMinutes: 5,
+      siteId: 'site_fixture',
+      packetPath,
+      dryRun: false,
+    }, {
+      execFileImpl: async () => ({
+        stdout: [
+          'TaskName: \\Narada\\CloudflareSiteContinuitySync',
+          'Status: Ready',
+          'Last Result: 0',
+          `Task To Run: wscript.exe //B "${join(root, '.narada/site-continuity/cloudflare-site-continuity-sync.hidden.vbs')}"`,
+          'Scheduled Task State: Enabled',
+          'Power Management:',
+          'Repeat: Every: 0 Hour(s), 5 Minute(s)',
+        ].join('\n'),
+        stderr: '',
+      }),
+    });
+
+    assert.equal(result.scheduler_task_readback.status, 'ok');
+    assert.equal(result.scheduler_task_readback.power_management_status, 'allows_battery_execution');
+    assert.deepEqual(result.scheduler_task_readback.attention_reasons, []);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

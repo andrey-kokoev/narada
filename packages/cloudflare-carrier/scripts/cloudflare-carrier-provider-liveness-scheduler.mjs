@@ -49,6 +49,7 @@ export function buildProviderLivenessSchedulerPlan({
     local_root: effectiveLocalRoot,
     hidden_wrapper_path: wrapperPath,
     hidden_wrapper_kind: 'windows_wscript_vbs_hidden',
+    scheduler_power_policy_target: 'allow_start_and_continue_on_battery',
     hidden_wrapper_content: hiddenWrapperContent,
     credential_posture: 'external_env_file_or_process_environment_only',
     embeds_credentials: false,
@@ -75,6 +76,7 @@ export function buildProviderLivenessSchedulerPlan({
           '/TR', taskCommand,
           '/F',
         ],
+        scheduled_task_settings_command: buildSchedulerBatterySettingsCommand(taskName),
       };
     case 'disable':
     case 'pause':
@@ -103,6 +105,47 @@ export function buildProviderLivenessSchedulerPlan({
       };
     default:
       throw new Error(`unknown_provider_liveness_scheduler_action:${action}`);
+  }
+}
+
+async function executeProviderLivenessSchedulerSettingsPlan(plan, { execFileImpl, timeout }) {
+  const settingsCommand = plan?.scheduled_task_settings_command ?? [];
+  const [command, ...args] = settingsCommand;
+  if (command !== 'powershell.exe' || args[0] !== '-NoProfile' || !args.includes('-Command')) {
+    return {
+      state: 'refused',
+      status: 'needs_attention',
+      reason: 'unsupported_scheduler_settings_command',
+      command: command ?? null,
+      args,
+      embeds_credentials: false,
+    };
+  }
+  try {
+    const result = await execFileImpl(command, args, { cwd: plan.repo_root, timeout, windowsHide: true });
+    return {
+      state: 'completed',
+      status: 'ok',
+      command,
+      args,
+      stdout: result?.stdout ?? '',
+      stderr: result?.stderr ?? '',
+      timeout_ms: timeout,
+      embeds_credentials: false,
+    };
+  } catch (error) {
+    return {
+      state: 'failed',
+      status: 'needs_attention',
+      command,
+      args,
+      exit_code: error.code ?? null,
+      signal: error.signal ?? null,
+      stdout: error.stdout ?? '',
+      stderr: error.stderr ?? '',
+      timeout_ms: timeout,
+      embeds_credentials: false,
+    };
   }
 }
 
@@ -153,19 +196,29 @@ async function executeProviderLivenessSchedulerTaskPlan(plan, { execFileImpl = e
   const timeout = normalizeExecutionTimeoutMs(executionTimeoutMs);
   try {
     const result = await execFileImpl(command, args, { cwd: plan.repo_root, timeout, windowsHide: true });
+    const schedulerTaskExecution = {
+      state: 'completed',
+      status: 'ok',
+      command,
+      args,
+      stdout: result?.stdout ?? '',
+      stderr: result?.stderr ?? '',
+      timeout_ms: timeout,
+      embeds_credentials: false,
+    };
+    if (action === 'install') {
+      const schedulerTaskSettingsExecution = await executeProviderLivenessSchedulerSettingsPlan(plan, { execFileImpl, timeout });
+      return {
+        ...base,
+        plan_status: schedulerTaskSettingsExecution.status === 'ok' ? 'live_install_completed' : 'live_install_failed',
+        scheduler_task_execution: schedulerTaskExecution,
+        scheduler_task_settings_execution: schedulerTaskSettingsExecution,
+      };
+    }
     return {
       ...base,
       plan_status: `live_${action}_completed`,
-      scheduler_task_execution: {
-        state: 'completed',
-        status: 'ok',
-        command,
-        args,
-        stdout: result?.stdout ?? '',
-        stderr: result?.stderr ?? '',
-        timeout_ms: timeout,
-        embeds_credentials: false,
-      },
+      scheduler_task_execution: schedulerTaskExecution,
     };
   } catch (error) {
     return {
@@ -336,8 +389,9 @@ function isSchedulerLastResultHealthy(lastResult, statusText) {
 }
 
 function summarizeSchedulerPowerManagementStatus(powerManagement) {
-  if (!powerManagement) return 'unknown';
-  const normalized = String(powerManagement).toLowerCase();
+  if (powerManagement === null || powerManagement === undefined) return 'unknown';
+  const normalized = String(powerManagement).trim().toLowerCase();
+  if (!normalized) return 'allows_battery_execution';
   return normalized.includes('no start on batteries') || normalized.includes('stop on battery')
     ? 'blocks_battery_execution'
     : 'allows_battery_execution';
@@ -460,6 +514,29 @@ function buildTaskCommand({ nodeCommand, entrypoint, localRoot }) {
   ].join(' ');
 }
 
+function buildSchedulerBatterySettingsCommand(taskName) {
+  const { taskPath, taskLeafName } = splitWindowsSchedulerTaskName(taskName);
+  const script = [
+    '$ErrorActionPreference = \'Stop\';',
+    `$task = Get-ScheduledTask -TaskPath ${powershellString(taskPath)} -TaskName ${powershellString(taskLeafName)};`,
+    '$task.Settings.DisallowStartIfOnBatteries = $false;',
+    '$task.Settings.StopIfGoingOnBatteries = $false;',
+    '$task.Settings.StartWhenAvailable = $true;',
+    'Set-ScheduledTask -InputObject $task | Out-Null;',
+  ].join(' ');
+  return ['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script];
+}
+
+function splitWindowsSchedulerTaskName(taskName) {
+  const normalized = String(taskName ?? '').replaceAll('/', '\\');
+  const lastSeparator = normalized.lastIndexOf('\\');
+  if (lastSeparator < 0) return { taskPath: '\\', taskLeafName: normalized };
+  return {
+    taskPath: normalized.slice(0, lastSeparator + 1) || '\\',
+    taskLeafName: normalized.slice(lastSeparator + 1),
+  };
+}
+
 function buildHiddenTaskCommand({ wrapperPath }) {
   return [
     'wscript.exe',
@@ -505,6 +582,10 @@ function resolvePath(root, value) {
 
 function quote(value) {
   return `"${String(value).replaceAll('"', '\\"')}"`;
+}
+
+function powershellString(value) {
+  return `'${String(value).replaceAll("'", "''")}'`;
 }
 
 function vbsString(value) {
