@@ -25,6 +25,10 @@ function classifyRepositoryPublicationRequest(request) {
   if (!value.repository_ref) errors.push('repository_publication_request_repository_ref_required');
   if (!value.branch_ref) errors.push('repository_publication_request_branch_ref_required');
   if (!value.source_change_ref) errors.push('repository_publication_request_source_change_ref_required');
+  const cloudflareAdmission = value.cloudflare_repository_publication_admission;
+  if (!cloudflareAdmission || typeof cloudflareAdmission !== 'object') errors.push('repository_publication_cloudflare_admission_required');
+  if (cloudflareAdmission && cloudflareAdmission.admission_action !== 'admit') errors.push('repository_publication_cloudflare_admission_not_admitted');
+  if (cloudflareAdmission && cloudflareAdmission.repository_publication_admission !== 'admitted_by_cloudflare_repository_publication') errors.push('repository_publication_cloudflare_admission_state_invalid');
   if ((value.repository_publication_admission ?? 'pending_windows_publication_admission') !== 'pending_windows_publication_admission') errors.push('repository_publication_request_admission_invalid');
   if ((value.cloudflare_git_push_admission ?? 'not_admitted') !== 'not_admitted') errors.push('repository_publication_request_cloudflare_git_push_admission_invalid');
   if ((value.direct_cloudflare_repository_mutation_admission ?? 'not_admitted') !== 'not_admitted') errors.push('repository_publication_request_direct_cloudflare_repository_mutation_admission_invalid');
@@ -45,6 +49,8 @@ async function buildRepositoryPublicationExecutionEvidence(request, { repoPath, 
     source_change_ref: String(request?.source_change_ref ?? `git:commit:${gitState.head}`),
     cloudflare_git_push_admission: 'not_admitted',
     direct_cloudflare_repository_mutation_admission: 'not_admitted',
+    cloudflare_repository_publication_admission_id: request?.cloudflare_repository_publication_admission?.repository_publication_admission_id ?? null,
+    cloudflare_repository_publication_admission_action: request?.cloudflare_repository_publication_admission?.admission_action ?? null,
   };
   if (requestAdmission.action === 'refuse') {
     return {
@@ -232,7 +238,10 @@ if (command === 'repository-publication-execute-pending') {
   const startedAt = new Date().toISOString();
   const selected = await post({ operation: 'repository_publication.request.next', params: { site_id: siteId, limit: requestLimit } });
   if (selected.http_status !== 200 || selected.body?.ok === false) failApi('cloudflare_repository_publication_request_next_failed', selected);
-  const requests = selected.body?.request ? [selected.body.request] : [];
+  const requests = selected.body?.request ? [{
+    ...selected.body.request,
+    cloudflare_repository_publication_admission: selected.body.admission ?? selected.body.request.cloudflare_repository_publication_admission ?? null,
+  }] : [];
   const results = [];
   for (const request of requests) {
     const evidence = await buildRepositoryPublicationExecutionEvidence(request, { repoPath, remote, shouldPush });

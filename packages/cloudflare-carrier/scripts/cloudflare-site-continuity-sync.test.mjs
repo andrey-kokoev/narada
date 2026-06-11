@@ -164,6 +164,11 @@ test('site continuity sync executes pending repository publication requests by r
         body: {
           ok: true,
           status: 'selected',
+          admission: {
+            repository_publication_admission_id: 'repository-publication-admission-fixture',
+            admission_action: 'admit',
+            repository_publication_admission: 'admitted_by_cloudflare_repository_publication',
+          },
           request: {
             repository_publication_request_id: 'repository-publication-request-fixture',
             publication_ref: 'repository-publication:fixture',
@@ -171,6 +176,11 @@ test('site continuity sync executes pending repository publication requests by r
             repository_ref: 'github:andrey-kokoev/narada',
             branch_ref: 'main',
             source_change_ref: 'git:commit:fixture-source',
+            cloudflare_repository_publication_admission: {
+              repository_publication_admission_id: 'repository-publication-admission-fixture',
+              admission_action: 'admit',
+              repository_publication_admission: 'admitted_by_cloudflare_repository_publication',
+            },
             repository_publication_admission: 'pending_windows_publication_admission',
             cloudflare_git_push_admission: 'not_admitted',
             direct_cloudflare_repository_mutation_admission: 'not_admitted',
@@ -231,6 +241,11 @@ test('site continuity sync executes pending repository publication requests with
         body: {
           ok: true,
           status: 'selected',
+          admission: {
+            repository_publication_admission_id: 'repository-publication-admission-push-fixture',
+            admission_action: 'admit',
+            repository_publication_admission: 'admitted_by_cloudflare_repository_publication',
+          },
           request: {
             repository_publication_request_id: 'repository-publication-request-push-fixture',
             publication_ref: 'repository-publication:push-fixture',
@@ -238,6 +253,11 @@ test('site continuity sync executes pending repository publication requests with
             repository_ref: 'github:andrey-kokoev/narada',
             branch_ref: 'main',
             source_change_ref: `git:commit:${fixture.head}`,
+            cloudflare_repository_publication_admission: {
+              repository_publication_admission_id: 'repository-publication-admission-push-fixture',
+              admission_action: 'admit',
+              repository_publication_admission: 'admitted_by_cloudflare_repository_publication',
+            },
             repository_publication_admission: 'pending_windows_publication_admission',
             cloudflare_git_push_admission: 'not_admitted',
             direct_cloudflare_repository_mutation_admission: 'not_admitted',

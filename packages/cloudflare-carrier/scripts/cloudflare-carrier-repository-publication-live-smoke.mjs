@@ -71,6 +71,33 @@ assert.equal(queued.body.repository_publication_admission, 'pending_windows_publ
 assert.equal(queued.body.cloudflare_git_push_admission, 'not_admitted');
 assert.equal(queued.body.direct_cloudflare_repository_mutation_admission, 'not_admitted');
 
+const selectedBeforeAdmission = await postCarrier({
+  operation: 'repository_publication.request.next',
+  request_id: `repository_publication_request_next_before_admission_${suffix}`,
+  params: { site_id: siteId, repository_publication_request_limit: 25 },
+});
+assert.equal(selectedBeforeAdmission.http_status, 200, JSON.stringify(selectedBeforeAdmission.body));
+if (selectedBeforeAdmission.body.request?.repository_publication_request_id === requestId) {
+  throw new Error('repository_publication_live_smoke_selected_unadmitted_request');
+}
+
+const admitted = await postCarrier({
+  operation: 'repository_publication.admission.classify',
+  request_id: `repository_publication_admission_classify_${suffix}`,
+  params: {
+    site_id: siteId,
+    repository_publication_admission_id: `repository_publication_admission_live_${suffix}`,
+    repository_publication_request_id: requestId,
+    admission_action: 'admit',
+    admission_reason: 'cloudflare_repository_publication_live_smoke_admitted',
+  },
+});
+assert.equal(admitted.http_status, 200, JSON.stringify(admitted.body));
+assert.equal(admitted.body.repository_publication_admission_authority, 'cloudflare_repository_publication_admission_controller');
+assert.equal(admitted.body.repository_publication_admission, 'admitted_by_cloudflare_repository_publication');
+assert.equal(admitted.body.cloudflare_git_push_admission, 'not_admitted');
+assert.equal(admitted.body.direct_cloudflare_repository_mutation_admission, 'not_admitted');
+
 const execution = await execFile(process.execPath, [
   syncScript,
   'repository-publication-execute-pending',
@@ -90,6 +117,8 @@ assert.equal(executionResult.status, 'evidence_recorded');
 assert.equal(executionResult.evidence.windows_admission_action, 'refuse');
 assert.equal(executionResult.evidence.windows_admission_reason, 'repository_publication_push_not_enabled');
 assert.equal(executionResult.evidence.publication_status, 'refused');
+assert.equal(executionResult.evidence.cloudflare_repository_publication_admission_id, `repository_publication_admission_live_${suffix}`);
+assert.equal(executionResult.evidence.cloudflare_repository_publication_admission_action, 'admit');
 assert.equal(executionResult.evidence.cloudflare_git_push_admission, 'not_admitted');
 assert.equal(executionResult.evidence.direct_cloudflare_repository_mutation_admission, 'not_admitted');
 
@@ -104,11 +133,14 @@ assert.ok(evidence, JSON.stringify(evidenceList.body));
 assert.equal(evidence.windows_admission_action, 'refuse');
 assert.equal(evidence.windows_admission_reason, 'repository_publication_push_not_enabled');
 assert.equal(evidence.publication_status, 'refused');
+assert.equal(evidence.cloudflare_repository_publication_admission_id, `repository_publication_admission_live_${suffix}`);
+assert.equal(evidence.cloudflare_repository_publication_admission_action, 'admit');
 assert.equal(evidence.cloudflare_git_push_admission, 'not_admitted');
 assert.equal(evidence.direct_cloudflare_repository_mutation_admission, 'not_admitted');
 assert.equal(evidenceList.body.repository_publication_evidence_authority, 'windows_repository_publication_executor');
+assert.equal(evidenceList.body.repository_publication_admission_authority, 'cloudflare_repository_publication_admission_controller');
 assert.equal(evidenceList.body.cloudflare_evidence_store_authority, 'cloudflare_repository_publication_evidence_store');
-assert.equal(evidenceList.body.authority_partition, 'windows_admits_or_refuses_repository_publication_cloudflare_records_evidence_without_direct_repository_authority');
+assert.equal(evidenceList.body.authority_partition, 'cloudflare_admits_repository_publication_windows_executes_and_cloudflare_records_evidence');
 
 const heartbeatList = await postCarrier({
   operation: 'repository_publication.provider_heartbeat.list',
@@ -132,8 +164,9 @@ process.stdout.write(`${JSON.stringify({
   operation_id: operationId,
   repository_publication_request_id: requestId,
   repository_publication_request_authority: queued.body.repository_publication_request_authority,
+  repository_publication_admission_authority: admitted.body.repository_publication_admission_authority,
   repository_publication_executor_authority: queued.body.repository_publication_executor_authority,
-  repository_publication_admission: queued.body.repository_publication_admission,
+  repository_publication_admission: admitted.body.repository_publication_admission,
   cloudflare_git_push_admission: queued.body.cloudflare_git_push_admission,
   direct_cloudflare_repository_mutation_admission: queued.body.direct_cloudflare_repository_mutation_admission,
   execution_status: executionResult.status,
