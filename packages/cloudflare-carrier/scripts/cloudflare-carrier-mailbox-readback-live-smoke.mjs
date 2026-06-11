@@ -47,19 +47,26 @@ const operationRead = await postCarrier({
   params: {
     site_id: siteId,
     operation_id: operationId,
+    mailbox_draft_reply_proposal_limit: 20,
     mailbox_send_accepted_limit: 20,
     mailbox_send_confirmation_limit: 20,
   },
 });
 assert.equal(operationRead.http_status, 200, JSON.stringify(operationRead.body));
+assert.equal(Array.isArray(operationRead.body.mailbox_draft_reply_proposals), true);
 assert.equal(Array.isArray(operationRead.body.mailbox_send_accepted_records), true);
 assert.equal(Array.isArray(operationRead.body.mailbox_send_confirmations), true);
 assert.equal(typeof operationRead.body.operation_product_surface?.mailbox_status_source_read_count, 'number');
+assert.equal(typeof operationRead.body.operation_product_surface?.mailbox_draft_reply_proposal_count, 'number');
 assert.equal(typeof operationRead.body.operation_product_surface?.mailbox_send_accepted_count, 'number');
 assert.equal(typeof operationRead.body.operation_product_surface?.mailbox_send_confirmation_count, 'number');
 if (operationRead.body.operation_product_surface.mailbox_status_source_read_count > 0) {
   assert.equal(operationRead.body.operation_product_surface.mailbox_status_authority, 'cloudflare_graph_mailbox_status_source');
   assert.equal(operationRead.body.operation_product_surface.mailbox_authority_partition.startsWith('mailbox_status_source_read'), true);
+}
+if (operationRead.body.operation_product_surface.mailbox_draft_reply_proposal_count > 0) {
+  assert.equal(operationRead.body.operation_product_surface.mailbox_draft_reply_proposal_authority, 'cloudflare_carrier_site');
+  assert.equal(operationRead.body.operation_product_surface.mailbox_draft_reply_authority_partition, 'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted');
 }
 assert.equal(operationRead.body.operation_product_surface.mailbox_mutation_admission, 'not_admitted');
 assert.ok(operationRead.body.authority_transfer_posture, 'missing authority transfer posture');
@@ -73,6 +80,10 @@ process.stdout.write(`${JSON.stringify({
   mailbox_status_source_read_count: operationRead.body.operation_product_surface.mailbox_status_source_read_count,
   mailbox_status_authority: operationRead.body.operation_product_surface.mailbox_status_authority,
   mailbox_authority_partition: operationRead.body.operation_product_surface.mailbox_authority_partition,
+  mailbox_draft_reply_proposal_count: operationRead.body.operation_product_surface.mailbox_draft_reply_proposal_count,
+  mailbox_draft_reply_proposal_authority: operationRead.body.operation_product_surface.mailbox_draft_reply_proposal_authority,
+  mailbox_draft_reply_authority_partition: operationRead.body.operation_product_surface.mailbox_draft_reply_authority_partition,
+  mailbox_outlook_draft_create_admission: operationRead.body.operation_product_surface.mailbox_outlook_draft_create_admission,
   mailbox_send_accepted_count: operationRead.body.operation_product_surface.mailbox_send_accepted_count,
   mailbox_send_confirmation_count: operationRead.body.operation_product_surface.mailbox_send_confirmation_count,
   mailbox_send_admission: operationRead.body.operation_product_surface.mailbox_send_admission,
