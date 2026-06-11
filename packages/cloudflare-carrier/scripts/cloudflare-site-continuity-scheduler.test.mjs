@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import {
   buildSiteContinuitySchedulerPlan,
+  buildSiteContinuitySchedulerPlanWithOptionalRefresh,
   readLastSyncArtifact,
   readLocalConfiguredSites,
   readLocalSyncArtifactInventory,
@@ -204,6 +205,64 @@ test('site continuity scheduler status-all inventories local sync artifacts', as
     assert.equal(plan.local_sync_artifacts.artifact_count, 2);
     assert.equal(plan.local_sync_artifacts.status, 'needs_attention');
     assert.equal(plan.embeds_credentials, false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('site continuity scheduler can refresh site registry projection before status-all', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-refresh-projection-'));
+  const artifactDirectory = join(root, '.narada/site-continuity');
+  const siteRegistryProjectionPath = join(root, '.narada/site-registry/cloudflare-sites.json');
+  await mkdir(artifactDirectory, { recursive: true });
+  await mkdir(join(root, '.narada/site-registry'), { recursive: true });
+  await writeFile(join(root, '.env'), 'CLOUDFLARE_CARRIER_URL=https://worker.example\nCLOUDFLARE_CARRIER_TOKEN=secret-refresh-token\n', 'utf8');
+  try {
+    const plan = await buildSiteContinuitySchedulerPlanWithOptionalRefresh({
+      action: 'status-all',
+      repoRoot: root,
+      artifactDirectory,
+      siteRegistryProjectionPath,
+      refreshSiteRegistryProjection: true,
+    }, {
+      env: {},
+      materializeSiteRegistryProjection: async (inputs) => {
+        assert.equal(inputs.workerUrl, 'https://worker.example');
+        assert.equal(inputs.bearerToken.value, 'secret-refresh-token');
+        assert.equal(inputs.bearerToken.source, 'env:CLOUDFLARE_CARRIER_TOKEN');
+        assert.equal(inputs.outputPath, siteRegistryProjectionPath);
+        await writeFile(siteRegistryProjectionPath, `${JSON.stringify({
+          schema: 'narada.cloudflare_site_registry.snapshot.v1',
+          generated_at: '2026-06-11T11:00:00.000Z',
+          source: 'cloudflare_carrier_site_list',
+          source_operation: 'site.list',
+          worker_url: inputs.workerUrl,
+          site_count: 1,
+          sites: [{ site_id: 'site_refreshed', status: 'active' }],
+          embeds_credentials: false,
+        }, null, 2)}\n`, 'utf8');
+        return {
+          schema: 'narada.cloudflare_site_registry.local_projection_materialization.v1',
+          status: 'ok',
+          worker_url: inputs.workerUrl,
+          token_source: inputs.bearerToken.source,
+          output_path: inputs.outputPath,
+          written: true,
+          embeds_credentials: false,
+          projection: { site_count: 1, generated_at: '2026-06-11T11:00:00.000Z' },
+        };
+      },
+    });
+
+    assert.equal(plan.plan_status, 'local_sync_artifact_inventory_read_only_no_cloudflare_access');
+    assert.equal(plan.site_registry_projection_refresh.status, 'ok');
+    assert.equal(plan.site_registry_projection_refresh.site_count, 1);
+    assert.equal(plan.configured_sites.site_registry_projection.state, 'read');
+    assert.deepEqual(plan.configured_sites.sites, ['site_refreshed']);
+    assert.deepEqual(plan.local_sync_artifacts.configured_site_sync_statuses.map((site) => [site.site_id, site.reason]), [
+      ['site_refreshed', 'configured_site_sync_artifact_missing'],
+    ]);
+    assert.doesNotMatch(JSON.stringify(plan), /secret-refresh-token/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

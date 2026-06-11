@@ -80,17 +80,21 @@ export async function runCloudflareSiteRegistryProjectionCli(argv = process.argv
   const args = parseArgs(argv);
   const scriptDir = dirname(fileURLToPath(import.meta.url));
   const repoRoot = resolve(scriptDir, '../../..');
-  loadLocalEnv(resolvePath(repoRoot, args.envPath ?? '.env'), env);
-  const outputPath = resolvePath(repoRoot, args.outputPath ?? env.NARADA_CLOUDFLARE_SITE_REGISTRY_PROJECTION ?? DEFAULT_OUTPUT_PATH);
-  const result = await materializeCloudflareSiteRegistryProjection({
-    workerUrl: args.workerUrl ?? env.CLOUDFLARE_CARRIER_URL ?? '',
-    bearerToken: resolveBearerToken({ args, env, repoRoot }),
-    outputPath,
-    dryRun: args.dryRun,
-  });
+  const inputs = resolveCloudflareSiteRegistryProjectionInputs({ args, env, repoRoot });
+  const result = await materializeCloudflareSiteRegistryProjection(inputs);
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   if (result.status !== 'ok') process.exitCode = 1;
   return result;
+}
+
+export function resolveCloudflareSiteRegistryProjectionInputs({ args = {}, env = process.env, repoRoot = process.cwd() } = {}) {
+  loadLocalEnv(resolvePath(repoRoot, args.envPath ?? '.env'), env);
+  return {
+    workerUrl: args.workerUrl ?? env.CLOUDFLARE_CARRIER_URL ?? '',
+    bearerToken: resolveBearerToken({ args, env, repoRoot }),
+    outputPath: resolvePath(repoRoot, args.outputPath ?? env.NARADA_CLOUDFLARE_SITE_REGISTRY_PROJECTION ?? DEFAULT_OUTPUT_PATH),
+    dryRun: args.dryRun,
+  };
 }
 
 async function postCarrier({ workerUrl, bearerToken, body, fetchImpl }) {

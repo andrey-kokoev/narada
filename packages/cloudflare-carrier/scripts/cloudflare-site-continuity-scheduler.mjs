@@ -3,6 +3,10 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { readCloudflareSiteRegistryLocalProjection } from '@narada2/cloudflare-site-registry';
+import {
+  materializeCloudflareSiteRegistryProjection,
+  resolveCloudflareSiteRegistryProjectionInputs,
+} from './cloudflare-carrier-site-registry-projection.mjs';
 
 const DEFAULT_TASK_NAME = 'Narada Cloudflare Site Continuity Sync';
 const DEFAULT_INTERVAL_MINUTES = 5;
@@ -147,6 +151,79 @@ export function buildSiteContinuitySchedulerPlan({
     default:
       throw new Error(`unknown_site_continuity_scheduler_action:${action}`);
   }
+}
+
+export async function buildSiteContinuitySchedulerPlanWithOptionalRefresh(
+  options = {},
+  { env = process.env, materializeSiteRegistryProjection = materializeCloudflareSiteRegistryProjection } = {},
+) {
+  if (!options.refreshSiteRegistryProjection) return buildSiteContinuitySchedulerPlan(options);
+
+  const root = resolve(options.repoRoot ?? resolve(dirname(fileURLToPath(import.meta.url)), '../../..'));
+  const projectionRefresh = await refreshSiteRegistryProjection({
+    ...options,
+    repoRoot: root,
+    env,
+    materializeSiteRegistryProjection,
+  });
+  return {
+    ...buildSiteContinuitySchedulerPlan({ ...options, repoRoot: root }),
+    site_registry_projection_refresh: projectionRefresh,
+  };
+}
+
+async function refreshSiteRegistryProjection({
+  repoRoot,
+  siteRegistryProjectionPath = process.env.NARADA_CLOUDFLARE_SITE_REGISTRY_PROJECTION ?? '.narada/site-registry/cloudflare-sites.json',
+  projectionWorkerUrl = null,
+  projectionToken = null,
+  projectionTokenFile = null,
+  envPath = null,
+  env = process.env,
+  materializeSiteRegistryProjection,
+}) {
+  try {
+    const inputs = resolveCloudflareSiteRegistryProjectionInputs({
+      repoRoot,
+      env,
+      args: {
+        outputPath: siteRegistryProjectionPath,
+        workerUrl: projectionWorkerUrl,
+        token: projectionToken,
+        tokenFile: projectionTokenFile,
+        envPath,
+        dryRun: false,
+      },
+    });
+    const result = await materializeSiteRegistryProjection(inputs);
+    return summarizeSiteRegistryProjectionRefresh(result);
+  } catch (error) {
+    return {
+      schema: 'narada.cloudflare_site_registry.local_projection_refresh_summary.v1',
+      status: 'failed',
+      reason: error.message,
+      output_path: siteRegistryProjectionPath ? resolvePath(repoRoot, siteRegistryProjectionPath) : null,
+      embeds_credentials: false,
+      written: false,
+    };
+  }
+}
+
+function summarizeSiteRegistryProjectionRefresh(result) {
+  return {
+    schema: 'narada.cloudflare_site_registry.local_projection_refresh_summary.v1',
+    status: result?.status ?? 'failed',
+    reason: result?.reason ?? null,
+    http_status: result?.http_status ?? null,
+    code: result?.code ?? null,
+    worker_url: result?.worker_url ?? null,
+    token_source: result?.token_source ?? null,
+    output_path: result?.output_path ?? null,
+    written: result?.written ?? false,
+    embeds_credentials: false,
+    site_count: result?.projection?.site_count ?? null,
+    generated_at: result?.projection?.generated_at ?? null,
+  };
 }
 
 export function readLocalSyncArtifactInventory(artifactDirectory, { lastOutputPath = null, configuredSites = [] } = {}) {
@@ -459,6 +536,11 @@ function parseArgs(argv) {
     else if (arg === '--sites') args.configuredSites = argv[++index];
     else if (arg === '--sites-file') args.sitesFilePath = argv[++index];
     else if (arg === '--site-registry-projection') args.siteRegistryProjectionPath = argv[++index];
+    else if (arg === '--refresh-site-registry-projection') args.refreshSiteRegistryProjection = true;
+    else if (arg === '--projection-url') args.projectionWorkerUrl = argv[++index];
+    else if (arg === '--projection-token') args.projectionToken = argv[++index];
+    else if (arg === '--projection-token-file') args.projectionTokenFile = argv[++index];
+    else if (arg === '--env') args.envPath = argv[++index];
     else if (arg === '--node-command') args.nodeCommand = argv[++index];
     else throw new Error(`unknown_argument:${arg}`);
   }
@@ -466,6 +548,7 @@ function parseArgs(argv) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const plan = buildSiteContinuitySchedulerPlan(parseArgs(process.argv.slice(2)));
+  const plan = await buildSiteContinuitySchedulerPlanWithOptionalRefresh(parseArgs(process.argv.slice(2)));
+  if (plan.site_registry_projection_refresh?.status && plan.site_registry_projection_refresh.status !== 'ok') process.exitCode = 1;
   console.log(JSON.stringify(plan, null, 2));
 }
