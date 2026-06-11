@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 import { putCloudflareOperationStatus } from './cloudflare-carrier-operation-status-put.mjs';
 import { authHeaders, resolveAuth } from './cloudflare-carrier-product-read.mjs';
 
+const CONTINUATION_RESUME_ACTION = 'resume_operation_continuation';
+
 export function parseContinuationResumeArgs(argv = [], env = process.env, now = () => Date.now()) {
   const args = [...argv];
   const workerUrl = normalizeWorkerUrl(option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '');
@@ -16,6 +18,7 @@ export function parseContinuationResumeArgs(argv = [], env = process.env, now = 
   const requestId = option(args, '--request-id') ?? `continuation_resume_${sanitizeId(operationId ?? 'operation')}_${now()}`;
   const format = option(args, '--format') ?? env.CLOUDFLARE_CARRIER_CONTINUATION_RESUME_FORMAT ?? 'json';
   const activateOperation = !flag(args, '--skip-activate') && !parseBoolean(env.CLOUDFLARE_CARRIER_CONTINUATION_RESUME_SKIP_ACTIVATE ?? '');
+  const routeCheck = !flag(args, '--skip-route-check') && !parseBoolean(env.CLOUDFLARE_CARRIER_CONTINUATION_RESUME_SKIP_ROUTE_CHECK ?? '');
   const auth = resolveAuth(args, env);
 
   if (!workerUrl) throw new Error('continuation_resume_requires_--url_or_CLOUDFLARE_CARRIER_URL');
@@ -31,6 +34,7 @@ export function parseContinuationResumeArgs(argv = [], env = process.env, now = 
     requestId,
     format,
     activateOperation,
+    routeCheck,
     auth,
     params: {
       site_id: siteId,
@@ -44,6 +48,14 @@ export function parseContinuationResumeArgs(argv = [], env = process.env, now = 
 }
 
 export async function resumeCloudflareContinuation(config, fetchImpl = fetch) {
+  const route = config.routeCheck === false ? null : await readContinuationRoute(config, fetchImpl);
+  if (route && route.workflow_next_action !== CONTINUATION_RESUME_ACTION) {
+    const error = new Error(`continuation_resume_route_refused:${route.workflow_next_action ?? 'missing_route'}`);
+    error.code = 'continuation_resume_route_refused';
+    error.summary = summarizeContinuationRouteRefusal(route, config.params);
+    error.config = config;
+    throw error;
+  }
   const activation = config.activateOperation === false ? null : await putCloudflareOperationStatus({
     workerUrl: config.workerUrl,
     requestId: `${config.requestId}_activate`,
@@ -95,9 +107,55 @@ export async function resumeCloudflareContinuation(config, fetchImpl = fetch) {
     worker_url: config.workerUrl,
     auth_source: config.auth.source,
     params: config.params,
+    route,
     activation,
     session_start: body,
-    summary: summarizeContinuationResume({ activation, session_start: body }, config.params),
+    summary: summarizeContinuationResume({ route, activation, session_start: body }, config.params),
+  };
+}
+
+export async function readContinuationRoute(config, fetchImpl = fetch) {
+  const response = await fetchImpl(new URL('/api/carrier', withTrailingSlash(config.workerUrl)), {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...authHeaders(config.auth),
+    },
+    body: JSON.stringify({
+      operation: 'operation.read',
+      request_id: `${config.requestId}_route_read`,
+      params: {
+        site_id: config.params.site_id,
+        operation_id: config.params.operation_id,
+      },
+    }),
+  });
+  const text = await response.text();
+  const body = parseJsonText(text);
+  if (response.status < 200 || response.status >= 300) {
+    const code = body?.code ?? body?.error ?? `http_${response.status}`;
+    const error = new Error(`continuation_resume_route_read_failed:${code}`);
+    error.code = code;
+    error.http_status = response.status;
+    error.response = body;
+    error.summary = summarizeContinuationResumeFailure(body, config.params);
+    error.config = config;
+    throw error;
+  }
+  return summarizeContinuationRoute(body, config.params);
+}
+
+export function summarizeContinuationRoute(body = {}, params = {}) {
+  const lifecycle = body?.operation_lifecycle_status ?? null;
+  const workflowRoute = body?.operation_workflow_route ?? null;
+  return {
+    site_id: body?.operation?.site_id ?? body?.site_id ?? params.site_id ?? null,
+    operation_id: body?.operation?.operation_id ?? body?.operation_id ?? params.operation_id ?? null,
+    current_status: body?.operation?.status ?? lifecycle?.phase ?? null,
+    lifecycle_next_action: lifecycle?.next_action ?? null,
+    workflow_next_action: workflowRoute?.next_action ?? null,
+    workflow_reason: workflowRoute?.reason ?? null,
+    workflow_target: workflowRoute?.target ?? null,
   };
 }
 
@@ -113,8 +171,25 @@ export function summarizeContinuationResume(result = {}, params = {}) {
     activation_status: activationSummary?.status ?? (result.activation ? 'unknown' : 'skipped'),
     activation_transition: activationSummary?.transition ?? null,
     activation_reason: activationSummary?.reason ?? params.reason ?? null,
+    route_next_action: result.route?.workflow_next_action ?? null,
+    route_reason: result.route?.workflow_reason ?? null,
     session_event_kind: event?.event_kind ?? null,
     session_event_sequence: event?.sequence ?? null,
+  };
+}
+
+export function summarizeContinuationRouteRefusal(route = {}, params = {}) {
+  return {
+    ok: false,
+    code: 'continuation_resume_route_refused',
+    action: 'deny',
+    reason: route.workflow_next_action ? 'operation_route_not_continuation_resume' : 'operation_route_missing',
+    site_id: route.site_id ?? params.site_id ?? null,
+    operation_id: route.operation_id ?? params.operation_id ?? null,
+    current_status: route.current_status ?? null,
+    lifecycle_next_action: route.lifecycle_next_action ?? null,
+    workflow_next_action: route.workflow_next_action ?? null,
+    workflow_reason: route.workflow_reason ?? null,
   };
 }
 
@@ -148,6 +223,7 @@ export function formatContinuationResumeText(result) {
     lines.push(`Refusal: action=${summary.action ?? 'deny'} reason=${summary.reason ?? 'unknown'}`);
     return `${lines.join('\n')}\n`;
   }
+  if (summary.route_next_action || summary.route_reason) lines.push(`Route: action=${summary.route_next_action ?? 'unknown'} reason=${summary.route_reason ?? 'none'}`);
   lines.push(`Activation: status=${summary.activation_status ?? 'unknown'} transition=${summary.activation_transition ?? 'none'} reason=${summary.activation_reason ?? 'none'}`);
   lines.push(`Session Event: kind=${summary.session_event_kind ?? 'unknown'} sequence=${summary.session_event_sequence ?? 'unknown'}`);
   return `${lines.join('\n')}\n`;
@@ -201,7 +277,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
       process.stdout.write(JSON.stringify(result, null, 2) + '\n');
     }
   } catch (error) {
-    if (error?.response && error?.summary && error?.config?.format === 'text') {
+    if (error?.summary && error?.config?.format === 'text') {
       process.stderr.write(formatContinuationResumeText({
         status: 'refused',
         worker_url: error.config.workerUrl,
@@ -211,7 +287,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
         summary: error.summary,
       }));
     } else {
-      process.stderr.write(JSON.stringify({ ok: false, code: error?.message ?? String(error), response: error?.response }, null, 2) + '\n');
+      process.stderr.write(JSON.stringify({ ok: false, code: error?.message ?? String(error), response: error?.response, summary: error?.summary }, null, 2) + '\n');
     }
     process.exit(1);
   }

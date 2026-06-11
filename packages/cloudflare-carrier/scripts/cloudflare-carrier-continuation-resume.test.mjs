@@ -26,6 +26,7 @@ test('parseContinuationResumeArgs builds activation and session.start params', (
   assert.equal(parsed.requestId, 'request_resume_alpha');
   assert.equal(parsed.format, 'text');
   assert.equal(parsed.activateOperation, true);
+  assert.equal(parsed.routeCheck, true);
   assert.deepEqual(parsed.params, {
     site_id: 'site_alpha',
     operation_id: 'operation_alpha',
@@ -46,9 +47,11 @@ test('parseContinuationResumeArgs accepts explicit session id and skip activate'
     '--agent', 'agent.operator',
     '--session', 'carrier_session_existing',
     '--skip-activate',
+    '--skip-route-check',
   ], {}, () => 123);
 
   assert.equal(parsed.activateOperation, false);
+  assert.equal(parsed.routeCheck, false);
   assert.equal(parsed.params.carrier_session_id, 'carrier_session_existing');
   assert.equal(parsed.params.agent_id, 'agent.operator');
 });
@@ -81,6 +84,22 @@ test('resumeCloudflareContinuation activates operation then starts bound session
   const fetchImpl = async (url, init) => {
     calls.push({ url: url.toString(), init });
     if (calls.length === 1) {
+      return {
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            operation: { site_id: 'site_alpha', operation_id: 'operation_alpha', status: 'needs_continuation' },
+            operation_lifecycle_status: { next_action: 'resume_operation_continuation' },
+            operation_workflow_route: {
+              next_action: 'resume_operation_continuation',
+              reason: 'operation_lifecycle_needs_continuation',
+              target: 'operation_alpha',
+            },
+          });
+        },
+      };
+    }
+    if (calls.length === 2) {
       return {
         status: 200,
         async text() {
@@ -136,9 +155,17 @@ test('resumeCloudflareContinuation activates operation then starts bound session
     },
   }, fetchImpl);
 
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3);
   assert.equal(calls[0].url, 'https://carrier.example.test/api/carrier');
   assert.deepEqual(JSON.parse(calls[0].init.body), {
+    operation: 'operation.read',
+    request_id: 'request_resume_alpha_route_read',
+    params: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+    },
+  });
+  assert.deepEqual(JSON.parse(calls[1].init.body), {
     operation: 'operation.status.put',
     request_id: 'request_resume_alpha_activate',
     params: {
@@ -148,7 +175,7 @@ test('resumeCloudflareContinuation activates operation then starts bound session
       reason: 'operator_resuming_continuation',
     },
   });
-  assert.deepEqual(JSON.parse(calls[1].init.body), {
+  assert.deepEqual(JSON.parse(calls[2].init.body), {
     operation: 'session.start',
     request_id: 'request_resume_alpha_session_start',
     params: {
@@ -162,6 +189,7 @@ test('resumeCloudflareContinuation activates operation then starts bound session
   assert.equal(result.schema, 'narada.cloudflare_carrier.continuation_resume.v1');
   assert.equal(result.auth_source, 'flag:--token');
   assert.equal(JSON.stringify(result).includes('secret-token'), false);
+  assert.equal(result.route.workflow_next_action, 'resume_operation_continuation');
   assert.deepEqual(result.summary, {
     site_id: 'site_alpha',
     operation_id: 'operation_alpha',
@@ -170,6 +198,8 @@ test('resumeCloudflareContinuation activates operation then starts bound session
     activation_status: 'active',
     activation_transition: 'needs_continuation_to_active',
     activation_reason: 'operator_resuming_continuation',
+    route_next_action: 'resume_operation_continuation',
+    route_reason: 'operation_lifecycle_needs_continuation',
     session_event_kind: 'carrier_session_started',
     session_event_sequence: 1,
   });
@@ -181,6 +211,7 @@ test('resumeCloudflareContinuation can start session without status activation',
     workerUrl: 'https://carrier.example.test',
     requestId: 'request_resume_alpha',
     activateOperation: false,
+    routeCheck: false,
     auth: { kind: 'bearer', value: 'secret-token', source: 'flag:--token' },
     params: {
       site_id: 'site_alpha',
@@ -207,6 +238,47 @@ test('resumeCloudflareContinuation can start session without status activation',
   assert.equal(result.summary.activation_status, 'skipped');
 });
 
+test('resumeCloudflareContinuation refuses when operation route is not continuation resume', async () => {
+  const calls = [];
+  await assert.rejects(
+    async () => resumeCloudflareContinuation({
+      workerUrl: 'https://carrier.example.test',
+      requestId: 'request_resume_wrong_route',
+      format: 'text',
+      activateOperation: true,
+      routeCheck: true,
+      auth: { kind: 'bearer', value: 'secret-token', source: 'flag:--token' },
+      params: {
+        site_id: 'site_alpha',
+        operation_id: 'operation_alpha',
+        carrier_session_id: 'carrier_session_alpha',
+        agent_id: 'agent.operator',
+      },
+    }, async (url, init) => {
+      calls.push({ url: url.toString(), init });
+      return {
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            operation: { site_id: 'site_alpha', operation_id: 'operation_alpha', status: 'active' },
+            operation_lifecycle_status: { next_action: 'monitor_operation' },
+            operation_workflow_route: { next_action: 'monitor_operation', reason: 'operation_ready' },
+          });
+        },
+      };
+    }),
+    (error) => {
+      assert.match(error.message, /continuation_resume_route_refused:monitor_operation/);
+      assert.equal(error.code, 'continuation_resume_route_refused');
+      assert.equal(error.summary.reason, 'operation_route_not_continuation_resume');
+      assert.equal(error.summary.workflow_next_action, 'monitor_operation');
+      return true;
+    },
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(JSON.parse(calls[0].init.body).operation, 'operation.read');
+});
+
 test('resumeCloudflareContinuation surfaces structured session.start refusal evidence', async () => {
   await assert.rejects(
     async () => resumeCloudflareContinuation({
@@ -214,6 +286,7 @@ test('resumeCloudflareContinuation surfaces structured session.start refusal evi
       requestId: 'request_resume_denied',
       format: 'text',
       activateOperation: false,
+      routeCheck: false,
       auth: { kind: 'bearer', value: 'secret-token', source: 'flag:--token' },
       params: {
         site_id: 'site_alpha',
@@ -265,6 +338,10 @@ test('formatContinuationResumeText renders operator summary without auth materia
       reason: 'operator_resuming_continuation',
     },
     summary: summarizeContinuationResume({
+      route: {
+        workflow_next_action: 'resume_operation_continuation',
+        workflow_reason: 'operation_lifecycle_needs_continuation',
+      },
       activation: {
         summary: {
           status: 'active',
@@ -289,6 +366,7 @@ test('formatContinuationResumeText renders operator summary without auth materia
   assert.match(text, /Continuation Resume: ok/);
   assert.match(text, /Operation: operation_alpha/);
   assert.match(text, /Session: carrier_session_alpha/);
+  assert.match(text, /Route: action=resume_operation_continuation reason=operation_lifecycle_needs_continuation/);
   assert.match(text, /Activation: status=active transition=needs_continuation_to_active reason=operator_resuming_continuation/);
   assert.match(text, /Session Event: kind=carrier_session_started sequence=1/);
   assert.equal(text.includes('secret-token'), false);
