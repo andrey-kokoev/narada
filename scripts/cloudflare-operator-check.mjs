@@ -1411,6 +1411,28 @@ assert.equal(repositoryPublicationSmoke.publication_status, 'refused');
 assert.equal(repositoryPublicationSmoke.cloudflare_evidence_store_authority, 'cloudflare_repository_publication_evidence_store');
 assert.equal(repositoryPublicationSmoke.authority_partition, 'windows_admits_or_refuses_repository_publication_cloudflare_records_evidence_without_direct_repository_authority');
 
+const repositoryPublicationReadiness = await runJsonCommand('repository-publication:readiness-smoke:live', [
+  'node',
+  'packages/cloudflare-carrier/scripts/cloudflare-carrier-repository-publication-readiness-live-smoke.mjs',
+  '--url',
+  workerUrl,
+  '--token-file',
+  tokenFile,
+  '--site',
+  siteId,
+]);
+assert.ok(['ready', 'not_ready'].includes(repositoryPublicationReadiness.status), JSON.stringify(repositoryPublicationReadiness));
+assert.equal(repositoryPublicationReadiness.worker_url, workerUrl);
+assert.equal(repositoryPublicationReadiness.site_id, siteId);
+assert.equal(repositoryPublicationReadiness.repository_publication_executor_authority, 'cloudflare_github_repository_publication_executor');
+assert.equal(repositoryPublicationReadiness.repository_publication_admission_authority, 'cloudflare_repository_publication_admission_controller');
+assert.ok(['github_token', 'github_app_installation', 'missing'].includes(repositoryPublicationReadiness.github_credential_mode), JSON.stringify(repositoryPublicationReadiness));
+assert.equal(typeof repositoryPublicationReadiness.github_app_configured, 'boolean');
+assert.equal(typeof repositoryPublicationReadiness.github_token_configured, 'boolean');
+assert.equal(repositoryPublicationReadiness.cloudflare_git_push_admission, 'not_admitted');
+assert.ok(Array.isArray(repositoryPublicationReadiness.missing_configuration));
+assert.doesNotMatch(JSON.stringify(repositoryPublicationReadiness), /gh[pousr]_[A-Za-z0-9_]+/);
+
 const webhookDelayDirectiveDeliverySuffix = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
 const webhookDelayDirectiveDelivery = await postCarrier(workerUrl, bearerToken, {
   operation: 'webhook_delay.directive.primary_with_fallback.deliver',
@@ -1848,6 +1870,7 @@ const report = {
     mailbox_draft_reply_proposal_surface: 'ok',
     mailbox_outlook_draft_create_surface: 'ok',
     site_file_materialization_surface: 'ok',
+    repository_publication_cloudflare_github_readiness: repositoryPublicationReadiness.status,
     resident_loop_shadow_surface: 'ok',
     resident_dispatch_surface: 'ok',
     human_operator_session: humanOperator.status,
@@ -1967,6 +1990,14 @@ const report = {
     site_file_materialization_repository_publication_admission: operationSurface.site_file_materialization_repository_publication_admission,
     site_file_materialization_authority_partition: operationSurface.site_file_materialization_authority_partition,
     repository_publication_request_id: repositoryPublicationSmoke.repository_publication_request_id,
+    repository_publication_readiness_status: repositoryPublicationReadiness.status,
+    repository_publication_readiness_authority_partition: repositoryPublicationReadiness.authority_partition,
+    repository_publication_github_credential_mode: repositoryPublicationReadiness.github_credential_mode,
+    repository_publication_github_app_configured: repositoryPublicationReadiness.github_app_configured,
+    repository_publication_github_token_configured: repositoryPublicationReadiness.github_token_configured,
+    repository_publication_missing_configuration: repositoryPublicationReadiness.missing_configuration,
+    repository_publication_requested_repository_allowed: repositoryPublicationReadiness.requested_repository_allowed,
+    repository_publication_requested_branch_allowed: repositoryPublicationReadiness.requested_branch_allowed,
     repository_publication_request_authority: repositoryPublicationSmoke.repository_publication_request_authority,
     repository_publication_executor_authority: repositoryPublicationSmoke.repository_publication_executor_authority,
     repository_publication_cloudflare_git_push_admission: repositoryPublicationSmoke.cloudflare_git_push_admission,
