@@ -2490,8 +2490,10 @@ function summarizeCloudflareAuthorityTransferPosture({
   const mailboxStatusShadowCount = Array.isArray(mailboxStatusShadowReads) ? mailboxStatusShadowReads.length : 0;
   const mailboxSendAcceptedCount = Array.isArray(mailboxSendAcceptedRecords) ? mailboxSendAcceptedRecords.length : 0;
   const mailboxSendConfirmationCount = Array.isArray(mailboxSendConfirmations) ? mailboxSendConfirmations.length : 0;
+  const mailboxOutlookDraftCreateCount = Array.isArray(mailboxOutlookDraftCreates) ? mailboxOutlookDraftCreates.length : 0;
   const mailboxSendRemaining = mailboxSendAcceptedCount > 0 ? [] : ['mailbox_send'];
   const mailboxSendConfirmationRemaining = mailboxSendAcceptedCount > 0 && mailboxSendConfirmationCount === 0 ? ['mailbox_delivery_confirmation'] : [];
+  const mailboxOutlookDraftCreateRemaining = mailboxOutlookDraftCreateCount > 0 ? [] : ['outlook_draft_create'];
   const mailboxStatusClassification = mailboxStatusSourceCount > 0
     ? 'cloudflare_owned'
     : mailboxStatusShadowCount > 0 ? 'cloudflare_recorded_windows_owned' : 'windows_retained';
@@ -2512,21 +2514,21 @@ function summarizeCloudflareAuthorityTransferPosture({
       classification: mailboxStatusClassification,
       observed_count: mailboxStatusSourceCount + mailboxStatusShadowCount,
       authority_partition: mailboxStatusSourceCount > 0 ? (mailboxSendAcceptedCount > 0 ? (mailboxSendConfirmationCount > 0 ? 'mailbox_status_source_read_send_and_confirmation_cloudflare_owned_mutation_not_admitted' : 'mailbox_status_source_read_and_send_cloudflare_owned_confirmation_and_mutation_not_admitted') : 'mailbox_status_source_read_cloudflare_owned_send_and_mutation_not_admitted') : mailboxStatusShadowCount > 0 ? (mailboxSendAcceptedCount > 0 ? (mailboxSendConfirmationCount > 0 ? 'mailbox_status_shadow_read_cloudflare_recorded_send_and_confirmation_cloudflare_owned_mutation_windows_owned' : 'mailbox_status_shadow_read_cloudflare_recorded_send_cloudflare_owned_confirmation_and_mutation_windows_owned') : 'mailbox_status_shadow_read_cloudflare_recorded_send_and_mutation_windows_owned') : 'mailbox_windows_owned',
-      remaining_windows_authority: mailboxStatusSourceCount > 0 ? [...mailboxSendRemaining, ...mailboxSendConfirmationRemaining, 'mailbox_mutation'] : ['mailbox_status_source', ...mailboxSendRemaining, ...mailboxSendConfirmationRemaining, 'mailbox_mutation'],
+      remaining_windows_authority: mailboxStatusSourceCount > 0 ? [] : ['mailbox_status_source'],
     },
     {
       domain: 'mailbox_draft_reply',
       classification: classifyCounted(Array.isArray(mailboxDraftReplyProposals) ? mailboxDraftReplyProposals.length : 0, 'cloudflare_recorded_windows_owned'),
       observed_count: Array.isArray(mailboxDraftReplyProposals) ? mailboxDraftReplyProposals.length : 0,
       authority_partition: Array.isArray(mailboxDraftReplyProposals) && mailboxDraftReplyProposals.length > 0 ? (mailboxSendAcceptedCount > 0 ? (mailboxSendConfirmationCount > 0 ? 'mailbox_draft_reply_proposal_cloudflare_recorded_send_and_confirmation_cloudflare_owned_outlook_draft_and_mutation_not_admitted' : 'mailbox_draft_reply_proposal_cloudflare_recorded_send_cloudflare_owned_confirmation_outlook_draft_and_mutation_not_admitted') : 'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted') : 'mailbox_draft_reply_windows_owned',
-      remaining_windows_authority: ['outlook_draft_create', ...mailboxSendRemaining, ...mailboxSendConfirmationRemaining, 'mailbox_mutation'],
+      remaining_windows_authority: [...mailboxOutlookDraftCreateRemaining, ...mailboxSendRemaining, ...mailboxSendConfirmationRemaining],
     },
     {
       domain: 'mailbox_outlook_draft_create',
       classification: classifyCounted(Array.isArray(mailboxOutlookDraftCreates) ? mailboxOutlookDraftCreates.length : 0, 'cloudflare_owned'),
       observed_count: Array.isArray(mailboxOutlookDraftCreates) ? mailboxOutlookDraftCreates.length : 0,
       authority_partition: Array.isArray(mailboxOutlookDraftCreates) && mailboxOutlookDraftCreates.length > 0 ? (mailboxSendAcceptedCount > 0 ? (mailboxSendConfirmationCount > 0 ? 'mailbox_outlook_draft_create_send_and_confirmation_cloudflare_owned_other_mutation_not_admitted' : 'mailbox_outlook_draft_create_and_send_cloudflare_owned_confirmation_and_other_mutation_not_admitted') : 'mailbox_outlook_draft_create_cloudflare_owned_send_and_other_mutation_not_admitted') : 'mailbox_outlook_draft_create_not_observed',
-      remaining_windows_authority: Array.isArray(mailboxOutlookDraftCreates) && mailboxOutlookDraftCreates.length > 0 ? [...mailboxSendRemaining, ...mailboxSendConfirmationRemaining, 'mailbox_mutation'] : ['outlook_draft_create', ...mailboxSendRemaining, ...mailboxSendConfirmationRemaining, 'mailbox_mutation'],
+      remaining_windows_authority: mailboxOutlookDraftCreateCount > 0 ? [...mailboxSendRemaining, ...mailboxSendConfirmationRemaining] : ['outlook_draft_create', ...mailboxSendRemaining, ...mailboxSendConfirmationRemaining],
     },
     {
       domain: 'site_file_change_proposal',
