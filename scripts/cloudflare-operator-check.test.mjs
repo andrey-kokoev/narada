@@ -34,6 +34,8 @@ test('cloudflare operator check help describes the current product gate', async 
   assert.match(result.stdout, /persistence posture/);
   assert.match(result.stdout, /recovery posture/);
   assert.match(result.stdout, /carrier evidence replay posture/);
+  assert.match(result.stdout, /provider-liveness Task Scheduler readback/);
+  assert.match(result.stdout, /hidden wscript wrapper/);
   assert.match(result.stdout, /task lifecycle cutover gates/);
   assert.match(result.stdout, /repository-publication readiness boundaries/);
   assert.match(result.stdout, /without granting hidden mutation authority/);

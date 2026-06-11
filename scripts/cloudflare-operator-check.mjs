@@ -966,7 +966,7 @@ assert.ok(siteList.body.site_product_overview.action_counts);
 assert.ok(siteList.body.site_product_overview.missing_counts);
 assert.ok(siteList.body.site_product_overview.attention_counts);
 assert.equal(typeof siteList.body.site_product_overview.next_reason, 'string');
-assert.match(siteList.body.site_product_overview.next_action, /^(monitor_sites|active_membership|operation|session|carrier_evidence|continuity_packet|continuity_loop_report|open_tasks)$/);
+assert.match(siteList.body.site_product_overview.next_action, /^(monitor_sites|active_membership|operation|session|carrier_evidence|continuity_packet|continuity_loop_report|open_tasks|observe_continuity_packet|return_local_windows_continuity_packet|publish_cloudflare_continuity_packet)$/);
 const expectedSiteOverview = expectedSiteProductOverview(siteList.body.site_product_statuses);
 assert.deepEqual(siteList.body.site_product_overview.health_counts, expectedSiteOverview.health_counts);
 assert.deepEqual(siteList.body.site_product_overview.action_counts, expectedSiteOverview.action_counts);
@@ -1094,6 +1094,9 @@ assert.ok((cloudflareContinuityPull.packet?.decisions ?? []).some((decision) => 
   && decision.reason === 'site_continuity_cross_embodiment_mutation_execution_refused'
   && decision.exchange_class === 'cross_embodiment_mutation_execution'
 )));
+
+const providerLivenessSchedulerReadback = await runJsonCommand('provider-liveness-scheduler:status', providerLivenessSchedulerReadbackCommand());
+assertProviderLivenessSchedulerReadback(providerLivenessSchedulerReadback);
 
 const taskLifecycleWriteAdmission = await postCarrier(workerUrl, bearerToken, {
   operation: 'task_lifecycle.write_admission.classify',
@@ -1915,6 +1918,7 @@ const report = {
     operation_continuity_status: 'ok',
     operation_lifecycle_status: 'ok',
     operation_provider_scheduler_posture: 'ok',
+    local_provider_liveness_scheduler_readback: 'ok',
     operation_persistence_posture: 'ok',
     operation_recovery_posture: 'ok',
     webhook_delay_directive_delivery_surface: 'ok',
@@ -1942,6 +1946,19 @@ const report = {
   operation_provider_scheduler_posture: {
     local_ingress: localIngressProviderSchedulerPosture,
     repository_publication: repositoryPublicationProviderSchedulerPosture,
+  },
+  local_provider_liveness_scheduler_readback: {
+    task_name: providerLivenessSchedulerReadback.task_name,
+    task_command: providerLivenessSchedulerReadback.task_command,
+    hidden_wrapper_kind: providerLivenessSchedulerReadback.hidden_wrapper_kind,
+    status: providerLivenessSchedulerReadback.scheduler_task_readback.status,
+    scheduled_task_state: providerLivenessSchedulerReadback.scheduler_task_readback.scheduled_task_state,
+    last_result: providerLivenessSchedulerReadback.scheduler_task_readback.last_result,
+    cadence_status: providerLivenessSchedulerReadback.scheduler_task_readback.cadence_status,
+    task_command_status: providerLivenessSchedulerReadback.scheduler_task_readback.task_command_status,
+    hidden_wrapper_status: providerLivenessSchedulerReadback.scheduler_task_readback.hidden_wrapper_readback.status,
+    power_management_status: providerLivenessSchedulerReadback.scheduler_task_readback.power_management_status,
+    attention_reasons: providerLivenessSchedulerReadback.scheduler_task_readback.attention_reasons,
   },
   service_principal_ready: true,
   console_structure: consoleStructure,
@@ -2145,6 +2162,16 @@ function cloudflareContinuityPullCommand() {
     workerUrl,
     '--token-file',
     tokenFile,
+  ];
+}
+
+function providerLivenessSchedulerReadbackCommand() {
+  return [
+    'node',
+    'packages/cloudflare-carrier/scripts/cloudflare-carrier-provider-liveness-scheduler.mjs',
+    '--action',
+    'status',
+    '--live',
   ];
 }
 
@@ -2440,6 +2467,31 @@ function assertProviderSchedulerPosture(posture, providerKind) {
     assert.ok(Number.isInteger(posture.interval_minutes));
     assert.ok(posture.interval_minutes > 0);
   }
+}
+
+function assertProviderLivenessSchedulerReadback(readback) {
+  assert.equal(readback?.schema, 'narada.cloudflare_carrier.provider_liveness_scheduler_plan.v1');
+  assert.equal(readback?.action, 'status');
+  assert.equal(readback?.dry_run, false);
+  assert.equal(readback?.task_name, '\\Narada\\CloudflareProviderLivenessRefresh');
+  assert.equal(readback?.hidden_wrapper_kind, 'windows_wscript_vbs_hidden');
+  assert.equal(readback?.credential_posture, 'external_env_file_or_process_environment_only');
+  assert.equal(readback?.embeds_credentials, false);
+  assert.equal(readback?.host_scheduler_read_admission, 'bounded_schtasks_query_from_scheduler_plan');
+  assert.match(readback?.task_command ?? '', /^wscript\.exe \/\/B /);
+  assert.doesNotMatch(readback?.task_command ?? '', /fnm\.exe|cmd\.exe/i);
+  const scheduler = readback?.scheduler_task_readback;
+  assert.equal(scheduler?.state, 'completed');
+  assert.equal(scheduler?.status, 'ok');
+  assert.equal(scheduler?.task_name, '\\Narada\\CloudflareProviderLivenessRefresh');
+  assert.equal(scheduler?.scheduled_task_state, 'Enabled');
+  assert.equal(scheduler?.cadence_status, 'matches_plan');
+  assert.equal(scheduler?.task_command_status, 'matches_plan');
+  assert.equal(scheduler?.hidden_wrapper_readback?.status, 'matches_plan');
+  assert.equal(scheduler?.power_management_status, 'allows_battery_execution');
+  assert.deepEqual(scheduler?.attention_reasons, []);
+  assert.match(scheduler?.task_to_run ?? '', /^wscript\.exe \/\/B /);
+  assert.doesNotMatch(scheduler?.task_to_run ?? '', /fnm\.exe|cmd\.exe/i);
 }
 
 function assertLocalCloudContinuityBridgeState(bridge) {
@@ -2953,6 +3005,7 @@ Effect:
   Optionally verifies the current Microsoft operator session, active Site membership, Operation visibility, and a real cookie-backed resident dispatch action.
   Runs the live carrier smoke through Workers AI and Cloudflare task effects.
   Reads site and operation product surfaces, including posture routes, persistence posture, recovery posture, and carrier evidence replay posture.
+  Verifies the local provider-liveness Task Scheduler readback points at the hidden wscript wrapper, matches cadence, and has no scheduler attention reasons.
   Runs the task lifecycle cutover gates that are part of the root readiness surface: projection write, role resolution, roster mutation, and source-state refusal posture.
   Reads mailbox, site-file, resident-loop, resident-dispatch, webhook-delay, and repository-publication readiness boundaries without granting hidden mutation authority.
   Runs the Windows/Cloudflare continuity loop twice to prove idempotent packet exchange.
