@@ -765,6 +765,51 @@ test('site continuity scheduler live status surfaces cadence mismatch as attenti
   }
 });
 
+test('site continuity scheduler live status surfaces battery-blocking power policy as attention evidence', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-live-status-power-'));
+  const syncEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-sync.mjs');
+  const scheduledTaskEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-scheduled-task.mjs');
+  const packetPath = join(root, '.narada/site-continuity/local-packet.json');
+  await mkdir(join(root, 'packages/cloudflare-carrier/scripts'), { recursive: true });
+  await mkdir(join(root, '.narada/site-continuity'), { recursive: true });
+  await writeFile(syncEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(scheduledTaskEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(packetPath, '{"packet":{"site_id":"site_fixture"}}\n', 'utf8');
+  await writePlannedSiteContinuityHiddenWrapper({ repoRoot: root });
+  try {
+    const result = await runSiteContinuitySchedulerActionWithOptionalRefresh({
+      action: 'status',
+      repoRoot: root,
+      intervalMinutes: 5,
+      siteId: 'site_fixture',
+      packetPath,
+      dryRun: false,
+    }, {
+      execFileImpl: async () => ({
+        stdout: [
+          'TaskName: \\Narada\\CloudflareSiteContinuitySync',
+          'Status: Ready',
+          'Last Result: 0',
+          `Task To Run: wscript.exe //B "${join(root, '.narada/site-continuity/cloudflare-site-continuity-sync.hidden.vbs')}"`,
+          'Scheduled Task State: Enabled',
+          'Power Management: Stop On Battery Mode, No Start On Batteries',
+          'Repeat: Every: 0 Hour(s), 5 Minute(s)',
+        ].join('\n'),
+        stderr: '',
+      }),
+    });
+
+    assert.equal(result.scheduler_task_readback.status, 'needs_attention');
+    assert.equal(result.scheduler_task_readback.last_result, '0');
+    assert.equal(result.scheduler_task_readback.cadence_status, 'matches_plan');
+    assert.equal(result.scheduler_task_readback.task_command_status, 'matches_plan');
+    assert.equal(result.scheduler_task_readback.power_management_status, 'blocks_battery_execution');
+    assert.deepEqual(result.scheduler_task_readback.attention_reasons, ['scheduler_power_policy_blocks_battery_execution']);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('site continuity scheduler live status surfaces nonzero last result as attention evidence', async () => {
   const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-live-status-last-result-'));
   const syncEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-sync.mjs');

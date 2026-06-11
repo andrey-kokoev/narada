@@ -204,6 +204,7 @@ test('provider liveness scheduler readback surfaces drift', () => {
       'Scheduled Task State': 'Enabled',
       'Task To Run': 'node old-entrypoint.mjs',
       'Repeat: Every': '0 Hour(s), 10 Minute(s)',
+      'Power Management': 'Stop On Battery Mode, No Start On Batteries',
     },
     expectedIntervalMinutes: 2,
     expectedTaskCommand: 'wscript.exe //B hidden.vbs',
@@ -218,7 +219,9 @@ test('provider liveness scheduler readback surfaces drift', () => {
     'scheduler_task_command_differs_from_plan',
     'hidden_wrapper_differs_from_plan',
     'scheduler_last_result_nonzero',
+    'scheduler_power_policy_blocks_battery_execution',
   ]);
+  assert.equal(readback.power_management_status, 'blocks_battery_execution');
 });
 
 test('provider liveness scheduler text output summarizes operator posture', () => {
@@ -235,6 +238,7 @@ test('provider liveness scheduler text output summarizes operator posture', () =
       actual_interval_minutes: 2,
       cadence_status: 'matches_plan',
       task_command_status: 'matches_plan',
+      power_management_status: 'allows_battery_execution',
       hidden_wrapper_readback: { status: 'matches_plan', path: 'hidden.vbs', embeds_credentials: false },
       task_to_run: 'wscript.exe //B hidden.vbs',
       attention_reasons: [],
@@ -245,6 +249,7 @@ test('provider liveness scheduler text output summarizes operator posture', () =
   assert.match(text, /Scheduler: state=Enabled status=Ready last=0/);
   assert.match(text, /Cadence: expected=2m actual=2m matches_plan/);
   assert.match(text, /Command: matches_plan/);
+  assert.match(text, /Power: allows_battery_execution/);
   assert.match(text, /Hidden Wrapper: matches_plan/);
 });
 

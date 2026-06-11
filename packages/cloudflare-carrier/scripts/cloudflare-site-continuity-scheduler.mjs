@@ -376,6 +376,7 @@ function summarizeSiteContinuityHealth(plan, schedulerTaskReadback = plan?.sched
     scheduler_readback_status: schedulerTaskReadback?.status ?? null,
     scheduler_last_result: schedulerTaskReadback?.last_result ?? null,
     scheduler_task_state: schedulerTaskReadback?.scheduled_task_state ?? null,
+    scheduler_power_management_status: schedulerTaskReadback?.power_management_status ?? null,
     embeds_credentials: false,
   };
 }
@@ -407,7 +408,7 @@ export function formatSiteContinuitySchedulerResultForText(result) {
     lines.push(`Bindings: ${continuityHealth.binding_count ?? 0} (${continuityHealth.binding_registry_state ?? 'unknown'})`);
     lines.push(`Local Sync: ${continuityHealth.local_sync_status ?? 'unknown'} (${continuityHealth.local_sync_artifact_count ?? 0})`);
     lines.push(`Local Inbound: ${continuityHealth.local_inbound_status ?? 'unknown'} (${continuityHealth.local_inbound_artifact_count ?? 0})`);
-    lines.push(`Scheduler: ${continuityHealth.scheduler_readback_status ?? 'unknown'} last=${continuityHealth.scheduler_last_result ?? 'unknown'}`);
+    lines.push(`Scheduler: ${continuityHealth.scheduler_readback_status ?? 'unknown'} last=${continuityHealth.scheduler_last_result ?? 'unknown'} power=${continuityHealth.scheduler_power_management_status ?? 'unknown'}`);
     if (continuityHealth.attention_reasons?.length) lines.push(`Attention: ${continuityHealth.attention_reasons.join(', ')}`);
   } else {
     if (localSyncArtifacts) lines.push(`Local Sync: ${localSyncArtifacts.status ?? 'unknown'} (${localSyncArtifacts.artifact_count ?? 0})`);
@@ -442,6 +443,8 @@ function summarizeSchedulerTaskReadback({ state, command, args, stdout, stderr, 
   const lastResult = parsed['Last Result'] ?? null;
   const scheduledTaskState = parsed['Scheduled Task State'] ?? null;
   const statusText = parsed.Status ?? null;
+  const powerManagement = parsed['Power Management'] ?? null;
+  const powerManagementStatus = summarizeSchedulerPowerManagementStatus(powerManagement);
   const cadenceStatus = actualIntervalMinutes === null
     ? 'unknown'
     : actualIntervalMinutes === expectedInterval ? 'matches_plan' : 'differs_from_plan';
@@ -456,6 +459,7 @@ function summarizeSchedulerTaskReadback({ state, command, args, stdout, stderr, 
     hiddenWrapperReadback && hiddenWrapperReadback.status !== 'matches_plan' ? `hidden_wrapper_${hiddenWrapperReadback.status}` : null,
     isSchedulerLastResultHealthy(lastResult, statusText) ? null : 'scheduler_last_result_nonzero',
     scheduledTaskState && !/^enabled$/i.test(scheduledTaskState) ? 'scheduler_task_disabled' : null,
+    powerManagementStatus === 'blocks_battery_execution' ? 'scheduler_power_policy_blocks_battery_execution' : null,
   ].filter(Boolean);
   return {
     state,
@@ -469,6 +473,8 @@ function summarizeSchedulerTaskReadback({ state, command, args, stdout, stderr, 
     task_name: parsed.TaskName ?? null,
     scheduled_task_state: scheduledTaskState,
     status_text: statusText,
+    power_management: powerManagement,
+    power_management_status: powerManagementStatus,
     last_run_time: parsed['Last Run Time'] ?? null,
     last_result: lastResult,
     next_run_time: parsed['Next Run Time'] ?? null,
@@ -489,6 +495,14 @@ function isSchedulerLastResultHealthy(lastResult, statusText) {
   const normalizedLastResult = String(lastResult).trim().toLowerCase();
   const normalizedStatus = String(statusText ?? '').trim().toLowerCase();
   return normalizedStatus === 'running' && ['267009', '0x41301'].includes(normalizedLastResult);
+}
+
+function summarizeSchedulerPowerManagementStatus(powerManagement) {
+  if (!powerManagement) return 'unknown';
+  const normalized = String(powerManagement).toLowerCase();
+  return normalized.includes('no start on batteries') || normalized.includes('stop on battery')
+    ? 'blocks_battery_execution'
+    : 'allows_battery_execution';
 }
 
 function parseSchedulerTaskListOutput(output) {

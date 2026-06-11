@@ -258,6 +258,8 @@ export function summarizeProviderLivenessSchedulerReadback({ state, command, arg
   const lastResult = parsed['Last Result'] ?? null;
   const scheduledTaskState = parsed['Scheduled Task State'] ?? null;
   const statusText = parsed.Status ?? null;
+  const powerManagement = parsed['Power Management'] ?? null;
+  const powerManagementStatus = summarizeSchedulerPowerManagementStatus(powerManagement);
   const cadenceStatus = actualIntervalMinutes === null
     ? 'unknown'
     : actualIntervalMinutes === expectedInterval ? 'matches_plan' : 'differs_from_plan';
@@ -272,6 +274,7 @@ export function summarizeProviderLivenessSchedulerReadback({ state, command, arg
     hiddenWrapperReadback && hiddenWrapperReadback.status !== 'matches_plan' ? `hidden_wrapper_${hiddenWrapperReadback.status}` : null,
     isSchedulerLastResultHealthy(lastResult, statusText) ? null : 'scheduler_last_result_nonzero',
     scheduledTaskState && !/^enabled$/i.test(scheduledTaskState) ? 'scheduler_task_disabled' : null,
+    powerManagementStatus === 'blocks_battery_execution' ? 'scheduler_power_policy_blocks_battery_execution' : null,
   ].filter(Boolean);
   return {
     state,
@@ -285,6 +288,8 @@ export function summarizeProviderLivenessSchedulerReadback({ state, command, arg
     task_name: parsed.TaskName ?? null,
     scheduled_task_state: scheduledTaskState,
     status_text: statusText,
+    power_management: powerManagement,
+    power_management_status: powerManagementStatus,
     last_run_time: parsed['Last Run Time'] ?? null,
     last_result: lastResult,
     next_run_time: parsed['Next Run Time'] ?? null,
@@ -312,6 +317,7 @@ export function formatProviderLivenessSchedulerText(result) {
     lines.push(`Scheduler: state=${readback.scheduled_task_state ?? 'unknown'} status=${readback.status_text ?? 'unknown'} last=${readback.last_result ?? 'unknown'} next=${readback.next_run_time ?? 'unknown'}`);
     lines.push(`Cadence: expected=${readback.expected_interval_minutes ?? 'unknown'}m actual=${readback.actual_interval_minutes ?? 'unknown'}m ${readback.cadence_status ?? 'unknown'}`);
     lines.push(`Command: ${readback.task_command_status ?? 'unknown'}`);
+    lines.push(`Power: ${readback.power_management_status ?? 'unknown'}`);
     if (readback.hidden_wrapper_readback) lines.push(`Hidden Wrapper: ${readback.hidden_wrapper_readback.status ?? 'unknown'}`);
     if (readback.task_to_run) lines.push(`Task To Run: ${readback.task_to_run}`);
     if (readback.attention_reasons?.length > 0) lines.push(`Attention: ${readback.attention_reasons.join(', ')}`);
@@ -327,6 +333,14 @@ function isSchedulerLastResultHealthy(lastResult, statusText) {
   const normalizedLastResult = String(lastResult).trim().toLowerCase();
   const normalizedStatus = String(statusText ?? '').trim().toLowerCase();
   return normalizedStatus === 'running' && ['267009', '0x41301'].includes(normalizedLastResult);
+}
+
+function summarizeSchedulerPowerManagementStatus(powerManagement) {
+  if (!powerManagement) return 'unknown';
+  const normalized = String(powerManagement).toLowerCase();
+  return normalized.includes('no start on batteries') || normalized.includes('stop on battery')
+    ? 'blocks_battery_execution'
+    : 'allows_battery_execution';
 }
 
 function parseSchedulerTaskListOutput(output) {
