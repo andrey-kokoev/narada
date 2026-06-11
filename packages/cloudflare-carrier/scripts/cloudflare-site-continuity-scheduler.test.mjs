@@ -12,6 +12,7 @@ import {
   buildSiteContinuitySchedulerPlan,
   buildSiteContinuitySchedulerPlanWithOptionalRefresh,
   readLastReconciliationExecutionArtifact,
+  readLastScheduledHealthSnapshot,
   readLastSyncArtifact,
   readLocalConfiguredSites,
   readLocalSyncArtifactInventory,
@@ -632,6 +633,67 @@ test('site continuity scheduler status-all inventories local sync artifacts', as
     assert.equal(plan.plan_status, 'local_sync_artifact_inventory_read_only_no_cloudflare_access');
     assert.equal(plan.local_sync_artifacts.artifact_count, 2);
     assert.equal(plan.local_sync_artifacts.status, 'needs_attention');
+    assert.equal(plan.embeds_credentials, false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('site continuity scheduler reads the last scheduled health snapshot separately from sync artifacts', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-health-last-'));
+  const healthOutputPath = join(root, '.narada/site-continuity/health/cloudflare-continuity-health-last.json');
+  await mkdir(join(root, '.narada/site-continuity/health'), { recursive: true });
+  await writeFile(healthOutputPath, `${JSON.stringify({
+    schema: 'narada.cloudflare_carrier.site_continuity_scheduled_health_snapshot.v1',
+    status: 'ok',
+    generated_at: '2026-06-11T14:05:52.209Z',
+    persisted_at: '2026-06-11T14:05:52.210Z',
+    trigger: 'windows_task_scheduler',
+    embeds_credentials: false,
+    reconciliation_execution: {
+      status: 'completed',
+      reconciliation_plan_status: 'ready',
+      selected_site_count: 1,
+      executed_site_count: 1,
+      completed_site_count: 1,
+      failed_site_count: 0,
+    },
+    continuity_health: {
+      status: 'ok',
+      attention_reasons: [],
+    },
+    scheduler_task_readback: {
+      status: 'ok',
+      status_text: 'Running',
+      last_result: '267009',
+      next_run_time: '6/11/2026 9:12:00 AM',
+    },
+  }, null, 2)}\n`, 'utf8');
+  await utimes(healthOutputPath, new Date('2026-06-11T14:05:52.210Z'), new Date('2026-06-11T14:05:52.210Z'));
+  try {
+    const lastHealth = readLastScheduledHealthSnapshot(healthOutputPath);
+    assert.equal(lastHealth.state, 'read');
+    assert.equal(lastHealth.status, 'ok');
+    assert.equal(lastHealth.trigger, 'windows_task_scheduler');
+    assert.equal(lastHealth.embeds_credentials, false);
+    assert.equal(lastHealth.reconciliation_execution_status, 'completed');
+    assert.equal(lastHealth.selected_site_count, 1);
+    assert.equal(lastHealth.completed_site_count, 1);
+    assert.equal(lastHealth.continuity_health_status, 'ok');
+    assert.deepEqual(lastHealth.continuity_health_attention_reasons, []);
+    assert.equal(lastHealth.scheduler_task_readback_status, 'ok');
+    assert.equal(lastHealth.scheduler_task_status_text, 'Running');
+    assert.equal(lastHealth.scheduler_last_result, '267009');
+    assert.doesNotMatch(JSON.stringify(lastHealth), /secret-token-value|CLOUDFLARE_CARRIER_TOKEN=/);
+
+    const plan = buildSiteContinuitySchedulerPlan({
+      action: 'read-health-last',
+      repoRoot: root,
+      healthOutputPath,
+    });
+    assert.equal(plan.plan_status, 'last_scheduled_health_snapshot_read_only_no_cloudflare_access');
+    assert.equal(plan.last_scheduled_health.status, 'ok');
+    assert.equal(plan.last_scheduled_health.artifact_path, healthOutputPath);
     assert.equal(plan.embeds_credentials, false);
   } finally {
     await rm(root, { recursive: true, force: true });

@@ -20,7 +20,7 @@ const DEFAULT_INTERVAL_MINUTES = 5;
 const DEFAULT_MAX_SYNC_ARTIFACT_AGE_MINUTES = 15;
 const DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS = 120000;
 const LIVE_SCHEDULER_TASK_ACTIONS = new Set(['install', 'disable', 'pause', 'resume', 'uninstall']);
-const LIVE_SCHEDULER_READ_ACTIONS = new Set(['status', 'read-last', 'last', 'status-all', 'status-local', 'health', 'reconcile', 'reconcile-plan']);
+const LIVE_SCHEDULER_READ_ACTIONS = new Set(['status', 'read-last', 'last', 'read-health-last', 'health-last', 'status-all', 'status-local', 'health', 'reconcile', 'reconcile-plan']);
 const execFile = promisify(execFileCallback);
 
 export function buildSiteContinuitySchedulerPlan({
@@ -160,6 +160,14 @@ export function buildSiteContinuitySchedulerPlan({
         plan_status: 'last_sync_artifact_read_only_no_cloudflare_access',
         scheduled_task_command: ['schtasks', '/Query', '/TN', taskName, '/V', '/FO', 'LIST'],
         last_sync: readLastSyncArtifact(effectiveOutputPath),
+      };
+    case 'read-health-last':
+    case 'health-last':
+      return {
+        ...base,
+        plan_status: 'last_scheduled_health_snapshot_read_only_no_cloudflare_access',
+        scheduled_task_command: ['schtasks', '/Query', '/TN', taskName, '/V', '/FO', 'LIST'],
+        last_scheduled_health: readLastScheduledHealthSnapshot(effectiveHealthOutputPath),
       };
     case 'status-all':
     case 'status-local':
@@ -1138,6 +1146,74 @@ export function readLastReconciliationExecutionArtifact(outputPath) {
     cloudflare_reconciliation_execution_recorded_count: artifact.cloudflare_reconciliation_execution_evidence?.recorded_count ?? null,
     cloudflare_reconciliation_execution_failed_count: artifact.cloudflare_reconciliation_execution_evidence?.failed_count ?? null,
     result_status_counts: countResultStatuses(artifact.results ?? []),
+  };
+}
+
+export function readLastScheduledHealthSnapshot(outputPath) {
+  if (!outputPath) {
+    return {
+      state: 'not_configured',
+      artifact_present: false,
+      status: 'needs_configuration',
+    };
+  }
+  if (!existsSync(outputPath)) {
+    return {
+      state: 'missing',
+      artifact_path: outputPath,
+      artifact_present: false,
+      status: 'never_recorded',
+    };
+  }
+  const stat = statSync(outputPath);
+  let artifact;
+  try {
+    artifact = JSON.parse(readFileSync(outputPath, 'utf8'));
+  } catch (error) {
+    return {
+      state: 'invalid_json',
+      artifact_path: outputPath,
+      artifact_present: true,
+      artifact_updated_at: stat.mtime.toISOString(),
+      status: 'needs_attention',
+      reason: 'scheduled_health_snapshot_json_invalid',
+      error: error.message,
+    };
+  }
+  if (artifact?.schema !== 'narada.cloudflare_carrier.site_continuity_scheduled_health_snapshot.v1') {
+    return {
+      state: 'unsupported_schema',
+      artifact_path: outputPath,
+      artifact_present: true,
+      artifact_updated_at: stat.mtime.toISOString(),
+      status: 'needs_attention',
+      schema: artifact?.schema ?? null,
+      reason: 'unsupported_scheduled_health_snapshot_schema',
+    };
+  }
+  return {
+    state: 'read',
+    artifact_path: outputPath,
+    artifact_present: true,
+    artifact_updated_at: stat.mtime.toISOString(),
+    status: artifact.status ?? 'unknown',
+    schema: artifact.schema,
+    generated_at: artifact.generated_at ?? null,
+    persisted_at: artifact.persisted_at ?? null,
+    trigger: artifact.trigger ?? null,
+    embeds_credentials: artifact.embeds_credentials === false ? false : null,
+    reconciliation_execution_status: artifact.reconciliation_execution?.status ?? null,
+    reconciliation_plan_status: artifact.reconciliation_execution?.reconciliation_plan_status ?? null,
+    selected_site_count: artifact.reconciliation_execution?.selected_site_count ?? 0,
+    executed_site_count: artifact.reconciliation_execution?.executed_site_count ?? 0,
+    completed_site_count: artifact.reconciliation_execution?.completed_site_count ?? 0,
+    failed_site_count: artifact.reconciliation_execution?.failed_site_count ?? 0,
+    continuity_health_status: artifact.continuity_health?.status ?? null,
+    continuity_health_attention_reasons: artifact.continuity_health?.attention_reasons ?? [],
+    scheduler_task_readback_status: artifact.scheduler_task_readback?.status ?? null,
+    scheduler_task_status_text: artifact.scheduler_task_readback?.status_text ?? null,
+    scheduler_last_result: artifact.scheduler_task_readback?.last_result ?? null,
+    scheduler_next_run_time: artifact.scheduler_task_readback?.next_run_time ?? null,
   };
 }
 

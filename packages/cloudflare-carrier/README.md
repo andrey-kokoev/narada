@@ -199,6 +199,14 @@ pnpm --filter @narada2/cloudflare-carrier continuity:health
 
 `continuity:health` loads the same local `.env` and `.narada/site-continuity/cloudflare-continuity.env` configuration as the scheduled-task wrapper, then attaches bounded Task Scheduler query evidence to the status output. It reports the installed task state, last result, next run, task command, and whether the host scheduler cadence matches the package plan.
 
+Read the last durable scheduled health snapshot without querying Cloudflare or Task Scheduler:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier continuity:health:last
+```
+
+`continuity:health:last` reads `.narada/site-continuity/health/cloudflare-continuity-health-last.json`, the snapshot written by the scheduled continuity loop. It is distinct from `continuity:last`, which reads the last sync artifact.
+
 Install the Windows scheduled task for the recurring continuity loop after the site and packet path are configured in the local continuity env file:
 
 ```powershell
