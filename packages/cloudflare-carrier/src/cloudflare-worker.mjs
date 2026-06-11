@@ -15237,6 +15237,15 @@ export function renderCloudflareCarrierConsole() {
         || product.operation_product_surface?.recovery_posture
         || null;
     }
+    function recoveryPostureItemLabel(item) {
+      if (!item || typeof item !== 'object') return String(item || 'unknown');
+      const key = item.key || item.boundary || item.reason || item.action || item.status || 'unknown';
+      const detail = item.status || item.state || item.next_action || item.authority || '';
+      return detail && detail !== key ? String(key) + ':' + String(detail) : String(key);
+    }
+    function recoveryPostureItemSummary(items = []) {
+      return (Array.isArray(items) ? items : []).map(recoveryPostureItemLabel).join(', ') || 'none';
+    }
     function authorityTransferPosture(product = state.operationProduct || {}) {
       return product.authority_transfer_posture
         || product.operation_product_surface?.authority_transfer_posture
@@ -15275,6 +15284,7 @@ export function renderCloudflareCarrierConsole() {
     }
     function recoveryPostureContext(product = state.operationProduct || {}) {
       const posture = recoveryPosture(product) || {};
+      const boundaries = posture.recovery_boundaries || [];
       return [
         ['State', posture.state || 'unknown'],
         ['Site', posture.site_id || product.site?.site_id || product.operation?.site_id || el('siteId').value.trim() || 'none'],
@@ -15282,9 +15292,9 @@ export function renderCloudflareCarrierConsole() {
         ['Snapshot Reload', posture.snapshot_reload || 'unknown'],
         ['Evidence Replay', posture.evidence_replay || evidenceReplayStatus(product)?.state || 'unknown'],
         ['Evidence Sources', (posture.evidence_sources || []).join(', ') || 'none'],
-        ['Recoverable Boundaries', String(posture.recoverable_boundary_count ?? (posture.recovery_boundaries || []).filter((boundary) => boundary.status === 'recoverable').length)],
-        ['Recovery Boundaries', (posture.recovery_boundaries || []).filter((boundary) => boundary.status === 'recoverable').map((boundary) => boundary.key).join(', ') || 'none'],
-        ['Recovery Gaps', (posture.recovery_gaps || []).join(', ') || 'none'],
+        ['Recoverable Boundaries', String(posture.recoverable_boundary_count ?? boundaries.filter((boundary) => boundary.status === 'recoverable').length)],
+        ['Recovery Boundaries', recoveryPostureItemSummary(boundaries)],
+        ['Recovery Gaps', recoveryPostureItemSummary(posture.recovery_gaps || [])],
         ['Missing Sessions', (posture.missing_evidence_session_ids || []).join(', ') || 'none'],
         ['Sessions', String(posture.session_count ?? (product.sessions || []).length)],
         ['Evidence Sessions', String(posture.evidence_session_count ?? (product.carrier_evidence || []).length)],
