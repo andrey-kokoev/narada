@@ -151,6 +151,102 @@ assert.deepEqual(taskStatus.tool_effect_supported_tools, [
   'cloudflare_carrier_task_list',
 ]);
 
+const operationTaskDb = fakeD1TaskDatabase();
+const operationSiteDb = fakeD1SiteRegistryDatabase({
+  sites: [{
+    site_id: 'site_deploy_check_operation',
+    site_ref: 'site://deploy-check-operation',
+    display_name: 'Deploy Check Operation Site',
+    status: 'active',
+    created_at: '2026-06-10T00:00:00.000Z',
+    updated_at: '2026-06-10T00:00:00.000Z',
+    created_by_principal_id: 'admin',
+  }],
+  memberships: [{
+    site_id: 'site_deploy_check_operation',
+    principal_id: 'admin',
+    role: 'owner',
+    status: 'active',
+    created_at: '2026-06-10T00:00:00.000Z',
+    updated_at: '2026-06-10T00:00:00.000Z',
+  }],
+});
+const operationDurableEnv = {
+  CLOUDFLARE_CARRIER_ENABLE_TASK_TOOLS: '1',
+  CLOUDFLARE_CARRIER_TASK_DB: operationTaskDb,
+  CLOUDFLARE_SITE_REGISTRY_DB: operationSiteDb,
+};
+const operationEnv = {
+  CLOUDFLARE_CARRIER_SESSIONS: fakeDurableObjectNamespace(operationDurableEnv),
+  ADMIN_BEARER_TOKEN: 'deploy-check-admin-token',
+  ...operationDurableEnv,
+};
+const operationCreateResponse = await worker.fetch(jsonRequest({
+  operation: 'operation.create',
+  request_id: 'deploy_check_operation_create',
+  params: {
+    site_id: 'site_deploy_check_operation',
+    operation_id: 'operation_deploy_check',
+    display_name: 'Deploy Check Operation',
+    operation_kind: 'productization',
+    status: 'active',
+  },
+}, { path: '/api/carrier' }), operationEnv);
+assert.equal(operationCreateResponse.status, 200);
+const operationCreate = await operationCreateResponse.json();
+assert.equal(operationCreate.operation.operation_id, 'operation_deploy_check');
+assert.equal(operationCreate.operation.status, 'active');
+const operationSessionStartResponse = await worker.fetch(jsonRequest({
+  operation: 'session.start',
+  request_id: 'deploy_check_operation_session_start',
+  params: {
+    carrier_session_id: 'carrier_session_deploy_check_operation',
+    agent_id: 'narada.deploy.check.operation',
+    site_id: 'site_deploy_check_operation',
+    site_ref: 'site://deploy-check-operation',
+    site_root: 'cloudflare://site_deploy_check_operation',
+    operation_id: 'operation_deploy_check',
+  },
+}, { path: '/api/carrier' }), operationEnv);
+assert.equal(operationSessionStartResponse.status, 200);
+const operationTaskCreateResponse = await worker.fetch(jsonRequest({
+  operation: 'carrier.command.execute',
+  request_id: 'deploy_check_operation_task_create',
+  carrier_session_id: 'carrier_session_deploy_check_operation',
+  params: {
+    command: '/task',
+    args: ['create', 'operation', 'workspace', 'task'],
+  },
+}, { path: '/api/carrier' }), operationEnv);
+assert.equal(operationTaskCreateResponse.status, 200);
+const operationTaskCreate = await operationTaskCreateResponse.json();
+const operationTaskResult = operationTaskCreate.events.find((event) => event.event_kind === 'tool_result_received');
+assert.equal(operationTaskResult.payload.status, 'ok');
+const operationReadResponse = await worker.fetch(jsonRequest({
+  operation: 'operation.read',
+  request_id: 'deploy_check_operation_read',
+  params: { site_id: 'site_deploy_check_operation', operation_id: 'operation_deploy_check' },
+}, { path: '/api/carrier' }), operationEnv);
+assert.equal(operationReadResponse.status, 200);
+const operationRead = await operationReadResponse.json();
+assert.equal(operationRead.operation_product_surface.schema, 'narada.cloudflare_operation_product_surface.v1');
+assert.equal(operationRead.operation_product_surface.operation_id, 'operation_deploy_check');
+assert.equal(operationRead.operation_product_surface.session_count, 1);
+assert.equal(operationRead.operation_product_surface.task_count, 1);
+assert.equal(operationRead.operation_lifecycle_status.schema, 'narada.cloudflare_operation_lifecycle_status.v1');
+assert.equal(operationRead.operation_lifecycle_status.phase, 'inhabited');
+assert.equal(operationRead.cloudflare_persistence_posture.state, 'durable');
+assert.equal(operationRead.cloudflare_recovery_posture.state, 'reconstructable');
+assert.equal(operationRead.operation_workflow_route.command_action, 'review_continuity_packet');
+const operationListResponse = await worker.fetch(jsonRequest({
+  operation: 'operation.list',
+  request_id: 'deploy_check_operation_list',
+  params: { site_id: 'site_deploy_check_operation' },
+}, { path: '/api/carrier' }), operationEnv);
+assert.equal(operationListResponse.status, 200);
+const operationList = await operationListResponse.json();
+assert.deepEqual(operationList.operations.map((operation) => operation.operation_id), ['operation_deploy_check']);
+
 const startResponse = await worker.fetch(jsonRequest({
   operation: 'session.start',
   request_id: 'deploy_check_start',
@@ -574,6 +670,7 @@ process.stdout.write(`${JSON.stringify({
   console_surface_checked: true,
   microsoft_operator_identity_surface_checked: true,
   governed_site_membership_surface_checked: true,
+  operation_workspace_surface_checked: true,
   api_client_route_checked: true,
   task_tool_effect_boundary_checked: true,
   d1_task_state_persistence_checked: true,
@@ -638,6 +735,114 @@ function fakeKvBinding(values = {}) {
     },
     dump() {
       return { ...state };
+    },
+  };
+}
+
+
+function fakeD1SiteRegistryDatabase(initial = {}) {
+  const state = {
+    sites: clone(initial.sites ?? []),
+    memberships: clone(initial.memberships ?? []),
+    settings: clone(initial.settings ?? []),
+    operations: clone(initial.operations ?? []),
+    carrierSessions: clone(initial.carrierSessions ?? []),
+    authorityEvents: clone(initial.authorityEvents ?? []),
+  };
+  return {
+    prepare(sql) {
+      return fakeD1SiteRegistryStatement(state, String(sql));
+    },
+  };
+}
+
+function fakeD1SiteRegistryStatement(state, sql) {
+  let bound = [];
+  return {
+    bind(...values) {
+      bound = values;
+      return this;
+    },
+    async run() {
+      if (/^INSERT INTO cloudflare_sites/i.test(sql)) {
+        const [siteId, siteRef, displayName, status, createdAt, updatedAt, createdByPrincipalId] = bound;
+        if (!state.sites.some((site) => site.site_id === siteId)) {
+          state.sites.push({ site_id: siteId, site_ref: siteRef, display_name: displayName, status, created_at: createdAt, updated_at: updatedAt, created_by_principal_id: createdByPrincipalId });
+        }
+      } else if (/^INSERT INTO cloudflare_site_memberships/i.test(sql)) {
+        const [siteId, principalId, role, status, createdAt, updatedAt] = bound;
+        const existing = state.memberships.find((membership) => membership.site_id === siteId && membership.principal_id === principalId);
+        if (existing) Object.assign(existing, { role, status, updated_at: updatedAt });
+        else state.memberships.push({ site_id: siteId, principal_id: principalId, role, status, created_at: createdAt, updated_at: updatedAt });
+      } else if (/^INSERT INTO cloudflare_site_operations/i.test(sql)) {
+        const [operationId, siteId, displayName, operationKind, status, createdByPrincipalId, createdAt, updatedAt] = bound;
+        const existing = state.operations.find((operation) => operation.operation_id === operationId);
+        if (existing) Object.assign(existing, { display_name: displayName, operation_kind: operationKind, status, updated_at: updatedAt });
+        else state.operations.push({ operation_id: operationId, site_id: siteId, display_name: displayName, operation_kind: operationKind, status, created_by_principal_id: createdByPrincipalId, created_at: createdAt, updated_at: updatedAt });
+      } else if (/^\s*UPDATE cloudflare_site_operations/i.test(sql)) {
+        const [status, updatedAt, operationId] = bound;
+        const existing = state.operations.find((operation) => operation.operation_id === operationId);
+        if (existing) Object.assign(existing, { status, updated_at: updatedAt });
+      } else if (/^UPDATE cloudflare_site_carrier_sessions SET operation_id/i.test(sql)) {
+        const [operationId, updatedAt, carrierSessionId] = bound;
+        const existing = state.carrierSessions.find((binding) => binding.carrier_session_id === carrierSessionId);
+        if (existing) Object.assign(existing, { operation_id: operationId, updated_at: updatedAt });
+      } else if (/^INSERT INTO cloudflare_site_carrier_sessions/i.test(sql)) {
+        const hasOperationId = bound.length === 8;
+        const [carrierSessionId, siteId, maybeOperationId, maybeAgentId, maybeBoundByPrincipalId, maybeBindingStatus, maybeCreatedAt, maybeUpdatedAt] = bound;
+        const operationId = hasOperationId ? maybeOperationId : null;
+        const agentId = hasOperationId ? maybeAgentId : maybeOperationId;
+        const boundByPrincipalId = hasOperationId ? maybeBoundByPrincipalId : maybeAgentId;
+        const bindingStatus = hasOperationId ? maybeBindingStatus : maybeBoundByPrincipalId;
+        const createdAt = hasOperationId ? maybeCreatedAt : maybeBindingStatus;
+        const updatedAt = hasOperationId ? maybeUpdatedAt : maybeCreatedAt;
+        if (!state.carrierSessions.some((binding) => binding.carrier_session_id === carrierSessionId)) {
+          state.carrierSessions.push({ carrier_session_id: carrierSessionId, site_id: siteId, operation_id: operationId, agent_id: agentId, bound_by_principal_id: boundByPrincipalId, binding_status: bindingStatus, created_at: createdAt, updated_at: updatedAt });
+        }
+      } else if (/^INSERT INTO cloudflare_site_authority_events/i.test(sql)) {
+        const [eventId, eventKind, siteId, carrierSessionId, principalId, action, reason, evidenceJson, recordedAt] = bound;
+        state.authorityEvents.push({ event_id: eventId, event_kind: eventKind, site_id: siteId, carrier_session_id: carrierSessionId, principal_id: principalId, action, reason, evidence_json: evidenceJson, recorded_at: recordedAt });
+      }
+      return { success: true };
+    },
+    async first() {
+      if (/FROM cloudflare_sites WHERE site_id = \?/i.test(sql)) {
+        const [siteId] = bound;
+        return clone(state.sites.find((site) => site.site_id === siteId));
+      }
+      if (/FROM cloudflare_site_memberships WHERE site_id = \? AND principal_id = \?/i.test(sql)) {
+        const [siteId, principalId] = bound;
+        return clone(state.memberships.find((membership) => membership.site_id === siteId && membership.principal_id === principalId));
+      }
+      if (/FROM cloudflare_site_carrier_sessions WHERE carrier_session_id = \?/i.test(sql)) {
+        const [carrierSessionId] = bound;
+        return clone(state.carrierSessions.find((binding) => binding.carrier_session_id === carrierSessionId));
+      }
+      if (/FROM cloudflare_site_operations WHERE operation_id = \?/i.test(sql)) {
+        const [operationId] = bound;
+        return clone(state.operations.find((operation) => operation.operation_id === operationId));
+      }
+      return null;
+    },
+    async all() {
+      if (/FROM cloudflare_site_operations/i.test(sql)) {
+        const [siteId, limit] = bound;
+        return { results: state.operations.filter((operation) => operation.site_id === siteId).sort((left, right) => left.created_at.localeCompare(right.created_at)).slice(0, Number(limit)).map(clone) };
+      }
+      if (/FROM cloudflare_site_carrier_sessions/i.test(sql)) {
+        const [siteOrOperationId, limit] = bound;
+        const key = /WHERE operation_id = \?/i.test(sql) ? 'operation_id' : 'site_id';
+        return { results: state.carrierSessions.filter((binding) => binding[key] === siteOrOperationId).sort((left, right) => right.created_at.localeCompare(left.created_at)).slice(0, Number(limit)).map(clone) };
+      }
+      if (/FROM cloudflare_site_memberships\s+WHERE site_id = \?/i.test(sql)) {
+        const [siteId, limit] = bound;
+        return { results: state.memberships.filter((membership) => membership.site_id === siteId).sort((left, right) => left.created_at.localeCompare(right.created_at)).slice(0, Number(limit)).map(clone) };
+      }
+      if (/FROM cloudflare_site_authority_events/i.test(sql)) {
+        const [siteId, limit] = bound;
+        return { results: state.authorityEvents.filter((event) => event.site_id === siteId).sort((left, right) => right.recorded_at.localeCompare(left.recorded_at)).slice(0, Number(limit)).map(clone) };
+      }
+      return { results: [] };
     },
   };
 }
