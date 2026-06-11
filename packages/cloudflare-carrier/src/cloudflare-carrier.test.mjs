@@ -3374,6 +3374,11 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /load_or_create_membership/);
   assert.match(html, /Command State/);
   assert.match(html, /Command Action/);
+  assert.match(html, /Workflow State/);
+  assert.match(html, /Workflow Action/);
+  assert.match(html, /Workflow Reason/);
+  assert.match(html, /Action Command Kind/);
+  assert.match(html, /Action Command/);
   assert.match(html, /inspect_site_operations/);
   assert.match(html, /Site Focus Detail/);
   assert.match(html, /siteFocusDetail/);

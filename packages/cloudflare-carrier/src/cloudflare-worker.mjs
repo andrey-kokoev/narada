@@ -16112,6 +16112,7 @@ export function renderCloudflareCarrierConsole() {
       const sessionCount = scopeLoaded ? (state.operationProduct?.sessions || []).length : 0;
       const evidenceLoaded = operationEvidenceLoaded(operation);
       const path = Object.fromEntries(operationPathContext(operation, state.operationProduct || {}));
+      const workflowRoute = operationWorkflowRouteStage(state.operationProduct || {});
       const command = classifyCloudflareOperationCommandState({
         operation_id: operationId,
         is_active: Boolean(isActive),
@@ -16134,6 +16135,11 @@ export function renderCloudflareCarrierConsole() {
         ['Command State', command.command_state],
         ['Command Action', command.command_action],
         ['Next Action', command.next_action],
+        ['Workflow State', workflowRoute.command_state || 'unknown'],
+        ['Workflow Action', workflowRoute.next_action || workflowRoute.command_action || 'none'],
+        ['Workflow Reason', workflowRoute.reason || 'none'],
+        ['Action Command Kind', workflowRoute.action_command_kind || 'none'],
+        ['Action Command', workflowRoute.action_command || 'none'],
       ];
     }
     function applyOperationCommandAction() {
