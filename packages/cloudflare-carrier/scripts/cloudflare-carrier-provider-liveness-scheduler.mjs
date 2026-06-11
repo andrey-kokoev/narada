@@ -9,6 +9,7 @@ const DEFAULT_TASK_NAME = '\\Narada\\CloudflareProviderLivenessRefresh';
 const DEFAULT_INTERVAL_MINUTES = 2;
 const DEFAULT_EXECUTION_TIMEOUT_MS = 30000;
 const DEFAULT_HIDDEN_WRAPPER_RELATIVE_PATH = '.narada/site-continuity/cloudflare-provider-liveness-refresh.hidden.vbs';
+const LIVE_SCHEDULER_TASK_ACTIONS = new Set(['install', 'disable', 'pause', 'resume', 'uninstall']);
 const LIVE_SCHEDULER_READ_ACTIONS = new Set(['status']);
 const execFile = promisify(execFileCallback);
 
@@ -110,6 +111,12 @@ export async function runProviderLivenessSchedulerAction(
   { execFileImpl = execFile } = {},
 ) {
   const plan = buildProviderLivenessSchedulerPlan(options);
+  if (options.dryRun === false && LIVE_SCHEDULER_TASK_ACTIONS.has(plan.action)) {
+    return executeProviderLivenessSchedulerTaskPlan(plan, {
+      execFileImpl,
+      executionTimeoutMs: options.executionTimeoutMs,
+    });
+  }
   if (options.dryRun === false && LIVE_SCHEDULER_READ_ACTIONS.has(plan.action)) {
     return executeProviderLivenessSchedulerReadback(plan, {
       execFileImpl,
@@ -117,6 +124,67 @@ export async function runProviderLivenessSchedulerAction(
     });
   }
   return plan;
+}
+
+async function executeProviderLivenessSchedulerTaskPlan(plan, { execFileImpl = execFile, executionTimeoutMs = DEFAULT_EXECUTION_TIMEOUT_MS } = {}) {
+  const scheduledTaskCommand = plan?.scheduled_task_command ?? [];
+  const [command, ...args] = scheduledTaskCommand;
+  const action = plan?.action ?? 'unknown';
+  const base = {
+    ...plan,
+    dry_run: false,
+    host_scheduler_mutation_admission: 'bounded_schtasks_command_from_scheduler_plan',
+    embeds_credentials: false,
+  };
+  if (command !== 'schtasks' || !LIVE_SCHEDULER_TASK_ACTIONS.has(action)) {
+    return {
+      ...base,
+      plan_status: `live_${action}_refused`,
+      scheduler_task_execution: {
+        state: 'refused',
+        status: 'needs_attention',
+        reason: 'unsupported_scheduler_task_command',
+        command: command ?? null,
+        args,
+        embeds_credentials: false,
+      },
+    };
+  }
+  const timeout = normalizeExecutionTimeoutMs(executionTimeoutMs);
+  try {
+    const result = await execFileImpl(command, args, { cwd: plan.repo_root, timeout, windowsHide: true });
+    return {
+      ...base,
+      plan_status: `live_${action}_completed`,
+      scheduler_task_execution: {
+        state: 'completed',
+        status: 'ok',
+        command,
+        args,
+        stdout: result?.stdout ?? '',
+        stderr: result?.stderr ?? '',
+        timeout_ms: timeout,
+        embeds_credentials: false,
+      },
+    };
+  } catch (error) {
+    return {
+      ...base,
+      plan_status: `live_${action}_failed`,
+      scheduler_task_execution: {
+        state: 'failed',
+        status: 'needs_attention',
+        command,
+        args,
+        exit_code: error.code ?? null,
+        signal: error.signal ?? null,
+        stdout: error.stdout ?? '',
+        stderr: error.stderr ?? '',
+        timeout_ms: timeout,
+        embeds_credentials: false,
+      },
+    };
+  }
 }
 
 async function executeProviderLivenessSchedulerReadback(plan, { execFileImpl = execFile, executionTimeoutMs = DEFAULT_EXECUTION_TIMEOUT_MS } = {}) {

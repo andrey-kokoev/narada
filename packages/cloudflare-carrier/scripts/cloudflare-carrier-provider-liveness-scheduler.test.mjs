@@ -59,7 +59,7 @@ test('provider liveness scheduler install plan is bounded and secret-free', asyn
   }
 });
 
-test('provider liveness scheduler live install materializes hidden VBS wrapper only', async () => {
+test('provider liveness scheduler live install materializes hidden VBS wrapper and executes task plan', async () => {
   const root = await mkdtemp(join(tmpdir(), 'narada-provider-liveness-scheduler-live-'));
   const entrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-carrier-provider-liveness-refresh.mjs');
   const scheduledTaskEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-carrier-provider-liveness-scheduled-task.mjs');
@@ -67,9 +67,25 @@ test('provider liveness scheduler live install materializes hidden VBS wrapper o
   await writeFile(entrypoint, '#!/usr/bin/env node\n', 'utf8');
   await writeFile(scheduledTaskEntrypoint, '#!/usr/bin/env node\n', 'utf8');
   try {
-    const plan = buildProviderLivenessSchedulerPlan({ action: 'install', repoRoot: root, dryRun: false });
+    const plan = await runProviderLivenessSchedulerAction({ action: 'install', repoRoot: root, dryRun: false }, {
+      execFileImpl: async (command, args, options) => {
+        assert.equal(command, 'schtasks');
+        assert.deepEqual(args.slice(0, 6), ['/Create', '/TN', '\\Narada\\CloudflareProviderLivenessRefresh', '/SC', 'MINUTE', '/MO']);
+        assert.equal(args[6], '2');
+        assert.equal(args[7], '/TR');
+        assert.equal(args[8].startsWith('wscript.exe //B '), true);
+        assert.equal(args[9], '/F');
+        assert.equal(options.cwd, root);
+        assert.equal(options.windowsHide, true);
+        return { stdout: 'SUCCESS: The scheduled task was created.\n', stderr: '' };
+      },
+    });
 
-    assert.equal(plan.plan_status, 'live_install_requires_operator_execution');
+    assert.equal(plan.plan_status, 'live_install_completed');
+    assert.equal(plan.host_scheduler_mutation_admission, 'bounded_schtasks_command_from_scheduler_plan');
+    assert.equal(plan.scheduler_task_execution.status, 'ok');
+    assert.equal(plan.scheduler_task_execution.command, 'schtasks');
+    assert.equal(plan.scheduler_task_execution.args[0], '/Create');
     assert.equal(plan.filesystem_mutation_admission, 'hidden_wrapper_file_write_admitted');
     assert.equal(plan.task_command.startsWith('wscript.exe //B '), true);
     const wrapperContent = await import('node:fs/promises').then(({ readFile }) => readFile(plan.hidden_wrapper_path, 'utf8'));
