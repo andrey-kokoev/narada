@@ -14603,6 +14603,7 @@ export function renderCloudflareCarrierConsole() {
       if (action === 'publish_cloudflare_continuity_packet') { applyContinuityWorkflowNextStep(); return; }
       if (action === 'return_local_windows_continuity_packet') { applyContinuityWorkflowNextStep(); return; }
       if (action === 'monitor_operation_continuity') { renderLocalCloudContinuityBridge(product); return; }
+      if (action === 'refresh_site_continuity_loop') { focusContinuityLoopRefresh(product); return; }
       if (action === 'review_continuity_loop_report') { focusContinuityLoopReport(product); return; }
       if (action === 'review_carrier_evidence_replay') { focusRecoveryEvidence(product); return; }
       if (action === 'review_directive_delivery') { focusWebhookDelayDirectiveDelivery(); return; }
@@ -15434,6 +15435,10 @@ export function renderCloudflareCarrierConsole() {
         return;
       }
       el('continuityLoopEvidence').replaceChildren(...continuityLoopEvidenceContext(product).map(([label, value]) => evidenceField(label, value)));
+    }
+    function focusContinuityLoopRefresh(product = state.operationProduct || {}) {
+      renderLocalCloudContinuityBridge(product);
+      focusContinuityLoopReport(product);
     }
     function focusContinuityLoopReport(product = state.operationProduct || {}) {
       const report = (product.site_continuity_loop_reports || [])[0] || null;
