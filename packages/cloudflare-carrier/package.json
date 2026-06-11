@@ -15,6 +15,7 @@
     "d1:migrations:local": "wrangler d1 migrations apply narada-cloudflare-carrier-tasks --local --config wrangler.toml",
     "d1:migrations:remote": "wrangler d1 migrations apply narada-cloudflare-carrier-tasks --remote --config wrangler.toml",
     "smoke:live": "node scripts/cloudflare-carrier-live-smoke.mjs",
+    "authority-transfer:readiness-smoke:live": "node scripts/cloudflare-carrier-authority-transfer-readiness-live-smoke.mjs",
     "webhook-delay:shadow-smoke:live": "node scripts/cloudflare-carrier-webhook-delay-shadow-live-smoke.mjs",
     "webhook-delay:observation-primary-smoke:live": "node scripts/cloudflare-carrier-webhook-delay-observation-primary-live-smoke.mjs",
     "webhook-delay:remote-source-smoke:live": "node scripts/cloudflare-carrier-webhook-delay-remote-source-live-smoke.mjs",
