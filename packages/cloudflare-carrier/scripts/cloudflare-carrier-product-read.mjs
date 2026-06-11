@@ -262,7 +262,7 @@ export function formatProductSurfaceText(result) {
       lines.push(`Continuation: needed=${summary.needs_continuation_count ?? 0} next=${summary.next_continuation_operation_id ?? 'none'} action=${summary.continuation_next_action ?? 'monitor_operations'}`);
       if (summary.next_continuation_operation_id) {
         lines.push(`Continuation Read: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.next_continuation_operation_id} --operator-session-file <operator-session-file>`);
-        lines.push(`Continuation Start Params: operation=session.start site_id=${summary.site_id ?? '<site-id>'} operation_id=${summary.next_continuation_operation_id} carrier_session_id=<new-carrier-session-id> agent_id=<agent-id>`);
+        lines.push(`Continuation Resume: pnpm --filter @narada2/cloudflare-carrier product:operation:continuation:resume:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.next_continuation_operation_id} --agent-id <agent-id> --operator-session-file <operator-session-file>`);
       }
     }
     lines.push(`Next: status=${summary.next_status ?? 'unknown'} action=${summary.next_action ?? 'none'} reason=${summary.next_reason ?? 'none'}`);

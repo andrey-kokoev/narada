@@ -297,10 +297,11 @@ pnpm --filter @narada2/cloudflare-carrier product:site:list:text -- --url <worke
 pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
 pnpm --filter @narada2/cloudflare-carrier product:operation:list:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
 pnpm --filter @narada2/cloudflare-carrier product:operation:continuation:next:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada2/cloudflare-carrier product:operation:continuation:resume:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --agent-id <agent-id> --operator-session-file cloudflare-operator-session.json
 pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
 ```
 
-The text output names the operation, worker URL, auth source, selected site or operation, health, next action, continuity/reconciliation posture, durability posture, operation-list lifecycle status counts, operation-read lifecycle status transitions, and evidence counts while preserving the same credential redaction rule as the JSON envelope. The continuation alias filters the operation list for `needs_continuation`, prints the selected operation read command, and prints the `session.start` parameters needed to resume work against that operation.
+The text output names the operation, worker URL, auth source, selected site or operation, health, next action, continuity/reconciliation posture, durability posture, operation-list lifecycle status counts, operation-read lifecycle status transitions, and evidence counts while preserving the same credential redaction rule as the JSON envelope. The continuation selector filters the operation list for `needs_continuation`, prints the selected operation read command, and prints the resume command. The resume command transitions the selected operation to `active` unless `--skip-activate` is passed, then starts a carrier session bound to that operation.
 
 ## Live Smoke
 
