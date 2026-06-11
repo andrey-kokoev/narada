@@ -1,10 +1,11 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 
-const DEFAULT_TASK_NAME = 'Narada Cloudflare Provider Liveness Refresh';
+const DEFAULT_TASK_NAME = '\\Narada\\CloudflareProviderLivenessRefresh';
 const DEFAULT_INTERVAL_MINUTES = 2;
+const DEFAULT_HIDDEN_WRAPPER_RELATIVE_PATH = '.narada/site-continuity/cloudflare-provider-liveness-refresh.hidden.vbs';
 
 export function buildProviderLivenessSchedulerPlan({
   action = 'status',
@@ -15,6 +16,7 @@ export function buildProviderLivenessSchedulerPlan({
   scheduledTaskEntrypoint = 'packages/cloudflare-carrier/scripts/cloudflare-carrier-provider-liveness-scheduled-task.mjs',
   localRoot = null,
   nodeCommand = process.env.NARADA_NODE_COMMAND ?? 'node',
+  hiddenWrapperPath = null,
   dryRun = true,
 } = {}) {
   const root = resolve(repoRoot);
@@ -22,7 +24,10 @@ export function buildProviderLivenessSchedulerPlan({
   const taskEntryPoint = resolve(root, scheduledTaskEntrypoint);
   const effectiveLocalRoot = resolvePath(root, localRoot ?? root);
   const interval = normalizeIntervalMinutes(intervalMinutes);
-  const taskCommand = buildTaskCommand({ nodeCommand, entrypoint: taskEntryPoint, localRoot: effectiveLocalRoot });
+  const directTaskCommand = buildTaskCommand({ nodeCommand, entrypoint: taskEntryPoint, localRoot: effectiveLocalRoot });
+  const wrapperPath = resolvePath(root, hiddenWrapperPath ?? DEFAULT_HIDDEN_WRAPPER_RELATIVE_PATH);
+  const hiddenWrapperContent = buildHiddenVbsWrapperContent(directTaskCommand);
+  const taskCommand = buildHiddenTaskCommand({ wrapperPath });
   const status = readLocalSchedulerStatus({ root, refreshEntryPoint, taskEntryPoint, localRoot: effectiveLocalRoot });
 
   const base = {
@@ -36,17 +41,22 @@ export function buildProviderLivenessSchedulerPlan({
     refresh_entrypoint: refreshEntryPoint,
     scheduled_task_entrypoint: taskEntryPoint,
     local_root: effectiveLocalRoot,
+    hidden_wrapper_path: wrapperPath,
+    hidden_wrapper_kind: 'windows_wscript_vbs_hidden',
+    hidden_wrapper_content: hiddenWrapperContent,
     credential_posture: 'external_env_file_or_process_environment_only',
     embeds_credentials: false,
     cloudflare_mutation: 'provider_liveness_heartbeat_only',
-    filesystem_mutation_admission: 'not_admitted',
+    filesystem_mutation_admission: action === 'install' && !dryRun ? 'hidden_wrapper_file_write_admitted' : 'not_admitted',
     repository_publication_admission: 'not_admitted',
     task_command: taskCommand,
+    direct_task_command: directTaskCommand,
     status,
   };
 
   switch (action) {
     case 'install':
+      if (!dryRun) writeHiddenWrapper({ wrapperPath, content: hiddenWrapperContent });
       return {
         ...base,
         plan_status: dryRun ? 'dry_run_install_plan' : 'live_install_requires_operator_execution',
@@ -117,6 +127,27 @@ function buildTaskCommand({ nodeCommand, entrypoint, localRoot }) {
   ].join(' ');
 }
 
+function buildHiddenTaskCommand({ wrapperPath }) {
+  return [
+    'wscript.exe',
+    '//B',
+    quote(wrapperPath),
+  ].join(' ');
+}
+
+export function buildHiddenVbsWrapperContent(command) {
+  return [
+    'Set shell = CreateObject("WScript.Shell")',
+    `shell.Run ${vbsString(command)}, 0, False`,
+    '',
+  ].join('\r\n');
+}
+
+function writeHiddenWrapper({ wrapperPath, content }) {
+  mkdirSync(dirname(wrapperPath), { recursive: true });
+  writeFileSync(wrapperPath, content, 'utf8');
+}
+
 function readEnvKeys(envPath) {
   const keys = [];
   const content = readFileSync(envPath, 'utf8');
@@ -143,6 +174,10 @@ function quote(value) {
   return `"${String(value).replaceAll('"', '\\"')}"`;
 }
 
+function vbsString(value) {
+  return `"${String(value).replaceAll('"', '""')}"`;
+}
+
 function parseArgs(argv) {
   const args = { action: 'status', dryRun: true };
   for (let index = 0; index < argv.length; index += 1) {
@@ -157,6 +192,7 @@ function parseArgs(argv) {
     else if (arg === '--scheduled-task-entrypoint') args.scheduledTaskEntrypoint = argv[++index];
     else if (arg === '--local-root') args.localRoot = argv[++index];
     else if (arg === '--node-command') args.nodeCommand = argv[++index];
+    else if (arg === '--hidden-wrapper-path') args.hiddenWrapperPath = argv[++index];
     else throw new Error(`unknown_argument:${arg}`);
   }
   return args;
