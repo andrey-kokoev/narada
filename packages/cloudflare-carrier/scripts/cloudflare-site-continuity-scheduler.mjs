@@ -366,6 +366,59 @@ function summarizeSiteContinuityHealth(plan, schedulerTaskReadback = plan?.sched
   };
 }
 
+export function formatSiteContinuitySchedulerResultForText(result) {
+  const lines = ['Site Continuity'];
+  const continuityHealth = result?.continuity_health ?? result?.last_scheduled_health?.continuity_health ?? null;
+  const configuredSites = result?.configured_sites ?? null;
+  const localSyncArtifacts = result?.local_sync_artifacts ?? null;
+  const localInboundPackets = result?.local_inbound_packets ?? null;
+  const lastScheduledHealth = result?.last_scheduled_health ?? null;
+  const productPosture = result?.cloudflare_product_posture ?? lastScheduledHealth ?? null;
+  const operatorAction = result?.operator_next_action ?? lastScheduledHealth?.operator_next_action ?? null;
+  const operatorTarget = result?.operator_next_target_site_id ?? lastScheduledHealth?.operator_next_target_site_id ?? null;
+  const operatorReason = result?.operator_next_reason ?? lastScheduledHealth?.operator_next_reason ?? null;
+  const localPostureStatuses = [localSyncArtifacts?.status, localInboundPackets?.status].filter(Boolean);
+  const derivedLocalStatus = localPostureStatuses.length === 0
+    ? null
+    : localPostureStatuses.every((statusValue) => statusValue === 'synced') ? 'synced' : 'needs_attention';
+  const resultStatus = typeof result?.status === 'string' ? result.status : null;
+  const status = continuityHealth?.status ?? derivedLocalStatus ?? resultStatus ?? result?.plan_status ?? 'unknown';
+
+  lines.push(`Status: ${status}`);
+  if (result?.action) lines.push(`Action: ${result.action}`);
+  if (result?.plan_status) lines.push(`Plan: ${result.plan_status}`);
+  if (configuredSites) lines.push(`Sites: ${configuredSites.site_count ?? 0} (${configuredSites.selection_source ?? 'unknown'})`);
+  if (continuityHealth) {
+    lines.push(`Bindings: ${continuityHealth.binding_count ?? 0} (${continuityHealth.binding_registry_state ?? 'unknown'})`);
+    lines.push(`Local Sync: ${continuityHealth.local_sync_status ?? 'unknown'} (${continuityHealth.local_sync_artifact_count ?? 0})`);
+    lines.push(`Local Inbound: ${continuityHealth.local_inbound_status ?? 'unknown'} (${continuityHealth.local_inbound_artifact_count ?? 0})`);
+    lines.push(`Scheduler: ${continuityHealth.scheduler_readback_status ?? 'unknown'} last=${continuityHealth.scheduler_last_result ?? 'unknown'}`);
+    if (continuityHealth.attention_reasons?.length) lines.push(`Attention: ${continuityHealth.attention_reasons.join(', ')}`);
+  } else {
+    if (localSyncArtifacts) lines.push(`Local Sync: ${localSyncArtifacts.status ?? 'unknown'} (${localSyncArtifacts.artifact_count ?? 0})`);
+    if (localInboundPackets) lines.push(`Local Inbound: ${localInboundPackets.status ?? 'unknown'} (${localInboundPackets.artifact_count ?? 0})`);
+  }
+  if (productPosture?.cloudflare_product_posture_status || productPosture?.cloudflare_product_posture_state) {
+    lines.push(`Cloudflare Product: ${productPosture.cloudflare_product_posture_state ?? 'unknown'}/${productPosture.cloudflare_product_posture_status ?? 'unknown'} next=${productPosture.cloudflare_product_next_site_id ?? 'none'} action=${productPosture.cloudflare_product_next_action ?? 'none'}`);
+  } else if (result?.cloudflare_product_posture) {
+    lines.push(`Cloudflare Product: ${result.cloudflare_product_posture.state ?? 'unknown'}/${result.cloudflare_product_posture.status ?? 'unknown'} next=${result.cloudflare_product_posture.summary?.next_site_id ?? 'none'} action=${result.cloudflare_product_posture.summary?.next_action ?? 'none'}`);
+  }
+  if (operatorAction) lines.push(`Operator Next: ${operatorAction} target=${operatorTarget ?? 'none'} reason=${operatorReason ?? 'none'}`);
+
+  const syncBySite = new Map((localSyncArtifacts?.configured_site_sync_statuses ?? []).map((site) => [site.site_id, site]));
+  const inboundBySite = new Map((localInboundPackets?.configured_site_inbound_statuses ?? []).map((site) => [site.site_id, site]));
+  const siteIds = [...new Set([...syncBySite.keys(), ...inboundBySite.keys()])].sort();
+  if (siteIds.length > 0) {
+    lines.push('Site Details:');
+    for (const siteId of siteIds) {
+      const sync = syncBySite.get(siteId);
+      const inbound = inboundBySite.get(siteId);
+      lines.push(`- ${siteId}: sync=${sync?.status ?? 'unknown'} inbound=${inbound?.status ?? 'unknown'}`);
+    }
+  }
+  return `${lines.join('\n')}\n`;
+}
+
 function summarizeSchedulerTaskReadback({ state, command, args, stdout, stderr, timeout_ms: timeoutMs, parsed, expectedIntervalMinutes, expectedTaskCommand, expectedTaskEntrypoint }) {
   const repeatEvery = parsed['Repeat: Every'] ?? null;
   const taskToRun = parsed['Task To Run'] ?? null;
@@ -2176,6 +2229,7 @@ function parseArgs(argv) {
     else if (arg === '--projection-token-file') args.projectionTokenFile = argv[++index];
     else if (arg === '--env') args.envPath = argv[++index];
     else if (arg === '--node-command') args.nodeCommand = argv[++index];
+    else if (arg === '--format') args.format = argv[++index];
     else throw new Error(`unknown_argument:${arg}`);
   }
   return args;
@@ -2201,10 +2255,15 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   loadLocalEnvFile(resolve(repoRoot, '.env'));
   loadLocalEnvFile(resolve(repoRoot, '.narada/site-continuity/cloudflare-continuity.env'));
   const result = await runSiteContinuitySchedulerActionWithOptionalRefresh({ ...args, repoRoot });
+  const outputFormat = args.format ?? 'json';
+  if (!['json', 'text'].includes(outputFormat)) throw new Error(`unsupported_format:${outputFormat}`);
   if (result.site_registry_projection_refresh?.status && result.site_registry_projection_refresh.status !== 'ok') process.exitCode = 1;
   if (result.scheduler_task_execution?.status && result.scheduler_task_execution.status !== 'ok') process.exitCode = 1;
   if (result.scheduler_task_readback?.status && result.scheduler_task_readback.status !== 'ok') process.exitCode = 1;
   if (result.continuity_health?.status && result.continuity_health.status !== 'ok') process.exitCode = 1;
   if (result.schema === 'narada.cloudflare_carrier.site_continuity_reconciliation_execution.v1' && !['completed', 'dry_run'].includes(result.status)) process.exitCode = 1;
-  console.log(JSON.stringify(result, null, 2));
+  const output = outputFormat === 'text'
+    ? formatSiteContinuitySchedulerResultForText(result)
+    : `${JSON.stringify(result, null, 2)}\n`;
+  process.stdout.write(output);
 }

@@ -11,6 +11,7 @@ import {
   buildSiteContinuityReconciliationPlan,
   buildSiteContinuitySchedulerPlan,
   buildSiteContinuitySchedulerPlanWithOptionalRefresh,
+  formatSiteContinuitySchedulerResultForText,
   readCloudflareOperationPostureForHealthSnapshot,
   readCloudflareProductPostureForHealthSnapshot,
   readLastReconciliationExecutionArtifact,
@@ -446,6 +447,52 @@ test('site continuity scheduler reads local inbound packet inventory per configu
       ['site_missing', 'needs_attention', 'configured_site_inbound_packet_missing'],
       ['site_synced', 'synced', 'matching_inbound_packet_observed'],
     ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('site continuity scheduler text summary surfaces local and inbound continuity posture', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-text-summary-'));
+  const artifactDirectory = join(root, '.narada/site-continuity');
+  const outputPath = join(artifactDirectory, 'site_synced-cloudflare-sync.json');
+  await mkdir(artifactDirectory, { recursive: true });
+  await writeFile(outputPath, `${JSON.stringify({
+    schema: 'narada.site_continuity_cloudflare_sync_once.v1',
+    status: 'ok',
+    site_id: 'site_synced',
+    continuity_loop_report_recorded: true,
+    continuity_loop_report: {
+      status: 'ok',
+      site_id: 'site_synced',
+      generated_at: '2026-06-11T10:30:00.000Z',
+      cloudflare_push: {
+        status: 'imported',
+        pushed_packet_id: 'packet-synced-local',
+        returned_packet_id: 'packet-synced-cloudflare',
+      },
+    },
+  }, null, 2)}\n`, 'utf8');
+  await utimes(outputPath, new Date('2026-06-11T10:30:00.000Z'), new Date('2026-06-11T10:30:00.000Z'));
+  await writeInboundPacketArtifact(artifactDirectory, 'site_synced', { generatedAt: '2026-06-11T10:30:00.000Z' });
+  try {
+    const plan = buildSiteContinuitySchedulerPlan({
+      action: 'status-all',
+      repoRoot: root,
+      artifactDirectory,
+      configuredSites: 'site_synced,site_missing',
+      now: () => '2026-06-11T10:31:00.000Z',
+    });
+    const text = formatSiteContinuitySchedulerResultForText(plan);
+
+    assert.match(text, /^Site Continuity\n/);
+    assert.match(text, /Status: needs_attention/);
+    assert.doesNotMatch(text, /\[object Object\]/);
+    assert.match(text, /Sites: 2 \(explicit_sites\)/);
+    assert.match(text, /Local Sync: needs_attention \(1\)/);
+    assert.match(text, /Local Inbound: needs_attention \(1\)/);
+    assert.match(text, /- site_missing: sync=needs_attention inbound=needs_attention/);
+    assert.match(text, /- site_synced: sync=synced inbound=synced/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -1937,6 +1984,15 @@ test('site continuity scheduler CLI emits status without Cloudflare access', asy
   assert.equal(body.scheduled_task_command[0], 'schtasks');
   assert.equal(body.scheduled_task_command[1], '/Query');
   assert.equal(body.scheduled_task_command.includes('/V'), true);
+});
+
+test('site continuity scheduler CLI emits operator text status when requested', async () => {
+  const result = await execFile(process.execPath, [SCRIPT_PATH, '--action', 'status', '--format', 'text'], { timeout: 30000, windowsHide: true });
+
+  assert.match(result.stdout, /^Site Continuity\n/);
+  assert.match(result.stdout, /Action: status/);
+  assert.match(result.stdout, /Plan: status_only_no_cloudflare_access/);
+  assert.doesNotMatch(result.stdout, /^\{/);
 });
 
 test('site continuity scheduler CLI loads local continuity env for operator health readback', async () => {
