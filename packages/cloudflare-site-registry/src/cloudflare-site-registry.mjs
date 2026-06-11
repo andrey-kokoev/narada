@@ -5,7 +5,7 @@ export const CLOUDFLARE_SITE_REGISTRY_LOCAL_PROJECTION_SCHEMA = 'narada.cloudfla
 const SITE_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{1,127}$/;
 const SITE_ROLES = new Set(['owner', 'maintainer', 'operator', 'viewer']);
 const BINDING_ROLES = new Set(['owner', 'maintainer', 'operator']);
-const OPERATION_STATUSES = new Set(['active', 'inactive', 'closed']);
+const OPERATION_STATUSES = new Set(['active', 'inactive', 'needs_continuation', 'closed']);
 const OPERATION_STATUS_ALIASES = new Map([
   ['archived', 'closed'],
   ['paused', 'inactive'],

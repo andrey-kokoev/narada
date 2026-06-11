@@ -3003,6 +3003,7 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /operationLifecycleActionRow/);
   assert.match(html, /operationLifecyclePause/);
   assert.match(html, /operationLifecycleResume/);
+  assert.match(html, /operationLifecycleNeedsContinuation/);
   assert.match(html, /operationLifecycleArchive/);
   assert.match(html, /operation_status_history/);
   assert.match(html, /operationStatusHistory/);

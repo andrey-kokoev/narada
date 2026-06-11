@@ -17166,6 +17166,7 @@ export function renderCloudflareCarrierConsole() {
       return focusActionRow(
         focusActionButton('operationLifecycleResume', 'Resume', () => run(() => putFocusedOperationStatus('active', 'operation_resumed_by_operator'))),
         focusActionButton('operationLifecyclePause', 'Pause', () => run(() => putFocusedOperationStatus('inactive', 'operation_paused_by_operator'))),
+        focusActionButton('operationLifecycleNeedsContinuation', 'Needs Continuation', () => run(() => putFocusedOperationStatus('needs_continuation', 'operation_needs_continuation_by_operator'))),
         focusActionButton('operationLifecycleArchive', 'Archive', () => run(() => putFocusedOperationStatus('closed', 'operation_closed_by_operator'))),
       );
     }

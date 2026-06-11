@@ -44,6 +44,18 @@ test('parseOperationStatusPutArgs normalizes paused compatibility alias to inact
   assert.equal(parsed.params.status, 'inactive');
 });
 
+test('parseOperationStatusPutArgs admits needs_continuation operation lifecycle state', () => {
+  const parsed = parseOperationStatusPutArgs([
+    '--url', 'https://carrier.example.test/',
+    '--token', 'secret-token',
+    '--site', 'site_alpha',
+    '--operation-id', 'operation_alpha',
+    '--status', 'needs_continuation',
+  ], {}, () => 123);
+
+  assert.equal(parsed.params.status, 'needs_continuation');
+});
+
 test('parseOperationStatusPutArgs refuses missing authority and unsupported status', () => {
   assert.throws(
     () => parseOperationStatusPutArgs(['--token', 'secret-token', '--site', 'site_alpha', '--operation-id', 'operation_alpha', '--status', 'inactive'], {}),

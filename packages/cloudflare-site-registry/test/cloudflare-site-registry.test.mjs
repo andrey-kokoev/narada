@@ -207,6 +207,22 @@ test('updates operation status behind owner or maintainer authority', async () =
   assert.equal(resumedFromPausedAlias.status, 'inactive');
   assert.equal(resumedFromPausedAlias.operation.status, 'inactive');
 
+  const needsContinuation = await registry.handle({
+    operation: 'operation.status.put',
+    principal: owner,
+    params: {
+      site_id: 'site_operation_status',
+      operation_id: 'operation_status_control',
+      status: 'needs_continuation',
+      reason: 'operation_needs_continuation_by_operator',
+      request_id: 'req_operation_status_needs_continuation',
+    },
+  });
+  assert.equal(needsContinuation.ok, true);
+  assert.equal(needsContinuation.status, 'needs_continuation');
+  assert.equal(needsContinuation.reason, 'operation_needs_continuation_by_operator');
+  assert.equal(needsContinuation.operation.status, 'needs_continuation');
+
   const closed = await registry.handle({
     operation: 'operation.status.put',
     principal: owner,

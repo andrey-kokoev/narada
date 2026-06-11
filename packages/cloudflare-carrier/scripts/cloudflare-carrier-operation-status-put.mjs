@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { authHeaders, resolveAuth } from './cloudflare-carrier-product-read.mjs';
 
 const STATUS_ALIASES = new Map([['paused', 'inactive']]);
-const SUPPORTED_STATUSES = new Set(['active', 'inactive', 'closed']);
+const SUPPORTED_STATUSES = new Set(['active', 'inactive', 'needs_continuation', 'closed']);
 
 export function parseOperationStatusPutArgs(argv = [], env = process.env, now = () => Date.now()) {
   const args = [...argv];
