@@ -3647,6 +3647,9 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /site_continuity_loop_report/);
   assert.match(html, /review_continuity_loop_report/);
   assert.match(html, /run_site_continuity_loop/);
+  assert.match(html, /site_continuity_reconciliation_execution_reviewed/);
+  assert.match(html, /Focus Reconciliation Execution/);
+  assert.match(html, /focusContinuityReconciliationExecution/);
   assert.match(html, /Refresh Command/);
   assert.match(html, /site:continuity:loop/);
   assert.match(html, /sync-cloudflare/);

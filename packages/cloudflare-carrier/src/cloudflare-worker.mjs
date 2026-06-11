@@ -15644,6 +15644,11 @@ export function renderCloudflareCarrierConsole() {
       const continuityPacketCount = Number(product.site_continuity_status?.packet_count ?? (product.site_continuity_packets || []).length ?? 0);
       const continuityLoopReportCount = Number(product.site_continuity_loop_status?.report_count ?? product.operation_product_surface?.continuity_loop_report_count ?? (product.site_continuity_loop_reports || []).length ?? 0);
       const continuityLoopReport = (product.site_continuity_loop_reports || [])[0] || null;
+      const continuityReconciliationStatus = product.site_continuity_reconciliation_execution_status || product.operation_product_surface?.continuity_reconciliation_execution_status || {};
+      const continuityReconciliationExecution = (product.site_continuity_reconciliation_executions || [])[0] || null;
+      const continuityReconciliationExecutionCount = Number(continuityReconciliationStatus.execution_count ?? (product.site_continuity_reconciliation_executions || []).length ?? 0);
+      const continuityReconciliationExecutionRef = continuityReconciliationStatus.latest_execution_id || continuityReconciliationExecution?.execution_id || '';
+      const continuityReconciliationExecutionObserved = continuityReconciliationExecutionCount > 0 || Boolean(continuityReconciliationExecutionRef);
       const localCloudBridge = product.local_cloud_continuity_bridge || product.operation_product_surface?.local_cloud_continuity_bridge || {};
       const continuityLoopCommand = siteId
         ? (localCloudBridge.loop_command || 'pnpm site:continuity:loop -- sync-cloudflare --site ' + siteId + ' --url <worker-url> --token-file <token-file>')
@@ -15764,6 +15769,16 @@ export function renderCloudflareCarrierConsole() {
           action: () => continuityLoopReport ? focusContinuityLoopReport(product) : run(refreshSiteProduct),
         },
         {
+          key: 'site_continuity_reconciliation_execution_reviewed',
+          label: 'Reconciliation Execution',
+          status: continuityReconciliationExecutionObserved ? 'complete' : 'needs_attention',
+          detail: continuityReconciliationExecutionObserved
+            ? [String(continuityReconciliationExecutionCount) + ' execution(s) observed', continuityReconciliationStatus.latest_status || continuityReconciliationExecution?.status || 'status unknown'].join(' / ')
+            : 'read site continuity reconciliation execution evidence',
+          action_label: continuityReconciliationExecutionRef ? 'Focus Reconciliation Execution' : 'Read Reconciliation Evidence',
+          action: () => continuityReconciliationExecutionRef ? focusContinuityReconciliationExecution(product) : run(refreshSiteProduct),
+        },
+        {
           key: 'evidence_focus_set',
           label: 'Evidence Focus',
           status: state.evidenceFocus ? 'complete' : 'needs_attention',
@@ -15867,6 +15882,20 @@ export function renderCloudflareCarrierConsole() {
       const report = (product.site_continuity_loop_reports || [])[0] || null;
       if (report) selectContinuity({ kind: 'loop_report', ...report });
       renderContinuityLoopEvidence(product);
+    }
+    function focusContinuityReconciliationExecution(product = state.operationProduct || {}) {
+      const status = product.site_continuity_reconciliation_execution_status || product.operation_product_surface?.continuity_reconciliation_execution_status || {};
+      const execution = (product.site_continuity_reconciliation_executions || [])[0] || null;
+      const executionRef = status.latest_execution_id || execution?.execution_id || '';
+      if (!executionRef) { run(refreshSiteProduct); return; }
+      focusOperationReviewFromRoute({
+        focus_kind: 'site_continuity_reconciliation_execution',
+        focus_ref: executionRef,
+        next_action: 'review_site_continuity_reconciliation_execution',
+        command_action: 'review_site_continuity_reconciliation_execution',
+        target: executionRef,
+        reason: status.health === 'attention' ? 'site_continuity_reconciliation_execution_needs_review' : 'site_continuity_reconciliation_execution_observed',
+      }, product);
     }
     function refreshEventKindFilter() {
       const select = el('eventKindFilter');
