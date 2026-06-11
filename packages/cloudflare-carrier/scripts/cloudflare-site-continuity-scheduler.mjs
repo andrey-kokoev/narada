@@ -1,7 +1,9 @@
 #!/usr/bin/env node
+import { execFile as execFileCallback } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { readCloudflareSiteRegistryLocalProjection } from '@narada2/cloudflare-site-registry';
 import {
   materializeCloudflareSiteRegistryProjection,
@@ -11,6 +13,8 @@ import {
 const DEFAULT_TASK_NAME = 'Narada Cloudflare Site Continuity Sync';
 const DEFAULT_INTERVAL_MINUTES = 5;
 const DEFAULT_MAX_SYNC_ARTIFACT_AGE_MINUTES = 15;
+const DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS = 120000;
+const execFile = promisify(execFileCallback);
 
 export function buildSiteContinuitySchedulerPlan({
   action = 'status',
@@ -178,6 +182,113 @@ export function buildSiteContinuitySchedulerPlan({
     default:
       throw new Error(`unknown_site_continuity_scheduler_action:${action}`);
   }
+}
+
+export async function runSiteContinuitySchedulerActionWithOptionalRefresh(
+  options = {},
+  { env = process.env, materializeSiteRegistryProjection = materializeCloudflareSiteRegistryProjection, execFileImpl = execFile } = {},
+) {
+  const action = options.action ?? 'status';
+  if (action !== 'reconcile-execute') {
+    return buildSiteContinuitySchedulerPlanWithOptionalRefresh(options, { env, materializeSiteRegistryProjection });
+  }
+  const planningOptions = { ...options, action: 'reconcile' };
+  const plan = await buildSiteContinuitySchedulerPlanWithOptionalRefresh(planningOptions, { env, materializeSiteRegistryProjection });
+  return executeSiteContinuityReconciliationPlan(plan, {
+    dryRun: options.dryRun !== false,
+    executionTimeoutMs: options.executionTimeoutMs,
+    execFileImpl,
+  });
+}
+
+export async function executeSiteContinuityReconciliationPlan(
+  plan,
+  { dryRun = true, executionTimeoutMs = DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS, execFileImpl = execFile } = {},
+) {
+  const reconciliationPlan = plan?.reconciliation_plan ?? null;
+  const selectedSites = reconciliationPlan?.selected_sites ?? [];
+  const base = {
+    schema: 'narada.cloudflare_carrier.site_continuity_reconciliation_execution.v1',
+    status: 'refused',
+    dry_run: dryRun,
+    plan_status: plan?.plan_status ?? null,
+    reconciliation_plan_status: reconciliationPlan?.status ?? null,
+    selected_site_count: selectedSites.length,
+    cloudflare_mutation_admission: dryRun ? 'not_executed_dry_run' : 'pending_guarded_sync_once_execution',
+    filesystem_mutation_admission: dryRun ? 'not_executed_dry_run' : 'pending_guarded_sync_once_artifact_write',
+    embeds_credentials: false,
+    plan,
+  };
+  if (!reconciliationPlan) {
+    return { ...base, refusal_reason: 'reconciliation_plan_required', results: [] };
+  }
+  if (dryRun) {
+    return { ...base, status: 'dry_run', refusal_reason: 'reconcile_execute_requires_live_flag', results: [] };
+  }
+  if (reconciliationPlan.status !== 'ready') {
+    return {
+      ...base,
+      status: 'refused',
+      refusal_reason: 'reconciliation_plan_not_ready',
+      command_blockers: selectedSites.flatMap((site) => site.command_blockers ?? []),
+      results: selectedSites.map((site) => ({
+        site_id: site.site_id,
+        status: 'refused',
+        reason: site.command_status === 'ready' ? 'reconciliation_plan_not_ready' : 'site_sync_command_not_ready',
+        command_status: site.command_status,
+        command_blockers: site.command_blockers ?? [],
+      })),
+    };
+  }
+  const timeout = normalizeExecutionTimeoutMs(executionTimeoutMs);
+  const results = [];
+  for (const site of selectedSites) {
+    const args = [
+      plan.sync_entrypoint,
+      'sync-once',
+      '--site',
+      site.site_id,
+      '--packet',
+      plan.packet_path,
+      '--out',
+      site.output_path,
+    ];
+    try {
+      await execFileImpl(process.execPath, args, { cwd: plan.repo_root, timeout, windowsHide: true });
+      results.push({
+        site_id: site.site_id,
+        status: 'completed',
+        reason: 'sync_once_completed',
+        argv: [process.execPath, ...args],
+        output_path: site.output_path,
+        output_summary: readLastSyncArtifact(site.output_path),
+      });
+    } catch (error) {
+      results.push({
+        site_id: site.site_id,
+        status: 'failed',
+        reason: 'sync_once_failed',
+        argv: [process.execPath, ...args],
+        output_path: site.output_path,
+        exit_code: error.code ?? null,
+        signal: error.signal ?? null,
+        output_summary: readLastSyncArtifact(site.output_path),
+      });
+    }
+  }
+  const completedCount = results.filter((result) => result.status === 'completed').length;
+  const failedCount = results.filter((result) => result.status === 'failed').length;
+  return {
+    ...base,
+    status: failedCount === 0 ? 'completed' : completedCount > 0 ? 'partial' : 'failed',
+    cloudflare_mutation_admission: 'executed_via_guarded_site_continuity_sync_once',
+    filesystem_mutation_admission: 'sync_once_artifact_write_only',
+    execution_timeout_ms: timeout,
+    executed_site_count: results.length,
+    completed_site_count: completedCount,
+    failed_site_count: failedCount,
+    results,
+  };
 }
 
 export async function buildSiteContinuitySchedulerPlanWithOptionalRefresh(
@@ -650,6 +761,12 @@ function normalizeMaxArtifactAgeMinutes(value) {
   return Math.min(parsed, 24 * 60);
 }
 
+function normalizeExecutionTimeoutMs(value) {
+  const parsed = Number.parseInt(value ?? DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS, 10);
+  if (!Number.isFinite(parsed) || parsed < 1000) return DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS;
+  return Math.min(parsed, 10 * 60 * 1000);
+}
+
 function stripEnvValueQuotes(value) {
   if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
     return value.slice(1, -1);
@@ -698,6 +815,8 @@ function parseArgs(argv) {
     else if (arg === '--sites') args.configuredSites = argv[++index];
     else if (arg === '--sites-file') args.sitesFilePath = argv[++index];
     else if (arg === '--site-registry-projection') args.siteRegistryProjectionPath = argv[++index];
+    else if (arg === '--max-artifact-age-minutes') args.maxArtifactAgeMinutes = argv[++index];
+    else if (arg === '--execution-timeout-ms') args.executionTimeoutMs = argv[++index];
     else if (arg === '--refresh-site-registry-projection') args.refreshSiteRegistryProjection = true;
     else if (arg === '--projection-url') args.projectionWorkerUrl = argv[++index];
     else if (arg === '--projection-token') args.projectionToken = argv[++index];
@@ -710,7 +829,8 @@ function parseArgs(argv) {
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const plan = await buildSiteContinuitySchedulerPlanWithOptionalRefresh(parseArgs(process.argv.slice(2)));
-  if (plan.site_registry_projection_refresh?.status && plan.site_registry_projection_refresh.status !== 'ok') process.exitCode = 1;
-  console.log(JSON.stringify(plan, null, 2));
+  const result = await runSiteContinuitySchedulerActionWithOptionalRefresh(parseArgs(process.argv.slice(2)));
+  if (result.site_registry_projection_refresh?.status && result.site_registry_projection_refresh.status !== 'ok') process.exitCode = 1;
+  if (result.schema === 'narada.cloudflare_carrier.site_continuity_reconciliation_execution.v1' && !['completed', 'dry_run'].includes(result.status)) process.exitCode = 1;
+  console.log(JSON.stringify(result, null, 2));
 }
