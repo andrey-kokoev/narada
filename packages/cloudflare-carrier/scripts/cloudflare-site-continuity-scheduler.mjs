@@ -799,26 +799,21 @@ export function buildSiteContinuityReconciliationPlan({
 
 export function readLocalConfiguredSites({ root, explicitSites = null, sitesFilePath = null, siteRegistryProjectionPath = null } = {}) {
   const sources = [];
-  const sites = [];
   const explicit = normalizeConfiguredSiteList(explicitSites);
   if (explicit.length > 0) {
     sources.push('explicit_sites');
-    sites.push(...explicit);
   }
   const fileSites = readConfiguredSitesFile(sitesFilePath);
   if (fileSites.state === 'read' && fileSites.sites.length > 0) {
     sources.push('sites_file');
-    sites.push(...fileSites.sites);
   }
   const siteRegistryProjection = readCloudflareSiteRegistryLocalProjection(siteRegistryProjectionPath);
   if (siteRegistryProjection.state === 'read' && siteRegistryProjection.sites.length > 0) {
     sources.push('cloudflare_site_registry_local_projection');
-    sites.push(...siteRegistryProjection.sites);
   }
   const envSites = readConfiguredSitesFromEnvFile(root ? resolve(root, '.env') : null);
   if (envSites.sites.length > 0) {
     sources.push('safe_env_file_site_keys');
-    sites.push(...envSites.sites);
   }
   const processSites = normalizeConfiguredSiteList([
     process.env.CLOUDFLARE_CARRIER_SITE_ID,
@@ -827,16 +822,26 @@ export function readLocalConfiguredSites({ root, explicitSites = null, sitesFile
   ]);
   if (processSites.length > 0) {
     sources.push('process_environment_site_keys');
-    sites.push(...processSites);
   }
-  const normalizedSites = normalizeConfiguredSiteList(sites);
-  const siteRecords = normalizeConfiguredSiteRecords([
-    ...normalizedSites,
-    ...(siteRegistryProjection.site_records ?? []),
-  ]);
+  const selectedSource = [
+    ['explicit_sites', explicit],
+    ['sites_file', fileSites.sites],
+    ['safe_env_file_site_keys', envSites.sites],
+    ['process_environment_site_keys', processSites],
+    ['cloudflare_site_registry_local_projection', siteRegistryProjection.sites],
+  ].find(([, sites]) => sites.length > 0) ?? ['not_configured', []];
+  const [selectionSource, selectedSites] = selectedSource;
+  const normalizedSites = normalizeConfiguredSiteList(selectedSites);
+  const registryRecordBySiteId = new Map(normalizeConfiguredSiteRecords(siteRegistryProjection.site_records ?? [])
+    .map((site) => [site.site_id, site]));
+  const siteRecords = normalizeConfiguredSiteRecords(normalizedSites.map((siteId) => ({
+    ...(registryRecordBySiteId.get(siteId) ?? {}),
+    site_id: siteId,
+  })));
   return {
     state: normalizedSites.length > 0 ? 'configured' : 'not_configured',
     sources,
+    selection_source: selectionSource,
     site_count: normalizedSites.length,
     sites: normalizedSites,
     site_records: siteRecords,

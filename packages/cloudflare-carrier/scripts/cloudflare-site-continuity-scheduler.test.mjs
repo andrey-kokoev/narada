@@ -300,13 +300,14 @@ test('site continuity scheduler status-all distinguishes configured sites missin
   try {
     const configured = readLocalConfiguredSites({
       root,
-      explicitSites: 'site_synced,site_missing',
+      explicitSites: 'site_synced,site_missing,site_registry',
       sitesFilePath,
       siteRegistryProjectionPath,
     });
     assert.equal(configured.state, 'configured');
     assert.deepEqual(configured.sources, ['explicit_sites', 'sites_file', 'cloudflare_site_registry_local_projection', 'safe_env_file_site_keys']);
-    assert.deepEqual(configured.sites, ['site_env', 'site_file', 'site_missing', 'site_registry', 'site_synced']);
+    assert.equal(configured.selection_source, 'explicit_sites');
+    assert.deepEqual(configured.sites, ['site_missing', 'site_registry', 'site_synced']);
     assert.equal(configured.site_registry_projection.state, 'read');
     assert.deepEqual(configured.site_records.find((site) => site.site_id === 'site_registry'), {
       site_id: 'site_registry',
@@ -322,17 +323,16 @@ test('site continuity scheduler status-all distinguishes configured sites missin
       repoRoot: root,
       outputPath,
       artifactDirectory,
-      configuredSites: 'site_synced,site_missing',
+      configuredSites: 'site_synced,site_missing,site_registry',
       sitesFilePath,
       siteRegistryProjectionPath,
     });
-    assert.equal(plan.configured_sites.site_count, 5);
+    assert.equal(plan.configured_sites.site_count, 3);
+    assert.equal(plan.configured_sites.selection_source, 'explicit_sites');
     assert.equal(plan.status.site_configured, true);
     assert.equal(plan.local_sync_artifacts.status, 'needs_attention');
     assert.equal(plan.local_sync_artifacts.max_sync_artifact_age_minutes, 15);
     assert.deepEqual(plan.local_sync_artifacts.configured_site_sync_statuses.map((site) => [site.site_id, site.status, site.reason]), [
-      ['site_env', 'needs_attention', 'configured_site_sync_artifact_missing'],
-      ['site_file', 'needs_attention', 'configured_site_sync_artifact_missing'],
       ['site_missing', 'needs_attention', 'configured_site_sync_artifact_missing'],
       ['site_registry', 'needs_attention', 'configured_site_sync_artifact_missing'],
       ['site_synced', 'synced', 'matching_sync_artifact_synced'],
