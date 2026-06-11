@@ -1270,6 +1270,12 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(operationReadAfterLocalIngressBody.operation_product_surface.local_ingress_execution_admission, 'pending_windows_admission');
   assert.equal(operationReadAfterLocalIngressBody.operation_product_surface.local_ingress_direct_cloudflare_filesystem_mutation_admission, 'not_admitted');
   assert.equal(operationReadAfterLocalIngressBody.operation_product_surface.local_ingress_repository_publication_admission, 'not_admitted');
+  assert.equal(operationReadAfterLocalIngressBody.local_ingress_operation_posture.schema, 'narada.cloudflare_local_ingress_operation_posture.v1');
+  assert.equal(operationReadAfterLocalIngressBody.local_ingress_operation_posture.state, 'attention');
+  assert.equal(operationReadAfterLocalIngressBody.local_ingress_operation_posture.pending_request_count, 1);
+  assert.equal(operationReadAfterLocalIngressBody.local_ingress_operation_posture.provider_liveness.state, 'missing');
+  assert.equal(operationReadAfterLocalIngressBody.local_ingress_operation_posture.next_action, 'restore_windows_local_ingress_executor');
+  assert.equal(operationReadAfterLocalIngressBody.operation_product_surface.local_ingress_operation_posture.pending_request_count, 1);
   assert.equal(operationReadAfterLocalIngressBody.operation_lifecycle_status.local_ingress_request_count, 1);
   assert.equal(operationReadAfterLocalIngressBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'local_ingress_request'), true);
 
@@ -1656,6 +1662,17 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_product_surface.local_ingress_provider_liveness_authority, 'cloudflare_local_ingress_provider_liveness_store');
   assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_product_surface.local_ingress_provider_liveness.state, 'fresh');
   assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_product_surface.local_ingress_execution_admission, 'completed_by_windows_local_ingress');
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.local_ingress_operation_posture.state, 'evidence_recorded');
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.local_ingress_operation_posture.local_ingress_request_count, 1);
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.local_ingress_operation_posture.local_ingress_evidence_count, 1);
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.local_ingress_operation_posture.local_ingress_provider_heartbeat_count, 1);
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.local_ingress_operation_posture.pending_request_count, 0);
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.local_ingress_operation_posture.completed_evidence_count, 1);
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.local_ingress_operation_posture.provider_liveness.state, 'fresh');
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.local_ingress_operation_posture.direct_cloudflare_filesystem_mutation_admission, 'not_admitted');
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.local_ingress_operation_posture.repository_publication_admission, 'not_admitted');
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.local_ingress_operation_posture.next_action, 'review_local_ingress_evidence');
+  assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_product_surface.local_ingress_operation_posture.pending_request_count, 0);
   assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_lifecycle_status.local_ingress_evidence_count, 1);
   assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_lifecycle_status.local_ingress_provider_heartbeat_count, 1);
   assert.equal(operationReadAfterLocalIngressEvidenceBody.operation_lifecycle_status.local_ingress_provider_liveness.state, 'fresh');
