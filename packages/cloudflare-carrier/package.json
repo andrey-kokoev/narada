@@ -23,6 +23,7 @@
     "product:site:read:text": "node scripts/cloudflare-carrier-product-read.mjs --operation site.read --format text",
     "product:operation:list": "node scripts/cloudflare-carrier-product-read.mjs --operation operation.list",
     "product:operation:list:text": "node scripts/cloudflare-carrier-product-read.mjs --operation operation.list --format text",
+    "product:operation:continuation:next:text": "node scripts/cloudflare-carrier-product-read.mjs --operation operation.list --continuation --format text",
     "product:operation:read": "node scripts/cloudflare-carrier-product-read.mjs --operation operation.read",
     "product:operation:read:text": "node scripts/cloudflare-carrier-product-read.mjs --operation operation.read --format text",
     "product:operation:create": "node scripts/cloudflare-carrier-operation-create.mjs",

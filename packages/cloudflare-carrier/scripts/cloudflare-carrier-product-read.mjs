@@ -13,6 +13,7 @@ export function parseProductReadArgs(argv = [], env = process.env) {
   const operationId = option(args, '--carrier-operation') ?? option(args, '--operation-id') ?? env.CLOUDFLARE_CARRIER_OPERATION_ID ?? null;
   const limit = parseOptionalInteger(option(args, '--limit') ?? env.CLOUDFLARE_CARRIER_PRODUCT_LIMIT ?? null, 'limit');
   const format = option(args, '--format') ?? env.CLOUDFLARE_CARRIER_PRODUCT_FORMAT ?? 'json';
+  const continuation = flag(args, '--continuation') || parseBoolean(env.CLOUDFLARE_CARRIER_PRODUCT_CONTINUATION ?? '');
   const requestId = option(args, '--request-id') ?? `product_read_${operation.replace(/[^a-z0-9]+/gi, '_')}_${Date.now()}`;
   const auth = resolveAuth(args, env);
 
@@ -21,6 +22,7 @@ export function parseProductReadArgs(argv = [], env = process.env) {
   if (!['json', 'summary', 'text'].includes(format)) throw new Error(`product_read_format_unsupported:${format}`);
   if ((operation === 'site.read' || operation === 'operation.list' || operation === 'operation.read') && !siteId) throw new Error(`product_read_${operation}_requires_--site`);
   if (operation === 'operation.read' && !operationId) throw new Error('product_read_operation.read_requires_--operation-id_or_--carrier-operation');
+  if (continuation && operation !== 'operation.list') throw new Error('product_read_continuation_requires_operation.list');
   if (!auth) throw new Error('product_read_requires_bearer_token_or_operator_session');
 
   return {
@@ -29,8 +31,13 @@ export function parseProductReadArgs(argv = [], env = process.env) {
     requestId,
     params: buildParams({ operation, siteId, operationId, limit }),
     format,
+    continuation,
     auth,
   };
+}
+
+function parseBoolean(value) {
+  return ['1', 'true', 'yes', 'on'].includes(String(value ?? '').trim().toLowerCase());
 }
 
 export function buildParams({ operation, siteId, operationId, limit }) {
@@ -75,11 +82,11 @@ export async function readProductSurface(config, fetchImpl = fetch) {
     auth_source: config.auth.source,
     params: config.params,
     response: body,
-    summary: summarizeProductSurface(config.operation, body),
+    summary: summarizeProductSurface(config.operation, body, { continuation: config.continuation === true }),
   };
 }
 
-export function summarizeProductSurface(operation, body) {
+export function summarizeProductSurface(operation, body, options = {}) {
   if (operation === 'site.list') {
     const overview = body?.site_product_overview ?? {};
     const sitePostureRoute = body?.site_posture_route ?? null;
@@ -128,13 +135,20 @@ export function summarizeProductSurface(operation, body) {
     const overview = body?.operation_posture_overview ?? body?.operation_product_overview ?? {};
     const nextOperationId = overview.next_operation_id ?? operations[0]?.operation_id ?? null;
     const nextOperation = nextOperationId ? operations.find((item) => item?.operation_id === nextOperationId) ?? null : null;
+    const continuationOperations = operations.filter((item) => item?.status === 'needs_continuation');
+    const nextContinuationOperation = continuationOperations[0] ?? null;
     return {
       operation,
+      continuation_mode: options.continuation === true,
       site_id: body?.site?.site_id ?? body?.site_id ?? operations[0]?.site_id ?? null,
       operation_count: overview.operation_count ?? operations.length,
       active_operation_id: overview.active_operation_id ?? null,
       next_operation_id: nextOperationId,
       next_operation_status: nextOperation?.status ?? null,
+      needs_continuation_count: continuationOperations.length,
+      next_continuation_operation_id: nextContinuationOperation?.operation_id ?? null,
+      next_continuation_operation_status: nextContinuationOperation?.status ?? null,
+      continuation_next_action: nextContinuationOperation ? 'read_operation_for_continuation' : 'monitor_operations',
       operation_status_counts: countBy(operations, (item) => item?.status ?? 'unknown'),
       next_status: overview.next_status ?? null,
       next_action: overview.next_action ?? null,
@@ -244,6 +258,13 @@ export function formatProductSurfaceText(result) {
     lines.push(`Operations: count=${summary.operation_count ?? 0} active=${summary.active_operation_id ?? 'none'} next=${summary.next_operation_id ?? 'none'}`);
     lines.push(`Lifecycle Statuses: ${formatKeyValueMap(summary.operation_status_counts ?? {})}`);
     if (summary.next_operation_id) lines.push(`Next Operation Status: ${summary.next_operation_status ?? 'unknown'}`);
+    if (summary.continuation_mode) {
+      lines.push(`Continuation: needed=${summary.needs_continuation_count ?? 0} next=${summary.next_continuation_operation_id ?? 'none'} action=${summary.continuation_next_action ?? 'monitor_operations'}`);
+      if (summary.next_continuation_operation_id) {
+        lines.push(`Continuation Read: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.next_continuation_operation_id} --operator-session-file <operator-session-file>`);
+        lines.push(`Continuation Start Params: operation=session.start site_id=${summary.site_id ?? '<site-id>'} operation_id=${summary.next_continuation_operation_id} carrier_session_id=<new-carrier-session-id> agent_id=<agent-id>`);
+      }
+    }
     lines.push(`Next: status=${summary.next_status ?? 'unknown'} action=${summary.next_action ?? 'none'} reason=${summary.next_reason ?? 'none'}`);
     if (summary.health_counts) lines.push(`Health Counts: ${formatKeyValueMap(summary.health_counts)}`);
     return `${lines.join('\n')}\n`;
@@ -325,6 +346,10 @@ export function authHeaders(auth) {
 function option(args, name) {
   const index = args.indexOf(name);
   return index >= 0 ? args[index + 1] : null;
+}
+
+function flag(args, name) {
+  return args.includes(name);
 }
 
 function positionalArgs(args) {

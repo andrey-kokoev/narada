@@ -296,10 +296,11 @@ For operator-facing readback without JSON inspection, use the text aliases:
 pnpm --filter @narada2/cloudflare-carrier product:site:list:text -- --url <worker-url> --operator-session-file cloudflare-operator-session.json
 pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
 pnpm --filter @narada2/cloudflare-carrier product:operation:list:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada2/cloudflare-carrier product:operation:continuation:next:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
 pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
 ```
 
-The text output names the operation, worker URL, auth source, selected site or operation, health, next action, continuity/reconciliation posture, durability posture, operation-list lifecycle status counts, operation-read lifecycle status transitions, and evidence counts while preserving the same credential redaction rule as the JSON envelope.
+The text output names the operation, worker URL, auth source, selected site or operation, health, next action, continuity/reconciliation posture, durability posture, operation-list lifecycle status counts, operation-read lifecycle status transitions, and evidence counts while preserving the same credential redaction rule as the JSON envelope. The continuation alias filters the operation list for `needs_continuation`, prints the selected operation read command, and prints the `session.start` parameters needed to resume work against that operation.
 
 ## Live Smoke
 

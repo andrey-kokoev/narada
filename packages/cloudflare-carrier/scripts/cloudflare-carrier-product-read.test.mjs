@@ -39,6 +39,32 @@ test('parseProductReadArgs accepts operator text format', () => {
   assert.equal(parsed.format, 'text');
 });
 
+test('parseProductReadArgs accepts continuation selector for operation list only', () => {
+  const parsed = parseProductReadArgs([
+    '--operation', 'operation.list',
+    '--url', 'https://carrier.example.test',
+    '--token', 'secret-token',
+    '--site', 'site_fixture',
+    '--continuation',
+  ], {});
+
+  assert.equal(parsed.operation, 'operation.list');
+  assert.equal(parsed.continuation, true);
+  assert.deepEqual(parsed.params, { site_id: 'site_fixture' });
+
+  assert.throws(
+    () => parseProductReadArgs([
+      '--operation', 'operation.read',
+      '--url', 'https://carrier.example.test',
+      '--token', 'secret-token',
+      '--site', 'site_fixture',
+      '--operation-id', 'operation_fixture',
+      '--continuation',
+    ], {}),
+    /product_read_continuation_requires_operation\.list/,
+  );
+});
+
 test('parseProductReadArgs builds site.read operation.list and operation.read params', () => {
   const siteRead = parseProductReadArgs([
     'site.read',
@@ -295,6 +321,33 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(operationListText, /Lifecycle Statuses: inactive=1/);
   assert.match(operationListText, /Next Operation Status: inactive/);
 
+  const continuationListText = formatProductSurfaceText({
+    operation: 'operation.list',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.list',
+      continuation_mode: true,
+      site_id: 'site_alpha',
+      operation_count: 2,
+      active_operation_id: null,
+      next_operation_id: 'operation_continue',
+      next_operation_status: 'needs_continuation',
+      needs_continuation_count: 1,
+      next_continuation_operation_id: 'operation_continue',
+      continuation_next_action: 'read_operation_for_continuation',
+      operation_status_counts: { needs_continuation: 1, active: 1 },
+      next_status: 'needs_attention',
+      next_action: 'review_operation',
+      next_reason: 'operation_needs_continuation',
+    },
+    auth: { kind: 'bearer', value: 'secret-token' },
+  });
+  assert.match(continuationListText, /Continuation: needed=1 next=operation_continue action=read_operation_for_continuation/);
+  assert.match(continuationListText, /Continuation Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_continue --operator-session-file <operator-session-file>/);
+  assert.match(continuationListText, /Continuation Start Params: operation=session\.start site_id=site_alpha operation_id=operation_continue carrier_session_id=<new-carrier-session-id> agent_id=<agent-id>/);
+  assert.equal(continuationListText.includes('secret-token'), false);
+
   const operationReadText = formatProductSurfaceText({
     operation: 'operation.read',
     worker_url: 'https://carrier.example.test',
@@ -415,9 +468,12 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
 
   assert.deepEqual(summarizeProductSurface('operation.list', {
     site_id: 'site_fixture',
-    operations: [{ site_id: 'site_fixture', operation_id: 'operation_control', status: 'inactive' }],
+    operations: [
+      { site_id: 'site_fixture', operation_id: 'operation_control', status: 'inactive' },
+      { site_id: 'site_fixture', operation_id: 'operation_continue', status: 'needs_continuation' },
+    ],
     operation_posture_overview: {
-      operation_count: 1,
+      operation_count: 2,
       active_operation_id: 'operation_control',
       next_operation_id: 'operation_control',
       next_status: 'needs_attention',
@@ -425,14 +481,19 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
       next_reason: 'operation_needs_review',
       health_counts: { ready: 0, needs_attention: 1 },
     },
-  }), {
+  }, { continuation: true }), {
     operation: 'operation.list',
+    continuation_mode: true,
     site_id: 'site_fixture',
-    operation_count: 1,
+    operation_count: 2,
     active_operation_id: 'operation_control',
     next_operation_id: 'operation_control',
     next_operation_status: 'inactive',
-    operation_status_counts: { inactive: 1 },
+    needs_continuation_count: 1,
+    next_continuation_operation_id: 'operation_continue',
+    next_continuation_operation_status: 'needs_continuation',
+    continuation_next_action: 'read_operation_for_continuation',
+    operation_status_counts: { inactive: 1, needs_continuation: 1 },
     next_status: 'needs_attention',
     next_action: 'review_operation',
     next_reason: 'operation_needs_review',
