@@ -244,6 +244,18 @@ pnpm --filter @narada2/cloudflare-carrier continuity:install
 - configured KV write execution failure after admission, proving admitted `failed` result evidence is distinct from boundary denial;
 - thrown tool-effect adapter failures, proving pre-admission boundary execution failures are still recorded as `tool_result_received` with `status: failed`.
 
+## Product Readback
+
+Use `product:read` for read-only inspection of the deployed Cloudflare carrier product model. It calls the same `POST /api/carrier` operation envelope as the browser console and accepts either the automation bearer token or a captured Microsoft operator session cookie.
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:site:list -- --url <worker-url> --token <token>
+pnpm --filter @narada2/cloudflare-carrier product:site:read -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada2/cloudflare-carrier product:operation:read -- --url <worker-url> --site <site-id> --operation-id <operation-id> --format summary
+```
+
+The command prints a `narada.cloudflare_carrier.product_read.v1` envelope by default, including `site.list`, `site.read`, or `operation.read` response evidence and a compact summary. It records only `auth_source` in the output; bearer tokens and operator-session cookies are not echoed.
+
 ## Live Smoke
 
 `smoke:live` requires a deployed Worker URL and a bearer token:
