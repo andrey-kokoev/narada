@@ -26,7 +26,7 @@ test('provider liveness scheduler install plan is bounded and secret-free', asyn
   await writeFile(scheduledTaskEntrypoint, '#!/usr/bin/env node\n', 'utf8');
   await writeFile(join(root, '.env'), 'CLOUDFLARE_CARRIER_URL=https://worker.example\nCLOUDFLARE_CARRIER_TOKEN_FILE=.secrets/token\n', 'utf8');
   try {
-    const plan = buildProviderLivenessSchedulerPlan({ action: 'install', repoRoot: root, intervalMinutes: 2 });
+    const plan = buildProviderLivenessSchedulerPlan({ action: 'install', repoRoot: root, intervalMinutes: 2, nodeCommand: 'node' });
 
     assert.equal(plan.schema, 'narada.cloudflare_carrier.provider_liveness_scheduler_plan.v1');
     assert.equal(plan.plan_status, 'dry_run_install_plan');
@@ -103,6 +103,9 @@ test('provider liveness scheduler live status reads hidden wrapper task posture'
   await mkdir(join(root, 'packages/cloudflare-carrier/scripts'), { recursive: true });
   await writeFile(entrypoint, '#!/usr/bin/env node\n', 'utf8');
   await writeFile(scheduledTaskEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await mkdir(join(root, '.narada/site-continuity'), { recursive: true });
+  const statusPlan = buildProviderLivenessSchedulerPlan({ action: 'status', repoRoot: root });
+  await writeFile(wrapperPath, statusPlan.hidden_wrapper_content, 'utf8');
   try {
     const result = await runProviderLivenessSchedulerAction({ action: 'status', repoRoot: root, dryRun: false }, {
       execFileImpl: async (command, args, options) => {
@@ -130,6 +133,7 @@ test('provider liveness scheduler live status reads hidden wrapper task posture'
     assert.equal(result.scheduler_task_readback.status, 'ok');
     assert.equal(result.scheduler_task_readback.cadence_status, 'matches_plan');
     assert.equal(result.scheduler_task_readback.task_command_status, 'matches_plan');
+    assert.equal(result.scheduler_task_readback.hidden_wrapper_readback.status, 'matches_plan');
     assert.deepEqual(result.scheduler_task_readback.attention_reasons, []);
     assert.equal(result.scheduler_task_readback.task_to_run, `wscript.exe //B "${wrapperPath}"`);
   } finally {
@@ -154,6 +158,7 @@ test('provider liveness scheduler readback surfaces drift', () => {
     },
     expectedIntervalMinutes: 2,
     expectedTaskCommand: 'wscript.exe //B hidden.vbs',
+    hiddenWrapperReadback: { status: 'differs_from_plan', path: 'hidden.vbs', embeds_credentials: false },
   });
 
   assert.equal(readback.status, 'needs_attention');
@@ -162,6 +167,7 @@ test('provider liveness scheduler readback surfaces drift', () => {
   assert.deepEqual(readback.attention_reasons, [
     'scheduler_cadence_differs_from_plan',
     'scheduler_task_command_differs_from_plan',
+    'hidden_wrapper_differs_from_plan',
     'scheduler_last_result_nonzero',
   ]);
 });
@@ -180,6 +186,7 @@ test('provider liveness scheduler text output summarizes operator posture', () =
       actual_interval_minutes: 2,
       cadence_status: 'matches_plan',
       task_command_status: 'matches_plan',
+      hidden_wrapper_readback: { status: 'matches_plan', path: 'hidden.vbs', embeds_credentials: false },
       task_to_run: 'wscript.exe //B hidden.vbs',
       attention_reasons: [],
     },
@@ -189,6 +196,7 @@ test('provider liveness scheduler text output summarizes operator posture', () =
   assert.match(text, /Scheduler: state=Enabled status=Ready last=0/);
   assert.match(text, /Cadence: expected=2m actual=2m matches_plan/);
   assert.match(text, /Command: matches_plan/);
+  assert.match(text, /Hidden Wrapper: matches_plan/);
 });
 
 test('provider liveness scheduler CLI emits operator text status', async () => {

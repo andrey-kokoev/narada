@@ -20,7 +20,7 @@ export function buildProviderLivenessSchedulerPlan({
   refreshEntrypoint = 'packages/cloudflare-carrier/scripts/cloudflare-carrier-provider-liveness-refresh.mjs',
   scheduledTaskEntrypoint = 'packages/cloudflare-carrier/scripts/cloudflare-carrier-provider-liveness-scheduled-task.mjs',
   localRoot = null,
-  nodeCommand = process.env.NARADA_NODE_COMMAND ?? 'node',
+  nodeCommand = resolveDefaultNodeCommand(),
   hiddenWrapperPath = null,
   dryRun = true,
 } = {}) {
@@ -157,6 +157,10 @@ async function executeProviderLivenessSchedulerReadback(plan, { execFileImpl = e
         expectedIntervalMinutes: plan.interval_minutes,
         expectedTaskCommand: plan.task_command,
         expectedTaskEntrypoint: plan.scheduled_task_entrypoint,
+        hiddenWrapperReadback: readHiddenWrapperFileReadback({
+          wrapperPath: plan.hidden_wrapper_path,
+          expectedContent: plan.hidden_wrapper_content,
+        }),
       }),
     };
   } catch (error) {
@@ -178,7 +182,7 @@ async function executeProviderLivenessSchedulerReadback(plan, { execFileImpl = e
   }
 }
 
-export function summarizeProviderLivenessSchedulerReadback({ state, command, args, stdout, stderr, timeout_ms: timeoutMs, parsed, expectedIntervalMinutes, expectedTaskCommand, expectedTaskEntrypoint }) {
+export function summarizeProviderLivenessSchedulerReadback({ state, command, args, stdout, stderr, timeout_ms: timeoutMs, parsed, expectedIntervalMinutes, expectedTaskCommand, expectedTaskEntrypoint, hiddenWrapperReadback = null }) {
   const repeatEvery = parsed['Repeat: Every'] ?? null;
   const taskToRun = parsed['Task To Run'] ?? null;
   const actualIntervalMinutes = parseSchedulerRepeatMinutes(repeatEvery);
@@ -197,6 +201,7 @@ export function summarizeProviderLivenessSchedulerReadback({ state, command, arg
   const attentionReasons = [
     cadenceStatus === 'differs_from_plan' ? 'scheduler_cadence_differs_from_plan' : null,
     taskCommandStatus === 'differs_from_plan' ? 'scheduler_task_command_differs_from_plan' : null,
+    hiddenWrapperReadback && hiddenWrapperReadback.status !== 'matches_plan' ? `hidden_wrapper_${hiddenWrapperReadback.status}` : null,
     isSchedulerLastResultHealthy(lastResult, statusText) ? null : 'scheduler_last_result_nonzero',
     scheduledTaskState && !/^enabled$/i.test(scheduledTaskState) ? 'scheduler_task_disabled' : null,
   ].filter(Boolean);
@@ -221,6 +226,7 @@ export function summarizeProviderLivenessSchedulerReadback({ state, command, arg
     actual_interval_minutes: actualIntervalMinutes,
     cadence_status: cadenceStatus,
     task_command_status: taskCommandStatus,
+    hidden_wrapper_readback: hiddenWrapperReadback,
     attention_reasons: attentionReasons,
     embeds_credentials: false,
   };
@@ -238,6 +244,7 @@ export function formatProviderLivenessSchedulerText(result) {
     lines.push(`Scheduler: state=${readback.scheduled_task_state ?? 'unknown'} status=${readback.status_text ?? 'unknown'} last=${readback.last_result ?? 'unknown'} next=${readback.next_run_time ?? 'unknown'}`);
     lines.push(`Cadence: expected=${readback.expected_interval_minutes ?? 'unknown'}m actual=${readback.actual_interval_minutes ?? 'unknown'}m ${readback.cadence_status ?? 'unknown'}`);
     lines.push(`Command: ${readback.task_command_status ?? 'unknown'}`);
+    if (readback.hidden_wrapper_readback) lines.push(`Hidden Wrapper: ${readback.hidden_wrapper_readback.status ?? 'unknown'}`);
     if (readback.task_to_run) lines.push(`Task To Run: ${readback.task_to_run}`);
     if (readback.attention_reasons?.length > 0) lines.push(`Attention: ${readback.attention_reasons.join(', ')}`);
   } else {
@@ -289,6 +296,53 @@ function normalizeCommandForComparison(value) {
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
+}
+
+function readHiddenWrapperFileReadback({ wrapperPath, expectedContent }) {
+  if (!wrapperPath) {
+    return {
+      status: 'unknown',
+      path: null,
+      embeds_credentials: false,
+    };
+  }
+  if (!existsSync(wrapperPath)) {
+    return {
+      status: 'missing',
+      path: wrapperPath,
+      embeds_credentials: false,
+    };
+  }
+  try {
+    const actualContent = readFileSync(wrapperPath, 'utf8');
+    const matches = normalizeWrapperContentForComparison(actualContent) === normalizeWrapperContentForComparison(expectedContent);
+    return {
+      status: matches ? 'matches_plan' : 'differs_from_plan',
+      path: wrapperPath,
+      embeds_credentials: false,
+    };
+  } catch (error) {
+    return {
+      status: 'read_failed',
+      path: wrapperPath,
+      error_code: error.code ?? null,
+      embeds_credentials: false,
+    };
+  }
+}
+
+function normalizeWrapperContentForComparison(value) {
+  return String(value ?? '').replace(/\r\n/g, '\n').trimEnd();
+}
+
+function resolveDefaultNodeCommand() {
+  if (process.env.NARADA_NODE_COMMAND) return process.env.NARADA_NODE_COMMAND;
+  const fnmDir = process.env.FNM_DIR;
+  if (fnmDir) {
+    const fnmNode = join(fnmDir, 'node-versions', `v${process.versions.node}`, 'installation', process.platform === 'win32' ? 'node.exe' : 'bin/node');
+    if (existsSync(fnmNode)) return fnmNode;
+  }
+  return 'node';
 }
 
 function normalizeExecutionTimeoutMs(value) {

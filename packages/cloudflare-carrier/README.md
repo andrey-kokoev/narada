@@ -221,7 +221,7 @@ Read the provider-liveness scheduler posture with the same operator-facing text 
 pnpm --filter @narada2/cloudflare-carrier provider-liveness:status:live:text
 ```
 
-`provider-liveness:status:live:text` performs a bounded live Task Scheduler readback for `\Narada\CloudflareProviderLivenessRefresh`. It reports whether the hidden `wscript.exe //B` wrapper is installed, whether the two-minute cadence matches the package plan, the last run result, the next run time, and any attention reasons without exposing credential values.
+`provider-liveness:status:live:text` performs a bounded live Task Scheduler readback for `\Narada\CloudflareProviderLivenessRefresh`. It reports whether Task Scheduler points at the hidden `wscript.exe //B` wrapper, whether the wrapper file matches the package plan, whether the two-minute cadence matches, the last run result, the next run time, and any attention reasons without exposing credential values.
 
 Read the last durable scheduled health snapshot without querying Cloudflare or Task Scheduler:
 
