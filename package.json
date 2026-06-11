@@ -14,6 +14,8 @@
     "cloudflare:operator:check:human": "node scripts/cloudflare-operator-check.mjs --require-operator-session",
     "cloudflare:operator:check:human-action": "node scripts/cloudflare-operator-check.mjs --require-human-operator-action",
     "cloudflare:operator:check:test": "node --test scripts/cloudflare-operator-check.test.mjs",
+    "cloudflare:product:readiness": "node scripts/cloudflare-product-readiness.mjs",
+    "cloudflare:product:readiness:test": "node --test scripts/cloudflare-product-readiness.test.mjs",
     "cloudflare:operator:login": "node scripts/cloudflare-operator-login.mjs",
     "cloudflare:operator:site:bootstrap": "node scripts/cloudflare-operator-site-bootstrap.mjs",
     "cloudflare:operator:operation:bootstrap": "node scripts/cloudflare-operator-operation-bootstrap.mjs",
