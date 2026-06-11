@@ -4159,6 +4159,7 @@ test('worker creates Outlook drafts through Cloudflare Graph authority without a
     CLOUDFLARE_GRAPH_FETCH: async (url, init = {}) => {
       graphCalls.push({ url, method: init.method ?? 'GET', authorization: init.headers?.Authorization, body: init.body == null ? null : JSON.parse(String(init.body)) });
       if (String(url).endsWith('/send')) return new Response('', { status: 202 });
+      if (String(url).endsWith('/messages/sent-message-fixture-1')) return new Response(JSON.stringify({ id: 'sent-message-fixture-1', internetMessageId: '<sent-message-fixture-1@example.test>', sentDateTime: '2026-06-08T14:06:00.000Z', subject: 'Re: support request' }), { status: 200, headers: { 'content-type': 'application/json' } });
       return new Response(JSON.stringify({ id: 'outlook-draft-fixture-1', changeKey: 'change-key-fixture-1', webLink: 'https://example.test/draft' }), { status: 201, headers: { 'content-type': 'application/json' } });
     },
   });
@@ -4303,10 +4304,78 @@ test('worker creates Outlook drafts through Cloudflare Graph authority without a
   assert.equal(operationReadAfterSendBody.operation_product_surface.mailbox_send_admission, 'admitted');
   assert.equal(operationReadAfterSendBody.operation_product_surface.mailbox_send_delivery_confirmation_admission, 'not_admitted');
   assert.equal(operationReadAfterSendBody.operation_product_surface.mailbox_mutation_admission, 'not_admitted');
-  assert.equal(operationReadAfterSendBody.operation_product_surface.mailbox_outlook_draft_create_authority_partition, 'mailbox_outlook_draft_create_and_send_cloudflare_owned_other_mutation_not_admitted');
+  assert.equal(operationReadAfterSendBody.operation_product_surface.mailbox_outlook_draft_create_authority_partition, 'mailbox_outlook_draft_create_and_send_cloudflare_owned_confirmation_and_other_mutation_not_admitted');
   assert.equal(operationReadAfterSendBody.authority_transfer_posture.remaining_windows_authorities.some((entry) => entry.authority === 'mailbox_send'), false);
+  assert.equal(operationReadAfterSendBody.authority_transfer_posture.remaining_windows_authorities.some((entry) => entry.authority === 'mailbox_delivery_confirmation'), true);
   assert.equal(operationReadAfterSendBody.authority_transfer_posture.next_action, 'transfer_mailbox_status_source_authority');
   assert.equal(operationReadAfterSendBody.operation_activity_timeline.items.some((entry) => entry.activity_kind === 'mailbox_send_accepted'), true);
+
+  const confirmationPayload = {
+    schema: 'narada.sonar.mailbox_send_confirmation_read_request.v1',
+    generated_at: '2026-06-08T14:06:30.000Z',
+    operation_id: 'operation_mailbox_draft_create',
+    send_accepted_id: 'mailbox_send_accepted_fixture_1',
+    account_ref: 'help@global-maxima.com',
+    outlook_draft_id: 'outlook-draft-fixture-1',
+    sent_message_ref: 'sent-message-fixture-1',
+    delivery_confirmation_admission: 'admitted',
+    mailbox_mutation_admission: 'not_admitted',
+    cutover_point_ref: 'cutover:mailbox-send-confirmation:v1',
+    governed_write_contract_ref: 'contract:graph-sent-message-read:v1',
+    confirmation_evidence_ref: 'evidence:graph-sent-message-observed:v1',
+  };
+  const refusedConfirmationWithoutAcceptedSend = await worker.fetch(jsonRequest({
+    operation: 'mailbox.send_confirmation.read',
+    request_id: 'request_mailbox_send_confirmation_refused_missing_send',
+    params: { site_id: 'site_fixture', source_payload: { ...confirmationPayload, send_accepted_id: 'missing-send-accepted' } },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(refusedConfirmationWithoutAcceptedSend.status, 403);
+  assert.equal((await refusedConfirmationWithoutAcceptedSend.json()).code, 'mailbox_send_confirmation_requires_existing_send_accepted');
+  assert.equal(graphCalls.length, 2);
+
+  const confirmed = await worker.fetch(jsonRequest({
+    operation: 'mailbox.send_confirmation.read',
+    request_id: 'request_mailbox_send_confirmation_read',
+    params: { site_id: 'site_fixture', send_confirmation_id: 'mailbox_send_confirmation_fixture_1', source_payload: confirmationPayload },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(confirmed.status, 200);
+  const confirmedBody = await confirmed.json();
+  assert.equal(confirmedBody.schema, 'narada.sonar.cloudflare_mailbox_send_confirmation.v1');
+  assert.equal(confirmedBody.status, 'confirmed_by_reconciliation_read');
+  assert.equal(confirmedBody.mailbox_send_confirmation_authority, 'cloudflare_graph_sent_items_reconciliation');
+  assert.equal(confirmedBody.delivery_confirmation_admission, 'admitted');
+  assert.equal(confirmedBody.mailbox_mutation_admission, 'not_admitted');
+  assert.equal(confirmedBody.record.graph_status, 200);
+  assert.equal(confirmedBody.record.internet_message_id, '<sent-message-fixture-1@example.test>');
+  assert.equal(graphCalls.length, 3);
+  assert.equal(graphCalls[2].method, 'GET');
+  assert.match(graphCalls[2].url, /\/users\/help%40global-maxima\.com\/messages\/sent-message-fixture-1$/);
+
+  const confirmationListed = await worker.fetch(jsonRequest({
+    operation: 'mailbox.send_confirmation.list',
+    request_id: 'request_mailbox_send_confirmation_list',
+    params: { site_id: 'site_fixture', limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(confirmationListed.status, 200);
+  const confirmationListedBody = await confirmationListed.json();
+  assert.equal(confirmationListedBody.delivery_confirmation_admission, 'admitted');
+  assert.equal(confirmationListedBody.mailbox_mutation_admission, 'not_admitted');
+  assert.deepEqual(confirmationListedBody.confirmations.map((entry) => entry.send_confirmation_id), ['mailbox_send_confirmation_fixture_1']);
+
+  const operationReadAfterConfirmation = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_mailbox_send_confirmation_operation_read',
+    params: { site_id: 'site_fixture', operation_id: 'operation_mailbox_draft_create', mailbox_outlook_draft_create_limit: 10, mailbox_send_accepted_limit: 10, mailbox_send_confirmation_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(operationReadAfterConfirmation.status, 200);
+  const operationReadAfterConfirmationBody = await operationReadAfterConfirmation.json();
+  assert.equal(operationReadAfterConfirmationBody.mailbox_send_confirmations.length, 1);
+  assert.equal(operationReadAfterConfirmationBody.operation_product_surface.mailbox_send_confirmation_count, 1);
+  assert.equal(operationReadAfterConfirmationBody.operation_product_surface.mailbox_send_delivery_confirmation_admission, 'admitted');
+  assert.equal(operationReadAfterConfirmationBody.operation_product_surface.mailbox_mutation_admission, 'not_admitted');
+  assert.equal(operationReadAfterConfirmationBody.operation_product_surface.mailbox_outlook_draft_create_authority_partition, 'mailbox_outlook_draft_create_send_and_confirmation_cloudflare_owned_other_mutation_not_admitted');
+  assert.equal(operationReadAfterConfirmationBody.authority_transfer_posture.remaining_windows_authorities.some((entry) => entry.authority === 'mailbox_delivery_confirmation'), false);
+  assert.equal(operationReadAfterConfirmationBody.operation_activity_timeline.items.some((entry) => entry.activity_kind === 'mailbox_send_confirmation'), true);
 });
 
 test('worker records site file change proposals without admitting filesystem or publication mutation', async () => {
@@ -6950,6 +7019,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     mailboxDraftReplyProposals: clone(initial.mailboxDraftReplyProposals ?? []),
     mailboxOutlookDraftCreates: clone(initial.mailboxOutlookDraftCreates ?? []),
     mailboxSendAcceptedRecords: clone(initial.mailboxSendAcceptedRecords ?? []),
+    mailboxSendConfirmations: clone(initial.mailboxSendConfirmations ?? []),
     siteFileChangeProposals: clone(initial.siteFileChangeProposals ?? []),
     siteFileMaterializations: clone(initial.siteFileMaterializations ?? []),
     localIngressRequests: clone(initial.localIngressRequests ?? []),
@@ -7100,6 +7170,12 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const row = { send_accepted_id, site_id, source_schema, generated_at, operation_id, account_ref, outlook_draft_id, draft_create_id, proposal_id, source_message_ref, send_authority, mailbox_send_admission, mailbox_mutation_admission, delivery_confirmation_admission, send_posture, graph_status, graph_response_json, cutover_point_ref, governed_write_contract_ref, confirmation_evidence_ref, record_json, recorded_by_principal_id, recorded_at };
         if (existing) Object.assign(existing, row);
         else state.mailboxSendAcceptedRecords.push(row);
+      } else if (normalized.startsWith('insert into cloudflare_mailbox_send_confirmation_records')) {
+        const [send_confirmation_id, site_id, source_schema, generated_at, operation_id, send_accepted_id, account_ref, outlook_draft_id, sent_message_ref, internet_message_id, sent_at, confirmation_authority, delivery_confirmation_admission, mailbox_mutation_admission, confirmation_posture, graph_status, graph_response_json, cutover_point_ref, governed_write_contract_ref, confirmation_evidence_ref, record_json, recorded_by_principal_id, recorded_at] = bindings;
+        const existing = state.mailboxSendConfirmations.find((entry) => entry.send_confirmation_id === send_confirmation_id);
+        const row = { send_confirmation_id, site_id, source_schema, generated_at, operation_id, send_accepted_id, account_ref, outlook_draft_id, sent_message_ref, internet_message_id, sent_at, confirmation_authority, delivery_confirmation_admission, mailbox_mutation_admission, confirmation_posture, graph_status, graph_response_json, cutover_point_ref, governed_write_contract_ref, confirmation_evidence_ref, record_json, recorded_by_principal_id, recorded_at };
+        if (existing) Object.assign(existing, row);
+        else state.mailboxSendConfirmations.push(row);
       } else if (normalized.startsWith('insert into cloudflare_site_file_change_proposals')) {
         const [proposal_id, site_id, source_schema, generated_at, operation_id, task_id, proposal_ref, proposal_summary, authority_locus, filesystem_executor_authority, filesystem_mutation_admission, repository_publication_admission, proposal_posture, file_count, proposal_json, recorded_by_principal_id, recorded_at] = bindings;
         const existing = state.siteFileChangeProposals.find((entry) => entry.proposal_id === proposal_id);
@@ -7221,6 +7297,10 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const [siteId, taskId] = bindings;
         return clone(state.taskLifecycleTasks.find((entry) => entry.site_id === siteId && entry.task_id === taskId));
       }
+      if (normalized.includes('from cloudflare_mailbox_send_accepted_records') && normalized.includes('send_accepted_id = ?')) {
+        const [siteId, sendAcceptedId] = bindings;
+        return clone(state.mailboxSendAcceptedRecords.find((entry) => entry.site_id === siteId && entry.send_accepted_id === sendAcceptedId));
+      }
       return null;
     },
     async all() {
@@ -7290,6 +7370,16 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const [siteId, limit] = bindings;
         return {
           results: state.mailboxSendAcceptedRecords
+            .filter((entry) => entry.site_id === siteId)
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_mailbox_send_confirmation_records')) {
+        const [siteId, limit] = bindings;
+        return {
+          results: state.mailboxSendConfirmations
             .filter((entry) => entry.site_id === siteId)
             .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
             .slice(0, Number(limit))

@@ -51,6 +51,7 @@ const CLOUDFLARE_MAILBOX_STATUS_SOURCE_READ_SCHEMA = 'narada.sonar.cloudflare_ma
 const CLOUDFLARE_MAILBOX_DRAFT_REPLY_PROPOSAL_SCHEMA = 'narada.sonar.cloudflare_mailbox_draft_reply_proposal.v1';
 const CLOUDFLARE_MAILBOX_OUTLOOK_DRAFT_CREATE_SCHEMA = 'narada.sonar.cloudflare_mailbox_outlook_draft_create.v1';
 const CLOUDFLARE_MAILBOX_SEND_ACCEPTED_SCHEMA = 'narada.sonar.cloudflare_mailbox_send_accepted.v1';
+const CLOUDFLARE_MAILBOX_SEND_CONFIRMATION_SCHEMA = 'narada.sonar.cloudflare_mailbox_send_confirmation.v1';
 const CLOUDFLARE_SITE_FILE_CHANGE_PROPOSAL_SCHEMA = 'narada.sonar.cloudflare_site_file_change_proposal.v1';
 const CLOUDFLARE_SITE_FILE_MATERIALIZATION_SCHEMA = 'narada.sonar.cloudflare_site_file_materialization.v1';
 const CLOUDFLARE_LOCAL_INGRESS_REQUEST_SCHEMA = 'narada.sonar.cloudflare_local_ingress_request.v1';
@@ -88,6 +89,7 @@ const CLOUDFLARE_MAILBOX_STATUS_SOURCE_AUTHORITY = 'cloudflare_graph_mailbox_sta
 const CLOUDFLARE_MAILBOX_DRAFT_REPLY_PROPOSAL_AUTHORITY = 'cloudflare_carrier_site';
 const CLOUDFLARE_MAILBOX_OUTLOOK_DRAFT_CREATE_AUTHORITY = 'cloudflare_graph_outlook_draft_create';
 const CLOUDFLARE_MAILBOX_SEND_AUTHORITY = 'cloudflare_graph_mailbox_send';
+const CLOUDFLARE_MAILBOX_SEND_CONFIRMATION_AUTHORITY = 'cloudflare_graph_sent_items_reconciliation';
 const CLOUDFLARE_LOCAL_INGRESS_REQUEST_AUTHORITY = 'cloudflare_local_ingress_request_queue';
 const WINDOWS_LOCAL_INGRESS_EXECUTOR_AUTHORITY = 'windows_local_ingress_executor';
 const CLOUDFLARE_LOCAL_INGRESS_PROVIDER_LIVENESS_AUTHORITY = 'cloudflare_local_ingress_provider_liveness_store';
@@ -2295,6 +2297,7 @@ function summarizeCloudflareAuthorityTransferPosture({
   mailboxDraftReplyProposals = [],
   mailboxOutlookDraftCreates = [],
   mailboxSendAcceptedRecords = [],
+  mailboxSendConfirmations = [],
   siteFileChangeProposals = [],
   siteFileMaterializations = [],
   localIngressOperationPosture = null,
@@ -2305,7 +2308,9 @@ function summarizeCloudflareAuthorityTransferPosture({
   const mailboxStatusSourceCount = Array.isArray(mailboxStatusSourceReads) ? mailboxStatusSourceReads.length : 0;
   const mailboxStatusShadowCount = Array.isArray(mailboxStatusShadowReads) ? mailboxStatusShadowReads.length : 0;
   const mailboxSendAcceptedCount = Array.isArray(mailboxSendAcceptedRecords) ? mailboxSendAcceptedRecords.length : 0;
+  const mailboxSendConfirmationCount = Array.isArray(mailboxSendConfirmations) ? mailboxSendConfirmations.length : 0;
   const mailboxSendRemaining = mailboxSendAcceptedCount > 0 ? [] : ['mailbox_send'];
+  const mailboxSendConfirmationRemaining = mailboxSendAcceptedCount > 0 && mailboxSendConfirmationCount === 0 ? ['mailbox_delivery_confirmation'] : [];
   const mailboxStatusClassification = mailboxStatusSourceCount > 0
     ? 'cloudflare_owned'
     : mailboxStatusShadowCount > 0 ? 'cloudflare_recorded_windows_owned' : 'windows_retained';
@@ -2325,22 +2330,22 @@ function summarizeCloudflareAuthorityTransferPosture({
       domain: 'mailbox_status',
       classification: mailboxStatusClassification,
       observed_count: mailboxStatusSourceCount + mailboxStatusShadowCount,
-      authority_partition: mailboxStatusSourceCount > 0 ? (mailboxSendAcceptedCount > 0 ? 'mailbox_status_source_read_and_send_cloudflare_owned_mutation_not_admitted' : 'mailbox_status_source_read_cloudflare_owned_send_and_mutation_not_admitted') : mailboxStatusShadowCount > 0 ? (mailboxSendAcceptedCount > 0 ? 'mailbox_status_shadow_read_cloudflare_recorded_send_cloudflare_owned_mutation_windows_owned' : 'mailbox_status_shadow_read_cloudflare_recorded_send_and_mutation_windows_owned') : 'mailbox_windows_owned',
-      remaining_windows_authority: mailboxStatusSourceCount > 0 ? [...mailboxSendRemaining, 'mailbox_mutation'] : ['mailbox_status_source', ...mailboxSendRemaining, 'mailbox_mutation'],
+      authority_partition: mailboxStatusSourceCount > 0 ? (mailboxSendAcceptedCount > 0 ? (mailboxSendConfirmationCount > 0 ? 'mailbox_status_source_read_send_and_confirmation_cloudflare_owned_mutation_not_admitted' : 'mailbox_status_source_read_and_send_cloudflare_owned_confirmation_and_mutation_not_admitted') : 'mailbox_status_source_read_cloudflare_owned_send_and_mutation_not_admitted') : mailboxStatusShadowCount > 0 ? (mailboxSendAcceptedCount > 0 ? (mailboxSendConfirmationCount > 0 ? 'mailbox_status_shadow_read_cloudflare_recorded_send_and_confirmation_cloudflare_owned_mutation_windows_owned' : 'mailbox_status_shadow_read_cloudflare_recorded_send_cloudflare_owned_confirmation_and_mutation_windows_owned') : 'mailbox_status_shadow_read_cloudflare_recorded_send_and_mutation_windows_owned') : 'mailbox_windows_owned',
+      remaining_windows_authority: mailboxStatusSourceCount > 0 ? [...mailboxSendRemaining, ...mailboxSendConfirmationRemaining, 'mailbox_mutation'] : ['mailbox_status_source', ...mailboxSendRemaining, ...mailboxSendConfirmationRemaining, 'mailbox_mutation'],
     },
     {
       domain: 'mailbox_draft_reply',
       classification: classifyCounted(Array.isArray(mailboxDraftReplyProposals) ? mailboxDraftReplyProposals.length : 0, 'cloudflare_recorded_windows_owned'),
       observed_count: Array.isArray(mailboxDraftReplyProposals) ? mailboxDraftReplyProposals.length : 0,
-      authority_partition: Array.isArray(mailboxDraftReplyProposals) && mailboxDraftReplyProposals.length > 0 ? (mailboxSendAcceptedCount > 0 ? 'mailbox_draft_reply_proposal_cloudflare_recorded_send_cloudflare_owned_outlook_draft_and_mutation_not_admitted' : 'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted') : 'mailbox_draft_reply_windows_owned',
-      remaining_windows_authority: ['outlook_draft_create', ...mailboxSendRemaining, 'mailbox_mutation'],
+      authority_partition: Array.isArray(mailboxDraftReplyProposals) && mailboxDraftReplyProposals.length > 0 ? (mailboxSendAcceptedCount > 0 ? (mailboxSendConfirmationCount > 0 ? 'mailbox_draft_reply_proposal_cloudflare_recorded_send_and_confirmation_cloudflare_owned_outlook_draft_and_mutation_not_admitted' : 'mailbox_draft_reply_proposal_cloudflare_recorded_send_cloudflare_owned_confirmation_outlook_draft_and_mutation_not_admitted') : 'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted') : 'mailbox_draft_reply_windows_owned',
+      remaining_windows_authority: ['outlook_draft_create', ...mailboxSendRemaining, ...mailboxSendConfirmationRemaining, 'mailbox_mutation'],
     },
     {
       domain: 'mailbox_outlook_draft_create',
       classification: classifyCounted(Array.isArray(mailboxOutlookDraftCreates) ? mailboxOutlookDraftCreates.length : 0, 'cloudflare_owned'),
       observed_count: Array.isArray(mailboxOutlookDraftCreates) ? mailboxOutlookDraftCreates.length : 0,
-      authority_partition: Array.isArray(mailboxOutlookDraftCreates) && mailboxOutlookDraftCreates.length > 0 ? (mailboxSendAcceptedCount > 0 ? 'mailbox_outlook_draft_create_and_send_cloudflare_owned_other_mutation_not_admitted' : 'mailbox_outlook_draft_create_cloudflare_owned_send_and_other_mutation_not_admitted') : 'mailbox_outlook_draft_create_not_observed',
-      remaining_windows_authority: Array.isArray(mailboxOutlookDraftCreates) && mailboxOutlookDraftCreates.length > 0 ? [...mailboxSendRemaining, 'mailbox_mutation'] : ['outlook_draft_create', ...mailboxSendRemaining, 'mailbox_mutation'],
+      authority_partition: Array.isArray(mailboxOutlookDraftCreates) && mailboxOutlookDraftCreates.length > 0 ? (mailboxSendAcceptedCount > 0 ? (mailboxSendConfirmationCount > 0 ? 'mailbox_outlook_draft_create_send_and_confirmation_cloudflare_owned_other_mutation_not_admitted' : 'mailbox_outlook_draft_create_and_send_cloudflare_owned_confirmation_and_other_mutation_not_admitted') : 'mailbox_outlook_draft_create_cloudflare_owned_send_and_other_mutation_not_admitted') : 'mailbox_outlook_draft_create_not_observed',
+      remaining_windows_authority: Array.isArray(mailboxOutlookDraftCreates) && mailboxOutlookDraftCreates.length > 0 ? [...mailboxSendRemaining, ...mailboxSendConfirmationRemaining, 'mailbox_mutation'] : ['outlook_draft_create', ...mailboxSendRemaining, ...mailboxSendConfirmationRemaining, 'mailbox_mutation'],
     },
     {
       domain: 'site_file_change_proposal',
@@ -2442,6 +2447,7 @@ function summarizeCloudflareOperationActivityTimeline({
   mailboxDraftReplyProposals = [],
   mailboxOutlookDraftCreates = [],
   mailboxSendAcceptedRecords = [],
+  mailboxSendConfirmations = [],
   localIngressRequests = [],
   localIngressEvidence = [],
   localIngressProviderHeartbeats = [],
@@ -2633,6 +2639,19 @@ function summarizeCloudflareOperationActivityTimeline({
       focus_kind: 'mailbox_send_accepted',
       focus_ref: send.send_accepted_id,
       principal_id: send.recorded_by_principal_id,
+    });
+  }
+  for (const confirmation of mailboxSendConfirmations || []) {
+    push({
+      activity_id: `mailbox_send_confirmation:${confirmation.send_confirmation_id}`,
+      activity_kind: 'mailbox_send_confirmation',
+      occurred_at: confirmation.recorded_at || confirmation.sent_at || confirmation.generated_at,
+      title: 'Mailbox Send Confirmation Read',
+      summary: [confirmation.account_ref, confirmation.sent_message_ref, confirmation.graph_status].filter(Boolean).join(' / ') || 'graph sent message observed',
+      source_ref: confirmation.send_confirmation_id,
+      focus_kind: 'mailbox_send_confirmation',
+      focus_ref: confirmation.send_confirmation_id,
+      principal_id: confirmation.recorded_by_principal_id,
     });
   }
   for (const request of localIngressRequests || []) {
@@ -3140,6 +3159,8 @@ function isSiteProductOperation(operation) {
     'mailbox.outlook_draft.list',
     'mailbox.outlook_draft.send',
     'mailbox.send_accepted.list',
+    'mailbox.send_confirmation.read',
+    'mailbox.send_confirmation.list',
     'site_file_change_proposal.record',
     'site_file_change_proposal.list',
     'site_file_materialization.admit',
@@ -3691,6 +3712,31 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       },
     };
   }
+  if (body.operation === 'mailbox.send_confirmation.read') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const result = await readCloudflareMailboxSendConfirmation(env, requestedSiteId, params, principal);
+    return { status: result.ok ? 200 : result.code === 'graph_credentials_missing' ? 401 : result.code?.startsWith?.('mailbox_send_confirmation') ? 403 : 400, body: result };
+  }
+  if (body.operation === 'mailbox.send_confirmation.list') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const confirmations = await listCloudflareMailboxSendConfirmations(env, requestedSiteId, params.mailbox_send_confirmation_limit ?? params.limit);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        schema: CLOUDFLARE_MAILBOX_SEND_CONFIRMATION_SCHEMA,
+        status: 'ok',
+        site_id: requestedSiteId,
+        mailbox_send_confirmation_authority: confirmations.length > 0 ? CLOUDFLARE_MAILBOX_SEND_CONFIRMATION_AUTHORITY : 'not_observed',
+        delivery_confirmation_admission: confirmations.length > 0 ? 'admitted' : 'not_observed',
+        mailbox_mutation_admission: 'not_admitted',
+        authority_partition: confirmations.length > 0 ? 'mailbox_send_confirmation_cloudflare_owned_other_mutation_not_admitted' : 'mailbox_send_confirmation_not_observed',
+        confirmations,
+      },
+    };
+  }
   if (body.operation === 'site_file_change_proposal.record') {
     const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
     if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
@@ -4128,6 +4174,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     const mailboxDraftReplyProposals = await listCloudflareMailboxDraftReplyProposals(env, siteId, params.mailbox_draft_reply_proposal_limit ?? params.limit);
     const mailboxOutlookDraftCreates = await listCloudflareMailboxOutlookDraftCreates(env, siteId, params.mailbox_outlook_draft_create_limit ?? params.limit);
     const mailboxSendAcceptedRecords = await listCloudflareMailboxSendAcceptedRecords(env, siteId, params.mailbox_send_accepted_limit ?? params.limit);
+    const mailboxSendConfirmations = await listCloudflareMailboxSendConfirmations(env, siteId, params.mailbox_send_confirmation_limit ?? params.limit);
     const siteFileChangeProposals = await listCloudflareSiteFileChangeProposals(env, siteId, params.site_file_change_proposal_limit ?? params.limit);
     const siteFileMaterializations = await listCloudflareSiteFileMaterializations(env, siteId, params.site_file_materialization_limit ?? params.limit);
     const localIngressRequests = await listCloudflareLocalIngressRequests(env, siteId, params.local_ingress_request_limit ?? params.limit);
@@ -4181,6 +4228,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       mailboxDraftReplyProposals,
       mailboxOutlookDraftCreates,
       mailboxSendAcceptedRecords,
+      mailboxSendConfirmations,
       siteFileChangeProposals,
       localIngressRequests,
       localIngressEvidence,
@@ -4226,6 +4274,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       mailboxDraftReplyProposals,
       mailboxOutlookDraftCreates,
       mailboxSendAcceptedRecords,
+      mailboxSendConfirmations,
       siteFileChangeProposals,
       siteFileMaterializations,
       localIngressOperationPosture,
@@ -4272,6 +4321,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         mailbox_draft_reply_proposals: mailboxDraftReplyProposals,
         mailbox_outlook_draft_creates: mailboxOutlookDraftCreates,
         mailbox_send_accepted_records: mailboxSendAcceptedRecords,
+        mailbox_send_confirmations: mailboxSendConfirmations,
         site_file_change_proposals: siteFileChangeProposals,
         site_file_materializations: siteFileMaterializations,
         local_ingress_requests: localIngressRequests,
@@ -4344,11 +4394,13 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           mailbox_send_accepted_count: mailboxSendAcceptedRecords.length,
           mailbox_send_authority: mailboxSendAcceptedRecords.length > 0 ? CLOUDFLARE_MAILBOX_SEND_AUTHORITY : 'not_observed',
           mailbox_send_admission: mailboxSendAcceptedRecords.length > 0 ? 'admitted' : mailboxStatusSourceReads.length > 0 || mailboxStatusShadowReads.length > 0 || mailboxDraftReplyProposals.length > 0 || mailboxOutlookDraftCreates.length > 0 ? 'not_admitted' : 'retained',
-          mailbox_send_delivery_confirmation_admission: 'not_admitted',
+          mailbox_send_confirmation_count: mailboxSendConfirmations.length,
+          mailbox_send_confirmation_authority: mailboxSendConfirmations.length > 0 ? CLOUDFLARE_MAILBOX_SEND_CONFIRMATION_AUTHORITY : 'not_observed',
+          mailbox_send_delivery_confirmation_admission: mailboxSendConfirmations.length > 0 ? 'admitted' : mailboxSendAcceptedRecords.length > 0 ? 'not_admitted' : 'retained',
           mailbox_mutation_admission: mailboxStatusSourceReads.length > 0 || mailboxStatusShadowReads.length > 0 || mailboxDraftReplyProposals.length > 0 || mailboxOutlookDraftCreates.length > 0 || mailboxSendAcceptedRecords.length > 0 ? 'not_admitted' : 'retained',
-          mailbox_authority_partition: mailboxStatusSourceReads.length > 0 ? (mailboxSendAcceptedRecords.length > 0 ? 'mailbox_status_source_read_and_send_cloudflare_owned_mutation_not_admitted' : 'mailbox_status_source_read_cloudflare_owned_send_and_mutation_not_admitted') : mailboxStatusShadowReads.length > 0 ? (mailboxSendAcceptedRecords.length > 0 ? 'mailbox_status_shadow_read_cloudflare_recorded_send_cloudflare_owned_mutation_windows_owned' : 'mailbox_status_shadow_read_cloudflare_recorded_send_and_mutation_windows_owned') : 'mailbox_windows_owned',
-          mailbox_draft_reply_authority_partition: mailboxDraftReplyProposals.length > 0 ? (mailboxSendAcceptedRecords.length > 0 ? 'mailbox_draft_reply_proposal_cloudflare_recorded_send_cloudflare_owned_outlook_draft_and_mutation_not_admitted' : 'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted') : 'mailbox_draft_reply_windows_owned',
-          mailbox_outlook_draft_create_authority_partition: mailboxOutlookDraftCreates.length > 0 ? (mailboxSendAcceptedRecords.length > 0 ? 'mailbox_outlook_draft_create_and_send_cloudflare_owned_other_mutation_not_admitted' : 'mailbox_outlook_draft_create_cloudflare_owned_send_and_other_mutation_not_admitted') : 'mailbox_outlook_draft_create_not_observed',
+          mailbox_authority_partition: mailboxStatusSourceReads.length > 0 ? (mailboxSendAcceptedRecords.length > 0 ? (mailboxSendConfirmations.length > 0 ? 'mailbox_status_source_read_send_and_confirmation_cloudflare_owned_mutation_not_admitted' : 'mailbox_status_source_read_and_send_cloudflare_owned_confirmation_and_mutation_not_admitted') : 'mailbox_status_source_read_cloudflare_owned_send_and_mutation_not_admitted') : mailboxStatusShadowReads.length > 0 ? (mailboxSendAcceptedRecords.length > 0 ? (mailboxSendConfirmations.length > 0 ? 'mailbox_status_shadow_read_cloudflare_recorded_send_and_confirmation_cloudflare_owned_mutation_windows_owned' : 'mailbox_status_shadow_read_cloudflare_recorded_send_cloudflare_owned_confirmation_and_mutation_windows_owned') : 'mailbox_status_shadow_read_cloudflare_recorded_send_and_mutation_windows_owned') : 'mailbox_windows_owned',
+          mailbox_draft_reply_authority_partition: mailboxDraftReplyProposals.length > 0 ? (mailboxSendAcceptedRecords.length > 0 ? (mailboxSendConfirmations.length > 0 ? 'mailbox_draft_reply_proposal_cloudflare_recorded_send_and_confirmation_cloudflare_owned_outlook_draft_and_mutation_not_admitted' : 'mailbox_draft_reply_proposal_cloudflare_recorded_send_cloudflare_owned_confirmation_outlook_draft_and_mutation_not_admitted') : 'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted') : 'mailbox_draft_reply_windows_owned',
+          mailbox_outlook_draft_create_authority_partition: mailboxOutlookDraftCreates.length > 0 ? (mailboxSendAcceptedRecords.length > 0 ? (mailboxSendConfirmations.length > 0 ? 'mailbox_outlook_draft_create_send_and_confirmation_cloudflare_owned_other_mutation_not_admitted' : 'mailbox_outlook_draft_create_and_send_cloudflare_owned_confirmation_and_other_mutation_not_admitted') : 'mailbox_outlook_draft_create_cloudflare_owned_send_and_other_mutation_not_admitted') : 'mailbox_outlook_draft_create_not_observed',
           site_file_change_proposal_count: siteFileChangeProposals.length,
           site_file_change_proposal_authority: siteFileChangeProposals.length > 0 ? 'cloudflare_carrier_site' : 'not_observed',
           filesystem_executor_authority: siteFileChangeProposals.length > 0 ? 'windows_filesystem_executor' : 'retained',
@@ -5583,6 +5635,132 @@ async function listCloudflareMailboxSendAcceptedRecords(env = {}, siteId, limit)
   `).bind(siteId, boundedLimit).all();
   return (rows.results ?? []).map((row) => ({
     send_accepted_id: row.send_accepted_id, site_id: row.site_id, schema: CLOUDFLARE_MAILBOX_SEND_ACCEPTED_SCHEMA, source_schema: row.source_schema, generated_at: row.generated_at, operation_id: row.operation_id, account_ref: row.account_ref, outlook_draft_id: row.outlook_draft_id, draft_create_id: row.draft_create_id, proposal_id: row.proposal_id, source_message_ref: row.source_message_ref, send_authority: row.send_authority, mailbox_send_admission: row.mailbox_send_admission, mailbox_mutation_admission: row.mailbox_mutation_admission, delivery_confirmation_admission: row.delivery_confirmation_admission, send_posture: row.send_posture, graph_status: Number(row.graph_status), graph_response: parseJsonObject(row.graph_response_json), record: parseJsonObject(row.record_json), recorded_by_principal_id: row.recorded_by_principal_id, recorded_at: row.recorded_at,
+  }));
+}
+
+function createMailboxSendConfirmationRequest(siteId, params = {}) {
+  const sourceInput = params.source_payload ?? params.confirmation_payload ?? params;
+  const source = sourceInput && typeof sourceInput === 'object' && !Array.isArray(sourceInput) ? sourceInput : {};
+  const sourceSchema = String(source.schema ?? params.source_schema ?? '');
+  if (sourceSchema !== 'narada.sonar.mailbox_send_confirmation_read_request.v1') {
+    return { ok: false, code: 'mailbox_send_confirmation_source_schema_invalid', source_schema: sourceSchema || null, schema: CLOUDFLARE_MAILBOX_SEND_CONFIRMATION_SCHEMA };
+  }
+  const sendAcceptedId = String(source.send_accepted_id ?? params.send_accepted_id ?? '');
+  const deliveryConfirmationAdmission = String(source.delivery_confirmation_admission ?? params.delivery_confirmation_admission ?? '');
+  const mailboxMutationAdmission = String(source.mailbox_mutation_admission ?? params.mailbox_mutation_admission ?? '');
+  const sentMessageRef = String(source.sent_message_ref ?? params.sent_message_ref ?? '');
+  if (!sendAcceptedId) return { ok: false, code: 'mailbox_send_confirmation_requires_send_accepted_id', schema: CLOUDFLARE_MAILBOX_SEND_CONFIRMATION_SCHEMA };
+  if (!sentMessageRef) return { ok: false, code: 'mailbox_send_confirmation_requires_sent_message_ref', schema: CLOUDFLARE_MAILBOX_SEND_CONFIRMATION_SCHEMA };
+  if (deliveryConfirmationAdmission !== 'admitted') return { ok: false, code: 'mailbox_send_confirmation_admission_invalid', delivery_confirmation_admission: deliveryConfirmationAdmission, schema: CLOUDFLARE_MAILBOX_SEND_CONFIRMATION_SCHEMA };
+  if (mailboxMutationAdmission !== 'not_admitted') return { ok: false, code: 'mailbox_send_confirmation_mutation_admission_invalid', mailbox_mutation_admission: mailboxMutationAdmission, schema: CLOUDFLARE_MAILBOX_SEND_CONFIRMATION_SCHEMA };
+  return {
+    ok: true,
+    confirmation_request: {
+      schema: sourceSchema,
+      generated_at: String(source.generated_at ?? params.generated_at ?? new Date().toISOString()),
+      site_id: siteId,
+      send_accepted_id: sendAcceptedId,
+      operation_id: String(source.operation_id ?? params.operation_id ?? ''),
+      account_ref: String(source.account_ref ?? params.account_ref ?? ''),
+      outlook_draft_id: String(source.outlook_draft_id ?? params.outlook_draft_id ?? ''),
+      sent_message_ref: sentMessageRef,
+      delivery_confirmation_admission: deliveryConfirmationAdmission,
+      mailbox_mutation_admission: mailboxMutationAdmission,
+      confirmation_authority: CLOUDFLARE_MAILBOX_SEND_CONFIRMATION_AUTHORITY,
+      confirmation_posture: 'graph_sent_message_observed_delivery_not_claimed',
+      cutover_point_ref: String(source.cutover_point_ref ?? params.cutover_point_ref ?? ''),
+      governed_write_contract_ref: String(source.governed_write_contract_ref ?? params.governed_write_contract_ref ?? ''),
+      confirmation_evidence_ref: String(source.confirmation_evidence_ref ?? params.confirmation_evidence_ref ?? ''),
+    },
+  };
+}
+
+function mailboxSendConfirmationId(siteId, confirmationRequest) {
+  return `mailbox_send_confirmation_${safeIdToken(siteId)}_${safeIdToken(confirmationRequest.generated_at)}_${safeIdToken(confirmationRequest.send_accepted_id)}`;
+}
+
+async function readCloudflareMailboxSendConfirmation(env = {}, siteId, params = {}, principal = null) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return { ok: false, code: 'missing_site_registry_binding' };
+  if (!siteId || siteId === 'unknown-site') return { ok: false, code: 'missing_site_id' };
+  const payload = createMailboxSendConfirmationRequest(siteId, params);
+  if (!payload.ok) return payload;
+  const confirmationRequest = payload.confirmation_request;
+  await ensureCloudflareMailboxSendAcceptedSchema(db);
+  const sendAccepted = await db.prepare(`
+    SELECT * FROM cloudflare_mailbox_send_accepted_records WHERE site_id = ? AND send_accepted_id = ?
+  `).bind(siteId, confirmationRequest.send_accepted_id).first();
+  if (!sendAccepted) return { ok: false, code: 'mailbox_send_confirmation_requires_existing_send_accepted', schema: CLOUDFLARE_MAILBOX_SEND_CONFIRMATION_SCHEMA, send_accepted_id: confirmationRequest.send_accepted_id };
+  const accountRef = confirmationRequest.account_ref || String(sendAccepted.account_ref ?? '');
+  if (!accountRef) return { ok: false, code: 'mailbox_send_confirmation_requires_account_ref', schema: CLOUDFLARE_MAILBOX_SEND_CONFIRMATION_SCHEMA };
+  const tokenResult = await resolveCloudflareGraphAccessToken(env);
+  if (!tokenResult.ok) return tokenResult;
+  const baseUrl = String(env.GRAPH_BASE_URL ?? 'https://graph.microsoft.com/v1.0').replace(/\/+$/, '');
+  const graphResult = await fetchCloudflareGraphJson(env, `${baseUrl}/users/${encodeURIComponent(accountRef)}/messages/${encodeURIComponent(confirmationRequest.sent_message_ref)}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${tokenResult.access_token}` },
+  });
+  if (!graphResult.ok) return { ok: false, code: 'graph_mailbox_send_confirmation_read_failed', graph_status: graphResult.status, graph_error: graphResult.error };
+  const graphMessage = graphResult.body && typeof graphResult.body === 'object' && !Array.isArray(graphResult.body) ? graphResult.body : {};
+  const now = new Date().toISOString();
+  const record = {
+    send_confirmation_id: params.send_confirmation_id ?? mailboxSendConfirmationId(siteId, confirmationRequest),
+    site_id: siteId,
+    schema: CLOUDFLARE_MAILBOX_SEND_CONFIRMATION_SCHEMA,
+    source_schema: confirmationRequest.schema,
+    generated_at: confirmationRequest.generated_at,
+    operation_id: confirmationRequest.operation_id || String(sendAccepted.operation_id ?? ''),
+    send_accepted_id: confirmationRequest.send_accepted_id,
+    account_ref: accountRef,
+    outlook_draft_id: confirmationRequest.outlook_draft_id || String(sendAccepted.outlook_draft_id ?? ''),
+    sent_message_ref: confirmationRequest.sent_message_ref,
+    internet_message_id: String(graphMessage.internetMessageId ?? graphMessage.internet_message_id ?? ''),
+    sent_at: String(graphMessage.sentDateTime ?? graphMessage.sent_at ?? ''),
+    confirmation_authority: confirmationRequest.confirmation_authority,
+    delivery_confirmation_admission: confirmationRequest.delivery_confirmation_admission,
+    mailbox_mutation_admission: confirmationRequest.mailbox_mutation_admission,
+    confirmation_posture: confirmationRequest.confirmation_posture,
+    graph_status: graphResult.status,
+    graph_response: graphMessage,
+    cutover_point_ref: confirmationRequest.cutover_point_ref,
+    governed_write_contract_ref: confirmationRequest.governed_write_contract_ref,
+    confirmation_evidence_ref: confirmationRequest.confirmation_evidence_ref,
+    recorded_by_principal_id: principal?.principal_id ?? 'unknown-principal',
+    recorded_at: now,
+  };
+  await ensureCloudflareMailboxSendConfirmationSchema(db);
+  await db.prepare(`
+    INSERT INTO cloudflare_mailbox_send_confirmation_records (
+      send_confirmation_id, site_id, source_schema, generated_at, operation_id, send_accepted_id, account_ref, outlook_draft_id, sent_message_ref, internet_message_id, sent_at, confirmation_authority, delivery_confirmation_admission, mailbox_mutation_admission, confirmation_posture, graph_status, graph_response_json, cutover_point_ref, governed_write_contract_ref, confirmation_evidence_ref, record_json, recorded_by_principal_id, recorded_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(send_confirmation_id) DO UPDATE SET
+      source_schema = excluded.source_schema, generated_at = excluded.generated_at, operation_id = excluded.operation_id, send_accepted_id = excluded.send_accepted_id, account_ref = excluded.account_ref, outlook_draft_id = excluded.outlook_draft_id, sent_message_ref = excluded.sent_message_ref, internet_message_id = excluded.internet_message_id, sent_at = excluded.sent_at, confirmation_authority = excluded.confirmation_authority, delivery_confirmation_admission = excluded.delivery_confirmation_admission, mailbox_mutation_admission = excluded.mailbox_mutation_admission, confirmation_posture = excluded.confirmation_posture, graph_status = excluded.graph_status, graph_response_json = excluded.graph_response_json, cutover_point_ref = excluded.cutover_point_ref, governed_write_contract_ref = excluded.governed_write_contract_ref, confirmation_evidence_ref = excluded.confirmation_evidence_ref, record_json = excluded.record_json, recorded_by_principal_id = excluded.recorded_by_principal_id, recorded_at = excluded.recorded_at
+  `).bind(record.send_confirmation_id, record.site_id, record.source_schema, record.generated_at, record.operation_id, record.send_accepted_id, record.account_ref, record.outlook_draft_id, record.sent_message_ref, record.internet_message_id, record.sent_at, record.confirmation_authority, record.delivery_confirmation_admission, record.mailbox_mutation_admission, record.confirmation_posture, record.graph_status, JSON.stringify(record.graph_response), record.cutover_point_ref, record.governed_write_contract_ref, record.confirmation_evidence_ref, JSON.stringify({ ...record, confirmation_request: confirmationRequest }), record.recorded_by_principal_id, record.recorded_at).run();
+  return { ok: true, schema: CLOUDFLARE_MAILBOX_SEND_CONFIRMATION_SCHEMA, status: 'confirmed_by_reconciliation_read', site_id: siteId, mailbox_send_confirmation_authority: record.confirmation_authority, delivery_confirmation_admission: record.delivery_confirmation_admission, mailbox_mutation_admission: record.mailbox_mutation_admission, confirmation_request: confirmationRequest, record };
+}
+
+async function ensureCloudflareMailboxSendConfirmationSchema(db) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS cloudflare_mailbox_send_confirmation_records (
+      send_confirmation_id TEXT PRIMARY KEY, site_id TEXT NOT NULL, source_schema TEXT NOT NULL, generated_at TEXT NOT NULL, operation_id TEXT, send_accepted_id TEXT NOT NULL, account_ref TEXT NOT NULL, outlook_draft_id TEXT, sent_message_ref TEXT NOT NULL, internet_message_id TEXT, sent_at TEXT, confirmation_authority TEXT NOT NULL, delivery_confirmation_admission TEXT NOT NULL, mailbox_mutation_admission TEXT NOT NULL, confirmation_posture TEXT NOT NULL, graph_status INTEGER NOT NULL, graph_response_json TEXT NOT NULL, cutover_point_ref TEXT, governed_write_contract_ref TEXT, confirmation_evidence_ref TEXT, record_json TEXT NOT NULL, recorded_by_principal_id TEXT NOT NULL, recorded_at TEXT NOT NULL
+    )
+  `).run();
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_cloudflare_mailbox_send_confirmation_site_recorded
+    ON cloudflare_mailbox_send_confirmation_records(site_id, recorded_at)
+  `).run();
+}
+
+async function listCloudflareMailboxSendConfirmations(env = {}, siteId, limit) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function' || !siteId) return [];
+  await ensureCloudflareMailboxSendConfirmationSchema(db);
+  const boundedLimit = clampInteger(limit, 0, 100, 25);
+  const rows = await db.prepare(`
+    SELECT * FROM cloudflare_mailbox_send_confirmation_records WHERE site_id = ? ORDER BY recorded_at DESC, generated_at DESC LIMIT ?
+  `).bind(siteId, boundedLimit).all();
+  return (rows.results ?? []).map((row) => ({
+    send_confirmation_id: row.send_confirmation_id, site_id: row.site_id, schema: CLOUDFLARE_MAILBOX_SEND_CONFIRMATION_SCHEMA, source_schema: row.source_schema, generated_at: row.generated_at, operation_id: row.operation_id, send_accepted_id: row.send_accepted_id, account_ref: row.account_ref, outlook_draft_id: row.outlook_draft_id, sent_message_ref: row.sent_message_ref, internet_message_id: row.internet_message_id, sent_at: row.sent_at, confirmation_authority: row.confirmation_authority, delivery_confirmation_admission: row.delivery_confirmation_admission, mailbox_mutation_admission: row.mailbox_mutation_admission, confirmation_posture: row.confirmation_posture, graph_status: Number(row.graph_status), graph_response: parseJsonObject(row.graph_response_json), record: parseJsonObject(row.record_json), recorded_by_principal_id: row.recorded_by_principal_id, recorded_at: row.recorded_at,
   }));
 }
 
