@@ -125,10 +125,17 @@ export function summarizeProductSurface(operation, body) {
   }
   if (operation === 'operation.read') {
     const lifecycle = body?.operation_lifecycle_status ?? null;
+    const statusHistory = body?.operation_status_history ?? body?.operation_product_surface?.status_history ?? null;
+    const latestStatusTransition = statusHistory?.latest_transition ?? null;
     return {
       operation,
       site_id: body?.operation?.site_id ?? body?.site_id ?? null,
       operation_id: body?.operation?.operation_id ?? body?.operation_id ?? null,
+      current_status: statusHistory?.current_status ?? body?.operation?.status ?? null,
+      status_transition_count: statusHistory?.transition_count ?? 0,
+      latest_status_from: latestStatusTransition?.from_status ?? null,
+      latest_status_to: latestStatusTransition?.to_status ?? null,
+      latest_status_recorded_at: latestStatusTransition?.recorded_at ?? null,
       phase: lifecycle?.phase ?? null,
       health: lifecycle?.health ?? null,
       next_action: lifecycle?.next_action ?? body?.operation_product_surface?.next_action ?? null,
@@ -175,6 +182,10 @@ export function formatProductSurfaceText(result) {
   if (operation === 'operation.read') {
     lines.push(`Site: ${summary.site_id ?? 'unknown'}`);
     lines.push(`Operation: ${summary.operation_id ?? 'unknown'}`);
+    lines.push(`Status: current=${summary.current_status ?? 'unknown'} transitions=${summary.status_transition_count ?? 0}`);
+    if (summary.latest_status_to) {
+      lines.push(`Latest Status: ${summary.latest_status_from ?? 'unknown'} -> ${summary.latest_status_to}${summary.latest_status_recorded_at ? ` at ${summary.latest_status_recorded_at}` : ''}`);
+    }
     lines.push(`Lifecycle: phase=${summary.phase ?? 'unknown'} health=${summary.health ?? 'unknown'}`);
     lines.push(`Next Action: ${summary.next_action ?? 'none'}`);
     lines.push(`Evidence Counts: sessions=${summary.session_count ?? 0} tasks=${summary.task_count ?? 0}`);

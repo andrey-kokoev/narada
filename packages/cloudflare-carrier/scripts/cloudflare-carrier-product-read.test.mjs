@@ -225,6 +225,11 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       operation: 'operation.read',
       site_id: 'site_alpha',
       operation_id: 'operation_live',
+      current_status: 'paused',
+      status_transition_count: 1,
+      latest_status_from: 'active',
+      latest_status_to: 'paused',
+      latest_status_recorded_at: '2026-06-11T00:00:00.000Z',
       phase: 'inhabited',
       health: 'attention',
       next_action: 'continuity_packet',
@@ -232,6 +237,8 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       task_count: 3,
     },
   });
+  assert.match(operationReadText, /Status: current=paused transitions=1/);
+  assert.match(operationReadText, /Latest Status: active -> paused at 2026-06-11T00:00:00\.000Z/);
   assert.match(operationReadText, /Lifecycle: phase=inhabited health=attention/);
   assert.match(operationReadText, /Evidence Counts: sessions=1 tasks=3/);
 });
@@ -302,12 +309,26 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
   });
 
   assert.deepEqual(summarizeProductSurface('operation.read', {
-    operation: { site_id: 'site_fixture', operation_id: 'operation_control' },
+    operation: { site_id: 'site_fixture', operation_id: 'operation_control', status: 'active' },
+    operation_status_history: {
+      current_status: 'paused',
+      transition_count: 1,
+      latest_transition: {
+        from_status: 'active',
+        to_status: 'paused',
+        recorded_at: '2026-06-11T00:00:00.000Z',
+      },
+    },
     operation_lifecycle_status: { phase: 'inhabited', health: 'attention', next_action: 'continuity_packet', session_count: 1, task_count: 3 },
   }), {
     operation: 'operation.read',
     site_id: 'site_fixture',
     operation_id: 'operation_control',
+    current_status: 'paused',
+    status_transition_count: 1,
+    latest_status_from: 'active',
+    latest_status_to: 'paused',
+    latest_status_recorded_at: '2026-06-11T00:00:00.000Z',
     phase: 'inhabited',
     health: 'attention',
     next_action: 'continuity_packet',

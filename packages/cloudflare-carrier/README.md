@@ -299,7 +299,7 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:list:text -- --url <
 pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
 ```
 
-The text output names the operation, worker URL, auth source, selected site or operation, health, next action, continuity/reconciliation posture, durability posture, and evidence counts while preserving the same credential redaction rule as the JSON envelope.
+The text output names the operation, worker URL, auth source, selected site or operation, health, next action, continuity/reconciliation posture, durability posture, lifecycle status transitions, and evidence counts while preserving the same credential redaction rule as the JSON envelope.
 
 ## Live Smoke
 
