@@ -2974,6 +2974,9 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /recoveryNextAction/);
   assert.match(html, /Apply Recovery Next Action/);
   assert.match(html, /snapshot_reload_available/);
+  assert.match(html, /recovery_boundaries_recoverable/);
+  assert.match(html, /Review Persistence Boundaries/);
+  assert.match(html, /Review Recovery Boundaries/);
   assert.match(html, /evidence_replay_loaded/);
   assert.match(html, /reconstructability_confirmed/);
   assert.match(html, /Authority Transfer/);

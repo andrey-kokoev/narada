@@ -15314,6 +15314,8 @@ export function renderCloudflareCarrierConsole() {
     function recoveryWorkflowItems(product = state.operationProduct || {}) {
       const posture = recoveryPosture(product) || {};
       const gaps = posture.recovery_gaps || [];
+      const boundaries = posture.recovery_boundaries || [];
+      const unavailableBoundaries = boundaries.filter((boundary) => boundary.status !== 'recoverable');
       const missingSessionIds = posture.missing_evidence_session_ids || [];
       const hasProductScope = state.productScope !== 'none' && (product.operation || product.site);
       const hasEvidence = Number(posture.evidence_event_count ?? 0) > 0 || state.events.length > 0;
@@ -15339,6 +15341,16 @@ export function renderCloudflareCarrierConsole() {
           action: () => run(product.operation || el('operationId').value.trim() ? refreshOperation : refreshSiteProduct),
         },
         {
+          key: 'recovery_boundaries_recoverable',
+          label: 'Recovery Boundaries',
+          status: unavailableBoundaries.length === 0 ? 'complete' : 'needs_attention',
+          detail: unavailableBoundaries.length === 0
+            ? String(posture.recoverable_boundary_count ?? boundaries.filter((boundary) => boundary.status === 'recoverable').length) + ' recoverable boundaries'
+            : recoveryPostureItemSummary(unavailableBoundaries),
+          action_label: unavailableBoundaries.length === 0 ? 'Review Recovery Boundaries' : 'Review Persistence Boundaries',
+          action: () => { if (unavailableBoundaries.length > 0) renderPersistencePosture(product); else renderRecoveryPosture(product); },
+        },
+        {
           key: 'evidence_replay_loaded',
           label: 'Evidence Replay',
           status: evidenceReplayReady || hasEvidence ? 'complete' : 'needs_attention',
@@ -15361,7 +15373,7 @@ export function renderCloudflareCarrierConsole() {
           key: 'reconstructability_confirmed',
           label: 'Reconstructability',
           status: reconstructable ? 'complete' : 'needs_attention',
-          detail: gaps.length === 0 ? (posture.state || 'unknown') : gaps.join(', '),
+          detail: gaps.length === 0 ? (posture.state || 'unknown') : recoveryPostureItemSummary(gaps),
           action_label: hasEvidence ? 'Focus Replayed Evidence' : 'Refresh Recovery State',
           action: () => { if (hasEvidence) focusRecoveryEvidence(product); else run(refreshOperation); },
         },
