@@ -157,9 +157,9 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
       continuity_packet_count: 2,
       continuity_loop_report_count: 1,
       continuity_reconciliation_execution_count: 1,
-      cloudflare_persistence_posture: { state: 'durable' },
-      cloudflare_recovery_posture: { state: 'reconstructable' },
     },
+    cloudflare_persistence_posture: { state: 'durable' },
+    cloudflare_recovery_posture: { state: 'reconstructable' },
     memberships: [{}, {}],
   }), {
     operation: 'site.read',

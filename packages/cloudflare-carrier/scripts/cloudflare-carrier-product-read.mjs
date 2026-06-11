@@ -102,8 +102,8 @@ export function summarizeProductSurface(operation, body) {
       continuity_packet_count: status?.continuity_packet_count ?? 0,
       continuity_loop_report_count: status?.continuity_loop_report_count ?? 0,
       continuity_reconciliation_execution_count: status?.continuity_reconciliation_execution_count ?? 0,
-      persistence_state: status?.cloudflare_persistence_posture?.state ?? null,
-      recovery_state: status?.cloudflare_recovery_posture?.state ?? null,
+      persistence_state: status?.cloudflare_persistence_posture?.state ?? body?.cloudflare_persistence_posture?.state ?? null,
+      recovery_state: status?.cloudflare_recovery_posture?.state ?? body?.cloudflare_recovery_posture?.state ?? null,
       membership_count: Array.isArray(body?.memberships) ? body.memberships.length : 0,
       session_count: Array.isArray(body?.sessions) ? body.sessions.length : status?.session_count ?? 0,
     };
