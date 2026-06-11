@@ -3058,6 +3058,8 @@ function printHelp() {
 
 Command:
   pnpm cloudflare:operator:check [--site <site_id>]
+  pnpm cloudflare:operator:check:human
+  pnpm cloudflare:operator:check:human-action
 
 Configuration:
   --url <worker-url> or CLOUDFLARE_CARRIER_URL
@@ -3073,7 +3075,9 @@ Configuration:
 Effect:
   Loads the ignored root .env file.
   Verifies the console, API client, Microsoft login surface, canonical Site, and canonical Operation.
-  Optionally verifies the current Microsoft operator session, active Site membership, Operation visibility, and a real cookie-backed resident dispatch action.
+  The default check is the service/substrate readiness gate.
+  cloudflare:operator:check:human verifies the current Microsoft operator session, active Site membership, and Operation visibility.
+  cloudflare:operator:check:human-action also verifies a real cookie-backed resident dispatch action.
   Runs the live carrier smoke through Workers AI and Cloudflare task effects.
   Reads site and operation product surfaces, including posture routes, persistence posture, recovery posture, and carrier evidence replay posture.
   Verifies the local provider-liveness and site-continuity Task Scheduler readbacks point at hidden wscript wrappers, match cadence, and have no scheduler attention reasons.

@@ -29,6 +29,8 @@ test('cloudflare operator check help describes the current product gate', async 
   const result = await runHelp();
   assert.equal(result.code, 0, result.stderr);
   assert.match(result.stdout, /Microsoft login surface/);
+  assert.match(result.stdout, /cloudflare:operator:check:human/);
+  assert.match(result.stdout, /cloudflare:operator:check:human-action/);
   assert.match(result.stdout, /canonical Site/);
   assert.match(result.stdout, /canonical Operation/);
   assert.match(result.stdout, /persistence posture/);

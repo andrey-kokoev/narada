@@ -32,6 +32,18 @@ The service token proves service authority and live substrate readiness. It does
 pnpm cloudflare:operator:check -- --operator-cookie-file D:\tmp\narada-cloudflare-operator-cookie.txt --require-operator-session
 ```
 
+The named strict gate is:
+
+```powershell
+pnpm cloudflare:operator:check:human
+```
+
+To also prove a real cookie-backed controlled action and readback:
+
+```powershell
+pnpm cloudflare:operator:check:human-action
+```
+
 Without `--operator-cookie-file`, the command still verifies that the Microsoft login surface is reachable and reports `human_operator_login_ready` as `surface_only`.
 
 The repeatable capture path is:
@@ -40,7 +52,7 @@ The repeatable capture path is:
 pnpm cloudflare:operator:login
 pnpm cloudflare:operator:site:bootstrap
 pnpm cloudflare:operator:operation:bootstrap
-pnpm cloudflare:operator:check -- --require-operator-session
+pnpm cloudflare:operator:check:human
 ```
 
 `cloudflare:operator:site:bootstrap` creates the canonical Site if missing, resolves the Microsoft operator principal from the captured cookie file, grants that principal `owner / active`, and writes `CLOUDFLARE_CARRIER_SITE_ID=site_narada_cloudflare` to the ignored root `.env` file unless `--no-write-env` is supplied.
