@@ -33,6 +33,7 @@ export function buildSiteContinuitySchedulerPlan({
   localRoot = null,
   siteId = process.env.CLOUDFLARE_CARRIER_SITE_ID ?? process.env.NARADA_SITE_CONTINUITY_SITE_ID ?? null,
   packetPath = process.env.NARADA_SITE_CONTINUITY_PACKET ?? null,
+  packetDirectory = process.env.NARADA_SITE_CONTINUITY_PACKET_DIR ?? null,
   outputPath = process.env.NARADA_SITE_CONTINUITY_SYNC_OUT ?? '.narada/site-continuity/cloudflare-sync-last.json',
   reconciliationExecutionOutputPath = process.env.NARADA_SITE_CONTINUITY_RECONCILE_EXECUTION_OUT ?? '.narada/site-continuity/reconciliation/cloudflare-reconcile-last.json',
   healthOutputPath = process.env.NARADA_SITE_CONTINUITY_HEALTH_OUT ?? '.narada/site-continuity/health/cloudflare-continuity-health-last.json',
@@ -51,6 +52,7 @@ export function buildSiteContinuitySchedulerPlan({
   const taskEntryPoint = resolve(root, scheduledTaskEntrypoint);
   const effectiveLocalRoot = resolvePath(root, localRoot ?? root);
   const effectivePacketPath = packetPath ? resolvePath(effectiveLocalRoot, packetPath) : null;
+  const effectivePacketDirectory = packetDirectory ? resolvePath(effectiveLocalRoot, packetDirectory) : null;
   const effectiveOutputPath = outputPath ? resolvePath(effectiveLocalRoot, outputPath) : null;
   const effectiveReconciliationExecutionOutputPath = reconciliationExecutionOutputPath ? resolvePath(effectiveLocalRoot, reconciliationExecutionOutputPath) : null;
   const effectiveHealthOutputPath = healthOutputPath ? resolvePath(effectiveLocalRoot, healthOutputPath) : null;
@@ -72,6 +74,7 @@ export function buildSiteContinuitySchedulerPlan({
     taskEntryPoint,
     localRoot: effectiveLocalRoot,
     packetPath: effectivePacketPath,
+    packetDirectory: effectivePacketDirectory,
     outputPath: effectiveOutputPath,
     configuredSites: localConfiguredSites,
   });
@@ -96,6 +99,7 @@ export function buildSiteContinuitySchedulerPlan({
     local_root: effectiveLocalRoot,
     site_id: siteId ?? null,
     packet_path: effectivePacketPath,
+    packet_directory: effectivePacketDirectory,
     output_path: effectiveOutputPath,
     reconciliation_execution_output_path: effectiveReconciliationExecutionOutputPath,
     health_output_path: effectiveHealthOutputPath,
@@ -220,6 +224,7 @@ export function buildSiteContinuitySchedulerPlan({
           nodeCommand,
           syncEntryPoint,
           packetPath: effectivePacketPath,
+          packetDirectory: effectivePacketDirectory,
           artifactDirectory: effectiveArtifactDirectory,
         }),
       };
@@ -672,7 +677,7 @@ export async function executeSiteContinuityReconciliationPlan(
       '--site',
       site.site_id,
       '--packet',
-      plan.packet_path,
+      site.packet_path,
       '--out',
       site.output_path,
     ];
@@ -942,13 +947,14 @@ export function buildSiteContinuityReconciliationPlan({
   nodeCommand = process.env.NARADA_NODE_COMMAND ?? 'node',
   syncEntryPoint,
   packetPath = null,
+  packetDirectory = null,
   artifactDirectory = null,
 } = {}) {
   const configuredStatuses = localSyncArtifacts?.configured_site_sync_statuses ?? [];
-  const packetSummary = readSiteContinuityPacketSummary(packetPath);
   const selectedSites = configuredStatuses
     .filter((site) => site.status !== 'synced')
-    .map((site) => buildReconciliationSiteAction(site, { nodeCommand, syncEntryPoint, packetPath, packetSummary, artifactDirectory }));
+    .map((site) => buildReconciliationSiteAction(site, { nodeCommand, syncEntryPoint, packetPath, packetDirectory, artifactDirectory }));
+  const packetSummary = packetDirectory ? null : readSiteContinuityPacketSummary(packetPath);
   const commandReadyCount = selectedSites.filter((site) => site.command_status === 'ready').length;
   return {
     schema: 'narada.cloudflare_carrier.site_continuity_reconciliation_plan.v1',
@@ -961,6 +967,8 @@ export function buildSiteContinuityReconciliationPlan({
     selected_site_count: selectedSites.length,
     command_ready_count: commandReadyCount,
     packet_summary: packetSummary,
+    packet_directory: packetDirectory,
+    packet_resolution: packetDirectory ? 'per_site_packet_directory' : 'single_packet_path',
     selected_reason_counts: countSelectedReasons(selectedSites),
     selected_sites: selectedSites,
   };
@@ -1217,7 +1225,7 @@ export function readLastScheduledHealthSnapshot(outputPath) {
   };
 }
 
-export function readLocalSchedulerStatus({ root, syncEntryPoint, taskEntryPoint, localRoot, packetPath, outputPath, configuredSites = null }) {
+export function readLocalSchedulerStatus({ root, syncEntryPoint, taskEntryPoint, localRoot, packetPath, packetDirectory = null, outputPath, configuredSites = null }) {
   const envPath = resolve(root, '.env');
   const envKeys = existsSync(envPath) ? readEnvKeys(envPath) : [];
   return {
@@ -1228,6 +1236,7 @@ export function readLocalSchedulerStatus({ root, syncEntryPoint, taskEntryPoint,
     scheduled_task_entrypoint_exists: existsSync(taskEntryPoint),
     local_root_exists: existsSync(localRoot),
     packet_path_exists: packetPath ? existsSync(packetPath) : false,
+    packet_directory_exists: packetDirectory ? existsSync(packetDirectory) : false,
     output_path_parent_exists: outputPath ? existsSync(dirname(outputPath)) : false,
     env_file_present: existsSync(envPath),
     required_env_keys_observed: [
@@ -1235,8 +1244,8 @@ export function readLocalSchedulerStatus({ root, syncEntryPoint, taskEntryPoint,
       envKeys.includes('CLOUDFLARE_CARRIER_TOKEN_FILE') ? 'CLOUDFLARE_CARRIER_TOKEN_FILE' : envKeys.includes('CLOUDFLARE_CARRIER_TOKEN') ? 'CLOUDFLARE_CARRIER_TOKEN' : null,
     ].filter(Boolean),
     site_configured: Boolean(process.env.CLOUDFLARE_CARRIER_SITE_ID || process.env.NARADA_SITE_CONTINUITY_SITE_ID || configuredSites?.site_count > 0),
-    packet_configured: Boolean(process.env.NARADA_SITE_CONTINUITY_PACKET || packetPath),
-    command_args_complete: Boolean(packetPath && outputPath),
+    packet_configured: Boolean(process.env.NARADA_SITE_CONTINUITY_PACKET || process.env.NARADA_SITE_CONTINUITY_PACKET_DIR || packetPath || packetDirectory),
+    command_args_complete: Boolean((packetPath || packetDirectory) && outputPath),
     embeds_credentials: false,
   };
 }
@@ -1433,16 +1442,18 @@ function readSiteContinuityPacketSummary(packetPath) {
   }
 }
 
-function buildReconciliationSiteAction(site, { nodeCommand, syncEntryPoint, packetPath, packetSummary = null, artifactDirectory }) {
+function buildReconciliationSiteAction(site, { nodeCommand, syncEntryPoint, packetPath, packetDirectory = null, artifactDirectory }) {
   const outputPath = artifactDirectory ? join(artifactDirectory, `${safeFileToken(site.site_id)}-cloudflare-sync.json`) : null;
+  const effectivePacketPath = resolveReconciliationPacketPath(site.site_id, { packetPath, packetDirectory });
+  const packetSummary = readSiteContinuityPacketSummary(effectivePacketPath);
   const packetSiteId = packetSummary?.site_id ?? null;
   const packetSiteMismatch = Boolean(packetSiteId && site.site_id && packetSiteId !== site.site_id);
   const commandBlockers = [
     syncEntryPoint ? null : 'sync_entrypoint_required',
-    packetPath ? null : 'packet_path_required',
-    packetPath && packetSummary?.state === 'missing' ? 'packet_path_missing' : null,
-    packetPath && packetSummary?.state === 'invalid_json' ? 'packet_json_invalid' : null,
-    packetPath && packetSummary?.state === 'site_id_missing' ? 'packet_site_id_required' : null,
+    effectivePacketPath ? null : 'packet_path_required',
+    effectivePacketPath && packetSummary?.state === 'missing' ? 'packet_path_missing' : null,
+    effectivePacketPath && packetSummary?.state === 'invalid_json' ? 'packet_json_invalid' : null,
+    effectivePacketPath && packetSummary?.state === 'site_id_missing' ? 'packet_site_id_required' : null,
     packetSiteMismatch ? 'packet_site_id_mismatch' : null,
     outputPath ? null : 'artifact_directory_required',
   ].filter(Boolean);
@@ -1463,9 +1474,15 @@ function buildReconciliationSiteAction(site, { nodeCommand, syncEntryPoint, pack
     command_status: commandReady ? 'ready' : 'needs_configuration',
     command_blockers: commandBlockers,
     packet_site_id: packetSiteId,
-    packet_path: packetPath ?? null,
-    sync_command: commandReady ? buildSyncOnceCommand({ nodeCommand, syncEntryPoint, siteId: site.site_id, packetPath, outputPath }) : null,
+    packet_path: effectivePacketPath ?? null,
+    packet_path_source: packetDirectory ? 'packet_directory' : 'single_packet_path',
+    sync_command: commandReady ? buildSyncOnceCommand({ nodeCommand, syncEntryPoint, siteId: site.site_id, packetPath: effectivePacketPath, outputPath }) : null,
   };
+}
+
+function resolveReconciliationPacketPath(siteId, { packetPath = null, packetDirectory = null } = {}) {
+  if (packetDirectory) return join(packetDirectory, `${safeFileToken(siteId)}-packet.json`);
+  return packetPath;
 }
 
 function buildSyncOnceCommand({ nodeCommand, syncEntryPoint, siteId, packetPath, outputPath }) {
@@ -1550,6 +1567,7 @@ function parseArgs(argv) {
     else if (arg === '--local-root') args.localRoot = argv[++index];
     else if (arg === '--site') args.siteId = argv[++index];
     else if (arg === '--packet') args.packetPath = argv[++index];
+    else if (arg === '--packet-dir') args.packetDirectory = argv[++index];
     else if (arg === '--out') args.outputPath = argv[++index];
     else if (arg === '--reconciliation-execution-out') args.reconciliationExecutionOutputPath = argv[++index];
     else if (arg === '--health-out') args.healthOutputPath = argv[++index];
