@@ -3067,6 +3067,7 @@ test('worker records webhook delay observations as Cloudflare shadow-read eviden
     status: 'needs_attention',
     reason: 'persistence_posture_needs_attention',
     lifecycle_next_action: 'session',
+    operator_focus: null,
   });
   assert.deepEqual(operationReadBody.operation_product_surface.operation_workflow_route, operationReadBody.operation_workflow_route);
   assert.equal(operationReadBody.operation_product_surface.continuity_status.schema, 'narada.cloudflare_site_continuity_status.v1');
@@ -4144,6 +4145,11 @@ test('worker records mailbox draft reply proposals without admitting Outlook dra
   assert.equal(operationReadBody.operation_product_surface.mailbox_mutation_admission, 'not_admitted');
   assert.equal(operationReadBody.operation_product_surface.mailbox_draft_reply_authority_partition, 'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted');
   assert.equal(operationReadBody.operation_activity_timeline.items.some((entry) => entry.activity_kind === 'mailbox_draft_reply_proposal'), true);
+  assert.equal(operationReadBody.operation_workflow_route.operator_focus.schema, 'narada.cloudflare_operation_operator_focus.v1');
+  assert.equal(operationReadBody.operation_workflow_route.operator_focus.action, 'review_mailbox_draft_reply_proposal');
+  assert.equal(operationReadBody.operation_workflow_route.operator_focus.focus_kind, 'mailbox_draft_reply_proposal');
+  assert.equal(operationReadBody.operation_workflow_route.operator_focus.focus_ref, 'mailbox_draft_reply_fixture_1');
+  assert.deepEqual(operationReadBody.operation_product_surface.operation_workflow_route, operationReadBody.operation_workflow_route);
 });
 
 test('worker creates Outlook drafts through Cloudflare Graph authority without admitting send', async () => {
@@ -4236,6 +4242,11 @@ test('worker creates Outlook drafts through Cloudflare Graph authority without a
   assert.equal(operationReadBody.operation_product_surface.mailbox_mutation_admission, 'not_admitted');
   assert.equal(operationReadBody.operation_product_surface.mailbox_outlook_draft_create_authority_partition, 'mailbox_outlook_draft_create_cloudflare_owned_send_and_other_mutation_not_admitted');
   assert.equal(operationReadBody.operation_activity_timeline.items.some((entry) => entry.activity_kind === 'mailbox_outlook_draft_create'), true);
+  assert.equal(operationReadBody.operation_workflow_route.operator_focus.schema, 'narada.cloudflare_operation_operator_focus.v1');
+  assert.equal(operationReadBody.operation_workflow_route.operator_focus.action, 'review_mailbox_outlook_draft_create');
+  assert.equal(operationReadBody.operation_workflow_route.operator_focus.focus_kind, 'mailbox_outlook_draft_create');
+  assert.equal(operationReadBody.operation_workflow_route.operator_focus.focus_ref, 'mailbox_outlook_draft_create_fixture_1');
+  assert.deepEqual(operationReadBody.operation_product_surface.operation_workflow_route, operationReadBody.operation_workflow_route);
 
   const sendSourcePayload = {
     schema: 'narada.sonar.mailbox_send_request.v1',
@@ -4376,6 +4387,11 @@ test('worker creates Outlook drafts through Cloudflare Graph authority without a
   assert.equal(operationReadAfterConfirmationBody.operation_product_surface.mailbox_outlook_draft_create_authority_partition, 'mailbox_outlook_draft_create_send_and_confirmation_cloudflare_owned_other_mutation_not_admitted');
   assert.equal(operationReadAfterConfirmationBody.authority_transfer_posture.remaining_windows_authorities.some((entry) => entry.authority === 'mailbox_delivery_confirmation'), false);
   assert.equal(operationReadAfterConfirmationBody.operation_activity_timeline.items.some((entry) => entry.activity_kind === 'mailbox_send_confirmation'), true);
+  assert.equal(operationReadAfterConfirmationBody.operation_workflow_route.operator_focus.schema, 'narada.cloudflare_operation_operator_focus.v1');
+  assert.equal(operationReadAfterConfirmationBody.operation_workflow_route.operator_focus.action, 'review_mailbox_send_confirmation');
+  assert.equal(operationReadAfterConfirmationBody.operation_workflow_route.operator_focus.focus_kind, 'mailbox_send_confirmation');
+  assert.equal(operationReadAfterConfirmationBody.operation_workflow_route.operator_focus.focus_ref, 'mailbox_send_confirmation_fixture_1');
+  assert.deepEqual(operationReadAfterConfirmationBody.operation_product_surface.operation_workflow_route, operationReadAfterConfirmationBody.operation_workflow_route);
 });
 
 test('worker records site file change proposals without admitting filesystem or publication mutation', async () => {

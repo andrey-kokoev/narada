@@ -73,7 +73,19 @@ if (operationRead.body.operation_product_surface.mailbox_draft_reply_proposal_co
 }
 if (operationRead.body.operation_product_surface.mailbox_outlook_draft_create_count > 0) {
   assert.equal(operationRead.body.operation_product_surface.mailbox_outlook_draft_create_authority, 'cloudflare_graph_outlook_draft_create');
-  assert.equal(operationRead.body.operation_product_surface.mailbox_outlook_draft_create_authority_partition, 'mailbox_outlook_draft_create_cloudflare_owned_send_and_other_mutation_not_admitted');
+  assert.ok([
+    'mailbox_outlook_draft_create_cloudflare_owned_send_and_other_mutation_not_admitted',
+    'mailbox_outlook_draft_create_and_send_cloudflare_owned_confirmation_and_other_mutation_not_admitted',
+    'mailbox_outlook_draft_create_send_and_confirmation_cloudflare_owned_other_mutation_not_admitted',
+  ].includes(operationRead.body.operation_product_surface.mailbox_outlook_draft_create_authority_partition));
+}
+if (operationRead.body.operation_product_surface.mailbox_send_accepted_count > 0) {
+  assert.equal(operationRead.body.operation_product_surface.mailbox_send_authority, 'cloudflare_graph_mailbox_send');
+  assert.equal(operationRead.body.operation_product_surface.mailbox_send_admission, 'admitted');
+}
+if (operationRead.body.operation_product_surface.mailbox_send_confirmation_count > 0) {
+  assert.equal(operationRead.body.operation_product_surface.mailbox_send_confirmation_authority, 'cloudflare_graph_sent_items_reconciliation');
+  assert.equal(operationRead.body.operation_product_surface.mailbox_send_delivery_confirmation_admission, 'admitted');
 }
 assert.equal(operationRead.body.operation_product_surface.mailbox_mutation_admission, 'not_admitted');
 assert.ok(operationRead.body.authority_transfer_posture, 'missing authority transfer posture');
@@ -95,7 +107,9 @@ process.stdout.write(`${JSON.stringify({
   mailbox_outlook_draft_create_admission: operationRead.body.operation_product_surface.mailbox_outlook_draft_create_admission,
   mailbox_outlook_draft_create_authority_partition: operationRead.body.operation_product_surface.mailbox_outlook_draft_create_authority_partition,
   mailbox_send_accepted_count: operationRead.body.operation_product_surface.mailbox_send_accepted_count,
+  mailbox_send_authority: operationRead.body.operation_product_surface.mailbox_send_authority,
   mailbox_send_confirmation_count: operationRead.body.operation_product_surface.mailbox_send_confirmation_count,
+  mailbox_send_confirmation_authority: operationRead.body.operation_product_surface.mailbox_send_confirmation_authority,
   mailbox_send_admission: operationRead.body.operation_product_surface.mailbox_send_admission,
   mailbox_send_delivery_confirmation_admission: operationRead.body.operation_product_surface.mailbox_send_delivery_confirmation_admission,
   mailbox_mutation_admission: operationRead.body.operation_product_surface.mailbox_mutation_admission,

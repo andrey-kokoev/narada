@@ -1826,6 +1826,7 @@ function summarizeCloudflareOperationWorkflowRoute({
   lifecycleStatus = null,
   persistencePosture = null,
   recoveryPosture = null,
+  operationActivityTimeline = null,
   webhookDelayDirectiveRecords = [],
   webhookDelayDirectiveDeliveries = [],
   residentDispatchDecisions = [],
@@ -1837,6 +1838,7 @@ function summarizeCloudflareOperationWorkflowRoute({
   const directiveRecords = Array.isArray(webhookDelayDirectiveRecords) ? webhookDelayDirectiveRecords : [];
   const directiveDeliveries = Array.isArray(webhookDelayDirectiveDeliveries) ? webhookDelayDirectiveDeliveries : [];
   const dispatchDecisions = Array.isArray(residentDispatchDecisions) ? residentDispatchDecisions : [];
+  const operatorFocus = summarizeCloudflareOperationOperatorFocus(operationActivityTimeline);
   const next = (() => {
     if (!operationId) return { action: 'select_operation', target: siteId ?? 'none', reason: 'operation_not_loaded' };
     if (persistencePosture?.state && persistencePosture.state !== 'durable') {
@@ -1878,7 +1880,39 @@ function summarizeCloudflareOperationWorkflowRoute({
     status: ready ? 'ready' : 'needs_attention',
     reason: next.reason,
     lifecycle_next_action: lifecycleStatus?.next_action ?? 'unknown',
+    operator_focus: operatorFocus,
   };
+}
+
+function summarizeCloudflareOperationOperatorFocus(operationActivityTimeline = null) {
+  const items = Array.isArray(operationActivityTimeline?.items) ? operationActivityTimeline.items : [];
+  const priorities = [
+    ['mailbox_send_confirmation', 'review_mailbox_send_confirmation'],
+    ['mailbox_send_accepted', 'review_mailbox_send_acceptance'],
+    ['mailbox_outlook_draft_create', 'review_mailbox_outlook_draft_create'],
+    ['mailbox_draft_reply_proposal', 'review_mailbox_draft_reply_proposal'],
+    ['local_ingress_request', 'review_local_ingress_request'],
+    ['repository_publication_request', 'review_repository_publication_request'],
+    ['site_file_change_proposal', 'review_site_file_change_proposal'],
+  ];
+  for (const [activityKind, action] of priorities) {
+    const item = items.find((entry) => entry?.activity_kind === activityKind);
+    if (item) {
+      return {
+        schema: 'narada.cloudflare_operation_operator_focus.v1',
+        action,
+        activity_kind: item.activity_kind,
+        activity_id: item.activity_id ?? null,
+        focus_kind: item.focus_kind ?? item.activity_kind,
+        focus_ref: item.focus_ref ?? item.source_ref ?? item.activity_id ?? null,
+        source_ref: item.source_ref ?? null,
+        occurred_at: item.occurred_at ?? null,
+        title: item.title ?? null,
+        summary: item.summary ?? null,
+      };
+    }
+  }
+  return null;
 }
 
 function cloudflareOperationWorkQueueItems(operations = [], product = {}, context = {}) {
@@ -4297,6 +4331,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       lifecycleStatus: operationLifecycleStatus,
       persistencePosture: cloudflarePersistencePosture,
       recoveryPosture: cloudflareRecoveryPosture,
+      operationActivityTimeline,
       webhookDelayDirectiveRecords,
       webhookDelayDirectiveDeliveries,
       residentDispatchDecisions,
