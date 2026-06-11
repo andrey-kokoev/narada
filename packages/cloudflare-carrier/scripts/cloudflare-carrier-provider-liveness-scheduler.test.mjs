@@ -59,6 +59,39 @@ test('provider liveness scheduler install plan is bounded and secret-free', asyn
   }
 });
 
+test('provider liveness scheduler install plan resolves default FNM node command for hidden wrapper parity', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-provider-liveness-scheduler-fnm-node-'));
+  const entrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-carrier-provider-liveness-refresh.mjs');
+  const scheduledTaskEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-carrier-provider-liveness-scheduled-task.mjs');
+  const fnmDir = join(root, '.fnm');
+  const fnmInstallDir = join(fnmDir, 'node-versions', `v${process.versions.node}`, 'installation');
+  const fnmNode = process.platform === 'win32' ? join(fnmInstallDir, 'node.exe') : join(fnmInstallDir, 'bin/node');
+  const originalFnmDir = process.env.FNM_DIR;
+  const originalNaradaNodeCommand = process.env.NARADA_NODE_COMMAND;
+  await mkdir(join(root, 'packages/cloudflare-carrier/scripts'), { recursive: true });
+  await mkdir(process.platform === 'win32' ? fnmInstallDir : join(fnmInstallDir, 'bin'), { recursive: true });
+  await writeFile(entrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(scheduledTaskEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(fnmNode, '', 'utf8');
+  try {
+    process.env.FNM_DIR = fnmDir;
+    delete process.env.NARADA_NODE_COMMAND;
+    const plan = buildProviderLivenessSchedulerPlan({ action: 'install', repoRoot: root, intervalMinutes: 2 });
+
+    assert.equal(plan.node_command, fnmNode);
+    assert.equal(plan.direct_task_command.includes(fnmNode), true);
+    assert.equal(plan.hidden_wrapper_content.includes(fnmNode), true);
+    assert.doesNotMatch(plan.direct_task_command, /^"?node"?\s/);
+    assert.equal(plan.task_command.startsWith('wscript.exe //B '), true);
+  } finally {
+    if (originalFnmDir === undefined) delete process.env.FNM_DIR;
+    else process.env.FNM_DIR = originalFnmDir;
+    if (originalNaradaNodeCommand === undefined) delete process.env.NARADA_NODE_COMMAND;
+    else process.env.NARADA_NODE_COMMAND = originalNaradaNodeCommand;
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('provider liveness scheduler live install materializes hidden VBS wrapper and executes task plan', async () => {
   const root = await mkdtemp(join(tmpdir(), 'narada-provider-liveness-scheduler-live-'));
   const entrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-carrier-provider-liveness-refresh.mjs');
