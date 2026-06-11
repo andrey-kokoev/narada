@@ -14,6 +14,10 @@ import {
   materializeCloudflareSiteRegistryProjection,
   resolveCloudflareSiteRegistryProjectionInputs,
 } from './cloudflare-carrier-site-registry-projection.mjs';
+import {
+  readProductSurface,
+  resolveAuth as resolveProductReadAuth,
+} from './cloudflare-carrier-product-read.mjs';
 
 const DEFAULT_TASK_NAME = '\\Narada\\CloudflareSiteContinuitySync';
 const DEFAULT_INTERVAL_MINUTES = 5;
@@ -436,7 +440,12 @@ function countResultStatuses(results) {
 
 export async function runSiteContinuitySchedulerActionWithOptionalRefresh(
   options = {},
-  { env = process.env, materializeSiteRegistryProjection = materializeCloudflareSiteRegistryProjection, execFileImpl = execFile } = {},
+  {
+    env = process.env,
+    materializeSiteRegistryProjection = materializeCloudflareSiteRegistryProjection,
+    execFileImpl = execFile,
+    productReadSurface = readProductSurface,
+  } = {},
 ) {
   const action = options.action ?? 'status';
   if (action !== 'reconcile-execute') {
@@ -461,6 +470,11 @@ export async function runSiteContinuitySchedulerActionWithOptionalRefresh(
   const healthPlan = buildSiteContinuitySchedulerPlan({ ...planningOptions, action: 'health' });
   const healthReadback = await executeSchedulerTaskReadback(healthPlan, { execFileImpl, executionTimeoutMs: options.executionTimeoutMs });
   const continuityHealth = healthReadback.continuity_health ?? summarizeSiteContinuityHealth(healthPlan, healthReadback.scheduler_task_readback ?? null);
+  const cloudflareProductPosture = await readCloudflareProductPostureForHealthSnapshot({
+    env,
+    now: options.now,
+    productReadSurface,
+  });
   return {
     ...reconciliationExecution,
     scheduled_health_snapshot: persistSiteContinuityHealthSnapshot({
@@ -469,12 +483,87 @@ export async function runSiteContinuitySchedulerActionWithOptionalRefresh(
       generated_at: options.now?.() ?? new Date().toISOString(),
       health_output_path: plan.health_output_path ?? null,
       embeds_credentials: false,
-      trigger: process.env.NARADA_SITE_CONTINUITY_SYNC_TRIGGER ?? null,
+      trigger: env.NARADA_SITE_CONTINUITY_SYNC_TRIGGER ?? null,
       reconciliation_execution: summarizeReconciliationExecutionForHealthSnapshot(reconciliationExecution),
       continuity_health: continuityHealth,
+      cloudflare_product_posture: cloudflareProductPosture,
       scheduler_task_readback: healthReadback.scheduler_task_readback ?? null,
     }, { dryRun: false, now: options.now }),
   };
+}
+
+export async function readCloudflareProductPostureForHealthSnapshot({
+  env = process.env,
+  now = () => new Date().toISOString(),
+  productReadSurface = readProductSurface,
+} = {}) {
+  const workerUrl = String(env.CLOUDFLARE_CARRIER_URL ?? '').replace(/\/+$/, '');
+  const generatedAt = typeof now === 'function' ? now() : new Date().toISOString();
+  if (!workerUrl) {
+    return {
+      schema: 'narada.cloudflare_carrier.product_posture_snapshot.v1',
+      state: 'not_configured',
+      status: 'not_available',
+      generated_at: generatedAt,
+      operation: 'site.list',
+      missing: ['CLOUDFLARE_CARRIER_URL'],
+      embeds_credentials: false,
+    };
+  }
+  const auth = resolveProductReadAuth([], env);
+  if (!auth) {
+    return {
+      schema: 'narada.cloudflare_carrier.product_posture_snapshot.v1',
+      state: 'not_configured',
+      status: 'not_available',
+      generated_at: generatedAt,
+      worker_url: workerUrl,
+      operation: 'site.list',
+      missing: ['cloudflare_product_read_auth'],
+      embeds_credentials: false,
+    };
+  }
+  try {
+    const productRead = await productReadSurface({
+      workerUrl,
+      operation: 'site.list',
+      requestId: `scheduled_health_product_read_${Date.parse(generatedAt) || Date.now()}`,
+      params: {},
+      format: 'json',
+      auth,
+    });
+    return {
+      schema: 'narada.cloudflare_carrier.product_posture_snapshot.v1',
+      state: 'loaded',
+      status: 'ok',
+      generated_at: generatedAt,
+      worker_url: workerUrl,
+      operation: 'site.list',
+      auth_kind: auth.kind,
+      summary: productRead.summary ?? null,
+      site_product_overview: productRead.response?.site_product_overview ?? null,
+      site_posture_route: productRead.response?.site_posture_route ?? null,
+      embeds_credentials: false,
+    };
+  } catch (error) {
+    return {
+      schema: 'narada.cloudflare_carrier.product_posture_snapshot.v1',
+      state: 'failed',
+      status: 'needs_attention',
+      generated_at: generatedAt,
+      worker_url: workerUrl,
+      operation: 'site.list',
+      auth_kind: auth.kind,
+      reason: sanitizeProductPostureError(error),
+      embeds_credentials: false,
+    };
+  }
+}
+
+function sanitizeProductPostureError(error) {
+  return String(error?.message ?? error ?? 'cloudflare_product_posture_read_failed')
+    .replace(/Bearer\s+[^\s]+/gi, 'Bearer [redacted]')
+    .replace(/narada_operator_session=[^;\s]+/gi, 'narada_operator_session=[redacted]');
 }
 
 function persistSiteContinuityHealthSnapshot(snapshot, { dryRun = true, now = () => new Date().toISOString() } = {}) {
@@ -1218,6 +1307,10 @@ export function readLastScheduledHealthSnapshot(outputPath) {
     failed_site_count: artifact.reconciliation_execution?.failed_site_count ?? 0,
     continuity_health_status: artifact.continuity_health?.status ?? null,
     continuity_health_attention_reasons: artifact.continuity_health?.attention_reasons ?? [],
+    cloudflare_product_posture_state: artifact.cloudflare_product_posture?.state ?? null,
+    cloudflare_product_posture_status: artifact.cloudflare_product_posture?.status ?? null,
+    cloudflare_product_next_site_id: artifact.cloudflare_product_posture?.summary?.next_site_id ?? null,
+    cloudflare_product_next_action: artifact.cloudflare_product_posture?.summary?.next_action ?? null,
     scheduler_task_readback_status: artifact.scheduler_task_readback?.status ?? null,
     scheduler_task_status_text: artifact.scheduler_task_readback?.status_text ?? null,
     scheduler_last_result: artifact.scheduler_task_readback?.last_result ?? null,
