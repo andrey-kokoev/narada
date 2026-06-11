@@ -77,6 +77,7 @@ test('site continuity sync help describes supported transports', async () => {
   assert.match(result.stdout, /pull-cloudflare/);
   assert.match(result.stdout, /push-cloudflare/);
   assert.match(result.stdout, /read-cloudflare/);
+  assert.match(result.stdout, /sync-once/);
   assert.match(result.stdout, /repository-publication-execute-pending/);
   assert.match(result.stdout, /repository-publication-evidence-put/);
 });
@@ -182,6 +183,79 @@ test('site continuity sync pulls Cloudflare exchange packet before local import'
     assert.equal(mock.requests.length, 1);
     assert.equal(mock.requests[0].operation, 'site.read');
     assert.equal(mock.requests[0].params.site_id, 'site_fixture');
+  } finally {
+    await mock.close();
+  }
+});
+
+test('site continuity sync cycle pushes local packet and returns Cloudflare packet', async () => {
+  const binding = createSiteContinuityBinding({ site_id: 'site_fixture' });
+  const localPacket = createSiteContinuityExchangePacket({
+    binding,
+    source_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS,
+    target_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER,
+    projections: [
+      {
+        projection_class: 'site_read_model',
+        source_cursor: 'local-sync-cursor',
+      },
+    ],
+  });
+  const cloudflarePacket = createSiteContinuityExchangePacket({
+    binding,
+    source_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER,
+    target_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS,
+    decisions: [
+      {
+        action: 'refuse',
+        reason: 'site_continuity_cross_embodiment_mutation_execution_refused',
+        exchange_class: 'cross_embodiment_mutation_execution',
+      },
+    ],
+    projections: [
+      {
+        projection_class: 'site_read_model',
+        source_cursor: 'cloudflare-sync-cursor',
+      },
+    ],
+  });
+  const mock = await startCarrierMock((body) => {
+    if (body.operation === 'site.continuity.packet.put') {
+      return { body: { ok: true, status: 'recorded', packet_id: body.params.packet.packet_id } };
+    }
+    if (body.operation === 'site.read') {
+      return {
+        body: {
+          ok: true,
+          site_continuity: { exchange_packet: cloudflarePacket },
+        },
+      };
+    }
+    return { status: 400, body: { ok: false, code: 'unexpected_operation' } };
+  });
+  try {
+    const result = await runSync(['sync-once', '--site', 'site_fixture', '--url', mock.url], {
+      input: JSON.stringify({ packet: localPacket }),
+    });
+
+    assert.equal(result.code, 0, result.stderr);
+    const body = JSON.parse(result.stdout);
+    assert.equal(body.schema, 'narada.site_continuity_cloudflare_sync_once.v1');
+    assert.equal(body.status, 'ok');
+    assert.equal(body.site_id, 'site_fixture');
+    assert.equal(body.local_packet_admission.action, 'projection_only');
+    assert.equal(body.cloudflare_packet_admission.action, 'projection_only');
+    assert.equal(body.pushed_packet_id, localPacket.packet_id);
+    assert.equal(body.pulled_packet_id, cloudflarePacket.packet_id);
+    assert.equal(body.local_to_cloudflare_recorded, true);
+    assert.equal(body.cloudflare_to_local_windows_returned, true);
+    assert.equal(body.packet.packet_id, cloudflarePacket.packet_id);
+    assert.equal(mock.requests.length, 2);
+    assert.equal(mock.requests[0].operation, 'site.continuity.packet.put');
+    assert.equal(mock.requests[0].params.site_id, 'site_fixture');
+    assert.equal(mock.requests[0].params.packet.packet_id, localPacket.packet_id);
+    assert.equal(mock.requests[1].operation, 'site.read');
+    assert.equal(mock.requests[1].params.site_id, 'site_fixture');
   } finally {
     await mock.close();
   }
