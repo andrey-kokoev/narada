@@ -14683,6 +14683,19 @@ export function renderCloudflareCarrierConsole() {
         if (lifecycleStatus.next_action === 'continuity_loop_report') {
           return { domain: 'operation_lifecycle', action: 'focus_lifecycle_continuity_loop_report', target: operationId || siteId || 'operation', reason: 'operation_lifecycle_missing_continuity_loop_report' };
         }
+        if (lifecycleStatus.next_action === 'continuity_reconciliation_execution') {
+          const route = product.operation_workflow_route || product.operation_product_surface?.operation_workflow_route || {};
+          if (route.next_action && route.next_action !== 'review_site_continuity_reconciliation_execution') {
+            return { domain: 'operation_workflow', action: route.next_action, target: route.target || operationId || siteId || 'operation', reason: route.reason || 'operation_workflow_route_active' };
+          }
+          const reconciliationExecutionRef = lifecycleStatus.site_continuity_reconciliation_execution_status?.latest_execution_id
+            || product.site_continuity_reconciliation_execution_status?.latest_execution_id
+            || (product.site_continuity_reconciliation_executions || [])[0]?.execution_id
+            || operationId
+            || siteId
+            || 'operation';
+          return { domain: 'operation_lifecycle', action: 'review_site_continuity_reconciliation_execution', target: reconciliationExecutionRef, reason: 'operation_lifecycle_continuity_reconciliation_execution_attention' };
+        }
         if (lifecycleStatus.next_action === 'open_tasks') {
           return { domain: 'operation_lifecycle', action: 'focus_lifecycle_open_task', target: (targets.task?.task_id || 'task'), reason: 'operation_lifecycle_open_tasks' };
         }
@@ -14778,6 +14791,7 @@ export function renderCloudflareCarrierConsole() {
       if (action === 'focus_lifecycle_read_evidence') { run(refreshOperation); return; }
       if (action === 'focus_lifecycle_continuity') { applyContinuityWorkflowNextStep(); return; }
       if (action === 'focus_lifecycle_continuity_loop_report') { focusContinuityLoopReport(); return; }
+      if (action === 'review_site_continuity_reconciliation_execution') { focusOperationReviewFromRoute(operationWorkflowRouteStage(product), product); return; }
       if (action === 'focus_lifecycle_open_task') { applyFlightDeckNextAction(); return; }
       if (action === 'focus_lifecycle_directive_delivery') { focusWebhookDelayDirectiveDelivery(); return; }
       if (action === 'focus_operation_path_attention') { focusOperationPathAttention(); return; }
