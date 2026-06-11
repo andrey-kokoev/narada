@@ -15157,7 +15157,17 @@ export function renderCloudflareCarrierConsole() {
       if (targets.repositoryPublicationProviderHeartbeat) selectRepositoryPublicationProviderHeartbeat(targets.repositoryPublicationProviderHeartbeat);
       else renderRepositoryPublicationProviderHeartbeatFocusDetail(null);
     }
+    function applyFlightDeckWorkflowRouteAction(product = state.operationProduct || {}) {
+      const route = operationWorkflowRouteStage(product);
+      const action = String(route.next_action || route.command_action || '');
+      if (action === 'review_persistence_posture' || action === 'review_recovery_posture') {
+        applyOperationWorkflowRouteAction(route, product);
+        return true;
+      }
+      return false;
+    }
     function applyFlightDeckNextAction() {
+      if (applyFlightDeckWorkflowRouteAction()) return;
       const targets = operationFlightDeckTargets();
       if (targets.attention && targets.attention.status !== 'resolved') { selectAttentionItem(targets.attention); return; }
       if (targets.task && !['done', 'closed', 'resolved'].includes(String(targets.task.status || '').toLowerCase())) { selectTask(targets.task); return; }
@@ -15210,6 +15220,8 @@ export function renderCloudflareCarrierConsole() {
         operationFlightDeckButton('flightDeckFocusSiteFileChangeProposal', 'Focus File Change Proposal', () => { if (targets.siteFileChangeProposal) selectSiteFileChangeProposal(targets.siteFileChangeProposal); }),
         operationFlightDeckButton('flightDeckFocusLocalIngressRequest', 'Focus Local Ingress', () => { if (targets.localIngressProviderHeartbeat) selectLocalIngressProviderHeartbeat(targets.localIngressProviderHeartbeat); else if (targets.localIngressEvidence) selectLocalIngressEvidence(targets.localIngressEvidence); else if (targets.localIngressRequest) selectLocalIngressRequest(targets.localIngressRequest); }),
         operationFlightDeckButton('flightDeckFocusRepositoryPublication', 'Focus Repository Publication', () => { if (targets.repositoryPublicationProviderHeartbeat) selectRepositoryPublicationProviderHeartbeat(targets.repositoryPublicationProviderHeartbeat); else if (targets.repositoryPublicationEvidence) selectRepositoryPublicationEvidence(targets.repositoryPublicationEvidence); else if (targets.repositoryPublicationRequest) selectRepositoryPublicationRequest(targets.repositoryPublicationRequest); }),
+        operationFlightDeckButton('flightDeckFocusPersistencePosture', 'Focus Persistence', () => renderPersistencePosture(product)),
+        operationFlightDeckButton('flightDeckFocusRecoveryPosture', 'Focus Recovery', () => renderRecoveryPosture(product)),
         operationFlightDeckButton('flightDeckFocusEvidenceChain', 'Focus Evidence Chain', focusFlightDeckEvidenceChain),
         operationFlightDeckButton('flightDeckFocusEvidence', 'Focus Evidence', focusFlightDeckEvidence),
       );

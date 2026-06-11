@@ -3084,11 +3084,16 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /Next Action/);
   assert.match(html, /operationFlightDeckTargets/);
   assert.match(html, /applyFlightDeckNextAction/);
+  assert.match(html, /applyFlightDeckWorkflowRouteAction/);
   assert.match(html, /flightDeckNextAction/);
   assert.match(html, /flightDeckFocusSession/);
   assert.match(html, /flightDeckFocusAttention/);
   assert.match(html, /flightDeckFocusTask/);
   assert.match(html, /flightDeckFocusAuthority/);
+  assert.match(html, /flightDeckFocusPersistencePosture/);
+  assert.match(html, /flightDeckFocusRecoveryPosture/);
+  assert.match(html, /Focus Persistence/);
+  assert.match(html, /Focus Recovery/);
   assert.match(html, /flightDeckFocusEvidence/);
   assert.match(html, /Focus Next Action/);
   assert.match(html, /Runtime Posture/);
