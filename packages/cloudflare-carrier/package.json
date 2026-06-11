@@ -55,6 +55,7 @@
     "continuity:cloudflare": "node scripts/cloudflare-site-continuity-sync.mjs",
     "continuity:scheduler": "node scripts/cloudflare-site-continuity-scheduler.mjs",
     "continuity:status": "node scripts/cloudflare-site-continuity-scheduler.mjs --action status-all",
+    "continuity:status:live": "node scripts/cloudflare-site-continuity-scheduler.mjs --action status-all --refresh-site-registry-projection",
     "continuity:last": "node scripts/cloudflare-site-continuity-scheduler.mjs --action read-last",
     "site-registry:projection": "node scripts/cloudflare-carrier-site-registry-projection.mjs",
     "ship": "pnpm test && pnpm deploy:check && pnpm deploy:dry-run"

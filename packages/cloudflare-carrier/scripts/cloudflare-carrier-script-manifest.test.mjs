@@ -13,6 +13,10 @@ const packageJsonPath = join(packageRoot, 'package.json');
 
 test('cloudflare carrier package scripts point at parseable local node scripts', async () => {
   const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
+  assert.equal(
+    packageJson.scripts?.['continuity:status:live'],
+    'node scripts/cloudflare-site-continuity-scheduler.mjs --action status-all --refresh-site-registry-projection',
+  );
   const scriptEntries = Object.entries(packageJson.scripts ?? {})
     .map(([name, command]) => ({ name, command, scriptPath: localNodeScriptPath(command) }))
     .filter((entry) => entry.scriptPath);
