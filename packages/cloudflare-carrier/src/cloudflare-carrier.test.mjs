@@ -1957,10 +1957,39 @@ test('worker executes admitted repository publication through Cloudflare GitHub 
   assert.equal(nextAfterExecutionBody.status, 'drained');
   assert.equal(nextAfterExecutionBody.request, null);
 
+  const materialization = await worker.fetch(jsonRequest({
+    operation: 'site_file_materialization.admit',
+    request_id: 'request_cloudflare_repository_publication_site_file_materialization_admit',
+    params: {
+      site_id: 'site_fixture',
+      materialization_id: 'site-file-materialization-cloudflare-publication-fixture',
+      source_payload: {
+        cloudflare_site_file_materialization_cutover: true,
+        generated_at: '2026-06-08T07:30:00.000Z',
+        operation_id: 'operation_site_read',
+        task_id: 'cloudflare-task-file-materialization-publication-fixture',
+        proposal_id: 'site_file_change_cloudflare_publication_fixture',
+        proposal_ref: 'proposal:file-change:cloudflare-publication-fixture',
+        file_path: 'docs/architecture/cloudflare-carrier/target.md',
+        content_sha256: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+        content_ref: 'cloudflare-site-file-store:target-md:publication-fixture',
+        materialization_authority_ref: 'cloudflare-carrier:site-file-materialization:v1',
+        cutover_point_ref: 'cutover:cloudflare-site-file-and-publication:test',
+        governed_write_contract_ref: 'contract:cloudflare-site-file-materialization:test',
+        confirmation_evidence_ref: 'evidence:cloudflare-site-file-and-publication:test',
+        authority_locus: 'cloudflare_carrier_site',
+        filesystem_executor_authority: 'cloudflare_site_file_store',
+        windows_filesystem_mutation_admission: 'not_admitted',
+        repository_publication_admission: 'not_admitted',
+      },
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(materialization.status, 200, JSON.stringify(await materialization.clone().json()));
+
   const read = await worker.fetch(jsonRequest({
     operation: 'operation.read',
     request_id: 'request_operation_read_after_cloudflare_repository_publication_execution',
-    params: { operation_id: 'operation_site_read', repository_publication_request_limit: 10, repository_publication_execution_limit: 10, limit: 10 },
+    params: { operation_id: 'operation_site_read', repository_publication_request_limit: 10, repository_publication_execution_limit: 10, site_file_materialization_limit: 10, limit: 10 },
   }, { token: 'test-admin-token', path: '/api/carrier' }), env);
   const readBody = await read.json();
   assert.equal(read.status, 200, JSON.stringify(readBody));
@@ -1970,8 +1999,92 @@ test('worker executes admitted repository publication through Cloudflare GitHub 
   assert.equal(readBody.repository_publication_operation_posture.direct_cloudflare_repository_mutation_admission, 'admitted_by_cloudflare_github_repository_publication');
   assert.equal(readBody.repository_publication_operation_posture.authority_partition, 'cloudflare_admits_and_executes_github_repository_publication');
   assert.equal(readBody.authority_transfer_posture.domains.find((domain) => domain.domain === 'repository_publication').classification, 'cloudflare_owned');
-  assert.deepEqual(readBody.authority_transfer_posture.domains.find((domain) => domain.domain === 'site_file_materialization').remaining_windows_authority, ['site_file_materialization']);
+  assert.deepEqual(readBody.authority_transfer_posture.domains.find((domain) => domain.domain === 'site_file_materialization').remaining_windows_authority, []);
   assert.equal(readBody.authority_transfer_posture.remaining_windows_authorities.some((entry) => entry.domain === 'site_file_materialization' && entry.authority === 'repository_publication'), false);
+  assert.equal(readBody.authority_transfer_posture.domains.find((domain) => domain.domain === 'local_ingress').classification, 'cloudflare_owned');
+  assert.deepEqual(readBody.authority_transfer_posture.domains.find((domain) => domain.domain === 'local_ingress').remaining_windows_authority, []);
+  assert.equal(readBody.authority_transfer_posture.remaining_windows_authorities.some((entry) => entry.domain === 'local_ingress'), false);
+});
+
+test('worker bootstraps missing GitHub repository publication branch', async () => {
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{ site_id: 'site_fixture', site_ref: 'site://fixture', display_name: 'Fixture Site', status: 'active', created_at: clock(), updated_at: clock(), created_by_principal_id: 'admin' }],
+    memberships: [{ site_id: 'site_fixture', principal_id: 'admin', role: 'owner', status: 'active', created_at: clock(), updated_at: clock() }],
+  });
+  const githubCalls = [];
+  const env = authEnv(fakeDurableObjectNamespace(), {
+    CLOUDFLARE_SITE_REGISTRY_DB: siteDb,
+    CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_TOKEN: 'github-token-fixture',
+    CLOUDFLARE_REPOSITORY_PUBLICATION_ALLOWED_REPOSITORIES: 'github:andrey-kokoev/narada.sonar',
+    CLOUDFLARE_REPOSITORY_PUBLICATION_ALLOWED_BRANCHES: 'cloudflare-publication-fixture',
+    CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_FETCH: async (url, init) => {
+      githubCalls.push({ url, init });
+      if (githubCalls.length === 1) {
+        return new Response(JSON.stringify({ message: 'Reference does not exist' }), {
+          status: 404,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ ref: 'refs/heads/cloudflare-publication-fixture', object: { sha: '0123456789abcdef0123456789abcdef01234567', type: 'commit' } }), {
+        status: 201,
+        headers: { 'content-type': 'application/json' },
+      });
+    },
+  });
+
+  const request = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.request.create',
+    request_id: 'request_repository_publication_bootstrap_create',
+    params: {
+      site_id: 'site_fixture',
+      repository_publication_request_id: 'repository-publication-request-bootstrap-fixture',
+      publication_ref: 'repository-publication:bootstrap-fixture',
+      requested_action_ref: 'repository-publication-action:bootstrap-fixture',
+      requested_action_summary: 'bootstrap admitted Cloudflare publication branch',
+      repository_ref: 'github:andrey-kokoev/narada.sonar',
+      branch_ref: 'cloudflare-publication-fixture',
+      source_change_ref: 'git:commit:0123456789abcdef0123456789abcdef01234567',
+      governed_request_contract_ref: 'contract:cloudflare-github-repository-publication-request:v1',
+      evidence_return_contract_ref: 'contract:cloudflare-github-repository-publication-execution-record:v1',
+      rollback_plan_ref: 'rollback:cloudflare-github-repository-publication-bootstrap-fixture',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(request.status, 200, JSON.stringify(await request.clone().json()));
+
+  const admission = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.admission.classify',
+    request_id: 'request_repository_publication_bootstrap_admission',
+    params: {
+      site_id: 'site_fixture',
+      repository_publication_admission_id: 'repository-publication-admission-bootstrap-fixture',
+      repository_publication_request_id: 'repository-publication-request-bootstrap-fixture',
+      admission_action: 'admit',
+      admission_reason: 'cloudflare_repository_publication_request_admitted_for_branch_bootstrap',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(admission.status, 200, JSON.stringify(await admission.clone().json()));
+
+  const execution = await worker.fetch(jsonRequest({
+    operation: 'repository_publication.cloudflare_execution.execute',
+    request_id: 'request_repository_publication_bootstrap_execute',
+    params: {
+      site_id: 'site_fixture',
+      repository_publication_execution_id: 'repository-publication-execution-bootstrap-fixture',
+      repository_publication_request_id: 'repository-publication-request-bootstrap-fixture',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  const executionBody = await execution.json();
+  assert.equal(execution.status, 200, JSON.stringify(executionBody));
+  assert.equal(executionBody.publication_status, 'completed');
+  assert.equal(executionBody.execution.github_http_status, 201);
+  assert.equal(executionBody.execution.github_response_summary.github_operation, 'create_ref');
+  assert.equal(executionBody.execution.published_commit_ref, 'git:commit:0123456789abcdef0123456789abcdef01234567');
+  assert.equal(githubCalls.length, 2);
+  assert.equal(githubCalls[0].url, 'https://api.github.com/repos/andrey-kokoev/narada.sonar/git/refs/heads/cloudflare-publication-fixture');
+  assert.equal(githubCalls[0].init.method, 'PATCH');
+  assert.equal(githubCalls[1].url, 'https://api.github.com/repos/andrey-kokoev/narada.sonar/git/refs');
+  assert.equal(githubCalls[1].init.method, 'POST');
+  assert.deepEqual(JSON.parse(githubCalls[1].init.body), { ref: 'refs/heads/cloudflare-publication-fixture', sha: '0123456789abcdef0123456789abcdef01234567' });
 });
 
 test('worker executes admitted repository publication with GitHub App installation authority', async () => {

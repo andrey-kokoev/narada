@@ -2497,6 +2497,7 @@ function summarizeCloudflareAuthorityTransferPosture({
   const mailboxOutlookDraftCreateRemaining = mailboxOutlookDraftCreateCount > 0 ? [] : ['outlook_draft_create'];
   const repositoryPublicationRemaining = Number(repositoryPublicationOperationPosture?.repository_publication_execution_count ?? 0) > 0 ? [] : ['repository_publication'];
   const siteFileMaterializationRemaining = [...(siteFileMaterializationCount > 0 ? [] : ['site_file_materialization']), ...repositoryPublicationRemaining];
+  const cloudflareSiteMutationPathReady = siteFileMaterializationRemaining.length === 0;
   const mailboxStatusClassification = mailboxStatusSourceCount > 0
     ? 'cloudflare_owned'
     : mailboxStatusShadowCount > 0 ? 'cloudflare_recorded_windows_owned' : 'windows_retained';
@@ -2549,10 +2550,10 @@ function summarizeCloudflareAuthorityTransferPosture({
     },
     {
       domain: 'local_ingress',
-      classification: localIngressOperationPosture?.local_ingress_request_count > 0 || localIngressOperationPosture?.local_ingress_evidence_count > 0 || localIngressOperationPosture?.local_ingress_provider_heartbeat_count > 0 ? 'cloudflare_governed_windows_executed' : 'windows_retained',
+      classification: cloudflareSiteMutationPathReady ? 'cloudflare_owned' : localIngressOperationPosture?.local_ingress_request_count > 0 || localIngressOperationPosture?.local_ingress_evidence_count > 0 || localIngressOperationPosture?.local_ingress_provider_heartbeat_count > 0 ? 'cloudflare_governed_windows_executed' : 'windows_retained',
       observed_count: Number(localIngressOperationPosture?.local_ingress_request_count ?? 0) + Number(localIngressOperationPosture?.local_ingress_evidence_count ?? 0) + Number(localIngressOperationPosture?.local_ingress_provider_heartbeat_count ?? 0),
-      authority_partition: localIngressOperationPosture?.authority_partition ?? 'local_ingress_not_observed_windows_authority_retained',
-      remaining_windows_authority: ['windows_local_ingress_executor', 'local_filesystem_mutation'],
+      authority_partition: cloudflareSiteMutationPathReady ? 'local_ingress_windows_bridge_superseded_by_cloudflare_site_file_and_repository_publication' : localIngressOperationPosture?.authority_partition ?? 'local_ingress_not_observed_windows_authority_retained',
+      remaining_windows_authority: cloudflareSiteMutationPathReady ? [] : ['windows_local_ingress_executor', 'local_filesystem_mutation'],
     },
     {
       domain: 'repository_publication',
@@ -8806,12 +8807,13 @@ async function executeCloudflareGithubRepositoryPublication(env = {}, siteId, pa
   if (!credential.ok) return credential;
   const executionId = String(params.repository_publication_execution_id ?? `cloudflare_github_repository_publication_execution_${safeIdToken(siteId)}_${safeIdToken(repositoryPublicationRequestId)}_${Date.now()}`);
   const generatedAt = String(params.generated_at ?? new Date().toISOString());
-  const url = `https://api.github.com/repos/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.repo)}/git/refs/heads/${githubBranchRefPath(branchRef)}`;
+  const repositoryApiBaseUrl = `https://api.github.com/repos/${encodeURIComponent(repository.owner)}/${encodeURIComponent(repository.repo)}`;
+  const updateRefUrl = `${repositoryApiBaseUrl}/git/refs/heads/${githubBranchRefPath(branchRef)}`;
   let githubStatus = 0;
   let githubSummary = {};
   let publicationStatus = 'failed';
   try {
-    const response = await fetchImpl(url, {
+    const response = await fetchImpl(updateRefUrl, {
       method: 'PATCH',
       headers: {
         authorization: `Bearer ${credential.accessToken}`,
@@ -8824,8 +8826,28 @@ async function executeCloudflareGithubRepositoryPublication(env = {}, siteId, pa
     });
     githubStatus = Number(response.status ?? 0);
     const body = await response.json().catch(() => ({}));
-    githubSummary = summarizeGithubPublicationResponse(body);
-    publicationStatus = response.ok ? 'completed' : 'failed';
+    githubSummary = { ...summarizeGithubPublicationResponse(body), github_operation: 'update_ref' };
+    if (response.ok) {
+      publicationStatus = 'completed';
+    } else if (githubSummary.message === 'Reference does not exist') {
+      const createRefResponse = await fetchImpl(`${repositoryApiBaseUrl}/git/refs`, {
+        method: 'POST',
+        headers: {
+          authorization: `Bearer ${credential.accessToken}`,
+          accept: 'application/vnd.github+json',
+          'content-type': 'application/json',
+          'user-agent': 'narada-cloudflare-carrier',
+          'x-github-api-version': '2022-11-28',
+        },
+        body: JSON.stringify({ ref: `refs/heads/${githubBranchRefPath(branchRef)}`, sha: commitSha }),
+      });
+      githubStatus = Number(createRefResponse.status ?? 0);
+      const createRefBody = await createRefResponse.json().catch(() => ({}));
+      githubSummary = { ...summarizeGithubPublicationResponse(createRefBody), github_operation: 'create_ref' };
+      publicationStatus = createRefResponse.ok ? 'completed' : 'failed';
+    } else {
+      publicationStatus = 'failed';
+    }
   } catch (error) {
     githubSummary = { message: String(error?.message ?? error ?? 'github_repository_publication_request_failed') };
   }

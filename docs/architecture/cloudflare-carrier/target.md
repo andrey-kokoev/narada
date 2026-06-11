@@ -384,6 +384,8 @@ Each mutation class needs one declared authority locus before execution. A first
 | Task or artifact mutation | Declared task/artifact authority for the Site | Admit only when that authority is Cloudflare; otherwise forward or refuse. |
 | Read models and dashboards | Derived projection store | Rebuild or display only; no mutation authority. |
 
+For the Cloudflare product path, governed local ingress is a compatibility bridge, not the target authority. It is superseded only when Cloudflare has recorded both Cloudflare site-file materialization and Cloudflare repository publication evidence for the affected Site path; until then, Windows local ingress remains the declared executor for local filesystem mutation and Cloudflare must not claim direct filesystem mutation.
+
 Authority may migrate between local and Cloudflare embodiments only through an explicit migration operation that records source authority, target authority, mutation classes affected, cutoff point, and confirmation evidence. A temporary dual-write or sync period is not authority migration unless one locus remains the sole admission authority for each mutation class.
 
 If a Cloudflare console, local Windows command, or other embodiment cannot resolve the authority locus for a mutating request, it must refuse or run in proposal/inspection mode. It must not silently choose the current embodiment as authority.
