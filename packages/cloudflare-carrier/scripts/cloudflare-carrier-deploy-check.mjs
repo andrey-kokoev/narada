@@ -18,6 +18,8 @@ assert.match(configText, /^binding = "AI"$/m);
 assert.match(configText, /^CLOUDFLARE_CARRIER_ENABLE_TASK_TOOLS = "1"$/m);
 assert.match(configText, /^binding = "CLOUDFLARE_CARRIER_TASK_DB"$/m);
 assert.match(configText, /^database_name = "narada-cloudflare-carrier-tasks"$/m);
+assert.match(configText, /^binding = "CLOUDFLARE_SITE_REGISTRY_DB"$/m);
+assert.match(configText, /^database_name = "narada-cloudflare-site-registry"$/m);
 assert.equal(configText.includes('account_id'), false);
 assert.equal(classifyCloudflareToolEffectAdmission({ tool_name: 'cloudflare_carrier_runtime_metadata_read' }).action, 'deny');
 assert.equal(classifyCloudflareToolEffectAdmission({ tool_name: 'cloudflare_carrier_runtime_metadata_read' }, { runtimeReadsEnabled: true }).action, 'admit');
@@ -237,6 +239,42 @@ assert.equal(operationRead.operation_lifecycle_status.schema, 'narada.cloudflare
 assert.equal(operationRead.operation_lifecycle_status.phase, 'inhabited');
 assert.equal(operationRead.cloudflare_persistence_posture.state, 'durable');
 assert.equal(operationRead.cloudflare_recovery_posture.state, 'reconstructable');
+assert.equal(operationRead.cloudflare_persistence_posture.active_boundary_count, 12);
+assert.equal(operationRead.cloudflare_recovery_posture.recovery_boundary_count, 12);
+assert.deepEqual(
+  operationRead.cloudflare_persistence_posture.durable_boundaries.map((boundary) => boundary.key),
+  [
+    'session_snapshot',
+    'site_registry',
+    'carrier_evidence_index',
+    'site_continuity_packet_store',
+    'site_continuity_loop_report_store',
+    'site_continuity_reconciliation_execution_store',
+    'operation_focus_review_store',
+    'site_file_materialization_store',
+    'local_ingress_request_queue',
+    'repository_publication_request_queue',
+    'repository_publication_evidence_store',
+    'task_lifecycle_store',
+  ],
+);
+assert.deepEqual(
+  operationRead.cloudflare_recovery_posture.recovery_boundaries.map((boundary) => boundary.key),
+  [
+    'session_snapshot',
+    'site_registry',
+    'carrier_evidence_index',
+    'site_continuity_packet_store',
+    'site_continuity_loop_report_store',
+    'site_continuity_reconciliation_execution_store',
+    'operation_focus_review_store',
+    'site_file_materialization_store',
+    'local_ingress_request_queue',
+    'repository_publication_request_queue',
+    'repository_publication_evidence_store',
+    'task_lifecycle_store',
+  ],
+);
 assert.equal(operationRead.operation_workflow_route.command_action, 'review_continuity_packet');
 const operationListResponse = await worker.fetch(jsonRequest({
   operation: 'operation.list',
