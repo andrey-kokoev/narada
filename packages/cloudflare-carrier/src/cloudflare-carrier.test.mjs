@@ -1241,6 +1241,7 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.durable_mutation_authority, 'unchanged; routed_by_site_authority_map');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.next_action, 'review_continuity_packet');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.loop_command, 'pnpm site:continuity:loop -- sync-cloudflare --site site_fixture --url <worker-url> --token-file <token-file>');
+  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.refresh_command, 'pnpm site:continuity:loop -- sync-cloudflare --site site_fixture --url <worker-url> --token-file <token-file>');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.pull_command, 'pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- pull-cloudflare --site site_fixture --url <worker-url> --token-file <token-file>');
   assert.equal(readAfterPacketPutBody.site_continuity_loop_reports.length, 1);
   assert.equal(readAfterPacketPutBody.site_continuity_loop_status.schema, 'narada.cloudflare_site_continuity_loop_status.v1');
@@ -3457,6 +3458,7 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /site_continuity_loop_report/);
   assert.match(html, /review_continuity_loop_report/);
   assert.match(html, /run_site_continuity_loop/);
+  assert.match(html, /Refresh Command/);
   assert.match(html, /site:continuity:loop/);
   assert.match(html, /sync-cloudflare/);
   assert.match(html, /Read Site Continuity/);

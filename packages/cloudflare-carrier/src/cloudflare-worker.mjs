@@ -1798,8 +1798,10 @@ function summarizeLocalCloudContinuityBridge(siteId, continuityPackets = [], sit
         ? 'publish_cloudflare_continuity_packet'
         : 'observe_continuity_packet';
   const siteArg = siteId ? String(siteId) : '<site_id>';
+  const loopCommand = `pnpm site:continuity:loop -- sync-cloudflare --site ${siteArg} --url <worker-url> --token-file <token-file>`;
   const syncCommands = {
-    loop_command: `pnpm site:continuity:loop -- sync-cloudflare --site ${siteArg} --url <worker-url> --token-file <token-file>`,
+    loop_command: loopCommand,
+    refresh_command: loopCommand,
     pull_command: `pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- pull-cloudflare --site ${siteArg} --url <worker-url> --token-file <token-file>`,
     push_command: `pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- push-cloudflare --site ${siteArg} --url <worker-url> --token-file <token-file> < packet.json`,
     read_command: `pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- read-cloudflare --site ${siteArg} --url <worker-url> --token-file <token-file>`,
@@ -15390,6 +15392,7 @@ export function renderCloudflareCarrierConsole() {
         ['Durable Mutation Authority', bridge.durable_mutation_authority || status.authority_boundary?.durable_mutation_authority || 'unchanged; routed_by_site_authority_map'],
         ['Next Action', bridge.next_action || 'observe_continuity_packet'],
         ['Loop Command', bridge.loop_command || 'pnpm site:continuity:loop -- sync-cloudflare --site <site_id> --url <worker-url> --token-file <token-file>'],
+        ['Refresh Command', bridge.refresh_command || bridge.loop_command || 'pnpm site:continuity:loop -- sync-cloudflare --site <site_id> --url <worker-url> --token-file <token-file>'],
         ['Pull Command', bridge.pull_command || 'pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- pull-cloudflare --site <site_id> --url <worker-url> --token-file <token-file>'],
         ['Push Command', bridge.push_command || 'pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- push-cloudflare --site <site_id> --url <worker-url> --token-file <token-file> < packet.json'],
         ['Read Command', bridge.read_command || 'pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- read-cloudflare --site <site_id> --url <worker-url> --token-file <token-file>'],
