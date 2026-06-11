@@ -60,7 +60,7 @@
     "continuity:scheduler": "node scripts/cloudflare-site-continuity-scheduler.mjs",
     "continuity:status": "node scripts/cloudflare-site-continuity-scheduler.mjs --action status-all",
     "continuity:status:live": "node scripts/cloudflare-site-continuity-scheduler.mjs --action status-all --live --refresh-site-registry-projection",
-    "continuity:health": "node scripts/cloudflare-site-continuity-scheduler.mjs --action status-all --live --refresh-site-registry-projection",
+    "continuity:health": "node scripts/cloudflare-site-continuity-scheduler.mjs --action health --live --refresh-site-registry-projection",
     "continuity:install": "node scripts/cloudflare-site-continuity-scheduler.mjs --action install --live",
     "continuity:reconcile": "node scripts/cloudflare-site-continuity-scheduler.mjs --action reconcile",
     "continuity:reconcile:live": "node scripts/cloudflare-site-continuity-scheduler.mjs --action reconcile --refresh-site-registry-projection",

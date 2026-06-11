@@ -19,7 +19,7 @@ test('cloudflare carrier package scripts point at parseable local node scripts',
   );
   assert.equal(
     packageJson.scripts?.['continuity:health'],
-    'node scripts/cloudflare-site-continuity-scheduler.mjs --action status-all --live --refresh-site-registry-projection',
+    'node scripts/cloudflare-site-continuity-scheduler.mjs --action health --live --refresh-site-registry-projection',
   );
   assert.equal(
     packageJson.scripts?.['continuity:install'],

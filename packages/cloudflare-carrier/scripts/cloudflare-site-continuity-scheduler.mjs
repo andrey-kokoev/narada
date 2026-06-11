@@ -20,7 +20,7 @@ const DEFAULT_INTERVAL_MINUTES = 5;
 const DEFAULT_MAX_SYNC_ARTIFACT_AGE_MINUTES = 15;
 const DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS = 120000;
 const LIVE_SCHEDULER_TASK_ACTIONS = new Set(['install', 'disable', 'pause', 'resume', 'uninstall']);
-const LIVE_SCHEDULER_READ_ACTIONS = new Set(['status', 'read-last', 'last', 'status-all', 'status-local', 'reconcile', 'reconcile-plan']);
+const LIVE_SCHEDULER_READ_ACTIONS = new Set(['status', 'read-last', 'last', 'status-all', 'status-local', 'health', 'reconcile', 'reconcile-plan']);
 const execFile = promisify(execFileCallback);
 
 export function buildSiteContinuitySchedulerPlan({
@@ -172,6 +172,25 @@ export function buildSiteContinuitySchedulerPlan({
         }),
         last_reconciliation_execution: readLastReconciliationExecutionArtifact(effectiveReconciliationExecutionOutputPath),
       };
+    case 'health': {
+      const localSyncArtifacts = readLocalSyncArtifactInventory(effectiveArtifactDirectory, {
+        lastOutputPath: effectiveOutputPath,
+        configuredSites: localConfiguredSites.site_records,
+        maxArtifactAgeMinutes,
+        now,
+      });
+      const healthPlan = {
+        ...base,
+        plan_status: 'site_continuity_health_gate_read_only',
+        scheduled_task_command: ['schtasks', '/Query', '/TN', taskName, '/V', '/FO', 'LIST'],
+        local_sync_artifacts: localSyncArtifacts,
+        last_reconciliation_execution: readLastReconciliationExecutionArtifact(effectiveReconciliationExecutionOutputPath),
+      };
+      return {
+        ...healthPlan,
+        continuity_health: summarizeSiteContinuityHealth(healthPlan),
+      };
+    }
     case 'reconcile':
     case 'reconcile-plan': {
       const localSyncArtifacts = readLocalSyncArtifactInventory(effectiveArtifactDirectory, {
@@ -233,38 +252,76 @@ async function executeSchedulerTaskReadback(plan, { execFileImpl = execFile, exe
   try {
     const result = await execFileImpl(command, args, { cwd: plan.repo_root, timeout, windowsHide: true });
     const parsed = parseSchedulerTaskListOutput(result?.stdout ?? '');
-    return {
+    const readback = summarizeSchedulerTaskReadback({
+      state: 'completed',
+      command,
+      args,
+      stdout: result?.stdout ?? '',
+      stderr: result?.stderr ?? '',
+      timeout_ms: timeout,
+      parsed,
+      expectedIntervalMinutes: plan.interval_minutes,
+      expectedTaskCommand: plan.task_command,
+      expectedTaskEntrypoint: plan.scheduled_task_entrypoint,
+    });
+    const next = {
       ...base,
-      scheduler_task_readback: summarizeSchedulerTaskReadback({
-        state: 'completed',
-        command,
-        args,
-        stdout: result?.stdout ?? '',
-        stderr: result?.stderr ?? '',
-        timeout_ms: timeout,
-        parsed,
-        expectedIntervalMinutes: plan.interval_minutes,
-        expectedTaskCommand: plan.task_command,
-        expectedTaskEntrypoint: plan.scheduled_task_entrypoint,
-      }),
+      scheduler_task_readback: readback,
     };
+    return plan.action === 'health'
+      ? { ...next, continuity_health: summarizeSiteContinuityHealth(next, readback) }
+      : next;
   } catch (error) {
-    return {
-      ...base,
-      scheduler_task_readback: {
-        state: 'failed',
-        status: 'needs_attention',
-        command,
-        args,
-        exit_code: error.code ?? null,
-        signal: error.signal ?? null,
-        stdout: error.stdout ?? '',
-        stderr: error.stderr ?? '',
-        timeout_ms: timeout,
-        embeds_credentials: false,
-      },
+    const readback = {
+      state: 'failed',
+      status: 'needs_attention',
+      command,
+      args,
+      exit_code: error.code ?? null,
+      signal: error.signal ?? null,
+      stdout: error.stdout ?? '',
+      stderr: error.stderr ?? '',
+      timeout_ms: timeout,
+      embeds_credentials: false,
     };
+    const next = {
+      ...base,
+      scheduler_task_readback: readback,
+    };
+    return plan.action === 'health'
+      ? { ...next, continuity_health: summarizeSiteContinuityHealth(next, readback) }
+      : next;
   }
+}
+
+function summarizeSiteContinuityHealth(plan, schedulerTaskReadback = plan?.scheduler_task_readback ?? null) {
+  const configuredSites = plan?.configured_sites ?? {};
+  const bindingRegistry = configuredSites.site_continuity_binding_registry ?? {};
+  const localSyncArtifacts = plan?.local_sync_artifacts ?? null;
+  const status = plan?.status ?? {};
+  const attentionReasons = [
+    configuredSites.state !== 'configured' ? 'site_continuity_sites_not_configured' : null,
+    configuredSites.site_count <= 0 ? 'site_continuity_no_sites_selected' : null,
+    bindingRegistry.state !== 'read' ? `site_continuity_binding_registry_${bindingRegistry.state ?? 'unread'}` : null,
+    status.command_args_complete !== true ? 'site_continuity_scheduler_command_args_incomplete' : null,
+    localSyncArtifacts?.status && localSyncArtifacts.status !== 'synced' ? `site_continuity_local_sync_${localSyncArtifacts.status}` : null,
+    schedulerTaskReadback ? schedulerTaskReadback.status !== 'ok' ? 'site_continuity_scheduler_readback_needs_attention' : null : 'site_continuity_scheduler_live_readback_required',
+  ].filter(Boolean);
+  return {
+    schema: 'narada.cloudflare_carrier.site_continuity_health.v1',
+    status: attentionReasons.length === 0 ? 'ok' : 'needs_attention',
+    attention_reasons: attentionReasons,
+    site_count: configuredSites.site_count ?? 0,
+    selection_source: configuredSites.selection_source ?? 'unknown',
+    binding_registry_state: bindingRegistry.state ?? null,
+    binding_count: bindingRegistry.binding_count ?? 0,
+    local_sync_status: localSyncArtifacts?.status ?? null,
+    local_sync_artifact_count: localSyncArtifacts?.artifact_count ?? 0,
+    scheduler_readback_status: schedulerTaskReadback?.status ?? null,
+    scheduler_last_result: schedulerTaskReadback?.last_result ?? null,
+    scheduler_task_state: schedulerTaskReadback?.scheduled_task_state ?? null,
+    embeds_credentials: false,
+  };
 }
 
 function summarizeSchedulerTaskReadback({ state, command, args, stdout, stderr, timeout_ms: timeoutMs, parsed, expectedIntervalMinutes, expectedTaskCommand, expectedTaskEntrypoint }) {
@@ -1364,6 +1421,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (result.site_registry_projection_refresh?.status && result.site_registry_projection_refresh.status !== 'ok') process.exitCode = 1;
   if (result.scheduler_task_execution?.status && result.scheduler_task_execution.status !== 'ok') process.exitCode = 1;
   if (result.scheduler_task_readback?.status && result.scheduler_task_readback.status !== 'ok') process.exitCode = 1;
+  if (result.continuity_health?.status && result.continuity_health.status !== 'ok') process.exitCode = 1;
   if (result.schema === 'narada.cloudflare_carrier.site_continuity_reconciliation_execution.v1' && !['completed', 'dry_run'].includes(result.status)) process.exitCode = 1;
   console.log(JSON.stringify(result, null, 2));
 }

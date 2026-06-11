@@ -176,6 +176,145 @@ test('site continuity scheduler live status attaches parsed Task Scheduler readb
   }
 });
 
+test('site continuity scheduler health summarizes binding, sync, and scheduler posture', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-health-'));
+  const artifactDirectory = join(root, '.narada/site-continuity');
+  const syncEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-sync.mjs');
+  const scheduledTaskEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-scheduled-task.mjs');
+  const packetPath = join(artifactDirectory, 'local-packet.json');
+  const outputPath = join(artifactDirectory, 'cloudflare-sync-last.json');
+  const bindingRegistryPath = join(artifactDirectory, 'bindings.json');
+  await mkdir(join(root, 'packages/cloudflare-carrier/scripts'), { recursive: true });
+  await mkdir(artifactDirectory, { recursive: true });
+  await writeFile(syncEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(scheduledTaskEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(packetPath, '{"packet":{"site_id":"site_bound"}}\n', 'utf8');
+  await writeFile(bindingRegistryPath, `${JSON.stringify(createSiteContinuityBindingRegistry({
+    registry_ref: 'operator-registry',
+    generated_at: '2026-06-11T13:45:00.000Z',
+    bindings: [createSiteContinuityBinding({ site_id: 'site_bound' })],
+  }), null, 2)}\n`, 'utf8');
+  await writeFile(outputPath, `${JSON.stringify({
+    schema: 'narada.site_continuity_cloudflare_sync_once.v1',
+    status: 'ok',
+    site_id: 'site_bound',
+    worker_url: 'https://worker.example',
+    pushed_packet_id: 'packet-bound-local',
+    pulled_packet_id: 'packet-bound-cloudflare',
+    continuity_loop_report_recorded: true,
+    continuity_loop_report: {
+      status: 'ok',
+      site_id: 'site_bound',
+      generated_at: '2026-06-11T13:45:00.000Z',
+      cloudflare_push: {
+        status: 'imported',
+        pushed_packet_id: 'packet-bound-local',
+        returned_packet_id: 'packet-bound-cloudflare',
+      },
+    },
+  }, null, 2)}\n`, 'utf8');
+  await utimes(outputPath, new Date('2026-06-11T13:45:00.000Z'), new Date('2026-06-11T13:45:00.000Z'));
+  try {
+    const plan = buildSiteContinuitySchedulerPlan({
+      action: 'health',
+      repoRoot: root,
+      syncEntrypoint,
+      scheduledTaskEntrypoint,
+      packetPath,
+      outputPath,
+      artifactDirectory,
+      siteContinuityBindingRegistryPath: bindingRegistryPath,
+      now: () => '2026-06-11T13:46:00.000Z',
+    });
+
+    assert.equal(plan.plan_status, 'site_continuity_health_gate_read_only');
+    assert.equal(plan.local_sync_artifacts.status, 'synced');
+    assert.equal(plan.continuity_health.status, 'needs_attention');
+    assert.deepEqual(plan.continuity_health.attention_reasons, ['site_continuity_scheduler_live_readback_required']);
+    assert.equal(plan.continuity_health.site_count, 1);
+    assert.equal(plan.continuity_health.selection_source, 'site_continuity_binding_registry');
+    assert.equal(plan.continuity_health.binding_registry_state, 'read');
+    assert.equal(plan.continuity_health.local_sync_status, 'synced');
+    assert.equal(plan.continuity_health.embeds_credentials, false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('site continuity scheduler live health passes with synced artifacts and healthy scheduler readback', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-live-health-'));
+  const artifactDirectory = join(root, '.narada/site-continuity');
+  const syncEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-sync.mjs');
+  const scheduledTaskEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-scheduled-task.mjs');
+  const packetPath = join(artifactDirectory, 'local-packet.json');
+  const outputPath = join(artifactDirectory, 'cloudflare-sync-last.json');
+  const bindingRegistryPath = join(artifactDirectory, 'bindings.json');
+  await mkdir(join(root, 'packages/cloudflare-carrier/scripts'), { recursive: true });
+  await mkdir(artifactDirectory, { recursive: true });
+  await writeFile(syncEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(scheduledTaskEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(packetPath, '{"packet":{"site_id":"site_bound"}}\n', 'utf8');
+  await writeFile(bindingRegistryPath, `${JSON.stringify(createSiteContinuityBindingRegistry({
+    registry_ref: 'operator-registry',
+    generated_at: '2026-06-11T13:45:00.000Z',
+    bindings: [createSiteContinuityBinding({ site_id: 'site_bound' })],
+  }), null, 2)}\n`, 'utf8');
+  await writeFile(outputPath, `${JSON.stringify({
+    schema: 'narada.site_continuity_cloudflare_sync_once.v1',
+    status: 'ok',
+    site_id: 'site_bound',
+    continuity_loop_report_recorded: true,
+    continuity_loop_report: {
+      status: 'ok',
+      site_id: 'site_bound',
+      generated_at: '2026-06-11T13:45:00.000Z',
+      cloudflare_push: {
+        status: 'imported',
+        pushed_packet_id: 'packet-bound-local',
+        returned_packet_id: 'packet-bound-cloudflare',
+      },
+    },
+  }, null, 2)}\n`, 'utf8');
+  await utimes(outputPath, new Date('2026-06-11T13:45:00.000Z'), new Date('2026-06-11T13:45:00.000Z'));
+  try {
+    const result = await runSiteContinuitySchedulerActionWithOptionalRefresh({
+      action: 'health',
+      repoRoot: root,
+      syncEntrypoint,
+      scheduledTaskEntrypoint,
+      packetPath,
+      outputPath,
+      artifactDirectory,
+      siteContinuityBindingRegistryPath: bindingRegistryPath,
+      now: () => '2026-06-11T13:46:00.000Z',
+      dryRun: false,
+    }, {
+      execFileImpl: async () => ({
+        stdout: [
+          'TaskName: \\\\Narada\\\\CloudflareSiteContinuitySync',
+          'Status: Ready',
+          'Last Result: 0',
+          `Task To Run: C:\\node\\node.exe ${scheduledTaskEntrypoint}`,
+          'Scheduled Task State: Enabled',
+          'Repeat: Every: 0 Hour(s), 5 Minute(s)',
+        ].join('\n'),
+        stderr: '',
+      }),
+    });
+
+    assert.equal(result.scheduler_task_readback.status, 'ok');
+    assert.equal(result.continuity_health.status, 'ok');
+    assert.deepEqual(result.continuity_health.attention_reasons, []);
+    assert.equal(result.continuity_health.scheduler_readback_status, 'ok');
+    assert.equal(result.continuity_health.scheduler_last_result, '0');
+    assert.equal(result.continuity_health.local_sync_status, 'synced');
+    assert.equal(result.continuity_health.binding_count, 1);
+    assert.doesNotMatch(JSON.stringify(result), /secret|token/i);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('site continuity scheduler live status surfaces cadence mismatch as attention evidence', async () => {
   const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-live-status-mismatch-'));
   const syncEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-sync.mjs');
