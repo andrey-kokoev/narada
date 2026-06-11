@@ -281,6 +281,15 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:create:text -- --url
 
 `product:operation:create` calls `operation.create` through the same authenticated `POST /api/carrier` envelope as the console. It is a product mutation, not a readback command: the Worker still enforces Site authority, records the operation in the Site Registry, and returns a redacted `narada.cloudflare_carrier.operation_create.v1` envelope. The `:text` alias prints the worker URL, auth source, site, operation id, name, kind, and status without echoing bearer tokens or operator-session cookies.
 
+Move a governed Cloudflare operation through its lifecycle from the operator CLI:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:operation:status:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --status paused --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada2/cloudflare-carrier product:operation:status:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --status closed --operator-session-file cloudflare-operator-session.json
+```
+
+`product:operation:status` calls `operation.status.put` through authenticated `POST /api/carrier`. It supports `active`, `paused`, and `closed`, leaves Site authority enforcement in the Worker, and returns a redacted `narada.cloudflare_carrier.operation_status_put.v1` envelope. The `:text` alias prints the worker URL, auth source, site, operation id, status, and update time without echoing bearer tokens or operator-session cookies.
+
 For operator-facing readback without JSON inspection, use the text aliases:
 
 ```powershell
