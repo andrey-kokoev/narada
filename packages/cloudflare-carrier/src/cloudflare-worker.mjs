@@ -15608,7 +15608,7 @@ export function renderCloudflareCarrierConsole() {
         else focusFlightDeckEvidence();
         return;
       }
-      if (action.includes('task_lifecycle')) { applyFlightDeckNextAction(); return; }
+      if (action.includes('task_lifecycle') || action.includes('external_effects')) { applyFlightDeckNextAction(); return; }
       applyAuthorityNextAction();
     }
     function authorityTransferWorkflowItems(product = state.operationProduct || {}) {

@@ -3036,6 +3036,7 @@ test('worker serves minimal authenticated web console shell', async () => {
   assert.match(html, /applyAuthorityTransferNextAction/);
   assert.match(html, /authorityTransferRouteStage/);
   assert.match(html, /focusAuthorityTransferNextAction/);
+  assert.match(html, /external_effects/);
   assert.match(html, /Apply Authority Transfer Next Action/);
   assert.match(html, /authority_transfer_attention/);
   assert.match(html, /windows_authority_remains/);
