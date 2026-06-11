@@ -3666,8 +3666,16 @@ test('worker records webhook delay observations as Cloudflare shadow-read eviden
   assert.equal(operationReadBody.operation_lifecycle_status.schema, 'narada.cloudflare_operation_lifecycle_status.v1');
   assert.equal(operationReadBody.operation_lifecycle_status.phase, 'active_uninhabited');
   assert.equal(operationReadBody.operation_lifecycle_status.health, 'incomplete');
-  assert.deepEqual(operationReadBody.operation_lifecycle_status.missing, ['session', 'carrier_evidence', 'continuity_packet']);
+  assert.deepEqual(operationReadBody.operation_lifecycle_status.missing, [
+    'session',
+    'carrier_evidence',
+    'continuity_packet',
+    'cloudflare_persistence_posture',
+    'cloudflare_recovery_posture',
+  ]);
   assert.equal(operationReadBody.operation_lifecycle_status.continuity_loop_state, 'no_loop_report_observed');
+  assert.equal(operationReadBody.operation_lifecycle_status.cloudflare_persistence_posture.state, 'incomplete');
+  assert.equal(operationReadBody.operation_lifecycle_status.cloudflare_recovery_posture.state, 'not_reconstructable');
   assert.equal(operationReadBody.operation_product_surface.lifecycle_status.health, 'incomplete');
   assert.equal(operationReadBody.operation_posture_overview.schema, 'narada.cloudflare_operation_posture_overview.v1');
   assert.equal(operationReadBody.operation_posture_overview.operation_count, 1);
@@ -6598,6 +6606,8 @@ test('worker operation.create read and list route through site registry authorit
   assert.equal(readBody.cloudflare_persistence_posture.task_count, 1);
   assert.equal(readBody.operation_product_surface.persistence_posture.state, 'durable');
   assert.equal(readBody.operation_product_surface.persistence_posture.next_action, 'monitor_persistence_posture');
+  assert.deepEqual(readBody.operation_lifecycle_status.cloudflare_persistence_posture, readBody.cloudflare_persistence_posture);
+  assert.deepEqual(readBody.operation_lifecycle_status.cloudflare_recovery_posture, readBody.cloudflare_recovery_posture);
   assert.equal(readBody.cloudflare_recovery_posture.schema, 'narada.cloudflare_recovery_posture.v1');
   assert.equal(readBody.cloudflare_recovery_posture.operation_id, 'operation_control');
   assert.equal(readBody.cloudflare_recovery_posture.state, 'reconstructable');

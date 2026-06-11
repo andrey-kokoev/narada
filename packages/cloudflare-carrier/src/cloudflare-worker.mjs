@@ -2229,6 +2229,8 @@ function summarizeCloudflareOperationLifecycleStatus({
   repositoryPublicationProviderHeartbeats = [],
   webhookDelayDirectiveRecords = [],
   webhookDelayDirectiveDeliveries = [],
+  persistencePosture = null,
+  recoveryPosture = null,
 } = {}) {
   const sessionCount = Array.isArray(sessions) ? sessions.length : 0;
   const taskList = Array.isArray(tasks) ? tasks : [];
@@ -2258,9 +2260,13 @@ function summarizeCloudflareOperationLifecycleStatus({
   if (sessionCount === 0) missing.push('session');
   if (evidenceEventCount === 0) missing.push('carrier_evidence');
   if (continuityState !== 'packet_observed') missing.push('continuity_packet');
+  if (persistencePosture?.state === 'incomplete') missing.push('cloudflare_persistence_posture');
+  if (recoveryPosture?.state === 'not_reconstructable') missing.push('cloudflare_recovery_posture');
   const attention = [];
   if (continuityState === 'packet_observed' && continuityLoopState !== 'loop_report_observed') attention.push('continuity_loop_report');
   if (carrierEvidenceReadStatus?.state === 'degraded') attention.push('carrier_evidence_read_degraded');
+  if (persistencePosture?.state === 'degraded') attention.push('cloudflare_persistence_posture');
+  if (recoveryPosture?.state === 'partially_reconstructable') attention.push('cloudflare_recovery_posture');
   if (openTaskCount > 0) attention.push('open_tasks');
   if (directiveRecordCount > directiveDeliveryCount) attention.push('undelivered_directives');
   if (localIngressObserved && localIngressProviderLiveness.state === 'missing') attention.push('local_ingress_provider_liveness_missing');
@@ -2306,6 +2312,8 @@ function summarizeCloudflareOperationLifecycleStatus({
     directive_record_count: directiveRecordCount,
     directive_delivery_count: directiveDeliveryCount,
     carrier_evidence_read_status: carrierEvidenceReadStatus,
+    cloudflare_persistence_posture: persistencePosture,
+    cloudflare_recovery_posture: recoveryPosture,
     next_action: missing[0] ?? attention[0] ?? 'monitor_operation',
   };
 }
@@ -4627,6 +4635,8 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       repositoryPublicationProviderHeartbeats,
       webhookDelayDirectiveRecords,
       webhookDelayDirectiveDeliveries,
+      persistencePosture: cloudflarePersistencePosture,
+      recoveryPosture: cloudflareRecoveryPosture,
     });
     const localIngressOperationPosture = summarizeCloudflareLocalIngressOperationPosture({
       localIngressRequests,

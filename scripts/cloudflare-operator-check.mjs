@@ -1562,13 +1562,15 @@ assert.equal(operationSurface?.local_cloud_continuity_bridge?.schema, localCloud
 assert.equal(operationLifecycleStatus?.schema, 'narada.cloudflare_operation_lifecycle_status.v1');
 assert.equal(operationLifecycleStatus?.phase, 'inhabited');
 assert.match(operationLifecycleStatus?.health, /^(ready|attention)$/);
-assert.match(operationLifecycleStatus?.next_action, /^(monitor_operation|open_tasks|undelivered_directives|carrier_evidence_read_degraded|local_ingress_provider_liveness_stale)$/);
+assert.match(operationLifecycleStatus?.next_action, /^(monitor_operation|open_tasks|undelivered_directives|carrier_evidence_read_degraded|cloudflare_persistence_posture|cloudflare_recovery_posture|local_ingress_provider_liveness_stale)$/);
 assert.equal(operationLifecycleStatus?.continuity_loop_state, 'loop_report_observed');
 assert.ok((operationLifecycleStatus?.continuity_loop_report_count ?? 0) >= 1);
 const localIngressProviderSchedulerPosture = operationLifecycleStatus?.local_ingress_provider_scheduler_posture;
 const repositoryPublicationProviderSchedulerPosture = operationLifecycleStatus?.repository_publication_provider_scheduler_posture;
 assertProviderSchedulerPosture(localIngressProviderSchedulerPosture, 'local_ingress');
 assertProviderSchedulerPosture(repositoryPublicationProviderSchedulerPosture, 'repository_publication');
+assert.deepEqual(operationLifecycleStatus?.cloudflare_persistence_posture, operationPersistencePosture);
+assert.deepEqual(operationLifecycleStatus?.cloudflare_recovery_posture, operationRecoveryPosture);
 assert.equal(operationSurface?.lifecycle_status?.health, operationLifecycleStatus.health);
 assert.equal(operationSurface?.lifecycle_status?.next_action, operationLifecycleStatus.next_action);
 assert.equal(operationWorkflowRoute?.schema, 'narada.cloudflare_operation_workflow_route.v1');
