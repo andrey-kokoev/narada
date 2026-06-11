@@ -120,11 +120,12 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
     initialized = true;
   }
 
-  async function putOperationStatus({ operation_id, site_id, status, principal, request_id = null } = {}) {
+  async function putOperationStatus({ operation_id, site_id, status, reason = null, principal, request_id = null } = {}) {
     await ensureSchema();
     const operationId = normalizeOperationId(operation_id);
     const requestedSiteId = normalizeSiteId(site_id);
     const normalizedStatus = normalizeOperationStatus(status);
+    const statusReason = normalizeOptionalString(reason) ?? 'site_operation_status_updated';
     const principalId = normalizePrincipal(principal).principal_id;
     if (!operationId) return { ok: false, code: 'invalid_operation_id' };
     if (!OPERATION_STATUSES.has(normalizedStatus)) return { ok: false, code: 'invalid_operation_status', site_id: requestedSiteId || null, operation_id: operationId, status: normalizedStatus || null };
@@ -153,12 +154,13 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
       site_id: existing.site_id,
       principal_id: principalId,
       action: 'admit',
-      reason: 'site_operation_status_updated',
+      reason: statusReason,
       evidence: {
         request_id,
         operation_id: operationId,
         previous_status: existing.status,
         status: normalizedStatus,
+        status_reason: statusReason,
         actor_role: actorMembership.role,
       },
     });
@@ -170,6 +172,7 @@ export function createD1CloudflareSiteRegistry(db, { now = () => new Date().toIS
       operation_id: operationId,
       previous_status: existing.status,
       status: normalizedStatus,
+      reason: statusReason,
       operation: publicOperation(operation),
       actor_membership: publicMembership(actorMembership),
     };

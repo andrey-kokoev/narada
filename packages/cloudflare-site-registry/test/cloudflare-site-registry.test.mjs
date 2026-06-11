@@ -108,6 +108,7 @@ test('updates operation status behind owner or maintainer authority', async () =
       site_id: 'site_operation_status',
       operation_id: 'operation_status_control',
       status: 'inactive',
+      reason: 'operation_paused_by_operator',
       request_id: 'req_operation_status_pause',
     },
   });
@@ -115,6 +116,7 @@ test('updates operation status behind owner or maintainer authority', async () =
   assert.equal(paused.schema, 'narada.cloudflare_operation_status_update.v1');
   assert.equal(paused.action, 'status_updated');
   assert.equal(paused.previous_status, 'active');
+  assert.equal(paused.reason, 'operation_paused_by_operator');
   assert.equal(paused.operation.status, 'inactive');
 
   const readPaused = await registry.handle({
@@ -124,6 +126,9 @@ test('updates operation status behind owner or maintainer authority', async () =
   });
   assert.equal(readPaused.operation.status, 'inactive');
   assert.equal(readPaused.authority_events.some((event) => event.event_kind === 'site_operation_status_updated'), true);
+  const pauseEvent = readPaused.authority_events.find((event) => event.event_kind === 'site_operation_status_updated');
+  assert.equal(pauseEvent.reason, 'operation_paused_by_operator');
+  assert.equal(pauseEvent.evidence.status_reason, 'operation_paused_by_operator');
 
   const resumedFromPausedAlias = await registry.handle({
     operation: 'operation.status.put',

@@ -284,11 +284,11 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:create:text -- --url
 Move a governed Cloudflare operation through its lifecycle from the operator CLI:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:operation:status:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --status paused --operator-session-file cloudflare-operator-session.json
-pnpm --filter @narada2/cloudflare-carrier product:operation:status:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --status closed --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada2/cloudflare-carrier product:operation:status:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --status paused --reason operation_paused_by_operator --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada2/cloudflare-carrier product:operation:status:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --status closed --reason operation_closed_by_operator --operator-session-file cloudflare-operator-session.json
 ```
 
-`product:operation:status` calls `operation.status.put` through authenticated `POST /api/carrier`. It supports `active`, `inactive`, and `closed` (`paused` is normalized to `inactive` for compatibility), leaves Site authority enforcement in the Worker, and returns a redacted `narada.cloudflare_carrier.operation_status_put.v1` envelope. The `:text` alias prints the worker URL, auth source, site, operation id, status, worker-reported status transition, and update time without echoing bearer tokens or operator-session cookies.
+`product:operation:status` calls `operation.status.put` through authenticated `POST /api/carrier`. It supports `active`, `inactive`, and `closed` (`paused` is normalized to `inactive` for compatibility), accepts optional `--reason` / `CLOUDFLARE_CARRIER_OPERATION_STATUS_REASON` transition evidence, leaves Site authority enforcement in the Worker, and returns a redacted `narada.cloudflare_carrier.operation_status_put.v1` envelope. The `:text` alias prints the worker URL, auth source, site, operation id, status, optional reason, worker-reported status transition, and update time without echoing bearer tokens or operator-session cookies.
 
 For operator-facing readback without JSON inspection, use the text aliases:
 

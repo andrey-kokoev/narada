@@ -15,6 +15,7 @@ test('parseOperationStatusPutArgs builds governed operation.status.put params', 
     '--site', 'site_alpha',
     '--operation-id', 'operation_alpha',
     '--status', 'inactive',
+    '--reason', 'operation_paused_by_operator',
     '--request-id', 'request_alpha_status',
     '--format', 'text',
   ], {}, () => 123);
@@ -26,6 +27,7 @@ test('parseOperationStatusPutArgs builds governed operation.status.put params', 
     site_id: 'site_alpha',
     operation_id: 'operation_alpha',
     status: 'inactive',
+    reason: 'operation_paused_by_operator',
   });
   assert.deepEqual(parsed.auth, { kind: 'bearer', value: 'secret-token', source: 'flag:--token' });
 });
@@ -83,6 +85,7 @@ test('putCloudflareOperationStatus posts operation.status.put envelope and redac
             site_id: 'site_alpha',
             operation_id: 'operation_alpha',
             status: 'closed',
+            reason: 'operation_closed_by_operator',
             updated_at: '2026-06-11T00:00:00.000Z',
           },
         });
@@ -97,6 +100,7 @@ test('putCloudflareOperationStatus posts operation.status.put envelope and redac
       site_id: 'site_alpha',
       operation_id: 'operation_alpha',
       status: 'closed',
+      reason: 'operation_closed_by_operator',
     },
     auth: { kind: 'bearer', value: 'secret-token', source: 'flag:--token' },
   }, fetchImpl);
@@ -113,6 +117,7 @@ test('putCloudflareOperationStatus posts operation.status.put envelope and redac
       site_id: 'site_alpha',
       operation_id: 'operation_alpha',
       status: 'closed',
+      reason: 'operation_closed_by_operator',
     },
   });
   assert.equal(result.schema, 'narada.cloudflare_carrier.operation_status_put.v1');
@@ -123,6 +128,7 @@ test('putCloudflareOperationStatus posts operation.status.put envelope and redac
     operation_id: 'operation_alpha',
     previous_status: 'active',
     status: 'closed',
+    reason: 'operation_closed_by_operator',
     updated_at: '2026-06-11T00:00:00.000Z',
   });
 });
@@ -145,6 +151,7 @@ test('formatOperationStatusPutText renders operator summary without auth materia
     auth_source: 'operator-session-file',
     params: { site_id: 'site_alpha', operation_id: 'operation_alpha', status: 'inactive' },
     summary: summarizeOperationStatusPut({
+      reason: 'operation_paused_by_operator',
       previous_status: 'active',
       operation: { site_id: 'site_alpha', operation_id: 'operation_alpha', status: 'inactive', updated_at: '2026-06-11T00:00:00.000Z' },
     }),
@@ -155,6 +162,7 @@ test('formatOperationStatusPutText renders operator summary without auth materia
   assert.match(text, /Site: site_alpha/);
   assert.match(text, /Operation: operation_alpha/);
   assert.match(text, /Status: inactive/);
+  assert.match(text, /Reason: operation_paused_by_operator/);
   assert.match(text, /Transition: active -> inactive/);
   assert.equal(text.includes('secret-token'), false);
 });

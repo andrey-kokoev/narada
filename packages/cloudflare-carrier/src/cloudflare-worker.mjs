@@ -13887,11 +13887,12 @@ export function renderCloudflareCarrierConsole() {
           status: 'active',
         }, { request_id: 'console_operation_create_' + Date.now() });
       },
-      putOperationStatus(status) {
+      putOperationStatus(status, reason = null) {
         return this.request('operation.status.put', {
           site_id: el('siteId').value.trim(),
           operation_id: el('operationId').value.trim(),
           status,
+          ...(reason ? { reason } : {}),
         }, { request_id: 'console_operation_status_put_' + Date.now() });
       },
       putMembership(memberPrincipalId, role) {
@@ -16665,25 +16666,26 @@ export function renderCloudflareCarrierConsole() {
     }
     function operationLifecycleActionRow(operation = focusedOperation()) {
       return focusActionRow(
-        focusActionButton('operationLifecycleResume', 'Resume', () => run(() => putFocusedOperationStatus('active'))),
-        focusActionButton('operationLifecyclePause', 'Pause', () => run(() => putFocusedOperationStatus('inactive'))),
-        focusActionButton('operationLifecycleArchive', 'Archive', () => run(() => putFocusedOperationStatus('closed'))),
+        focusActionButton('operationLifecycleResume', 'Resume', () => run(() => putFocusedOperationStatus('active', 'operation_resumed_by_operator'))),
+        focusActionButton('operationLifecyclePause', 'Pause', () => run(() => putFocusedOperationStatus('inactive', 'operation_paused_by_operator'))),
+        focusActionButton('operationLifecycleArchive', 'Archive', () => run(() => putFocusedOperationStatus('closed', 'operation_closed_by_operator'))),
       );
     }
-    async function putFocusedOperationStatus(status) {
+    async function putFocusedOperationStatus(status, reason) {
       const operation = focusedOperation();
       const operationId = operation?.operation_id || el('operationId').value.trim();
       if (!operationId) throw new Error('Operation ID is required.');
       setCurrentOperation(operationId);
-      const body = await api.putOperationStatus(status);
+      const body = await api.putOperationStatus(status, reason);
       renderLastAuthority(null, {
         event_kind: 'operation.status.put',
         action: body.action || 'status_updated',
-        reason: 'site_operation_status_updated',
+        reason: body.reason || reason || 'site_operation_status_updated',
         evidence: {
           operation_id: operationId,
           previous_status: body.previous_status || operation?.status || null,
           status: body.status || status,
+          status_reason: body.reason || reason || null,
         },
       });
       await refreshOperation();

@@ -6899,13 +6899,14 @@ test('worker operation.create read and list route through site registry authorit
   const paused = await worker.fetch(jsonRequest({
     operation: 'operation.status.put',
     request_id: 'request_operation_status_pause',
-    params: { site_id: 'site_fixture', operation_id: 'operation_control', status: 'inactive' },
+    params: { site_id: 'site_fixture', operation_id: 'operation_control', status: 'inactive', reason: 'operation_paused_by_operator' },
   }, { token: 'test-admin-token', path: '/api/carrier' }), env);
   assert.equal(paused.status, 200);
   const pausedBody = await paused.json();
   assert.equal(pausedBody.schema, 'narada.cloudflare_operation_status_update.v1');
   assert.equal(pausedBody.action, 'status_updated');
   assert.equal(pausedBody.previous_status, 'active');
+  assert.equal(pausedBody.reason, 'operation_paused_by_operator');
   assert.equal(pausedBody.operation.status, 'inactive');
 
   const pausedRead = await worker.fetch(jsonRequest({
@@ -6922,7 +6923,9 @@ test('worker operation.create read and list route through site registry authorit
   assert.equal(pausedReadBody.operation_status_history.transition_count, 1);
   assert.equal(pausedReadBody.operation_status_history.latest_transition.from_status, 'active');
   assert.equal(pausedReadBody.operation_status_history.latest_transition.to_status, 'inactive');
+  assert.equal(pausedReadBody.operation_status_history.latest_transition.reason, 'operation_paused_by_operator');
   assert.equal(pausedReadBody.operation_product_surface.status_history.transition_count, 1);
+  assert.equal(pausedReadBody.operation_product_surface.status_history.latest_transition.reason, 'operation_paused_by_operator');
   assert.equal(pausedReadBody.operation_activity_timeline.schema, 'narada.cloudflare_operation_activity_timeline.v1');
   assert.equal(pausedReadBody.operation_activity_timeline.operation_id, 'operation_control');
   assert.ok(pausedReadBody.operation_activity_timeline.activity_count >= 5, JSON.stringify(pausedReadBody.operation_activity_timeline));
@@ -6935,16 +6938,20 @@ test('worker operation.create read and list route through site registry authorit
   assert.equal(pausedReadBody.operation_activity_timeline.items.some((item) => item.focus_kind === 'operation_authority_event' && item.focus_ref), true, JSON.stringify(pausedReadBody.operation_activity_timeline.items));
   assert.equal(pausedReadBody.operation_activity_timeline.items.some((item) => item.focus_kind === 'carrier_evidence_event' && item.focus_ref.startsWith('carrier_session_operation_fixture:')), true, JSON.stringify(pausedReadBody.operation_activity_timeline.items));
   assert.equal(pausedReadBody.operation_product_surface.activity_timeline.activity_count, pausedReadBody.operation_activity_timeline.activity_count);
-  assert.equal(pausedReadBody.authority_events.some((event) => event.event_kind === 'site_operation_status_updated'), true);
+  const pausedAuthorityEvent = pausedReadBody.authority_events.find((event) => event.event_kind === 'site_operation_status_updated');
+  assert.equal(Boolean(pausedAuthorityEvent), true);
+  assert.equal(pausedAuthorityEvent.reason, 'operation_paused_by_operator');
+  assert.equal(pausedAuthorityEvent.evidence.status_reason, 'operation_paused_by_operator');
 
   const resumed = await worker.fetch(jsonRequest({
     operation: 'operation.status.put',
     request_id: 'request_operation_status_resume',
-    params: { site_id: 'site_fixture', operation_id: 'operation_control', status: 'active' },
+    params: { site_id: 'site_fixture', operation_id: 'operation_control', status: 'active', reason: 'operation_resumed_by_operator' },
   }, { token: 'test-admin-token', path: '/api/carrier' }), env);
   assert.equal(resumed.status, 200);
   const resumedBody = await resumed.json();
   assert.equal(resumedBody.previous_status, 'inactive');
+  assert.equal(resumedBody.reason, 'operation_resumed_by_operator');
   assert.equal(resumedBody.operation.status, 'active');
 
   const resumedRead = await worker.fetch(jsonRequest({
@@ -6957,8 +6964,10 @@ test('worker operation.create read and list route through site registry authorit
   assert.equal(resumedReadBody.operation_status_history.current_status, 'active');
   assert.equal(resumedReadBody.operation_status_history.transition_count, 2);
   assert.deepEqual(resumedReadBody.operation_status_history.transitions.map((transition) => transition.to_status), ['inactive', 'active']);
+  assert.deepEqual(resumedReadBody.operation_status_history.transitions.map((transition) => transition.reason), ['operation_paused_by_operator', 'operation_resumed_by_operator']);
   assert.equal(resumedReadBody.operation_status_history.latest_transition.from_status, 'inactive');
   assert.equal(resumedReadBody.operation_status_history.latest_transition.to_status, 'active');
+  assert.equal(resumedReadBody.operation_status_history.latest_transition.reason, 'operation_resumed_by_operator');
   assert.equal(resumedReadBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'operation_status_transition' && item.summary === 'inactive -> active'), true, JSON.stringify(resumedReadBody.operation_activity_timeline.items));
 
   const listed = await worker.fetch(jsonRequest({

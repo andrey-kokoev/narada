@@ -12,6 +12,7 @@ export function parseOperationStatusPutArgs(argv = [], env = process.env, now = 
   const operationId = option(args, '--operation-id') ?? option(args, '--carrier-operation') ?? env.CLOUDFLARE_CARRIER_OPERATION_ID ?? null;
   const requestedStatus = option(args, '--status') ?? env.CLOUDFLARE_CARRIER_OPERATION_STATUS ?? null;
   const status = normalizeOperationStatus(requestedStatus);
+  const reason = normalizeOptionalString(option(args, '--reason') ?? env.CLOUDFLARE_CARRIER_OPERATION_STATUS_REASON ?? null);
   const requestId = option(args, '--request-id') ?? `operation_status_put_${String(operationId ?? 'operation').replace(/[^a-z0-9]+/gi, '_')}_${now()}`;
   const format = option(args, '--format') ?? env.CLOUDFLARE_CARRIER_OPERATION_STATUS_PUT_FORMAT ?? 'json';
   const auth = resolveAuth(args, env);
@@ -33,6 +34,7 @@ export function parseOperationStatusPutArgs(argv = [], env = process.env, now = 
       site_id: siteId,
       operation_id: operationId,
       status,
+      ...(reason ? { reason } : {}),
     },
   };
 }
@@ -75,6 +77,7 @@ export function summarizeOperationStatusPut(body = {}, params = {}) {
     site_id: operation.site_id ?? body.site_id ?? params.site_id ?? null,
     previous_status: body.previous_status ?? null,
     status: operation.status ?? body.status ?? params.status ?? null,
+    reason: body.reason ?? operation.status_reason ?? params.reason ?? null,
     updated_at: operation.updated_at ?? body.updated_at ?? null,
   };
 }
@@ -88,6 +91,7 @@ export function formatOperationStatusPutText(result) {
     `Site: ${summary.site_id ?? result?.params?.site_id ?? 'unknown'}`,
     `Operation: ${summary.operation_id ?? result?.params?.operation_id ?? 'unknown'}`,
     `Status: ${summary.status ?? result?.params?.status ?? 'unknown'}`,
+    ...(summary.reason ? [`Reason: ${summary.reason}`] : []),
     ...(summary.previous_status ? [`Transition: ${summary.previous_status} -> ${summary.status ?? result?.params?.status ?? 'unknown'}`] : []),
     `Updated: ${summary.updated_at ?? 'unknown'}`,
   ].join('\n') + '\n';
@@ -101,6 +105,11 @@ function option(args, name) {
 function normalizeOperationStatus(value) {
   const text = String(value ?? '').trim();
   return STATUS_ALIASES.get(text) ?? text;
+}
+
+function normalizeOptionalString(value) {
+  const text = String(value ?? '').trim();
+  return text || null;
 }
 
 function normalizeWorkerUrl(value) {
