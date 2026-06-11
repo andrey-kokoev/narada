@@ -35,6 +35,7 @@ export function buildSiteContinuitySchedulerPlan({
   packetPath = process.env.NARADA_SITE_CONTINUITY_PACKET ?? null,
   outputPath = process.env.NARADA_SITE_CONTINUITY_SYNC_OUT ?? '.narada/site-continuity/cloudflare-sync-last.json',
   reconciliationExecutionOutputPath = process.env.NARADA_SITE_CONTINUITY_RECONCILE_EXECUTION_OUT ?? '.narada/site-continuity/reconciliation/cloudflare-reconcile-last.json',
+  healthOutputPath = process.env.NARADA_SITE_CONTINUITY_HEALTH_OUT ?? '.narada/site-continuity/health/cloudflare-continuity-health-last.json',
   artifactDirectory = process.env.NARADA_SITE_CONTINUITY_ARTIFACT_DIR ?? null,
   configuredSites = process.env.NARADA_SITE_CONTINUITY_SITES ?? null,
   siteContinuityBindingRegistryPath = process.env.NARADA_SITE_CONTINUITY_BINDINGS ?? '.narada/site-continuity/bindings.json',
@@ -52,6 +53,7 @@ export function buildSiteContinuitySchedulerPlan({
   const effectivePacketPath = packetPath ? resolvePath(effectiveLocalRoot, packetPath) : null;
   const effectiveOutputPath = outputPath ? resolvePath(effectiveLocalRoot, outputPath) : null;
   const effectiveReconciliationExecutionOutputPath = reconciliationExecutionOutputPath ? resolvePath(effectiveLocalRoot, reconciliationExecutionOutputPath) : null;
+  const effectiveHealthOutputPath = healthOutputPath ? resolvePath(effectiveLocalRoot, healthOutputPath) : null;
   const effectiveArtifactDirectory = artifactDirectory ? resolvePath(effectiveLocalRoot, artifactDirectory) : effectiveOutputPath ? dirname(effectiveOutputPath) : null;
   const effectiveSiteContinuityBindingRegistryPath = siteContinuityBindingRegistryPath ? resolvePath(effectiveLocalRoot, siteContinuityBindingRegistryPath) : null;
   const effectiveSitesFilePath = sitesFilePath ? resolvePath(effectiveLocalRoot, sitesFilePath) : null;
@@ -96,6 +98,7 @@ export function buildSiteContinuitySchedulerPlan({
     packet_path: effectivePacketPath,
     output_path: effectiveOutputPath,
     reconciliation_execution_output_path: effectiveReconciliationExecutionOutputPath,
+    health_output_path: effectiveHealthOutputPath,
     artifact_directory: effectiveArtifactDirectory,
     site_continuity_binding_registry_path: effectiveSiteContinuityBindingRegistryPath,
     sites_file_path: effectiveSitesFilePath,
@@ -331,6 +334,7 @@ function summarizeSchedulerTaskReadback({ state, command, args, stdout, stderr, 
   const expectedInterval = normalizeIntervalMinutes(expectedIntervalMinutes);
   const lastResult = parsed['Last Result'] ?? null;
   const scheduledTaskState = parsed['Scheduled Task State'] ?? null;
+  const statusText = parsed.Status ?? null;
   const cadenceStatus = actualIntervalMinutes === null
     ? 'unknown'
     : actualIntervalMinutes === expectedInterval ? 'matches_plan' : 'differs_from_plan';
@@ -342,7 +346,7 @@ function summarizeSchedulerTaskReadback({ state, command, args, stdout, stderr, 
   const attentionReasons = [
     cadenceStatus === 'differs_from_plan' ? 'scheduler_cadence_differs_from_plan' : null,
     taskCommandStatus === 'differs_from_plan' ? 'scheduler_task_command_differs_from_plan' : null,
-    lastResult && lastResult !== '0' ? 'scheduler_last_result_nonzero' : null,
+    isSchedulerLastResultHealthy(lastResult, statusText) ? null : 'scheduler_last_result_nonzero',
     scheduledTaskState && !/^enabled$/i.test(scheduledTaskState) ? 'scheduler_task_disabled' : null,
   ].filter(Boolean);
   return {
@@ -356,7 +360,7 @@ function summarizeSchedulerTaskReadback({ state, command, args, stdout, stderr, 
     parsed,
     task_name: parsed.TaskName ?? null,
     scheduled_task_state: scheduledTaskState,
-    status_text: parsed.Status ?? null,
+    status_text: statusText,
     last_run_time: parsed['Last Run Time'] ?? null,
     last_result: lastResult,
     next_run_time: parsed['Next Run Time'] ?? null,
@@ -369,6 +373,13 @@ function summarizeSchedulerTaskReadback({ state, command, args, stdout, stderr, 
     attention_reasons: attentionReasons,
     embeds_credentials: false,
   };
+}
+
+function isSchedulerLastResultHealthy(lastResult, statusText) {
+  if (!lastResult || lastResult === '0') return true;
+  const normalizedLastResult = String(lastResult).trim().toLowerCase();
+  const normalizedStatus = String(statusText ?? '').trim().toLowerCase();
+  return normalizedStatus === 'running' && ['267009', '0x41301'].includes(normalizedLastResult);
 }
 
 function parseSchedulerTaskListOutput(output) {
@@ -427,12 +438,96 @@ export async function runSiteContinuitySchedulerActionWithOptionalRefresh(
   }
   const planningOptions = { ...options, action: 'reconcile' };
   const plan = await buildSiteContinuitySchedulerPlanWithOptionalRefresh(planningOptions, { env, materializeSiteRegistryProjection });
-  return executeSiteContinuityReconciliationPlan(plan, {
+  const reconciliationExecution = await executeSiteContinuityReconciliationPlan(plan, {
     dryRun: options.dryRun !== false,
     executionTimeoutMs: options.executionTimeoutMs,
     execFileImpl,
     now: options.now,
   });
+  if (options.dryRun !== false) return reconciliationExecution;
+  const healthPlan = buildSiteContinuitySchedulerPlan({ ...planningOptions, action: 'health' });
+  const healthReadback = await executeSchedulerTaskReadback(healthPlan, { execFileImpl, executionTimeoutMs: options.executionTimeoutMs });
+  const continuityHealth = healthReadback.continuity_health ?? summarizeSiteContinuityHealth(healthPlan, healthReadback.scheduler_task_readback ?? null);
+  return {
+    ...reconciliationExecution,
+    scheduled_health_snapshot: persistSiteContinuityHealthSnapshot({
+      schema: 'narada.cloudflare_carrier.site_continuity_scheduled_health_snapshot.v1',
+      status: continuityHealth.status,
+      generated_at: options.now?.() ?? new Date().toISOString(),
+      health_output_path: plan.health_output_path ?? null,
+      embeds_credentials: false,
+      trigger: process.env.NARADA_SITE_CONTINUITY_SYNC_TRIGGER ?? null,
+      reconciliation_execution: summarizeReconciliationExecutionForHealthSnapshot(reconciliationExecution),
+      continuity_health: continuityHealth,
+      scheduler_task_readback: healthReadback.scheduler_task_readback ?? null,
+    }, { dryRun: false, now: options.now }),
+  };
+}
+
+function persistSiteContinuityHealthSnapshot(snapshot, { dryRun = true, now = () => new Date().toISOString() } = {}) {
+  if (dryRun) return snapshot;
+  const outputPath = snapshot.health_output_path;
+  if (!outputPath) {
+    return {
+      ...snapshot,
+      health_snapshot_artifact: {
+        state: 'not_configured',
+        written: false,
+        status: 'needs_configuration',
+      },
+    };
+  }
+  try {
+    mkdirSync(dirname(outputPath), { recursive: true });
+    const artifact = {
+      ...snapshot,
+      persisted_at: now(),
+    };
+    writeFileSync(outputPath, `${JSON.stringify(artifact, null, 2)}\n`, 'utf8');
+    return {
+      ...snapshot,
+      health_snapshot_artifact: {
+        state: 'written',
+        written: true,
+        artifact_path: outputPath,
+        status: 'recorded',
+        persisted_at: artifact.persisted_at,
+      },
+    };
+  } catch (error) {
+    return {
+      ...snapshot,
+      health_snapshot_artifact: {
+        state: 'write_failed',
+        written: false,
+        artifact_path: outputPath,
+        status: 'needs_attention',
+        error: error.message,
+      },
+    };
+  }
+}
+
+function summarizeReconciliationExecutionForHealthSnapshot(result) {
+  return {
+    schema: result?.schema ?? null,
+    status: result?.status ?? null,
+    reconciliation_plan_status: result?.reconciliation_plan_status ?? null,
+    selected_site_count: result?.selected_site_count ?? 0,
+    executed_site_count: result?.executed_site_count ?? 0,
+    completed_site_count: result?.completed_site_count ?? 0,
+    failed_site_count: result?.failed_site_count ?? 0,
+    refusal_reason: result?.refusal_reason ?? null,
+    reconciliation_execution_artifact: result?.reconciliation_execution_artifact ?? null,
+    cloudflare_reconciliation_execution_evidence: result?.cloudflare_reconciliation_execution_evidence
+      ? {
+        state: result.cloudflare_reconciliation_execution_evidence.state ?? null,
+        status: result.cloudflare_reconciliation_execution_evidence.status ?? null,
+        recorded_count: result.cloudflare_reconciliation_execution_evidence.recorded_count ?? null,
+        failed_count: result.cloudflare_reconciliation_execution_evidence.failed_count ?? null,
+      }
+      : null,
+  };
 }
 
 async function executeSchedulerTaskPlan(plan, { execFileImpl = execFile, executionTimeoutMs = DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS } = {}) {
@@ -1381,6 +1476,7 @@ function parseArgs(argv) {
     else if (arg === '--packet') args.packetPath = argv[++index];
     else if (arg === '--out') args.outputPath = argv[++index];
     else if (arg === '--reconciliation-execution-out') args.reconciliationExecutionOutputPath = argv[++index];
+    else if (arg === '--health-out') args.healthOutputPath = argv[++index];
     else if (arg === '--artifact-dir') args.artifactDirectory = argv[++index];
     else if (arg === '--sites') args.configuredSites = argv[++index];
     else if (arg === '--sites-file') args.sitesFilePath = argv[++index];
