@@ -322,6 +322,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
     },
   });
   assert.match(siteReadText, /Site: site_alpha \(Alpha Site\)/);
+  assert.match(siteReadText, /Action Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:action:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-action/);
   assert.match(siteReadText, /Durability: persistence=durable recovery=reconstructable/);
 
   const operationListText = formatProductSurfaceText({

@@ -13,12 +13,16 @@ const scriptDir = dirname(scriptPath);
 const packageRoot = resolve(scriptDir, '..');
 const productReadScript = resolve(scriptDir, 'cloudflare-carrier-product-read.mjs');
 const siteFocusWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-site-focus-workflow-live.mjs');
+const siteActionWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-site-action-workflow-live.mjs');
 
 export function parseSiteNextWorkflowLiveArgs(argv = [], env = process.env) {
   const args = [...argv];
   const workerUrl = option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '';
   const expectedRouteAction = option(args, '--expected-route-action') ?? env.CLOUDFLARE_CARRIER_SITE_NEXT_EXPECTED_ROUTE_ACTION ?? null;
   const expectedSiteId = option(args, '--focused-site-id') ?? option(args, '--site-id') ?? env.CLOUDFLARE_CARRIER_FOCUSED_SITE_ID ?? null;
+  const expectedSiteAction = option(args, '--expected-action') ?? env.CLOUDFLARE_CARRIER_SITE_NEXT_EXPECTED_ACTION ?? null;
+  const localSiteRef = option(args, '--local-site-ref') ?? env.CLOUDFLARE_CARRIER_LOCAL_SITE_REF ?? null;
+  const cloudflareSiteRef = option(args, '--cloudflare-site-ref') ?? env.CLOUDFLARE_CARRIER_CLOUDFLARE_SITE_REF ?? null;
   const auth = resolveAuth(args, env);
   const executeAcknowledged = flag(args, '--execute-site-next')
     || env.CLOUDFLARE_CARRIER_SITE_NEXT_EXECUTE_LIVE === '1';
@@ -33,6 +37,9 @@ export function parseSiteNextWorkflowLiveArgs(argv = [], env = process.env) {
     workerUrl,
     expectedRouteAction,
     expectedSiteId,
+    expectedSiteAction,
+    localSiteRef,
+    cloudflareSiteRef,
     auth,
     executeAcknowledged,
   };
@@ -80,18 +87,23 @@ export async function runSiteNextWorkflowLive(
         `site_next_workflow_live_expected_site_mismatch:${config.expectedSiteId}:${selectedSiteId}`,
       );
     }
-    const delegatedResult = parseJsonStdout(
+    const focusResult = parseJsonStdout(
       await runNodeScript(buildSiteFocusArgs(config, selectedSiteId), { cwd: packageRoot }),
       'site_next_workflow_focus',
+    );
+    const delegatedResult = parseJsonStdout(
+      await runNodeScript(buildSiteActionArgs(config, selectedSiteId), { cwd: packageRoot }),
+      'site_next_workflow_action',
     );
     return {
       schema: 'narada.cloudflare_carrier.site_next_workflow_live.v1',
       status: 'ok',
       worker_url: config.workerUrl,
-      delegated_workflow: 'focus_site',
+      delegated_workflow: delegatedResult.delegated_workflow ?? 'focus_site',
       delegated_route_action: routeAction,
       selected_site_id: selectedSiteId,
       list_before_next: listBefore.summary,
+      focus_result: focusResult,
       delegated_result: delegatedResult,
     };
   }
@@ -110,6 +122,20 @@ function buildSiteListArgs(config) {
     '--operation', 'site.list',
     '--url', config.workerUrl,
   ];
+  appendAuthOptions(args, config);
+  return args;
+}
+
+function buildSiteActionArgs(config, siteId) {
+  const args = [
+    siteActionWorkflowScript,
+    '--url', config.workerUrl,
+    '--site', siteId,
+    '--execute-site-action',
+  ];
+  if (config.expectedSiteAction) args.push('--expected-action', config.expectedSiteAction);
+  if (config.localSiteRef) args.push('--local-site-ref', config.localSiteRef);
+  if (config.cloudflareSiteRef) args.push('--cloudflare-site-ref', config.cloudflareSiteRef);
   appendAuthOptions(args, config);
   return args;
 }

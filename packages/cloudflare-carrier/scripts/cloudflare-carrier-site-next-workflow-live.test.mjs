@@ -70,6 +70,9 @@ test('runSiteNextWorkflowLive delegates focus_next_site to site focus workflow',
     workerUrl: 'https://carrier.example',
     expectedRouteAction: 'focus_next_site',
     expectedSiteId: 'site_alpha',
+    expectedSiteAction: 'bind_cloudflare_product_next_site_locally',
+    localSiteRef: 'file:///D:/code/narada',
+    cloudflareSiteRef: 'cloudflare://site-alpha',
     auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
     executeAcknowledged: true,
   }, {
@@ -95,16 +98,26 @@ test('runSiteNextWorkflowLive delegates focus_next_site to site focus workflow',
           selected_site_id: 'site_alpha',
         });
       }
+      if (scriptName === 'cloudflare-carrier-site-action-workflow-live.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.site_action_workflow_live.v1',
+          status: 'ok',
+          delegated_workflow: 'prepare_next_site_binding',
+          delegated_action: 'bind_cloudflare_product_next_site_locally',
+        });
+      }
       throw new Error(`unexpected_script:${scriptName}`);
     },
   });
 
-  assert.equal(result.delegated_workflow, 'focus_site');
+  assert.equal(result.delegated_workflow, 'prepare_next_site_binding');
   assert.equal(result.delegated_route_action, 'focus_next_site');
   assert.equal(result.selected_site_id, 'site_alpha');
-  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.site_focus_workflow_live.v1');
-  assert.equal(invocations.length, 2);
+  assert.equal(result.focus_result.schema, 'narada.cloudflare_carrier.site_focus_workflow_live.v1');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.site_action_workflow_live.v1');
+  assert.equal(invocations.length, 3);
   assert.equal(invocations[1][0].split(/[\\/]/).pop(), 'cloudflare-carrier-site-focus-workflow-live.mjs');
+  assert.equal(invocations[2][0].split(/[\\/]/).pop(), 'cloudflare-carrier-site-action-workflow-live.mjs');
 });
 
 test('runSiteNextWorkflowLive rejects unsupported site route actions', async () => {
