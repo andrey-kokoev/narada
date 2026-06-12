@@ -22,6 +22,7 @@ const residentDispatchWindowsFallbackEvidenceScript = resolve(scriptDir, 'cloudf
 const residentDispatchWindowsFallbackEvidenceReviewScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-windows-fallback-evidence-review.mjs');
 const residentDispatchWindowsFallbackExecuteScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-windows-fallback-execute.mjs');
 const residentDispatchLocalResidentCarrierBridgeScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-local-resident-carrier-bridge.mjs');
+const focusReviewScript = resolve(scriptDir, 'cloudflare-carrier-operation-focus-review.mjs');
 const focusWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-focus-workflow-live.mjs');
 const sessionWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-session-workflow-live.mjs');
 const continuationWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-continuation-workflow-live.mjs');
@@ -137,6 +138,31 @@ export async function runOperationNextWorkflowLive(
       await runNodeScript(buildEvidenceArgs(config, selectedOperationId), { cwd: packageRoot }),
       'operation_next_workflow_evidence',
     );
+    if (isEvidenceReviewActionable(evidenceResult.summary)) {
+      const focusReviewResult = parseJsonStdout(
+        await runNodeScript(buildFocusReviewArgs(config, selectedOperationId, evidenceResult.summary), { cwd: packageRoot }),
+        'operation_next_workflow_focus_review',
+      );
+      const readAfter = parseJsonStdout(
+        await runNodeScript(buildOperationReadArgs(config, selectedOperationId), { cwd: packageRoot }),
+        'operation_read_after_next_workflow',
+      );
+      assert.equal(readAfter.schema, 'narada.cloudflare_carrier.product_read.v1');
+      return {
+        schema: 'narada.cloudflare_carrier.operation_next_workflow_live.v1',
+        status: 'ok',
+        worker_url: config.workerUrl,
+        site_id: config.siteId,
+        selected_operation_id: selectedOperationId,
+        list_before_next: listBefore.summary,
+        read_before_next: readBefore.summary,
+        delegated_workflow: 'focus_review',
+        delegated_route_action: listBefore.summary.next_action,
+        evidence_result: evidenceResult,
+        delegated_result: focusReviewResult,
+        read_after_next: readAfter.summary,
+      };
+    }
     if (!isEvidenceReviewSatisfied(evidenceResult.summary)) {
       const readAfter = parseJsonStdout(
         await runNodeScript(buildOperationReadArgs(config, selectedOperationId), { cwd: packageRoot }),
@@ -296,6 +322,19 @@ function buildEvidenceArgs(config, operationId) {
   return args;
 }
 
+function buildFocusReviewArgs(config, operationId, evidenceSummary = {}) {
+  const args = [
+    focusReviewScript,
+    '--url', config.workerUrl,
+    '--site', config.siteId,
+    '--operation-id', operationId,
+    '--focus-kind', evidenceSummary.reviewable_focus_kind,
+    '--focus-ref', evidenceSummary.reviewable_focus_ref,
+  ];
+  appendAuthOptions(args, config);
+  return args;
+}
+
 function appendAuthOptions(args, config) {
   if (config.auth?.kind === 'bearer') {
     args.push('--token', config.auth.value);
@@ -323,6 +362,11 @@ function isEvidenceReviewSatisfied(summary = {}) {
   return latestReview.focus_kind === summary.reviewable_focus_kind
     && latestReview.focus_ref === summary.reviewable_focus_ref
     && latestReview.review_status === 'acknowledged';
+}
+
+function isEvidenceReviewActionable(summary = {}) {
+  return Boolean(summary?.reviewable_focus_kind && summary?.reviewable_focus_ref)
+    && !isEvidenceReviewSatisfied(summary);
 }
 
 function option(args, name) {
