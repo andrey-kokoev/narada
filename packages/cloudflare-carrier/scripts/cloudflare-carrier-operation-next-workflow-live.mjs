@@ -15,6 +15,7 @@ const productReadScript = resolve(scriptDir, 'cloudflare-carrier-product-read.mj
 const evidenceReadScript = resolve(scriptDir, 'cloudflare-carrier-operation-evidence-read.mjs');
 const mailboxDraftReplyProposalReadScript = resolve(scriptDir, 'cloudflare-carrier-mailbox-draft-reply-proposal-read.mjs');
 const repositoryPublicationRequestReviewScript = resolve(scriptDir, 'cloudflare-carrier-repository-publication-request-review.mjs');
+const siteFileChangeProposalReviewScript = resolve(scriptDir, 'cloudflare-carrier-site-file-change-proposal-review.mjs');
 const focusWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-focus-workflow-live.mjs');
 const sessionWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-session-workflow-live.mjs');
 const continuationWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-continuation-workflow-live.mjs');
@@ -24,6 +25,7 @@ const CHILD_STDIO_MAX_BUFFER = 16 * 1024 * 1024;
 const ROUTE_TO_WORKFLOW = new Map([
   ['review_mailbox_draft_reply_proposal', { name: 'mailbox_draft_reply_proposal', script: mailboxDraftReplyProposalReadScript, flag: null }],
   ['review_repository_publication_request', { name: 'repository_publication_request', script: repositoryPublicationRequestReviewScript, flag: null }],
+  ['review_site_file_change_proposal', { name: 'site_file_change_proposal', script: siteFileChangeProposalReviewScript, flag: null }],
   ['start_or_select_session', { name: 'session', script: sessionWorkflowScript, flag: '--execute-operation-session' }],
   ['resume_operation_continuation', { name: 'continuation', script: continuationWorkflowScript, flag: '--execute-operation-continuation-resume' }],
   ['refresh_site_continuity_loop', { name: 'continuity', script: continuityWorkflowScript, flag: '--execute-operation-continuity' }],

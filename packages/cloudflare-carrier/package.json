@@ -58,6 +58,8 @@
     "product:resident-dispatch:workflow:live": "node scripts/cloudflare-carrier-resident-dispatch-live-smoke.mjs",
     "product:site-file-change:proposal": "node scripts/cloudflare-carrier-site-file-change-proposal.mjs",
     "product:site-file-change:proposal:text": "node scripts/cloudflare-carrier-site-file-change-proposal.mjs --format text",
+    "product:site-file-change:proposal:review": "node scripts/cloudflare-carrier-site-file-change-proposal-review.mjs",
+    "product:site-file-change:proposal:review:text": "node scripts/cloudflare-carrier-site-file-change-proposal-review.mjs --format text",
     "product:site-file:materialization": "node scripts/cloudflare-carrier-site-file-materialization.mjs",
     "product:site-file:materialization:text": "node scripts/cloudflare-carrier-site-file-materialization.mjs --format text",
     "product:local-ingress:request": "node scripts/cloudflare-carrier-local-ingress-request.mjs",

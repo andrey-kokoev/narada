@@ -531,6 +531,31 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
     },
   });
   assert.match(operationReadRepositoryPublicationText, /Repository Publication Review: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_repo_pub --operator-session-file <operator-session-file>/);
+
+  const operationReadSiteFileProposalText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_site_file',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'active_uninhabited',
+      health: 'incomplete',
+      next_action: 'session',
+      workflow_next_action: 'review_site_file_change_proposal',
+      workflow_reason: 'operation_operator_focus_needs_review',
+      workflow_focus_ref: 'site_file_change_proposal_live_1',
+      session_count: 0,
+      task_count: 0,
+      recovery_state: 'ready_no_sessions',
+      recovery_boundary_count: 1,
+      recovery_gap_count: 0,
+    },
+  });
+  assert.match(operationReadSiteFileProposalText, /Site File Change Proposal Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file-change:proposal:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_site_file --operator-session-file <operator-session-file>/);
 });
 
 test('formatProductSurfaceText renders refused product reads without auth material', () => {
