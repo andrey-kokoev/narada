@@ -272,6 +272,28 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(siteListText, /Site Route: domain=site_posture state=site_posture_ready action=return_local_windows_continuity_packet target=site_alpha status=ready reason=continuity_direction/);
   assert.equal(siteListText.includes('secret-token'), false);
 
+  const siteListFocusText = formatProductSurfaceText({
+    operation: 'site.list',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'site.list',
+      site_count: 2,
+      next_site_id: 'site_alpha',
+      next_health: 'attention',
+      next_action: 'bind_cloudflare_product_next_site_locally',
+      next_reason: 'continuity_direction',
+      route_domain: 'site_posture',
+      route_command_state: 'site_posture_attention',
+      route_command_action: 'focus_next_site',
+      route_next_action: 'focus_next_site',
+      route_target: 'site_alpha',
+      route_status: 'needs_attention',
+      route_reason: 'continuity_direction',
+    },
+  });
+  assert.match(siteListFocusText, /Focus Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:focus:workflow:live -- --url https:\/\/carrier\.example\.test --focused-site-id site_alpha --operator-session-file <operator-session-file> --execute-site-focus/);
+
   const siteReadText = formatProductSurfaceText({
     operation: 'site.read',
     worker_url: 'https://carrier.example.test',
