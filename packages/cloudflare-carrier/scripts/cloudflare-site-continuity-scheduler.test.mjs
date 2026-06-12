@@ -142,6 +142,29 @@ test('site continuity product posture snapshot reports missing config without li
   assert.equal(posture.embeds_credentials, false);
 });
 
+test('site continuity product posture snapshot records non-secret auth posture when loaded', async () => {
+  const posture = await readCloudflareProductPostureForHealthSnapshot({
+    env: {
+      CLOUDFLARE_CARRIER_URL: 'https://worker.example',
+      CLOUDFLARE_OPERATOR_SESSION_COOKIE: 'narada_operator_session=session-fixture',
+    },
+    now: () => '2026-06-11T13:47:30.000Z',
+    productReadSurface: async () => ({
+      summary: { next_site_id: 'site_alpha', next_action: 'monitor_sites' },
+      response: {
+        site_product_overview: { site_count: 1 },
+        site_posture_route: { domain: 'site' },
+      },
+    }),
+  });
+
+  assert.equal(posture.state, 'loaded');
+  assert.equal(posture.status, 'ok');
+  assert.equal(posture.auth_kind, 'operator_session');
+  assert.equal(posture.auth_source, 'env:CLOUDFLARE_OPERATOR_SESSION_COOKIE');
+  assert.equal(posture.embeds_credentials, false);
+});
+
 test('site continuity operation posture snapshot reports unselected site without live access', async () => {
   const posture = await readCloudflareOperationPostureForHealthSnapshot({
     env: { CLOUDFLARE_CARRIER_URL: 'https://worker.example' },
@@ -155,6 +178,30 @@ test('site continuity operation posture snapshot reports unselected site without
   assert.equal(posture.status, 'not_available');
   assert.equal(posture.operation, 'operation.list');
   assert.equal(posture.reason, 'cloudflare_product_next_site_id_not_available');
+  assert.equal(posture.embeds_credentials, false);
+});
+
+test('site continuity operation posture snapshot records non-secret auth posture when loaded', async () => {
+  const posture = await readCloudflareOperationPostureForHealthSnapshot({
+    env: {
+      CLOUDFLARE_CARRIER_URL: 'https://worker.example',
+      CLOUDFLARE_OPERATOR_SESSION_COOKIE: 'narada_operator_session=session-fixture',
+    },
+    now: () => '2026-06-11T13:48:30.000Z',
+    siteId: 'site_alpha',
+    productReadSurface: async () => ({
+      summary: { next_operation_id: 'carrier_operation_next', next_action: 'start_operation' },
+      response: {
+        operation_posture_overview: { operation_count: 1 },
+        operation_posture_route: { next_action: 'start_operation' },
+      },
+    }),
+  });
+
+  assert.equal(posture.state, 'loaded');
+  assert.equal(posture.status, 'ok');
+  assert.equal(posture.auth_kind, 'operator_session');
+  assert.equal(posture.auth_source, 'env:CLOUDFLARE_OPERATOR_SESSION_COOKIE');
   assert.equal(posture.embeds_credentials, false);
 });
 
@@ -2164,6 +2211,8 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
     assert.equal(result.scheduled_health_snapshot.status, 'ok');
     assert.equal(result.scheduled_health_snapshot.cloudflare_product_posture.state, 'loaded');
     assert.equal(result.scheduled_health_snapshot.cloudflare_product_posture.status, 'ok');
+    assert.equal(result.scheduled_health_snapshot.cloudflare_product_posture.auth_kind, 'bearer');
+    assert.equal(result.scheduled_health_snapshot.cloudflare_product_posture.auth_source, 'env:CLOUDFLARE_CARRIER_TOKEN');
     assert.equal(result.scheduled_health_snapshot.cloudflare_product_posture.summary.next_site_id, 'site_missing');
     assert.equal(result.scheduled_health_snapshot.cloudflare_product_posture.site_product_overview.site_count, 1);
     assert.equal(result.scheduled_health_snapshot.cloudflare_product_binding_alignment.state, 'aligned');
@@ -2173,6 +2222,8 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
     assert.equal(result.scheduled_health_snapshot.cloudflare_product_binding_preparation.status, 'ok');
     assert.equal(result.scheduled_health_snapshot.cloudflare_operation_posture.state, 'loaded');
     assert.equal(result.scheduled_health_snapshot.cloudflare_operation_posture.status, 'ok');
+    assert.equal(result.scheduled_health_snapshot.cloudflare_operation_posture.auth_kind, 'bearer');
+    assert.equal(result.scheduled_health_snapshot.cloudflare_operation_posture.auth_source, 'env:CLOUDFLARE_CARRIER_TOKEN');
     assert.equal(result.scheduled_health_snapshot.cloudflare_operation_posture.summary.next_operation_id, 'carrier_operation_next');
     assert.equal(result.scheduled_health_snapshot.health_snapshot_artifact.state, 'written');
     assert.equal(result.scheduled_health_snapshot.health_snapshot_artifact.artifact_path, healthOutputPath);
@@ -2194,18 +2245,24 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
     assert.equal(healthSnapshot.reconciliation_execution.status, 'completed');
     assert.equal(healthSnapshot.continuity_health.status, 'ok');
     assert.equal(healthSnapshot.cloudflare_product_posture.state, 'loaded');
+    assert.equal(healthSnapshot.cloudflare_product_posture.auth_kind, 'bearer');
+    assert.equal(healthSnapshot.cloudflare_product_posture.auth_source, 'env:CLOUDFLARE_CARRIER_TOKEN');
     assert.equal(healthSnapshot.cloudflare_product_posture.summary.next_action, 'monitor_sites');
     assert.equal(healthSnapshot.cloudflare_product_binding_alignment.state, 'aligned');
     assert.equal(healthSnapshot.cloudflare_product_binding_preparation.reason, 'cloudflare_product_binding_preparation_not_required');
     assert.equal(healthSnapshot.cloudflare_operation_posture.state, 'loaded');
+    assert.equal(healthSnapshot.cloudflare_operation_posture.auth_kind, 'bearer');
+    assert.equal(healthSnapshot.cloudflare_operation_posture.auth_source, 'env:CLOUDFLARE_CARRIER_TOKEN');
     assert.equal(healthSnapshot.cloudflare_operation_posture.summary.next_action, 'start_operation');
     assert.equal(healthSnapshot.scheduler_task_readback.status, 'ok');
     assert.equal(healthSnapshot.embeds_credentials, false);
-    assert.doesNotMatch(JSON.stringify(healthSnapshot), /secret|token/i);
+    assert.doesNotMatch(JSON.stringify(healthSnapshot), /secret-token-value|CLOUDFLARE_CARRIER_TOKEN=|narada_operator_session=session-fixture/);
 
     const healthSummary = readLastScheduledHealthSnapshot(healthOutputPath);
     assert.equal(healthSummary.cloudflare_product_posture_state, 'loaded');
     assert.equal(healthSummary.cloudflare_product_posture_status, 'ok');
+    assert.equal(healthSummary.cloudflare_product_auth_kind, 'bearer');
+    assert.equal(healthSummary.cloudflare_product_auth_source, 'env:CLOUDFLARE_CARRIER_TOKEN');
     assert.equal(healthSummary.cloudflare_product_next_site_id, 'site_missing');
     assert.equal(healthSummary.cloudflare_product_next_action, 'monitor_sites');
     assert.equal(healthSummary.cloudflare_product_binding_alignment_state, 'aligned');
@@ -2213,6 +2270,8 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
     assert.equal(healthSummary.cloudflare_product_binding_alignment_reason, 'cloudflare_product_next_site_in_local_continuity_set');
     assert.equal(healthSummary.cloudflare_operation_posture_state, 'loaded');
     assert.equal(healthSummary.cloudflare_operation_posture_status, 'ok');
+    assert.equal(healthSummary.cloudflare_operation_auth_kind, 'bearer');
+    assert.equal(healthSummary.cloudflare_operation_auth_source, 'env:CLOUDFLARE_CARRIER_TOKEN');
     assert.equal(healthSummary.cloudflare_operation_next_operation_id, 'carrier_operation_next');
     assert.equal(healthSummary.cloudflare_operation_next_action, 'start_operation');
 

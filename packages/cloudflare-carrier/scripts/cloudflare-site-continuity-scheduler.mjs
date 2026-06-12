@@ -528,8 +528,14 @@ export function formatSiteContinuitySchedulerResultForText(result) {
   }
   if (productPosture?.cloudflare_product_posture_status || productPosture?.cloudflare_product_posture_state) {
     lines.push(`Cloudflare Product: ${productPosture.cloudflare_product_posture_state ?? 'unknown'}/${productPosture.cloudflare_product_posture_status ?? 'unknown'} next=${productPosture.cloudflare_product_next_site_id ?? 'none'} action=${productPosture.cloudflare_product_next_action ?? 'none'}`);
+    if (productPosture.cloudflare_product_auth_kind || productPosture.cloudflare_product_auth_source) {
+      lines.push(`Cloudflare Product Auth: kind=${productPosture.cloudflare_product_auth_kind ?? 'unknown'} source=${productPosture.cloudflare_product_auth_source ?? 'unknown'}`);
+    }
   } else if (result?.cloudflare_product_posture) {
     lines.push(`Cloudflare Product: ${result.cloudflare_product_posture.state ?? 'unknown'}/${result.cloudflare_product_posture.status ?? 'unknown'} next=${result.cloudflare_product_posture.summary?.next_site_id ?? 'none'} action=${result.cloudflare_product_posture.summary?.next_action ?? 'none'}`);
+    if (result.cloudflare_product_posture.auth_kind || result.cloudflare_product_posture.auth_source) {
+      lines.push(`Cloudflare Product Auth: kind=${result.cloudflare_product_posture.auth_kind ?? 'unknown'} source=${result.cloudflare_product_posture.auth_source ?? 'unknown'}`);
+    }
   }
   if (operatorAction) lines.push(`Operator Next: ${operatorAction} target=${operatorTarget ?? 'none'} reason=${operatorReason ?? 'none'}`);
 
@@ -958,6 +964,7 @@ export async function readCloudflareProductPostureForHealthSnapshot({
       worker_url: workerUrl,
       operation: 'site.list',
       auth_kind: auth.kind,
+      auth_source: auth.source,
       summary: productRead.summary ?? null,
       site_product_overview: productRead.response?.site_product_overview ?? null,
       site_posture_route: productRead.response?.site_posture_route ?? null,
@@ -972,6 +979,7 @@ export async function readCloudflareProductPostureForHealthSnapshot({
       worker_url: workerUrl,
       operation: 'site.list',
       auth_kind: auth.kind,
+      auth_source: auth.source,
       reason: sanitizeProductPostureError(error),
       embeds_credentials: false,
     };
@@ -1041,6 +1049,7 @@ export async function readCloudflareOperationPostureForHealthSnapshot({
       operation: 'operation.list',
       site_id: siteId,
       auth_kind: auth.kind,
+      auth_source: auth.source,
       summary: productRead.summary ?? null,
       operation_posture_overview: productRead.response?.operation_posture_overview ?? null,
       operation_posture_route: productRead.response?.operation_posture_route ?? null,
@@ -1056,6 +1065,7 @@ export async function readCloudflareOperationPostureForHealthSnapshot({
       operation: 'operation.list',
       site_id: siteId,
       auth_kind: auth.kind,
+      auth_source: auth.source,
       reason: sanitizeProductPostureError(error),
       embeds_credentials: false,
     };
@@ -1944,6 +1954,8 @@ export function readLastScheduledHealthSnapshot(outputPath) {
     continuity_health_attention_reasons: artifact.continuity_health?.attention_reasons ?? [],
     cloudflare_product_posture_state: artifact.cloudflare_product_posture?.state ?? null,
     cloudflare_product_posture_status: artifact.cloudflare_product_posture?.status ?? null,
+    cloudflare_product_auth_kind: artifact.cloudflare_product_posture?.auth_kind ?? null,
+    cloudflare_product_auth_source: artifact.cloudflare_product_posture?.auth_source ?? null,
     cloudflare_product_next_site_id: artifact.cloudflare_product_posture?.summary?.next_site_id ?? null,
     cloudflare_product_next_action: artifact.cloudflare_product_posture?.summary?.next_action ?? null,
     cloudflare_product_binding_alignment_state: artifact.cloudflare_product_binding_alignment?.state ?? null,
@@ -1959,6 +1971,8 @@ export function readLastScheduledHealthSnapshot(outputPath) {
     operator_next_source: operatorNextAction.source,
     cloudflare_operation_posture_state: artifact.cloudflare_operation_posture?.state ?? null,
     cloudflare_operation_posture_status: artifact.cloudflare_operation_posture?.status ?? null,
+    cloudflare_operation_auth_kind: artifact.cloudflare_operation_posture?.auth_kind ?? null,
+    cloudflare_operation_auth_source: artifact.cloudflare_operation_posture?.auth_source ?? null,
     cloudflare_operation_next_operation_id: artifact.cloudflare_operation_posture?.summary?.next_operation_id ?? null,
     cloudflare_operation_next_action: artifact.cloudflare_operation_posture?.summary?.next_action ?? null,
     scheduler_task_readback_status: artifact.scheduler_task_readback?.status ?? null,
