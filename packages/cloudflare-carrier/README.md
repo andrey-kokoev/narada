@@ -149,6 +149,12 @@ pnpm --filter @narada2/cloudflare-carrier operator-session:capture -- --url http
 
 The command prints a Microsoft login URL, listens only on a loopback HTTP callback, writes the signed operator-session cookie to the output JSON, and verifies `/auth/session` resolves to `auth_type: microsoft_oidc`. The capture endpoint refuses non-loopback `return_to` URLs.
 
+To verify whether the current operator session file is still live before running governed workflows:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier operator-session:status:text -- --url https://<worker-host> --operator-session-file D:\code\narada\.narada\auth\cloudflare-operator-session.json
+```
+
 Microsoft identity is not Site authority. The Worker maps Microsoft claims into a Narada principal:
 
 ```text

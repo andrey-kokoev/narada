@@ -6,6 +6,11 @@ import {
   parseOperatorSessionCaptureArgs,
   verifyOperatorSession,
 } from './cloudflare-carrier-operator-session-capture.mjs';
+import {
+  formatOperatorSessionStatus,
+  parseOperatorSessionStatusArgs,
+  readOperatorSessionStatus,
+} from './cloudflare-carrier-operator-session-status.mjs';
 
 test('parseOperatorSessionCaptureArgs normalizes CLI capture configuration', () => {
   const parsed = parseOperatorSessionCaptureArgs([
@@ -129,4 +134,95 @@ test('formatOperatorSessionCaptureError renders verification evidence without se
   assert.match(text, /"http_status": 401/);
   assert.match(text, /operator_session_expired/);
   assert.equal(text.includes('secret-cookie'), false);
+});
+
+test('parseOperatorSessionStatusArgs resolves operator session auth and format', () => {
+  const parsed = parseOperatorSessionStatusArgs([
+    '--url', 'https://carrier.example.test/',
+    '--operator-session-cookie', 'narada_operator_session=secret-cookie',
+    '--format', 'text',
+  ], {
+    CLOUDFLARE_CARRIER_URL: '',
+    CLOUDFLARE_OPERATOR_SESSION_FILE: '',
+  });
+
+  assert.equal(parsed.workerUrl, 'https://carrier.example.test');
+  assert.equal(parsed.format, 'text');
+  assert.equal(parsed.auth.kind, 'operator_session');
+  assert.equal(parsed.auth.source, 'operator-session-cookie');
+});
+
+test('readOperatorSessionStatus preserves refusal evidence for expired sessions', async () => {
+  const result = await readOperatorSessionStatus({
+    workerUrl: 'https://carrier.example.test',
+    auth: { kind: 'operator_session', value: 'secret-cookie', source: 'operator-session-file' },
+  }, async (url, init) => {
+    assert.equal(url.toString(), 'https://carrier.example.test/auth/session');
+    assert.deepEqual(init.headers, {
+      accept: 'application/json',
+      cookie: 'narada_operator_session=secret-cookie',
+    });
+    return {
+      ok: false,
+      status: 401,
+      async json() {
+        return {
+          ok: false,
+          code: 'operator_session_expired',
+          principal: {
+            auth_type: 'microsoft_oidc',
+            principal_id: 'microsoft:tenant:operator',
+            email: 'operator@example.test',
+          },
+        };
+      },
+    };
+  });
+
+  assert.deepEqual(result, {
+    schema: 'narada.cloudflare_carrier.operator_session_status.v1',
+    ok: false,
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    auth_kind: 'operator_session',
+    http_status: 401,
+    code: 'operator_session_expired',
+    principal: {
+      auth_type: 'microsoft_oidc',
+      principal_id: 'microsoft:tenant:operator',
+      email: 'operator@example.test',
+    },
+    response: {
+      ok: false,
+      code: 'operator_session_expired',
+      principal: {
+        auth_type: 'microsoft_oidc',
+        principal_id: 'microsoft:tenant:operator',
+        email: 'operator@example.test',
+      },
+    },
+  });
+});
+
+test('formatOperatorSessionStatus renders concise text output', () => {
+  const text = formatOperatorSessionStatus({
+    ok: true,
+    auth_kind: 'operator_session',
+    auth_source: 'operator-session-file',
+    http_status: 200,
+    code: null,
+    principal: {
+      principal_id: 'microsoft:tenant:operator',
+      auth_type: 'microsoft_oidc',
+      email: 'operator@example.test',
+      name: 'Operator Example',
+    },
+  }, 'text');
+
+  assert.match(text, /Status: ok/);
+  assert.match(text, /HTTP: 200/);
+  assert.match(text, /Auth: kind=operator_session source=operator-session-file/);
+  assert.match(text, /Principal: microsoft:tenant:operator/);
+  assert.match(text, /Email: operator@example.test/);
+  assert.match(text, /Name: Operator Example/);
 });
