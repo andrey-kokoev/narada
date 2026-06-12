@@ -399,6 +399,15 @@ pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:workflow:liv
 
 `product:resident-dispatch:workflow:live` is the productized form of the existing resident-dispatch smoke verifier. It calls `resident_dispatch.primary_with_fallback.start`, confirms the decision through `resident_dispatch.primary_with_fallback.list`, then reads `operation.read` so the dispatch decision and started carrier session are proven from the same live product surfaces the console uses. It accepts the same bearer-token or operator-session auth sources as the newer operator product commands and returns a redacted `narada.cloudflare_carrier.resident_dispatch_live_smoke.v1` envelope with auth provenance, dispatch state, and readback counts.
 
+When Cloudflare primary resident dispatch has failed and the product route has advanced into a governed Windows fallback request, record or read that fallback request explicitly through the Cloudflare product surface:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:windows-fallback-request:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --dispatch-decision-id <dispatch-decision-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:windows-fallback-request:text -- --operation resident_dispatch.windows_fallback_request.list --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
+```
+
+`product:resident-dispatch:windows-fallback-request` is the governed Cloudflare queue lane for the Windows resident fallback. In create mode it calls `resident_dispatch.windows_fallback_request.create`, fixing the action to `local-windows-action:resident-session-start:v1`, the queue authority to `cloudflare_resident_dispatch_windows_fallback_request_queue`, the Windows executor to `windows_local_site_resident_loop`, and direct Cloudflare session start to `not_admitted`. In list mode it reads the recorded fallback request posture for the site or operation without claiming that Windows execution has already happened. This keeps the fallback branch explicit instead of collapsing back into the generic `start_or_select_session` route.
+
 Run the adjacent continuity-refresh live proof when `operation.read` has advanced past resident dispatch and is routing toward `refresh_site_continuity_loop`:
 
 ```powershell

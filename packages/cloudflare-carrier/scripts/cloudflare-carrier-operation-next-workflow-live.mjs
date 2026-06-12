@@ -16,6 +16,7 @@ const evidenceReadScript = resolve(scriptDir, 'cloudflare-carrier-operation-evid
 const mailboxDraftReplyProposalReadScript = resolve(scriptDir, 'cloudflare-carrier-mailbox-draft-reply-proposal-read.mjs');
 const repositoryPublicationRequestReviewScript = resolve(scriptDir, 'cloudflare-carrier-repository-publication-request-review.mjs');
 const siteFileChangeProposalReviewScript = resolve(scriptDir, 'cloudflare-carrier-site-file-change-proposal-review.mjs');
+const residentDispatchWindowsFallbackRequestScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-windows-fallback-request.mjs');
 const focusWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-focus-workflow-live.mjs');
 const sessionWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-session-workflow-live.mjs');
 const continuationWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-continuation-workflow-live.mjs');
@@ -26,6 +27,8 @@ const ROUTE_TO_WORKFLOW = new Map([
   ['review_mailbox_draft_reply_proposal', { name: 'mailbox_draft_reply_proposal', script: mailboxDraftReplyProposalReadScript, flag: null }],
   ['review_repository_publication_request', { name: 'repository_publication_request', script: repositoryPublicationRequestReviewScript, flag: null }],
   ['review_site_file_change_proposal', { name: 'site_file_change_proposal', script: siteFileChangeProposalReviewScript, flag: null }],
+  ['request_windows_fallback_resident_dispatch', { name: 'resident_dispatch_windows_fallback_request', script: residentDispatchWindowsFallbackRequestScript, flag: null }],
+  ['await_windows_fallback_resident_dispatch', { name: 'resident_dispatch_windows_fallback_request', script: residentDispatchWindowsFallbackRequestScript, flag: null, mode: 'list' }],
   ['start_or_select_session', { name: 'session', script: sessionWorkflowScript, flag: '--execute-operation-session' }],
   ['resume_operation_continuation', { name: 'continuation', script: continuationWorkflowScript, flag: '--execute-operation-continuation-resume' }],
   ['refresh_site_continuity_loop', { name: 'continuity', script: continuityWorkflowScript, flag: '--execute-operation-continuity' }],
@@ -97,7 +100,7 @@ export async function runOperationNextWorkflowLive(
   if (listBefore.summary.next_action === 'inspect_operation_evidence') {
     if (evidenceRouteLooksStale) {
       const workflowResult = parseJsonStdout(
-        await runNodeScript(buildWorkflowArgs(config, workflow, selectedOperationId), { cwd: packageRoot }),
+        await runNodeScript(buildWorkflowArgs(config, workflow, selectedOperationId, readBefore.summary ?? {}), { cwd: packageRoot }),
         `operation_next_workflow_${workflow.name}`,
       );
 
@@ -168,7 +171,7 @@ export async function runOperationNextWorkflowLive(
       };
     }
     const workflowResult = parseJsonStdout(
-      await runNodeScript(buildWorkflowArgs(config, workflowAfterEvidence, selectedOperationId), { cwd: packageRoot }),
+      await runNodeScript(buildWorkflowArgs(config, workflowAfterEvidence, selectedOperationId, readAfter.summary ?? {}), { cwd: packageRoot }),
       `operation_next_workflow_${workflowAfterEvidence.name}`,
     );
     const readAfterWorkflow = parseJsonStdout(
@@ -196,7 +199,7 @@ export async function runOperationNextWorkflowLive(
   }
 
   const workflowResult = parseJsonStdout(
-    await runNodeScript(buildWorkflowArgs(config, workflow, selectedOperationId), { cwd: packageRoot }),
+    await runNodeScript(buildWorkflowArgs(config, workflow, selectedOperationId, readBefore.summary ?? {}), { cwd: packageRoot }),
     `operation_next_workflow_${workflow.name}`,
   );
 
@@ -254,13 +257,20 @@ function buildOperationReadArgs(config, operationId) {
   return args;
 }
 
-function buildWorkflowArgs(config, workflow, operationId) {
+function buildWorkflowArgs(config, workflow, operationId, readSummary = {}) {
   const args = [
     workflow.script,
     '--url', config.workerUrl,
     '--site', config.siteId,
     '--operation-id', operationId,
   ];
+  if (workflow.mode) args.push('--operation', workflow.mode);
+  if (workflow.name === 'resident_dispatch_windows_fallback_request') {
+    const dispatchDecisionId = readSummary.workflow_focus_ref ?? readSummary.route_target ?? null;
+    if (workflow.mode !== 'list' && dispatchDecisionId) {
+      args.push('--dispatch-decision-id', dispatchDecisionId);
+    }
+  }
   if (workflow.flag) args.push(workflow.flag);
   appendAuthOptions(args, config);
   return args;

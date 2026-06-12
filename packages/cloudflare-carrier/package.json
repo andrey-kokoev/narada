@@ -56,6 +56,8 @@
     "product:operation:continuation:workflow:live": "node scripts/cloudflare-carrier-operation-continuation-workflow-live.mjs",
     "product:operation:continuity:workflow:live": "node scripts/cloudflare-carrier-operation-continuity-workflow-live.mjs",
     "product:resident-dispatch:workflow:live": "node scripts/cloudflare-carrier-resident-dispatch-live-smoke.mjs",
+    "product:resident-dispatch:windows-fallback-request": "node scripts/cloudflare-carrier-resident-dispatch-windows-fallback-request.mjs",
+    "product:resident-dispatch:windows-fallback-request:text": "node scripts/cloudflare-carrier-resident-dispatch-windows-fallback-request.mjs --format text",
     "product:site-file-change:proposal": "node scripts/cloudflare-carrier-site-file-change-proposal.mjs",
     "product:site-file-change:proposal:text": "node scripts/cloudflare-carrier-site-file-change-proposal.mjs --format text",
     "product:site-file-change:proposal:review": "node scripts/cloudflare-carrier-site-file-change-proposal-review.mjs",

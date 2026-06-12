@@ -6788,6 +6788,130 @@ test('worker starts controlled resident dispatch as Cloudflare primary with Wind
   assert.equal(operationReadBody.operation_product_surface.resident_dispatch_decision_count, 1);
 });
 
+test('worker records resident dispatch Windows fallback request and routes the operation through that governed lane', async () => {
+  const failingNamespace = {
+    idFromName(name) {
+      return name;
+    },
+    get() {
+      return {
+        async fetch() {
+          return new Response(JSON.stringify({ ok: false, code: 'carrier_session_start_failed' }), {
+            status: 500,
+            headers: { 'content-type': 'application/json' },
+          });
+        },
+      };
+    },
+  };
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{
+      site_id: 'site_fixture',
+      site_ref: 'site://fixture',
+      display_name: 'Fixture Site',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+      created_by_principal_id: 'admin',
+    }],
+    memberships: [{
+      site_id: 'site_fixture',
+      principal_id: 'admin',
+      role: 'owner',
+      status: 'active',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+    operations: [{
+      operation_id: 'operation_dispatch',
+      site_id: 'site_fixture',
+      display_name: 'Dispatch Operation',
+      operation_kind: 'control',
+      status: 'active',
+      created_by_principal_id: 'admin',
+      created_at: clock(),
+      updated_at: clock(),
+    }],
+  });
+  const env = authEnv(failingNamespace, { CLOUDFLARE_SITE_REGISTRY_DB: siteDb });
+
+  const dispatched = await worker.fetch(jsonRequest({
+    operation: 'resident_dispatch.primary_with_fallback.start',
+    request_id: 'request_resident_dispatch_primary_start',
+    params: {
+      site_id: 'site_fixture',
+      operation_id: 'operation_dispatch',
+      carrier_session_id: 'carrier_session_dispatch_fixture',
+      dispatch_decision_id: 'resident_dispatch_fixture_failed',
+      agent_id: 'narada.dispatch.fixture',
+      site_root: 'cloudflare://site_fixture',
+      site_ref: 'site://fixture',
+      windows_fallback_ref: 'windows_local_site_resident_loop',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(dispatched.status, 400);
+  const dispatchedBody = await dispatched.json();
+  assert.equal(dispatchedBody.status, 'cloudflare_primary_failed_windows_fallback_available');
+
+  const readBefore = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_operation_read_before_fallback_request',
+    params: { site_id: 'site_fixture', operation_id: 'operation_dispatch', resident_dispatch_limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(readBefore.status, 200);
+  const readBeforeBody = await readBefore.json();
+  assert.equal(readBeforeBody.resident_dispatch_decisions[0].decision_state, 'cloudflare_primary_failed_windows_fallback_available');
+
+  const created = await worker.fetch(jsonRequest({
+    operation: 'resident_dispatch.windows_fallback_request.create',
+    request_id: 'request_resident_dispatch_windows_fallback_create',
+    params: {
+      site_id: 'site_fixture',
+      source_payload: {
+        generated_at: '2026-06-12T16:00:00.000Z',
+        operation_id: 'operation_dispatch',
+        dispatch_decision_id: 'resident_dispatch_fixture_failed',
+        carrier_session_id: 'carrier_session_dispatch_fixture',
+        requested_action_ref: 'local-windows-action:resident-session-start:v1',
+        requested_action_summary: 'request governed Windows resident session start after Cloudflare primary dispatch fallback',
+        governed_request_contract_ref: 'contract:cloudflare-to-windows-resident-fallback-request:v1',
+        evidence_return_contract_ref: 'contract:windows-resident-fallback-evidence-return:v1',
+        rollback_plan_ref: 'rollback:windows-resident-fallback-request:v1',
+      },
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(created.status, 200);
+  const createdBody = await created.json();
+  assert.equal(createdBody.status, 'recorded');
+  assert.equal(createdBody.local_execution_admission, 'pending_windows_admission');
+  assert.equal(createdBody.fallback_request.dispatch_decision_id, 'resident_dispatch_fixture_failed');
+
+  const listed = await worker.fetch(jsonRequest({
+    operation: 'resident_dispatch.windows_fallback_request.list',
+    request_id: 'request_resident_dispatch_windows_fallback_list',
+    params: { site_id: 'site_fixture', operation_id: 'operation_dispatch', limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(listed.status, 200);
+  const listedBody = await listed.json();
+  assert.equal(listedBody.requests.length, 1);
+  assert.equal(listedBody.requests[0].dispatch_decision_id, 'resident_dispatch_fixture_failed');
+
+  const readAfter = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_operation_read_after_fallback_request',
+    params: {
+      site_id: 'site_fixture',
+      operation_id: 'operation_dispatch',
+      resident_dispatch_limit: 10,
+      resident_dispatch_windows_fallback_request_limit: 10,
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(readAfter.status, 200);
+  const readAfterBody = await readAfter.json();
+  assert.equal(readAfterBody.resident_dispatch_windows_fallback_requests.length, 1);
+  assert.equal(readAfterBody.operation_product_surface.resident_dispatch_windows_fallback_request_count, 1);
+});
+
 test('worker site.membership.put admits owner and exposes membership through site.read', async () => {
   const siteDb = fakeD1SiteRegistryDatabase({
     sites: [{
@@ -8347,6 +8471,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     taskLifecycleWriteAdmissions: clone(initial.taskLifecycleWriteAdmissions ?? []),
     taskLifecycleTasks: clone(initial.taskLifecycleTasks ?? []),
     residentDispatchDecisions: clone(initial.residentDispatchDecisions ?? []),
+    residentDispatchWindowsFallbackRequests: clone(initial.residentDispatchWindowsFallbackRequests ?? []),
     carrierSessionEvents: clone(initial.carrierSessionEvents ?? []),
   };
   return {
@@ -8600,6 +8725,12 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const row = { dispatch_decision_id, site_id, operation_id, carrier_session_id, decision_state, dispatch_authority, fallback_authority, fallback_status, dispatch_action, dispatch_scope, session_start_status, session_start_ok, decision_json, recorded_by_principal_id, recorded_at };
         if (existing) Object.assign(existing, row);
         else state.residentDispatchDecisions.push(row);
+      } else if (normalized.startsWith('insert into cloudflare_resident_dispatch_windows_fallback_requests')) {
+        const [fallback_request_id, site_id, generated_at, operation_id, dispatch_decision_id, carrier_session_id, requested_action_ref, requested_action_summary, governed_request_contract_ref, evidence_return_contract_ref, rollback_plan_ref, authority_locus, windows_fallback_ref, local_executor_authority, local_execution_admission, direct_cloudflare_session_start_admission, request_posture, request_json, recorded_by_principal_id, recorded_at] = bindings;
+        const existing = state.residentDispatchWindowsFallbackRequests.find((entry) => entry.fallback_request_id === fallback_request_id);
+        const row = { fallback_request_id, site_id, generated_at, operation_id, dispatch_decision_id, carrier_session_id, requested_action_ref, requested_action_summary, governed_request_contract_ref, evidence_return_contract_ref, rollback_plan_ref, authority_locus, windows_fallback_ref, local_executor_authority, local_execution_admission, direct_cloudflare_session_start_admission, request_posture, request_json, recorded_by_principal_id, recorded_at };
+        if (existing) Object.assign(existing, row);
+        else state.residentDispatchWindowsFallbackRequests.push(row);
       } else if (normalized.startsWith('insert into cloudflare_carrier_session_events')) {
         const [carrier_session_id, sequence, event_id, site_id, operation_id, agent_id, event_kind, occurred_at, event_json, indexed_at] = bindings;
         const existing = state.carrierSessionEvents.find((entry) => entry.carrier_session_id === carrier_session_id && Number(entry.sequence) === Number(sequence));
@@ -9050,6 +9181,16 @@ function fakeD1SiteRegistryStatement(state, sql) {
           results: state.residentDispatchDecisions
             .filter((entry) => entry.site_id === siteId)
             .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_resident_dispatch_windows_fallback_requests')) {
+        const [siteId, limit] = bindings;
+        return {
+          results: state.residentDispatchWindowsFallbackRequests
+            .filter((entry) => entry.site_id === siteId)
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
             .slice(0, Number(limit))
             .map((entry) => clone(entry)),
         };
