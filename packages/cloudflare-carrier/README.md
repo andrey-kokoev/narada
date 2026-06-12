@@ -306,6 +306,14 @@ pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:claim:text -- -
 
 `product:task-lifecycle:claim` calls `task_lifecycle.task_claim.admit` through authenticated `POST /api/carrier`. Without `--admit-cloudflare-task-claim`, it can request the Worker's refusal evidence for retained Windows task lifecycle authority. With the admission flag, it requires explicit assignment-authority, cutover, governed-write-contract, and confirmation-evidence refs before sending the Cloudflare task-claim admission request. The `:text` alias prints the Worker URL, auth source, site, admission id, task id/number when admitted, claimant, decision, authority posture, and evidence refs without echoing bearer tokens or operator-session cookies.
 
+Report work on an existing claimed Cloudflare task lifecycle task after explicit task-report cutover evidence exists:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:report:text -- --url <worker-url> --site <site-id> --task-id <task-id> --reporter-agent <agent-id> --summary <summary> --changed-file <path> --verification '{"command":"pnpm --filter @narada2/cloudflare-carrier test","result":"passed"}' --admission-id <admission-id> --admit-cloudflare-task-report --report-authority-ref <report-authority-ref> --report-schema-ref <report-schema-ref> --changed-file-evidence-boundary-ref <changed-file-boundary-ref> --cutover-point-ref <cutover-ref> --governed-write-contract-ref <contract-ref> --confirmation-evidence-ref <evidence-ref> --operator-session-file cloudflare-operator-session.json
+```
+
+`product:task-lifecycle:report` calls `task_lifecycle.task_report.admit` through authenticated `POST /api/carrier`. Without `--admit-cloudflare-task-report`, it can request the Worker's refusal evidence for retained Windows task lifecycle authority. With the admission flag, it requires explicit report-authority, report-schema, changed-file-evidence-boundary, cutover, governed-write-contract, and confirmation-evidence refs before sending the Cloudflare task-report admission request. Reporting records changed-file evidence only as report evidence; separate changed-file-evidence, filesystem mutation, and repository publication boundaries remain not admitted until their own governed contracts admit them. The `:text` alias prints the Worker URL, auth source, site, admission id, task/report ids, reporter, decision, authority posture, changed-file evidence posture, and evidence refs without echoing bearer tokens or operator-session cookies.
+
 For operator-facing readback without JSON inspection, use the text aliases:
 
 ```powershell
