@@ -12,6 +12,7 @@ const REVIEWABLE_FOCUS_KINDS = new Set([
   'local_ingress_request',
   'repository_publication_request',
   'site_continuity_reconciliation_execution',
+  'resident_dispatch_windows_fallback_evidence',
 ]);
 
 export function parseOperationEvidenceReadArgs(argv = [], env = process.env) {

@@ -356,6 +356,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       task_count: 0,
     },
   });
+  assert.match(operationFallbackEvidenceText, /Resident Dispatch Windows Fallback Evidence Review: pnpm --filter @narada2\/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(operationFallbackEvidenceText, /Resident Dispatch Windows Fallback Evidence: pnpm --filter @narada2\/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:text -- --operation resident_dispatch\.windows_fallback_evidence\.list --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 
   const siteReadText = formatProductSurfaceText({

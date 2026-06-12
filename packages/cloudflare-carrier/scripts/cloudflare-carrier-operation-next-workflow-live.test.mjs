@@ -296,27 +296,26 @@ test('runOperationNextWorkflowLive delegates Windows fallback resident dispatch 
           },
         });
       }
-      if (scriptName === 'cloudflare-carrier-resident-dispatch-windows-fallback-evidence.mjs') {
+      if (scriptName === 'cloudflare-carrier-resident-dispatch-windows-fallback-evidence-review.mjs') {
         assert.deepEqual(args.slice(1), [
           '--url', 'https://carrier.example',
           '--site', 'site_live_smoke',
           '--operation-id', 'operation_alpha',
-          '--operation', 'list',
           '--token', 'token-value',
         ]);
         return JSON.stringify({
-          schema: 'narada.cloudflare_carrier.resident_dispatch_windows_fallback_evidence.v1',
+          schema: 'narada.cloudflare_carrier.resident_dispatch_windows_fallback_evidence_review.v1',
           status: 'ok',
-          summary: { fallback_evidence_id: 'resident_fallback_evidence_alpha' },
+          summary: { focused_fallback_evidence_id: 'resident_fallback_evidence_alpha' },
         });
       }
       throw new Error(`unexpected_script:${scriptName}`);
     },
   });
 
-  assert.equal(result.delegated_workflow, 'resident_dispatch_windows_fallback_evidence');
+  assert.equal(result.delegated_workflow, 'resident_dispatch_windows_fallback_evidence_review');
   assert.equal(result.delegated_route_action, 'review_windows_fallback_resident_dispatch_evidence');
-  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.resident_dispatch_windows_fallback_evidence.v1');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.resident_dispatch_windows_fallback_evidence_review.v1');
 });
 
 test('runOperationNextWorkflowLive delegates Windows fallback resident dispatch execution route', async () => {

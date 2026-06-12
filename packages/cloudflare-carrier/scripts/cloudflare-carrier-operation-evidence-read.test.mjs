@@ -99,3 +99,33 @@ test('readOperationEvidence preserves product read envelope and text formatting 
   assert.match(text, /Carrier Sessions: session_1/);
   assert.match(text, /tool_result_received/);
 });
+
+test('formatOperationEvidenceReadText recognizes Windows fallback evidence as reviewable focus', () => {
+  const text = formatOperationEvidenceReadText({
+    worker_url: 'https://carrier.example',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      phase: 'active_uninhabited',
+      health: 'incomplete',
+      current_status: 'active',
+      next_action: 'session',
+      posture_next_action: 'monitor_operations',
+      carrier_evidence_read_state: 'no_sessions',
+      carrier_session_ids: [],
+      carrier_event_count: 0,
+      recent_activities: [{
+        activity_kind: 'resident_dispatch_windows_fallback_evidence',
+        focus_kind: 'resident_dispatch_windows_fallback_evidence',
+        focus_ref: 'resident_dispatch_windows_fallback_evidence_alpha',
+        summary: 'fallback execution recorded',
+      }],
+      reviewable_focus_kind: 'resident_dispatch_windows_fallback_evidence',
+      reviewable_focus_ref: 'resident_dispatch_windows_fallback_evidence_alpha',
+    },
+  });
+
+  assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
+  assert.match(text, /--focus-kind resident_dispatch_windows_fallback_evidence/);
+});

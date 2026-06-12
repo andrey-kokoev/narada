@@ -6957,6 +6957,55 @@ test('worker records resident dispatch Windows fallback request and routes the o
   assert.equal(readAfterEvidenceBody.resident_dispatch_windows_fallback_evidence.length, 1);
   assert.equal(readAfterEvidenceBody.operation_product_surface.resident_dispatch_windows_fallback_evidence_count, 1);
   assert.equal(readAfterEvidenceBody.operation_product_surface.resident_dispatch_windows_fallback_session_start_admission, 'admitted_by_windows_resident_loop');
+
+  const refusedReview = await worker.fetch(jsonRequest({
+    operation: 'operation_focus_review.acknowledge',
+    request_id: 'request_resident_dispatch_windows_fallback_focus_review_refused',
+    params: { site_id: 'site_fixture', focus_kind: 'resident_dispatch_windows_fallback_evidence', focus_ref: 'missing-resident-dispatch-windows-fallback-evidence' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(refusedReview.status, 403);
+  assert.equal((await refusedReview.json()).code, 'operation_focus_review_requires_existing_focus');
+
+  const focusReview = await worker.fetch(jsonRequest({
+    operation: 'operation_focus_review.acknowledge',
+    request_id: 'request_resident_dispatch_windows_fallback_focus_review_acknowledge',
+    params: {
+      site_id: 'site_fixture',
+      review_id: 'operation_focus_review_resident_dispatch_windows_fallback_evidence_fixture_1',
+      focus_kind: 'resident_dispatch_windows_fallback_evidence',
+      focus_ref: fallbackEvidencePutBody.record.fallback_evidence_id,
+      review_action: 'acknowledge_operation_focus_review',
+      note: 'operator reviewed governed Windows fallback resident dispatch evidence',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(focusReview.status, 200);
+  const focusReviewBody = await focusReview.json();
+  assert.equal(focusReviewBody.schema, 'narada.sonar.cloudflare_operation_focus_review.v1');
+  assert.equal(focusReviewBody.status, 'acknowledged');
+  assert.equal(focusReviewBody.operation_focus_review_authority, 'cloudflare_operator_operation_focus_review');
+  assert.equal(focusReviewBody.review_admission, 'admitted');
+
+  const readAfterFocusReview = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_operation_read_after_fallback_evidence_focus_review',
+    params: {
+      site_id: 'site_fixture',
+      operation_id: 'operation_dispatch',
+      resident_dispatch_limit: 10,
+      resident_dispatch_windows_fallback_request_limit: 10,
+      resident_dispatch_windows_fallback_evidence_limit: 10,
+      operation_focus_review_limit: 10,
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(readAfterFocusReview.status, 200);
+  const readAfterFocusReviewBody = await readAfterFocusReview.json();
+  assert.equal(readAfterFocusReviewBody.operation_focus_reviews.length, 1);
+  assert.equal(readAfterFocusReviewBody.operation_product_surface.operation_focus_review_count, 1);
+  assert.equal(readAfterFocusReviewBody.operation_product_surface.operation_focus_review_authority, 'cloudflare_operator_operation_focus_review');
+  assert.equal(readAfterFocusReviewBody.operation_product_surface.operation_focus_review_admission, 'admitted');
+  assert.equal(readAfterFocusReviewBody.operation_activity_timeline.items.some((entry) => entry.activity_kind === 'operation_focus_review_acknowledgement'), true);
+  assert.notEqual(readAfterFocusReviewBody.operation_workflow_route.operator_focus?.focus_ref, fallbackEvidencePutBody.record.fallback_evidence_id);
+  assert.notEqual(readAfterFocusReviewBody.operation_workflow_route.next_action, 'review_windows_fallback_resident_dispatch_evidence');
 });
 
 test('worker site.membership.put admits owner and exposes membership through site.read', async () => {

@@ -2170,13 +2170,18 @@ function summarizeCloudflareOperationWorkflowRoute({
             focus_ref: latestFallbackRequest.fallback_request_id ?? null,
           };
         }
-        return {
-          action: 'review_windows_fallback_resident_dispatch_evidence',
-          target: latestFallbackEvidence.fallback_evidence_id ?? latestFallbackRequest.fallback_request_id ?? operationId,
-          reason: 'windows_fallback_execution_recorded',
-          focus_kind: 'resident_dispatch_windows_fallback_evidence',
-          focus_ref: latestFallbackEvidence.fallback_evidence_id ?? null,
-        };
+        const fallbackEvidenceFocusRef = latestFallbackEvidence.fallback_evidence_id ?? null;
+        const fallbackEvidenceReviewKey = fallbackEvidenceFocusRef ? `resident_dispatch_windows_fallback_evidence:${fallbackEvidenceFocusRef}` : null;
+        if (!fallbackEvidenceReviewKey || !reviewedOperationFocusKeys.has(fallbackEvidenceReviewKey)) {
+          return {
+            action: 'review_windows_fallback_resident_dispatch_evidence',
+            target: latestFallbackEvidence.fallback_evidence_id ?? latestFallbackRequest.fallback_request_id ?? operationId,
+            reason: 'windows_fallback_execution_recorded',
+            focus_kind: 'resident_dispatch_windows_fallback_evidence',
+            focus_ref: fallbackEvidenceFocusRef,
+          };
+        }
+        return { action: 'start_or_select_session', target: operationId, reason: 'operation_lifecycle_missing_session' };
       }
       return { action: 'start_or_select_session', target: operationId, reason: 'operation_lifecycle_missing_session' };
     }
@@ -2292,6 +2297,7 @@ function summarizeCloudflareOperationOperatorFocus(operationActivityTimeline = n
     ['local_ingress_request', 'review_local_ingress_request'],
     ['repository_publication_request', 'review_repository_publication_request'],
     ['site_file_change_proposal', 'review_site_file_change_proposal'],
+    ['resident_dispatch_windows_fallback_evidence', 'review_windows_fallback_resident_dispatch_evidence'],
   ];
   for (const [activityKind, action] of priorities) {
     const item = items.find((entry) => {
@@ -7623,6 +7629,7 @@ async function findCloudflareOperationFocusRecord(env = {}, siteId, focusKind, f
   if (focusKind === 'site_file_change_proposal') return by(await listCloudflareSiteFileChangeProposals(env, siteId, limit), 'proposal_id');
   if (focusKind === 'local_ingress_request') return by(await listCloudflareLocalIngressRequests(env, siteId, limit), 'local_ingress_request_id');
   if (focusKind === 'repository_publication_request') return by(await listCloudflareRepositoryPublicationRequests(env, siteId, limit), 'repository_publication_request_id');
+  if (focusKind === 'resident_dispatch_windows_fallback_evidence') return by(await listCloudflareResidentDispatchWindowsFallbackEvidence(env, siteId, { limit }), 'fallback_evidence_id');
   if (focusKind === 'site_continuity_reconciliation_execution') return by(await listCloudflareContinuityReconciliationExecutions(env, siteId, limit), 'execution_id');
   return null;
 }
