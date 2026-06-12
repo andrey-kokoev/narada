@@ -380,3 +380,67 @@ test('runOperationNextWorkflowLive rejects unsupported downstream route actions'
     /operation_next_workflow_live_route_unsupported:unsupported_route/,
   );
 });
+
+test('runOperationNextWorkflowLive delegates mailbox draft reply proposal review route to mailbox proposal read', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_narada_cloudflare',
+    expectedListRouteAction: null,
+    expectedOperationId: null,
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        const readCount = invocations.filter((call) => call[0].endsWith('cloudflare-carrier-product-read.mjs')).length;
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              next_operation_id: 'operation_site_read',
+              route_next_action: 'focus_next_operation',
+              next_action: 'use_focused_operation',
+            },
+          });
+        }
+        if (operation === 'operation.read' && readCount === 2) {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              operation_id: 'operation_site_read',
+              workflow_next_action: 'review_mailbox_draft_reply_proposal',
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            operation_id: 'operation_site_read',
+            workflow_next_action: 'review_mailbox_draft_reply_proposal',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-mailbox-draft-reply-proposal-read.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.mailbox_draft_reply_proposal_read.v1',
+          status: 'ok',
+          summary: {
+            operation_id: 'operation_site_read',
+            proposal_count: 1,
+            focused_proposal_id: 'mailbox_draft_reply_proposal_live_1',
+          },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'mailbox_draft_reply_proposal');
+  assert.equal(result.delegated_route_action, 'review_mailbox_draft_reply_proposal');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.mailbox_draft_reply_proposal_read.v1');
+  assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-mailbox-draft-reply-proposal-read.mjs');
+});
