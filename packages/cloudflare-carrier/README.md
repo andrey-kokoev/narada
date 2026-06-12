@@ -330,6 +330,14 @@ pnpm --filter @narada2/cloudflare-carrier product:site-file-change:proposal:text
 
 `product:site-file-change:proposal` calls `site_file_change_proposal.record` through authenticated `POST /api/carrier`. It requires explicit proposal ref, summary, and per-file material provenance instead of relying on the Worker's generic defaults. The command fixes proposal authority at `cloudflare_carrier_site`, executor authority at `windows_filesystem_executor`, and keeps filesystem mutation and repository publication at `not_admitted`; it records Cloudflare proposal state only, without pretending the file was materialized or published. The `:text` alias prints the Worker URL, auth source, site, proposal id/ref, operation/task linkage, proposal posture, file count, downstream admission posture, and per-file provenance without echoing bearer tokens or operator-session cookies.
 
+Admit Cloudflare-owned site file materialization after explicit cutover evidence exists, while keeping Windows filesystem mutation and repository publication outside the admitted boundary:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:site-file:materialization:text -- --url <worker-url> --site <site-id> --materialization-id <materialization-id> --proposal-id <proposal-id> --proposal-ref <proposal-ref> --file-path <repo-relative-path> --content-sha256 <sha256> --content-ref <content-ref> --operation-id <operation-id> --task-id <task-id> --admit-cloudflare-site-file-materialization --materialization-authority-ref <materialization-authority-ref> --cutover-point-ref <cutover-ref> --governed-write-contract-ref <contract-ref> --confirmation-evidence-ref <evidence-ref> --operator-session-file cloudflare-operator-session.json
+```
+
+`product:site-file:materialization` calls `site_file_materialization.admit` through authenticated `POST /api/carrier`. Without `--admit-cloudflare-site-file-materialization`, it can request the Worker's refusal evidence for missing cutover admission. With the admission flag, it requires explicit materialization-authority, cutover, governed-write-contract, and confirmation-evidence refs before sending the Cloudflare materialization admission request. The command fixes materialization authority at `cloudflare_carrier_site`, executor authority at `cloudflare_site_file_store`, and keeps Windows filesystem mutation and repository publication at `not_admitted`; it records Cloudflare site-file materialization state only, without pretending the Windows site filesystem or repository publication boundary moved. The `:text` alias prints the Worker URL, auth source, site, materialization id, proposal linkage, file path, content provenance, authority posture, and downstream admission posture without echoing bearer tokens or operator-session cookies.
+
 Finish an existing closed Cloudflare task lifecycle task after explicit task-finish cutover evidence exists:
 
 ```powershell
