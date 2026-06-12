@@ -1248,7 +1248,10 @@ test('site continuity scheduler status-all inventories local sync artifacts', as
   }, null, 2)}\n`, 'utf8');
   await writeFile(join(artifactDirectory, 'notes.txt'), 'ignored\n', 'utf8');
   try {
-    const inventory = readLocalSyncArtifactInventory(artifactDirectory, { lastOutputPath: outputPath });
+    const inventory = readLocalSyncArtifactInventory(artifactDirectory, {
+      lastOutputPath: outputPath,
+      now: () => '2026-06-11T09:01:00.000Z',
+    });
     assert.equal(inventory.state, 'read');
     assert.equal(inventory.status, 'needs_attention');
     assert.equal(inventory.artifact_count, 2);
@@ -1261,6 +1264,7 @@ test('site continuity scheduler status-all inventories local sync artifacts', as
       repoRoot: root,
       outputPath,
       artifactDirectory,
+      now: () => '2026-06-11T09:01:00.000Z',
     });
     assert.equal(plan.plan_status, 'local_sync_artifact_inventory_read_only_no_cloudflare_access');
     assert.equal(plan.local_sync_artifacts.artifact_count, 2);
@@ -1372,7 +1376,7 @@ test('site continuity scheduler status-all marks stale configured site artifacts
       site_ref: 'site-ref:stale',
       site_status: 'active',
       status: 'needs_attention',
-      reason: 'configured_site_sync_artifact_stale',
+      reason: 'configured_site_continuity_loop_report_stale',
       artifact_present: true,
       artifact_path: outputPath,
       artifact_updated_at: '2026-06-11T10:00:00.000Z',
@@ -1381,6 +1385,83 @@ test('site continuity scheduler status-all marks stale configured site artifacts
       pushed_packet_id: 'packet-stale-local',
       pulled_packet_id: 'packet-stale-cloudflare',
     }]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('site continuity scheduler selects loop-stale sites before broad sync artifact expiry', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-loop-stale-'));
+  const artifactDirectory = join(root, '.narada/site-continuity');
+  const outputPath = join(artifactDirectory, 'site_loop_stale-cloudflare-sync.json');
+  const packetPath = join(artifactDirectory, 'local-packet.json');
+  const syncEntrypoint = join(root, 'packages/cloudflare-carrier/scripts/cloudflare-site-continuity-sync.mjs');
+  await mkdir(artifactDirectory, { recursive: true });
+  await mkdir(dirname(syncEntrypoint), { recursive: true });
+  await writeFile(syncEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(packetPath, '{"packet":{"site_id":"site_loop_stale"}}\n', 'utf8');
+  await writeFile(outputPath, `${JSON.stringify({
+    schema: 'narada.site_continuity_cloudflare_sync_once.v1',
+    status: 'ok',
+    site_id: 'site_loop_stale',
+    worker_url: 'https://worker.example',
+    pushed_packet_id: 'packet-loop-stale-local',
+    pulled_packet_id: 'packet-loop-stale-cloudflare',
+    continuity_loop_report_recorded: true,
+    continuity_loop_report: {
+      status: 'ok',
+      site_id: 'site_loop_stale',
+      generated_at: '2026-06-11T10:10:00.000Z',
+      cloudflare_push: {
+        status: 'imported',
+        pushed_packet_id: 'packet-loop-stale-local',
+        returned_packet_id: 'packet-loop-stale-cloudflare',
+      },
+    },
+  }, null, 2)}\n`, 'utf8');
+  await utimes(outputPath, new Date('2026-06-11T10:18:00.000Z'), new Date('2026-06-11T10:18:00.000Z'));
+  try {
+    const inventory = readLocalSyncArtifactInventory(artifactDirectory, {
+      lastOutputPath: outputPath,
+      configuredSites: [{ site_id: 'site_loop_stale', display_name: 'Loop Stale Site', site_ref: 'site-ref:loop-stale', status: 'active' }],
+      maxArtifactAgeMinutes: 15,
+      now: () => '2026-06-11T10:20:00.000Z',
+    });
+    assert.equal(inventory.status, 'needs_attention');
+    assert.equal(inventory.artifacts[0].status, 'needs_attention');
+    assert.equal(inventory.artifacts[0].reason, 'configured_site_continuity_loop_report_stale');
+    assert.equal(inventory.artifacts[0].continuity_loop_freshness_state, 'stale');
+    assert.equal(inventory.artifacts[0].continuity_loop_report_age_minutes, 10);
+    assert.deepEqual(inventory.configured_site_sync_statuses, [{
+      site_id: 'site_loop_stale',
+      display_name: 'Loop Stale Site',
+      site_ref: 'site-ref:loop-stale',
+      site_status: 'active',
+      status: 'needs_attention',
+      reason: 'configured_site_continuity_loop_report_stale',
+      artifact_present: true,
+      artifact_path: outputPath,
+      artifact_updated_at: '2026-06-11T10:18:00.000Z',
+      artifact_age_minutes: 2,
+      max_sync_artifact_age_minutes: 15,
+      pushed_packet_id: 'packet-loop-stale-local',
+      pulled_packet_id: 'packet-loop-stale-cloudflare',
+    }]);
+
+    const plan = buildSiteContinuityReconciliationPlan({
+      localSyncArtifacts: inventory,
+      syncEntryPoint: syncEntrypoint,
+      packetPath,
+      artifactDirectory,
+    });
+    assert.equal(plan.status, 'ready');
+    assert.equal(plan.selected_site_count, 1);
+    assert.deepEqual(plan.selected_reason_counts, {
+      configured_site_continuity_loop_report_stale: 1,
+    });
+    assert.deepEqual(plan.selected_sites.map((site) => [site.site_id, site.reason]), [
+      ['site_loop_stale', 'configured_site_continuity_loop_report_stale'],
+    ]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -1548,11 +1629,11 @@ test('site continuity scheduler reconcile plans stale and missing configured sit
     assert.equal(plan.reconciliation_plan.packet_summary.site_id, 'site_stale');
     assert.deepEqual(plan.reconciliation_plan.selected_reason_counts, {
       configured_site_sync_artifact_missing: 1,
-      configured_site_sync_artifact_stale: 1,
+      configured_site_continuity_loop_report_stale: 1,
     });
     assert.deepEqual(plan.reconciliation_plan.selected_sites.map((site) => [site.site_id, site.reason]), [
       ['site_missing', 'configured_site_sync_artifact_missing'],
-      ['site_stale', 'configured_site_sync_artifact_stale'],
+      ['site_stale', 'configured_site_continuity_loop_report_stale'],
     ]);
     assert.equal(plan.reconciliation_plan.selected_sites.some((site) => site.site_id === 'site_synced'), false);
     const staleSite = plan.reconciliation_plan.selected_sites.find((site) => site.site_id === 'site_stale');
@@ -2167,7 +2248,7 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
           continuity_loop_report: {
             status: 'ok',
             site_id: siteId,
-            generated_at: '2026-06-11T12:00:00.000Z',
+            generated_at: '2026-06-11T12:30:00.000Z',
           },
         }, null, 2)}\n`, 'utf8');
         if (localInboundDirIndex >= 0) {
@@ -2524,10 +2605,11 @@ test('site continuity scheduler read-last summarizes local sync artifact', async
     },
   }, null, 2)}\n`, 'utf8');
   try {
-    const summary = readLastSyncArtifact(outputPath);
+    const summary = readLastSyncArtifact(outputPath, { now: () => '2026-06-11T09:01:00.000Z' });
     assert.equal(summary.state, 'read');
     assert.equal(summary.artifact_present, true);
     assert.equal(summary.status, 'synced');
+    assert.equal(summary.reason, 'matching_sync_artifact_synced');
     assert.equal(summary.schema, 'narada.site_continuity_cloudflare_sync_once.v1');
     assert.equal(summary.site_id, 'site_fixture');
     assert.equal(summary.worker_url, 'https://worker.example');
@@ -2539,6 +2621,9 @@ test('site continuity scheduler read-last summarizes local sync artifact', async
     assert.equal(summary.cloudflare_push_imported_at, '2026-06-11T09:00:00.000Z');
     assert.equal(summary.cloudflare_push_previous_imported_at, '2026-06-11T08:59:00.000Z');
     assert.equal(summary.continuity_loop_report_recorded, true);
+    assert.equal(summary.continuity_loop_freshness_state, 'fresh');
+    assert.equal(summary.continuity_loop_report_age_minutes, 1);
+    assert.equal(summary.continuity_loop_stale_after_minutes, 5);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

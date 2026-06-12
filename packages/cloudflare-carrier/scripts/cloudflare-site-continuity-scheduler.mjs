@@ -22,6 +22,7 @@ import {
 const DEFAULT_TASK_NAME = '\\Narada\\CloudflareSiteContinuitySync';
 const DEFAULT_INTERVAL_MINUTES = 5;
 const DEFAULT_MAX_SYNC_ARTIFACT_AGE_MINUTES = 15;
+const DEFAULT_SITE_CONTINUITY_LOOP_STALE_AFTER_MS = 5 * 60 * 1000;
 const DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS = 120000;
 const DEFAULT_HIDDEN_WRAPPER_RELATIVE_PATH = '.narada/site-continuity/cloudflare-site-continuity-sync.hidden.vbs';
 const LIVE_SCHEDULER_TASK_ACTIONS = new Set(['install', 'disable', 'pause', 'resume', 'uninstall']);
@@ -1355,7 +1356,7 @@ export async function executeSiteContinuityReconciliationPlan(
         reason: 'sync_once_completed',
         argv: [process.execPath, ...args],
         output_path: site.output_path,
-        output_summary: readLastSyncArtifact(site.output_path),
+        output_summary: readLastSyncArtifact(site.output_path, { now }),
       });
     } catch (error) {
       results.push({
@@ -1366,7 +1367,7 @@ export async function executeSiteContinuityReconciliationPlan(
         output_path: site.output_path,
         exit_code: error.code ?? null,
         signal: error.signal ?? null,
-        output_summary: readLastSyncArtifact(site.output_path),
+        output_summary: readLastSyncArtifact(site.output_path, { now }),
       });
     }
   }
@@ -1582,19 +1583,19 @@ export function readLocalSyncArtifactInventory(
       status: normalizedConfiguredSites.length > 0 ? 'needs_attention' : 'never_synced',
       artifacts: [],
       configured_site_sync_statuses: buildConfiguredSiteSyncStatuses(configuredSiteRecords, [], { maxArtifactAgeMinutes: effectiveMaxArtifactAgeMinutes, now }),
-      last_sync: lastOutputPath ? readLastSyncArtifact(lastOutputPath) : null,
+      last_sync: lastOutputPath ? readLastSyncArtifact(lastOutputPath, { now }) : null,
     };
   }
   const allArtifactSummaries = readdirSync(artifactDirectory, { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
-    .map((entry) => readLastSyncArtifact(join(artifactDirectory, entry.name)))
+    .map((entry) => readLastSyncArtifact(join(artifactDirectory, entry.name), { now }))
     .filter((artifact) => isContinuitySyncArtifactSummary(artifact, lastOutputPath));
   const artifacts = allArtifactSummaries
     .sort(compareArtifactSummaries);
   const configuredSiteSyncStatuses = buildConfiguredSiteSyncStatuses(configuredSiteRecords, artifacts, { maxArtifactAgeMinutes: effectiveMaxArtifactAgeMinutes, now });
   const needsAttention = artifacts.some((artifact) => artifact.status !== 'synced')
     || configuredSiteSyncStatuses.some((site) => site.status !== 'synced');
-  const lastSync = lastOutputPath ? readLastSyncArtifact(lastOutputPath) : null;
+  const lastSync = lastOutputPath ? readLastSyncArtifact(lastOutputPath, { now }) : null;
   return {
     state: 'read',
     artifact_directory: artifactDirectory,
@@ -1822,7 +1823,10 @@ export function readLocalConfiguredSites({ root, explicitSites = null, siteConti
   };
 }
 
-export function readLastSyncArtifact(outputPath) {
+export function readLastSyncArtifact(
+  outputPath,
+  { now = () => new Date().toISOString(), loopStaleAfterMs = DEFAULT_SITE_CONTINUITY_LOOP_STALE_AFTER_MS } = {},
+) {
   if (!outputPath) {
     return {
       state: 'not_configured',
@@ -1855,13 +1859,27 @@ export function readLastSyncArtifact(outputPath) {
   }
   const loopReport = artifact?.continuity_loop_report ?? null;
   const cloudflarePush = loopReport?.cloudflare_push ?? null;
-  const status = artifact?.status === 'ok' && loopReport?.status === 'ok' ? 'synced' : 'needs_attention';
+  const loopReportFreshness = summarizeLoopReportFreshness(loopReport, { now, staleAfterMs: loopStaleAfterMs });
+  const status = artifact?.status === 'ok'
+    && loopReport?.status === 'ok'
+    && loopReportFreshness.freshness_state !== 'stale'
+    && loopReportFreshness.freshness_state !== 'missing'
+    ? 'synced'
+    : 'needs_attention';
+  const reason = status === 'synced'
+    ? 'matching_sync_artifact_synced'
+    : loopReportFreshness.freshness_state === 'stale'
+      ? 'configured_site_continuity_loop_report_stale'
+      : loopReportFreshness.freshness_state === 'missing'
+        ? 'configured_site_continuity_loop_report_missing'
+        : 'matching_sync_artifact_needs_attention';
   return {
     state: 'read',
     artifact_path: outputPath,
     artifact_present: true,
     artifact_updated_at: stat.mtime.toISOString(),
     status,
+    reason,
     schema: artifact?.schema ?? null,
     site_id: artifact?.site_id ?? loopReport?.site_id ?? null,
     worker_url: artifact?.worker_url ?? loopReport?.cloudflare_worker_url ?? null,
@@ -1873,6 +1891,9 @@ export function readLastSyncArtifact(outputPath) {
     cloudflare_push_imported_at: cloudflarePush?.imported_at ?? null,
     cloudflare_push_previous_imported_at: cloudflarePush?.previous_imported_at ?? null,
     continuity_loop_report_recorded: artifact?.continuity_loop_report_recorded ?? null,
+    continuity_loop_freshness_state: loopReportFreshness.freshness_state,
+    continuity_loop_report_age_minutes: loopReportFreshness.age_minutes,
+    continuity_loop_stale_after_minutes: Math.floor(loopStaleAfterMs / 60000),
   };
 }
 
@@ -2313,7 +2334,11 @@ function buildConfiguredSiteSyncStatuses(configuredSites, artifacts, { maxArtifa
       site_id: siteId,
       ...siteMetadata,
       status: artifactIsStale ? 'needs_attention' : artifact.status,
-      reason: artifactIsStale ? 'configured_site_sync_artifact_stale' : artifact.status === 'synced' ? 'matching_sync_artifact_synced' : 'matching_sync_artifact_needs_attention',
+      reason: artifactIsStale
+        ? 'configured_site_sync_artifact_stale'
+        : artifact.status === 'synced'
+          ? 'matching_sync_artifact_synced'
+          : artifact.reason ?? 'matching_sync_artifact_needs_attention',
       artifact_present: true,
       artifact_path: artifact.artifact_path,
       artifact_updated_at: artifact.artifact_updated_at,
@@ -2323,6 +2348,28 @@ function buildConfiguredSiteSyncStatuses(configuredSites, artifacts, { maxArtifa
       pulled_packet_id: artifact.pulled_packet_id,
     };
   });
+}
+
+function summarizeLoopReportFreshness(loopReport, { now = () => new Date().toISOString(), staleAfterMs = DEFAULT_SITE_CONTINUITY_LOOP_STALE_AFTER_MS } = {}) {
+  if (!loopReport || typeof loopReport !== 'object') {
+    return {
+      freshness_state: 'missing',
+      age_minutes: null,
+    };
+  }
+  const nowMs = Date.parse(now());
+  const observedAtMs = Date.parse(loopReport.generated_at ?? '');
+  if (!Number.isFinite(nowMs) || !Number.isFinite(observedAtMs)) {
+    return {
+      freshness_state: 'unknown',
+      age_minutes: null,
+    };
+  }
+  const ageMs = Math.max(0, nowMs - observedAtMs);
+  return {
+    freshness_state: ageMs > staleAfterMs ? 'stale' : 'fresh',
+    age_minutes: Math.floor(ageMs / 60000),
+  };
 }
 
 function buildConfiguredSiteInboundStatuses(configuredSites, artifacts, { maxArtifactAgeMinutes = DEFAULT_MAX_SYNC_ARTIFACT_AGE_MINUTES, now = () => new Date().toISOString() } = {}) {
