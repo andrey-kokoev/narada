@@ -8658,27 +8658,17 @@ test('worker operation.read does not smear indexed carrier evidence across sibli
   assert.equal(body.operation_workflow_route.next_action, 'start_or_select_session');
 });
 
-test('worker operation posture does not bounce between inactive but evidence-ready sibling operations', async () => {
+test('worker operation.list yields focused selection to a sibling operation with real workflow attention', async () => {
   const now = clock();
   const controlEventJson = JSON.stringify({
     schema: 'narada.cloudflare_carrier_event.v1',
-    carrier_session_id: 'carrier_session_control',
+    carrier_session_id: 'carrier_session_control_ready',
     sequence: 1,
-    event_id: 'carrier_event_control_1',
+    event_id: 'carrier_event_control_ready_1',
     site_id: 'site_fixture',
     event_kind: 'carrier_command_executed',
     created_at: now,
     payload: { command: '/goal' },
-  });
-  const siteReadEventJson = JSON.stringify({
-    schema: 'narada.cloudflare_carrier_event.v1',
-    carrier_session_id: 'carrier_session_site_read',
-    sequence: 1,
-    event_id: 'carrier_event_site_read_1',
-    site_id: 'site_fixture',
-    event_kind: 'carrier_command_executed',
-    created_at: now,
-    payload: { command: '/review' },
   });
   const siteDb = fakeD1SiteRegistryDatabase({
     sites: [{
@@ -8699,64 +8689,44 @@ test('worker operation posture does not bounce between inactive but evidence-rea
       updated_at: now,
     }],
     operations: [{
-      operation_id: 'operation_control',
+      operation_id: 'operation_control_ready',
       site_id: 'site_fixture',
-      display_name: 'Control Operation',
+      display_name: 'Ready Control Operation',
       operation_kind: 'control',
       status: 'active',
       created_by_principal_id: 'admin',
       created_at: now,
       updated_at: now,
     }, {
-      operation_id: 'operation_site_read',
+      operation_id: 'operation_attention',
       site_id: 'site_fixture',
-      display_name: 'Site Read Operation',
+      display_name: 'Attention Operation',
       operation_kind: 'cloudflare_site_read',
       status: 'active',
       created_by_principal_id: 'admin',
       created_at: now,
-      updated_at: now,
+      updated_at: new Date(Date.parse(now) + 1000).toISOString(),
     }],
     carrierSessions: [{
-      carrier_session_id: 'carrier_session_control',
+      carrier_session_id: 'carrier_session_control_ready',
       site_id: 'site_fixture',
-      operation_id: 'operation_control',
+      operation_id: 'operation_control_ready',
       agent_id: 'narada.fixture.control',
-      bound_by_principal_id: 'admin',
-      binding_status: 'active',
-      created_at: now,
-      updated_at: now,
-    }, {
-      carrier_session_id: 'carrier_session_site_read',
-      site_id: 'site_fixture',
-      operation_id: 'operation_site_read',
-      agent_id: 'narada.fixture.site_read',
       bound_by_principal_id: 'admin',
       binding_status: 'active',
       created_at: now,
       updated_at: now,
     }],
     carrierSessionEvents: [{
-      carrier_session_id: 'carrier_session_control',
+      carrier_session_id: 'carrier_session_control_ready',
       sequence: 1,
-      event_id: 'carrier_event_control_1',
+      event_id: 'carrier_event_control_ready_1',
       site_id: 'site_fixture',
-      operation_id: 'operation_control',
+      operation_id: 'operation_control_ready',
       agent_id: 'narada.fixture.control',
       event_kind: 'carrier_command_executed',
       occurred_at: now,
       event_json: controlEventJson,
-      indexed_at: now,
-    }, {
-      carrier_session_id: 'carrier_session_site_read',
-      sequence: 1,
-      event_id: 'carrier_event_site_read_1',
-      site_id: 'site_fixture',
-      operation_id: 'operation_site_read',
-      agent_id: 'narada.fixture.site_read',
-      event_kind: 'carrier_command_executed',
-      occurred_at: now,
-      event_json: siteReadEventJson,
       indexed_at: now,
     }],
   });
@@ -8765,50 +8735,19 @@ test('worker operation posture does not bounce between inactive but evidence-rea
     CLOUDFLARE_CARRIER_TASK_DB: fakeD1TaskDatabase(),
   });
 
-  const controlRead = await worker.fetch(jsonRequest({
-    operation: 'operation.read',
-    request_id: 'request_operation_read_no_bounce_control',
-    params: {
-      site_id: 'site_fixture',
-      operation_id: 'operation_control',
-      carrier_event_limit: 10,
-    },
-  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
-  assert.equal(controlRead.status, 200);
-  const controlBody = await controlRead.json();
-  assert.equal(controlBody.operation_posture_overview.active_operation_id, 'operation_control');
-  assert.equal(controlBody.operation_posture_overview.next_operation_id, 'operation_control');
-  assert.equal(controlBody.operation_posture_route.command_action, 'monitor_operations');
-  assert.equal(controlBody.operation_posture_route.target, 'operation_control');
-
-  const siteRead = await worker.fetch(jsonRequest({
-    operation: 'operation.read',
-    request_id: 'request_operation_read_no_bounce_site_read',
-    params: {
-      site_id: 'site_fixture',
-      operation_id: 'operation_site_read',
-      carrier_event_limit: 10,
-    },
-  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
-  assert.equal(siteRead.status, 200);
-  const siteReadBody = await siteRead.json();
-  assert.equal(siteReadBody.operation_posture_overview.active_operation_id, 'operation_site_read');
-  assert.equal(siteReadBody.operation_posture_overview.next_operation_id, 'operation_site_read');
-  assert.equal(siteReadBody.operation_posture_route.command_action, 'monitor_operations');
-  assert.equal(siteReadBody.operation_posture_route.target, 'operation_site_read');
-
   const listed = await worker.fetch(jsonRequest({
     operation: 'operation.list',
-    request_id: 'request_operation_list_no_bounce',
+    request_id: 'request_operation_list_yields_to_attention_sibling',
     params: { site_id: 'site_fixture' },
   }, { token: 'test-admin-token', path: '/api/carrier' }), env);
   assert.equal(listed.status, 200);
   const listedBody = await listed.json();
-  assert.equal(listedBody.operation_posture_overview.active_operation_id, 'operation_control');
-  assert.equal(listedBody.operation_posture_overview.next_operation_id, 'operation_control');
-  assert.equal(listedBody.operation_posture_route.command_action, 'monitor_operations');
-  assert.equal(listedBody.focused_operation_lifecycle.operation_id, 'operation_control');
+  assert.equal(listedBody.operation_posture_overview.next_operation_id, 'operation_attention');
+  assert.equal(listedBody.operation_posture_overview.next_status, 'needs_attention');
+  assert.equal(listedBody.focused_operation_lifecycle.operation_id, 'operation_attention');
+  assert.equal(listedBody.focused_operation_lifecycle.workflow_route.next_action, 'start_or_select_session');
 });
+
 
 function fakeD1TaskDatabase() {
   const rows = [];
