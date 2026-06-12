@@ -5038,6 +5038,31 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       },
     };
   }
+  if (body.operation === 'operation.list') {
+    const siteId = params.site_id ?? response.site?.site_id ?? response.operations?.[0]?.site_id ?? null;
+    if (!siteId) {
+      return { status: 200, body: { ...response } };
+    }
+    const siteRead = await registry.handle({
+      operation: 'site.read',
+      params: { site_id: siteId, limit: params.site_status_limit ?? params.limit },
+      principal,
+    });
+    if (!siteRead.ok) {
+      return { status: 200, body: { ...response, site_id: siteId } };
+    }
+    const projection = await buildCloudflareSiteProductProjection(env, principal, siteRead, params);
+    return {
+      status: 200,
+      body: {
+        ...response,
+        site_id: siteId,
+        operation_posture_overview: projection.operation_posture_overview,
+        operation_posture_route: projection.operation_posture_route,
+        focused_operation_lifecycle: projection.focused_operation_lifecycle,
+      },
+    };
+  }
   if (body.operation === 'operation.read') {
     const operation = response.operation;
     const siteId = operation?.site_id ?? params.site_id;

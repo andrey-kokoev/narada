@@ -7160,6 +7160,18 @@ test('worker operation.create read and list route through site registry authorit
   assert.equal(listed.status, 200);
   const listedBody = await listed.json();
   assert.deepEqual(listedBody.operations.map((operation) => operation.operation_id), ['operation_control']);
+  assert.equal(listedBody.reader_principal.email, 'admin@system');
+  assert.equal(listedBody.operation_posture_overview.schema, 'narada.cloudflare_operation_posture_overview.v1');
+  assert.equal(listedBody.operation_posture_overview.operation_count, 1);
+  assert.equal(listedBody.operation_posture_overview.active_operation_id, 'operation_control');
+  assert.equal(listedBody.operation_posture_overview.next_operation_id, 'operation_control');
+  assert.equal(listedBody.operation_posture_route.schema, 'narada.cloudflare_operation_posture_route.v1');
+  assert.equal(listedBody.operation_posture_route.target, 'operation_control');
+  assert.equal(listedBody.operation_posture_route.command_action, 'monitor_operations');
+  assert.equal(listedBody.operation_posture_route.status, 'ready');
+  assert.equal(listedBody.focused_operation_lifecycle.operation_id, 'operation_control');
+  assert.deepEqual(listedBody.focused_operation_lifecycle.operation_posture_overview, listedBody.operation_posture_overview);
+  assert.deepEqual(listedBody.focused_operation_lifecycle.operation_posture_route, listedBody.operation_posture_route);
 
   const siteRead = await worker.fetch(jsonRequest({
     operation: 'site.read',
