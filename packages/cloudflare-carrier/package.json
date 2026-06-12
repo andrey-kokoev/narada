@@ -8,7 +8,7 @@
     "./worker": "./src/cloudflare-worker.mjs"
   },
   "scripts": {
-    "test": "node --test src/cloudflare-carrier.test.mjs scripts/cloudflare-site-continuity-sync.test.mjs scripts/cloudflare-site-continuity-scheduler.test.mjs scripts/cloudflare-site-continuity-bindings.test.mjs scripts/cloudflare-carrier-site-registry-projection.test.mjs scripts/cloudflare-carrier-provider-liveness-refresh.test.mjs scripts/cloudflare-carrier-provider-liveness-scheduler.test.mjs scripts/cloudflare-carrier-product-read.test.mjs scripts/cloudflare-carrier-operation-create.test.mjs scripts/cloudflare-carrier-operator-session-capture.test.mjs scripts/cloudflare-carrier-operation-status-put.test.mjs scripts/cloudflare-carrier-task-lifecycle-create.test.mjs scripts/cloudflare-carrier-task-lifecycle-claim.test.mjs scripts/cloudflare-carrier-task-lifecycle-report.test.mjs scripts/cloudflare-carrier-continuation-resume.test.mjs scripts/cloudflare-carrier-script-manifest.test.mjs scripts/cloudflare-carrier-repository-publication-github-app-secret-preflight.test.mjs scripts/cloudflare-carrier-repository-publication-github-app-secret-put.test.mjs",
+    "test": "node --test src/cloudflare-carrier.test.mjs scripts/cloudflare-site-continuity-sync.test.mjs scripts/cloudflare-site-continuity-scheduler.test.mjs scripts/cloudflare-site-continuity-bindings.test.mjs scripts/cloudflare-carrier-site-registry-projection.test.mjs scripts/cloudflare-carrier-provider-liveness-refresh.test.mjs scripts/cloudflare-carrier-provider-liveness-scheduler.test.mjs scripts/cloudflare-carrier-product-read.test.mjs scripts/cloudflare-carrier-operation-create.test.mjs scripts/cloudflare-carrier-operator-session-capture.test.mjs scripts/cloudflare-carrier-operation-status-put.test.mjs scripts/cloudflare-carrier-task-lifecycle-create.test.mjs scripts/cloudflare-carrier-task-lifecycle-claim.test.mjs scripts/cloudflare-carrier-task-lifecycle-report.test.mjs scripts/cloudflare-carrier-task-lifecycle-finish.test.mjs scripts/cloudflare-carrier-continuation-resume.test.mjs scripts/cloudflare-carrier-script-manifest.test.mjs scripts/cloudflare-carrier-repository-publication-github-app-secret-preflight.test.mjs scripts/cloudflare-carrier-repository-publication-github-app-secret-put.test.mjs",
     "deploy:check": "node scripts/cloudflare-carrier-deploy-check.mjs",
     "deploy:dry-run": "wrangler deploy --dry-run --config wrangler.toml",
     "deploy:live": "wrangler deploy --config wrangler.toml",
@@ -67,6 +67,8 @@
     "product:task-lifecycle:claim:text": "node scripts/cloudflare-carrier-task-lifecycle-claim.mjs --format text",
     "product:task-lifecycle:report": "node scripts/cloudflare-carrier-task-lifecycle-report.mjs",
     "product:task-lifecycle:report:text": "node scripts/cloudflare-carrier-task-lifecycle-report.mjs --format text",
+    "product:task-lifecycle:finish": "node scripts/cloudflare-carrier-task-lifecycle-finish.mjs",
+    "product:task-lifecycle:finish:text": "node scripts/cloudflare-carrier-task-lifecycle-finish.mjs --format text",
     "task-lifecycle:shadow-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-shadow-live-smoke.mjs",
     "task-lifecycle:create-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-create-live-smoke.mjs",
     "task-lifecycle:claim-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-claim-live-smoke.mjs",

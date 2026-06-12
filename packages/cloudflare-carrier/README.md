@@ -314,6 +314,14 @@ pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:report:text -- 
 
 `product:task-lifecycle:report` calls `task_lifecycle.task_report.admit` through authenticated `POST /api/carrier`. Without `--admit-cloudflare-task-report`, it can request the Worker's refusal evidence for retained Windows task lifecycle authority. With the admission flag, it requires explicit report-authority, report-schema, changed-file-evidence-boundary, cutover, governed-write-contract, and confirmation-evidence refs before sending the Cloudflare task-report admission request. Reporting records changed-file evidence only as report evidence; separate changed-file-evidence, filesystem mutation, and repository publication boundaries remain not admitted until their own governed contracts admit them. The `:text` alias prints the Worker URL, auth source, site, admission id, task/report ids, reporter, decision, authority posture, changed-file evidence posture, and evidence refs without echoing bearer tokens or operator-session cookies.
 
+Finish an existing closed Cloudflare task lifecycle task after explicit task-finish cutover evidence exists:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:finish:text -- --url <worker-url> --site <site-id> --task-id <task-id> --finalizer-agent <agent-id> --finish-verdict accepted --admission-id <admission-id> --admit-cloudflare-task-finish --finish-authority-ref <finish-authority-ref> --finish-schema-ref <finish-schema-ref> --cutover-point-ref <cutover-ref> --governed-write-contract-ref <contract-ref> --confirmation-evidence-ref <evidence-ref> --operator-session-file cloudflare-operator-session.json
+```
+
+`product:task-lifecycle:finish` calls `task_lifecycle.task_finish.admit` through authenticated `POST /api/carrier`. Without `--admit-cloudflare-task-finish`, it can request the Worker's refusal evidence for retained Windows task lifecycle authority. With the admission flag, it requires explicit finish-authority, finish-schema, cutover, governed-write-contract, and confirmation-evidence refs before sending the Cloudflare task-finish admission request. The current Worker contract only admits `accepted` finish verdicts, so the product command rejects any other verdict locally instead of pretending a broader finish surface exists. The `:text` alias prints the Worker URL, auth source, site, admission id, task id/number when admitted, finalizer, verdict, decision, authority posture, changed-file-evidence count, and evidence refs without echoing bearer tokens or operator-session cookies.
+
 For operator-facing readback without JSON inspection, use the text aliases:
 
 ```powershell
