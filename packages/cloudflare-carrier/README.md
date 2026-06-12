@@ -322,6 +322,14 @@ pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:changed-file-ev
 
 `product:task-lifecycle:changed-file-evidence` calls `task_lifecycle.changed_file_evidence.admit` through authenticated `POST /api/carrier`. Without `--admit-cloudflare-changed-file-evidence`, it can request the Worker's refusal evidence for retained Windows task lifecycle authority. With the admission flag, it requires explicit file-evidence-authority, file-material-source, repository-authority, cutover, governed-write-contract, and confirmation-evidence refs before sending the Cloudflare changed-file-evidence admission request. Admitting changed-file evidence still leaves filesystem mutation, repository publication, and projection write as `not_admitted`; this command records Cloudflare evidence for the changed file, not those downstream effects. The `:text` alias prints the Worker URL, auth source, site, admission id, task/report/evidence ids, file path, reporter, authority posture, conflict evidence, and the three downstream admission postures without echoing bearer tokens or operator-session cookies.
 
+Bridge a task or operation outcome into an explicit Cloudflare site file change proposal before any materialization or publication step:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:site-file-change:proposal:text -- --url <worker-url> --site <site-id> --proposal-id <proposal-id> --proposal-ref <proposal-ref> --summary <proposal-summary> --operation-id <operation-id> --task-id <task-id> --file-path <repo-relative-path> --change-kind <create|update|delete> --material-source-ref <material-source-ref> --operator-session-file cloudflare-operator-session.json
+```
+
+`product:site-file-change:proposal` calls `site_file_change_proposal.record` through authenticated `POST /api/carrier`. It requires explicit proposal ref, summary, and per-file material provenance instead of relying on the Worker's generic defaults. The command fixes proposal authority at `cloudflare_carrier_site`, executor authority at `windows_filesystem_executor`, and keeps filesystem mutation and repository publication at `not_admitted`; it records Cloudflare proposal state only, without pretending the file was materialized or published. The `:text` alias prints the Worker URL, auth source, site, proposal id/ref, operation/task linkage, proposal posture, file count, downstream admission posture, and per-file provenance without echoing bearer tokens or operator-session cookies.
+
 Finish an existing closed Cloudflare task lifecycle task after explicit task-finish cutover evidence exists:
 
 ```powershell
