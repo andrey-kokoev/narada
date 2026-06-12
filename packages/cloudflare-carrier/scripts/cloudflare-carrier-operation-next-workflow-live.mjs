@@ -27,6 +27,7 @@ const continuityWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operatio
 const CHILD_STDIO_MAX_BUFFER = 64 * 1024 * 1024;
 
 const ROUTE_TO_WORKFLOW = new Map([
+  ['read_operation_evidence', { name: 'evidence', script: evidenceReadScript, flag: null }],
   ['review_mailbox_draft_reply_proposal', { name: 'mailbox_draft_reply_proposal', script: mailboxDraftReplyProposalReadScript, flag: null }],
   ['review_repository_publication_request', { name: 'repository_publication_request', script: repositoryPublicationRequestReviewScript, flag: null }],
   ['review_site_file_change_proposal', { name: 'site_file_change_proposal', script: siteFileChangeProposalReviewScript, flag: null }],

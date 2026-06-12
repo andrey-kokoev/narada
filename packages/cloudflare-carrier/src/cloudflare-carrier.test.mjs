@@ -6957,6 +6957,9 @@ test('worker records resident dispatch Windows fallback request and routes the o
   assert.equal(readAfterEvidenceBody.resident_dispatch_windows_fallback_evidence.length, 1);
   assert.equal(readAfterEvidenceBody.operation_product_surface.resident_dispatch_windows_fallback_evidence_count, 1);
   assert.equal(readAfterEvidenceBody.operation_product_surface.resident_dispatch_windows_fallback_session_start_admission, 'admitted_by_windows_resident_loop');
+  assert.equal(readAfterEvidenceBody.operation_lifecycle_status.phase, 'inhabited');
+  assert.equal(readAfterEvidenceBody.operation_lifecycle_status.local_resident_session_inhabitance_count, 1);
+  assert.equal(readAfterEvidenceBody.operation_lifecycle_status.session_inhabitance_count >= 1, true);
 
   const refusedReview = await worker.fetch(jsonRequest({
     operation: 'operation_focus_review.acknowledge',
@@ -7006,6 +7009,9 @@ test('worker records resident dispatch Windows fallback request and routes the o
   assert.equal(readAfterFocusReviewBody.operation_activity_timeline.items.some((entry) => entry.activity_kind === 'operation_focus_review_acknowledgement'), true);
   assert.notEqual(readAfterFocusReviewBody.operation_workflow_route.operator_focus?.focus_ref, fallbackEvidencePutBody.record.fallback_evidence_id);
   assert.notEqual(readAfterFocusReviewBody.operation_workflow_route.next_action, 'review_windows_fallback_resident_dispatch_evidence');
+  assert.equal(readAfterFocusReviewBody.operation_lifecycle_status.phase, 'inhabited');
+  assert.equal(readAfterFocusReviewBody.operation_lifecycle_status.next_action, 'carrier_evidence');
+  assert.notEqual(readAfterFocusReviewBody.operation_workflow_route.next_action, 'start_or_select_session');
 });
 
 test('worker site.membership.put admits owner and exposes membership through site.read', async () => {

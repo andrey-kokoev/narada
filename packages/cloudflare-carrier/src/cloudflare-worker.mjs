@@ -2365,19 +2365,24 @@ function selectCloudflareFocusedOperation(operations = [], params = {}, response
 function cloudflareOperationPathContext(operation = {}, product = {}, context = {}) {
   const operationId = operation.operation_id || context.active_operation_id || product.operation?.operation_id || '';
   const sessions = cloudflareOperationSessions(operationId, product);
+  const localResidentSessionInhabitanceCount = cloudflareOperationLocalResidentSessionInhabitanceCount(operationId, {
+    resident_dispatch_windows_fallback_evidence: product.resident_dispatch_windows_fallback_evidence,
+  });
+  const effectiveSessionCount = sessions.length > 0 ? sessions.length : localResidentSessionInhabitanceCount;
   const tasks = cloudflareOperationTasks(operationId, product, context);
   const events = cloudflareOperationEvents(operationId, product);
   const attention = cloudflareOperationAttention(product).filter((item) => !item.operation_id || item.operation_id === operationId);
   const openTasks = tasks.filter((task) => cloudflareTaskLifecycleStatus(task) === 'open');
   const openAttention = attention.filter((item) => item.status !== 'resolved');
   const nextAction = !operationId ? 'select_or_create_operation'
-    : sessions.length === 0 ? 'start_or_select_session'
+    : effectiveSessionCount === 0 ? 'start_or_select_session'
     : openAttention.length > 0 ? 'inspect_attention'
     : openTasks.length > 0 ? 'inspect_open_task'
     : events.length > 0 ? 'inspect_operation_evidence' : 'read_operation_evidence';
   return {
     operation_id: operationId,
     session_count: sessions.length,
+    session_inhabitance_count: effectiveSessionCount,
     task_count: tasks.length,
     open_task_count: openTasks.length,
     attention_count: attention.length,
@@ -2395,6 +2400,22 @@ function cloudflareOperationScopeLoaded(operation = {}, product = {}, context = 
 function cloudflareOperationSessions(operationId, product = {}) {
   if (!operationId) return [];
   return (product.sessions || []).filter((session) => !session.operation_id || session.operation_id === operationId);
+}
+
+function cloudflareOperationLocalResidentSessionInhabitanceCount(operationId, product = {}) {
+  if (!operationId) return 0;
+  const fallbackEvidence = Array.isArray(product.resident_dispatch_windows_fallback_evidence)
+    ? product.resident_dispatch_windows_fallback_evidence
+    : [];
+  const sessionRefs = new Set();
+  for (const entry of fallbackEvidence) {
+    if (!entry || entry.operation_id !== operationId) continue;
+    if (String(entry.local_session_start_admission ?? '') !== 'admitted_by_windows_resident_loop') continue;
+    const sessionRef = String(entry.local_resident_session_ref ?? '').trim();
+    if (!sessionRef) continue;
+    sessionRefs.add(sessionRef);
+  }
+  return sessionRefs.size;
 }
 
 function cloudflareOperationTasks(operationId, product = {}, context = {}) {
@@ -2594,6 +2615,7 @@ function summarizeCloudflareOperationLifecycleStatus({
   operationContinuityDirectionStatus = null,
   residentLoopShadowRuns = [],
   residentDispatchDecisions = [],
+  residentDispatchWindowsFallbackEvidence = [],
   localIngressRequests = [],
   localIngressEvidence = [],
   localIngressProviderHeartbeats = [],
@@ -2607,6 +2629,10 @@ function summarizeCloudflareOperationLifecycleStatus({
   recoveryPosture = null,
 } = {}) {
   const sessionCount = Array.isArray(sessions) ? sessions.length : 0;
+  const localResidentSessionInhabitanceCount = cloudflareOperationLocalResidentSessionInhabitanceCount(operation?.operation_id ?? null, {
+    resident_dispatch_windows_fallback_evidence: residentDispatchWindowsFallbackEvidence,
+  });
+  const effectiveSessionCount = sessionCount > 0 ? sessionCount : localResidentSessionInhabitanceCount;
   const taskList = Array.isArray(tasks) ? tasks : [];
   const openTaskCount = taskList.filter((task) => !['done', 'closed', 'cancelled'].includes(String(task.status ?? '').toLowerCase())).length;
   const evidenceGroups = Array.isArray(carrierEvidence) ? carrierEvidence : [];
@@ -2635,7 +2661,7 @@ function summarizeCloudflareOperationLifecycleStatus({
   const repositoryPublicationObserved = repositoryPublicationRequestCount > 0 || repositoryPublicationExecutionCount > 0 || repositoryPublicationEvidenceCount > 0 || repositoryPublicationProviderHeartbeatCount > 0;
   const needsContinuation = String(operation?.status ?? '').toLowerCase() === 'needs_continuation';
   const missing = [];
-  if (sessionCount === 0) missing.push('session');
+  if (effectiveSessionCount === 0) missing.push('session');
   if (evidenceEventCount === 0) missing.push('carrier_evidence');
   if (continuityState !== 'packet_observed') missing.push('continuity_packet');
   if (persistencePosture?.state === 'incomplete') missing.push('cloudflare_persistence_posture');
@@ -2654,13 +2680,13 @@ function summarizeCloudflareOperationLifecycleStatus({
   if (repositoryPublicationObserved && repositoryPublicationProviderLiveness.state === 'missing') attention.push('repository_publication_provider_liveness_missing');
   if (repositoryPublicationObserved && repositoryPublicationProviderLiveness.state === 'stale') attention.push('repository_publication_provider_liveness_stale');
   const phase = operation?.status === 'active'
-    ? (sessionCount > 0 ? 'inhabited' : 'active_uninhabited')
+    ? (effectiveSessionCount > 0 ? 'inhabited' : 'active_uninhabited')
     : String(operation?.status ?? 'unknown');
   const health = needsContinuation
     ? 'attention'
     : missing.length === 0 && attention.length === 0
     ? 'ready'
-    : (sessionCount === 0 || evidenceEventCount === 0 ? 'incomplete' : 'attention');
+    : (effectiveSessionCount === 0 || evidenceEventCount === 0 ? 'incomplete' : 'attention');
   return {
     schema: 'narada.cloudflare_operation_lifecycle_status.v1',
     operation_id: operation?.operation_id ?? null,
@@ -2670,6 +2696,8 @@ function summarizeCloudflareOperationLifecycleStatus({
     missing,
     attention,
     session_count: sessionCount,
+    session_inhabitance_count: effectiveSessionCount,
+    local_resident_session_inhabitance_count: localResidentSessionInhabitanceCount,
     open_task_count: openTaskCount,
     task_count: taskList.length,
     evidence_event_count: evidenceEventCount,
@@ -5322,6 +5350,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       operationContinuityDirectionStatus,
       residentLoopShadowRuns,
       residentDispatchDecisions,
+      residentDispatchWindowsFallbackEvidence,
       localIngressRequests,
       localIngressEvidence,
       localIngressProviderHeartbeats,
@@ -5370,6 +5399,8 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       carrier_evidence: carrierEvidence,
       site_continuity_packets: continuityPackets,
       site_continuity_loop_reports: continuityLoopReports,
+      resident_dispatch_windows_fallback_requests: residentDispatchWindowsFallbackRequests,
+      resident_dispatch_windows_fallback_evidence: residentDispatchWindowsFallbackEvidence,
     }, {
       active_operation_id: operation?.operation_id ?? params.operation_id,
       site_id: siteId,
@@ -5756,6 +5787,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     operationContinuityDirectionStatus,
     residentLoopShadowRuns,
     residentDispatchDecisions,
+    residentDispatchWindowsFallbackEvidence,
     localIngressRequests,
     localIngressEvidence,
     localIngressProviderHeartbeats,
@@ -5804,6 +5836,8 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     site_continuity_packets: continuityPackets,
     site_continuity_loop_reports: continuityLoopReports,
     operation: focusedOperation,
+    resident_dispatch_windows_fallback_requests: residentDispatchWindowsFallbackRequests,
+    resident_dispatch_windows_fallback_evidence: residentDispatchWindowsFallbackEvidence,
   }, {
     active_operation_id: focusedOperation?.operation_id ?? params.operation_id,
     site_id: siteId,
