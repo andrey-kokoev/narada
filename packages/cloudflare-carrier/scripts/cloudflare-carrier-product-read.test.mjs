@@ -337,6 +337,26 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   });
   assert.match(operationFallbackPendingText, /Resident Dispatch Windows Fallback Read: pnpm --filter @narada2\/cloudflare-carrier product:resident-dispatch:windows-fallback-request:text -- --operation resident_dispatch\.windows_fallback_request\.list --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 
+  const operationFallbackEvidenceText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      current_status: 'active',
+      status_transition_count: 1,
+      phase: 'active_uninhabited',
+      health: 'attention',
+      next_action: 'session',
+      workflow_next_action: 'review_windows_fallback_resident_dispatch_evidence',
+      workflow_reason: 'windows_fallback_execution_recorded',
+      session_count: 0,
+      task_count: 0,
+    },
+  });
+  assert.match(operationFallbackEvidenceText, /Resident Dispatch Windows Fallback Evidence: pnpm --filter @narada2\/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:text -- --operation resident_dispatch\.windows_fallback_evidence\.list --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+
   const siteReadText = formatProductSurfaceText({
     operation: 'site.read',
     worker_url: 'https://carrier.example.test',

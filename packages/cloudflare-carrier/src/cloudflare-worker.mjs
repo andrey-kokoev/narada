@@ -59,6 +59,7 @@ const CLOUDFLARE_SITE_FILE_CHANGE_PROPOSAL_SCHEMA = 'narada.sonar.cloudflare_sit
 const CLOUDFLARE_SITE_FILE_MATERIALIZATION_SCHEMA = 'narada.sonar.cloudflare_site_file_materialization.v1';
 const CLOUDFLARE_LOCAL_INGRESS_REQUEST_SCHEMA = 'narada.sonar.cloudflare_local_ingress_request.v1';
 const CLOUDFLARE_LOCAL_INGRESS_EVIDENCE_SCHEMA = 'narada.sonar.cloudflare_local_ingress_evidence.v1';
+const CLOUDFLARE_RESIDENT_DISPATCH_WINDOWS_FALLBACK_EVIDENCE_SCHEMA = 'narada.sonar.cloudflare_resident_dispatch_windows_fallback_evidence.v1';
 const CLOUDFLARE_LOCAL_INGRESS_PROVIDER_HEARTBEAT_SCHEMA = 'narada.sonar.cloudflare_local_ingress_provider_heartbeat.v1';
 const CLOUDFLARE_REPOSITORY_PUBLICATION_REQUEST_SCHEMA = 'narada.sonar.cloudflare_repository_publication_request.v1';
 const CLOUDFLARE_REPOSITORY_PUBLICATION_ADMISSION_SCHEMA = 'narada.sonar.cloudflare_repository_publication_admission.v1';
@@ -92,6 +93,7 @@ const CLOUDFLARE_PRIMARY_DISPATCH_AUTHORITY = 'cloudflare_primary_dispatcher';
 const WINDOWS_PRIMARY_DISPATCH_AUTHORITY = 'windows_primary_dispatcher';
 const WINDOWS_FALLBACK_DISPATCH_AUTHORITY = 'windows_fallback_dispatcher';
 const CLOUDFLARE_RESIDENT_DISPATCH_WINDOWS_FALLBACK_REQUEST_AUTHORITY = 'cloudflare_resident_dispatch_windows_fallback_request_queue';
+const CLOUDFLARE_RESIDENT_DISPATCH_WINDOWS_FALLBACK_EVIDENCE_STORE_AUTHORITY = 'cloudflare_resident_dispatch_windows_fallback_evidence_store';
 const WINDOWS_LOCAL_SITE_RESIDENT_LOOP_AUTHORITY = 'windows_local_site_resident_loop';
 const CLOUDFLARE_MAILBOX_STATUS_SOURCE_AUTHORITY = 'cloudflare_graph_mailbox_status_source';
 const CLOUDFLARE_MAILBOX_DRAFT_REPLY_PROPOSAL_AUTHORITY = 'cloudflare_carrier_site';
@@ -2109,6 +2111,7 @@ function summarizeCloudflareOperationWorkflowRoute({
   webhookDelayDirectiveDeliveries = [],
   residentDispatchDecisions = [],
   residentDispatchWindowsFallbackRequests = [],
+  residentDispatchWindowsFallbackEvidence = [],
   mailboxSendReviews = [],
   operationFocusReviews = [],
   tasks = [],
@@ -2120,6 +2123,7 @@ function summarizeCloudflareOperationWorkflowRoute({
   const directiveDeliveries = Array.isArray(webhookDelayDirectiveDeliveries) ? webhookDelayDirectiveDeliveries : [];
   const dispatchDecisions = Array.isArray(residentDispatchDecisions) ? residentDispatchDecisions : [];
   const fallbackRequests = Array.isArray(residentDispatchWindowsFallbackRequests) ? residentDispatchWindowsFallbackRequests : [];
+  const fallbackEvidence = Array.isArray(residentDispatchWindowsFallbackEvidence) ? residentDispatchWindowsFallbackEvidence : [];
   const operatorFocus = summarizeCloudflareOperationOperatorFocus(operationActivityTimeline, { mailboxSendReviews, operationFocusReviews });
   const reviewedOperationFocusKeys = cloudflareReviewedOperationFocusKeys(operationFocusReviews);
   const continuityDirectionStatus = operationContinuityDirectionStatus ?? lifecycleStatus?.operation_continuity_direction_status ?? null;
@@ -2132,6 +2136,13 @@ function summarizeCloudflareOperationWorkflowRoute({
     if (!request) return false;
     if (latestDispatchDecision?.dispatch_decision_id) return request.dispatch_decision_id === latestDispatchDecision.dispatch_decision_id;
     if (operationId && request.operation_id) return request.operation_id === operationId;
+    return true;
+  }) ?? null;
+  const latestFallbackEvidence = fallbackEvidence.find((entry) => {
+    if (!entry) return false;
+    if (latestFallbackRequest?.fallback_request_id) return entry.fallback_request_id === latestFallbackRequest.fallback_request_id;
+    if (latestDispatchDecision?.dispatch_decision_id) return entry.dispatch_decision_id === latestDispatchDecision.dispatch_decision_id;
+    if (operationId && entry.operation_id) return entry.operation_id === operationId;
     return true;
   }) ?? null;
   const next = (() => {
@@ -2150,12 +2161,21 @@ function summarizeCloudflareOperationWorkflowRoute({
             focus_ref: latestDispatchDecision.dispatch_decision_id ?? null,
           };
         }
+        if (!latestFallbackEvidence) {
+          return {
+            action: 'await_windows_fallback_resident_dispatch',
+            target: latestFallbackRequest.fallback_request_id ?? operationId,
+            reason: 'windows_fallback_request_pending_execution',
+            focus_kind: 'resident_dispatch_windows_fallback_request',
+            focus_ref: latestFallbackRequest.fallback_request_id ?? null,
+          };
+        }
         return {
-          action: 'await_windows_fallback_resident_dispatch',
-          target: latestFallbackRequest.fallback_request_id ?? operationId,
-          reason: 'windows_fallback_request_pending_execution',
-          focus_kind: 'resident_dispatch_windows_fallback_request',
-          focus_ref: latestFallbackRequest.fallback_request_id ?? null,
+          action: 'review_windows_fallback_resident_dispatch_evidence',
+          target: latestFallbackEvidence.fallback_evidence_id ?? latestFallbackRequest.fallback_request_id ?? operationId,
+          reason: 'windows_fallback_execution_recorded',
+          focus_kind: 'resident_dispatch_windows_fallback_evidence',
+          focus_ref: latestFallbackEvidence.fallback_evidence_id ?? null,
         };
       }
       return { action: 'start_or_select_session', target: operationId, reason: 'operation_lifecycle_missing_session' };
@@ -3944,6 +3964,8 @@ function isSiteProductOperation(operation) {
     'site_file_materialization.list',
     'resident_dispatch.windows_fallback_request.create',
     'resident_dispatch.windows_fallback_request.list',
+    'resident_dispatch.windows_fallback_evidence.put',
+    'resident_dispatch.windows_fallback_evidence.list',
     'local_ingress.request.create',
     'local_ingress.request.list',
     'local_ingress.evidence.put',
@@ -4656,6 +4678,32 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       },
     };
   }
+  if (body.operation === 'resident_dispatch.windows_fallback_evidence.put') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const result = await recordCloudflareResidentDispatchWindowsFallbackEvidence(env, requestedSiteId, params, principal);
+    return { status: result.ok ? 200 : 400, body: result };
+  }
+  if (body.operation === 'resident_dispatch.windows_fallback_evidence.list') {
+    const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
+    if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
+    const evidence = await listCloudflareResidentDispatchWindowsFallbackEvidence(env, requestedSiteId, params);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        schema: CLOUDFLARE_RESIDENT_DISPATCH_WINDOWS_FALLBACK_EVIDENCE_SCHEMA,
+        status: evidence.length > 0 ? 'selected' : 'not_observed',
+        site_id: requestedSiteId,
+        resident_dispatch_windows_fallback_evidence_authority: evidence.length > 0 ? WINDOWS_LOCAL_SITE_RESIDENT_LOOP_AUTHORITY : 'not_observed',
+        cloudflare_evidence_store_authority: evidence.length > 0 ? CLOUDFLARE_RESIDENT_DISPATCH_WINDOWS_FALLBACK_EVIDENCE_STORE_AUTHORITY : 'not_observed',
+        local_session_start_admission: evidence[0]?.local_session_start_admission ?? 'not_observed',
+        direct_cloudflare_session_start_admission: evidence[0]?.direct_cloudflare_session_start_admission ?? 'not_observed',
+        authority_partition: 'windows_resident_loop_executes_fallback_cloudflare_records_session_start_evidence',
+        evidence,
+      },
+    };
+  }
   if (body.operation === 'local_ingress.request.create') {
     const readResponse = await registry.handle({ operation: 'site.read', params: { site_id: requestedSiteId, limit: 1 }, principal });
     if (!readResponse.ok) return { status: readResponse.code === 'site_authority_denied' ? 403 : 400, body: readResponse };
@@ -5183,6 +5231,10 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       params.resident_dispatch_windows_fallback_request_limit ?? params.limit,
       { operation_id: params.operation_id ?? null },
     );
+    const residentDispatchWindowsFallbackEvidence = await listCloudflareResidentDispatchWindowsFallbackEvidence(env, siteId, {
+      operation_id: params.operation_id ?? null,
+      resident_dispatch_windows_fallback_evidence_limit: params.resident_dispatch_windows_fallback_evidence_limit ?? params.limit,
+    });
     const carrierEvidence = await readCarrierEvidenceForSiteSessions(env, sessions, principal, params);
     const carrierEvidenceReadStatus = summarizeCloudflareCarrierEvidenceReadStatus({ sessions, carrierEvidence, params });
     const siteAuthority = cloudflareSiteAuthorityReadModel(env, siteId);
@@ -5242,6 +5294,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       repositoryPublicationProviderHeartbeats,
       residentDispatchDecisions,
       residentDispatchWindowsFallbackRequests,
+      residentDispatchWindowsFallbackEvidence,
     });
     const localCloudContinuityBridge = summarizeLocalCloudContinuityBridge(siteId, continuityPackets, siteContinuity, siteContinuityStatus);
     const operationContinuityDirectionStatus = summarizeCloudflareOperationContinuityDirectionStatus({
@@ -5328,6 +5381,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       webhookDelayDirectiveDeliveries,
       residentDispatchDecisions,
       residentDispatchWindowsFallbackRequests,
+      residentDispatchWindowsFallbackEvidence,
       mailboxSendReviews,
       operationFocusReviews,
       tasks,
@@ -5370,6 +5424,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         task_lifecycle_tasks: taskLifecycleTasks,
         resident_dispatch_decisions: residentDispatchDecisions,
         resident_dispatch_windows_fallback_requests: residentDispatchWindowsFallbackRequests,
+        resident_dispatch_windows_fallback_evidence: residentDispatchWindowsFallbackEvidence,
         carrier_evidence: carrierEvidence,
         carrier_evidence_read_status: carrierEvidenceReadStatus,
         site_authority: siteAuthority,
@@ -5427,6 +5482,9 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           resident_dispatch_windows_fallback_request_authority: residentDispatchWindowsFallbackRequests.length > 0 ? CLOUDFLARE_RESIDENT_DISPATCH_WINDOWS_FALLBACK_REQUEST_AUTHORITY : 'not_observed',
           resident_dispatch_windows_fallback_executor_authority: residentDispatchWindowsFallbackRequests.length > 0 ? WINDOWS_LOCAL_SITE_RESIDENT_LOOP_AUTHORITY : 'not_observed',
           resident_dispatch_windows_fallback_execution_admission: residentDispatchWindowsFallbackRequests.length > 0 ? 'pending_windows_admission' : 'not_observed',
+          resident_dispatch_windows_fallback_evidence_count: residentDispatchWindowsFallbackEvidence.length,
+          resident_dispatch_windows_fallback_evidence_store_authority: residentDispatchWindowsFallbackEvidence.length > 0 ? CLOUDFLARE_RESIDENT_DISPATCH_WINDOWS_FALLBACK_EVIDENCE_STORE_AUTHORITY : 'not_observed',
+          resident_dispatch_windows_fallback_session_start_admission: residentDispatchWindowsFallbackEvidence[0]?.local_session_start_admission ?? 'not_observed',
           mailbox_status_shadow_read_count: mailboxStatusShadowReads.length,
           mailbox_status_source_read_count: mailboxStatusSourceReads.length,
           mailbox_status_authority: mailboxStatusSourceReads.length > 0 ? CLOUDFLARE_MAILBOX_STATUS_SOURCE_AUTHORITY : mailboxStatusShadowReads.length > 0 ? 'windows_mailbox_status_source' : 'not_observed',
@@ -5585,6 +5643,16 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
   const taskLifecycleWriteAdmissions = await listCloudflareTaskLifecycleWriteAdmissions(env, siteId, params.task_lifecycle_write_admission_limit ?? params.limit);
   const taskLifecycleTasks = await listCloudflareTaskLifecycleTasks(env, siteId, params.task_lifecycle_task_limit ?? params.limit, params);
   const residentDispatchDecisions = await listCloudflareResidentDispatchDecisions(env, siteId, params.resident_dispatch_limit ?? params.limit);
+  const residentDispatchWindowsFallbackRequests = await listCloudflareResidentDispatchWindowsFallbackRequests(
+    env,
+    siteId,
+    params.resident_dispatch_windows_fallback_request_limit ?? params.limit,
+    { operation_id: params.operation_id ?? null },
+  );
+  const residentDispatchWindowsFallbackEvidence = await listCloudflareResidentDispatchWindowsFallbackEvidence(env, siteId, {
+    operation_id: params.operation_id ?? null,
+    resident_dispatch_windows_fallback_evidence_limit: params.resident_dispatch_windows_fallback_evidence_limit ?? params.limit,
+  });
   const carrierEvidence = await readCarrierEvidenceForSiteSessions(env, response.sessions ?? [], principal, params);
   const carrierEvidenceReadStatus = summarizeCloudflareCarrierEvidenceReadStatus({ sessions: response.sessions ?? [], carrierEvidence, params });
   const siteAuthority = cloudflareSiteAuthorityReadModel(env, siteId);
@@ -5717,6 +5785,8 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     webhookDelayDirectiveRecords,
     webhookDelayDirectiveDeliveries,
     residentDispatchDecisions,
+    residentDispatchWindowsFallbackRequests,
+    residentDispatchWindowsFallbackEvidence,
     mailboxSendReviews,
     operationFocusReviews,
     tasks,
@@ -6168,6 +6238,223 @@ async function listCloudflareResidentDispatchWindowsFallbackRequests(env = {}, s
     recorded_by_principal_id: row.recorded_by_principal_id,
     recorded_at: row.recorded_at,
   }));
+}
+
+function createResidentDispatchWindowsFallbackEvidence(siteId, params = {}) {
+  const source = params.source_payload ?? params.payload ?? params.evidence ?? {};
+  const fallbackRequestId = String(source.fallback_request_id ?? params.fallback_request_id ?? '');
+  const operationId = String(source.operation_id ?? params.operation_id ?? '');
+  const dispatchDecisionId = String(source.dispatch_decision_id ?? params.dispatch_decision_id ?? '');
+  const localExecutionId = String(source.local_execution_id ?? params.local_execution_id ?? '');
+  const windowsAdmissionAction = String(source.windows_admission_action ?? params.windows_admission_action ?? 'admit');
+  const localExecutionStatus = String(source.local_execution_status ?? params.local_execution_status ?? 'completed');
+  const localSessionStartAdmission = String(source.local_session_start_admission ?? params.local_session_start_admission ?? 'admitted_by_windows_resident_loop');
+  const directCloudflareSessionStartAdmission = String(source.direct_cloudflare_session_start_admission ?? params.direct_cloudflare_session_start_admission ?? 'not_admitted');
+  const localResidentSessionRef = String(source.local_resident_session_ref ?? params.local_resident_session_ref ?? '');
+  if (!fallbackRequestId) return { ok: false, code: 'resident_dispatch_windows_fallback_evidence_request_id_required' };
+  if (!operationId) return { ok: false, code: 'resident_dispatch_windows_fallback_evidence_operation_id_required' };
+  if (!dispatchDecisionId) return { ok: false, code: 'resident_dispatch_windows_fallback_evidence_dispatch_decision_id_required' };
+  if (!localExecutionId) return { ok: false, code: 'resident_dispatch_windows_fallback_evidence_execution_id_required' };
+  if (!localResidentSessionRef) return { ok: false, code: 'resident_dispatch_windows_fallback_evidence_session_ref_required' };
+  if (windowsAdmissionAction !== 'admit') return { ok: false, code: 'resident_dispatch_windows_fallback_evidence_windows_admission_action_invalid', windows_admission_action: windowsAdmissionAction };
+  if (localExecutionStatus !== 'completed') return { ok: false, code: 'resident_dispatch_windows_fallback_evidence_execution_status_invalid', local_execution_status: localExecutionStatus };
+  if (localSessionStartAdmission !== 'admitted_by_windows_resident_loop') return { ok: false, code: 'resident_dispatch_windows_fallback_evidence_session_start_admission_invalid', local_session_start_admission: localSessionStartAdmission };
+  if (directCloudflareSessionStartAdmission !== 'not_admitted') return { ok: false, code: 'resident_dispatch_windows_fallback_evidence_direct_cloudflare_session_start_admission_invalid', direct_cloudflare_session_start_admission: directCloudflareSessionStartAdmission };
+  return {
+    ok: true,
+    evidence: {
+      schema: 'narada.sonar.cloudflare_resident_dispatch_windows_fallback_evidence_record.v1',
+      site_id: siteId,
+      generated_at: String(source.generated_at ?? params.generated_at ?? new Date().toISOString()),
+      fallback_request_id: fallbackRequestId,
+      operation_id: operationId,
+      dispatch_decision_id: dispatchDecisionId,
+      local_execution_id: localExecutionId,
+      windows_admission_action: windowsAdmissionAction,
+      windows_admission_reason: String(source.windows_admission_reason ?? params.windows_admission_reason ?? 'governed_windows_resident_fallback_request_admitted'),
+      local_execution_status: localExecutionStatus,
+      local_executor_authority: String(source.local_executor_authority ?? params.local_executor_authority ?? WINDOWS_LOCAL_SITE_RESIDENT_LOOP_AUTHORITY),
+      local_session_start_admission: localSessionStartAdmission,
+      local_resident_session_ref: localResidentSessionRef,
+      rollback_evidence_ref: String(source.rollback_evidence_ref ?? params.rollback_evidence_ref ?? ''),
+      direct_cloudflare_session_start_admission: directCloudflareSessionStartAdmission,
+      evidence_posture: 'windows_resident_fallback_executed_cloudflare_recorded_session_start_evidence',
+    },
+  };
+}
+
+async function recordCloudflareResidentDispatchWindowsFallbackEvidence(env = {}, siteId, params = {}, principal = null) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function') return { ok: false, code: 'missing_site_registry_binding' };
+  if (!siteId || siteId === 'unknown-site') return { ok: false, code: 'missing_site_id' };
+  const payload = createResidentDispatchWindowsFallbackEvidence(siteId, params);
+  if (!payload.ok) return payload;
+  const evidence = payload.evidence;
+  const record = {
+    fallback_evidence_id: params.fallback_evidence_id ?? `resident_dispatch_windows_fallback_evidence_${safeIdToken(siteId)}_${safeIdToken(evidence.local_execution_id)}`,
+    site_id: siteId,
+    generated_at: evidence.generated_at,
+    fallback_request_id: evidence.fallback_request_id,
+    operation_id: evidence.operation_id,
+    dispatch_decision_id: evidence.dispatch_decision_id,
+    local_execution_id: evidence.local_execution_id,
+    windows_admission_action: evidence.windows_admission_action,
+    windows_admission_reason: evidence.windows_admission_reason,
+    local_execution_status: evidence.local_execution_status,
+    local_executor_authority: evidence.local_executor_authority,
+    local_session_start_admission: evidence.local_session_start_admission,
+    local_resident_session_ref: evidence.local_resident_session_ref,
+    rollback_evidence_ref: evidence.rollback_evidence_ref,
+    direct_cloudflare_session_start_admission: evidence.direct_cloudflare_session_start_admission,
+    evidence_posture: evidence.evidence_posture,
+    recorded_by_principal_id: principal?.principal_id ?? 'unknown-principal',
+    recorded_at: new Date().toISOString(),
+  };
+  await ensureCloudflareResidentDispatchWindowsFallbackEvidenceSchema(db);
+  await db.prepare(`
+    INSERT INTO cloudflare_resident_dispatch_windows_fallback_evidence (
+      fallback_evidence_id,
+      site_id,
+      generated_at,
+      fallback_request_id,
+      operation_id,
+      dispatch_decision_id,
+      local_execution_id,
+      windows_admission_action,
+      windows_admission_reason,
+      local_execution_status,
+      local_executor_authority,
+      local_session_start_admission,
+      local_resident_session_ref,
+      rollback_evidence_ref,
+      direct_cloudflare_session_start_admission,
+      evidence_posture,
+      evidence_json,
+      recorded_by_principal_id,
+      recorded_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(fallback_evidence_id) DO UPDATE SET
+      generated_at = excluded.generated_at,
+      fallback_request_id = excluded.fallback_request_id,
+      operation_id = excluded.operation_id,
+      dispatch_decision_id = excluded.dispatch_decision_id,
+      local_execution_id = excluded.local_execution_id,
+      windows_admission_action = excluded.windows_admission_action,
+      windows_admission_reason = excluded.windows_admission_reason,
+      local_execution_status = excluded.local_execution_status,
+      local_executor_authority = excluded.local_executor_authority,
+      local_session_start_admission = excluded.local_session_start_admission,
+      local_resident_session_ref = excluded.local_resident_session_ref,
+      rollback_evidence_ref = excluded.rollback_evidence_ref,
+      direct_cloudflare_session_start_admission = excluded.direct_cloudflare_session_start_admission,
+      evidence_posture = excluded.evidence_posture,
+      evidence_json = excluded.evidence_json,
+      recorded_by_principal_id = excluded.recorded_by_principal_id,
+      recorded_at = excluded.recorded_at
+  `).bind(
+    record.fallback_evidence_id,
+    record.site_id,
+    record.generated_at,
+    record.fallback_request_id,
+    record.operation_id,
+    record.dispatch_decision_id,
+    record.local_execution_id,
+    record.windows_admission_action,
+    record.windows_admission_reason,
+    record.local_execution_status,
+    record.local_executor_authority,
+    record.local_session_start_admission,
+    record.local_resident_session_ref,
+    record.rollback_evidence_ref,
+    record.direct_cloudflare_session_start_admission,
+    record.evidence_posture,
+    JSON.stringify({ ...record, evidence }),
+    record.recorded_by_principal_id,
+    record.recorded_at,
+  ).run();
+  return {
+    ok: true,
+    schema: CLOUDFLARE_RESIDENT_DISPATCH_WINDOWS_FALLBACK_EVIDENCE_SCHEMA,
+    status: 'recorded',
+    site_id: siteId,
+    resident_dispatch_windows_fallback_evidence_authority: record.local_executor_authority,
+    cloudflare_evidence_store_authority: CLOUDFLARE_RESIDENT_DISPATCH_WINDOWS_FALLBACK_EVIDENCE_STORE_AUTHORITY,
+    local_session_start_admission: record.local_session_start_admission,
+    direct_cloudflare_session_start_admission: record.direct_cloudflare_session_start_admission,
+    authority_partition: 'windows_resident_loop_executes_fallback_cloudflare_records_session_start_evidence',
+    evidence,
+    record,
+  };
+}
+
+async function ensureCloudflareResidentDispatchWindowsFallbackEvidenceSchema(db) {
+  await db.prepare(`
+    CREATE TABLE IF NOT EXISTS cloudflare_resident_dispatch_windows_fallback_evidence (
+      fallback_evidence_id TEXT PRIMARY KEY,
+      site_id TEXT NOT NULL,
+      generated_at TEXT NOT NULL,
+      fallback_request_id TEXT NOT NULL,
+      operation_id TEXT NOT NULL,
+      dispatch_decision_id TEXT NOT NULL,
+      local_execution_id TEXT NOT NULL,
+      windows_admission_action TEXT NOT NULL,
+      windows_admission_reason TEXT NOT NULL,
+      local_execution_status TEXT NOT NULL,
+      local_executor_authority TEXT NOT NULL,
+      local_session_start_admission TEXT NOT NULL,
+      local_resident_session_ref TEXT NOT NULL,
+      rollback_evidence_ref TEXT,
+      direct_cloudflare_session_start_admission TEXT NOT NULL,
+      evidence_posture TEXT NOT NULL,
+      evidence_json TEXT NOT NULL,
+      recorded_by_principal_id TEXT NOT NULL,
+      recorded_at TEXT NOT NULL
+    )
+  `).run();
+  await db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_cloudflare_resident_dispatch_windows_fallback_evidence_site_recorded
+    ON cloudflare_resident_dispatch_windows_fallback_evidence(site_id, recorded_at)
+  `).run();
+}
+
+async function listCloudflareResidentDispatchWindowsFallbackEvidence(env = {}, siteId, params = {}) {
+  const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
+  if (!db || typeof db.prepare !== 'function' || !siteId) return [];
+  await ensureCloudflareResidentDispatchWindowsFallbackEvidenceSchema(db);
+  const boundedLimit = clampInteger(params.resident_dispatch_windows_fallback_evidence_limit ?? params.limit, 0, 100, 25);
+  const fallbackRequestId = normalizeNullableWorkerString(params.fallback_request_id ?? null);
+  const operationId = normalizeNullableWorkerString(params.operation_id ?? null);
+  const dispatchDecisionId = normalizeNullableWorkerString(params.dispatch_decision_id ?? null);
+  const rows = await db.prepare(`
+    SELECT * FROM cloudflare_resident_dispatch_windows_fallback_evidence
+    WHERE site_id = ?
+    ORDER BY recorded_at DESC, generated_at DESC
+    LIMIT ?
+  `).bind(siteId, boundedLimit).all();
+  return (rows.results ?? [])
+    .filter((row) => (!fallbackRequestId || row.fallback_request_id === fallbackRequestId) && (!operationId || row.operation_id === operationId) && (!dispatchDecisionId || row.dispatch_decision_id === dispatchDecisionId))
+    .map((row) => ({
+      fallback_evidence_id: row.fallback_evidence_id,
+      site_id: row.site_id,
+      schema: CLOUDFLARE_RESIDENT_DISPATCH_WINDOWS_FALLBACK_EVIDENCE_SCHEMA,
+      generated_at: row.generated_at,
+      fallback_request_id: row.fallback_request_id,
+      operation_id: row.operation_id,
+      dispatch_decision_id: row.dispatch_decision_id,
+      local_execution_id: row.local_execution_id,
+      windows_admission_action: row.windows_admission_action,
+      windows_admission_reason: row.windows_admission_reason,
+      local_execution_status: row.local_execution_status,
+      local_executor_authority: row.local_executor_authority,
+      local_session_start_admission: row.local_session_start_admission,
+      local_resident_session_ref: row.local_resident_session_ref,
+      rollback_evidence_ref: row.rollback_evidence_ref,
+      direct_cloudflare_session_start_admission: row.direct_cloudflare_session_start_admission,
+      evidence_posture: row.evidence_posture,
+      record: parseJsonObject(row.evidence_json),
+      recorded_by_principal_id: row.recorded_by_principal_id,
+      recorded_at: row.recorded_at,
+    }));
 }
 
 function createResidentDispatchWindowsFallbackRequest(siteId, params = {}) {

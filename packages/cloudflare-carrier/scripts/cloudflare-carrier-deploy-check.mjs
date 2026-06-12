@@ -9,6 +9,7 @@ const workerSource = readFileSync(new URL('../src/cloudflare-worker.mjs', import
 const migrationSources = [
   '../migrations/0001_narada_tasks.sql',
   '../migrations/0002_resident_dispatch_windows_fallback_requests.sql',
+  '../migrations/0003_resident_dispatch_windows_fallback_evidence.sql',
   '../../cloudflare-site-registry/migrations/0001_cloudflare_site_registry.sql',
   '../../cloudflare-site-registry/migrations/0002_cloudflare_operator_sessions.sql',
   '../../cloudflare-site-registry/migrations/0003_cloudflare_product_stores.sql',

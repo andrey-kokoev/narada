@@ -6910,6 +6910,53 @@ test('worker records resident dispatch Windows fallback request and routes the o
   const readAfterBody = await readAfter.json();
   assert.equal(readAfterBody.resident_dispatch_windows_fallback_requests.length, 1);
   assert.equal(readAfterBody.operation_product_surface.resident_dispatch_windows_fallback_request_count, 1);
+
+  const fallbackEvidencePut = await worker.fetch(jsonRequest({
+    operation: 'resident_dispatch.windows_fallback_evidence.put',
+    request_id: 'request_resident_dispatch_windows_fallback_evidence_put',
+    params: {
+      site_id: 'site_fixture',
+      source_payload: {
+        generated_at: '2026-06-12T16:01:00.000Z',
+        fallback_request_id: createdBody.fallback_request.fallback_request_id,
+        operation_id: 'operation_dispatch',
+        dispatch_decision_id: 'resident_dispatch_fixture_failed',
+        local_execution_id: 'windows_execution_dispatch_1',
+        local_resident_session_ref: 'windows-session://operation_dispatch/1',
+      },
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(fallbackEvidencePut.status, 200);
+  const fallbackEvidencePutBody = await fallbackEvidencePut.json();
+  assert.equal(fallbackEvidencePutBody.status, 'recorded');
+  assert.equal(fallbackEvidencePutBody.local_session_start_admission, 'admitted_by_windows_resident_loop');
+
+  const fallbackEvidenceList = await worker.fetch(jsonRequest({
+    operation: 'resident_dispatch.windows_fallback_evidence.list',
+    request_id: 'request_resident_dispatch_windows_fallback_evidence_list',
+    params: { site_id: 'site_fixture', operation_id: 'operation_dispatch', limit: 10 },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(fallbackEvidenceList.status, 200);
+  const fallbackEvidenceListBody = await fallbackEvidenceList.json();
+  assert.equal(fallbackEvidenceListBody.evidence.length, 1);
+  assert.equal(fallbackEvidenceListBody.evidence[0].dispatch_decision_id, 'resident_dispatch_fixture_failed');
+
+  const readAfterEvidence = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_operation_read_after_fallback_evidence',
+    params: {
+      site_id: 'site_fixture',
+      operation_id: 'operation_dispatch',
+      resident_dispatch_limit: 10,
+      resident_dispatch_windows_fallback_request_limit: 10,
+      resident_dispatch_windows_fallback_evidence_limit: 10,
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(readAfterEvidence.status, 200);
+  const readAfterEvidenceBody = await readAfterEvidence.json();
+  assert.equal(readAfterEvidenceBody.resident_dispatch_windows_fallback_evidence.length, 1);
+  assert.equal(readAfterEvidenceBody.operation_product_surface.resident_dispatch_windows_fallback_evidence_count, 1);
+  assert.equal(readAfterEvidenceBody.operation_product_surface.resident_dispatch_windows_fallback_session_start_admission, 'admitted_by_windows_resident_loop');
 });
 
 test('worker site.membership.put admits owner and exposes membership through site.read', async () => {
@@ -8472,6 +8519,7 @@ function fakeD1SiteRegistryDatabase(initial = {}) {
     taskLifecycleTasks: clone(initial.taskLifecycleTasks ?? []),
     residentDispatchDecisions: clone(initial.residentDispatchDecisions ?? []),
     residentDispatchWindowsFallbackRequests: clone(initial.residentDispatchWindowsFallbackRequests ?? []),
+    residentDispatchWindowsFallbackEvidence: clone(initial.residentDispatchWindowsFallbackEvidence ?? []),
     carrierSessionEvents: clone(initial.carrierSessionEvents ?? []),
   };
   return {
@@ -8731,6 +8779,12 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const row = { fallback_request_id, site_id, generated_at, operation_id, dispatch_decision_id, carrier_session_id, requested_action_ref, requested_action_summary, governed_request_contract_ref, evidence_return_contract_ref, rollback_plan_ref, authority_locus, windows_fallback_ref, local_executor_authority, local_execution_admission, direct_cloudflare_session_start_admission, request_posture, request_json, recorded_by_principal_id, recorded_at };
         if (existing) Object.assign(existing, row);
         else state.residentDispatchWindowsFallbackRequests.push(row);
+      } else if (normalized.startsWith('insert into cloudflare_resident_dispatch_windows_fallback_evidence')) {
+        const [fallback_evidence_id, site_id, generated_at, fallback_request_id, operation_id, dispatch_decision_id, local_execution_id, windows_admission_action, windows_admission_reason, local_execution_status, local_executor_authority, local_session_start_admission, local_resident_session_ref, rollback_evidence_ref, direct_cloudflare_session_start_admission, evidence_posture, evidence_json, recorded_by_principal_id, recorded_at] = bindings;
+        const existing = state.residentDispatchWindowsFallbackEvidence.find((entry) => entry.fallback_evidence_id === fallback_evidence_id);
+        const row = { fallback_evidence_id, site_id, generated_at, fallback_request_id, operation_id, dispatch_decision_id, local_execution_id, windows_admission_action, windows_admission_reason, local_execution_status, local_executor_authority, local_session_start_admission, local_resident_session_ref, rollback_evidence_ref, direct_cloudflare_session_start_admission, evidence_posture, evidence_json, recorded_by_principal_id, recorded_at };
+        if (existing) Object.assign(existing, row);
+        else state.residentDispatchWindowsFallbackEvidence.push(row);
       } else if (normalized.startsWith('insert into cloudflare_carrier_session_events')) {
         const [carrier_session_id, sequence, event_id, site_id, operation_id, agent_id, event_kind, occurred_at, event_json, indexed_at] = bindings;
         const existing = state.carrierSessionEvents.find((entry) => entry.carrier_session_id === carrier_session_id && Number(entry.sequence) === Number(sequence));
@@ -9189,6 +9243,16 @@ function fakeD1SiteRegistryStatement(state, sql) {
         const [siteId, limit] = bindings;
         return {
           results: state.residentDispatchWindowsFallbackRequests
+            .filter((entry) => entry.site_id === siteId)
+            .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
+            .slice(0, Number(limit))
+            .map((entry) => clone(entry)),
+        };
+      }
+      if (normalized.includes('from cloudflare_resident_dispatch_windows_fallback_evidence')) {
+        const [siteId, limit] = bindings;
+        return {
+          results: state.residentDispatchWindowsFallbackEvidence
             .filter((entry) => entry.site_id === siteId)
             .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at) || right.generated_at.localeCompare(left.generated_at))
             .slice(0, Number(limit))

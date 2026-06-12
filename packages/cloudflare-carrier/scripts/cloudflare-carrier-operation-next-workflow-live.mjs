@@ -17,6 +17,7 @@ const mailboxDraftReplyProposalReadScript = resolve(scriptDir, 'cloudflare-carri
 const repositoryPublicationRequestReviewScript = resolve(scriptDir, 'cloudflare-carrier-repository-publication-request-review.mjs');
 const siteFileChangeProposalReviewScript = resolve(scriptDir, 'cloudflare-carrier-site-file-change-proposal-review.mjs');
 const residentDispatchWindowsFallbackRequestScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-windows-fallback-request.mjs');
+const residentDispatchWindowsFallbackEvidenceScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-windows-fallback-evidence.mjs');
 const focusWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-focus-workflow-live.mjs');
 const sessionWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-session-workflow-live.mjs');
 const continuationWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-continuation-workflow-live.mjs');
@@ -29,6 +30,7 @@ const ROUTE_TO_WORKFLOW = new Map([
   ['review_site_file_change_proposal', { name: 'site_file_change_proposal', script: siteFileChangeProposalReviewScript, flag: null }],
   ['request_windows_fallback_resident_dispatch', { name: 'resident_dispatch_windows_fallback_request', script: residentDispatchWindowsFallbackRequestScript, flag: null }],
   ['await_windows_fallback_resident_dispatch', { name: 'resident_dispatch_windows_fallback_request', script: residentDispatchWindowsFallbackRequestScript, flag: null, mode: 'list' }],
+  ['review_windows_fallback_resident_dispatch_evidence', { name: 'resident_dispatch_windows_fallback_evidence', script: residentDispatchWindowsFallbackEvidenceScript, flag: null, mode: 'list' }],
   ['start_or_select_session', { name: 'session', script: sessionWorkflowScript, flag: '--execute-operation-session' }],
   ['resume_operation_continuation', { name: 'continuation', script: continuationWorkflowScript, flag: '--execute-operation-continuation-resume' }],
   ['refresh_site_continuity_loop', { name: 'continuity', script: continuityWorkflowScript, flag: '--execute-operation-continuity' }],
