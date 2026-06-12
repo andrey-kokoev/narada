@@ -5340,7 +5340,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
     if (!siteRead.ok) {
       return { status: 200, body: { ...response, site_id: siteId } };
     }
-    const projection = await buildCloudflareSiteProductProjection(env, principal, siteRead, params);
+    const siteProjection = await buildCloudflareSiteProductProjection(env, principal, siteRead, params);
     const focusedOperation = selectCloudflareFocusedOperation(response.operations ?? [], params, response);
     if (focusedOperation?.operation_id) {
       const focusedOperationRead = await registry.handle({
@@ -5358,6 +5358,28 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           site_id: siteId,
           operation_id: focusedOperation.operation_id,
         });
+        let selectedProjection = focusedProjection;
+        const postureTarget = focusedProjection.operation_posture_route?.next_action === 'focus_next_operation'
+          ? String(focusedProjection.operation_posture_route?.target || '').trim()
+          : '';
+        if (postureTarget && postureTarget !== focusedOperation.operation_id) {
+          const targetOperationRead = await registry.handle({
+            operation: 'operation.read',
+            params: {
+              site_id: siteId,
+              operation_id: postureTarget,
+              limit: params.operation_limit ?? params.limit,
+            },
+            principal,
+          });
+          if (targetOperationRead?.ok) {
+            selectedProjection = await buildCloudflareOperationProductProjection(env, registry, principal, targetOperationRead, {
+              ...params,
+              site_id: siteId,
+              operation_id: postureTarget,
+            });
+          }
+        }
         return {
           status: 200,
           body: {
@@ -5365,7 +5387,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
             site_id: siteId,
             operation_posture_overview: focusedProjection.operation_posture_overview,
             operation_posture_route: focusedProjection.operation_posture_route,
-            focused_operation_lifecycle: focusedProjection.focused_operation_lifecycle,
+            focused_operation_lifecycle: selectedProjection.focused_operation_lifecycle,
           },
         };
       }
@@ -5375,9 +5397,9 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       body: {
         ...response,
         site_id: siteId,
-        operation_posture_overview: projection.operation_posture_overview,
-        operation_posture_route: projection.operation_posture_route,
-        focused_operation_lifecycle: projection.focused_operation_lifecycle,
+        operation_posture_overview: siteProjection.operation_posture_overview,
+        operation_posture_route: siteProjection.operation_posture_route,
+        focused_operation_lifecycle: siteProjection.focused_operation_lifecycle,
       },
     };
   }
