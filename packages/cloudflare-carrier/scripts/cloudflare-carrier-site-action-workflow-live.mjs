@@ -11,6 +11,7 @@ const execFile = promisify(execFileCallback);
 const scriptPath = fileURLToPath(import.meta.url);
 const scriptDir = dirname(scriptPath);
 const packageRoot = resolve(scriptDir, '..');
+const CHILD_STDIO_MAX_BUFFER = 64 * 1024 * 1024;
 const productReadScript = resolve(scriptDir, 'cloudflare-carrier-product-read.mjs');
 const operationNextWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-next-workflow-live.mjs');
 const siteContinuityPublishScript = resolve(scriptDir, 'cloudflare-carrier-site-continuity-publish.mjs');
@@ -117,7 +118,12 @@ export async function runSiteActionWorkflowLive(
 }
 
 async function defaultRunNodeScript(args, options) {
-  const result = await execFile(process.execPath, args, { ...options, timeout: 120000, windowsHide: true });
+  const result = await execFile(process.execPath, args, {
+    ...options,
+    timeout: 120000,
+    maxBuffer: CHILD_STDIO_MAX_BUFFER,
+    windowsHide: true,
+  });
   return result.stdout;
 }
 
