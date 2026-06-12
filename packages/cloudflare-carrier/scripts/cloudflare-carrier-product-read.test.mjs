@@ -331,6 +331,32 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(operationListText, /Operation Route: domain=operation_posture state=operation_posture_attention action=focus_next_operation target=operation_live status=needs_attention reason=operation_needs_review/);
   assert.match(operationListText, /Focus Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file> --execute-operation-focus/);
 
+  const operationListEvidenceText = formatProductSurfaceText({
+    operation: 'operation.list',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.list',
+      site_id: 'site_alpha',
+      operation_count: 1,
+      active_operation_id: 'operation_live',
+      next_operation_id: 'operation_live',
+      next_operation_status: 'active',
+      operation_status_counts: { active: 1 },
+      next_status: 'ready',
+      next_action: 'inspect_operation_evidence',
+      next_reason: 'evidence_review',
+      route_domain: 'operation_posture',
+      route_command_state: 'operation_posture_ready',
+      route_command_action: 'monitor_operations',
+      route_next_action: 'monitor_operations',
+      route_target: 'operation_live',
+      route_status: 'ready',
+      route_reason: 'evidence_review',
+    },
+  });
+  assert.match(operationListEvidenceText, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+
   const continuationListText = formatProductSurfaceText({
     operation: 'operation.list',
     worker_url: 'https://carrier.example.test',
@@ -408,6 +434,28 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(operationReadText, /Recovery Next: action=monitor_recovery_posture gaps=none/);
   assert.match(operationReadText, /Recovery Boundaries: site_registry, carrier_evidence_index, site_file_materialization_store/);
   assert.match(operationReadText, /Evidence Counts: sessions=1 tasks=3/);
+
+  const operationReadEvidenceText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_live',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'inhabited',
+      health: 'ready',
+      next_action: 'inspect_operation_evidence',
+      session_count: 1,
+      task_count: 0,
+      posture_next_status: 'needs_attention',
+      posture_next_action: 'focus_next_operation',
+      posture_reason: 'use_focused_operation',
+    },
+  });
+  assert.match(operationReadEvidenceText, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
 });
 
 test('formatProductSurfaceText renders refused product reads without auth material', () => {

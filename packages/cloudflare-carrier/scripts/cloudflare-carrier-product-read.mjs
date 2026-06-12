@@ -268,6 +268,9 @@ export function formatProductSurfaceText(result) {
     if (summary.next_operation_id) lines.push(`Next Operation Status: ${summary.next_operation_status ?? 'unknown'}`);
     if (summary.next_operation_id) {
       lines.push(`Focused Read: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.next_operation_id} --operator-session-file <operator-session-file>`);
+      if (summary.next_action === 'inspect_operation_evidence') {
+        lines.push(`Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:operation:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.next_operation_id} --operator-session-file <operator-session-file>`);
+      }
     }
     if (summary.continuation_mode) {
       lines.push(`Continuation: needed=${summary.needs_continuation_count ?? 0} next=${summary.next_continuation_operation_id ?? 'none'} action=${summary.continuation_next_action ?? 'monitor_operations'}`);
@@ -321,6 +324,9 @@ export function formatProductSurfaceText(result) {
       }
     }
     lines.push(`Evidence Counts: sessions=${summary.session_count ?? 0} tasks=${summary.task_count ?? 0}`);
+    if (summary.posture_next_action === 'focus_next_operation' || summary.next_action === 'inspect_operation_evidence') {
+      lines.push(`Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:operation:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
+    }
     return `${lines.join('\n')}\n`;
   }
   return `${lines.join('\n')}\n`;

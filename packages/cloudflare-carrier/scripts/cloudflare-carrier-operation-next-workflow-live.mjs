@@ -12,6 +12,7 @@ const scriptPath = fileURLToPath(import.meta.url);
 const scriptDir = dirname(scriptPath);
 const packageRoot = resolve(scriptDir, '..');
 const productReadScript = resolve(scriptDir, 'cloudflare-carrier-product-read.mjs');
+const evidenceReadScript = resolve(scriptDir, 'cloudflare-carrier-operation-evidence-read.mjs');
 const focusWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-focus-workflow-live.mjs');
 const sessionWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-session-workflow-live.mjs');
 const continuationWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-continuation-workflow-live.mjs');
@@ -81,6 +82,30 @@ export async function runOperationNextWorkflowLive(
     'operation_read_before_next_workflow',
   );
   assert.equal(readBefore.schema, 'narada.cloudflare_carrier.product_read.v1');
+  if (listBefore.summary.next_action === 'inspect_operation_evidence') {
+    const workflowResult = parseJsonStdout(
+      await runNodeScript(buildEvidenceArgs(config, selectedOperationId), { cwd: packageRoot }),
+      'operation_next_workflow_evidence',
+    );
+    const readAfter = parseJsonStdout(
+      await runNodeScript(buildOperationReadArgs(config, selectedOperationId), { cwd: packageRoot }),
+      'operation_read_after_next_workflow',
+    );
+    assert.equal(readAfter.schema, 'narada.cloudflare_carrier.product_read.v1');
+    return {
+      schema: 'narada.cloudflare_carrier.operation_next_workflow_live.v1',
+      status: 'ok',
+      worker_url: config.workerUrl,
+      site_id: config.siteId,
+      selected_operation_id: selectedOperationId,
+      list_before_next: listBefore.summary,
+      read_before_next: readBefore.summary,
+      delegated_workflow: 'evidence',
+      delegated_route_action: listBefore.summary.next_action,
+      delegated_result: workflowResult,
+      read_after_next: readAfter.summary,
+    };
+  }
   const routeAction = readBefore.summary.workflow_next_action ?? null;
   const workflow = ROUTE_TO_WORKFLOW.get(routeAction);
   if (!workflow) {
@@ -148,6 +173,17 @@ function buildWorkflowArgs(config, workflow, operationId) {
     '--site', config.siteId,
     '--operation-id', operationId,
     workflow.flag,
+  ];
+  appendAuthOptions(args, config);
+  return args;
+}
+
+function buildEvidenceArgs(config, operationId) {
+  const args = [
+    evidenceReadScript,
+    '--url', config.workerUrl,
+    '--site', config.siteId,
+    '--operation-id', operationId,
   ];
   appendAuthOptions(args, config);
   return args;

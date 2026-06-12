@@ -1,0 +1,161 @@
+#!/usr/bin/env node
+import { fileURLToPath } from 'node:url';
+
+import { formatProductSurfaceText, parseProductReadArgs, readProductSurface } from './cloudflare-carrier-product-read.mjs';
+
+export function parseOperationEvidenceReadArgs(argv = [], env = process.env) {
+  const parsed = parseProductReadArgs(['--operation', 'operation.read', ...argv], env);
+  const args = [...argv];
+  return {
+    ...parsed,
+    eventLimit: parseOptionalInteger(option(args, '--event-limit') ?? env.CLOUDFLARE_CARRIER_OPERATION_EVIDENCE_EVENT_LIMIT ?? null, 'event-limit') ?? 5,
+    activityLimit: parseOptionalInteger(option(args, '--activity-limit') ?? env.CLOUDFLARE_CARRIER_OPERATION_EVIDENCE_ACTIVITY_LIMIT ?? null, 'activity-limit') ?? 5,
+  };
+}
+
+export async function readOperationEvidence(config, fetchImpl = fetch) {
+  const product = await readProductSurface(config, fetchImpl);
+  return {
+    schema: 'narada.cloudflare_carrier.operation_evidence_read.v1',
+    status: 'ok',
+    worker_url: product.worker_url,
+    auth_source: product.auth_source,
+    operation: product.operation,
+    params: product.params,
+    summary: summarizeOperationEvidence(product.response, {
+      operationSummary: product.summary,
+      eventLimit: config.eventLimit,
+      activityLimit: config.activityLimit,
+    }),
+    response: product.response,
+  };
+}
+
+export function summarizeOperationEvidence(body = {}, options = {}) {
+  const operationSummary = options.operationSummary ?? {};
+  const sessions = Array.isArray(body?.sessions) ? body.sessions : [];
+  const carrierEvidence = Array.isArray(body?.carrier_evidence) ? body.carrier_evidence : [];
+  const activityItems = Array.isArray(body?.operation_activity_timeline?.items) ? body.operation_activity_timeline.items : [];
+  const focusReviews = Array.isArray(body?.operation_focus_reviews) ? body.operation_focus_reviews : [];
+  const eventLimit = clampInteger(options.eventLimit, 1, 20, 5);
+  const activityLimit = clampInteger(options.activityLimit, 1, 20, 5);
+  const recentCarrierEvents = [];
+  for (const entry of carrierEvidence) {
+    const events = Array.isArray(entry?.events) ? entry.events : [];
+    for (const event of events.slice(-eventLimit)) {
+      recentCarrierEvents.push({
+        carrier_session_id: entry?.carrier_session_id ?? entry?.session_id ?? null,
+        sequence: event?.sequence ?? null,
+        event_kind: event?.event_kind ?? null,
+      });
+    }
+  }
+  const recentActivities = activityItems.slice(0, activityLimit).map((item) => ({
+    activity_kind: item?.activity_kind ?? null,
+    focus_kind: item?.focus_kind ?? item?.activity_kind ?? null,
+    focus_ref: item?.focus_ref ?? item?.source_ref ?? item?.activity_id ?? null,
+    summary: item?.summary ?? item?.title ?? null,
+    occurred_at: item?.occurred_at ?? null,
+  }));
+  const latestFocusReview = focusReviews[0] ?? null;
+  return {
+    site_id: body?.operation?.site_id ?? body?.site_id ?? operationSummary.site_id ?? null,
+    operation_id: body?.operation?.operation_id ?? body?.operation_id ?? operationSummary.operation_id ?? null,
+    current_status: operationSummary.current_status ?? body?.operation?.status ?? null,
+    phase: operationSummary.phase ?? body?.operation_lifecycle_status?.phase ?? null,
+    health: operationSummary.health ?? body?.operation_lifecycle_status?.health ?? null,
+    next_action: operationSummary.next_action ?? body?.operation_lifecycle_status?.next_action ?? null,
+    posture_next_action: operationSummary.posture_next_action ?? body?.operation_posture_route?.next_action ?? null,
+    carrier_evidence_read_state: body?.carrier_evidence_read_status?.state ?? body?.carrier_evidence_read_status?.status ?? null,
+    carrier_session_ids: sessions.map((session) => session?.carrier_session_id ?? session?.session_id).filter(Boolean),
+    carrier_event_count: carrierEvidence.reduce((count, entry) => count + (Array.isArray(entry?.events) ? entry.events.length : 0), 0),
+    carrier_event_session_count: carrierEvidence.length,
+    recent_carrier_events: recentCarrierEvents.slice(-eventLimit),
+    activity_count: activityItems.length,
+    recent_activities: recentActivities,
+    operation_focus_review_count: focusReviews.length,
+    latest_focus_review: latestFocusReview ? {
+      review_id: latestFocusReview.review_id ?? null,
+      focus_kind: latestFocusReview.focus_kind ?? null,
+      focus_ref: latestFocusReview.focus_ref ?? null,
+      review_status: latestFocusReview.review_status ?? null,
+      recorded_at: latestFocusReview.recorded_at ?? null,
+    } : null,
+  };
+}
+
+export function formatOperationEvidenceReadText(result) {
+  const summary = result?.summary ?? {};
+  const lines = [
+    'Operation Evidence Read: ok',
+    `Worker: ${result?.worker_url ?? 'unknown'}`,
+    `Auth: ${result?.auth_source ?? 'unknown'}`,
+    `Site: ${summary.site_id ?? 'unknown'}`,
+    `Operation: ${summary.operation_id ?? 'unknown'}`,
+    `Lifecycle: phase=${summary.phase ?? 'unknown'} health=${summary.health ?? 'unknown'} status=${summary.current_status ?? 'unknown'}`,
+    `Next Action: ${summary.next_action ?? 'none'}`,
+    `Posture Next: ${summary.posture_next_action ?? 'none'}`,
+    `Carrier Evidence: state=${summary.carrier_evidence_read_state ?? 'unknown'} sessions=${summary.carrier_session_ids?.length ?? 0} events=${summary.carrier_event_count ?? 0}`,
+  ];
+  if (summary.carrier_session_ids?.length > 0) lines.push(`Carrier Sessions: ${summary.carrier_session_ids.join(', ')}`);
+  if (summary.recent_carrier_events?.length > 0) {
+    lines.push('Recent Carrier Events:');
+    for (const event of summary.recent_carrier_events) {
+      lines.push(`- ${event.carrier_session_id ?? 'unknown-session'} #${event.sequence ?? '?'} ${event.event_kind ?? 'unknown_event'}`);
+    }
+  }
+  if (summary.recent_activities?.length > 0) {
+    lines.push('Recent Activities:');
+    for (const item of summary.recent_activities) {
+      lines.push(`- ${item.activity_kind ?? 'unknown_activity'} focus=${item.focus_kind ?? 'unknown'}:${item.focus_ref ?? 'unknown'}${item.summary ? ` summary=${item.summary}` : ''}`);
+    }
+  }
+  if (summary.latest_focus_review) {
+    lines.push(`Latest Focus Review: ${summary.latest_focus_review.focus_kind ?? 'unknown'}:${summary.latest_focus_review.focus_ref ?? 'unknown'} status=${summary.latest_focus_review.review_status ?? 'unknown'}`);
+  }
+  return `${lines.join('\n')}\n`;
+}
+
+function option(args, name) {
+  const index = args.indexOf(name);
+  return index >= 0 ? args[index + 1] : null;
+}
+
+function parseOptionalInteger(value, label) {
+  if (value == null || value === '') return null;
+  const parsed = Number.parseInt(String(value), 10);
+  if (!Number.isFinite(parsed)) throw new Error(`operation_evidence_read_invalid_${label}:${value}`);
+  return parsed;
+}
+
+function clampInteger(value, minimum, maximum, fallback) {
+  if (!Number.isFinite(value)) return fallback;
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  try {
+    const config = parseOperationEvidenceReadArgs(process.argv.slice(2));
+    const result = await readOperationEvidence(config);
+    if (config.format === 'text') {
+      process.stdout.write(formatOperationEvidenceReadText(result));
+    } else if (config.format === 'summary') {
+      process.stdout.write(`${JSON.stringify(result.summary, null, 2)}\n`);
+    } else {
+      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    }
+  } catch (error) {
+    if (error?.response && error?.config?.format === 'text') {
+      process.stderr.write(formatProductSurfaceText({
+        operation: error.config.operation,
+        worker_url: error.config.workerUrl,
+        auth_source: error.config.auth?.source,
+        params: error.config.params,
+        summary: error.summary,
+      }));
+    } else {
+      process.stderr.write(JSON.stringify({ ok: false, code: error?.message ?? String(error), response: error?.response }, null, 2) + '\n');
+    }
+    process.exit(1);
+  }
+}

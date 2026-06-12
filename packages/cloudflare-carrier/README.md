@@ -326,7 +326,15 @@ Run the adjacent next-operation live proof when the operator wants the package t
 pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json --execute-operation-next
 ```
 
-`product:operation:next:workflow:live` is an orchestrated verifier over the existing focus/session/continuation/continuity workflows, not a new mutation primitive. It reads `operation.list`, selects the current `next_operation_id`, reads that operation's workflow route, then dispatches to the corresponding existing live workflow when the route is already productized (`start_or_select_session`, `resume_operation_continuation`, or `refresh_site_continuity_loop`). This removes the manual control-room step of choosing which downstream workflow wrapper to run after `operation.list`.
+`product:operation:next:workflow:live` is an orchestrated verifier over the existing focus/session/continuation/continuity/evidence workflows, not a new mutation primitive. It reads `operation.list`, selects the current `next_operation_id`, and then either dispatches to the corresponding existing live workflow (`start_or_select_session`, `resume_operation_continuation`, or `refresh_site_continuity_loop`) or, when posture says `inspect_operation_evidence`, hands off to the focused evidence read surface. This removes the manual control-room step of choosing which downstream operator command to run after `operation.list`.
+
+Run the focused operation evidence read when posture says `inspect_operation_evidence` and the operator needs the actual evidence without parsing the full raw `operation.read` payload:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:operation:evidence:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
+```
+
+`product:operation:evidence:text` reuses `operation.read`, but condenses the large product payload into the pieces the operator actually needs for evidence review: carrier evidence replay state, current carrier session ids, recent carrier event kinds, recent operation activity items, and the latest recorded focus review if one exists.
 
 Run the adjacent session-start live proof when a focused operation is routing toward `start_or_select_session` and the existing resident-dispatch path should satisfy that route:
 

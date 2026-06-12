@@ -100,6 +100,56 @@ test('runOperationNextWorkflowLive selects the next operation and delegates to s
   assert.equal(invocations[3][0].split(/[\\/]/).pop(), 'cloudflare-carrier-product-read.mjs');
 });
 
+test('runOperationNextWorkflowLive delegates inspect_operation_evidence to operation evidence read', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_live_smoke',
+    expectedListRouteAction: null,
+    expectedOperationId: null,
+    auth: { kind: 'bearer', value: 'token-value', source: 'flag:--token' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              next_operation_id: 'operation_alpha',
+              route_next_action: 'monitor_operations',
+              next_action: 'inspect_operation_evidence',
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            operation_id: 'operation_alpha',
+            workflow_next_action: 'monitor_operation',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-operation-evidence-read.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.operation_evidence_read.v1',
+          status: 'ok',
+          summary: { operation_id: 'operation_alpha', carrier_event_count: 2 },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'evidence');
+  assert.equal(result.delegated_route_action, 'inspect_operation_evidence');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.operation_evidence_read.v1');
+  assert.equal(invocations[2][0].split(/[\\/]/).pop(), 'cloudflare-carrier-operation-evidence-read.mjs');
+});
+
 test('runOperationNextWorkflowLive rejects unsupported downstream route actions', async () => {
   await assert.rejects(
     async () => {
@@ -116,16 +166,16 @@ test('runOperationNextWorkflowLive rejects unsupported downstream route actions'
           if (operation === 'operation.list') {
             return JSON.stringify({
               schema: 'narada.cloudflare_carrier.product_read.v1',
-              summary: { next_operation_id: 'operation_alpha', route_next_action: 'monitor_operations' },
+              summary: { next_operation_id: 'operation_alpha', route_next_action: 'monitor_operations', next_action: 'monitor_operation' },
             });
           }
           return JSON.stringify({
             schema: 'narada.cloudflare_carrier.product_read.v1',
-            summary: { operation_id: 'operation_alpha', workflow_next_action: 'inspect_operation_evidence' },
+            summary: { operation_id: 'operation_alpha', workflow_next_action: 'unsupported_route' },
           });
         },
       });
     },
-    /operation_next_workflow_live_route_unsupported:inspect_operation_evidence/,
+    /operation_next_workflow_live_route_unsupported:unsupported_route/,
   );
 });
