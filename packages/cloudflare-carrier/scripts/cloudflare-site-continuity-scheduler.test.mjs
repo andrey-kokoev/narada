@@ -23,6 +23,7 @@ import {
   readLocalInboundPacketArtifact,
   readLocalInboundPacketInventory,
   readLocalSyncArtifactInventory,
+  resolveSiteContinuitySchedulerProductReadAuth,
   runSiteContinuitySchedulerActionWithOptionalRefresh,
   summarizeCloudflareProductBindingAlignment,
   summarizeCloudflareProductBindingPreparation,
@@ -203,6 +204,28 @@ test('site continuity operation posture snapshot records non-secret auth posture
   assert.equal(posture.auth_kind, 'operator_session');
   assert.equal(posture.auth_source, 'env:CLOUDFLARE_OPERATOR_SESSION_COOKIE');
   assert.equal(posture.embeds_credentials, false);
+});
+
+test('site continuity scheduler product read auth prefers explicit operator session file over bearer env', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-auth-'));
+  const sessionFile = join(root, 'cloudflare-operator-session.json');
+  const tokenFile = join(root, 'carrier-token.txt');
+  await writeFile(sessionFile, `${JSON.stringify({ cookie: 'narada_operator_session=session-fixture' })}\n`, 'utf8');
+  await writeFile(tokenFile, 'bearer-fixture\n', 'utf8');
+  try {
+    const auth = resolveSiteContinuitySchedulerProductReadAuth({
+      operatorSessionFile: sessionFile,
+    }, {
+      CLOUDFLARE_CARRIER_TOKEN_FILE: tokenFile,
+      CLOUDFLARE_CARRIER_TOKEN: 'bearer-env-fixture',
+    });
+
+    assert.equal(auth.kind, 'operator_session');
+    assert.equal(auth.source, 'operator-session-file');
+    assert.equal(auth.value, 'session-fixture');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test('site continuity product binding alignment classifies remote next-site coverage', () => {
@@ -702,10 +725,12 @@ test('site continuity scheduler live health passes with synced artifacts and hea
   const packetPath = join(artifactDirectory, 'local-packet.json');
   const outputPath = join(artifactDirectory, 'cloudflare-sync-last.json');
   const bindingRegistryPath = join(artifactDirectory, 'bindings.json');
+  const operatorSessionFile = join(root, 'cloudflare-operator-session.json');
   await mkdir(join(root, 'packages/cloudflare-carrier/scripts'), { recursive: true });
   await mkdir(artifactDirectory, { recursive: true });
   await writeFile(syncEntrypoint, '#!/usr/bin/env node\n', 'utf8');
   await writeFile(scheduledTaskEntrypoint, '#!/usr/bin/env node\n', 'utf8');
+  await writeFile(operatorSessionFile, `${JSON.stringify({ cookie: 'narada_operator_session=session-fixture' })}\n`, 'utf8');
   await writeFile(packetPath, '{"packet":{"site_id":"site_bound"}}\n', 'utf8');
   await writeFile(bindingRegistryPath, `${JSON.stringify(createSiteContinuityBindingRegistry({
     registry_ref: 'operator-registry',
@@ -753,7 +778,12 @@ test('site continuity scheduler live health passes with synced artifacts and hea
       siteContinuityBindingRegistryPath: bindingRegistryPath,
       now: () => '2026-06-11T13:46:00.000Z',
       dryRun: false,
+      operatorSessionFile,
     }, {
+      env: {
+        CLOUDFLARE_CARRIER_URL: 'https://worker.example',
+        CLOUDFLARE_CARRIER_TOKEN: 'secret-token-that-must-not-win',
+      },
       execFileImpl: async () => ({
         stdout: [
           'TaskName: \\\\Narada\\\\CloudflareSiteContinuitySync',
@@ -765,6 +795,36 @@ test('site continuity scheduler live health passes with synced artifacts and hea
         ].join('\n'),
         stderr: '',
       }),
+      productReadSurface: async ({ operation, auth, params }) => {
+        assert.equal(auth.kind, 'operator_session');
+        assert.equal(auth.source, 'operator-session-file');
+        assert.equal(auth.value, 'session-fixture');
+        if (operation === 'site.list') {
+          return {
+            summary: {
+              next_site_id: 'site_bound',
+              next_action: 'monitor_sites',
+              next_reason: 'continuity_loop_freshness',
+            },
+            response: {
+              site_product_overview: { site_count: 1 },
+              site_posture_route: { next_action: 'monitor_sites', status: 'ready' },
+            },
+          };
+        }
+        assert.equal(operation, 'operation.list');
+        assert.deepEqual(params, { site_id: 'site_bound' });
+        return {
+          summary: {
+            next_operation_id: 'carrier_operation_next',
+            next_action: 'start_operation',
+          },
+          response: {
+            operation_posture_overview: { operation_count: 1 },
+            operation_posture_route: { next_action: 'start_operation', status: 'ready' },
+          },
+        };
+      },
     });
 
     assert.equal(result.scheduler_task_readback.status, 'ok');
@@ -776,7 +836,15 @@ test('site continuity scheduler live health passes with synced artifacts and hea
     assert.equal(result.continuity_health.local_sync_status, 'synced');
     assert.equal(result.continuity_health.local_inbound_status, 'synced');
     assert.equal(result.continuity_health.binding_count, 1);
-    assert.doesNotMatch(JSON.stringify(result), /secret|token/i);
+    assert.equal(result.cloudflare_product_posture.state, 'loaded');
+    assert.equal(result.cloudflare_product_posture.auth_kind, 'operator_session');
+    assert.equal(result.cloudflare_product_posture.auth_source, 'operator-session-file');
+    assert.equal(result.cloudflare_product_binding_alignment.state, 'aligned');
+    assert.equal(result.cloudflare_product_binding_preparation.state, 'not_required');
+    assert.equal(result.cloudflare_operation_posture.state, 'loaded');
+    assert.equal(result.cloudflare_operation_posture.auth_kind, 'operator_session');
+    assert.equal(result.cloudflare_operation_posture.auth_source, 'operator-session-file');
+    assert.doesNotMatch(JSON.stringify(result), /secret-token-that-must-not-win|narada_operator_session=session-fixture|CLOUDFLARE_CARRIER_TOKEN=/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

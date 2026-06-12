@@ -317,7 +317,17 @@ function isContinuitySyncArtifactSummary(artifact, lastOutputPath) {
   return /(?:^|[\\/])[^\\/]*cloudflare-sync(?:-last)?\.json$/i.test(artifactPath);
 }
 
-async function executeSchedulerTaskReadback(plan, { execFileImpl = execFile, executionTimeoutMs = DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS } = {}) {
+async function executeSchedulerTaskReadback(
+  plan,
+  {
+    env = process.env,
+    now = () => new Date().toISOString(),
+    execFileImpl = execFile,
+    executionTimeoutMs = DEFAULT_RECONCILE_EXECUTION_TIMEOUT_MS,
+    productReadSurface = readProductSurface,
+    productReadAuth = null,
+  } = {},
+) {
   const scheduledTaskCommand = plan?.scheduled_task_command ?? [];
   const [command, ...args] = scheduledTaskCommand;
   const base = {
@@ -363,9 +373,38 @@ async function executeSchedulerTaskReadback(plan, { execFileImpl = execFile, exe
       ...base,
       scheduler_task_readback: readback,
     };
-    return plan.action === 'health'
-      ? { ...next, continuity_health: summarizeSiteContinuityHealth(next, readback) }
-      : next;
+    if (plan.action !== 'health') return next;
+    const continuityHealth = summarizeSiteContinuityHealth(next, readback);
+    const cloudflareProductPosture = await readCloudflareProductPostureForHealthSnapshot({
+      env,
+      now,
+      productReadSurface,
+      auth: productReadAuth,
+    });
+    const cloudflareProductBindingAlignment = summarizeCloudflareProductBindingAlignment({
+      configuredSites: plan.configured_sites,
+      cloudflareProductPosture,
+    });
+    const cloudflareProductBindingPreparation = summarizeCloudflareProductBindingPreparation({
+      configuredSites: plan.configured_sites,
+      cloudflareProductPosture,
+      cloudflareProductBindingAlignment,
+    });
+    const cloudflareOperationPosture = await readCloudflareOperationPostureForHealthSnapshot({
+      env,
+      now,
+      productReadSurface,
+      auth: productReadAuth,
+      siteId: cloudflareProductPosture.summary?.next_site_id ?? null,
+    });
+    return {
+      ...next,
+      continuity_health: continuityHealth,
+      cloudflare_product_posture: cloudflareProductPosture,
+      cloudflare_product_binding_alignment: cloudflareProductBindingAlignment,
+      cloudflare_product_binding_preparation: cloudflareProductBindingPreparation,
+      cloudflare_operation_posture: cloudflareOperationPosture,
+    };
   } catch (error) {
     const readback = {
       state: 'failed',
@@ -383,9 +422,38 @@ async function executeSchedulerTaskReadback(plan, { execFileImpl = execFile, exe
       ...base,
       scheduler_task_readback: readback,
     };
-    return plan.action === 'health'
-      ? { ...next, continuity_health: summarizeSiteContinuityHealth(next, readback) }
-      : next;
+    if (plan.action !== 'health') return next;
+    const continuityHealth = summarizeSiteContinuityHealth(next, readback);
+    const cloudflareProductPosture = await readCloudflareProductPostureForHealthSnapshot({
+      env,
+      now,
+      productReadSurface,
+      auth: productReadAuth,
+    });
+    const cloudflareProductBindingAlignment = summarizeCloudflareProductBindingAlignment({
+      configuredSites: plan.configured_sites,
+      cloudflareProductPosture,
+    });
+    const cloudflareProductBindingPreparation = summarizeCloudflareProductBindingPreparation({
+      configuredSites: plan.configured_sites,
+      cloudflareProductPosture,
+      cloudflareProductBindingAlignment,
+    });
+    const cloudflareOperationPosture = await readCloudflareOperationPostureForHealthSnapshot({
+      env,
+      now,
+      productReadSurface,
+      auth: productReadAuth,
+      siteId: cloudflareProductPosture.summary?.next_site_id ?? null,
+    });
+    return {
+      ...next,
+      continuity_health: continuityHealth,
+      cloudflare_product_posture: cloudflareProductPosture,
+      cloudflare_product_binding_alignment: cloudflareProductBindingAlignment,
+      cloudflare_product_binding_preparation: cloudflareProductBindingPreparation,
+      cloudflare_operation_posture: cloudflareOperationPosture,
+    };
   }
 }
 
@@ -713,6 +781,25 @@ function countResultStatuses(results) {
   return counts;
 }
 
+export function resolveSiteContinuitySchedulerProductReadAuth(options = {}, env = process.env) {
+  const baseRoot = resolve(options.repoRoot ?? options.localRoot ?? process.cwd());
+  const effectiveEnv = { ...env };
+  if (effectiveEnv.CLOUDFLARE_CARRIER_TOKEN_FILE && !isAbsolute(effectiveEnv.CLOUDFLARE_CARRIER_TOKEN_FILE)) {
+    effectiveEnv.CLOUDFLARE_CARRIER_TOKEN_FILE = resolve(baseRoot, effectiveEnv.CLOUDFLARE_CARRIER_TOKEN_FILE);
+  }
+  if (effectiveEnv.CLOUDFLARE_OPERATOR_SESSION_FILE && !isAbsolute(effectiveEnv.CLOUDFLARE_OPERATOR_SESSION_FILE)) {
+    effectiveEnv.CLOUDFLARE_OPERATOR_SESSION_FILE = resolve(baseRoot, effectiveEnv.CLOUDFLARE_OPERATOR_SESSION_FILE);
+  }
+  const authArgs = [];
+  if (options.token) authArgs.push('--token', options.token);
+  if (options.tokenFile) authArgs.push('--token-file', isAbsolute(options.tokenFile) ? options.tokenFile : resolve(baseRoot, options.tokenFile));
+  if (options.operatorSessionCookie) authArgs.push('--operator-session-cookie', options.operatorSessionCookie);
+  if (options.operatorSessionFile) {
+    authArgs.push('--operator-session-file', isAbsolute(options.operatorSessionFile) ? options.operatorSessionFile : resolve(baseRoot, options.operatorSessionFile));
+  }
+  return resolveProductReadAuth(authArgs, effectiveEnv);
+}
+
 export async function runSiteContinuitySchedulerActionWithOptionalRefresh(
   options = {},
   {
@@ -723,13 +810,22 @@ export async function runSiteContinuitySchedulerActionWithOptionalRefresh(
   } = {},
 ) {
   const action = options.action ?? 'status';
+  const needsProductReadAuth = options.dryRun === false && (LIVE_SCHEDULER_READ_ACTIONS.has(action) || action === 'reconcile-execute');
+  const productReadAuth = needsProductReadAuth ? resolveSiteContinuitySchedulerProductReadAuth(options, env) : null;
   if (action !== 'reconcile-execute') {
     const plan = await buildSiteContinuitySchedulerPlanWithOptionalRefresh(options, { env, materializeSiteRegistryProjection });
     if (options.dryRun === false && LIVE_SCHEDULER_TASK_ACTIONS.has(action)) {
       return executeSchedulerTaskPlan(plan, { execFileImpl, executionTimeoutMs: options.executionTimeoutMs });
     }
     if (options.dryRun === false && LIVE_SCHEDULER_READ_ACTIONS.has(action)) {
-      return executeSchedulerTaskReadback(plan, { execFileImpl, executionTimeoutMs: options.executionTimeoutMs });
+      return executeSchedulerTaskReadback(plan, {
+        env,
+        now: options.now,
+        execFileImpl,
+        executionTimeoutMs: options.executionTimeoutMs,
+        productReadSurface,
+        productReadAuth,
+      });
     }
     return plan;
   }
@@ -749,6 +845,7 @@ export async function runSiteContinuitySchedulerActionWithOptionalRefresh(
     env,
     now: options.now,
     productReadSurface,
+    auth: productReadAuth,
   });
   const cloudflareProductBindingAlignment = summarizeCloudflareProductBindingAlignment({
     configuredSites: healthPlan.configured_sites,
@@ -763,6 +860,7 @@ export async function runSiteContinuitySchedulerActionWithOptionalRefresh(
     env,
     now: options.now,
     productReadSurface,
+    auth: productReadAuth,
     siteId: cloudflareProductPosture.summary?.next_site_id ?? null,
   });
   return {
@@ -920,6 +1018,7 @@ export async function readCloudflareProductPostureForHealthSnapshot({
   env = process.env,
   now = () => new Date().toISOString(),
   productReadSurface = readProductSurface,
+  auth = null,
 } = {}) {
   const workerUrl = String(env.CLOUDFLARE_CARRIER_URL ?? '').replace(/\/+$/, '');
   const generatedAt = typeof now === 'function' ? now() : new Date().toISOString();
@@ -934,8 +1033,8 @@ export async function readCloudflareProductPostureForHealthSnapshot({
       embeds_credentials: false,
     };
   }
-  const auth = resolveProductReadAuth([], env);
-  if (!auth) {
+  const effectiveAuth = auth ?? resolveProductReadAuth([], env);
+  if (!effectiveAuth) {
     return {
       schema: 'narada.cloudflare_carrier.product_posture_snapshot.v1',
       state: 'not_configured',
@@ -954,7 +1053,7 @@ export async function readCloudflareProductPostureForHealthSnapshot({
       requestId: `scheduled_health_product_read_${Date.parse(generatedAt) || Date.now()}`,
       params: {},
       format: 'json',
-      auth,
+      auth: effectiveAuth,
     });
     return {
       schema: 'narada.cloudflare_carrier.product_posture_snapshot.v1',
@@ -963,8 +1062,8 @@ export async function readCloudflareProductPostureForHealthSnapshot({
       generated_at: generatedAt,
       worker_url: workerUrl,
       operation: 'site.list',
-      auth_kind: auth.kind,
-      auth_source: auth.source,
+      auth_kind: effectiveAuth.kind,
+      auth_source: effectiveAuth.source,
       summary: productRead.summary ?? null,
       site_product_overview: productRead.response?.site_product_overview ?? null,
       site_posture_route: productRead.response?.site_posture_route ?? null,
@@ -978,8 +1077,8 @@ export async function readCloudflareProductPostureForHealthSnapshot({
       generated_at: generatedAt,
       worker_url: workerUrl,
       operation: 'site.list',
-      auth_kind: auth.kind,
-      auth_source: auth.source,
+      auth_kind: effectiveAuth.kind,
+      auth_source: effectiveAuth.source,
       reason: sanitizeProductPostureError(error),
       embeds_credentials: false,
     };
@@ -991,6 +1090,7 @@ export async function readCloudflareOperationPostureForHealthSnapshot({
   now = () => new Date().toISOString(),
   productReadSurface = readProductSurface,
   siteId = null,
+  auth = null,
 } = {}) {
   const workerUrl = String(env.CLOUDFLARE_CARRIER_URL ?? '').replace(/\/+$/, '');
   const generatedAt = typeof now === 'function' ? now() : new Date().toISOString();
@@ -1017,8 +1117,8 @@ export async function readCloudflareOperationPostureForHealthSnapshot({
       embeds_credentials: false,
     };
   }
-  const auth = resolveProductReadAuth([], env);
-  if (!auth) {
+  const effectiveAuth = auth ?? resolveProductReadAuth([], env);
+  if (!effectiveAuth) {
     return {
       schema: 'narada.cloudflare_carrier.operation_posture_snapshot.v1',
       state: 'not_configured',
@@ -1038,7 +1138,7 @@ export async function readCloudflareOperationPostureForHealthSnapshot({
       requestId: `scheduled_health_operation_read_${Date.parse(generatedAt) || Date.now()}`,
       params: { site_id: siteId },
       format: 'json',
-      auth,
+      auth: effectiveAuth,
     });
     return {
       schema: 'narada.cloudflare_carrier.operation_posture_snapshot.v1',
@@ -1048,8 +1148,8 @@ export async function readCloudflareOperationPostureForHealthSnapshot({
       worker_url: workerUrl,
       operation: 'operation.list',
       site_id: siteId,
-      auth_kind: auth.kind,
-      auth_source: auth.source,
+      auth_kind: effectiveAuth.kind,
+      auth_source: effectiveAuth.source,
       summary: productRead.summary ?? null,
       operation_posture_overview: productRead.response?.operation_posture_overview ?? null,
       operation_posture_route: productRead.response?.operation_posture_route ?? null,
@@ -1064,8 +1164,8 @@ export async function readCloudflareOperationPostureForHealthSnapshot({
       worker_url: workerUrl,
       operation: 'operation.list',
       site_id: siteId,
-      auth_kind: auth.kind,
-      auth_source: auth.source,
+      auth_kind: effectiveAuth.kind,
+      auth_source: effectiveAuth.source,
       reason: sanitizeProductPostureError(error),
       embeds_credentials: false,
     };
@@ -2497,6 +2597,10 @@ function parseArgs(argv) {
     else if (arg === '--projection-url') args.projectionWorkerUrl = argv[++index];
     else if (arg === '--projection-token') args.projectionToken = argv[++index];
     else if (arg === '--projection-token-file') args.projectionTokenFile = argv[++index];
+    else if (arg === '--token') args.token = argv[++index];
+    else if (arg === '--token-file') args.tokenFile = argv[++index];
+    else if (arg === '--operator-session-cookie') args.operatorSessionCookie = argv[++index];
+    else if (arg === '--operator-session-file') args.operatorSessionFile = argv[++index];
     else if (arg === '--env') args.envPath = argv[++index];
     else if (arg === '--node-command') args.nodeCommand = argv[++index];
     else if (arg === '--hidden-wrapper-path') args.hiddenWrapperPath = argv[++index];
