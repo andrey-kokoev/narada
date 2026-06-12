@@ -3,6 +3,17 @@ import { fileURLToPath } from 'node:url';
 
 import { formatProductSurfaceText, parseProductReadArgs, readProductSurface } from './cloudflare-carrier-product-read.mjs';
 
+const REVIEWABLE_FOCUS_KINDS = new Set([
+  'mailbox_draft_reply_proposal',
+  'mailbox_outlook_draft_create',
+  'mailbox_send_accepted',
+  'mailbox_send_confirmation',
+  'site_file_change_proposal',
+  'local_ingress_request',
+  'repository_publication_request',
+  'site_continuity_reconciliation_execution',
+]);
+
 export function parseOperationEvidenceReadArgs(argv = [], env = process.env) {
   const parsed = parseProductReadArgs(['--operation', 'operation.read', ...argv], env);
   const args = [...argv];
@@ -58,6 +69,11 @@ export function summarizeOperationEvidence(body = {}, options = {}) {
     occurred_at: item?.occurred_at ?? null,
   }));
   const latestFocusReview = focusReviews[0] ?? null;
+  const reviewableFocus = activityItems.find((item) => {
+    const focusKind = item?.focus_kind ?? item?.activity_kind ?? null;
+    const focusRef = item?.focus_ref ?? item?.source_ref ?? item?.activity_id ?? null;
+    return REVIEWABLE_FOCUS_KINDS.has(focusKind) && !!focusRef;
+  }) ?? null;
   return {
     site_id: body?.operation?.site_id ?? body?.site_id ?? operationSummary.site_id ?? null,
     operation_id: body?.operation?.operation_id ?? body?.operation_id ?? operationSummary.operation_id ?? null,
@@ -74,6 +90,9 @@ export function summarizeOperationEvidence(body = {}, options = {}) {
     activity_count: activityItems.length,
     recent_activities: recentActivities,
     operation_focus_review_count: focusReviews.length,
+    reviewable_focus_kind: reviewableFocus?.focus_kind ?? reviewableFocus?.activity_kind ?? null,
+    reviewable_focus_ref: reviewableFocus?.focus_ref ?? reviewableFocus?.source_ref ?? reviewableFocus?.activity_id ?? null,
+    reviewable_focus_summary: reviewableFocus?.summary ?? reviewableFocus?.title ?? null,
     latest_focus_review: latestFocusReview ? {
       review_id: latestFocusReview.review_id ?? null,
       focus_kind: latestFocusReview.focus_kind ?? null,
@@ -112,6 +131,9 @@ export function formatOperationEvidenceReadText(result) {
   }
   if (summary.latest_focus_review) {
     lines.push(`Latest Focus Review: ${summary.latest_focus_review.focus_kind ?? 'unknown'}:${summary.latest_focus_review.focus_ref ?? 'unknown'} status=${summary.latest_focus_review.review_status ?? 'unknown'}`);
+  }
+  if (summary.reviewable_focus_kind && summary.reviewable_focus_ref) {
+    lines.push(`Review Ack: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --focus-kind ${summary.reviewable_focus_kind} --focus-ref ${summary.reviewable_focus_ref} --operator-session-file <operator-session-file>`);
   }
   return `${lines.join('\n')}\n`;
 }

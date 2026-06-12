@@ -336,6 +336,15 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:evidence:text -- --u
 
 `product:operation:evidence:text` reuses `operation.read`, but condenses the large product payload into the pieces the operator actually needs for evidence review: carrier evidence replay state, current carrier session ids, recent carrier event kinds, recent operation activity items, and the latest recorded focus review if one exists.
 
+When the focused operation has a reviewable focus item, the operator can record that review explicitly through the governed Cloudflare review lane:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --focus-kind <focus-kind> --focus-ref <focus-ref> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:list:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
+```
+
+`product:operation:focus-review` calls the existing Worker-owned `operation_focus_review.acknowledge` primitive, while `product:operation:focus-review:list` reads the recorded review acknowledgements for that site. This makes the evidence-review step a first-class operator action instead of an implied manual note.
+
 Run the adjacent session-start live proof when a focused operation is routing toward `start_or_select_session` and the existing resident-dispatch path should satisfy that route:
 
 ```powershell
