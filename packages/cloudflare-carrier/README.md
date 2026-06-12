@@ -414,6 +414,14 @@ pnpm --filter @narada2/cloudflare-carrier repository-publication:readback-smoke:
 
 `repository-publication:readback-smoke:live` is a live verifier over the product read surfaces, not a second mutation path. It proves the request appears in `request:list`, the governing Cloudflare decision appears in `admission:list`, the downstream result appears in either `cloudflare-execution:list` or `evidence:list` depending on `--lane`, and `request:next` no longer selects the resolved request. When `--operation-id` is supplied, it also checks `operation.read` for the same downstream record so operator lifecycle readback stays coherent across both operation and publication views.
 
+For the direct Cloudflare GitHub lane, use the workflow wrapper when one operator run should both execute the governed publication and prove the readback surface afterward:
+
+```bash
+pnpm --filter @narada2/cloudflare-carrier repository-publication:cloudflare-workflow:live -- --url <worker-url> --token-file <token-file> --site <site-id> --operation <operation-id> --repository-ref github:andrey-kokoev/narada --branch refs/heads/cloudflare-publication-live --commit <40-hex-commit> --execute-cloudflare-github
+```
+
+`repository-publication:cloudflare-workflow:live` is an orchestration wrapper over the existing execution and readback live-smoke commands. It does not create a separate mutation path. It first runs the governed Cloudflare publication execution, then immediately verifies that the same request, admission, execution, and operation lifecycle are visible through the readback product surfaces.
+
 Finish an existing closed Cloudflare task lifecycle task after explicit task-finish cutover evidence exists:
 
 ```powershell
