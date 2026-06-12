@@ -394,6 +394,18 @@ pnpm --filter @narada2/cloudflare-carrier product:repository-publication:cloudfl
 
 `product:repository-publication:cloudflare-execution` calls `repository_publication.cloudflare_execution.execute` through authenticated `POST /api/carrier`. It requires explicit `--execute-cloudflare-github` acknowledgement and a governed repository publication request id before Cloudflare may push to GitHub. This command is the direct-Cloudflare publication lane: it records execution under `cloudflare_github_repository_publication_executor`, links back to Cloudflare admission, keeps `cloudflare_git_push_admission` at `not_admitted`, and admits direct Cloudflare repository mutation only through this explicit execution boundary. The `:text` alias prints the Worker URL, auth source, site, request/execution ids, publication outcome, admission linkage, GitHub response summary, and authority partition without echoing bearer tokens or operator-session cookies.
 
+Read the governed repository publication lane back as operator-visible queue, admission, evidence, and Cloudflare execution history:
+
+```bash
+pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:list:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:next:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada2/cloudflare-carrier product:repository-publication:admission:list:text -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada2/cloudflare-carrier product:repository-publication:evidence:list:text -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada2/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --operator-session-file cloudflare-operator-session.json
+```
+
+These aliases all route through `product:repository-publication:*` readback over authenticated `POST /api/carrier` and keep the authority boundary explicit instead of inferring publication state from smoke artifacts. `request:list` shows queued Windows publication requests, `request:next` shows the next admitted dispatch candidate and any pending-unadmitted backlog, `admission:list` shows Cloudflare admission history, `evidence:list` shows Windows execution evidence recorded back into Cloudflare, and `cloudflare-execution:list` shows direct Cloudflare GitHub execution history. The `:text` aliases print the Worker URL, auth source, site, latest ids/statuses, and authority posture without echoing bearer tokens or operator-session cookies.
+
 Finish an existing closed Cloudflare task lifecycle task after explicit task-finish cutover evidence exists:
 
 ```powershell
