@@ -346,6 +346,14 @@ pnpm --filter @narada2/cloudflare-carrier product:local-ingress:request:text -- 
 
 `product:local-ingress:request` calls `local_ingress.request.create` through authenticated `POST /api/carrier`. It requires explicit action, governed request contract, evidence return contract, and rollback refs before sending the Cloudflare queue request. The command fixes request authority at `cloudflare_local_ingress_request_queue`, target authority at `local-windows-site-authority`, executor authority at `windows_local_ingress_executor`, and keeps both direct Cloudflare filesystem mutation and repository publication at `not_admitted`; it records a governed request for Windows execution and later evidence return, not the execution itself. The `:text` alias prints the Worker URL, auth source, site, local ingress request id, operation/task linkage, action summary, authority posture, queue/execution posture, and contract refs without echoing bearer tokens or operator-session cookies.
 
+Record Windows execution evidence back into Cloudflare after a governed local ingress request has been admitted and executed:
+
+```bash
+pnpm --filter @narada2/cloudflare-carrier product:local-ingress:evidence:text -- --url <worker-url> --site <site-id> --local-ingress-request-id <request-id> --local-execution-id <execution-id> --changed-file <path-1> --changed-file <path-2> --rollback-evidence-ref <rollback-ref> --operator-session-file cloudflare-operator-session.json
+```
+
+`product:local-ingress:evidence` calls `local_ingress.evidence.put` through authenticated `POST /api/carrier`. It requires the governing request id, the Windows execution id, and at least one changed file before sending the evidence record. The command fixes requested mutation class at `local_repository_filesystem_mutation`, Windows admission action at `admit`, local execution status at `completed`, local filesystem mutation admission at `admitted_by_windows_local_ingress`, executor authority at `windows_local_ingress_executor`, and keeps both direct Cloudflare filesystem mutation and repository publication at `not_admitted`; it records the Windows-side execution evidence in Cloudflare without claiming direct Cloudflare filesystem authority. The `:text` alias prints the Worker URL, auth source, site, evidence/request/execution ids, authority partition, mutation admissions, changed files, rollback evidence ref, and record timestamps without echoing bearer tokens or operator-session cookies.
+
 Finish an existing closed Cloudflare task lifecycle task after explicit task-finish cutover evidence exists:
 
 ```powershell
