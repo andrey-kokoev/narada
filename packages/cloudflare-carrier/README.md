@@ -338,6 +338,14 @@ pnpm --filter @narada2/cloudflare-carrier product:site-file:materialization:text
 
 `product:site-file:materialization` calls `site_file_materialization.admit` through authenticated `POST /api/carrier`. Without `--admit-cloudflare-site-file-materialization`, it can request the Worker's refusal evidence for missing cutover admission. With the admission flag, it requires explicit materialization-authority, cutover, governed-write-contract, and confirmation-evidence refs before sending the Cloudflare materialization admission request. The command fixes materialization authority at `cloudflare_carrier_site`, executor authority at `cloudflare_site_file_store`, and keeps Windows filesystem mutation and repository publication at `not_admitted`; it records Cloudflare site-file materialization state only, without pretending the Windows site filesystem or repository publication boundary moved. The `:text` alias prints the Worker URL, auth source, site, materialization id, proposal linkage, file path, content provenance, authority posture, and downstream admission posture without echoing bearer tokens or operator-session cookies.
 
+Queue a governed Windows-side local ingress request after Cloudflare-side planning/materialization state exists, without claiming direct Cloudflare filesystem mutation:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:local-ingress:request:text -- --url <worker-url> --site <site-id> --local-ingress-request-id <request-id> --operation-id <operation-id> --task-id <task-id> --action-ref <local-action-ref> --summary <operator-summary> --contract-ref <contract-ref> --evidence-contract-ref <evidence-contract-ref> --rollback-ref <rollback-ref> --operator-session-file cloudflare-operator-session.json
+```
+
+`product:local-ingress:request` calls `local_ingress.request.create` through authenticated `POST /api/carrier`. It requires explicit action, governed request contract, evidence return contract, and rollback refs before sending the Cloudflare queue request. The command fixes request authority at `cloudflare_local_ingress_request_queue`, target authority at `local-windows-site-authority`, executor authority at `windows_local_ingress_executor`, and keeps both direct Cloudflare filesystem mutation and repository publication at `not_admitted`; it records a governed request for Windows execution and later evidence return, not the execution itself. The `:text` alias prints the Worker URL, auth source, site, local ingress request id, operation/task linkage, action summary, authority posture, queue/execution posture, and contract refs without echoing bearer tokens or operator-session cookies.
+
 Finish an existing closed Cloudflare task lifecycle task after explicit task-finish cutover evidence exists:
 
 ```powershell
