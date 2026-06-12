@@ -366,6 +366,14 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:evidence:text -- --u
 
 `product:operation:evidence:text` reuses `operation.read`, but condenses the large product payload into the pieces the operator actually needs for evidence review: carrier evidence replay state, current carrier session ids, recent carrier event kinds, recent operation activity items, and the latest recorded focus review if one exists.
 
+Run the focused operation recovery read when the workflow route is `review_recovery_posture` and the operator needs the current recovery boundaries, gaps, and follow-on evidence path without parsing the full raw `operation.read` payload:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:operation:recovery:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
+```
+
+`product:operation:recovery:text` reuses `operation.read`, but condenses the recovery posture the operator actually needs: recovery state, recovery boundaries, recovery gaps, the current lifecycle/evidence next action, and the explicit `product:operation:evidence:text` follow-on command.
+
 When the focused operation has a reviewable focus item, the operator can record that review explicitly through the governed Cloudflare review lane:
 
 ```powershell

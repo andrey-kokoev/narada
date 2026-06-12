@@ -619,6 +619,31 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
     },
   });
   assert.match(operationReadSiteFileProposalText, /Site File Change Proposal Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file-change:proposal:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_site_file --operator-session-file <operator-session-file>/);
+
+  const operationReadRecoveryText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_recovery',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'inhabited',
+      health: 'incomplete',
+      next_action: 'local_resident_carrier_evidence',
+      workflow_next_action: 'review_recovery_posture',
+      workflow_reason: 'recovery_posture_needs_attention',
+      workflow_focus_ref: 'local_resident_carrier_evidence_not_admitted',
+      session_count: 0,
+      task_count: 0,
+      recovery_state: 'local_resident_inhabitance_not_replayable',
+      recovery_boundary_count: 12,
+      recovery_gap_count: 1,
+    },
+  });
+  assert.match(operationReadRecoveryText, /Recovery Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_recovery --operator-session-file <operator-session-file>/);
 });
 
 test('formatProductSurfaceText renders refused product reads without auth material', () => {
