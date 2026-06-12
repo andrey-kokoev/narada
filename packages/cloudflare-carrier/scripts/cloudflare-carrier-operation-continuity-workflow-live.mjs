@@ -13,6 +13,7 @@ const scriptDir = dirname(scriptPath);
 const packageRoot = resolve(scriptDir, '..');
 const productReadScript = resolve(scriptDir, 'cloudflare-carrier-product-read.mjs');
 const continuitySchedulerScript = resolve(scriptDir, 'cloudflare-site-continuity-scheduler.mjs');
+const CHILD_STDIO_MAX_BUFFER = 16 * 1024 * 1024;
 
 export function parseOperationContinuityWorkflowLiveArgs(argv = [], env = process.env) {
   const args = [...argv];
@@ -103,7 +104,12 @@ export async function runOperationContinuityWorkflowLive(
 }
 
 async function defaultRunNodeScript(args, options) {
-  const result = await execFile(process.execPath, args, { ...options, timeout: 120000, windowsHide: true });
+  const result = await execFile(process.execPath, args, {
+    ...options,
+    timeout: 120000,
+    windowsHide: true,
+    maxBuffer: CHILD_STDIO_MAX_BUFFER,
+  });
   return result.stdout;
 }
 
