@@ -1,0 +1,135 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import {
+  parseOperationContinuationWorkflowLiveArgs,
+  runOperationContinuationWorkflowLive,
+} from './cloudflare-carrier-operation-continuation-workflow-live.mjs';
+
+test('parseOperationContinuationWorkflowLiveArgs requires explicit execution acknowledgement', () => {
+  assert.throws(
+    () => parseOperationContinuationWorkflowLiveArgs([
+      '--url', 'https://carrier.example',
+      '--site', 'site_live_smoke',
+      '--agent-id', 'agent.operator',
+      '--token', 'token-value',
+    ], {}),
+    /operation_continuation_workflow_live_requires_--execute-operation-continuation-resume/,
+  );
+});
+
+test('parseOperationContinuationWorkflowLiveArgs supports operator session auth and expected operation id', () => {
+  const parsed = parseOperationContinuationWorkflowLiveArgs([
+    '--url', 'https://carrier.example',
+    '--site', 'site_live_smoke',
+    '--operation-id', 'operation_live_alpha',
+    '--agent-id', 'agent.operator',
+    '--operator-session-cookie', 'operator-session-cookie',
+    '--execute-operation-continuation-resume',
+  ], {});
+
+  assert.deepEqual(parsed.auth, {
+    kind: 'operator_session',
+    value: 'operator-session-cookie',
+    source: 'operator-session-cookie',
+  });
+  assert.equal(parsed.expectedOperationId, 'operation_live_alpha');
+  assert.equal(parsed.expectedPreAction, 'resume_operation_continuation');
+});
+
+test('runOperationContinuationWorkflowLive selects continuation from operation.list then resumes it', async () => {
+  const invocations = [];
+  const result = await runOperationContinuationWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_live_smoke',
+    expectedOperationId: 'operation_live_alpha',
+    agentId: 'agent.operator',
+    continuationReason: 'operator_resuming_continuation',
+    expectedPreAction: 'resume_operation_continuation',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        if (operation === 'operation.list' && invocations.length === 1) {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            status: 'ok',
+            summary: {
+              operation: 'operation.list',
+              site_id: 'site_live_smoke',
+              needs_continuation_count: 1,
+              next_continuation_operation_id: 'operation_live_alpha',
+            },
+          });
+        }
+        if (operation === 'operation.read' && invocations.length === 2) {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            status: 'ok',
+            summary: {
+              site_id: 'site_live_smoke',
+              operation_id: 'operation_live_alpha',
+              workflow_next_action: 'resume_operation_continuation',
+              next_action: 'resume_operation_continuation',
+            },
+          });
+        }
+        if (operation === 'operation.read' && invocations.length === 4) {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            status: 'ok',
+            summary: {
+              site_id: 'site_live_smoke',
+              operation_id: 'operation_live_alpha',
+              workflow_next_action: 'start_resident_dispatch',
+              next_action: 'start_resident_dispatch',
+            },
+          });
+        }
+        if (operation === 'operation.list' && invocations.length === 5) {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            status: 'ok',
+            summary: {
+              operation: 'operation.list',
+              site_id: 'site_live_smoke',
+              needs_continuation_count: 0,
+              next_continuation_operation_id: null,
+            },
+          });
+        }
+      }
+      if (scriptName === 'cloudflare-carrier-continuation-resume.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.continuation_resume.v1',
+          status: 'ok',
+          summary: {
+            operation_id: 'operation_live_alpha',
+            route_next_action: 'resume_operation_continuation',
+            session_event_kind: 'carrier_session_started',
+          },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.schema, 'narada.cloudflare_carrier.operation_continuation_workflow_live.v1');
+  assert.equal(result.status, 'ok');
+  assert.equal(result.selected_operation_id, 'operation_live_alpha');
+  assert.equal(result.pre_workflow_next_action, 'resume_operation_continuation');
+  assert.equal(result.read_after_resume.workflow_next_action, 'start_resident_dispatch');
+  assert.equal(result.list_after_resume.next_continuation_operation_id, null);
+  assert.equal(invocations.length, 5);
+  assert.equal(invocations[0][0].split(/[\\/]/).pop(), 'cloudflare-carrier-product-read.mjs');
+  assert.equal(invocations[1][0].split(/[\\/]/).pop(), 'cloudflare-carrier-product-read.mjs');
+  assert.equal(invocations[2][0].split(/[\\/]/).pop(), 'cloudflare-carrier-continuation-resume.mjs');
+  assert.equal(invocations[3][0].split(/[\\/]/).pop(), 'cloudflare-carrier-product-read.mjs');
+  assert.equal(invocations[4][0].split(/[\\/]/).pop(), 'cloudflare-carrier-product-read.mjs');
+  assert.ok(invocations[0].includes('--continuation'));
+  assert.ok(invocations[2].includes('--operator-session-cookie'));
+});

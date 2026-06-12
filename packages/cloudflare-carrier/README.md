@@ -312,6 +312,14 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:lifecycle:workflow:l
 
 `product:operation:lifecycle:workflow:live` is an orchestrated live verifier, not a new mutation primitive. It calls `product:operation:create`, `product:operation:status`, `product:operation:continuation:resume`, and `product:operation:read` in sequence, and returns the readback summaries after each stage so the lifecycle route is proven from live product evidence instead of inferred from unit tests alone.
 
+Run the adjacent continuation-selection live proof when the operator workflow should begin from `operation.list` rather than a remembered operation id:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:operation:continuation:workflow:live -- --url <worker-url> --site <site-id> --agent-id <agent-id> --operator-session-file cloudflare-operator-session.json --execute-operation-continuation-resume
+```
+
+`product:operation:continuation:workflow:live` is an orchestrated verifier over the existing continuation selector and resume product paths, not a new mutation primitive. It reads `operation.list --continuation`, selects the next queued continuation operation, optionally asserts `--operation-id` matches that selection, reads `operation.read`, runs `product:operation:continuation:resume`, then re-reads both `operation.read` and `operation.list` so the selected operation is proven to have left the continuation queue through live product evidence instead of manual control-room bridging.
+
 Run the adjacent resident-dispatch live proof when an active operation has already resumed and `operation.read` is routing toward `start_resident_dispatch`:
 
 ```powershell
