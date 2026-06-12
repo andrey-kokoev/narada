@@ -2346,7 +2346,12 @@ function cloudflareOperationWorkQueueItems(operations = [], product = {}, contex
       evidence_loaded: path.evidence_event_count > 0,
       operation_path_next_action: path.next_action || 'read_operation_scope',
     });
-    const ready = ['inspect_operation_evidence', 'evidence_ready'].includes(command.next_action) || command.command_state === 'evidence_ready';
+    const ready = command.command_state === 'evidence_ready'
+      || command.next_action === 'inspect_operation_evidence'
+      || (
+        command.next_action === 'use_focused_operation'
+        && ['inspect_operation_evidence', 'monitor_operation'].includes(command.command_action)
+      );
     return { operation, command, path, status: ready ? 'ready' : 'needs_attention' };
   }).sort((left, right) => {
     if (left.status !== right.status) return left.status === 'needs_attention' ? -1 : 1;
@@ -5717,7 +5722,7 @@ async function buildCloudflareOperationProductProjection(env, registry, principa
     ?.authority_partition === 'task_lifecycle_cloudflare_writes_and_external_effects_cloudflare_owned';
     const taskLifecycleSurfaceWriteAdmissionPosture = summarizeTaskLifecycleSurfaceWriteAdmissionPosture(taskLifecycleTasks, taskLifecycleExternalEffectsReady);
     const taskLifecycleSurfaceAuthorityPartition = summarizeTaskLifecycleSurfaceAuthorityPartition(taskLifecycleTasks, taskLifecycleExternalEffectsReady);
-    const operationPostureOverview = summarizeCloudflareOperationPostureOverview(siteOperations, {
+    let operationPostureOverview = summarizeCloudflareOperationPostureOverview(siteOperations, {
     ...response,
     sessions,
     tasks,
@@ -5731,7 +5736,7 @@ async function buildCloudflareOperationProductProjection(env, registry, principa
     active_operation_id: operation?.operation_id ?? params.operation_id,
     site_id: siteId,
   });
-    const operationPostureRoute = summarizeCloudflareOperationPostureRoute(operationPostureOverview, operation?.operation_id ?? params.operation_id ?? '');
+    let operationPostureRoute = summarizeCloudflareOperationPostureRoute(operationPostureOverview, operation?.operation_id ?? params.operation_id ?? '');
     const operationWorkflowRoute = summarizeCloudflareOperationWorkflowRoute({
     operation,
     lifecycleStatus: operationLifecycleStatus,
@@ -5749,6 +5754,52 @@ async function buildCloudflareOperationProductProjection(env, registry, principa
     operationFocusReviews,
     tasks,
   });
+    const postureTarget = operationPostureRoute.next_action === 'focus_next_operation'
+      ? String(operationPostureRoute.target || '').trim()
+      : '';
+    if (
+      params.disable_posture_bounce_probe !== true
+      && operationWorkflowRoute.next_action === 'monitor_operation'
+      && postureTarget
+      && postureTarget !== (operation?.operation_id ?? params.operation_id ?? '')
+    ) {
+      const targetOperationRead = await registry.handle({
+        operation: 'operation.read',
+        params: {
+          site_id: siteId,
+          operation_id: postureTarget,
+          limit: params.operation_limit ?? params.limit,
+          session_limit: projectionParams.session_limit,
+          carrier_event_limit: projectionParams.carrier_event_limit,
+        },
+        principal,
+      });
+      if (targetOperationRead?.ok) {
+        const targetProjection = await buildCloudflareOperationProductProjection(env, registry, principal, targetOperationRead, {
+          ...projectionParams,
+          site_id: siteId,
+          operation_id: postureTarget,
+          disable_posture_bounce_probe: true,
+        });
+        if (
+          targetProjection.operation_workflow_route?.next_action === 'monitor_operation'
+          && targetProjection.operation_posture_route?.next_action === 'focus_next_operation'
+          && String(targetProjection.operation_posture_route?.target || '').trim() === (operation?.operation_id ?? params.operation_id ?? '')
+        ) {
+          operationPostureOverview = {
+            ...operationPostureOverview,
+            next_operation_id: operation?.operation_id ?? params.operation_id ?? null,
+            next_status: 'ready',
+            next_action: 'monitor_operations',
+            next_reason: 'all_operations_monitoring',
+          };
+          operationPostureRoute = summarizeCloudflareOperationPostureRoute(
+            operationPostureOverview,
+            operation?.operation_id ?? params.operation_id ?? '',
+          );
+        }
+      }
+    }
     return {
     sessions,
     operations: siteOperations,
@@ -18228,7 +18279,12 @@ export function renderCloudflareCarrierConsole() {
           evidence_loaded: evidenceLoaded,
           operation_path_next_action: path['Next Action'] || 'read_operation_scope',
         });
-        const ready = ['inspect_operation_evidence', 'evidence_ready'].includes(command.next_action) || command.command_state === 'evidence_ready';
+        const ready = command.command_state === 'evidence_ready'
+          || command.next_action === 'inspect_operation_evidence'
+          || (
+            command.next_action === 'use_focused_operation'
+            && ['inspect_operation_evidence', 'monitor_operation'].includes(command.command_action)
+          );
         return { operation, command, path, status: ready ? 'ready' : 'needs_attention' };
       }).sort((left, right) => {
         if (left.status !== right.status) return left.status === 'needs_attention' ? -1 : 1;

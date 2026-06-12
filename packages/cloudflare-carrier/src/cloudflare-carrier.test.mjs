@@ -8658,6 +8658,158 @@ test('worker operation.read does not smear indexed carrier evidence across sibli
   assert.equal(body.operation_workflow_route.next_action, 'start_or_select_session');
 });
 
+test('worker operation posture does not bounce between inactive but evidence-ready sibling operations', async () => {
+  const now = clock();
+  const controlEventJson = JSON.stringify({
+    schema: 'narada.cloudflare_carrier_event.v1',
+    carrier_session_id: 'carrier_session_control',
+    sequence: 1,
+    event_id: 'carrier_event_control_1',
+    site_id: 'site_fixture',
+    event_kind: 'carrier_command_executed',
+    created_at: now,
+    payload: { command: '/goal' },
+  });
+  const siteReadEventJson = JSON.stringify({
+    schema: 'narada.cloudflare_carrier_event.v1',
+    carrier_session_id: 'carrier_session_site_read',
+    sequence: 1,
+    event_id: 'carrier_event_site_read_1',
+    site_id: 'site_fixture',
+    event_kind: 'carrier_command_executed',
+    created_at: now,
+    payload: { command: '/review' },
+  });
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{
+      site_id: 'site_fixture',
+      site_ref: 'site://fixture',
+      display_name: 'Fixture Site',
+      status: 'active',
+      created_at: now,
+      updated_at: now,
+      created_by_principal_id: 'admin',
+    }],
+    memberships: [{
+      site_id: 'site_fixture',
+      principal_id: 'admin',
+      role: 'owner',
+      status: 'active',
+      created_at: now,
+      updated_at: now,
+    }],
+    operations: [{
+      operation_id: 'operation_control',
+      site_id: 'site_fixture',
+      display_name: 'Control Operation',
+      operation_kind: 'control',
+      status: 'active',
+      created_by_principal_id: 'admin',
+      created_at: now,
+      updated_at: now,
+    }, {
+      operation_id: 'operation_site_read',
+      site_id: 'site_fixture',
+      display_name: 'Site Read Operation',
+      operation_kind: 'cloudflare_site_read',
+      status: 'active',
+      created_by_principal_id: 'admin',
+      created_at: now,
+      updated_at: now,
+    }],
+    carrierSessions: [{
+      carrier_session_id: 'carrier_session_control',
+      site_id: 'site_fixture',
+      operation_id: 'operation_control',
+      agent_id: 'narada.fixture.control',
+      bound_by_principal_id: 'admin',
+      binding_status: 'active',
+      created_at: now,
+      updated_at: now,
+    }, {
+      carrier_session_id: 'carrier_session_site_read',
+      site_id: 'site_fixture',
+      operation_id: 'operation_site_read',
+      agent_id: 'narada.fixture.site_read',
+      bound_by_principal_id: 'admin',
+      binding_status: 'active',
+      created_at: now,
+      updated_at: now,
+    }],
+    carrierSessionEvents: [{
+      carrier_session_id: 'carrier_session_control',
+      sequence: 1,
+      event_id: 'carrier_event_control_1',
+      site_id: 'site_fixture',
+      operation_id: 'operation_control',
+      agent_id: 'narada.fixture.control',
+      event_kind: 'carrier_command_executed',
+      occurred_at: now,
+      event_json: controlEventJson,
+      indexed_at: now,
+    }, {
+      carrier_session_id: 'carrier_session_site_read',
+      sequence: 1,
+      event_id: 'carrier_event_site_read_1',
+      site_id: 'site_fixture',
+      operation_id: 'operation_site_read',
+      agent_id: 'narada.fixture.site_read',
+      event_kind: 'carrier_command_executed',
+      occurred_at: now,
+      event_json: siteReadEventJson,
+      indexed_at: now,
+    }],
+  });
+  const env = authEnv(null, {
+    CLOUDFLARE_SITE_REGISTRY_DB: siteDb,
+    CLOUDFLARE_CARRIER_TASK_DB: fakeD1TaskDatabase(),
+  });
+
+  const controlRead = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_operation_read_no_bounce_control',
+    params: {
+      site_id: 'site_fixture',
+      operation_id: 'operation_control',
+      carrier_event_limit: 10,
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(controlRead.status, 200);
+  const controlBody = await controlRead.json();
+  assert.equal(controlBody.operation_posture_overview.active_operation_id, 'operation_control');
+  assert.equal(controlBody.operation_posture_overview.next_operation_id, 'operation_control');
+  assert.equal(controlBody.operation_posture_route.command_action, 'monitor_operations');
+  assert.equal(controlBody.operation_posture_route.target, 'operation_control');
+
+  const siteRead = await worker.fetch(jsonRequest({
+    operation: 'operation.read',
+    request_id: 'request_operation_read_no_bounce_site_read',
+    params: {
+      site_id: 'site_fixture',
+      operation_id: 'operation_site_read',
+      carrier_event_limit: 10,
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(siteRead.status, 200);
+  const siteReadBody = await siteRead.json();
+  assert.equal(siteReadBody.operation_posture_overview.active_operation_id, 'operation_site_read');
+  assert.equal(siteReadBody.operation_posture_overview.next_operation_id, 'operation_site_read');
+  assert.equal(siteReadBody.operation_posture_route.command_action, 'monitor_operations');
+  assert.equal(siteReadBody.operation_posture_route.target, 'operation_site_read');
+
+  const listed = await worker.fetch(jsonRequest({
+    operation: 'operation.list',
+    request_id: 'request_operation_list_no_bounce',
+    params: { site_id: 'site_fixture' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(listed.status, 200);
+  const listedBody = await listed.json();
+  assert.equal(listedBody.operation_posture_overview.active_operation_id, 'operation_control');
+  assert.equal(listedBody.operation_posture_overview.next_operation_id, 'operation_control');
+  assert.equal(listedBody.operation_posture_route.command_action, 'monitor_operations');
+  assert.equal(listedBody.focused_operation_lifecycle.operation_id, 'operation_control');
+});
+
 function fakeD1TaskDatabase() {
   const rows = [];
   return {
