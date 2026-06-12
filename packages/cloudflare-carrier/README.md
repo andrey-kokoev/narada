@@ -255,6 +255,14 @@ pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text
 
 `product:durability:coherence:live` reads `site.list`, then for each selected site reads `site.read`, `operation.list`, `operation.read`, and `product:operation:recovery` for the currently routed operation. It fails when site durability drifts from `durable` / `reconstructable`, when operation recovery still has gaps, or when the `operation.read` recovery summary disagrees with the dedicated recovery surface.
 
+Run a bounded live control-plane convergence pass when you want the current top-level site route executed first and then immediately proven against both posture and durability coherence:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:control-plane:convergence:live:text -- --url https://<worker-host> --operator-session-file cloudflare-operator-session.json --execute-control-plane
+```
+
+`product:control-plane:convergence:live` reads `site.list`, executes `product:site:next:workflow:live` while the top-level route is still `focus_next_site`, then proves the resulting state with `product:posture:coherence:live` and `product:durability:coherence:live`. It fails if the site route does not converge back to `monitor_sites`, or if either downstream verifier still reports drift.
+
 Install the Windows scheduled task for the recurring continuity loop after the site and packet path are configured in the local continuity env file:
 
 ```powershell
