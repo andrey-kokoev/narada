@@ -312,6 +312,14 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:lifecycle:workflow:l
 
 `product:operation:lifecycle:workflow:live` is an orchestrated live verifier, not a new mutation primitive. It calls `product:operation:create`, `product:operation:status`, `product:operation:continuation:resume`, and `product:operation:read` in sequence, and returns the readback summaries after each stage so the lifecycle route is proven from live product evidence instead of inferred from unit tests alone.
 
+Run the adjacent focus-selection live proof when the operator workflow should begin from posture, selecting the next operation from `operation.list` before drilling into `operation.read`:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:operation:focus:workflow:live -- --url <worker-url> --site <site-id> --operation-id <expected-operation-id> --operator-session-file cloudflare-operator-session.json --execute-operation-focus
+```
+
+`product:operation:focus:workflow:live` is an orchestrated live verifier over the existing read surfaces, not a new mutation primitive. It reads `operation.list`, requires the posture route to point at `focus_next_operation`, optionally asserts `--operation-id` matches that selected target, then reads `operation.read` for that operation so the control-plane handoff from operation posture into focused operation readback is proven from live product evidence instead of relying on the web console.
+
 Run the adjacent continuation-selection live proof when the operator workflow should begin from `operation.list` rather than a remembered operation id:
 
 ```powershell

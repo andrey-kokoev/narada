@@ -133,6 +133,7 @@ export function summarizeProductSurface(operation, body, options = {}) {
   if (operation === 'operation.list') {
     const operations = Array.isArray(body?.operations) ? body.operations : [];
     const overview = body?.operation_posture_overview ?? body?.operation_product_overview ?? {};
+    const postureRoute = body?.operation_posture_route ?? null;
     const nextOperationId = overview.next_operation_id ?? operations[0]?.operation_id ?? null;
     const nextOperation = nextOperationId ? operations.find((item) => item?.operation_id === nextOperationId) ?? null : null;
     const continuationOperations = operations.filter((item) => item?.status === 'needs_continuation');
@@ -154,6 +155,13 @@ export function summarizeProductSurface(operation, body, options = {}) {
       next_action: overview.next_action ?? null,
       next_reason: overview.next_reason ?? null,
       health_counts: overview.health_counts ?? null,
+      route_domain: postureRoute?.domain ?? null,
+      route_command_state: postureRoute?.command_state ?? null,
+      route_command_action: postureRoute?.command_action ?? null,
+      route_next_action: postureRoute?.next_action ?? null,
+      route_target: postureRoute?.target ?? null,
+      route_status: postureRoute?.status ?? null,
+      route_reason: postureRoute?.reason ?? null,
     };
   }
   if (operation === 'operation.read') {
@@ -258,6 +266,9 @@ export function formatProductSurfaceText(result) {
     lines.push(`Operations: count=${summary.operation_count ?? 0} active=${summary.active_operation_id ?? 'none'} next=${summary.next_operation_id ?? 'none'}`);
     lines.push(`Lifecycle Statuses: ${formatKeyValueMap(summary.operation_status_counts ?? {})}`);
     if (summary.next_operation_id) lines.push(`Next Operation Status: ${summary.next_operation_status ?? 'unknown'}`);
+    if (summary.next_operation_id) {
+      lines.push(`Focused Read: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.next_operation_id} --operator-session-file <operator-session-file>`);
+    }
     if (summary.continuation_mode) {
       lines.push(`Continuation: needed=${summary.needs_continuation_count ?? 0} next=${summary.next_continuation_operation_id ?? 'none'} action=${summary.continuation_next_action ?? 'monitor_operations'}`);
       if (summary.next_continuation_operation_id) {
@@ -267,6 +278,12 @@ export function formatProductSurfaceText(result) {
       }
     }
     lines.push(`Next: status=${summary.next_status ?? 'unknown'} action=${summary.next_action ?? 'none'} reason=${summary.next_reason ?? 'none'}`);
+    if (summary.route_next_action || summary.route_command_state || summary.route_target) {
+      lines.push(`Operation Route: domain=${summary.route_domain ?? 'unknown'} state=${summary.route_command_state ?? 'unknown'} action=${summary.route_next_action ?? 'none'} target=${summary.route_target ?? 'none'} status=${summary.route_status ?? 'unknown'} reason=${summary.route_reason ?? 'none'}`);
+      if (summary.route_next_action === 'focus_next_operation' && summary.next_operation_id) {
+        lines.push(`Focus Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:focus:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.next_operation_id} --operator-session-file <operator-session-file> --execute-operation-focus`);
+      }
+    }
     if (summary.health_counts) lines.push(`Health Counts: ${formatKeyValueMap(summary.health_counts)}`);
     return `${lines.join('\n')}\n`;
   }

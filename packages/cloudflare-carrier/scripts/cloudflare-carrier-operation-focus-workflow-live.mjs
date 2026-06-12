@@ -1,0 +1,154 @@
+#!/usr/bin/env node
+import assert from 'node:assert/strict';
+import { execFile as execFileCallback } from 'node:child_process';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+
+import { resolveAuth } from './cloudflare-carrier-product-read.mjs';
+
+const execFile = promisify(execFileCallback);
+const scriptPath = fileURLToPath(import.meta.url);
+const scriptDir = dirname(scriptPath);
+const packageRoot = resolve(scriptDir, '..');
+const productReadScript = resolve(scriptDir, 'cloudflare-carrier-product-read.mjs');
+
+export function parseOperationFocusWorkflowLiveArgs(argv = [], env = process.env) {
+  const args = [...argv];
+  const workerUrl = option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '';
+  const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? 'site_live_smoke';
+  const expectedOperationId = option(args, '--operation-id') ?? option(args, '--carrier-operation') ?? env.CLOUDFLARE_CARRIER_OPERATION_ID ?? null;
+  const expectedRouteAction = option(args, '--expected-route-action') ?? env.CLOUDFLARE_CARRIER_OPERATION_FOCUS_EXPECTED_ROUTE_ACTION ?? 'focus_next_operation';
+  const auth = resolveAuth(args, env);
+  const executeAcknowledged = flag(args, '--execute-operation-focus')
+    || env.CLOUDFLARE_CARRIER_OPERATION_FOCUS_EXECUTE_LIVE === '1';
+
+  if (!executeAcknowledged) {
+    throw new Error('operation_focus_workflow_live_requires_--execute-operation-focus_or_CLOUDFLARE_CARRIER_OPERATION_FOCUS_EXECUTE_LIVE=1');
+  }
+  if (!workerUrl) throw new Error('operation_focus_workflow_live_requires_--url_or_CLOUDFLARE_CARRIER_URL');
+  if (!siteId) throw new Error('operation_focus_workflow_live_requires_site_id');
+  if (!auth) throw new Error('operation_focus_workflow_live_requires_bearer_token_or_operator_session');
+
+  return {
+    workerUrl,
+    siteId,
+    expectedOperationId,
+    expectedRouteAction,
+    auth,
+    executeAcknowledged,
+  };
+}
+
+export async function runOperationFocusWorkflowLive(
+  config,
+  { runNodeScript = defaultRunNodeScript } = {},
+) {
+  const listBefore = parseJsonStdout(
+    await runNodeScript(buildOperationListArgs(config), { cwd: packageRoot }),
+    'operation_list_before_focus',
+  );
+  assert.equal(listBefore.schema, 'narada.cloudflare_carrier.product_read.v1');
+
+  const selectedOperationId = listBefore.summary.next_operation_id ?? null;
+  assert.ok(selectedOperationId, 'operation_focus_workflow_live_requires_next_operation');
+  if (config.expectedOperationId) {
+    assert.equal(
+      selectedOperationId,
+      config.expectedOperationId,
+      `operation_focus_workflow_live_expected_operation_mismatch:${config.expectedOperationId}:${selectedOperationId}`,
+    );
+  }
+  assert.equal(
+    listBefore.summary.route_next_action,
+    config.expectedRouteAction,
+    `operation_focus_workflow_live_expected_route_action_mismatch:${config.expectedRouteAction}:${listBefore.summary.route_next_action ?? 'null'}`,
+  );
+
+  const readFocused = parseJsonStdout(
+    await runNodeScript(buildOperationReadArgs(config, selectedOperationId), { cwd: packageRoot }),
+    'operation_read_focused',
+  );
+  assert.equal(readFocused.schema, 'narada.cloudflare_carrier.product_read.v1');
+  assert.equal(readFocused.summary.operation_id, selectedOperationId);
+  assert.equal(
+    readFocused.summary.current_status,
+    listBefore.summary.next_operation_status,
+    `operation_focus_workflow_live_status_mismatch:${listBefore.summary.next_operation_status ?? 'null'}:${readFocused.summary.current_status ?? 'null'}`,
+  );
+
+  return {
+    schema: 'narada.cloudflare_carrier.operation_focus_workflow_live.v1',
+    status: 'ok',
+    worker_url: config.workerUrl,
+    site_id: config.siteId,
+    selected_operation_id: selectedOperationId,
+    expected_operation_id: config.expectedOperationId,
+    expected_route_action: config.expectedRouteAction,
+    list_before_focus: listBefore.summary,
+    read_focused: readFocused.summary,
+  };
+}
+
+async function defaultRunNodeScript(args, options) {
+  const result = await execFile(process.execPath, args, { ...options, timeout: 120000, windowsHide: true });
+  return result.stdout;
+}
+
+function buildOperationListArgs(config) {
+  const args = [
+    productReadScript,
+    '--operation', 'operation.list',
+    '--url', config.workerUrl,
+    '--site', config.siteId,
+  ];
+  appendAuthOptions(args, config);
+  return args;
+}
+
+function buildOperationReadArgs(config, operationId) {
+  const args = [
+    productReadScript,
+    '--operation', 'operation.read',
+    '--url', config.workerUrl,
+    '--site', config.siteId,
+    '--operation-id', operationId,
+  ];
+  appendAuthOptions(args, config);
+  return args;
+}
+
+function appendAuthOptions(args, config) {
+  if (config.auth?.kind === 'bearer') {
+    args.push('--token', config.auth.value);
+    return;
+  }
+  if (config.auth?.kind === 'operator_session') {
+    args.push('--operator-session-cookie', config.auth.value);
+  }
+}
+
+function parseJsonStdout(stdout, label) {
+  const text = String(stdout ?? '').trim();
+  if (!text) throw new Error(`${label}_stdout_empty`);
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${label}_stdout_invalid_json:${error.message}`);
+  }
+}
+
+function option(args, name) {
+  const index = args.indexOf(name);
+  return index >= 0 ? args[index + 1] : null;
+}
+
+function flag(args, name) {
+  return args.includes(name);
+}
+
+if (resolve(process.argv[1] ?? '') === scriptPath) {
+  const config = parseOperationFocusWorkflowLiveArgs(process.argv.slice(2));
+  const result = await runOperationFocusWorkflowLive(config);
+  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+}

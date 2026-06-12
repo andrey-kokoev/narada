@@ -315,11 +315,21 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       next_status: 'needs_attention',
       next_action: 'review_operation',
       next_reason: 'operation_needs_review',
+      route_domain: 'operation_posture',
+      route_command_state: 'operation_posture_attention',
+      route_command_action: 'focus_next_operation',
+      route_next_action: 'focus_next_operation',
+      route_target: 'operation_live',
+      route_status: 'needs_attention',
+      route_reason: 'operation_needs_review',
     },
   });
   assert.match(operationListText, /Operations: count=1 active=operation_live next=operation_live/);
   assert.match(operationListText, /Lifecycle Statuses: inactive=1/);
   assert.match(operationListText, /Next Operation Status: inactive/);
+  assert.match(operationListText, /Focused Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(operationListText, /Operation Route: domain=operation_posture state=operation_posture_attention action=focus_next_operation target=operation_live status=needs_attention reason=operation_needs_review/);
+  assert.match(operationListText, /Focus Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file> --execute-operation-focus/);
 
   const continuationListText = formatProductSurfaceText({
     operation: 'operation.list',
@@ -482,6 +492,15 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
       next_reason: 'operation_needs_review',
       health_counts: { ready: 0, needs_attention: 1 },
     },
+    operation_posture_route: {
+      domain: 'operation_posture',
+      command_state: 'operation_posture_attention',
+      command_action: 'focus_next_operation',
+      next_action: 'focus_next_operation',
+      target: 'operation_control',
+      status: 'needs_attention',
+      reason: 'operation_needs_review',
+    },
   }, { continuation: true }), {
     operation: 'operation.list',
     continuation_mode: true,
@@ -499,6 +518,13 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     next_action: 'review_operation',
     next_reason: 'operation_needs_review',
     health_counts: { ready: 0, needs_attention: 1 },
+    route_domain: 'operation_posture',
+    route_command_state: 'operation_posture_attention',
+    route_command_action: 'focus_next_operation',
+    route_next_action: 'focus_next_operation',
+    route_target: 'operation_control',
+    route_status: 'needs_attention',
+    route_reason: 'operation_needs_review',
   });
 
   assert.deepEqual(summarizeProductSurface('operation.read', {
