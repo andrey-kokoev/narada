@@ -398,8 +398,12 @@ function isEvidenceReviewActionable(summary = {}) {
 }
 
 function shouldRetargetToPostureTarget(summary = {}, selectedOperationId) {
+  const currentWorkflowAction = typeof summary?.workflow_next_action === 'string'
+    ? summary.workflow_next_action
+    : null;
   return summary?.posture_next_action === 'focus_next_operation'
     && summary?.posture_next_status === 'needs_attention'
+    && (!currentWorkflowAction || currentWorkflowAction === 'monitor_operation')
     && typeof summary?.posture_target === 'string'
     && summary.posture_target.length > 0
     && summary.posture_target !== selectedOperationId;

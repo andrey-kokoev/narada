@@ -699,6 +699,43 @@ test('formatProductSurfaceText renders refused product reads without auth materi
   assert.equal(text.includes('secret-token'), false);
 });
 
+test('formatProductSurfaceText renders structured operation projection errors', () => {
+  const text = formatProductSurfaceText({
+    status: 'ok',
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    response: {
+      operation: { site_id: 'site_alpha', operation_id: 'operation_broken', status: 'active' },
+      operation_product_projection_error: {
+        stage: 'carrier_evidence_read',
+        code: 'operation_product_projection_failed',
+        message: 'projection blew up',
+      },
+      operation_status_history: { current_status: 'active', transition_count: 1 },
+      operation_lifecycle_status: { phase: 'unknown', health: 'attention', next_action: 'inspect_projection_error', session_count: 0, task_count: 0 },
+      operation_workflow_route: { next_action: 'inspect_projection_error', reason: 'projection_failed' },
+      cloudflare_recovery_posture: { recovery_boundaries: [], recovery_gaps: [] },
+    },
+    summary: summarizeProductSurface('operation.read', {
+      operation: { site_id: 'site_alpha', operation_id: 'operation_broken', status: 'active' },
+      operation_product_projection_error: {
+        stage: 'carrier_evidence_read',
+        code: 'operation_product_projection_failed',
+        message: 'projection blew up',
+      },
+      operation_status_history: { current_status: 'active', transition_count: 1 },
+      operation_lifecycle_status: { phase: 'unknown', health: 'attention', next_action: 'inspect_projection_error', session_count: 0, task_count: 0 },
+      operation_workflow_route: { next_action: 'inspect_projection_error', reason: 'projection_failed' },
+      cloudflare_recovery_posture: { recovery_boundaries: [], recovery_gaps: [] },
+    }),
+  });
+
+  assert.match(text, /Projection Error: stage=carrier_evidence_read code=operation_product_projection_failed message=projection blew up/);
+  assert.match(text, /Operation: operation_broken/);
+  assert.match(text, /Workflow Route: action=inspect_projection_error reason=projection_failed/);
+});
+
 test('summarizeProductSurface summarizes site and operation reads', () => {
   assert.deepEqual(summarizeProductSurface('site.read', {
     site: { site_id: 'site_fixture', display_name: 'Fixture Site' },
@@ -788,6 +825,9 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     route_target: 'operation_control',
     route_status: 'needs_attention',
     route_reason: 'operation_needs_review',
+    projection_error_stage: null,
+    projection_error_code: null,
+    projection_error_message: null,
   });
 
   assert.deepEqual(summarizeProductSurface('operation.read', {
@@ -861,5 +901,8 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     recovery_gap_count: 0,
     recovery_gap_keys: [],
     recovery_next_action: 'monitor_recovery_posture',
+    projection_error_stage: null,
+    projection_error_code: null,
+    projection_error_message: null,
   });
 });

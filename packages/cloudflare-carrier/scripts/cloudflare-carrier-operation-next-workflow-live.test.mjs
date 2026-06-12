@@ -383,6 +383,74 @@ test('runOperationNextWorkflowLive follows the posture target chain until it rea
   assert.equal(result.delegated_route_action, 'start_or_select_session');
 });
 
+test('runOperationNextWorkflowLive does not retarget away from an already actionable focused operation', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_live_smoke',
+    expectedListRouteAction: null,
+    expectedOperationId: 'operation_focus',
+    auth: { kind: 'bearer', value: 'token-value', source: 'flag:--token' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        const operationId = args.includes('--operation-id') ? args[args.indexOf('--operation-id') + 1] : null;
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              next_operation_id: 'operation_focus',
+              route_next_action: 'focus_next_operation',
+              next_action: 'use_focused_operation',
+            },
+          });
+        }
+        if (operationId === 'operation_focus') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              operation_id: 'operation_focus',
+              workflow_next_action: 'refresh_site_continuity_loop',
+              posture_next_status: 'needs_attention',
+              posture_next_action: 'focus_next_operation',
+              posture_target: 'operation_control',
+              posture_reason: 'use_focused_operation',
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            operation_id: 'operation_control',
+            workflow_next_action: 'monitor_operation',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-operation-continuity-workflow-live.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.operation_continuity_workflow_live.v1',
+          status: 'ok',
+          summary: {
+            operation_id: 'operation_focus',
+          },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.selected_operation_id, 'operation_focus');
+  assert.equal(result.read_before_next.operation_id, 'operation_focus');
+  assert.equal(result.delegated_workflow, 'continuity');
+  assert.equal(result.delegated_route_action, 'refresh_site_continuity_loop');
+  assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-operation-continuity-workflow-live.mjs');
+  assert.equal(invocations[2][invocations[2].indexOf('--operation-id') + 1], 'operation_focus');
+});
+
 test('runOperationNextWorkflowLive stops retargeting cleanly on a posture cycle and keeps the last distinct operation selected', async () => {
   const result = await runOperationNextWorkflowLive({
     workerUrl: 'https://carrier.example',

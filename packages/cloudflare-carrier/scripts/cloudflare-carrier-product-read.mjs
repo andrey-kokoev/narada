@@ -134,6 +134,7 @@ export function summarizeProductSurface(operation, body, options = {}) {
     const operations = Array.isArray(body?.operations) ? body.operations : [];
     const overview = body?.operation_posture_overview ?? body?.operation_product_overview ?? {};
     const postureRoute = body?.operation_posture_route ?? null;
+    const projectionError = body?.operation_product_projection_error ?? null;
     const nextOperationId = overview.next_operation_id ?? operations[0]?.operation_id ?? null;
     const nextOperation = nextOperationId ? operations.find((item) => item?.operation_id === nextOperationId) ?? null : null;
     const continuationOperations = operations.filter((item) => item?.status === 'needs_continuation');
@@ -162,6 +163,9 @@ export function summarizeProductSurface(operation, body, options = {}) {
       route_target: postureRoute?.target ?? null,
       route_status: postureRoute?.status ?? null,
       route_reason: postureRoute?.reason ?? null,
+      projection_error_stage: projectionError?.stage ?? null,
+      projection_error_code: projectionError?.code ?? null,
+      projection_error_message: projectionError?.message ?? null,
     };
   }
   if (operation === 'operation.read') {
@@ -172,6 +176,7 @@ export function summarizeProductSurface(operation, body, options = {}) {
     const postureRoute = body?.operation_posture_route ?? body?.operation_product_surface?.posture_route ?? null;
     const postureOverview = body?.operation_posture_overview ?? body?.operation_product_surface?.posture_overview ?? null;
     const recoveryPosture = body?.cloudflare_recovery_posture ?? body?.operation_product_surface?.cloudflare_recovery_posture ?? null;
+    const projectionError = body?.operation_product_projection_error ?? null;
     const recoveryBoundaries = Array.isArray(recoveryPosture?.recovery_boundaries) ? recoveryPosture.recovery_boundaries : [];
     const recoveryGaps = Array.isArray(recoveryPosture?.recovery_gaps) ? recoveryPosture.recovery_gaps : [];
     return {
@@ -206,6 +211,9 @@ export function summarizeProductSurface(operation, body, options = {}) {
       recovery_gap_count: recoveryGaps.length,
       recovery_gap_keys: recoveryGaps.map((gap) => gap?.key ?? gap?.boundary ?? gap).filter(Boolean),
       recovery_next_action: recoveryPosture?.next_action ?? null,
+      projection_error_stage: projectionError?.stage ?? null,
+      projection_error_code: projectionError?.code ?? null,
+      projection_error_message: projectionError?.message ?? null,
     };
   }
   return { operation };
@@ -270,6 +278,9 @@ export function formatProductSurfaceText(result) {
   if (operation === 'operation.list') {
     lines.push(`Site: ${summary.site_id ?? 'unknown'}`);
     lines.push(`Operations: count=${summary.operation_count ?? 0} active=${summary.active_operation_id ?? 'none'} next=${summary.next_operation_id ?? 'none'}`);
+    if (summary.projection_error_stage || summary.projection_error_code) {
+      lines.push(`Projection Error: stage=${summary.projection_error_stage ?? 'unknown'} code=${summary.projection_error_code ?? 'unknown'} message=${summary.projection_error_message ?? 'none'}`);
+    }
     lines.push(`Lifecycle Statuses: ${formatKeyValueMap(summary.operation_status_counts ?? {})}`);
     if (summary.next_operation_id) lines.push(`Next Operation Status: ${summary.next_operation_status ?? 'unknown'}`);
     if (summary.next_operation_id) {
@@ -299,6 +310,9 @@ export function formatProductSurfaceText(result) {
   if (operation === 'operation.read') {
     lines.push(`Site: ${summary.site_id ?? 'unknown'}`);
     lines.push(`Operation: ${summary.operation_id ?? 'unknown'}`);
+    if (summary.projection_error_stage || summary.projection_error_code) {
+      lines.push(`Projection Error: stage=${summary.projection_error_stage ?? 'unknown'} code=${summary.projection_error_code ?? 'unknown'} message=${summary.projection_error_message ?? 'none'}`);
+    }
     lines.push(`Status: current=${summary.current_status ?? 'unknown'} transitions=${summary.status_transition_count ?? 0}`);
     if (summary.latest_status_to) {
       lines.push(`Latest Status: ${summary.latest_status_from ?? 'unknown'} -> ${summary.latest_status_to}${summary.latest_status_recorded_at ? ` at ${summary.latest_status_recorded_at}` : ''}`);
