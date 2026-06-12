@@ -156,4 +156,11 @@ test('runSiteActionWorkflowLive delegates continuity refresh', async () => {
   assert.equal(result.delegated_workflow, 'refresh_site_continuity_loop');
   assert.equal(result.delegated_result.action, 'reconcile-execute');
   assert.equal(invocations.length, 3);
+  assert.deepEqual(invocations[1].slice(1, 9), [
+    '--action', 'reconcile-execute',
+    '--live',
+    '--site', 'site_alpha',
+    '--refresh-site-registry-projection',
+    '--projection-url', 'https://carrier.example',
+  ]);
 });

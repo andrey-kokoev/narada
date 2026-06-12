@@ -144,7 +144,14 @@ function buildWorkflowArgs(config, action, script) {
     return args;
   }
   if (action === 'refresh_site_continuity_loop') {
-    const args = [script, '--action', 'reconcile-execute', '--live', '--url', config.workerUrl, '--refresh-site-registry-projection'];
+    const args = [
+      script,
+      '--action', 'reconcile-execute',
+      '--live',
+      '--site', config.siteId,
+      '--refresh-site-registry-projection',
+      '--projection-url', config.workerUrl,
+    ];
     appendAuthOptions(args, config);
     return args;
   }
