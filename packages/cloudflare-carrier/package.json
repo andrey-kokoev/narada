@@ -78,7 +78,6 @@
     "webhook-delay:directive-smoke:live": "node scripts/cloudflare-carrier-webhook-delay-directive-live-smoke.mjs",
     "webhook-delay:directive-delivery-smoke:live": "node scripts/cloudflare-carrier-webhook-delay-directive-delivery-live-smoke.mjs",
     "resident-loop:shadow-smoke:live": "node scripts/cloudflare-carrier-resident-loop-shadow-live-smoke.mjs",
-    "resident-dispatch:smoke:live": "node scripts/cloudflare-carrier-resident-dispatch-live-smoke.mjs",
     "mailbox:status-shadow-smoke:live": "node scripts/cloudflare-carrier-mailbox-status-shadow-live-smoke.mjs",
     "mailbox:status-source-smoke:live": "node scripts/cloudflare-carrier-mailbox-status-source-live-smoke.mjs",
     "mailbox:draft-reply-proposal-smoke:live": "node scripts/cloudflare-carrier-mailbox-draft-reply-proposal-live-smoke.mjs",
