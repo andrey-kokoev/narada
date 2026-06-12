@@ -275,11 +275,17 @@ Use `product:read` for read-only inspection of the deployed Cloudflare carrier p
 ```powershell
 pnpm --filter @narada2/cloudflare-carrier product:site:list -- --url <worker-url> --token <token>
 pnpm --filter @narada2/cloudflare-carrier product:site:read -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada2/cloudflare-carrier product:site-continuity:publish -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada2/cloudflare-carrier product:site-continuity:loop-report -- --url <worker-url> --site <site-id> --report-file .narada/site-continuity/<site-id>-cloudflare-sync.json --operator-session-file cloudflare-operator-session.json
 pnpm --filter @narada2/cloudflare-carrier product:operation:list -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json --format summary
 pnpm --filter @narada2/cloudflare-carrier product:operation:read -- --url <worker-url> --site <site-id> --operation-id <operation-id> --format summary
 ```
 
 The command prints a `narada.cloudflare_carrier.product_read.v1` envelope by default, including `site.list`, `site.read`, `operation.list`, or `operation.read` response evidence and a compact summary. It records only `auth_source` in the output; bearer tokens and operator-session cookies are not echoed.
+
+Use `product:site-continuity:publish` when a site product read or workflow route names `publish_cloudflare_continuity_packet` as the next action. It calls `site.continuity.packet.publish` through the same authenticated `POST /api/carrier` envelope, records only the Cloudflare-side continuity packet import, and returns the packet direction, packet admission, and packet durability action without inventing filesystem or repository mutation authority.
+
+Use `product:site-continuity:loop-report` when the next step is to refresh Cloudflare-side loop evidence after a local continuity sync. It calls `site.continuity.loop.report.put` through the same authenticated `POST /api/carrier` envelope and accepts either a direct loop-report JSON file or a full `continuity:run-once` / `sync-once` artifact containing `continuity_loop_report`; the command extracts that report, records only loop evidence, and returns loop freshness and Cloudflare push posture without inventing Windows execution authority.
 
 Create a governed Cloudflare operation from the operator CLI when the caller has Site authority:
 
@@ -443,6 +449,8 @@ For operator-facing readback without JSON inspection, use the text aliases:
 ```powershell
 pnpm --filter @narada2/cloudflare-carrier product:site:list:text -- --url <worker-url> --operator-session-file cloudflare-operator-session.json
 pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada2/cloudflare-carrier product:site-continuity:publish:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada2/cloudflare-carrier product:site-continuity:loop-report:text -- --url <worker-url> --site <site-id> --report-file .narada/site-continuity/<site-id>-cloudflare-sync.json --operator-session-file cloudflare-operator-session.json
 pnpm --filter @narada2/cloudflare-carrier product:operation:list:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
 pnpm --filter @narada2/cloudflare-carrier product:operation:continuation:next:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
 pnpm --filter @narada2/cloudflare-carrier product:operation:continuation:resume:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --agent-id <agent-id> --operator-session-file cloudflare-operator-session.json
