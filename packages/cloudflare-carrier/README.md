@@ -417,10 +417,10 @@ pnpm --filter @narada2/cloudflare-carrier repository-publication:readback-smoke:
 For the direct Cloudflare GitHub lane, use the workflow wrapper when one operator run should both execute the governed publication and prove the readback surface afterward:
 
 ```bash
-pnpm --filter @narada2/cloudflare-carrier repository-publication:cloudflare-workflow:live -- --url <worker-url> --token-file <token-file> --site <site-id> --operation <operation-id> --repository-ref github:andrey-kokoev/narada --branch refs/heads/cloudflare-publication-live --commit <40-hex-commit> --execute-cloudflare-github
+pnpm --filter @narada2/cloudflare-carrier repository-publication:cloudflare-workflow:live -- --url <worker-url> --operator-session-file cloudflare-operator-session.json --site <site-id> --operation <operation-id> --repository-ref github:andrey-kokoev/narada --branch refs/heads/cloudflare-publication-live --commit <40-hex-commit> --execute-cloudflare-github
 ```
 
-`repository-publication:cloudflare-workflow:live` is an orchestration wrapper over the existing execution and readback live-smoke commands. It does not create a separate mutation path. It first runs the governed Cloudflare publication execution, then immediately verifies that the same request, admission, execution, and operation lifecycle are visible through the readback product surfaces.
+`repository-publication:cloudflare-workflow:live` is an orchestration wrapper over the existing execution and readback live-smoke commands. It does not create a separate mutation path. It first runs the governed Cloudflare publication execution, then immediately verifies that the same request, admission, execution, and operation lifecycle are visible through the readback product surfaces. The wrapper accepts either bearer-token auth or a captured operator session file/cookie, so this lane can run as a real authenticated operator workflow instead of a token-only maintenance path.
 
 Finish an existing closed Cloudflare task lifecycle task after explicit task-finish cutover evidence exists:
 

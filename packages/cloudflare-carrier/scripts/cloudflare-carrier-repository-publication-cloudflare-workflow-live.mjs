@@ -4,6 +4,7 @@ import { execFile as execFileCallback } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { resolveAuth } from './cloudflare-carrier-product-read.mjs';
 
 const execFile = promisify(execFileCallback);
 const scriptPath = fileURLToPath(import.meta.url);
@@ -24,8 +25,7 @@ export function parseRepositoryPublicationCloudflareWorkflowLiveArgs(argv = [], 
   const contractRef = option(args, '--contract-ref') ?? null;
   const evidenceContractRef = option(args, '--evidence-contract-ref') ?? null;
   const rollbackRef = option(args, '--rollback-ref') ?? null;
-  const token = option(args, '--token') ?? null;
-  const tokenFile = option(args, '--token-file') ?? env.CLOUDFLARE_CARRIER_TOKEN_FILE ?? null;
+  const auth = resolveAuth(args, env);
   const readbackLimit = parsePositiveInteger(
     option(args, '--readback-limit') ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_READBACK_LIMIT ?? '50',
     'readback-limit',
@@ -48,8 +48,8 @@ export function parseRepositoryPublicationCloudflareWorkflowLiveArgs(argv = [], 
   if (!commitSha) {
     throw new Error('repository_publication_cloudflare_workflow_live_requires_40_hex_--commit_or_CLOUDFLARE_REPOSITORY_PUBLICATION_LIVE_COMMIT_SHA');
   }
-  if (!token && !tokenFile) {
-    throw new Error('repository_publication_cloudflare_workflow_live_requires_--token_or_--token-file_or_CLOUDFLARE_CARRIER_TOKEN_FILE');
+  if (!auth) {
+    throw new Error('repository_publication_cloudflare_workflow_live_requires_bearer_token_or_operator_session');
   }
 
   return {
@@ -63,8 +63,7 @@ export function parseRepositoryPublicationCloudflareWorkflowLiveArgs(argv = [], 
     contractRef,
     evidenceContractRef,
     rollbackRef,
-    token,
-    tokenFile,
+    auth,
     readbackLimit,
     allowMissingGithubToken,
     executeAcknowledged,
@@ -173,12 +172,12 @@ function parseJsonStdout(stdout, label) {
 }
 
 function appendAuthOptions(args, config) {
-  if (config.token) {
-    args.push('--token', config.token);
+  if (config.auth?.kind === 'bearer') {
+    args.push('--token', config.auth.value);
     return;
   }
-  if (config.tokenFile) {
-    args.push('--token-file', config.tokenFile);
+  if (config.auth?.kind === 'operator_session') {
+    args.push('--operator-session-cookie', config.auth.value);
   }
 }
 

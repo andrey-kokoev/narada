@@ -19,6 +19,23 @@ test('parseRepositoryPublicationCloudflareWorkflowLiveArgs requires explicit exe
   );
 });
 
+test('parseRepositoryPublicationCloudflareWorkflowLiveArgs supports operator session auth', () => {
+  const parsed = parseRepositoryPublicationCloudflareWorkflowLiveArgs([
+    '--url', 'https://carrier.example',
+    '--operator-session-cookie', 'operator-session-cookie',
+    '--repository-ref', 'github:andrey-kokoev/narada',
+    '--branch', 'refs/heads/cloudflare-live',
+    '--commit', '0123456789abcdef0123456789abcdef01234567',
+    '--execute-cloudflare-github',
+  ], {});
+
+  assert.deepEqual(parsed.auth, {
+    kind: 'operator_session',
+    value: 'operator-session-cookie',
+    source: 'operator-session-cookie',
+  });
+});
+
 test('runRepositoryPublicationCloudflareWorkflowLive runs execution then readback with shared ids', async () => {
   const invocations = [];
   const result = await runRepositoryPublicationCloudflareWorkflowLive({
@@ -28,8 +45,7 @@ test('runRepositoryPublicationCloudflareWorkflowLive runs execution then readbac
     repositoryRef: 'github:andrey-kokoev/narada',
     branchRef: 'refs/heads/cloudflare-live',
     commitSha: '0123456789abcdef0123456789abcdef01234567',
-    token: 'token-value',
-    tokenFile: null,
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
     taskId: null,
     contractRef: null,
     evidenceContractRef: null,
@@ -85,10 +101,14 @@ test('runRepositoryPublicationCloudflareWorkflowLive runs execution then readbac
   assert.equal(invocations[0][0].split(/[\\/]/).pop(), 'cloudflare-carrier-repository-publication-cloudflare-github-live-smoke.mjs');
   assert.equal(invocations[1][0].split(/[\\/]/).pop(), 'cloudflare-carrier-repository-publication-readback-live-smoke.mjs');
   assert.ok(invocations[0].includes('--execute-cloudflare-github'));
+  assert.ok(invocations[0].includes('--operator-session-cookie'));
+  assert.ok(invocations[0].includes('operator-session-cookie'));
   assert.ok(invocations[1].includes('--repository-publication-request-id'));
   assert.ok(invocations[1].includes('repository_publication_request_live_1'));
   assert.ok(invocations[1].includes('--repository-publication-execution-id'));
   assert.ok(invocations[1].includes('repository_publication_execution_live_1'));
+  assert.ok(invocations[1].includes('--operator-session-cookie'));
+  assert.ok(invocations[1].includes('operator-session-cookie'));
   assert.ok(invocations[1].includes('--limit'));
   assert.ok(invocations[1].includes('75'));
 });
