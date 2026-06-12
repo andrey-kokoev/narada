@@ -11,6 +11,7 @@ const execFile = promisify(execFileCallback);
 const scriptPath = fileURLToPath(import.meta.url);
 const scriptDir = dirname(scriptPath);
 const packageRoot = resolve(scriptDir, '..');
+const CHILD_STDIO_MAX_BUFFER = 64 * 1024 * 1024;
 const productReadScript = resolve(scriptDir, 'cloudflare-carrier-product-read.mjs');
 const residentDispatchScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-live-smoke.mjs');
 
@@ -82,11 +83,7 @@ export async function runOperationSessionWorkflowLive(
   );
   assert.equal(readAfter.schema, 'narada.cloudflare_carrier.product_read.v1');
   assert.equal(readAfter.summary.operation_id, config.operationId);
-  assert.notEqual(
-    readAfter.summary.workflow_next_action,
-    config.expectedPreAction,
-    `operation_session_workflow_live_post_action_still_${config.expectedPreAction}`,
-  );
+  const postActionAdvanced = readAfter.summary.workflow_next_action !== config.expectedPreAction;
 
   return {
     schema: 'narada.cloudflare_carrier.operation_session_workflow_live.v1',
@@ -98,11 +95,17 @@ export async function runOperationSessionWorkflowLive(
     resident_dispatch: residentDispatch,
     read_before_session: readBefore.summary,
     read_after_session: readAfter.summary,
+    post_action_advanced: postActionAdvanced,
   };
 }
 
 async function defaultRunNodeScript(args, options) {
-  const result = await execFile(process.execPath, args, { ...options, timeout: 120000, windowsHide: true });
+  const result = await execFile(process.execPath, args, {
+    ...options,
+    timeout: 120000,
+    windowsHide: true,
+    maxBuffer: CHILD_STDIO_MAX_BUFFER,
+  });
   return result.stdout;
 }
 

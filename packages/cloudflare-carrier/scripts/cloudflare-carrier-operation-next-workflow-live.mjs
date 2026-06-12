@@ -20,7 +20,7 @@ const focusWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-foc
 const sessionWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-session-workflow-live.mjs');
 const continuationWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-continuation-workflow-live.mjs');
 const continuityWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-continuity-workflow-live.mjs');
-const CHILD_STDIO_MAX_BUFFER = 16 * 1024 * 1024;
+const CHILD_STDIO_MAX_BUFFER = 64 * 1024 * 1024;
 
 const ROUTE_TO_WORKFLOW = new Map([
   ['review_mailbox_draft_reply_proposal', { name: 'mailbox_draft_reply_proposal', script: mailboxDraftReplyProposalReadScript, flag: null }],

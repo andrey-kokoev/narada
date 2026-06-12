@@ -110,4 +110,56 @@ test('runOperationSessionWorkflowLive bridges operation.read into resident dispa
   assert.ok(invocations[1].includes('--dispatch-decision-id'));
   assert.ok(invocations[1].includes('dispatch_alpha'));
   assert.ok(invocations[1].includes('--operator-session-cookie'));
+  assert.equal(result.post_action_advanced, true);
+});
+
+test('runOperationSessionWorkflowLive surfaces fallback posture without failing when session is still missing', async () => {
+  const result = await runOperationSessionWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_live_smoke',
+    operationId: 'operation_live_alpha',
+    agentId: 'narada.cloudflare.operation.session.live',
+    siteRef: 'cloudflare://site_live_smoke',
+    windowsFallbackRef: 'windows_local_site_resident_loop',
+    carrierSessionId: 'carrier_session_alpha',
+    dispatchDecisionId: 'dispatch_alpha',
+    expectedPreAction: 'start_or_select_session',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      const scriptName = args[0].split(/[\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          status: 'ok',
+          summary: {
+            site_id: 'site_live_smoke',
+            operation_id: 'operation_live_alpha',
+            workflow_next_action: 'start_or_select_session',
+            next_action: 'session',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-resident-dispatch-live-smoke.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.resident_dispatch_live_smoke.v1',
+          status: 'ok',
+          site_id: 'site_live_smoke',
+          operation_id: 'operation_live_alpha',
+          carrier_session_id: 'carrier_session_alpha',
+          dispatch_decision_id: 'dispatch_alpha',
+          dispatch_state: 'cloudflare_primary_failed_windows_fallback_available',
+          fallback_status: 'available',
+          workflow_next_action: 'start_or_select_session',
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.status, 'ok');
+  assert.equal(result.resident_dispatch.dispatch_state, 'cloudflare_primary_failed_windows_fallback_available');
+  assert.equal(result.read_after_session.workflow_next_action, 'start_or_select_session');
+  assert.equal(result.post_action_advanced, false);
 });

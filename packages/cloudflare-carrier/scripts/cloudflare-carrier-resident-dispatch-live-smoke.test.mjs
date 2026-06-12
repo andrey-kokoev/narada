@@ -94,6 +94,66 @@ test('runResidentDispatchLiveSmoke uses operator session cookie headers and retu
   assert.equal(calls[2].body.operation, 'operation.read');
 });
 
+test('runResidentDispatchLiveSmoke accepts cloudflare primary failure when windows fallback remains available', async () => {
+  const result = await runResidentDispatchLiveSmoke({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_live_smoke',
+    siteRef: 'cloudflare://site_live_smoke',
+    operationId: 'operation_live_alpha',
+    agentId: 'agent.operator.dispatch',
+    windowsFallbackRef: 'windows_local_site_resident_loop',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    carrierSessionId: 'carrier_session_live_alpha',
+    dispatchDecisionId: 'resident_dispatch_live_alpha',
+    suffix: '20260612000000',
+  }, {
+    fetchImpl: async (_url, options) => {
+      const operation = JSON.parse(options.body).operation;
+      if (operation === 'resident_dispatch.primary_with_fallback.start') {
+        return jsonResponse(400, {
+          ok: false,
+          status: 'cloudflare_primary_failed_windows_fallback_available',
+          dispatch_authority: 'cloudflare_primary_dispatcher',
+          fallback_authority: 'windows_fallback_dispatcher',
+          fallback_status: 'available',
+          dispatch_action: 'cloudflare_session_start',
+          carrier_session_id: 'carrier_session_live_alpha',
+        });
+      }
+      if (operation === 'resident_dispatch.primary_with_fallback.list') {
+        return jsonResponse(200, {
+          ok: true,
+          dispatch_decisions: [{
+            dispatch_decision_id: 'resident_dispatch_live_alpha',
+            decision_state: 'cloudflare_primary_failed_windows_fallback_available',
+            dispatch_authority: 'cloudflare_primary_dispatcher',
+            fallback_authority: 'windows_fallback_dispatcher',
+            fallback_status: 'available',
+          }],
+        });
+      }
+      if (operation === 'operation.read') {
+        return jsonResponse(200, {
+          ok: true,
+          summary: {
+            operation_id: 'operation_live_alpha',
+            workflow_next_action: 'start_or_select_session',
+          },
+          resident_dispatch_decisions: [{ dispatch_decision_id: 'resident_dispatch_live_alpha' }],
+          operation_product_surface: { resident_dispatch_decision_count: 1 },
+          sessions: [],
+        });
+      }
+      throw new Error(`unexpected_operation:${operation}`);
+    },
+  });
+
+  assert.equal(result.status, 'ok');
+  assert.equal(result.dispatch_state, 'cloudflare_primary_failed_windows_fallback_available');
+  assert.equal(result.fallback_status, 'available');
+  assert.equal(result.workflow_next_action, 'start_or_select_session');
+});
+
 function jsonResponse(status, body) {
   return {
     status,
