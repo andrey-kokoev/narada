@@ -335,6 +335,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       task_count: 0,
     },
   });
+  assert.match(operationFallbackPendingText, /Resident Dispatch Windows Fallback Execute: pnpm --filter @narada2\/cloudflare-carrier product:resident-dispatch:windows-fallback:execute:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-windows-fallback/);
   assert.match(operationFallbackPendingText, /Resident Dispatch Windows Fallback Read: pnpm --filter @narada2\/cloudflare-carrier product:resident-dispatch:windows-fallback-request:text -- --operation resident_dispatch\.windows_fallback_request\.list --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 
   const operationFallbackEvidenceText = formatProductSurfaceText({

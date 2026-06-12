@@ -342,6 +342,7 @@ export function formatProductSurfaceText(result) {
       lines.push(`Resident Dispatch Windows Fallback Request: pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:windows-fallback-request:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --dispatch-decision-id ${summary.workflow_focus_ref ?? '<dispatch-decision-id>'} --operator-session-file <operator-session-file>`);
     }
     if (summary.workflow_next_action === 'await_windows_fallback_resident_dispatch') {
+      lines.push(`Resident Dispatch Windows Fallback Execute: pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:windows-fallback:execute:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file> --execute-windows-fallback`);
       lines.push(`Resident Dispatch Windows Fallback Read: pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:windows-fallback-request:text -- --operation resident_dispatch.windows_fallback_request.list --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
     }
     if (summary.workflow_next_action === 'review_windows_fallback_resident_dispatch_evidence') {
