@@ -312,6 +312,14 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:lifecycle:workflow:l
 
 `product:operation:lifecycle:workflow:live` is an orchestrated live verifier, not a new mutation primitive. It calls `product:operation:create`, `product:operation:status`, `product:operation:continuation:resume`, and `product:operation:read` in sequence, and returns the readback summaries after each stage so the lifecycle route is proven from live product evidence instead of inferred from unit tests alone.
 
+Run the adjacent resident-dispatch live proof when an active operation has already resumed and `operation.read` is routing toward `start_resident_dispatch`:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:workflow:live -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
+```
+
+`product:resident-dispatch:workflow:live` is the productized form of the existing resident-dispatch smoke verifier. It calls `resident_dispatch.primary_with_fallback.start`, confirms the decision through `resident_dispatch.primary_with_fallback.list`, then reads `operation.read` so the dispatch decision and started carrier session are proven from the same live product surfaces the console uses. It accepts the same bearer-token or operator-session auth sources as the newer operator product commands and returns a redacted `narada.cloudflare_carrier.resident_dispatch_live_smoke.v1` envelope with auth provenance, dispatch state, and readback counts.
+
 Create a governed Cloudflare task lifecycle task from the operator CLI after explicit task-create cutover evidence exists:
 
 ```powershell

@@ -1,0 +1,104 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+
+import {
+  parseResidentDispatchLiveSmokeArgs,
+  runResidentDispatchLiveSmoke,
+} from './cloudflare-carrier-resident-dispatch-live-smoke.mjs';
+
+test('parseResidentDispatchLiveSmokeArgs supports operator session auth', () => {
+  const parsed = parseResidentDispatchLiveSmokeArgs([
+    '--url', 'https://carrier.example',
+    '--site', 'site_live_smoke',
+    '--operation-id', 'operation_live_alpha',
+    '--operator-session-cookie', 'operator-session-cookie',
+  ], {}, () => new Date('2026-06-12T00:00:00.000Z'));
+
+  assert.equal(parsed.workerUrl, 'https://carrier.example');
+  assert.equal(parsed.siteId, 'site_live_smoke');
+  assert.equal(parsed.operationId, 'operation_live_alpha');
+  assert.equal(parsed.dispatchDecisionId, 'resident_dispatch_live_20260612000000');
+  assert.deepEqual(parsed.auth, {
+    kind: 'operator_session',
+    value: 'operator-session-cookie',
+    source: 'operator-session-cookie',
+  });
+});
+
+test('runResidentDispatchLiveSmoke uses operator session cookie headers and returns readback summary', async () => {
+  const calls = [];
+  const result = await runResidentDispatchLiveSmoke({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_live_smoke',
+    siteRef: 'cloudflare://site_live_smoke',
+    operationId: 'operation_live_alpha',
+    agentId: 'agent.operator.dispatch',
+    windowsFallbackRef: 'windows_local_site_resident_loop',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    carrierSessionId: 'carrier_session_live_alpha',
+    dispatchDecisionId: 'resident_dispatch_live_alpha',
+    suffix: '20260612000000',
+  }, {
+    fetchImpl: async (url, options) => {
+      calls.push({ url, options, body: JSON.parse(options.body) });
+      const operation = JSON.parse(options.body).operation;
+      if (operation === 'resident_dispatch.primary_with_fallback.start') {
+        return jsonResponse(200, {
+          ok: true,
+          status: 'cloudflare_primary_started',
+          dispatch_authority: 'cloudflare_primary_dispatcher',
+          fallback_authority: 'windows_fallback_dispatcher',
+          fallback_status: 'available',
+          dispatch_action: 'cloudflare_session_start',
+          carrier_session_id: 'carrier_session_live_alpha',
+          session_start: { event: { event_kind: 'carrier_session_started' } },
+        });
+      }
+      if (operation === 'resident_dispatch.primary_with_fallback.list') {
+        return jsonResponse(200, {
+          ok: true,
+          dispatch_decisions: [{
+            dispatch_decision_id: 'resident_dispatch_live_alpha',
+            decision_state: 'cloudflare_primary_started',
+            dispatch_authority: 'cloudflare_primary_dispatcher',
+            fallback_authority: 'windows_fallback_dispatcher',
+            fallback_status: 'available',
+          }],
+        });
+      }
+      if (operation === 'operation.read') {
+        return jsonResponse(200, {
+          ok: true,
+          summary: {
+            operation_id: 'operation_live_alpha',
+            workflow_next_action: 'monitor_operation',
+          },
+          resident_dispatch_decisions: [{ dispatch_decision_id: 'resident_dispatch_live_alpha' }],
+          operation_product_surface: { resident_dispatch_decision_count: 1 },
+          sessions: [{ carrier_session_id: 'carrier_session_live_alpha' }],
+        });
+      }
+      throw new Error(`unexpected_operation:${operation}`);
+    },
+  });
+
+  assert.equal(result.schema, 'narada.cloudflare_carrier.resident_dispatch_live_smoke.v1');
+  assert.equal(result.status, 'ok');
+  assert.equal(result.auth_source, 'operator-session-cookie');
+  assert.equal(result.workflow_next_action, 'monitor_operation');
+  assert.equal(calls.length, 3);
+  assert.equal(calls[0].url, 'https://carrier.example/api/carrier');
+  assert.equal(calls[0].options.headers.cookie, 'narada_operator_session=operator-session-cookie');
+  assert.equal(calls[0].body.operation, 'resident_dispatch.primary_with_fallback.start');
+  assert.equal(calls[1].body.operation, 'resident_dispatch.primary_with_fallback.list');
+  assert.equal(calls[2].body.operation, 'operation.read');
+});
+
+function jsonResponse(status, body) {
+  return {
+    status,
+    async json() {
+      return body;
+    },
+  };
+}
