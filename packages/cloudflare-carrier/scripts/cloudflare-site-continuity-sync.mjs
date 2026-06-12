@@ -5,6 +5,7 @@ import { dirname } from 'node:path';
 import { stdin, stdout, stderr } from 'node:process';
 import { promisify } from 'node:util';
 import { classifySiteContinuityExchangePacket } from '../../site-continuity/src/site-continuity.mjs';
+import { authHeaders, resolveAuth } from './cloudflare-carrier-product-read.mjs';
 
 const execFile = promisify(execFileCallback);
 
@@ -198,10 +199,10 @@ function safeToken(value) {
 }
 
 const workerUrl = option('--url') ?? process.env.CLOUDFLARE_CARRIER_URL;
-const bearerToken = await resolveBearerToken();
+const auth = resolveAuth(args, process.env);
 
 if (!workerUrl) fail('site_continuity_sync_requires_--url_or_CLOUDFLARE_CARRIER_URL');
-if (!bearerToken) fail('site_continuity_sync_requires_--token_or_--token-file_or_CLOUDFLARE_CARRIER_TOKEN');
+if (!auth) fail('site_continuity_sync_requires_bearer_token_or_operator_session');
 
 if (command === 'pull-cloudflare') {
   const siteId = requiredOption('--site');
@@ -218,6 +219,7 @@ if (command === 'pull-cloudflare') {
     status: 'ok',
     site_id: siteId,
     worker_url: workerUrl,
+    auth_source: auth.source,
     site_continuity_packet_admission: admission,
     packet,
   });
@@ -242,6 +244,7 @@ if (command === 'push-cloudflare') {
     status: 'ok',
     site_id: siteId,
     worker_url: workerUrl,
+    auth_source: auth.source,
     local_packet_admission: admission,
     cloudflare_response: pushed.body,
   });
@@ -257,6 +260,7 @@ if (command === 'read-cloudflare') {
     status: 'ok',
     site_id: siteId,
     worker_url: workerUrl,
+    auth_source: auth.source,
     site_continuity: read.body.site_continuity ?? null,
     site_continuity_packets: read.body.site_continuity_packets ?? [],
   });
@@ -278,6 +282,7 @@ if (command === 'reconciliation-execution-put') {
     status: 'ok',
     site_id: siteId,
     worker_url: workerUrl,
+    auth_source: auth.source,
     reconciliation_execution_recorded: true,
     execution_status: execution.status ?? null,
     execution_generated_at: execution.generated_at ?? null,
@@ -329,6 +334,7 @@ if (command === 'sync-once') {
     status: 'ok',
     site_id: siteId,
     worker_url: workerUrl,
+    auth_source: auth.source,
     local_packet_admission: localAdmission,
     cloudflare_packet_admission: cloudflareAdmission,
     pushed_packet_id: localPacket.packet_id ?? null,
@@ -409,6 +415,7 @@ if (command === 'repository-publication-execute-pending') {
     status: results.every((result) => result.status === 'evidence_recorded') && heartbeat.http_status === 200 && heartbeat.body?.ok !== false ? 'ok' : 'needs_attention',
     site_id: siteId,
     worker_url: workerUrl,
+    auth_source: auth.source,
     repository_path: repoPath,
     push_enabled: shouldPush,
     request_selection_status: selected.body?.status ?? 'unknown',
@@ -438,6 +445,7 @@ if (command === 'repository-publication-evidence-put') {
     status: 'ok',
     site_id: siteId,
     worker_url: workerUrl,
+    auth_source: auth.source,
     local_evidence_admission: admission,
     cloudflare_response: pushed.body,
   });
@@ -511,7 +519,7 @@ function buildSiteContinuityLoopReport({ siteId, localPacket, cloudflarePacket, 
     generated_at: generatedAt,
     cloudflare_source: 'cloudflare.site.read',
     cloudflare_worker_url: workerUrl,
-    cloudflare_credential_source: bearerToken.source,
+    cloudflare_credential_source: auth.source,
     cloudflare_push: {
       status: 'imported',
       pushed_packet_id: localPacket.packet_id ?? null,
@@ -528,19 +536,6 @@ function buildSiteContinuityLoopReport({ siteId, localPacket, cloudflarePacket, 
       durable_mutation_authority: 'unchanged; routed_by_site_authority_map',
     },
   };
-}
-
-async function resolveBearerToken() {
-  const flagToken = option('--token');
-  if (flagToken) return { value: flagToken, source: 'flag:--token' };
-  const tokenFile = option('--token-file') ?? process.env.CLOUDFLARE_CARRIER_TOKEN_FILE ?? null;
-  if (tokenFile) return { value: (await readFile(tokenFile, 'utf8')).trim(), source: tokenFileSource(tokenFile) };
-  if (process.env.CLOUDFLARE_CARRIER_TOKEN) return { value: process.env.CLOUDFLARE_CARRIER_TOKEN, source: 'env:CLOUDFLARE_CARRIER_TOKEN' };
-  return null;
-}
-
-function tokenFileSource(path) {
-  return path === process.env.CLOUDFLARE_CARRIER_TOKEN_FILE ? 'env:CLOUDFLARE_CARRIER_TOKEN_FILE' : 'flag:--token-file';
 }
 
 async function readAllStdin() {
@@ -564,7 +559,7 @@ async function post(body) {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      authorization: `Bearer ${bearerToken.value}`,
+      ...authHeaders(auth),
     },
     body: JSON.stringify(body),
   });
@@ -603,5 +598,5 @@ function fail(code) {
 }
 
 function printHelp() {
-  stdout.write(`Narada Cloudflare site-continuity transport\n\nCommands:\n  pull-cloudflare --site <site_id> [--out <packet.json>]\n  push-cloudflare --packet <packet.json> [--site <site_id>] [--out <result.json>]\n  read-cloudflare --site <site_id> [--out <result.json>]\n  reconciliation-execution-put --site <site_id> --execution <execution.json> [--out <result.json>]\n  sync-once --packet <packet.json> [--site <site_id>] [--out <result.json>] [--local-inbound-dir <dir>]\n  repository-publication-execute-pending --site <site_id> [--repo <path>] [--limit <n>] [--push] [--remote <name>] [--out <result.json>]\n  repository-publication-evidence-put --site <site_id> [--evidence <evidence.json>] [--out <result.json>]\n\nAuth:\n  --url <worker-url> or CLOUDFLARE_CARRIER_URL\n  --token-file <path> or CLOUDFLARE_CARRIER_TOKEN_FILE\n  --token <bearer-token> or CLOUDFLARE_CARRIER_TOKEN\n\nNotes:\n  pull-cloudflare exports the packet emitted by site.read.\n  push-cloudflare imports a packet through site.continuity.packet.put.\n  reconciliation-execution-put records Windows reconciliation execution evidence in Cloudflare without granting Cloudflare execution authority.\n  sync-once imports the local packet, then returns the Cloudflare packet for local observation.\n  The script refuses locally invalid/executable-mutation packets before sending them.\n  repository-publication-execute-pending consumes queued Cloudflare publication requests and returns Windows-side evidence; it only runs git push when --push is explicit.\n  repository-publication-evidence-put returns Windows-side publication evidence to Cloudflare without granting Cloudflare git push authority.\n`);
+  stdout.write(`Narada Cloudflare site-continuity transport\n\nCommands:\n  pull-cloudflare --site <site_id> [--out <packet.json>]\n  push-cloudflare --packet <packet.json> [--site <site_id>] [--out <result.json>]\n  read-cloudflare --site <site_id> [--out <result.json>]\n  reconciliation-execution-put --site <site_id> --execution <execution.json> [--out <result.json>]\n  sync-once --packet <packet.json> [--site <site_id>] [--out <result.json>] [--local-inbound-dir <dir>]\n  repository-publication-execute-pending --site <site_id> [--repo <path>] [--limit <n>] [--push] [--remote <name>] [--out <result.json>]\n  repository-publication-evidence-put --site <site_id> [--evidence <evidence.json>] [--out <result.json>]\n\nAuth:\n  --url <worker-url> or CLOUDFLARE_CARRIER_URL\n  --token-file <path> or CLOUDFLARE_CARRIER_TOKEN_FILE\n  --token <bearer-token> or CLOUDFLARE_CARRIER_TOKEN\n  --operator-session-file <path> or CLOUDFLARE_OPERATOR_SESSION_FILE\n  --operator-session-cookie <cookie> or CLOUDFLARE_OPERATOR_SESSION_COOKIE\n\nNotes:\n  pull-cloudflare exports the packet emitted by site.read.\n  push-cloudflare imports a packet through site.continuity.packet.put.\n  reconciliation-execution-put records Windows reconciliation execution evidence in Cloudflare without granting Cloudflare execution authority.\n  sync-once imports the local packet, then returns the Cloudflare packet for local observation.\n  The script refuses locally invalid/executable-mutation packets before sending them.\n  repository-publication-execute-pending consumes queued Cloudflare publication requests and returns Windows-side evidence; it only runs git push when --push is explicit.\n  repository-publication-evidence-put returns Windows-side publication evidence to Cloudflare without granting Cloudflare git push authority.\n`);
 }

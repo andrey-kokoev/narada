@@ -205,7 +205,7 @@ Run one guarded local-cloud continuity loop:
 pnpm --filter @narada2/cloudflare-carrier continuity:run-once
 ```
 
-`continuity:run-once` is the product-facing alias for the existing live reconciliation execution path: it plans ready configured sites, runs guarded `sync-once`, writes the reconciliation execution artifact, and records that execution evidence back to Cloudflare. Use `NARADA_SITE_CONTINUITY_PACKET` for a single configured site. Use `NARADA_SITE_CONTINUITY_PACKET_DIR` for multiple configured sites; each site packet is resolved as `<file-safe-site-id>-packet.json` from that directory.
+`continuity:run-once` is the product-facing alias for the existing live reconciliation execution path: it plans ready configured sites, runs guarded `sync-once`, writes the reconciliation execution artifact, and records that execution evidence back to Cloudflare. The underlying continuity transport now accepts either bearer-token auth or captured Microsoft operator-session auth, so a direct operator run no longer has to fall back to service-token posture. Use `NARADA_SITE_CONTINUITY_PACKET` for a single configured site. Use `NARADA_SITE_CONTINUITY_PACKET_DIR` for multiple configured sites; each site packet is resolved as `<file-safe-site-id>-packet.json` from that directory.
 
 Read local-cloud continuity health, including local sync artifacts, last reconciliation execution, and live Windows Task Scheduler readback:
 

@@ -48,11 +48,16 @@ function runSync(args = [], { input = '', env = {} } = {}) {
 
 function startCarrierMock(handler) {
   const requests = [];
+  const requestHeaders = [];
   const server = createServer(async (request, response) => {
     const chunks = [];
     for await (const chunk of request) chunks.push(Buffer.from(chunk));
     const body = chunks.length > 0 ? JSON.parse(Buffer.concat(chunks).toString('utf8')) : null;
     requests.push(body);
+    requestHeaders.push({
+      authorization: request.headers.authorization ?? null,
+      cookie: request.headers.cookie ?? null,
+    });
     const result = await handler(body, request);
     response.writeHead(result.status ?? 200, { 'content-type': 'application/json' });
     response.end(JSON.stringify(result.body));
@@ -64,6 +69,7 @@ function startCarrierMock(handler) {
       resolve({
         url: `http://127.0.0.1:${address.port}`,
         requests,
+        requestHeaders,
         close: () => new Promise((closeResolve, closeReject) => server.close((error) => (error ? closeReject(error) : closeResolve()))),
       });
     });
@@ -81,6 +87,50 @@ test('site continuity sync help describes supported transports', async () => {
   assert.match(result.stdout, /sync-once/);
   assert.match(result.stdout, /repository-publication-execute-pending/);
   assert.match(result.stdout, /repository-publication-evidence-put/);
+  assert.match(result.stdout, /operator-session-file/);
+});
+
+test('site continuity sync accepts operator session auth for Cloudflare transport', async () => {
+  const binding = createSiteContinuityBinding({ site_id: 'site_fixture' });
+  const packet = createSiteContinuityExchangePacket({
+    binding,
+    source_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER,
+    target_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS,
+    projections: [
+      {
+        projection_class: 'site_read_model',
+        source_cursor: 'cloudflare-test-cursor',
+      },
+    ],
+  });
+  const mock = await startCarrierMock((body) => {
+    if (body.operation === 'site.read') {
+      return {
+        body: {
+          ok: true,
+          site_continuity: { exchange_packet: packet },
+        },
+      };
+    }
+    return { status: 400, body: { ok: false, code: 'unexpected_operation' } };
+  });
+  try {
+    const result = await runSync(['pull-cloudflare', '--site', 'site_fixture', '--url', mock.url], {
+      env: {
+        CLOUDFLARE_CARRIER_TOKEN: '',
+        CLOUDFLARE_OPERATOR_SESSION_COOKIE: 'narada_operator_session=session-fixture',
+      },
+    });
+
+    assert.equal(result.code, 0, result.stderr);
+    const body = JSON.parse(result.stdout);
+    assert.equal(body.auth_source, 'env:CLOUDFLARE_OPERATOR_SESSION_COOKIE');
+    assert.equal(mock.requestHeaders.length, 1);
+    assert.equal(mock.requestHeaders[0].authorization, null);
+    assert.equal(mock.requestHeaders[0].cookie, 'narada_operator_session=session-fixture');
+  } finally {
+    await mock.close();
+  }
 });
 
 test('site continuity sync refuses malformed packets before push', async () => {
@@ -208,6 +258,7 @@ test('site continuity sync pulls Cloudflare exchange packet before local import'
     assert.equal(body.schema, 'narada.site_continuity_cloudflare_pull.v1');
     assert.equal(body.status, 'ok');
     assert.equal(body.site_id, 'site_fixture');
+    assert.equal(body.auth_source, 'env:CLOUDFLARE_CARRIER_TOKEN');
     assert.equal(body.site_continuity_packet_admission.action, 'projection_only');
     assert.equal(body.site_continuity_packet_admission.reason, 'site_continuity_exchange_packet_projection_admitted');
     assert.equal(body.packet.packet_id, packet.packet_id);
