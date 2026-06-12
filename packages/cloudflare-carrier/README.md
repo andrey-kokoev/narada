@@ -290,6 +290,14 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:status:text -- --url
 
 `product:operation:status` calls `operation.status.put` through authenticated `POST /api/carrier`. It supports `active`, `inactive`, `needs_continuation`, and `closed` (`paused` is normalized to `inactive` for compatibility), accepts optional `--reason` / `CLOUDFLARE_CARRIER_OPERATION_STATUS_REASON` transition evidence, leaves Site authority enforcement in the Worker, and returns a redacted `narada.cloudflare_carrier.operation_status_put.v1` envelope. `closed` is terminal: repeated close/archive updates are idempotent, but a closed operation cannot be reopened to `active`, `inactive`, or `needs_continuation`. The `:text` alias prints the worker URL, auth source, site, operation id, status, optional reason, worker-reported status transition, and update time without echoing bearer tokens or operator-session cookies.
 
+Create a governed Cloudflare task lifecycle task from the operator CLI after explicit task-create cutover evidence exists:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:create:text -- --url <worker-url> --site <site-id> --title <task-title> --admission-id <admission-id> --admit-cloudflare-task-create --cutover-point-ref <cutover-ref> --governed-write-contract-ref <contract-ref> --confirmation-evidence-ref <evidence-ref> --operator-session-file cloudflare-operator-session.json
+```
+
+`product:task-lifecycle:create` calls `task_lifecycle.task_create.admit` through authenticated `POST /api/carrier`. Without `--admit-cloudflare-task-create`, it can request the Worker's refusal evidence for the retained Windows task lifecycle authority. With the admission flag, it requires explicit cutover, governed-write-contract, and confirmation-evidence refs before sending the Cloudflare task-create admission request. The `:text` alias prints the Worker URL, auth source, site, admission id, task id/number when admitted, decision, authority posture, and evidence refs without echoing bearer tokens or operator-session cookies.
+
 For operator-facing readback without JSON inspection, use the text aliases:
 
 ```powershell
