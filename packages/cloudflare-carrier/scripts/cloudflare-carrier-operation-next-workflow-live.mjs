@@ -50,6 +50,9 @@ export function parseOperationNextWorkflowLiveArgs(argv = [], env = process.env)
   const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? 'site_live_smoke';
   const expectedListRouteAction = option(args, '--expected-list-route-action') ?? env.CLOUDFLARE_CARRIER_OPERATION_NEXT_EXPECTED_LIST_ROUTE_ACTION ?? null;
   const expectedOperationId = option(args, '--operation-id') ?? option(args, '--carrier-operation') ?? env.CLOUDFLARE_CARRIER_OPERATION_ID ?? null;
+  const agentId = option(args, '--agent-id') ?? env.CLOUDFLARE_CARRIER_AGENT_ID ?? null;
+  const siteRoot = option(args, '--site-root') ?? env.CLOUDFLARE_CARRIER_SITE_ROOT ?? env.CLOUDFLARE_CARRIER_SITE_REF ?? null;
+  const continuationReason = option(args, '--continuation-reason') ?? env.CLOUDFLARE_CARRIER_CONTINUATION_REASON ?? null;
   const auth = resolveAuth(args, env);
   const executeAcknowledged = flag(args, '--execute-operation-next')
     || env.CLOUDFLARE_CARRIER_OPERATION_NEXT_EXECUTE_LIVE === '1';
@@ -66,6 +69,9 @@ export function parseOperationNextWorkflowLiveArgs(argv = [], env = process.env)
     siteId,
     expectedListRouteAction,
     expectedOperationId,
+    agentId,
+    siteRoot,
+    continuationReason,
     auth,
     executeAcknowledged,
   };
@@ -333,6 +339,11 @@ function buildWorkflowArgs(config, workflow, operationId, readSummary = {}) {
     if (workflow.mode !== 'list' && dispatchDecisionId) {
       args.push('--dispatch-decision-id', dispatchDecisionId);
     }
+  }
+  if (workflow.name === 'continuation') {
+    if (config.agentId) args.push('--agent-id', config.agentId);
+    if (config.siteRoot) args.push('--site-root', config.siteRoot);
+    if (config.continuationReason) args.push('--continuation-reason', config.continuationReason);
   }
   if (workflow.flag) args.push(workflow.flag);
   appendAuthOptions(args, config);

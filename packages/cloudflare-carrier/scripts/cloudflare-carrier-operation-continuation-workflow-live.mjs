@@ -13,13 +13,14 @@ const scriptDir = dirname(scriptPath);
 const packageRoot = resolve(scriptDir, '..');
 const productReadScript = resolve(scriptDir, 'cloudflare-carrier-product-read.mjs');
 const continuationResumeScript = resolve(scriptDir, 'cloudflare-carrier-continuation-resume.mjs');
+const DEFAULT_OPERATION_CONTINUATION_AGENT_ID = 'narada.cloudflare.operation.continuation.live';
 
 export function parseOperationContinuationWorkflowLiveArgs(argv = [], env = process.env) {
   const args = [...argv];
   const workerUrl = option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '';
   const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? 'site_live_smoke';
   const expectedOperationId = option(args, '--operation-id') ?? option(args, '--carrier-operation') ?? env.CLOUDFLARE_CARRIER_OPERATION_ID ?? null;
-  const agentId = option(args, '--agent-id') ?? env.CLOUDFLARE_CARRIER_AGENT_ID ?? '';
+  const agentId = option(args, '--agent-id') ?? env.CLOUDFLARE_CARRIER_AGENT_ID ?? DEFAULT_OPERATION_CONTINUATION_AGENT_ID;
   const siteRoot = option(args, '--site-root') ?? env.CLOUDFLARE_CARRIER_SITE_ROOT ?? env.CLOUDFLARE_CARRIER_SITE_REF ?? null;
   const continuationReason = option(args, '--continuation-reason') ?? env.CLOUDFLARE_CARRIER_CONTINUATION_REASON ?? 'operation_continuation_resumed_by_operator';
   const expectedPreAction = option(args, '--expected-pre-action') ?? env.CLOUDFLARE_CARRIER_OPERATION_CONTINUATION_EXPECTED_PRE_ACTION ?? 'resume_operation_continuation';
@@ -32,7 +33,6 @@ export function parseOperationContinuationWorkflowLiveArgs(argv = [], env = proc
   }
   if (!workerUrl) throw new Error('operation_continuation_workflow_live_requires_--url_or_CLOUDFLARE_CARRIER_URL');
   if (!siteId) throw new Error('operation_continuation_workflow_live_requires_site_id');
-  if (!agentId) throw new Error('operation_continuation_workflow_live_requires_agent_id');
   if (!auth) throw new Error('operation_continuation_workflow_live_requires_bearer_token_or_operator_session');
 
   return {

@@ -37,6 +37,17 @@ test('parseOperationContinuationWorkflowLiveArgs supports operator session auth 
   assert.equal(parsed.expectedPreAction, 'resume_operation_continuation');
 });
 
+test('parseOperationContinuationWorkflowLiveArgs defaults the agent id when omitted', () => {
+  const parsed = parseOperationContinuationWorkflowLiveArgs([
+    '--url', 'https://carrier.example',
+    '--site', 'site_live_smoke',
+    '--operator-session-cookie', 'operator-session-cookie',
+    '--execute-operation-continuation-resume',
+  ], {});
+
+  assert.equal(parsed.agentId, 'narada.cloudflare.operation.continuation.live');
+});
+
 test('runOperationContinuationWorkflowLive selects continuation from operation.list then resumes it', async () => {
   const invocations = [];
   const result = await runOperationContinuationWorkflowLive({

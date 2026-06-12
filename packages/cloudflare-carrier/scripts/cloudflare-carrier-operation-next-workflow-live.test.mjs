@@ -100,6 +100,73 @@ test('runOperationNextWorkflowLive selects the next operation and delegates to s
   assert.equal(invocations[3][0].split(/[\\/]/).pop(), 'cloudflare-carrier-product-read.mjs');
 });
 
+test('runOperationNextWorkflowLive forwards continuation inputs and executes continuation workflow', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_live_smoke',
+    expectedListRouteAction: 'focus_next_operation',
+    expectedOperationId: 'operation_continuation',
+    agentId: 'agent.operator',
+    siteRoot: 'D:\\code\\narada',
+    continuationReason: 'operator_resuming_continuation',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        const readCount = invocations.filter((call) => call[0].endsWith('cloudflare-carrier-product-read.mjs')).length;
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              next_operation_id: 'operation_continuation',
+              route_next_action: 'focus_next_operation',
+            },
+          });
+        }
+        if (operation === 'operation.read' && readCount === 2) {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              operation_id: 'operation_continuation',
+              workflow_next_action: 'resume_operation_continuation',
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            operation_id: 'operation_continuation',
+            workflow_next_action: 'monitor_operation',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-operation-continuation-workflow-live.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.operation_continuation_workflow_live.v1',
+          status: 'ok',
+          summary: {
+            operation_id: 'operation_continuation',
+          },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.selected_operation_id, 'operation_continuation');
+  assert.equal(result.delegated_workflow, 'continuation');
+  assert.equal(result.delegated_route_action, 'resume_operation_continuation');
+  assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-operation-continuation-workflow-live.mjs');
+  assert.equal(invocations[2][invocations[2].indexOf('--agent-id') + 1], 'agent.operator');
+  assert.equal(invocations[2][invocations[2].indexOf('--site-root') + 1], 'D:\\code\\narada');
+  assert.equal(invocations[2][invocations[2].indexOf('--continuation-reason') + 1], 'operator_resuming_continuation');
+});
+
 test('runOperationNextWorkflowLive delegates inspect_operation_evidence into focus review when a reviewable focus is pending', async () => {
   const invocations = [];
   const result = await runOperationNextWorkflowLive({
