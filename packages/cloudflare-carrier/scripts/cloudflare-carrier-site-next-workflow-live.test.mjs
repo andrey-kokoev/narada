@@ -64,6 +64,52 @@ test('runSiteNextWorkflowLive returns monitor_sites when no site needs focus', a
   assert.equal(invocations.length, 1);
 });
 
+test('runSiteNextWorkflowLive delegates current site action when route monitors but overview candidate is actionable', async () => {
+  const invocations = [];
+  const result = await runSiteNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    expectedRouteAction: 'monitor_sites',
+    expectedSiteId: 'site_alpha',
+    expectedSiteAction: 'refresh_site_continuity_loop',
+    auth: { kind: 'bearer', value: 'token-value', source: 'flag:--token' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            site_count: 2,
+            next_site_id: 'site_alpha',
+            next_action: 'refresh_site_continuity_loop',
+            route_next_action: 'monitor_sites',
+            route_target: 'site_alpha',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-site-action-workflow-live.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.site_action_workflow_live.v1',
+          status: 'ok',
+          delegated_workflow: 'refresh_site_continuity_loop',
+          delegated_action: 'refresh_site_continuity_loop',
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'refresh_site_continuity_loop');
+  assert.equal(result.delegated_route_action, 'monitor_sites');
+  assert.equal(result.selected_site_id, 'site_alpha');
+  assert.equal(result.focus_result, null);
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.site_action_workflow_live.v1');
+  assert.equal(invocations.length, 2);
+  assert.equal(invocations[1][0].split(/[\\/]/).pop(), 'cloudflare-carrier-site-action-workflow-live.mjs');
+});
+
 test('runSiteNextWorkflowLive delegates focus_next_site to site focus workflow', async () => {
   const invocations = [];
   const result = await runSiteNextWorkflowLive({

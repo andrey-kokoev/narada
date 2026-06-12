@@ -64,7 +64,34 @@ export async function runSiteNextWorkflowLive(
     );
   }
 
+  const overviewSiteId = listBefore.summary.next_site_id ?? listBefore.summary.route_target ?? null;
+  const overviewAction = listBefore.summary.next_action ?? 'monitor_sites';
+
   if (routeAction === 'monitor_sites') {
+    if (overviewSiteId && overviewAction !== 'monitor_sites') {
+      if (config.expectedSiteId) {
+        assert.equal(
+          overviewSiteId,
+          config.expectedSiteId,
+          `site_next_workflow_live_expected_site_mismatch:${config.expectedSiteId}:${overviewSiteId}`,
+        );
+      }
+      const delegatedResult = parseJsonStdout(
+        await runNodeScript(buildSiteActionArgs(config, overviewSiteId), { cwd: packageRoot }),
+        'site_next_workflow_current_site_action',
+      );
+      return {
+        schema: 'narada.cloudflare_carrier.site_next_workflow_live.v1',
+        status: 'ok',
+        worker_url: config.workerUrl,
+        delegated_workflow: delegatedResult.delegated_workflow ?? 'current_site_action',
+        delegated_route_action: routeAction,
+        selected_site_id: overviewSiteId,
+        list_before_next: listBefore.summary,
+        focus_result: null,
+        delegated_result: delegatedResult,
+      };
+    }
     return {
       schema: 'narada.cloudflare_carrier.site_next_workflow_live.v1',
       status: 'ok',
@@ -78,7 +105,7 @@ export async function runSiteNextWorkflowLive(
   }
 
   if (routeAction === 'focus_next_site') {
-    const selectedSiteId = listBefore.summary.next_site_id ?? listBefore.summary.route_target ?? null;
+    const selectedSiteId = overviewSiteId;
     assert.ok(selectedSiteId, 'site_next_workflow_live_requires_next_site');
     if (config.expectedSiteId) {
       assert.equal(

@@ -342,7 +342,7 @@ Run the adjacent site-next live proof when the operator wants the package to rea
 pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live -- --url <worker-url> --operator-session-file cloudflare-operator-session.json --execute-site-next
 ```
 
-`product:site:next:workflow:live` is an orchestrated verifier over the existing site read surfaces, not a new mutation primitive. It reads `site.list`, returns a clean monitored result when the posture route is already `monitor_sites`, and when the route is `focus_next_site` it delegates first to `product:site:focus:workflow:live` and then to `product:site:action:workflow:live` so the site-level control-plane handoff can be proven without manually choosing the next site command from the console.
+`product:site:next:workflow:live` is an orchestrated verifier over the existing site read surfaces, not a new mutation primitive. It reads `site.list`, returns a clean monitored result only when the posture route is `monitor_sites` and the overview candidate is also already `monitor_site`, and otherwise advances through the next real site lane. When the route is `focus_next_site` it delegates first to `product:site:focus:workflow:live` and then to `product:site:action:workflow:live`; when the route stays `monitor_sites` but the current overview candidate still has actionable site work, it delegates directly to `product:site:action:workflow:live` for that current site.
 
 Run the adjacent next-operation live proof when the operator wants the package to select the next operation from posture and dispatch into the right downstream workflow automatically:
 
