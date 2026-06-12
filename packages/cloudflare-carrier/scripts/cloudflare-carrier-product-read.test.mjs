@@ -267,8 +267,8 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
     auth: { kind: 'bearer', value: 'secret-token' },
   });
   assert.match(siteListText, /Product Read: site\.list/);
-  assert.match(siteListText, /Sites: count=2 next=site_alpha health=attention/);
-  assert.match(siteListText, /Next Action: bind_cloudflare_product_next_site_locally reason=continuity_direction/);
+  assert.match(siteListText, /Sites: count=2/);
+  assert.match(siteListText, /Overview Candidate: site=site_alpha health=attention action=bind_cloudflare_product_next_site_locally reason=continuity_direction/);
   assert.match(siteListText, /Site Route: domain=site_posture state=site_posture_ready action=return_local_windows_continuity_packet target=site_alpha status=ready reason=continuity_direction/);
   assert.match(siteListText, /Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live -- --url https:\/\/carrier\.example\.test --operator-session-file <operator-session-file> --execute-site-next/);
   assert.equal(siteListText.includes('secret-token'), false);

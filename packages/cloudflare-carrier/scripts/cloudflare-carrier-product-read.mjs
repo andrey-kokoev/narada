@@ -241,8 +241,8 @@ export function formatProductSurfaceText(result) {
     return `${lines.join('\n')}\n`;
   }
   if (operation === 'site.list') {
-    lines.push(`Sites: count=${summary.site_count ?? 0} next=${summary.next_site_id ?? 'none'} health=${summary.next_health ?? 'unknown'}`);
-    lines.push(`Next Action: ${summary.next_action ?? 'none'}${summary.next_reason ? ` reason=${summary.next_reason}` : ''}`);
+    lines.push(`Sites: count=${summary.site_count ?? 0}`);
+    lines.push(`Overview Candidate: site=${summary.next_site_id ?? 'none'} health=${summary.next_health ?? 'unknown'} action=${summary.next_action ?? 'none'}${summary.next_reason ? ` reason=${summary.next_reason}` : ''}`);
     if (summary.route_next_action || summary.route_command_state || summary.route_target) {
       lines.push(`Site Route: domain=${summary.route_domain ?? 'unknown'} state=${summary.route_command_state ?? 'unknown'} action=${summary.route_next_action ?? 'none'} target=${summary.route_target ?? 'none'} status=${summary.route_status ?? 'unknown'} reason=${summary.route_reason ?? 'none'}`);
       lines.push(`Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --operator-session-file <operator-session-file> --execute-site-next`);
