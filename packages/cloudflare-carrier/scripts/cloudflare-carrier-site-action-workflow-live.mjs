@@ -12,12 +12,14 @@ const scriptPath = fileURLToPath(import.meta.url);
 const scriptDir = dirname(scriptPath);
 const packageRoot = resolve(scriptDir, '..');
 const productReadScript = resolve(scriptDir, 'cloudflare-carrier-product-read.mjs');
+const operationNextWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-next-workflow-live.mjs');
 const siteContinuityPublishScript = resolve(scriptDir, 'cloudflare-carrier-site-continuity-publish.mjs');
 const continuityBindingsScript = resolve(scriptDir, 'cloudflare-site-continuity-bindings.mjs');
 const continuitySchedulerScript = resolve(scriptDir, 'cloudflare-site-continuity-scheduler.mjs');
 
 const ACTION_TO_WORKFLOW = {
   monitor_site: { name: 'monitor_site' },
+  focus_next_operation: { name: 'focus_next_operation', script: operationNextWorkflowScript },
   publish_cloudflare_continuity_packet: { name: 'publish_continuity_packet', script: siteContinuityPublishScript },
   bind_cloudflare_product_next_site_locally: { name: 'prepare_next_site_binding', script: continuityBindingsScript },
   refresh_site_continuity_loop: { name: 'refresh_site_continuity_loop', script: continuitySchedulerScript },
@@ -131,6 +133,11 @@ function buildSiteReadArgs(config) {
 }
 
 function buildWorkflowArgs(config, action, script) {
+  if (action === 'focus_next_operation') {
+    const args = [script, '--url', config.workerUrl, '--site', config.siteId, '--execute-operation-next'];
+    appendAuthOptions(args, config);
+    return args;
+  }
   if (action === 'publish_cloudflare_continuity_packet') {
     const args = [script, '--url', config.workerUrl, '--site', config.siteId];
     appendAuthOptions(args, config);

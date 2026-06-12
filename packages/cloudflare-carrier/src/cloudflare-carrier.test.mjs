@@ -8748,6 +8748,165 @@ test('worker operation.list yields focused selection to a sibling operation with
   assert.equal(listedBody.focused_operation_lifecycle.workflow_route.next_action, 'start_or_select_session');
 });
 
+test('worker site.read and site.list surface operation attention from a sibling operation', async () => {
+  const now = clock();
+  const controlEventJson = JSON.stringify({
+    schema: 'narada.cloudflare_carrier_event.v1',
+    carrier_session_id: 'carrier_session_control_ready',
+    sequence: 1,
+    event_id: 'carrier_event_control_ready_1',
+    site_id: 'site_fixture',
+    event_kind: 'carrier_command_executed',
+    created_at: now,
+    payload: { command: '/goal' },
+  });
+  const siteDb = fakeD1SiteRegistryDatabase({
+    sites: [{
+      site_id: 'site_fixture',
+      site_ref: 'site://fixture',
+      display_name: 'Fixture Site',
+      status: 'active',
+      created_at: now,
+      updated_at: now,
+      created_by_principal_id: 'admin',
+    }],
+    memberships: [{
+      site_id: 'site_fixture',
+      principal_id: 'admin',
+      role: 'owner',
+      status: 'active',
+      created_at: now,
+      updated_at: now,
+    }],
+    operations: [{
+      operation_id: 'operation_control_ready',
+      site_id: 'site_fixture',
+      display_name: 'Ready Control Operation',
+      operation_kind: 'control',
+      status: 'active',
+      created_by_principal_id: 'admin',
+      created_at: now,
+      updated_at: now,
+    }, {
+      operation_id: 'operation_needs_continuation',
+      site_id: 'site_fixture',
+      display_name: 'Needs Continuation Operation',
+      operation_kind: 'cloudflare_site_read',
+      status: 'needs_continuation',
+      created_by_principal_id: 'admin',
+      created_at: now,
+      updated_at: new Date(Date.parse(now) + 1000).toISOString(),
+    }],
+    carrierSessions: [{
+      carrier_session_id: 'carrier_session_control_ready',
+      site_id: 'site_fixture',
+      operation_id: 'operation_control_ready',
+      agent_id: 'narada.fixture.control',
+      bound_by_principal_id: 'admin',
+      binding_status: 'active',
+      created_at: now,
+      updated_at: now,
+    }],
+    carrierSessionEvents: [{
+      carrier_session_id: 'carrier_session_control_ready',
+      sequence: 1,
+      event_id: 'carrier_event_control_ready_1',
+      site_id: 'site_fixture',
+      operation_id: 'operation_control_ready',
+      agent_id: 'narada.fixture.control',
+      event_kind: 'carrier_command_executed',
+      occurred_at: now,
+      event_json: controlEventJson,
+      indexed_at: now,
+    }],
+    continuityPackets: [{
+      packet_id: 'site_packet_cloudflare_to_windows',
+      site_id: 'site_fixture',
+      source_embodiment_kind: 'cloudflare_carrier',
+      target_embodiment_kind: 'local_windows',
+      imported_at: now,
+      admission_action: 'projection_only',
+      admission_reason: 'site_continuity_packet_projection_only',
+      packet: {
+        binding: {
+          local_windows_site_ref: 'file:///D:/code/narada',
+          cloudflare_site_ref: 'cloudflare://site_fixture',
+          authority_map_ref: 'narada:site-authority-map:site_fixture',
+          embodiments: [],
+        },
+      },
+    }, {
+      packet_id: 'site_packet_windows_to_cloudflare',
+      site_id: 'site_fixture',
+      source_embodiment_kind: 'local_windows',
+      target_embodiment_kind: 'cloudflare_carrier',
+      imported_at: now,
+      admission_action: 'projection_only',
+      admission_reason: 'site_continuity_packet_projection_only',
+      packet: {
+        binding: {
+          local_windows_site_ref: 'file:///D:/code/narada',
+          cloudflare_site_ref: 'cloudflare://site_fixture',
+          authority_map_ref: 'narada:site-authority-map:site_fixture',
+          embodiments: [],
+        },
+      },
+    }],
+    continuityLoopReports: [{
+      report_id: 'site_loop_report_fixture',
+      site_id: 'site_fixture',
+      status: 'ok',
+      generated_at: now,
+      recorded_at: now,
+      cloudflare_push_status: 'imported',
+      windows_packet_count: 1,
+    }],
+    continuityReconciliationExecutions: [{
+      execution_id: 'site_reconciliation_fixture',
+      site_id: 'site_fixture',
+      status: 'completed',
+      generated_at: now,
+      persisted_at: now,
+      recorded_at: now,
+      reconciliation_plan_status: 'ready',
+      selected_site_count: 1,
+      executed_site_count: 1,
+      completed_site_count: 1,
+      failed_site_count: 0,
+      refusal_reason: null,
+    }],
+  });
+  const env = authEnv(null, {
+    CLOUDFLARE_SITE_REGISTRY_DB: siteDb,
+    CLOUDFLARE_CARRIER_TASK_DB: fakeD1TaskDatabase(),
+  });
+
+  const read = await worker.fetch(jsonRequest({
+    operation: 'site.read',
+    request_id: 'request_site_read_surfaces_operation_attention',
+    params: { site_id: 'site_fixture' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(read.status, 200);
+  const readBody = await read.json();
+  assert.equal(readBody.site_product_status.health, 'attention');
+  assert.equal(readBody.site_product_status.next_action, 'focus_next_operation');
+  assert.equal(readBody.focused_operation_lifecycle.operation_id, 'operation_needs_continuation');
+  assert.equal(readBody.focused_operation_lifecycle.workflow_route.next_action, 'resume_operation_continuation');
+  assert.equal(readBody.operation_posture_overview.next_operation_id, 'operation_needs_continuation');
+  assert.equal(readBody.operation_posture_overview.next_status, 'needs_attention');
+
+  const listed = await worker.fetch(jsonRequest({
+    operation: 'site.list',
+    request_id: 'request_site_list_surfaces_operation_attention',
+    params: {},
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(listed.status, 200);
+  const listedBody = await listed.json();
+  assert.equal(listedBody.site_product_overview.next_site_id, 'site_fixture');
+  assert.equal(listedBody.site_product_overview.next_action, 'focus_next_operation');
+  assert.equal(listedBody.site_posture_route.next_action, 'focus_next_site');
+});
+
 
 function fakeD1TaskDatabase() {
   const rows = [];

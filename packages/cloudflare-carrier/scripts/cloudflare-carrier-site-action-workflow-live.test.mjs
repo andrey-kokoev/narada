@@ -66,6 +66,41 @@ test('runSiteActionWorkflowLive returns monitor result without delegation', asyn
   assert.equal(invocations.length, 1);
 });
 
+test('runSiteActionWorkflowLive delegates operation focus to operation.next workflow', async () => {
+  const invocations = [];
+  const result = await runSiteActionWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_alpha',
+    expectedAction: 'focus_next_operation',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs' && invocations.length === 1) {
+        return JSON.stringify({ schema: 'narada.cloudflare_carrier.product_read.v1', summary: { site_id: 'site_alpha', next_action: 'focus_next_operation' } });
+      }
+      if (scriptName === 'cloudflare-carrier-operation-next-workflow-live.mjs') {
+        return JSON.stringify({ schema: 'narada.cloudflare_carrier.operation_next_workflow_live.v1', status: 'ok' });
+      }
+      if (scriptName === 'cloudflare-carrier-product-read.mjs' && invocations.length === 3) {
+        return JSON.stringify({ schema: 'narada.cloudflare_carrier.product_read.v1', summary: { site_id: 'site_alpha', next_action: 'monitor_site' } });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'focus_next_operation');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.operation_next_workflow_live.v1');
+  assert.equal(invocations.length, 3);
+  assert.deepEqual(invocations[1].slice(1, 6), [
+    '--url', 'https://carrier.example',
+    '--site', 'site_alpha',
+    '--execute-operation-next',
+  ]);
+});
+
 test('runSiteActionWorkflowLive delegates continuity publish', async () => {
   const invocations = [];
   const result = await runSiteActionWorkflowLive({
