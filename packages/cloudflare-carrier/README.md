@@ -320,6 +320,14 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:focus:workflow:live 
 
 `product:operation:focus:workflow:live` is an orchestrated live verifier over the existing read surfaces, not a new mutation primitive. It reads `operation.list`, requires the posture route to point at `focus_next_operation`, optionally asserts `--operation-id` matches that selected target, then reads `operation.read` for that operation so the control-plane handoff from operation posture into focused operation readback is proven from live product evidence instead of relying on the web console.
 
+Run the adjacent next-operation live proof when the operator wants the package to select the next operation from posture and dispatch into the right downstream workflow automatically:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json --execute-operation-next
+```
+
+`product:operation:next:workflow:live` is an orchestrated verifier over the existing focus/session/continuation/continuity workflows, not a new mutation primitive. It reads `operation.list`, selects the current `next_operation_id`, reads that operation's workflow route, then dispatches to the corresponding existing live workflow when the route is already productized (`start_or_select_session`, `resume_operation_continuation`, or `refresh_site_continuity_loop`). This removes the manual control-room step of choosing which downstream workflow wrapper to run after `operation.list`.
+
 Run the adjacent session-start live proof when a focused operation is routing toward `start_or_select_session` and the existing resident-dispatch path should satisfy that route:
 
 ```powershell

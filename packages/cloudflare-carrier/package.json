@@ -38,6 +38,7 @@
     "product:operation:continuation:resume:text": "node scripts/cloudflare-carrier-continuation-resume.mjs --format text",
     "product:operation:lifecycle:workflow:live": "node scripts/cloudflare-carrier-operation-lifecycle-workflow-live.mjs",
     "product:operation:focus:workflow:live": "node scripts/cloudflare-carrier-operation-focus-workflow-live.mjs",
+    "product:operation:next:workflow:live": "node scripts/cloudflare-carrier-operation-next-workflow-live.mjs",
     "product:operation:session:workflow:live": "node scripts/cloudflare-carrier-operation-session-workflow-live.mjs",
     "product:operation:continuation:workflow:live": "node scripts/cloudflare-carrier-operation-continuation-workflow-live.mjs",
     "product:operation:continuity:workflow:live": "node scripts/cloudflare-carrier-operation-continuity-workflow-live.mjs",
