@@ -304,6 +304,14 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:status:text -- --url
 
 `product:operation:status` calls `operation.status.put` through authenticated `POST /api/carrier`. It supports `active`, `inactive`, `needs_continuation`, and `closed` (`paused` is normalized to `inactive` for compatibility), accepts optional `--reason` / `CLOUDFLARE_CARRIER_OPERATION_STATUS_REASON` transition evidence, leaves Site authority enforcement in the Worker, and returns a redacted `narada.cloudflare_carrier.operation_status_put.v1` envelope. `closed` is terminal: repeated close/archive updates are idempotent, but a closed operation cannot be reopened to `active`, `inactive`, or `needs_continuation`. The `:text` alias prints the worker URL, auth source, site, operation id, status, optional reason, worker-reported status transition, and update time without echoing bearer tokens or operator-session cookies.
 
+Run the full governed operation lifecycle live when you need durable operator proof for create -> continuation -> resume -> close, using the same product commands and `operation.read` evidence the console consumes:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:operation:lifecycle:workflow:live -- --url <worker-url> --site <site-id> --operation-id <operation-id> --agent-id <agent-id> --operator-session-file cloudflare-operator-session.json --execute-operation-lifecycle
+```
+
+`product:operation:lifecycle:workflow:live` is an orchestrated live verifier, not a new mutation primitive. It calls `product:operation:create`, `product:operation:status`, `product:operation:continuation:resume`, and `product:operation:read` in sequence, and returns the readback summaries after each stage so the lifecycle route is proven from live product evidence instead of inferred from unit tests alone.
+
 Create a governed Cloudflare task lifecycle task from the operator CLI after explicit task-create cutover evidence exists:
 
 ```powershell
