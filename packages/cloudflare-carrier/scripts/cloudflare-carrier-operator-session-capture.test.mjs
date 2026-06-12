@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  defaultOperatorSessionOutPath,
   formatOperatorSessionCaptureError,
   parseOperatorSessionCaptureArgs,
   verifyOperatorSession,
@@ -16,7 +17,7 @@ test('parseOperatorSessionCaptureArgs normalizes CLI capture configuration', () 
   const parsed = parseOperatorSessionCaptureArgs([
     '--url', 'https://carrier.example.test/',
     '--out', 'D:/tmp/operator-session.json',
-    '--host', '127.0.0.1',
+    '--host', 'localhost',
     '--port', '5173',
     '--timeout-ms', '120000',
   ], {});
@@ -24,10 +25,22 @@ test('parseOperatorSessionCaptureArgs normalizes CLI capture configuration', () 
   assert.deepEqual(parsed, {
     workerUrl: 'https://carrier.example.test',
     outPath: 'D:/tmp/operator-session.json',
-    host: '127.0.0.1',
+    host: 'localhost',
     port: 5173,
     timeoutMs: 120000,
   });
+});
+
+test('parseOperatorSessionCaptureArgs defaults to repo-local session file and localhost loopback', () => {
+  const parsed = parseOperatorSessionCaptureArgs([
+    '--url', 'https://carrier.example.test/',
+  ], {});
+
+  assert.equal(parsed.workerUrl, 'https://carrier.example.test');
+  assert.equal(parsed.outPath, defaultOperatorSessionOutPath());
+  assert.equal(parsed.host, 'localhost');
+  assert.equal(parsed.port, 0);
+  assert.equal(parsed.timeoutMs, 300000);
 });
 
 test('parseOperatorSessionCaptureArgs refuses invalid local listener inputs', () => {

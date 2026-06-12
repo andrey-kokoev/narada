@@ -144,10 +144,10 @@ The Worker uses authorization code flow with PKCE, validates Microsoft ID tokens
 For local live probes that must use the Microsoft operator principal rather than a service token, capture a loopback-scoped operator session cookie:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier operator-session:capture -- --url https://<worker-host> --out D:\tmp\narada-cloudflare-operator-session.json
+pnpm --filter @narada2/cloudflare-carrier operator-session:capture -- --url https://<worker-host>
 ```
 
-The command prints a Microsoft login URL, listens only on a loopback HTTP callback, writes the signed operator-session cookie to the output JSON, and verifies `/auth/session` resolves to `auth_type: microsoft_oidc`. The capture endpoint refuses non-loopback `return_to` URLs.
+By default this writes to `D:\code\narada\.narada\auth\cloudflare-operator-session.json`, listens on `localhost`, and verifies `/auth/session` resolves to `auth_type: microsoft_oidc`. The capture endpoint refuses non-loopback `return_to` URLs.
 
 To verify whether the current operator session file is still live before running governed workflows:
 

@@ -11,8 +11,8 @@ export function parseOperatorSessionCaptureArgs(argv = [], env = process.env) {
   };
 
   const workerUrl = String(option('--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '').replace(/\/+$/, '');
-  const outPath = option('--out') ?? env.CLOUDFLARE_OPERATOR_SESSION_OUT ?? 'cloudflare-operator-session.json';
-  const host = option('--host') ?? '127.0.0.1';
+  const outPath = option('--out') ?? env.CLOUDFLARE_OPERATOR_SESSION_OUT ?? defaultOperatorSessionOutPath();
+  const host = option('--host') ?? 'localhost';
   const requestedPort = Number.parseInt(option('--port') ?? '0', 10);
   const timeoutMs = Number.parseInt(option('--timeout-ms') ?? '300000', 10);
 
@@ -118,6 +118,10 @@ export function formatOperatorSessionCaptureError(error) {
     response: error?.response,
     summary: error?.summary,
   }, null, 2) + '\n';
+}
+
+export function defaultOperatorSessionOutPath() {
+  return fileURLToPath(new URL('../../../.narada/auth/cloudflare-operator-session.json', import.meta.url));
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
