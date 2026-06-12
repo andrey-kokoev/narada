@@ -82,7 +82,38 @@ export async function runOperationNextWorkflowLive(
     'operation_read_before_next_workflow',
   );
   assert.equal(readBefore.schema, 'narada.cloudflare_carrier.product_read.v1');
+  const routeAction = readBefore.summary.workflow_next_action ?? null;
+  const workflow = ROUTE_TO_WORKFLOW.get(routeAction);
+  const evidenceRouteLooksStale = listBefore.summary.next_action === 'inspect_operation_evidence'
+    && workflow
+    && routeAction !== 'monitor_operation';
   if (listBefore.summary.next_action === 'inspect_operation_evidence') {
+    if (evidenceRouteLooksStale) {
+      const workflowResult = parseJsonStdout(
+        await runNodeScript(buildWorkflowArgs(config, workflow, selectedOperationId), { cwd: packageRoot }),
+        `operation_next_workflow_${workflow.name}`,
+      );
+
+      const readAfter = parseJsonStdout(
+        await runNodeScript(buildOperationReadArgs(config, selectedOperationId), { cwd: packageRoot }),
+        'operation_read_after_next_workflow',
+      );
+      assert.equal(readAfter.schema, 'narada.cloudflare_carrier.product_read.v1');
+
+      return {
+        schema: 'narada.cloudflare_carrier.operation_next_workflow_live.v1',
+        status: 'ok',
+        worker_url: config.workerUrl,
+        site_id: config.siteId,
+        selected_operation_id: selectedOperationId,
+        list_before_next: listBefore.summary,
+        read_before_next: readBefore.summary,
+        delegated_workflow: workflow.name,
+        delegated_route_action: routeAction,
+        delegated_result: workflowResult,
+        read_after_next: readAfter.summary,
+      };
+    }
     const evidenceResult = parseJsonStdout(
       await runNodeScript(buildEvidenceArgs(config, selectedOperationId), { cwd: packageRoot }),
       'operation_next_workflow_evidence',
@@ -153,8 +184,6 @@ export async function runOperationNextWorkflowLive(
       read_after_next: readAfterWorkflow.summary,
     };
   }
-  const routeAction = readBefore.summary.workflow_next_action ?? null;
-  const workflow = ROUTE_TO_WORKFLOW.get(routeAction);
   if (!workflow) {
     throw new Error(`operation_next_workflow_live_route_unsupported:${routeAction ?? 'missing_route'}`);
   }
