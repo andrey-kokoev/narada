@@ -23,7 +23,7 @@ if (flag('--help') || flag('-h')) {
 
 const workerUrl = trimTrailingSlash(option('--url') ?? process.env.CLOUDFLARE_CARRIER_URL ?? '');
 const cookieFile = option('--cookie-file') ?? option('--operator-cookie-file') ?? process.env.CLOUDFLARE_OPERATOR_COOKIE_FILE ?? defaultCookieFile();
-const host = option('--host') ?? '127.0.0.1';
+const host = option('--host') ?? 'localhost';
 const port = Number(option('--port') ?? 0);
 const timeoutMs = Number(option('--timeout-ms') ?? 180000);
 const shouldOpen = !flag('--no-open');
@@ -83,7 +83,14 @@ async function captureOperatorCookie({ workerUrl, cookieFile, host, port, timeou
         }
         const cookie = url.searchParams.get('cookie') ?? '';
         if (!cookie) throw new Error('operator_cookie_capture_missing_cookie');
-        await writeFile(cookieFile, `narada_operator_session=${cookie}`, 'utf8');
+        await writeFile(cookieFile, JSON.stringify({
+          schema: 'narada.cloudflare_operator_session.v1',
+          captured_at: new Date().toISOString(),
+          worker_url: workerUrl,
+          cookie: `narada_operator_session=${cookie}`,
+          captured_principal_id: url.searchParams.get('principal_id') ?? null,
+          captured_email: url.searchParams.get('email') ?? null,
+        }, null, 2) + '\n', 'utf8');
         clearTimeout(timer);
         response.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' });
         response.end('<!doctype html><title>Narada operator session captured</title><p>Narada operator session captured. You can close this tab.</p>');
@@ -200,8 +207,7 @@ function loadLocalEnv(pathUrl) {
 }
 
 function defaultCookieFile() {
-  if (process.platform === 'win32') return 'D:\\tmp\\narada-cloudflare-operator-cookie.txt';
-  return join(tmpdir(), 'narada-cloudflare-operator-cookie.txt');
+  return 'D:\\code\\narada\\.narada\\auth\\cloudflare-operator-session.json';
 }
 
 function option(name) {
@@ -237,5 +243,5 @@ function fail(code, detail = {}) {
 }
 
 function printHelp() {
-  stdout.write(`Narada Cloudflare operator login\n\nCommand:\n  pnpm cloudflare:operator:login\n\nConfiguration:\n  --url <worker-url> or CLOUDFLARE_CARRIER_URL\n  --cookie-file <path> or CLOUDFLARE_OPERATOR_COOKIE_FILE\n  --no-open prints the capture URL without opening a browser\n  --skip-check stores the cookie without running cloudflare:operator:check\n  --no-write-env avoids updating the ignored root .env file\n\nEffect:\n  Starts a short-lived local loopback capture server.\n  Opens the Worker Microsoft login/capture URL.\n  Stores only the signed narada_operator_session cookie in the local cookie file.\n  Updates CLOUDFLARE_OPERATOR_COOKIE_FILE in the ignored root .env file unless --no-write-env is supplied.\n  Runs pnpm cloudflare:operator:check -- --operator-cookie-file <path> --require-operator-session unless --skip-check is supplied.\n`);
+  stdout.write(`Narada Cloudflare operator login\n\nCommand:\n  pnpm cloudflare:operator:login\n\nConfiguration:\n  --url <worker-url> or CLOUDFLARE_CARRIER_URL\n  --cookie-file <path> or CLOUDFLARE_OPERATOR_COOKIE_FILE\n  --no-open prints the capture URL without opening a browser\n  --skip-check stores the operator session file without running cloudflare:operator:check\n  --no-write-env avoids updating the ignored root .env file\n\nEffect:\n  Starts a short-lived localhost loopback capture server.\n  Opens the Worker Microsoft login/capture URL.\n  Stores the captured operator session JSON file, including the signed narada_operator_session cookie and capture metadata.\n  Updates CLOUDFLARE_OPERATOR_COOKIE_FILE in the ignored root .env file unless --no-write-env is supplied.\n  Runs pnpm cloudflare:operator:check -- --operator-cookie-file <path> --require-operator-session unless --skip-check is supplied.\n`);
 }
