@@ -463,17 +463,8 @@ function summarizeSiteContinuityHealth(plan, schedulerTaskReadback = plan?.sched
   const localSyncArtifacts = plan?.local_sync_artifacts ?? null;
   const localInboundPackets = plan?.local_inbound_packets ?? null;
   const reconciliationExecution = plan?.last_reconciliation_execution ?? null;
-  const reconciliationCoversLocalArtifactStaleness = freshCompletedNoopReconciliationCoversLocalArtifactStaleness({
-    reconciliationExecution,
-    localSyncArtifacts,
-    localInboundPackets,
-  });
-  const effectiveLocalSyncStatus = reconciliationCoversLocalArtifactStaleness && localSyncArtifacts?.status === 'needs_attention'
-    ? 'synced'
-    : localSyncArtifacts?.status ?? null;
-  const effectiveLocalInboundStatus = reconciliationCoversLocalArtifactStaleness && localInboundPackets?.status === 'needs_attention'
-    ? 'synced'
-    : localInboundPackets?.status ?? null;
+  const effectiveLocalSyncStatus = localSyncArtifacts?.status ?? null;
+  const effectiveLocalInboundStatus = localInboundPackets?.status ?? null;
   const status = plan?.status ?? {};
   const attentionReasons = [
     configuredSites.state !== 'configured' ? 'site_continuity_sites_not_configured' : null,
@@ -496,9 +487,7 @@ function summarizeSiteContinuityHealth(plan, schedulerTaskReadback = plan?.sched
     local_sync_artifact_count: localSyncArtifacts?.artifact_count ?? 0,
     local_inbound_status: effectiveLocalInboundStatus,
     local_inbound_artifact_count: localInboundPackets?.artifact_count ?? 0,
-    local_artifact_freshness_source: reconciliationCoversLocalArtifactStaleness
-      ? 'fresh_completed_noop_reconciliation_execution'
-      : 'artifact_mtime',
+    local_artifact_freshness_source: 'artifact_mtime',
     reconciliation_execution_status: reconciliationExecution?.status ?? null,
     reconciliation_execution_plan_status: reconciliationExecution?.reconciliation_plan_status ?? null,
     scheduler_readback_status: schedulerTaskReadback?.status ?? null,
@@ -507,42 +496,6 @@ function summarizeSiteContinuityHealth(plan, schedulerTaskReadback = plan?.sched
     scheduler_power_management_status: schedulerTaskReadback?.power_management_status ?? null,
     embeds_credentials: false,
   };
-}
-
-function freshCompletedNoopReconciliationCoversLocalArtifactStaleness({
-  reconciliationExecution,
-  localSyncArtifacts,
-  localInboundPackets,
-} = {}) {
-  if (!reconciliationExecution || reconciliationExecution.state !== 'read') return false;
-  if (reconciliationExecution.status !== 'completed') return false;
-  if (reconciliationExecution.reconciliation_plan_status !== 'synced') return false;
-  if (Number(reconciliationExecution.selected_site_count ?? 0) !== 0) return false;
-  if (Number(reconciliationExecution.failed_site_count ?? 0) !== 0) return false;
-  if (!onlyConfiguredSiteStaleness(localSyncArtifacts?.configured_site_sync_statuses, 'configured_site_sync_artifact_stale')) return false;
-  if (!onlyConfiguredSiteStaleness(localInboundPackets?.configured_site_inbound_statuses, 'configured_site_inbound_packet_stale')) return false;
-  const hasLocalArtifactStaleness = hasConfiguredSiteStaleness(
-    localSyncArtifacts?.configured_site_sync_statuses,
-    'configured_site_sync_artifact_stale',
-  ) || hasConfiguredSiteStaleness(
-    localInboundPackets?.configured_site_inbound_statuses,
-    'configured_site_inbound_packet_stale',
-  );
-  if (!hasLocalArtifactStaleness) return false;
-
-  const syncMaxAge = Number(localSyncArtifacts?.max_sync_artifact_age_minutes);
-  const inboundMaxAge = Number(localInboundPackets?.max_inbound_artifact_age_minutes);
-  const maxAgeMinutes = Math.max(
-    Number.isFinite(syncMaxAge) ? syncMaxAge : 0,
-    Number.isFinite(inboundMaxAge) ? inboundMaxAge : 0,
-  );
-  const observedAt = reconciliationExecution.artifact_updated_at
-    ?? reconciliationExecution.persisted_at
-    ?? reconciliationExecution.generated_at
-    ?? null;
-  const observedAtMs = Date.parse(observedAt);
-  if (!Number.isFinite(observedAtMs) || maxAgeMinutes <= 0) return false;
-  return Date.now() - observedAtMs <= maxAgeMinutes * 60 * 1000;
 }
 
 function onlyConfiguredSiteStaleness(statuses = [], staleReason) {

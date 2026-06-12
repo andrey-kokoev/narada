@@ -1386,7 +1386,7 @@ test('site continuity scheduler status-all marks stale configured site artifacts
   }
 });
 
-test('site continuity health accepts fresh no-op reconciliation over stale local packet mtimes', async () => {
+test('site continuity health keeps stale local packet mtimes visible after fresh no-op reconciliation', async () => {
   const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-noop-reconcile-'));
   const artifactDirectory = join(root, '.narada/site-continuity');
   const inboundDirectory = join(artifactDirectory, 'inbound');
@@ -1474,10 +1474,11 @@ test('site continuity health accepts fresh no-op reconciliation over stale local
     assert.equal(plan.last_reconciliation_execution.status, 'completed');
     assert.equal(plan.last_reconciliation_execution.reconciliation_plan_status, 'synced');
     assert.equal(plan.continuity_health.status, 'needs_attention');
-    assert.doesNotMatch(JSON.stringify(plan.continuity_health.attention_reasons), /local_(sync|inbound)_needs_attention/);
-    assert.equal(plan.continuity_health.local_sync_status, 'synced');
-    assert.equal(plan.continuity_health.local_inbound_status, 'synced');
-    assert.equal(plan.continuity_health.local_artifact_freshness_source, 'fresh_completed_noop_reconciliation_execution');
+    assert.match(JSON.stringify(plan.continuity_health.attention_reasons), /site_continuity_local_sync_needs_attention/);
+    assert.match(JSON.stringify(plan.continuity_health.attention_reasons), /site_continuity_local_inbound_needs_attention/);
+    assert.equal(plan.continuity_health.local_sync_status, 'needs_attention');
+    assert.equal(plan.continuity_health.local_inbound_status, 'needs_attention');
+    assert.equal(plan.continuity_health.local_artifact_freshness_source, 'artifact_mtime');
   } finally {
     await rm(root, { recursive: true, force: true });
   }
