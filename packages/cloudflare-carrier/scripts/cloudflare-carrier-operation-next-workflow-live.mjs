@@ -248,6 +248,86 @@ export async function runOperationNextWorkflowLive(
       read_after_next: readAfterWorkflow.summary,
     };
   }
+  if (routeAction === 'review_recovery_posture') {
+    const recoveryResult = parseJsonStdout(
+      await runNodeScript(buildRecoveryArgs(config, selectedOperationId), { cwd: packageRoot }),
+      'operation_next_workflow_recovery',
+    );
+    if (isRecoveryBridgeActionable(recoveryResult.summary)) {
+      const evidenceResult = parseJsonStdout(
+        await runNodeScript(buildEvidenceArgs(config, selectedOperationId), { cwd: packageRoot }),
+        'operation_next_workflow_recovery_evidence',
+      );
+      if (!isLocalResidentBridgeActionable(evidenceResult.summary)) {
+        const readAfter = parseJsonStdout(
+          await runNodeScript(buildOperationReadArgs(config, selectedOperationId), { cwd: packageRoot }),
+          'operation_read_after_next_workflow',
+        );
+        assert.equal(readAfter.schema, 'narada.cloudflare_carrier.product_read.v1');
+        return {
+          schema: 'narada.cloudflare_carrier.operation_next_workflow_live.v1',
+          status: 'ok',
+          worker_url: config.workerUrl,
+          site_id: config.siteId,
+          selected_operation_id: selectedOperationId,
+          list_before_next: listBefore.summary,
+          read_before_next: readBefore.summary,
+          delegated_workflow: 'operation_recovery',
+          delegated_route_action: routeAction,
+          recovery_result: recoveryResult,
+          evidence_result: evidenceResult,
+          delegated_result: recoveryResult,
+          read_after_next: readAfter.summary,
+        };
+      }
+      const bridgeWorkflow = ROUTE_TO_WORKFLOW.get('bridge_local_resident_carrier_evidence');
+      const workflowResult = parseJsonStdout(
+        await runNodeScript(buildWorkflowArgs(config, bridgeWorkflow, selectedOperationId, {
+          ...(readBefore.summary ?? {}),
+          local_resident_session_ref: evidenceResult.summary.local_resident_session_refs?.[0] ?? null,
+        }), { cwd: packageRoot }),
+        'operation_next_workflow_local_resident_carrier_bridge',
+      );
+      const readAfter = parseJsonStdout(
+        await runNodeScript(buildOperationReadArgs(config, selectedOperationId), { cwd: packageRoot }),
+        'operation_read_after_next_workflow',
+      );
+      assert.equal(readAfter.schema, 'narada.cloudflare_carrier.product_read.v1');
+      return {
+        schema: 'narada.cloudflare_carrier.operation_next_workflow_live.v1',
+        status: 'ok',
+        worker_url: config.workerUrl,
+        site_id: config.siteId,
+        selected_operation_id: selectedOperationId,
+        list_before_next: listBefore.summary,
+        read_before_next: readBefore.summary,
+        delegated_workflow: bridgeWorkflow.name,
+        delegated_route_action: routeAction,
+        recovery_result: recoveryResult,
+        evidence_result: evidenceResult,
+        delegated_result: workflowResult,
+        read_after_next: readAfter.summary,
+      };
+    }
+    const readAfter = parseJsonStdout(
+      await runNodeScript(buildOperationReadArgs(config, selectedOperationId), { cwd: packageRoot }),
+      'operation_read_after_next_workflow',
+    );
+    assert.equal(readAfter.schema, 'narada.cloudflare_carrier.product_read.v1');
+    return {
+      schema: 'narada.cloudflare_carrier.operation_next_workflow_live.v1',
+      status: 'ok',
+      worker_url: config.workerUrl,
+      site_id: config.siteId,
+      selected_operation_id: selectedOperationId,
+      list_before_next: listBefore.summary,
+      read_before_next: readBefore.summary,
+      delegated_workflow: 'operation_recovery',
+      delegated_route_action: routeAction,
+      delegated_result: recoveryResult,
+      read_after_next: readAfter.summary,
+    };
+  }
   if (!workflow) {
     if (routeAction === 'monitor_operation') {
       return {
@@ -296,7 +376,7 @@ export async function runOperationNextWorkflowLive(
 async function defaultRunNodeScript(args, options) {
   const result = await execFile(process.execPath, args, {
     ...options,
-    timeout: 120000,
+    timeout: 240000,
     windowsHide: true,
     maxBuffer: CHILD_STDIO_MAX_BUFFER,
   });
@@ -345,6 +425,12 @@ function buildWorkflowArgs(config, workflow, operationId, readSummary = {}) {
     if (config.siteRoot) args.push('--site-root', config.siteRoot);
     if (config.continuationReason) args.push('--continuation-reason', config.continuationReason);
   }
+  if (workflow.name === 'local_resident_carrier_bridge') {
+    const localResidentSessionRef = typeof readSummary.local_resident_session_ref === 'string'
+      ? readSummary.local_resident_session_ref.trim()
+      : '';
+    if (localResidentSessionRef) args.push('--local-resident-session-ref', localResidentSessionRef);
+  }
   if (workflow.flag) args.push(workflow.flag);
   appendAuthOptions(args, config);
   return args;
@@ -353,6 +439,17 @@ function buildWorkflowArgs(config, workflow, operationId, readSummary = {}) {
 function buildEvidenceArgs(config, operationId) {
   const args = [
     evidenceReadScript,
+    '--url', config.workerUrl,
+    '--site', config.siteId,
+    '--operation-id', operationId,
+  ];
+  appendAuthOptions(args, config);
+  return args;
+}
+
+function buildRecoveryArgs(config, operationId) {
+  const args = [
+    recoveryReadScript,
     '--url', config.workerUrl,
     '--site', config.siteId,
     '--operation-id', operationId,
@@ -406,6 +503,15 @@ function isEvidenceReviewSatisfied(summary = {}) {
 function isEvidenceReviewActionable(summary = {}) {
   return Boolean(summary?.reviewable_focus_kind && summary?.reviewable_focus_ref)
     && !isEvidenceReviewSatisfied(summary);
+}
+
+function isRecoveryBridgeActionable(summary = {}) {
+  return summary?.recovery_next_action === 'local_resident_carrier_evidence_not_admitted';
+}
+
+function isLocalResidentBridgeActionable(summary = {}) {
+  return Array.isArray(summary?.local_resident_session_refs)
+    && summary.local_resident_session_refs.some((ref) => typeof ref === 'string' && ref.trim().length > 0);
 }
 
 function shouldRetargetToPostureTarget(summary = {}, selectedOperationId) {

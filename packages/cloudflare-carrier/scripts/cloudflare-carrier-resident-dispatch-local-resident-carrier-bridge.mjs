@@ -105,7 +105,7 @@ export async function runResidentDispatchLocalResidentCarrierBridge(config, fetc
 
 async function resolveBridgePutConfig(config, fetchImpl) {
   const sourcePayload = config.params.source_payload ?? {};
-  if (sourcePayload.local_resident_session_ref && sourcePayload.fallback_evidence_id) return config;
+  if (sourcePayload.local_resident_session_ref) return config;
   const response = await fetchImpl(`${config.workerUrl}/api/carrier`, {
     method: 'POST',
     headers: {

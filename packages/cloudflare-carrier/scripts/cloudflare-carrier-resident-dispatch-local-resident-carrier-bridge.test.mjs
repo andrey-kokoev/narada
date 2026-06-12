@@ -83,6 +83,57 @@ test('runResidentDispatchLocalResidentCarrierBridge reads list posture', async (
   assert.equal(result.summary.cloudflare_carrier_session_id, 'cloudflare-bridged:site_live_smoke:operation_live_alpha:1');
 });
 
+test('runResidentDispatchLocalResidentCarrierBridge accepts direct local resident session ref without fallback evidence lookup', async () => {
+  let fetchCount = 0;
+  const result = await runResidentDispatchLocalResidentCarrierBridge({
+    operation: 'resident_dispatch.local_resident_carrier_bridge.put',
+    workerUrl: 'https://carrier.example',
+    requestId: 'request_put_alpha',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    params: {
+      site_id: 'site_live_smoke',
+      source_payload: {
+        operation_id: 'operation_live_alpha',
+        local_resident_session_ref: 'windows-session://operation_live_alpha/1',
+        bridge_admission_action: 'admit',
+        bridge_admission_reason: 'governed_local_resident_carrier_evidence_admitted_into_cloudflare_replay_surface',
+        bridge_authority: 'cloudflare_operator_local_resident_carrier_bridge',
+        cloudflare_session_replay_binding_admission: 'admitted_by_cloudflare_operator',
+        cloudflare_evidence_replay_binding_admission: 'admitted_by_cloudflare_operator',
+        cloudflare_runtime_session_start_admission: 'not_admitted',
+        bridge_posture: 'local_resident_inhabitance_bridged_to_cloudflare_replay',
+      },
+    },
+  }, async (_url, init) => {
+    fetchCount += 1;
+    return {
+      ok: true,
+      status: 200,
+      async json() {
+        return {
+          ok: true,
+          status: 'recorded',
+          record: {
+            bridge_id: 'local_resident_carrier_bridge_alpha',
+            operation_id: 'operation_live_alpha',
+            local_resident_session_ref: 'windows-session://operation_live_alpha/1',
+            cloudflare_carrier_session_id: 'cloudflare-bridged:site_live_smoke:operation_live_alpha:1',
+            cloudflare_session_replay_binding_admission: 'admitted_by_cloudflare_operator',
+            cloudflare_evidence_replay_binding_admission: 'admitted_by_cloudflare_operator',
+            cloudflare_runtime_session_start_admission: 'not_admitted',
+            bridge_authority: 'cloudflare_operator_local_resident_carrier_bridge',
+          },
+          bridge: JSON.parse(init.body).params.source_payload,
+        };
+      },
+    };
+  });
+
+  assert.equal(fetchCount, 1);
+  assert.equal(result.status, 'ok');
+  assert.equal(result.summary.local_resident_session_ref, 'windows-session://operation_live_alpha/1');
+});
+
 test('formatResidentDispatchLocalResidentCarrierBridgeText prints key posture', () => {
   const text = formatResidentDispatchLocalResidentCarrierBridgeText({
     operation: 'resident_dispatch.local_resident_carrier_bridge.list',
