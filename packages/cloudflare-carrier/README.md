@@ -320,6 +320,14 @@ pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:workflow:liv
 
 `product:resident-dispatch:workflow:live` is the productized form of the existing resident-dispatch smoke verifier. It calls `resident_dispatch.primary_with_fallback.start`, confirms the decision through `resident_dispatch.primary_with_fallback.list`, then reads `operation.read` so the dispatch decision and started carrier session are proven from the same live product surfaces the console uses. It accepts the same bearer-token or operator-session auth sources as the newer operator product commands and returns a redacted `narada.cloudflare_carrier.resident_dispatch_live_smoke.v1` envelope with auth provenance, dispatch state, and readback counts.
 
+Run the adjacent continuity-refresh live proof when `operation.read` has advanced past resident dispatch and is routing toward `refresh_site_continuity_loop`:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:operation:continuity:workflow:live -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json --execute-operation-continuity
+```
+
+`product:operation:continuity:workflow:live` is an orchestrated verifier over the existing continuity product path, not a new continuity primitive. It reads `operation.read`, requires the current workflow route to be `refresh_site_continuity_loop`, runs the existing live `continuity:run-once` execution path with the same operator auth, then reads both `operation.read` and `site.read` again so the continuity refresh is proven to have cleared that route through live product evidence instead of manual cross-checking.
+
 Create a governed Cloudflare task lifecycle task from the operator CLI after explicit task-create cutover evidence exists:
 
 ```powershell
