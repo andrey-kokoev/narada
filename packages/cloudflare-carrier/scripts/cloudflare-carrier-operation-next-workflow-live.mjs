@@ -83,15 +83,61 @@ export async function runOperationNextWorkflowLive(
   );
   assert.equal(readBefore.schema, 'narada.cloudflare_carrier.product_read.v1');
   if (listBefore.summary.next_action === 'inspect_operation_evidence') {
-    const workflowResult = parseJsonStdout(
+    const evidenceResult = parseJsonStdout(
       await runNodeScript(buildEvidenceArgs(config, selectedOperationId), { cwd: packageRoot }),
       'operation_next_workflow_evidence',
     );
+    if (!isEvidenceReviewSatisfied(evidenceResult.summary)) {
+      const readAfter = parseJsonStdout(
+        await runNodeScript(buildOperationReadArgs(config, selectedOperationId), { cwd: packageRoot }),
+        'operation_read_after_next_workflow',
+      );
+      assert.equal(readAfter.schema, 'narada.cloudflare_carrier.product_read.v1');
+      return {
+        schema: 'narada.cloudflare_carrier.operation_next_workflow_live.v1',
+        status: 'ok',
+        worker_url: config.workerUrl,
+        site_id: config.siteId,
+        selected_operation_id: selectedOperationId,
+        list_before_next: listBefore.summary,
+        read_before_next: readBefore.summary,
+        delegated_workflow: 'evidence',
+        delegated_route_action: listBefore.summary.next_action,
+        delegated_result: evidenceResult,
+        read_after_next: readAfter.summary,
+      };
+    }
     const readAfter = parseJsonStdout(
       await runNodeScript(buildOperationReadArgs(config, selectedOperationId), { cwd: packageRoot }),
       'operation_read_after_next_workflow',
     );
     assert.equal(readAfter.schema, 'narada.cloudflare_carrier.product_read.v1');
+    const routeActionAfterEvidence = readAfter.summary.workflow_next_action ?? null;
+    const workflowAfterEvidence = ROUTE_TO_WORKFLOW.get(routeActionAfterEvidence);
+    if (!workflowAfterEvidence) {
+      return {
+        schema: 'narada.cloudflare_carrier.operation_next_workflow_live.v1',
+        status: 'ok',
+        worker_url: config.workerUrl,
+        site_id: config.siteId,
+        selected_operation_id: selectedOperationId,
+        list_before_next: listBefore.summary,
+        read_before_next: readBefore.summary,
+        delegated_workflow: 'evidence_reviewed',
+        delegated_route_action: routeActionAfterEvidence ?? listBefore.summary.next_action,
+        delegated_result: evidenceResult,
+        read_after_next: readAfter.summary,
+      };
+    }
+    const workflowResult = parseJsonStdout(
+      await runNodeScript(buildWorkflowArgs(config, workflowAfterEvidence, selectedOperationId), { cwd: packageRoot }),
+      `operation_next_workflow_${workflowAfterEvidence.name}`,
+    );
+    const readAfterWorkflow = parseJsonStdout(
+      await runNodeScript(buildOperationReadArgs(config, selectedOperationId), { cwd: packageRoot }),
+      'operation_read_after_follow_on_workflow',
+    );
+    assert.equal(readAfterWorkflow.schema, 'narada.cloudflare_carrier.product_read.v1');
     return {
       schema: 'narada.cloudflare_carrier.operation_next_workflow_live.v1',
       status: 'ok',
@@ -100,10 +146,11 @@ export async function runOperationNextWorkflowLive(
       selected_operation_id: selectedOperationId,
       list_before_next: listBefore.summary,
       read_before_next: readBefore.summary,
-      delegated_workflow: 'evidence',
-      delegated_route_action: listBefore.summary.next_action,
+      delegated_workflow: workflowAfterEvidence.name,
+      delegated_route_action: routeActionAfterEvidence,
+      evidence_result: evidenceResult,
       delegated_result: workflowResult,
-      read_after_next: readAfter.summary,
+      read_after_next: readAfterWorkflow.summary,
     };
   }
   const routeAction = readBefore.summary.workflow_next_action ?? null;
@@ -207,6 +254,15 @@ function parseJsonStdout(stdout, label) {
   } catch (error) {
     throw new Error(`${label}_stdout_invalid_json:${error.message}`);
   }
+}
+
+function isEvidenceReviewSatisfied(summary = {}) {
+  if (!summary?.reviewable_focus_kind || !summary?.reviewable_focus_ref) return false;
+  const latestReview = summary.latest_focus_review ?? null;
+  if (!latestReview) return false;
+  return latestReview.focus_kind === summary.reviewable_focus_kind
+    && latestReview.focus_ref === summary.reviewable_focus_ref
+    && latestReview.review_status === 'acknowledged';
 }
 
 function option(args, name) {
