@@ -5385,7 +5385,12 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
           body: {
             ...response,
             site_id: siteId,
-            operation_posture_overview: focusedProjection.operation_posture_overview,
+            operation_posture_overview: {
+              ...focusedProjection.operation_posture_overview,
+              active_operation_id: selectedProjection.focused_operation_lifecycle?.operation_id
+                ?? focusedProjection.operation_posture_overview?.active_operation_id
+                ?? null,
+            },
             operation_posture_route: focusedProjection.operation_posture_route,
             focused_operation_lifecycle: selectedProjection.focused_operation_lifecycle,
           },
