@@ -21,6 +21,7 @@ const residentDispatchWindowsFallbackRequestScript = resolve(scriptDir, 'cloudfl
 const residentDispatchWindowsFallbackEvidenceScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-windows-fallback-evidence.mjs');
 const residentDispatchWindowsFallbackEvidenceReviewScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-windows-fallback-evidence-review.mjs');
 const residentDispatchWindowsFallbackExecuteScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-windows-fallback-execute.mjs');
+const residentDispatchLocalResidentCarrierBridgeScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-local-resident-carrier-bridge.mjs');
 const focusWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-focus-workflow-live.mjs');
 const sessionWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-session-workflow-live.mjs');
 const continuationWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-continuation-workflow-live.mjs');
@@ -36,6 +37,7 @@ const ROUTE_TO_WORKFLOW = new Map([
   ['request_windows_fallback_resident_dispatch', { name: 'resident_dispatch_windows_fallback_request', script: residentDispatchWindowsFallbackRequestScript, flag: null }],
   ['await_windows_fallback_resident_dispatch', { name: 'resident_dispatch_windows_fallback_execute', script: residentDispatchWindowsFallbackExecuteScript, flag: '--execute-windows-fallback' }],
   ['review_windows_fallback_resident_dispatch_evidence', { name: 'resident_dispatch_windows_fallback_evidence_review', script: residentDispatchWindowsFallbackEvidenceReviewScript, flag: null }],
+  ['bridge_local_resident_carrier_evidence', { name: 'local_resident_carrier_bridge', script: residentDispatchLocalResidentCarrierBridgeScript, flag: null }],
   ['start_or_select_session', { name: 'session', script: sessionWorkflowScript, flag: '--execute-operation-session' }],
   ['resume_operation_continuation', { name: 'continuation', script: continuationWorkflowScript, flag: '--execute-operation-continuation-resume' }],
   ['refresh_site_continuity_loop', { name: 'continuity', script: continuityWorkflowScript, flag: '--execute-operation-continuity' }],

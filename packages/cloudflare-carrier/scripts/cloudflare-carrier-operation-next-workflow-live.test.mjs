@@ -374,6 +374,69 @@ test('runOperationNextWorkflowLive delegates Windows fallback resident dispatch 
   assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.resident_dispatch_windows_fallback_evidence_review.v1');
 });
 
+test('runOperationNextWorkflowLive delegates local resident carrier bridge route', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_live_smoke',
+    expectedListRouteAction: 'monitor_operations',
+    expectedOperationId: null,
+    auth: { kind: 'bearer', value: 'token-value', source: 'flag:--token' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              next_operation_id: 'operation_alpha',
+              route_next_action: 'monitor_operations',
+            },
+          });
+        }
+        if (invocations.length === 2) {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              operation_id: 'operation_alpha',
+              workflow_next_action: 'bridge_local_resident_carrier_evidence',
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            operation_id: 'operation_alpha',
+            workflow_next_action: 'monitor_operation',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-resident-dispatch-local-resident-carrier-bridge.mjs') {
+        assert.deepEqual(args.slice(1), [
+          '--url', 'https://carrier.example',
+          '--site', 'site_live_smoke',
+          '--operation-id', 'operation_alpha',
+          '--token', 'token-value',
+        ]);
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.local_resident_carrier_bridge.v1',
+          status: 'ok',
+          summary: { bridge_id: 'local_resident_carrier_bridge_alpha' },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'local_resident_carrier_bridge');
+  assert.equal(result.delegated_route_action, 'bridge_local_resident_carrier_evidence');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.local_resident_carrier_bridge.v1');
+});
+
 test('runOperationNextWorkflowLive delegates Windows fallback resident dispatch execution route', async () => {
   const invocations = [];
   const result = await runOperationNextWorkflowLive({

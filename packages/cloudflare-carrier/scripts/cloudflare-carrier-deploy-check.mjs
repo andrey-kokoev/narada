@@ -10,6 +10,7 @@ const migrationSources = [
   '../migrations/0001_narada_tasks.sql',
   '../migrations/0002_resident_dispatch_windows_fallback_requests.sql',
   '../migrations/0003_resident_dispatch_windows_fallback_evidence.sql',
+  '../migrations/0004_local_resident_carrier_bridge.sql',
   '../../cloudflare-site-registry/migrations/0001_cloudflare_site_registry.sql',
   '../../cloudflare-site-registry/migrations/0002_cloudflare_operator_sessions.sql',
   '../../cloudflare-site-registry/migrations/0003_cloudflare_product_stores.sql',

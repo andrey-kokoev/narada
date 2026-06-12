@@ -7032,6 +7032,24 @@ test('worker records resident dispatch Windows fallback request and routes the o
     assert.equal(readAfterFocusReviewBody.cloudflare_recovery_posture.evidence_replay, 'not_admitted_to_cloudflare_carrier_session');
   }
   assert.notEqual(readAfterFocusReviewBody.operation_workflow_route.next_action, 'start_or_select_session');
+
+  const localResidentCarrierBridgePut = await worker.fetch(jsonRequest({
+    operation: 'resident_dispatch.local_resident_carrier_bridge.put',
+    request_id: 'request_local_resident_carrier_bridge_put',
+    params: {
+      site_id: 'site_fixture',
+      operation_id: 'operation_dispatch',
+      dispatch_decision_id: fallbackEvidencePutBody.record.dispatch_decision_id,
+      fallback_evidence_id: fallbackEvidencePutBody.record.fallback_evidence_id,
+      local_resident_session_ref: fallbackEvidencePutBody.record.local_resident_session_ref,
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(localResidentCarrierBridgePut.status, 200);
+  const localResidentCarrierBridgePutBody = await localResidentCarrierBridgePut.json();
+  assert.equal(localResidentCarrierBridgePutBody.schema, 'narada.sonar.cloudflare_local_resident_carrier_bridge.v1');
+  assert.equal(localResidentCarrierBridgePutBody.status, 'recorded');
+  assert.equal(localResidentCarrierBridgePutBody.cloudflare_session_replay_binding_admission, 'admitted_by_cloudflare_operator');
+  assert.equal(localResidentCarrierBridgePutBody.cloudflare_runtime_session_start_admission, 'not_admitted');
 });
 
 test('worker site.membership.put admits owner and exposes membership through site.read', async () => {

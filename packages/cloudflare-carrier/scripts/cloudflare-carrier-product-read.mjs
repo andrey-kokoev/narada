@@ -352,6 +352,9 @@ export function formatProductSurfaceText(result) {
     if (summary.workflow_next_action === 'review_recovery_posture') {
       lines.push(`Recovery Review: pnpm --filter @narada2/cloudflare-carrier product:operation:recovery:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
     }
+    if (summary.workflow_next_action === 'bridge_local_resident_carrier_evidence') {
+      lines.push(`Local Resident Carrier Bridge: pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:local-resident-carrier-bridge:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
+    }
     if (summary.posture_next_action === 'focus_next_operation' || summary.next_action === 'inspect_operation_evidence') {
       lines.push(`Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:operation:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
     }

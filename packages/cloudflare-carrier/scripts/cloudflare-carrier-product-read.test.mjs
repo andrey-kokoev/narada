@@ -644,6 +644,31 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
     },
   });
   assert.match(operationReadRecoveryText, /Recovery Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_recovery --operator-session-file <operator-session-file>/);
+
+  const operationReadLocalResidentBridgeText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_bridge',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'inhabited',
+      health: 'incomplete',
+      next_action: 'local_resident_carrier_evidence',
+      workflow_next_action: 'bridge_local_resident_carrier_evidence',
+      workflow_reason: 'operation_lifecycle_missing_local_resident_carrier_evidence',
+      workflow_focus_ref: 'operation_bridge',
+      session_count: 0,
+      task_count: 0,
+      recovery_state: 'local_resident_inhabitance_not_replayable',
+      recovery_boundary_count: 12,
+      recovery_gap_count: 1,
+    },
+  });
+  assert.match(operationReadLocalResidentBridgeText, /Local Resident Carrier Bridge: pnpm --filter @narada2\/cloudflare-carrier product:resident-dispatch:local-resident-carrier-bridge:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_bridge --operator-session-file <operator-session-file>/);
 });
 
 test('formatProductSurfaceText renders refused product reads without auth material', () => {
