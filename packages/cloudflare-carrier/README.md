@@ -378,6 +378,22 @@ pnpm --filter @narada2/cloudflare-carrier product:repository-publication:evidenc
 
 `product:repository-publication:evidence` calls `repository_publication.evidence.put` through authenticated `POST /api/carrier`. It requires the governing request id, the Windows publication execution id, repository/branch/source-change refs, and for admitted completion a published commit ref before sending the evidence record. The command fixes evidence-store authority at `cloudflare_repository_publication_evidence_store`, executor authority at `windows_repository_publication_executor`, keeps both Cloudflare Git push and direct Cloudflare repository mutation at `not_admitted`, and records the Windows publication outcome only after Cloudflare admission exists; it does not blur the line into direct Cloudflare publication authority. The `:text` alias prints the Worker URL, auth source, site, evidence/request/execution ids, admission linkage, publish outcome, authority partition, mutation posture, and rollback evidence ref without echoing bearer tokens or operator-session cookies.
 
+Read whether the Cloudflare GitHub publication lane is configured and whether a repository/branch is currently allowed before requesting direct Cloudflare execution:
+
+```bash
+pnpm --filter @narada2/cloudflare-carrier product:repository-publication:readiness:text -- --url <worker-url> --site <site-id> --repository-ref <github:owner/repo> --branch-ref <branch-ref> --operator-session-file cloudflare-operator-session.json
+```
+
+`product:repository-publication:readiness` calls `repository_publication.cloudflare_execution.readiness` through authenticated `POST /api/carrier`. It reads Cloudflare-held GitHub credential posture, allowed repository/branch policy, and requested repository/branch eligibility without mutating GitHub. The command fixes executor authority at `cloudflare_github_repository_publication_executor`, admission authority at `cloudflare_repository_publication_admission_controller`, keeps Cloudflare Git push at `not_admitted`, and reports whether direct Cloudflare repository mutation would be available if execution were later requested. The `:text` alias prints the Worker URL, auth source, site, readiness status, credential mode, requested repository/branch posture, missing configuration, and authority partition without echoing bearer tokens, operator-session cookies, or secret values.
+
+Execute an already admitted repository publication directly through the Cloudflare GitHub executor when that lane is intentionally chosen:
+
+```bash
+pnpm --filter @narada2/cloudflare-carrier product:repository-publication:cloudflare-execution:text -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --repository-publication-execution-id <execution-id> --execute-cloudflare-github --operator-session-file cloudflare-operator-session.json
+```
+
+`product:repository-publication:cloudflare-execution` calls `repository_publication.cloudflare_execution.execute` through authenticated `POST /api/carrier`. It requires explicit `--execute-cloudflare-github` acknowledgement and a governed repository publication request id before Cloudflare may push to GitHub. This command is the direct-Cloudflare publication lane: it records execution under `cloudflare_github_repository_publication_executor`, links back to Cloudflare admission, keeps `cloudflare_git_push_admission` at `not_admitted`, and admits direct Cloudflare repository mutation only through this explicit execution boundary. The `:text` alias prints the Worker URL, auth source, site, request/execution ids, publication outcome, admission linkage, GitHub response summary, and authority partition without echoing bearer tokens or operator-session cookies.
+
 Finish an existing closed Cloudflare task lifecycle task after explicit task-finish cutover evidence exists:
 
 ```powershell
