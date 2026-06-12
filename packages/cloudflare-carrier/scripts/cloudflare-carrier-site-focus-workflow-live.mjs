@@ -12,6 +12,7 @@ const scriptPath = fileURLToPath(import.meta.url);
 const scriptDir = dirname(scriptPath);
 const packageRoot = resolve(scriptDir, '..');
 const productReadScript = resolve(scriptDir, 'cloudflare-carrier-product-read.mjs');
+const CHILD_STDIO_MAX_BUFFER = 64 * 1024 * 1024;
 
 export function parseSiteFocusWorkflowLiveArgs(argv = [], env = process.env) {
   const args = [...argv];
@@ -82,7 +83,12 @@ export async function runSiteFocusWorkflowLive(
 }
 
 async function defaultRunNodeScript(args, options) {
-  const result = await execFile(process.execPath, args, { ...options, timeout: 120000, windowsHide: true });
+  const result = await execFile(process.execPath, args, {
+    ...options,
+    timeout: 120000,
+    maxBuffer: CHILD_STDIO_MAX_BUFFER,
+    windowsHide: true,
+  });
   return result.stdout;
 }
 
