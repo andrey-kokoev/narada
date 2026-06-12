@@ -80,15 +80,8 @@ export async function runOperationNextWorkflowLive(
     'operation_list_before_next_workflow',
   );
   assert.equal(listBefore.schema, 'narada.cloudflare_carrier.product_read.v1');
-  const selectedOperationId = listBefore.summary.next_operation_id ?? null;
+  let selectedOperationId = listBefore.summary.next_operation_id ?? null;
   assert.ok(selectedOperationId, 'operation_next_workflow_live_requires_next_operation');
-  if (config.expectedOperationId) {
-    assert.equal(
-      selectedOperationId,
-      config.expectedOperationId,
-      `operation_next_workflow_live_expected_operation_mismatch:${config.expectedOperationId}:${selectedOperationId}`,
-    );
-  }
   if (config.expectedListRouteAction) {
     assert.equal(
       listBefore.summary.route_next_action,
@@ -97,17 +90,37 @@ export async function runOperationNextWorkflowLive(
     );
   }
 
-  const readBefore = parseJsonStdout(
+  let readBefore = parseJsonStdout(
     await runNodeScript(buildOperationReadArgs(config, selectedOperationId), { cwd: packageRoot }),
     'operation_read_before_next_workflow',
   );
   assert.equal(readBefore.schema, 'narada.cloudflare_carrier.product_read.v1');
+  const visitedOperationIds = new Set([selectedOperationId]);
+  while (shouldRetargetToPostureTarget(readBefore.summary, selectedOperationId)) {
+    const nextOperationId = readBefore.summary.posture_target;
+    if (visitedOperationIds.has(nextOperationId)) break;
+    selectedOperationId = nextOperationId;
+    visitedOperationIds.add(selectedOperationId);
+    readBefore = parseJsonStdout(
+      await runNodeScript(buildOperationReadArgs(config, selectedOperationId), { cwd: packageRoot }),
+      'operation_read_retargeted_before_next_workflow',
+    );
+    assert.equal(readBefore.schema, 'narada.cloudflare_carrier.product_read.v1');
+  }
+  if (config.expectedOperationId) {
+    assert.equal(
+      selectedOperationId,
+      config.expectedOperationId,
+      `operation_next_workflow_live_expected_operation_mismatch:${config.expectedOperationId}:${selectedOperationId}`,
+    );
+  }
   const routeAction = readBefore.summary.workflow_next_action ?? null;
   const workflow = ROUTE_TO_WORKFLOW.get(routeAction);
   const evidenceRouteLooksStale = listBefore.summary.next_action === 'inspect_operation_evidence'
     && workflow
     && routeAction !== 'monitor_operation';
-  if (listBefore.summary.next_action === 'inspect_operation_evidence') {
+  const selectedMatchesListNext = selectedOperationId === (listBefore.summary.next_operation_id ?? null);
+  if (listBefore.summary.next_action === 'inspect_operation_evidence' && selectedMatchesListNext) {
     if (evidenceRouteLooksStale) {
       const workflowResult = parseJsonStdout(
         await runNodeScript(buildWorkflowArgs(config, workflow, selectedOperationId, readBefore.summary ?? {}), { cwd: packageRoot }),
@@ -230,6 +243,21 @@ export async function runOperationNextWorkflowLive(
     };
   }
   if (!workflow) {
+    if (routeAction === 'monitor_operation') {
+      return {
+        schema: 'narada.cloudflare_carrier.operation_next_workflow_live.v1',
+        status: 'ok',
+        worker_url: config.workerUrl,
+        site_id: config.siteId,
+        selected_operation_id: selectedOperationId,
+        list_before_next: listBefore.summary,
+        read_before_next: readBefore.summary,
+        delegated_workflow: 'monitor_operation',
+        delegated_route_action: routeAction,
+        delegated_result: null,
+        read_after_next: readBefore.summary,
+      };
+    }
     throw new Error(`operation_next_workflow_live_route_unsupported:${routeAction ?? 'missing_route'}`);
   }
 
@@ -367,6 +395,14 @@ function isEvidenceReviewSatisfied(summary = {}) {
 function isEvidenceReviewActionable(summary = {}) {
   return Boolean(summary?.reviewable_focus_kind && summary?.reviewable_focus_ref)
     && !isEvidenceReviewSatisfied(summary);
+}
+
+function shouldRetargetToPostureTarget(summary = {}, selectedOperationId) {
+  return summary?.posture_next_action === 'focus_next_operation'
+    && summary?.posture_next_status === 'needs_attention'
+    && typeof summary?.posture_target === 'string'
+    && summary.posture_target.length > 0
+    && summary.posture_target !== selectedOperationId;
 }
 
 function option(args, name) {

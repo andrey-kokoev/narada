@@ -198,6 +198,7 @@ export function summarizeProductSurface(operation, body, options = {}) {
       workflow_continuity_direction_missing: workflowRoute?.continuity_direction_missing ?? null,
       posture_next_status: postureRoute?.next_status ?? postureOverview?.next_status ?? null,
       posture_next_action: postureRoute?.next_action ?? postureOverview?.next_action ?? null,
+      posture_target: postureRoute?.target ?? postureOverview?.next_operation_id ?? null,
       posture_reason: postureRoute?.reason ?? postureOverview?.next_reason ?? null,
       recovery_state: recoveryPosture?.state ?? null,
       recovery_boundary_count: recoveryPosture?.recovery_boundary_count ?? null,
@@ -317,7 +318,8 @@ export function formatProductSurfaceText(result) {
       lines.push(`Workflow Command: kind=${summary.workflow_action_command_kind ?? 'unknown'} command=${summary.workflow_action_command ?? 'none'}`);
     }
     if (summary.posture_next_status || summary.posture_next_action || summary.posture_reason) {
-      lines.push(`Posture Route: status=${summary.posture_next_status ?? 'unknown'} action=${summary.posture_next_action ?? 'none'} reason=${summary.posture_reason ?? 'none'}`);
+      const postureTargetSuffix = summary.posture_target ? ` target=${summary.posture_target}` : '';
+      lines.push(`Posture Route: status=${summary.posture_next_status ?? 'unknown'} action=${summary.posture_next_action ?? 'none'} reason=${summary.posture_reason ?? 'none'}${postureTargetSuffix}`);
     }
     if (summary.recovery_state || summary.recovery_boundary_count !== null || summary.recovery_gap_count !== null) {
       lines.push(`Recovery: state=${summary.recovery_state ?? 'unknown'} boundaries=${summary.recovery_boundary_count ?? 'unknown'} gaps=${summary.recovery_gap_count ?? 'unknown'}`);

@@ -540,10 +540,12 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       task_count: 0,
       posture_next_status: 'needs_attention',
       posture_next_action: 'focus_next_operation',
+      posture_target: 'operation_focus_target',
       posture_reason: 'use_focused_operation',
     },
   });
   assert.match(operationReadEvidenceText, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(operationReadEvidenceText, /Posture Route: status=needs_attention action=focus_next_operation reason=use_focused_operation target=operation_focus_target/);
 
   const operationReadMailboxText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -851,6 +853,7 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     workflow_continuity_direction_missing: ['local_windows_to_cloudflare'],
     posture_next_status: 'needs_attention',
     posture_next_action: 'review_operation',
+    posture_target: null,
     posture_reason: 'operation_needs_review',
     recovery_state: 'reconstructable',
     recovery_boundary_count: 12,
