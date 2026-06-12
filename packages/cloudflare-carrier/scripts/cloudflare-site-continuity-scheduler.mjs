@@ -2568,7 +2568,7 @@ function vbsString(value) {
   return `"${String(value).replaceAll('"', '""')}"`;
 }
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
   const args = { action: 'status', dryRun: true };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -2594,7 +2594,7 @@ function parseArgs(argv) {
     else if (arg === '--max-artifact-age-minutes') args.maxArtifactAgeMinutes = argv[++index];
     else if (arg === '--execution-timeout-ms') args.executionTimeoutMs = argv[++index];
     else if (arg === '--refresh-site-registry-projection') args.refreshSiteRegistryProjection = true;
-    else if (arg === '--projection-url') args.projectionWorkerUrl = argv[++index];
+    else if (arg === '--projection-url' || arg === '--url') args.projectionWorkerUrl = argv[++index];
     else if (arg === '--projection-token') args.projectionToken = argv[++index];
     else if (arg === '--projection-token-file') args.projectionTokenFile = argv[++index];
     else if (arg === '--token') args.token = argv[++index];

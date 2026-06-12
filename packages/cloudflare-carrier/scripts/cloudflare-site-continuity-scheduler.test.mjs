@@ -14,6 +14,7 @@ import {
   buildSiteContinuitySchedulerPlan,
   buildSiteContinuitySchedulerPlanWithOptionalRefresh,
   formatSiteContinuitySchedulerResultForText,
+  parseArgs,
   readCloudflareOperationPostureForHealthSnapshot,
   readCloudflareProductPostureForHealthSnapshot,
   readLastReconciliationExecutionArtifact,
@@ -226,6 +227,18 @@ test('site continuity scheduler product read auth prefers explicit operator sess
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test('site continuity scheduler parseArgs accepts --url as projection worker alias', () => {
+  const args = parseArgs([
+    '--action', 'health',
+    '--url', 'https://worker.example',
+    '--operator-session-file', 'D:\\code\\narada\\.narada\\auth\\cloudflare-operator-session.json',
+  ]);
+
+  assert.equal(args.action, 'health');
+  assert.equal(args.projectionWorkerUrl, 'https://worker.example');
+  assert.equal(args.operatorSessionFile, 'D:\\code\\narada\\.narada\\auth\\cloudflare-operator-session.json');
 });
 
 test('site continuity product binding alignment classifies remote next-site coverage', () => {

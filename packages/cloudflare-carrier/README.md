@@ -242,10 +242,10 @@ Scheduled health also reports `cloudflare_product_binding_preparation`, which sa
 Run a bounded live continuity health readback with direct operator-session auth, without relying on token-only env configuration:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier continuity:health:text -- --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada2/cloudflare-carrier continuity:health:text -- --url https://<worker-host> --operator-session-file cloudflare-operator-session.json
 ```
 
-`continuity:health:text` now accepts the same `--token`, `--token-file`, `--operator-session-cookie`, and `--operator-session-file` auth inputs as the other Cloudflare product read surfaces. In live mode it performs the Task Scheduler readback, summarizes local continuity health, and attaches live `site.list` / `operation.list` Cloudflare posture with non-secret auth provenance, local binding alignment, and binding preparation state, without echoing bearer tokens or operator-session cookies.
+`continuity:health:text` now accepts the same `--url`, `--token`, `--token-file`, `--operator-session-cookie`, and `--operator-session-file` inputs as the other Cloudflare product read surfaces. `--url` is accepted as an alias for the scheduler's underlying `--projection-url`. In live mode it performs the Task Scheduler readback, summarizes local continuity health, and attaches live `site.list` / `operation.list` Cloudflare posture with non-secret auth provenance, local binding alignment, and binding preparation state, without echoing bearer tokens or operator-session cookies.
 
 Install the Windows scheduled task for the recurring continuity loop after the site and packet path are configured in the local continuity env file:
 
