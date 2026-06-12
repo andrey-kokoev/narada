@@ -354,6 +354,30 @@ pnpm --filter @narada2/cloudflare-carrier product:local-ingress:evidence:text --
 
 `product:local-ingress:evidence` calls `local_ingress.evidence.put` through authenticated `POST /api/carrier`. It requires the governing request id, the Windows execution id, and at least one changed file before sending the evidence record. The command fixes requested mutation class at `local_repository_filesystem_mutation`, Windows admission action at `admit`, local execution status at `completed`, local filesystem mutation admission at `admitted_by_windows_local_ingress`, executor authority at `windows_local_ingress_executor`, and keeps both direct Cloudflare filesystem mutation and repository publication at `not_admitted`; it records the Windows-side execution evidence in Cloudflare without claiming direct Cloudflare filesystem authority. The `:text` alias prints the Worker URL, auth source, site, evidence/request/execution ids, authority partition, mutation admissions, changed files, rollback evidence ref, and record timestamps without echoing bearer tokens or operator-session cookies.
 
+Queue a governed repository publication request after Windows-side filesystem evidence exists, without claiming direct Cloudflare Git push or repository mutation:
+
+```bash
+pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:text -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --operation-id <operation-id> --task-id <task-id> --publication-ref <publication-ref> --action-ref <action-ref> --repository-ref <github:owner/repo> --branch-ref <branch-ref> --source-change-ref <git:commit:sha> --contract-ref <contract-ref> --evidence-contract-ref <evidence-contract-ref> --rollback-ref <rollback-ref> --operator-session-file cloudflare-operator-session.json
+```
+
+`product:repository-publication:request` calls `repository_publication.request.create` through authenticated `POST /api/carrier`. It requires explicit publication, repository, branch, source-change, governed request contract, evidence return contract, and rollback refs before sending the queue request. The command fixes request authority at `cloudflare_repository_publication_request_queue`, executor authority at `windows_repository_publication_executor`, leaves repository publication admission at `pending_windows_publication_admission`, and keeps both Cloudflare Git push and direct Cloudflare repository mutation at `not_admitted`; it records the governed Windows publication request, not publication execution itself. The `:text` alias prints the Worker URL, auth source, site, request id, operation/task linkage, publication/repository refs, authority posture, admission posture, and contract refs without echoing bearer tokens or operator-session cookies.
+
+Record the Cloudflare admission decision for a queued repository publication request before Windows publishes:
+
+```bash
+pnpm --filter @narada2/cloudflare-carrier product:repository-publication:admission:text -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --admission-action admit --admission-reason <reason-ref> --operator-session-file cloudflare-operator-session.json
+```
+
+`product:repository-publication:admission` calls `repository_publication.admission.classify` through authenticated `POST /api/carrier`. It requires the queued request id and an admission action, fixes admission authority at `cloudflare_repository_publication_admission_controller`, executor authority at `windows_repository_publication_executor`, and keeps both Cloudflare Git push and direct Cloudflare repository mutation at `not_admitted`; it governs whether Windows may publish, without pretending Cloudflare performed the publish. The `:text` alias prints the Worker URL, auth source, site, admission/request ids, decision, authority posture, downstream mutation posture, and record timestamps without echoing bearer tokens or operator-session cookies.
+
+Record Windows repository publication evidence back into Cloudflare after governed publication resolves:
+
+```bash
+pnpm --filter @narada2/cloudflare-carrier product:repository-publication:evidence:text -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --publication-execution-id <execution-id> --repository-ref <github:owner/repo> --branch-ref <branch-ref> --source-change-ref <git:commit:sha> --windows-admission-action admit --publication-status completed --published-commit-ref <git:commit:published-sha> --rollback-evidence-ref <rollback-ref> --operator-session-file cloudflare-operator-session.json
+```
+
+`product:repository-publication:evidence` calls `repository_publication.evidence.put` through authenticated `POST /api/carrier`. It requires the governing request id, the Windows publication execution id, repository/branch/source-change refs, and for admitted completion a published commit ref before sending the evidence record. The command fixes evidence-store authority at `cloudflare_repository_publication_evidence_store`, executor authority at `windows_repository_publication_executor`, keeps both Cloudflare Git push and direct Cloudflare repository mutation at `not_admitted`, and records the Windows publication outcome only after Cloudflare admission exists; it does not blur the line into direct Cloudflare publication authority. The `:text` alias prints the Worker URL, auth source, site, evidence/request/execution ids, admission linkage, publish outcome, authority partition, mutation posture, and rollback evidence ref without echoing bearer tokens or operator-session cookies.
+
 Finish an existing closed Cloudflare task lifecycle task after explicit task-finish cutover evidence exists:
 
 ```powershell
