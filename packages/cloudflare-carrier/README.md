@@ -298,6 +298,14 @@ pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:create:text -- 
 
 `product:task-lifecycle:create` calls `task_lifecycle.task_create.admit` through authenticated `POST /api/carrier`. Without `--admit-cloudflare-task-create`, it can request the Worker's refusal evidence for the retained Windows task lifecycle authority. With the admission flag, it requires explicit cutover, governed-write-contract, and confirmation-evidence refs before sending the Cloudflare task-create admission request. The `:text` alias prints the Worker URL, auth source, site, admission id, task id/number when admitted, decision, authority posture, and evidence refs without echoing bearer tokens or operator-session cookies.
 
+Claim an existing governed Cloudflare task lifecycle task after explicit task-claim cutover evidence exists:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:claim:text -- --url <worker-url> --site <site-id> --task-id <task-id> --claimant-agent <agent-id> --admission-id <admission-id> --admit-cloudflare-task-claim --assignment-authority-ref <assignment-authority-ref> --cutover-point-ref <cutover-ref> --governed-write-contract-ref <contract-ref> --confirmation-evidence-ref <evidence-ref> --operator-session-file cloudflare-operator-session.json
+```
+
+`product:task-lifecycle:claim` calls `task_lifecycle.task_claim.admit` through authenticated `POST /api/carrier`. Without `--admit-cloudflare-task-claim`, it can request the Worker's refusal evidence for retained Windows task lifecycle authority. With the admission flag, it requires explicit assignment-authority, cutover, governed-write-contract, and confirmation-evidence refs before sending the Cloudflare task-claim admission request. The `:text` alias prints the Worker URL, auth source, site, admission id, task id/number when admitted, claimant, decision, authority posture, and evidence refs without echoing bearer tokens or operator-session cookies.
+
 For operator-facing readback without JSON inspection, use the text aliases:
 
 ```powershell
