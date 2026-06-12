@@ -263,6 +263,14 @@ pnpm --filter @narada2/cloudflare-carrier product:control-plane:convergence:live
 
 `product:control-plane:convergence:live` reads `site.list`, executes `product:site:next:workflow:live` while the top-level route is still `focus_next_site`, then proves the resulting state with `product:posture:coherence:live` and `product:durability:coherence:live`. It fails if the site route does not converge back to `monitor_sites`, or if either downstream verifier still reports drift.
 
+Run a bounded live operation convergence pass when you want the currently focused operation route on one or more sites executed until it settles back to `monitor_operations`, then re-proven against the same posture and durability checks:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:operation:convergence:live:text -- --url https://<worker-host> --operator-session-file cloudflare-operator-session.json --site site_live_smoke --site site_narada_cloudflare --execute-operation-convergence
+```
+
+`product:operation:convergence:live` reads `site.list`, then for each selected site reads `operation.list`, executes `product:operation:next:workflow:live` while the operation route is still `focus_next_operation`, and confirms the resulting focused operation now reads `monitor_operation`. It then re-runs `product:posture:coherence:live` and `product:durability:coherence:live` for the same site set. It fails if any selected site does not converge back to `monitor_operations`, or if the downstream verifiers still report drift.
+
 Install the Windows scheduled task for the recurring continuity loop after the site and packet path are configured in the local continuity env file:
 
 ```powershell
