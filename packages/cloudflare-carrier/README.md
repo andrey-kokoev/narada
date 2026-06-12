@@ -247,6 +247,14 @@ pnpm --filter @narada2/cloudflare-carrier continuity:health:text -- --url https:
 
 `continuity:health:text` now accepts the same `--url`, `--token`, `--token-file`, `--operator-session-cookie`, and `--operator-session-file` inputs as the other Cloudflare product read surfaces. `--url` is accepted as an alias for the scheduler's underlying `--projection-url`. In live mode it performs the Task Scheduler readback, summarizes local continuity health, and attaches live `site.list` / `operation.list` Cloudflare posture with non-secret auth provenance, local binding alignment, and binding preparation state, without echoing bearer tokens or operator-session cookies.
 
+Run a bounded live durability coherence readback when you want one operator check over the currently focused operation on each site, rather than manually correlating `site.read`, `operation.list`, `operation.read`, and `product:operation:recovery`:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text -- --url https://<worker-host> --operator-session-file cloudflare-operator-session.json
+```
+
+`product:durability:coherence:live` reads `site.list`, then for each selected site reads `site.read`, `operation.list`, `operation.read`, and `product:operation:recovery` for the currently routed operation. It fails when site durability drifts from `durable` / `reconstructable`, when operation recovery still has gaps, or when the `operation.read` recovery summary disagrees with the dedicated recovery surface.
+
 Install the Windows scheduled task for the recurring continuity loop after the site and packet path are configured in the local continuity env file:
 
 ```powershell
