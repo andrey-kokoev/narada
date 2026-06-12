@@ -406,6 +406,14 @@ pnpm --filter @narada2/cloudflare-carrier product:repository-publication:cloudfl
 
 These aliases all route through `product:repository-publication:*` readback over authenticated `POST /api/carrier` and keep the authority boundary explicit instead of inferring publication state from smoke artifacts. `request:list` shows queued Windows publication requests, `request:next` shows the next admitted dispatch candidate and any pending-unadmitted backlog, `admission:list` shows Cloudflare admission history, `evidence:list` shows Windows execution evidence recorded back into Cloudflare, and `cloudflare-execution:list` shows direct Cloudflare GitHub execution history. The `:text` aliases print the Worker URL, auth source, site, latest ids/statuses, and authority posture without echoing bearer tokens or operator-session cookies.
 
+After a live publication request has been admitted and resolved, verify that the operator readback lane exposes coherent request/admission/downstream evidence:
+
+```bash
+pnpm --filter @narada2/cloudflare-carrier repository-publication:readback-smoke:live -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --lane cloudflare --repository-publication-execution-id <execution-id> --operation-id <operation-id>
+```
+
+`repository-publication:readback-smoke:live` is a live verifier over the product read surfaces, not a second mutation path. It proves the request appears in `request:list`, the governing Cloudflare decision appears in `admission:list`, the downstream result appears in either `cloudflare-execution:list` or `evidence:list` depending on `--lane`, and `request:next` no longer selects the resolved request. When `--operation-id` is supplied, it also checks `operation.read` for the same downstream record so operator lifecycle readback stays coherent across both operation and publication views.
+
 Finish an existing closed Cloudflare task lifecycle task after explicit task-finish cutover evidence exists:
 
 ```powershell
