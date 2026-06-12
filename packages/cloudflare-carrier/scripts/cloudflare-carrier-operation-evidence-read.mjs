@@ -47,6 +47,9 @@ export function summarizeOperationEvidence(body = {}, options = {}) {
   const operationSummary = options.operationSummary ?? {};
   const sessions = Array.isArray(body?.sessions) ? body.sessions : [];
   const carrierEvidence = Array.isArray(body?.carrier_evidence) ? body.carrier_evidence : [];
+  const residentDispatchWindowsFallbackEvidence = Array.isArray(body?.resident_dispatch_windows_fallback_evidence)
+    ? body.resident_dispatch_windows_fallback_evidence
+    : [];
   const activityItems = Array.isArray(body?.operation_activity_timeline?.items) ? body.operation_activity_timeline.items : [];
   const focusReviews = Array.isArray(body?.operation_focus_reviews) ? body.operation_focus_reviews : [];
   const eventLimit = clampInteger(options.eventLimit, 1, 20, 5);
@@ -75,9 +78,23 @@ export function summarizeOperationEvidence(body = {}, options = {}) {
     const focusRef = item?.focus_ref ?? item?.source_ref ?? item?.activity_id ?? null;
     return REVIEWABLE_FOCUS_KINDS.has(focusKind) && !!focusRef;
   }) ?? null;
+  const operationId = body?.operation?.operation_id ?? body?.operation_id ?? operationSummary.operation_id ?? null;
+  const localResidentSessionRefs = [...new Set(
+    residentDispatchWindowsFallbackEvidence
+      .filter((entry) =>
+        (!operationId || entry?.operation_id === operationId)
+        && String(entry?.local_session_start_admission ?? '') === 'admitted_by_windows_resident_loop'
+        && String(entry?.local_resident_session_ref ?? '').trim())
+      .map((entry) => String(entry.local_resident_session_ref).trim()),
+  )];
+  const localResidentCarrierBridgeState = localResidentSessionRefs.length === 0
+    ? 'not_observed'
+    : sessions.length > 0
+      ? 'cloudflare_carrier_session_bound'
+      : 'not_admitted_to_cloudflare_carrier_session';
   return {
     site_id: body?.operation?.site_id ?? body?.site_id ?? operationSummary.site_id ?? null,
-    operation_id: body?.operation?.operation_id ?? body?.operation_id ?? operationSummary.operation_id ?? null,
+    operation_id: operationId,
     current_status: operationSummary.current_status ?? body?.operation?.status ?? null,
     phase: operationSummary.phase ?? body?.operation_lifecycle_status?.phase ?? null,
     health: operationSummary.health ?? body?.operation_lifecycle_status?.health ?? null,
@@ -85,6 +102,9 @@ export function summarizeOperationEvidence(body = {}, options = {}) {
     posture_next_action: operationSummary.posture_next_action ?? body?.operation_posture_route?.next_action ?? null,
     carrier_evidence_read_state: body?.carrier_evidence_read_status?.state ?? body?.carrier_evidence_read_status?.status ?? null,
     carrier_session_ids: sessions.map((session) => session?.carrier_session_id ?? session?.session_id).filter(Boolean),
+    local_resident_session_refs: localResidentSessionRefs,
+    local_resident_session_count: localResidentSessionRefs.length,
+    local_resident_carrier_bridge_state: localResidentCarrierBridgeState,
     carrier_event_count: carrierEvidence.reduce((count, entry) => count + (Array.isArray(entry?.events) ? entry.events.length : 0), 0),
     carrier_event_session_count: carrierEvidence.length,
     recent_carrier_events: recentCarrierEvents.slice(-eventLimit),
@@ -117,7 +137,11 @@ export function formatOperationEvidenceReadText(result) {
     `Posture Next: ${summary.posture_next_action ?? 'none'}`,
     `Carrier Evidence: state=${summary.carrier_evidence_read_state ?? 'unknown'} sessions=${summary.carrier_session_ids?.length ?? 0} events=${summary.carrier_event_count ?? 0}`,
   ];
+  if ((summary.local_resident_session_count ?? 0) > 0) {
+    lines.push(`Local Resident Evidence: sessions=${summary.local_resident_session_count} bridge=${summary.local_resident_carrier_bridge_state ?? 'unknown'}`);
+  }
   if (summary.carrier_session_ids?.length > 0) lines.push(`Carrier Sessions: ${summary.carrier_session_ids.join(', ')}`);
+  if (summary.local_resident_session_refs?.length > 0) lines.push(`Local Resident Sessions: ${summary.local_resident_session_refs.join(', ')}`);
   if (summary.recent_carrier_events?.length > 0) {
     lines.push('Recent Carrier Events:');
     for (const event of summary.recent_carrier_events) {

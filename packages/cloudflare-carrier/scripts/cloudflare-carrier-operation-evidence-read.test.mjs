@@ -60,6 +60,7 @@ test('summarizeOperationEvidence condenses operation response into operator evid
   assert.equal(summary.operation_id, 'operation_alpha');
   assert.equal(summary.carrier_evidence_read_state, 'loaded');
   assert.deepEqual(summary.carrier_session_ids, ['session_1']);
+  assert.equal(summary.local_resident_carrier_bridge_state, 'not_observed');
   assert.equal(summary.carrier_event_count, 2);
   assert.equal(summary.recent_carrier_events.at(-1).event_kind, 'turn_completed');
   assert.equal(summary.recent_activities[0].focus_ref, 'session_1:2');
@@ -114,6 +115,9 @@ test('formatOperationEvidenceReadText recognizes Windows fallback evidence as re
       posture_next_action: 'monitor_operations',
       carrier_evidence_read_state: 'no_sessions',
       carrier_session_ids: [],
+      local_resident_session_refs: ['windows-session://operation_alpha/1'],
+      local_resident_session_count: 1,
+      local_resident_carrier_bridge_state: 'not_admitted_to_cloudflare_carrier_session',
       carrier_event_count: 0,
       recent_activities: [{
         activity_kind: 'resident_dispatch_windows_fallback_evidence',
@@ -128,4 +132,35 @@ test('formatOperationEvidenceReadText recognizes Windows fallback evidence as re
 
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
   assert.match(text, /--focus-kind resident_dispatch_windows_fallback_evidence/);
+  assert.match(text, /Local Resident Evidence: sessions=1 bridge=not_admitted_to_cloudflare_carrier_session/);
+  assert.match(text, /Local Resident Sessions: windows-session:\/\/operation_alpha\/1/);
+});
+
+test('summarizeOperationEvidence makes local resident evidence posture explicit without inventing a Cloudflare session', () => {
+  const summary = summarizeOperationEvidence({
+    operation: { operation_id: 'operation_alpha', site_id: 'site_live_smoke', status: 'active' },
+    operation_lifecycle_status: { phase: 'inhabited', health: 'incomplete', next_action: 'local_resident_carrier_evidence' },
+    operation_posture_route: { next_action: 'focus_next_operation' },
+    carrier_evidence_read_status: { state: 'no_sessions' },
+    sessions: [],
+    carrier_evidence: [],
+    resident_dispatch_windows_fallback_evidence: [{
+      fallback_evidence_id: 'resident_dispatch_windows_fallback_evidence_alpha',
+      operation_id: 'operation_alpha',
+      local_session_start_admission: 'admitted_by_windows_resident_loop',
+      local_resident_session_ref: 'windows-session://operation_alpha/1',
+    }],
+    operation_activity_timeline: { items: [] },
+    operation_focus_reviews: [],
+  }, {
+    operationSummary: { operation_id: 'operation_alpha', site_id: 'site_live_smoke' },
+    eventLimit: 5,
+    activityLimit: 5,
+  });
+
+  assert.equal(summary.next_action, 'local_resident_carrier_evidence');
+  assert.equal(summary.carrier_evidence_read_state, 'no_sessions');
+  assert.equal(summary.local_resident_session_count, 1);
+  assert.deepEqual(summary.local_resident_session_refs, ['windows-session://operation_alpha/1']);
+  assert.equal(summary.local_resident_carrier_bridge_state, 'not_admitted_to_cloudflare_carrier_session');
 });

@@ -96,6 +96,7 @@ test('cloudflare operation command state classifies focus, scope, evidence, and 
     [{ operation_id: 'operation_1', is_active: false, scope_loaded: false }, { command_state: 'scope_needed', command_action: 'read_operation_scope', next_action: 'use_focused_operation' }],
     [{ operation_id: 'operation_1', is_active: true, scope_loaded: false }, { command_state: 'scope_needed', command_action: 'read_operation_scope', next_action: 'read_operation_scope' }],
     [{ operation_id: 'operation_1', is_active: true, scope_loaded: true, session_count: 0, operation_path_next_action: 'start_or_select_session' }, { command_state: 'session_needed', command_action: 'start_or_select_session', next_action: 'start_or_select_session' }],
+    [{ operation_id: 'operation_1', is_active: true, scope_loaded: true, session_count: 0, session_inhabitance_count: 1, evidence_loaded: false, operation_path_next_action: 'read_operation_evidence' }, { command_state: 'evidence_needed', command_action: 'read_operation_evidence', next_action: 'read_operation_evidence' }],
     [{ operation_id: 'operation_1', is_active: true, scope_loaded: true, session_count: 1, evidence_loaded: false, operation_path_next_action: 'read_operation_evidence' }, { command_state: 'evidence_needed', command_action: 'read_operation_evidence', next_action: 'read_operation_evidence' }],
     [{ operation_id: 'operation_1', is_active: true, scope_loaded: true, session_count: 1, evidence_loaded: true, operation_path_next_action: 'inspect_operation_evidence' }, { command_state: 'evidence_ready', command_action: 'inspect_operation_evidence', next_action: 'inspect_operation_evidence' }],
     [{ operation_id: 'operation_1', is_active: true, scope_loaded: true, session_count: 1, evidence_loaded: true, operation_path_next_action: 'inspect_attention' }, { command_state: 'attention_required', command_action: 'inspect_attention', next_action: 'inspect_operation_evidence' }],
@@ -6960,6 +6961,10 @@ test('worker records resident dispatch Windows fallback request and routes the o
   assert.equal(readAfterEvidenceBody.operation_lifecycle_status.phase, 'inhabited');
   assert.equal(readAfterEvidenceBody.operation_lifecycle_status.local_resident_session_inhabitance_count, 1);
   assert.equal(readAfterEvidenceBody.operation_lifecycle_status.session_inhabitance_count >= 1, true);
+  assert.equal(
+    readAfterEvidenceBody.operation_lifecycle_status.local_resident_only_carrier_evidence_gap,
+    readAfterEvidenceBody.operation_lifecycle_status.session_count === 0,
+  );
 
   const refusedReview = await worker.fetch(jsonRequest({
     operation: 'operation_focus_review.acknowledge',
@@ -7010,7 +7015,22 @@ test('worker records resident dispatch Windows fallback request and routes the o
   assert.notEqual(readAfterFocusReviewBody.operation_workflow_route.operator_focus?.focus_ref, fallbackEvidencePutBody.record.fallback_evidence_id);
   assert.notEqual(readAfterFocusReviewBody.operation_workflow_route.next_action, 'review_windows_fallback_resident_dispatch_evidence');
   assert.equal(readAfterFocusReviewBody.operation_lifecycle_status.phase, 'inhabited');
-  assert.equal(readAfterFocusReviewBody.operation_lifecycle_status.next_action, 'carrier_evidence');
+  const expectedEvidenceNextAction = readAfterFocusReviewBody.operation_lifecycle_status.session_count === 0
+    ? 'local_resident_carrier_evidence'
+    : 'carrier_evidence';
+  assert.equal(readAfterFocusReviewBody.operation_lifecycle_status.next_action, expectedEvidenceNextAction);
+  if (readAfterFocusReviewBody.operation_workflow_route.next_action === 'read_operation_evidence') {
+    assert.equal(
+      readAfterFocusReviewBody.operation_workflow_route.reason,
+      expectedEvidenceNextAction === 'local_resident_carrier_evidence'
+        ? 'operation_lifecycle_missing_local_resident_carrier_evidence'
+        : 'operation_lifecycle_missing_carrier_evidence',
+    );
+  }
+  if (readAfterFocusReviewBody.operation_lifecycle_status.session_count === 0) {
+    assert.equal(readAfterFocusReviewBody.cloudflare_recovery_posture.state, 'local_resident_inhabitance_not_replayable');
+    assert.equal(readAfterFocusReviewBody.cloudflare_recovery_posture.evidence_replay, 'not_admitted_to_cloudflare_carrier_session');
+  }
   assert.notEqual(readAfterFocusReviewBody.operation_workflow_route.next_action, 'start_or_select_session');
 });
 
