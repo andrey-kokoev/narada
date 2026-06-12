@@ -1,0 +1,237 @@
+#!/usr/bin/env node
+import { fileURLToPath } from 'node:url';
+import { authHeaders, resolveAuth } from './cloudflare-carrier-product-read.mjs';
+
+export function parseTaskLifecycleChangedFileEvidenceArgs(argv = [], env = process.env, now = () => Date.now()) {
+  const args = [...argv];
+  const workerUrl = normalizeWorkerUrl(option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '');
+  const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? null;
+  const taskId = option(args, '--task-id') ?? env.CLOUDFLARE_TASK_LIFECYCLE_CHANGED_FILE_EVIDENCE_TASK_ID ?? null;
+  const reportId = option(args, '--report-id') ?? env.CLOUDFLARE_TASK_LIFECYCLE_CHANGED_FILE_EVIDENCE_REPORT_ID ?? null;
+  const filePath = option(args, '--file-path') ?? option(args, '--changed-file') ?? option(args, '--file') ?? env.CLOUDFLARE_TASK_LIFECYCLE_CHANGED_FILE_EVIDENCE_FILE_PATH ?? null;
+  const reporterAgentId = normalizeOptionalString(option(args, '--reporter-agent') ?? option(args, '--agent') ?? env.CLOUDFLARE_TASK_LIFECYCLE_CHANGED_FILE_EVIDENCE_AGENT_ID ?? null);
+  const reporterPrincipalId = normalizeOptionalString(option(args, '--reporter-principal') ?? env.CLOUDFLARE_TASK_LIFECYCLE_CHANGED_FILE_EVIDENCE_PRINCIPAL_ID ?? null);
+  const evidenceId = normalizeOptionalString(option(args, '--evidence-id') ?? env.CLOUDFLARE_TASK_LIFECYCLE_CHANGED_FILE_EVIDENCE_ID ?? null);
+  const admissionId = option(args, '--admission-id') ?? env.CLOUDFLARE_TASK_LIFECYCLE_CHANGED_FILE_EVIDENCE_ADMISSION_ID ?? `changed_file_evidence_${now()}`;
+  const admitCloudflareChangedFileEvidence = booleanFlag(args, '--admit-cloudflare-changed-file-evidence') || env.CLOUDFLARE_TASK_LIFECYCLE_CHANGED_FILE_EVIDENCE_CUTOVER === 'true';
+  const fileEvidenceAuthorityRef = normalizeOptionalString(option(args, '--file-evidence-authority-ref') ?? env.CLOUDFLARE_TASK_LIFECYCLE_CHANGED_FILE_EVIDENCE_AUTHORITY_REF ?? null);
+  const fileMaterialSourceRef = normalizeOptionalString(option(args, '--file-material-source-ref') ?? env.CLOUDFLARE_TASK_LIFECYCLE_CHANGED_FILE_EVIDENCE_MATERIAL_SOURCE_REF ?? null);
+  const repositoryAuthorityRef = normalizeOptionalString(option(args, '--repository-authority-ref') ?? env.CLOUDFLARE_TASK_LIFECYCLE_CHANGED_FILE_EVIDENCE_REPOSITORY_AUTHORITY_REF ?? null);
+  const cutoverPointRef = normalizeOptionalString(option(args, '--cutover-point-ref') ?? env.CLOUDFLARE_TASK_LIFECYCLE_CHANGED_FILE_EVIDENCE_CUTOVER_POINT_REF ?? null);
+  const governedWriteContractRef = normalizeOptionalString(option(args, '--governed-write-contract-ref') ?? env.CLOUDFLARE_TASK_LIFECYCLE_CHANGED_FILE_EVIDENCE_CONTRACT_REF ?? null);
+  const confirmationEvidenceRef = normalizeOptionalString(option(args, '--confirmation-evidence-ref') ?? env.CLOUDFLARE_TASK_LIFECYCLE_CHANGED_FILE_EVIDENCE_CONFIRMATION_EVIDENCE_REF ?? null);
+  const requestId = option(args, '--request-id') ?? `changed_file_evidence_${String(admissionId).replace(/[^a-z0-9]+/gi, '_')}_${now()}`;
+  const format = option(args, '--format') ?? env.CLOUDFLARE_TASK_LIFECYCLE_CHANGED_FILE_EVIDENCE_FORMAT ?? 'json';
+  const auth = resolveAuth(args, env);
+
+  if (!workerUrl) throw new Error('changed_file_evidence_requires_--url_or_CLOUDFLARE_CARRIER_URL');
+  if (!siteId) throw new Error('changed_file_evidence_requires_--site_or_CLOUDFLARE_CARRIER_SITE_ID');
+  if (!taskId) throw new Error('changed_file_evidence_requires_--task-id_or_CLOUDFLARE_TASK_LIFECYCLE_CHANGED_FILE_EVIDENCE_TASK_ID');
+  if (!reportId) throw new Error('changed_file_evidence_requires_--report-id_or_CLOUDFLARE_TASK_LIFECYCLE_CHANGED_FILE_EVIDENCE_REPORT_ID');
+  if (!filePath) throw new Error('changed_file_evidence_requires_--file-path_or_CLOUDFLARE_TASK_LIFECYCLE_CHANGED_FILE_EVIDENCE_FILE_PATH');
+  if (!reporterAgentId && !reporterPrincipalId) throw new Error('changed_file_evidence_requires_--reporter-agent_or_--reporter-principal');
+  if (!['json', 'text'].includes(format)) throw new Error(`changed_file_evidence_format_unsupported:${format}`);
+  if (!auth) throw new Error('changed_file_evidence_requires_bearer_token_or_operator_session');
+  if (admitCloudflareChangedFileEvidence) {
+    if (!fileEvidenceAuthorityRef) throw new Error('changed_file_evidence_admission_requires_--file-evidence-authority-ref');
+    if (!fileMaterialSourceRef) throw new Error('changed_file_evidence_admission_requires_--file-material-source-ref');
+    if (!repositoryAuthorityRef) throw new Error('changed_file_evidence_admission_requires_--repository-authority-ref');
+    if (!cutoverPointRef) throw new Error('changed_file_evidence_admission_requires_--cutover-point-ref');
+    if (!governedWriteContractRef) throw new Error('changed_file_evidence_admission_requires_--governed-write-contract-ref');
+    if (!confirmationEvidenceRef) throw new Error('changed_file_evidence_admission_requires_--confirmation-evidence-ref');
+  }
+
+  return {
+    workerUrl,
+    requestId,
+    format,
+    auth,
+    params: {
+      site_id: siteId,
+      admission_id: admissionId,
+      task_id: taskId,
+      report_id: reportId,
+      file_path: filePath,
+      ...(reporterAgentId ? { reporter_agent_id: reporterAgentId } : {}),
+      ...(reporterPrincipalId ? { reporter_principal_id: reporterPrincipalId } : {}),
+      ...(evidenceId ? { evidence_id: evidenceId } : {}),
+      ...(admitCloudflareChangedFileEvidence ? {
+        cloudflare_changed_file_evidence_cutover: true,
+        file_evidence_authority_ref: fileEvidenceAuthorityRef,
+        file_material_source_ref: fileMaterialSourceRef,
+        repository_authority_ref: repositoryAuthorityRef,
+        cutover_point_ref: cutoverPointRef,
+        governed_write_contract_ref: governedWriteContractRef,
+        confirmation_evidence_ref: confirmationEvidenceRef,
+      } : {}),
+    },
+  };
+}
+
+export async function admitCloudflareTaskLifecycleChangedFileEvidence(config, fetchImpl = fetch) {
+  const response = await fetchImpl(new URL('/api/carrier', withTrailingSlash(config.workerUrl)), {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...authHeaders(config.auth),
+    },
+    body: JSON.stringify({
+      operation: 'task_lifecycle.changed_file_evidence.admit',
+      request_id: config.requestId,
+      params: config.params,
+    }),
+  });
+  const text = await response.text();
+  const body = parseJsonText(text);
+  if (response.status < 200 || response.status >= 300) {
+    const code = body?.code ?? body?.error ?? `http_${response.status}`;
+    const error = new Error(`changed_file_evidence_request_failed:${code}`);
+    error.code = code;
+    error.http_status = response.status;
+    error.response = body;
+    error.summary = summarizeTaskLifecycleChangedFileEvidence(body, config.params);
+    error.config = config;
+    throw error;
+  }
+  return {
+    schema: 'narada.cloudflare_carrier.task_lifecycle_changed_file_evidence.v1',
+    status: 'ok',
+    request_id: config.requestId,
+    worker_url: config.workerUrl,
+    auth_source: config.auth.source,
+    params: redactTaskLifecycleChangedFileEvidenceParams(config.params),
+    response: body,
+    summary: summarizeTaskLifecycleChangedFileEvidence(body, config.params),
+  };
+}
+
+export function summarizeTaskLifecycleChangedFileEvidence(body = {}, params = {}) {
+  const task = body?.task ?? {};
+  const evidence = body?.evidence ?? {};
+  const decision = body?.decision ?? {};
+  return {
+    ok: body.ok ?? null,
+    code: body.code ?? null,
+    site_id: task.site_id ?? body.site_id ?? params.site_id ?? null,
+    admission_id: body.admission_id ?? params.admission_id ?? null,
+    task_id: task.task_id ?? body.task_id ?? params.task_id ?? null,
+    task_number: task.task_number ?? body.task_number ?? null,
+    report_id: evidence.report_id ?? body.report_id ?? params.report_id ?? null,
+    evidence_id: evidence.evidence_id ?? body.evidence_id ?? params.evidence_id ?? null,
+    file_path: evidence.file_path ?? body.file_path ?? params.file_path ?? null,
+    reporter_agent_id: evidence.reporter_agent_id ?? body.reporter_agent_id ?? params.reporter_agent_id ?? null,
+    reporter_principal_id: evidence.reporter_principal_id ?? body.reporter_principal_id ?? params.reporter_principal_id ?? null,
+    reported_by_agent_id: body.reported_by_agent_id ?? task.reported_by_agent_id ?? null,
+    changed_file_evidence_admission: task.changed_file_evidence_admission ?? body.changed_file_evidence_admission ?? null,
+    changed_file_evidence_count: task.changed_file_evidence_count ?? body.changed_file_evidence_count ?? null,
+    filesystem_mutation_admission: evidence.filesystem_mutation_admission ?? body.filesystem_mutation_admission ?? null,
+    repository_publication_admission: evidence.repository_publication_admission ?? body.repository_publication_admission ?? null,
+    projection_write_admission: evidence.projection_write_admission ?? body.projection_write_admission ?? null,
+    decision_action: decision.action ?? body.action ?? null,
+    decision_reason: decision.reason ?? body.reason ?? null,
+    conflict_policy: decision.conflict_policy ?? body.conflict_policy ?? null,
+    mutation_authority: body.mutation_authority ?? task.mutation_authority ?? null,
+    cloudflare_write_admission: body.cloudflare_write_admission ?? task.cloudflare_write_admission ?? null,
+    write_effect: body.write_effect ?? null,
+    file_evidence_authority_ref: evidence.file_evidence_authority_ref ?? params.file_evidence_authority_ref ?? null,
+    file_material_source_ref: evidence.file_material_source_ref ?? params.file_material_source_ref ?? null,
+    repository_authority_ref: evidence.repository_authority_ref ?? params.repository_authority_ref ?? null,
+    cutoverPointRef: evidence.cutover_point_ref ?? params.cutover_point_ref ?? null,
+    governed_write_contract_ref: evidence.governed_write_contract_ref ?? params.governed_write_contract_ref ?? null,
+    confirmation_evidence_ref: evidence.confirmation_evidence_ref ?? params.confirmation_evidence_ref ?? null,
+    existing_report_id: body.existing_report_id ?? null,
+  };
+}
+
+export function formatTaskLifecycleChangedFileEvidenceText(result) {
+  const summary = result?.summary ?? summarizeTaskLifecycleChangedFileEvidence(result?.response ?? {}, result?.params ?? {});
+  const ok = summary.ok === false || result?.status === 'refused' ? false : true;
+  return [
+    `Task Lifecycle Changed File Evidence: ${ok === false ? 'refused' : 'ok'}`,
+    `Worker: ${result?.worker_url ?? 'unknown'}`,
+    `Auth: ${result?.auth_source ?? 'unknown'}`,
+    `Site: ${summary.site_id ?? result?.params?.site_id ?? 'unknown'}`,
+    `Admission: ${summary.admission_id ?? result?.params?.admission_id ?? 'unknown'}`,
+    ...(summary.code ? [`Code: ${summary.code}`] : []),
+    `Task: ${summary.task_id ?? result?.params?.task_id ?? 'unknown'}${summary.task_number ? ` #${summary.task_number}` : ''}`,
+    ...(summary.report_id ? [`Report: ${summary.report_id}`] : []),
+    ...(summary.evidence_id ? [`Evidence: ${summary.evidence_id}`] : []),
+    `File: ${summary.file_path ?? result?.params?.file_path ?? 'unknown'}`,
+    `Reporter: ${summary.reporter_agent_id ?? summary.reporter_principal_id ?? result?.params?.reporter_agent_id ?? result?.params?.reporter_principal_id ?? 'unknown'}`,
+    `Decision: action=${summary.decision_action ?? 'unknown'} reason=${summary.decision_reason ?? 'unknown'}${summary.conflict_policy ? ` conflict_policy=${summary.conflict_policy}` : ''}`,
+    `Authority: mutation=${summary.mutation_authority ?? 'unknown'} cloudflare_write=${summary.cloudflare_write_admission ?? 'unknown'} effect=${summary.write_effect ?? 'unknown'}`,
+    ...(summary.changed_file_evidence_admission ? [`Changed File Evidence Admission: ${summary.changed_file_evidence_admission}`] : []),
+    ...(summary.changed_file_evidence_count !== null ? [`Changed File Evidence Count: ${summary.changed_file_evidence_count}`] : []),
+    ...(summary.filesystem_mutation_admission ? [`Filesystem Mutation: ${summary.filesystem_mutation_admission}`] : []),
+    ...(summary.repository_publication_admission ? [`Repository Publication: ${summary.repository_publication_admission}`] : []),
+    ...(summary.projection_write_admission ? [`Projection Write: ${summary.projection_write_admission}`] : []),
+    ...(summary.existing_report_id ? [`Existing Report: ${summary.existing_report_id}`] : []),
+    ...(summary.reported_by_agent_id ? [`Reported By: ${summary.reported_by_agent_id}`] : []),
+    ...(summary.file_evidence_authority_ref ? [`File Evidence Authority: ${summary.file_evidence_authority_ref}`] : []),
+    ...(summary.file_material_source_ref ? [`File Material Source: ${summary.file_material_source_ref}`] : []),
+    ...(summary.repository_authority_ref ? [`Repository Authority: ${summary.repository_authority_ref}`] : []),
+    ...(summary.cutoverPointRef ? [`Cutover: ${summary.cutoverPointRef}`] : []),
+    ...(summary.governed_write_contract_ref ? [`Contract: ${summary.governed_write_contract_ref}`] : []),
+    ...(summary.confirmation_evidence_ref ? [`Evidence Ref: ${summary.confirmation_evidence_ref}`] : []),
+  ].join('\n') + '\n';
+}
+
+function redactTaskLifecycleChangedFileEvidenceParams(params = {}) {
+  return { ...params };
+}
+
+function option(args, name) {
+  const index = args.indexOf(name);
+  return index >= 0 ? args[index + 1] : null;
+}
+
+function booleanFlag(args, name) {
+  return args.includes(name);
+}
+
+function normalizeOptionalString(value) {
+  const text = String(value ?? '').trim();
+  return text || null;
+}
+
+function normalizeWorkerUrl(value) {
+  return String(value ?? '').replace(/\/+$/, '');
+}
+
+function withTrailingSlash(value) {
+  return String(value).endsWith('/') ? value : `${value}/`;
+}
+
+function parseJsonText(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { raw: text };
+  }
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  try {
+    const config = parseTaskLifecycleChangedFileEvidenceArgs(process.argv.slice(2));
+    const result = await admitCloudflareTaskLifecycleChangedFileEvidence(config);
+    if (config.format === 'text') {
+      process.stdout.write(formatTaskLifecycleChangedFileEvidenceText(result));
+    } else {
+      process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+    }
+  } catch (error) {
+    if (error?.response && error?.summary && error?.config?.format === 'text') {
+      process.stderr.write(formatTaskLifecycleChangedFileEvidenceText({
+        status: 'refused',
+        worker_url: error.config.workerUrl,
+        auth_source: error.config.auth?.source,
+        params: error.config.params,
+        response: error.response,
+        summary: error.summary,
+      }));
+    } else {
+      process.stderr.write(JSON.stringify({ ok: false, code: error?.message ?? String(error), response: error?.response, summary: error?.summary }, null, 2) + '\n');
+    }
+    process.exit(1);
+  }
+}
