@@ -5323,7 +5323,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         ...response,
         site_product_statuses: siteProductStatuses,
         site_product_overview: siteProductOverview,
-        site_posture_route: summarizeCloudflareSitePostureRoute(siteProductOverview, params.focused_site_id ?? params.site_id ?? response.sites?.[0]?.site_id ?? ''),
+        site_posture_route: summarizeCloudflareSitePostureRoute(siteProductOverview, params.focused_site_id ?? params.site_id ?? ''),
       },
     };
   }

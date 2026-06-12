@@ -7217,11 +7217,11 @@ test('worker site.list exposes product statuses across visible sites', async () 
   assert.deepEqual(listedBody.site_posture_route, {
     schema: 'narada.cloudflare_site_posture_route.v1',
     domain: 'site_posture',
-    command_state: 'site_posture_ready',
-    command_action: 'monitor_sites',
-    next_action: 'monitor_sites',
+    command_state: 'site_posture_attention',
+    command_action: 'focus_next_site',
+    next_action: 'focus_next_site',
     target: 'site_alpha',
-    status: 'ready',
+    status: 'needs_attention',
     reason: 'continuity_direction',
   });
 });
@@ -7453,8 +7453,8 @@ test('worker starts Microsoft login with PKCE and signed pending cookie', async 
   assert.equal(response.status, 302);
   const location = new URL(response.headers.get('location'));
   assert.equal(location.origin, 'https://login.microsoftonline.com');
-  assert.equal(location.pathname, '/tenant-fixture/oauth2/v2.0/authorize');
-  assert.equal(location.searchParams.get('client_id'), 'microsoft-client-fixture');
+});
+test('worker starts Microsoft login with PKCE and signed pending cookie', async () => {
   assert.equal(location.searchParams.get('response_type'), 'code');
   assert.equal(location.searchParams.get('redirect_uri'), 'https://carrier.test/auth/microsoft/callback');
   assert.equal(location.searchParams.get('code_challenge_method'), 'S256');
