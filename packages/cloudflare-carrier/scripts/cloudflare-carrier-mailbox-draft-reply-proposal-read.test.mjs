@@ -36,10 +36,12 @@ test('readMailboxDraftReplyProposal summarizes focused proposal and linked draft
         mailbox_draft_reply_proposals: [
           {
             proposal_id: 'mailbox_draft_reply_proposal_live_1',
-            account_ref: 'help@global-maxima.com',
-            source_message_ref: 'graph-message-1',
-            subject: 'Re: draft',
-            proposal_posture: 'proposal_only_no_outlook_draft_create',
+          account_ref: 'help@global-maxima.com',
+          source_message_ref: 'graph-message-1',
+          subject: 'Re: draft',
+          body_preview: 'Draft reply preview text.',
+          rationale: 'prove Cloudflare can hold draft reply proposal authority',
+          proposal_posture: 'proposal_only_no_outlook_draft_create',
             proposal_authority: 'cloudflare_carrier_site',
             mailbox_outlook_draft_create_admission: 'not_admitted',
             mailbox_send_admission: 'not_admitted',
@@ -83,6 +85,8 @@ test('readMailboxDraftReplyProposal summarizes focused proposal and linked draft
 
   assert.equal(result.summary.focused_proposal_id, 'mailbox_draft_reply_proposal_live_1');
   assert.equal(result.summary.linked_draft_create_count, 1);
+  assert.equal(result.summary.focused_body_preview, 'Draft reply preview text.');
+  assert.equal(result.summary.focused_rationale, 'prove Cloudflare can hold draft reply proposal authority');
   assert.equal(result.summary.proposal_authority, 'cloudflare_carrier_site');
   assert.equal(result.summary.latest_focus_review.review_status, 'acknowledged');
 });
@@ -101,6 +105,8 @@ test('formatMailboxDraftReplyProposalReadText surfaces review ack command', () =
       focused_account_ref: 'help@global-maxima.com',
       focused_source_message_ref: 'graph-message-1',
       focused_subject: 'Re: draft',
+      focused_body_preview: 'Draft reply preview text.',
+      focused_rationale: 'prove Cloudflare can hold draft reply proposal authority',
       focused_proposal_posture: 'proposal_only_no_outlook_draft_create',
       proposal_authority: 'cloudflare_carrier_site',
       windows_draft_executor_fallback: 'available',
@@ -113,5 +119,7 @@ test('formatMailboxDraftReplyProposalReadText surfaces review ack command', () =
 
   assert.match(text, /Mailbox Draft Reply Proposal Read: ok/);
   assert.match(text, /Workflow Route: action=review_mailbox_draft_reply_proposal/);
+  assert.match(text, /Body Preview: Draft reply preview text\./);
+  assert.match(text, /Rationale: prove Cloudflare can hold draft reply proposal authority/);
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
 });

@@ -107,6 +107,8 @@ export function formatMailboxDraftReplyProposalReadText(result) {
     lines.push(`Message: account=${summary.focused_account_ref ?? 'unknown'} source=${summary.focused_source_message_ref ?? 'unknown'}`);
   }
   if (summary.focused_subject) lines.push(`Subject: ${summary.focused_subject}`);
+  if (summary.focused_body_preview) lines.push(`Body Preview: ${summary.focused_body_preview}`);
+  if (summary.focused_rationale) lines.push(`Rationale: ${summary.focused_rationale}`);
   if (summary.focused_proposal_posture) lines.push(`Posture: ${summary.focused_proposal_posture}`);
   if (summary.proposal_authority || summary.windows_draft_executor_fallback) {
     lines.push(`Authority: proposal=${summary.proposal_authority ?? 'unknown'} fallback=${summary.windows_draft_executor_fallback ?? 'unknown'}`);
