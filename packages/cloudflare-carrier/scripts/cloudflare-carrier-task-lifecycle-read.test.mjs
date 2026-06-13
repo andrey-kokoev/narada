@@ -178,6 +178,34 @@ test('readCloudflareTaskLifecycle posts operation.read for operation focus', asy
   assert.equal(result.summary.task_status, 'opened');
 });
 
+test('summarizeTaskLifecycleRead falls back to focused task authority fields for operation focus', () => {
+  const summary = summarizeTaskLifecycleRead({
+    operation: { operation_id: 'operation_alpha', site_id: 'site_alpha' },
+    task_lifecycle_tasks: [
+      {
+        task_id: 'task_old',
+        task_number: 1,
+        status: 'closed',
+        title: 'old task',
+      },
+      {
+        task_id: 'task_new',
+        task_number: 2,
+        status: 'opened',
+        title: 'new open task',
+        mutation_authority: 'cloudflare_task_lifecycle_d1',
+        mutation_class: 'task_create',
+        cloudflare_write_admission: 'admitted',
+      },
+    ],
+  }, { site_id: 'site_alpha', operation_id: 'operation_alpha' });
+
+  assert.equal(summary.task_id, 'task_new');
+  assert.equal(summary.mutation_authority, 'cloudflare_task_lifecycle_d1');
+  assert.equal(summary.mutation_class, 'task_create');
+  assert.equal(summary.cloudflare_write_admission, 'admitted');
+});
+
 test('formatTaskLifecycleReadText renders focused task summary', () => {
   const text = formatTaskLifecycleReadText({
     worker_url: 'https://carrier.example',
