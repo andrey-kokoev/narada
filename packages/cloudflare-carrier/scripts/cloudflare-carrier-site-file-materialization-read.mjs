@@ -71,6 +71,7 @@ export function summarizeSiteFileMaterialization(body = {}, options = {}) {
 
 export function formatSiteFileMaterializationReadText(result) {
   const summary = result?.summary ?? {};
+  const recordedLabel = summary.focused_read ? 'Focused Recorded' : 'Latest Recorded';
   const materializationLead = summary.focused_read
     ? `Materializations: count=${summary.materialization_count ?? 0} focused=${summary.focused_materialization_id ?? 'none'} authority=${summary.site_file_materialization_authority ?? 'unknown'} admission=${summary.cloudflare_site_file_materialization_admission ?? 'unknown'}`
     : `Materializations: count=${summary.materialization_count ?? 0} authority=${summary.site_file_materialization_authority ?? 'unknown'} admission=${summary.cloudflare_site_file_materialization_admission ?? 'unknown'}`;
@@ -95,7 +96,7 @@ export function formatSiteFileMaterializationReadText(result) {
       + `${summary.latest_materialization_posture ? ` posture=${summary.latest_materialization_posture}` : ''}`,
     );
   }
-  if (summary.latest_recorded_at) lines.push(`Latest Recorded: ${summary.latest_recorded_at}`);
+  if (summary.latest_recorded_at) lines.push(`${recordedLabel}: ${summary.latest_recorded_at}`);
   return `${lines.join('\n')}\n`;
 }
 

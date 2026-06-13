@@ -168,9 +168,11 @@ test('formatSiteFileMaterializationReadText prints focused wording for direct hi
       latest_proposal_id: 'proposal-9',
       latest_file_path: 'docs/focused.md',
       latest_materialization_posture: 'recorded',
+      latest_recorded_at: '2026-06-12T01:00:00.000Z',
     },
   });
 
   assert.match(text, /Materializations: count=1 focused=materialization-9 authority=cloudflare_carrier_site admission=admitted/);
   assert.match(text, /Focused Materialization: materialization-9 proposal=proposal-9 file=docs\/focused.md posture=recorded/);
+  assert.match(text, /Focused Recorded: 2026-06-12T01:00:00.000Z/);
 });
