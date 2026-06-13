@@ -1781,6 +1781,60 @@ test('runOperationNextWorkflowLive delegates repository publication request revi
   assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-repository-publication-request-review.mjs');
 });
 
+test('runOperationNextWorkflowLive delegates directive delivery review route to directive delivery review read', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_narada_cloudflare',
+    expectedListRouteAction: null,
+    expectedOperationId: null,
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              next_operation_id: 'operation_site_read',
+              route_next_action: 'focus_next_operation',
+              next_action: 'use_focused_operation',
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            operation_id: 'operation_site_read',
+            workflow_next_action: 'review_directive_delivery',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-directive-delivery-review.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.directive_delivery_review.v1',
+          status: 'ok',
+          summary: {
+            operation_id: 'operation_site_read',
+            directive_record_count: 1,
+            undelivered_directive_record_count: 1,
+          },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'directive_delivery');
+  assert.equal(result.delegated_route_action, 'review_directive_delivery');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.directive_delivery_review.v1');
+  assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-directive-delivery-review.mjs');
+});
+
 test('runOperationNextWorkflowLive delegates repository publication evidence route to repository publication evidence read', async () => {
   const invocations = [];
   const result = await runOperationNextWorkflowLive({

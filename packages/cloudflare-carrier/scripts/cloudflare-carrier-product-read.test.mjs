@@ -572,6 +572,31 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   });
   assert.match(operationReadMailboxText, /Mailbox Proposal Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_mailbox --operator-session-file <operator-session-file>/);
 
+  const operationReadDirectiveText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_directive',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'directive_delivery',
+      workflow_next_action: 'review_directive_delivery',
+      workflow_reason: 'undelivered_directives',
+      workflow_focus_ref: 'directive_record_focus',
+      session_count: 1,
+      task_count: 0,
+      recovery_state: 'reconstructable',
+      recovery_boundary_count: 1,
+      recovery_gap_count: 0,
+    },
+  });
+  assert.match(operationReadDirectiveText, /Directive Delivery Review: pnpm --filter @narada2\/cloudflare-carrier product:directive:delivery:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_directive --operator-session-file <operator-session-file>/);
+
   const operationReadRepositoryPublicationText = formatProductSurfaceText({
     operation: 'operation.read',
     worker_url: 'https://carrier.example.test',

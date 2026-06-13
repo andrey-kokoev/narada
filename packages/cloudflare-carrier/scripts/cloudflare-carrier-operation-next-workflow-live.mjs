@@ -17,6 +17,7 @@ const persistenceReadScript = resolve(scriptDir, 'cloudflare-carrier-operation-p
 const recoveryReadScript = resolve(scriptDir, 'cloudflare-carrier-operation-recovery-read.mjs');
 const mailboxSendAcceptedReadScript = resolve(scriptDir, 'cloudflare-carrier-mailbox-send-accepted-read.mjs');
 const mailboxSendConfirmationReadScript = resolve(scriptDir, 'cloudflare-carrier-mailbox-send-confirmation-read.mjs');
+const directiveDeliveryReviewScript = resolve(scriptDir, 'cloudflare-carrier-directive-delivery-review.mjs');
 const localIngressRequestReadScript = resolve(scriptDir, 'cloudflare-carrier-local-ingress-request-read.mjs');
 const localIngressEvidenceReadScript = resolve(scriptDir, 'cloudflare-carrier-local-ingress-evidence-read.mjs');
 const localIngressProviderLivenessReadScript = resolve(scriptDir, 'cloudflare-carrier-local-ingress-provider-liveness-read.mjs');
@@ -44,6 +45,7 @@ const ROUTE_TO_WORKFLOW = new Map([
   ['read_operation_evidence', { name: 'evidence', script: evidenceReadScript, flag: null }],
   ['review_mailbox_send_confirmation', { name: 'mailbox_send_confirmation', script: mailboxSendConfirmationReadScript, flag: null }],
   ['review_mailbox_send_acceptance', { name: 'mailbox_send_accepted', script: mailboxSendAcceptedReadScript, flag: null }],
+  ['review_directive_delivery', { name: 'directive_delivery', script: directiveDeliveryReviewScript, flag: null }],
   ['review_local_ingress_request', { name: 'local_ingress_request', script: localIngressRequestReadScript, flag: null }],
   ['review_local_ingress_evidence', { name: 'local_ingress_evidence', script: localIngressEvidenceReadScript, flag: null }],
   ['review_local_ingress_provider_liveness', { name: 'local_ingress_provider_liveness', script: localIngressProviderLivenessReadScript, flag: null }],
