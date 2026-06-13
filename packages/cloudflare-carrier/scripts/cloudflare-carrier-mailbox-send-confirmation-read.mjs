@@ -70,6 +70,11 @@ export function summarizeMailboxSendConfirmation(body = {}, options = {}) {
       ?? latestRecord?.send_accepted_id
       ?? latestRequest?.send_accepted_id
       ?? null,
+    latest_outlook_draft_id:
+      latest?.outlook_draft_id
+      ?? latestRecord?.outlook_draft_id
+      ?? latestRequest?.outlook_draft_id
+      ?? null,
     latest_send_confirmation_id: latest?.send_confirmation_id ?? null,
     latest_message_id:
       latest?.message_id
@@ -113,6 +118,9 @@ export function formatMailboxSendConfirmationReadText(result) {
   }
   if (summary.latest_send_accepted_id) {
     lines.push(`Accepted Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.latest_send_accepted_id} --operator-session-file <operator-session-file>`);
+  }
+  if (summary.latest_outlook_draft_id) {
+    lines.push(`Draft Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.latest_outlook_draft_id} --operator-session-file <operator-session-file>`);
   }
   if (summary.latest_body_preview) {
     lines.push(`Body Preview: ${summary.latest_body_preview}`);

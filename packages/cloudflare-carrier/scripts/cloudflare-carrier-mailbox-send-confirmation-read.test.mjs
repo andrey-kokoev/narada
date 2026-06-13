@@ -45,6 +45,7 @@ test('summarizeMailboxSendConfirmation lifts latest confirmation details', () =>
   assert.equal(summary.latest_account_ref, null);
   assert.equal(summary.latest_confirmation_posture, null);
   assert.equal(summary.latest_send_accepted_id, null);
+  assert.equal(summary.latest_outlook_draft_id, null);
   assert.equal(summary.latest_send_confirmation_id, 'mailbox_send_confirmation_alpha');
   assert.equal(summary.latest_message_id, 'message_alpha');
   assert.equal(summary.latest_subject, 'Confirmed subject');
@@ -142,6 +143,7 @@ test('formatMailboxSendConfirmationReadText prints mailbox send confirmation sum
       latest_account_ref: 'help@example.test',
       latest_confirmation_posture: 'graph_sent_message_observed_delivery_not_claimed',
       latest_send_accepted_id: 'mailbox_send_accepted_alpha',
+      latest_outlook_draft_id: 'outlook_draft_alpha',
       latest_send_confirmation_id: 'mailbox_send_confirmation_alpha',
       latest_message_id: 'message_alpha',
       latest_subject: 'Confirmed subject',
@@ -155,6 +157,7 @@ test('formatMailboxSendConfirmationReadText prints mailbox send confirmation sum
   assert.match(text, /Current Posture: graph_sent_message_observed_delivery_not_claimed/);
   assert.match(text, /Latest Confirmation: id=mailbox_send_confirmation_alpha account=help@example.test message=message_alpha subject=Confirmed subject/);
   assert.match(text, /Accepted Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-accepted:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref mailbox_send_accepted_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Draft Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref outlook_draft_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Body Preview: Delivered confirmation preview\./);
 });
 
