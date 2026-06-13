@@ -5,15 +5,24 @@ import { parseProductReadArgs, readProductSurface } from './cloudflare-carrier-p
 
 export function parseSiteFileChangeProposalReviewArgs(argv = [], env = process.env) {
   const args = [...argv];
-  const parsed = parseProductReadArgs(['--operation', 'operation.read', ...argv], env);
+  const explicitOperationId =
+    normalizeOptionalString(option(args, '--operation-id'))
+    ?? normalizeOptionalString(option(args, '--carrier-operation'))
+    ?? normalizeOptionalString(env.CLOUDFLARE_CARRIER_OPERATION_ID)
+    ?? normalizeOptionalString(env.CLOUDFLARE_CARRIER_CARRIER_OPERATION)
+    ?? null;
+  const defaultOperation = explicitOperationId ? 'operation.read' : 'site_file_change_proposal.list';
+  const defaultProposalLimit = explicitOperationId ? 20 : 200;
+  const defaultMaterializationLimit = explicitOperationId ? 20 : 200;
+  const parsed = parseProductReadArgs(['--operation', defaultOperation, ...argv], env);
   const proposalLimit = parseOptionalInteger(
     option(args, '--proposal-limit') ?? env.CLOUDFLARE_CARRIER_SITE_FILE_CHANGE_PROPOSAL_LIMIT ?? null,
     'proposal-limit',
-  ) ?? 20;
+  ) ?? defaultProposalLimit;
   const materializationLimit = parseOptionalInteger(
     option(args, '--materialization-limit') ?? env.CLOUDFLARE_CARRIER_SITE_FILE_MATERIALIZATION_LIMIT ?? null,
     'materialization-limit',
-  ) ?? 20;
+  ) ?? defaultMaterializationLimit;
   const focusRef = normalizeOptionalString(
     option(args, '--focus-ref') ?? env.CLOUDFLARE_CARRIER_SITE_FILE_CHANGE_PROPOSAL_FOCUS_REF ?? null,
   );
@@ -29,34 +38,72 @@ export function parseSiteFileChangeProposalReviewArgs(argv = [], env = process.e
 }
 
 export async function readSiteFileChangeProposalReview(config, fetchImpl = fetch) {
-  const product = await readProductSurface(config, fetchImpl);
+  const baseProduct = await readProductSurface(config, fetchImpl);
+  const operationProduct = config.operation === 'operation.read' ? baseProduct : null;
+  const proposalProduct = config.operation === 'site_file_change_proposal.list'
+    ? baseProduct
+    : await readProductSurface({
+      ...config,
+      operation: 'site_file_change_proposal.list',
+      params: {
+        site_id: config.params.site_id ?? null,
+        site_file_change_proposal_limit: config.params.site_file_change_proposal_limit,
+      },
+    }, fetchImpl);
+  const siteId =
+    operationProduct?.summary?.site_id
+    ?? proposalProduct.summary?.site_id
+    ?? config.params.site_id
+    ?? null;
+  const materializationProduct = await readProductSurface({
+    ...config,
+    operation: 'site_file_materialization.list',
+    params: {
+      site_id: siteId,
+      site_file_materialization_limit: config.params.site_file_materialization_limit,
+    },
+  }, fetchImpl);
   return {
     schema: 'narada.cloudflare_carrier.site_file_change_proposal_review.v1',
     status: 'ok',
-    worker_url: product.worker_url,
-    auth_source: product.auth_source,
-    operation: product.operation,
-    params: product.params,
-    summary: summarizeSiteFileChangeProposalReview(product.response, {
-      operationSummary: product.summary,
+    worker_url: baseProduct.worker_url,
+    auth_source: baseProduct.auth_source,
+    operation: baseProduct.operation,
+    params: baseProduct.params,
+    summary: summarizeSiteFileChangeProposalReview(
+      operationProduct?.response,
+      proposalProduct.response,
+      materializationProduct.response,
+      {
+      operationSummary: operationProduct?.summary,
       focusRef: config.focusRef,
-    }),
-    response: product.response,
+      },
+    ),
+    response: {
+      operation: operationProduct?.response ?? null,
+      site_file_change_proposals: proposalProduct.response,
+      site_file_materializations: materializationProduct.response,
+    },
   };
 }
 
-export function summarizeSiteFileChangeProposalReview(body = {}, options = {}) {
+export function summarizeSiteFileChangeProposalReview(operationBody = {}, proposalsBody = {}, materializationsBody = {}, options = {}) {
   const operationSummary = options.operationSummary ?? {};
-  const proposals = Array.isArray(body?.site_file_change_proposals) ? body.site_file_change_proposals : [];
-  const materializations = Array.isArray(body?.site_file_materializations) ? body.site_file_materializations : [];
-  const focusReviews = Array.isArray(body?.operation_focus_reviews) ? body.operation_focus_reviews : [];
-  const focusRef = options.focusRef ?? operationSummary.workflow_focus_ref ?? null;
+  const proposals = Array.isArray(proposalsBody?.site_file_change_proposals) ? proposalsBody.site_file_change_proposals : [];
+  const materializations = Array.isArray(materializationsBody?.site_file_materializations) ? materializationsBody.site_file_materializations : [];
+  const focusReviews = Array.isArray(operationBody?.operation_focus_reviews) ? operationBody.operation_focus_reviews : [];
+  const explicitFocusRef = options.focusRef ?? null;
+  const workflowFocusRef = operationSummary.workflow_focus_ref ?? null;
+  const focusRef = explicitFocusRef ?? workflowFocusRef;
   const exactFocusedProposals = focusRef
     ? proposals.filter((entry) => entry?.proposal_id === focusRef)
     : [];
+  if (explicitFocusRef && exactFocusedProposals.length === 0) {
+    throw new Error(`site_file_change_proposal_review_focus_not_found:${focusRef}`);
+  }
   const focusedProposals = exactFocusedProposals.length > 0 ? exactFocusedProposals : proposals;
   const focusedProposal = selectFocusedProposal(proposals, focusRef);
-  const focusedProposalId = focusedProposal?.proposal_id ?? focusRef ?? null;
+  const focusedProposalId = focusedProposal?.proposal_id ?? null;
   const proposalRecord = focusedProposal?.record?.proposal ?? focusedProposal?.proposal ?? null;
   const proposalFiles = Array.isArray(proposalRecord?.files) ? proposalRecord.files : [];
   const linkedMaterializations = focusedProposalId
@@ -81,8 +128,16 @@ export function summarizeSiteFileChangeProposalReview(body = {}, options = {}) {
   const currentRepositoryPublicationAdmission =
     latestMaterialization?.repository_publication_admission ?? requestedRepositoryPublicationAdmission;
   return {
-    site_id: body?.operation?.site_id ?? body?.site_id ?? operationSummary.site_id ?? null,
-    operation_id: body?.operation?.operation_id ?? body?.operation_id ?? operationSummary.operation_id ?? null,
+    site_id: operationBody?.operation?.site_id ?? operationBody?.site_id ?? proposalsBody?.site_id ?? materializationsBody?.site_id ?? operationSummary.site_id ?? null,
+    operation_id:
+      operationBody?.operation?.operation_id
+      ?? operationBody?.operation_id
+      ?? operationSummary.operation_id
+      ?? focusedProposal?.operation_id
+      ?? focusedProposal?.carrier_operation_id
+      ?? latestMaterialization?.operation_id
+      ?? latestMaterialization?.carrier_operation_id
+      ?? null,
     workflow_next_action: operationSummary.workflow_next_action ?? null,
     workflow_reason: operationSummary.workflow_reason ?? null,
     workflow_focus_ref: operationSummary.workflow_focus_ref ?? focusRef ?? null,

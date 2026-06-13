@@ -26,73 +26,116 @@ test('parseSiteFileChangeProposalReviewArgs extends operation.read params with s
   assert.equal(parsed.focusRef, 'site_file_change_proposal_live_1');
 });
 
+test('parseSiteFileChangeProposalReviewArgs supports direct focused review without operation id', () => {
+  const parsed = parseSiteFileChangeProposalReviewArgs([
+    '--url', 'https://carrier.example',
+    '--site', 'site_narada_cloudflare',
+    '--focus-ref', 'site_file_change_proposal_live_1',
+    '--operator-session-cookie', 'operator-session-cookie',
+  ], {});
+
+  assert.equal(parsed.operation, 'site_file_change_proposal.list');
+  assert.equal(parsed.params.site_id, 'site_narada_cloudflare');
+  assert.equal(parsed.params.site_file_change_proposal_limit, 200);
+  assert.equal(parsed.params.site_file_materialization_limit, 200);
+  assert.equal(parsed.focusRef, 'site_file_change_proposal_live_1');
+});
+
 test('readSiteFileChangeProposalReview summarizes focused proposal and linked materialization', async () => {
-  const fetchImpl = async () => ({
-    status: 200,
-    async text() {
-      return JSON.stringify({
-        ok: true,
-        operation: { site_id: 'site_narada_cloudflare', operation_id: 'operation_site_read' },
-        site_file_change_proposals: [
-          {
-            proposal_id: 'site_file_change_proposal_live_1',
-            proposal_ref: 'proposal:site-file-change-live:1',
-            proposal_summary: 'live Cloudflare site file change proposal',
-            proposal_posture: 'proposal_only_no_filesystem_write',
-            authority_locus: 'cloudflare_carrier_site',
-            filesystem_executor_authority: 'windows_filesystem_executor',
-            filesystem_mutation_admission: 'not_admitted',
-            repository_publication_admission: 'not_admitted',
-            file_count: 1,
-            recorded_at: '2026-06-12T00:00:00.000Z',
-            recorded_by_principal_id: 'service',
-            record: {
-              proposal: {
-                files: [
-                  {
-                    file_path: 'docs/architecture/cloudflare-carrier/target.md',
-                    change_kind: 'update',
-                    material_source_ref: 'material-source:1',
-                  },
-                ],
+  const fetchImpl = async (_url, init) => {
+    const body = JSON.parse(init.body);
+    if (body.operation === 'operation.read') {
+      return {
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            ok: true,
+            operation: { site_id: 'site_narada_cloudflare', operation_id: 'operation_site_read' },
+            operation_focus_reviews: [
+              {
+                review_id: 'review_1',
+                focus_kind: 'site_file_change_proposal',
+                focus_ref: 'site_file_change_proposal_live_1',
+                review_status: 'acknowledged',
+                recorded_at: '2026-06-12T00:05:00.000Z',
               },
-            },
-          },
-          {
-            proposal_id: 'site_file_change_proposal_live_2',
-            proposal_ref: 'proposal:site-file-change-live:2',
-            proposal_summary: 'another site file change proposal',
-            proposal_posture: 'proposal_only_no_filesystem_write',
-            authority_locus: 'cloudflare_carrier_site',
-            filesystem_executor_authority: 'windows_filesystem_executor',
-            filesystem_mutation_admission: 'not_admitted',
-            repository_publication_admission: 'not_admitted',
-            file_count: 1,
-            recorded_at: '2026-06-12T00:01:00.000Z',
-            recorded_by_principal_id: 'service',
-          },
-        ],
-        site_file_materializations: [
-          {
-            proposal_id: 'site_file_change_proposal_live_1',
-            materialization_id: 'site_file_materialization_live_1',
-            materialization_posture: 'cloudflare_site_file_store_only_no_windows_filesystem_write_no_repository_publication',
-            write_effect: 'cloudflare_site_file_materialization_record',
-            file_path: 'docs/architecture/cloudflare-carrier/target.md',
-          },
-        ],
-        operation_focus_reviews: [
-          {
-            review_id: 'review_1',
-            focus_kind: 'site_file_change_proposal',
-            focus_ref: 'site_file_change_proposal_live_1',
-            review_status: 'acknowledged',
-            recorded_at: '2026-06-12T00:05:00.000Z',
-          },
-        ],
-      });
-    },
-  });
+            ],
+          });
+        },
+      };
+    }
+    if (body.operation === 'site_file_change_proposal.list') {
+      return {
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            ok: true,
+            site_id: 'site_narada_cloudflare',
+            site_file_change_proposals: [
+              {
+                proposal_id: 'site_file_change_proposal_live_1',
+                proposal_ref: 'proposal:site-file-change-live:1',
+                proposal_summary: 'live Cloudflare site file change proposal',
+                proposal_posture: 'proposal_only_no_filesystem_write',
+                authority_locus: 'cloudflare_carrier_site',
+                filesystem_executor_authority: 'windows_filesystem_executor',
+                filesystem_mutation_admission: 'not_admitted',
+                repository_publication_admission: 'not_admitted',
+                file_count: 1,
+                recorded_at: '2026-06-12T00:00:00.000Z',
+                recorded_by_principal_id: 'service',
+                record: {
+                  proposal: {
+                    files: [
+                      {
+                        file_path: 'docs/architecture/cloudflare-carrier/target.md',
+                        change_kind: 'update',
+                        material_source_ref: 'material-source:1',
+                      },
+                    ],
+                  },
+                },
+              },
+              {
+                proposal_id: 'site_file_change_proposal_live_2',
+                proposal_ref: 'proposal:site-file-change-live:2',
+                proposal_summary: 'another site file change proposal',
+                proposal_posture: 'proposal_only_no_filesystem_write',
+                authority_locus: 'cloudflare_carrier_site',
+                filesystem_executor_authority: 'windows_filesystem_executor',
+                filesystem_mutation_admission: 'not_admitted',
+                repository_publication_admission: 'not_admitted',
+                file_count: 1,
+                recorded_at: '2026-06-12T00:01:00.000Z',
+                recorded_by_principal_id: 'service',
+              },
+            ],
+          });
+        },
+      };
+    }
+    if (body.operation === 'site_file_materialization.list') {
+      return {
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            ok: true,
+            site_id: 'site_narada_cloudflare',
+            site_file_materializations: [
+              {
+                proposal_id: 'site_file_change_proposal_live_1',
+                materialization_id: 'site_file_materialization_live_1',
+                materialization_posture: 'cloudflare_site_file_store_only_no_windows_filesystem_write_no_repository_publication',
+                write_effect: 'cloudflare_site_file_materialization_record',
+                file_path: 'docs/architecture/cloudflare-carrier/target.md',
+              },
+            ],
+          });
+        },
+      };
+    }
+    throw new Error(`unexpected_operation:${body.operation}`);
+  };
 
   const result = await readSiteFileChangeProposalReview({
     workerUrl: 'https://carrier.example',
@@ -121,32 +164,186 @@ test('readSiteFileChangeProposalReview summarizes focused proposal and linked ma
   assert.equal(result.summary.latest_focus_review.review_status, 'acknowledged');
 });
 
-test('readSiteFileChangeProposalReview falls back to the proposal window when focus ref is unrelated', async () => {
-  const fetchImpl = async () => ({
-    status: 200,
-    async text() {
-      return JSON.stringify({
-        ok: true,
-        operation: { site_id: 'site_narada_cloudflare', operation_id: 'operation_site_read' },
-        site_file_change_proposals: [
-          {
-            proposal_id: 'site_file_change_proposal_live_1',
-            proposal_ref: 'proposal:site-file-change-live:1',
-            proposal_summary: 'live Cloudflare site file change proposal',
-            proposal_posture: 'proposal_only_no_filesystem_write',
-            file_count: 1,
-          },
-        ],
-        site_file_materializations: [],
-        operation_focus_reviews: [],
-      });
+test('readSiteFileChangeProposalReview supports direct focused review without operation read', async () => {
+  const calls = [];
+  const fetchImpl = async (_url, init) => {
+    const body = JSON.parse(init.body);
+    calls.push(body);
+    if (body.operation === 'site_file_change_proposal.list') {
+      return {
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            ok: true,
+            site_id: 'site_narada_cloudflare',
+            site_file_change_proposals: [
+              {
+                proposal_id: 'site_file_change_proposal_live_1',
+                operation_id: 'operation_site_read',
+                proposal_ref: 'proposal:site-file-change-live:1',
+                proposal_summary: 'live Cloudflare site file change proposal',
+                proposal_posture: 'proposal_only_no_filesystem_write',
+                file_count: 1,
+              },
+              {
+                proposal_id: 'site_file_change_proposal_live_2',
+                operation_id: 'operation_other',
+                proposal_ref: 'proposal:site-file-change-live:2',
+                proposal_summary: 'another site file change proposal',
+                proposal_posture: 'proposal_only_no_filesystem_write',
+                file_count: 1,
+              },
+            ],
+          });
+        },
+      };
+    }
+    if (body.operation === 'site_file_materialization.list') {
+      return {
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            ok: true,
+            site_id: 'site_narada_cloudflare',
+            site_file_materializations: [],
+          });
+        },
+      };
+    }
+    throw new Error(`unexpected_operation:${body.operation}`);
+  };
+
+  const result = await readSiteFileChangeProposalReview({
+    workerUrl: 'https://carrier.example',
+    operation: 'site_file_change_proposal.list',
+    requestId: 'request_2',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    params: {
+      site_id: 'site_narada_cloudflare',
+      site_file_change_proposal_limit: 200,
+      site_file_materialization_limit: 200,
     },
-  });
+    format: 'json',
+    focusRef: 'site_file_change_proposal_live_1',
+  }, fetchImpl);
+
+  assert.deepEqual(calls.map((entry) => entry.operation), [
+    'site_file_change_proposal.list',
+    'site_file_materialization.list',
+  ]);
+  assert.equal(result.summary.proposal_count, 1);
+  assert.equal(result.summary.focused_proposal_id, 'site_file_change_proposal_live_1');
+  assert.equal(result.summary.operation_id, 'operation_site_read');
+});
+
+test('readSiteFileChangeProposalReview fails explicitly when focused proposal is missing', async () => {
+  const fetchImpl = async (_url, init) => {
+    const body = JSON.parse(init.body);
+    if (body.operation === 'site_file_change_proposal.list') {
+      return {
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            ok: true,
+            site_id: 'site_narada_cloudflare',
+            site_file_change_proposals: [
+              {
+                proposal_id: 'site_file_change_proposal_live_1',
+              },
+            ],
+          });
+        },
+      };
+    }
+    if (body.operation === 'site_file_materialization.list') {
+      return {
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            ok: true,
+            site_id: 'site_narada_cloudflare',
+            site_file_materializations: [],
+          });
+        },
+      };
+    }
+    throw new Error(`unexpected_operation:${body.operation}`);
+  };
+
+  await assert.rejects(() => readSiteFileChangeProposalReview({
+    workerUrl: 'https://carrier.example',
+    operation: 'site_file_change_proposal.list',
+    requestId: 'request_3',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    params: {
+      site_id: 'site_narada_cloudflare',
+      site_file_change_proposal_limit: 200,
+      site_file_materialization_limit: 200,
+    },
+    format: 'json',
+    focusRef: 'missing_focus_ref',
+  }, fetchImpl), /site_file_change_proposal_review_focus_not_found:missing_focus_ref/);
+});
+
+test('readSiteFileChangeProposalReview falls back when workflow focus is unrelated but no explicit focus was requested', async () => {
+  const fetchImpl = async (_url, init) => {
+    const body = JSON.parse(init.body);
+    if (body.operation === 'operation.read') {
+      return {
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            ok: true,
+            operation: { site_id: 'site_narada_cloudflare', operation_id: 'operation_site_read' },
+            operation_workflow_route: {
+              next_action: 'review_site_file_change_proposal',
+              reason: 'operation_operator_focus_needs_review',
+              focus_ref: 'unrelated_focus_ref',
+            },
+          });
+        },
+      };
+    }
+    if (body.operation === 'site_file_change_proposal.list') {
+      return {
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            ok: true,
+            site_id: 'site_narada_cloudflare',
+            site_file_change_proposals: [
+              {
+                proposal_id: 'site_file_change_proposal_live_1',
+                operation_id: 'operation_site_read',
+                proposal_ref: 'proposal:site-file-change-live:1',
+                proposal_summary: 'live Cloudflare site file change proposal',
+                proposal_posture: 'proposal_only_no_filesystem_write',
+                file_count: 1,
+              },
+            ],
+          });
+        },
+      };
+    }
+    if (body.operation === 'site_file_materialization.list') {
+      return {
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            ok: true,
+            site_id: 'site_narada_cloudflare',
+            site_file_materializations: [],
+          });
+        },
+      };
+    }
+    throw new Error(`unexpected_operation:${body.operation}`);
+  };
 
   const result = await readSiteFileChangeProposalReview({
     workerUrl: 'https://carrier.example',
     operation: 'operation.read',
-    requestId: 'request_2',
+    requestId: 'request_4',
     auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
     params: {
       site_id: 'site_narada_cloudflare',
@@ -155,11 +352,76 @@ test('readSiteFileChangeProposalReview falls back to the proposal window when fo
       site_file_materialization_limit: 20,
     },
     format: 'json',
-    focusRef: 'unrelated_focus_ref',
+    focusRef: null,
   }, fetchImpl);
 
   assert.equal(result.summary.proposal_count, 1);
   assert.equal(result.summary.focused_proposal_id, 'site_file_change_proposal_live_1');
+});
+
+test('readSiteFileChangeProposalReview keeps focused proposal empty when no proposals are visible', async () => {
+  const fetchImpl = async (_url, init) => {
+    const body = JSON.parse(init.body);
+    if (body.operation === 'operation.read') {
+      return {
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            ok: true,
+            operation: { site_id: 'site_narada_cloudflare', operation_id: 'operation_site_read' },
+            operation_workflow_route: {
+              next_action: 'refresh_site_continuity_loop',
+              reason: 'operation_lifecycle_continuity_loop_stale',
+              focus_ref: 'site_narada_cloudflare',
+            },
+          });
+        },
+      };
+    }
+    if (body.operation === 'site_file_change_proposal.list') {
+      return {
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            ok: true,
+            site_id: 'site_narada_cloudflare',
+            site_file_change_proposals: [],
+          });
+        },
+      };
+    }
+    if (body.operation === 'site_file_materialization.list') {
+      return {
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            ok: true,
+            site_id: 'site_narada_cloudflare',
+            site_file_materializations: [],
+          });
+        },
+      };
+    }
+    throw new Error(`unexpected_operation:${body.operation}`);
+  };
+
+  const result = await readSiteFileChangeProposalReview({
+    workerUrl: 'https://carrier.example',
+    operation: 'operation.read',
+    requestId: 'request_5',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    params: {
+      site_id: 'site_narada_cloudflare',
+      operation_id: 'operation_site_read',
+      site_file_change_proposal_limit: 20,
+      site_file_materialization_limit: 20,
+    },
+    format: 'json',
+    focusRef: null,
+  }, fetchImpl);
+
+  assert.equal(result.summary.proposal_count, 0);
+  assert.equal(result.summary.focused_proposal_id, null);
 });
 
 test('formatSiteFileChangeProposalReviewText surfaces review ack command', () => {
