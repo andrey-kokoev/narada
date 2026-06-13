@@ -143,6 +143,7 @@ test('readRepositoryPublicationRequestReview supports direct request review with
       requests: [
         {
           repository_publication_request_id: 'repository_publication_request_live_1',
+          operation_id: 'operation_site_read',
           publication_ref: 'repository-publication:live-smoke:1',
           repository_ref: 'github:andrey-kokoev/narada',
           branch_ref: 'cloudflare-publication',
@@ -206,7 +207,7 @@ test('readRepositoryPublicationRequestReview supports direct request review with
   }, fetchImpl);
 
   assert.equal(result.summary.site_id, 'site_narada_cloudflare');
-  assert.equal(result.summary.operation_id, null);
+  assert.equal(result.summary.operation_id, 'operation_site_read');
   assert.equal(result.summary.focused_repository_publication_request_id, 'repository_publication_request_live_1');
   assert.equal(result.summary.current_request_posture, 'repository_publication_request_admitted_pending_execution');
   assert.equal(result.summary.linked_admission_id, 'admission_1');

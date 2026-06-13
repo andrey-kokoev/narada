@@ -170,7 +170,11 @@ export function summarizeRepositoryPublicationRequestReview(body = {}, options =
   });
   return {
     site_id: body?.operation?.site_id ?? body?.site_id ?? operationSummary.site_id ?? null,
-    operation_id: body?.operation?.operation_id ?? body?.operation_id ?? operationSummary.operation_id ?? null,
+    operation_id: body?.operation?.operation_id
+      ?? body?.operation_id
+      ?? operationSummary.operation_id
+      ?? focusedRequest?.operation_id
+      ?? null,
     workflow_next_action: operationSummary.workflow_next_action ?? null,
     workflow_reason: operationSummary.workflow_reason ?? null,
     workflow_focus_ref: operationSummary.workflow_focus_ref ?? focusRef ?? null,
