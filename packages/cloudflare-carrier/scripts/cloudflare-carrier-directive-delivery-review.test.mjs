@@ -80,6 +80,7 @@ test('summarizeDirectiveDeliveryReview tracks focused undelivered directive stat
   assert.equal(summary.latest_undelivered_directive_record_id, 'directive_record_focus');
   assert.equal(summary.focused_classification_state, 'critical');
   assert.equal(summary.focused_latest_delay_minutes, 18);
+  assert.equal(summary.latest_delivery_recorded_at, null);
 });
 
 test('readDirectiveDeliveryReview reads operation state plus directive record and delivery lists', async () => {

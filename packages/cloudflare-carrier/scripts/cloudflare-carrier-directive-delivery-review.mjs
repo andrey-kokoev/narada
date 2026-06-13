@@ -108,7 +108,7 @@ export function summarizeDirectiveDeliveryReview(operationBody = {}, directiveRe
     dispatch_authority: focusedDirectiveDelivery?.dispatch_authority ?? null,
     fallback_authority: directiveRecordsBody?.fallback_authority ?? directiveDeliveriesBody?.fallback_authority ?? focusedDirectiveRecord?.fallback_authority ?? focusedDirectiveDelivery?.fallback_authority ?? null,
     latest_recorded_at: focusedDirectiveRecord?.recorded_at ?? directiveRecords[0]?.recorded_at ?? null,
-    latest_delivery_recorded_at: focusedDirectiveDelivery?.recorded_at ?? directiveDeliveries[0]?.recorded_at ?? null,
+    latest_delivery_recorded_at: focusedDirectiveDelivery?.recorded_at ?? null,
   };
 }
 
