@@ -109,6 +109,9 @@ test('readRepositoryPublicationRequestReview summarizes focused request and link
   }, fetchImpl);
 
   assert.equal(result.summary.focused_repository_publication_request_id, 'repository_publication_request_live_1');
+  assert.equal(result.summary.current_request_posture, 'cloudflare_repository_publication_execution_completed');
+  assert.equal(result.summary.current_repository_publication_admission, 'admitted_by_cloudflare_repository_publication');
+  assert.equal(result.summary.current_direct_cloudflare_repository_mutation_admission, 'admitted_by_cloudflare_github_repository_publication');
   assert.equal(result.summary.linked_admission_id, 'admission_1');
   assert.equal(result.summary.linked_execution_id, 'execution_1');
   assert.equal(result.summary.linked_evidence_id, 'evidence_1');
@@ -132,11 +135,15 @@ test('formatRepositoryPublicationRequestReviewText surfaces review ack command',
       focused_source_change_ref: 'git:commit:abc',
       focused_requested_action_summary: 'request governed Cloudflare GitHub repository publication execution',
       focused_request_posture: 'cloudflare_queued_repository_publication_request_windows_must_admit_publish_and_return_evidence',
+      current_request_posture: 'cloudflare_repository_publication_execution_completed',
       repository_publication_request_authority: 'cloudflare_repository_publication_request_queue',
       repository_publication_executor_authority: 'windows_repository_publication_executor',
       repository_publication_admission: 'pending_windows_publication_admission',
+      current_repository_publication_admission: 'admitted_by_cloudflare_repository_publication',
       cloudflare_git_push_admission: 'not_admitted',
+      current_cloudflare_git_push_admission: 'not_admitted',
       direct_cloudflare_repository_mutation_admission: 'not_admitted',
+      current_direct_cloudflare_repository_mutation_admission: 'admitted_by_cloudflare_github_repository_publication',
       linked_admission_id: 'admission_1',
       linked_admission_action: 'admit',
       linked_execution_id: 'execution_1',
@@ -149,5 +156,8 @@ test('formatRepositoryPublicationRequestReviewText surfaces review ack command',
 
   assert.match(text, /Repository Publication Request Review: ok/);
   assert.match(text, /Workflow Route: action=review_repository_publication_request/);
+  assert.match(text, /Current Posture: cloudflare_repository_publication_execution_completed/);
+  assert.match(text, /Requested Posture: cloudflare_queued_repository_publication_request_windows_must_admit_publish_and_return_evidence/);
+  assert.match(text, /Current Admissions: request=admitted_by_cloudflare_repository_publication cloudflare_git_push=not_admitted direct_cloudflare_repo_mutation=admitted_by_cloudflare_github_repository_publication/);
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
 });
