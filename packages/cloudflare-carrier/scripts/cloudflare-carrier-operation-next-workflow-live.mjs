@@ -27,6 +27,7 @@ const repositoryPublicationProviderLivenessReadScript = resolve(scriptDir, 'clou
 const repositoryPublicationReadScript = resolve(scriptDir, 'cloudflare-carrier-repository-publication-read.mjs');
 const repositoryPublicationRequestReviewScript = resolve(scriptDir, 'cloudflare-carrier-repository-publication-request-review.mjs');
 const siteFileChangeProposalReviewScript = resolve(scriptDir, 'cloudflare-carrier-site-file-change-proposal-review.mjs');
+const siteFileMaterializationReadScript = resolve(scriptDir, 'cloudflare-carrier-site-file-materialization-read.mjs');
 const residentDispatchWindowsFallbackRequestScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-windows-fallback-request.mjs');
 const residentDispatchWindowsFallbackEvidenceScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-windows-fallback-evidence.mjs');
 const residentDispatchWindowsFallbackEvidenceReviewScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-windows-fallback-evidence-review.mjs');
@@ -45,6 +46,7 @@ const ROUTE_TO_WORKFLOW = new Map([
   ['review_site_continuity_reconciliation_execution', { name: 'focus_review', script: focusReviewScript, flag: null }],
   ['review_carrier_evidence_replay', { name: 'evidence', script: evidenceReadScript, flag: null }],
   ['read_operation_evidence', { name: 'evidence', script: evidenceReadScript, flag: null }],
+  ['review_outlook_draft_create_evidence', { name: 'mailbox_outlook_draft', script: mailboxOutlookDraftReadScript, flag: null }],
   ['review_mailbox_outlook_draft_create', { name: 'mailbox_outlook_draft', script: mailboxOutlookDraftReadScript, flag: null }],
   ['review_mailbox_send_confirmation', { name: 'mailbox_send_confirmation', script: mailboxSendConfirmationReadScript, flag: null }],
   ['review_mailbox_send_acceptance', { name: 'mailbox_send_accepted', script: mailboxSendAcceptedReadScript, flag: null }],
@@ -59,6 +61,7 @@ const ROUTE_TO_WORKFLOW = new Map([
   ['review_cloudflare_github_repository_publication_execution', { name: 'repository_publication_cloudflare_execution', script: repositoryPublicationReadScript, flag: null, mode: 'repository_publication.cloudflare_execution.list' }],
   ['review_repository_publication_evidence', { name: 'repository_publication_evidence', script: repositoryPublicationReadScript, flag: null, mode: 'repository_publication.evidence.list' }],
   ['review_site_file_change_proposal', { name: 'site_file_change_proposal', script: siteFileChangeProposalReviewScript, flag: null }],
+  ['review_site_file_materialization', { name: 'site_file_materialization_review', script: siteFileMaterializationReadScript, flag: null }],
   ['request_windows_fallback_resident_dispatch', { name: 'resident_dispatch_windows_fallback_request', script: residentDispatchWindowsFallbackRequestScript, flag: null }],
   ['await_windows_fallback_resident_dispatch', { name: 'resident_dispatch_windows_fallback_execute', script: residentDispatchWindowsFallbackExecuteScript, flag: '--execute-windows-fallback' }],
   ['review_windows_fallback_resident_dispatch_evidence', { name: 'resident_dispatch_windows_fallback_evidence_review', script: residentDispatchWindowsFallbackEvidenceReviewScript, flag: null }],

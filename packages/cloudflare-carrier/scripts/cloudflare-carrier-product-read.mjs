@@ -10,6 +10,7 @@ const VALID_OPERATIONS = new Set([
   'webhook_delay.directive.dual_record.list',
   'webhook_delay.directive.primary_with_fallback.list',
   'mailbox.outlook_draft.list',
+  'site_file_materialization.list',
   'mailbox.send_accepted.list',
   'mailbox.send_confirmation.list',
   'local_ingress.request.list',
@@ -40,6 +41,7 @@ export function parseProductReadArgs(argv = [], env = process.env) {
     || operation === 'webhook_delay.directive.dual_record.list'
     || operation === 'webhook_delay.directive.primary_with_fallback.list'
     || operation === 'mailbox.outlook_draft.list'
+    || operation === 'site_file_materialization.list'
     || operation === 'mailbox.send_accepted.list'
     || operation === 'mailbox.send_confirmation.list'
     || operation === 'local_ingress.request.list'
@@ -73,6 +75,7 @@ export function buildParams({ operation, siteId, operationId, limit }) {
     || operation === 'webhook_delay.directive.dual_record.list'
     || operation === 'webhook_delay.directive.primary_with_fallback.list'
     || operation === 'mailbox.outlook_draft.list'
+    || operation === 'site_file_materialization.list'
     || operation === 'mailbox.send_accepted.list'
     || operation === 'mailbox.send_confirmation.list'
     || operation === 'local_ingress.request.list'
@@ -390,7 +393,7 @@ export function formatProductSurfaceText(result) {
     if (summary.workflow_next_action === 'review_mailbox_send_acceptance') {
       lines.push(`Mailbox Send Accepted: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
     }
-    if (summary.workflow_next_action === 'review_mailbox_outlook_draft_create') {
+    if (summary.workflow_next_action === 'review_mailbox_outlook_draft_create' || summary.workflow_next_action === 'review_outlook_draft_create_evidence') {
       lines.push(`Mailbox Outlook Draft Review: pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
     }
     if (summary.workflow_next_action === 'review_directive_delivery') {
@@ -419,6 +422,9 @@ export function formatProductSurfaceText(result) {
     }
     if (summary.workflow_next_action === 'review_site_file_change_proposal') {
       lines.push(`Site File Change Proposal Review: pnpm --filter @narada2/cloudflare-carrier product:site-file-change:proposal:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
+    }
+    if (summary.workflow_next_action === 'review_site_file_materialization') {
+      lines.push(`Site File Materialization Review: pnpm --filter @narada2/cloudflare-carrier product:site-file:materialization:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
     }
     if (summary.workflow_next_action === 'request_windows_fallback_resident_dispatch') {
       lines.push(`Resident Dispatch Windows Fallback Request: pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:windows-fallback-request:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --dispatch-decision-id ${summary.workflow_focus_ref ?? '<dispatch-decision-id>'} --operator-session-file <operator-session-file>`);

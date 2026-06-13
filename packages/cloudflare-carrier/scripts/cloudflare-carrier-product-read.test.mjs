@@ -659,6 +659,27 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   });
   assert.match(operationReadOutlookDraftText, /Mailbox Outlook Draft Review: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
+  const operationReadOutlookDraftEvidenceText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_mailbox_draft',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'active_uninhabited',
+      health: 'attention',
+      next_action: 'mailbox_outlook_draft_create',
+      workflow_next_action: 'review_outlook_draft_create_evidence',
+      workflow_reason: 'operation_operator_focus_needs_review',
+      session_count: 0,
+      task_count: 0,
+    },
+  });
+  assert.match(operationReadOutlookDraftEvidenceText, /Mailbox Outlook Draft Review: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+
   const operationReadRepositoryPublicationText = formatProductSurfaceText({
     operation: 'operation.read',
     worker_url: 'https://carrier.example.test',
@@ -756,6 +777,27 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
     },
   });
   assert.match(operationReadSiteFileProposalText, /Site File Change Proposal Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file-change:proposal:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_site_file --operator-session-file <operator-session-file>/);
+
+  const operationReadSiteFileMaterializationText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_site_file',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'active_uninhabited',
+      health: 'attention',
+      next_action: 'site_file_materialization',
+      workflow_next_action: 'review_site_file_materialization',
+      workflow_reason: 'operation_operator_focus_needs_review',
+      session_count: 0,
+      task_count: 0,
+    },
+  });
+  assert.match(operationReadSiteFileMaterializationText, /Site File Materialization Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file:materialization:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
   const operationReadRecoveryText = formatProductSurfaceText({
     operation: 'operation.read',

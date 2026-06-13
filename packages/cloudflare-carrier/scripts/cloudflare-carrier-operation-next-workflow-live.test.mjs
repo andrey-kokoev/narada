@@ -1015,6 +1015,108 @@ test('runOperationNextWorkflowLive delegates site file change proposal review ro
   assert.equal(invocations[2][0].split(/[\\/]/).pop(), 'cloudflare-carrier-site-file-change-proposal-review.mjs');
 });
 
+test('runOperationNextWorkflowLive delegates review_outlook_draft_create_evidence route', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_live_smoke',
+    expectedListRouteAction: null,
+    expectedOperationId: null,
+    auth: { kind: 'bearer', value: 'token-value', source: 'flag:--token' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              next_operation_id: 'operation_alpha',
+              route_next_action: 'monitor_operations',
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            operation_id: 'operation_alpha',
+            workflow_next_action: 'review_outlook_draft_create_evidence',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-mailbox-outlook-draft-read.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.mailbox_outlook_draft_read.v1',
+          status: 'ok',
+          summary: {
+            draft_count: 1,
+          },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'mailbox_outlook_draft');
+  assert.equal(result.delegated_route_action, 'review_outlook_draft_create_evidence');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.mailbox_outlook_draft_read.v1');
+  assert.equal(invocations[2][0].split(/[\\/]/).pop(), 'cloudflare-carrier-mailbox-outlook-draft-read.mjs');
+});
+
+test('runOperationNextWorkflowLive delegates review_site_file_materialization route', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_live_smoke',
+    expectedListRouteAction: null,
+    expectedOperationId: null,
+    auth: { kind: 'bearer', value: 'token-value', source: 'flag:--token' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              next_operation_id: 'operation_alpha',
+              route_next_action: 'monitor_operations',
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            operation_id: 'operation_alpha',
+            workflow_next_action: 'review_site_file_materialization',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-site-file-materialization-read.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.site_file_materialization_read.v1',
+          status: 'ok',
+          summary: {
+            materialization_count: 1,
+          },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'site_file_materialization_review');
+  assert.equal(result.delegated_route_action, 'review_site_file_materialization');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.site_file_materialization_read.v1');
+  assert.equal(invocations[2][0].split(/[\\/]/).pop(), 'cloudflare-carrier-site-file-materialization-read.mjs');
+});
+
 test('runOperationNextWorkflowLive delegates Windows fallback resident dispatch request route', async () => {
   const invocations = [];
   const result = await runOperationNextWorkflowLive({
