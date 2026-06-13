@@ -19,6 +19,8 @@ import worker, {
   classifyCloudflareToolEffectAdmission,
   CloudflareCarrierDurableObject,
   createCloudflareToolEffectAdapter,
+  selectCloudflareFocusedOperation,
+  shouldKeepFocusedOperationProjection,
 } from './cloudflare-worker.mjs';
 import {
   CloudflareCarrierRouter,
@@ -8745,7 +8747,61 @@ test('worker operation.list yields focused selection to a sibling operation with
   assert.equal(listedBody.operation_posture_overview.next_operation_id, 'operation_attention');
   assert.equal(listedBody.operation_posture_overview.next_status, 'needs_attention');
   assert.equal(listedBody.focused_operation_lifecycle.operation_id, 'operation_attention');
-  assert.equal(listedBody.focused_operation_lifecycle.workflow_route.next_action, 'start_or_select_session');
+  assert.equal(listedBody.focused_operation_lifecycle.workflow_route.status, 'needs_attention');
+  assert.notEqual(listedBody.focused_operation_lifecycle.workflow_route.next_action, 'monitor_operation');
+});
+
+test('shouldKeepFocusedOperationProjection prefers the active focused operation over a closed sibling with the same continuity obligation', () => {
+  assert.equal(
+    shouldKeepFocusedOperationProjection(
+      {
+        operation: { operation_id: 'operation_control', status: 'active' },
+        operation_workflow_route: {
+          next_action: 'refresh_site_continuity_loop',
+          focus_ref: 'site_fixture',
+        },
+      },
+      {
+        operation: { operation_id: 'operation_probe', status: 'closed' },
+        operation_workflow_route: {
+          next_action: 'refresh_site_continuity_loop',
+          focus_ref: 'site_fixture',
+        },
+      },
+    ),
+    true,
+  );
+
+  assert.equal(
+    shouldKeepFocusedOperationProjection(
+      {
+        operation: { operation_id: 'operation_control', status: 'active' },
+        operation_workflow_route: {
+          next_action: 'refresh_site_continuity_loop',
+          focus_ref: 'site_fixture',
+        },
+      },
+      {
+        operation: { operation_id: 'operation_probe', status: 'closed' },
+        operation_workflow_route: {
+          next_action: 'review_site_continuity_reconciliation_execution',
+          focus_ref: 'site_fixture',
+        },
+      },
+    ),
+    false,
+  );
+});
+
+test('selectCloudflareFocusedOperation ignores stale response.operation focus when no operation id was explicitly requested', () => {
+  const selected = selectCloudflareFocusedOperation([
+    { operation_id: 'operation_control', status: 'active' },
+    { operation_id: 'operation_probe', status: 'closed' },
+  ], {}, {
+    operation: { operation_id: 'operation_probe' },
+  });
+
+  assert.equal(selected?.operation_id, 'operation_control');
 });
 
 test('worker site.read and site.list surface operation attention from a sibling operation', async () => {
@@ -8906,7 +8962,6 @@ test('worker site.read and site.list surface operation attention from a sibling 
   assert.equal(listedBody.site_product_overview.next_action, 'focus_next_operation');
   assert.equal(listedBody.site_posture_route.next_action, 'focus_next_site');
 });
-
 
 function fakeD1TaskDatabase() {
   const rows = [];

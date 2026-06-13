@@ -2414,8 +2414,8 @@ function cloudflareOperationWorkQueueItems(operations = [], product = {}, contex
   });
 }
 
-function selectCloudflareFocusedOperation(operations = [], params = {}, response = {}) {
-  const requestedOperationId = String(params.operation_id ?? response.operation?.operation_id ?? '').trim();
+export function selectCloudflareFocusedOperation(operations = [], params = {}, response = {}) {
+  const requestedOperationId = String(params.operation_id ?? '').trim();
   const candidates = Array.isArray(operations) ? operations : [];
   if (requestedOperationId) {
     const requested = candidates.find((operation) => operation.operation_id === requestedOperationId);
@@ -2481,6 +2481,20 @@ function cloudflareOperationLocalResidentSessionInhabitanceCount(operationId, pr
     sessionRefs.add(sessionRef);
   }
   return sessionRefs.size;
+}
+
+export function shouldKeepFocusedOperationProjection(focusedProjection = null, selectedProjection = null) {
+  const focusedRoute = focusedProjection?.operation_workflow_route || null;
+  const selectedRoute = selectedProjection?.operation_workflow_route || null;
+  const focusedStatus = String(focusedProjection?.operation?.status || '').trim();
+  const selectedStatus = String(selectedProjection?.operation?.status || '').trim();
+  if (focusedStatus !== 'active' || selectedStatus === 'active') return false;
+  if (!focusedRoute?.next_action || focusedRoute.next_action === 'monitor_operation') return false;
+  if (!selectedRoute?.next_action || selectedRoute.next_action === 'monitor_operation') return false;
+  if (focusedRoute.next_action !== selectedRoute.next_action) return false;
+  const focusedRef = String(focusedRoute.focus_ref || focusedRoute.target || '').trim();
+  const selectedRef = String(selectedRoute.focus_ref || selectedRoute.target || '').trim();
+  return Boolean(focusedRef && focusedRef === selectedRef);
 }
 
 function mergeLocalResidentCarrierBridgeSessions(sessions = [], bridgeRecords = []) {
@@ -5463,6 +5477,23 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
         return { status: 200, body: { ...response, site_id: siteId } };
       }
       siteProjection = await buildCloudflareSiteProductProjection(env, principal, siteRead, params);
+      if (
+        !String(params.operation_id ?? '').trim()
+        && siteProjection?.operation_posture_overview?.schema === 'narada.cloudflare_operation_posture_overview.v1'
+        && siteProjection?.operation_posture_route?.schema === 'narada.cloudflare_operation_posture_route.v1'
+        && siteProjection?.focused_operation_lifecycle?.operation_id
+      ) {
+        return {
+          status: 200,
+          body: {
+            ...response,
+            site_id: siteId,
+            operation_posture_overview: siteProjection.operation_posture_overview,
+            operation_posture_route: siteProjection.operation_posture_route,
+            focused_operation_lifecycle: siteProjection.focused_operation_lifecycle,
+          },
+        };
+      }
       const focusedOperation = selectCloudflareFocusedOperation(response.operations ?? [], params, response);
       focusedOperationId = focusedOperation?.operation_id ?? null;
       if (focusedOperation?.operation_id) {
@@ -5505,6 +5536,9 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
                 site_id: siteId,
                 operation_id: postureTarget,
               });
+              if (shouldKeepFocusedOperationProjection(focusedProjection, selectedProjection)) {
+                selectedProjection = focusedProjection;
+              }
             }
           }
           if (
