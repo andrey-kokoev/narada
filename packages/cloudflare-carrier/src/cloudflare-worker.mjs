@@ -2041,8 +2041,9 @@ function summarizeLocalCloudContinuityBridge(siteId, continuityPackets = [], sit
   };
 }
 
-function summarizeCloudflareSiteProductOverview(siteProductStatuses = []) {
+function summarizeCloudflareSiteProductOverview(siteProductStatuses = [], siteProductProjections = []) {
   const statuses = Array.isArray(siteProductStatuses) ? siteProductStatuses : [];
+  const projections = Array.isArray(siteProductProjections) ? siteProductProjections : [];
   const healthCounts = { ready: 0, attention: 0, incomplete: 0, other: 0 };
   const actionCounts = {};
   const missingCounts = {};
@@ -2058,6 +2059,14 @@ function summarizeCloudflareSiteProductOverview(siteProductStatuses = []) {
     for (const attention of status?.attention || []) attentionCounts[attention] = (attentionCounts[attention] || 0) + 1;
   }
   const firstActionable = statuses.find((status) => status?.next_action && status.next_action !== 'monitor_site');
+  const actionableProjection = firstActionable
+    ? projections.find((projection) => (
+      projection?.site?.site_id
+      ?? projection?.site_id
+      ?? projection?.site_product_status?.site_id
+    ) === firstActionable.site_id)
+    : null;
+  const actionableWorkflowRoute = actionableProjection?.focused_operation_lifecycle?.workflow_route ?? null;
   const nextReason = firstActionable
     ? (firstActionable.missing || [])[0] || (firstActionable.attention || [])[0] || firstActionable.next_action || 'inspect_site'
     : 'all_sites_monitoring';
@@ -2072,6 +2081,11 @@ function summarizeCloudflareSiteProductOverview(siteProductStatuses = []) {
     next_health: firstActionable?.health ?? 'ready',
     next_action: firstActionable?.next_action ?? 'monitor_sites',
     next_reason: nextReason,
+    next_operation_id: actionableProjection?.focused_operation_lifecycle?.operation_id ?? null,
+    next_operation_next_action: actionableWorkflowRoute?.next_action ?? null,
+    next_operation_reason: actionableWorkflowRoute?.reason ?? null,
+    next_operation_focus_kind: actionableWorkflowRoute?.focus_kind ?? null,
+    next_operation_focus_ref: actionableWorkflowRoute?.focus_ref ?? actionableWorkflowRoute?.target ?? null,
   };
 }
 
@@ -5478,6 +5492,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
   if (!response.ok) return { status: response.code === 'site_authority_denied' ? 403 : 400, body: response };
   if (body.operation === 'site.list') {
     const siteProductStatuses = [];
+    const siteProductProjections = [];
     for (const site of response.sites ?? []) {
       const siteRead = await registry.handle({
         operation: 'site.read',
@@ -5487,8 +5502,9 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
       if (!siteRead.ok) continue;
       const projection = await buildCloudflareSiteProductProjection(env, principal, siteRead, params);
       siteProductStatuses.push(projection.site_product_status);
+      siteProductProjections.push(projection);
     }
-    const siteProductOverview = summarizeCloudflareSiteProductOverview(siteProductStatuses);
+    const siteProductOverview = summarizeCloudflareSiteProductOverview(siteProductStatuses, siteProductProjections);
     return {
       status: 200,
       body: {

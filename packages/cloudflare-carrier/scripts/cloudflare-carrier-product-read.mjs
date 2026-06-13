@@ -151,6 +151,11 @@ export function summarizeProductSurface(operation, body, options = {}) {
       next_health: overview.next_health ?? null,
       next_action: overview.next_action ?? null,
       next_reason: overview.next_reason ?? null,
+      next_operation_id: overview.next_operation_id ?? null,
+      next_operation_next_action: overview.next_operation_next_action ?? null,
+      next_operation_reason: overview.next_operation_reason ?? null,
+      next_operation_focus_kind: overview.next_operation_focus_kind ?? null,
+      next_operation_focus_ref: overview.next_operation_focus_ref ?? null,
       health_counts: overview.health_counts ?? null,
       route_domain: sitePostureRoute?.domain ?? null,
       route_command_state: sitePostureRoute?.command_state ?? null,
@@ -320,6 +325,12 @@ export function formatProductSurfaceText(result) {
   if (operation === 'site.list') {
     lines.push(`Sites: count=${summary.site_count ?? 0}`);
     lines.push(`Overview Candidate: site=${summary.next_site_id ?? 'none'} health=${summary.next_health ?? 'unknown'} action=${summary.next_action ?? 'none'}${summary.next_reason ? ` reason=${summary.next_reason}` : ''}`);
+    if (summary.next_operation_next_action || summary.next_operation_reason) {
+      lines.push(`Candidate Operation Route: operation=${summary.next_operation_id ?? 'none'} action=${summary.next_operation_next_action ?? 'none'} reason=${summary.next_operation_reason ?? 'none'}`);
+    }
+    if (summary.next_operation_focus_kind || summary.next_operation_focus_ref) {
+      lines.push(`Candidate Operation Focus: kind=${summary.next_operation_focus_kind ?? 'unknown'} ref=${summary.next_operation_focus_ref ?? 'unknown'}`);
+    }
     if (summary.route_next_action || summary.route_command_state || summary.route_target) {
       lines.push(`Site Route: domain=${summary.route_domain ?? 'unknown'} state=${summary.route_command_state ?? 'unknown'} action=${summary.route_next_action ?? 'none'} target=${summary.route_target ?? 'none'} status=${summary.route_status ?? 'unknown'} reason=${summary.route_reason ?? 'none'}`);
       lines.push(`Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --operator-session-file <operator-session-file> --execute-site-next`);
@@ -327,6 +338,12 @@ export function formatProductSurfaceText(result) {
         lines.push(`Focus Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:focus:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --focused-site-id ${summary.next_site_id} --operator-session-file <operator-session-file> --execute-site-focus`);
         if (summary.next_action === 'focus_next_operation') {
           lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.next_site_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+          if (summary.next_operation_next_action === 'refresh_site_continuity_loop' && summary.next_operation_id) {
+            lines.push(`Continuity Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:continuity:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.next_site_id} --operation-id ${summary.next_operation_id} --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity`);
+          }
+          if (summary.next_operation_next_action === 'review_site_continuity_reconciliation_execution' && summary.next_operation_id && summary.next_operation_focus_ref) {
+            lines.push(`Review Ack: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.next_site_id} --operation-id ${summary.next_operation_id} --focus-kind ${summary.next_operation_focus_kind ?? 'site_continuity_reconciliation_execution'} --focus-ref ${summary.next_operation_focus_ref} --operator-session-file <operator-session-file>`);
+          }
         }
       }
     }

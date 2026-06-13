@@ -7231,28 +7231,28 @@ test('worker site.list exposes product statuses across visible sites', async () 
   assert.equal(listedBody.site_product_statuses[0].site_id, 'site_alpha');
   assert.equal(listedBody.site_product_statuses[0].health, 'attention');
   assert.deepEqual(listedBody.site_product_statuses[0].missing, []);
-  assert.deepEqual(listedBody.site_product_statuses[0].attention, ['continuity_direction', 'continuity_loop_report']);
+  assert.deepEqual(listedBody.site_product_statuses[0].attention, ['operation_posture', 'continuity_direction', 'continuity_loop_report']);
   assert.equal(listedBody.site_product_statuses[0].operation_count, 1);
   assert.equal(listedBody.site_product_statuses[0].session_count, 1);
   assert.equal(listedBody.site_product_statuses[0].continuity_state, 'packet_observed');
   assert.equal(listedBody.site_product_statuses[0].continuity_direction_state, 'cloudflare_to_local_windows_only');
   assert.deepEqual(listedBody.site_product_statuses[0].continuity_direction_missing, ['local_windows_to_cloudflare']);
   assert.equal(listedBody.site_product_statuses[0].operation_continuity_direction_status.next_action, 'return_local_windows_continuity_packet');
-  assert.equal(listedBody.site_product_statuses[0].next_action, 'return_local_windows_continuity_packet');
+  assert.equal(listedBody.site_product_statuses[0].next_action, 'focus_next_operation');
   assert.equal(listedBody.site_product_statuses[1].site_id, 'site_beta');
   assert.equal(listedBody.site_product_statuses[1].health, 'incomplete');
   assert.deepEqual(listedBody.site_product_statuses[1].missing, ['operation', 'session', 'carrier_evidence', 'continuity_packet']);
-  assert.equal(listedBody.site_product_statuses[1].next_action, 'operation');
+  assert.equal(listedBody.site_product_statuses[1].next_action, 'focus_next_operation');
   assert.equal(listedBody.site_product_overview.schema, 'narada.cloudflare_site_product_overview.v1');
   assert.equal(listedBody.site_product_overview.site_count, 2);
   assert.deepEqual(listedBody.site_product_overview.health_counts, { ready: 0, attention: 1, incomplete: 1, other: 0 });
-  assert.deepEqual(listedBody.site_product_overview.action_counts, { return_local_windows_continuity_packet: 1, operation: 1 });
+  assert.deepEqual(listedBody.site_product_overview.action_counts, { focus_next_operation: 2 });
   assert.deepEqual(listedBody.site_product_overview.missing_counts, { operation: 1, session: 1, carrier_evidence: 1, continuity_packet: 1 });
-  assert.deepEqual(listedBody.site_product_overview.attention_counts, { continuity_direction: 1, continuity_loop_report: 1 });
+  assert.deepEqual(listedBody.site_product_overview.attention_counts, { operation_posture: 2, continuity_direction: 1, continuity_loop_report: 1 });
   assert.equal(listedBody.site_product_overview.next_site_id, 'site_alpha');
   assert.equal(listedBody.site_product_overview.next_health, 'attention');
-  assert.equal(listedBody.site_product_overview.next_action, 'return_local_windows_continuity_packet');
-  assert.equal(listedBody.site_product_overview.next_reason, 'continuity_direction');
+  assert.equal(listedBody.site_product_overview.next_action, 'focus_next_operation');
+  assert.equal(listedBody.site_product_overview.next_reason, 'operation_posture');
   assert.deepEqual(listedBody.site_posture_route, {
     schema: 'narada.cloudflare_site_posture_route.v1',
     domain: 'site_posture',
@@ -7261,7 +7261,7 @@ test('worker site.list exposes product statuses across visible sites', async () 
     next_action: 'focus_next_site',
     target: 'site_alpha',
     status: 'needs_attention',
-    reason: 'continuity_direction',
+    reason: 'operation_posture',
   });
 });
 
@@ -9179,6 +9179,9 @@ test('worker site.read and site.list surface operation attention from a sibling 
   const listedBody = await listed.json();
   assert.equal(listedBody.site_product_overview.next_site_id, 'site_fixture');
   assert.equal(listedBody.site_product_overview.next_action, 'focus_next_operation');
+  assert.equal(listedBody.site_product_overview.next_operation_id, 'operation_needs_continuation');
+  assert.equal(listedBody.site_product_overview.next_operation_next_action, 'resume_operation_continuation');
+  assert.equal(listedBody.site_product_overview.next_operation_reason, 'operation_lifecycle_needs_continuation');
   assert.equal(listedBody.site_posture_route.next_action, 'focus_next_site');
 });
 

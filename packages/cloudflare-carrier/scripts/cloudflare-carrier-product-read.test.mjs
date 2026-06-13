@@ -187,6 +187,11 @@ test('readProductSurface posts operation envelope and redacts auth material from
     next_health: 'ready',
     next_action: 'monitor_sites',
     next_reason: 'sites_ready',
+    next_operation_id: null,
+    next_operation_next_action: null,
+    next_operation_reason: null,
+    next_operation_focus_kind: null,
+    next_operation_focus_ref: null,
     health_counts: { ready: 1, attention: 0, incomplete: 0, other: 0 },
     route_domain: 'site_posture',
     route_command_state: 'site_posture_ready',
@@ -284,6 +289,11 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       next_health: 'attention',
       next_action: 'focus_next_operation',
       next_reason: 'operation_posture',
+      next_operation_id: 'operation_alpha',
+      next_operation_next_action: 'refresh_site_continuity_loop',
+      next_operation_reason: 'operation_lifecycle_continuity_loop_stale',
+      next_operation_focus_kind: null,
+      next_operation_focus_ref: 'site_alpha',
       route_domain: 'site_posture',
       route_command_state: 'site_posture_attention',
       route_command_action: 'focus_next_site',
@@ -294,8 +304,11 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
     },
   });
   assert.match(siteListFocusText, /Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live -- --url https:\/\/carrier\.example\.test --operator-session-file <operator-session-file> --execute-site-next/);
+  assert.match(siteListFocusText, /Candidate Operation Route: operation=operation_alpha action=refresh_site_continuity_loop reason=operation_lifecycle_continuity_loop_stale/);
+  assert.match(siteListFocusText, /Candidate Operation Focus: kind=unknown ref=site_alpha/);
   assert.match(siteListFocusText, /Focus Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:focus:workflow:live -- --url https:\/\/carrier\.example\.test --focused-site-id site_alpha --operator-session-file <operator-session-file> --execute-site-focus/);
   assert.match(siteListFocusText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
+  assert.match(siteListFocusText, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity/);
 
   const operationFallbackText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1686,6 +1699,52 @@ test('formatProductSurfaceText emits mailbox send review operator commands for o
 });
 
 test('summarizeProductSurface summarizes site and operation reads', () => {
+  assert.deepEqual(summarizeProductSurface('site.list', {
+    sites: [{ site_id: 'site_fixture' }],
+    site_product_overview: {
+      site_count: 1,
+      next_site_id: 'site_fixture',
+      next_health: 'attention',
+      next_action: 'focus_next_operation',
+      next_reason: 'operation_posture',
+      next_operation_id: 'operation_fixture',
+      next_operation_next_action: 'refresh_site_continuity_loop',
+      next_operation_reason: 'operation_lifecycle_continuity_loop_stale',
+      next_operation_focus_kind: null,
+      next_operation_focus_ref: 'site_fixture',
+      health_counts: { ready: 0, attention: 1, incomplete: 0, other: 0 },
+    },
+    site_posture_route: {
+      domain: 'site_posture',
+      command_state: 'site_posture_attention',
+      command_action: 'focus_next_site',
+      next_action: 'focus_next_site',
+      target: 'site_fixture',
+      status: 'needs_attention',
+      reason: 'operation_posture',
+    },
+  }), {
+    operation: 'site.list',
+    site_count: 1,
+    next_site_id: 'site_fixture',
+    next_health: 'attention',
+    next_action: 'focus_next_operation',
+    next_reason: 'operation_posture',
+    next_operation_id: 'operation_fixture',
+    next_operation_next_action: 'refresh_site_continuity_loop',
+    next_operation_reason: 'operation_lifecycle_continuity_loop_stale',
+    next_operation_focus_kind: null,
+    next_operation_focus_ref: 'site_fixture',
+    health_counts: { ready: 0, attention: 1, incomplete: 0, other: 0 },
+    route_domain: 'site_posture',
+    route_command_state: 'site_posture_attention',
+    route_command_action: 'focus_next_site',
+    route_next_action: 'focus_next_site',
+    route_target: 'site_fixture',
+    route_status: 'needs_attention',
+    route_reason: 'operation_posture',
+  });
+
   assert.deepEqual(summarizeProductSurface('site.read', {
     site: { site_id: 'site_fixture', display_name: 'Fixture Site' },
     focused_operation_lifecycle: {
