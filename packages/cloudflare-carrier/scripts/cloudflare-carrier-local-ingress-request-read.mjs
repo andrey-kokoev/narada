@@ -68,6 +68,7 @@ export function summarizeLocalIngressRequest(body = {}, evidenceBody = {}, optio
     latest_local_execution_id: latestEvidence?.local_execution_id ?? null,
     latest_execution_status: latestEvidence?.local_execution_status ?? null,
     latest_evidence_posture: latestEvidence?.evidence_posture ?? null,
+    requested_posture: latestRequest ? 'request_only_pending_windows_execution' : null,
     current_posture: latestEvidence?.evidence_posture ?? (latestRequest ? 'request_only_pending_windows_execution' : null),
   };
 }
@@ -80,10 +81,13 @@ export function formatLocalIngressRequestReadText(result) {
     `Auth: ${result?.auth_source ?? 'unknown'}`,
     `Site: ${summary.site_id ?? 'unknown'}`,
     `Requests: count=${summary.request_count ?? 0} latest=${summary.latest_request_id ?? 'none'} action=${summary.latest_requested_action_ref ?? 'none'}`,
-    `Execution: admission=${summary.local_execution_admission ?? 'unknown'} executor=${summary.local_executor_authority ?? 'unknown'} target=${summary.latest_target_authority_locus ?? 'unknown'}`,
+    `Requested Execution: admission=${summary.local_execution_admission ?? 'unknown'} executor=${summary.local_executor_authority ?? 'unknown'} target=${summary.latest_target_authority_locus ?? 'unknown'}`,
     `Current Posture: ${summary.current_posture ?? 'unknown'}`,
     `Admissions: direct_cloudflare_filesystem_mutation=${summary.direct_cloudflare_filesystem_mutation_admission ?? 'unknown'} repository_publication=${summary.repository_publication_admission ?? 'unknown'}`,
   ];
+  if (summary.requested_posture && summary.requested_posture !== summary.current_posture) {
+    lines.push(`Requested Posture: ${summary.requested_posture}`);
+  }
   if (summary.local_ingress_request_authority || summary.latest_request_authority || summary.authority_partition) {
     lines.push(`Authority: request=${summary.local_ingress_request_authority ?? summary.latest_request_authority ?? 'unknown'} partition=${summary.authority_partition ?? 'unknown'}`);
   }

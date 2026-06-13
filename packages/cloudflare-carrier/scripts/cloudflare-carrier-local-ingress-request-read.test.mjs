@@ -57,6 +57,7 @@ test('summarizeLocalIngressRequest lifts latest local ingress request posture an
   assert.equal(summary.request_count, 1);
   assert.equal(summary.latest_request_id, 'local_ingress_request_alpha');
   assert.equal(summary.latest_requested_action_ref, 'site_file_materialization.admit');
+  assert.equal(summary.requested_posture, 'request_only_pending_windows_execution');
   assert.equal(summary.current_posture, 'local_repository_filesystem_mutation_completed');
   assert.equal(summary.latest_evidence_id, 'local_ingress_evidence_alpha');
 });
@@ -110,6 +111,7 @@ test('readLocalIngressRequest returns summarized local ingress request state and
   assert.equal(result.schema, 'narada.cloudflare_carrier.local_ingress_request_read.v1');
   assert.equal(result.summary.request_count, 1);
   assert.equal(result.summary.latest_request_id, 'local_ingress_request_alpha');
+  assert.equal(result.summary.requested_posture, 'request_only_pending_windows_execution');
   assert.equal(result.summary.current_posture, 'local_repository_filesystem_mutation_completed');
 });
 
@@ -127,6 +129,7 @@ test('formatLocalIngressRequestReadText prints local ingress request summary', (
       latest_target_authority_locus: 'local-windows-site-authority',
       direct_cloudflare_filesystem_mutation_admission: 'not_admitted',
       repository_publication_admission: 'not_admitted',
+      requested_posture: 'request_only_pending_windows_execution',
       current_posture: 'local_repository_filesystem_mutation_completed',
       local_ingress_request_authority: 'cloudflare_local_ingress_request_queue',
       authority_partition: 'cloudflare_queues_governed_local_ingress_request_windows_admits_executes_and_returns_evidence',
@@ -140,7 +143,8 @@ test('formatLocalIngressRequestReadText prints local ingress request summary', (
 
   assert.match(text, /Local Ingress Request Review: ok/);
   assert.match(text, /Requests: count=1 latest=local_ingress_request_alpha action=site_file_materialization\.admit/);
-  assert.match(text, /Execution: admission=pending_windows_admission executor=windows_local_ingress_executor target=local-windows-site-authority/);
+  assert.match(text, /Requested Execution: admission=pending_windows_admission executor=windows_local_ingress_executor target=local-windows-site-authority/);
   assert.match(text, /Current Posture: local_repository_filesystem_mutation_completed/);
+  assert.match(text, /Requested Posture: request_only_pending_windows_execution/);
   assert.match(text, /Current Execution: evidence=local_ingress_evidence_alpha local_execution=windows_local_ingress_execution_alpha status=completed/);
 });
