@@ -101,6 +101,43 @@ test('runSiteActionWorkflowLive delegates operation focus to operation.next work
   ]);
 });
 
+test('runSiteActionWorkflowLive retries operation focus once when site stays focused on operations', async () => {
+  const invocations = [];
+  const result = await runSiteActionWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_alpha',
+    expectedAction: 'focus_next_operation',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs' && invocations.length === 1) {
+        return JSON.stringify({ schema: 'narada.cloudflare_carrier.product_read.v1', summary: { site_id: 'site_alpha', next_action: 'focus_next_operation' } });
+      }
+      if (scriptName === 'cloudflare-carrier-operation-next-workflow-live.mjs' && invocations.length === 2) {
+        return JSON.stringify({ schema: 'narada.cloudflare_carrier.operation_next_workflow_live.v1', status: 'ok', read_after_next: { workflow_next_action: 'review_site_continuity_reconciliation_execution' } });
+      }
+      if (scriptName === 'cloudflare-carrier-product-read.mjs' && invocations.length === 3) {
+        return JSON.stringify({ schema: 'narada.cloudflare_carrier.product_read.v1', summary: { site_id: 'site_alpha', next_action: 'focus_next_operation' } });
+      }
+      if (scriptName === 'cloudflare-carrier-operation-next-workflow-live.mjs' && invocations.length === 4) {
+        return JSON.stringify({ schema: 'narada.cloudflare_carrier.operation_next_workflow_live.v1', status: 'ok', read_after_next: { workflow_next_action: 'monitor_operation' } });
+      }
+      if (scriptName === 'cloudflare-carrier-product-read.mjs' && invocations.length === 5) {
+        return JSON.stringify({ schema: 'narada.cloudflare_carrier.product_read.v1', summary: { site_id: 'site_alpha', next_action: 'monitor_site' } });
+      }
+      throw new Error(`unexpected_script:${scriptName}:${invocations.length}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'focus_next_operation');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.operation_next_workflow_live.v1');
+  assert.equal(result.delegated_followup_result.schema, 'narada.cloudflare_carrier.operation_next_workflow_live.v1');
+  assert.equal(invocations.length, 5);
+});
+
 test('runSiteActionWorkflowLive delegates site operation focus to operation.next workflow', async () => {
   const invocations = [];
   const result = await runSiteActionWorkflowLive({

@@ -103,11 +103,27 @@ export async function runSiteActionWorkflowLive(
     'site_action_workflow_delegate',
   );
 
-  const readAfter = parseJsonStdout(
+  let readAfter = parseJsonStdout(
     await runNodeScript(buildSiteReadArgs(config), { cwd: packageRoot }),
     'site_action_read_after',
   );
   assert.equal(readAfter.schema, 'narada.cloudflare_carrier.product_read.v1');
+
+  let delegatedFollowupResult = null;
+  if (
+    (action === 'focus_next_operation' || action === 'focus_site_operation')
+    && readAfter.summary?.next_action === 'focus_next_operation'
+  ) {
+    delegatedFollowupResult = parseJsonStdout(
+      await runNodeScript(buildWorkflowArgs(config, action, workflow.script), { cwd: packageRoot }),
+      'site_action_workflow_delegate_followup',
+    );
+    readAfter = parseJsonStdout(
+      await runNodeScript(buildSiteReadArgs(config), { cwd: packageRoot }),
+      'site_action_read_after_followup',
+    );
+    assert.equal(readAfter.schema, 'narada.cloudflare_carrier.product_read.v1');
+  }
 
   return {
     schema: 'narada.cloudflare_carrier.site_action_workflow_live.v1',
@@ -118,6 +134,7 @@ export async function runSiteActionWorkflowLive(
     delegated_action: action,
     read_before_action: readBefore.summary,
     delegated_result: delegatedResult,
+    delegated_followup_result: delegatedFollowupResult,
     read_after_action: readAfter.summary,
   };
 }
