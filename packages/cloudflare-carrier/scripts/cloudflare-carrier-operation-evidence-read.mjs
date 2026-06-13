@@ -126,6 +126,11 @@ export function summarizeOperationEvidence(body = {}, options = {}) {
 
 export function formatOperationEvidenceReadText(result) {
   const summary = result?.summary ?? {};
+  const reviewableMatchesLatestReview = summary.reviewable_focus_kind
+    && summary.reviewable_focus_ref
+    && summary.latest_focus_review
+    && summary.latest_focus_review.focus_kind === summary.reviewable_focus_kind
+    && summary.latest_focus_review.focus_ref === summary.reviewable_focus_ref;
   const lines = [
     'Operation Evidence Read: ok',
     `Worker: ${result?.worker_url ?? 'unknown'}`,
@@ -154,8 +159,12 @@ export function formatOperationEvidenceReadText(result) {
       lines.push(`- ${item.activity_kind ?? 'unknown_activity'} focus=${item.focus_kind ?? 'unknown'}:${item.focus_ref ?? 'unknown'}${item.summary ? ` summary=${item.summary}` : ''}`);
     }
   }
+  if (summary.reviewable_focus_kind && summary.reviewable_focus_ref && !reviewableMatchesLatestReview) {
+    lines.push(`Reviewable Focus: ${summary.reviewable_focus_kind}:${summary.reviewable_focus_ref}`);
+  }
   if (summary.latest_focus_review) {
-    lines.push(`Latest Focus Review: ${summary.latest_focus_review.focus_kind ?? 'unknown'}:${summary.latest_focus_review.focus_ref ?? 'unknown'} status=${summary.latest_focus_review.review_status ?? 'unknown'}`);
+    const reviewLabel = reviewableMatchesLatestReview ? 'Focused Review' : 'Latest Review';
+    lines.push(`${reviewLabel}: ${summary.latest_focus_review.focus_kind ?? 'unknown'}:${summary.latest_focus_review.focus_ref ?? 'unknown'} status=${summary.latest_focus_review.review_status ?? 'unknown'}`);
   }
   if (summary.reviewable_focus_kind && summary.reviewable_focus_ref) {
     lines.push(`Review Ack: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --focus-kind ${summary.reviewable_focus_kind} --focus-ref ${summary.reviewable_focus_ref} --operator-session-file <operator-session-file>`);

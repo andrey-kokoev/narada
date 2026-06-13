@@ -134,6 +134,36 @@ test('formatOperationEvidenceReadText recognizes Windows fallback evidence as re
   assert.match(text, /--focus-kind resident_dispatch_windows_fallback_evidence/);
   assert.match(text, /Local Resident Evidence: sessions=1 bridge=not_admitted_to_cloudflare_carrier_session/);
   assert.match(text, /Local Resident Sessions: windows-session:\/\/operation_alpha\/1/);
+  assert.match(text, /Reviewable Focus: resident_dispatch_windows_fallback_evidence:resident_dispatch_windows_fallback_evidence_alpha/);
+});
+
+test('formatOperationEvidenceReadText distinguishes current reviewable focus from latest acknowledged review', () => {
+  const text = formatOperationEvidenceReadText({
+    worker_url: 'https://carrier.example',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      phase: 'inhabited',
+      health: 'ready',
+      current_status: 'active',
+      next_action: 'monitor_operation',
+      posture_next_action: 'monitor_operations',
+      carrier_evidence_read_state: 'partial',
+      carrier_session_ids: ['session_1'],
+      carrier_event_count: 1,
+      latest_focus_review: {
+        focus_kind: 'site_continuity_reconciliation_execution',
+        focus_ref: 'site-continuity-reconciliation-execution:site_alpha:older',
+        review_status: 'acknowledged',
+      },
+      reviewable_focus_kind: 'site_continuity_reconciliation_execution',
+      reviewable_focus_ref: 'site-continuity-reconciliation-execution:site_alpha:newer',
+    },
+  });
+
+  assert.match(text, /Reviewable Focus: site_continuity_reconciliation_execution:site-continuity-reconciliation-execution:site_alpha:newer/);
+  assert.match(text, /Latest Review: site_continuity_reconciliation_execution:site-continuity-reconciliation-execution:site_alpha:older status=acknowledged/);
 });
 
 test('summarizeOperationEvidence makes local resident evidence posture explicit without inventing a Cloudflare session', () => {
