@@ -253,7 +253,102 @@ test('runSiteNextWorkflowLive retries site list once when top-level readback sta
 
   assert.equal(result.list_after_next.next_action, 'monitor_sites');
   assert.equal(result.list_after_next_followup.next_action, 'monitor_sites');
+  assert.equal(result.list_after_next_delayed_followup, null);
   assert.equal(invocations.length, 5);
+});
+
+test('runSiteNextWorkflowLive performs one delayed re-read when the immediate follow-up is still stale', async () => {
+  const invocations = [];
+  const waits = [];
+  const result = await runSiteNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    expectedRouteAction: 'focus_next_site',
+    expectedSiteId: 'site_alpha',
+    expectedSiteAction: 'focus_next_operation',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    wait: async (ms) => {
+      waits.push(ms);
+    },
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs' && invocations.length === 1) {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            site_count: 2,
+            next_site_id: 'site_alpha',
+            next_action: 'focus_next_operation',
+            route_next_action: 'focus_next_site',
+            route_target: 'site_alpha',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-site-focus-workflow-live.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.site_focus_workflow_live.v1',
+          status: 'ok',
+          selected_site_id: 'site_alpha',
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-site-action-workflow-live.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.site_action_workflow_live.v1',
+          status: 'ok',
+          delegated_workflow: 'focus_next_operation',
+          delegated_action: 'focus_next_operation',
+          read_after_action: {
+            next_action: 'monitor_site',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-product-read.mjs' && invocations.length === 4) {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            site_count: 2,
+            next_site_id: 'site_alpha',
+            next_action: 'focus_next_operation',
+            route_next_action: 'focus_next_site',
+            route_target: 'site_alpha',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-product-read.mjs' && invocations.length === 5) {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            site_count: 2,
+            next_site_id: 'site_alpha',
+            next_action: 'focus_next_operation',
+            route_next_action: 'focus_next_site',
+            route_target: 'site_alpha',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-product-read.mjs' && invocations.length === 6) {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            site_count: 2,
+            next_site_id: null,
+            next_action: 'monitor_sites',
+            route_next_action: 'monitor_sites',
+            route_target: 'none',
+          },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}:${invocations.length}`);
+    },
+  });
+
+  assert.deepEqual(waits, [20_000]);
+  assert.equal(result.list_after_next.next_action, 'monitor_sites');
+  assert.equal(result.list_after_next_followup.next_action, 'focus_next_operation');
+  assert.equal(result.list_after_next_delayed_followup.next_action, 'monitor_sites');
+  assert.equal(invocations.length, 6);
 });
 
 test('runSiteNextWorkflowLive rejects unsupported site route actions', async () => {

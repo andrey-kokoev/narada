@@ -15,6 +15,7 @@ const productReadScript = resolve(scriptDir, 'cloudflare-carrier-product-read.mj
 const siteFocusWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-site-focus-workflow-live.mjs');
 const siteActionWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-site-action-workflow-live.mjs');
 const CHILD_STDIO_MAX_BUFFER = 64 * 1024 * 1024;
+const SITE_LIST_STALE_RECHECK_DELAY_MS = 20_000;
 
 export function parseSiteNextWorkflowLiveArgs(argv = [], env = process.env) {
   const args = [...argv];
@@ -48,7 +49,7 @@ export function parseSiteNextWorkflowLiveArgs(argv = [], env = process.env) {
 
 export async function runSiteNextWorkflowLive(
   config,
-  { runNodeScript = defaultRunNodeScript } = {},
+  { runNodeScript = defaultRunNodeScript, wait = defaultWait } = {},
 ) {
   const listBefore = parseJsonStdout(
     await runNodeScript(buildSiteListArgs(config), { cwd: packageRoot }),
@@ -133,6 +134,7 @@ export async function runSiteNextWorkflowLive(
     );
     assert.equal(listAfter.schema, 'narada.cloudflare_carrier.product_read.v1');
     let listAfterFollowup = null;
+    let listAfterDelayedFollowup = null;
     if (
       shouldRetryListAfterNext({
         selectedSiteId,
@@ -146,6 +148,21 @@ export async function runSiteNextWorkflowLive(
       );
       assert.equal(listAfterFollowup.schema, 'narada.cloudflare_carrier.product_read.v1');
       listAfter = listAfterFollowup;
+      if (
+        shouldRetryListAfterNext({
+          selectedSiteId,
+          delegatedResult,
+          listAfterSummary: listAfter.summary,
+        })
+      ) {
+        await wait(SITE_LIST_STALE_RECHECK_DELAY_MS);
+        listAfterDelayedFollowup = parseJsonStdout(
+          await runNodeScript(buildSiteListArgs(config), { cwd: packageRoot }),
+          'site_list_after_next_workflow_delayed_followup',
+        );
+        assert.equal(listAfterDelayedFollowup.schema, 'narada.cloudflare_carrier.product_read.v1');
+        listAfter = listAfterDelayedFollowup;
+      }
     }
     return {
       schema: 'narada.cloudflare_carrier.site_next_workflow_live.v1',
@@ -159,6 +176,7 @@ export async function runSiteNextWorkflowLive(
       delegated_result: delegatedResult,
       list_after_next: listAfter.summary,
       list_after_next_followup: listAfterFollowup?.summary ?? null,
+      list_after_next_delayed_followup: listAfterDelayedFollowup?.summary ?? null,
     };
   }
 
@@ -173,6 +191,10 @@ async function defaultRunNodeScript(args, options) {
     windowsHide: true,
   });
   return result.stdout;
+}
+
+async function defaultWait(ms) {
+  await new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
 }
 
 function buildSiteListArgs(config) {
