@@ -24,6 +24,9 @@ export async function readMailboxSendConfirmation(config, fetchImpl = fetch) {
 export function summarizeMailboxSendConfirmation(body = {}) {
   const confirmations = Array.isArray(body?.confirmations) ? body.confirmations : [];
   const latest = confirmations[0] ?? null;
+  const latestRecord = latest?.record ?? null;
+  const latestRequest = latestRecord?.confirmation_request ?? null;
+  const latestGraphResponse = latest?.graph_response ?? latestRecord?.graph_response ?? null;
   return {
     site_id: body?.site_id ?? null,
     confirmation_count: confirmations.length,
@@ -35,17 +38,32 @@ export function summarizeMailboxSendConfirmation(body = {}) {
       ?? latest?.record?.delivery_confirmation_admission
       ?? null,
     mailbox_mutation_admission: body?.mailbox_mutation_admission ?? null,
+    latest_account_ref:
+      latest?.account_ref
+      ?? latestRecord?.account_ref
+      ?? latestRequest?.account_ref
+      ?? null,
+    latest_confirmation_posture:
+      latest?.confirmation_posture
+      ?? latestRecord?.confirmation_posture
+      ?? latestRequest?.confirmation_posture
+      ?? null,
     latest_send_confirmation_id: latest?.send_confirmation_id ?? null,
     latest_message_id:
       latest?.message_id
       ?? latest?.sent_message_ref
-      ?? latest?.record?.sent_message_ref
+      ?? latestRecord?.sent_message_ref
       ?? null,
     latest_subject:
       latest?.subject
       ?? latest?.sent_subject
-      ?? latest?.record?.confirmation_request?.sent_subject
-      ?? latest?.record?.graph_response?.subject
+      ?? latestRequest?.sent_subject
+      ?? latestGraphResponse?.subject
+      ?? null,
+    latest_body_preview:
+      latest?.body_preview
+      ?? latestGraphResponse?.bodyPreview
+      ?? latestGraphResponse?.body?.content
       ?? null,
     latest_recorded_at: latest?.recorded_at ?? latest?.generated_at ?? null,
   };
@@ -63,8 +81,14 @@ export function formatMailboxSendConfirmationReadText(result) {
   if (summary.mailbox_mutation_admission) {
     lines.push(`Mutation Admission: ${summary.mailbox_mutation_admission}`);
   }
+  if (summary.latest_confirmation_posture) {
+    lines.push(`Current Posture: ${summary.latest_confirmation_posture}`);
+  }
   if (summary.latest_send_confirmation_id || summary.latest_message_id || summary.latest_subject) {
-    lines.push(`Latest Confirmation: id=${summary.latest_send_confirmation_id ?? 'none'} message=${summary.latest_message_id ?? 'none'} subject=${summary.latest_subject ?? 'none'}`);
+    lines.push(`Latest Confirmation: id=${summary.latest_send_confirmation_id ?? 'none'} account=${summary.latest_account_ref ?? 'none'} message=${summary.latest_message_id ?? 'none'} subject=${summary.latest_subject ?? 'none'}`);
+  }
+  if (summary.latest_body_preview) {
+    lines.push(`Body Preview: ${summary.latest_body_preview}`);
   }
   if (summary.latest_recorded_at) {
     lines.push(`Latest Recorded: ${summary.latest_recorded_at}`);

@@ -43,6 +43,9 @@ test('summarizeMailboxSendAccepted lifts latest accepted send details', () => {
 
   assert.equal(summary.send_count, 1);
   assert.equal(summary.mailbox_send_authority, 'cloudflare_graph_mailbox_send');
+  assert.equal(summary.latest_account_ref, null);
+  assert.equal(summary.latest_proposal_id, null);
+  assert.equal(summary.latest_send_posture, null);
   assert.equal(summary.latest_send_accepted_id, 'mailbox_send_accepted_alpha');
   assert.equal(summary.latest_message_id, 'message_alpha');
   assert.equal(summary.latest_subject, null);
@@ -88,6 +91,9 @@ test('formatMailboxSendAcceptedReadText prints mailbox send acceptance summary',
       mailbox_send_authority: 'cloudflare_graph_mailbox_send',
       mailbox_send_admission: 'admitted',
       mailbox_mutation_admission: 'not_admitted',
+      latest_account_ref: 'help@example.test',
+      latest_proposal_id: 'mailbox_send_proposal_alpha',
+      latest_send_posture: 'cloudflare_graph_send_accepted_delivery_not_confirmed',
       latest_send_accepted_id: 'mailbox_send_accepted_alpha',
       latest_message_id: 'message_alpha',
       latest_subject: null,
@@ -97,5 +103,6 @@ test('formatMailboxSendAcceptedReadText prints mailbox send acceptance summary',
 
   assert.match(text, /Mailbox Send Accepted: ok/);
   assert.match(text, /Send Acceptance: count=1 authority=cloudflare_graph_mailbox_send admission=admitted/);
-  assert.match(text, /Latest Accepted: id=mailbox_send_accepted_alpha message=message_alpha subject=none/);
+  assert.match(text, /Current Posture: cloudflare_graph_send_accepted_delivery_not_confirmed/);
+  assert.match(text, /Latest Accepted: id=mailbox_send_accepted_alpha proposal=mailbox_send_proposal_alpha account=help@example.test message=message_alpha subject=none/);
 });

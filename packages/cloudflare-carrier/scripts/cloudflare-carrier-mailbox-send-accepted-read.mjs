@@ -32,6 +32,21 @@ export function summarizeMailboxSendAccepted(body = {}) {
     mailbox_send_authority: body?.mailbox_send_authority ?? null,
     mailbox_send_admission: body?.mailbox_send_admission ?? null,
     mailbox_mutation_admission: body?.mailbox_mutation_admission ?? null,
+    latest_account_ref:
+      latest?.account_ref
+      ?? latestRecord?.account_ref
+      ?? latestRequest?.account_ref
+      ?? null,
+    latest_proposal_id:
+      latest?.proposal_id
+      ?? latestRecord?.proposal_id
+      ?? latestRequest?.proposal_id
+      ?? null,
+    latest_send_posture:
+      latest?.send_posture
+      ?? latestRecord?.send_posture
+      ?? latestRequest?.send_posture
+      ?? null,
     latest_send_accepted_id: latest?.send_accepted_id ?? null,
     latest_message_id:
       latest?.message_id ??
@@ -60,8 +75,11 @@ export function formatMailboxSendAcceptedReadText(result) {
   if (summary.mailbox_mutation_admission) {
     lines.push(`Mutation Admission: ${summary.mailbox_mutation_admission}`);
   }
+  if (summary.latest_send_posture) {
+    lines.push(`Current Posture: ${summary.latest_send_posture}`);
+  }
   if (summary.latest_send_accepted_id || summary.latest_message_id || summary.latest_subject) {
-    lines.push(`Latest Accepted: id=${summary.latest_send_accepted_id ?? 'none'} message=${summary.latest_message_id ?? 'none'} subject=${summary.latest_subject ?? 'none'}`);
+    lines.push(`Latest Accepted: id=${summary.latest_send_accepted_id ?? 'none'} proposal=${summary.latest_proposal_id ?? 'none'} account=${summary.latest_account_ref ?? 'none'} message=${summary.latest_message_id ?? 'none'} subject=${summary.latest_subject ?? 'none'}`);
   }
   if (summary.latest_recorded_at) {
     lines.push(`Latest Recorded: ${summary.latest_recorded_at}`);
