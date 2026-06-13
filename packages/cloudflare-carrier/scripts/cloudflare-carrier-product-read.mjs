@@ -235,6 +235,11 @@ export function summarizeProductSurface(operation, body, options = {}) {
     const projectionError = body?.operation_product_projection_error ?? null;
     const recoveryBoundaries = Array.isArray(recoveryPosture?.recovery_boundaries) ? recoveryPosture.recovery_boundaries : [];
     const recoveryGaps = Array.isArray(recoveryPosture?.recovery_gaps) ? recoveryPosture.recovery_gaps : [];
+    const lifecycleNextAction = lifecycle?.next_action ?? body?.operation_product_surface?.next_action ?? null;
+    const workflowNextAction = workflowRoute?.next_action ?? null;
+    const nextAction = lifecycleNextAction && lifecycleNextAction !== 'monitor_operation'
+      ? lifecycleNextAction
+      : (workflowNextAction ?? lifecycleNextAction);
     return {
       operation,
       site_id: body?.operation?.site_id ?? body?.site_id ?? null,
@@ -246,11 +251,11 @@ export function summarizeProductSurface(operation, body, options = {}) {
       latest_status_recorded_at: latestStatusTransition?.recorded_at ?? null,
       phase: lifecycle?.phase ?? null,
       health: lifecycle?.health ?? null,
-      next_action: lifecycle?.next_action ?? body?.operation_product_surface?.next_action ?? null,
+      next_action: nextAction,
       session_count: lifecycle?.session_count ?? body?.operation_product_surface?.session_count ?? 0,
       active_session_id: Array.isArray(body?.sessions) ? body.sessions[0]?.carrier_session_id ?? body.sessions[0]?.session_id ?? null : null,
       task_count: lifecycle?.task_count ?? body?.operation_product_surface?.task_count ?? 0,
-      workflow_next_action: workflowRoute?.next_action ?? null,
+      workflow_next_action: workflowNextAction,
       workflow_reason: workflowRoute?.reason ?? null,
       workflow_focus_kind: workflowRoute?.focus_kind ?? null,
       workflow_focus_ref: workflowRoute?.focus_ref ?? workflowRoute?.target ?? null,

@@ -799,7 +799,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       status_transition_count: 0,
       phase: 'inhabited',
       health: 'ready',
-      next_action: 'monitor_operation',
+      next_action: 'review_site_continuity_reconciliation_execution',
       workflow_next_action: 'review_site_continuity_reconciliation_execution',
       workflow_reason: 'operation_operator_focus_needs_review',
       workflow_focus_kind: null,
@@ -811,6 +811,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       recovery_gap_count: 0,
     },
   });
+  assert.match(operationReadContinuityReviewWithoutKindText, /Next Action: review_site_continuity_reconciliation_execution/);
   assert.match(operationReadContinuityReviewWithoutKindText, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:2026-06-13T21:59:01.308Z:completed --operator-session-file <operator-session-file>/);
 
   const operationReadLifecycleSessionText = formatProductSurfaceText({
@@ -1838,6 +1839,16 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     projection_error_code: null,
     projection_error_message: null,
   });
+
+  assert.equal(summarizeProductSurface('operation.read', {
+    operation: { site_id: 'site_fixture', operation_id: 'operation_control', status: 'active' },
+    operation_lifecycle_status: { phase: 'inhabited', health: 'ready', next_action: 'monitor_operation', session_count: 1, task_count: 0 },
+    operation_workflow_route: {
+      next_action: 'review_site_continuity_reconciliation_execution',
+      reason: 'operation_operator_focus_needs_review',
+      focus_ref: 'site-continuity-reconciliation-execution:site_fixture:2026-06-13T21:59:01.308Z:completed',
+    },
+  }).next_action, 'review_site_continuity_reconciliation_execution');
 });
 test('formatProductSurfaceText surfaces site scope and site operation focus commands', () => {
   const siteReadScopeText = formatProductSurfaceText({
