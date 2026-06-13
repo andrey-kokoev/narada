@@ -1070,6 +1070,27 @@ test('formatProductSurfaceText emits provider liveness operator commands for ope
   });
   assert.match(localIngressText, /Local Ingress Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:provider-liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
+  const localIngressRestoreText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_local_ingress_provider',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'local_ingress_provider_liveness_missing',
+      workflow_next_action: 'restore_windows_local_ingress_executor',
+      workflow_reason: 'local_ingress_operation_posture_requires_windows_executor',
+      session_count: 1,
+      task_count: 0,
+    },
+  });
+  assert.match(localIngressRestoreText, /Local Ingress Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:provider-liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+
   const localIngressRequestText = formatProductSurfaceText({
     operation: 'operation.read',
     worker_url: 'https://carrier.example.test',
@@ -1132,6 +1153,27 @@ test('formatProductSurfaceText emits provider liveness operator commands for ope
     },
   });
   assert.match(repositoryPublicationText, /Repository Publication Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+
+  const repositoryPublicationRestoreText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_repository_publication_provider',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'repository_publication_provider_liveness_missing',
+      workflow_next_action: 'restore_windows_repository_publication_provider',
+      workflow_reason: 'repository_publication_operation_posture_requires_windows_provider',
+      session_count: 1,
+      task_count: 0,
+    },
+  });
+  assert.match(repositoryPublicationRestoreText, /Repository Publication Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 });
 
 test('formatProductSurfaceText emits mailbox send review operator commands for operation review routes', () => {
