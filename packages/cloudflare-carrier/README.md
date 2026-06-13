@@ -568,6 +568,14 @@ pnpm --filter @narada2/cloudflare-carrier product:repository-publication:readine
 
 `product:repository-publication:readiness` calls `repository_publication.cloudflare_execution.readiness` through authenticated `POST /api/carrier`. It reads Cloudflare-held GitHub credential posture, allowed repository/branch policy, and requested repository/branch eligibility without mutating GitHub. The command fixes executor authority at `cloudflare_github_repository_publication_executor`, admission authority at `cloudflare_repository_publication_admission_controller`, keeps Cloudflare Git push at `not_admitted`, and reports whether direct Cloudflare repository mutation would be available if execution were later requested. The `:text` alias prints the Worker URL, auth source, site, readiness status, credential mode, requested repository/branch posture, missing configuration, and authority partition without echoing bearer tokens, operator-session cookies, or secret values.
 
+Read the current authority-transfer posture as a first-class product surface instead of relying on the older smoke-only wrapper:
+
+```bash
+pnpm --filter @narada2/cloudflare-carrier product:authority-transfer:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --repository-ref <github:owner/repo> --branch-ref <branch-ref> --operator-session-file cloudflare-operator-session.json
+```
+
+`product:authority-transfer` composes authenticated `operation.read` with `repository_publication.cloudflare_execution.readiness`. It reads the current `authority_transfer_posture`, the operation-product slice counts that still matter for transfer completion, and the Cloudflare GitHub publication readiness needed for `verify_full_cloudflare_authority`. The command does not mutate GitHub or Cloudflare state. The `:text` alias prints the Worker URL, auth source, site, operation, overall transfer readiness, remaining Windows-owned domain/authority counts, repository-publication readiness posture, and any incomplete reasons without echoing bearer tokens or operator-session cookies.
+
 Execute an already admitted repository publication directly through the Cloudflare GitHub executor when that lane is intentionally chosen:
 
 ```bash
