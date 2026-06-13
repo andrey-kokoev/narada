@@ -2207,6 +2207,89 @@ test('runOperationNextWorkflowLive prefers direct workflow when operation read h
   assert.equal(invocations.some((call) => call[0].split(/[\\\\/]/).pop() === 'cloudflare-carrier-operation-evidence-read.mjs'), false);
 });
 
+test('runOperationNextWorkflowLive continues continuity into immediate continuity reconciliation focus review', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_live_smoke',
+    expectedListRouteAction: null,
+    expectedOperationId: null,
+    auth: { kind: 'bearer', value: 'token-value', source: 'flag:--token' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        const readCount = invocations.filter((call) => call[0].endsWith('cloudflare-carrier-product-read.mjs')).length;
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              next_operation_id: 'operation_alpha',
+              route_next_action: 'monitor_operations',
+              next_action: 'refresh_site_continuity_loop',
+            },
+          });
+        }
+        if (operation === 'operation.read' && readCount === 2) {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              operation_id: 'operation_alpha',
+              workflow_next_action: 'refresh_site_continuity_loop',
+            },
+          });
+        }
+        if (operation === 'operation.read' && readCount === 3) {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              operation_id: 'operation_alpha',
+              workflow_next_action: 'review_site_continuity_reconciliation_execution',
+              workflow_focus_ref: 'site-continuity-reconciliation-execution:site_live_smoke:2026-06-13T09:46:36.845Z:completed',
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            operation_id: 'operation_alpha',
+            workflow_next_action: 'monitor_operation',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-operation-continuity-workflow-live.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.operation_continuity_workflow_live.v1',
+          status: 'ok',
+          operation_id: 'operation_alpha',
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-operation-focus-review.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.operation_focus_review.v1',
+          status: 'ok',
+          operation_id: 'operation_alpha',
+          focus_kind: 'site_continuity_reconciliation_execution',
+          focus_ref: 'site-continuity-reconciliation-execution:site_live_smoke:2026-06-13T09:46:36.845Z:completed',
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'focus_review');
+  assert.equal(result.delegated_route_action, 'review_site_continuity_reconciliation_execution');
+  assert.equal(result.continuity_result.schema, 'narada.cloudflare_carrier.operation_continuity_workflow_live.v1');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.operation_focus_review.v1');
+  assert.equal(result.read_after_next.workflow_next_action, 'monitor_operation');
+  assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-operation-continuity-workflow-live.mjs');
+  assert.equal(invocations[4][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-operation-focus-review.mjs');
+  assert.equal(invocations[4][invocations[4].indexOf('--focus-kind') + 1], 'site_continuity_reconciliation_execution');
+});
+
 test('runOperationNextWorkflowLive rejects unsupported downstream route actions', async () => {
   await assert.rejects(
     async () => {

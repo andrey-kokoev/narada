@@ -417,6 +417,34 @@ export async function runOperationNextWorkflowLive(
   );
   assert.equal(readAfter.schema, 'narada.cloudflare_carrier.product_read.v1');
 
+  const followOnRouteAction = readAfter.summary.workflow_next_action ?? null;
+  const followOnWorkflow = ROUTE_TO_WORKFLOW.get(followOnRouteAction);
+  if (workflow.name === 'continuity' && followOnWorkflow?.name === 'focus_review') {
+    const followOnWorkflowResult = parseJsonStdout(
+      await runNodeScript(buildWorkflowArgs(config, followOnWorkflow, selectedOperationId, readAfter.summary ?? {}), { cwd: packageRoot }),
+      `operation_next_workflow_${followOnWorkflow.name}`,
+    );
+    const readAfterFollowOn = parseJsonStdout(
+      await runNodeScript(buildOperationReadArgs(config, selectedOperationId), { cwd: packageRoot }),
+      'operation_read_after_follow_on_workflow',
+    );
+    assert.equal(readAfterFollowOn.schema, 'narada.cloudflare_carrier.product_read.v1');
+    return {
+      schema: 'narada.cloudflare_carrier.operation_next_workflow_live.v1',
+      status: 'ok',
+      worker_url: config.workerUrl,
+      site_id: config.siteId,
+      selected_operation_id: selectedOperationId,
+      list_before_next: listBefore.summary,
+      read_before_next: readBefore.summary,
+      delegated_workflow: followOnWorkflow.name,
+      delegated_route_action: followOnRouteAction,
+      continuity_result: workflowResult,
+      delegated_result: followOnWorkflowResult,
+      read_after_next: readAfterFollowOn.summary,
+    };
+  }
+
   return {
     schema: 'narada.cloudflare_carrier.operation_next_workflow_live.v1',
     status: 'ok',
