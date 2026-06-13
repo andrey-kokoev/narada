@@ -4,11 +4,31 @@ import { fileURLToPath } from 'node:url';
 import { parseProductReadArgs, readProductSurface } from './cloudflare-carrier-product-read.mjs';
 
 export function parseSiteFileMaterializationReadArgs(argv = [], env = process.env) {
-  return parseProductReadArgs(['--operation', 'site_file_materialization.list', ...argv], env);
+  const args = [...argv];
+  const parsed = parseProductReadArgs(['--operation', 'site_file_materialization.list', ...argv], env);
+  const focusMaterializationId = normalizeOptionalString(
+    option(args, '--site-file-materialization-id') ?? env.CLOUDFLARE_CARRIER_SITE_FILE_MATERIALIZATION_ID ?? null,
+  );
+  const materializationLimit = parseOptionalInteger(
+    option(args, '--materialization-limit') ?? env.CLOUDFLARE_CARRIER_SITE_FILE_MATERIALIZATION_LIMIT ?? null,
+    'materialization-limit',
+  ) ?? (focusMaterializationId ? 200 : 20);
+  return {
+    ...parsed,
+    focusMaterializationId,
+    params: {
+      ...parsed.params,
+      site_file_materialization_limit: materializationLimit,
+    },
+  };
 }
 
 export async function readSiteFileMaterialization(config, fetchImpl = fetch) {
   const product = await readProductSurface(config, fetchImpl);
+  const materializations = Array.isArray(product.response?.materializations) ? product.response.materializations : [];
+  if (config.focusMaterializationId && !materializations.some((entry) => entry?.materialization_id === config.focusMaterializationId)) {
+    throw new Error(`site_file_materialization_read_focus_not_found:${config.focusMaterializationId}`);
+  }
   return {
     schema: 'narada.cloudflare_carrier.site_file_materialization_read.v1',
     status: 'ok',
@@ -16,17 +36,24 @@ export async function readSiteFileMaterialization(config, fetchImpl = fetch) {
     auth_source: product.auth_source,
     operation: product.operation,
     params: product.params,
-    summary: summarizeSiteFileMaterialization(product.response),
+    summary: summarizeSiteFileMaterialization(product.response, { focusMaterializationId: config.focusMaterializationId }),
     response: product.response,
   };
 }
 
-export function summarizeSiteFileMaterialization(body = {}) {
+export function summarizeSiteFileMaterialization(body = {}, options = {}) {
   const materializations = Array.isArray(body?.materializations) ? body.materializations : [];
-  const latest = materializations[0] ?? null;
+  const focusMaterializationId = options.focusMaterializationId ?? null;
+  const exactFocusedMaterializations = focusMaterializationId
+    ? materializations.filter((entry) => entry?.materialization_id === focusMaterializationId)
+    : [];
+  const focusedMaterializations = exactFocusedMaterializations.length > 0 ? exactFocusedMaterializations : materializations;
+  const latest = focusedMaterializations[0] ?? null;
   return {
     site_id: body?.site_id ?? null,
-    materialization_count: materializations.length,
+    materialization_count: focusedMaterializations.length,
+    focused_materialization_id: latest?.materialization_id ?? focusMaterializationId ?? null,
+    focused_read: exactFocusedMaterializations.length > 0,
     site_file_materialization_authority: body?.site_file_materialization_authority ?? null,
     cloudflare_site_file_materialization_admission: body?.cloudflare_site_file_materialization_admission ?? null,
     filesystem_executor_authority: body?.filesystem_executor_authority ?? null,
@@ -44,12 +71,15 @@ export function summarizeSiteFileMaterialization(body = {}) {
 
 export function formatSiteFileMaterializationReadText(result) {
   const summary = result?.summary ?? {};
+  const materializationLead = summary.focused_read
+    ? `Materializations: count=${summary.materialization_count ?? 0} focused=${summary.focused_materialization_id ?? 'none'} authority=${summary.site_file_materialization_authority ?? 'unknown'} admission=${summary.cloudflare_site_file_materialization_admission ?? 'unknown'}`
+    : `Materializations: count=${summary.materialization_count ?? 0} authority=${summary.site_file_materialization_authority ?? 'unknown'} admission=${summary.cloudflare_site_file_materialization_admission ?? 'unknown'}`;
   const lines = [
     'Site File Materialization Review: ok',
     `Worker: ${result?.worker_url ?? 'unknown'}`,
     `Auth: ${result?.auth_source ?? 'unknown'}`,
     `Site: ${summary.site_id ?? 'unknown'}`,
-    `Materializations: count=${summary.materialization_count ?? 0} authority=${summary.site_file_materialization_authority ?? 'unknown'} admission=${summary.cloudflare_site_file_materialization_admission ?? 'unknown'}`,
+    materializationLead,
   ];
   if (summary.filesystem_executor_authority) lines.push(`Filesystem Executor: ${summary.filesystem_executor_authority}`);
   if (summary.windows_filesystem_mutation_admission || summary.repository_publication_admission) {
@@ -58,7 +88,7 @@ export function formatSiteFileMaterializationReadText(result) {
   if (summary.authority_partition) lines.push(`Authority Partition: ${summary.authority_partition}`);
   if (summary.latest_materialization_id || summary.latest_file_path) {
     lines.push(
-      `Latest Materialization: ${summary.latest_materialization_id ?? 'none'}`
+      `${summary.focused_read ? 'Focused' : 'Latest'} Materialization: ${summary.latest_materialization_id ?? 'none'}`
       + `${summary.latest_proposal_id ? ` proposal=${summary.latest_proposal_id}` : ''}`
       + `${summary.latest_file_path ? ` file=${summary.latest_file_path}` : ''}`
       + `${summary.latest_write_effect ? ` effect=${summary.latest_write_effect}` : ''}`
@@ -84,4 +114,22 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
     process.stderr.write(JSON.stringify({ ok: false, code: error?.message ?? String(error), response: error?.response }, null, 2) + '\n');
     process.exit(1);
   }
+}
+
+function option(args, name) {
+  const index = args.indexOf(name);
+  return index >= 0 ? args[index + 1] : null;
+}
+
+function parseOptionalInteger(value, label) {
+  if (value == null || value === '') return null;
+  const parsed = Number.parseInt(String(value), 10);
+  if (!Number.isFinite(parsed)) throw new Error(`site_file_materialization_read_invalid_${label}:${value}`);
+  return parsed;
+}
+
+function normalizeOptionalString(value) {
+  if (value == null) return null;
+  const text = String(value).trim();
+  return text.length > 0 ? text : null;
 }
