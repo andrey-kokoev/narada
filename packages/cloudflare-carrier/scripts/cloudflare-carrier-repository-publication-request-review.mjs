@@ -282,9 +282,15 @@ export function formatRepositoryPublicationRequestReviewText(result) {
   }
   if (summary.linked_admission_id || summary.linked_admission_action) {
     lines.push(`Linked Admission: ${summary.linked_admission_id ?? 'none'}${summary.linked_admission_action ? ` action=${summary.linked_admission_action}` : ''}${summary.linked_admission_reason ? ` reason=${summary.linked_admission_reason}` : ''}`);
+    if (summary.linked_admission_id) {
+      lines.push(`Admission Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:admission:list:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --repository-publication-admission-id ${summary.linked_admission_id} --operator-session-file <operator-session-file>`);
+    }
   }
   if (summary.linked_execution_id || summary.linked_execution_status) {
     lines.push(`Linked Execution: ${summary.linked_execution_id ?? 'none'} status=${summary.linked_execution_status ?? 'unknown'}`);
+    if (summary.linked_execution_id) {
+      lines.push(`Execution Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --repository-publication-execution-id ${summary.linked_execution_id} --operator-session-file <operator-session-file>`);
+    }
   }
   if (summary.current_publication_execution_id || summary.current_execution_status) {
     lines.push(`Current Execution: ${summary.current_publication_execution_id ?? 'none'} status=${summary.current_execution_status ?? 'unknown'} source=${summary.current_execution_source ?? 'unknown'}${summary.current_execution_reason ? ` reason=${summary.current_execution_reason}` : ''}`);
@@ -298,6 +304,9 @@ export function formatRepositoryPublicationRequestReviewText(result) {
     || ((summary.linked_admission_id || summary.linked_execution_id) && summary.focused_repository_publication_request_id)
   ) {
     lines.push(`Linked Evidence: ${summary.linked_evidence_id ?? 'none'} status=${summary.linked_evidence_status ?? 'unknown'}`);
+    if (summary.linked_evidence_id) {
+      lines.push(`Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:evidence:list:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --repository-publication-evidence-id ${summary.linked_evidence_id} --operator-session-file <operator-session-file>`);
+    }
   }
   if (summary.focused_recorded_at || summary.focused_recorded_by_principal_id) {
     lines.push(`Recorded: ${summary.focused_recorded_at ?? 'unknown'} by ${summary.focused_recorded_by_principal_id ?? 'unknown'}`);

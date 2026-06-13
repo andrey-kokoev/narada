@@ -383,6 +383,9 @@ test('formatRepositoryPublicationRequestReviewText surfaces review ack command',
   assert.match(text, /Requested Posture: cloudflare_queued_repository_publication_request_windows_must_admit_publish_and_return_evidence/);
   assert.match(text, /Current Admissions: request=admitted_by_cloudflare_repository_publication cloudflare_git_push=not_admitted direct_cloudflare_repo_mutation=admitted_by_cloudflare_github_repository_publication/);
   assert.match(text, /Current Execution: execution_1 status=completed source=cloudflare_execution/);
+  assert.match(text, /Admission Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:admission:list:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --repository-publication-admission-id admission_1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Execution Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --repository-publication-execution-id execution_1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:evidence:list:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --repository-publication-evidence-id evidence_1 --operator-session-file <operator-session-file>/);
   assert.match(text, /Focused Review: repository_publication_request:repository_publication_request_live_1 status=acknowledged/);
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
 });
