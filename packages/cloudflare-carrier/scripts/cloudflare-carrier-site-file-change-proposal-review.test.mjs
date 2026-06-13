@@ -236,6 +236,79 @@ test('readSiteFileChangeProposalReview supports direct focused review without op
   assert.equal(result.summary.operation_id, 'operation_site_read');
 });
 
+test('readSiteFileChangeProposalReview accepts direct live payload keys for proposals and materializations', async () => {
+  const fetchImpl = async (_url, init) => {
+    const body = JSON.parse(init.body);
+    if (body.operation === 'site_file_change_proposal.list') {
+      return {
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            ok: true,
+            site_id: 'site_narada_cloudflare',
+            proposals: [
+              {
+                proposal_id: 'site_file_change_proposal_live_1',
+                operation_id: 'operation_narada_cloudflare_control',
+                proposal_ref: 'proposal:site-file-change-live:1',
+                proposal_summary: 'live Cloudflare site file change proposal',
+                proposal_posture: 'proposal_only_no_filesystem_write',
+                file_count: 1,
+                record: {
+                  proposal: {
+                    files: [{ file_path: 'docs/architecture/cloudflare-carrier/target.md', change_kind: 'update' }],
+                  },
+                },
+                recorded_at: '2026-06-11T23:20:11.736Z',
+              },
+            ],
+          });
+        },
+      };
+    }
+    if (body.operation === 'site_file_materialization.list') {
+      return {
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            ok: true,
+            site_id: 'site_narada_cloudflare',
+            materializations: [
+              {
+                materialization_id: 'site_file_materialization_live_1',
+                proposal_id: 'site_file_change_proposal_live_1',
+                file_path: 'docs/architecture/cloudflare-carrier/target.md',
+                write_effect: 'cloudflare_site_file_materialization_record',
+                materialization_posture: 'cloudflare_site_file_store_only_no_windows_filesystem_write_no_repository_publication',
+              },
+            ],
+          });
+        },
+      };
+    }
+    throw new Error(`unexpected_operation:${body.operation}`);
+  };
+
+  const result = await readSiteFileChangeProposalReview({
+    workerUrl: 'https://carrier.example',
+    operation: 'site_file_change_proposal.list',
+    requestId: 'request_direct_shape',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    params: {
+      site_id: 'site_narada_cloudflare',
+      site_file_change_proposal_limit: 200,
+      site_file_materialization_limit: 200,
+    },
+    format: 'json',
+    focusRef: 'site_file_change_proposal_live_1',
+  }, fetchImpl);
+
+  assert.equal(result.summary.proposal_count, 1);
+  assert.equal(result.summary.focused_proposal_id, 'site_file_change_proposal_live_1');
+  assert.equal(result.summary.linked_materialization_count, 1);
+  assert.equal(result.summary.linked_materialization_id, 'site_file_materialization_live_1');
+});
+
 test('readSiteFileChangeProposalReview fails explicitly when focused proposal is missing', async () => {
   const fetchImpl = async (_url, init) => {
     const body = JSON.parse(init.body);
@@ -458,6 +531,7 @@ test('formatSiteFileChangeProposalReviewText surfaces review ack command', () =>
 
   assert.match(text, /Site File Change Proposal Review: ok/);
   assert.match(text, /Workflow Route: action=review_site_file_change_proposal/);
+  assert.match(text, /Linked Materialization: site_file_materialization_live_1 posture=cloudflare_site_file_store_only_no_windows_filesystem_write_no_repository_publication effect=cloudflare_site_file_materialization_record/);
   assert.match(text, /Current Posture: cloudflare_site_file_store_only_no_windows_filesystem_write_no_repository_publication/);
   assert.match(text, /Requested Posture: proposal_only_no_filesystem_write/);
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);

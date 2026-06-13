@@ -89,8 +89,16 @@ export async function readSiteFileChangeProposalReview(config, fetchImpl = fetch
 
 export function summarizeSiteFileChangeProposalReview(operationBody = {}, proposalsBody = {}, materializationsBody = {}, options = {}) {
   const operationSummary = options.operationSummary ?? {};
-  const proposals = Array.isArray(proposalsBody?.site_file_change_proposals) ? proposalsBody.site_file_change_proposals : [];
-  const materializations = Array.isArray(materializationsBody?.site_file_materializations) ? materializationsBody.site_file_materializations : [];
+  const proposals = Array.isArray(proposalsBody?.site_file_change_proposals)
+    ? proposalsBody.site_file_change_proposals
+    : Array.isArray(proposalsBody?.proposals)
+      ? proposalsBody.proposals
+      : [];
+  const materializations = Array.isArray(materializationsBody?.site_file_materializations)
+    ? materializationsBody.site_file_materializations
+    : Array.isArray(materializationsBody?.materializations)
+      ? materializationsBody.materializations
+      : [];
   const focusReviews = Array.isArray(operationBody?.operation_focus_reviews) ? operationBody.operation_focus_reviews : [];
   const explicitFocusRef = options.focusRef ?? null;
   const workflowFocusRef = operationSummary.workflow_focus_ref ?? null;
@@ -176,6 +184,7 @@ export function summarizeSiteFileChangeProposalReview(operationBody = {}, propos
 
 export function formatSiteFileChangeProposalReviewText(result) {
   const summary = result?.summary ?? {};
+  const materializationLabel = summary.focused_proposal_id ? 'Linked Materialization' : 'Latest Materialization';
   const lines = [
     'Site File Change Proposal Review: ok',
     `Worker: ${result?.worker_url ?? 'unknown'}`,
@@ -215,7 +224,7 @@ export function formatSiteFileChangeProposalReviewText(result) {
   lines.push(`Linked Materializations: ${summary.linked_materialization_count ?? 0}`);
   if (summary.linked_materialization_id || summary.linked_materialization_posture) {
     lines.push(
-      `Latest Materialization: ${summary.linked_materialization_id ?? 'none'}`
+      `${materializationLabel}: ${summary.linked_materialization_id ?? 'none'}`
       + `${summary.linked_materialization_posture ? ` posture=${summary.linked_materialization_posture}` : ''}`
       + `${summary.linked_materialization_effect ? ` effect=${summary.linked_materialization_effect}` : ''}`,
     );
