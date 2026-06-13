@@ -51,6 +51,7 @@ const ROUTE_TO_WORKFLOW = new Map([
   ['read_operation_scope', { name: 'operation_scope', script: operationScopeReadScript, flag: null }],
   ['review_site_continuity_reconciliation_execution', { name: 'focus_review', script: focusReviewScript, flag: null }],
   ['review_carrier_evidence_replay', { name: 'evidence', script: evidenceReadScript, flag: null }],
+  ['focus_evidence', { name: 'evidence', script: evidenceReadScript, flag: null }],
   ['read_operation_evidence', { name: 'evidence', script: evidenceReadScript, flag: null }],
   ['review_outlook_draft_create_evidence', { name: 'mailbox_outlook_draft', script: mailboxOutlookDraftReadScript, flag: null }],
   ['review_mailbox_outlook_draft_create', { name: 'mailbox_outlook_draft', script: mailboxOutlookDraftReadScript, flag: null }],

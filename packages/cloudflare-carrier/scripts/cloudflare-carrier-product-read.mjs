@@ -339,7 +339,11 @@ export function formatProductSurfaceText(result) {
     if (summary.next_operation_id) lines.push(`Next Operation Status: ${summary.next_operation_status ?? 'unknown'}`);
     if (summary.next_operation_id) {
       lines.push(`Focused Read: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.next_operation_id} --operator-session-file <operator-session-file>`);
-      if (summary.next_action === 'inspect_operation_evidence' || summary.next_action === 'review_carrier_evidence_replay') {
+      if (
+        summary.next_action === 'inspect_operation_evidence'
+        || summary.next_action === 'review_carrier_evidence_replay'
+        || summary.next_action === 'focus_evidence'
+      ) {
         lines.push(`Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:operation:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.next_operation_id} --operator-session-file <operator-session-file>`);
       }
     }
@@ -478,6 +482,7 @@ export function formatProductSurfaceText(result) {
       || summary.workflow_next_action === 'focus_session_path_evidence'
       || summary.workflow_next_action === 'focus_session_path_task'
       || summary.workflow_next_action === 'focus_authority_path_evidence'
+      || summary.workflow_next_action === 'focus_evidence'
       || summary.workflow_next_action === 'focus_open_attention'
       || summary.workflow_next_action === 'monitor_operation_evidence'
     ) {
