@@ -52,12 +52,17 @@ test('runSiteFocusWorkflowLive selects next site from posture and reads it', asy
             site_count: 2,
             next_site_id: 'site_alpha',
             next_health: 'attention',
-            next_action: 'bind_cloudflare_product_next_site_locally',
-            next_reason: 'continuity_direction',
+            next_action: 'focus_next_operation',
+            next_reason: 'operation_posture',
+            next_operation_id: 'operation_alpha',
+            next_operation_next_action: 'refresh_site_continuity_loop',
+            next_operation_reason: 'operation_lifecycle_continuity_loop_stale',
+            next_operation_focus_kind: null,
+            next_operation_focus_ref: 'site_alpha',
             route_next_action: 'focus_next_site',
             route_target: 'site_alpha',
-            route_status: 'ready',
-            route_reason: 'continuity_direction',
+            route_status: 'needs_attention',
+            route_reason: 'operation_posture',
           },
         });
       }
@@ -67,7 +72,7 @@ test('runSiteFocusWorkflowLive selects next site from posture and reads it', asy
           operation: 'site.read',
           site_id: 'site_alpha',
           health: 'attention',
-          next_action: 'bind_cloudflare_product_next_site_locally',
+          next_action: 'focus_next_operation',
         },
       });
     },
@@ -76,6 +81,10 @@ test('runSiteFocusWorkflowLive selects next site from posture and reads it', asy
   assert.equal(result.schema, 'narada.cloudflare_carrier.site_focus_workflow_live.v1');
   assert.equal(result.status, 'ok');
   assert.equal(result.selected_site_id, 'site_alpha');
+  assert.equal(result.selected_site_action, 'focus_next_operation');
+  assert.equal(result.selected_operation_id, 'operation_alpha');
+  assert.equal(result.selected_operation_action, 'refresh_site_continuity_loop');
+  assert.equal(result.selected_operation_reason, 'operation_lifecycle_continuity_loop_stale');
   assert.equal(result.list_before_focus.route_next_action, 'focus_next_site');
   assert.equal(result.read_focused.site_id, 'site_alpha');
   assert.equal(calls.length, 2);
