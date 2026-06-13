@@ -329,7 +329,7 @@ export function formatProductSurfaceText(result) {
     if (summary.next_action === 'read_site_scope' || summary.next_action === 'read_membership_site') {
       lines.push(`Site Scope: pnpm --filter @narada2/cloudflare-carrier product:site:scope:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
     }
-    if (summary.next_action === 'focus_site_operation') {
+    if (summary.next_action === 'focus_site_operation' || summary.next_action === 'focus_next_operation') {
       lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file> --execute-operation-next`);
     }
     if (
