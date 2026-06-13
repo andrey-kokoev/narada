@@ -161,22 +161,30 @@ function validateOperationListSummary(siteId, summary = {}, response = {}, issue
     }));
   }
   if (routeAction === 'monitor_operations') {
-    const focusedReviewWithoutRefocus = focusedWorkflowAction === 'review_site_continuity_reconciliation_execution';
-    const expectedNextAction = focusedReviewWithoutRefocus
-      ? 'inspect_operation_evidence'
-      : 'monitor_operations';
+    const focusedWorkflowWithoutRefocus = focusedWorkflowAction && focusedWorkflowAction !== 'monitor_operation';
+    const expectedNextAction = focusedWorkflowWithoutRefocus ? focusedWorkflowAction : 'monitor_operations';
     if (summary.next_action !== expectedNextAction) {
       issues.push(issue(`operation.list:${siteId}`, 'operation_list_next_action_mismatch', {
         expected: expectedNextAction,
         actual: summary.next_action ?? null,
       }));
     }
-    if ((summary.health_counts?.needs_attention ?? 0) !== 0) {
+    if (!focusedWorkflowWithoutRefocus && (summary.health_counts?.needs_attention ?? 0) !== 0) {
       issues.push(issue(`operation.list:${siteId}`, 'operation_list_needs_attention_count_nonzero', {
         actual: summary.health_counts?.needs_attention ?? 0,
       }));
     }
-    if (!focusedReviewWithoutRefocus && focusedWorkflowAction !== 'monitor_operation') {
+    if (focusedWorkflowWithoutRefocus && (summary.health_counts?.needs_attention ?? 0) === 0) {
+      issues.push(issue(`operation.list:${siteId}`, 'operation_list_focused_attention_hidden_in_health_counts', {
+        actual: summary.health_counts?.needs_attention ?? 0,
+      }));
+    }
+    if (focusedWorkflowWithoutRefocus && summary.next_status === 'ready') {
+      issues.push(issue(`operation.list:${siteId}`, 'operation_list_focused_attention_hidden_in_next_status', {
+        actual: summary.next_status ?? null,
+      }));
+    }
+    if (!focusedWorkflowWithoutRefocus && focusedWorkflowAction !== 'monitor_operation') {
       issues.push(issue(`operation.list:${siteId}`, 'operation_list_focused_workflow_not_monitoring', {
         actual: focusedWorkflowAction,
       }));

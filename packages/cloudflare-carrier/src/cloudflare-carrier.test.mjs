@@ -19,6 +19,7 @@ import worker, {
   classifyCloudflareToolEffectAdmission,
   CloudflareCarrierDurableObject,
   createCloudflareToolEffectAdapter,
+  normalizeCloudflareOperationPostureOverview,
   selectCloudflareFocusedOperation,
   shouldKeepFocusedOperationProjection,
   shouldPromoteOperationOperatorFocus,
@@ -8827,6 +8828,42 @@ test('shouldPromoteOperationOperatorFocus suppresses historical focus review on 
     ),
     false,
   );
+});
+
+test('normalizeCloudflareOperationPostureOverview surfaces focused workflow when route stays on the active operation', () => {
+  const normalized = normalizeCloudflareOperationPostureOverview(
+    {
+      schema: 'narada.cloudflare_operation_posture_overview.v1',
+      operation_count: 3,
+      health_counts: { ready: 3, needs_attention: 0 },
+      action_counts: { inspect_operation_evidence: 1, use_focused_operation: 2 },
+      reason_counts: { evidence_review: 1, use_focused_operation: 2 },
+      command_state_counts: { evidence_ready: 3 },
+      active_operation_id: 'operation_control',
+      next_operation_id: 'operation_control',
+      next_status: 'ready',
+      next_action: 'inspect_operation_evidence',
+      next_reason: 'evidence_review',
+    },
+    {
+      next_action: 'monitor_operations',
+      reason: 'all_operations_monitoring',
+    },
+    {
+      lifecycle_status: { health: 'ready' },
+      workflow_route: {
+        status: 'needs_attention',
+        next_action: 'refresh_site_continuity_loop',
+        reason: 'operation_lifecycle_continuity_loop_stale',
+      },
+    },
+    3,
+  );
+
+  assert.equal(normalized.next_status, 'needs_attention');
+  assert.equal(normalized.next_action, 'refresh_site_continuity_loop');
+  assert.equal(normalized.next_reason, 'operation_lifecycle_continuity_loop_stale');
+  assert.deepEqual(normalized.health_counts, { ready: 2, needs_attention: 1 });
 });
 
 test('worker site.read and site.list surface operation attention from a sibling operation', async () => {
