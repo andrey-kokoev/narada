@@ -31,6 +31,7 @@ const CHILD_STDIO_MAX_BUFFER = 64 * 1024 * 1024;
 
 const ROUTE_TO_WORKFLOW = new Map([
   ['review_recovery_posture', { name: 'operation_recovery', script: recoveryReadScript, flag: null }],
+  ['review_site_continuity_reconciliation_execution', { name: 'focus_review', script: focusReviewScript, flag: null }],
   ['read_operation_evidence', { name: 'evidence', script: evidenceReadScript, flag: null }],
   ['review_mailbox_draft_reply_proposal', { name: 'mailbox_draft_reply_proposal', script: mailboxDraftReplyProposalReadScript, flag: null }],
   ['review_repository_publication_request', { name: 'repository_publication_request', script: repositoryPublicationRequestReviewScript, flag: null }],
@@ -431,6 +432,26 @@ function buildWorkflowArgs(config, workflow, operationId, readSummary = {}) {
       : '';
     if (localResidentSessionRef) args.push('--local-resident-session-ref', localResidentSessionRef);
   }
+  if (workflow.name === 'focus_review') {
+    const focusKind = typeof readSummary.workflow_focus_kind === 'string' && readSummary.workflow_focus_kind.trim()
+      ? readSummary.workflow_focus_kind.trim()
+      : typeof readSummary.reviewable_focus_kind === 'string' && readSummary.reviewable_focus_kind.trim()
+        ? readSummary.reviewable_focus_kind.trim()
+        : inferFocusKindFromRef(
+          typeof readSummary.workflow_focus_ref === 'string' && readSummary.workflow_focus_ref.trim()
+            ? readSummary.workflow_focus_ref.trim()
+            : typeof readSummary.reviewable_focus_ref === 'string' && readSummary.reviewable_focus_ref.trim()
+              ? readSummary.reviewable_focus_ref.trim()
+              : '',
+        );
+    const focusRef = typeof readSummary.workflow_focus_ref === 'string' && readSummary.workflow_focus_ref.trim()
+      ? readSummary.workflow_focus_ref.trim()
+      : typeof readSummary.reviewable_focus_ref === 'string' && readSummary.reviewable_focus_ref.trim()
+        ? readSummary.reviewable_focus_ref.trim()
+        : '';
+    if (focusKind) args.push('--focus-kind', focusKind);
+    if (focusRef) args.push('--focus-ref', focusRef);
+  }
   if (workflow.flag) args.push(workflow.flag);
   appendAuthOptions(args, config);
   return args;
@@ -459,16 +480,31 @@ function buildRecoveryArgs(config, operationId) {
 }
 
 function buildFocusReviewArgs(config, operationId, evidenceSummary = {}) {
+  const focusRef = evidenceSummary.reviewable_focus_ref;
+  const focusKind = evidenceSummary.reviewable_focus_kind
+    || inferFocusKindFromRef(focusRef);
   const args = [
     focusReviewScript,
     '--url', config.workerUrl,
     '--site', config.siteId,
     '--operation-id', operationId,
-    '--focus-kind', evidenceSummary.reviewable_focus_kind,
-    '--focus-ref', evidenceSummary.reviewable_focus_ref,
+    '--focus-kind', focusKind,
+    '--focus-ref', focusRef,
   ];
   appendAuthOptions(args, config);
   return args;
+}
+
+function inferFocusKindFromRef(focusRef) {
+  const value = typeof focusRef === 'string' ? focusRef.trim() : '';
+  if (!value) return '';
+  if (value.startsWith('site-continuity-reconciliation-execution:')) {
+    return 'site_continuity_reconciliation_execution';
+  }
+  if (value.startsWith('resident_dispatch_windows_fallback_evidence_')) {
+    return 'resident_dispatch_windows_fallback_evidence';
+  }
+  return '';
 }
 
 function appendAuthOptions(args, config) {

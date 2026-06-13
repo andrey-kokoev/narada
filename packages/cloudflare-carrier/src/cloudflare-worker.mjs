@@ -2289,7 +2289,7 @@ function summarizeCloudflareOperationWorkflowRoute({
     }
     return { action: 'monitor_operation', target: operationId, reason: 'operation_ready' };
   })();
-  const routedNext = operatorFocus
+  const routedNext = operatorFocus && next.action === 'monitor_operation'
     ? {
         action: operatorFocus.action || 'review_operation_operator_focus',
         target: operatorFocus.focus_ref || operatorFocus.source_ref || operatorFocus.activity_id || operationId,
@@ -2355,6 +2355,7 @@ function summarizeCloudflareOperationOperatorFocus(operationActivityTimeline = n
     ['local_ingress_request', 'review_local_ingress_request'],
     ['repository_publication_request', 'review_repository_publication_request'],
     ['site_file_change_proposal', 'review_site_file_change_proposal'],
+    ['site_continuity_reconciliation_execution', 'review_site_continuity_reconciliation_execution'],
     ['resident_dispatch_windows_fallback_evidence', 'review_windows_fallback_resident_dispatch_evidence'],
   ];
   for (const [activityKind, action] of priorities) {

@@ -238,6 +238,145 @@ test('runOperationNextWorkflowLive delegates inspect_operation_evidence into foc
   assert.equal(invocations[3][0].split(/[\\/]/).pop(), 'cloudflare-carrier-operation-focus-review.mjs');
 });
 
+test('runOperationNextWorkflowLive delegates continuity reconciliation review route into focus review', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_narada_cloudflare',
+    expectedListRouteAction: 'monitor_operations',
+    expectedOperationId: 'operation_control',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        const readCount = invocations.filter((call) => call[0].endsWith('cloudflare-carrier-product-read.mjs')).length;
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              next_operation_id: 'operation_control',
+              route_next_action: 'monitor_operations',
+            },
+          });
+        }
+        if (operation === 'operation.read' && readCount === 2) {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              operation_id: 'operation_control',
+              workflow_next_action: 'review_site_continuity_reconciliation_execution',
+              workflow_focus_kind: 'site_continuity_reconciliation_execution',
+              workflow_focus_ref: 'reconciliation_execution_2',
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            operation_id: 'operation_control',
+            workflow_next_action: 'monitor_operation',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-operation-focus-review.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.operation_focus_review.v1',
+          status: 'ok',
+          summary: {
+            operation: 'operation_focus_review.acknowledge',
+            operation_id: 'operation_control',
+            focus_kind: 'site_continuity_reconciliation_execution',
+            focus_ref: 'reconciliation_execution_2',
+            review_status: 'acknowledged',
+          },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.selected_operation_id, 'operation_control');
+  assert.equal(result.delegated_workflow, 'focus_review');
+  assert.equal(result.delegated_route_action, 'review_site_continuity_reconciliation_execution');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.operation_focus_review.v1');
+  assert.equal(invocations[2][0].split(/[\\/]/).pop(), 'cloudflare-carrier-operation-focus-review.mjs');
+  assert.equal(invocations[2][invocations[2].indexOf('--focus-kind') + 1], 'site_continuity_reconciliation_execution');
+  assert.equal(invocations[2][invocations[2].indexOf('--focus-ref') + 1], 'reconciliation_execution_2');
+});
+
+test('runOperationNextWorkflowLive infers continuity reconciliation focus kind from the review ref when the read summary omits it', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_live_smoke',
+    expectedListRouteAction: null,
+    expectedOperationId: null,
+    auth: { kind: 'bearer', value: 'token-value', source: 'flag:--token' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        const readCount = invocations.filter((call) => call[0].endsWith('cloudflare-carrier-product-read.mjs')).length;
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              next_operation_id: 'operation_control',
+              route_next_action: 'monitor_operations',
+            },
+          });
+        }
+        if (operation === 'operation.read' && readCount === 2) {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              operation_id: 'operation_control',
+              workflow_next_action: 'review_site_continuity_reconciliation_execution',
+              workflow_focus_ref: 'site-continuity-reconciliation-execution:site_live_smoke:2026-06-13T02:39:38.447Z:completed',
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            operation_id: 'operation_control',
+            workflow_next_action: 'monitor_operation',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-operation-focus-review.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.operation_focus_review.v1',
+          status: 'ok',
+          summary: {
+            operation: 'operation_focus_review.acknowledge',
+            operation_id: 'operation_control',
+            focus_kind: 'site_continuity_reconciliation_execution',
+            focus_ref: 'site-continuity-reconciliation-execution:site_live_smoke:2026-06-13T02:39:38.447Z:completed',
+            review_status: 'acknowledged',
+          },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'focus_review');
+  assert.equal(invocations[2][0].split(/[\\/]/).pop(), 'cloudflare-carrier-operation-focus-review.mjs');
+  assert.equal(invocations[2][invocations[2].indexOf('--focus-kind') + 1], 'site_continuity_reconciliation_execution');
+  assert.equal(
+    invocations[2][invocations[2].indexOf('--focus-ref') + 1],
+    'site-continuity-reconciliation-execution:site_live_smoke:2026-06-13T02:39:38.447Z:completed',
+  );
+});
+
 test('runOperationNextWorkflowLive retargets to posture target when the initially selected operation only reports focused-operation posture', async () => {
   const invocations = [];
   const result = await runOperationNextWorkflowLive({
