@@ -1206,6 +1206,30 @@ test('formatProductSurfaceText emits site authority operator command for site au
   assert.match(siteAuthorityText, /Site Authority: pnpm --filter @narada2\/cloudflare-carrier product:site:authority:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 });
 
+test('formatProductSurfaceText emits directive intent task create operator command', () => {
+  const taskCreateText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'directive_intent_task_missing',
+      workflow_next_action: 'create_task_from_directive_intent',
+      workflow_reason: 'directive_intent_has_no_task',
+      session_count: 1,
+      task_count: 0,
+    },
+  });
+
+  assert.match(taskCreateText, /Task Create From Directive Intent: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:create-from-directive-intent:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+});
+
 test('formatProductSurfaceText emits mailbox send review operator commands for operation review routes', () => {
   const confirmationText = formatProductSurfaceText({
     operation: 'operation.read',

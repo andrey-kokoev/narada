@@ -1538,6 +1538,65 @@ test('runOperationNextWorkflowLive delegates restore_windows_local_ingress_execu
   assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-local-ingress-provider-liveness-read.mjs');
 });
 
+test('runOperationNextWorkflowLive delegates create_task_from_directive_intent to directive intent task create', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_alpha',
+    expectedListRouteAction: 'monitor_operations',
+    expectedOperationId: 'operation_control',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        const readCount = invocations.filter((call) => call[0].endsWith('cloudflare-carrier-product-read.mjs')).length;
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              next_operation_id: 'operation_control',
+              route_next_action: 'monitor_operations',
+            },
+          });
+        }
+        if (operation === 'operation.read' && readCount === 2) {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              operation_id: 'operation_control',
+              workflow_next_action: 'create_task_from_directive_intent',
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            operation_id: 'operation_control',
+            workflow_next_action: 'monitor_operation',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-task-lifecycle-create-from-directive-intent.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.task_lifecycle_create_from_directive_intent.v1',
+          status: 'ok',
+          mode: 'task_created',
+          created_task_id: 'task_alpha',
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'task_lifecycle_create_from_directive_intent');
+  assert.equal(result.delegated_route_action, 'create_task_from_directive_intent');
+  assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-task-lifecycle-create-from-directive-intent.mjs');
+});
+
 test('runOperationNextWorkflowLive delegates repository publication provider liveness review route', async () => {
   const invocations = [];
   const result = await runOperationNextWorkflowLive({

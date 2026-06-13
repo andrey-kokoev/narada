@@ -29,6 +29,7 @@ const repositoryPublicationRequestReviewScript = resolve(scriptDir, 'cloudflare-
 const siteFileChangeProposalReviewScript = resolve(scriptDir, 'cloudflare-carrier-site-file-change-proposal-review.mjs');
 const siteFileMaterializationReadScript = resolve(scriptDir, 'cloudflare-carrier-site-file-materialization-read.mjs');
 const taskLifecycleReadScript = resolve(scriptDir, 'cloudflare-carrier-task-lifecycle-read.mjs');
+const taskLifecycleCreateFromDirectiveIntentScript = resolve(scriptDir, 'cloudflare-carrier-task-lifecycle-create-from-directive-intent.mjs');
 const residentDispatchWindowsFallbackRequestScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-windows-fallback-request.mjs');
 const residentDispatchWindowsFallbackEvidenceScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-windows-fallback-evidence.mjs');
 const residentDispatchWindowsFallbackEvidenceReviewScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-windows-fallback-evidence-review.mjs');
@@ -66,6 +67,7 @@ const ROUTE_TO_WORKFLOW = new Map([
   ['review_repository_publication_evidence', { name: 'repository_publication_evidence', script: repositoryPublicationReadScript, flag: null, mode: 'repository_publication.evidence.list' }],
   ['review_site_file_change_proposal', { name: 'site_file_change_proposal', script: siteFileChangeProposalReviewScript, flag: null }],
   ['review_site_file_materialization', { name: 'site_file_materialization_review', script: siteFileMaterializationReadScript, flag: null }],
+  ['create_task_from_directive_intent', { name: 'task_lifecycle_create_from_directive_intent', script: taskLifecycleCreateFromDirectiveIntentScript, flag: null }],
   ['focus_open_task', { name: 'task_lifecycle_review', script: taskLifecycleReadScript, flag: null }],
   ['focus_lifecycle_open_task', { name: 'task_lifecycle_review', script: taskLifecycleReadScript, flag: null }],
   ['focus_lifecycle_start_session', { name: 'session', script: sessionWorkflowScript, flag: '--execute-operation-session' }],
