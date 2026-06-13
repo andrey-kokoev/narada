@@ -526,6 +526,11 @@ test('formatSiteFileChangeProposalReviewText surfaces review ack command', () =>
       linked_materialization_id: 'site_file_materialization_live_1',
       linked_materialization_posture: 'cloudflare_site_file_store_only_no_windows_filesystem_write_no_repository_publication',
       linked_materialization_effect: 'cloudflare_site_file_materialization_record',
+      latest_focus_review: {
+        focus_kind: 'site_file_change_proposal',
+        focus_ref: 'site_file_change_proposal_live_1',
+        review_status: 'acknowledged',
+      },
     },
   });
 
@@ -533,6 +538,7 @@ test('formatSiteFileChangeProposalReviewText surfaces review ack command', () =>
   assert.match(text, /Workflow Route: action=review_site_file_change_proposal/);
   assert.match(text, /Linked Materialization: site_file_materialization_live_1 posture=cloudflare_site_file_store_only_no_windows_filesystem_write_no_repository_publication effect=cloudflare_site_file_materialization_record/);
   assert.match(text, /Current Posture: cloudflare_site_file_store_only_no_windows_filesystem_write_no_repository_publication/);
+  assert.match(text, /Focused Review: site_file_change_proposal:site_file_change_proposal_live_1 status=acknowledged/);
   assert.match(text, /Requested Posture: proposal_only_no_filesystem_write/);
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
 });

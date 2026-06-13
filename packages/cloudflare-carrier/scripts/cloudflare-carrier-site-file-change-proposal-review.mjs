@@ -234,7 +234,11 @@ export function formatSiteFileChangeProposalReviewText(result) {
     lines.push(`Recorded: ${summary.focused_recorded_at ?? 'unknown'} by ${summary.focused_recorded_by_principal_id ?? 'unknown'}`);
   }
   if (summary.latest_focus_review) {
-    lines.push(`Latest Focus Review: ${summary.latest_focus_review.focus_kind ?? 'unknown'}:${summary.latest_focus_review.focus_ref ?? 'unknown'} status=${summary.latest_focus_review.review_status ?? 'unknown'}`);
+    const focusReviewLabel = summary.focused_proposal_id
+      && summary.latest_focus_review.focus_ref === summary.focused_proposal_id
+      ? 'Focused Review'
+      : 'Latest Focus Review';
+    lines.push(`${focusReviewLabel}: ${summary.latest_focus_review.focus_kind ?? 'unknown'}:${summary.latest_focus_review.focus_ref ?? 'unknown'} status=${summary.latest_focus_review.review_status ?? 'unknown'}`);
   }
   if (summary.focused_proposal_id) {
     lines.push(`Review Ack: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --focus-kind site_file_change_proposal --focus-ref ${summary.focused_proposal_id} --operator-session-file <operator-session-file>`);

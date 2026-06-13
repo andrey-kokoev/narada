@@ -369,6 +369,11 @@ test('formatRepositoryPublicationRequestReviewText surfaces review ack command',
       current_published_commit_ref: 'git:commit:def',
       linked_evidence_id: 'evidence_1',
       linked_evidence_status: 'completed',
+      latest_focus_review: {
+        focus_kind: 'repository_publication_request',
+        focus_ref: 'repository_publication_request_live_1',
+        review_status: 'acknowledged',
+      },
     },
   });
 
@@ -378,6 +383,7 @@ test('formatRepositoryPublicationRequestReviewText surfaces review ack command',
   assert.match(text, /Requested Posture: cloudflare_queued_repository_publication_request_windows_must_admit_publish_and_return_evidence/);
   assert.match(text, /Current Admissions: request=admitted_by_cloudflare_repository_publication cloudflare_git_push=not_admitted direct_cloudflare_repo_mutation=admitted_by_cloudflare_github_repository_publication/);
   assert.match(text, /Current Execution: execution_1 status=completed source=cloudflare_execution/);
+  assert.match(text, /Focused Review: repository_publication_request:repository_publication_request_live_1 status=acknowledged/);
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
 });
 

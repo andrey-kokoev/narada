@@ -198,10 +198,16 @@ test('formatResidentDispatchWindowsFallbackEvidenceReviewText prints review ack 
       focused_local_execution_status: 'completed',
       focused_local_session_start_admission: 'admitted_by_windows_resident_loop',
       focused_direct_cloudflare_session_start_admission: 'not_admitted',
+      latest_focus_review: {
+        focus_kind: 'resident_dispatch_windows_fallback_evidence',
+        focus_ref: 'resident_dispatch_windows_fallback_evidence_alpha',
+        review_status: 'acknowledged',
+      },
     },
   });
 
   assert.match(text, /Resident Dispatch Windows Fallback Evidence Review: ok/);
+  assert.match(text, /Focused Review: resident_dispatch_windows_fallback_evidence:resident_dispatch_windows_fallback_evidence_alpha status=acknowledged/);
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
   assert.match(text, /--focus-kind resident_dispatch_windows_fallback_evidence/);
 });
