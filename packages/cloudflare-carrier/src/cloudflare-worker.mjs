@@ -357,9 +357,6 @@ export function normalizeCloudflareOperationPostureOverview(overview = null, rou
       next_reason: focusedWorkflowRoute.reason ?? overview.next_reason,
     };
   }
-  if (route?.reason !== 'all_operations_monitoring') {
-    return overview;
-  }
   return {
     ...overview,
     health_counts: {
@@ -2173,7 +2170,7 @@ function summarizeCloudflareOperationPostureRoute(overview = {}, activeOperation
   };
 }
 
-function summarizeCloudflareOperationWorkflowRoute({
+export function summarizeCloudflareOperationWorkflowRoute({
   operation = null,
   lifecycleStatus = null,
   operationContinuityDirectionStatus = null,
@@ -2198,6 +2195,8 @@ function summarizeCloudflareOperationWorkflowRoute({
   const dispatchDecisions = Array.isArray(residentDispatchDecisions) ? residentDispatchDecisions : [];
   const fallbackRequests = Array.isArray(residentDispatchWindowsFallbackRequests) ? residentDispatchWindowsFallbackRequests : [];
   const fallbackEvidence = Array.isArray(residentDispatchWindowsFallbackEvidence) ? residentDispatchWindowsFallbackEvidence : [];
+  const operationStatus = String(operation?.status ?? '').toLowerCase();
+  const suppressClosedContinuityAttention = operationStatus === 'closed';
   const operatorFocus = summarizeCloudflareOperationOperatorFocus(operationActivityTimeline, { mailboxSendReviews, operationFocusReviews });
   const reviewedOperationFocusKeys = cloudflareReviewedOperationFocusKeys(operationFocusReviews);
   const continuityDirectionStatus = operationContinuityDirectionStatus ?? lifecycleStatus?.operation_continuity_direction_status ?? null;
@@ -2269,17 +2268,17 @@ function summarizeCloudflareOperationWorkflowRoute({
     if (lifecycleStatus?.next_action === 'local_resident_carrier_evidence') {
       return { action: 'bridge_local_resident_carrier_evidence', target: operationId, reason: 'operation_lifecycle_missing_local_resident_carrier_evidence' };
     }
-    if (lifecycleStatus?.next_action === 'continuity_packet') return { action: 'review_continuity_packet', target: siteId ?? operationId, reason: 'operation_lifecycle_missing_continuity_packet' };
-    if (continuityDirectionStatus?.state && continuityDirectionStatus.state !== 'bidirectional_packets_observed') {
+    if (!suppressClosedContinuityAttention && lifecycleStatus?.next_action === 'continuity_packet') return { action: 'review_continuity_packet', target: siteId ?? operationId, reason: 'operation_lifecycle_missing_continuity_packet' };
+    if (!suppressClosedContinuityAttention && continuityDirectionStatus?.state && continuityDirectionStatus.state !== 'bidirectional_packets_observed') {
       return {
         action: continuityDirectionStatus.next_action || 'observe_continuity_packet',
         target: siteId ?? operationId,
         reason: 'operation_continuity_direction_needs_attention',
       };
     }
-    if (lifecycleStatus?.next_action === 'continuity_loop_report') return { action: 'review_continuity_loop_report', target: siteId ?? operationId, reason: 'operation_lifecycle_missing_continuity_loop_report' };
-    if (lifecycleStatus?.next_action === 'refresh_site_continuity_loop') return { action: 'refresh_site_continuity_loop', target: siteId ?? operationId, reason: 'operation_lifecycle_continuity_loop_stale' };
-    if (lifecycleStatus?.next_action === 'continuity_reconciliation_execution') {
+    if (!suppressClosedContinuityAttention && lifecycleStatus?.next_action === 'continuity_loop_report') return { action: 'review_continuity_loop_report', target: siteId ?? operationId, reason: 'operation_lifecycle_missing_continuity_loop_report' };
+    if (!suppressClosedContinuityAttention && lifecycleStatus?.next_action === 'refresh_site_continuity_loop') return { action: 'refresh_site_continuity_loop', target: siteId ?? operationId, reason: 'operation_lifecycle_continuity_loop_stale' };
+    if (!suppressClosedContinuityAttention && lifecycleStatus?.next_action === 'continuity_reconciliation_execution') {
       const reconciliationFocusRef = lifecycleStatus?.site_continuity_reconciliation_execution_status?.latest_execution_id ?? null;
       const reconciliationReviewKey = reconciliationFocusRef ? `site_continuity_reconciliation_execution:${reconciliationFocusRef}` : null;
       if (!reconciliationReviewKey || !reviewedOperationFocusKeys.has(reconciliationReviewKey)) {
@@ -2531,6 +2530,9 @@ export function shouldKeepFocusedOperationProjection(focusedProjection = null, s
   const focusedStatus = String(focusedProjection?.operation?.status || '').trim();
   const selectedStatus = String(selectedProjection?.operation?.status || '').trim();
   if (focusedStatus !== 'active' || selectedStatus === 'active') return false;
+  if (selectedRoute?.next_action === 'monitor_operation') {
+    return Boolean(focusedRoute?.next_action && focusedRoute.next_action !== 'monitor_operation');
+  }
   if (!focusedRoute?.next_action || focusedRoute.next_action === 'monitor_operation') return false;
   if (!selectedRoute?.next_action || selectedRoute.next_action === 'monitor_operation') return false;
   if (focusedRoute.next_action !== selectedRoute.next_action) return false;

@@ -21,6 +21,7 @@ import worker, {
   createCloudflareToolEffectAdapter,
   normalizeCloudflareOperationPostureOverview,
   selectCloudflareFocusedOperation,
+  summarizeCloudflareOperationWorkflowRoute,
   summarizeCloudflareOperationOperatorFocus,
   shouldKeepFocusedOperationProjection,
   shouldPromoteOperationOperatorFocus,
@@ -8794,6 +8795,26 @@ test('shouldKeepFocusedOperationProjection prefers the active focused operation 
     ),
     false,
   );
+
+  assert.equal(
+    shouldKeepFocusedOperationProjection(
+      {
+        operation: { operation_id: 'operation_control', status: 'active' },
+        operation_workflow_route: {
+          next_action: 'review_site_continuity_reconciliation_execution',
+          focus_ref: 'site_fixture',
+        },
+      },
+      {
+        operation: { operation_id: 'operation_probe', status: 'closed' },
+        operation_workflow_route: {
+          next_action: 'monitor_operation',
+          focus_ref: 'operation_probe',
+        },
+      },
+    ),
+    true,
+  );
 });
 
 test('selectCloudflareFocusedOperation ignores stale response.operation focus when no operation id was explicitly requested', () => {
@@ -8829,6 +8850,40 @@ test('shouldPromoteOperationOperatorFocus suppresses historical focus review on 
     ),
     false,
   );
+});
+
+test('summarizeCloudflareOperationWorkflowRoute suppresses stale site continuity attention on closed operations', () => {
+  const route = summarizeCloudflareOperationWorkflowRoute({
+    operation: {
+      operation_id: 'operation_probe',
+      site_id: 'site_fixture',
+      status: 'closed',
+    },
+    lifecycleStatus: {
+      operation_id: 'operation_probe',
+      site_id: 'site_fixture',
+      next_action: 'refresh_site_continuity_loop',
+      operation_continuity_direction_status: {
+        state: 'bidirectional_packets_observed',
+      },
+    },
+    operationContinuityDirectionStatus: {
+      state: 'bidirectional_packets_observed',
+    },
+    persistencePosture: {
+      state: 'durable',
+    },
+    recoveryPosture: {
+      recovery_gaps: [],
+    },
+    operationActivityTimeline: {
+      items: [],
+    },
+  });
+
+  assert.equal(route.next_action, 'monitor_operation');
+  assert.equal(route.status, 'ready');
+  assert.equal(route.reason, 'operation_ready');
 });
 
 test('summarizeCloudflareOperationOperatorFocus does not fall back to older continuity reconciliation focus after the latest one is acknowledged', () => {
@@ -8897,6 +8952,42 @@ test('normalizeCloudflareOperationPostureOverview surfaces focused workflow when
   assert.equal(normalized.next_action, 'refresh_site_continuity_loop');
   assert.equal(normalized.next_reason, 'operation_lifecycle_continuity_loop_stale');
   assert.deepEqual(normalized.health_counts, { ready: 2, needs_attention: 1 });
+});
+
+test('normalizeCloudflareOperationPostureOverview collapses stale evidence review when focused workflow is already monitoring', () => {
+  const normalized = normalizeCloudflareOperationPostureOverview(
+    {
+      schema: 'narada.cloudflare_operation_posture_overview.v1',
+      operation_count: 5,
+      health_counts: { ready: 5, needs_attention: 0 },
+      action_counts: { inspect_operation_evidence: 1, use_focused_operation: 4 },
+      reason_counts: { evidence_review: 1, use_focused_operation: 4 },
+      command_state_counts: { evidence_ready: 5 },
+      active_operation_id: 'operation_control',
+      next_operation_id: 'operation_control',
+      next_status: 'ready',
+      next_action: 'inspect_operation_evidence',
+      next_reason: 'evidence_review',
+    },
+    {
+      next_action: 'monitor_operations',
+      reason: 'evidence_review',
+    },
+    {
+      lifecycle_status: { health: 'ready' },
+      workflow_route: {
+        status: 'ready',
+        next_action: 'monitor_operation',
+        reason: 'operation_ready',
+      },
+    },
+    5,
+  );
+
+  assert.equal(normalized.next_status, 'ready');
+  assert.equal(normalized.next_action, 'monitor_operations');
+  assert.equal(normalized.next_reason, 'all_operations_monitoring');
+  assert.deepEqual(normalized.health_counts, { ready: 5, needs_attention: 0 });
 });
 
 test('worker site.read and site.list surface operation attention from a sibling operation', async () => {
