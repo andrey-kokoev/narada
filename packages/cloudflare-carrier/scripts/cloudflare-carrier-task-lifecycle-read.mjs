@@ -6,9 +6,10 @@ export function parseTaskLifecycleReadArgs(argv = [], env = process.env) {
   const args = [...argv];
   const workerUrl = normalizeWorkerUrl(option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '');
   const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? null;
+  const operationId = option(args, '--operation-id') ?? env.CLOUDFLARE_CARRIER_OPERATION_ID ?? null;
   const taskId = option(args, '--task-id') ?? env.CLOUDFLARE_TASK_LIFECYCLE_TASK_ID ?? null;
   const carrierSessionId = option(args, '--carrier-session-id') ?? option(args, '--session-id') ?? env.CLOUDFLARE_CARRIER_SESSION_ID ?? null;
-  const defaultLimit = carrierSessionId && !taskId ? 100 : 25;
+  const defaultLimit = (carrierSessionId || operationId) && !taskId ? 100 : 25;
   const limit = clampInteger(option(args, '--limit') ?? env.CLOUDFLARE_TASK_LIFECYCLE_TASK_LIMIT ?? defaultLimit, 1, 100, defaultLimit);
   const format = option(args, '--format') ?? env.CLOUDFLARE_TASK_LIFECYCLE_TASK_FORMAT ?? 'json';
   const auth = resolveAuth(args, env);
@@ -25,6 +26,7 @@ export function parseTaskLifecycleReadArgs(argv = [], env = process.env) {
     params: {
       site_id: siteId,
       limit,
+      ...(operationId ? { operation_id: operationId } : {}),
       ...(taskId ? { task_lifecycle_task_id: taskId } : {}),
       ...(carrierSessionId ? { carrier_session_id: carrierSessionId } : {}),
     },
@@ -33,6 +35,7 @@ export function parseTaskLifecycleReadArgs(argv = [], env = process.env) {
 }
 
 export async function readCloudflareTaskLifecycle(config, fetchImpl = fetch) {
+  const operation = config.params?.operation_id ? 'operation.read' : 'task_lifecycle.task.list';
   const response = await fetchImpl(new URL('/api/carrier', withTrailingSlash(config.workerUrl)), {
     method: 'POST',
     headers: {
@@ -40,9 +43,16 @@ export async function readCloudflareTaskLifecycle(config, fetchImpl = fetch) {
       ...authHeaders(config.auth),
     },
     body: JSON.stringify({
-      operation: 'task_lifecycle.task.list',
-      request_id: `task_lifecycle_task_list_${Date.now()}`,
-      params: config.params,
+      operation,
+      request_id: `${operation.replace(/\./g, '_')}_${Date.now()}`,
+      params: config.params?.operation_id
+        ? {
+            site_id: config.params.site_id,
+            operation_id: config.params.operation_id,
+            task_lifecycle_task_limit: config.params.limit,
+            ...(config.params.task_lifecycle_task_id ? { task_lifecycle_include_task_ids: [config.params.task_lifecycle_task_id] } : {}),
+          }
+        : config.params,
     }),
   });
   const text = await response.text();
@@ -68,20 +78,30 @@ export async function readCloudflareTaskLifecycle(config, fetchImpl = fetch) {
 }
 
 export function summarizeTaskLifecycleRead(body = {}, params = {}) {
-  const tasks = Array.isArray(body?.tasks) ? body.tasks : [];
+  const tasks = Array.isArray(body?.task_lifecycle_tasks)
+    ? body.task_lifecycle_tasks
+    : Array.isArray(body?.tasks)
+      ? body.tasks
+      : [];
+  const newestTasks = [...tasks].reverse();
   const sessionFocusedTask = params.carrier_session_id
-    ? [...tasks].reverse().find((entry) => entry?.carrier_session_id === params.carrier_session_id) ?? null
+    ? newestTasks.find((entry) => entry?.carrier_session_id === params.carrier_session_id) ?? null
+    : null;
+  const openStatuses = new Set(['open', 'opened', 'claimed', 'active', 'needs_continuation']);
+  const operationFocusedTask = params.operation_id
+    ? newestTasks.find((entry) => openStatuses.has(String(entry?.status ?? '').toLowerCase())) ?? newestTasks[0] ?? null
     : null;
   const focusedTask = tasks.find((entry) => entry?.task_id === params.task_lifecycle_task_id)
     ?? sessionFocusedTask
+    ?? operationFocusedTask
     ?? tasks[0]
     ?? null;
-  const openStatuses = new Set(['open', 'opened', 'claimed', 'active', 'needs_continuation']);
   const openTaskCount = tasks.filter((entry) => openStatuses.has(String(entry?.status ?? '').toLowerCase())).length;
   return {
     ok: body.ok ?? null,
     code: body.code ?? null,
-    site_id: body.site_id ?? params.site_id ?? null,
+    site_id: body.site_id ?? body.operation?.site_id ?? params.site_id ?? null,
+    operation_id: body.operation?.operation_id ?? params.operation_id ?? null,
     task_count: tasks.length,
     open_task_count: openTaskCount,
     mutation_authority: body.mutation_authority ?? null,

@@ -1388,13 +1388,14 @@ test('runOperationNextWorkflowLive advances focus_session_path_task through task
   assert.ok(invocations[2].includes('--execute-task-lifecycle-next'));
 });
 
-test('runOperationNextWorkflowLive delegates focus_operation_path_task to task lifecycle review', async () => {
+test('runOperationNextWorkflowLive advances focus_operation_path_task through task lifecycle next workflow', async () => {
   const invocations = [];
   const result = await runOperationNextWorkflowLive({
     workerUrl: 'https://carrier.example',
     siteId: 'site_live_smoke',
     expectedListRouteAction: null,
     expectedOperationId: null,
+    agentId: 'agent.alpha',
     auth: { kind: 'bearer', value: 'token-value', source: 'flag:--token' },
     executeAcknowledged: true,
   }, {
@@ -1421,9 +1422,11 @@ test('runOperationNextWorkflowLive delegates focus_operation_path_task to task l
           },
         });
       }
-      if (scriptName === 'cloudflare-carrier-task-lifecycle-read.mjs') {
+      if (scriptName === 'cloudflare-carrier-task-lifecycle-next-workflow-live.mjs') {
+        assert.equal(args[args.indexOf('--operation-id') + 1], 'operation_alpha');
+        assert.equal(args[args.indexOf('--agent-id') + 1], 'agent.alpha');
         return JSON.stringify({
-          schema: 'narada.cloudflare_carrier.task_lifecycle_read.v1',
+          schema: 'narada.cloudflare_carrier.task_lifecycle_next_workflow_live.v1',
           status: 'ok',
           summary: {
             task_id: 'task_alpha',
@@ -1434,10 +1437,10 @@ test('runOperationNextWorkflowLive delegates focus_operation_path_task to task l
     },
   });
 
-  assert.equal(result.delegated_workflow, 'task_lifecycle_review');
+  assert.equal(result.delegated_workflow, 'task_lifecycle_next');
   assert.equal(result.delegated_route_action, 'focus_operation_path_task');
-  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.task_lifecycle_read.v1');
-  assert.equal(invocations[2][0].split(/[\\/]/).pop(), 'cloudflare-carrier-task-lifecycle-read.mjs');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.task_lifecycle_next_workflow_live.v1');
+  assert.equal(invocations[2][0].split(/[\\/]/).pop(), 'cloudflare-carrier-task-lifecycle-next-workflow-live.mjs');
 });
 
 test('runOperationNextWorkflowLive delegates focus_lifecycle_start_session to operation session workflow', async () => {

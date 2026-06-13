@@ -20,6 +20,7 @@ export function parseTaskLifecycleNextWorkflowLiveArgs(argv = [], env = process.
   const args = [...argv];
   const workerUrl = option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '';
   const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? 'site_narada_cloudflare';
+  const operationId = option(args, '--operation-id') ?? env.CLOUDFLARE_CARRIER_OPERATION_ID ?? null;
   const taskId = option(args, '--task-id') ?? env.CLOUDFLARE_TASK_LIFECYCLE_TASK_ID ?? null;
   const carrierSessionId = option(args, '--carrier-session-id') ?? option(args, '--session-id') ?? env.CLOUDFLARE_CARRIER_SESSION_ID ?? null;
   const agentId = option(args, '--agent-id') ?? env.CLOUDFLARE_CARRIER_AGENT_ID ?? 'agent.operator.task-lifecycle-next-live';
@@ -33,13 +34,14 @@ export function parseTaskLifecycleNextWorkflowLiveArgs(argv = [], env = process.
   }
   if (!workerUrl) throw new Error('task_lifecycle_next_workflow_live_requires_--url_or_CLOUDFLARE_CARRIER_URL');
   if (!siteId) throw new Error('task_lifecycle_next_workflow_live_requires_site_id');
-  if (!taskId && !carrierSessionId) throw new Error('task_lifecycle_next_workflow_live_requires_task_id_or_carrier_session_id');
+  if (!taskId && !carrierSessionId && !operationId) throw new Error('task_lifecycle_next_workflow_live_requires_task_id_or_carrier_session_id_or_operation_id');
   if (!agentId) throw new Error('task_lifecycle_next_workflow_live_requires_agent_id');
   if (!auth) throw new Error('task_lifecycle_next_workflow_live_requires_bearer_token_or_operator_session');
 
   return {
     workerUrl,
     siteId,
+    operationId,
     taskId,
     carrierSessionId,
     agentId,
@@ -113,6 +115,7 @@ function buildTaskReadArgs(config) {
     '--url', config.workerUrl,
     '--site', config.siteId,
   ];
+  if (config.operationId) args.push('--operation-id', config.operationId);
   if (config.taskId) args.push('--task-id', config.taskId);
   if (config.carrierSessionId) args.push('--carrier-session-id', config.carrierSessionId);
   appendAuthOptions(args, config);

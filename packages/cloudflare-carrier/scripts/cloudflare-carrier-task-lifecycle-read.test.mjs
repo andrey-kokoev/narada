@@ -51,6 +51,19 @@ test('parseTaskLifecycleReadArgs accepts carrier session focus', () => {
   assert.equal(parsed.carrierSessionId, 'session_alpha');
 });
 
+test('parseTaskLifecycleReadArgs accepts operation focus', () => {
+  const parsed = parseTaskLifecycleReadArgs([
+    '--url', 'https://carrier.example/',
+    '--site', 'site_alpha',
+    '--operation-id', 'operation_alpha',
+    '--token', 'secret-token',
+  ], {});
+
+  assert.equal(parsed.params.site_id, 'site_alpha');
+  assert.equal(parsed.params.operation_id, 'operation_alpha');
+  assert.equal(parsed.params.limit, 100);
+});
+
 test('summarizeTaskLifecycleRead prefers requested task and counts open tasks', () => {
   const summary = summarizeTaskLifecycleRead({
     ok: true,
@@ -131,6 +144,38 @@ test('readCloudflareTaskLifecycle posts task_lifecycle.task.list', async () => {
 
   assert.equal(result.summary.task_id, 'task_9');
   assert.equal(result.summary.task_status, 'open');
+});
+
+test('readCloudflareTaskLifecycle posts operation.read for operation focus', async () => {
+  const result = await readCloudflareTaskLifecycle({
+    workerUrl: 'https://carrier.example',
+    auth: { kind: 'operator_session', value: 'cookie', source: 'operator-session-cookie' },
+    params: { site_id: 'site_alpha', operation_id: 'operation_alpha', limit: 12 },
+  }, async (url, init) => {
+    assert.equal(String(url), 'https://carrier.example/api/carrier');
+    const body = JSON.parse(init.body);
+    assert.equal(body.operation, 'operation.read');
+    assert.equal(body.params.site_id, 'site_alpha');
+    assert.equal(body.params.operation_id, 'operation_alpha');
+    assert.equal(body.params.task_lifecycle_task_limit, 12);
+    return {
+      status: 200,
+      async text() {
+        return JSON.stringify({
+          ok: true,
+          operation: { operation_id: 'operation_alpha', site_id: 'site_alpha' },
+          task_lifecycle_tasks: [
+            { task_id: 'task_old', task_number: 1, status: 'closed', title: 'old task' },
+            { task_id: 'task_new', task_number: 2, status: 'opened', title: 'new open task' },
+          ],
+        });
+      },
+    };
+  });
+
+  assert.equal(result.summary.operation_id, 'operation_alpha');
+  assert.equal(result.summary.task_id, 'task_new');
+  assert.equal(result.summary.task_status, 'opened');
 });
 
 test('formatTaskLifecycleReadText renders focused task summary', () => {
