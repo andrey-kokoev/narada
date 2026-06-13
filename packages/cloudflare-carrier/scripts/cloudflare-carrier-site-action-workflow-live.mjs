@@ -28,7 +28,10 @@ const ACTION_TO_WORKFLOW = {
   bind_cloudflare_product_next_site_locally: { name: 'prepare_next_site_binding', script: continuityBindingsScript },
   refresh_site_continuity_loop: { name: 'refresh_site_continuity_loop', script: continuitySchedulerScript },
   read_site_scope: { name: 'site_scope', script: siteScopeReadScript },
+  read_membership_site: { name: 'site_scope', script: siteScopeReadScript },
   read_site_authority: { name: 'site_authority', script: siteAuthorityReadScript },
+  focus_membership_authority: { name: 'site_authority', script: siteAuthorityReadScript },
+  inspect_inactive_membership: { name: 'site_authority', script: siteAuthorityReadScript },
 };
 
 export function parseSiteActionWorkflowLiveArgs(argv = [], env = process.env) {
@@ -190,12 +193,12 @@ function buildWorkflowArgs(config, action, script) {
     appendAuthOptions(args, config);
     return args;
   }
-  if (action === 'read_site_scope') {
+  if (action === 'read_site_scope' || action === 'read_membership_site') {
     const args = [script, '--url', config.workerUrl, '--site', config.siteId];
     appendAuthOptions(args, config);
     return args;
   }
-  if (action === 'read_site_authority') {
+  if (action === 'read_site_authority' || action === 'focus_membership_authority' || action === 'inspect_inactive_membership') {
     const args = [script, '--url', config.workerUrl, '--site', config.siteId];
     appendAuthOptions(args, config);
     return args;

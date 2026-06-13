@@ -324,13 +324,17 @@ export function formatProductSurfaceText(result) {
     lines.push(`Next Action: ${summary.next_action ?? 'none'}`);
     lines.push(`Scope Loaded: ${summary.scope_loaded ? 'yes' : 'no'}`);
     lines.push(`Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file> --execute-site-action`);
-    if (summary.next_action === 'read_site_scope') {
+    if (summary.next_action === 'read_site_scope' || summary.next_action === 'read_membership_site') {
       lines.push(`Site Scope: pnpm --filter @narada2/cloudflare-carrier product:site:scope:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
     }
     if (summary.next_action === 'focus_site_operation') {
       lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file> --execute-operation-next`);
     }
-    if (summary.next_action === 'read_site_authority') {
+    if (
+      summary.next_action === 'read_site_authority'
+      || summary.next_action === 'focus_membership_authority'
+      || summary.next_action === 'inspect_inactive_membership'
+    ) {
       lines.push(`Site Authority: pnpm --filter @narada2/cloudflare-carrier product:site:authority:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
     }
     lines.push(`Continuity: state=${summary.continuity_state ?? 'unknown'} direction=${summary.continuity_direction_state ?? 'unknown'} loop=${summary.continuity_loop_state ?? 'unknown'}`);

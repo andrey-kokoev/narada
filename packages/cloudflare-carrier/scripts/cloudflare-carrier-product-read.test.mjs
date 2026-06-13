@@ -1315,6 +1315,62 @@ test('formatProductSurfaceText emits site authority operator command for site au
   assert.match(siteAuthorityText, /Site Authority: pnpm --filter @narada2\/cloudflare-carrier product:site:authority:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 });
 
+test('formatProductSurfaceText emits site authority operator command for membership authority routes', () => {
+  const membershipAuthorityText = formatProductSurfaceText({
+    operation: 'site.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'site.read',
+      site_id: 'site_alpha',
+      display_name: 'Site Alpha',
+      health: 'attention',
+      next_action: 'focus_membership_authority',
+      continuity_state: 'packet_observed',
+      continuity_direction_state: 'bidirectional_packets_observed',
+      continuity_direction_missing: [],
+      continuity_loop_state: 'loop_report_observed',
+      continuity_reconciliation_execution_state: 'reconciliation_execution_observed',
+      continuity_reconciliation_execution_health: 'ready',
+      continuity_packet_count: 3,
+      continuity_loop_report_count: 20,
+      continuity_reconciliation_execution_count: 20,
+      persistence_state: 'durable',
+      recovery_state: 'reconstructable',
+      membership_count: 1,
+      session_count: 4,
+    },
+  });
+  assert.match(membershipAuthorityText, /Site Authority: pnpm --filter @narada2\/cloudflare-carrier product:site:authority:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+
+  const inactiveMembershipText = formatProductSurfaceText({
+    operation: 'site.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'site.read',
+      site_id: 'site_alpha',
+      display_name: 'Site Alpha',
+      health: 'attention',
+      next_action: 'inspect_inactive_membership',
+      continuity_state: 'packet_observed',
+      continuity_direction_state: 'bidirectional_packets_observed',
+      continuity_direction_missing: [],
+      continuity_loop_state: 'loop_report_observed',
+      continuity_reconciliation_execution_state: 'reconciliation_execution_observed',
+      continuity_reconciliation_execution_health: 'ready',
+      continuity_packet_count: 3,
+      continuity_loop_report_count: 20,
+      continuity_reconciliation_execution_count: 20,
+      persistence_state: 'durable',
+      recovery_state: 'reconstructable',
+      membership_count: 1,
+      session_count: 4,
+    },
+  });
+  assert.match(inactiveMembershipText, /Site Authority: pnpm --filter @narada2\/cloudflare-carrier product:site:authority:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+});
+
 test('formatProductSurfaceText emits site authority operator command for authority evidence routes', () => {
   const authorityEvidenceText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1631,6 +1687,33 @@ test('formatProductSurfaceText surfaces site scope and site operation focus comm
   });
   assert.match(siteReadScopeText, /Scope Loaded: no/);
   assert.match(siteReadScopeText, /Site Scope: pnpm --filter @narada2\/cloudflare-carrier product:site:scope:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+
+  const membershipScopeText = formatProductSurfaceText({
+    operation: 'site.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'site.read',
+      site_id: 'site_alpha',
+      display_name: 'Alpha Site',
+      health: 'attention',
+      next_action: 'read_membership_site',
+      scope_loaded: true,
+      continuity_state: 'unknown',
+      continuity_direction_state: 'unknown',
+      continuity_loop_state: 'unknown',
+      continuity_reconciliation_execution_state: 'unknown',
+      continuity_reconciliation_execution_health: 'unknown',
+      continuity_packet_count: 0,
+      continuity_loop_report_count: 0,
+      continuity_reconciliation_execution_count: 0,
+      persistence_state: 'unknown',
+      recovery_state: 'unknown',
+      membership_count: 0,
+      session_count: 0,
+    },
+  });
+  assert.match(membershipScopeText, /Site Scope: pnpm --filter @narada2\/cloudflare-carrier product:site:scope:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
 
   const siteReadFocusText = formatProductSurfaceText({
