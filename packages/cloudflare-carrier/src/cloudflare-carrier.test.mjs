@@ -21,6 +21,7 @@ import worker, {
   createCloudflareToolEffectAdapter,
   normalizeCloudflareOperationPostureOverview,
   selectCloudflareFocusedOperation,
+  summarizeCloudflareOperationOperatorFocus,
   shouldKeepFocusedOperationProjection,
   shouldPromoteOperationOperatorFocus,
 } from './cloudflare-worker.mjs';
@@ -8828,6 +8829,38 @@ test('shouldPromoteOperationOperatorFocus suppresses historical focus review on 
     ),
     false,
   );
+});
+
+test('summarizeCloudflareOperationOperatorFocus does not fall back to older continuity reconciliation focus after the latest one is acknowledged', () => {
+  const focus = summarizeCloudflareOperationOperatorFocus(
+    {
+      items: [
+        {
+          activity_kind: 'site_continuity_reconciliation_execution',
+          focus_kind: 'site_continuity_reconciliation_execution',
+          focus_ref: 'site-continuity-reconciliation-execution:site_live_smoke:2026-06-13T01:29:01.294Z:completed',
+          occurred_at: '2026-06-13T01:29:01.294Z',
+        },
+        {
+          activity_kind: 'site_continuity_reconciliation_execution',
+          focus_kind: 'site_continuity_reconciliation_execution',
+          focus_ref: 'site-continuity-reconciliation-execution:site_live_smoke:2026-06-13T01:19:01.249Z:completed',
+          occurred_at: '2026-06-13T01:19:01.249Z',
+        },
+      ],
+    },
+    {
+      operationFocusReviews: [
+        {
+          review_status: 'acknowledged',
+          focus_kind: 'site_continuity_reconciliation_execution',
+          focus_ref: 'site-continuity-reconciliation-execution:site_live_smoke:2026-06-13T01:29:01.294Z:completed',
+        },
+      ],
+    },
+  );
+
+  assert.equal(focus, null);
 });
 
 test('normalizeCloudflareOperationPostureOverview surfaces focused workflow when route stays on the active operation', () => {

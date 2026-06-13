@@ -2362,10 +2362,13 @@ function cloudflareReviewedOperationFocusKeys(operationFocusReviews = []) {
   return reviewed;
 }
 
-function summarizeCloudflareOperationOperatorFocus(operationActivityTimeline = null, options = {}) {
+export function summarizeCloudflareOperationOperatorFocus(operationActivityTimeline = null, options = {}) {
   const items = Array.isArray(operationActivityTimeline?.items) ? operationActivityTimeline.items : [];
   const reviewedMailboxSendFocusKeys = cloudflareReviewedMailboxSendFocusKeys(options.mailboxSendReviews);
   const reviewedOperationFocusKeys = cloudflareReviewedOperationFocusKeys(options.operationFocusReviews);
+  const latestOnlyActivityKinds = new Set([
+    'site_continuity_reconciliation_execution',
+  ]);
   const priorities = [
     ['mailbox_send_confirmation', 'review_mailbox_send_confirmation'],
     ['mailbox_send_accepted', 'review_mailbox_send_acceptance'],
@@ -2378,8 +2381,28 @@ function summarizeCloudflareOperationOperatorFocus(operationActivityTimeline = n
     ['resident_dispatch_windows_fallback_evidence', 'review_windows_fallback_resident_dispatch_evidence'],
   ];
   for (const [activityKind, action] of priorities) {
-    const item = items.find((entry) => {
-      if (entry?.activity_kind !== activityKind) return false;
+    const matchingItems = items.filter((entry) => entry?.activity_kind === activityKind);
+    if (latestOnlyActivityKinds.has(activityKind)) {
+      const item = matchingItems[0] ?? null;
+      if (!item) continue;
+      const focusKind = item.focus_kind ?? item.activity_kind;
+      const focusRef = item.focus_ref ?? item.source_ref ?? item.activity_id ?? null;
+      if (focusRef && reviewedMailboxSendFocusKeys.has(`${focusKind}:${focusRef}`)) continue;
+      if (focusRef && reviewedOperationFocusKeys.has(`${focusKind}:${focusRef}`)) continue;
+      return {
+        schema: 'narada.cloudflare_operation_operator_focus.v1',
+        action,
+        activity_kind: item.activity_kind,
+        activity_id: item.activity_id ?? null,
+        focus_kind: focusKind,
+        focus_ref: focusRef,
+        source_ref: item.source_ref ?? null,
+        occurred_at: item.occurred_at ?? null,
+        title: item.title ?? null,
+        summary: item.summary ?? null,
+      };
+    }
+    const item = matchingItems.find((entry) => {
       const focusKind = entry.focus_kind ?? entry.activity_kind;
       const focusRef = entry.focus_ref ?? entry.source_ref ?? entry.activity_id ?? null;
       if (focusRef && reviewedMailboxSendFocusKeys.has(`${focusKind}:${focusRef}`)) return false;
