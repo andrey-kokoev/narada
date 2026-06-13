@@ -57,6 +57,7 @@ test('summarizeLocalIngressRequest lifts latest local ingress request posture an
   assert.equal(summary.request_count, 1);
   assert.equal(summary.focused_request_id, 'local_ingress_request_alpha');
   assert.equal(summary.focused_requested_action_ref, 'site_file_materialization.admit');
+  assert.equal(summary.authority_partition, 'cloudflare_queues_governed_local_ingress_request_windows_admits_executes_and_returns_evidence');
   assert.equal(summary.requested_posture, 'request_only_pending_windows_execution');
   assert.equal(summary.current_posture, 'local_repository_filesystem_mutation_completed');
   assert.equal(summary.latest_evidence_id, 'local_ingress_evidence_alpha');
@@ -174,5 +175,6 @@ test('formatLocalIngressRequestReadText prints local ingress request summary', (
   assert.match(text, /Current Posture: local_repository_filesystem_mutation_completed/);
   assert.match(text, /Requested Posture: request_only_pending_windows_execution/);
   assert.match(text, /Current Execution: evidence=local_ingress_evidence_alpha local_execution=windows_local_ingress_execution_alpha status=completed/);
+  assert.match(text, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:evidence:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --local-ingress-evidence-id local_ingress_evidence_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Focused Request: operation=operation_site_read recorded=2026-06-13T04:30:00.000Z/);
 });

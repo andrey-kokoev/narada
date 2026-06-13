@@ -66,7 +66,7 @@ export function summarizeLocalIngressRequest(body = {}, evidenceBody = {}, optio
     local_execution_admission: body?.local_execution_admission ?? focusedRequest?.local_execution_admission ?? null,
     direct_cloudflare_filesystem_mutation_admission: body?.direct_cloudflare_filesystem_mutation_admission ?? null,
     repository_publication_admission: body?.repository_publication_admission ?? null,
-    authority_partition: body?.authority_partition ?? latestRequest?.authority_partition ?? null,
+    authority_partition: body?.authority_partition ?? focusedRequest?.authority_partition ?? null,
     focused_request_id: focusedRequest?.local_ingress_request_id ?? null,
     focused_operation_id: focusedRequest?.operation_id ?? null,
     focused_requested_action_ref: focusedRequest?.requested_action_ref ?? null,
@@ -102,6 +102,9 @@ export function formatLocalIngressRequestReadText(result) {
   }
   if (summary.latest_evidence_id || summary.latest_local_execution_id || summary.latest_execution_status) {
     lines.push(`Current Execution: evidence=${summary.latest_evidence_id ?? 'none'} local_execution=${summary.latest_local_execution_id ?? 'none'} status=${summary.latest_execution_status ?? 'unknown'}`);
+    if (summary.latest_evidence_id) {
+      lines.push(`Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:evidence:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --local-ingress-evidence-id ${summary.latest_evidence_id} --operator-session-file <operator-session-file>`);
+    }
   }
   if (summary.focused_operation_id || summary.focused_recorded_at) {
     lines.push(`Focused Request: operation=${summary.focused_operation_id ?? 'none'} recorded=${summary.focused_recorded_at ?? 'unknown'}`);
