@@ -48,6 +48,24 @@ test('parseRepositoryPublicationReadArgs supports operator session auth and requ
   });
 });
 
+test('parseRepositoryPublicationReadArgs supports focused evidence id with widened default limit', () => {
+  const parsed = parseRepositoryPublicationReadArgs([
+    '--operation', 'repository_publication.evidence.list',
+    '--url', 'https://carrier.example.test',
+    '--token', 'secret-token',
+    '--site', 'site_alpha',
+    '--repository-publication-evidence-id', 'repository-publication-evidence-7',
+  ], {}, () => 42);
+
+  assert.equal(parsed.requestId, 'repository_publication_read_repository_publication_evidence_list_repository-publication-evidence-7');
+  assert.equal(parsed.focusEvidenceId, 'repository-publication-evidence-7');
+  assert.deepEqual(parsed.params, {
+    site_id: 'site_alpha',
+    limit: 500,
+    repository_publication_evidence_limit: 500,
+  });
+});
+
 test('parseRepositoryPublicationReadArgs refuses missing required inputs and unsupported operation', () => {
   assert.throws(
     () => parseRepositoryPublicationReadArgs(['--operation', 'repository_publication.request.list', '--token', 'token', '--site', 'site_alpha']),
@@ -171,6 +189,65 @@ test('readRepositoryPublicationSurface posts evidence list envelope and summariz
   });
   assert.equal(result.summary.latest_repository_publication_evidence_id, 'repository-publication-evidence-1');
   assert.equal(result.summary.latest_published_commit_ref, 'git:commit:123456');
+});
+
+test('readRepositoryPublicationSurface refuses focused evidence id that is not present', async () => {
+  await assert.rejects(
+    readRepositoryPublicationSurface({
+      workerUrl: 'https://carrier.example.test',
+      operation: 'repository_publication.evidence.list',
+      requestId: 'request_repository_publication_read_missing_evidence',
+      auth: { kind: 'bearer', value: 'secret-token', source: 'flag:--token' },
+      params: {
+        site_id: 'site_alpha',
+        limit: 500,
+        repository_publication_evidence_limit: 500,
+      },
+      focusEvidenceId: 'repository-publication-evidence-missing',
+    }, async () => responseJson(200, {
+      ok: true,
+      status: 'ok',
+      site_id: 'site_alpha',
+      evidence: [{
+        repository_publication_evidence_id: 'repository-publication-evidence-1',
+        repository_publication_request_id: 'repository-publication-request-1',
+      }],
+    })),
+    /repository_publication_evidence_read_focus_not_found:repository-publication-evidence-missing/,
+  );
+});
+
+test('summarizeRepositoryPublicationSurface narrows evidence summary to focused evidence id', () => {
+  const summary = summarizeRepositoryPublicationSurface('repository_publication.evidence.list', {
+    ok: true,
+    status: 'ok',
+    site_id: 'site_alpha',
+    evidence: [
+      {
+        repository_publication_evidence_id: 'repository-publication-evidence-2',
+        repository_publication_request_id: 'repository-publication-request-2',
+        publication_execution_id: 'publication-execution-2',
+        publication_status: 'completed',
+        published_commit_ref: 'git:commit:2222',
+      },
+      {
+        repository_publication_evidence_id: 'repository-publication-evidence-1',
+        repository_publication_request_id: 'repository-publication-request-1',
+        publication_execution_id: 'publication-execution-1',
+        publication_status: 'completed',
+        published_commit_ref: 'git:commit:1111',
+      },
+    ],
+  }, {
+    site_id: 'site_alpha',
+  }, {
+    focusEvidenceId: 'repository-publication-evidence-1',
+  });
+
+  assert.equal(summary.evidence_count, 1);
+  assert.equal(summary.focused_repository_publication_evidence_id, 'repository-publication-evidence-1');
+  assert.equal(summary.latest_repository_publication_evidence_id, 'repository-publication-evidence-1');
+  assert.equal(summary.latest_published_commit_ref, 'git:commit:1111');
 });
 
 test('summaries and text output preserve refusal evidence for filtered execution list', () => {

@@ -29,18 +29,34 @@ export function parseRepositoryPublicationReadArgs(argv = [], env = process.env,
   const operation = option(args, '--operation') ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_READ_OPERATION ?? 'repository_publication.request.list';
   const workerUrl = normalizeWorkerUrl(option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '');
   const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? null;
+  const repositoryPublicationEvidenceId = normalizeOptionalString(
+    option(args, '--repository-publication-evidence-id')
+    ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_EVIDENCE_ID
+    ?? null,
+  );
   const repositoryPublicationRequestId = normalizeOptionalString(
     option(args, '--repository-publication-request-id')
     ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_READ_REQUEST_ID
     ?? null,
   );
+  const limitOption = option(args, '--limit') ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_READ_LIMIT ?? null;
   const limit = parseOptionalInteger(
-    option(args, '--limit') ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_READ_LIMIT ?? null,
+    limitOption,
     'limit',
+  );
+  const effectiveLimit = (
+    limit
+    ?? (
+      operation === 'repository_publication.evidence.list'
+      && repositoryPublicationEvidenceId
+      && !limitOption
+        ? 500
+        : null
+    )
   );
   const requestId = option(args, '--request-id')
     ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_READ_ENVELOPE_REQUEST_ID
-    ?? `repository_publication_read_${safeToken(operation)}_${repositoryPublicationRequestId ?? siteId ?? now()}`;
+    ?? `repository_publication_read_${safeToken(operation)}_${repositoryPublicationEvidenceId ?? repositoryPublicationRequestId ?? siteId ?? now()}`;
   const format = option(args, '--format') ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_READ_FORMAT ?? 'json';
   const auth = resolveAuth(args, env);
 
@@ -56,7 +72,8 @@ export function parseRepositoryPublicationReadArgs(argv = [], env = process.env,
     requestId,
     format,
     auth,
-    params: buildRepositoryPublicationReadParams({ operation, siteId, repositoryPublicationRequestId, limit }),
+    params: buildRepositoryPublicationReadParams({ operation, siteId, repositoryPublicationRequestId, limit: effectiveLimit }),
+    focusEvidenceId: repositoryPublicationEvidenceId,
   };
 }
 
@@ -98,6 +115,12 @@ export async function readRepositoryPublicationSurface(config, fetchImpl = fetch
     error.config = config;
     throw error;
   }
+  if (config.operation === 'repository_publication.evidence.list' && config.focusEvidenceId) {
+    const evidence = Array.isArray(body?.evidence) ? body.evidence : [];
+    if (!evidence.some((entry) => entry?.repository_publication_evidence_id === config.focusEvidenceId)) {
+      throw new Error(`repository_publication_evidence_read_focus_not_found:${config.focusEvidenceId}`);
+    }
+  }
   return {
     schema: 'narada.cloudflare_carrier.repository_publication_read.v1',
     status: 'ok',
@@ -107,11 +130,13 @@ export async function readRepositoryPublicationSurface(config, fetchImpl = fetch
     auth_source: config.auth.source,
     params: { ...config.params },
     response: body,
-    summary: summarizeRepositoryPublicationSurface(config.operation, body, config.params),
+    summary: summarizeRepositoryPublicationSurface(config.operation, body, config.params, {
+      focusEvidenceId: config.focusEvidenceId ?? null,
+    }),
   };
 }
 
-export function summarizeRepositoryPublicationSurface(operation, body = {}, params = {}) {
+export function summarizeRepositoryPublicationSurface(operation, body = {}, params = {}, options = {}) {
   if (operation === 'repository_publication.request.list') {
     const requests = Array.isArray(body?.requests) ? body.requests : [];
     const latest = requests[0] ?? null;
@@ -189,7 +214,11 @@ export function summarizeRepositoryPublicationSurface(operation, body = {}, para
   }
   if (operation === 'repository_publication.evidence.list') {
     const evidence = Array.isArray(body?.evidence) ? body.evidence : [];
-    const latest = evidence[0] ?? null;
+    const focusEvidenceId = options?.focusEvidenceId ?? null;
+    const focusedEvidence = focusEvidenceId
+      ? evidence.filter((entry) => entry?.repository_publication_evidence_id === focusEvidenceId)
+      : evidence;
+    const latest = focusedEvidence[0] ?? null;
     return {
       operation,
       ok: body.ok ?? null,
@@ -197,7 +226,7 @@ export function summarizeRepositoryPublicationSurface(operation, body = {}, para
       status: body.status ?? null,
       site_id: body.site_id ?? params.site_id ?? null,
       repository_publication_request_id: params.repository_publication_request_id ?? latest?.repository_publication_request_id ?? null,
-      evidence_count: evidence.length,
+      evidence_count: focusedEvidence.length,
       latest_repository_publication_evidence_id: latest?.repository_publication_evidence_id ?? null,
       latest_repository_publication_request_id: latest?.repository_publication_request_id ?? null,
       latest_publication_execution_id: latest?.publication_execution_id ?? null,
@@ -210,6 +239,7 @@ export function summarizeRepositoryPublicationSurface(operation, body = {}, para
       cloudflare_git_push_admission: body.cloudflare_git_push_admission ?? null,
       direct_cloudflare_repository_mutation_admission: body.direct_cloudflare_repository_mutation_admission ?? null,
       authority_partition: body.authority_partition ?? null,
+      focused_repository_publication_evidence_id: focusEvidenceId,
     };
   }
   if (operation === 'repository_publication.cloudflare_execution.list') {
