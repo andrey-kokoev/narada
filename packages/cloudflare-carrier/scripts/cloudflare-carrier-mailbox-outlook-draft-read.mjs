@@ -108,6 +108,9 @@ export function formatMailboxOutlookDraftReadText(result) {
       + ` subject=${summary.latest_subject ?? 'none'}`,
     );
   }
+  if (summary.latest_proposal_id) {
+    lines.push(`Proposal Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.latest_proposal_id} --operator-session-file <operator-session-file>`);
+  }
   if (summary.latest_body_preview) {
     lines.push(`Body Preview: ${summary.latest_body_preview}`);
   }
