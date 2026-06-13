@@ -5,15 +5,24 @@ import { parseProductReadArgs, readProductSurface } from './cloudflare-carrier-p
 
 export function parseDirectiveDeliveryReviewArgs(argv = [], env = process.env) {
   const args = [...argv];
-  const parsed = parseProductReadArgs(['--operation', 'operation.read', ...argv], env);
+  const explicitOperationId =
+    normalizeOptionalString(option(args, '--operation-id'))
+    ?? normalizeOptionalString(option(args, '--carrier-operation'))
+    ?? normalizeOptionalString(env.CLOUDFLARE_CARRIER_OPERATION_ID)
+    ?? normalizeOptionalString(env.CLOUDFLARE_CARRIER_CARRIER_OPERATION)
+    ?? null;
+  const defaultOperation = explicitOperationId ? 'operation.read' : 'webhook_delay.directive.dual_record.list';
+  const defaultDirectiveRecordLimit = explicitOperationId ? 20 : 200;
+  const defaultDirectiveDeliveryLimit = explicitOperationId ? 20 : 200;
+  const parsed = parseProductReadArgs(['--operation', defaultOperation, ...argv], env);
   const directiveRecordLimit = parseOptionalInteger(
     option(args, '--directive-record-limit') ?? env.CLOUDFLARE_CARRIER_WEBHOOK_DELAY_DIRECTIVE_LIMIT ?? null,
     'directive-record-limit',
-  ) ?? 20;
+  ) ?? defaultDirectiveRecordLimit;
   const directiveDeliveryLimit = parseOptionalInteger(
     option(args, '--directive-delivery-limit') ?? env.CLOUDFLARE_CARRIER_WEBHOOK_DELAY_DIRECTIVE_DELIVERY_LIMIT ?? null,
     'directive-delivery-limit',
-  ) ?? 20;
+  ) ?? defaultDirectiveDeliveryLimit;
   const focusRef = normalizeOptionalString(
     option(args, '--focus-ref') ?? env.CLOUDFLARE_CARRIER_DIRECTIVE_RECORD_FOCUS_REF ?? null,
   );
@@ -29,16 +38,23 @@ export function parseDirectiveDeliveryReviewArgs(argv = [], env = process.env) {
 }
 
 export async function readDirectiveDeliveryReview(config, fetchImpl = fetch) {
-  const operationProduct = await readProductSurface(config, fetchImpl);
-  const siteId = operationProduct.summary?.site_id ?? config.params.site_id ?? null;
-  const directiveRecordsProduct = await readProductSurface({
-    ...config,
-    operation: 'webhook_delay.directive.dual_record.list',
-    params: {
-      site_id: siteId,
-      webhook_delay_directive_limit: config.params.webhook_delay_directive_limit,
-    },
-  }, fetchImpl);
+  const baseProduct = await readProductSurface(config, fetchImpl);
+  const operationProduct = config.operation === 'operation.read' ? baseProduct : null;
+  const directiveRecordsProduct = config.operation === 'webhook_delay.directive.dual_record.list'
+    ? baseProduct
+    : await readProductSurface({
+      ...config,
+      operation: 'webhook_delay.directive.dual_record.list',
+      params: {
+        site_id: config.params.site_id ?? null,
+        webhook_delay_directive_limit: config.params.webhook_delay_directive_limit,
+      },
+    }, fetchImpl);
+  const siteId =
+    operationProduct?.summary?.site_id
+    ?? directiveRecordsProduct.summary?.site_id
+    ?? config.params.site_id
+    ?? null;
   const directiveDeliveriesProduct = await readProductSurface({
     ...config,
     operation: 'webhook_delay.directive.primary_with_fallback.list',
@@ -50,21 +66,21 @@ export async function readDirectiveDeliveryReview(config, fetchImpl = fetch) {
   return {
     schema: 'narada.cloudflare_carrier.directive_delivery_review.v1',
     status: 'ok',
-    worker_url: operationProduct.worker_url,
-    auth_source: operationProduct.auth_source,
-    operation: operationProduct.operation,
-    params: operationProduct.params,
+    worker_url: baseProduct.worker_url,
+    auth_source: baseProduct.auth_source,
+    operation: baseProduct.operation,
+    params: baseProduct.params,
     summary: summarizeDirectiveDeliveryReview(
-      operationProduct.response,
+      operationProduct?.response,
       directiveRecordsProduct.response,
       directiveDeliveriesProduct.response,
       {
-        operationSummary: operationProduct.summary,
+        operationSummary: operationProduct?.summary,
         focusRef: config.focusRef,
       },
     ),
     response: {
-      operation: operationProduct.response,
+      operation: operationProduct?.response ?? null,
       directive_records: directiveRecordsProduct.response,
       directive_deliveries: directiveDeliveriesProduct.response,
     },
@@ -76,23 +92,41 @@ export function summarizeDirectiveDeliveryReview(operationBody = {}, directiveRe
   const directiveRecords = Array.isArray(directiveRecordsBody?.directive_records) ? directiveRecordsBody.directive_records : [];
   const directiveDeliveries = Array.isArray(directiveDeliveriesBody?.directive_deliveries) ? directiveDeliveriesBody.directive_deliveries : [];
   const focusRef = options.focusRef ?? operationSummary.workflow_focus_ref ?? null;
-  const focusedDirectiveRecord = directiveRecords.find((entry) => entry?.directive_record_id === focusRef) ?? directiveRecords[0] ?? null;
+  const exactFocusedDirectiveRecord = focusRef
+    ? directiveRecords.find((entry) => entry?.directive_record_id === focusRef) ?? null
+    : null;
+  if (focusRef && !exactFocusedDirectiveRecord) {
+    throw new Error(`directive_delivery_review_focus_not_found:${focusRef}`);
+  }
+  const focusedDirectiveRecord = exactFocusedDirectiveRecord ?? directiveRecords[0] ?? null;
   const focusedDirectiveRecordId = focusedDirectiveRecord?.directive_record_id ?? focusRef ?? null;
-  const focusedDirectiveDelivery = directiveDeliveries.find((entry) => entry?.directive_record_id === focusedDirectiveRecordId) ?? null;
+  const focusedDirectiveRecords = exactFocusedDirectiveRecord ? [exactFocusedDirectiveRecord] : directiveRecords;
+  const focusedDirectiveDeliveries = exactFocusedDirectiveRecord
+    ? directiveDeliveries.filter((entry) => entry?.directive_record_id === focusedDirectiveRecordId)
+    : directiveDeliveries;
+  const focusedDirectiveDelivery = focusedDirectiveDeliveries[0] ?? null;
   const deliveredRecordIds = new Set(
-    directiveDeliveries
+    focusedDirectiveDeliveries
       .map((entry) => entry?.directive_record_id)
       .filter((value) => typeof value === 'string' && value.length > 0),
   );
-  const undeliveredDirectiveRecords = directiveRecords.filter((entry) => !deliveredRecordIds.has(entry?.directive_record_id));
+  const undeliveredDirectiveRecords = focusedDirectiveRecords.filter((entry) => !deliveredRecordIds.has(entry?.directive_record_id));
   return {
     site_id: operationBody?.operation?.site_id ?? operationBody?.site_id ?? directiveRecordsBody?.site_id ?? directiveDeliveriesBody?.site_id ?? operationSummary.site_id ?? null,
-    operation_id: operationBody?.operation?.operation_id ?? operationBody?.operation_id ?? operationSummary.operation_id ?? null,
+    operation_id:
+      operationBody?.operation?.operation_id
+      ?? operationBody?.operation_id
+      ?? operationSummary.operation_id
+      ?? focusedDirectiveRecord?.operation_id
+      ?? focusedDirectiveRecord?.carrier_operation_id
+      ?? focusedDirectiveDelivery?.operation_id
+      ?? focusedDirectiveDelivery?.carrier_operation_id
+      ?? null,
     workflow_next_action: operationSummary.workflow_next_action ?? null,
     workflow_reason: operationSummary.workflow_reason ?? null,
     workflow_focus_ref: operationSummary.workflow_focus_ref ?? focusRef ?? null,
-    directive_record_count: directiveRecords.length,
-    directive_delivery_count: directiveDeliveries.length,
+    directive_record_count: focusedDirectiveRecords.length,
+    directive_delivery_count: focusedDirectiveDeliveries.length,
     focused_directive_record_id: focusedDirectiveRecordId,
     focused_delivery_id: focusedDirectiveDelivery?.delivery_id ?? null,
     focused_classification_state: focusedDirectiveRecord?.classification_state ?? null,
@@ -122,7 +156,7 @@ export function summarizeDirectiveDeliveryReview(operationBody = {}, directiveRe
     delivery_authority: directiveDeliveriesBody?.directive_authority ?? focusedDirectiveDelivery?.directive_authority ?? null,
     dispatch_authority: focusedDirectiveDelivery?.dispatch_authority ?? null,
     fallback_authority: directiveRecordsBody?.fallback_authority ?? directiveDeliveriesBody?.fallback_authority ?? focusedDirectiveRecord?.fallback_authority ?? focusedDirectiveDelivery?.fallback_authority ?? null,
-    latest_recorded_at: focusedDirectiveRecord?.recorded_at ?? directiveRecords[0]?.recorded_at ?? null,
+    latest_recorded_at: focusedDirectiveRecord?.recorded_at ?? focusedDirectiveRecords[0]?.recorded_at ?? null,
     latest_delivery_recorded_at: focusedDirectiveDelivery?.recorded_at ?? null,
   };
 }
@@ -135,7 +169,7 @@ export function formatDirectiveDeliveryReviewText(result) {
     `Auth: ${result?.auth_source ?? 'unknown'}`,
     `Site: ${summary.site_id ?? 'unknown'}`,
     `Workflow: action=${summary.workflow_next_action ?? 'none'} reason=${summary.workflow_reason ?? 'none'} focus=${summary.workflow_focus_ref ?? 'none'}`,
-    `Directive Records: count=${summary.directive_record_count ?? 0} undelivered=${summary.undelivered_directive_record_count ?? 0} latest_undelivered=${summary.latest_undelivered_directive_record_id ?? 'none'}`,
+    `Directive Records: count=${summary.directive_record_count ?? 0} focused=${summary.focused_directive_record_id ?? 'none'} undelivered=${summary.undelivered_directive_record_count ?? 0} latest_undelivered=${summary.latest_undelivered_directive_record_id ?? 'none'}`,
     `Directive Deliveries: count=${summary.directive_delivery_count ?? 0} focused_delivery=${summary.focused_delivery_id ?? 'none'} state=${summary.focused_delivery_state ?? 'none'} ok=${summary.focused_delivery_ok ?? 'unknown'}`,
   ];
   if (summary.focused_directive_record_id || summary.focused_classification_state || summary.focused_latest_delay_minutes !== null) {

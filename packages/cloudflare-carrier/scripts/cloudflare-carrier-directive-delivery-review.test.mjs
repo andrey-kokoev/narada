@@ -27,6 +27,21 @@ test('parseDirectiveDeliveryReviewArgs configures operation read and review limi
   assert.equal(config.focusRef, 'directive_record_focus');
 });
 
+test('parseDirectiveDeliveryReviewArgs supports direct focused review without operation id', () => {
+  const config = parseDirectiveDeliveryReviewArgs([
+    '--url', 'https://carrier.example',
+    '--site', 'site_alpha',
+    '--focus-ref', 'directive_record_focus',
+    '--token', 'test-token',
+  ], {});
+
+  assert.equal(config.operation, 'webhook_delay.directive.dual_record.list');
+  assert.equal(config.params.site_id, 'site_alpha');
+  assert.equal(config.params.webhook_delay_directive_limit, 200);
+  assert.equal(config.params.webhook_delay_directive_delivery_limit, 200);
+  assert.equal(config.focusRef, 'directive_record_focus');
+});
+
 test('summarizeDirectiveDeliveryReview tracks focused undelivered directive state', () => {
   const summary = summarizeDirectiveDeliveryReview(
     { operation: { site_id: 'site_alpha', operation_id: 'operation_alpha' } },
@@ -93,6 +108,23 @@ test('summarizeDirectiveDeliveryReview tracks focused undelivered directive stat
   assert.equal(summary.latest_delivery_recorded_at, null);
 });
 
+test('summarizeDirectiveDeliveryReview fails explicitly when focused directive is missing', () => {
+  assert.throws(() => summarizeDirectiveDeliveryReview(
+    {},
+    {
+      directive_records: [
+        { directive_record_id: 'directive_record_other' },
+      ],
+    },
+    {
+      directive_deliveries: [],
+    },
+    {
+      focusRef: 'directive_record_focus',
+    },
+  ), /directive_delivery_review_focus_not_found:directive_record_focus/);
+});
+
 test('readDirectiveDeliveryReview reads operation state plus directive record and delivery lists', async () => {
   const calls = [];
   const result = await readDirectiveDeliveryReview({
@@ -150,6 +182,68 @@ test('readDirectiveDeliveryReview reads operation state plus directive record an
   assert.equal(result.summary.undelivered_directive_record_count, 1);
 });
 
+test('readDirectiveDeliveryReview supports direct focused review without operation read', async () => {
+  const calls = [];
+  const result = await readDirectiveDeliveryReview({
+    workerUrl: 'https://carrier.example',
+    auth: { kind: 'operator_session', value: 'cookie', source: 'operator-session-file' },
+    operation: 'webhook_delay.directive.dual_record.list',
+    requestId: 'directive_delivery_review_direct_test',
+    format: 'json',
+    focusRef: 'directive_record_focus',
+    params: {
+      site_id: 'site_alpha',
+      webhook_delay_directive_limit: 200,
+      webhook_delay_directive_delivery_limit: 200,
+    },
+  }, async (_url, init) => {
+    const body = JSON.parse(init.body);
+    calls.push(body);
+    if (body.operation === 'webhook_delay.directive.dual_record.list') {
+      return responseJson({
+        ok: true,
+        site_id: 'site_alpha',
+        directive_records: [
+          {
+            directive_record_id: 'directive_record_focus',
+            operation_id: 'operation_alpha',
+            recorded_at: '2026-06-12T12:00:00.000Z',
+          },
+          {
+            directive_record_id: 'directive_record_other',
+            operation_id: 'operation_beta',
+            recorded_at: '2026-06-12T11:00:00.000Z',
+          },
+        ],
+      });
+    }
+    if (body.operation === 'webhook_delay.directive.primary_with_fallback.list') {
+      return responseJson({
+        ok: true,
+        site_id: 'site_alpha',
+        directive_deliveries: [
+          {
+            delivery_id: 'delivery_focus',
+            directive_record_id: 'directive_record_focus',
+            delivery_state: 'cloudflare_primary_delivered',
+            delivery_ok: true,
+          },
+        ],
+      });
+    }
+    throw new Error(`unexpected_operation:${body.operation}`);
+  });
+
+  assert.deepEqual(calls.map((entry) => entry.operation), [
+    'webhook_delay.directive.dual_record.list',
+    'webhook_delay.directive.primary_with_fallback.list',
+  ]);
+  assert.equal(result.summary.operation_id, 'operation_alpha');
+  assert.equal(result.summary.directive_record_count, 1);
+  assert.equal(result.summary.directive_delivery_count, 1);
+  assert.equal(result.summary.focused_directive_record_id, 'directive_record_focus');
+});
+
 test('formatDirectiveDeliveryReviewText renders directive review summary', () => {
   const text = formatDirectiveDeliveryReviewText({
     worker_url: 'https://carrier.example',
@@ -186,7 +280,7 @@ test('formatDirectiveDeliveryReviewText renders directive review summary', () =>
 
   assert.match(text, /Directive Delivery Review: ok/);
   assert.match(text, /Workflow: action=review_directive_delivery reason=undelivered_directives focus=directive_record_focus/);
-  assert.match(text, /Directive Records: count=2 undelivered=1 latest_undelivered=directive_record_focus/);
+  assert.match(text, /Directive Records: count=2 focused=directive_record_focus undelivered=1 latest_undelivered=directive_record_focus/);
   assert.match(text, /Directive Deliveries: count=1 focused_delivery=none state=none ok=unknown/);
   assert.match(text, /Focused Directive: id=directive_record_focus classification=critical delay=18 critical=15 action=record_directive_emission_intent visibility=record_only/);
   assert.match(text, /Focused Admission: delivery_action=none dispatch_to_provider=false complete_without_provider=true/);
