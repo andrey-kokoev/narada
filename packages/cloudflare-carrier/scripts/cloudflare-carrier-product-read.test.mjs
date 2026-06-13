@@ -1951,6 +1951,38 @@ test('formatProductSurfaceText surfaces site scope and site operation focus comm
   assert.match(siteReadContinuityReviewText, /Active Operation Focus: kind=unknown ref=site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:19:01.404Z:completed/);
   assert.match(siteReadContinuityReviewText, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:19:01.404Z:completed --operator-session-file <operator-session-file>/);
 
+  const siteReadContinuityRefreshText = formatProductSurfaceText({
+    operation: 'site.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'site.read',
+      site_id: 'site_alpha',
+      display_name: 'Alpha Site',
+      active_operation_id: 'operation_alpha',
+      active_operation_next_action: 'refresh_site_continuity_loop',
+      active_operation_workflow_reason: 'operation_lifecycle_continuity_loop_stale',
+      active_operation_focus_kind: null,
+      active_operation_focus_ref: 'site_alpha',
+      health: 'attention',
+      next_action: 'focus_next_operation',
+      scope_loaded: true,
+      continuity_state: 'packet_observed',
+      continuity_direction_state: 'bidirectional_packets_observed',
+      continuity_loop_state: 'loop_report_observed',
+      continuity_reconciliation_execution_state: 'reconciliation_execution_observed',
+      continuity_reconciliation_execution_health: 'ready',
+      continuity_packet_count: 3,
+      continuity_loop_report_count: 20,
+      continuity_reconciliation_execution_count: 20,
+      persistence_state: 'durable',
+      recovery_state: 'reconstructable',
+      membership_count: 2,
+      session_count: 4,
+    },
+  });
+  assert.match(siteReadContinuityRefreshText, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity/);
+
   const siteReadMembershipPutText = formatProductSurfaceText({
     operation: 'site.read',
     worker_url: 'https://carrier.example.test',
