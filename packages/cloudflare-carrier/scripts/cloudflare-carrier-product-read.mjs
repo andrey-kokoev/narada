@@ -9,6 +9,8 @@ const VALID_OPERATIONS = new Set([
   'operation.read',
   'mailbox.send_accepted.list',
   'mailbox.send_confirmation.list',
+  'local_ingress.request.list',
+  'local_ingress.evidence.list',
   'local_ingress.provider_heartbeat.list',
   'repository_publication.provider_heartbeat.list',
 ]);
@@ -34,6 +36,8 @@ export function parseProductReadArgs(argv = [], env = process.env) {
     || operation === 'operation.read'
     || operation === 'mailbox.send_accepted.list'
     || operation === 'mailbox.send_confirmation.list'
+    || operation === 'local_ingress.request.list'
+    || operation === 'local_ingress.evidence.list'
     || operation === 'local_ingress.provider_heartbeat.list'
     || operation === 'repository_publication.provider_heartbeat.list') && !siteId) throw new Error(`product_read_${operation}_requires_--site`);
   if (operation === 'operation.read' && !operationId) throw new Error('product_read_operation.read_requires_--operation-id_or_--carrier-operation');
@@ -62,6 +66,8 @@ export function buildParams({ operation, siteId, operationId, limit }) {
     || operation === 'operation.read'
     || operation === 'mailbox.send_accepted.list'
     || operation === 'mailbox.send_confirmation.list'
+    || operation === 'local_ingress.request.list'
+    || operation === 'local_ingress.evidence.list'
     || operation === 'local_ingress.provider_heartbeat.list'
     || operation === 'repository_publication.provider_heartbeat.list') params.site_id = siteId;
   if (operation === 'operation.read') params.operation_id = operationId;
@@ -386,6 +392,12 @@ export function formatProductSurfaceText(result) {
     }
     if (summary.workflow_next_action === 'review_local_ingress_provider_liveness') {
       lines.push(`Local Ingress Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:provider-liveness:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
+    }
+    if (summary.workflow_next_action === 'review_local_ingress_request') {
+      lines.push(`Local Ingress Request Review: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:request:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
+    }
+    if (summary.workflow_next_action === 'review_local_ingress_evidence') {
+      lines.push(`Local Ingress Evidence Review: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:evidence:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
     }
     if (summary.workflow_next_action === 'review_repository_publication_provider_liveness') {
       lines.push(`Repository Publication Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);

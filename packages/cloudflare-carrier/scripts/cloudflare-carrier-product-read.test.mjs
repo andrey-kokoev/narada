@@ -852,6 +852,48 @@ test('formatProductSurfaceText emits provider liveness operator commands for ope
   });
   assert.match(localIngressText, /Local Ingress Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:provider-liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
+  const localIngressRequestText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_local_ingress_request',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'local_ingress_request_attention',
+      workflow_next_action: 'review_local_ingress_request',
+      workflow_reason: 'local_ingress_operation_posture_has_pending_requests',
+      session_count: 1,
+      task_count: 0,
+    },
+  });
+  assert.match(localIngressRequestText, /Local Ingress Request Review: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+
+  const localIngressEvidenceText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_local_ingress_evidence',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'local_ingress_evidence_attention',
+      workflow_next_action: 'review_local_ingress_evidence',
+      workflow_reason: 'local_ingress_operation_posture_has_returned_evidence',
+      session_count: 1,
+      task_count: 0,
+    },
+  });
+  assert.match(localIngressEvidenceText, /Local Ingress Evidence Review: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:evidence:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+
   const repositoryPublicationText = formatProductSurfaceText({
     operation: 'operation.read',
     worker_url: 'https://carrier.example.test',

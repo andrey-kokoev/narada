@@ -17,6 +17,86 @@ test('parseOperationNextWorkflowLiveArgs requires explicit execution acknowledge
   );
 });
 
+test('runOperationNextWorkflowLive delegates local ingress request route to local ingress request read', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example.test',
+    siteId: 'site_alpha',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-file' },
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              route_next_action: 'monitor_operations',
+              next_operation_id: 'operation_alpha',
+              route_target: 'operation_alpha',
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            operation_id: 'operation_alpha',
+            workflow_next_action: 'review_local_ingress_request',
+            posture_next_action: 'focus_next_operation',
+            posture_target: 'operation_alpha',
+          },
+        });
+      }
+      return JSON.stringify({ schema: 'narada.cloudflare_carrier.product_read.v1', status: 'ok', summary: { request_count: 1 } });
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'local_ingress_request');
+  assert.ok(invocations.some((args) => /cloudflare-carrier-local-ingress-request-read\.mjs$/.test(args[0])));
+});
+
+test('runOperationNextWorkflowLive delegates local ingress evidence route to local ingress evidence read', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example.test',
+    siteId: 'site_alpha',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-file' },
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              route_next_action: 'monitor_operations',
+              next_operation_id: 'operation_alpha',
+              route_target: 'operation_alpha',
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            operation_id: 'operation_alpha',
+            workflow_next_action: 'review_local_ingress_evidence',
+            posture_next_action: 'focus_next_operation',
+            posture_target: 'operation_alpha',
+          },
+        });
+      }
+      return JSON.stringify({ schema: 'narada.cloudflare_carrier.product_read.v1', status: 'ok', summary: { evidence_count: 1 } });
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'local_ingress_evidence');
+  assert.ok(invocations.some((args) => /cloudflare-carrier-local-ingress-evidence-read\.mjs$/.test(args[0])));
+});
+
 test('parseOperationNextWorkflowLiveArgs supports operator session auth', () => {
   const parsed = parseOperationNextWorkflowLiveArgs([
     '--url', 'https://carrier.example',

@@ -17,6 +17,8 @@ const persistenceReadScript = resolve(scriptDir, 'cloudflare-carrier-operation-p
 const recoveryReadScript = resolve(scriptDir, 'cloudflare-carrier-operation-recovery-read.mjs');
 const mailboxSendAcceptedReadScript = resolve(scriptDir, 'cloudflare-carrier-mailbox-send-accepted-read.mjs');
 const mailboxSendConfirmationReadScript = resolve(scriptDir, 'cloudflare-carrier-mailbox-send-confirmation-read.mjs');
+const localIngressRequestReadScript = resolve(scriptDir, 'cloudflare-carrier-local-ingress-request-read.mjs');
+const localIngressEvidenceReadScript = resolve(scriptDir, 'cloudflare-carrier-local-ingress-evidence-read.mjs');
 const localIngressProviderLivenessReadScript = resolve(scriptDir, 'cloudflare-carrier-local-ingress-provider-liveness-read.mjs');
 const mailboxDraftReplyProposalReadScript = resolve(scriptDir, 'cloudflare-carrier-mailbox-draft-reply-proposal-read.mjs');
 const repositoryPublicationProviderLivenessReadScript = resolve(scriptDir, 'cloudflare-carrier-repository-publication-provider-liveness-read.mjs');
@@ -42,6 +44,8 @@ const ROUTE_TO_WORKFLOW = new Map([
   ['read_operation_evidence', { name: 'evidence', script: evidenceReadScript, flag: null }],
   ['review_mailbox_send_confirmation', { name: 'mailbox_send_confirmation', script: mailboxSendConfirmationReadScript, flag: null }],
   ['review_mailbox_send_acceptance', { name: 'mailbox_send_accepted', script: mailboxSendAcceptedReadScript, flag: null }],
+  ['review_local_ingress_request', { name: 'local_ingress_request', script: localIngressRequestReadScript, flag: null }],
+  ['review_local_ingress_evidence', { name: 'local_ingress_evidence', script: localIngressEvidenceReadScript, flag: null }],
   ['review_local_ingress_provider_liveness', { name: 'local_ingress_provider_liveness', script: localIngressProviderLivenessReadScript, flag: null }],
   ['review_mailbox_draft_reply_proposal', { name: 'mailbox_draft_reply_proposal', script: mailboxDraftReplyProposalReadScript, flag: null }],
   ['review_repository_publication_provider_liveness', { name: 'repository_publication_provider_liveness', script: repositoryPublicationProviderLivenessReadScript, flag: null }],
