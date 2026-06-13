@@ -2,7 +2,14 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-const VALID_OPERATIONS = new Set(['site.list', 'site.read', 'operation.list', 'operation.read']);
+const VALID_OPERATIONS = new Set([
+  'site.list',
+  'site.read',
+  'operation.list',
+  'operation.read',
+  'local_ingress.provider_heartbeat.list',
+  'repository_publication.provider_heartbeat.list',
+]);
 
 export function parseProductReadArgs(argv = [], env = process.env) {
   const args = [...argv];
@@ -20,7 +27,11 @@ export function parseProductReadArgs(argv = [], env = process.env) {
   if (!workerUrl) throw new Error('product_read_requires_--url_or_CLOUDFLARE_CARRIER_URL');
   if (!VALID_OPERATIONS.has(operation)) throw new Error(`product_read_operation_unsupported:${operation}`);
   if (!['json', 'summary', 'text'].includes(format)) throw new Error(`product_read_format_unsupported:${format}`);
-  if ((operation === 'site.read' || operation === 'operation.list' || operation === 'operation.read') && !siteId) throw new Error(`product_read_${operation}_requires_--site`);
+  if ((operation === 'site.read'
+    || operation === 'operation.list'
+    || operation === 'operation.read'
+    || operation === 'local_ingress.provider_heartbeat.list'
+    || operation === 'repository_publication.provider_heartbeat.list') && !siteId) throw new Error(`product_read_${operation}_requires_--site`);
   if (operation === 'operation.read' && !operationId) throw new Error('product_read_operation.read_requires_--operation-id_or_--carrier-operation');
   if (continuation && operation !== 'operation.list') throw new Error('product_read_continuation_requires_operation.list');
   if (!auth) throw new Error('product_read_requires_bearer_token_or_operator_session');
@@ -42,7 +53,11 @@ function parseBoolean(value) {
 
 export function buildParams({ operation, siteId, operationId, limit }) {
   const params = {};
-  if (operation === 'site.read' || operation === 'operation.list' || operation === 'operation.read') params.site_id = siteId;
+  if (operation === 'site.read'
+    || operation === 'operation.list'
+    || operation === 'operation.read'
+    || operation === 'local_ingress.provider_heartbeat.list'
+    || operation === 'repository_publication.provider_heartbeat.list') params.site_id = siteId;
   if (operation === 'operation.read') params.operation_id = operationId;
   if (Number.isInteger(limit)) params.limit = limit;
   return params;
@@ -350,6 +365,12 @@ export function formatProductSurfaceText(result) {
     }
     if (summary.workflow_next_action === 'review_repository_publication_request') {
       lines.push(`Repository Publication Review: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
+    }
+    if (summary.workflow_next_action === 'review_local_ingress_provider_liveness') {
+      lines.push(`Local Ingress Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:provider-liveness:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
+    }
+    if (summary.workflow_next_action === 'review_repository_publication_provider_liveness') {
+      lines.push(`Repository Publication Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
     }
     if (summary.workflow_next_action === 'review_site_file_change_proposal') {
       lines.push(`Site File Change Proposal Review: pnpm --filter @narada2/cloudflare-carrier product:site-file-change:proposal:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
