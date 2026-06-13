@@ -185,6 +185,8 @@
     "product:task-lifecycle:report:text": "node scripts/cloudflare-carrier-task-lifecycle-report.mjs --format text",
     "product:task-lifecycle:review": "node scripts/cloudflare-carrier-task-lifecycle-read.mjs",
     "product:task-lifecycle:review:text": "node scripts/cloudflare-carrier-task-lifecycle-read.mjs --format text",
+    "product:task-lifecycle:next:workflow:live": "node scripts/cloudflare-carrier-task-lifecycle-next-workflow-live.mjs",
+    "product:task-lifecycle:next:workflow:live:text": "node scripts/cloudflare-carrier-task-lifecycle-next-workflow-live.mjs",
     "product:task-lifecycle:changed-file-evidence": "node scripts/cloudflare-carrier-task-lifecycle-changed-file-evidence.mjs",
     "product:task-lifecycle:changed-file-evidence:text": "node scripts/cloudflare-carrier-task-lifecycle-changed-file-evidence.mjs --format text",
     "product:task-lifecycle:finish": "node scripts/cloudflare-carrier-task-lifecycle-finish.mjs",

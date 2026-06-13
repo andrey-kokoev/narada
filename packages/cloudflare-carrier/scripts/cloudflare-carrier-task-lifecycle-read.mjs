@@ -127,19 +127,23 @@ function formatTaskLifecycleNextCommands(result, summary) {
   const siteId = summary.site_id ?? result?.params?.site_id ?? '<site-id>';
   const taskId = summary.task_id ?? result?.params?.task_lifecycle_task_id ?? '<task-id>';
   if (!taskId) return [];
+  const workflowCommand = `Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`;
   const normalizedStatus = normalizeTaskStatus(summary.task_status);
   if (summary.report_id && !summary.finish_id) {
     return [
+      workflowCommand,
       `Finish Command: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:finish:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --finalizer-agent <agent-id> --finish-verdict accepted --operator-session-file <operator-session-file>`,
     ];
   }
   if (normalizedStatus === 'claimed') {
     return [
+      workflowCommand,
       `Report Command: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:report:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --reporter-agent <agent-id> --summary <summary> --operator-session-file <operator-session-file>`,
     ];
   }
   if (normalizedStatus === 'open') {
     return [
+      workflowCommand,
       `Claim Command: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:claim:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --claimant-agent <agent-id> --operator-session-file <operator-session-file>`,
     ];
   }
