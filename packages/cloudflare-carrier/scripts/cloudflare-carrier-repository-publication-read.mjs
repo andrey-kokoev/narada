@@ -377,7 +377,10 @@ export function formatRepositoryPublicationReadText(result) {
     } else if (summary.latest_repository_publication_admission_id) {
       lines.push(`Latest Admission: ${summary.latest_repository_publication_admission_id}`);
     }
-    if (summary.latest_repository_publication_request_id) lines.push(`Latest Request: ${summary.latest_repository_publication_request_id}`);
+    if (summary.latest_repository_publication_request_id) {
+      const requestLabel = summary.focused_repository_publication_admission_id ? 'Focused Request' : 'Latest Request';
+      lines.push(`${requestLabel}: ${summary.latest_repository_publication_request_id}`);
+    }
     if (summary.latest_admission_action) {
       const decisionLabel = summary.focused_repository_publication_admission_id ? 'Focused Decision' : 'Latest Decision';
       lines.push(`${decisionLabel}: ${summary.latest_admission_action}${summary.latest_admission_reason ? ` reason=${summary.latest_admission_reason}` : ''}`);

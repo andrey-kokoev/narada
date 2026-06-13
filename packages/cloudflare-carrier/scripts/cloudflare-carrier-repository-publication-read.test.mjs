@@ -467,6 +467,7 @@ test('formatRepositoryPublicationReadText surfaces focused admission and executi
   });
 
   assert.match(admissionText, /Focused Admission: repository-publication-admission-1/);
+  assert.match(admissionText, /Focused Request: repository-publication-request-1/);
   assert.match(admissionText, /Focused Decision: admit reason=admitted_reason/);
 
   const executionText = formatRepositoryPublicationReadText({
