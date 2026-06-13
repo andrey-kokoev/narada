@@ -24,6 +24,8 @@ export async function readMailboxOutlookDraft(config, fetchImpl = fetch) {
 export function summarizeMailboxOutlookDraft(body = {}) {
   const drafts = Array.isArray(body?.drafts) ? body.drafts : [];
   const latest = drafts[0] ?? null;
+  const latestRecord = latest?.record ?? null;
+  const latestProposal = latestRecord?.proposal ?? null;
   return {
     site_id: body?.site_id ?? null,
     draft_count: drafts.length,
@@ -33,8 +35,17 @@ export function summarizeMailboxOutlookDraft(body = {}) {
     mailbox_mutation_admission: body?.mailbox_mutation_admission ?? null,
     authority_partition: body?.authority_partition ?? null,
     latest_draft_create_id: latest?.draft_create_id ?? null,
-    latest_message_id: latest?.message_id ?? null,
-    latest_subject: latest?.subject ?? null,
+    latest_message_id:
+      latest?.message_id ??
+      latest?.source_message_ref ??
+      latestRecord?.source_message_ref ??
+      latestProposal?.source_message_ref ??
+      null,
+    latest_subject:
+      latest?.subject ??
+      latestRecord?.subject ??
+      latestProposal?.subject ??
+      null,
     latest_recorded_at: latest?.recorded_at ?? latest?.created_at ?? null,
   };
 }

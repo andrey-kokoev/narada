@@ -30,7 +30,7 @@ test('summarizeMailboxOutlookDraft returns latest draft metadata', () => {
     drafts: [
       {
         draft_create_id: 'draft_live_1',
-        message_id: 'message_1',
+        source_message_ref: 'message_1',
         subject: 'Draft subject',
         recorded_at: '2026-06-12T12:00:00.000Z',
       },
@@ -39,6 +39,7 @@ test('summarizeMailboxOutlookDraft returns latest draft metadata', () => {
 
   assert.equal(summary.draft_count, 1);
   assert.equal(summary.latest_draft_create_id, 'draft_live_1');
+  assert.equal(summary.latest_message_id, 'message_1');
   assert.equal(summary.latest_subject, 'Draft subject');
 });
 
@@ -63,13 +64,14 @@ test('readMailboxOutlookDraft reads mailbox outlook draft list surface', async (
         mailbox_outlook_draft_create_admission: 'admitted',
         mailbox_send_admission: 'not_admitted',
         mailbox_mutation_admission: 'not_admitted',
-        drafts: [{ draft_create_id: 'draft_live_1' }],
+        drafts: [{ draft_create_id: 'draft_live_1', source_message_ref: 'message_1' }],
       }),
     };
   });
 
   assert.equal(result.summary.draft_count, 1);
   assert.equal(result.summary.mailbox_outlook_draft_create_admission, 'admitted');
+  assert.equal(result.summary.latest_message_id, 'message_1');
 });
 
 test('formatMailboxOutlookDraftReadText renders mailbox outlook draft summary', () => {
