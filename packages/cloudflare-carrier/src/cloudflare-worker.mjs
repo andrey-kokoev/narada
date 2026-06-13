@@ -8019,7 +8019,7 @@ async function listCloudflareMailboxDraftReplyProposals(env = {}, siteId, limit)
   const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
   if (!db || typeof db.prepare !== 'function' || !siteId) return [];
   await ensureCloudflareMailboxDraftReplyProposalSchema(db);
-  const boundedLimit = clampInteger(limit, 0, 100, 25);
+  const boundedLimit = clampInteger(limit, 0, 5000, 25);
   const rows = await db.prepare(`
     SELECT * FROM cloudflare_mailbox_draft_reply_proposals
     WHERE site_id = ?
@@ -8184,7 +8184,7 @@ async function listCloudflareMailboxOutlookDraftCreates(env = {}, siteId, limit)
   const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
   if (!db || typeof db.prepare !== 'function' || !siteId) return [];
   await ensureCloudflareMailboxOutlookDraftCreateSchema(db);
-  const boundedLimit = clampInteger(limit, 0, 100, 25);
+  const boundedLimit = clampInteger(limit, 0, 5000, 25);
   const rows = await db.prepare(`
     SELECT * FROM cloudflare_mailbox_outlook_draft_creates WHERE site_id = ? ORDER BY recorded_at DESC, generated_at DESC LIMIT ?
   `).bind(siteId, boundedLimit).all();
@@ -8311,7 +8311,7 @@ async function listCloudflareMailboxSendAcceptedRecords(env = {}, siteId, limit)
   const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
   if (!db || typeof db.prepare !== 'function' || !siteId) return [];
   await ensureCloudflareMailboxSendAcceptedSchema(db);
-  const boundedLimit = clampInteger(limit, 0, 100, 25);
+  const boundedLimit = clampInteger(limit, 0, 5000, 25);
   const rows = await db.prepare(`
     SELECT * FROM cloudflare_mailbox_send_accepted_records WHERE site_id = ? ORDER BY recorded_at DESC, generated_at DESC LIMIT ?
   `).bind(siteId, boundedLimit).all();
@@ -8461,7 +8461,7 @@ async function listCloudflareMailboxSendConfirmations(env = {}, siteId, limit) {
   const db = env.CLOUDFLARE_SITE_REGISTRY_DB ?? env.NARADA_SITE_REGISTRY_DB ?? null;
   if (!db || typeof db.prepare !== 'function' || !siteId) return [];
   await ensureCloudflareMailboxSendConfirmationSchema(db);
-  const boundedLimit = clampInteger(limit, 0, 100, 25);
+  const boundedLimit = clampInteger(limit, 0, 5000, 25);
   const rows = await db.prepare(`
     SELECT * FROM cloudflare_mailbox_send_confirmation_records WHERE site_id = ? ORDER BY recorded_at DESC, generated_at DESC LIMIT ?
   `).bind(siteId, boundedLimit).all();

@@ -19,6 +19,19 @@ test('parseMailboxOutlookDraftReadArgs configures mailbox outlook draft list ope
   assert.equal(config.operation, 'mailbox.outlook_draft.list');
   assert.equal(config.params.site_id, 'site_alpha');
   assert.equal(config.focusRef, 'draft_live_1');
+  assert.equal(config.params.mailbox_outlook_draft_create_limit, 5000);
+});
+
+test('parseMailboxOutlookDraftReadArgs preserves explicit focused mailbox outlook draft limit', () => {
+  const config = parseMailboxOutlookDraftReadArgs([
+    '--url', 'https://carrier.example',
+    '--site', 'site_alpha',
+    '--focus-ref', 'draft_live_1',
+    '--mailbox-outlook-draft-limit', '1500',
+    '--token', 'test-token',
+  ], {});
+
+  assert.equal(config.params.mailbox_outlook_draft_create_limit, 1500);
 });
 
 test('summarizeMailboxOutlookDraft returns latest draft metadata', () => {
@@ -174,7 +187,7 @@ test('formatMailboxOutlookDraftReadText renders mailbox outlook draft summary', 
   assert.match(text, /Admissions: send=not_admitted mutation=not_admitted/);
   assert.match(text, /Current Posture: cloudflare_created_outlook_draft_send_not_admitted/);
   assert.match(text, /Latest Draft: id=draft_live_1 proposal=proposal_1 account=help@example.com message=message_1 subject=Draft subject/);
-  assert.match(text, /Proposal Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url https:\/\/carrier\.example --site site_alpha --focus-ref proposal_1 --operator-session-file <operator-session-file>/);
+  assert.doesNotMatch(text, /Proposal Read:/);
   assert.match(text, /Body Preview: Draft preview text\./);
 });
 

@@ -36,8 +36,20 @@ test('parseMailboxDraftReplyProposalReadArgs supports direct historical review w
 
   assert.equal(parsed.operation, 'mailbox.draft_reply_proposal.list');
   assert.equal(parsed.params.site_id, 'site_narada_cloudflare');
-  assert.equal(parsed.params.mailbox_draft_reply_proposal_limit, 200);
-  assert.equal(parsed.params.mailbox_outlook_draft_create_limit, 200);
+  assert.equal(parsed.params.mailbox_draft_reply_proposal_limit, 5000);
+  assert.equal(parsed.params.mailbox_outlook_draft_create_limit, 5000);
+});
+
+test('parseMailboxDraftReplyProposalReadArgs preserves explicit focused proposal limit', () => {
+  const parsed = parseMailboxDraftReplyProposalReadArgs([
+    '--url', 'https://carrier.example',
+    '--site', 'site_narada_cloudflare',
+    '--focus-ref', 'mailbox_draft_reply_proposal_live_1',
+    '--proposal-limit', '1500',
+    '--operator-session-cookie', 'operator-session-cookie',
+  ], {});
+
+  assert.equal(parsed.params.mailbox_draft_reply_proposal_limit, 1500);
 });
 
 test('readMailboxDraftReplyProposal summarizes focused proposal and linked draft creates', async () => {

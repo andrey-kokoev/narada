@@ -3,14 +3,28 @@ import { fileURLToPath } from 'node:url';
 
 import { parseProductReadArgs, readProductSurface } from './cloudflare-carrier-product-read.mjs';
 
+const DIRECT_FOCUSED_DRAFT_WINDOW = 5000;
+
 export function parseMailboxOutlookDraftReadArgs(argv = [], env = process.env) {
   const args = [...argv];
   const parsed = parseProductReadArgs(['--operation', 'mailbox.outlook_draft.list', ...argv], env);
+  const focusRef = normalizeOptionalString(
+    option(args, '--focus-ref') ?? env.CLOUDFLARE_CARRIER_MAILBOX_OUTLOOK_DRAFT_FOCUS_REF ?? null,
+  );
   return {
     ...parsed,
-    focusRef: normalizeOptionalString(
-      option(args, '--focus-ref') ?? env.CLOUDFLARE_CARRIER_MAILBOX_OUTLOOK_DRAFT_FOCUS_REF ?? null,
-    ),
+    focusRef,
+    params: {
+      ...parsed.params,
+      mailbox_outlook_draft_create_limit: focusRef
+        ? parseOptionalInteger(
+          option(args, '--mailbox-outlook-draft-limit')
+          ?? env.CLOUDFLARE_CARRIER_MAILBOX_OUTLOOK_DRAFT_LIMIT
+          ?? null,
+          'mailbox-outlook-draft-limit',
+        ) ?? DIRECT_FOCUSED_DRAFT_WINDOW
+        : parsed.params.mailbox_outlook_draft_create_limit,
+    },
   };
 }
 
@@ -108,9 +122,6 @@ export function formatMailboxOutlookDraftReadText(result) {
       + ` subject=${summary.latest_subject ?? 'none'}`,
     );
   }
-  if (summary.latest_proposal_id) {
-    lines.push(`Proposal Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.latest_proposal_id} --operator-session-file <operator-session-file>`);
-  }
   if (summary.latest_body_preview) {
     lines.push(`Body Preview: ${summary.latest_body_preview}`);
   }
@@ -128,6 +139,13 @@ function listMailboxOutlookDrafts(body = {}) {
 function option(args, name) {
   const index = args.indexOf(name);
   return index >= 0 ? args[index + 1] : null;
+}
+
+function parseOptionalInteger(value, label) {
+  if (value == null || value === '') return null;
+  const parsed = Number.parseInt(String(value), 10);
+  if (!Number.isFinite(parsed)) throw new Error(`mailbox_outlook_draft_read_invalid_${label}:${value}`);
+  return parsed;
 }
 
 function normalizeOptionalString(value) {

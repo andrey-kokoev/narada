@@ -3,14 +3,21 @@ import { fileURLToPath } from 'node:url';
 
 import { parseProductReadArgs, readProductSurface } from './cloudflare-carrier-product-read.mjs';
 
+const DIRECT_FOCUSED_SEND_CONFIRMATION_WINDOW = 5000;
+
 export function parseMailboxSendConfirmationReadArgs(argv = [], env = process.env) {
   const args = [...argv];
   const parsed = parseProductReadArgs(['--operation', 'mailbox.send_confirmation.list', ...argv], env);
+  const focusRef = normalizeOptionalString(
+    option(args, '--focus-ref') ?? env.CLOUDFLARE_CARRIER_MAILBOX_SEND_CONFIRMATION_FOCUS_REF ?? null,
+  );
   return {
     ...parsed,
-    focusRef: normalizeOptionalString(
-      option(args, '--focus-ref') ?? env.CLOUDFLARE_CARRIER_MAILBOX_SEND_CONFIRMATION_FOCUS_REF ?? null,
-    ),
+    focusRef,
+    params: {
+      ...parsed.params,
+      mailbox_send_confirmation_limit: focusRef ? DIRECT_FOCUSED_SEND_CONFIRMATION_WINDOW : parsed.params.mailbox_send_confirmation_limit,
+    },
   };
 }
 
@@ -70,6 +77,11 @@ export function summarizeMailboxSendConfirmation(body = {}, options = {}) {
       ?? latestRecord?.send_accepted_id
       ?? latestRequest?.send_accepted_id
       ?? null,
+    latest_draft_create_id:
+      latest?.draft_create_id
+      ?? latestRecord?.draft_create_id
+      ?? latestRequest?.draft_create_id
+      ?? null,
     latest_outlook_draft_id:
       latest?.outlook_draft_id
       ?? latestRecord?.outlook_draft_id
@@ -119,8 +131,8 @@ export function formatMailboxSendConfirmationReadText(result) {
   if (summary.latest_send_accepted_id) {
     lines.push(`Accepted Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.latest_send_accepted_id} --operator-session-file <operator-session-file>`);
   }
-  if (summary.latest_outlook_draft_id) {
-    lines.push(`Draft Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.latest_outlook_draft_id} --operator-session-file <operator-session-file>`);
+  if (summary.latest_draft_create_id) {
+    lines.push(`Draft Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.latest_draft_create_id} --operator-session-file <operator-session-file>`);
   }
   if (summary.latest_body_preview) {
     lines.push(`Body Preview: ${summary.latest_body_preview}`);

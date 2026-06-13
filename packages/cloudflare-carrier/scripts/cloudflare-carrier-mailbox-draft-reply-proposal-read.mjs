@@ -3,9 +3,14 @@ import { fileURLToPath } from 'node:url';
 
 import { parseProductReadArgs, readProductSurface } from './cloudflare-carrier-product-read.mjs';
 
+const DIRECT_FOCUSED_PROPOSAL_WINDOW = 5000;
+
 export function parseMailboxDraftReplyProposalReadArgs(argv = [], env = process.env) {
   const args = [...argv];
   const explicitOperationId = option(args, '--carrier-operation') ?? option(args, '--operation-id') ?? env.CLOUDFLARE_CARRIER_OPERATION_ID ?? null;
+  const focusRef = normalizeOptionalString(
+    option(args, '--focus-ref') ?? env.CLOUDFLARE_CARRIER_MAILBOX_DRAFT_REPLY_PROPOSAL_FOCUS_REF ?? null,
+  );
   const parsed = parseProductReadArgs(
     ['--operation', explicitOperationId ? 'operation.read' : 'mailbox.draft_reply_proposal.list', ...argv],
     env,
@@ -13,14 +18,11 @@ export function parseMailboxDraftReplyProposalReadArgs(argv = [], env = process.
   const proposalLimit = parseOptionalInteger(
     option(args, '--proposal-limit') ?? env.CLOUDFLARE_CARRIER_MAILBOX_DRAFT_REPLY_PROPOSAL_LIMIT ?? null,
     'proposal-limit',
-  ) ?? (explicitOperationId ? 20 : 200);
+  ) ?? (explicitOperationId ? 20 : (focusRef ? DIRECT_FOCUSED_PROPOSAL_WINDOW : 200));
   const draftCreateLimit = parseOptionalInteger(
     option(args, '--draft-create-limit') ?? env.CLOUDFLARE_CARRIER_MAILBOX_OUTLOOK_DRAFT_CREATE_LIMIT ?? null,
     'draft-create-limit',
-  ) ?? (explicitOperationId ? 20 : 200);
-  const focusRef = normalizeOptionalString(
-    option(args, '--focus-ref') ?? env.CLOUDFLARE_CARRIER_MAILBOX_DRAFT_REPLY_PROPOSAL_FOCUS_REF ?? null,
-  );
+  ) ?? (explicitOperationId ? 20 : (focusRef ? DIRECT_FOCUSED_PROPOSAL_WINDOW : 200));
   return {
     ...parsed,
     focusRef,
@@ -41,7 +43,7 @@ export async function readMailboxDraftReplyProposal(config, fetchImpl = fetch) {
       operation: 'mailbox.outlook_draft.list',
       params: {
         site_id: config.params.site_id,
-        mailbox_outlook_draft_limit: config.params.mailbox_outlook_draft_create_limit ?? config.params.mailbox_outlook_draft_limit ?? 200,
+        mailbox_outlook_draft_create_limit: config.params.mailbox_outlook_draft_create_limit ?? 200,
       },
     }, fetchImpl);
   const proposals = listMailboxDraftReplyProposals(product.response);
