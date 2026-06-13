@@ -1109,6 +1109,55 @@ test('runOperationNextWorkflowLive delegates focus_lifecycle_start_session to op
   assert.equal(invocations[2][0].split(/[\\/]/).pop(), 'cloudflare-carrier-operation-session-workflow-live.mjs');
 });
 
+test('runOperationNextWorkflowLive delegates start_resident_dispatch to resident dispatch workflow', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_live_smoke',
+    expectedListRouteAction: null,
+    expectedOperationId: null,
+    auth: { kind: 'bearer', value: 'token-value', source: 'flag:--token' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              next_operation_id: 'operation_alpha',
+              route_next_action: 'focus_next_operation',
+              next_action: 'start_resident_dispatch',
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            operation_id: 'operation_alpha',
+            workflow_next_action: 'start_resident_dispatch',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-resident-dispatch-live-smoke.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.resident_dispatch_live_smoke.v1',
+          status: 'ok',
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'resident_dispatch');
+  assert.equal(result.delegated_route_action, 'start_resident_dispatch');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.resident_dispatch_live_smoke.v1');
+  assert.equal(invocations[2][0].split(/[\\/]/).pop(), 'cloudflare-carrier-resident-dispatch-live-smoke.mjs');
+});
+
 
 test('runOperationNextWorkflowLive delegates site file change proposal review route', async () => {
   const invocations = [];

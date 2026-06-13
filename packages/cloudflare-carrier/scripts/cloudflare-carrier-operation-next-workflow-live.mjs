@@ -34,6 +34,7 @@ const residentDispatchWindowsFallbackEvidenceScript = resolve(scriptDir, 'cloudf
 const residentDispatchWindowsFallbackEvidenceReviewScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-windows-fallback-evidence-review.mjs');
 const residentDispatchWindowsFallbackExecuteScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-windows-fallback-execute.mjs');
 const residentDispatchLocalResidentCarrierBridgeScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-local-resident-carrier-bridge.mjs');
+const residentDispatchLiveSmokeScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-live-smoke.mjs');
 const focusReviewScript = resolve(scriptDir, 'cloudflare-carrier-operation-focus-review.mjs');
 const focusWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-focus-workflow-live.mjs');
 const sessionWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operation-session-workflow-live.mjs');
@@ -77,6 +78,7 @@ const ROUTE_TO_WORKFLOW = new Map([
   ['focus_authority_path_evidence', { name: 'evidence', script: evidenceReadScript, flag: null }],
   ['focus_open_attention', { name: 'evidence', script: evidenceReadScript, flag: null }],
   ['monitor_operation_evidence', { name: 'evidence', script: evidenceReadScript, flag: null }],
+  ['start_resident_dispatch', { name: 'resident_dispatch', script: residentDispatchLiveSmokeScript, flag: null }],
   ['request_windows_fallback_resident_dispatch', { name: 'resident_dispatch_windows_fallback_request', script: residentDispatchWindowsFallbackRequestScript, flag: null }],
   ['await_windows_fallback_resident_dispatch', { name: 'resident_dispatch_windows_fallback_execute', script: residentDispatchWindowsFallbackExecuteScript, flag: '--execute-windows-fallback' }],
   ['review_windows_fallback_resident_dispatch_evidence', { name: 'resident_dispatch_windows_fallback_evidence_review', script: residentDispatchWindowsFallbackEvidenceReviewScript, flag: null }],

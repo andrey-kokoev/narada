@@ -359,6 +359,26 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(operationFallbackEvidenceText, /Resident Dispatch Windows Fallback Evidence Review: pnpm --filter @narada2\/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(operationFallbackEvidenceText, /Resident Dispatch Windows Fallback Evidence: pnpm --filter @narada2\/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:text -- --operation resident_dispatch\.windows_fallback_evidence\.list --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 
+  const operationResidentDispatchText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      current_status: 'active',
+      status_transition_count: 1,
+      phase: 'active_uninhabited',
+      health: 'attention',
+      next_action: 'session',
+      workflow_next_action: 'start_resident_dispatch',
+      workflow_reason: 'resident_dispatch_not_recorded',
+      session_count: 0,
+      task_count: 0,
+    },
+  });
+  assert.match(operationResidentDispatchText, /Resident Dispatch Workflow: pnpm --filter @narada2\/cloudflare-carrier product:resident-dispatch:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+
   const operationTaskFocusText = formatProductSurfaceText({
     operation: 'operation.read',
     worker_url: 'https://carrier.example.test',

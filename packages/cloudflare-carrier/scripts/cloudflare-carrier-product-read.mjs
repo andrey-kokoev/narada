@@ -452,6 +452,9 @@ export function formatProductSurfaceText(result) {
     ) {
       lines.push(`Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:operation:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
     }
+    if (summary.workflow_next_action === 'start_resident_dispatch') {
+      lines.push(`Resident Dispatch Workflow: pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
+    }
     if (summary.workflow_next_action === 'request_windows_fallback_resident_dispatch') {
       lines.push(`Resident Dispatch Windows Fallback Request: pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:windows-fallback-request:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --dispatch-decision-id ${summary.workflow_focus_ref ?? '<dispatch-decision-id>'} --operator-session-file <operator-session-file>`);
     }
