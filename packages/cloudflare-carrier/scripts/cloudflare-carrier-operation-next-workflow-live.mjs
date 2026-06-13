@@ -28,6 +28,7 @@ const repositoryPublicationReadScript = resolve(scriptDir, 'cloudflare-carrier-r
 const repositoryPublicationRequestReviewScript = resolve(scriptDir, 'cloudflare-carrier-repository-publication-request-review.mjs');
 const siteFileChangeProposalReviewScript = resolve(scriptDir, 'cloudflare-carrier-site-file-change-proposal-review.mjs');
 const siteFileMaterializationReadScript = resolve(scriptDir, 'cloudflare-carrier-site-file-materialization-read.mjs');
+const taskLifecycleReadScript = resolve(scriptDir, 'cloudflare-carrier-task-lifecycle-read.mjs');
 const residentDispatchWindowsFallbackRequestScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-windows-fallback-request.mjs');
 const residentDispatchWindowsFallbackEvidenceScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-windows-fallback-evidence.mjs');
 const residentDispatchWindowsFallbackEvidenceReviewScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-windows-fallback-evidence-review.mjs');
@@ -62,6 +63,9 @@ const ROUTE_TO_WORKFLOW = new Map([
   ['review_repository_publication_evidence', { name: 'repository_publication_evidence', script: repositoryPublicationReadScript, flag: null, mode: 'repository_publication.evidence.list' }],
   ['review_site_file_change_proposal', { name: 'site_file_change_proposal', script: siteFileChangeProposalReviewScript, flag: null }],
   ['review_site_file_materialization', { name: 'site_file_materialization_review', script: siteFileMaterializationReadScript, flag: null }],
+  ['focus_open_task', { name: 'task_lifecycle_review', script: taskLifecycleReadScript, flag: null }],
+  ['focus_lifecycle_open_task', { name: 'task_lifecycle_review', script: taskLifecycleReadScript, flag: null }],
+  ['focus_task_path_evidence', { name: 'task_lifecycle_review', script: taskLifecycleReadScript, flag: null }],
   ['request_windows_fallback_resident_dispatch', { name: 'resident_dispatch_windows_fallback_request', script: residentDispatchWindowsFallbackRequestScript, flag: null }],
   ['await_windows_fallback_resident_dispatch', { name: 'resident_dispatch_windows_fallback_execute', script: residentDispatchWindowsFallbackExecuteScript, flag: '--execute-windows-fallback' }],
   ['review_windows_fallback_resident_dispatch_evidence', { name: 'resident_dispatch_windows_fallback_evidence_review', script: residentDispatchWindowsFallbackEvidenceReviewScript, flag: null }],

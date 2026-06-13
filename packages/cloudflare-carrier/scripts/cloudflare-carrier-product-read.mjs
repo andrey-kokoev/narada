@@ -11,6 +11,7 @@ const VALID_OPERATIONS = new Set([
   'webhook_delay.directive.primary_with_fallback.list',
   'mailbox.outlook_draft.list',
   'site_file_materialization.list',
+  'task_lifecycle.task.list',
   'mailbox.send_accepted.list',
   'mailbox.send_confirmation.list',
   'local_ingress.request.list',
@@ -42,6 +43,7 @@ export function parseProductReadArgs(argv = [], env = process.env) {
     || operation === 'webhook_delay.directive.primary_with_fallback.list'
     || operation === 'mailbox.outlook_draft.list'
     || operation === 'site_file_materialization.list'
+    || operation === 'task_lifecycle.task.list'
     || operation === 'mailbox.send_accepted.list'
     || operation === 'mailbox.send_confirmation.list'
     || operation === 'local_ingress.request.list'
@@ -76,6 +78,7 @@ export function buildParams({ operation, siteId, operationId, limit }) {
     || operation === 'webhook_delay.directive.primary_with_fallback.list'
     || operation === 'mailbox.outlook_draft.list'
     || operation === 'site_file_materialization.list'
+    || operation === 'task_lifecycle.task.list'
     || operation === 'mailbox.send_accepted.list'
     || operation === 'mailbox.send_confirmation.list'
     || operation === 'local_ingress.request.list'
@@ -425,6 +428,9 @@ export function formatProductSurfaceText(result) {
     }
     if (summary.workflow_next_action === 'review_site_file_materialization') {
       lines.push(`Site File Materialization Review: pnpm --filter @narada2/cloudflare-carrier product:site-file:materialization:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
+    }
+    if (summary.workflow_next_action === 'focus_open_task' || summary.workflow_next_action === 'focus_lifecycle_open_task' || summary.workflow_next_action === 'focus_task_path_evidence') {
+      lines.push(`Task Lifecycle Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --task-id ${summary.route_target ?? '<task-id>'} --operator-session-file <operator-session-file>`);
     }
     if (summary.workflow_next_action === 'request_windows_fallback_resident_dispatch') {
       lines.push(`Resident Dispatch Windows Fallback Request: pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:windows-fallback-request:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --dispatch-decision-id ${summary.workflow_focus_ref ?? '<dispatch-decision-id>'} --operator-session-file <operator-session-file>`);
