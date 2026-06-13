@@ -161,3 +161,24 @@ test('formatRepositoryPublicationRequestReviewText surfaces review ack command',
   assert.match(text, /Current Admissions: request=admitted_by_cloudflare_repository_publication cloudflare_git_push=not_admitted direct_cloudflare_repo_mutation=admitted_by_cloudflare_github_repository_publication/);
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
 });
+
+test('formatRepositoryPublicationRequestReviewText makes missing evidence explicit after execution', () => {
+  const text = formatRepositoryPublicationRequestReviewText({
+    worker_url: 'https://carrier.example',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_narada_cloudflare',
+      operation_id: 'operation_site_read',
+      workflow_next_action: 'refresh_site_continuity_loop',
+      workflow_reason: 'operation_lifecycle_continuity_loop_stale',
+      request_count: 1,
+      focused_repository_publication_request_id: 'repository_publication_request_live_1',
+      current_request_posture: 'cloudflare_repository_publication_execution_completed',
+      linked_admission_id: 'admission_1',
+      linked_execution_id: 'execution_1',
+      linked_execution_status: 'completed',
+    },
+  });
+
+  assert.match(text, /Linked Evidence: none status=unknown/);
+});

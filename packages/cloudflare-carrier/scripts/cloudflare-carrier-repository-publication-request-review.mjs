@@ -179,7 +179,11 @@ export function formatRepositoryPublicationRequestReviewText(result) {
     lines.push(`Linked Execution: ${summary.linked_execution_id ?? 'none'} status=${summary.linked_execution_status ?? 'unknown'}`);
   }
   if (summary.linked_published_commit_ref) lines.push(`Published Commit: ${summary.linked_published_commit_ref}`);
-  if (summary.linked_evidence_id || summary.linked_evidence_status) {
+  if (
+    summary.linked_evidence_id
+    || summary.linked_evidence_status
+    || ((summary.linked_admission_id || summary.linked_execution_id) && summary.focused_repository_publication_request_id)
+  ) {
     lines.push(`Linked Evidence: ${summary.linked_evidence_id ?? 'none'} status=${summary.linked_evidence_status ?? 'unknown'}`);
   }
   if (summary.focused_recorded_at || summary.focused_recorded_by_principal_id) {
