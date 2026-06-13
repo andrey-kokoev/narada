@@ -19,6 +19,7 @@ const mailboxOutlookDraftReadScript = resolve(scriptDir, 'cloudflare-carrier-mai
 const mailboxSendAcceptedReadScript = resolve(scriptDir, 'cloudflare-carrier-mailbox-send-accepted-read.mjs');
 const mailboxSendConfirmationReadScript = resolve(scriptDir, 'cloudflare-carrier-mailbox-send-confirmation-read.mjs');
 const directiveDeliveryReviewScript = resolve(scriptDir, 'cloudflare-carrier-directive-delivery-review.mjs');
+const operationScopeReadScript = resolve(scriptDir, 'cloudflare-carrier-operation-scope-read.mjs');
 const webhookDelayShadowReadScript = resolve(scriptDir, 'cloudflare-carrier-webhook-delay-shadow-read.mjs');
 const localIngressRequestReadScript = resolve(scriptDir, 'cloudflare-carrier-local-ingress-request-read.mjs');
 const localIngressEvidenceReadScript = resolve(scriptDir, 'cloudflare-carrier-local-ingress-evidence-read.mjs');
@@ -47,6 +48,7 @@ const CHILD_STDIO_MAX_BUFFER = 64 * 1024 * 1024;
 const ROUTE_TO_WORKFLOW = new Map([
   ['review_persistence_posture', { name: 'operation_persistence', script: persistenceReadScript, flag: null }],
   ['review_recovery_posture', { name: 'operation_recovery', script: recoveryReadScript, flag: null }],
+  ['read_operation_scope', { name: 'operation_scope', script: operationScopeReadScript, flag: null }],
   ['review_site_continuity_reconciliation_execution', { name: 'focus_review', script: focusReviewScript, flag: null }],
   ['review_carrier_evidence_replay', { name: 'evidence', script: evidenceReadScript, flag: null }],
   ['read_operation_evidence', { name: 'evidence', script: evidenceReadScript, flag: null }],

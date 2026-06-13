@@ -170,6 +170,7 @@ export function summarizeProductSurface(operation, body, options = {}) {
       recovery_state: status?.cloudflare_recovery_posture?.state ?? body?.cloudflare_recovery_posture?.state ?? null,
       membership_count: Array.isArray(body?.memberships) ? body.memberships.length : 0,
       session_count: Array.isArray(body?.sessions) ? body.sessions.length : status?.session_count ?? 0,
+      scope_loaded: Boolean(body?.site?.site_id ?? body?.site_id),
     };
   }
   if (operation === 'operation.list') {
@@ -253,6 +254,7 @@ export function summarizeProductSurface(operation, body, options = {}) {
       recovery_gap_count: recoveryGaps.length,
       recovery_gap_keys: recoveryGaps.map((gap) => gap?.key ?? gap?.boundary ?? gap).filter(Boolean),
       recovery_next_action: recoveryPosture?.next_action ?? null,
+      scope_loaded: Boolean(body?.operation?.operation_id ?? body?.operation_id),
       projection_error_stage: projectionError?.stage ?? null,
       projection_error_code: projectionError?.code ?? null,
       projection_error_message: projectionError?.message ?? null,
@@ -308,7 +310,14 @@ export function formatProductSurfaceText(result) {
     lines.push(`Site: ${summary.site_id ?? 'unknown'}${summary.display_name ? ` (${summary.display_name})` : ''}`);
     lines.push(`Health: ${summary.health ?? 'unknown'}`);
     lines.push(`Next Action: ${summary.next_action ?? 'none'}`);
+    lines.push(`Scope Loaded: ${summary.scope_loaded ? 'yes' : 'no'}`);
     lines.push(`Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file> --execute-site-action`);
+    if (summary.next_action === 'read_site_scope') {
+      lines.push(`Site Scope: pnpm --filter @narada2/cloudflare-carrier product:site:scope:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
+    }
+    if (summary.next_action === 'focus_site_operation') {
+      lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file> --execute-operation-next`);
+    }
     if (summary.next_action === 'read_site_authority') {
       lines.push(`Site Authority: pnpm --filter @narada2/cloudflare-carrier product:site:authority:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
     }
@@ -364,6 +373,7 @@ export function formatProductSurfaceText(result) {
     }
     lines.push(`Lifecycle: phase=${summary.phase ?? 'unknown'} health=${summary.health ?? 'unknown'}`);
     lines.push(`Next Action: ${summary.next_action ?? 'none'}`);
+    lines.push(`Scope Loaded: ${summary.scope_loaded ? 'yes' : 'no'}`);
     if (summary.workflow_next_action || summary.workflow_reason) {
       lines.push(`Workflow Route: action=${summary.workflow_next_action ?? 'none'} reason=${summary.workflow_reason ?? 'none'}`);
     }
@@ -492,6 +502,9 @@ export function formatProductSurfaceText(result) {
     }
     if (summary.workflow_next_action === 'review_recovery_posture') {
       lines.push(`Recovery Review: pnpm --filter @narada2/cloudflare-carrier product:operation:recovery:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
+    }
+    if (summary.workflow_next_action === 'read_operation_scope') {
+      lines.push(`Operation Scope: pnpm --filter @narada2/cloudflare-carrier product:operation:scope:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
     }
     if (summary.workflow_next_action === 'review_continuity_packet' || summary.workflow_next_action === 'review_continuity_loop_report' || summary.workflow_next_action === 'refresh_site_continuity_loop') {
       lines.push(`Continuity Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:continuity:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --expected-pre-action ${summary.workflow_next_action ?? 'refresh_site_continuity_loop'} --operator-session-file <operator-session-file> --execute-operation-continuity`);

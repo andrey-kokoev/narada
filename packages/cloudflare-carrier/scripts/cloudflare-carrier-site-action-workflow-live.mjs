@@ -18,13 +18,16 @@ const siteContinuityPublishScript = resolve(scriptDir, 'cloudflare-carrier-site-
 const continuityBindingsScript = resolve(scriptDir, 'cloudflare-site-continuity-bindings.mjs');
 const continuitySchedulerScript = resolve(scriptDir, 'cloudflare-site-continuity-scheduler.mjs');
 const siteAuthorityReadScript = resolve(scriptDir, 'cloudflare-carrier-site-authority-read.mjs');
+const siteScopeReadScript = resolve(scriptDir, 'cloudflare-carrier-site-scope-read.mjs');
 
 const ACTION_TO_WORKFLOW = {
   monitor_site: { name: 'monitor_site' },
+  focus_site_operation: { name: 'focus_site_operation', script: operationNextWorkflowScript },
   focus_next_operation: { name: 'focus_next_operation', script: operationNextWorkflowScript },
   publish_cloudflare_continuity_packet: { name: 'publish_continuity_packet', script: siteContinuityPublishScript },
   bind_cloudflare_product_next_site_locally: { name: 'prepare_next_site_binding', script: continuityBindingsScript },
   refresh_site_continuity_loop: { name: 'refresh_site_continuity_loop', script: continuitySchedulerScript },
+  read_site_scope: { name: 'site_scope', script: siteScopeReadScript },
   read_site_authority: { name: 'site_authority', script: siteAuthorityReadScript },
 };
 
@@ -141,7 +144,7 @@ function buildSiteReadArgs(config) {
 }
 
 function buildWorkflowArgs(config, action, script) {
-  if (action === 'focus_next_operation') {
+  if (action === 'focus_next_operation' || action === 'focus_site_operation') {
     const args = [script, '--url', config.workerUrl, '--site', config.siteId, '--execute-operation-next'];
     appendAuthOptions(args, config);
     return args;
@@ -167,6 +170,11 @@ function buildWorkflowArgs(config, action, script) {
       '--refresh-site-registry-projection',
       '--projection-url', config.workerUrl,
     ];
+    appendAuthOptions(args, config);
+    return args;
+  }
+  if (action === 'read_site_scope') {
+    const args = [script, '--url', config.workerUrl, '--site', config.siteId];
     appendAuthOptions(args, config);
     return args;
   }

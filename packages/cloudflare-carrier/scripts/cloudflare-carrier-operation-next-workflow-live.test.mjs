@@ -2834,3 +2834,57 @@ test('runOperationNextWorkflowLive advances recovery review into local resident 
   assert.equal(invocations[3][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-operation-evidence-read.mjs');
   assert.equal(invocations[4][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-resident-dispatch-local-resident-carrier-bridge.mjs');
 });
+test('runOperationNextWorkflowLive delegates read_operation_scope route', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example.test',
+    siteId: 'site_alpha',
+    expectedListRouteAction: null,
+    expectedOperationId: null,
+    auth: { kind: 'operator_session', value: 'operator_session=test', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              next_operation_id: 'operation_site_read',
+              route_next_action: 'focus_next_operation',
+              next_action: 'use_focused_operation',
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            operation_id: 'operation_site_read',
+            workflow_next_action: 'read_operation_scope',
+            workflow_reason: 'operation_scope_not_loaded',
+            health: 'attention',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-operation-scope-read.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.operation_scope_read.v1',
+          status: 'ok',
+          summary: {
+            operation_id: 'operation_site_read',
+            scope_loaded: true,
+          },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'operation_scope');
+  assert.equal(result.delegated_route_action, 'read_operation_scope');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.operation_scope_read.v1');
+  assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-operation-scope-read.mjs');
+});

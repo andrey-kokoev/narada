@@ -1355,6 +1355,7 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     continuity_reconciliation_execution_count: 1,
     persistence_state: 'durable',
     recovery_state: 'reconstructable',
+    scope_loaded: true,
     membership_count: 2,
     session_count: 2,
   });
@@ -1465,6 +1466,7 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     next_action: 'continuity_packet',
     session_count: 1,
     task_count: 3,
+    scope_loaded: true,
     workflow_next_action: 'review_site_continuity_reconciliation_execution',
     workflow_reason: 'operation_lifecycle_continuity_reconciliation_execution_attention',
     workflow_focus_kind: 'site_continuity_reconciliation_execution',
@@ -1487,4 +1489,90 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     projection_error_code: null,
     projection_error_message: null,
   });
+});
+test('formatProductSurfaceText surfaces site scope and site operation focus commands', () => {
+  const siteReadScopeText = formatProductSurfaceText({
+    operation: 'site.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'site.read',
+      site_id: 'site_alpha',
+      display_name: 'Alpha Site',
+      health: 'attention',
+      next_action: 'read_site_scope',
+      scope_loaded: false,
+      continuity_state: 'unknown',
+      continuity_direction_state: 'unknown',
+      continuity_loop_state: 'unknown',
+      continuity_reconciliation_execution_state: 'unknown',
+      continuity_reconciliation_execution_health: 'unknown',
+      continuity_packet_count: 0,
+      continuity_loop_report_count: 0,
+      continuity_reconciliation_execution_count: 0,
+      persistence_state: 'unknown',
+      recovery_state: 'unknown',
+      membership_count: 0,
+      session_count: 0,
+    },
+  });
+  assert.match(siteReadScopeText, /Scope Loaded: no/);
+  assert.match(siteReadScopeText, /Site Scope: pnpm --filter @narada2\/cloudflare-carrier product:site:scope:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+
+
+  const siteReadFocusText = formatProductSurfaceText({
+    operation: 'site.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'site.read',
+      site_id: 'site_alpha',
+      display_name: 'Alpha Site',
+      health: 'attention',
+      next_action: 'focus_site_operation',
+      scope_loaded: true,
+      continuity_state: 'unknown',
+      continuity_direction_state: 'unknown',
+      continuity_loop_state: 'unknown',
+      continuity_reconciliation_execution_state: 'unknown',
+      continuity_reconciliation_execution_health: 'unknown',
+      continuity_packet_count: 0,
+      continuity_loop_report_count: 0,
+      continuity_reconciliation_execution_count: 0,
+      persistence_state: 'durable',
+      recovery_state: 'reconstructable',
+      membership_count: 1,
+      session_count: 0,
+    },
+  });
+  assert.match(siteReadFocusText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
+});
+
+test('formatProductSurfaceText surfaces operation scope command', () => {
+  const operationReadScopeText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'active_uninhabited',
+      health: 'attention',
+      next_action: 'session',
+      scope_loaded: false,
+      workflow_next_action: 'read_operation_scope',
+      workflow_reason: 'operation_scope_not_loaded',
+      session_count: 0,
+      task_count: 0,
+      recovery_state: 'unknown',
+      recovery_boundary_count: 0,
+      recovery_gap_count: 0,
+    },
+  });
+
+  assert.match(operationReadScopeText, /Scope Loaded: no/);
+  assert.match(operationReadScopeText, /Operation Scope: pnpm --filter @narada2\/cloudflare-carrier product:operation:scope:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
