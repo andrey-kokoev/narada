@@ -504,12 +504,14 @@ export function formatProductSurfaceText(result) {
       || summary.workflow_next_action === 'focus_operation_path_task'
       || summary.workflow_next_action === 'focus_session_path_evidence'
       || summary.workflow_next_action === 'focus_session_path_task'
-      || summary.workflow_next_action === 'focus_authority_path_evidence'
       || summary.workflow_next_action === 'focus_evidence'
       || summary.workflow_next_action === 'focus_open_attention'
       || summary.workflow_next_action === 'monitor_operation_evidence'
     ) {
       lines.push(`Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:operation:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
+    }
+    if (summary.workflow_next_action === 'focus_authority_path_evidence') {
+      lines.push(`Site Authority: pnpm --filter @narada2/cloudflare-carrier product:site:authority:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
     }
     if (summary.workflow_next_action === 'start_resident_dispatch') {
       lines.push(`Resident Dispatch Workflow: pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);

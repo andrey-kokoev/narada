@@ -89,7 +89,7 @@ const ROUTE_TO_WORKFLOW = new Map([
   ['focus_operation_path_task', { name: 'evidence', script: evidenceReadScript, flag: null }],
   ['focus_session_path_evidence', { name: 'evidence', script: evidenceReadScript, flag: null }],
   ['focus_session_path_task', { name: 'evidence', script: evidenceReadScript, flag: null }],
-  ['focus_authority_path_evidence', { name: 'evidence', script: evidenceReadScript, flag: null }],
+  ['focus_authority_path_evidence', { name: 'site_authority', script: siteAuthorityReadScript, flag: null }],
   ['focus_authority_evidence', { name: 'site_authority', script: siteAuthorityReadScript, flag: null }],
   ['review_refused_authority', { name: 'site_authority', script: siteAuthorityReadScript, flag: null }],
   ['review_unresolved_locus', { name: 'site_authority', script: siteAuthorityReadScript, flag: null }],
