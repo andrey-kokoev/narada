@@ -6,6 +6,7 @@ export function parseTaskLifecycleCreateArgs(argv = [], env = process.env, now =
   const args = [...argv];
   const workerUrl = normalizeWorkerUrl(option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '');
   const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? null;
+  const carrierSessionId = normalizeOptionalString(option(args, '--carrier-session-id') ?? option(args, '--session-id') ?? env.CLOUDFLARE_CARRIER_SESSION_ID ?? null);
   const title = option(args, '--title') ?? env.CLOUDFLARE_TASK_LIFECYCLE_CREATE_TITLE ?? null;
   const description = normalizeOptionalString(option(args, '--description') ?? env.CLOUDFLARE_TASK_LIFECYCLE_CREATE_DESCRIPTION ?? null);
   const admissionId = option(args, '--admission-id') ?? env.CLOUDFLARE_TASK_LIFECYCLE_CREATE_ADMISSION_ID ?? `task_lifecycle_create_${now()}`;
@@ -36,6 +37,7 @@ export function parseTaskLifecycleCreateArgs(argv = [], env = process.env, now =
     params: {
       site_id: siteId,
       admission_id: admissionId,
+      ...(carrierSessionId ? { carrier_session_id: carrierSessionId } : {}),
       title,
       ...(description ? { description } : {}),
       ...(admitCloudflareTaskCreate ? {
@@ -95,6 +97,7 @@ export function summarizeTaskLifecycleCreate(body = {}, params = {}) {
     admission_id: body.admission_id ?? params.admission_id ?? null,
     task_id: task.task_id ?? body.task_id ?? null,
     task_number: task.task_number ?? body.task_number ?? null,
+    carrier_session_id: task.carrier_session_id ?? params.carrier_session_id ?? null,
     title: task.title ?? params.title ?? null,
     status: task.status ?? body.status ?? null,
     decision_action: decision.action ?? body.action ?? null,
@@ -120,6 +123,7 @@ export function formatTaskLifecycleCreateText(result) {
     ...(summary.code ? [`Code: ${summary.code}`] : []),
     ...(summary.task_id ? [`Task: ${summary.task_id}${summary.task_number ? ` #${summary.task_number}` : ''}`] : []),
     `Title: ${summary.title ?? result?.params?.title ?? 'unknown'}`,
+    ...(summary.carrier_session_id ? [`Session: ${summary.carrier_session_id}`] : []),
     `Status: ${summary.status ?? 'unknown'}`,
     `Decision: action=${summary.decision_action ?? 'unknown'} reason=${summary.decision_reason ?? 'unknown'}`,
     `Authority: mutation=${summary.mutation_authority ?? 'unknown'} cloudflare_write=${summary.cloudflare_write_admission ?? 'unknown'} effect=${summary.write_effect ?? 'unknown'}`,

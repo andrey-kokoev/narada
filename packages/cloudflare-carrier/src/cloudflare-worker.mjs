@@ -9501,6 +9501,7 @@ async function createCloudflareTaskLifecycleTask(env = {}, siteId, params = {}, 
     site_id: siteId,
     task_id: params.task_id ?? `cloudflare-task-lifecycle-${taskNumber}`,
     task_number: taskNumber,
+    carrier_session_id: normalizeNullableWorkerString(params.carrier_session_id ?? null),
     title,
     description: params.description == null ? null : String(params.description),
     status: 'opened',
@@ -9623,6 +9624,22 @@ async function listCloudflareTaskLifecycleTasks(env = {}, siteId, limit, params 
   `).bind(siteId, boundedLimit).all();
   const tasks = (rows.results ?? []).map(formatCloudflareTaskLifecycleTask);
   const seenTaskIds = new Set(tasks.map((task) => task.task_id));
+  const carrierSessionId = normalizeNullableWorkerString(params.carrier_session_id ?? params.session_id ?? null);
+  if (carrierSessionId && !tasks.some((task) => task.carrier_session_id === carrierSessionId)) {
+    const focusedRows = await db.prepare(`
+      SELECT * FROM cloudflare_task_lifecycle_tasks
+      WHERE site_id = ?
+        AND json_extract(task_json, '$.carrier_session_id') = ?
+      ORDER BY task_number DESC
+      LIMIT 1
+    `).bind(siteId, carrierSessionId).all();
+    for (const row of focusedRows.results ?? []) {
+      const task = formatCloudflareTaskLifecycleTask(row);
+      if (seenTaskIds.has(task.task_id)) continue;
+      tasks.push(task);
+      seenTaskIds.add(task.task_id);
+    }
+  }
   for (const taskId of normalizeCloudflareTaskLifecycleIncludeTaskIds(params)) {
     if (seenTaskIds.has(taskId)) continue;
     const task = await getCloudflareTaskLifecycleTask(db, siteId, taskId);
@@ -9654,6 +9671,7 @@ function formatCloudflareTaskLifecycleTask(row) {
     cutover_point_ref: row.cutover_point_ref,
     governed_write_contract_ref: row.governed_write_contract_ref,
     confirmation_evidence_ref: row.confirmation_evidence_ref,
+    carrier_session_id: taskJson.carrier_session_id ?? null,
     created_by_principal_id: row.created_by_principal_id,
     claimed_by_agent_id: taskJson.claimed_by_agent_id ?? null,
     claimed_by_principal_id: taskJson.claimed_by_principal_id ?? null,

@@ -92,7 +92,7 @@ const ROUTE_TO_WORKFLOW = new Map([
   ['read_session_evidence', { name: 'session_evidence', script: sessionEvidenceReadScript, flag: null }],
   ['inspect_session_evidence', { name: 'session_evidence', script: sessionEvidenceReadScript, flag: null }],
   ['focus_session_path_evidence', { name: 'session_evidence', script: sessionEvidenceReadScript, flag: null }],
-  ['focus_session_path_task', { name: 'task_lifecycle_review', script: taskLifecycleReadScript, flag: null }],
+  ['focus_session_path_task', { name: 'task_lifecycle_next', script: taskLifecycleNextWorkflowScript, flag: '--execute-task-lifecycle-next' }],
   ['focus_authority_path_evidence', { name: 'site_authority', script: siteAuthorityReadScript, flag: null }],
   ['focus_authority_evidence', { name: 'site_authority', script: siteAuthorityReadScript, flag: null }],
   ['review_refused_authority', { name: 'site_authority', script: siteAuthorityReadScript, flag: null }],
@@ -552,8 +552,12 @@ function buildWorkflowArgs(config, workflow, operationId, readSummary = {}) {
   }
   if (workflow.name === 'task_lifecycle_next') {
     const taskId = resolveTaskLifecycleTaskId(readSummary);
-    if (!taskId) throw new Error('operation_next_workflow_task_lifecycle_next_requires_task_id');
-    args.push('--task-id', taskId);
+    const carrierSessionId = typeof readSummary.active_session_id === 'string' && readSummary.active_session_id.trim()
+      ? readSummary.active_session_id.trim()
+      : '';
+    if (!taskId && !carrierSessionId) throw new Error('operation_next_workflow_task_lifecycle_next_requires_task_id_or_active_session_id');
+    if (taskId) args.push('--task-id', taskId);
+    if (!taskId && carrierSessionId) args.push('--carrier-session-id', carrierSessionId);
     if (config.agentId) args.push('--agent-id', config.agentId);
   }
   if (workflow.name === 'focus_review') {

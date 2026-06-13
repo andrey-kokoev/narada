@@ -13,6 +13,20 @@ test('parseTaskLifecycleNextWorkflowLiveArgs requires explicit execution acknowl
   );
 });
 
+test('parseTaskLifecycleNextWorkflowLiveArgs accepts carrier session focus without task id', () => {
+  const parsed = parseTaskLifecycleNextWorkflowLiveArgs([
+    '--url', 'https://carrier.example',
+    '--site', 'site_alpha',
+    '--carrier-session-id', 'session_alpha',
+    '--agent-id', 'agent.alpha',
+    '--execute-task-lifecycle-next',
+    '--operator-session-cookie', 'session-cookie',
+  ]);
+
+  assert.equal(parsed.taskId, null);
+  assert.equal(parsed.carrierSessionId, 'session_alpha');
+});
+
 test('runTaskLifecycleNextWorkflowLive claims an open task', async () => {
   const invocations = [];
   const result = await runTaskLifecycleNextWorkflowLive({
@@ -157,4 +171,62 @@ test('runTaskLifecycleNextWorkflowLive no-ops once task is already finished', as
 
   assert.equal(result.selected_step, 'monitor_task_lifecycle');
   assert.equal(result.delegated_result, null);
+});
+
+test('runTaskLifecycleNextWorkflowLive resolves task id from carrier session focus before claiming', async () => {
+  const invocations = [];
+  const result = await runTaskLifecycleNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_alpha',
+    taskId: null,
+    carrierSessionId: 'session_alpha',
+    agentId: 'agent.alpha',
+    reportSummary: 'report summary',
+    auth: { kind: 'operator_session', value: 'session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-task-lifecycle-read.mjs') {
+        if (invocations.length === 1) {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.task_lifecycle_read.v1',
+            summary: {
+              site_id: 'site_alpha',
+              task_id: 'task_alpha',
+              carrier_session_id: 'session_alpha',
+              task_status: 'opened',
+              report_id: null,
+              finish_id: null,
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.task_lifecycle_read.v1',
+          summary: {
+            site_id: 'site_alpha',
+            task_id: 'task_alpha',
+            carrier_session_id: 'session_alpha',
+            task_status: 'claimed',
+            report_id: null,
+            finish_id: null,
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-task-lifecycle-claim.mjs') {
+        assert.equal(args[args.indexOf('--task-id') + 1], 'task_alpha');
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.task_lifecycle_claim.v1',
+          status: 'ok',
+          summary: { task_id: 'task_alpha', status: 'claimed' },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.task_id, 'task_alpha');
+  assert.equal(result.selected_step, 'claim');
+  assert.equal(invocations[0][invocations[0].indexOf('--carrier-session-id') + 1], 'session_alpha');
 });

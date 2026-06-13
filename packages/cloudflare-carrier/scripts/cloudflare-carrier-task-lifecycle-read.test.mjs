@@ -46,6 +46,8 @@ test('parseTaskLifecycleReadArgs accepts carrier session focus', () => {
 
   assert.equal(parsed.workerUrl, 'https://carrier.example');
   assert.equal(parsed.params.site_id, 'site_alpha');
+  assert.equal(parsed.params.carrier_session_id, 'session_alpha');
+  assert.equal(parsed.params.limit, 100);
   assert.equal(parsed.carrierSessionId, 'session_alpha');
 });
 
@@ -84,6 +86,21 @@ test('summarizeTaskLifecycleRead can focus the first task for a carrier session'
   assert.equal(summary.task_id, 'task_2');
   assert.equal(summary.carrier_session_id, 'session_alpha');
   assert.equal(summary.task_title, 'session task');
+});
+
+test('summarizeTaskLifecycleRead prefers the latest matching task for a carrier session', () => {
+  const summary = summarizeTaskLifecycleRead({
+    ok: true,
+    site_id: 'site_alpha',
+    tasks: [
+      { task_id: 'task_2', task_number: 2, status: 'open', carrier_session_id: 'session_alpha', title: 'older session task' },
+      { task_id: 'task_9', task_number: 9, status: 'claimed', carrier_session_id: 'session_alpha', title: 'latest session task' },
+    ],
+  }, { site_id: 'site_alpha', carrier_session_id: 'session_alpha' });
+
+  assert.equal(summary.task_id, 'task_9');
+  assert.equal(summary.task_title, 'latest session task');
+  assert.equal(summary.task_status, 'claimed');
 });
 
 test('readCloudflareTaskLifecycle posts task_lifecycle.task.list', async () => {

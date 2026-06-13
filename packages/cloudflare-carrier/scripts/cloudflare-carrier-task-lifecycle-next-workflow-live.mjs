@@ -21,6 +21,7 @@ export function parseTaskLifecycleNextWorkflowLiveArgs(argv = [], env = process.
   const workerUrl = option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '';
   const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? 'site_narada_cloudflare';
   const taskId = option(args, '--task-id') ?? env.CLOUDFLARE_TASK_LIFECYCLE_TASK_ID ?? null;
+  const carrierSessionId = option(args, '--carrier-session-id') ?? option(args, '--session-id') ?? env.CLOUDFLARE_CARRIER_SESSION_ID ?? null;
   const agentId = option(args, '--agent-id') ?? env.CLOUDFLARE_CARRIER_AGENT_ID ?? 'agent.operator.task-lifecycle-next-live';
   const reportSummary = option(args, '--report-summary') ?? env.CLOUDFLARE_TASK_LIFECYCLE_REPORT_SUMMARY ?? 'Live next-step report from the governed task lifecycle workflow.';
   const auth = resolveAuth(args, env);
@@ -32,7 +33,7 @@ export function parseTaskLifecycleNextWorkflowLiveArgs(argv = [], env = process.
   }
   if (!workerUrl) throw new Error('task_lifecycle_next_workflow_live_requires_--url_or_CLOUDFLARE_CARRIER_URL');
   if (!siteId) throw new Error('task_lifecycle_next_workflow_live_requires_site_id');
-  if (!taskId) throw new Error('task_lifecycle_next_workflow_live_requires_task_id');
+  if (!taskId && !carrierSessionId) throw new Error('task_lifecycle_next_workflow_live_requires_task_id_or_carrier_session_id');
   if (!agentId) throw new Error('task_lifecycle_next_workflow_live_requires_agent_id');
   if (!auth) throw new Error('task_lifecycle_next_workflow_live_requires_bearer_token_or_operator_session');
 
@@ -40,6 +41,7 @@ export function parseTaskLifecycleNextWorkflowLiveArgs(argv = [], env = process.
     workerUrl,
     siteId,
     taskId,
+    carrierSessionId,
     agentId,
     reportSummary,
     auth,
@@ -51,6 +53,8 @@ export async function runTaskLifecycleNextWorkflowLive(config, { runNodeScript =
   const readBefore = parseJsonStdout(await runNodeScript(buildTaskReadArgs(config), { cwd: packageRoot }), 'task_lifecycle_read_before_next');
   assert.equal(readBefore.schema, 'narada.cloudflare_carrier.task_lifecycle_read.v1');
   const summary = readBefore.summary ?? {};
+  const resolvedTaskId = summary.task_id ?? config.taskId ?? null;
+  if (!resolvedTaskId) throw new Error('task_lifecycle_next_workflow_live_requires_resolved_task_id');
   const step = selectTaskLifecycleStep(summary);
 
   if (!step) {
@@ -59,7 +63,7 @@ export async function runTaskLifecycleNextWorkflowLive(config, { runNodeScript =
       status: 'ok',
       worker_url: config.workerUrl,
       site_id: config.siteId,
-      task_id: config.taskId,
+      task_id: resolvedTaskId,
       selected_step: 'monitor_task_lifecycle',
       read_before_next: summary,
       delegated_result: null,
@@ -67,7 +71,7 @@ export async function runTaskLifecycleNextWorkflowLive(config, { runNodeScript =
     };
   }
 
-  const delegatedResult = parseJsonStdout(await runNodeScript(buildStepArgs(config, step), { cwd: packageRoot }), `task_lifecycle_${step}_result`);
+  const delegatedResult = parseJsonStdout(await runNodeScript(buildStepArgs({ ...config, taskId: resolvedTaskId }, step), { cwd: packageRoot }), `task_lifecycle_${step}_result`);
   const readAfter = parseJsonStdout(await runNodeScript(buildTaskReadArgs(config), { cwd: packageRoot }), 'task_lifecycle_read_after_next');
   assert.equal(readAfter.schema, 'narada.cloudflare_carrier.task_lifecycle_read.v1');
 
@@ -76,7 +80,7 @@ export async function runTaskLifecycleNextWorkflowLive(config, { runNodeScript =
     status: 'ok',
     worker_url: config.workerUrl,
     site_id: config.siteId,
-    task_id: config.taskId,
+    task_id: resolvedTaskId,
     selected_step: step,
     read_before_next: summary,
     delegated_result: delegatedResult,
@@ -94,7 +98,12 @@ function selectTaskLifecycleStep(summary = {}) {
 }
 
 async function defaultRunNodeScript(args, options) {
-  const result = await execFile(process.execPath, args, { ...options, timeout: 120000, windowsHide: true });
+  const result = await execFile(process.execPath, args, {
+    ...options,
+    timeout: 120000,
+    windowsHide: true,
+    maxBuffer: 64 * 1024 * 1024,
+  });
   return result.stdout;
 }
 
@@ -103,8 +112,9 @@ function buildTaskReadArgs(config) {
     taskReadScript,
     '--url', config.workerUrl,
     '--site', config.siteId,
-    '--task-id', config.taskId,
   ];
+  if (config.taskId) args.push('--task-id', config.taskId);
+  if (config.carrierSessionId) args.push('--carrier-session-id', config.carrierSessionId);
   appendAuthOptions(args, config);
   return args;
 }

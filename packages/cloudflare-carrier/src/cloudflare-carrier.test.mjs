@@ -6054,6 +6054,7 @@ test('worker records task lifecycle shadow reads from Windows without admitting 
     params: {
       site_id: 'site_fixture',
       admission_id: 'task_lifecycle_create_admitted_1',
+      carrier_session_id: 'carrier_session_operation_fixture',
       title: 'cloudflare governed task lifecycle create',
       description: 'first task lifecycle create mutation admitted on Cloudflare',
       cloudflare_task_create_cutover: true,
@@ -6079,6 +6080,7 @@ test('worker records task lifecycle shadow reads from Windows without admitting 
   assert.equal(admittedCreateBody.cloudflare_write_admission, 'admitted');
   assert.equal(admittedCreateBody.write_effect, 'task_lifecycle_create');
   assert.equal(admittedCreateBody.task.status, 'opened');
+  assert.equal(admittedCreateBody.task.carrier_session_id, 'carrier_session_operation_fixture');
   assert.equal(admittedCreateBody.task.cutover_point_ref, 'cutover:task-lifecycle-create:v1');
 
   const taskLifecycleList = await worker.fetch(jsonRequest({
@@ -6092,6 +6094,37 @@ test('worker records task lifecycle shadow reads from Windows without admitting 
   assert.equal(taskLifecycleListBody.mutation_class, 'task_create');
   assert.equal(taskLifecycleListBody.mutation_authority, 'cloudflare_task_lifecycle_d1');
   assert.equal(taskLifecycleListBody.tasks[0].mutation_authority, 'cloudflare_task_lifecycle_d1');
+  assert.equal(taskLifecycleListBody.tasks[0].carrier_session_id, 'carrier_session_operation_fixture');
+
+  const secondCreate = await worker.fetch(jsonRequest({
+    operation: 'task_lifecycle.task_create.admit',
+    request_id: 'request_task_lifecycle_task_create_admitted_second',
+    params: {
+      site_id: 'site_fixture',
+      admission_id: 'task_lifecycle_create_admitted_2',
+      title: 'cloudflare governed task lifecycle create second',
+      description: 'second task lifecycle create mutation admitted on Cloudflare',
+      cloudflare_task_create_cutover: true,
+      cutover_point_ref: 'cutover:task-lifecycle-create:v1',
+      governed_write_contract_ref: 'contract:task-lifecycle-create:v1',
+      confirmation_evidence_ref: 'evidence:operator-check:task-create',
+    },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(secondCreate.status, 200);
+
+  const focusedTaskLifecycleList = await worker.fetch(jsonRequest({
+    operation: 'task_lifecycle.task.list',
+    request_id: 'request_task_lifecycle_task_list_focused_session',
+    params: { site_id: 'site_fixture', limit: 1, carrier_session_id: 'carrier_session_operation_fixture' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(focusedTaskLifecycleList.status, 200);
+  const focusedTaskLifecycleListBody = await focusedTaskLifecycleList.json();
+  assert.equal(focusedTaskLifecycleListBody.tasks.length, 2);
+  assert.equal(
+    focusedTaskLifecycleListBody.tasks.some((task) => task.carrier_session_id === 'carrier_session_operation_fixture'),
+    true,
+    JSON.stringify(focusedTaskLifecycleListBody.tasks),
+  );
 
   const refusedClaim = await worker.fetch(jsonRequest({
     operation: 'task_lifecycle.task_claim.admit',

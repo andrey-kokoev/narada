@@ -13,6 +13,7 @@ test('parseTaskLifecycleCreateArgs builds guarded task lifecycle create params',
     '--url', 'https://carrier.example.test/',
     '--token', 'secret-token',
     '--site', 'site_alpha',
+    '--carrier-session-id', 'session_alpha',
     '--title', 'Real product task',
     '--description', 'Operator-created task',
     '--admission-id', 'admission_alpha',
@@ -31,6 +32,7 @@ test('parseTaskLifecycleCreateArgs builds guarded task lifecycle create params',
   assert.deepEqual(parsed.params, {
     site_id: 'site_alpha',
     admission_id: 'admission_alpha',
+    carrier_session_id: 'session_alpha',
     title: 'Real product task',
     description: 'Operator-created task',
     cloudflare_task_create_cutover: true,
@@ -97,9 +99,10 @@ test('createCloudflareTaskLifecycleTask posts task lifecycle create envelope and
           write_effect: 'task_lifecycle_create',
           task: {
             site_id: 'site_alpha',
-            task_id: 'cloudflare-task-1',
-            task_number: 1,
-            title: 'Real product task',
+          task_id: 'cloudflare-task-1',
+          task_number: 1,
+          carrier_session_id: 'session_alpha',
+          title: 'Real product task',
             status: 'opened',
             cutover_point_ref: 'cutover:task-create:alpha',
             governed_write_contract_ref: 'contract:task-create:alpha',
@@ -116,6 +119,7 @@ test('createCloudflareTaskLifecycleTask posts task lifecycle create envelope and
     params: {
       site_id: 'site_alpha',
       admission_id: 'admission_alpha',
+      carrier_session_id: 'session_alpha',
       title: 'Real product task',
       cloudflare_task_create_cutover: true,
       cutover_point_ref: 'cutover:task-create:alpha',
@@ -136,6 +140,7 @@ test('createCloudflareTaskLifecycleTask posts task lifecycle create envelope and
     params: {
       site_id: 'site_alpha',
       admission_id: 'admission_alpha',
+      carrier_session_id: 'session_alpha',
       title: 'Real product task',
       cloudflare_task_create_cutover: true,
       cutover_point_ref: 'cutover:task-create:alpha',
@@ -153,6 +158,7 @@ test('createCloudflareTaskLifecycleTask posts task lifecycle create envelope and
     admission_id: 'admission_alpha',
     task_id: 'cloudflare-task-1',
     task_number: 1,
+    carrier_session_id: 'session_alpha',
     title: 'Real product task',
     status: 'opened',
     decision_action: 'admit',
@@ -194,6 +200,7 @@ test('createCloudflareTaskLifecycleTask preserves structured refusal evidence', 
         admission_id: 'admission_refused',
         task_id: null,
         task_number: null,
+        carrier_session_id: null,
         title: 'Guard check task',
         status: null,
         decision_action: 'refuse',
@@ -214,20 +221,21 @@ test('formatTaskLifecycleCreateText renders admitted and refused summaries witho
   const admitted = formatTaskLifecycleCreateText({
     worker_url: 'https://carrier.example.test',
     auth_source: 'operator-session-file',
-    params: { site_id: 'site_alpha', admission_id: 'admission_alpha', title: 'Real product task' },
+    params: { site_id: 'site_alpha', admission_id: 'admission_alpha', carrier_session_id: 'session_alpha', title: 'Real product task' },
     summary: summarizeTaskLifecycleCreate({
       ok: true,
       decision: { action: 'admit', reason: 'cloudflare_task_create_cutover_admitted' },
       mutation_authority: 'cloudflare_task_lifecycle_d1',
       cloudflare_write_admission: 'admitted',
       write_effect: 'task_lifecycle_create',
-      task: { site_id: 'site_alpha', task_id: 'cloudflare-task-1', task_number: 1, title: 'Real product task', status: 'opened' },
+      task: { site_id: 'site_alpha', task_id: 'cloudflare-task-1', task_number: 1, carrier_session_id: 'session_alpha', title: 'Real product task', status: 'opened' },
     }, { admission_id: 'admission_alpha' }),
     auth: { kind: 'bearer', value: 'secret-token' },
   });
 
   assert.match(admitted, /Task Lifecycle Create: ok/);
   assert.match(admitted, /Task: cloudflare-task-1 #1/);
+  assert.match(admitted, /Session: session_alpha/);
   assert.match(admitted, /Authority: mutation=cloudflare_task_lifecycle_d1 cloudflare_write=admitted effect=task_lifecycle_create/);
   assert.equal(admitted.includes('secret-token'), false);
 

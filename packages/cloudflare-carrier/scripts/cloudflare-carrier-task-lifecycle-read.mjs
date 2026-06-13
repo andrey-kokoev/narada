@@ -8,7 +8,8 @@ export function parseTaskLifecycleReadArgs(argv = [], env = process.env) {
   const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? null;
   const taskId = option(args, '--task-id') ?? env.CLOUDFLARE_TASK_LIFECYCLE_TASK_ID ?? null;
   const carrierSessionId = option(args, '--carrier-session-id') ?? option(args, '--session-id') ?? env.CLOUDFLARE_CARRIER_SESSION_ID ?? null;
-  const limit = clampInteger(option(args, '--limit') ?? env.CLOUDFLARE_TASK_LIFECYCLE_TASK_LIMIT ?? 25, 1, 100, 25);
+  const defaultLimit = carrierSessionId && !taskId ? 100 : 25;
+  const limit = clampInteger(option(args, '--limit') ?? env.CLOUDFLARE_TASK_LIFECYCLE_TASK_LIMIT ?? defaultLimit, 1, 100, defaultLimit);
   const format = option(args, '--format') ?? env.CLOUDFLARE_TASK_LIFECYCLE_TASK_FORMAT ?? 'json';
   const auth = resolveAuth(args, env);
 
@@ -25,6 +26,7 @@ export function parseTaskLifecycleReadArgs(argv = [], env = process.env) {
       site_id: siteId,
       limit,
       ...(taskId ? { task_lifecycle_task_id: taskId } : {}),
+      ...(carrierSessionId ? { carrier_session_id: carrierSessionId } : {}),
     },
     carrierSessionId,
   };
@@ -67,8 +69,11 @@ export async function readCloudflareTaskLifecycle(config, fetchImpl = fetch) {
 
 export function summarizeTaskLifecycleRead(body = {}, params = {}) {
   const tasks = Array.isArray(body?.tasks) ? body.tasks : [];
+  const sessionFocusedTask = params.carrier_session_id
+    ? [...tasks].reverse().find((entry) => entry?.carrier_session_id === params.carrier_session_id) ?? null
+    : null;
   const focusedTask = tasks.find((entry) => entry?.task_id === params.task_lifecycle_task_id)
-    ?? tasks.find((entry) => entry?.carrier_session_id === params.carrier_session_id)
+    ?? sessionFocusedTask
     ?? tasks[0]
     ?? null;
   const openStatuses = new Set(['open', 'opened', 'claimed', 'active', 'needs_continuation']);

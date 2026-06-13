@@ -516,7 +516,7 @@ export function formatProductSurfaceText(result) {
       lines.push(`Task Lifecycle Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
     }
     if (summary.workflow_next_action === 'focus_session_path_task') {
-      lines.push(`Task Lifecycle Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --carrier-session-id ${summary.active_session_id ?? '<session-id>'} --operator-session-file <operator-session-file>`);
+      lines.push(`Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --carrier-session-id ${summary.active_session_id ?? '<session-id>'} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`);
     }
     if (summary.workflow_next_action === 'focus_lifecycle_start_session') {
       lines.push(`Session Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:session:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file> --execute-operation-session`);
