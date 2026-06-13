@@ -545,6 +545,47 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
     },
   });
   assert.match(operationReadEvidenceText, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+
+  const operationListReplayText = formatProductSurfaceText({
+    operation: 'operation.list',
+    worker_url: 'https://carrier.example.test',
+    summary: {
+      site_id: 'site_alpha',
+      operation_count: 1,
+      active_operation_id: 'operation_live',
+      next_operation_id: 'operation_live',
+      next_operation_status: 'active',
+      next_status: 'needs_attention',
+      next_action: 'review_carrier_evidence_replay',
+      next_reason: 'carrier_evidence_read_degraded',
+      route_domain: 'operation',
+      route_command_state: 'needs_attention',
+      route_next_action: 'focus_next_operation',
+      route_target: 'operation_live',
+      route_status: 'active',
+      route_reason: 'carrier_evidence_read_degraded',
+      operation_status_counts: { active: 1 },
+      health_counts: { needs_attention: 1 },
+    },
+  });
+  assert.match(operationListReplayText, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+
+  const operationReadReplayText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_live',
+      current_status: 'active',
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'carrier_evidence',
+      workflow_next_action: 'review_carrier_evidence_replay',
+      workflow_reason: 'carrier_evidence_read_degraded',
+      posture_next_action: 'monitor_operations',
+    },
+  });
+  assert.match(operationReadReplayText, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
   assert.match(operationReadEvidenceText, /Posture Route: status=needs_attention action=focus_next_operation reason=use_focused_operation target=operation_focus_target/);
 
   const operationReadMailboxText = formatProductSurfaceText({

@@ -43,6 +43,7 @@ const ROUTE_TO_WORKFLOW = new Map([
   ['review_persistence_posture', { name: 'operation_persistence', script: persistenceReadScript, flag: null }],
   ['review_recovery_posture', { name: 'operation_recovery', script: recoveryReadScript, flag: null }],
   ['review_site_continuity_reconciliation_execution', { name: 'focus_review', script: focusReviewScript, flag: null }],
+  ['review_carrier_evidence_replay', { name: 'evidence', script: evidenceReadScript, flag: null }],
   ['read_operation_evidence', { name: 'evidence', script: evidenceReadScript, flag: null }],
   ['review_mailbox_outlook_draft_create', { name: 'mailbox_outlook_draft', script: mailboxOutlookDraftReadScript, flag: null }],
   ['review_mailbox_send_confirmation', { name: 'mailbox_send_confirmation', script: mailboxSendConfirmationReadScript, flag: null }],
