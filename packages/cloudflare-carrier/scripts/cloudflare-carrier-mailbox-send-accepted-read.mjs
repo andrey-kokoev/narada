@@ -100,6 +100,9 @@ export function formatMailboxSendAcceptedReadText(result) {
   if (summary.latest_send_accepted_id || summary.latest_message_id || summary.latest_subject) {
     lines.push(`${latestLabel}: id=${summary.latest_send_accepted_id ?? 'none'} proposal=${summary.latest_proposal_id ?? 'none'} account=${summary.latest_account_ref ?? 'none'} message=${summary.latest_message_id ?? 'none'} subject=${summary.latest_subject ?? 'none'}`);
   }
+  if (summary.latest_proposal_id) {
+    lines.push(`Proposal Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.latest_proposal_id} --operator-session-file <operator-session-file>`);
+  }
   if (summary.latest_recorded_at) {
     lines.push(`${latestRecordedLabel}: ${summary.latest_recorded_at}`);
   }
