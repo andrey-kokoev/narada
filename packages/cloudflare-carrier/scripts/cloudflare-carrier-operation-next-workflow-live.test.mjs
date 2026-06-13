@@ -1060,6 +1060,55 @@ test('runOperationNextWorkflowLive delegates focus_session_path_evidence to oper
   assert.equal(invocations[2][0].split(/[\\/]/).pop(), 'cloudflare-carrier-operation-evidence-read.mjs');
 });
 
+test('runOperationNextWorkflowLive delegates focus_lifecycle_start_session to operation session workflow', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_live_smoke',
+    expectedListRouteAction: null,
+    expectedOperationId: null,
+    auth: { kind: 'bearer', value: 'token-value', source: 'flag:--token' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              next_operation_id: 'operation_alpha',
+              route_next_action: 'focus_next_operation',
+              next_action: 'focus_lifecycle_start_session',
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            operation_id: 'operation_alpha',
+            workflow_next_action: 'focus_lifecycle_start_session',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-operation-session-workflow-live.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.operation_session_workflow_live.v1',
+          status: 'ok',
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'session');
+  assert.equal(result.delegated_route_action, 'focus_lifecycle_start_session');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.operation_session_workflow_live.v1');
+  assert.equal(invocations[2][0].split(/[\\/]/).pop(), 'cloudflare-carrier-operation-session-workflow-live.mjs');
+});
+
 
 test('runOperationNextWorkflowLive delegates site file change proposal review route', async () => {
   const invocations = [];

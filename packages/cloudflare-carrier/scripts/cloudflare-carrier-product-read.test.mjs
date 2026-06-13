@@ -625,6 +625,38 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   });
   assert.match(operationReadSessionPathEvidenceText, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
 
+  const operationReadLifecycleSessionText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_live',
+      current_status: 'active',
+      phase: 'active_uninhabited',
+      health: 'incomplete',
+      next_action: 'session',
+      workflow_next_action: 'focus_lifecycle_start_session',
+      workflow_reason: 'operation_lifecycle_missing_session',
+    },
+  });
+  assert.match(operationReadLifecycleSessionText, /Session Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:session:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file> --execute-operation-session/);
+
+  const operationReadLifecycleContinuityText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_live',
+      current_status: 'active',
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'continuity_packet',
+      workflow_next_action: 'focus_lifecycle_continuity',
+      workflow_reason: 'operation_lifecycle_missing_continuity_packet',
+    },
+  });
+  assert.match(operationReadLifecycleContinuityText, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --expected-pre-action focus_lifecycle_continuity --operator-session-file <operator-session-file> --execute-operation-continuity/);
+
   const operationReadMailboxText = formatProductSurfaceText({
     operation: 'operation.read',
     worker_url: 'https://carrier.example.test',

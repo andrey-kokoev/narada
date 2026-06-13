@@ -402,6 +402,9 @@ export function formatProductSurfaceText(result) {
     if (summary.workflow_next_action === 'review_directive_delivery') {
       lines.push(`Directive Delivery Review: pnpm --filter @narada2/cloudflare-carrier product:directive:delivery:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
     }
+    if (summary.workflow_next_action === 'focus_lifecycle_directive_delivery') {
+      lines.push(`Directive Delivery Review: pnpm --filter @narada2/cloudflare-carrier product:directive:delivery:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
+    }
     if (summary.workflow_next_action === 'review_repository_publication_request') {
       lines.push(`Repository Publication Review: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
     }
@@ -432,12 +435,20 @@ export function formatProductSurfaceText(result) {
     if (summary.workflow_next_action === 'focus_open_task' || summary.workflow_next_action === 'focus_lifecycle_open_task' || summary.workflow_next_action === 'focus_task_path_evidence') {
       lines.push(`Task Lifecycle Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --task-id ${summary.route_target ?? '<task-id>'} --operator-session-file <operator-session-file>`);
     }
+    if (summary.workflow_next_action === 'focus_lifecycle_start_session') {
+      lines.push(`Session Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:session:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file> --execute-operation-session`);
+    }
+    if (summary.workflow_next_action === 'focus_lifecycle_continuity' || summary.workflow_next_action === 'focus_lifecycle_continuity_loop_report') {
+      lines.push(`Continuity Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:continuity:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --expected-pre-action ${summary.workflow_next_action ?? 'refresh_site_continuity_loop'} --operator-session-file <operator-session-file> --execute-operation-continuity`);
+    }
     if (
       summary.workflow_next_action === 'focus_operation_path_attention'
       || summary.workflow_next_action === 'focus_operation_path_task'
       || summary.workflow_next_action === 'focus_session_path_evidence'
       || summary.workflow_next_action === 'focus_session_path_task'
       || summary.workflow_next_action === 'focus_authority_path_evidence'
+      || summary.workflow_next_action === 'focus_open_attention'
+      || summary.workflow_next_action === 'monitor_operation_evidence'
     ) {
       lines.push(`Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:operation:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
     }
