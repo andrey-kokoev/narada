@@ -57,8 +57,8 @@ test('runSiteFocusWorkflowLive selects next site from posture and reads it', asy
             next_operation_id: 'operation_alpha',
             next_operation_next_action: 'refresh_site_continuity_loop',
             next_operation_reason: 'operation_lifecycle_continuity_loop_stale',
-            next_operation_focus_kind: null,
-            next_operation_focus_ref: 'site_alpha',
+            next_operation_focus_kind: 'site_continuity_reconciliation_execution',
+            next_operation_focus_ref: 'site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:49:01.463Z:completed',
             route_next_action: 'focus_next_site',
             route_target: 'site_alpha',
             route_status: 'needs_attention',
@@ -85,6 +85,8 @@ test('runSiteFocusWorkflowLive selects next site from posture and reads it', asy
   assert.equal(result.selected_operation_id, 'operation_alpha');
   assert.equal(result.selected_operation_action, 'refresh_site_continuity_loop');
   assert.equal(result.selected_operation_reason, 'operation_lifecycle_continuity_loop_stale');
+  assert.equal(result.selected_operation_focus_kind, 'site_continuity_reconciliation_execution');
+  assert.equal(result.selected_operation_focus_ref, 'site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:49:01.463Z:completed');
   assert.equal(result.list_before_focus.route_next_action, 'focus_next_site');
   assert.equal(result.read_focused.site_id, 'site_alpha');
   assert.equal(calls.length, 2);

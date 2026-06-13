@@ -53,6 +53,8 @@ export async function runSiteFocusWorkflowLive(
   const selectedOperationId = listBefore.summary.next_operation_id ?? null;
   const selectedOperationAction = listBefore.summary.next_operation_next_action ?? null;
   const selectedOperationReason = listBefore.summary.next_operation_reason ?? null;
+  const selectedOperationFocusKind = listBefore.summary.next_operation_focus_kind ?? null;
+  const selectedOperationFocusRef = listBefore.summary.next_operation_focus_ref ?? null;
   assert.ok(selectedSiteId, 'site_focus_workflow_live_requires_next_site');
   if (config.expectedSiteId) {
     assert.equal(
@@ -83,6 +85,8 @@ export async function runSiteFocusWorkflowLive(
     selected_operation_id: selectedOperationId,
     selected_operation_action: selectedOperationAction,
     selected_operation_reason: selectedOperationReason,
+    selected_operation_focus_kind: selectedOperationFocusKind,
+    selected_operation_focus_ref: selectedOperationFocusRef,
     expected_site_id: config.expectedSiteId,
     expected_route_action: config.expectedRouteAction,
     list_before_focus: listBefore.summary,

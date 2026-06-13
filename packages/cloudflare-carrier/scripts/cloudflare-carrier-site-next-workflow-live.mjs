@@ -71,6 +71,8 @@ export async function runSiteNextWorkflowLive(
   const overviewOperationId = listBefore.summary.next_operation_id ?? null;
   const overviewOperationAction = listBefore.summary.next_operation_next_action ?? null;
   const overviewOperationReason = listBefore.summary.next_operation_reason ?? null;
+  const overviewOperationFocusKind = listBefore.summary.next_operation_focus_kind ?? null;
+  const overviewOperationFocusRef = listBefore.summary.next_operation_focus_ref ?? null;
 
   if (routeAction === 'monitor_sites') {
     if (overviewSiteId && overviewAction !== 'monitor_sites') {
@@ -95,6 +97,8 @@ export async function runSiteNextWorkflowLive(
         delegated_operation_id: overviewOperationId,
         delegated_operation_action: overviewOperationAction,
         delegated_operation_reason: overviewOperationReason,
+        delegated_operation_focus_kind: overviewOperationFocusKind,
+        delegated_operation_focus_ref: overviewOperationFocusRef,
         selected_site_id: overviewSiteId,
         list_before_next: listBefore.summary,
         focus_result: null,
@@ -113,6 +117,8 @@ export async function runSiteNextWorkflowLive(
       delegated_operation_id: overviewOperationId,
       delegated_operation_action: overviewOperationAction,
       delegated_operation_reason: overviewOperationReason,
+      delegated_operation_focus_kind: overviewOperationFocusKind,
+      delegated_operation_focus_ref: overviewOperationFocusRef,
       selected_site_id: null,
       list_before_next: listBefore.summary,
       delegated_result: null,
@@ -185,6 +191,8 @@ export async function runSiteNextWorkflowLive(
       delegated_operation_id: overviewOperationId,
       delegated_operation_action: overviewOperationAction,
       delegated_operation_reason: overviewOperationReason,
+      delegated_operation_focus_kind: overviewOperationFocusKind,
+      delegated_operation_focus_ref: overviewOperationFocusRef,
       selected_site_id: selectedSiteId,
       list_before_next: listBefore.summary,
       focus_result: focusResult,

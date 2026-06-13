@@ -64,6 +64,8 @@ test('runSiteNextWorkflowLive returns monitor_sites when no site needs focus', a
   assert.equal(result.delegated_operation_id, null);
   assert.equal(result.delegated_operation_action, null);
   assert.equal(result.delegated_operation_reason, null);
+  assert.equal(result.delegated_operation_focus_kind, null);
+  assert.equal(result.delegated_operation_focus_ref, null);
   assert.equal(result.selected_site_id, null);
   assert.equal(invocations.length, 1);
 });
@@ -111,6 +113,8 @@ test('runSiteNextWorkflowLive delegates current site action when route monitors 
   assert.equal(result.delegated_operation_id, null);
   assert.equal(result.delegated_operation_action, null);
   assert.equal(result.delegated_operation_reason, null);
+  assert.equal(result.delegated_operation_focus_kind, null);
+  assert.equal(result.delegated_operation_focus_ref, null);
   assert.equal(result.selected_site_id, 'site_alpha');
   assert.equal(result.focus_result, null);
   assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.site_action_workflow_live.v1');
@@ -392,7 +396,7 @@ test('runSiteNextWorkflowLive carries selected operation lane from site-list ove
             next_operation_id: 'operation_alpha',
             next_operation_next_action: 'review_site_continuity_reconciliation_execution',
             next_operation_reason: 'operation_operator_focus_needs_review',
-            next_operation_focus_kind: null,
+            next_operation_focus_kind: 'site_continuity_reconciliation_execution',
             next_operation_focus_ref: 'site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:39:01.453Z:completed',
             route_next_action: 'focus_next_site',
             route_target: 'site_alpha',
@@ -426,6 +430,8 @@ test('runSiteNextWorkflowLive carries selected operation lane from site-list ove
   assert.equal(result.delegated_operation_id, 'operation_alpha');
   assert.equal(result.delegated_operation_action, 'review_site_continuity_reconciliation_execution');
   assert.equal(result.delegated_operation_reason, 'operation_operator_focus_needs_review');
+  assert.equal(result.delegated_operation_focus_kind, 'site_continuity_reconciliation_execution');
+  assert.equal(result.delegated_operation_focus_ref, 'site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:39:01.453Z:completed');
 });
 
 test('runSiteNextWorkflowLive rejects unsupported site route actions', async () => {
