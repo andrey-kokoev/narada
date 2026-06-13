@@ -1822,6 +1822,40 @@ test('runOperationNextWorkflowLive delegates persistence review route to operati
   assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-operation-persistence-read.mjs');
 });
 
+test('runOperationNextWorkflowLive delegates continuity loop report review route to operation continuity workflow', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_alpha',
+    expectedListRouteAction: null,
+    expectedOperationId: null,
+    auth: { kind: 'operator_session', value: 'operator_session=test', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        if (operation === 'operation.list') {
+          return JSON.stringify({ schema: 'narada.cloudflare_carrier.product_read.v1', summary: { next_operation_id: 'operation_site_read', route_next_action: 'focus_next_operation', next_action: 'use_focused_operation' } });
+        }
+        return JSON.stringify({ schema: 'narada.cloudflare_carrier.product_read.v1', summary: { operation_id: 'operation_site_read', workflow_next_action: 'review_continuity_loop_report', workflow_reason: 'operation_lifecycle_missing_continuity_loop_report' } });
+      }
+      if (scriptName === 'cloudflare-carrier-operation-continuity-workflow-live.mjs') {
+        assert.equal(args[args.indexOf('--expected-pre-action') + 1], 'review_continuity_loop_report');
+        return JSON.stringify({ schema: 'narada.cloudflare_carrier.operation_continuity_workflow_live.v1', status: 'ok', read_after_continuity: { workflow_next_action: 'monitor_operation' } });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'continuity');
+  assert.equal(result.delegated_route_action, 'review_continuity_loop_report');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.operation_continuity_workflow_live.v1');
+  assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-operation-continuity-workflow-live.mjs');
+});
+
 test('runOperationNextWorkflowLive advances recovery review into local resident carrier bridge when recovery names that admitted next action', async () => {
   const invocations = [];
   const result = await runOperationNextWorkflowLive({

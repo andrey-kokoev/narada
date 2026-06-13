@@ -406,6 +406,8 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:persistence:text -- 
 
 `product:operation:persistence:text` reuses `operation.read`, but condenses the persistence posture the operator actually needs: durability state, active and durable boundary counts, missing boundaries, warnings, and the explicit `product:operation:recovery:text` follow-on command.
 
+Use `product:operation:continuity:workflow:live` for the operation-scoped continuity lanes `review_continuity_packet`, `review_continuity_loop_report`, and `refresh_site_continuity_loop`. It reuses the governed continuity reconciler instead of inventing a separate operation-level mutation primitive, then re-reads the focused operation and site posture to prove the continuity step advanced.
+
 When the focused operation has a reviewable focus item, the operator can record that review explicitly through the governed Cloudflare review lane:
 
 ```powershell

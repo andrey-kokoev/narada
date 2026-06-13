@@ -24,6 +24,11 @@ export function parseOperationContinuityWorkflowLiveArgs(argv = [], env = proces
   const auth = resolveAuth(args, env);
   const executeAcknowledged = flag(args, '--execute-operation-continuity')
     || env.CLOUDFLARE_CARRIER_OPERATION_CONTINUITY_EXECUTE_LIVE === '1';
+  const supportedPreActions = new Set([
+    'refresh_site_continuity_loop',
+    'review_continuity_packet',
+    'review_continuity_loop_report',
+  ]);
 
   if (!executeAcknowledged) {
     throw new Error('operation_continuity_workflow_live_requires_--execute-operation-continuity_or_CLOUDFLARE_CARRIER_OPERATION_CONTINUITY_EXECUTE_LIVE=1');
@@ -32,6 +37,9 @@ export function parseOperationContinuityWorkflowLiveArgs(argv = [], env = proces
   if (!siteId) throw new Error('operation_continuity_workflow_live_requires_site_id');
   if (!operationId) throw new Error('operation_continuity_workflow_live_requires_operation_id');
   if (!auth) throw new Error('operation_continuity_workflow_live_requires_bearer_token_or_operator_session');
+  if (!supportedPreActions.has(expectedPreAction)) {
+    throw new Error(`operation_continuity_workflow_live_expected_pre_action_unsupported:${expectedPreAction}`);
+  }
 
   return {
     workerUrl,

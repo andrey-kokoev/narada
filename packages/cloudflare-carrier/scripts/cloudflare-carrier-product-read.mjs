@@ -404,6 +404,9 @@ export function formatProductSurfaceText(result) {
     if (summary.workflow_next_action === 'review_recovery_posture') {
       lines.push(`Recovery Review: pnpm --filter @narada2/cloudflare-carrier product:operation:recovery:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
     }
+    if (summary.workflow_next_action === 'review_continuity_packet' || summary.workflow_next_action === 'review_continuity_loop_report' || summary.workflow_next_action === 'refresh_site_continuity_loop') {
+      lines.push(`Continuity Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:continuity:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --expected-pre-action ${summary.workflow_next_action ?? 'refresh_site_continuity_loop'} --operator-session-file <operator-session-file> --execute-operation-continuity`);
+    }
     if (summary.workflow_next_action === 'bridge_local_resident_carrier_evidence') {
       lines.push(`Local Resident Carrier Bridge: pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:local-resident-carrier-bridge:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
     }

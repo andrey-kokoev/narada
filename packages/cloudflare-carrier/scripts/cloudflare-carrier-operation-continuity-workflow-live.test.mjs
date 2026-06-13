@@ -35,6 +35,19 @@ test('parseOperationContinuityWorkflowLiveArgs supports operator session auth', 
   assert.equal(parsed.expectedPreAction, 'refresh_site_continuity_loop');
 });
 
+test('parseOperationContinuityWorkflowLiveArgs accepts continuity review pre-actions', () => {
+  const parsed = parseOperationContinuityWorkflowLiveArgs([
+    '--url', 'https://carrier.example',
+    '--site', 'site_live_smoke',
+    '--operation-id', 'operation_live_alpha',
+    '--expected-pre-action', 'review_continuity_loop_report',
+    '--operator-session-cookie', 'operator-session-cookie',
+    '--execute-operation-continuity',
+  ], {});
+
+  assert.equal(parsed.expectedPreAction, 'review_continuity_loop_report');
+});
+
 test('runOperationContinuityWorkflowLive orchestrates continuity refresh through existing live surfaces', async () => {
   const invocations = [];
   const result = await runOperationContinuityWorkflowLive({
@@ -123,4 +136,54 @@ test('runOperationContinuityWorkflowLive orchestrates continuity refresh through
   assert.ok(invocations[0].includes('--operator-session-cookie'));
   assert.ok(invocations[1].includes('--refresh-site-registry-projection'));
   assert.ok(invocations[1].includes('--live'));
+});
+
+test('runOperationContinuityWorkflowLive accepts continuity packet review as the pre-action', async () => {
+  let afterContinuity = false;
+  const result = await runOperationContinuityWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_live_smoke',
+    operationId: 'operation_live_alpha',
+    expectedPreAction: 'review_continuity_packet',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      const scriptName = args[0].split(/[\\\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        if (operation === 'operation.read') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            status: 'ok',
+            summary: {
+              site_id: 'site_live_smoke',
+              operation_id: 'operation_live_alpha',
+              workflow_next_action: afterContinuity ? 'monitor_operation' : 'review_continuity_packet',
+              next_action: afterContinuity ? 'monitor_operation' : 'continuity_packet',
+            },
+          });
+        }
+        if (operation === 'site.read') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            status: 'ok',
+            summary: { site_id: 'site_live_smoke', next_action: 'monitor_site' },
+          });
+        }
+      }
+      if (scriptName === 'cloudflare-site-continuity-scheduler.mjs') {
+        afterContinuity = true;
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.site_continuity_reconciliation_execution.v1',
+          status: 'completed',
+          summary: { site_count: 1, completed_site_count: 1, refused_site_count: 0 },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.pre_workflow_next_action, 'review_continuity_packet');
+  assert.equal(result.read_after_continuity.workflow_next_action, 'monitor_operation');
 });
