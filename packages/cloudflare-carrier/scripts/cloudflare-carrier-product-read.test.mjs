@@ -727,6 +727,50 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   });
   assert.match(operationReadDirectiveText, /Directive Delivery Review: pnpm --filter @narada2\/cloudflare-carrier product:directive:delivery:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_directive --operator-session-file <operator-session-file>/);
 
+  const operationReadDirectiveIntentFocusText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_directive',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'directive_intent_focus',
+      workflow_next_action: 'focus_webhook_delay_directive_intent',
+      workflow_reason: 'directive_intent_record_needs_operator_focus',
+      workflow_focus_ref: 'directive_record_focus',
+      session_count: 1,
+      task_count: 0,
+    },
+  });
+  assert.match(operationReadDirectiveIntentFocusText, /Directive Delivery Review: pnpm --filter @narada2\/cloudflare-carrier product:directive:delivery:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_directive --operator-session-file <operator-session-file>/);
+
+  const operationReadShadowText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_shadow',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'shadow_focus',
+      workflow_next_action: 'focus_webhook_delay_shadow_read',
+      workflow_reason: 'directive_intent_not_recorded_from_shadow_read',
+      workflow_focus_ref: 'shadow_focus',
+      session_count: 1,
+      task_count: 0,
+    },
+  });
+  assert.match(operationReadShadowText, /Webhook Delay Shadow Read: pnpm --filter @narada2\/cloudflare-carrier product:webhook-delay:shadow-read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_shadow --operator-session-file <operator-session-file>/);
+
   const operationReadOutlookDraftText = formatProductSurfaceText({
     operation: 'operation.read',
     worker_url: 'https://carrier.example.test',

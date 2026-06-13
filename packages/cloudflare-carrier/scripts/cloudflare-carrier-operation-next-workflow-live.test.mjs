@@ -2363,6 +2363,112 @@ test('runOperationNextWorkflowLive delegates directive delivery review route to 
   assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-directive-delivery-review.mjs');
 });
 
+test('runOperationNextWorkflowLive delegates webhook delay directive focus routes to directive delivery review read', async () => {
+  for (const workflowNextAction of ['focus_webhook_delay_directive_intent', 'focus_webhook_delay_directive_delivery']) {
+    const invocations = [];
+    const result = await runOperationNextWorkflowLive({
+      workerUrl: 'https://carrier.example',
+      siteId: 'site_narada_cloudflare',
+      expectedListRouteAction: 'focus_next_operation',
+      expectedOperationId: 'operation_site_read',
+      auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+      executeAcknowledged: true,
+    }, {
+      runNodeScript: async (args) => {
+        invocations.push(args);
+        const scriptName = args[0].split(/[\\\\/]/).pop();
+        if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+          const operation = args[args.indexOf('--operation') + 1];
+          if (operation === 'operation.list') {
+            return JSON.stringify({
+              schema: 'narada.cloudflare_carrier.product_read.v1',
+              summary: {
+                next_operation_id: 'operation_site_read',
+                route_next_action: 'focus_next_operation',
+                next_action: 'use_focused_operation',
+              },
+            });
+          }
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              operation_id: 'operation_site_read',
+              workflow_next_action: workflowNextAction,
+            },
+          });
+        }
+        if (scriptName === 'cloudflare-carrier-directive-delivery-review.mjs') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.directive_delivery_review.v1',
+            status: 'ok',
+            summary: {
+              operation_id: 'operation_site_read',
+              directive_record_count: 1,
+            },
+          });
+        }
+        throw new Error(`unexpected_script:${scriptName}`);
+      },
+    });
+
+    assert.equal(result.delegated_workflow, 'directive_delivery');
+    assert.equal(result.delegated_route_action, workflowNextAction);
+    assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-directive-delivery-review.mjs');
+  }
+});
+
+test('runOperationNextWorkflowLive delegates webhook delay shadow read focus route', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_narada_cloudflare',
+    expectedListRouteAction: 'focus_next_operation',
+    expectedOperationId: 'operation_site_read',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              next_operation_id: 'operation_site_read',
+              route_next_action: 'focus_next_operation',
+              next_action: 'use_focused_operation',
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            operation_id: 'operation_site_read',
+            workflow_next_action: 'focus_webhook_delay_shadow_read',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-webhook-delay-shadow-read.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.webhook_delay_shadow_read.v1',
+          status: 'ok',
+          summary: {
+            operation_id: 'operation_site_read',
+            observation_count: 1,
+          },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'webhook_delay_shadow_read');
+  assert.equal(result.delegated_route_action, 'focus_webhook_delay_shadow_read');
+  assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-webhook-delay-shadow-read.mjs');
+});
+
 test('runOperationNextWorkflowLive delegates mailbox outlook draft review route to mailbox outlook draft read', async () => {
   const invocations = [];
   const result = await runOperationNextWorkflowLive({
