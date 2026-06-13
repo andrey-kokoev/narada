@@ -927,6 +927,30 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   });
   assert.match(operationReadRepositoryPublicationEvidenceText, /Repository Publication Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:evidence:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
+  const operationReadGenericFocusReviewText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_focus_review',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'carrier_evidence',
+      workflow_next_action: 'review_operation_operator_focus',
+      workflow_reason: 'operation_operator_focus_needs_review',
+      session_count: 1,
+      task_count: 0,
+      recovery_state: 'reconstructable',
+      recovery_boundary_count: 1,
+      recovery_gap_count: 0,
+    },
+  });
+  assert.match(operationReadGenericFocusReviewText, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_focus_review --operator-session-file <operator-session-file>/);
+
   const operationReadSiteFileProposalText = formatProductSurfaceText({
     operation: 'operation.read',
     worker_url: 'https://carrier.example.test',

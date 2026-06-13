@@ -2609,6 +2609,39 @@ test('runOperationNextWorkflowLive delegates repository publication evidence rou
   assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-repository-publication-read.mjs');
 });
 
+test('runOperationNextWorkflowLive delegates generic operation focus review route to evidence read', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_narada_cloudflare',
+    expectedListRouteAction: null,
+    expectedOperationId: null,
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        if (operation === 'operation.list') {
+          return JSON.stringify({ schema: 'narada.cloudflare_carrier.product_read.v1', summary: { next_operation_id: 'operation_site_read', route_next_action: 'monitor_operations' } });
+        }
+        return JSON.stringify({ schema: 'narada.cloudflare_carrier.product_read.v1', summary: { operation_id: 'operation_site_read', workflow_next_action: 'review_operation_operator_focus' } });
+      }
+      if (scriptName === 'cloudflare-carrier-operation-evidence-read.mjs') {
+        return JSON.stringify({ schema: 'narada.cloudflare_carrier.operation_evidence_read.v1', status: 'ok', summary: { carrier_event_count: 1 } });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'evidence');
+  assert.equal(result.delegated_route_action, 'review_operation_operator_focus');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.operation_evidence_read.v1');
+  assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-operation-evidence-read.mjs');
+});
+
 test('runOperationNextWorkflowLive delegates cloudflare repository publication execution review route to execution read', async () => {
   const invocations = [];
   const result = await runOperationNextWorkflowLive({
