@@ -173,5 +173,6 @@ test('formatLocalIngressEvidenceReadText prints local ingress evidence summary',
   assert.match(text, /Evidence: count=1 focused=local_ingress_evidence_alpha status=completed/);
   assert.match(text, /Current Posture: windows_local_ingress_executed_cloudflare_recorded_evidence/);
   assert.match(text, /Admissions: windows=admit \/ local_ingress_execution_completed local_filesystem_mutation=admitted_by_windows_local_ingress/);
+  assert.match(text, /Request Read: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --local-ingress-request-id local_ingress_request_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Focused Evidence: recorded=2026-06-13T04:31:00.000Z/);
 });
