@@ -155,5 +155,6 @@ test('formatLocalIngressEvidenceReadText prints local ingress evidence summary',
 
   assert.match(text, /Local Ingress Evidence Review: ok/);
   assert.match(text, /Evidence: count=1 latest=local_ingress_evidence_alpha status=completed/);
+  assert.match(text, /Current Posture: windows_local_ingress_executed_cloudflare_recorded_evidence/);
   assert.match(text, /Admissions: windows=admit \/ local_ingress_execution_completed local_filesystem_mutation=admitted_by_windows_local_ingress/);
 });

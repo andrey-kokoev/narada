@@ -86,6 +86,7 @@ export function formatLocalIngressEvidenceReadText(result) {
     `Site: ${summary.site_id ?? 'unknown'}`,
     `Evidence: count=${summary.evidence_count ?? 0} latest=${summary.latest_evidence_id ?? 'none'} status=${summary.latest_status ?? 'unknown'}`,
     `Execution: request=${summary.latest_request_id ?? 'none'} local_execution=${summary.latest_local_execution_id ?? 'none'} executor=${summary.latest_executor_authority ?? 'unknown'}`,
+    `Current Posture: ${summary.latest_evidence_posture ?? 'unknown'}`,
     `Admissions: windows=${windowsAdmission || 'none'} local_filesystem_mutation=${summary.local_filesystem_mutation_admission ?? 'unknown'}`,
     `Changed Files: count=${summary.latest_changed_file_count ?? 0} rollback=${summary.latest_rollback_evidence_ref ?? 'none'}`,
     `Cloudflare Boundaries: evidence_store=${summary.cloudflare_evidence_store_authority ?? 'unknown'} direct_cloudflare_filesystem_mutation=${summary.direct_cloudflare_filesystem_mutation_admission ?? 'unknown'} repository_publication=${summary.repository_publication_admission ?? 'unknown'}`,
