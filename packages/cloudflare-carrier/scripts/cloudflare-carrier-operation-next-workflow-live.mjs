@@ -102,6 +102,7 @@ const ROUTE_TO_WORKFLOW = new Map([
   ['review_windows_fallback_resident_dispatch_evidence', { name: 'resident_dispatch_windows_fallback_evidence_review', script: residentDispatchWindowsFallbackEvidenceReviewScript, flag: null }],
   ['bridge_local_resident_carrier_evidence', { name: 'local_resident_carrier_bridge', script: residentDispatchLocalResidentCarrierBridgeScript, flag: null }],
   ['review_continuity_packet', { name: 'continuity', script: continuityWorkflowScript, flag: '--execute-operation-continuity' }],
+  ['observe_continuity_packet', { name: 'continuity', script: continuityWorkflowScript, flag: '--execute-operation-continuity' }],
   ['review_continuity_loop_report', { name: 'continuity', script: continuityWorkflowScript, flag: '--execute-operation-continuity' }],
   ['start_or_select_session', { name: 'session', script: sessionWorkflowScript, flag: '--execute-operation-session' }],
   ['resume_operation_continuation', { name: 'continuation', script: continuationWorkflowScript, flag: '--execute-operation-continuation-resume' }],
@@ -673,3 +674,4 @@ if (resolve(process.argv[1] ?? '') === scriptPath) {
   const result = await runOperationNextWorkflowLive(config);
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
+

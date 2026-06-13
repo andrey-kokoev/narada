@@ -1068,6 +1068,28 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   });
   assert.match(operationReadContinuityText, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_continuity --expected-pre-action review_continuity_loop_report --operator-session-file <operator-session-file> --execute-operation-continuity/);
 
+  const operationReadObserveContinuityText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_continuity_observe',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'continuity_packet',
+      workflow_next_action: 'observe_continuity_packet',
+      workflow_reason: 'operation_continuity_direction_needs_attention',
+      session_count: 0,
+      task_count: 0,
+      persistence_state: 'durable',
+      recovery_state: 'reconstructable',
+    },
+  });
+  assert.match(operationReadObserveContinuityText, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_continuity_observe --expected-pre-action observe_continuity_packet --operator-session-file <operator-session-file> --execute-operation-continuity/);
   const operationReadLocalResidentBridgeText = formatProductSurfaceText({
     operation: 'operation.read',
     worker_url: 'https://carrier.example.test',
@@ -1799,3 +1821,4 @@ test('formatProductSurfaceText surfaces operation scope command', () => {
   assert.match(operationReadScopeText, /Scope Loaded: no/);
   assert.match(operationReadScopeText, /Operation Scope: pnpm --filter @narada2\/cloudflare-carrier product:operation:scope:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
+

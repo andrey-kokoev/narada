@@ -860,6 +860,74 @@ test('runOperationNextWorkflowLive does not retarget away from an already action
   assert.equal(invocations[2][invocations[2].indexOf('--operation-id') + 1], 'operation_focus');
 });
 
+
+test('runOperationNextWorkflowLive routes observe_continuity_packet through the continuity workflow', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_live_smoke',
+    expectedListRouteAction: null,
+    expectedOperationId: null,
+    auth: { kind: 'bearer', value: 'token-value', source: 'flag:--token' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        const operationId = args.includes('--operation-id') ? args[args.indexOf('--operation-id') + 1] : null;
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              next_operation_id: 'operation_alpha',
+              route_next_action: 'monitor_operations',
+              next_action: 'observe_continuity_packet',
+            },
+          });
+        }
+        if (operation === 'operation.read' && operationId === 'operation_alpha') {
+          if (invocations.filter((entry) => entry[0].split(/[\\/]/).pop() === 'cloudflare-carrier-product-read.mjs' && entry.includes('--operation') && entry[entry.indexOf('--operation') + 1] === 'operation.read').length === 1) {
+            return JSON.stringify({
+              schema: 'narada.cloudflare_carrier.product_read.v1',
+              summary: {
+                operation_id: 'operation_alpha',
+                workflow_next_action: 'observe_continuity_packet',
+                workflow_reason: 'operation_continuity_direction_needs_attention',
+                posture_next_action: 'monitor_operations',
+              },
+            });
+          }
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              operation_id: 'operation_alpha',
+              workflow_next_action: 'monitor_operation',
+            },
+          });
+        }
+      }
+      if (scriptName === 'cloudflare-carrier-operation-continuity-workflow-live.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.operation_continuity_workflow_live.v1',
+          status: 'ok',
+          summary: {
+            operation_id: 'operation_alpha',
+          },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.selected_operation_id, 'operation_alpha');
+  assert.equal(result.read_before_next.operation_id, 'operation_alpha');
+  assert.equal(result.delegated_workflow, 'continuity');
+  assert.equal(result.delegated_route_action, 'observe_continuity_packet');
+  assert.equal(invocations[2][0].split(/[\\/]/).pop(), 'cloudflare-carrier-operation-continuity-workflow-live.mjs');
+  assert.equal(invocations[2][invocations[2].indexOf('--operation-id') + 1], 'operation_alpha');
+});
 test('runOperationNextWorkflowLive stops retargeting cleanly on a posture cycle and keeps the last distinct operation selected', async () => {
   const result = await runOperationNextWorkflowLive({
     workerUrl: 'https://carrier.example',
@@ -3142,3 +3210,4 @@ test('runOperationNextWorkflowLive delegates read_operation_scope route', async 
   assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.operation_scope_read.v1');
   assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-operation-scope-read.mjs');
 });
+
