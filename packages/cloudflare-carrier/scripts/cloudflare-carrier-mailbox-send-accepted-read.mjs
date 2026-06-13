@@ -59,6 +59,11 @@ export function summarizeMailboxSendAccepted(body = {}, options = {}) {
       ?? latestRecord?.proposal_id
       ?? latestRequest?.proposal_id
       ?? null,
+    latest_outlook_draft_id:
+      latest?.outlook_draft_id
+      ?? latestRecord?.outlook_draft_id
+      ?? latestRequest?.outlook_draft_id
+      ?? null,
     latest_send_posture:
       latest?.send_posture
       ?? latestRecord?.send_posture
@@ -102,6 +107,9 @@ export function formatMailboxSendAcceptedReadText(result) {
   }
   if (summary.latest_proposal_id) {
     lines.push(`Proposal Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.latest_proposal_id} --operator-session-file <operator-session-file>`);
+  }
+  if (summary.latest_outlook_draft_id) {
+    lines.push(`Draft Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.latest_outlook_draft_id} --operator-session-file <operator-session-file>`);
   }
   if (summary.latest_recorded_at) {
     lines.push(`${latestRecordedLabel}: ${summary.latest_recorded_at}`);

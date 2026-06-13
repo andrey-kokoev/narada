@@ -47,6 +47,7 @@ test('summarizeMailboxSendAccepted lifts latest accepted send details', () => {
   assert.equal(summary.mailbox_send_authority, 'cloudflare_graph_mailbox_send');
   assert.equal(summary.latest_account_ref, null);
   assert.equal(summary.latest_proposal_id, null);
+  assert.equal(summary.latest_outlook_draft_id, null);
   assert.equal(summary.latest_send_posture, null);
   assert.equal(summary.latest_send_accepted_id, 'mailbox_send_accepted_alpha');
   assert.equal(summary.latest_message_id, 'message_alpha');
@@ -144,6 +145,7 @@ test('formatMailboxSendAcceptedReadText prints mailbox send acceptance summary',
       mailbox_mutation_admission: 'not_admitted',
       latest_account_ref: 'help@example.test',
       latest_proposal_id: 'mailbox_send_proposal_alpha',
+      latest_outlook_draft_id: 'outlook_draft_alpha',
       latest_send_posture: 'cloudflare_graph_send_accepted_delivery_not_confirmed',
       latest_send_accepted_id: 'mailbox_send_accepted_alpha',
       latest_message_id: 'message_alpha',
@@ -157,6 +159,7 @@ test('formatMailboxSendAcceptedReadText prints mailbox send acceptance summary',
   assert.match(text, /Current Posture: cloudflare_graph_send_accepted_delivery_not_confirmed/);
   assert.match(text, /Latest Accepted: id=mailbox_send_accepted_alpha proposal=mailbox_send_proposal_alpha account=help@example.test message=message_alpha subject=none/);
   assert.match(text, /Proposal Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref mailbox_send_proposal_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Draft Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref outlook_draft_alpha --operator-session-file <operator-session-file>/);
 });
 
 test('formatMailboxSendAcceptedReadText prints focused labels for focused reads', () => {
