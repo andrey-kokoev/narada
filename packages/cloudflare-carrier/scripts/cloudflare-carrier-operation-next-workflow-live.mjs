@@ -20,6 +20,7 @@ const mailboxSendConfirmationReadScript = resolve(scriptDir, 'cloudflare-carrier
 const localIngressProviderLivenessReadScript = resolve(scriptDir, 'cloudflare-carrier-local-ingress-provider-liveness-read.mjs');
 const mailboxDraftReplyProposalReadScript = resolve(scriptDir, 'cloudflare-carrier-mailbox-draft-reply-proposal-read.mjs');
 const repositoryPublicationProviderLivenessReadScript = resolve(scriptDir, 'cloudflare-carrier-repository-publication-provider-liveness-read.mjs');
+const repositoryPublicationReadScript = resolve(scriptDir, 'cloudflare-carrier-repository-publication-read.mjs');
 const repositoryPublicationRequestReviewScript = resolve(scriptDir, 'cloudflare-carrier-repository-publication-request-review.mjs');
 const siteFileChangeProposalReviewScript = resolve(scriptDir, 'cloudflare-carrier-site-file-change-proposal-review.mjs');
 const residentDispatchWindowsFallbackRequestScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-windows-fallback-request.mjs');
@@ -45,6 +46,9 @@ const ROUTE_TO_WORKFLOW = new Map([
   ['review_mailbox_draft_reply_proposal', { name: 'mailbox_draft_reply_proposal', script: mailboxDraftReplyProposalReadScript, flag: null }],
   ['review_repository_publication_provider_liveness', { name: 'repository_publication_provider_liveness', script: repositoryPublicationProviderLivenessReadScript, flag: null }],
   ['review_repository_publication_request', { name: 'repository_publication_request', script: repositoryPublicationRequestReviewScript, flag: null }],
+  ['review_repository_publication_execution', { name: 'repository_publication_cloudflare_execution', script: repositoryPublicationReadScript, flag: null, mode: 'repository_publication.cloudflare_execution.list' }],
+  ['review_cloudflare_github_repository_publication_execution', { name: 'repository_publication_cloudflare_execution', script: repositoryPublicationReadScript, flag: null, mode: 'repository_publication.cloudflare_execution.list' }],
+  ['review_repository_publication_evidence', { name: 'repository_publication_evidence', script: repositoryPublicationReadScript, flag: null, mode: 'repository_publication.evidence.list' }],
   ['review_site_file_change_proposal', { name: 'site_file_change_proposal', script: siteFileChangeProposalReviewScript, flag: null }],
   ['request_windows_fallback_resident_dispatch', { name: 'resident_dispatch_windows_fallback_request', script: residentDispatchWindowsFallbackRequestScript, flag: null }],
   ['await_windows_fallback_resident_dispatch', { name: 'resident_dispatch_windows_fallback_execute', script: residentDispatchWindowsFallbackExecuteScript, flag: '--execute-windows-fallback' }],

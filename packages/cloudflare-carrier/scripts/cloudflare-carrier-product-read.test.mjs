@@ -597,6 +597,54 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   });
   assert.match(operationReadRepositoryPublicationText, /Repository Publication Review: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_repo_pub --operator-session-file <operator-session-file>/);
 
+  const operationReadRepositoryPublicationExecutionText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_repo_pub_execution',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'active_uninhabited',
+      health: 'attention',
+      next_action: 'session',
+      workflow_next_action: 'review_cloudflare_github_repository_publication_execution',
+      workflow_reason: 'repository_publication_execution_failed',
+      session_count: 0,
+      task_count: 0,
+      recovery_state: 'reconstructable',
+      recovery_boundary_count: 1,
+      recovery_gap_count: 0,
+    },
+  });
+  assert.match(operationReadRepositoryPublicationExecutionText, /Repository Publication Execution Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+
+  const operationReadRepositoryPublicationEvidenceText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_repo_pub_evidence',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'active_uninhabited',
+      health: 'attention',
+      next_action: 'session',
+      workflow_next_action: 'review_repository_publication_evidence',
+      workflow_reason: 'repository_publication_operation_posture_has_returned_evidence',
+      session_count: 0,
+      task_count: 0,
+      recovery_state: 'reconstructable',
+      recovery_boundary_count: 1,
+      recovery_gap_count: 0,
+    },
+  });
+  assert.match(operationReadRepositoryPublicationEvidenceText, /Repository Publication Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:evidence:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+
   const operationReadSiteFileProposalText = formatProductSurfaceText({
     operation: 'operation.read',
     worker_url: 'https://carrier.example.test',

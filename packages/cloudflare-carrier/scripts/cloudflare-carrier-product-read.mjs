@@ -378,6 +378,12 @@ export function formatProductSurfaceText(result) {
     if (summary.workflow_next_action === 'review_repository_publication_request') {
       lines.push(`Repository Publication Review: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
     }
+    if (summary.workflow_next_action === 'review_repository_publication_execution' || summary.workflow_next_action === 'review_cloudflare_github_repository_publication_execution') {
+      lines.push(`Repository Publication Execution Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
+    }
+    if (summary.workflow_next_action === 'review_repository_publication_evidence') {
+      lines.push(`Repository Publication Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:evidence:list:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
+    }
     if (summary.workflow_next_action === 'review_local_ingress_provider_liveness') {
       lines.push(`Local Ingress Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:provider-liveness:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
     }

@@ -1701,6 +1701,74 @@ test('runOperationNextWorkflowLive delegates repository publication request revi
   assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-repository-publication-request-review.mjs');
 });
 
+test('runOperationNextWorkflowLive delegates repository publication evidence route to repository publication evidence read', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_narada_cloudflare',
+    expectedListRouteAction: null,
+    expectedOperationId: null,
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        if (operation === 'operation.list') {
+          return JSON.stringify({ schema: 'narada.cloudflare_carrier.product_read.v1', summary: { next_operation_id: 'operation_site_read', route_next_action: 'monitor_operations' } });
+        }
+        return JSON.stringify({ schema: 'narada.cloudflare_carrier.product_read.v1', summary: { operation_id: 'operation_site_read', workflow_next_action: 'review_repository_publication_evidence' } });
+      }
+      if (scriptName === 'cloudflare-carrier-repository-publication-read.mjs') {
+        assert.equal(args[args.indexOf('--operation') + 1], 'repository_publication.evidence.list');
+        return JSON.stringify({ schema: 'narada.cloudflare_carrier.repository_publication_read.v1', status: 'ok', summary: { operation: 'repository_publication.evidence.list', evidence_count: 1 } });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'repository_publication_evidence');
+  assert.equal(result.delegated_route_action, 'review_repository_publication_evidence');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.repository_publication_read.v1');
+  assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-repository-publication-read.mjs');
+});
+
+test('runOperationNextWorkflowLive delegates cloudflare repository publication execution review route to execution read', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_narada_cloudflare',
+    expectedListRouteAction: null,
+    expectedOperationId: null,
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        if (operation === 'operation.list') {
+          return JSON.stringify({ schema: 'narada.cloudflare_carrier.product_read.v1', summary: { next_operation_id: 'operation_site_read', route_next_action: 'monitor_operations' } });
+        }
+        return JSON.stringify({ schema: 'narada.cloudflare_carrier.product_read.v1', summary: { operation_id: 'operation_site_read', workflow_next_action: 'review_cloudflare_github_repository_publication_execution' } });
+      }
+      if (scriptName === 'cloudflare-carrier-repository-publication-read.mjs') {
+        assert.equal(args[args.indexOf('--operation') + 1], 'repository_publication.cloudflare_execution.list');
+        return JSON.stringify({ schema: 'narada.cloudflare_carrier.repository_publication_read.v1', status: 'ok', summary: { operation: 'repository_publication.cloudflare_execution.list', execution_count: 1 } });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'repository_publication_cloudflare_execution');
+  assert.equal(result.delegated_route_action, 'review_cloudflare_github_repository_publication_execution');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.repository_publication_read.v1');
+  assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-repository-publication-read.mjs');
+});
+
 test('runOperationNextWorkflowLive delegates recovery review route to operation recovery read', async () => {
   const invocations = [];
   const result = await runOperationNextWorkflowLive({
