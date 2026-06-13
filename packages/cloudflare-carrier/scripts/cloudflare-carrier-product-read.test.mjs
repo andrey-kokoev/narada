@@ -1176,6 +1176,36 @@ test('formatProductSurfaceText emits provider liveness operator commands for ope
   assert.match(repositoryPublicationRestoreText, /Repository Publication Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 });
 
+test('formatProductSurfaceText emits site authority operator command for site authority route', () => {
+  const siteAuthorityText = formatProductSurfaceText({
+    operation: 'site.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'site.read',
+      site_id: 'site_alpha',
+      display_name: 'Site Alpha',
+      health: 'attention',
+      next_action: 'read_site_authority',
+      continuity_state: 'packet_observed',
+      continuity_direction_state: 'bidirectional_packets_observed',
+      continuity_direction_missing: [],
+      continuity_loop_state: 'loop_report_observed',
+      continuity_reconciliation_execution_state: 'reconciliation_execution_observed',
+      continuity_reconciliation_execution_health: 'ready',
+      continuity_packet_count: 3,
+      continuity_loop_report_count: 20,
+      continuity_reconciliation_execution_count: 20,
+      persistence_state: 'durable',
+      recovery_state: 'reconstructable',
+      membership_count: 2,
+      session_count: 4,
+    },
+  });
+
+  assert.match(siteAuthorityText, /Site Authority: pnpm --filter @narada2\/cloudflare-carrier product:site:authority:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+});
+
 test('formatProductSurfaceText emits mailbox send review operator commands for operation review routes', () => {
   const confirmationText = formatProductSurfaceText({
     operation: 'operation.read',

@@ -309,6 +309,9 @@ export function formatProductSurfaceText(result) {
     lines.push(`Health: ${summary.health ?? 'unknown'}`);
     lines.push(`Next Action: ${summary.next_action ?? 'none'}`);
     lines.push(`Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file> --execute-site-action`);
+    if (summary.next_action === 'read_site_authority') {
+      lines.push(`Site Authority: pnpm --filter @narada2/cloudflare-carrier product:site:authority:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
+    }
     lines.push(`Continuity: state=${summary.continuity_state ?? 'unknown'} direction=${summary.continuity_direction_state ?? 'unknown'} loop=${summary.continuity_loop_state ?? 'unknown'}`);
     if (summary.continuity_direction_missing?.length > 0) lines.push(`Continuity Missing: ${summary.continuity_direction_missing.join(', ')}`);
     lines.push(`Reconciliation: state=${summary.continuity_reconciliation_execution_state ?? 'unknown'} health=${summary.continuity_reconciliation_execution_health ?? 'unknown'}`);

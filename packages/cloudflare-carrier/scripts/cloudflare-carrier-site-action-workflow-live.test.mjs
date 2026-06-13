@@ -199,3 +199,33 @@ test('runSiteActionWorkflowLive delegates continuity refresh', async () => {
     '--projection-url', 'https://carrier.example',
   ]);
 });
+
+test('runSiteActionWorkflowLive delegates site authority read', async () => {
+  const invocations = [];
+  const result = await runSiteActionWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_alpha',
+    expectedAction: 'read_site_authority',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs' && invocations.length === 1) {
+        return JSON.stringify({ schema: 'narada.cloudflare_carrier.product_read.v1', summary: { site_id: 'site_alpha', next_action: 'read_site_authority' } });
+      }
+      if (scriptName === 'cloudflare-carrier-site-authority-read.mjs') {
+        return JSON.stringify({ schema: 'narada.cloudflare_carrier.site_authority_read.v1', status: 'ok', summary: { site_id: 'site_alpha', admitted_count: 1 } });
+      }
+      if (scriptName === 'cloudflare-carrier-product-read.mjs' && invocations.length === 3) {
+        return JSON.stringify({ schema: 'narada.cloudflare_carrier.product_read.v1', summary: { site_id: 'site_alpha', next_action: 'monitor_site' } });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'site_authority');
+  assert.equal(result.delegated_action, 'read_site_authority');
+  assert.equal(invocations[1][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-site-authority-read.mjs');
+});

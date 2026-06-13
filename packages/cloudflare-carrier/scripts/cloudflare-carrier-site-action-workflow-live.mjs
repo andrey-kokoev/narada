@@ -17,6 +17,7 @@ const operationNextWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-opera
 const siteContinuityPublishScript = resolve(scriptDir, 'cloudflare-carrier-site-continuity-publish.mjs');
 const continuityBindingsScript = resolve(scriptDir, 'cloudflare-site-continuity-bindings.mjs');
 const continuitySchedulerScript = resolve(scriptDir, 'cloudflare-site-continuity-scheduler.mjs');
+const siteAuthorityReadScript = resolve(scriptDir, 'cloudflare-carrier-site-authority-read.mjs');
 
 const ACTION_TO_WORKFLOW = {
   monitor_site: { name: 'monitor_site' },
@@ -24,6 +25,7 @@ const ACTION_TO_WORKFLOW = {
   publish_cloudflare_continuity_packet: { name: 'publish_continuity_packet', script: siteContinuityPublishScript },
   bind_cloudflare_product_next_site_locally: { name: 'prepare_next_site_binding', script: continuityBindingsScript },
   refresh_site_continuity_loop: { name: 'refresh_site_continuity_loop', script: continuitySchedulerScript },
+  read_site_authority: { name: 'site_authority', script: siteAuthorityReadScript },
 };
 
 export function parseSiteActionWorkflowLiveArgs(argv = [], env = process.env) {
@@ -165,6 +167,11 @@ function buildWorkflowArgs(config, action, script) {
       '--refresh-site-registry-projection',
       '--projection-url', config.workerUrl,
     ];
+    appendAuthOptions(args, config);
+    return args;
+  }
+  if (action === 'read_site_authority') {
+    const args = [script, '--url', config.workerUrl, '--site', config.siteId];
     appendAuthOptions(args, config);
     return args;
   }

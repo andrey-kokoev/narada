@@ -1,0 +1,79 @@
+#!/usr/bin/env node
+import { fileURLToPath } from 'node:url';
+
+import { parseProductReadArgs, readProductSurface } from './cloudflare-carrier-product-read.mjs';
+
+export function parseSiteAuthorityReadArgs(argv = [], env = process.env) {
+  return parseProductReadArgs(['--operation', 'site.read', ...argv], env);
+}
+
+export async function readSiteAuthority(config, fetchImpl = fetch) {
+  const product = await readProductSurface(config, fetchImpl);
+  return {
+    schema: 'narada.cloudflare_carrier.site_authority_read.v1',
+    status: 'ok',
+    worker_url: product.worker_url,
+    auth_source: product.auth_source,
+    operation: product.operation,
+    params: product.params,
+    summary: summarizeSiteAuthority(product.response),
+    response: product.response,
+  };
+}
+
+export function summarizeSiteAuthority(body = {}) {
+  const siteAuthority = body?.site_authority ?? {};
+  const map = siteAuthority?.map ?? {};
+  const decisions = Array.isArray(siteAuthority?.decisions) ? siteAuthority.decisions : [];
+  return {
+    site_id: body?.site?.site_id ?? body?.site_id ?? map?.site_id ?? null,
+    classifier_version: map?.classifier_version ?? null,
+    embodiment_count: Array.isArray(map?.embodiments) ? map.embodiments.length : 0,
+    entry_count: Array.isArray(map?.entries) ? map.entries.length : 0,
+    decision_count: decisions.length,
+    admitted_count: decisions.filter((item) => item?.action === 'admit').length,
+    refused_count: decisions.filter((item) => item?.action === 'refuse').length,
+    projection_only_count: decisions.filter((item) => item?.action === 'projection_only').length,
+    next_action: body?.site_product_status?.next_action ?? null,
+    health: body?.site_product_status?.health ?? null,
+    mutation_classes: Array.isArray(map?.entries) ? map.entries.map((item) => item?.mutation_class).filter(Boolean) : [],
+    authority_loci: Array.isArray(map?.entries) ? map.entries.map((item) => item?.authority_locus).filter(Boolean) : [],
+  };
+}
+
+export function formatSiteAuthorityReadText(result) {
+  const summary = result?.summary ?? {};
+  const lines = [
+    'Site Authority: ok',
+    `Worker: ${result?.worker_url ?? 'unknown'}`,
+    `Auth: ${result?.auth_source ?? 'unknown'}`,
+    `Site: ${summary.site_id ?? 'unknown'}`,
+    `Authority Map: classifier=${summary.classifier_version ?? 'unknown'} embodiments=${summary.embodiment_count ?? 0} entries=${summary.entry_count ?? 0}`,
+    `Decisions: total=${summary.decision_count ?? 0} admitted=${summary.admitted_count ?? 0} refused=${summary.refused_count ?? 0} projection_only=${summary.projection_only_count ?? 0}`,
+    `Posture: health=${summary.health ?? 'unknown'} next=${summary.next_action ?? 'none'}`,
+  ];
+  if ((summary.mutation_classes ?? []).length > 0) {
+    lines.push(`Mutation Classes: ${(summary.mutation_classes ?? []).join(', ')}`);
+  }
+  if ((summary.authority_loci ?? []).length > 0) {
+    lines.push(`Authority Loci: ${(summary.authority_loci ?? []).join(', ')}`);
+  }
+  return `${lines.join('\n')}\n`;
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  try {
+    const config = parseSiteAuthorityReadArgs(process.argv.slice(2));
+    const result = await readSiteAuthority(config);
+    if (config.format === 'text') {
+      process.stdout.write(formatSiteAuthorityReadText(result));
+    } else if (config.format === 'summary') {
+      process.stdout.write(`${JSON.stringify(result.summary, null, 2)}\n`);
+    } else {
+      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    }
+  } catch (error) {
+    process.stderr.write(JSON.stringify({ ok: false, code: error?.message ?? String(error), response: error?.response }, null, 2) + '\n');
+    process.exit(1);
+  }
+}
