@@ -27,6 +27,20 @@ test('parseWebhookDelayShadowReadArgs parses shadow read options', () => {
   assert.equal(parsed.format, 'text');
 });
 
+test('parseWebhookDelayShadowReadArgs supports direct focused review without operation id', () => {
+  const parsed = parseWebhookDelayShadowReadArgs([
+    '--url', 'https://carrier.example.test',
+    '--site', 'site_alpha',
+    '--focus-ref', 'shadow_alpha',
+    '--operator-session-cookie', 'cookie-value',
+  ], {});
+
+  assert.equal(parsed.operation, 'webhook_delay.shadow_read.list');
+  assert.equal(parsed.params.site_id, 'site_alpha');
+  assert.equal(parsed.params.webhook_delay_shadow_limit, 200);
+  assert.equal(parsed.focusRef, 'shadow_alpha');
+});
+
 test('summarizeWebhookDelayShadow prefers focused observation', () => {
   const summary = summarizeWebhookDelayShadow(
     { operation: { site_id: 'site_alpha', operation_id: 'operation_alpha' } },
@@ -49,6 +63,20 @@ test('summarizeWebhookDelayShadow prefers focused observation', () => {
   assert.equal(summary.focused_observation_id, 'shadow_focus');
   assert.equal(summary.focused_dispatch_authority, 'cloudflare_shadow_read');
   assert.equal(summary.workflow_next_action, 'focus_webhook_delay_shadow_read');
+});
+
+test('summarizeWebhookDelayShadow fails explicitly when focused observation is missing', () => {
+  assert.throws(() => summarizeWebhookDelayShadow(
+    {},
+    {
+      observations: [
+        { observation_id: 'shadow_other' },
+      ],
+    },
+    {
+      focusRef: 'shadow_focus',
+    },
+  ), /webhook_delay_shadow_read_focus_not_found:shadow_focus/);
 });
 
 test('readWebhookDelayShadow loads operation and shadow read products', async () => {
@@ -100,6 +128,57 @@ test('readWebhookDelayShadow loads operation and shadow read products', async ()
 
   assert.equal(calls[0].operation, 'operation.read');
   assert.equal(calls[1].operation, 'webhook_delay.shadow_read.list');
+  assert.equal(result.summary.focused_observation_id, 'shadow_focus');
+  assert.equal(result.summary.observation_count, 1);
+});
+
+test('readWebhookDelayShadow supports direct focused review without operation read', async () => {
+  const calls = [];
+  const result = await readWebhookDelayShadow({
+    workerUrl: 'https://carrier.example.test',
+    auth: { kind: 'operator_session', value: 'cookie-value', source: 'operator-session-file' },
+    operation: 'webhook_delay.shadow_read.list',
+    params: {
+      site_id: 'site_alpha',
+      webhook_delay_shadow_limit: 200,
+    },
+    format: 'json',
+    focusRef: 'shadow_focus',
+  }, async (_url, init) => {
+    const body = JSON.parse(init.body);
+    calls.push(body);
+    if (body.operation === 'webhook_delay.shadow_read.list') {
+      return {
+        status: 200,
+        ok: true,
+        text: async () => JSON.stringify({
+          site_id: 'site_alpha',
+          observations: [
+            {
+              observation_id: 'shadow_focus',
+              operation_id: 'operation_alpha',
+              classification_state: 'critical',
+              dispatch_authority: 'windows_primary_dispatcher',
+              dispatch_action: 'none',
+            },
+            {
+              observation_id: 'shadow_other',
+              operation_id: 'operation_beta',
+              classification_state: 'warning',
+              dispatch_authority: 'cloudflare_shadow_read',
+              dispatch_action: 'record_only',
+            },
+          ],
+        }),
+      };
+    }
+    throw new Error(`unexpected_operation:${body.operation}`);
+  });
+
+  assert.deepEqual(calls.map((entry) => entry.operation), [
+    'webhook_delay.shadow_read.list',
+  ]);
+  assert.equal(result.summary.operation_id, 'operation_alpha');
   assert.equal(result.summary.focused_observation_id, 'shadow_focus');
   assert.equal(result.summary.observation_count, 1);
 });
