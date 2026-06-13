@@ -252,7 +252,11 @@ test('summarizeRepositoryPublicationSurface narrows evidence summary to focused 
   });
 
   assert.equal(summary.evidence_count, 1);
+  assert.equal(summary.requested_repository_publication_evidence_id, 'repository-publication-evidence-1');
   assert.equal(summary.focused_repository_publication_evidence_id, 'repository-publication-evidence-1');
+  assert.equal(summary.focused_publication_execution_id, 'publication-execution-1');
+  assert.equal(summary.focused_publication_status, 'refused');
+  assert.equal(summary.focused_publication_reason, 'repository_publication_push_not_enabled');
   assert.equal(summary.latest_repository_publication_evidence_id, 'repository-publication-evidence-1');
   assert.equal(summary.latest_publication_reason, 'repository_publication_push_not_enabled');
   assert.equal(summary.latest_evidence_posture, 'windows_repository_publication_refused_cloudflare_recorded_evidence');
@@ -272,6 +276,11 @@ test('formatRepositoryPublicationReadText surfaces evidence refusal reason', () 
       status: 'ok',
       evidence_count: 1,
       repository_publication_request_id: 'repository-publication-request-1',
+      focused_repository_publication_evidence_id: 'repository-publication-evidence-1',
+      focused_publication_execution_id: 'publication-execution-1',
+      focused_evidence_posture: 'windows_repository_publication_refused_cloudflare_recorded_evidence',
+      focused_publication_status: 'refused',
+      focused_publication_reason: 'repository_publication_push_not_enabled',
       latest_repository_publication_evidence_id: 'repository-publication-evidence-1',
       latest_publication_execution_id: 'publication-execution-1',
       latest_evidence_posture: 'windows_repository_publication_refused_cloudflare_recorded_evidence',
@@ -283,8 +292,10 @@ test('formatRepositoryPublicationReadText surfaces evidence refusal reason', () 
     },
   });
 
+  assert.match(text, /Focused Evidence: repository-publication-evidence-1/);
+  assert.match(text, /Focused Execution: publication-execution-1/);
   assert.match(text, /Current Posture: windows_repository_publication_refused_cloudflare_recorded_evidence/);
-  assert.match(text, /Latest Publication Status: refused reason=repository_publication_push_not_enabled/);
+  assert.match(text, /Focused Publication Status: refused reason=repository_publication_push_not_enabled/);
 });
 
 test('summaries and text output preserve refusal evidence for filtered execution list', () => {

@@ -227,6 +227,13 @@ export function summarizeRepositoryPublicationSurface(operation, body = {}, para
       site_id: body.site_id ?? params.site_id ?? null,
       repository_publication_request_id: params.repository_publication_request_id ?? latest?.repository_publication_request_id ?? null,
       evidence_count: focusedEvidence.length,
+      focused_repository_publication_evidence_id: latest?.repository_publication_evidence_id ?? null,
+      focused_repository_publication_request_id: latest?.repository_publication_request_id ?? null,
+      focused_publication_execution_id: latest?.publication_execution_id ?? null,
+      focused_publication_status: latest?.publication_status ?? null,
+      focused_publication_reason: latest?.publication_reason ?? latest?.windows_admission_reason ?? null,
+      focused_evidence_posture: latest?.evidence_posture ?? null,
+      focused_published_commit_ref: latest?.published_commit_ref ?? null,
       latest_repository_publication_evidence_id: latest?.repository_publication_evidence_id ?? null,
       latest_repository_publication_request_id: latest?.repository_publication_request_id ?? null,
       latest_publication_execution_id: latest?.publication_execution_id ?? null,
@@ -241,7 +248,7 @@ export function summarizeRepositoryPublicationSurface(operation, body = {}, para
       cloudflare_git_push_admission: body.cloudflare_git_push_admission ?? null,
       direct_cloudflare_repository_mutation_admission: body.direct_cloudflare_repository_mutation_admission ?? null,
       authority_partition: body.authority_partition ?? null,
-      focused_repository_publication_evidence_id: focusEvidenceId,
+      requested_repository_publication_evidence_id: focusEvidenceId,
     };
   }
   if (operation === 'repository_publication.cloudflare_execution.list') {
@@ -322,13 +329,13 @@ export function formatRepositoryPublicationReadText(result) {
   } else if (summary.operation === 'repository_publication.evidence.list') {
     lines.push(`Evidence: count=${summary.evidence_count ?? 0}`);
     if (summary.repository_publication_request_id) lines.push(`Filter Request: ${summary.repository_publication_request_id}`);
-    if (summary.latest_repository_publication_evidence_id) lines.push(`Latest Evidence: ${summary.latest_repository_publication_evidence_id}`);
-    if (summary.latest_publication_execution_id) lines.push(`Latest Execution: ${summary.latest_publication_execution_id}`);
-    if (summary.latest_evidence_posture) lines.push(`Current Posture: ${summary.latest_evidence_posture}`);
-    if (summary.latest_publication_status) {
-      lines.push(`Latest Publication Status: ${summary.latest_publication_status}${summary.latest_publication_reason ? ` reason=${summary.latest_publication_reason}` : ''}`);
+    if (summary.focused_repository_publication_evidence_id) lines.push(`Focused Evidence: ${summary.focused_repository_publication_evidence_id}`);
+    if (summary.focused_publication_execution_id) lines.push(`Focused Execution: ${summary.focused_publication_execution_id}`);
+    if (summary.focused_evidence_posture) lines.push(`Current Posture: ${summary.focused_evidence_posture}`);
+    if (summary.focused_publication_status) {
+      lines.push(`Focused Publication Status: ${summary.focused_publication_status}${summary.focused_publication_reason ? ` reason=${summary.focused_publication_reason}` : ''}`);
     }
-    if (summary.latest_published_commit_ref) lines.push(`Latest Published Commit: ${summary.latest_published_commit_ref}`);
+    if (summary.focused_published_commit_ref) lines.push(`Focused Published Commit: ${summary.focused_published_commit_ref}`);
     lines.push(`Authority: evidence=${summary.repository_publication_evidence_authority ?? 'unknown'} admission=${summary.repository_publication_admission_authority ?? 'unknown'} store=${summary.cloudflare_evidence_store_authority ?? 'unknown'}`);
   } else if (summary.operation === 'repository_publication.cloudflare_execution.list') {
     lines.push(`Cloudflare Executions: count=${summary.execution_count ?? 0}`);
