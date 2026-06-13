@@ -332,3 +332,64 @@ test('runPostureCoherenceLive reports stale operation summary counts against mon
     details: { actual: 4 },
   }]);
 });
+
+test('runPostureCoherenceLive retries once on transient fetch failure from child read', async () => {
+  const attempts = new Map();
+  const result = await runPostureCoherenceLive({
+    workerUrl: 'https://carrier.example.test',
+    siteIds: ['site_alpha'],
+    format: 'json',
+    auth: { kind: 'bearer', value: 'secret-token', source: 'flag:--token' },
+  }, {
+    async runNodeScript(args) {
+      const key = args.join(' ');
+      attempts.set(key, (attempts.get(key) ?? 0) + 1);
+      if (args.includes('site.read') && attempts.get(key) === 1) {
+        const error = new Error('fetch failed');
+        error.stderr = '{\n  "ok": false,\n  "code": "fetch failed"\n}\n';
+        throw error;
+      }
+      if (args.includes('site.list')) {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            route_next_action: 'monitor_sites',
+            next_action: 'monitor_sites',
+            next_site_id: null,
+            health_counts: { ready: 1, attention: 0, incomplete: 0, other: 0 },
+          },
+          response: { site_product_statuses: [{ site_id: 'site_alpha' }] },
+        });
+      }
+      if (args.includes('site.read')) {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: { site_id: 'site_alpha', health: 'ready', next_action: 'monitor_site' },
+        });
+      }
+      if (args.includes('operation.list')) {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            site_id: 'site_alpha',
+            operation_count: 1,
+            next_operation_id: 'operation_control',
+            next_action: 'monitor_operations',
+            route_next_action: 'monitor_operations',
+            route_target: 'operation_control',
+            health_counts: { ready: 1, needs_attention: 0 },
+          },
+          response: {
+            focused_operation_lifecycle: {
+              operation_id: 'operation_control',
+              workflow_route: { next_action: 'monitor_operation' },
+            },
+          },
+        });
+      }
+      throw new Error(`unexpected args: ${args.join(' ')}`);
+    },
+  });
+
+  assert.equal(result.status, 'ok');
+});

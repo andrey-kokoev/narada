@@ -156,6 +156,55 @@ test('durability coherence fails on recovery mismatch and site persistence drift
   assert.match(formatDurabilityCoherenceLiveText(result), /Durability Coherence: failed/);
 });
 
+test('durability coherence retries once on transient fetch failure from child read', async () => {
+  const attempts = new Map();
+  const result = await runDurabilityCoherenceLive(
+    {
+      workerUrl: 'https://worker.example',
+      siteIds: ['site_alpha'],
+      auth: { kind: 'operator_session', value: 'session-fixture', source: 'operator-session-file' },
+      tokenFile: null,
+      operatorSessionFile: 'cloudflare-operator-session.json',
+    },
+    {
+      runNodeScript: async (args) => {
+        const key = args.join(' ');
+        attempts.set(key, (attempts.get(key) ?? 0) + 1);
+        if (args.includes('--operation') && args.includes('site.read') && attempts.get(key) === 1) {
+          const error = new Error('fetch failed');
+          error.stderr = '{\n  "ok": false,\n  "code": "fetch failed"\n}\n';
+          throw error;
+        }
+        return JSON.stringify(mockResponse(args, {
+          'site.list': {
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: { route_next_action: 'monitor_sites' },
+            response: { site_product_statuses: [{ site_id: 'site_alpha' }] },
+          },
+          'site.read:site_alpha': {
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: { persistence_state: 'durable', recovery_state: 'reconstructable' },
+          },
+          'operation.list:site_alpha': {
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: { operation_count: 1, route_target: 'operation_alpha' },
+          },
+          'operation.read:site_alpha:operation_alpha': {
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: { recovery_state: 'reconstructable', recovery_gap_count: 0, recovery_gap_keys: [] },
+          },
+          'operation.recovery:site_alpha:operation_alpha': {
+            schema: 'narada.cloudflare_carrier.operation_recovery_read.v1',
+            summary: { recovery_state: 'reconstructable', recovery_gap_count: 0, recovery_gap_keys: [] },
+          },
+        }));
+      },
+    },
+  );
+
+  assert.equal(result.status, 'ok');
+});
+
 function mockResponse(args, responses) {
   const key = classifyArgs(args);
   const response = responses[key];

@@ -58,7 +58,7 @@ function normalizeOperatorSessionCookie(cookie) {
 
 export async function runPostureCoherenceLive(config, { runNodeScript = defaultRunNodeScript } = {}) {
   const siteList = parseJsonStdout(
-    await runNodeScript(buildSiteListArgs(config), { cwd: packageRoot }),
+    await runNodeScriptWithRetry(runNodeScript, buildSiteListArgs(config), { cwd: packageRoot }),
     'site_list',
   );
   assert.equal(siteList.schema, 'narada.cloudflare_carrier.product_read.v1');
@@ -74,13 +74,13 @@ export async function runPostureCoherenceLive(config, { runNodeScript = defaultR
 
   for (const siteId of siteIds) {
     const siteRead = parseJsonStdout(
-      await runNodeScript(buildSiteReadArgs(config, siteId), { cwd: packageRoot }),
+      await runNodeScriptWithRetry(runNodeScript, buildSiteReadArgs(config, siteId), { cwd: packageRoot }),
       `site_read:${siteId}`,
     );
     assert.equal(siteRead.schema, 'narada.cloudflare_carrier.product_read.v1');
 
     const operationList = parseJsonStdout(
-      await runNodeScript(buildOperationListArgs(config, siteId), { cwd: packageRoot }),
+      await runNodeScriptWithRetry(runNodeScript, buildOperationListArgs(config, siteId), { cwd: packageRoot }),
       `operation_list:${siteId}`,
     );
     assert.equal(operationList.schema, 'narada.cloudflare_carrier.product_read.v1');
@@ -262,6 +262,21 @@ async function defaultRunNodeScript(args, options = {}) {
     maxBuffer: CHILD_STDIO_MAX_BUFFER,
   });
   return stdout;
+}
+
+async function runNodeScriptWithRetry(runNodeScript, args, options = {}) {
+  try {
+    return await runNodeScript(args, options);
+  } catch (error) {
+    if (!isTransientChildReadError(error)) throw error;
+    return await runNodeScript(args, options);
+  }
+}
+
+function isTransientChildReadError(error) {
+  const message = String(error?.message ?? error ?? '');
+  const stderr = String(error?.stderr ?? '');
+  return message.includes('fetch failed') || stderr.includes('"code": "fetch failed"');
 }
 
 function parseJsonStdout(stdout, label) {

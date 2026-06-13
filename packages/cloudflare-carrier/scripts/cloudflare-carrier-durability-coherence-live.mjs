@@ -59,7 +59,7 @@ function normalizeOperatorSessionCookie(cookie) {
 
 export async function runDurabilityCoherenceLive(config, { runNodeScript = defaultRunNodeScript } = {}) {
   const siteList = parseJsonStdout(
-    await runNodeScript(buildProductReadArgs(config, 'site.list'), { cwd: packageRoot }),
+    await runNodeScriptWithRetry(runNodeScript, buildProductReadArgs(config, 'site.list'), { cwd: packageRoot }),
     'site_list',
   );
   assert.equal(siteList.schema, 'narada.cloudflare_carrier.product_read.v1');
@@ -73,13 +73,13 @@ export async function runDurabilityCoherenceLive(config, { runNodeScript = defau
 
   for (const siteId of siteIds) {
     const siteRead = parseJsonStdout(
-      await runNodeScript(buildProductReadArgs(config, 'site.read', { siteId }), { cwd: packageRoot }),
+      await runNodeScriptWithRetry(runNodeScript, buildProductReadArgs(config, 'site.read', { siteId }), { cwd: packageRoot }),
       `site_read:${siteId}`,
     );
     assert.equal(siteRead.schema, 'narada.cloudflare_carrier.product_read.v1');
 
     const operationList = parseJsonStdout(
-      await runNodeScript(buildProductReadArgs(config, 'operation.list', { siteId }), { cwd: packageRoot }),
+      await runNodeScriptWithRetry(runNodeScript, buildProductReadArgs(config, 'operation.list', { siteId }), { cwd: packageRoot }),
       `operation_list:${siteId}`,
     );
     assert.equal(operationList.schema, 'narada.cloudflare_carrier.product_read.v1');
@@ -91,14 +91,14 @@ export async function runDurabilityCoherenceLive(config, { runNodeScript = defau
     let operationRecoverySummary = null;
     if (operationId) {
       const operationRead = parseJsonStdout(
-        await runNodeScript(buildProductReadArgs(config, 'operation.read', { siteId, operationId }), { cwd: packageRoot }),
+        await runNodeScriptWithRetry(runNodeScript, buildProductReadArgs(config, 'operation.read', { siteId, operationId }), { cwd: packageRoot }),
         `operation_read:${siteId}:${operationId}`,
       );
       assert.equal(operationRead.schema, 'narada.cloudflare_carrier.product_read.v1');
       operationReadSummary = operationRead.summary;
 
       const operationRecovery = parseJsonStdout(
-        await runNodeScript(buildOperationRecoveryArgs(config, siteId, operationId), { cwd: packageRoot }),
+        await runNodeScriptWithRetry(runNodeScript, buildOperationRecoveryArgs(config, siteId, operationId), { cwd: packageRoot }),
         `operation_recovery:${siteId}:${operationId}`,
       );
       assert.equal(operationRecovery.schema, 'narada.cloudflare_carrier.operation_recovery_read.v1');
@@ -230,6 +230,21 @@ async function defaultRunNodeScript(args, options = {}) {
     windowsHide: true,
   });
   return stdout;
+}
+
+async function runNodeScriptWithRetry(runNodeScript, args, options = {}) {
+  try {
+    return await runNodeScript(args, options);
+  } catch (error) {
+    if (!isTransientChildReadError(error)) throw error;
+    return await runNodeScript(args, options);
+  }
+}
+
+function isTransientChildReadError(error) {
+  const message = String(error?.message ?? error ?? '');
+  const stderr = String(error?.stderr ?? '');
+  return message.includes('fetch failed') || stderr.includes('"code": "fetch failed"');
 }
 
 function parseJsonStdout(stdout, label) {
