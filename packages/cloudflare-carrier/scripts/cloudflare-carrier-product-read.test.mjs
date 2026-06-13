@@ -557,6 +557,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(operationReadText, /Workflow Focus: kind=site_continuity_reconciliation_execution ref=reconciliation_execution_failed/);
   assert.match(operationReadText, /Workflow Continuity: direction=cloudflare_to_local_windows_only missing=local_windows_to_cloudflare/);
   assert.match(operationReadText, /Workflow Command: kind=site_continuity_reconciliation_review command=pnpm site:continuity:reconciliation -- review --id reconciliation_execution_failed/);
+  assert.match(operationReadText, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --focus-kind site_continuity_reconciliation_execution --focus-ref reconciliation_execution_failed --operator-session-file <operator-session-file>/);
   assert.match(operationReadText, /Posture Route: status=needs_attention action=review_operation reason=operation_needs_review/);
   assert.match(operationReadText, /Recovery: state=reconstructable boundaries=12 gaps=0/);
   assert.match(operationReadText, /Recovery Next: action=monitor_recovery_posture gaps=none/);
@@ -757,6 +758,32 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
     },
   });
   assert.match(operationReadOperationPathTaskText, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
+
+  const operationReadContinuityReviewWithoutKindText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_live',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'inhabited',
+      health: 'ready',
+      next_action: 'monitor_operation',
+      workflow_next_action: 'review_site_continuity_reconciliation_execution',
+      workflow_reason: 'operation_operator_focus_needs_review',
+      workflow_focus_kind: null,
+      workflow_focus_ref: 'site-continuity-reconciliation-execution:site_alpha:2026-06-13T21:59:01.308Z:completed',
+      session_count: 1,
+      task_count: 0,
+      recovery_state: 'reconstructable',
+      recovery_boundary_count: 0,
+      recovery_gap_count: 0,
+    },
+  });
+  assert.match(operationReadContinuityReviewWithoutKindText, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:2026-06-13T21:59:01.308Z:completed --operator-session-file <operator-session-file>/);
 
   const operationReadLifecycleSessionText = formatProductSurfaceText({
     operation: 'operation.read',
