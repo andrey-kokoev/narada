@@ -91,11 +91,13 @@ export function summarizeDirectiveDeliveryReview(operationBody = {}, directiveRe
   const operationSummary = options.operationSummary ?? {};
   const directiveRecords = Array.isArray(directiveRecordsBody?.directive_records) ? directiveRecordsBody.directive_records : [];
   const directiveDeliveries = Array.isArray(directiveDeliveriesBody?.directive_deliveries) ? directiveDeliveriesBody.directive_deliveries : [];
-  const focusRef = options.focusRef ?? operationSummary.workflow_focus_ref ?? null;
+  const explicitFocusRef = options.focusRef ?? null;
+  const workflowFocusRef = operationSummary.workflow_focus_ref ?? null;
+  const focusRef = explicitFocusRef ?? workflowFocusRef;
   const exactFocusedDirectiveRecord = focusRef
     ? directiveRecords.find((entry) => entry?.directive_record_id === focusRef) ?? null
     : null;
-  if (focusRef && !exactFocusedDirectiveRecord) {
+  if (explicitFocusRef && !exactFocusedDirectiveRecord) {
     throw new Error(`directive_delivery_review_focus_not_found:${focusRef}`);
   }
   const focusedDirectiveRecord = exactFocusedDirectiveRecord ?? directiveRecords[0] ?? null;

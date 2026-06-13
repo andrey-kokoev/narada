@@ -125,6 +125,31 @@ test('summarizeDirectiveDeliveryReview fails explicitly when focused directive i
   ), /directive_delivery_review_focus_not_found:directive_record_focus/);
 });
 
+test('summarizeDirectiveDeliveryReview falls back to the directive window when workflow focus is unrelated', () => {
+  const summary = summarizeDirectiveDeliveryReview(
+    {},
+    {
+      directive_records: [
+        {
+          directive_record_id: 'directive_record_focus',
+          classification_state: 'critical',
+        },
+      ],
+    },
+    {
+      directive_deliveries: [],
+    },
+    {
+      operationSummary: {
+        workflow_focus_ref: 'site-continuity-reconciliation-execution:site_narada_cloudflare:2026-06-13T09:54:02.102Z:completed',
+      },
+    },
+  );
+
+  assert.equal(summary.directive_record_count, 1);
+  assert.equal(summary.focused_directive_record_id, 'directive_record_focus');
+});
+
 test('readDirectiveDeliveryReview reads operation state plus directive record and delivery lists', async () => {
   const calls = [];
   const result = await readDirectiveDeliveryReview({
