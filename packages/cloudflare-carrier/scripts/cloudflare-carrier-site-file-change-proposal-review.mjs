@@ -64,6 +64,18 @@ export function summarizeSiteFileChangeProposalReview(body = {}, options = {}) {
     : null;
   const firstFile = proposalFiles[0] ?? null;
   const latestMaterialization = linkedMaterializations[0] ?? null;
+  const requestedProposalPosture = focusedProposal?.proposal_posture ?? proposalRecord?.proposal_posture ?? null;
+  const currentProposalPosture = latestMaterialization?.materialization_posture ?? requestedProposalPosture;
+  const requestedFilesystemMutationAdmission =
+    focusedProposal?.filesystem_mutation_admission ?? proposalRecord?.filesystem_mutation_admission ?? null;
+  const currentFilesystemMutationAdmission =
+    latestMaterialization?.windows_filesystem_mutation_admission
+    ?? latestMaterialization?.filesystem_mutation_admission
+    ?? requestedFilesystemMutationAdmission;
+  const requestedRepositoryPublicationAdmission =
+    focusedProposal?.repository_publication_admission ?? proposalRecord?.repository_publication_admission ?? null;
+  const currentRepositoryPublicationAdmission =
+    latestMaterialization?.repository_publication_admission ?? requestedRepositoryPublicationAdmission;
   return {
     site_id: body?.operation?.site_id ?? body?.site_id ?? operationSummary.site_id ?? null,
     operation_id: body?.operation?.operation_id ?? body?.operation_id ?? operationSummary.operation_id ?? null,
@@ -74,15 +86,18 @@ export function summarizeSiteFileChangeProposalReview(body = {}, options = {}) {
     focused_proposal_id: focusedProposalId,
     focused_proposal_ref: focusedProposal?.proposal_ref ?? proposalRecord?.proposal_ref ?? null,
     focused_proposal_summary: focusedProposal?.proposal_summary ?? proposalRecord?.proposal_summary ?? null,
-    focused_proposal_posture: focusedProposal?.proposal_posture ?? proposalRecord?.proposal_posture ?? null,
+    current_proposal_posture: currentProposalPosture,
+    requested_proposal_posture: requestedProposalPosture,
     focused_file_count: focusedProposal?.file_count ?? proposalFiles.length,
     focused_first_file_path: firstFile?.file_path ?? null,
     focused_first_file_change_kind: firstFile?.change_kind ?? null,
     focused_first_file_material_source_ref: firstFile?.material_source_ref ?? null,
     proposal_authority: focusedProposal?.authority_locus ?? proposalRecord?.authority_locus ?? null,
     filesystem_executor_authority: focusedProposal?.filesystem_executor_authority ?? proposalRecord?.filesystem_executor_authority ?? null,
-    filesystem_mutation_admission: focusedProposal?.filesystem_mutation_admission ?? proposalRecord?.filesystem_mutation_admission ?? null,
-    repository_publication_admission: focusedProposal?.repository_publication_admission ?? proposalRecord?.repository_publication_admission ?? null,
+    current_filesystem_mutation_admission: currentFilesystemMutationAdmission,
+    requested_filesystem_mutation_admission: requestedFilesystemMutationAdmission,
+    current_repository_publication_admission: currentRepositoryPublicationAdmission,
+    requested_repository_publication_admission: requestedRepositoryPublicationAdmission,
     focused_recorded_at: focusedProposal?.recorded_at ?? focusedProposal?.record?.recorded_at ?? null,
     focused_recorded_by_principal_id: focusedProposal?.recorded_by_principal_id ?? focusedProposal?.record?.recorded_by_principal_id ?? null,
     linked_materialization_count: linkedMaterializations.length,
@@ -113,12 +128,22 @@ export function formatSiteFileChangeProposalReviewText(result) {
   ];
   if (summary.focused_proposal_ref) lines.push(`Proposal Ref: ${summary.focused_proposal_ref}`);
   if (summary.focused_proposal_summary) lines.push(`Summary: ${summary.focused_proposal_summary}`);
-  if (summary.focused_proposal_posture) lines.push(`Posture: ${summary.focused_proposal_posture}`);
+  if (summary.current_proposal_posture) lines.push(`Current Posture: ${summary.current_proposal_posture}`);
+  if (summary.requested_proposal_posture && summary.requested_proposal_posture !== summary.current_proposal_posture) {
+    lines.push(`Requested Posture: ${summary.requested_proposal_posture}`);
+  }
   if (summary.proposal_authority || summary.filesystem_executor_authority) {
     lines.push(`Authority: proposal=${summary.proposal_authority ?? 'unknown'} executor=${summary.filesystem_executor_authority ?? 'unknown'}`);
   }
-  if (summary.filesystem_mutation_admission || summary.repository_publication_admission) {
-    lines.push(`Admissions: filesystem=${summary.filesystem_mutation_admission ?? 'unknown'} repository_publication=${summary.repository_publication_admission ?? 'unknown'}`);
+  if (summary.current_filesystem_mutation_admission || summary.current_repository_publication_admission) {
+    lines.push(`Current Admissions: filesystem=${summary.current_filesystem_mutation_admission ?? 'unknown'} repository_publication=${summary.current_repository_publication_admission ?? 'unknown'}`);
+  }
+  if (
+    (summary.requested_filesystem_mutation_admission || summary.requested_repository_publication_admission)
+    && (summary.requested_filesystem_mutation_admission !== summary.current_filesystem_mutation_admission
+      || summary.requested_repository_publication_admission !== summary.current_repository_publication_admission)
+  ) {
+    lines.push(`Requested Admissions: filesystem=${summary.requested_filesystem_mutation_admission ?? 'unknown'} repository_publication=${summary.requested_repository_publication_admission ?? 'unknown'}`);
   }
   lines.push(`Files: count=${summary.focused_file_count ?? 0}`);
   if (summary.focused_first_file_path) {

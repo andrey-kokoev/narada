@@ -99,6 +99,11 @@ test('readSiteFileChangeProposalReview summarizes focused proposal and linked ma
   assert.equal(result.summary.focused_proposal_id, 'site_file_change_proposal_live_1');
   assert.equal(result.summary.focused_first_file_path, 'docs/architecture/cloudflare-carrier/target.md');
   assert.equal(result.summary.linked_materialization_id, 'site_file_materialization_live_1');
+  assert.equal(
+    result.summary.current_proposal_posture,
+    'cloudflare_site_file_store_only_no_windows_filesystem_write_no_repository_publication',
+  );
+  assert.equal(result.summary.requested_proposal_posture, 'proposal_only_no_filesystem_write');
   assert.equal(result.summary.latest_focus_review.review_status, 'acknowledged');
 });
 
@@ -115,15 +120,18 @@ test('formatSiteFileChangeProposalReviewText surfaces review ack command', () =>
       focused_proposal_id: 'site_file_change_proposal_live_1',
       focused_proposal_ref: 'proposal:site-file-change-live:1',
       focused_proposal_summary: 'live Cloudflare site file change proposal',
-      focused_proposal_posture: 'proposal_only_no_filesystem_write',
+      current_proposal_posture: 'cloudflare_site_file_store_only_no_windows_filesystem_write_no_repository_publication',
+      requested_proposal_posture: 'proposal_only_no_filesystem_write',
       focused_file_count: 1,
       focused_first_file_path: 'docs/architecture/cloudflare-carrier/target.md',
       focused_first_file_change_kind: 'update',
       focused_first_file_material_source_ref: 'material-source:1',
       proposal_authority: 'cloudflare_carrier_site',
       filesystem_executor_authority: 'windows_filesystem_executor',
-      filesystem_mutation_admission: 'not_admitted',
-      repository_publication_admission: 'not_admitted',
+      current_filesystem_mutation_admission: 'not_admitted',
+      requested_filesystem_mutation_admission: 'not_admitted',
+      current_repository_publication_admission: 'not_admitted',
+      requested_repository_publication_admission: 'not_admitted',
       linked_materialization_count: 1,
       linked_materialization_id: 'site_file_materialization_live_1',
       linked_materialization_posture: 'cloudflare_site_file_store_only_no_windows_filesystem_write_no_repository_publication',
@@ -133,5 +141,7 @@ test('formatSiteFileChangeProposalReviewText surfaces review ack command', () =>
 
   assert.match(text, /Site File Change Proposal Review: ok/);
   assert.match(text, /Workflow Route: action=review_site_file_change_proposal/);
+  assert.match(text, /Current Posture: cloudflare_site_file_store_only_no_windows_filesystem_write_no_repository_publication/);
+  assert.match(text, /Requested Posture: proposal_only_no_filesystem_write/);
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
 });
