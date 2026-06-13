@@ -199,6 +199,17 @@ export function summarizeRepositoryPublicationRequestReview(body = {}, options =
     linked_execution_id: latestExecution?.repository_publication_execution_id ?? latestExecution?.publication_execution_id ?? null,
     linked_execution_status: latestExecution?.publication_status ?? null,
     linked_published_commit_ref: latestExecution?.published_commit_ref ?? null,
+    current_publication_execution_id: latestExecution?.repository_publication_execution_id
+      ?? latestExecution?.publication_execution_id
+      ?? latestEvidence?.publication_execution_id
+      ?? null,
+    current_execution_status: latestExecution?.publication_status ?? latestEvidence?.publication_status ?? null,
+    current_published_commit_ref: latestExecution?.published_commit_ref ?? latestEvidence?.published_commit_ref ?? null,
+    current_execution_source: latestExecution
+      ? 'cloudflare_execution'
+      : latestEvidence
+        ? 'windows_evidence'
+        : null,
     linked_evidence_id: latestEvidence?.repository_publication_evidence_id ?? null,
     linked_evidence_status: latestEvidence?.publication_status ?? null,
     latest_focus_review: latestFocusReview ? {
@@ -258,7 +269,12 @@ export function formatRepositoryPublicationRequestReviewText(result) {
   if (summary.linked_execution_id || summary.linked_execution_status) {
     lines.push(`Linked Execution: ${summary.linked_execution_id ?? 'none'} status=${summary.linked_execution_status ?? 'unknown'}`);
   }
-  if (summary.linked_published_commit_ref) lines.push(`Published Commit: ${summary.linked_published_commit_ref}`);
+  if (summary.current_publication_execution_id || summary.current_execution_status) {
+    lines.push(`Current Execution: ${summary.current_publication_execution_id ?? 'none'} status=${summary.current_execution_status ?? 'unknown'} source=${summary.current_execution_source ?? 'unknown'}`);
+  }
+  if (summary.current_published_commit_ref || summary.linked_published_commit_ref) {
+    lines.push(`Published Commit: ${summary.current_published_commit_ref ?? summary.linked_published_commit_ref}`);
+  }
   if (
     summary.linked_evidence_id
     || summary.linked_evidence_status

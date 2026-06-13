@@ -127,6 +127,9 @@ test('readRepositoryPublicationRequestReview summarizes focused request and link
   assert.equal(result.summary.current_direct_cloudflare_repository_mutation_admission, 'admitted_by_cloudflare_github_repository_publication');
   assert.equal(result.summary.linked_admission_id, 'admission_1');
   assert.equal(result.summary.linked_execution_id, 'execution_1');
+  assert.equal(result.summary.current_publication_execution_id, 'execution_1');
+  assert.equal(result.summary.current_execution_status, 'completed');
+  assert.equal(result.summary.current_execution_source, 'cloudflare_execution');
   assert.equal(result.summary.linked_evidence_id, 'evidence_1');
   assert.equal(result.summary.latest_focus_review.review_status, 'acknowledged');
 });
@@ -242,6 +245,7 @@ test('readRepositoryPublicationRequestReview treats refused evidence as current 
         {
           repository_publication_request_id: 'repository_publication_request_live_1',
           repository_publication_evidence_id: 'evidence_1',
+          publication_execution_id: 'publication-execution-1',
           publication_status: 'refused',
           repository_publication_admission: 'resolved_after_cloudflare_repository_publication_admission',
           cloudflare_git_push_admission: 'not_admitted',
@@ -283,6 +287,9 @@ test('readRepositoryPublicationRequestReview treats refused evidence as current 
 
   assert.equal(result.summary.current_request_posture, 'repository_publication_evidence_refused');
   assert.equal(result.summary.current_repository_publication_admission, 'resolved_after_cloudflare_repository_publication_admission');
+  assert.equal(result.summary.current_publication_execution_id, 'publication-execution-1');
+  assert.equal(result.summary.current_execution_status, 'refused');
+  assert.equal(result.summary.current_execution_source, 'windows_evidence');
   assert.equal(result.summary.linked_evidence_id, 'evidence_1');
 });
 
@@ -316,7 +323,11 @@ test('formatRepositoryPublicationRequestReviewText surfaces review ack command',
       linked_admission_action: 'admit',
       linked_execution_id: 'execution_1',
       linked_execution_status: 'completed',
+      current_publication_execution_id: 'execution_1',
+      current_execution_status: 'completed',
+      current_execution_source: 'cloudflare_execution',
       linked_published_commit_ref: 'git:commit:def',
+      current_published_commit_ref: 'git:commit:def',
       linked_evidence_id: 'evidence_1',
       linked_evidence_status: 'completed',
     },
@@ -327,7 +338,31 @@ test('formatRepositoryPublicationRequestReviewText surfaces review ack command',
   assert.match(text, /Current Posture: cloudflare_repository_publication_execution_completed/);
   assert.match(text, /Requested Posture: cloudflare_queued_repository_publication_request_windows_must_admit_publish_and_return_evidence/);
   assert.match(text, /Current Admissions: request=admitted_by_cloudflare_repository_publication cloudflare_git_push=not_admitted direct_cloudflare_repo_mutation=admitted_by_cloudflare_github_repository_publication/);
+  assert.match(text, /Current Execution: execution_1 status=completed source=cloudflare_execution/);
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
+});
+
+test('formatRepositoryPublicationRequestReviewText surfaces current execution from evidence when no Cloudflare execution record exists', () => {
+  const text = formatRepositoryPublicationRequestReviewText({
+    worker_url: 'https://carrier.example',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_narada_cloudflare',
+      operation_id: 'operation_site_read',
+      workflow_next_action: 'none',
+      workflow_reason: 'none',
+      request_count: 1,
+      focused_repository_publication_request_id: 'repository_publication_request_live_1',
+      current_request_posture: 'repository_publication_evidence_refused',
+      current_publication_execution_id: 'publication-execution-1',
+      current_execution_status: 'refused',
+      current_execution_source: 'windows_evidence',
+      linked_evidence_id: 'evidence_1',
+      linked_evidence_status: 'refused',
+    },
+  });
+
+  assert.match(text, /Current Execution: publication-execution-1 status=refused source=windows_evidence/);
 });
 
 test('formatRepositoryPublicationRequestReviewText makes missing evidence explicit after execution', () => {
