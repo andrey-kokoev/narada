@@ -36,17 +36,17 @@ test('parseAuthorityTransferReadArgs supports operator session auth and refuses 
     '--operator-session-cookie', 'operator-session-cookie',
     '--site', 'site_alpha',
     '--operation-id', 'operation_alpha',
-    '--repository-ref', 'github:andrey/site-alpha',
-    '--branch-ref', 'cloudflare-publication',
   ]);
   assert.deepEqual(parsed.auth, { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' });
+  assert.equal(parsed.readinessParams.repository_ref, null);
+  assert.equal(parsed.readinessParams.branch_ref, null);
 
   assert.throws(
-    () => parseAuthorityTransferReadArgs(['--token', 'token', '--site', 'site_alpha', '--operation-id', 'operation_alpha', '--repository-ref', 'github:andrey/site-alpha', '--branch-ref', 'cloudflare-publication']),
+    () => parseAuthorityTransferReadArgs(['--token', 'token', '--site', 'site_alpha', '--operation-id', 'operation_alpha']),
     /authority_transfer_read_requires_--url_or_CLOUDFLARE_CARRIER_URL/,
   );
   assert.throws(
-    () => parseAuthorityTransferReadArgs(['--url', 'https://carrier.example.test', '--token', 'token', '--site', 'site_alpha', '--repository-ref', 'github:andrey/site-alpha', '--branch-ref', 'cloudflare-publication']),
+    () => parseAuthorityTransferReadArgs(['--url', 'https://carrier.example.test', '--token', 'token', '--site', 'site_alpha']),
     /authority_transfer_read_requires_--operation-id_or_--carrier-operation_or_CLOUDFLARE_CARRIER_OPERATION_ID/,
   );
 });
@@ -141,6 +141,67 @@ test('readAuthorityTransfer composes operation read with repository readiness an
   assert.equal(result.summary.transfer_readiness, 'incomplete');
   assert.deepEqual(result.summary.remaining_windows_domains, ['mailbox']);
   assert.equal(result.summary.slices.repository_publication.readiness_status, 'ready');
+  assert.deepEqual(result.params, {
+    site_id: 'site_alpha',
+    operation_id: 'operation_alpha',
+    repository_ref: 'github:andrey/site-alpha',
+    branch_ref: 'cloudflare-publication',
+  });
+});
+
+test('readAuthorityTransfer infers repository publication target when repository and branch are omitted', async () => {
+  const requests = [];
+  const result = await readAuthorityTransfer({
+    workerUrl: 'https://carrier.example.test',
+    requestId: 'authority_transfer_read_2',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-file' },
+    operationParams: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      repository_publication_request_limit: 20,
+    },
+    readinessParams: {
+      site_id: 'site_alpha',
+      repository_ref: null,
+      branch_ref: null,
+    },
+  }, async (url, init) => {
+    requests.push({ url: String(url), init });
+    const body = JSON.parse(init.body);
+    if (body.operation === 'operation.read') {
+      return responseJson(200, {
+        operation: { site_id: 'site_alpha', operation_id: 'operation_alpha' },
+        authority_transfer_posture: { transfer_complete: true, next_action: 'verify_full_cloudflare_authority' },
+        operation_product_surface: {},
+      });
+    }
+    if (body.operation === 'repository_publication.request.list') {
+      return responseJson(200, {
+        site_id: 'site_alpha',
+        requests: [{
+          repository_publication_request_id: 'repository_publication_request_alpha',
+          operation_id: 'operation_alpha',
+          repository_ref: 'github:andrey/site-alpha',
+          branch_ref: 'cloudflare-publication',
+        }],
+      });
+    }
+    if (body.operation === 'repository_publication.cloudflare_execution.readiness') {
+      return responseJson(200, {
+        ok: true,
+        status: 'ok',
+        site_id: 'site_alpha',
+        readiness_status: 'ready',
+        requested_repository_ref: 'github:andrey/site-alpha',
+        requested_branch_ref: 'cloudflare-publication',
+        requested_repository_allowed: true,
+        requested_branch_allowed: true,
+      });
+    }
+    throw new Error(`unexpected operation:${body.operation}`);
+  });
+
+  assert.equal(requests.length, 3);
   assert.deepEqual(result.params, {
     site_id: 'site_alpha',
     operation_id: 'operation_alpha',

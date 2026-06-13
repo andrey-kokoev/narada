@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { fileURLToPath } from 'node:url';
 
+import { readRepositoryPublicationSurface } from './cloudflare-carrier-repository-publication-read.mjs';
 import { readCloudflareRepositoryPublicationReadiness } from './cloudflare-carrier-repository-publication-readiness.mjs';
 import { readProductSurface, resolveAuth } from './cloudflare-carrier-product-read.mjs';
 
@@ -18,8 +19,6 @@ export function parseAuthorityTransferReadArgs(argv = [], env = process.env) {
   if (!workerUrl) throw new Error('authority_transfer_read_requires_--url_or_CLOUDFLARE_CARRIER_URL');
   if (!siteId) throw new Error('authority_transfer_read_requires_--site_or_CLOUDFLARE_CARRIER_SITE_ID');
   if (!operationId) throw new Error('authority_transfer_read_requires_--operation-id_or_--carrier-operation_or_CLOUDFLARE_CARRIER_OPERATION_ID');
-  if (!repositoryRef) throw new Error('authority_transfer_read_requires_--repository-ref_or_CLOUDFLARE_REPOSITORY_PUBLICATION_REPOSITORY_REF');
-  if (!branchRef) throw new Error('authority_transfer_read_requires_--branch-ref_or_--branch_or_CLOUDFLARE_REPOSITORY_PUBLICATION_BRANCH_REF');
   if (!['json', 'text'].includes(format)) throw new Error(`authority_transfer_read_format_unsupported:${format}`);
   if (!auth) throw new Error('authority_transfer_read_requires_bearer_token_or_operator_session');
 
@@ -60,10 +59,24 @@ export async function readAuthorityTransfer(config, fetchImpl = fetch) {
     params: config.operationParams,
     auth: config.auth,
   }, fetchImpl);
+  const inferredRepositoryTarget = (!config.readinessParams.repository_ref || !config.readinessParams.branch_ref)
+    ? await inferRepositoryPublicationTarget(config, fetchImpl)
+    : null;
+  const resolvedReadinessParams = {
+    ...config.readinessParams,
+    repository_ref: config.readinessParams.repository_ref ?? inferredRepositoryTarget?.repository_ref ?? null,
+    branch_ref: config.readinessParams.branch_ref ?? inferredRepositoryTarget?.branch_ref ?? null,
+  };
+  if (!resolvedReadinessParams.repository_ref) {
+    throw new Error('authority_transfer_read_requires_--repository-ref_or_CLOUDFLARE_REPOSITORY_PUBLICATION_REPOSITORY_REF');
+  }
+  if (!resolvedReadinessParams.branch_ref) {
+    throw new Error('authority_transfer_read_requires_--branch-ref_or_--branch_or_CLOUDFLARE_REPOSITORY_PUBLICATION_BRANCH_REF');
+  }
   const readiness = await readCloudflareRepositoryPublicationReadiness({
     workerUrl: config.workerUrl,
     requestId: `${config.requestId}_repository_readiness`,
-    params: config.readinessParams,
+    params: resolvedReadinessParams,
     auth: config.auth,
   }, fetchImpl);
   return {
@@ -72,7 +85,7 @@ export async function readAuthorityTransfer(config, fetchImpl = fetch) {
     request_id: config.requestId,
     worker_url: config.workerUrl,
     auth_source: config.auth.source,
-    params: redactAuthorityTransferParams(config),
+    params: redactAuthorityTransferParams(config, resolvedReadinessParams),
     summary: summarizeAuthorityTransfer(product.response, readiness.summary),
     response: {
       operation: product.response,
@@ -168,12 +181,31 @@ export function formatAuthorityTransferText(result) {
   return `${lines.join('\n')}\n`;
 }
 
-function redactAuthorityTransferParams(config) {
+async function inferRepositoryPublicationTarget(config, fetchImpl) {
+  const repositoryPublication = await readRepositoryPublicationSurface({
+    workerUrl: config.workerUrl,
+    requestId: `${config.requestId}_repository_publication_request`,
+    operation: 'repository_publication.request.list',
+    params: {
+      site_id: config.operationParams.site_id,
+      repository_publication_request_limit: 200,
+    },
+    auth: config.auth,
+  }, fetchImpl);
+  const requests = Array.isArray(repositoryPublication.response?.requests) ? repositoryPublication.response.requests : [];
+  const focusedRequest = requests.find((entry) => entry?.operation_id === config.operationParams.operation_id) ?? null;
+  return {
+    repository_ref: focusedRequest?.repository_ref ?? null,
+    branch_ref: focusedRequest?.branch_ref ?? null,
+  };
+}
+
+function redactAuthorityTransferParams(config, resolvedReadinessParams = config.readinessParams) {
   return {
     site_id: config.operationParams?.site_id ?? null,
     operation_id: config.operationParams?.operation_id ?? null,
-    repository_ref: config.readinessParams?.repository_ref ?? null,
-    branch_ref: config.readinessParams?.branch_ref ?? null,
+    repository_ref: resolvedReadinessParams?.repository_ref ?? null,
+    branch_ref: resolvedReadinessParams?.branch_ref ?? null,
   };
 }
 
