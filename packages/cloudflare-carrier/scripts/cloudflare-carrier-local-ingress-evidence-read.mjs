@@ -10,13 +10,22 @@ function option(argv, name) {
 
 export function parseLocalIngressEvidenceReadArgs(argv = [], env = process.env) {
   const config = parseProductReadArgs(['--operation', 'local_ingress.evidence.list', ...argv], env);
+  const focusEvidenceId = option(argv, '--local-ingress-evidence-id') ?? env.CLOUDFLARE_LOCAL_INGRESS_EVIDENCE_ID ?? null;
   const focusRequestId = option(argv, '--local-ingress-request-id') ?? env.CLOUDFLARE_CARRIER_LOCAL_INGRESS_REQUEST_ID ?? null;
+  if (focusEvidenceId) config.params.local_ingress_evidence_id = focusEvidenceId;
   if (focusRequestId) config.params.local_ingress_request_id = focusRequestId;
   return config;
 }
 
 export async function readLocalIngressEvidence(config, fetchImpl = fetch) {
   const product = await readProductSurface(config, fetchImpl);
+  const evidence = Array.isArray(product.response?.evidence) ? product.response.evidence : [];
+  if (
+    config.params?.local_ingress_evidence_id
+    && !evidence.some((entry) => entry?.local_ingress_evidence_id === config.params.local_ingress_evidence_id)
+  ) {
+    throw new Error(`local_ingress_evidence_review_focus_not_found:${config.params.local_ingress_evidence_id}`);
+  }
   return {
     schema: 'narada.cloudflare_carrier.local_ingress_evidence_read.v1',
     status: 'ok',

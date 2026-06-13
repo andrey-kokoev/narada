@@ -30,6 +30,19 @@ test('parseRepositoryPublicationRequestReviewArgs extends operation.read params 
   assert.equal(parsed.focusRef, 'repository_publication_request_live_1');
 });
 
+test('parseRepositoryPublicationRequestReviewArgs falls back to direct request review when no operation id is provided', () => {
+  const parsed = parseRepositoryPublicationRequestReviewArgs([
+    '--url', 'https://carrier.example',
+    '--site', 'site_narada_cloudflare',
+    '--repository-publication-request-id', 'repository_publication_request_live_1',
+    '--operator-session-cookie', 'operator-session-cookie',
+  ], {});
+
+  assert.equal(parsed.operation, 'repository_publication.request.list');
+  assert.equal(parsed.params.site_id, 'site_narada_cloudflare');
+  assert.equal(parsed.focusRef, 'repository_publication_request_live_1');
+});
+
 test('readRepositoryPublicationRequestReview summarizes focused request and linked records', async () => {
   const fetchImpl = async () => ({
     status: 200,
@@ -116,6 +129,161 @@ test('readRepositoryPublicationRequestReview summarizes focused request and link
   assert.equal(result.summary.linked_execution_id, 'execution_1');
   assert.equal(result.summary.linked_evidence_id, 'evidence_1');
   assert.equal(result.summary.latest_focus_review.review_status, 'acknowledged');
+});
+
+test('readRepositoryPublicationRequestReview supports direct request review without operation.read context', async () => {
+  const responses = new Map([
+    ['repository_publication.request.list', {
+      ok: true,
+      site_id: 'site_narada_cloudflare',
+      requests: [
+        {
+          repository_publication_request_id: 'repository_publication_request_live_1',
+          publication_ref: 'repository-publication:live-smoke:1',
+          repository_ref: 'github:andrey-kokoev/narada',
+          branch_ref: 'cloudflare-publication',
+          requested_action_summary: 'request governed Cloudflare GitHub repository publication execution',
+          request_posture: 'cloudflare_queued_repository_publication_request_windows_must_admit_publish_and_return_evidence',
+          authority_locus: 'cloudflare_repository_publication_request_queue',
+          repository_publication_executor_authority: 'windows_repository_publication_executor',
+          repository_publication_admission: 'pending_windows_publication_admission',
+          cloudflare_git_push_admission: 'not_admitted',
+          direct_cloudflare_repository_mutation_admission: 'not_admitted',
+        },
+      ],
+    }],
+    ['repository_publication.admission.list', {
+      ok: true,
+      site_id: 'site_narada_cloudflare',
+      admissions: [
+        {
+          repository_publication_request_id: 'repository_publication_request_live_1',
+          repository_publication_admission_id: 'admission_1',
+          admission_action: 'admit',
+          admission_reason: 'admitted',
+        },
+      ],
+    }],
+    ['repository_publication.evidence.list', {
+      ok: true,
+      site_id: 'site_narada_cloudflare',
+      evidence: [],
+    }],
+    ['repository_publication.cloudflare_execution.list', {
+      ok: true,
+      site_id: 'site_narada_cloudflare',
+      executions: [],
+    }],
+  ]);
+  const fetchImpl = async (_url, init) => {
+    const body = JSON.parse(init.body);
+    return {
+      status: 200,
+      async text() {
+        return JSON.stringify(responses.get(body.operation));
+      },
+    };
+  };
+
+  const result = await readRepositoryPublicationRequestReview({
+    workerUrl: 'https://carrier.example',
+    operation: 'repository_publication.request.list',
+    requestId: 'request_2',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    params: {
+      site_id: 'site_narada_cloudflare',
+      repository_publication_request_limit: 20,
+      repository_publication_admission_limit: 20,
+      repository_publication_evidence_limit: 20,
+      repository_publication_execution_limit: 20,
+    },
+    format: 'json',
+    focusRef: 'repository_publication_request_live_1',
+  }, fetchImpl);
+
+  assert.equal(result.summary.site_id, 'site_narada_cloudflare');
+  assert.equal(result.summary.operation_id, null);
+  assert.equal(result.summary.focused_repository_publication_request_id, 'repository_publication_request_live_1');
+  assert.equal(result.summary.current_request_posture, 'repository_publication_request_admitted_pending_execution');
+  assert.equal(result.summary.linked_admission_id, 'admission_1');
+  assert.equal(result.summary.linked_evidence_id, null);
+});
+
+test('readRepositoryPublicationRequestReview treats refused evidence as current state', async () => {
+  const responses = new Map([
+    ['repository_publication.request.list', {
+      ok: true,
+      site_id: 'site_narada_cloudflare',
+      requests: [
+        {
+          repository_publication_request_id: 'repository_publication_request_live_1',
+          request_posture: 'cloudflare_queued_repository_publication_request_windows_must_admit_publish_and_return_evidence',
+          repository_publication_admission: 'pending_windows_publication_admission',
+          cloudflare_git_push_admission: 'not_admitted',
+          direct_cloudflare_repository_mutation_admission: 'not_admitted',
+        },
+      ],
+    }],
+    ['repository_publication.admission.list', {
+      ok: true,
+      site_id: 'site_narada_cloudflare',
+      admissions: [
+        {
+          repository_publication_request_id: 'repository_publication_request_live_1',
+          repository_publication_admission_id: 'admission_1',
+          admission_action: 'admit',
+        },
+      ],
+    }],
+    ['repository_publication.evidence.list', {
+      ok: true,
+      site_id: 'site_narada_cloudflare',
+      evidence: [
+        {
+          repository_publication_request_id: 'repository_publication_request_live_1',
+          repository_publication_evidence_id: 'evidence_1',
+          publication_status: 'refused',
+          repository_publication_admission: 'resolved_after_cloudflare_repository_publication_admission',
+          cloudflare_git_push_admission: 'not_admitted',
+          direct_cloudflare_repository_mutation_admission: 'not_admitted',
+        },
+      ],
+    }],
+    ['repository_publication.cloudflare_execution.list', {
+      ok: true,
+      site_id: 'site_narada_cloudflare',
+      executions: [],
+    }],
+  ]);
+  const fetchImpl = async (_url, init) => {
+    const body = JSON.parse(init.body);
+    return {
+      status: 200,
+      async text() {
+        return JSON.stringify(responses.get(body.operation));
+      },
+    };
+  };
+
+  const result = await readRepositoryPublicationRequestReview({
+    workerUrl: 'https://carrier.example',
+    operation: 'repository_publication.request.list',
+    requestId: 'request_3',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    params: {
+      site_id: 'site_narada_cloudflare',
+      repository_publication_request_limit: 20,
+      repository_publication_admission_limit: 20,
+      repository_publication_evidence_limit: 20,
+      repository_publication_execution_limit: 20,
+    },
+    format: 'json',
+    focusRef: 'repository_publication_request_live_1',
+  }, fetchImpl);
+
+  assert.equal(result.summary.current_request_posture, 'repository_publication_evidence_refused');
+  assert.equal(result.summary.current_repository_publication_admission, 'resolved_after_cloudflare_repository_publication_admission');
+  assert.equal(result.summary.linked_evidence_id, 'evidence_1');
 });
 
 test('formatRepositoryPublicationRequestReviewText surfaces review ack command', () => {

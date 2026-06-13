@@ -12,6 +12,7 @@ test('parseLocalIngressEvidenceReadArgs reuses direct local ingress evidence lis
   const parsed = parseLocalIngressEvidenceReadArgs([
     '--url', 'https://carrier.example.test',
     '--site', 'site_alpha',
+    '--local-ingress-evidence-id', 'local_ingress_evidence_alpha',
     '--local-ingress-request-id', 'local_ingress_request_alpha',
     '--operator-session-cookie', 'operator-session-cookie',
     '--format', 'text',
@@ -20,6 +21,7 @@ test('parseLocalIngressEvidenceReadArgs reuses direct local ingress evidence lis
   assert.equal(parsed.workerUrl, 'https://carrier.example.test');
   assert.equal(parsed.operation, 'local_ingress.evidence.list');
   assert.equal(parsed.params.site_id, 'site_alpha');
+  assert.equal(parsed.params.local_ingress_evidence_id, 'local_ingress_evidence_alpha');
   assert.equal(parsed.params.local_ingress_request_id, 'local_ingress_request_alpha');
   assert.equal(parsed.format, 'text');
 });
@@ -57,7 +59,7 @@ test('readLocalIngressEvidence returns summarized local ingress evidence', async
   const result = await readLocalIngressEvidence({
     workerUrl: 'https://carrier.example.test',
     operation: 'local_ingress.evidence.list',
-    params: { site_id: 'site_alpha' },
+    params: { site_id: 'site_alpha', local_ingress_evidence_id: 'local_ingress_evidence_alpha' },
     auth: { kind: 'operator_session', value: 'cookie-value', source: 'operator-session-file' },
   }, async () => ({
     status: 200,
@@ -77,6 +79,25 @@ test('readLocalIngressEvidence returns summarized local ingress evidence', async
   assert.equal(result.schema, 'narada.cloudflare_carrier.local_ingress_evidence_read.v1');
   assert.equal(result.summary.evidence_count, 1);
   assert.equal(result.summary.latest_evidence_id, 'local_ingress_evidence_alpha');
+});
+
+test('readLocalIngressEvidence fails when focused local ingress evidence is absent', async () => {
+  await assert.rejects(
+    () => readLocalIngressEvidence({
+      workerUrl: 'https://carrier.example.test',
+      operation: 'local_ingress.evidence.list',
+      params: { site_id: 'site_alpha', local_ingress_evidence_id: 'local_ingress_evidence_missing' },
+      auth: { kind: 'operator_session', value: 'cookie-value', source: 'operator-session-file' },
+    }, async () => ({
+      status: 200,
+      ok: true,
+      text: async () => JSON.stringify({
+        site_id: 'site_alpha',
+        evidence: [{ local_ingress_evidence_id: 'local_ingress_evidence_alpha', local_execution_status: 'completed' }],
+      }),
+    })),
+    /local_ingress_evidence_review_focus_not_found:local_ingress_evidence_missing/,
+  );
 });
 
 test('formatLocalIngressEvidenceReadText prints local ingress evidence summary', () => {

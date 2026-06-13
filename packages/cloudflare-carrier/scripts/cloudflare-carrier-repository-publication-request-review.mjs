@@ -2,14 +2,15 @@
 import { fileURLToPath } from 'node:url';
 
 import { parseProductReadArgs, readProductSurface } from './cloudflare-carrier-product-read.mjs';
+import { parseRepositoryPublicationReadArgs, readRepositoryPublicationSurface } from './cloudflare-carrier-repository-publication-read.mjs';
 
 export function parseRepositoryPublicationRequestReviewArgs(argv = [], env = process.env) {
   const args = [...argv];
-  const parsed = parseProductReadArgs(['--operation', 'operation.read', ...argv], env);
+  const requestLimitOption = option(args, '--request-limit') ?? env.CLOUDFLARE_CARRIER_REPOSITORY_PUBLICATION_REQUEST_LIMIT ?? null;
   const requestLimit = parseOptionalInteger(
-    option(args, '--request-limit') ?? env.CLOUDFLARE_CARRIER_REPOSITORY_PUBLICATION_REQUEST_LIMIT ?? null,
+    requestLimitOption,
     'request-limit',
-  ) ?? 20;
+  );
   const admissionLimit = parseOptionalInteger(
     option(args, '--admission-limit') ?? env.CLOUDFLARE_CARRIER_REPOSITORY_PUBLICATION_ADMISSION_LIMIT ?? null,
     'admission-limit',
@@ -23,14 +24,28 @@ export function parseRepositoryPublicationRequestReviewArgs(argv = [], env = pro
     'execution-limit',
   ) ?? 20;
   const focusRef = normalizeOptionalString(
-    option(args, '--focus-ref') ?? env.CLOUDFLARE_CARRIER_REPOSITORY_PUBLICATION_FOCUS_REF ?? null,
+    option(args, '--focus-ref')
+    ?? option(args, '--repository-publication-request-id')
+    ?? env.CLOUDFLARE_CARRIER_REPOSITORY_PUBLICATION_FOCUS_REF
+    ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_READ_REQUEST_ID
+    ?? null,
   );
+  const operationId = option(args, '--carrier-operation') ?? option(args, '--operation-id') ?? env.CLOUDFLARE_CARRIER_OPERATION_ID ?? null;
+  const effectiveRequestLimit = requestLimit ?? (!operationId && focusRef && !requestLimitOption ? 500 : 20);
+  const parsed = operationId
+    ? parseProductReadArgs(['--operation', 'operation.read', ...argv], env)
+    : parseRepositoryPublicationReadArgs([
+        '--operation', 'repository_publication.request.list',
+        '--request-limit', String(effectiveRequestLimit),
+        ...(focusRef ? ['--repository-publication-request-id', focusRef] : []),
+        ...argv,
+      ], env);
   return {
     ...parsed,
     focusRef,
     params: {
       ...parsed.params,
-      repository_publication_request_limit: requestLimit,
+      repository_publication_request_limit: effectiveRequestLimit,
       repository_publication_admission_limit: admissionLimit,
       repository_publication_evidence_limit: evidenceLimit,
       repository_publication_execution_limit: executionLimit,
@@ -39,7 +54,9 @@ export function parseRepositoryPublicationRequestReviewArgs(argv = [], env = pro
 }
 
 export async function readRepositoryPublicationRequestReview(config, fetchImpl = fetch) {
-  const product = await readProductSurface(config, fetchImpl);
+  const product = config.operation === 'operation.read'
+    ? await readProductSurface(config, fetchImpl)
+    : await readRepositoryPublicationRequestReviewDirect(config, fetchImpl);
   return {
     schema: 'narada.cloudflare_carrier.repository_publication_request_review.v1',
     status: 'ok',
@@ -52,6 +69,69 @@ export async function readRepositoryPublicationRequestReview(config, fetchImpl =
       focusRef: config.focusRef,
     }),
     response: product.response,
+  };
+}
+
+async function readRepositoryPublicationRequestReviewDirect(config, fetchImpl) {
+  const requestProduct = await readRepositoryPublicationSurface({
+    ...config,
+    operation: 'repository_publication.request.list',
+  }, fetchImpl);
+  const requestEntries = Array.isArray(requestProduct.response?.requests) ? requestProduct.response.requests : [];
+  if (config.focusRef && !requestEntries.some((entry) => entry?.repository_publication_request_id === config.focusRef)) {
+    throw new Error(`repository_publication_request_review_focus_not_found:${config.focusRef}`);
+  }
+  const focusedRequestId = config.focusRef ?? requestProduct.summary?.latest_repository_publication_request_id ?? null;
+  const sharedParams = {
+    site_id: config.params.site_id,
+    ...(focusedRequestId ? { repository_publication_request_id: focusedRequestId } : {}),
+  };
+  const [admissionProduct, evidenceProduct, executionProduct] = await Promise.all([
+    readRepositoryPublicationSurface({
+      ...config,
+      operation: 'repository_publication.admission.list',
+      requestId: `${config.requestId}_admission`,
+      params: {
+        ...sharedParams,
+        repository_publication_admission_limit: config.params.repository_publication_admission_limit,
+      },
+    }, fetchImpl),
+    readRepositoryPublicationSurface({
+      ...config,
+      operation: 'repository_publication.evidence.list',
+      requestId: `${config.requestId}_evidence`,
+      params: {
+        ...sharedParams,
+        repository_publication_evidence_limit: config.params.repository_publication_evidence_limit,
+      },
+    }, fetchImpl),
+    readRepositoryPublicationSurface({
+      ...config,
+      operation: 'repository_publication.cloudflare_execution.list',
+      requestId: `${config.requestId}_execution`,
+      params: {
+        ...sharedParams,
+        repository_publication_execution_limit: config.params.repository_publication_execution_limit,
+      },
+    }, fetchImpl),
+  ]);
+  return {
+    worker_url: requestProduct.worker_url,
+    auth_source: requestProduct.auth_source,
+    operation: 'repository_publication.request.review',
+    params: { ...config.params },
+    response: {
+      site_id: requestProduct.response?.site_id ?? config.params.site_id ?? null,
+      repository_publication_requests: requestProduct.response?.requests ?? [],
+      repository_publication_admissions: admissionProduct.response?.admissions ?? [],
+      repository_publication_evidence: evidenceProduct.response?.evidence ?? [],
+      repository_publication_cloudflare_executions: executionProduct.response?.executions ?? [],
+      operation_focus_reviews: [],
+    },
+    summary: {
+      site_id: requestProduct.summary?.site_id ?? config.params.site_id ?? null,
+      operation_id: null,
+    },
   };
 }
 
@@ -236,12 +316,13 @@ function deriveCurrentRepositoryPublicationRequestState({ focusedRequest, latest
       direct_cloudflare_repository_mutation_admission: requestedDirectMutationAdmission,
     };
   }
-  if (evidenceStatus === 'completed') {
+  if (evidenceStatus) {
     return {
-      request_posture: 'repository_publication_evidence_completed',
-      repository_publication_admission: requestedAdmission,
-      cloudflare_git_push_admission: requestedGitPushAdmission,
-      direct_cloudflare_repository_mutation_admission: requestedDirectMutationAdmission,
+      request_posture: `repository_publication_evidence_${evidenceStatus}`,
+      repository_publication_admission: latestEvidence?.repository_publication_admission
+        ?? (admissionAction === 'admit' ? 'admitted_by_cloudflare_repository_publication' : requestedAdmission),
+      cloudflare_git_push_admission: latestEvidence?.cloudflare_git_push_admission ?? requestedGitPushAdmission,
+      direct_cloudflare_repository_mutation_admission: latestEvidence?.direct_cloudflare_repository_mutation_admission ?? requestedDirectMutationAdmission,
     };
   }
   if (admissionAction === 'admit') {
