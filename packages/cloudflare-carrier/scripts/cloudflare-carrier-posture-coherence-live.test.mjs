@@ -151,6 +151,64 @@ test('runPostureCoherenceLive preserves operator session file for child product 
   assert.equal(calls[0][calls[0].indexOf('--operator-session-file') + 1], 'D:\\tmp\\operator-session.json');
 });
 
+test('runPostureCoherenceLive accepts focused continuity review without refocus under monitor route', async () => {
+  const result = await runPostureCoherenceLive({
+    workerUrl: 'https://carrier.example.test',
+    siteIds: ['site_alpha'],
+    format: 'json',
+    auth: { kind: 'bearer', value: 'secret-token', source: 'flag:--token' },
+  }, {
+    async runNodeScript(args) {
+      if (args.includes('site.list')) {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            route_next_action: 'monitor_sites',
+            next_action: 'monitor_sites',
+            next_site_id: null,
+            health_counts: { ready: 1, attention: 0, incomplete: 0, other: 0 },
+          },
+          response: { site_product_statuses: [{ site_id: 'site_alpha' }] },
+        });
+      }
+      if (args.includes('site.read')) {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            site_id: 'site_alpha',
+            health: 'ready',
+            next_action: 'monitor_site',
+          },
+        });
+      }
+      if (args.includes('operation.list')) {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            site_id: 'site_alpha',
+            operation_count: 3,
+            next_operation_id: 'operation_control',
+            next_action: 'inspect_operation_evidence',
+            route_next_action: 'monitor_operations',
+            route_target: 'operation_control',
+            health_counts: { ready: 3, needs_attention: 0 },
+          },
+          response: {
+            focused_operation_lifecycle: {
+              operation_id: 'operation_control',
+              workflow_route: { next_action: 'review_site_continuity_reconciliation_execution' },
+            },
+          },
+        });
+      }
+      throw new Error(`unexpected args: ${args.join(' ')}`);
+    },
+  });
+
+  assert.equal(result.status, 'ok');
+  assert.deepEqual(result.issues, []);
+});
+
 test('runPostureCoherenceLive reports stale operation summary counts against monitor route', async () => {
   const result = await runPostureCoherenceLive({
     workerUrl: 'https://carrier.example.test',

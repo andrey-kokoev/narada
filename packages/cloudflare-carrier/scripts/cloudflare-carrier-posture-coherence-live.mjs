@@ -153,6 +153,7 @@ function validateSiteReadSummary(summary = {}, issues) {
 function validateOperationListSummary(siteId, summary = {}, response = {}, issues) {
   const routeAction = summary.route_next_action ?? null;
   const focusedOperationId = response.focused_operation_lifecycle?.operation_id ?? null;
+  const focusedWorkflowAction = response.focused_operation_lifecycle?.workflow_route?.next_action ?? null;
   if (focusedOperationId && focusedOperationId !== (summary.next_operation_id ?? null)) {
     issues.push(issue(`operation.list:${siteId}`, 'operation_list_focused_operation_mismatch', {
       next_operation_id: summary.next_operation_id ?? null,
@@ -160,9 +161,13 @@ function validateOperationListSummary(siteId, summary = {}, response = {}, issue
     }));
   }
   if (routeAction === 'monitor_operations') {
-    if (summary.next_action !== 'monitor_operations') {
+    const focusedReviewWithoutRefocus = focusedWorkflowAction === 'review_site_continuity_reconciliation_execution';
+    const expectedNextAction = focusedReviewWithoutRefocus
+      ? 'inspect_operation_evidence'
+      : 'monitor_operations';
+    if (summary.next_action !== expectedNextAction) {
       issues.push(issue(`operation.list:${siteId}`, 'operation_list_next_action_mismatch', {
-        expected: 'monitor_operations',
+        expected: expectedNextAction,
         actual: summary.next_action ?? null,
       }));
     }
@@ -171,9 +176,9 @@ function validateOperationListSummary(siteId, summary = {}, response = {}, issue
         actual: summary.health_counts?.needs_attention ?? 0,
       }));
     }
-    if ((response.focused_operation_lifecycle?.workflow_route?.next_action ?? null) !== 'monitor_operation') {
+    if (!focusedReviewWithoutRefocus && focusedWorkflowAction !== 'monitor_operation') {
       issues.push(issue(`operation.list:${siteId}`, 'operation_list_focused_workflow_not_monitoring', {
-        actual: response.focused_operation_lifecycle?.workflow_route?.next_action ?? null,
+        actual: focusedWorkflowAction,
       }));
     }
   } else if (routeAction === 'focus_next_operation') {
