@@ -163,11 +163,16 @@ export function summarizeProductSurface(operation, body, options = {}) {
   }
   if (operation === 'site.read') {
     const status = body?.site_product_status ?? body?.product_status ?? null;
+    const focusedWorkflowRoute = body?.focused_operation_lifecycle?.workflow_route ?? null;
     return {
       operation,
       site_id: body?.site?.site_id ?? body?.site_id ?? status?.site_id ?? null,
       display_name: body?.site?.display_name ?? null,
       active_operation_id: body?.focused_operation_lifecycle?.operation_id ?? body?.operation?.operation_id ?? null,
+      active_operation_next_action: focusedWorkflowRoute?.next_action ?? null,
+      active_operation_workflow_reason: focusedWorkflowRoute?.reason ?? null,
+      active_operation_focus_kind: focusedWorkflowRoute?.focus_kind ?? null,
+      active_operation_focus_ref: focusedWorkflowRoute?.focus_ref ?? focusedWorkflowRoute?.target ?? null,
       health: status?.health ?? null,
       next_action: status?.next_action ?? null,
       continuity_state: status?.continuity_state ?? null,
@@ -334,6 +339,12 @@ export function formatProductSurfaceText(result) {
     lines.push(`Next Action: ${summary.next_action ?? 'none'}`);
     lines.push(`Scope Loaded: ${summary.scope_loaded ? 'yes' : 'no'}`);
     lines.push(`Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file> --execute-site-action`);
+    if (summary.active_operation_next_action || summary.active_operation_workflow_reason) {
+      lines.push(`Active Operation Route: operation=${summary.active_operation_id ?? 'none'} action=${summary.active_operation_next_action ?? 'none'} reason=${summary.active_operation_workflow_reason ?? 'none'}`);
+    }
+    if (summary.active_operation_focus_kind || summary.active_operation_focus_ref) {
+      lines.push(`Active Operation Focus: kind=${summary.active_operation_focus_kind ?? 'unknown'} ref=${summary.active_operation_focus_ref ?? 'unknown'}`);
+    }
     if (summary.next_action === 'read_site_scope' || summary.next_action === 'read_membership_site') {
       lines.push(`Site Scope: pnpm --filter @narada2/cloudflare-carrier product:site:scope:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
     }
@@ -356,6 +367,13 @@ export function formatProductSurfaceText(result) {
       || summary.next_action === 'verify_full_cloudflare_authority'
     ) {
       lines.push(`Authority Transfer: pnpm --filter @narada2/cloudflare-carrier product:authority-transfer:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.active_operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
+    }
+    if (
+      summary.active_operation_next_action === 'review_site_continuity_reconciliation_execution'
+      && summary.active_operation_id
+      && summary.active_operation_focus_ref
+    ) {
+      lines.push(`Review Ack: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.active_operation_id} --focus-kind ${summary.active_operation_focus_kind ?? 'site_continuity_reconciliation_execution'} --focus-ref ${summary.active_operation_focus_ref} --operator-session-file <operator-session-file>`);
     }
     lines.push(`Continuity: state=${summary.continuity_state ?? 'unknown'} direction=${summary.continuity_direction_state ?? 'unknown'} loop=${summary.continuity_loop_state ?? 'unknown'}`);
     if (summary.continuity_direction_missing?.length > 0) lines.push(`Continuity Missing: ${summary.continuity_direction_missing.join(', ')}`);

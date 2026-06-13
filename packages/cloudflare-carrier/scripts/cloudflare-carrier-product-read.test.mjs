@@ -1668,7 +1668,14 @@ test('formatProductSurfaceText emits mailbox send review operator commands for o
 test('summarizeProductSurface summarizes site and operation reads', () => {
   assert.deepEqual(summarizeProductSurface('site.read', {
     site: { site_id: 'site_fixture', display_name: 'Fixture Site' },
-    focused_operation_lifecycle: { operation_id: 'operation_fixture' },
+    focused_operation_lifecycle: {
+      operation_id: 'operation_fixture',
+      workflow_route: {
+        next_action: 'review_site_continuity_reconciliation_execution',
+        reason: 'operation_operator_focus_needs_review',
+        focus_ref: 'site-continuity-reconciliation-execution:site_fixture:2026-06-13T23:19:01.404Z:completed',
+      },
+    },
     site_product_status: {
       health: 'attention',
       next_action: 'return_local_windows_continuity_packet',
@@ -1691,6 +1698,10 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     site_id: 'site_fixture',
     display_name: 'Fixture Site',
     active_operation_id: 'operation_fixture',
+    active_operation_next_action: 'review_site_continuity_reconciliation_execution',
+    active_operation_workflow_reason: 'operation_operator_focus_needs_review',
+    active_operation_focus_kind: null,
+    active_operation_focus_ref: 'site-continuity-reconciliation-execution:site_fixture:2026-06-13T23:19:01.404Z:completed',
     health: 'attention',
     next_action: 'return_local_windows_continuity_packet',
     continuity_state: 'packet_observed',
@@ -1905,6 +1916,40 @@ test('formatProductSurfaceText surfaces site scope and site operation focus comm
     },
   });
   assert.match(membershipScopeText, /Site Scope: pnpm --filter @narada2\/cloudflare-carrier product:site:scope:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+
+  const siteReadContinuityReviewText = formatProductSurfaceText({
+    operation: 'site.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'site.read',
+      site_id: 'site_alpha',
+      display_name: 'Alpha Site',
+      active_operation_id: 'operation_alpha',
+      active_operation_next_action: 'review_site_continuity_reconciliation_execution',
+      active_operation_workflow_reason: 'operation_operator_focus_needs_review',
+      active_operation_focus_kind: null,
+      active_operation_focus_ref: 'site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:19:01.404Z:completed',
+      health: 'attention',
+      next_action: 'focus_next_operation',
+      scope_loaded: true,
+      continuity_state: 'packet_observed',
+      continuity_direction_state: 'bidirectional_packets_observed',
+      continuity_loop_state: 'loop_report_observed',
+      continuity_reconciliation_execution_state: 'reconciliation_execution_observed',
+      continuity_reconciliation_execution_health: 'ready',
+      continuity_packet_count: 3,
+      continuity_loop_report_count: 20,
+      continuity_reconciliation_execution_count: 20,
+      persistence_state: 'durable',
+      recovery_state: 'reconstructable',
+      membership_count: 2,
+      session_count: 4,
+    },
+  });
+  assert.match(siteReadContinuityReviewText, /Active Operation Route: operation=operation_alpha action=review_site_continuity_reconciliation_execution reason=operation_operator_focus_needs_review/);
+  assert.match(siteReadContinuityReviewText, /Active Operation Focus: kind=unknown ref=site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:19:01.404Z:completed/);
+  assert.match(siteReadContinuityReviewText, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:19:01.404Z:completed --operator-session-file <operator-session-file>/);
 
   const siteReadMembershipPutText = formatProductSurfaceText({
     operation: 'site.read',
