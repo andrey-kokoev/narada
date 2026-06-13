@@ -4,11 +4,22 @@ import { fileURLToPath } from 'node:url';
 import { parseProductReadArgs, readProductSurface } from './cloudflare-carrier-product-read.mjs';
 
 export function parseMailboxSendConfirmationReadArgs(argv = [], env = process.env) {
-  return parseProductReadArgs(['--operation', 'mailbox.send_confirmation.list', ...argv], env);
+  const args = [...argv];
+  const parsed = parseProductReadArgs(['--operation', 'mailbox.send_confirmation.list', ...argv], env);
+  return {
+    ...parsed,
+    focusRef: normalizeOptionalString(
+      option(args, '--focus-ref') ?? env.CLOUDFLARE_CARRIER_MAILBOX_SEND_CONFIRMATION_FOCUS_REF ?? null,
+    ),
+  };
 }
 
 export async function readMailboxSendConfirmation(config, fetchImpl = fetch) {
   const product = await readProductSurface(config, fetchImpl);
+  const confirmations = listMailboxSendConfirmations(product.response);
+  if (config.focusRef && !confirmations.some((entry) => entry?.send_confirmation_id === config.focusRef)) {
+    throw new Error(`mailbox_send_confirmation_read_focus_not_found:${config.focusRef}`);
+  }
   return {
     schema: 'narada.cloudflare_carrier.mailbox_send_confirmation_read.v1',
     status: 'ok',
@@ -16,20 +27,26 @@ export async function readMailboxSendConfirmation(config, fetchImpl = fetch) {
     auth_source: product.auth_source,
     operation: product.operation,
     params: product.params,
-    summary: summarizeMailboxSendConfirmation(product.response),
+    summary: summarizeMailboxSendConfirmation(product.response, { focusRef: config.focusRef }),
     response: product.response,
   };
 }
 
-export function summarizeMailboxSendConfirmation(body = {}) {
-  const confirmations = Array.isArray(body?.confirmations) ? body.confirmations : [];
-  const latest = confirmations[0] ?? null;
+export function summarizeMailboxSendConfirmation(body = {}, options = {}) {
+  const confirmations = listMailboxSendConfirmations(body);
+  const focusRef = options.focusRef ?? null;
+  const focused = focusRef
+    ? confirmations.find((entry) => entry?.send_confirmation_id === focusRef) ?? null
+    : null;
+  const summarizedConfirmations = focused ? [focused] : confirmations;
+  const latest = focused ?? confirmations[0] ?? null;
   const latestRecord = latest?.record ?? null;
   const latestRequest = latestRecord?.confirmation_request ?? null;
   const latestGraphResponse = latest?.graph_response ?? latestRecord?.graph_response ?? null;
   return {
     site_id: body?.site_id ?? null,
-    confirmation_count: confirmations.length,
+    confirmation_count: summarizedConfirmations.length,
+    focused_send_confirmation_id: focusRef ? (latest?.send_confirmation_id ?? focusRef) : null,
     mailbox_send_confirmation_authority: body?.mailbox_send_confirmation_authority ?? null,
     mailbox_send_delivery_confirmation_admission:
       body?.mailbox_send_delivery_confirmation_admission
@@ -71,6 +88,8 @@ export function summarizeMailboxSendConfirmation(body = {}) {
 
 export function formatMailboxSendConfirmationReadText(result) {
   const summary = result?.summary ?? {};
+  const latestLabel = summary.focused_send_confirmation_id ? 'Focused Confirmation' : 'Latest Confirmation';
+  const latestRecordedLabel = summary.focused_send_confirmation_id ? 'Focused Recorded' : 'Latest Recorded';
   const lines = [
     'Mailbox Send Confirmation: ok',
     `Worker: ${result?.worker_url ?? 'unknown'}`,
@@ -85,15 +104,30 @@ export function formatMailboxSendConfirmationReadText(result) {
     lines.push(`Current Posture: ${summary.latest_confirmation_posture}`);
   }
   if (summary.latest_send_confirmation_id || summary.latest_message_id || summary.latest_subject) {
-    lines.push(`Latest Confirmation: id=${summary.latest_send_confirmation_id ?? 'none'} account=${summary.latest_account_ref ?? 'none'} message=${summary.latest_message_id ?? 'none'} subject=${summary.latest_subject ?? 'none'}`);
+    lines.push(`${latestLabel}: id=${summary.latest_send_confirmation_id ?? 'none'} account=${summary.latest_account_ref ?? 'none'} message=${summary.latest_message_id ?? 'none'} subject=${summary.latest_subject ?? 'none'}`);
   }
   if (summary.latest_body_preview) {
     lines.push(`Body Preview: ${summary.latest_body_preview}`);
   }
   if (summary.latest_recorded_at) {
-    lines.push(`Latest Recorded: ${summary.latest_recorded_at}`);
+    lines.push(`${latestRecordedLabel}: ${summary.latest_recorded_at}`);
   }
   return `${lines.join('\n')}\n`;
+}
+
+function listMailboxSendConfirmations(body = {}) {
+  if (Array.isArray(body?.confirmations)) return body.confirmations;
+  return [];
+}
+
+function option(args, name) {
+  const index = args.indexOf(name);
+  return index >= 0 ? args[index + 1] : null;
+}
+
+function normalizeOptionalString(value) {
+  const normalized = String(value ?? '').trim();
+  return normalized || null;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

@@ -12,6 +12,7 @@ test('parseMailboxSendAcceptedReadArgs reuses mailbox send accepted list parsing
   const parsed = parseMailboxSendAcceptedReadArgs([
     '--url', 'https://carrier.example.test',
     '--site', 'site_alpha',
+    '--focus-ref', 'mailbox_send_accepted_alpha',
     '--operator-session-cookie', 'operator-session-cookie',
     '--format', 'text',
   ], {});
@@ -19,6 +20,7 @@ test('parseMailboxSendAcceptedReadArgs reuses mailbox send accepted list parsing
   assert.equal(parsed.workerUrl, 'https://carrier.example.test');
   assert.equal(parsed.operation, 'mailbox.send_accepted.list');
   assert.equal(parsed.params.site_id, 'site_alpha');
+  assert.equal(parsed.focusRef, 'mailbox_send_accepted_alpha');
   assert.equal(parsed.format, 'text');
   assert.equal(parsed.auth.kind, 'operator_session');
 });
@@ -81,6 +83,55 @@ test('readMailboxSendAccepted returns summarized mailbox send acceptance', async
   assert.equal(result.summary.latest_message_id, 'message_alpha');
 });
 
+test('readMailboxSendAccepted narrows to a focused historical accepted send', async () => {
+  const result = await readMailboxSendAccepted({
+    workerUrl: 'https://carrier.example.test',
+    operation: 'mailbox.send_accepted.list',
+    params: { site_id: 'site_alpha' },
+    auth: { kind: 'operator_session', value: 'cookie-value', source: 'operator-session-file' },
+    focusRef: 'mailbox_send_accepted_focus',
+  }, async () => ({
+    status: 200,
+    ok: true,
+    text: async () => JSON.stringify({
+      site_id: 'site_alpha',
+      sends: [
+        { send_accepted_id: 'mailbox_send_accepted_alpha' },
+        {
+          send_accepted_id: 'mailbox_send_accepted_focus',
+          proposal_id: 'proposal_focus',
+          source_message_ref: 'message_focus',
+          recorded_at: '2026-06-13T04:01:00.000Z',
+        },
+      ],
+    }),
+  }));
+
+  assert.equal(result.summary.send_count, 1);
+  assert.equal(result.summary.focused_send_accepted_id, 'mailbox_send_accepted_focus');
+  assert.equal(result.summary.latest_send_accepted_id, 'mailbox_send_accepted_focus');
+});
+
+test('readMailboxSendAccepted fails when focused accepted send is missing', async () => {
+  await assert.rejects(
+    () => readMailboxSendAccepted({
+      workerUrl: 'https://carrier.example.test',
+      operation: 'mailbox.send_accepted.list',
+      params: { site_id: 'site_alpha' },
+      auth: { kind: 'operator_session', value: 'cookie-value', source: 'operator-session-file' },
+      focusRef: 'mailbox_send_accepted_missing',
+    }, async () => ({
+      status: 200,
+      ok: true,
+      text: async () => JSON.stringify({
+        site_id: 'site_alpha',
+        sends: [{ send_accepted_id: 'mailbox_send_accepted_alpha' }],
+      }),
+    })),
+    /mailbox_send_accepted_read_focus_not_found:mailbox_send_accepted_missing/,
+  );
+});
+
 test('formatMailboxSendAcceptedReadText prints mailbox send acceptance summary', () => {
   const text = formatMailboxSendAcceptedReadText({
     worker_url: 'https://carrier.example.test',
@@ -105,4 +156,25 @@ test('formatMailboxSendAcceptedReadText prints mailbox send acceptance summary',
   assert.match(text, /Send Acceptance: count=1 authority=cloudflare_graph_mailbox_send admission=admitted/);
   assert.match(text, /Current Posture: cloudflare_graph_send_accepted_delivery_not_confirmed/);
   assert.match(text, /Latest Accepted: id=mailbox_send_accepted_alpha proposal=mailbox_send_proposal_alpha account=help@example.test message=message_alpha subject=none/);
+});
+
+test('formatMailboxSendAcceptedReadText prints focused labels for focused reads', () => {
+  const text = formatMailboxSendAcceptedReadText({
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      send_count: 1,
+      focused_send_accepted_id: 'mailbox_send_accepted_focus',
+      latest_send_accepted_id: 'mailbox_send_accepted_focus',
+      latest_proposal_id: 'proposal_focus',
+      latest_account_ref: 'help@example.test',
+      latest_message_id: 'message_focus',
+      latest_subject: null,
+      latest_recorded_at: '2026-06-13T04:01:00.000Z',
+    },
+  });
+
+  assert.match(text, /Focused Accepted: id=mailbox_send_accepted_focus/);
+  assert.match(text, /Focused Recorded: 2026-06-13T04:01:00.000Z/);
 });
