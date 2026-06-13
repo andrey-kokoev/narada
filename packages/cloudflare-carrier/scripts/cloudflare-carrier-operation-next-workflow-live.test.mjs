@@ -1835,6 +1835,56 @@ test('runOperationNextWorkflowLive delegates directive delivery review route to 
   assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-directive-delivery-review.mjs');
 });
 
+test('runOperationNextWorkflowLive delegates mailbox outlook draft review route to mailbox outlook draft read', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_narada_cloudflare',
+    expectedListRouteAction: null,
+    expectedOperationId: null,
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              next_operation_id: 'operation_site_read',
+              route_next_action: 'focus_next_operation',
+              next_action: 'use_focused_operation',
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            operation_id: 'operation_site_read',
+            workflow_next_action: 'review_mailbox_outlook_draft_create',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-mailbox-outlook-draft-read.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.mailbox_outlook_draft_read.v1',
+          status: 'ok',
+          summary: { draft_count: 1, latest_draft_create_id: 'draft_live_1' },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'mailbox_outlook_draft');
+  assert.equal(result.delegated_route_action, 'review_mailbox_outlook_draft_create');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.mailbox_outlook_draft_read.v1');
+  assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-mailbox-outlook-draft-read.mjs');
+});
+
 test('runOperationNextWorkflowLive delegates repository publication evidence route to repository publication evidence read', async () => {
   const invocations = [];
   const result = await runOperationNextWorkflowLive({

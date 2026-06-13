@@ -1,0 +1,81 @@
+#!/usr/bin/env node
+import { fileURLToPath } from 'node:url';
+
+import { parseProductReadArgs, readProductSurface } from './cloudflare-carrier-product-read.mjs';
+
+export function parseMailboxOutlookDraftReadArgs(argv = [], env = process.env) {
+  return parseProductReadArgs(['--operation', 'mailbox.outlook_draft.list', ...argv], env);
+}
+
+export async function readMailboxOutlookDraft(config, fetchImpl = fetch) {
+  const product = await readProductSurface(config, fetchImpl);
+  return {
+    schema: 'narada.cloudflare_carrier.mailbox_outlook_draft_read.v1',
+    status: 'ok',
+    worker_url: product.worker_url,
+    auth_source: product.auth_source,
+    operation: product.operation,
+    params: product.params,
+    summary: summarizeMailboxOutlookDraft(product.response),
+    response: product.response,
+  };
+}
+
+export function summarizeMailboxOutlookDraft(body = {}) {
+  const drafts = Array.isArray(body?.drafts) ? body.drafts : [];
+  const latest = drafts[0] ?? null;
+  return {
+    site_id: body?.site_id ?? null,
+    draft_count: drafts.length,
+    mailbox_outlook_draft_create_authority: body?.mailbox_outlook_draft_create_authority ?? null,
+    mailbox_outlook_draft_create_admission: body?.mailbox_outlook_draft_create_admission ?? null,
+    mailbox_send_admission: body?.mailbox_send_admission ?? null,
+    mailbox_mutation_admission: body?.mailbox_mutation_admission ?? null,
+    authority_partition: body?.authority_partition ?? null,
+    latest_draft_create_id: latest?.draft_create_id ?? null,
+    latest_message_id: latest?.message_id ?? null,
+    latest_subject: latest?.subject ?? null,
+    latest_recorded_at: latest?.recorded_at ?? latest?.created_at ?? null,
+  };
+}
+
+export function formatMailboxOutlookDraftReadText(result) {
+  const summary = result?.summary ?? {};
+  const lines = [
+    'Mailbox Outlook Draft Review: ok',
+    `Worker: ${result?.worker_url ?? 'unknown'}`,
+    `Auth: ${result?.auth_source ?? 'unknown'}`,
+    `Site: ${summary.site_id ?? 'unknown'}`,
+    `Outlook Drafts: count=${summary.draft_count ?? 0} authority=${summary.mailbox_outlook_draft_create_authority ?? 'unknown'} admission=${summary.mailbox_outlook_draft_create_admission ?? 'unknown'}`,
+  ];
+  if (summary.mailbox_send_admission || summary.mailbox_mutation_admission) {
+    lines.push(`Admissions: send=${summary.mailbox_send_admission ?? 'unknown'} mutation=${summary.mailbox_mutation_admission ?? 'unknown'}`);
+  }
+  if (summary.authority_partition) {
+    lines.push(`Authority Partition: ${summary.authority_partition}`);
+  }
+  if (summary.latest_draft_create_id || summary.latest_message_id || summary.latest_subject) {
+    lines.push(`Latest Draft: id=${summary.latest_draft_create_id ?? 'none'} message=${summary.latest_message_id ?? 'none'} subject=${summary.latest_subject ?? 'none'}`);
+  }
+  if (summary.latest_recorded_at) {
+    lines.push(`Latest Recorded: ${summary.latest_recorded_at}`);
+  }
+  return `${lines.join('\n')}\n`;
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  try {
+    const config = parseMailboxOutlookDraftReadArgs(process.argv.slice(2));
+    const result = await readMailboxOutlookDraft(config);
+    if (config.format === 'text') {
+      process.stdout.write(formatMailboxOutlookDraftReadText(result));
+    } else if (config.format === 'summary') {
+      process.stdout.write(`${JSON.stringify(result.summary, null, 2)}\n`);
+    } else {
+      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    }
+  } catch (error) {
+    process.stderr.write(JSON.stringify({ ok: false, code: error?.message ?? String(error), response: error?.response }, null, 2) + '\n');
+    process.exit(1);
+  }
+}

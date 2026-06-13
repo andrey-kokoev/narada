@@ -9,6 +9,7 @@ const VALID_OPERATIONS = new Set([
   'operation.read',
   'webhook_delay.directive.dual_record.list',
   'webhook_delay.directive.primary_with_fallback.list',
+  'mailbox.outlook_draft.list',
   'mailbox.send_accepted.list',
   'mailbox.send_confirmation.list',
   'local_ingress.request.list',
@@ -38,6 +39,7 @@ export function parseProductReadArgs(argv = [], env = process.env) {
     || operation === 'operation.read'
     || operation === 'webhook_delay.directive.dual_record.list'
     || operation === 'webhook_delay.directive.primary_with_fallback.list'
+    || operation === 'mailbox.outlook_draft.list'
     || operation === 'mailbox.send_accepted.list'
     || operation === 'mailbox.send_confirmation.list'
     || operation === 'local_ingress.request.list'
@@ -70,6 +72,7 @@ export function buildParams({ operation, siteId, operationId, limit }) {
     || operation === 'operation.read'
     || operation === 'webhook_delay.directive.dual_record.list'
     || operation === 'webhook_delay.directive.primary_with_fallback.list'
+    || operation === 'mailbox.outlook_draft.list'
     || operation === 'mailbox.send_accepted.list'
     || operation === 'mailbox.send_confirmation.list'
     || operation === 'local_ingress.request.list'
@@ -386,6 +389,9 @@ export function formatProductSurfaceText(result) {
     }
     if (summary.workflow_next_action === 'review_mailbox_send_acceptance') {
       lines.push(`Mailbox Send Accepted: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
+    }
+    if (summary.workflow_next_action === 'review_mailbox_outlook_draft_create') {
+      lines.push(`Mailbox Outlook Draft Review: pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
     }
     if (summary.workflow_next_action === 'review_directive_delivery') {
       lines.push(`Directive Delivery Review: pnpm --filter @narada2/cloudflare-carrier product:directive:delivery:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);

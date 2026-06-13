@@ -597,6 +597,27 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   });
   assert.match(operationReadDirectiveText, /Directive Delivery Review: pnpm --filter @narada2\/cloudflare-carrier product:directive:delivery:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_directive --operator-session-file <operator-session-file>/);
 
+  const operationReadOutlookDraftText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_mailbox_draft',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'active_uninhabited',
+      health: 'attention',
+      next_action: 'mailbox_outlook_draft_create',
+      workflow_next_action: 'review_mailbox_outlook_draft_create',
+      workflow_reason: 'operation_operator_focus_needs_review',
+      session_count: 0,
+      task_count: 0,
+    },
+  });
+  assert.match(operationReadOutlookDraftText, /Mailbox Outlook Draft Review: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+
   const operationReadRepositoryPublicationText = formatProductSurfaceText({
     operation: 'operation.read',
     worker_url: 'https://carrier.example.test',

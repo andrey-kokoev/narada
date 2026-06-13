@@ -15,6 +15,7 @@ const productReadScript = resolve(scriptDir, 'cloudflare-carrier-product-read.mj
 const evidenceReadScript = resolve(scriptDir, 'cloudflare-carrier-operation-evidence-read.mjs');
 const persistenceReadScript = resolve(scriptDir, 'cloudflare-carrier-operation-persistence-read.mjs');
 const recoveryReadScript = resolve(scriptDir, 'cloudflare-carrier-operation-recovery-read.mjs');
+const mailboxOutlookDraftReadScript = resolve(scriptDir, 'cloudflare-carrier-mailbox-outlook-draft-read.mjs');
 const mailboxSendAcceptedReadScript = resolve(scriptDir, 'cloudflare-carrier-mailbox-send-accepted-read.mjs');
 const mailboxSendConfirmationReadScript = resolve(scriptDir, 'cloudflare-carrier-mailbox-send-confirmation-read.mjs');
 const directiveDeliveryReviewScript = resolve(scriptDir, 'cloudflare-carrier-directive-delivery-review.mjs');
@@ -43,6 +44,7 @@ const ROUTE_TO_WORKFLOW = new Map([
   ['review_recovery_posture', { name: 'operation_recovery', script: recoveryReadScript, flag: null }],
   ['review_site_continuity_reconciliation_execution', { name: 'focus_review', script: focusReviewScript, flag: null }],
   ['read_operation_evidence', { name: 'evidence', script: evidenceReadScript, flag: null }],
+  ['review_mailbox_outlook_draft_create', { name: 'mailbox_outlook_draft', script: mailboxOutlookDraftReadScript, flag: null }],
   ['review_mailbox_send_confirmation', { name: 'mailbox_send_confirmation', script: mailboxSendConfirmationReadScript, flag: null }],
   ['review_mailbox_send_acceptance', { name: 'mailbox_send_accepted', script: mailboxSendAcceptedReadScript, flag: null }],
   ['review_directive_delivery', { name: 'directive_delivery', script: directiveDeliveryReviewScript, flag: null }],
