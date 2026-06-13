@@ -29,6 +29,7 @@ const ACTION_TO_WORKFLOW = {
   bind_cloudflare_product_next_site_locally: { name: 'prepare_next_site_binding', script: continuityBindingsScript },
   refresh_site_continuity_loop: { name: 'refresh_site_continuity_loop', script: continuitySchedulerScript },
   load_or_create_membership: { name: 'site_membership_put', script: siteMembershipPutScript },
+  put_membership: { name: 'site_membership_put', script: siteMembershipPutScript },
   read_site_scope: { name: 'site_scope', script: siteScopeReadScript },
   read_membership_site: { name: 'site_scope', script: siteScopeReadScript },
   read_site_authority: { name: 'site_authority', script: siteAuthorityReadScript },
@@ -201,9 +202,9 @@ function buildWorkflowArgs(config, action, script) {
     appendAuthOptions(args, config);
     return args;
   }
-  if (action === 'load_or_create_membership') {
-    if (!config.memberPrincipalId) throw new Error('site_action_workflow_live_load_or_create_membership_requires_--member-principal-id');
-    if (!config.membershipRole) throw new Error('site_action_workflow_live_load_or_create_membership_requires_--membership-role_or_--role');
+  if (action === 'load_or_create_membership' || action === 'put_membership') {
+    if (!config.memberPrincipalId) throw new Error(`site_action_workflow_live_${action}_requires_--member-principal-id`);
+    if (!config.membershipRole) throw new Error(`site_action_workflow_live_${action}_requires_--membership-role_or_--role`);
     const args = [
       script,
       '--url', config.workerUrl,
