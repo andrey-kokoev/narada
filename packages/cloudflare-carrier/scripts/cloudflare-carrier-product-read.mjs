@@ -167,6 +167,7 @@ export function summarizeProductSurface(operation, body, options = {}) {
       operation,
       site_id: body?.site?.site_id ?? body?.site_id ?? status?.site_id ?? null,
       display_name: body?.site?.display_name ?? null,
+      active_operation_id: body?.focused_operation_lifecycle?.operation_id ?? body?.operation?.operation_id ?? null,
       health: status?.health ?? null,
       next_action: status?.next_action ?? null,
       continuity_state: status?.continuity_state ?? null,
@@ -339,6 +340,13 @@ export function formatProductSurfaceText(result) {
     }
     if (summary.next_action === 'load_or_create_membership' || summary.next_action === 'put_membership') {
       lines.push(`Site Membership Put: pnpm --filter @narada2/cloudflare-carrier product:site:membership:put:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --member-principal-id <principal-id> --role <role> --operator-session-file <operator-session-file>`);
+    }
+    if (
+      (typeof summary.next_action === 'string' && summary.next_action.startsWith('transfer_'))
+      || summary.next_action === 'continue_authority_transfer'
+      || summary.next_action === 'verify_full_cloudflare_authority'
+    ) {
+      lines.push(`Authority Transfer: pnpm --filter @narada2/cloudflare-carrier product:authority-transfer:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.active_operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
     }
     lines.push(`Continuity: state=${summary.continuity_state ?? 'unknown'} direction=${summary.continuity_direction_state ?? 'unknown'} loop=${summary.continuity_loop_state ?? 'unknown'}`);
     if (summary.continuity_direction_missing?.length > 0) lines.push(`Continuity Missing: ${summary.continuity_direction_missing.join(', ')}`);

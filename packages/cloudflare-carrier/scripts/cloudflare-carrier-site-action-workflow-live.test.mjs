@@ -430,6 +430,48 @@ test('runSiteActionWorkflowLive delegates inactive membership inspection to site
   assert.equal(result.delegated_action, 'inspect_inactive_membership');
   assert.equal(invocations[1][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-site-authority-read.mjs');
 });
+
+test('runSiteActionWorkflowLive delegates authority transfer continuation to authority transfer read', async () => {
+  const invocations = [];
+  const result = await runSiteActionWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_alpha',
+    expectedAction: 'continue_authority_transfer',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs' && invocations.length === 1) {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            site_id: 'site_alpha',
+            active_operation_id: 'operation_alpha',
+            next_action: 'continue_authority_transfer',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-authority-transfer-read.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.authority_transfer_read.v1',
+          status: 'ok',
+          summary: { site_id: 'site_alpha', operation_id: 'operation_alpha', transfer_readiness: 'incomplete' },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-product-read.mjs' && invocations.length === 3) {
+        return JSON.stringify({ schema: 'narada.cloudflare_carrier.product_read.v1', summary: { site_id: 'site_alpha', next_action: 'monitor_site' } });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'authority_transfer');
+  assert.equal(result.delegated_action, 'continue_authority_transfer');
+  assert.equal(invocations[1][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-authority-transfer-read.mjs');
+  assert.equal(invocations[1][invocations[1].indexOf('--operation-id') + 1], 'operation_alpha');
+});
 test('runSiteActionWorkflowLive delegates site scope read', async () => {
   const invocations = [];
   const result = await runSiteActionWorkflowLive({

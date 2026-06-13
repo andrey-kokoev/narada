@@ -20,6 +20,7 @@ const continuitySchedulerScript = resolve(scriptDir, 'cloudflare-site-continuity
 const siteAuthorityReadScript = resolve(scriptDir, 'cloudflare-carrier-site-authority-read.mjs');
 const siteScopeReadScript = resolve(scriptDir, 'cloudflare-carrier-site-scope-read.mjs');
 const siteMembershipPutScript = resolve(scriptDir, 'cloudflare-carrier-site-membership-put.mjs');
+const authorityTransferReadScript = resolve(scriptDir, 'cloudflare-carrier-authority-transfer-read.mjs');
 
 const ACTION_TO_WORKFLOW = {
   monitor_site: { name: 'monitor_site' },
@@ -37,6 +38,13 @@ const ACTION_TO_WORKFLOW = {
   inspect_inactive_membership: { name: 'site_authority', script: siteAuthorityReadScript },
 };
 
+function resolveActionWorkflow(action) {
+  if (typeof action === 'string' && (action.startsWith('transfer_') || action === 'continue_authority_transfer' || action === 'verify_full_cloudflare_authority')) {
+    return { name: 'authority_transfer', script: authorityTransferReadScript };
+  }
+  return ACTION_TO_WORKFLOW[action];
+}
+
 export function parseSiteActionWorkflowLiveArgs(argv = [], env = process.env) {
   const args = [...argv];
   const workerUrl = option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '';
@@ -47,6 +55,7 @@ export function parseSiteActionWorkflowLiveArgs(argv = [], env = process.env) {
   const memberPrincipalId = option(args, '--member-principal-id') ?? option(args, '--principal-id') ?? env.CLOUDFLARE_CARRIER_MEMBER_PRINCIPAL_ID ?? null;
   const membershipRole = option(args, '--membership-role') ?? option(args, '--role') ?? env.CLOUDFLARE_CARRIER_MEMBERSHIP_ROLE ?? null;
   const membershipStatus = option(args, '--membership-status') ?? option(args, '--status') ?? env.CLOUDFLARE_CARRIER_MEMBERSHIP_STATUS ?? null;
+  const operationId = option(args, '--carrier-operation') ?? option(args, '--operation-id') ?? env.CLOUDFLARE_CARRIER_OPERATION_ID ?? null;
   const auth = resolveAuth(args, env);
   const executeAcknowledged = flag(args, '--execute-site-action')
     || env.CLOUDFLARE_CARRIER_SITE_ACTION_EXECUTE_LIVE === '1';
@@ -67,6 +76,7 @@ export function parseSiteActionWorkflowLiveArgs(argv = [], env = process.env) {
     memberPrincipalId,
     membershipRole,
     membershipStatus,
+    operationId,
     auth,
     executeAcknowledged,
   };
@@ -91,7 +101,7 @@ export async function runSiteActionWorkflowLive(
     );
   }
 
-  const workflow = ACTION_TO_WORKFLOW[action];
+  const workflow = resolveActionWorkflow(action);
   if (!workflow) {
     throw new Error(`site_action_workflow_live_action_unsupported:${action}`);
   }
@@ -111,7 +121,10 @@ export async function runSiteActionWorkflowLive(
   }
 
   const delegatedResult = parseJsonStdout(
-    await runNodeScript(buildWorkflowArgs(config, action, workflow.script), { cwd: packageRoot }),
+    await runNodeScript(buildWorkflowArgs({
+      ...config,
+      operationId: config.operationId ?? readBefore.summary?.active_operation_id ?? null,
+    }, action, workflow.script), { cwd: packageRoot }),
     'site_action_workflow_delegate',
   );
 
@@ -223,6 +236,12 @@ function buildWorkflowArgs(config, action, script) {
   }
   if (action === 'read_site_authority' || action === 'focus_membership_authority' || action === 'inspect_inactive_membership') {
     const args = [script, '--url', config.workerUrl, '--site', config.siteId];
+    appendAuthOptions(args, config);
+    return args;
+  }
+  if (action.startsWith('transfer_') || action === 'continue_authority_transfer' || action === 'verify_full_cloudflare_authority') {
+    if (!config.operationId) throw new Error(`site_action_workflow_live_${action}_requires_--operation-id_or_active_operation_id`);
+    const args = [script, '--url', config.workerUrl, '--site', config.siteId, '--operation-id', config.operationId];
     appendAuthOptions(args, config);
     return args;
   }

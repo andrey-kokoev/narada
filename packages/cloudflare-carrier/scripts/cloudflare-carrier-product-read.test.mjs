@@ -1391,6 +1391,34 @@ test('formatProductSurfaceText emits site authority operator command for members
     },
   });
   assert.match(inactiveMembershipText, /Site Authority: pnpm --filter @narada2\/cloudflare-carrier product:site:authority:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+
+  const authorityTransferText = formatProductSurfaceText({
+    operation: 'site.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'site.read',
+      site_id: 'site_alpha',
+      display_name: 'Site Alpha',
+      active_operation_id: 'operation_alpha',
+      health: 'attention',
+      next_action: 'continue_authority_transfer',
+      continuity_state: 'packet_observed',
+      continuity_direction_state: 'bidirectional_packets_observed',
+      continuity_direction_missing: [],
+      continuity_loop_state: 'loop_report_observed',
+      continuity_reconciliation_execution_state: 'reconciliation_execution_observed',
+      continuity_reconciliation_execution_health: 'ready',
+      continuity_packet_count: 3,
+      continuity_loop_report_count: 20,
+      continuity_reconciliation_execution_count: 20,
+      persistence_state: 'durable',
+      recovery_state: 'reconstructable',
+      membership_count: 1,
+      session_count: 4,
+    },
+  });
+  assert.match(authorityTransferText, /Authority Transfer: pnpm --filter @narada2\/cloudflare-carrier product:authority-transfer:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
 
 test('formatProductSurfaceText emits site authority operator command for authority evidence routes', () => {
@@ -1512,6 +1540,7 @@ test('formatProductSurfaceText emits mailbox send review operator commands for o
 test('summarizeProductSurface summarizes site and operation reads', () => {
   assert.deepEqual(summarizeProductSurface('site.read', {
     site: { site_id: 'site_fixture', display_name: 'Fixture Site' },
+    focused_operation_lifecycle: { operation_id: 'operation_fixture' },
     site_product_status: {
       health: 'attention',
       next_action: 'return_local_windows_continuity_packet',
@@ -1533,6 +1562,7 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     operation: 'site.read',
     site_id: 'site_fixture',
     display_name: 'Fixture Site',
+    active_operation_id: 'operation_fixture',
     health: 'attention',
     next_action: 'return_local_windows_continuity_packet',
     continuity_state: 'packet_observed',
