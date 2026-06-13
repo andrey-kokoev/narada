@@ -30,8 +30,12 @@ test('summarizeMailboxOutlookDraft returns latest draft metadata', () => {
     drafts: [
       {
         draft_create_id: 'draft_live_1',
+        account_ref: 'help@example.com',
+        proposal_id: 'proposal_1',
         source_message_ref: 'message_1',
         subject: 'Draft subject',
+        body_preview: 'Draft preview text.',
+        draft_create_posture: 'cloudflare_created_outlook_draft_send_not_admitted',
         recorded_at: '2026-06-12T12:00:00.000Z',
       },
     ],
@@ -39,8 +43,12 @@ test('summarizeMailboxOutlookDraft returns latest draft metadata', () => {
 
   assert.equal(summary.draft_count, 1);
   assert.equal(summary.latest_draft_create_id, 'draft_live_1');
+  assert.equal(summary.latest_account_ref, 'help@example.com');
+  assert.equal(summary.latest_proposal_id, 'proposal_1');
   assert.equal(summary.latest_message_id, 'message_1');
   assert.equal(summary.latest_subject, 'Draft subject');
+  assert.equal(summary.latest_body_preview, 'Draft preview text.');
+  assert.equal(summary.latest_draft_create_posture, 'cloudflare_created_outlook_draft_send_not_admitted');
 });
 
 test('readMailboxOutlookDraft reads mailbox outlook draft list surface', async () => {
@@ -64,7 +72,14 @@ test('readMailboxOutlookDraft reads mailbox outlook draft list surface', async (
         mailbox_outlook_draft_create_admission: 'admitted',
         mailbox_send_admission: 'not_admitted',
         mailbox_mutation_admission: 'not_admitted',
-        drafts: [{ draft_create_id: 'draft_live_1', source_message_ref: 'message_1' }],
+        drafts: [{
+          draft_create_id: 'draft_live_1',
+          account_ref: 'help@example.com',
+          proposal_id: 'proposal_1',
+          source_message_ref: 'message_1',
+          body_preview: 'Draft preview text.',
+          draft_create_posture: 'cloudflare_created_outlook_draft_send_not_admitted',
+        }],
       }),
     };
   });
@@ -87,8 +102,12 @@ test('formatMailboxOutlookDraftReadText renders mailbox outlook draft summary', 
       mailbox_mutation_admission: 'not_admitted',
       authority_partition: 'mailbox_outlook_draft_create_cloudflare_owned_send_and_other_mutation_not_admitted',
       latest_draft_create_id: 'draft_live_1',
+      latest_account_ref: 'help@example.com',
+      latest_proposal_id: 'proposal_1',
       latest_message_id: 'message_1',
       latest_subject: 'Draft subject',
+      latest_body_preview: 'Draft preview text.',
+      latest_draft_create_posture: 'cloudflare_created_outlook_draft_send_not_admitted',
       latest_recorded_at: '2026-06-12T12:00:00.000Z',
     },
   });
@@ -96,5 +115,7 @@ test('formatMailboxOutlookDraftReadText renders mailbox outlook draft summary', 
   assert.match(text, /Mailbox Outlook Draft Review: ok/);
   assert.match(text, /Outlook Drafts: count=1 authority=cloudflare_graph_outlook_draft_create admission=admitted/);
   assert.match(text, /Admissions: send=not_admitted mutation=not_admitted/);
-  assert.match(text, /Latest Draft: id=draft_live_1 message=message_1 subject=Draft subject/);
+  assert.match(text, /Current Posture: cloudflare_created_outlook_draft_send_not_admitted/);
+  assert.match(text, /Latest Draft: id=draft_live_1 proposal=proposal_1 account=help@example.com message=message_1 subject=Draft subject/);
+  assert.match(text, /Body Preview: Draft preview text\./);
 });

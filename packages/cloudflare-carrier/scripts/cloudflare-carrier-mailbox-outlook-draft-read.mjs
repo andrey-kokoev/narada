@@ -35,6 +35,8 @@ export function summarizeMailboxOutlookDraft(body = {}) {
     mailbox_mutation_admission: body?.mailbox_mutation_admission ?? null,
     authority_partition: body?.authority_partition ?? null,
     latest_draft_create_id: latest?.draft_create_id ?? null,
+    latest_account_ref: latest?.account_ref ?? latestRecord?.account_ref ?? null,
+    latest_proposal_id: latest?.proposal_id ?? latestRecord?.proposal_id ?? latestProposal?.proposal_id ?? null,
     latest_message_id:
       latest?.message_id ??
       latest?.source_message_ref ??
@@ -45,6 +47,16 @@ export function summarizeMailboxOutlookDraft(body = {}) {
       latest?.subject ??
       latestRecord?.subject ??
       latestProposal?.subject ??
+      null,
+    latest_body_preview:
+      latest?.body_preview ??
+      latestRecord?.body_preview ??
+      latestRecord?.draft?.body_preview ??
+      null,
+    latest_draft_create_posture:
+      latest?.draft_create_posture ??
+      latestRecord?.draft_create_posture ??
+      latestRecord?.draft?.draft_create_posture ??
       null,
     latest_recorded_at: latest?.recorded_at ?? latest?.created_at ?? null,
   };
@@ -65,8 +77,20 @@ export function formatMailboxOutlookDraftReadText(result) {
   if (summary.authority_partition) {
     lines.push(`Authority Partition: ${summary.authority_partition}`);
   }
+  if (summary.latest_draft_create_posture) {
+    lines.push(`Current Posture: ${summary.latest_draft_create_posture}`);
+  }
   if (summary.latest_draft_create_id || summary.latest_message_id || summary.latest_subject) {
-    lines.push(`Latest Draft: id=${summary.latest_draft_create_id ?? 'none'} message=${summary.latest_message_id ?? 'none'} subject=${summary.latest_subject ?? 'none'}`);
+    lines.push(
+      `Latest Draft: id=${summary.latest_draft_create_id ?? 'none'}`
+      + ` proposal=${summary.latest_proposal_id ?? 'none'}`
+      + ` account=${summary.latest_account_ref ?? 'none'}`
+      + ` message=${summary.latest_message_id ?? 'none'}`
+      + ` subject=${summary.latest_subject ?? 'none'}`,
+    );
+  }
+  if (summary.latest_body_preview) {
+    lines.push(`Body Preview: ${summary.latest_body_preview}`);
   }
   if (summary.latest_recorded_at) {
     lines.push(`Latest Recorded: ${summary.latest_recorded_at}`);
