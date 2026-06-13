@@ -33,6 +33,7 @@ const repositoryPublicationRequestReviewScript = resolve(scriptDir, 'cloudflare-
 const siteFileChangeProposalReviewScript = resolve(scriptDir, 'cloudflare-carrier-site-file-change-proposal-review.mjs');
 const siteFileMaterializationReadScript = resolve(scriptDir, 'cloudflare-carrier-site-file-materialization-read.mjs');
 const taskLifecycleReadScript = resolve(scriptDir, 'cloudflare-carrier-task-lifecycle-read.mjs');
+const taskLifecycleNextWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-task-lifecycle-next-workflow-live.mjs');
 const taskLifecycleCreateFromDirectiveIntentScript = resolve(scriptDir, 'cloudflare-carrier-task-lifecycle-create-from-directive-intent.mjs');
 const residentDispatchWindowsFallbackRequestScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-windows-fallback-request.mjs');
 const residentDispatchWindowsFallbackEvidenceScript = resolve(scriptDir, 'cloudflare-carrier-resident-dispatch-windows-fallback-evidence.mjs');
@@ -79,8 +80,8 @@ const ROUTE_TO_WORKFLOW = new Map([
   ['review_site_file_change_proposal', { name: 'site_file_change_proposal', script: siteFileChangeProposalReviewScript, flag: null }],
   ['review_site_file_materialization', { name: 'site_file_materialization_review', script: siteFileMaterializationReadScript, flag: null }],
   ['create_task_from_directive_intent', { name: 'task_lifecycle_create_from_directive_intent', script: taskLifecycleCreateFromDirectiveIntentScript, flag: null }],
-  ['focus_open_task', { name: 'task_lifecycle_review', script: taskLifecycleReadScript, flag: null }],
-  ['focus_lifecycle_open_task', { name: 'task_lifecycle_review', script: taskLifecycleReadScript, flag: null }],
+  ['focus_open_task', { name: 'task_lifecycle_next', script: taskLifecycleNextWorkflowScript, flag: '--execute-task-lifecycle-next' }],
+  ['focus_lifecycle_open_task', { name: 'task_lifecycle_next', script: taskLifecycleNextWorkflowScript, flag: '--execute-task-lifecycle-next' }],
   ['focus_lifecycle_start_session', { name: 'session', script: sessionWorkflowScript, flag: '--execute-operation-session' }],
   ['focus_lifecycle_continuity', { name: 'continuity', script: continuityWorkflowScript, flag: '--execute-operation-continuity' }],
   ['focus_lifecycle_continuity_loop_report', { name: 'continuity', script: continuityWorkflowScript, flag: '--execute-operation-continuity' }],
@@ -549,6 +550,12 @@ function buildWorkflowArgs(config, workflow, operationId, readSummary = {}) {
     if (!carrierSessionId) throw new Error('operation_next_workflow_task_lifecycle_requires_active_session_id');
     args.push('--carrier-session-id', carrierSessionId);
   }
+  if (workflow.name === 'task_lifecycle_next') {
+    const taskId = resolveTaskLifecycleTaskId(readSummary);
+    if (!taskId) throw new Error('operation_next_workflow_task_lifecycle_next_requires_task_id');
+    args.push('--task-id', taskId);
+    if (config.agentId) args.push('--agent-id', config.agentId);
+  }
   if (workflow.name === 'focus_review') {
     const focusKind = typeof readSummary.workflow_focus_kind === 'string' && readSummary.workflow_focus_kind.trim()
       ? readSummary.workflow_focus_kind.trim()
@@ -677,6 +684,21 @@ function shouldRetargetToPostureTarget(summary = {}, selectedOperationId) {
     && typeof summary?.posture_target === 'string'
     && summary.posture_target.length > 0
     && summary.posture_target !== selectedOperationId;
+}
+
+function resolveTaskLifecycleTaskId(readSummary = {}) {
+  const candidates = [
+    readSummary.task_id,
+    readSummary.route_target,
+    readSummary.workflow_focus_ref,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue;
+    const value = candidate.trim();
+    if (!value) continue;
+    if (value.startsWith('task_') || value.startsWith('cloudflare-task-lifecycle-')) return value;
+  }
+  return '';
 }
 
 function option(args, name) {

@@ -397,7 +397,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       task_count: 1,
     },
   });
-  assert.match(operationTaskFocusText, /Task Lifecycle Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id task_123 --operator-session-file <operator-session-file>/);
+  assert.match(operationTaskFocusText, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id task_123 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
 
   const siteReadText = formatProductSurfaceText({
     operation: 'site.read',

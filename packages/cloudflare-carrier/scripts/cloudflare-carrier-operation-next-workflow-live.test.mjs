@@ -179,11 +179,12 @@ test('runOperationNextWorkflowLive delegates authority path evidence route to si
   assert.ok(invocations.some((args) => /cloudflare-carrier-site-authority-read\.mjs$/.test(args[0])));
 });
 
-test('runOperationNextWorkflowLive delegates task-focused routes to task lifecycle review', async () => {
+test('runOperationNextWorkflowLive advances open-task routes through task lifecycle next workflow', async () => {
   const invocations = [];
   const result = await runOperationNextWorkflowLive({
     workerUrl: 'https://carrier.example.test',
     siteId: 'site_alpha',
+    agentId: 'agent.operator',
     auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-file' },
   }, {
     runNodeScript: async (args) => {
@@ -212,12 +213,21 @@ test('runOperationNextWorkflowLive delegates task-focused routes to task lifecyc
           },
         });
       }
-      return JSON.stringify({ schema: 'narada.cloudflare_carrier.task_lifecycle_read.v1', status: 'ok', summary: { task_count: 1 } });
+      return JSON.stringify({
+        schema: 'narada.cloudflare_carrier.task_lifecycle_next_workflow_live.v1',
+        status: 'ok',
+        selected_step: 'claim',
+        read_after_next: { task_id: 'task_123', task_status: 'claimed' },
+      });
     },
   });
 
-  assert.equal(result.delegated_workflow, 'task_lifecycle_review');
-  assert.ok(invocations.some((args) => /cloudflare-carrier-task-lifecycle-read\.mjs$/.test(args[0])));
+  assert.equal(result.delegated_workflow, 'task_lifecycle_next');
+  assert.ok(invocations.some((args) => /cloudflare-carrier-task-lifecycle-next-workflow-live\.mjs$/.test(args[0])));
+  const workflowArgs = invocations.find((args) => /cloudflare-carrier-task-lifecycle-next-workflow-live\.mjs$/.test(args[0]));
+  assert.equal(workflowArgs[workflowArgs.indexOf('--task-id') + 1], 'task_123');
+  assert.equal(workflowArgs[workflowArgs.indexOf('--agent-id') + 1], 'agent.operator');
+  assert.ok(workflowArgs.includes('--execute-task-lifecycle-next'));
 });
 
 test('parseOperationNextWorkflowLiveArgs supports operator session auth', () => {
