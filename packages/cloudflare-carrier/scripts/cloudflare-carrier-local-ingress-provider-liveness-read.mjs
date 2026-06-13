@@ -4,11 +4,25 @@ import { fileURLToPath } from 'node:url';
 import { parseProductReadArgs, readProductSurface } from './cloudflare-carrier-product-read.mjs';
 
 export function parseLocalIngressProviderLivenessReadArgs(argv = [], env = process.env) {
-  return parseProductReadArgs(['--operation', 'local_ingress.provider_heartbeat.list', ...argv], env);
+  const args = [...argv];
+  const parsed = parseProductReadArgs(['--operation', 'local_ingress.provider_heartbeat.list', ...argv], env);
+  return {
+    ...parsed,
+    focusHeartbeatId: normalizeOptionalString(
+      option(args, '--local-ingress-provider-heartbeat-id')
+      ?? option(args, '--focus-ref')
+      ?? env.CLOUDFLARE_LOCAL_INGRESS_PROVIDER_HEARTBEAT_ID
+      ?? null,
+    ),
+  };
 }
 
 export async function readLocalIngressProviderLiveness(config, fetchImpl = fetch) {
   const product = await readProductSurface(config, fetchImpl);
+  const heartbeats = listLocalIngressProviderHeartbeats(product.response);
+  if (config.focusHeartbeatId && !heartbeats.some((entry) => entry?.local_ingress_provider_heartbeat_id === config.focusHeartbeatId)) {
+    throw new Error(`local_ingress_provider_liveness_read_focus_not_found:${config.focusHeartbeatId}`);
+  }
   return {
     schema: 'narada.cloudflare_carrier.local_ingress_provider_liveness_read.v1',
     status: 'ok',
@@ -16,19 +30,24 @@ export async function readLocalIngressProviderLiveness(config, fetchImpl = fetch
     auth_source: product.auth_source,
     operation: product.operation,
     params: product.params,
-    summary: summarizeLocalIngressProviderLiveness(product.response),
+    summary: summarizeLocalIngressProviderLiveness(product.response, { focusHeartbeatId: config.focusHeartbeatId }),
     response: product.response,
   };
 }
 
-export function summarizeLocalIngressProviderLiveness(body = {}) {
+export function summarizeLocalIngressProviderLiveness(body = {}, options = {}) {
   const liveness = body?.local_ingress_provider_liveness ?? {};
-  const heartbeats = Array.isArray(body?.local_ingress_provider_heartbeats) ? body.local_ingress_provider_heartbeats : [];
-  const latestHeartbeat = heartbeats[0] ?? null;
+  const heartbeats = listLocalIngressProviderHeartbeats(body);
+  const focusHeartbeatId = options?.focusHeartbeatId ?? null;
+  const focusedHeartbeats = focusHeartbeatId
+    ? heartbeats.filter((entry) => entry?.local_ingress_provider_heartbeat_id === focusHeartbeatId)
+    : heartbeats;
+  const latestHeartbeat = focusedHeartbeats[0] ?? null;
   const schedulerPosture = liveness?.scheduler_posture ?? {};
   return {
     site_id: body?.site_id ?? null,
-    heartbeat_count: body?.local_ingress_provider_heartbeat_count ?? heartbeats.length,
+    heartbeat_count: focusedHeartbeats.length,
+    focused_local_ingress_provider_heartbeat_id: focusHeartbeatId ? (latestHeartbeat?.local_ingress_provider_heartbeat_id ?? focusHeartbeatId) : null,
     provider_liveness_authority: body?.provider_liveness_authority ?? null,
     state: liveness?.state ?? null,
     next_action: liveness?.next_action ?? null,
@@ -50,6 +69,8 @@ export function summarizeLocalIngressProviderLiveness(body = {}) {
 
 export function formatLocalIngressProviderLivenessReadText(result) {
   const summary = result?.summary ?? {};
+  const heartbeatLabel = summary.focused_local_ingress_provider_heartbeat_id ? 'focused' : 'latest';
+  const timingLabel = summary.focused_local_ingress_provider_heartbeat_id ? 'Focused Timing' : 'Latest Timing';
   const lines = [
     'Local Ingress Provider Liveness: ok',
     `Worker: ${result?.worker_url ?? 'unknown'}`,
@@ -58,15 +79,30 @@ export function formatLocalIngressProviderLivenessReadText(result) {
     `Liveness: state=${summary.state ?? 'unknown'} next=${summary.next_action ?? 'none'} authority=${summary.provider_liveness_authority ?? 'unknown'}`,
     `Scheduler: state=${summary.scheduler_state ?? 'unknown'} task=${summary.scheduler_task_name ?? 'none'} interval=${summary.scheduler_interval_minutes ?? 'unknown'}`,
     `Provider: authority=${summary.provider_authority ?? 'unknown'} id=${summary.latest_provider_id ?? 'unknown'} embodiment=${summary.latest_provider_embodiment ?? 'unknown'} trigger=${summary.latest_refresh_trigger ?? 'unknown'}`,
-    `Heartbeats: count=${summary.heartbeat_count ?? 0} latest=${summary.latest_heartbeat_id ?? 'none'} status=${summary.latest_status ?? 'unknown'}`,
+    `Heartbeats: count=${summary.heartbeat_count ?? 0} ${heartbeatLabel}=${summary.latest_heartbeat_id ?? 'none'} status=${summary.latest_status ?? 'unknown'}`,
   ];
   if (summary.latest_generated_at || summary.latest_last_run_at) {
-    lines.push(`Latest Timing: generated=${summary.latest_generated_at ?? 'unknown'} last_run=${summary.latest_last_run_at ?? 'unknown'}`);
+    lines.push(`${timingLabel}: generated=${summary.latest_generated_at ?? 'unknown'} last_run=${summary.latest_last_run_at ?? 'unknown'}`);
   }
   if (summary.direct_cloudflare_filesystem_mutation_admission || summary.repository_publication_admission) {
     lines.push(`Admissions: direct_cloudflare_filesystem_mutation=${summary.direct_cloudflare_filesystem_mutation_admission ?? 'unknown'} repository_publication=${summary.repository_publication_admission ?? 'unknown'}`);
   }
   return `${lines.join('\n')}\n`;
+}
+
+function listLocalIngressProviderHeartbeats(body = {}) {
+  if (Array.isArray(body?.local_ingress_provider_heartbeats)) return body.local_ingress_provider_heartbeats;
+  return [];
+}
+
+function option(args, name) {
+  const index = args.indexOf(name);
+  return index >= 0 ? args[index + 1] : null;
+}
+
+function normalizeOptionalString(value) {
+  const normalized = String(value ?? '').trim();
+  return normalized || null;
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

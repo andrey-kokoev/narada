@@ -12,6 +12,7 @@ test('parseRepositoryPublicationProviderLivenessReadArgs reuses direct heartbeat
   const parsed = parseRepositoryPublicationProviderLivenessReadArgs([
     '--url', 'https://carrier.example.test',
     '--site', 'site_alpha',
+    '--focus-ref', 'heartbeat_repo_alpha',
     '--operator-session-cookie', 'operator-session-cookie',
     '--format', 'text',
   ], {});
@@ -19,6 +20,7 @@ test('parseRepositoryPublicationProviderLivenessReadArgs reuses direct heartbeat
   assert.equal(parsed.workerUrl, 'https://carrier.example.test');
   assert.equal(parsed.operation, 'repository_publication.provider_heartbeat.list');
   assert.equal(parsed.params.site_id, 'site_alpha');
+  assert.equal(parsed.focusHeartbeatId, 'heartbeat_repo_alpha');
   assert.equal(parsed.format, 'text');
   assert.equal(parsed.auth.kind, 'operator_session');
 });
@@ -53,6 +55,21 @@ test('summarizeRepositoryPublicationProviderLiveness lifts latest heartbeat and 
   assert.equal(summary.scheduler_task_name, '\\Narada\\CloudflareProviderLivenessRefresh');
   assert.equal(summary.latest_heartbeat_id, 'heartbeat_repo_alpha');
   assert.equal(summary.latest_status, 'completed_and_recorded');
+});
+
+test('summarizeRepositoryPublicationProviderLiveness narrows to a focused heartbeat', () => {
+  const summary = summarizeRepositoryPublicationProviderLiveness({
+    site_id: 'site_alpha',
+    repository_publication_provider_heartbeat_count: 2,
+    repository_publication_provider_heartbeats: [
+      { repository_publication_provider_heartbeat_id: 'heartbeat_repo_beta', status: 'completed_and_recorded' },
+      { repository_publication_provider_heartbeat_id: 'heartbeat_repo_alpha', status: 'completed_and_recorded' },
+    ],
+  }, { focusHeartbeatId: 'heartbeat_repo_alpha' });
+
+  assert.equal(summary.heartbeat_count, 1);
+  assert.equal(summary.focused_repository_publication_provider_heartbeat_id, 'heartbeat_repo_alpha');
+  assert.equal(summary.latest_heartbeat_id, 'heartbeat_repo_alpha');
 });
 
 test('readRepositoryPublicationProviderLiveness returns summarized provider liveness', async () => {
@@ -93,6 +110,26 @@ test('readRepositoryPublicationProviderLiveness returns summarized provider live
   assert.equal(result.summary.latest_heartbeat_id, 'heartbeat_repo_alpha');
 });
 
+test('readRepositoryPublicationProviderLiveness rejects missing focused heartbeat ids', async () => {
+  await assert.rejects(
+    () => readRepositoryPublicationProviderLiveness({
+      workerUrl: 'https://carrier.example.test',
+      operation: 'repository_publication.provider_heartbeat.list',
+      params: { site_id: 'site_alpha' },
+      auth: { kind: 'operator_session', value: 'cookie-value', source: 'operator-session-file' },
+      focusHeartbeatId: 'heartbeat_repo_missing',
+    }, async () => ({
+      status: 200,
+      ok: true,
+      text: async () => JSON.stringify({
+        site_id: 'site_alpha',
+        repository_publication_provider_heartbeats: [{ repository_publication_provider_heartbeat_id: 'heartbeat_repo_alpha', status: 'completed_and_recorded' }],
+      }),
+    })),
+    /repository_publication_provider_liveness_read_focus_not_found:heartbeat_repo_missing/,
+  );
+});
+
 test('formatRepositoryPublicationProviderLivenessReadText prints provider liveness summary', () => {
   const text = formatRepositoryPublicationProviderLivenessReadText({
     worker_url: 'https://carrier.example.test',
@@ -121,4 +158,23 @@ test('formatRepositoryPublicationProviderLivenessReadText prints provider livene
   assert.match(text, /Liveness: state=fresh next=monitor_repository_publication_provider_liveness authority=cloudflare_repository_publication_provider_liveness_store/);
   assert.match(text, /Scheduler: state=fresh_from_scheduled_refresh task=\\Narada\\CloudflareProviderLivenessRefresh interval=2/);
   assert.match(text, /Heartbeats: count=1 latest=heartbeat_repo_alpha status=completed_and_recorded/);
+});
+
+test('formatRepositoryPublicationProviderLivenessReadText uses focused labels for focused reads', () => {
+  const text = formatRepositoryPublicationProviderLivenessReadText({
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      heartbeat_count: 1,
+      focused_repository_publication_provider_heartbeat_id: 'heartbeat_repo_alpha',
+      latest_heartbeat_id: 'heartbeat_repo_alpha',
+      latest_status: 'completed_and_recorded',
+      latest_generated_at: '2026-06-13T03:46:01.000Z',
+      latest_last_run_at: '2026-06-13T03:46:00.000Z',
+    },
+  });
+
+  assert.match(text, /Heartbeats: count=1 focused=heartbeat_repo_alpha status=completed_and_recorded/);
+  assert.match(text, /Focused Timing: generated=2026-06-13T03:46:01.000Z last_run=2026-06-13T03:46:00.000Z/);
 });
