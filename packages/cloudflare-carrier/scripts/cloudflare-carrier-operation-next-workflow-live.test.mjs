@@ -1767,6 +1767,61 @@ test('runOperationNextWorkflowLive delegates recovery review route to operation 
   assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-operation-recovery-read.mjs');
 });
 
+test('runOperationNextWorkflowLive delegates persistence review route to operation persistence read', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_alpha',
+    expectedListRouteAction: null,
+    expectedOperationId: null,
+    auth: { kind: 'operator_session', value: 'operator_session=test', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              next_operation_id: 'operation_site_read',
+              route_next_action: 'focus_next_operation',
+              next_action: 'use_focused_operation',
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            operation_id: 'operation_site_read',
+            workflow_next_action: 'review_persistence_posture',
+            workflow_reason: 'persistence_posture_needs_attention',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-operation-persistence-read.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.operation_persistence_read.v1',
+          status: 'ok',
+          summary: {
+            operation_id: 'operation_site_read',
+            persistence_state: 'degraded',
+            persistence_active_boundary_count: 10,
+          },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'operation_persistence');
+  assert.equal(result.delegated_route_action, 'review_persistence_posture');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.operation_persistence_read.v1');
+  assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-operation-persistence-read.mjs');
+});
+
 test('runOperationNextWorkflowLive advances recovery review into local resident carrier bridge when recovery names that admitted next action', async () => {
   const invocations = [];
   const result = await runOperationNextWorkflowLive({

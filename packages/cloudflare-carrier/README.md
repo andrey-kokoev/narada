@@ -398,6 +398,14 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:recovery:text -- --u
 
 `product:operation:recovery:text` reuses `operation.read`, but condenses the recovery posture the operator actually needs: recovery state, recovery boundaries, recovery gaps, the current lifecycle/evidence next action, and the explicit `product:operation:evidence:text` follow-on command.
 
+Run the focused operation persistence read when the workflow route is `review_persistence_posture` and the operator needs the current persistence boundary coverage without parsing the full raw `operation.read` payload:
+
+```powershell
+pnpm --filter @narada2/cloudflare-carrier product:operation:persistence:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
+```
+
+`product:operation:persistence:text` reuses `operation.read`, but condenses the persistence posture the operator actually needs: durability state, active and durable boundary counts, missing boundaries, warnings, and the explicit `product:operation:recovery:text` follow-on command.
+
 When the focused operation has a reviewable focus item, the operator can record that review explicitly through the governed Cloudflare review lane:
 
 ```powershell

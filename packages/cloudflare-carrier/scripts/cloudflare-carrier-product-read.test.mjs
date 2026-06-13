@@ -647,6 +647,29 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   });
   assert.match(operationReadRecoveryText, /Recovery Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_recovery --operator-session-file <operator-session-file>/);
 
+  const operationReadPersistenceText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_persistence',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'inhabited',
+      health: 'incomplete',
+      next_action: 'carrier_evidence',
+      workflow_next_action: 'review_persistence_posture',
+      workflow_reason: 'persistence_posture_needs_attention',
+      session_count: 0,
+      task_count: 0,
+      persistence_state: 'degraded',
+      recovery_state: 'reconstructable',
+    },
+  });
+  assert.match(operationReadPersistenceText, /Persistence Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_persistence --operator-session-file <operator-session-file>/);
+
   const operationReadLocalResidentBridgeText = formatProductSurfaceText({
     operation: 'operation.read',
     worker_url: 'https://carrier.example.test',

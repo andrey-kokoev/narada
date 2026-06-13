@@ -13,6 +13,7 @@ const scriptDir = dirname(scriptPath);
 const packageRoot = resolve(scriptDir, '..');
 const productReadScript = resolve(scriptDir, 'cloudflare-carrier-product-read.mjs');
 const evidenceReadScript = resolve(scriptDir, 'cloudflare-carrier-operation-evidence-read.mjs');
+const persistenceReadScript = resolve(scriptDir, 'cloudflare-carrier-operation-persistence-read.mjs');
 const recoveryReadScript = resolve(scriptDir, 'cloudflare-carrier-operation-recovery-read.mjs');
 const mailboxSendAcceptedReadScript = resolve(scriptDir, 'cloudflare-carrier-mailbox-send-accepted-read.mjs');
 const mailboxSendConfirmationReadScript = resolve(scriptDir, 'cloudflare-carrier-mailbox-send-confirmation-read.mjs');
@@ -34,6 +35,7 @@ const continuityWorkflowScript = resolve(scriptDir, 'cloudflare-carrier-operatio
 const CHILD_STDIO_MAX_BUFFER = 64 * 1024 * 1024;
 
 const ROUTE_TO_WORKFLOW = new Map([
+  ['review_persistence_posture', { name: 'operation_persistence', script: persistenceReadScript, flag: null }],
   ['review_recovery_posture', { name: 'operation_recovery', script: recoveryReadScript, flag: null }],
   ['review_site_continuity_reconciliation_execution', { name: 'focus_review', script: focusReviewScript, flag: null }],
   ['read_operation_evidence', { name: 'evidence', script: evidenceReadScript, flag: null }],
