@@ -27,19 +27,22 @@ test('summarizeMailboxSendConfirmation lifts latest confirmation details', () =>
   const summary = summarizeMailboxSendConfirmation({
     site_id: 'site_alpha',
     mailbox_send_confirmation_authority: 'cloudflare_graph_sent_items_reconciliation',
-    mailbox_send_delivery_confirmation_admission: 'admitted',
+    delivery_confirmation_admission: 'admitted',
     mailbox_mutation_admission: 'not_admitted',
     confirmations: [{
       send_confirmation_id: 'mailbox_send_confirmation_alpha',
-      message_id: 'message_alpha',
-      subject: 'Confirmed subject',
+      sent_message_ref: 'message_alpha',
+      sent_subject: 'Confirmed subject',
       recorded_at: '2026-06-13T03:59:01.000Z',
     }],
   });
 
   assert.equal(summary.confirmation_count, 1);
   assert.equal(summary.mailbox_send_confirmation_authority, 'cloudflare_graph_sent_items_reconciliation');
+  assert.equal(summary.mailbox_send_delivery_confirmation_admission, 'admitted');
   assert.equal(summary.latest_send_confirmation_id, 'mailbox_send_confirmation_alpha');
+  assert.equal(summary.latest_message_id, 'message_alpha');
+  assert.equal(summary.latest_subject, 'Confirmed subject');
 });
 
 test('readMailboxSendConfirmation returns summarized mailbox send confirmation', async () => {
@@ -54,21 +57,22 @@ test('readMailboxSendConfirmation returns summarized mailbox send confirmation',
     text: async () => JSON.stringify({
       site_id: 'site_alpha',
       mailbox_send_confirmation_authority: 'cloudflare_graph_sent_items_reconciliation',
-      mailbox_send_delivery_confirmation_admission: 'admitted',
+      delivery_confirmation_admission: 'admitted',
       mailbox_mutation_admission: 'not_admitted',
-      confirmations: [{ send_confirmation_id: 'mailbox_send_confirmation_alpha', message_id: 'message_alpha', subject: 'Confirmed subject' }],
+      confirmations: [{ send_confirmation_id: 'mailbox_send_confirmation_alpha', sent_message_ref: 'message_alpha', sent_subject: 'Confirmed subject' }],
     }),
     json: async () => ({
       site_id: 'site_alpha',
       mailbox_send_confirmation_authority: 'cloudflare_graph_sent_items_reconciliation',
-      mailbox_send_delivery_confirmation_admission: 'admitted',
+      delivery_confirmation_admission: 'admitted',
       mailbox_mutation_admission: 'not_admitted',
-      confirmations: [{ send_confirmation_id: 'mailbox_send_confirmation_alpha', message_id: 'message_alpha', subject: 'Confirmed subject' }],
+      confirmations: [{ send_confirmation_id: 'mailbox_send_confirmation_alpha', sent_message_ref: 'message_alpha', sent_subject: 'Confirmed subject' }],
     }),
   }));
 
   assert.equal(result.schema, 'narada.cloudflare_carrier.mailbox_send_confirmation_read.v1');
   assert.equal(result.summary.latest_send_confirmation_id, 'mailbox_send_confirmation_alpha');
+  assert.equal(result.summary.mailbox_send_delivery_confirmation_admission, 'admitted');
 });
 
 test('formatMailboxSendConfirmationReadText prints mailbox send confirmation summary', () => {

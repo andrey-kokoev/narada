@@ -28,11 +28,25 @@ export function summarizeMailboxSendConfirmation(body = {}) {
     site_id: body?.site_id ?? null,
     confirmation_count: confirmations.length,
     mailbox_send_confirmation_authority: body?.mailbox_send_confirmation_authority ?? null,
-    mailbox_send_delivery_confirmation_admission: body?.mailbox_send_delivery_confirmation_admission ?? null,
+    mailbox_send_delivery_confirmation_admission:
+      body?.mailbox_send_delivery_confirmation_admission
+      ?? body?.delivery_confirmation_admission
+      ?? latest?.delivery_confirmation_admission
+      ?? latest?.record?.delivery_confirmation_admission
+      ?? null,
     mailbox_mutation_admission: body?.mailbox_mutation_admission ?? null,
     latest_send_confirmation_id: latest?.send_confirmation_id ?? null,
-    latest_message_id: latest?.message_id ?? null,
-    latest_subject: latest?.subject ?? null,
+    latest_message_id:
+      latest?.message_id
+      ?? latest?.sent_message_ref
+      ?? latest?.record?.sent_message_ref
+      ?? null,
+    latest_subject:
+      latest?.subject
+      ?? latest?.sent_subject
+      ?? latest?.record?.confirmation_request?.sent_subject
+      ?? latest?.record?.graph_response?.subject
+      ?? null,
     latest_recorded_at: latest?.recorded_at ?? latest?.generated_at ?? null,
   };
 }
