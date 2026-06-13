@@ -19,6 +19,7 @@ const continuityBindingsScript = resolve(scriptDir, 'cloudflare-site-continuity-
 const continuitySchedulerScript = resolve(scriptDir, 'cloudflare-site-continuity-scheduler.mjs');
 const siteAuthorityReadScript = resolve(scriptDir, 'cloudflare-carrier-site-authority-read.mjs');
 const siteScopeReadScript = resolve(scriptDir, 'cloudflare-carrier-site-scope-read.mjs');
+const siteMembershipPutScript = resolve(scriptDir, 'cloudflare-carrier-site-membership-put.mjs');
 
 const ACTION_TO_WORKFLOW = {
   monitor_site: { name: 'monitor_site' },
@@ -27,6 +28,7 @@ const ACTION_TO_WORKFLOW = {
   publish_cloudflare_continuity_packet: { name: 'publish_continuity_packet', script: siteContinuityPublishScript },
   bind_cloudflare_product_next_site_locally: { name: 'prepare_next_site_binding', script: continuityBindingsScript },
   refresh_site_continuity_loop: { name: 'refresh_site_continuity_loop', script: continuitySchedulerScript },
+  load_or_create_membership: { name: 'site_membership_put', script: siteMembershipPutScript },
   read_site_scope: { name: 'site_scope', script: siteScopeReadScript },
   read_membership_site: { name: 'site_scope', script: siteScopeReadScript },
   read_site_authority: { name: 'site_authority', script: siteAuthorityReadScript },
@@ -41,6 +43,9 @@ export function parseSiteActionWorkflowLiveArgs(argv = [], env = process.env) {
   const expectedAction = option(args, '--expected-action') ?? env.CLOUDFLARE_CARRIER_SITE_ACTION_EXPECTED_ACTION ?? null;
   const localSiteRef = option(args, '--local-site-ref') ?? env.CLOUDFLARE_CARRIER_LOCAL_SITE_REF ?? null;
   const cloudflareSiteRef = option(args, '--cloudflare-site-ref') ?? env.CLOUDFLARE_CARRIER_CLOUDFLARE_SITE_REF ?? null;
+  const memberPrincipalId = option(args, '--member-principal-id') ?? option(args, '--principal-id') ?? env.CLOUDFLARE_CARRIER_MEMBER_PRINCIPAL_ID ?? null;
+  const membershipRole = option(args, '--membership-role') ?? option(args, '--role') ?? env.CLOUDFLARE_CARRIER_MEMBERSHIP_ROLE ?? null;
+  const membershipStatus = option(args, '--membership-status') ?? option(args, '--status') ?? env.CLOUDFLARE_CARRIER_MEMBERSHIP_STATUS ?? null;
   const auth = resolveAuth(args, env);
   const executeAcknowledged = flag(args, '--execute-site-action')
     || env.CLOUDFLARE_CARRIER_SITE_ACTION_EXECUTE_LIVE === '1';
@@ -58,6 +63,9 @@ export function parseSiteActionWorkflowLiveArgs(argv = [], env = process.env) {
     expectedAction,
     localSiteRef,
     cloudflareSiteRef,
+    memberPrincipalId,
+    membershipRole,
+    membershipStatus,
     auth,
     executeAcknowledged,
   };
@@ -190,6 +198,20 @@ function buildWorkflowArgs(config, action, script) {
       '--refresh-site-registry-projection',
       '--projection-url', config.workerUrl,
     ];
+    appendAuthOptions(args, config);
+    return args;
+  }
+  if (action === 'load_or_create_membership') {
+    if (!config.memberPrincipalId) throw new Error('site_action_workflow_live_load_or_create_membership_requires_--member-principal-id');
+    if (!config.membershipRole) throw new Error('site_action_workflow_live_load_or_create_membership_requires_--membership-role_or_--role');
+    const args = [
+      script,
+      '--url', config.workerUrl,
+      '--site', config.siteId,
+      '--member-principal-id', config.memberPrincipalId,
+      '--role', config.membershipRole,
+    ];
+    if (config.membershipStatus) args.push('--membership-status', config.membershipStatus);
     appendAuthOptions(args, config);
     return args;
   }

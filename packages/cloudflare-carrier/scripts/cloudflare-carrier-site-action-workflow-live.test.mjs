@@ -271,6 +271,44 @@ test('runSiteActionWorkflowLive delegates continuity refresh', async () => {
   ]);
 });
 
+test('runSiteActionWorkflowLive delegates membership creation to site membership put', async () => {
+  const invocations = [];
+  const result = await runSiteActionWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_alpha',
+    expectedAction: 'load_or_create_membership',
+    memberPrincipalId: 'principal:alpha',
+    membershipRole: 'viewer',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs' && invocations.length === 1) {
+        return JSON.stringify({ schema: 'narada.cloudflare_carrier.product_read.v1', summary: { site_id: 'site_alpha', next_action: 'load_or_create_membership' } });
+      }
+      if (scriptName === 'cloudflare-carrier-site-membership-put.mjs') {
+        return JSON.stringify({ schema: 'narada.cloudflare_carrier.site_membership_put.v1', status: 'ok' });
+      }
+      if (scriptName === 'cloudflare-carrier-product-read.mjs' && invocations.length === 3) {
+        return JSON.stringify({ schema: 'narada.cloudflare_carrier.product_read.v1', summary: { site_id: 'site_alpha', next_action: 'monitor_site' } });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'site_membership_put');
+  assert.equal(result.delegated_action, 'load_or_create_membership');
+  assert.equal(invocations[1][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-site-membership-put.mjs');
+  assert.deepEqual(invocations[1].slice(1, 9), [
+    '--url', 'https://carrier.example',
+    '--site', 'site_alpha',
+    '--member-principal-id', 'principal:alpha',
+    '--role', 'viewer',
+  ]);
+});
+
 test('runSiteActionWorkflowLive delegates site authority read', async () => {
   const invocations = [];
   const result = await runSiteActionWorkflowLive({

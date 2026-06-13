@@ -23,6 +23,8 @@
     "product:site:authority:text": "node scripts/cloudflare-carrier-site-authority-read.mjs --format text",
     "product:site:scope": "node scripts/cloudflare-carrier-site-scope-read.mjs",
     "product:site:scope:text": "node scripts/cloudflare-carrier-site-scope-read.mjs --format text",
+    "product:site:membership:put": "node scripts/cloudflare-carrier-site-membership-put.mjs",
+    "product:site:membership:put:text": "node scripts/cloudflare-carrier-site-membership-put.mjs --format text",
     "product:task-lifecycle:create-from-directive-intent": "node scripts/cloudflare-carrier-task-lifecycle-create-from-directive-intent.mjs",
     "product:task-lifecycle:create-from-directive-intent:text": "node scripts/cloudflare-carrier-task-lifecycle-create-from-directive-intent.mjs --format text",
     "product:posture:coherence:live": "node scripts/cloudflare-carrier-posture-coherence-live.mjs",

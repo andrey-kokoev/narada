@@ -1715,6 +1715,33 @@ test('formatProductSurfaceText surfaces site scope and site operation focus comm
   });
   assert.match(membershipScopeText, /Site Scope: pnpm --filter @narada2\/cloudflare-carrier product:site:scope:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
+  const siteReadMembershipPutText = formatProductSurfaceText({
+    operation: 'site.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'site.read',
+      site_id: 'site_alpha',
+      display_name: 'Alpha Site',
+      health: 'attention',
+      next_action: 'load_or_create_membership',
+      scope_loaded: true,
+      continuity_state: 'unknown',
+      continuity_direction_state: 'unknown',
+      continuity_loop_state: 'unknown',
+      continuity_reconciliation_execution_state: 'unknown',
+      continuity_reconciliation_execution_health: 'unknown',
+      continuity_packet_count: 0,
+      continuity_loop_report_count: 0,
+      continuity_reconciliation_execution_count: 0,
+      persistence_state: 'unknown',
+      recovery_state: 'unknown',
+      membership_count: 0,
+      session_count: 0,
+    },
+  });
+  assert.match(siteReadMembershipPutText, /Site Membership Put: pnpm --filter @narada2\/cloudflare-carrier product:site:membership:put:text -- --url https:\/\/carrier\.example\.test --site site_alpha --member-principal-id <principal-id> --role <role> --operator-session-file <operator-session-file>/);
+
 
   const siteReadFocusText = formatProductSurfaceText({
     operation: 'site.read',
