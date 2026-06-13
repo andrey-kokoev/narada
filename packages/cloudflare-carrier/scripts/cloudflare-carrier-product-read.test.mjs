@@ -780,6 +780,50 @@ test('formatProductSurfaceText emits provider liveness operator commands for ope
   assert.match(repositoryPublicationText, /Repository Publication Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 });
 
+test('formatProductSurfaceText emits mailbox send review operator commands for operation review routes', () => {
+  const confirmationText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_mailbox_confirmation',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'monitor_operation',
+      workflow_next_action: 'review_mailbox_send_confirmation',
+      workflow_reason: 'operation_operator_focus_needs_review',
+      session_count: 1,
+      task_count: 0,
+    },
+  });
+  assert.match(confirmationText, /Mailbox Send Confirmation: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-confirmation:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+
+  const acceptedText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_mailbox_accepted',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'monitor_operation',
+      workflow_next_action: 'review_mailbox_send_acceptance',
+      workflow_reason: 'operation_operator_focus_needs_review',
+      session_count: 1,
+      task_count: 0,
+    },
+  });
+  assert.match(acceptedText, /Mailbox Send Accepted: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-accepted:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+});
+
 test('summarizeProductSurface summarizes site and operation reads', () => {
   assert.deepEqual(summarizeProductSurface('site.read', {
     site: { site_id: 'site_fixture', display_name: 'Fixture Site' },

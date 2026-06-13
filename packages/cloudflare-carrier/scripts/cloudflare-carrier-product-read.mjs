@@ -7,6 +7,8 @@ const VALID_OPERATIONS = new Set([
   'site.read',
   'operation.list',
   'operation.read',
+  'mailbox.send_accepted.list',
+  'mailbox.send_confirmation.list',
   'local_ingress.provider_heartbeat.list',
   'repository_publication.provider_heartbeat.list',
 ]);
@@ -30,6 +32,8 @@ export function parseProductReadArgs(argv = [], env = process.env) {
   if ((operation === 'site.read'
     || operation === 'operation.list'
     || operation === 'operation.read'
+    || operation === 'mailbox.send_accepted.list'
+    || operation === 'mailbox.send_confirmation.list'
     || operation === 'local_ingress.provider_heartbeat.list'
     || operation === 'repository_publication.provider_heartbeat.list') && !siteId) throw new Error(`product_read_${operation}_requires_--site`);
   if (operation === 'operation.read' && !operationId) throw new Error('product_read_operation.read_requires_--operation-id_or_--carrier-operation');
@@ -56,6 +60,8 @@ export function buildParams({ operation, siteId, operationId, limit }) {
   if (operation === 'site.read'
     || operation === 'operation.list'
     || operation === 'operation.read'
+    || operation === 'mailbox.send_accepted.list'
+    || operation === 'mailbox.send_confirmation.list'
     || operation === 'local_ingress.provider_heartbeat.list'
     || operation === 'repository_publication.provider_heartbeat.list') params.site_id = siteId;
   if (operation === 'operation.read') params.operation_id = operationId;
@@ -362,6 +368,12 @@ export function formatProductSurfaceText(result) {
     lines.push(`Evidence Counts: sessions=${summary.session_count ?? 0} tasks=${summary.task_count ?? 0}`);
     if (summary.workflow_next_action === 'review_mailbox_draft_reply_proposal') {
       lines.push(`Mailbox Proposal Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
+    }
+    if (summary.workflow_next_action === 'review_mailbox_send_confirmation') {
+      lines.push(`Mailbox Send Confirmation: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-confirmation:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
+    }
+    if (summary.workflow_next_action === 'review_mailbox_send_acceptance') {
+      lines.push(`Mailbox Send Accepted: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
     }
     if (summary.workflow_next_action === 'review_repository_publication_request') {
       lines.push(`Repository Publication Review: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);

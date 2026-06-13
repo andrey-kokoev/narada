@@ -1105,6 +1105,122 @@ test('runOperationNextWorkflowLive delegates repository publication provider liv
   assert.equal(invocations[2][0].split(/[\\/]/).pop(), 'cloudflare-carrier-repository-publication-provider-liveness-read.mjs');
 });
 
+test('runOperationNextWorkflowLive delegates mailbox send confirmation review route', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_alpha',
+    expectedListRouteAction: 'monitor_operations',
+    expectedOperationId: 'operation_control',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        const readCount = invocations.filter((call) => call[0].endsWith('cloudflare-carrier-product-read.mjs')).length;
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              next_operation_id: 'operation_control',
+              route_next_action: 'monitor_operations',
+            },
+          });
+        }
+        if (operation === 'operation.read' && readCount === 2) {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              operation_id: 'operation_control',
+              workflow_next_action: 'review_mailbox_send_confirmation',
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            operation_id: 'operation_control',
+            workflow_next_action: 'monitor_operation',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-mailbox-send-confirmation-read.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.mailbox_send_confirmation_read.v1',
+          status: 'ok',
+          summary: { site_id: 'site_alpha', confirmation_count: 1 },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'mailbox_send_confirmation');
+  assert.equal(result.delegated_route_action, 'review_mailbox_send_confirmation');
+  assert.equal(invocations[2][0].split(/[\\/]/).pop(), 'cloudflare-carrier-mailbox-send-confirmation-read.mjs');
+});
+
+test('runOperationNextWorkflowLive delegates mailbox send acceptance review route', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_alpha',
+    expectedListRouteAction: 'monitor_operations',
+    expectedOperationId: 'operation_control',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        const readCount = invocations.filter((call) => call[0].endsWith('cloudflare-carrier-product-read.mjs')).length;
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              next_operation_id: 'operation_control',
+              route_next_action: 'monitor_operations',
+            },
+          });
+        }
+        if (operation === 'operation.read' && readCount === 2) {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              operation_id: 'operation_control',
+              workflow_next_action: 'review_mailbox_send_acceptance',
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            operation_id: 'operation_control',
+            workflow_next_action: 'monitor_operation',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-mailbox-send-accepted-read.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.mailbox_send_accepted_read.v1',
+          status: 'ok',
+          summary: { site_id: 'site_alpha', send_count: 1 },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'mailbox_send_accepted');
+  assert.equal(result.delegated_route_action, 'review_mailbox_send_acceptance');
+  assert.equal(invocations[2][0].split(/[\\/]/).pop(), 'cloudflare-carrier-mailbox-send-accepted-read.mjs');
+});
+
 test('runOperationNextWorkflowLive delegates local resident carrier bridge route', async () => {
   const invocations = [];
   const result = await runOperationNextWorkflowLive({
