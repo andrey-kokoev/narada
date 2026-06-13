@@ -165,13 +165,18 @@ export function summarizeDirectiveDeliveryReview(operationBody = {}, directiveRe
 
 export function formatDirectiveDeliveryReviewText(result) {
   const summary = result?.summary ?? {};
+  const undeliveredLabel = summary.directive_record_count === 1
+    && summary.focused_directive_record_id
+    && summary.focused_directive_record_id === summary.latest_undelivered_directive_record_id
+      ? 'focused_undelivered'
+      : 'latest_undelivered';
   const lines = [
     'Directive Delivery Review: ok',
     `Worker: ${result?.worker_url ?? 'unknown'}`,
     `Auth: ${result?.auth_source ?? 'unknown'}`,
     `Site: ${summary.site_id ?? 'unknown'}`,
     `Workflow: action=${summary.workflow_next_action ?? 'none'} reason=${summary.workflow_reason ?? 'none'} focus=${summary.workflow_focus_ref ?? 'none'}`,
-    `Directive Records: count=${summary.directive_record_count ?? 0} focused=${summary.focused_directive_record_id ?? 'none'} undelivered=${summary.undelivered_directive_record_count ?? 0} latest_undelivered=${summary.latest_undelivered_directive_record_id ?? 'none'}`,
+    `Directive Records: count=${summary.directive_record_count ?? 0} focused=${summary.focused_directive_record_id ?? 'none'} undelivered=${summary.undelivered_directive_record_count ?? 0} ${undeliveredLabel}=${summary.latest_undelivered_directive_record_id ?? 'none'}`,
     `Directive Deliveries: count=${summary.directive_delivery_count ?? 0} focused_delivery=${summary.focused_delivery_id ?? 'none'} state=${summary.focused_delivery_state ?? 'none'} ok=${summary.focused_delivery_ok ?? 'unknown'}`,
   ];
   if (summary.focused_directive_record_id || summary.focused_classification_state || summary.focused_latest_delay_minutes !== null) {

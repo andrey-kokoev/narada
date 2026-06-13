@@ -312,6 +312,29 @@ test('formatDirectiveDeliveryReviewText renders directive review summary', () =>
   assert.match(text, /Authority: record=cloudflare_directive_dual_record delivery=cloudflare_primary_directive_delivery dispatch=cloudflare_primary_dispatcher fallback=windows_fallback_dispatcher/);
 });
 
+test('formatDirectiveDeliveryReviewText uses focused undelivered label for narrowed historical reads', () => {
+  const text = formatDirectiveDeliveryReviewText({
+    worker_url: 'https://carrier.example',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      workflow_next_action: null,
+      workflow_reason: null,
+      workflow_focus_ref: 'directive_record_focus',
+      directive_record_count: 1,
+      directive_delivery_count: 0,
+      undelivered_directive_record_count: 1,
+      latest_undelivered_directive_record_id: 'directive_record_focus',
+      focused_delivery_id: null,
+      focused_delivery_state: null,
+      focused_delivery_ok: null,
+      focused_directive_record_id: 'directive_record_focus',
+    },
+  });
+
+  assert.match(text, /Directive Records: count=1 focused=directive_record_focus undelivered=1 focused_undelivered=directive_record_focus/);
+});
+
 function responseJson(body) {
   return {
     ok: true,
