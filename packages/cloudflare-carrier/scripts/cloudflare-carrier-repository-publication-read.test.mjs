@@ -172,6 +172,7 @@ test('readRepositoryPublicationSurface posts evidence list envelope and summariz
         repository_publication_request_id: 'repository-publication-request-1',
         publication_execution_id: 'publication-execution-1',
         publication_status: 'completed',
+        windows_admission_reason: null,
         published_commit_ref: 'git:commit:123456',
       }],
     });
@@ -189,6 +190,7 @@ test('readRepositoryPublicationSurface posts evidence list envelope and summariz
   });
   assert.equal(result.summary.latest_repository_publication_evidence_id, 'repository-publication-evidence-1');
   assert.equal(result.summary.latest_published_commit_ref, 'git:commit:123456');
+  assert.equal(result.summary.latest_publication_reason, null);
 });
 
 test('readRepositoryPublicationSurface refuses focused evidence id that is not present', async () => {
@@ -234,7 +236,8 @@ test('summarizeRepositoryPublicationSurface narrows evidence summary to focused 
         repository_publication_evidence_id: 'repository-publication-evidence-1',
         repository_publication_request_id: 'repository-publication-request-1',
         publication_execution_id: 'publication-execution-1',
-        publication_status: 'completed',
+        publication_status: 'refused',
+        windows_admission_reason: 'repository_publication_push_not_enabled',
         published_commit_ref: 'git:commit:1111',
       },
     ],
@@ -247,7 +250,34 @@ test('summarizeRepositoryPublicationSurface narrows evidence summary to focused 
   assert.equal(summary.evidence_count, 1);
   assert.equal(summary.focused_repository_publication_evidence_id, 'repository-publication-evidence-1');
   assert.equal(summary.latest_repository_publication_evidence_id, 'repository-publication-evidence-1');
+  assert.equal(summary.latest_publication_reason, 'repository_publication_push_not_enabled');
   assert.equal(summary.latest_published_commit_ref, 'git:commit:1111');
+});
+
+test('formatRepositoryPublicationReadText surfaces evidence refusal reason', () => {
+  const text = formatRepositoryPublicationReadText({
+    status: 'ok',
+    operation: 'repository_publication.evidence.list',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'flag:--token',
+    params: { site_id: 'site_alpha' },
+    summary: {
+      operation: 'repository_publication.evidence.list',
+      site_id: 'site_alpha',
+      status: 'ok',
+      evidence_count: 1,
+      repository_publication_request_id: 'repository-publication-request-1',
+      latest_repository_publication_evidence_id: 'repository-publication-evidence-1',
+      latest_publication_execution_id: 'publication-execution-1',
+      latest_publication_status: 'refused',
+      latest_publication_reason: 'repository_publication_push_not_enabled',
+      repository_publication_evidence_authority: 'windows_repository_publication_executor',
+      repository_publication_admission_authority: 'cloudflare_repository_publication_admission_controller',
+      cloudflare_evidence_store_authority: 'cloudflare_repository_publication_evidence_store',
+    },
+  });
+
+  assert.match(text, /Latest Publication Status: refused reason=repository_publication_push_not_enabled/);
 });
 
 test('summaries and text output preserve refusal evidence for filtered execution list', () => {
