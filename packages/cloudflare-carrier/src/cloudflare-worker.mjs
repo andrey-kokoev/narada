@@ -2289,7 +2289,7 @@ function summarizeCloudflareOperationWorkflowRoute({
     }
     return { action: 'monitor_operation', target: operationId, reason: 'operation_ready' };
   })();
-  const routedNext = operatorFocus && next.action === 'monitor_operation'
+  const routedNext = operatorFocus && shouldPromoteOperationOperatorFocus(operation, next)
     ? {
         action: operatorFocus.action || 'review_operation_operator_focus',
         target: operatorFocus.focus_ref || operatorFocus.source_ref || operatorFocus.activity_id || operationId,
@@ -5953,6 +5953,48 @@ async function buildCloudflareOperationProductProjection(env, registry, principa
         }
       }
     }
+    if (
+      postureProbeDepth < 2
+      && postureTarget
+      && postureTarget !== (operation?.operation_id ?? params.operation_id ?? '')
+      && operationWorkflowRoute.next_action !== 'monitor_operation'
+    ) {
+      const targetOperationRead = await registry.handle({
+        operation: 'operation.read',
+        params: {
+          site_id: siteId,
+          operation_id: postureTarget,
+          limit: params.operation_limit ?? params.limit,
+          session_limit: projectionParams.session_limit,
+          carrier_event_limit: projectionParams.carrier_event_limit,
+        },
+        principal,
+      });
+      if (targetOperationRead?.ok) {
+        const targetProjection = await buildCloudflareOperationProductProjection(env, registry, principal, targetOperationRead, {
+          ...projectionParams,
+          site_id: siteId,
+          operation_id: postureTarget,
+          posture_probe_depth: postureProbeDepth + 1,
+        });
+        if (shouldKeepFocusedOperationProjection({
+          operation,
+          operation_workflow_route: operationWorkflowRoute,
+        }, targetProjection)) {
+          operationPostureOverview = {
+            ...operationPostureOverview,
+            next_operation_id: operation?.operation_id ?? params.operation_id ?? null,
+            next_status: 'ready',
+            next_action: 'monitor_operations',
+            next_reason: 'all_operations_monitoring',
+          };
+          operationPostureRoute = summarizeCloudflareOperationPostureRoute(
+            operationPostureOverview,
+            operation?.operation_id ?? params.operation_id ?? '',
+          );
+        }
+      }
+    }
     return {
     sessions,
     operations: siteOperations,
@@ -6328,35 +6370,53 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
   if (postureTarget && postureTarget !== (focusedOperation?.operation_id ?? '')) {
     const targetOperation = (Array.isArray(response.operations) ? response.operations : []).find((operation) => operation?.operation_id === postureTarget);
     if (targetOperation) {
-      ({
-        focusedOperation,
-        focusedOperationStatusHistory,
-        focusedOperationActivityTimeline,
-        focusedOperationLifecycleStatus,
-        focusedOperationWorkflowRoute,
-      } = summarizeFocusedOperationArtifacts(targetOperation));
-      operationPostureOverview = summarizeCloudflareOperationPostureOverview(response.operations ?? [], {
-        ...response,
-        sessions,
-        tasks,
-        carrier_evidence: carrierEvidence,
-        site_continuity_packets: continuityPackets,
-        site_continuity_loop_reports: continuityLoopReports,
+      const targetArtifacts = summarizeFocusedOperationArtifacts(targetOperation);
+      if (shouldKeepFocusedOperationProjection({
         operation: focusedOperation,
-        resident_dispatch_windows_fallback_requests: residentDispatchWindowsFallbackRequests,
-        resident_dispatch_windows_fallback_evidence: residentDispatchWindowsFallbackEvidence,
-        local_resident_carrier_bridge_records: localResidentCarrierBridgeRecords,
+        operation_workflow_route: focusedOperationWorkflowRoute,
       }, {
-        active_operation_id: focusedOperation?.operation_id ?? params.operation_id,
-        site_id: siteId,
-      });
-      operationPostureRoute = summarizeCloudflareOperationPostureRoute(operationPostureOverview, focusedOperation?.operation_id ?? params.operation_id ?? '');
-      operationPostureOverview = normalizeCloudflareOperationPostureOverview(
-        operationPostureOverview,
-        operationPostureRoute,
-        focusedOperationLifecycleStatus,
-        Array.isArray(response.operations) ? response.operations.length : 0,
-      );
+        operation: targetArtifacts.focusedOperation,
+        operation_workflow_route: targetArtifacts.focusedOperationWorkflowRoute,
+      })) {
+        operationPostureOverview = {
+          ...operationPostureOverview,
+          next_operation_id: focusedOperation?.operation_id ?? null,
+          next_status: focusedOperationWorkflowRoute?.status ?? operationPostureOverview.next_status,
+          next_action: focusedOperationWorkflowRoute?.next_action ?? operationPostureOverview.next_action,
+          next_reason: focusedOperationWorkflowRoute?.reason ?? operationPostureOverview.next_reason,
+        };
+        operationPostureRoute = summarizeCloudflareOperationPostureRoute(operationPostureOverview, focusedOperation?.operation_id ?? params.operation_id ?? '');
+      } else {
+        ({
+          focusedOperation,
+          focusedOperationStatusHistory,
+          focusedOperationActivityTimeline,
+          focusedOperationLifecycleStatus,
+          focusedOperationWorkflowRoute,
+        } = targetArtifacts);
+        operationPostureOverview = summarizeCloudflareOperationPostureOverview(response.operations ?? [], {
+          ...response,
+          sessions,
+          tasks,
+          carrier_evidence: carrierEvidence,
+          site_continuity_packets: continuityPackets,
+          site_continuity_loop_reports: continuityLoopReports,
+          operation: focusedOperation,
+          resident_dispatch_windows_fallback_requests: residentDispatchWindowsFallbackRequests,
+          resident_dispatch_windows_fallback_evidence: residentDispatchWindowsFallbackEvidence,
+          local_resident_carrier_bridge_records: localResidentCarrierBridgeRecords,
+        }, {
+          active_operation_id: focusedOperation?.operation_id ?? params.operation_id,
+          site_id: siteId,
+        });
+        operationPostureRoute = summarizeCloudflareOperationPostureRoute(operationPostureOverview, focusedOperation?.operation_id ?? params.operation_id ?? '');
+        operationPostureOverview = normalizeCloudflareOperationPostureOverview(
+          operationPostureOverview,
+          operationPostureRoute,
+          focusedOperationLifecycleStatus,
+          Array.isArray(response.operations) ? response.operations.length : 0,
+        );
+      }
     }
   }
   let siteProductStatus = summarizeCloudflareSiteProductStatus({
@@ -14640,6 +14700,12 @@ export function classifyCloudflareOperationCommandState(input = {}) {
     command_action: pathAction,
     next_action: nextAction,
   };
+}
+
+export function shouldPromoteOperationOperatorFocus(operation = null, next = {}) {
+  const status = String(operation?.status ?? '').toLowerCase();
+  if (next?.action !== 'monitor_operation') return false;
+  return status !== 'closed';
 }
 
 export function classifyCloudflareAuthorityCommandState(input = {}) {

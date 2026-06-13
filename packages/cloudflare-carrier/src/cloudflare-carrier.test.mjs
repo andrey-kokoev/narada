@@ -21,6 +21,7 @@ import worker, {
   createCloudflareToolEffectAdapter,
   selectCloudflareFocusedOperation,
   shouldKeepFocusedOperationProjection,
+  shouldPromoteOperationOperatorFocus,
 } from './cloudflare-worker.mjs';
 import {
   CloudflareCarrierRouter,
@@ -8802,6 +8803,30 @@ test('selectCloudflareFocusedOperation ignores stale response.operation focus wh
   });
 
   assert.equal(selected?.operation_id, 'operation_control');
+});
+
+test('shouldPromoteOperationOperatorFocus suppresses historical focus review on closed operations', () => {
+  assert.equal(
+    shouldPromoteOperationOperatorFocus(
+      { operation_id: 'operation_control', status: 'active' },
+      { action: 'monitor_operation' },
+    ),
+    true,
+  );
+  assert.equal(
+    shouldPromoteOperationOperatorFocus(
+      { operation_id: 'operation_probe', status: 'closed' },
+      { action: 'monitor_operation' },
+    ),
+    false,
+  );
+  assert.equal(
+    shouldPromoteOperationOperatorFocus(
+      { operation_id: 'operation_probe', status: 'closed' },
+      { action: 'review_site_continuity_reconciliation_execution' },
+    ),
+    false,
+  );
 });
 
 test('worker site.read and site.list surface operation attention from a sibling operation', async () => {
