@@ -1315,6 +1315,30 @@ test('formatProductSurfaceText emits site authority operator command for site au
   assert.match(siteAuthorityText, /Site Authority: pnpm --filter @narada2\/cloudflare-carrier product:site:authority:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 });
 
+test('formatProductSurfaceText emits site authority operator command for authority evidence routes', () => {
+  const authorityEvidenceText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_authority_alpha',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'focus_authority_evidence',
+      workflow_next_action: 'focus_authority_evidence',
+      workflow_reason: 'authority_path_needs_evidence_or_locus_attention',
+      session_count: 1,
+      task_count: 0,
+    },
+  });
+
+  assert.match(authorityEvidenceText, /Site Authority: pnpm --filter @narada2\/cloudflare-carrier product:site:authority:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+});
+
 test('formatProductSurfaceText emits directive intent task create operator command', () => {
   const taskCreateText = formatProductSurfaceText({
     operation: 'operation.read',

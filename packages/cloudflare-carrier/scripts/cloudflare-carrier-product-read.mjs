@@ -473,6 +473,14 @@ export function formatProductSurfaceText(result) {
     if (summary.workflow_next_action === 'restore_windows_repository_publication_provider') {
       lines.push(`Repository Publication Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
     }
+    if (
+      summary.workflow_next_action === 'focus_authority_evidence'
+      || summary.workflow_next_action === 'review_refused_authority'
+      || summary.workflow_next_action === 'review_unresolved_locus'
+      || summary.workflow_next_action === 'monitor_authority_admissions'
+    ) {
+      lines.push(`Site Authority: pnpm --filter @narada2/cloudflare-carrier product:site:authority:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
+    }
     if (summary.workflow_next_action === 'review_site_file_change_proposal') {
       lines.push(`Site File Change Proposal Review: pnpm --filter @narada2/cloudflare-carrier product:site-file-change:proposal:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file>`);
     }

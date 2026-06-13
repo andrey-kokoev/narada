@@ -20,6 +20,7 @@ const mailboxSendAcceptedReadScript = resolve(scriptDir, 'cloudflare-carrier-mai
 const mailboxSendConfirmationReadScript = resolve(scriptDir, 'cloudflare-carrier-mailbox-send-confirmation-read.mjs');
 const directiveDeliveryReviewScript = resolve(scriptDir, 'cloudflare-carrier-directive-delivery-review.mjs');
 const operationScopeReadScript = resolve(scriptDir, 'cloudflare-carrier-operation-scope-read.mjs');
+const siteAuthorityReadScript = resolve(scriptDir, 'cloudflare-carrier-site-authority-read.mjs');
 const webhookDelayShadowReadScript = resolve(scriptDir, 'cloudflare-carrier-webhook-delay-shadow-read.mjs');
 const localIngressRequestReadScript = resolve(scriptDir, 'cloudflare-carrier-local-ingress-request-read.mjs');
 const localIngressEvidenceReadScript = resolve(scriptDir, 'cloudflare-carrier-local-ingress-evidence-read.mjs');
@@ -89,6 +90,10 @@ const ROUTE_TO_WORKFLOW = new Map([
   ['focus_session_path_evidence', { name: 'evidence', script: evidenceReadScript, flag: null }],
   ['focus_session_path_task', { name: 'evidence', script: evidenceReadScript, flag: null }],
   ['focus_authority_path_evidence', { name: 'evidence', script: evidenceReadScript, flag: null }],
+  ['focus_authority_evidence', { name: 'site_authority', script: siteAuthorityReadScript, flag: null }],
+  ['review_refused_authority', { name: 'site_authority', script: siteAuthorityReadScript, flag: null }],
+  ['review_unresolved_locus', { name: 'site_authority', script: siteAuthorityReadScript, flag: null }],
+  ['monitor_authority_admissions', { name: 'site_authority', script: siteAuthorityReadScript, flag: null }],
   ['focus_open_attention', { name: 'evidence', script: evidenceReadScript, flag: null }],
   ['monitor_operation_evidence', { name: 'evidence', script: evidenceReadScript, flag: null }],
   ['start_resident_dispatch', { name: 'resident_dispatch', script: residentDispatchLiveSmokeScript, flag: null }],
