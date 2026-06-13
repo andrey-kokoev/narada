@@ -5599,6 +5599,13 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
             selectedProjection.focused_operation_lifecycle,
             Array.isArray(response.operations) ? response.operations.length : 0,
           );
+          const selectedOperationPostureRoute = summarizeCloudflareOperationPostureRoute(
+            selectedOperationPostureOverview,
+            selectedProjection.focused_operation_lifecycle?.operation_id
+              ?? selectedProjection.operation?.operation_id
+              ?? selectedOperationPostureOverview?.active_operation_id
+              ?? '',
+          );
           return {
             status: 200,
             body: {
@@ -5610,7 +5617,7 @@ async function handleSiteProductApiRequest(body, principal, env = {}) {
                   ?? selectedOperationPostureOverview?.active_operation_id
                   ?? null,
               },
-              operation_posture_route: selectedProjection.operation_posture_route,
+              operation_posture_route: selectedOperationPostureRoute,
               focused_operation_lifecycle: selectedProjection.focused_operation_lifecycle,
             },
           };
@@ -6386,6 +6393,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
     },
     Array.isArray(response.operations) ? response.operations.length : 0,
   );
+  operationPostureRoute = summarizeCloudflareOperationPostureRoute(operationPostureOverview, focusedOperation?.operation_id ?? params.operation_id ?? '');
   const postureTarget = operationPostureRoute.next_action === 'focus_next_operation'
     ? String(operationPostureRoute.target || '').trim()
     : '';
@@ -6441,6 +6449,7 @@ async function buildCloudflareSiteProductProjection(env, principal, response, pa
           },
           Array.isArray(response.operations) ? response.operations.length : 0,
         );
+        operationPostureRoute = summarizeCloudflareOperationPostureRoute(operationPostureOverview, focusedOperation?.operation_id ?? params.operation_id ?? '');
       }
     }
   }
