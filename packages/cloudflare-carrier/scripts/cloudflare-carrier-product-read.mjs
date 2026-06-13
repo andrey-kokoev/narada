@@ -11,6 +11,7 @@ const VALID_OPERATIONS = new Set([
   'webhook_delay.directive.primary_with_fallback.list',
   'webhook_delay.shadow_read.list',
   'site_file_change_proposal.list',
+  'resident_dispatch.windows_fallback_evidence.list',
   'mailbox.outlook_draft.list',
   'mailbox.draft_reply_proposal.list',
   'site_file_materialization.list',
@@ -46,6 +47,7 @@ export function parseProductReadArgs(argv = [], env = process.env) {
     || operation === 'webhook_delay.directive.primary_with_fallback.list'
     || operation === 'webhook_delay.shadow_read.list'
     || operation === 'site_file_change_proposal.list'
+    || operation === 'resident_dispatch.windows_fallback_evidence.list'
     || operation === 'mailbox.outlook_draft.list'
     || operation === 'mailbox.draft_reply_proposal.list'
     || operation === 'site_file_materialization.list'
@@ -84,6 +86,7 @@ export function buildParams({ operation, siteId, operationId, limit }) {
     || operation === 'webhook_delay.directive.primary_with_fallback.list'
     || operation === 'webhook_delay.shadow_read.list'
     || operation === 'site_file_change_proposal.list'
+    || operation === 'resident_dispatch.windows_fallback_evidence.list'
     || operation === 'mailbox.outlook_draft.list'
     || operation === 'mailbox.draft_reply_proposal.list'
     || operation === 'site_file_materialization.list'

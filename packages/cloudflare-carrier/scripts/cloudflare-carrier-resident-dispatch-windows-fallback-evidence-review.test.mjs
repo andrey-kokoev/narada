@@ -20,6 +20,19 @@ test('parseResidentDispatchWindowsFallbackEvidenceReviewArgs adds focused eviden
   assert.equal(parsed.params.resident_dispatch_windows_fallback_evidence_limit, 4);
 });
 
+test('parseResidentDispatchWindowsFallbackEvidenceReviewArgs supports direct focused review without operation id', () => {
+  const parsed = parseResidentDispatchWindowsFallbackEvidenceReviewArgs([
+    '--url', 'https://carrier.example',
+    '--site', 'site_alpha',
+    '--token', 'token-value',
+    '--focus-ref', 'resident_dispatch_windows_fallback_evidence_alpha',
+  ], {});
+
+  assert.equal(parsed.operation, 'resident_dispatch.windows_fallback_evidence.list');
+  assert.equal(parsed.params.site_id, 'site_alpha');
+  assert.equal(parsed.params.resident_dispatch_windows_fallback_evidence_limit, 200);
+});
+
 test('readResidentDispatchWindowsFallbackEvidenceReview summarizes focused evidence and review state', async () => {
   const result = await readResidentDispatchWindowsFallbackEvidenceReview({
     workerUrl: 'https://carrier.example',
@@ -33,44 +46,141 @@ test('readResidentDispatchWindowsFallbackEvidenceReview summarizes focused evide
       resident_dispatch_windows_fallback_evidence_limit: 4,
     },
     focusRef: 'resident_dispatch_windows_fallback_evidence_alpha',
+  }, async (_url, init) => {
+    const body = JSON.parse(init.body);
+    if (body.operation === 'operation.read') {
+      return {
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            ok: true,
+            operation: { site_id: 'site_alpha', operation_id: 'operation_alpha', status: 'active' },
+            operation_workflow_route: {
+              next_action: 'review_windows_fallback_resident_dispatch_evidence',
+              reason: 'windows_fallback_execution_recorded',
+              focus_ref: 'resident_dispatch_windows_fallback_evidence_alpha',
+            },
+            operation_focus_reviews: [{
+              review_id: 'focus_review_alpha',
+              focus_kind: 'resident_dispatch_windows_fallback_evidence',
+              focus_ref: 'resident_dispatch_windows_fallback_evidence_alpha',
+              review_status: 'acknowledged',
+              recorded_at: '2026-06-12T16:46:00.000Z',
+            }],
+          });
+        },
+      };
+    }
+    if (body.operation === 'resident_dispatch.windows_fallback_evidence.list') {
+      return {
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            ok: true,
+            site_id: 'site_alpha',
+            resident_dispatch_windows_fallback_evidence_authority: 'windows_local_site_resident_loop',
+            resident_dispatch_windows_fallback_evidence: [{
+              fallback_evidence_id: 'resident_dispatch_windows_fallback_evidence_alpha',
+              fallback_request_id: 'resident_dispatch_windows_fallback_request_alpha',
+              dispatch_decision_id: 'resident_dispatch_alpha',
+              local_execution_id: 'windows_execution_alpha',
+              local_execution_status: 'completed',
+              local_session_start_admission: 'admitted_by_windows_resident_loop',
+              direct_cloudflare_session_start_admission: 'not_admitted',
+              local_resident_session_ref: 'windows-session://operation_alpha/1',
+              local_executor_authority: 'windows_local_site_resident_loop',
+              recorded_at: '2026-06-12T16:45:00.000Z',
+              recorded_by_principal_id: 'principal:windows',
+            }],
+          });
+        },
+      };
+    }
+    throw new Error(`unexpected_operation:${body.operation}`);
+  });
+
+  assert.equal(result.summary.focused_fallback_evidence_id, 'resident_dispatch_windows_fallback_evidence_alpha');
+  assert.equal(result.summary.focused_local_execution_id, 'windows_execution_alpha');
+  assert.equal(result.summary.latest_focus_review.review_status, 'acknowledged');
+});
+
+test('readResidentDispatchWindowsFallbackEvidenceReview supports direct focused review without operation read', async () => {
+  const calls = [];
+  const result = await readResidentDispatchWindowsFallbackEvidenceReview({
+    workerUrl: 'https://carrier.example',
+    operation: 'resident_dispatch.windows_fallback_evidence.list',
+    requestId: 'request_beta',
+    format: 'json',
+    auth: { kind: 'bearer', value: 'token-value', source: 'flag:--token' },
+    params: {
+      site_id: 'site_alpha',
+      resident_dispatch_windows_fallback_evidence_limit: 200,
+    },
+    focusRef: 'resident_dispatch_windows_fallback_evidence_alpha',
+  }, async (_url, init) => {
+    const body = JSON.parse(init.body);
+    calls.push(body);
+    if (body.operation === 'resident_dispatch.windows_fallback_evidence.list') {
+      return {
+        status: 200,
+        async text() {
+          return JSON.stringify({
+            ok: true,
+            site_id: 'site_alpha',
+            resident_dispatch_windows_fallback_evidence_authority: 'windows_local_site_resident_loop',
+            resident_dispatch_windows_fallback_evidence: [
+              {
+                fallback_evidence_id: 'resident_dispatch_windows_fallback_evidence_alpha',
+                operation_id: 'operation_alpha',
+                local_execution_id: 'windows_execution_alpha',
+                local_execution_status: 'completed',
+              },
+              {
+                fallback_evidence_id: 'resident_dispatch_windows_fallback_evidence_beta',
+                operation_id: 'operation_beta',
+                local_execution_id: 'windows_execution_beta',
+                local_execution_status: 'completed',
+              },
+            ],
+          });
+        },
+      };
+    }
+    throw new Error(`unexpected_operation:${body.operation}`);
+  });
+
+  assert.deepEqual(calls.map((entry) => entry.operation), [
+    'resident_dispatch.windows_fallback_evidence.list',
+  ]);
+  assert.equal(result.summary.evidence_count, 1);
+  assert.equal(result.summary.operation_id, 'operation_alpha');
+  assert.equal(result.summary.focused_fallback_evidence_id, 'resident_dispatch_windows_fallback_evidence_alpha');
+});
+
+test('readResidentDispatchWindowsFallbackEvidenceReview fails explicitly when focused evidence is missing', async () => {
+  await assert.rejects(() => readResidentDispatchWindowsFallbackEvidenceReview({
+    workerUrl: 'https://carrier.example',
+    operation: 'resident_dispatch.windows_fallback_evidence.list',
+    requestId: 'request_gamma',
+    format: 'json',
+    auth: { kind: 'bearer', value: 'token-value', source: 'flag:--token' },
+    params: {
+      site_id: 'site_alpha',
+      resident_dispatch_windows_fallback_evidence_limit: 200,
+    },
+    focusRef: 'missing_evidence',
   }, async () => ({
     status: 200,
     async text() {
       return JSON.stringify({
         ok: true,
-        operation: { site_id: 'site_alpha', operation_id: 'operation_alpha', status: 'active' },
-        operation_workflow_route: {
-          next_action: 'review_windows_fallback_resident_dispatch_evidence',
-          reason: 'windows_fallback_execution_recorded',
-          focus_ref: 'resident_dispatch_windows_fallback_evidence_alpha',
-        },
-        resident_dispatch_windows_fallback_evidence: [{
-          fallback_evidence_id: 'resident_dispatch_windows_fallback_evidence_alpha',
-          fallback_request_id: 'resident_dispatch_windows_fallback_request_alpha',
-          dispatch_decision_id: 'resident_dispatch_alpha',
-          local_execution_id: 'windows_execution_alpha',
-          local_execution_status: 'completed',
-          local_session_start_admission: 'admitted_by_windows_resident_loop',
-          direct_cloudflare_session_start_admission: 'not_admitted',
-          local_resident_session_ref: 'windows-session://operation_alpha/1',
-          local_executor_authority: 'windows_local_site_resident_loop',
-          recorded_at: '2026-06-12T16:45:00.000Z',
-          recorded_by_principal_id: 'principal:windows',
-        }],
-        operation_focus_reviews: [{
-          review_id: 'focus_review_alpha',
-          focus_kind: 'resident_dispatch_windows_fallback_evidence',
-          focus_ref: 'resident_dispatch_windows_fallback_evidence_alpha',
-          review_status: 'acknowledged',
-          recorded_at: '2026-06-12T16:46:00.000Z',
-        }],
+        site_id: 'site_alpha',
+        resident_dispatch_windows_fallback_evidence: [
+          { fallback_evidence_id: 'resident_dispatch_windows_fallback_evidence_alpha' },
+        ],
       });
     },
-  }));
-
-  assert.equal(result.summary.focused_fallback_evidence_id, 'resident_dispatch_windows_fallback_evidence_alpha');
-  assert.equal(result.summary.focused_local_execution_id, 'windows_execution_alpha');
-  assert.equal(result.summary.latest_focus_review.review_status, 'acknowledged');
+  })), /resident_dispatch_windows_fallback_evidence_review_focus_not_found:missing_evidence/);
 });
 
 test('formatResidentDispatchWindowsFallbackEvidenceReviewText prints review ack command', () => {

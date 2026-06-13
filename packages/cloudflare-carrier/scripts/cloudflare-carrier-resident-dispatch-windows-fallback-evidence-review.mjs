@@ -7,11 +7,19 @@ const FOCUS_KIND = 'resident_dispatch_windows_fallback_evidence';
 
 export function parseResidentDispatchWindowsFallbackEvidenceReviewArgs(argv = [], env = process.env) {
   const args = [...argv];
-  const parsed = parseProductReadArgs(['--operation', 'operation.read', ...argv], env);
+  const explicitOperationId =
+    normalizeOptionalString(option(args, '--operation-id'))
+    ?? normalizeOptionalString(option(args, '--carrier-operation'))
+    ?? normalizeOptionalString(env.CLOUDFLARE_CARRIER_OPERATION_ID)
+    ?? normalizeOptionalString(env.CLOUDFLARE_CARRIER_CARRIER_OPERATION)
+    ?? null;
+  const defaultOperation = explicitOperationId ? 'operation.read' : 'resident_dispatch.windows_fallback_evidence.list';
+  const defaultEvidenceLimit = explicitOperationId ? 20 : 200;
+  const parsed = parseProductReadArgs(['--operation', defaultOperation, ...argv], env);
   const evidenceLimit = parseOptionalInteger(
     option(args, '--evidence-limit') ?? env.CLOUDFLARE_CARRIER_RESIDENT_DISPATCH_FALLBACK_EVIDENCE_LIMIT ?? null,
     'evidence-limit',
-  ) ?? 20;
+  ) ?? defaultEvidenceLimit;
   const focusRef = normalizeOptionalString(
     option(args, '--focus-ref') ?? env.CLOUDFLARE_CARRIER_RESIDENT_DISPATCH_FALLBACK_EVIDENCE_FOCUS_REF ?? null,
   );
@@ -26,39 +34,74 @@ export function parseResidentDispatchWindowsFallbackEvidenceReviewArgs(argv = []
 }
 
 export async function readResidentDispatchWindowsFallbackEvidenceReview(config, fetchImpl = fetch) {
-  const product = await readProductSurface(config, fetchImpl);
+  const baseProduct = await readProductSurface(config, fetchImpl);
+  const operationProduct = config.operation === 'operation.read' ? baseProduct : null;
+  const evidenceProduct = config.operation === 'resident_dispatch.windows_fallback_evidence.list'
+    ? baseProduct
+    : await readProductSurface({
+      ...config,
+      operation: 'resident_dispatch.windows_fallback_evidence.list',
+      params: {
+        site_id: config.params.site_id ?? null,
+        resident_dispatch_windows_fallback_evidence_limit: config.params.resident_dispatch_windows_fallback_evidence_limit,
+      },
+    }, fetchImpl);
   return {
     schema: 'narada.cloudflare_carrier.resident_dispatch_windows_fallback_evidence_review.v1',
     status: 'ok',
-    worker_url: product.worker_url,
-    auth_source: product.auth_source,
-    operation: product.operation,
-    params: product.params,
-    summary: summarizeResidentDispatchWindowsFallbackEvidenceReview(product.response, {
-      operationSummary: product.summary,
+    worker_url: baseProduct.worker_url,
+    auth_source: baseProduct.auth_source,
+    operation: baseProduct.operation,
+    params: baseProduct.params,
+    summary: summarizeResidentDispatchWindowsFallbackEvidenceReview(
+      operationProduct?.response,
+      evidenceProduct.response,
+      {
+      operationSummary: operationProduct?.summary,
       focusRef: config.focusRef,
-    }),
-    response: product.response,
+      },
+    ),
+    response: {
+      operation: operationProduct?.response ?? null,
+      resident_dispatch_windows_fallback_evidence: evidenceProduct.response,
+    },
   };
 }
 
-export function summarizeResidentDispatchWindowsFallbackEvidenceReview(body = {}, options = {}) {
+export function summarizeResidentDispatchWindowsFallbackEvidenceReview(operationBody = {}, evidenceBody = {}, options = {}) {
   const operationSummary = options.operationSummary ?? {};
-  const evidence = Array.isArray(body?.resident_dispatch_windows_fallback_evidence) ? body.resident_dispatch_windows_fallback_evidence : [];
-  const focusReviews = Array.isArray(body?.operation_focus_reviews) ? body.operation_focus_reviews : [];
-  const focusRef = options.focusRef ?? operationSummary.workflow_focus_ref ?? null;
-  const focusedEvidence = selectFocusedEvidence(evidence, focusRef);
-  const focusedEvidenceId = focusedEvidence?.fallback_evidence_id ?? focusRef ?? null;
+  const evidence = Array.isArray(evidenceBody?.resident_dispatch_windows_fallback_evidence)
+    ? evidenceBody.resident_dispatch_windows_fallback_evidence
+    : (Array.isArray(evidenceBody?.evidence) ? evidenceBody.evidence : []);
+  const focusReviews = Array.isArray(operationBody?.operation_focus_reviews) ? operationBody.operation_focus_reviews : [];
+  const explicitFocusRef = options.focusRef ?? null;
+  const workflowFocusRef = operationSummary.workflow_focus_ref ?? null;
+  const focusRef = explicitFocusRef ?? workflowFocusRef;
+  const exactFocusedEvidence = focusRef
+    ? evidence.find((entry) => entry?.fallback_evidence_id === focusRef) ?? null
+    : null;
+  const focusedEvidence = exactFocusedEvidence ?? (explicitFocusRef ? null : (evidence[0] ?? null));
+  if (explicitFocusRef && !focusedEvidence) {
+    throw new Error(`resident_dispatch_windows_fallback_evidence_review_focus_not_found:${explicitFocusRef}`);
+  }
+  const focusedEvidenceId = focusedEvidence?.fallback_evidence_id ?? null;
+  const focusedEvidenceRecords = focusedEvidence ? [focusedEvidence] : evidence;
   const latestFocusReview = focusedEvidenceId
     ? focusReviews.find((entry) => entry?.focus_kind === FOCUS_KIND && entry?.focus_ref === focusedEvidenceId) ?? null
     : null;
   return {
-    site_id: body?.operation?.site_id ?? body?.site_id ?? operationSummary.site_id ?? null,
-    operation_id: body?.operation?.operation_id ?? body?.operation_id ?? operationSummary.operation_id ?? null,
+    site_id: operationBody?.operation?.site_id ?? operationBody?.site_id ?? evidenceBody?.site_id ?? operationSummary.site_id ?? null,
+    operation_id:
+      operationBody?.operation?.operation_id
+      ?? operationBody?.operation_id
+      ?? operationSummary.operation_id
+      ?? focusedEvidence?.operation_id
+      ?? focusedEvidence?.carrier_operation_id
+      ?? null,
     workflow_next_action: operationSummary.workflow_next_action ?? null,
     workflow_reason: operationSummary.workflow_reason ?? null,
     workflow_focus_ref: operationSummary.workflow_focus_ref ?? focusRef ?? null,
-    evidence_count: evidence.length,
+    evidence_count: focusedEvidenceRecords.length,
     focused_fallback_evidence_id: focusedEvidenceId,
     focused_fallback_request_id: focusedEvidence?.fallback_request_id ?? null,
     focused_dispatch_decision_id: focusedEvidence?.dispatch_decision_id ?? null,
@@ -67,7 +110,11 @@ export function summarizeResidentDispatchWindowsFallbackEvidenceReview(body = {}
     focused_local_session_start_admission: focusedEvidence?.local_session_start_admission ?? null,
     focused_direct_cloudflare_session_start_admission: focusedEvidence?.direct_cloudflare_session_start_admission ?? null,
     focused_local_resident_session_ref: focusedEvidence?.local_resident_session_ref ?? null,
-    resident_dispatch_windows_fallback_evidence_authority: focusedEvidence?.local_executor_authority ?? body?.resident_dispatch_windows_fallback_evidence_authority ?? null,
+    resident_dispatch_windows_fallback_evidence_authority:
+      focusedEvidence?.local_executor_authority
+      ?? evidenceBody?.resident_dispatch_windows_fallback_evidence_authority
+      ?? evidenceBody?.cloudflare_evidence_store_authority
+      ?? null,
     focused_recorded_at: focusedEvidence?.recorded_at ?? null,
     focused_recorded_by_principal_id: focusedEvidence?.recorded_by_principal_id ?? null,
     latest_focus_review: latestFocusReview ? {
