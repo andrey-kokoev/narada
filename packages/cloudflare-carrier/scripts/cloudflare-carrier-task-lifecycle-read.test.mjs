@@ -66,6 +66,8 @@ test('summarizeTaskLifecycleRead prefers requested task and counts open tasks', 
   assert.equal(summary.open_task_count, 1);
   assert.equal(summary.task_id, 'task_2');
   assert.equal(summary.task_status, 'claimed');
+  assert.equal(summary.report_id, null);
+  assert.equal(summary.finish_id, null);
   assert.equal(summary.claimed_by_agent_id, 'agent.alpha');
 });
 
@@ -139,4 +141,45 @@ test('formatTaskLifecycleReadText renders focused task summary', () => {
   assert.match(text, /Task: task_9 #9/);
   assert.match(text, /Title: focus task/);
   assert.match(text, /Session: session_alpha/);
+  assert.match(text, /Claim Command: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:claim:text -- --url https:\/\/carrier\.example --site site_alpha --task-id task_9 --claimant-agent <agent-id> --operator-session-file <operator-session-file>/);
+});
+
+test('formatTaskLifecycleReadText renders report and finish commands from focused task state', () => {
+  const claimedText = formatTaskLifecycleReadText({
+    worker_url: 'https://carrier.example',
+    auth_source: 'operator-session-file',
+    summary: {
+      ok: true,
+      site_id: 'site_alpha',
+      task_count: 1,
+      open_task_count: 1,
+      mutation_authority: 'cloudflare_task_lifecycle_d1',
+      mutation_class: 'task_claim',
+      cloudflare_write_admission: 'admitted',
+      task_id: 'task_claimed',
+      task_status: 'claimed',
+      report_id: null,
+      finish_id: null,
+    },
+  });
+  assert.match(claimedText, /Report Command: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:report:text -- --url https:\/\/carrier\.example --site site_alpha --task-id task_claimed --reporter-agent <agent-id> --summary <summary> --operator-session-file <operator-session-file>/);
+
+  const reportedText = formatTaskLifecycleReadText({
+    worker_url: 'https://carrier.example',
+    auth_source: 'operator-session-file',
+    summary: {
+      ok: true,
+      site_id: 'site_alpha',
+      task_count: 1,
+      open_task_count: 0,
+      mutation_authority: 'cloudflare_task_lifecycle_d1',
+      mutation_class: 'task_report',
+      cloudflare_write_admission: 'admitted',
+      task_id: 'task_reported',
+      task_status: 'claimed',
+      report_id: 'report_alpha',
+      finish_id: null,
+    },
+  });
+  assert.match(reportedText, /Finish Command: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:finish:text -- --url https:\/\/carrier\.example --site site_alpha --task-id task_reported --finalizer-agent <agent-id> --finish-verdict accepted --operator-session-file <operator-session-file>/);
 });

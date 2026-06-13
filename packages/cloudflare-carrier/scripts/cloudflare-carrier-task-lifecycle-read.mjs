@@ -85,6 +85,8 @@ export function summarizeTaskLifecycleRead(body = {}, params = {}) {
     task_id: focusedTask?.task_id ?? params.task_lifecycle_task_id ?? null,
     task_number: focusedTask?.task_number ?? null,
     task_status: focusedTask?.status ?? null,
+    report_id: focusedTask?.report_id ?? null,
+    finish_id: focusedTask?.finish_id ?? null,
     task_title: focusedTask?.title ?? null,
     carrier_session_id: focusedTask?.carrier_session_id ?? params.carrier_session_id ?? null,
     claimed_by_agent_id: focusedTask?.claimed_by_agent_id ?? null,
@@ -112,11 +114,45 @@ export function formatTaskLifecycleReadText(result) {
     ...(summary.claimed_by_agent_id ? [`Claimed By: ${summary.claimed_by_agent_id}`] : []),
     ...(summary.reported_by_agent_id ? [`Reported By: ${summary.reported_by_agent_id}`] : []),
     ...(summary.finished_by_agent_id ? [`Finished By: ${summary.finished_by_agent_id}`] : []),
+    ...formatTaskLifecycleNextCommands(result, summary),
     ...(summary.changed_file_evidence_count != null ? [`Changed File Evidence: ${summary.changed_file_evidence_count}`] : []),
     ...(summary.role_resolution_write_count != null ? [`Role Resolution Writes: ${summary.role_resolution_write_count}`] : []),
     ...(summary.roster_mutation_write_count != null ? [`Roster Mutation Writes: ${summary.roster_mutation_write_count}`] : []),
     ...(summary.code ? [`Code: ${summary.code}`] : []),
   ].join('\n') + '\n';
+}
+
+function formatTaskLifecycleNextCommands(result, summary) {
+  const workerUrl = result?.worker_url ?? '<worker-url>';
+  const siteId = summary.site_id ?? result?.params?.site_id ?? '<site-id>';
+  const taskId = summary.task_id ?? result?.params?.task_lifecycle_task_id ?? '<task-id>';
+  if (!taskId) return [];
+  const normalizedStatus = normalizeTaskStatus(summary.task_status);
+  if (summary.report_id && !summary.finish_id) {
+    return [
+      `Finish Command: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:finish:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --finalizer-agent <agent-id> --finish-verdict accepted --operator-session-file <operator-session-file>`,
+    ];
+  }
+  if (normalizedStatus === 'claimed') {
+    return [
+      `Report Command: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:report:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --reporter-agent <agent-id> --summary <summary> --operator-session-file <operator-session-file>`,
+    ];
+  }
+  if (normalizedStatus === 'open') {
+    return [
+      `Claim Command: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:claim:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --claimant-agent <agent-id> --operator-session-file <operator-session-file>`,
+    ];
+  }
+  return [];
+}
+
+function normalizeTaskStatus(value) {
+  const status = String(value ?? '').trim().toLowerCase();
+  if (status === 'open' || status === 'opened' || status === 'todo' || status === 'pending') return 'open';
+  if (status === 'claimed' || status === 'active' || status === 'needs_continuation') return 'claimed';
+  if (status === 'reported') return 'reported';
+  if (status === 'done' || status === 'resolved' || status === 'closed' || status === 'finished') return 'closed';
+  return status;
 }
 
 function option(args, name) {
