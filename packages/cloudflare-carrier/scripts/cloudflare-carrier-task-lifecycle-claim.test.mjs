@@ -218,6 +218,33 @@ test('claimCloudflareTaskLifecycleTask preserves structured refusal and conflict
   assert.equal(conflict.claimant_agent_id, 'agent_beta');
 });
 
+test('summarizeTaskLifecycleClaim prefers claim refs over inherited task create refs', () => {
+  const summary = summarizeTaskLifecycleClaim({
+    ok: true,
+    mutation_authority: 'cloudflare_task_lifecycle_d1',
+    cloudflare_write_admission: 'admitted',
+    write_effect: 'task_lifecycle_claim',
+    task: {
+      task_id: 'cloudflare-task-7',
+      status: 'claimed',
+      cutover_point_ref: 'cutover:create:v1',
+      governed_write_contract_ref: 'contract:create:v1',
+      confirmation_evidence_ref: 'evidence:create:v1',
+    },
+  }, {
+    site_id: 'site_alpha',
+    admission_id: 'admission_claim_1',
+    claimant_agent_id: 'agent_alpha',
+    cutover_point_ref: 'cutover:claim:v1',
+    governed_write_contract_ref: 'contract:claim:v1',
+    confirmation_evidence_ref: 'evidence:claim:v1',
+  });
+
+  assert.equal(summary.cutover_point_ref, 'cutover:claim:v1');
+  assert.equal(summary.governed_write_contract_ref, 'contract:claim:v1');
+  assert.equal(summary.confirmation_evidence_ref, 'evidence:claim:v1');
+});
+
 test('formatTaskLifecycleClaimText renders admitted and refused summaries without auth material', () => {
   const admitted = formatTaskLifecycleClaimText({
     status: 'ok',

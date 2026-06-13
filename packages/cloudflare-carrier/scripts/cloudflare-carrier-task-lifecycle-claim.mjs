@@ -109,9 +109,9 @@ export function summarizeTaskLifecycleClaim(body = {}, params = {}) {
     mutation_authority: body.mutation_authority ?? task.mutation_authority ?? null,
     cloudflare_write_admission: body.cloudflare_write_admission ?? task.cloudflare_write_admission ?? null,
     write_effect: body.write_effect ?? null,
-    cutover_point_ref: task.cutover_point_ref ?? params.cutover_point_ref ?? null,
-    governed_write_contract_ref: task.governed_write_contract_ref ?? params.governed_write_contract_ref ?? null,
-    confirmation_evidence_ref: task.confirmation_evidence_ref ?? params.confirmation_evidence_ref ?? null,
+    cutover_point_ref: body.cutover_point_ref ?? params.cutover_point_ref ?? task.cutover_point_ref ?? null,
+    governed_write_contract_ref: body.governed_write_contract_ref ?? params.governed_write_contract_ref ?? task.governed_write_contract_ref ?? null,
+    confirmation_evidence_ref: body.confirmation_evidence_ref ?? params.confirmation_evidence_ref ?? task.confirmation_evidence_ref ?? null,
   };
 }
 
