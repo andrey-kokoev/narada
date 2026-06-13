@@ -89,7 +89,7 @@ const ROUTE_TO_WORKFLOW = new Map([
   ['focus_operation_path_attention', { name: 'evidence', script: evidenceReadScript, flag: null }],
   ['focus_operation_path_task', { name: 'evidence', script: evidenceReadScript, flag: null }],
   ['focus_session_path_evidence', { name: 'session_evidence', script: sessionEvidenceReadScript, flag: null }],
-  ['focus_session_path_task', { name: 'evidence', script: evidenceReadScript, flag: null }],
+  ['focus_session_path_task', { name: 'task_lifecycle_review', script: taskLifecycleReadScript, flag: null }],
   ['focus_authority_path_evidence', { name: 'site_authority', script: siteAuthorityReadScript, flag: null }],
   ['focus_authority_evidence', { name: 'site_authority', script: siteAuthorityReadScript, flag: null }],
   ['review_refused_authority', { name: 'site_authority', script: siteAuthorityReadScript, flag: null }],
@@ -538,6 +538,13 @@ function buildWorkflowArgs(config, workflow, operationId, readSummary = {}) {
         ? readSummary.workflow_focus_ref.trim()
         : '';
     if (!carrierSessionId) throw new Error('operation_next_workflow_session_evidence_requires_active_session_id');
+    args.push('--carrier-session-id', carrierSessionId);
+  }
+  if (workflow.name === 'task_lifecycle_review' && readSummary.workflow_next_action === 'focus_session_path_task') {
+    const carrierSessionId = typeof readSummary.active_session_id === 'string' && readSummary.active_session_id.trim()
+      ? readSummary.active_session_id.trim()
+      : '';
+    if (!carrierSessionId) throw new Error('operation_next_workflow_task_lifecycle_requires_active_session_id');
     args.push('--carrier-session-id', carrierSessionId);
   }
   if (workflow.name === 'focus_review') {

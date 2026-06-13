@@ -36,6 +36,19 @@ test('parseTaskLifecycleReadArgs accepts task filter and operator session auth',
   assert.equal(parsed.auth.kind, 'operator_session');
 });
 
+test('parseTaskLifecycleReadArgs accepts carrier session focus', () => {
+  const parsed = parseTaskLifecycleReadArgs([
+    '--url', 'https://carrier.example/',
+    '--site', 'site_alpha',
+    '--carrier-session-id', 'session_alpha',
+    '--token', 'secret-token',
+  ], {});
+
+  assert.equal(parsed.workerUrl, 'https://carrier.example');
+  assert.equal(parsed.params.site_id, 'site_alpha');
+  assert.equal(parsed.carrierSessionId, 'session_alpha');
+});
+
 test('summarizeTaskLifecycleRead prefers requested task and counts open tasks', () => {
   const summary = summarizeTaskLifecycleRead({
     ok: true,
@@ -54,6 +67,21 @@ test('summarizeTaskLifecycleRead prefers requested task and counts open tasks', 
   assert.equal(summary.task_id, 'task_2');
   assert.equal(summary.task_status, 'claimed');
   assert.equal(summary.claimed_by_agent_id, 'agent.alpha');
+});
+
+test('summarizeTaskLifecycleRead can focus the first task for a carrier session', () => {
+  const summary = summarizeTaskLifecycleRead({
+    ok: true,
+    site_id: 'site_alpha',
+    tasks: [
+      { task_id: 'task_1', status: 'closed', carrier_session_id: 'session_beta' },
+      { task_id: 'task_2', status: 'open', carrier_session_id: 'session_alpha', title: 'session task' },
+    ],
+  }, { site_id: 'site_alpha', carrier_session_id: 'session_alpha' });
+
+  assert.equal(summary.task_id, 'task_2');
+  assert.equal(summary.carrier_session_id, 'session_alpha');
+  assert.equal(summary.task_title, 'session task');
 });
 
 test('readCloudflareTaskLifecycle posts task_lifecycle.task.list', async () => {
@@ -97,16 +125,18 @@ test('formatTaskLifecycleReadText renders focused task summary', () => {
       open_task_count: 2,
       mutation_authority: 'cloudflare_task_lifecycle_d1',
       mutation_class: 'task_create',
-      cloudflare_write_admission: 'admitted',
-      task_id: 'task_9',
-      task_number: 9,
-      task_status: 'open',
-      task_title: 'focus task',
-    },
+    cloudflare_write_admission: 'admitted',
+    task_id: 'task_9',
+    task_number: 9,
+    task_status: 'open',
+    task_title: 'focus task',
+    carrier_session_id: 'session_alpha',
+  },
   });
 
   assert.match(text, /Task Lifecycle Review: ok/);
   assert.match(text, /Tasks: count=3 open=2/);
   assert.match(text, /Task: task_9 #9/);
   assert.match(text, /Title: focus task/);
+  assert.match(text, /Session: session_alpha/);
 });

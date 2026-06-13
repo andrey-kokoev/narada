@@ -687,6 +687,24 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   });
   assert.match(operationReadSessionPathEvidenceText, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
 
+  const operationReadSessionPathTaskText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_live',
+      active_session_id: 'session_alpha',
+      current_status: 'active',
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'carrier_evidence',
+      workflow_next_action: 'focus_session_path_task',
+      workflow_reason: 'session_path_has_open_task',
+      posture_next_action: 'monitor_operations',
+    },
+  });
+  assert.match(operationReadSessionPathTaskText, /Task Lifecycle Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
+
   const operationReadLifecycleSessionText = formatProductSurfaceText({
     operation: 'operation.read',
     worker_url: 'https://carrier.example.test',

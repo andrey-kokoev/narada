@@ -7,6 +7,7 @@ export function parseTaskLifecycleReadArgs(argv = [], env = process.env) {
   const workerUrl = normalizeWorkerUrl(option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '');
   const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? null;
   const taskId = option(args, '--task-id') ?? env.CLOUDFLARE_TASK_LIFECYCLE_TASK_ID ?? null;
+  const carrierSessionId = option(args, '--carrier-session-id') ?? option(args, '--session-id') ?? env.CLOUDFLARE_CARRIER_SESSION_ID ?? null;
   const limit = clampInteger(option(args, '--limit') ?? env.CLOUDFLARE_TASK_LIFECYCLE_TASK_LIMIT ?? 25, 1, 100, 25);
   const format = option(args, '--format') ?? env.CLOUDFLARE_TASK_LIFECYCLE_TASK_FORMAT ?? 'json';
   const auth = resolveAuth(args, env);
@@ -25,6 +26,7 @@ export function parseTaskLifecycleReadArgs(argv = [], env = process.env) {
       limit,
       ...(taskId ? { task_lifecycle_task_id: taskId } : {}),
     },
+    carrierSessionId,
   };
 }
 
@@ -65,7 +67,10 @@ export async function readCloudflareTaskLifecycle(config, fetchImpl = fetch) {
 
 export function summarizeTaskLifecycleRead(body = {}, params = {}) {
   const tasks = Array.isArray(body?.tasks) ? body.tasks : [];
-  const focusedTask = tasks.find((entry) => entry?.task_id === params.task_lifecycle_task_id) ?? tasks[0] ?? null;
+  const focusedTask = tasks.find((entry) => entry?.task_id === params.task_lifecycle_task_id)
+    ?? tasks.find((entry) => entry?.carrier_session_id === params.carrier_session_id)
+    ?? tasks[0]
+    ?? null;
   const openStatuses = new Set(['open', 'opened', 'claimed', 'active', 'needs_continuation']);
   const openTaskCount = tasks.filter((entry) => openStatuses.has(String(entry?.status ?? '').toLowerCase())).length;
   return {
@@ -81,6 +86,7 @@ export function summarizeTaskLifecycleRead(body = {}, params = {}) {
     task_number: focusedTask?.task_number ?? null,
     task_status: focusedTask?.status ?? null,
     task_title: focusedTask?.title ?? null,
+    carrier_session_id: focusedTask?.carrier_session_id ?? params.carrier_session_id ?? null,
     claimed_by_agent_id: focusedTask?.claimed_by_agent_id ?? null,
     reported_by_agent_id: focusedTask?.reported_by_agent_id ?? null,
     finished_by_agent_id: focusedTask?.finished_by_agent_id ?? null,
@@ -102,6 +108,7 @@ export function formatTaskLifecycleReadText(result) {
     `Task: ${summary.task_id ?? 'unknown'}${summary.task_number ? ` #${summary.task_number}` : ''}`,
     `Status: ${summary.task_status ?? 'unknown'}`,
     ...(summary.task_title ? [`Title: ${summary.task_title}`] : []),
+    ...(summary.carrier_session_id ? [`Session: ${summary.carrier_session_id}`] : []),
     ...(summary.claimed_by_agent_id ? [`Claimed By: ${summary.claimed_by_agent_id}`] : []),
     ...(summary.reported_by_agent_id ? [`Reported By: ${summary.reported_by_agent_id}`] : []),
     ...(summary.finished_by_agent_id ? [`Finished By: ${summary.finished_by_agent_id}`] : []),
