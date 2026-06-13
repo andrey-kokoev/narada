@@ -456,6 +456,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(operationListText, /Lifecycle Statuses: inactive=1/);
   assert.match(operationListText, /Next Operation Status: inactive/);
   assert.match(operationListText, /Focused Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(operationListText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.match(operationListText, /Operation Route: domain=operation_posture state=operation_posture_attention action=focus_next_operation target=operation_live status=needs_attention reason=operation_needs_review/);
   assert.match(operationListText, /Focus Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file> --execute-operation-focus/);
 
@@ -484,6 +485,32 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
     },
   });
   assert.match(operationListEvidenceText, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+
+  const operationListContinuityText = formatProductSurfaceText({
+    operation: 'operation.list',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.list',
+      site_id: 'site_alpha',
+      operation_count: 1,
+      active_operation_id: 'operation_live',
+      next_operation_id: 'operation_live',
+      next_operation_status: 'active',
+      operation_status_counts: { active: 1 },
+      next_status: 'needs_attention',
+      next_action: 'refresh_site_continuity_loop',
+      next_reason: 'operation_lifecycle_continuity_loop_stale',
+      route_domain: 'operation_posture',
+      route_command_state: 'operation_posture_ready',
+      route_command_action: 'monitor_operations',
+      route_next_action: 'monitor_operations',
+      route_target: 'operation_live',
+      route_status: 'ready',
+      route_reason: 'operation_lifecycle_continuity_loop_stale',
+    },
+  });
+  assert.match(operationListContinuityText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
 
   const continuationListText = formatProductSurfaceText({
     operation: 'operation.list',
