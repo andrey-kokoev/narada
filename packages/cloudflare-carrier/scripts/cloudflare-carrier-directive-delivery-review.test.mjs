@@ -40,7 +40,13 @@ test('summarizeDirectiveDeliveryReview tracks focused undelivered directive stat
           classification_state: 'critical',
           latest_delay_minutes: 18,
           critical_minutes: 15,
+          directive_action: 'record_directive_emission_intent',
           fallback_status: 'available',
+          carrier_admission: {
+            directive_visibility: 'record_only',
+            dispatch_to_provider: false,
+            complete_without_provider: true,
+          },
           recorded_at: '2026-06-12T12:00:00.000Z',
         },
         {
@@ -80,6 +86,10 @@ test('summarizeDirectiveDeliveryReview tracks focused undelivered directive stat
   assert.equal(summary.latest_undelivered_directive_record_id, 'directive_record_focus');
   assert.equal(summary.focused_classification_state, 'critical');
   assert.equal(summary.focused_latest_delay_minutes, 18);
+  assert.equal(summary.focused_directive_action, 'record_directive_emission_intent');
+  assert.equal(summary.focused_directive_visibility, 'record_only');
+  assert.equal(summary.focused_dispatch_to_provider, false);
+  assert.equal(summary.focused_complete_without_provider, true);
   assert.equal(summary.latest_delivery_recorded_at, null);
 });
 
@@ -160,6 +170,10 @@ test('formatDirectiveDeliveryReviewText renders directive review summary', () =>
       focused_classification_state: 'critical',
       focused_latest_delay_minutes: 18,
       focused_critical_minutes: 15,
+      focused_directive_action: 'record_directive_emission_intent',
+      focused_directive_visibility: 'record_only',
+      focused_dispatch_to_provider: false,
+      focused_complete_without_provider: true,
       directive_authority: 'cloudflare_directive_dual_record',
       delivery_authority: 'cloudflare_primary_directive_delivery',
       dispatch_authority: 'cloudflare_primary_dispatcher',
@@ -174,6 +188,8 @@ test('formatDirectiveDeliveryReviewText renders directive review summary', () =>
   assert.match(text, /Workflow: action=review_directive_delivery reason=undelivered_directives focus=directive_record_focus/);
   assert.match(text, /Directive Records: count=2 undelivered=1 latest_undelivered=directive_record_focus/);
   assert.match(text, /Directive Deliveries: count=1 focused_delivery=none state=none ok=unknown/);
+  assert.match(text, /Focused Directive: id=directive_record_focus classification=critical delay=18 critical=15 action=record_directive_emission_intent visibility=record_only/);
+  assert.match(text, /Focused Admission: delivery_action=none dispatch_to_provider=false complete_without_provider=true/);
   assert.match(text, /Authority: record=cloudflare_directive_dual_record delivery=cloudflare_primary_directive_delivery dispatch=cloudflare_primary_dispatcher fallback=windows_fallback_dispatcher/);
 });
 

@@ -99,6 +99,21 @@ export function summarizeDirectiveDeliveryReview(operationBody = {}, directiveRe
     focused_latest_delay_minutes: focusedDirectiveRecord?.latest_delay_minutes ?? null,
     focused_critical_minutes: focusedDirectiveRecord?.critical_minutes ?? null,
     focused_fallback_status: focusedDirectiveDelivery?.fallback_status ?? focusedDirectiveRecord?.fallback_status ?? null,
+    focused_directive_action: focusedDirectiveRecord?.directive_action ?? null,
+    focused_delivery_action: focusedDirectiveDelivery?.delivery_action ?? null,
+    focused_directive_visibility:
+      focusedDirectiveDelivery?.carrier_admission?.directive_visibility
+      ?? focusedDirectiveRecord?.carrier_admission?.directive_visibility
+      ?? focusedDirectiveRecord?.directive_intent?.input_event?.metadata?.directive?.visibility
+      ?? null,
+    focused_dispatch_to_provider:
+      focusedDirectiveDelivery?.carrier_admission?.dispatch_to_provider
+      ?? focusedDirectiveRecord?.carrier_admission?.dispatch_to_provider
+      ?? null,
+    focused_complete_without_provider:
+      focusedDirectiveDelivery?.carrier_admission?.complete_without_provider
+      ?? focusedDirectiveRecord?.carrier_admission?.complete_without_provider
+      ?? null,
     focused_delivery_state: focusedDirectiveDelivery?.delivery_state ?? null,
     focused_delivery_ok: focusedDirectiveDelivery?.delivery_ok ?? null,
     undelivered_directive_record_count: undeliveredDirectiveRecords.length,
@@ -124,7 +139,19 @@ export function formatDirectiveDeliveryReviewText(result) {
     `Directive Deliveries: count=${summary.directive_delivery_count ?? 0} focused_delivery=${summary.focused_delivery_id ?? 'none'} state=${summary.focused_delivery_state ?? 'none'} ok=${summary.focused_delivery_ok ?? 'unknown'}`,
   ];
   if (summary.focused_directive_record_id || summary.focused_classification_state || summary.focused_latest_delay_minutes !== null) {
-    lines.push(`Focused Directive: id=${summary.focused_directive_record_id ?? 'none'} classification=${summary.focused_classification_state ?? 'unknown'} delay=${summary.focused_latest_delay_minutes ?? 'unknown'} critical=${summary.focused_critical_minutes ?? 'unknown'}`);
+    lines.push(
+      `Focused Directive: id=${summary.focused_directive_record_id ?? 'none'} classification=${summary.focused_classification_state ?? 'unknown'}`
+      + ` delay=${summary.focused_latest_delay_minutes ?? 'unknown'} critical=${summary.focused_critical_minutes ?? 'unknown'}`
+      + ` action=${summary.focused_directive_action ?? 'unknown'}`
+      + ` visibility=${summary.focused_directive_visibility ?? 'unknown'}`,
+    );
+  }
+  if (summary.focused_delivery_action || summary.focused_dispatch_to_provider !== null || summary.focused_complete_without_provider !== null) {
+    lines.push(
+      `Focused Admission: delivery_action=${summary.focused_delivery_action ?? 'none'}`
+      + ` dispatch_to_provider=${summary.focused_dispatch_to_provider ?? 'unknown'}`
+      + ` complete_without_provider=${summary.focused_complete_without_provider ?? 'unknown'}`,
+    );
   }
   if (summary.directive_authority || summary.delivery_authority || summary.dispatch_authority || summary.fallback_authority) {
     lines.push(`Authority: record=${summary.directive_authority ?? 'unknown'} delivery=${summary.delivery_authority ?? 'unknown'} dispatch=${summary.dispatch_authority ?? 'unknown'} fallback=${summary.fallback_authority ?? 'unknown'}`);
