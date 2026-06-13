@@ -315,6 +315,9 @@ export function formatProductSurfaceText(result) {
       lines.push(`Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --operator-session-file <operator-session-file> --execute-site-next`);
       if (summary.route_next_action === 'focus_next_site' && summary.next_site_id) {
         lines.push(`Focus Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:focus:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --focused-site-id ${summary.next_site_id} --operator-session-file <operator-session-file> --execute-site-focus`);
+        if (summary.next_action === 'focus_next_operation') {
+          lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.next_site_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+        }
       }
     }
     if (summary.health_counts) lines.push(`Health Counts: ${formatKeyValueMap(summary.health_counts)}`);

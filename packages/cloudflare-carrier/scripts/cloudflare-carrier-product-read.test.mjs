@@ -282,19 +282,20 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       site_count: 2,
       next_site_id: 'site_alpha',
       next_health: 'attention',
-      next_action: 'bind_cloudflare_product_next_site_locally',
-      next_reason: 'continuity_direction',
+      next_action: 'focus_next_operation',
+      next_reason: 'operation_posture',
       route_domain: 'site_posture',
       route_command_state: 'site_posture_attention',
       route_command_action: 'focus_next_site',
       route_next_action: 'focus_next_site',
       route_target: 'site_alpha',
       route_status: 'needs_attention',
-      route_reason: 'continuity_direction',
+      route_reason: 'operation_posture',
     },
   });
   assert.match(siteListFocusText, /Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live -- --url https:\/\/carrier\.example\.test --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(siteListFocusText, /Focus Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:focus:workflow:live -- --url https:\/\/carrier\.example\.test --focused-site-id site_alpha --operator-session-file <operator-session-file> --execute-site-focus/);
+  assert.match(siteListFocusText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
 
   const operationFallbackText = formatProductSurfaceText({
     operation: 'operation.read',
