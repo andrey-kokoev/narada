@@ -147,6 +147,9 @@ export function summarizeRepositoryPublicationRequestReview(body = {}, options =
       : [];
   const focusReviews = Array.isArray(body?.operation_focus_reviews) ? body.operation_focus_reviews : [];
   const focusRef = options.focusRef ?? operationSummary.workflow_focus_ref ?? null;
+  const focusedRequests = focusRef
+    ? requests.filter((entry) => entry?.repository_publication_request_id === focusRef)
+    : requests;
   const focusedRequest = selectFocusedRequest(requests, focusRef);
   const focusedRequestId = focusedRequest?.repository_publication_request_id ?? focusRef ?? null;
   const latestAdmission = focusedRequestId
@@ -178,7 +181,7 @@ export function summarizeRepositoryPublicationRequestReview(body = {}, options =
     workflow_next_action: operationSummary.workflow_next_action ?? null,
     workflow_reason: operationSummary.workflow_reason ?? null,
     workflow_focus_ref: operationSummary.workflow_focus_ref ?? focusRef ?? null,
-    request_count: requests.length,
+    request_count: focusedRequests.length,
     focused_repository_publication_request_id: focusedRequestId,
     focused_publication_ref: focusedRequest?.publication_ref ?? null,
     focused_repository_ref: focusedRequest?.repository_ref ?? null,

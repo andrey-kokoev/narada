@@ -155,6 +155,21 @@ test('readRepositoryPublicationRequestReview supports direct request review with
           cloudflare_git_push_admission: 'not_admitted',
           direct_cloudflare_repository_mutation_admission: 'not_admitted',
         },
+        {
+          repository_publication_request_id: 'repository_publication_request_live_2',
+          operation_id: 'operation_other',
+          publication_ref: 'repository-publication:live-smoke:20260611060000',
+          repository_ref: 'github:andrey-kokoev/narada',
+          branch_ref: 'main',
+          source_change_ref: 'cloudflare-local-change:site_narada_cloudflare:20260611060000',
+          requested_action_summary: 'request governed Cloudflare GitHub repository publication execution',
+          request_posture: 'cloudflare_queued_repository_publication_request_windows_must_admit_publish_and_return_evidence',
+          authority_locus: 'cloudflare_repository_publication_request_queue',
+          repository_publication_executor_authority: 'windows_repository_publication_executor',
+          repository_publication_admission: 'pending_windows_publication_admission',
+          cloudflare_git_push_admission: 'not_admitted',
+          direct_cloudflare_repository_mutation_admission: 'not_admitted',
+        },
       ],
     }],
     ['repository_publication.admission.list', {
@@ -208,6 +223,7 @@ test('readRepositoryPublicationRequestReview supports direct request review with
 
   assert.equal(result.summary.site_id, 'site_narada_cloudflare');
   assert.equal(result.summary.operation_id, 'operation_site_read');
+  assert.equal(result.summary.request_count, 1);
   assert.equal(result.summary.focused_repository_publication_request_id, 'repository_publication_request_live_1');
   assert.equal(result.summary.current_request_posture, 'repository_publication_request_admitted_pending_execution');
   assert.equal(result.summary.linked_admission_id, 'admission_1');
