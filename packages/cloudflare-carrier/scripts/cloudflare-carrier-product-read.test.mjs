@@ -608,6 +608,23 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(operationReadReplayText, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
   assert.match(operationReadEvidenceText, /Posture Route: status=needs_attention action=focus_next_operation reason=use_focused_operation target=operation_focus_target/);
 
+  const operationReadSessionPathEvidenceText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_live',
+      current_status: 'active',
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'carrier_evidence',
+      workflow_next_action: 'focus_session_path_evidence',
+      workflow_reason: 'session_path_has_failures',
+      posture_next_action: 'monitor_operations',
+    },
+  });
+  assert.match(operationReadSessionPathEvidenceText, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+
   const operationReadMailboxText = formatProductSurfaceText({
     operation: 'operation.read',
     worker_url: 'https://carrier.example.test',
