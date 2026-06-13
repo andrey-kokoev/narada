@@ -51,6 +51,10 @@ export function summarizeSiteFileChangeProposalReview(body = {}, options = {}) {
   const materializations = Array.isArray(body?.site_file_materializations) ? body.site_file_materializations : [];
   const focusReviews = Array.isArray(body?.operation_focus_reviews) ? body.operation_focus_reviews : [];
   const focusRef = options.focusRef ?? operationSummary.workflow_focus_ref ?? null;
+  const exactFocusedProposals = focusRef
+    ? proposals.filter((entry) => entry?.proposal_id === focusRef)
+    : [];
+  const focusedProposals = exactFocusedProposals.length > 0 ? exactFocusedProposals : proposals;
   const focusedProposal = selectFocusedProposal(proposals, focusRef);
   const focusedProposalId = focusedProposal?.proposal_id ?? focusRef ?? null;
   const proposalRecord = focusedProposal?.record?.proposal ?? focusedProposal?.proposal ?? null;
@@ -82,7 +86,7 @@ export function summarizeSiteFileChangeProposalReview(body = {}, options = {}) {
     workflow_next_action: operationSummary.workflow_next_action ?? null,
     workflow_reason: operationSummary.workflow_reason ?? null,
     workflow_focus_ref: operationSummary.workflow_focus_ref ?? focusRef ?? null,
-    proposal_count: proposals.length,
+    proposal_count: focusedProposals.length,
     focused_proposal_id: focusedProposalId,
     focused_proposal_ref: focusedProposal?.proposal_ref ?? proposalRecord?.proposal_ref ?? null,
     focused_proposal_summary: focusedProposal?.proposal_summary ?? proposalRecord?.proposal_summary ?? null,
