@@ -51,6 +51,8 @@ test('summarizeLocalIngressEvidence lifts latest local ingress execution evidenc
   });
 
   assert.equal(summary.evidence_count, 1);
+  assert.equal(summary.focused_evidence_id, 'local_ingress_evidence_alpha');
+  assert.equal(summary.focused_local_execution_id, 'windows_execution_alpha');
   assert.equal(summary.latest_evidence_id, 'local_ingress_evidence_alpha');
   assert.equal(summary.latest_local_execution_id, 'windows_execution_alpha');
 });
@@ -77,6 +79,8 @@ test('summarizeLocalIngressEvidence narrows to the focused evidence id', () => {
   });
 
   assert.equal(summary.evidence_count, 1);
+  assert.equal(summary.focused_evidence_id, 'local_ingress_evidence_alpha');
+  assert.equal(summary.focused_local_execution_id, 'windows_execution_alpha');
   assert.equal(summary.latest_evidence_id, 'local_ingress_evidence_alpha');
   assert.equal(summary.latest_local_execution_id, 'windows_execution_alpha');
 });
@@ -104,6 +108,7 @@ test('readLocalIngressEvidence returns summarized local ingress evidence', async
 
   assert.equal(result.schema, 'narada.cloudflare_carrier.local_ingress_evidence_read.v1');
   assert.equal(result.summary.evidence_count, 1);
+  assert.equal(result.summary.focused_evidence_id, 'local_ingress_evidence_alpha');
   assert.equal(result.summary.latest_evidence_id, 'local_ingress_evidence_alpha');
 });
 
@@ -133,6 +138,17 @@ test('formatLocalIngressEvidenceReadText prints local ingress evidence summary',
     summary: {
       site_id: 'site_alpha',
       evidence_count: 1,
+      focused_evidence_id: 'local_ingress_evidence_alpha',
+      focused_status: 'completed',
+      focused_request_id: 'local_ingress_request_alpha',
+      focused_local_execution_id: 'windows_execution_alpha',
+      focused_executor_authority: 'windows_local_ingress_executor',
+      focused_windows_admission_action: 'admit',
+      focused_windows_admission_reason: 'local_ingress_execution_completed',
+      focused_changed_file_count: 2,
+      focused_rollback_evidence_ref: 'rollback_alpha',
+      focused_evidence_posture: 'windows_local_ingress_executed_cloudflare_recorded_evidence',
+      focused_recorded_at: '2026-06-13T04:31:00.000Z',
       latest_evidence_id: 'local_ingress_evidence_alpha',
       latest_status: 'completed',
       latest_request_id: 'local_ingress_request_alpha',
@@ -154,7 +170,8 @@ test('formatLocalIngressEvidenceReadText prints local ingress evidence summary',
   });
 
   assert.match(text, /Local Ingress Evidence Review: ok/);
-  assert.match(text, /Evidence: count=1 latest=local_ingress_evidence_alpha status=completed/);
+  assert.match(text, /Evidence: count=1 focused=local_ingress_evidence_alpha status=completed/);
   assert.match(text, /Current Posture: windows_local_ingress_executed_cloudflare_recorded_evidence/);
   assert.match(text, /Admissions: windows=admit \/ local_ingress_execution_completed local_filesystem_mutation=admitted_by_windows_local_ingress/);
+  assert.match(text, /Focused Evidence: recorded=2026-06-13T04:31:00.000Z/);
 });

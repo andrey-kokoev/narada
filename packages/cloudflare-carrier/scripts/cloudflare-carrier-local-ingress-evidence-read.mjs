@@ -60,6 +60,17 @@ export function summarizeLocalIngressEvidence(body = {}, options = {}) {
     direct_cloudflare_filesystem_mutation_admission: body?.direct_cloudflare_filesystem_mutation_admission ?? null,
     repository_publication_admission: body?.repository_publication_admission ?? null,
     authority_partition: body?.authority_partition ?? null,
+    focused_evidence_id: latestEvidence?.local_ingress_evidence_id ?? null,
+    focused_request_id: latestEvidence?.local_ingress_request_id ?? null,
+    focused_local_execution_id: latestEvidence?.local_execution_id ?? null,
+    focused_status: latestEvidence?.local_execution_status ?? null,
+    focused_executor_authority: latestEvidence?.local_executor_authority ?? null,
+    focused_windows_admission_action: latestEvidence?.windows_admission_action ?? null,
+    focused_windows_admission_reason: latestEvidence?.windows_admission_reason ?? null,
+    focused_changed_file_count: latestEvidence?.changed_file_count ?? latestEvidence?.evidence?.changed_files?.length ?? 0,
+    focused_rollback_evidence_ref: latestEvidence?.rollback_evidence_ref ?? null,
+    focused_recorded_at: latestEvidence?.recorded_at ?? null,
+    focused_evidence_posture: latestEvidence?.evidence_posture ?? null,
     latest_evidence_id: latestEvidence?.local_ingress_evidence_id ?? null,
     latest_request_id: latestEvidence?.local_ingress_request_id ?? null,
     latest_local_execution_id: latestEvidence?.local_execution_id ?? null,
@@ -78,24 +89,24 @@ export function summarizeLocalIngressEvidence(body = {}, options = {}) {
 
 export function formatLocalIngressEvidenceReadText(result) {
   const summary = result?.summary ?? {};
-  const windowsAdmission = [summary.latest_windows_admission_action, summary.latest_windows_admission_reason].filter(Boolean).join(' / ');
+  const windowsAdmission = [summary.focused_windows_admission_action, summary.focused_windows_admission_reason].filter(Boolean).join(' / ');
   const lines = [
     'Local Ingress Evidence Review: ok',
     `Worker: ${result?.worker_url ?? 'unknown'}`,
     `Auth: ${result?.auth_source ?? 'unknown'}`,
     `Site: ${summary.site_id ?? 'unknown'}`,
-    `Evidence: count=${summary.evidence_count ?? 0} latest=${summary.latest_evidence_id ?? 'none'} status=${summary.latest_status ?? 'unknown'}`,
-    `Execution: request=${summary.latest_request_id ?? 'none'} local_execution=${summary.latest_local_execution_id ?? 'none'} executor=${summary.latest_executor_authority ?? 'unknown'}`,
-    `Current Posture: ${summary.latest_evidence_posture ?? 'unknown'}`,
+    `Evidence: count=${summary.evidence_count ?? 0} focused=${summary.focused_evidence_id ?? 'none'} status=${summary.focused_status ?? 'unknown'}`,
+    `Execution: request=${summary.focused_request_id ?? 'none'} local_execution=${summary.focused_local_execution_id ?? 'none'} executor=${summary.focused_executor_authority ?? 'unknown'}`,
+    `Current Posture: ${summary.focused_evidence_posture ?? 'unknown'}`,
     `Admissions: windows=${windowsAdmission || 'none'} local_filesystem_mutation=${summary.local_filesystem_mutation_admission ?? 'unknown'}`,
-    `Changed Files: count=${summary.latest_changed_file_count ?? 0} rollback=${summary.latest_rollback_evidence_ref ?? 'none'}`,
+    `Changed Files: count=${summary.focused_changed_file_count ?? 0} rollback=${summary.focused_rollback_evidence_ref ?? 'none'}`,
     `Cloudflare Boundaries: evidence_store=${summary.cloudflare_evidence_store_authority ?? 'unknown'} direct_cloudflare_filesystem_mutation=${summary.direct_cloudflare_filesystem_mutation_admission ?? 'unknown'} repository_publication=${summary.repository_publication_admission ?? 'unknown'}`,
   ];
-  if (summary.local_ingress_evidence_authority || summary.authority_partition || summary.latest_evidence_posture) {
-    lines.push(`Authority: evidence=${summary.local_ingress_evidence_authority ?? 'unknown'} posture=${summary.latest_evidence_posture ?? 'unknown'} partition=${summary.authority_partition ?? 'unknown'}`);
+  if (summary.local_ingress_evidence_authority || summary.authority_partition || summary.focused_evidence_posture) {
+    lines.push(`Authority: evidence=${summary.local_ingress_evidence_authority ?? 'unknown'} posture=${summary.focused_evidence_posture ?? 'unknown'} partition=${summary.authority_partition ?? 'unknown'}`);
   }
-  if (summary.latest_recorded_at) {
-    lines.push(`Latest Evidence: recorded=${summary.latest_recorded_at}`);
+  if (summary.focused_recorded_at) {
+    lines.push(`Focused Evidence: recorded=${summary.focused_recorded_at}`);
   }
   return `${lines.join('\n')}\n`;
 }

@@ -13,7 +13,7 @@ test('parseLocalIngressRequestReadArgs reuses direct local ingress request list 
     '--url', 'https://carrier.example.test',
     '--site', 'site_alpha',
     '--operator-session-cookie', 'operator-session-cookie',
-    '--local-ingress-request-id', 'local_ingress_request_alpha',
+    '--focus-ref', 'local_ingress_request_alpha',
     '--format', 'text',
   ], {});
 
@@ -55,8 +55,8 @@ test('summarizeLocalIngressRequest lifts latest local ingress request posture an
   });
 
   assert.equal(summary.request_count, 1);
-  assert.equal(summary.latest_request_id, 'local_ingress_request_alpha');
-  assert.equal(summary.latest_requested_action_ref, 'site_file_materialization.admit');
+  assert.equal(summary.focused_request_id, 'local_ingress_request_alpha');
+  assert.equal(summary.focused_requested_action_ref, 'site_file_materialization.admit');
   assert.equal(summary.requested_posture, 'request_only_pending_windows_execution');
   assert.equal(summary.current_posture, 'local_repository_filesystem_mutation_completed');
   assert.equal(summary.latest_evidence_id, 'local_ingress_evidence_alpha');
@@ -110,9 +110,36 @@ test('readLocalIngressRequest returns summarized local ingress request state and
 
   assert.equal(result.schema, 'narada.cloudflare_carrier.local_ingress_request_read.v1');
   assert.equal(result.summary.request_count, 1);
-  assert.equal(result.summary.latest_request_id, 'local_ingress_request_alpha');
+  assert.equal(result.summary.focused_request_id, 'local_ingress_request_alpha');
   assert.equal(result.summary.requested_posture, 'request_only_pending_windows_execution');
   assert.equal(result.summary.current_posture, 'local_repository_filesystem_mutation_completed');
+});
+
+test('readLocalIngressRequest fails explicitly when a focused request is missing', async () => {
+  await assert.rejects(
+    () => readLocalIngressRequest({
+      workerUrl: 'https://carrier.example.test',
+      operation: 'local_ingress.request.list',
+      requestId: 'request_local_ingress_review_2',
+      params: { site_id: 'site_alpha' },
+      focusRequestId: 'local_ingress_request_missing',
+      auth: { kind: 'operator_session', value: 'cookie-value', source: 'operator-session-file' },
+    }, async (_url, init) => {
+      const body = JSON.parse(init.body);
+      if (body.operation === 'local_ingress.request.list') {
+        return {
+          status: 200,
+          ok: true,
+          text: async () => JSON.stringify({
+            site_id: 'site_alpha',
+            requests: [{ local_ingress_request_id: 'local_ingress_request_alpha' }],
+          }),
+        };
+      }
+      throw new Error(`unexpected operation:${body.operation}`);
+    }),
+    /local_ingress_request_review_focus_not_found:local_ingress_request_missing/,
+  );
 });
 
 test('formatLocalIngressRequestReadText prints local ingress request summary', () => {
@@ -122,19 +149,19 @@ test('formatLocalIngressRequestReadText prints local ingress request summary', (
     summary: {
       site_id: 'site_alpha',
       request_count: 1,
-      latest_request_id: 'local_ingress_request_alpha',
-      latest_requested_action_ref: 'site_file_materialization.admit',
+      focused_request_id: 'local_ingress_request_alpha',
+      focused_requested_action_ref: 'site_file_materialization.admit',
       local_execution_admission: 'pending_windows_admission',
       local_executor_authority: 'windows_local_ingress_executor',
-      latest_target_authority_locus: 'local-windows-site-authority',
+      focused_target_authority_locus: 'local-windows-site-authority',
       direct_cloudflare_filesystem_mutation_admission: 'not_admitted',
       repository_publication_admission: 'not_admitted',
       requested_posture: 'request_only_pending_windows_execution',
       current_posture: 'local_repository_filesystem_mutation_completed',
       local_ingress_request_authority: 'cloudflare_local_ingress_request_queue',
       authority_partition: 'cloudflare_queues_governed_local_ingress_request_windows_admits_executes_and_returns_evidence',
-      latest_operation_id: 'operation_site_read',
-      latest_recorded_at: '2026-06-13T04:30:00.000Z',
+      focused_operation_id: 'operation_site_read',
+      focused_recorded_at: '2026-06-13T04:30:00.000Z',
       latest_evidence_id: 'local_ingress_evidence_alpha',
       latest_local_execution_id: 'windows_local_ingress_execution_alpha',
       latest_execution_status: 'completed',
@@ -142,9 +169,10 @@ test('formatLocalIngressRequestReadText prints local ingress request summary', (
   });
 
   assert.match(text, /Local Ingress Request Review: ok/);
-  assert.match(text, /Requests: count=1 latest=local_ingress_request_alpha action=site_file_materialization\.admit/);
+  assert.match(text, /Requests: count=1 focused=local_ingress_request_alpha action=site_file_materialization\.admit/);
   assert.match(text, /Requested Execution: admission=pending_windows_admission executor=windows_local_ingress_executor target=local-windows-site-authority/);
   assert.match(text, /Current Posture: local_repository_filesystem_mutation_completed/);
   assert.match(text, /Requested Posture: request_only_pending_windows_execution/);
   assert.match(text, /Current Execution: evidence=local_ingress_evidence_alpha local_execution=windows_local_ingress_execution_alpha status=completed/);
+  assert.match(text, /Focused Request: operation=operation_site_read recorded=2026-06-13T04:30:00.000Z/);
 });
