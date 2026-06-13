@@ -91,6 +91,8 @@ export async function runSiteNextWorkflowLive(
         list_before_next: listBefore.summary,
         focus_result: null,
         delegated_result: delegatedResult,
+        list_after_next: null,
+        list_after_next_followup: null,
       };
     }
     return {
@@ -102,6 +104,8 @@ export async function runSiteNextWorkflowLive(
       selected_site_id: null,
       list_before_next: listBefore.summary,
       delegated_result: null,
+      list_after_next: null,
+      list_after_next_followup: null,
     };
   }
 
@@ -123,6 +127,26 @@ export async function runSiteNextWorkflowLive(
       await runNodeScript(buildSiteActionArgs(config, selectedSiteId), { cwd: packageRoot }),
       'site_next_workflow_action',
     );
+    let listAfter = parseJsonStdout(
+      await runNodeScript(buildSiteListArgs(config), { cwd: packageRoot }),
+      'site_list_after_next_workflow',
+    );
+    assert.equal(listAfter.schema, 'narada.cloudflare_carrier.product_read.v1');
+    let listAfterFollowup = null;
+    if (
+      shouldRetryListAfterNext({
+        selectedSiteId,
+        delegatedResult,
+        listAfterSummary: listAfter.summary,
+      })
+    ) {
+      listAfterFollowup = parseJsonStdout(
+        await runNodeScript(buildSiteListArgs(config), { cwd: packageRoot }),
+        'site_list_after_next_workflow_followup',
+      );
+      assert.equal(listAfterFollowup.schema, 'narada.cloudflare_carrier.product_read.v1');
+      listAfter = listAfterFollowup;
+    }
     return {
       schema: 'narada.cloudflare_carrier.site_next_workflow_live.v1',
       status: 'ok',
@@ -133,6 +157,8 @@ export async function runSiteNextWorkflowLive(
       list_before_next: listBefore.summary,
       focus_result: focusResult,
       delegated_result: delegatedResult,
+      list_after_next: listAfter.summary,
+      list_after_next_followup: listAfterFollowup?.summary ?? null,
     };
   }
 
@@ -182,6 +208,15 @@ function buildSiteFocusArgs(config, siteId) {
   ];
   appendAuthOptions(args, config);
   return args;
+}
+
+function shouldRetryListAfterNext({ selectedSiteId, delegatedResult, listAfterSummary }) {
+  const siteActionNext = delegatedResult?.read_after_action?.next_action ?? null;
+  const listNextSiteId = listAfterSummary?.next_site_id ?? null;
+  const listNextAction = listAfterSummary?.next_action ?? null;
+  return siteActionNext === 'monitor_site'
+    && listNextSiteId === selectedSiteId
+    && listNextAction !== 'monitor_sites';
 }
 
 function appendAuthOptions(args, config) {

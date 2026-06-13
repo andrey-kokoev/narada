@@ -152,6 +152,18 @@ test('runSiteNextWorkflowLive delegates focus_next_site to site focus workflow',
           delegated_action: 'bind_cloudflare_product_next_site_locally',
         });
       }
+      if (scriptName === 'cloudflare-carrier-product-read.mjs' && invocations.length === 4) {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            site_count: 2,
+            next_site_id: null,
+            next_action: 'monitor_sites',
+            route_next_action: 'monitor_sites',
+            route_target: 'none',
+          },
+        });
+      }
       throw new Error(`unexpected_script:${scriptName}`);
     },
   });
@@ -161,9 +173,87 @@ test('runSiteNextWorkflowLive delegates focus_next_site to site focus workflow',
   assert.equal(result.selected_site_id, 'site_alpha');
   assert.equal(result.focus_result.schema, 'narada.cloudflare_carrier.site_focus_workflow_live.v1');
   assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.site_action_workflow_live.v1');
-  assert.equal(invocations.length, 3);
+  assert.equal(result.list_after_next.next_action, 'bind_cloudflare_product_next_site_locally');
+  assert.equal(result.list_after_next_followup, null);
+  assert.equal(invocations.length, 4);
   assert.equal(invocations[1][0].split(/[\\/]/).pop(), 'cloudflare-carrier-site-focus-workflow-live.mjs');
   assert.equal(invocations[2][0].split(/[\\/]/).pop(), 'cloudflare-carrier-site-action-workflow-live.mjs');
+});
+
+test('runSiteNextWorkflowLive retries site list once when top-level readback stays on the just-cleared site', async () => {
+  const invocations = [];
+  const result = await runSiteNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    expectedRouteAction: 'focus_next_site',
+    expectedSiteId: 'site_alpha',
+    expectedSiteAction: 'focus_next_operation',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs' && invocations.length === 1) {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            site_count: 2,
+            next_site_id: 'site_alpha',
+            next_action: 'focus_next_operation',
+            route_next_action: 'focus_next_site',
+            route_target: 'site_alpha',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-site-focus-workflow-live.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.site_focus_workflow_live.v1',
+          status: 'ok',
+          selected_site_id: 'site_alpha',
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-site-action-workflow-live.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.site_action_workflow_live.v1',
+          status: 'ok',
+          delegated_workflow: 'focus_next_operation',
+          delegated_action: 'focus_next_operation',
+          read_after_action: {
+            next_action: 'monitor_site',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-product-read.mjs' && invocations.length === 4) {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            site_count: 2,
+            next_site_id: 'site_alpha',
+            next_action: 'focus_next_operation',
+            route_next_action: 'focus_next_site',
+            route_target: 'site_alpha',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-product-read.mjs' && invocations.length === 5) {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            site_count: 2,
+            next_site_id: null,
+            next_action: 'monitor_sites',
+            route_next_action: 'monitor_sites',
+            route_target: 'none',
+          },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}:${invocations.length}`);
+    },
+  });
+
+  assert.equal(result.list_after_next.next_action, 'monitor_sites');
+  assert.equal(result.list_after_next_followup.next_action, 'monitor_sites');
+  assert.equal(invocations.length, 5);
 });
 
 test('runSiteNextWorkflowLive rejects unsupported site route actions', async () => {
