@@ -34,6 +34,16 @@ export function parseRepositoryPublicationReadArgs(argv = [], env = process.env,
     ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_EVIDENCE_ID
     ?? null,
   );
+  const repositoryPublicationAdmissionId = normalizeOptionalString(
+    option(args, '--repository-publication-admission-id')
+    ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_ADMISSION_ID
+    ?? null,
+  );
+  const repositoryPublicationExecutionId = normalizeOptionalString(
+    option(args, '--repository-publication-execution-id')
+    ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_EXECUTION_ID
+    ?? null,
+  );
   const repositoryPublicationRequestId = normalizeOptionalString(
     option(args, '--repository-publication-request-id')
     ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_READ_REQUEST_ID
@@ -51,12 +61,20 @@ export function parseRepositoryPublicationReadArgs(argv = [], env = process.env,
       && repositoryPublicationEvidenceId
       && !limitOption
         ? 500
+        : operation === 'repository_publication.admission.list'
+        && repositoryPublicationAdmissionId
+        && !limitOption
+          ? 500
+          : operation === 'repository_publication.cloudflare_execution.list'
+          && repositoryPublicationExecutionId
+          && !limitOption
+            ? 500
         : null
     )
   );
   const requestId = option(args, '--request-id')
     ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_READ_ENVELOPE_REQUEST_ID
-    ?? `repository_publication_read_${safeToken(operation)}_${repositoryPublicationEvidenceId ?? repositoryPublicationRequestId ?? siteId ?? now()}`;
+    ?? `repository_publication_read_${safeToken(operation)}_${repositoryPublicationEvidenceId ?? repositoryPublicationAdmissionId ?? repositoryPublicationExecutionId ?? repositoryPublicationRequestId ?? siteId ?? now()}`;
   const format = option(args, '--format') ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_READ_FORMAT ?? 'json';
   const auth = resolveAuth(args, env);
 
@@ -74,6 +92,8 @@ export function parseRepositoryPublicationReadArgs(argv = [], env = process.env,
     auth,
     params: buildRepositoryPublicationReadParams({ operation, siteId, repositoryPublicationRequestId, limit: effectiveLimit }),
     focusEvidenceId: repositoryPublicationEvidenceId,
+    focusAdmissionId: repositoryPublicationAdmissionId,
+    focusExecutionId: repositoryPublicationExecutionId,
   };
 }
 
@@ -121,6 +141,18 @@ export async function readRepositoryPublicationSurface(config, fetchImpl = fetch
       throw new Error(`repository_publication_evidence_read_focus_not_found:${config.focusEvidenceId}`);
     }
   }
+  if (config.operation === 'repository_publication.admission.list' && config.focusAdmissionId) {
+    const admissions = Array.isArray(body?.admissions) ? body.admissions : [];
+    if (!admissions.some((entry) => entry?.repository_publication_admission_id === config.focusAdmissionId)) {
+      throw new Error(`repository_publication_admission_read_focus_not_found:${config.focusAdmissionId}`);
+    }
+  }
+  if (config.operation === 'repository_publication.cloudflare_execution.list' && config.focusExecutionId) {
+    const executions = Array.isArray(body?.executions) ? body.executions : [];
+    if (!executions.some((entry) => entry?.repository_publication_execution_id === config.focusExecutionId)) {
+      throw new Error(`repository_publication_execution_read_focus_not_found:${config.focusExecutionId}`);
+    }
+  }
   return {
     schema: 'narada.cloudflare_carrier.repository_publication_read.v1',
     status: 'ok',
@@ -132,6 +164,8 @@ export async function readRepositoryPublicationSurface(config, fetchImpl = fetch
     response: body,
     summary: summarizeRepositoryPublicationSurface(config.operation, body, config.params, {
       focusEvidenceId: config.focusEvidenceId ?? null,
+      focusAdmissionId: config.focusAdmissionId ?? null,
+      focusExecutionId: config.focusExecutionId ?? null,
     }),
   };
 }
@@ -191,7 +225,11 @@ export function summarizeRepositoryPublicationSurface(operation, body = {}, para
   }
   if (operation === 'repository_publication.admission.list') {
     const admissions = Array.isArray(body?.admissions) ? body.admissions : [];
-    const latest = admissions[0] ?? null;
+    const focusAdmissionId = options?.focusAdmissionId ?? null;
+    const focusedAdmissions = focusAdmissionId
+      ? admissions.filter((entry) => entry?.repository_publication_admission_id === focusAdmissionId)
+      : admissions;
+    const latest = focusedAdmissions[0] ?? null;
     return {
       operation,
       ok: body.ok ?? null,
@@ -199,7 +237,8 @@ export function summarizeRepositoryPublicationSurface(operation, body = {}, para
       status: body.status ?? null,
       site_id: body.site_id ?? params.site_id ?? null,
       repository_publication_request_id: params.repository_publication_request_id ?? latest?.repository_publication_request_id ?? null,
-      admission_count: admissions.length,
+      admission_count: focusedAdmissions.length,
+      focused_repository_publication_admission_id: latest?.repository_publication_admission_id ?? null,
       latest_repository_publication_admission_id: latest?.repository_publication_admission_id ?? null,
       latest_repository_publication_request_id: latest?.repository_publication_request_id ?? null,
       latest_admission_action: latest?.admission_action ?? null,
@@ -210,6 +249,7 @@ export function summarizeRepositoryPublicationSurface(operation, body = {}, para
       cloudflare_git_push_admission: body.cloudflare_git_push_admission ?? null,
       direct_cloudflare_repository_mutation_admission: body.direct_cloudflare_repository_mutation_admission ?? null,
       authority_partition: body.authority_partition ?? null,
+      requested_repository_publication_admission_id: focusAdmissionId,
     };
   }
   if (operation === 'repository_publication.evidence.list') {
@@ -253,7 +293,11 @@ export function summarizeRepositoryPublicationSurface(operation, body = {}, para
   }
   if (operation === 'repository_publication.cloudflare_execution.list') {
     const executions = Array.isArray(body?.executions) ? body.executions : [];
-    const latest = executions[0] ?? null;
+    const focusExecutionId = options?.focusExecutionId ?? null;
+    const focusedExecutions = focusExecutionId
+      ? executions.filter((entry) => entry?.repository_publication_execution_id === focusExecutionId)
+      : executions;
+    const latest = focusedExecutions[0] ?? null;
     return {
       operation,
       ok: body.ok ?? null,
@@ -261,7 +305,14 @@ export function summarizeRepositoryPublicationSurface(operation, body = {}, para
       status: body.status ?? null,
       site_id: body.site_id ?? params.site_id ?? null,
       repository_publication_request_id: params.repository_publication_request_id ?? latest?.repository_publication_request_id ?? null,
-      execution_count: executions.length,
+      execution_count: focusedExecutions.length,
+      focused_repository_publication_execution_id: latest?.repository_publication_execution_id ?? null,
+      focused_repository_publication_request_id: latest?.repository_publication_request_id ?? null,
+      focused_publication_status: latest?.publication_status ?? null,
+      focused_repository_ref: latest?.repository_ref ?? null,
+      focused_branch_ref: latest?.branch_ref ?? null,
+      focused_published_commit_ref: latest?.published_commit_ref ?? null,
+      focused_github_http_status: latest?.github_http_status ?? null,
       latest_repository_publication_execution_id: latest?.repository_publication_execution_id ?? null,
       latest_repository_publication_request_id: latest?.repository_publication_request_id ?? null,
       latest_publication_status: latest?.publication_status ?? null,
@@ -275,6 +326,7 @@ export function summarizeRepositoryPublicationSurface(operation, body = {}, para
       cloudflare_git_push_admission: body.cloudflare_git_push_admission ?? null,
       direct_cloudflare_repository_mutation_admission: body.direct_cloudflare_repository_mutation_admission ?? null,
       authority_partition: body.authority_partition ?? null,
+      requested_repository_publication_execution_id: focusExecutionId,
     };
   }
   return { operation, ok: body.ok ?? null, code: body.code ?? null, status: body.status ?? null, site_id: body.site_id ?? params.site_id ?? null };
@@ -320,10 +372,15 @@ export function formatRepositoryPublicationReadText(result) {
   } else if (summary.operation === 'repository_publication.admission.list') {
     lines.push(`Admissions: count=${summary.admission_count ?? 0}`);
     if (summary.repository_publication_request_id) lines.push(`Filter Request: ${summary.repository_publication_request_id}`);
-    if (summary.latest_repository_publication_admission_id) lines.push(`Latest Admission: ${summary.latest_repository_publication_admission_id}`);
+    if (summary.focused_repository_publication_admission_id) {
+      lines.push(`Focused Admission: ${summary.focused_repository_publication_admission_id}`);
+    } else if (summary.latest_repository_publication_admission_id) {
+      lines.push(`Latest Admission: ${summary.latest_repository_publication_admission_id}`);
+    }
     if (summary.latest_repository_publication_request_id) lines.push(`Latest Request: ${summary.latest_repository_publication_request_id}`);
     if (summary.latest_admission_action) {
-      lines.push(`Latest Decision: ${summary.latest_admission_action}${summary.latest_admission_reason ? ` reason=${summary.latest_admission_reason}` : ''}`);
+      const decisionLabel = summary.focused_repository_publication_admission_id ? 'Focused Decision' : 'Latest Decision';
+      lines.push(`${decisionLabel}: ${summary.latest_admission_action}${summary.latest_admission_reason ? ` reason=${summary.latest_admission_reason}` : ''}`);
     }
     lines.push(`Authority: admission=${summary.repository_publication_admission_authority ?? 'unknown'} executor=${summary.repository_publication_executor_authority ?? 'unknown'}`);
   } else if (summary.operation === 'repository_publication.evidence.list') {
@@ -340,12 +397,21 @@ export function formatRepositoryPublicationReadText(result) {
   } else if (summary.operation === 'repository_publication.cloudflare_execution.list') {
     lines.push(`Cloudflare Executions: count=${summary.execution_count ?? 0}`);
     if (summary.repository_publication_request_id) lines.push(`Filter Request: ${summary.repository_publication_request_id}`);
-    if (summary.latest_repository_publication_execution_id) lines.push(`Latest Execution: ${summary.latest_repository_publication_execution_id}`);
-    if (summary.latest_publication_status) lines.push(`Latest Publication Status: ${summary.latest_publication_status}`);
-    if (summary.latest_repository_ref) lines.push(`Latest Repository: ${summary.latest_repository_ref}`);
-    if (summary.latest_branch_ref) lines.push(`Latest Branch: ${summary.latest_branch_ref}`);
-    if (summary.latest_published_commit_ref) lines.push(`Latest Published Commit: ${summary.latest_published_commit_ref}`);
-    if (summary.latest_github_http_status != null) lines.push(`Latest GitHub HTTP Status: ${summary.latest_github_http_status}`);
+    if (summary.focused_repository_publication_execution_id) {
+      lines.push(`Focused Execution: ${summary.focused_repository_publication_execution_id}`);
+      if (summary.focused_publication_status) lines.push(`Focused Publication Status: ${summary.focused_publication_status}`);
+      if (summary.focused_repository_ref) lines.push(`Focused Repository: ${summary.focused_repository_ref}`);
+      if (summary.focused_branch_ref) lines.push(`Focused Branch: ${summary.focused_branch_ref}`);
+      if (summary.focused_published_commit_ref) lines.push(`Focused Published Commit: ${summary.focused_published_commit_ref}`);
+      if (summary.focused_github_http_status != null) lines.push(`Focused GitHub HTTP Status: ${summary.focused_github_http_status}`);
+    } else {
+      if (summary.latest_repository_publication_execution_id) lines.push(`Latest Execution: ${summary.latest_repository_publication_execution_id}`);
+      if (summary.latest_publication_status) lines.push(`Latest Publication Status: ${summary.latest_publication_status}`);
+      if (summary.latest_repository_ref) lines.push(`Latest Repository: ${summary.latest_repository_ref}`);
+      if (summary.latest_branch_ref) lines.push(`Latest Branch: ${summary.latest_branch_ref}`);
+      if (summary.latest_published_commit_ref) lines.push(`Latest Published Commit: ${summary.latest_published_commit_ref}`);
+      if (summary.latest_github_http_status != null) lines.push(`Latest GitHub HTTP Status: ${summary.latest_github_http_status}`);
+    }
     lines.push(`Authority: executor=${summary.repository_publication_executor_authority ?? 'unknown'} admission=${summary.repository_publication_admission_authority ?? 'unknown'}`);
   }
 

@@ -48,6 +48,38 @@ test('parseRepositoryPublicationReadArgs supports operator session auth and requ
   });
 });
 
+test('parseRepositoryPublicationReadArgs supports focused admission and execution ids with widened defaults', () => {
+  const admissionParsed = parseRepositoryPublicationReadArgs([
+    '--operation', 'repository_publication.admission.list',
+    '--url', 'https://carrier.example.test',
+    '--token', 'secret-token',
+    '--site', 'site_alpha',
+    '--repository-publication-admission-id', 'repository-publication-admission-7',
+  ], {}, () => 42);
+
+  assert.equal(admissionParsed.focusAdmissionId, 'repository-publication-admission-7');
+  assert.deepEqual(admissionParsed.params, {
+    site_id: 'site_alpha',
+    limit: 500,
+    repository_publication_admission_limit: 500,
+  });
+
+  const executionParsed = parseRepositoryPublicationReadArgs([
+    '--operation', 'repository_publication.cloudflare_execution.list',
+    '--url', 'https://carrier.example.test',
+    '--token', 'secret-token',
+    '--site', 'site_alpha',
+    '--repository-publication-execution-id', 'repository-publication-execution-7',
+  ], {}, () => 42);
+
+  assert.equal(executionParsed.focusExecutionId, 'repository-publication-execution-7');
+  assert.deepEqual(executionParsed.params, {
+    site_id: 'site_alpha',
+    limit: 500,
+    repository_publication_execution_limit: 500,
+  });
+});
+
 test('parseRepositoryPublicationReadArgs supports focused evidence id with widened default limit', () => {
   const parsed = parseRepositoryPublicationReadArgs([
     '--operation', 'repository_publication.evidence.list',
@@ -221,6 +253,58 @@ test('readRepositoryPublicationSurface refuses focused evidence id that is not p
   );
 });
 
+test('readRepositoryPublicationSurface refuses focused admission id that is not present', async () => {
+  await assert.rejects(
+    readRepositoryPublicationSurface({
+      workerUrl: 'https://carrier.example.test',
+      operation: 'repository_publication.admission.list',
+      requestId: 'request_repository_publication_read_missing_admission',
+      auth: { kind: 'bearer', value: 'secret-token', source: 'flag:--token' },
+      params: {
+        site_id: 'site_alpha',
+        limit: 500,
+        repository_publication_admission_limit: 500,
+      },
+      focusAdmissionId: 'repository-publication-admission-missing',
+    }, async () => responseJson(200, {
+      ok: true,
+      status: 'ok',
+      site_id: 'site_alpha',
+      admissions: [{
+        repository_publication_admission_id: 'repository-publication-admission-1',
+        repository_publication_request_id: 'repository-publication-request-1',
+      }],
+    })),
+    /repository_publication_admission_read_focus_not_found:repository-publication-admission-missing/,
+  );
+});
+
+test('readRepositoryPublicationSurface refuses focused execution id that is not present', async () => {
+  await assert.rejects(
+    readRepositoryPublicationSurface({
+      workerUrl: 'https://carrier.example.test',
+      operation: 'repository_publication.cloudflare_execution.list',
+      requestId: 'request_repository_publication_read_missing_execution',
+      auth: { kind: 'bearer', value: 'secret-token', source: 'flag:--token' },
+      params: {
+        site_id: 'site_alpha',
+        limit: 500,
+        repository_publication_execution_limit: 500,
+      },
+      focusExecutionId: 'repository-publication-execution-missing',
+    }, async () => responseJson(200, {
+      ok: true,
+      status: 'ok',
+      site_id: 'site_alpha',
+      executions: [{
+        repository_publication_execution_id: 'repository-publication-execution-1',
+        repository_publication_request_id: 'repository-publication-request-1',
+      }],
+    })),
+    /repository_publication_execution_read_focus_not_found:repository-publication-execution-missing/,
+  );
+});
+
 test('summarizeRepositoryPublicationSurface narrows evidence summary to focused evidence id', () => {
   const summary = summarizeRepositoryPublicationSurface('repository_publication.evidence.list', {
     ok: true,
@@ -263,6 +347,70 @@ test('summarizeRepositoryPublicationSurface narrows evidence summary to focused 
   assert.equal(summary.latest_published_commit_ref, 'git:commit:1111');
 });
 
+test('summarizeRepositoryPublicationSurface narrows admission summary to focused admission id', () => {
+  const summary = summarizeRepositoryPublicationSurface('repository_publication.admission.list', {
+    ok: true,
+    status: 'ok',
+    site_id: 'site_alpha',
+    admissions: [
+      {
+        repository_publication_admission_id: 'repository-publication-admission-2',
+        repository_publication_request_id: 'repository-publication-request-2',
+        admission_action: 'admit',
+      },
+      {
+        repository_publication_admission_id: 'repository-publication-admission-1',
+        repository_publication_request_id: 'repository-publication-request-1',
+        admission_action: 'admit',
+        admission_reason: 'admitted_reason',
+      },
+    ],
+  }, {
+    site_id: 'site_alpha',
+  }, {
+    focusAdmissionId: 'repository-publication-admission-1',
+  });
+
+  assert.equal(summary.admission_count, 1);
+  assert.equal(summary.focused_repository_publication_admission_id, 'repository-publication-admission-1');
+  assert.equal(summary.latest_repository_publication_admission_id, 'repository-publication-admission-1');
+  assert.equal(summary.latest_admission_reason, 'admitted_reason');
+});
+
+test('summarizeRepositoryPublicationSurface narrows execution summary to focused execution id', () => {
+  const summary = summarizeRepositoryPublicationSurface('repository_publication.cloudflare_execution.list', {
+    ok: true,
+    status: 'ok',
+    site_id: 'site_alpha',
+    executions: [
+      {
+        repository_publication_execution_id: 'repository-publication-execution-2',
+        repository_publication_request_id: 'repository-publication-request-2',
+        publication_status: 'completed',
+      },
+      {
+        repository_publication_execution_id: 'repository-publication-execution-1',
+        repository_publication_request_id: 'repository-publication-request-1',
+        publication_status: 'completed',
+        repository_ref: 'github:andrey/site-alpha',
+        branch_ref: 'main',
+        published_commit_ref: 'git:commit:1111',
+        github_http_status: 200,
+      },
+    ],
+  }, {
+    site_id: 'site_alpha',
+  }, {
+    focusExecutionId: 'repository-publication-execution-1',
+  });
+
+  assert.equal(summary.execution_count, 1);
+  assert.equal(summary.focused_repository_publication_execution_id, 'repository-publication-execution-1');
+  assert.equal(summary.latest_repository_publication_execution_id, 'repository-publication-execution-1');
+  assert.equal(summary.focused_repository_ref, 'github:andrey/site-alpha');
+  assert.equal(summary.focused_github_http_status, 200);
+});
+
 test('formatRepositoryPublicationReadText surfaces evidence refusal reason', () => {
   const text = formatRepositoryPublicationReadText({
     status: 'ok',
@@ -296,6 +444,55 @@ test('formatRepositoryPublicationReadText surfaces evidence refusal reason', () 
   assert.match(text, /Focused Execution: publication-execution-1/);
   assert.match(text, /Current Posture: windows_repository_publication_refused_cloudflare_recorded_evidence/);
   assert.match(text, /Focused Publication Status: refused reason=repository_publication_push_not_enabled/);
+});
+
+test('formatRepositoryPublicationReadText surfaces focused admission and execution labels', () => {
+  const admissionText = formatRepositoryPublicationReadText({
+    status: 'ok',
+    operation: 'repository_publication.admission.list',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'flag:--token',
+    params: { site_id: 'site_alpha' },
+    summary: {
+      operation: 'repository_publication.admission.list',
+      site_id: 'site_alpha',
+      admission_count: 1,
+      focused_repository_publication_admission_id: 'repository-publication-admission-1',
+      latest_repository_publication_request_id: 'repository-publication-request-1',
+      latest_admission_action: 'admit',
+      latest_admission_reason: 'admitted_reason',
+      repository_publication_admission_authority: 'cloudflare_repository_publication_admission_controller',
+      repository_publication_executor_authority: 'windows_repository_publication_executor',
+    },
+  });
+
+  assert.match(admissionText, /Focused Admission: repository-publication-admission-1/);
+  assert.match(admissionText, /Focused Decision: admit reason=admitted_reason/);
+
+  const executionText = formatRepositoryPublicationReadText({
+    status: 'ok',
+    operation: 'repository_publication.cloudflare_execution.list',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'flag:--token',
+    params: { site_id: 'site_alpha' },
+    summary: {
+      operation: 'repository_publication.cloudflare_execution.list',
+      site_id: 'site_alpha',
+      execution_count: 1,
+      focused_repository_publication_execution_id: 'repository-publication-execution-1',
+      focused_publication_status: 'completed',
+      focused_repository_ref: 'github:andrey/site-alpha',
+      focused_branch_ref: 'main',
+      focused_published_commit_ref: 'git:commit:1111',
+      focused_github_http_status: 200,
+      repository_publication_executor_authority: 'windows_repository_publication_executor',
+      repository_publication_admission_authority: 'cloudflare_repository_publication_admission_controller',
+    },
+  });
+
+  assert.match(executionText, /Focused Execution: repository-publication-execution-1/);
+  assert.match(executionText, /Focused Publication Status: completed/);
+  assert.match(executionText, /Focused GitHub HTTP Status: 200/);
 });
 
 test('summaries and text output preserve refusal evidence for filtered execution list', () => {
