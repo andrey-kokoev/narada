@@ -204,6 +204,10 @@ export function summarizeRepositoryPublicationRequestReview(body = {}, options =
       ?? latestEvidence?.publication_execution_id
       ?? null,
     current_execution_status: latestExecution?.publication_status ?? latestEvidence?.publication_status ?? null,
+    current_execution_reason: latestExecution?.publication_reason
+      ?? latestExecution?.execution_reason
+      ?? latestEvidence?.windows_admission_reason
+      ?? null,
     current_published_commit_ref: latestExecution?.published_commit_ref ?? latestEvidence?.published_commit_ref ?? null,
     current_execution_source: latestExecution
       ? 'cloudflare_execution'
@@ -270,7 +274,7 @@ export function formatRepositoryPublicationRequestReviewText(result) {
     lines.push(`Linked Execution: ${summary.linked_execution_id ?? 'none'} status=${summary.linked_execution_status ?? 'unknown'}`);
   }
   if (summary.current_publication_execution_id || summary.current_execution_status) {
-    lines.push(`Current Execution: ${summary.current_publication_execution_id ?? 'none'} status=${summary.current_execution_status ?? 'unknown'} source=${summary.current_execution_source ?? 'unknown'}`);
+    lines.push(`Current Execution: ${summary.current_publication_execution_id ?? 'none'} status=${summary.current_execution_status ?? 'unknown'} source=${summary.current_execution_source ?? 'unknown'}${summary.current_execution_reason ? ` reason=${summary.current_execution_reason}` : ''}`);
   }
   if (summary.current_published_commit_ref || summary.linked_published_commit_ref) {
     lines.push(`Published Commit: ${summary.current_published_commit_ref ?? summary.linked_published_commit_ref}`);

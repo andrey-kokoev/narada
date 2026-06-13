@@ -130,6 +130,7 @@ test('readRepositoryPublicationRequestReview summarizes focused request and link
   assert.equal(result.summary.current_publication_execution_id, 'execution_1');
   assert.equal(result.summary.current_execution_status, 'completed');
   assert.equal(result.summary.current_execution_source, 'cloudflare_execution');
+  assert.equal(result.summary.current_execution_reason, null);
   assert.equal(result.summary.linked_evidence_id, 'evidence_1');
   assert.equal(result.summary.latest_focus_review.review_status, 'acknowledged');
 });
@@ -247,6 +248,7 @@ test('readRepositoryPublicationRequestReview treats refused evidence as current 
           repository_publication_evidence_id: 'evidence_1',
           publication_execution_id: 'publication-execution-1',
           publication_status: 'refused',
+          windows_admission_reason: 'repository_publication_push_not_enabled',
           repository_publication_admission: 'resolved_after_cloudflare_repository_publication_admission',
           cloudflare_git_push_admission: 'not_admitted',
           direct_cloudflare_repository_mutation_admission: 'not_admitted',
@@ -290,6 +292,7 @@ test('readRepositoryPublicationRequestReview treats refused evidence as current 
   assert.equal(result.summary.current_publication_execution_id, 'publication-execution-1');
   assert.equal(result.summary.current_execution_status, 'refused');
   assert.equal(result.summary.current_execution_source, 'windows_evidence');
+  assert.equal(result.summary.current_execution_reason, 'repository_publication_push_not_enabled');
   assert.equal(result.summary.linked_evidence_id, 'evidence_1');
 });
 
@@ -326,6 +329,7 @@ test('formatRepositoryPublicationRequestReviewText surfaces review ack command',
       current_publication_execution_id: 'execution_1',
       current_execution_status: 'completed',
       current_execution_source: 'cloudflare_execution',
+      current_execution_reason: null,
       linked_published_commit_ref: 'git:commit:def',
       current_published_commit_ref: 'git:commit:def',
       linked_evidence_id: 'evidence_1',
@@ -357,12 +361,13 @@ test('formatRepositoryPublicationRequestReviewText surfaces current execution fr
       current_publication_execution_id: 'publication-execution-1',
       current_execution_status: 'refused',
       current_execution_source: 'windows_evidence',
+      current_execution_reason: 'repository_publication_push_not_enabled',
       linked_evidence_id: 'evidence_1',
       linked_evidence_status: 'refused',
     },
   });
 
-  assert.match(text, /Current Execution: publication-execution-1 status=refused source=windows_evidence/);
+  assert.match(text, /Current Execution: publication-execution-1 status=refused source=windows_evidence reason=repository_publication_push_not_enabled/);
 });
 
 test('formatRepositoryPublicationRequestReviewText makes missing evidence explicit after execution', () => {
