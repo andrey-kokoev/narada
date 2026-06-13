@@ -1266,6 +1266,62 @@ test('runOperationNextWorkflowLive delegates focus_session_path_evidence to sess
   assert.equal(invocations[2][invocations[2].indexOf('--carrier-session-id') + 1], 'session_alpha');
 });
 
+test('runOperationNextWorkflowLive delegates read_session_evidence to session evidence read', async () => {
+  const invocations = [];
+  const result = await runOperationNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_live_smoke',
+    expectedListRouteAction: null,
+    expectedOperationId: null,
+    auth: { kind: 'bearer', value: 'token-value', source: 'flag:--token' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        const operation = args[args.indexOf('--operation') + 1];
+        if (operation === 'operation.list') {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              next_operation_id: 'operation_alpha',
+              route_next_action: 'focus_next_operation',
+              next_action: 'read_session_evidence',
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            operation_id: 'operation_alpha',
+            active_session_id: 'session_alpha',
+            workflow_next_action: 'read_session_evidence',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-session-evidence-read.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.session_evidence_read.v1',
+          status: 'ok',
+          summary: {
+            operation_id: 'operation_alpha',
+            carrier_session_id: 'session_alpha',
+            event_count: 0,
+          },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_workflow, 'session_evidence');
+  assert.equal(result.delegated_route_action, 'read_session_evidence');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.session_evidence_read.v1');
+  assert.equal(invocations[2][0].split(/[\\/]/).pop(), 'cloudflare-carrier-session-evidence-read.mjs');
+  assert.equal(invocations[2][invocations[2].indexOf('--carrier-session-id') + 1], 'session_alpha');
+});
+
 test('runOperationNextWorkflowLive delegates focus_session_path_task to task lifecycle review', async () => {
   const invocations = [];
   const result = await runOperationNextWorkflowLive({

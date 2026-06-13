@@ -515,7 +515,11 @@ export function formatProductSurfaceText(result) {
     if (summary.workflow_next_action === 'focus_lifecycle_continuity' || summary.workflow_next_action === 'focus_lifecycle_continuity_loop_report') {
       lines.push(`Continuity Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:continuity:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --expected-pre-action ${summary.workflow_next_action ?? 'refresh_site_continuity_loop'} --operator-session-file <operator-session-file> --execute-operation-continuity`);
     }
-    if (summary.workflow_next_action === 'focus_session_path_evidence') {
+    if (
+      summary.workflow_next_action === 'read_session_evidence'
+      || summary.workflow_next_action === 'inspect_session_evidence'
+      || summary.workflow_next_action === 'focus_session_path_evidence'
+    ) {
       lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --carrier-session-id ${summary.active_session_id ?? '<session-id>'} --operator-session-file <operator-session-file>`);
     }
     if (

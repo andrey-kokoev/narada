@@ -687,6 +687,42 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   });
   assert.match(operationReadSessionPathEvidenceText, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
 
+  const operationReadSessionEvidenceText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_live',
+      active_session_id: 'session_alpha',
+      current_status: 'active',
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'session',
+      workflow_next_action: 'read_session_evidence',
+      workflow_reason: 'evidence_needed',
+      posture_next_action: 'monitor_operations',
+    },
+  });
+  assert.match(operationReadSessionEvidenceText, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
+
+  const operationReadInspectSessionEvidenceText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_live',
+      active_session_id: 'session_alpha',
+      current_status: 'active',
+      phase: 'inhabited',
+      health: 'ready',
+      next_action: 'session',
+      workflow_next_action: 'inspect_session_evidence',
+      workflow_reason: 'evidence_ready',
+      posture_next_action: 'monitor_operations',
+    },
+  });
+  assert.match(operationReadInspectSessionEvidenceText, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
+
   const operationReadSessionPathTaskText = formatProductSurfaceText({
     operation: 'operation.read',
     worker_url: 'https://carrier.example.test',
