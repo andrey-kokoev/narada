@@ -5,15 +5,19 @@ import { parseProductReadArgs, readProductSurface } from './cloudflare-carrier-p
 
 export function parseMailboxDraftReplyProposalReadArgs(argv = [], env = process.env) {
   const args = [...argv];
-  const parsed = parseProductReadArgs(['--operation', 'operation.read', ...argv], env);
+  const explicitOperationId = option(args, '--carrier-operation') ?? option(args, '--operation-id') ?? env.CLOUDFLARE_CARRIER_OPERATION_ID ?? null;
+  const parsed = parseProductReadArgs(
+    ['--operation', explicitOperationId ? 'operation.read' : 'mailbox.draft_reply_proposal.list', ...argv],
+    env,
+  );
   const proposalLimit = parseOptionalInteger(
     option(args, '--proposal-limit') ?? env.CLOUDFLARE_CARRIER_MAILBOX_DRAFT_REPLY_PROPOSAL_LIMIT ?? null,
     'proposal-limit',
-  ) ?? 20;
+  ) ?? (explicitOperationId ? 20 : 200);
   const draftCreateLimit = parseOptionalInteger(
     option(args, '--draft-create-limit') ?? env.CLOUDFLARE_CARRIER_MAILBOX_OUTLOOK_DRAFT_CREATE_LIMIT ?? null,
     'draft-create-limit',
-  ) ?? 20;
+  ) ?? (explicitOperationId ? 20 : 200);
   const focusRef = normalizeOptionalString(
     option(args, '--focus-ref') ?? env.CLOUDFLARE_CARRIER_MAILBOX_DRAFT_REPLY_PROPOSAL_FOCUS_REF ?? null,
   );
@@ -30,6 +34,20 @@ export function parseMailboxDraftReplyProposalReadArgs(argv = [], env = process.
 
 export async function readMailboxDraftReplyProposal(config, fetchImpl = fetch) {
   const product = await readProductSurface(config, fetchImpl);
+  const directDraftReads = config.operation === 'operation.read'
+    ? null
+    : await readProductSurface({
+      ...config,
+      operation: 'mailbox.outlook_draft.list',
+      params: {
+        site_id: config.params.site_id,
+        mailbox_outlook_draft_limit: config.params.mailbox_outlook_draft_create_limit ?? config.params.mailbox_outlook_draft_limit ?? 200,
+      },
+    }, fetchImpl);
+  const proposals = listMailboxDraftReplyProposals(product.response);
+  if (config.focusRef && !proposals.some((entry) => entry?.proposal_id === config.focusRef)) {
+    throw new Error(`mailbox_draft_reply_proposal_read_focus_not_found:${config.focusRef}`);
+  }
   return {
     schema: 'narada.cloudflare_carrier.mailbox_draft_reply_proposal_read.v1',
     status: 'ok',
@@ -37,20 +55,26 @@ export async function readMailboxDraftReplyProposal(config, fetchImpl = fetch) {
     auth_source: product.auth_source,
     operation: product.operation,
     params: product.params,
-    summary: summarizeMailboxDraftReplyProposal(product.response, {
+    summary: summarizeMailboxDraftReplyProposal(product.response, directDraftReads?.response ?? null, {
       operationSummary: product.summary,
       focusRef: config.focusRef,
     }),
-    response: product.response,
+    response: directDraftReads
+      ? { proposals: product.response, draft_creates: directDraftReads.response }
+      : product.response,
   };
 }
 
-export function summarizeMailboxDraftReplyProposal(body = {}, options = {}) {
+export function summarizeMailboxDraftReplyProposal(body = {}, draftCreateBody = null, options = {}) {
   const operationSummary = options.operationSummary ?? {};
-  const proposals = Array.isArray(body?.mailbox_draft_reply_proposals) ? body.mailbox_draft_reply_proposals : [];
-  const draftCreates = Array.isArray(body?.mailbox_outlook_draft_creates) ? body.mailbox_outlook_draft_creates : [];
+  const proposals = listMailboxDraftReplyProposals(body);
+  const draftCreates = listMailboxOutlookDraftCreates(draftCreateBody ?? body);
   const focusReviews = Array.isArray(body?.operation_focus_reviews) ? body.operation_focus_reviews : [];
   const focusRef = options.focusRef ?? operationSummary.workflow_focus_ref ?? null;
+  const exactFocusedProposals = focusRef
+    ? proposals.filter((entry) => entry?.proposal_id === focusRef)
+    : [];
+  const focusedProposals = exactFocusedProposals.length > 0 ? exactFocusedProposals : proposals;
   const focusedProposal = selectFocusedProposal(proposals, focusRef);
   const linkedDraftCreates = focusedProposal
     ? draftCreates.filter((entry) => entry?.proposal_id === focusedProposal.proposal_id)
@@ -61,11 +85,11 @@ export function summarizeMailboxDraftReplyProposal(body = {}, options = {}) {
     : null;
   return {
     site_id: body?.operation?.site_id ?? body?.site_id ?? operationSummary.site_id ?? null,
-    operation_id: body?.operation?.operation_id ?? body?.operation_id ?? operationSummary.operation_id ?? null,
+    operation_id: body?.operation?.operation_id ?? body?.operation_id ?? focusedProposal?.operation_id ?? focusedProposal?.record?.operation_id ?? operationSummary.operation_id ?? null,
     workflow_next_action: operationSummary.workflow_next_action ?? null,
     workflow_reason: operationSummary.workflow_reason ?? null,
     workflow_focus_ref: operationSummary.workflow_focus_ref ?? focusRef ?? null,
-    proposal_count: proposals.length,
+    proposal_count: focusedProposals.length,
     focused_proposal_id: focusedProposal?.proposal_id ?? focusRef ?? null,
     focused_account_ref: focusedProposal?.account_ref ?? null,
     focused_source_message_ref: focusedProposal?.source_message_ref ?? null,
@@ -138,6 +162,18 @@ function selectFocusedProposal(proposals, focusRef) {
     if (exact) return exact;
   }
   return proposals[0] ?? null;
+}
+
+function listMailboxDraftReplyProposals(body = {}) {
+  if (Array.isArray(body?.mailbox_draft_reply_proposals)) return body.mailbox_draft_reply_proposals;
+  if (Array.isArray(body?.proposals)) return body.proposals;
+  return [];
+}
+
+function listMailboxOutlookDraftCreates(body = {}) {
+  if (Array.isArray(body?.mailbox_outlook_draft_creates)) return body.mailbox_outlook_draft_creates;
+  if (Array.isArray(body?.drafts)) return body.drafts;
+  return [];
 }
 
 function option(args, name) {

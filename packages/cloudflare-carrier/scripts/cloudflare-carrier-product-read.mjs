@@ -10,6 +10,7 @@ const VALID_OPERATIONS = new Set([
   'webhook_delay.directive.dual_record.list',
   'webhook_delay.directive.primary_with_fallback.list',
   'mailbox.outlook_draft.list',
+  'mailbox.draft_reply_proposal.list',
   'site_file_materialization.list',
   'task_lifecycle.task.list',
   'mailbox.send_accepted.list',
@@ -42,6 +43,7 @@ export function parseProductReadArgs(argv = [], env = process.env) {
     || operation === 'webhook_delay.directive.dual_record.list'
     || operation === 'webhook_delay.directive.primary_with_fallback.list'
     || operation === 'mailbox.outlook_draft.list'
+    || operation === 'mailbox.draft_reply_proposal.list'
     || operation === 'site_file_materialization.list'
     || operation === 'task_lifecycle.task.list'
     || operation === 'mailbox.send_accepted.list'
@@ -77,6 +79,7 @@ export function buildParams({ operation, siteId, operationId, limit }) {
     || operation === 'webhook_delay.directive.dual_record.list'
     || operation === 'webhook_delay.directive.primary_with_fallback.list'
     || operation === 'mailbox.outlook_draft.list'
+    || operation === 'mailbox.draft_reply_proposal.list'
     || operation === 'site_file_materialization.list'
     || operation === 'task_lifecycle.task.list'
     || operation === 'mailbox.send_accepted.list'
