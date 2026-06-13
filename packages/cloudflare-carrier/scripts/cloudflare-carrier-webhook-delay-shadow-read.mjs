@@ -74,11 +74,13 @@ export async function readWebhookDelayShadow(config, fetchImpl = fetch) {
 export function summarizeWebhookDelayShadow(operationBody = {}, shadowReadBody = {}, options = {}) {
   const operationSummary = options.operationSummary ?? {};
   const observations = Array.isArray(shadowReadBody?.observations) ? shadowReadBody.observations : [];
-  const focusRef = options.focusRef ?? operationSummary.workflow_focus_ref ?? null;
+  const explicitFocusRef = options.focusRef ?? null;
+  const workflowFocusRef = operationSummary.workflow_focus_ref ?? null;
+  const focusRef = explicitFocusRef ?? workflowFocusRef;
   const exactFocusedObservation = focusRef
     ? observations.find((entry) => entry?.observation_id === focusRef) ?? null
     : null;
-  if (focusRef && !exactFocusedObservation) {
+  if (explicitFocusRef && !exactFocusedObservation) {
     throw new Error(`webhook_delay_shadow_read_focus_not_found:${focusRef}`);
   }
   const focusedObservation = exactFocusedObservation ?? observations[0] ?? null;

@@ -79,6 +79,30 @@ test('summarizeWebhookDelayShadow fails explicitly when focused observation is m
   ), /webhook_delay_shadow_read_focus_not_found:shadow_focus/);
 });
 
+test('summarizeWebhookDelayShadow falls back to the observation window when workflow focus is unrelated', () => {
+  const summary = summarizeWebhookDelayShadow(
+    {},
+    {
+      observations: [
+        {
+          observation_id: 'shadow_focus',
+          classification_state: 'critical',
+          dispatch_authority: 'windows_primary_dispatcher',
+          dispatch_action: 'none',
+        },
+      ],
+    },
+    {
+      operationSummary: {
+        workflow_focus_ref: 'site_narada_cloudflare',
+      },
+    },
+  );
+
+  assert.equal(summary.observation_count, 1);
+  assert.equal(summary.focused_observation_id, 'shadow_focus');
+});
+
 test('readWebhookDelayShadow loads operation and shadow read products', async () => {
   const calls = [];
   const result = await readWebhookDelayShadow({
