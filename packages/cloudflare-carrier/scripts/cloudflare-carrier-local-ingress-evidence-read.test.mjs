@@ -55,6 +55,32 @@ test('summarizeLocalIngressEvidence lifts latest local ingress execution evidenc
   assert.equal(summary.latest_local_execution_id, 'windows_execution_alpha');
 });
 
+test('summarizeLocalIngressEvidence narrows to the focused evidence id', () => {
+  const summary = summarizeLocalIngressEvidence({
+    site_id: 'site_alpha',
+    evidence: [
+      {
+        local_ingress_evidence_id: 'local_ingress_evidence_newer',
+        local_ingress_request_id: 'local_ingress_request_newer',
+        local_execution_id: 'windows_execution_newer',
+        local_execution_status: 'completed',
+      },
+      {
+        local_ingress_evidence_id: 'local_ingress_evidence_alpha',
+        local_ingress_request_id: 'local_ingress_request_alpha',
+        local_execution_id: 'windows_execution_alpha',
+        local_execution_status: 'completed',
+      },
+    ],
+  }, {
+    focusEvidenceId: 'local_ingress_evidence_alpha',
+  });
+
+  assert.equal(summary.evidence_count, 1);
+  assert.equal(summary.latest_evidence_id, 'local_ingress_evidence_alpha');
+  assert.equal(summary.latest_local_execution_id, 'windows_execution_alpha');
+});
+
 test('readLocalIngressEvidence returns summarized local ingress evidence', async () => {
   const result = await readLocalIngressEvidence({
     workerUrl: 'https://carrier.example.test',

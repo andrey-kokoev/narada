@@ -33,17 +33,27 @@ export async function readLocalIngressEvidence(config, fetchImpl = fetch) {
     auth_source: product.auth_source,
     operation: product.operation,
     params: product.params,
-    summary: summarizeLocalIngressEvidence(product.response),
+    summary: summarizeLocalIngressEvidence(product.response, {
+      focusEvidenceId: config.params?.local_ingress_evidence_id ?? null,
+      focusRequestId: config.params?.local_ingress_request_id ?? null,
+    }),
     response: product.response,
   };
 }
 
-export function summarizeLocalIngressEvidence(body = {}) {
+export function summarizeLocalIngressEvidence(body = {}, options = {}) {
   const evidence = Array.isArray(body?.evidence) ? body.evidence : [];
-  const latestEvidence = evidence[0] ?? null;
+  const focusEvidenceId = options?.focusEvidenceId ?? null;
+  const focusRequestId = options?.focusRequestId ?? null;
+  const focusedEvidence = focusEvidenceId
+    ? evidence.filter((entry) => entry?.local_ingress_evidence_id === focusEvidenceId)
+    : focusRequestId
+      ? evidence.filter((entry) => entry?.local_ingress_request_id === focusRequestId)
+      : evidence;
+  const latestEvidence = focusedEvidence[0] ?? null;
   return {
     site_id: body?.site_id ?? null,
-    evidence_count: evidence.length,
+    evidence_count: focusedEvidence.length,
     local_ingress_evidence_authority: body?.local_ingress_evidence_authority ?? null,
     cloudflare_evidence_store_authority: body?.cloudflare_evidence_store_authority ?? null,
     local_filesystem_mutation_admission: body?.local_filesystem_mutation_admission ?? latestEvidence?.local_filesystem_mutation_admission ?? null,
@@ -61,6 +71,8 @@ export function summarizeLocalIngressEvidence(body = {}) {
     latest_rollback_evidence_ref: latestEvidence?.rollback_evidence_ref ?? null,
     latest_recorded_at: latestEvidence?.recorded_at ?? null,
     latest_evidence_posture: latestEvidence?.evidence_posture ?? null,
+    focused_local_ingress_evidence_id: focusEvidenceId,
+    focused_local_ingress_request_id: focusRequestId,
   };
 }
 
