@@ -5,6 +5,7 @@ import {
   formatRepositoryPublicationRequestReviewText,
   parseRepositoryPublicationRequestReviewArgs,
   readRepositoryPublicationRequestReview,
+  summarizeRepositoryPublicationRequestReview,
 } from './cloudflare-carrier-repository-publication-request-review.mjs';
 
 test('parseRepositoryPublicationRequestReviewArgs extends operation.read params with repository publication limits', () => {
@@ -311,6 +312,23 @@ test('readRepositoryPublicationRequestReview treats refused evidence as current 
   assert.equal(result.summary.current_execution_source, 'windows_evidence');
   assert.equal(result.summary.current_execution_reason, 'repository_publication_push_not_enabled');
   assert.equal(result.summary.linked_evidence_id, 'evidence_1');
+});
+
+test('summarizeRepositoryPublicationRequestReview keeps focus empty when no request matches an unrelated workflow focus', () => {
+  const summary = summarizeRepositoryPublicationRequestReview({
+    operation: {
+      site_id: 'site_narada_cloudflare',
+      operation_id: 'operation_site_read',
+    },
+    repository_publication_requests: [],
+  }, {
+    operationSummary: {
+      workflow_focus_ref: 'site_narada_cloudflare',
+    },
+  });
+
+  assert.equal(summary.request_count, 0);
+  assert.equal(summary.focused_repository_publication_request_id, null);
 });
 
 test('formatRepositoryPublicationRequestReviewText surfaces review ack command', () => {

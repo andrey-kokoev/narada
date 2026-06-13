@@ -146,12 +146,18 @@ export function summarizeRepositoryPublicationRequestReview(body = {}, options =
       ? body.repository_publication_executions
       : [];
   const focusReviews = Array.isArray(body?.operation_focus_reviews) ? body.operation_focus_reviews : [];
-  const focusRef = options.focusRef ?? operationSummary.workflow_focus_ref ?? null;
-  const focusedRequests = focusRef
+  const explicitFocusRef = options.focusRef ?? null;
+  const workflowFocusRef = operationSummary.workflow_focus_ref ?? null;
+  const focusRef = explicitFocusRef ?? workflowFocusRef;
+  const exactFocusedRequests = focusRef
     ? requests.filter((entry) => entry?.repository_publication_request_id === focusRef)
     : requests;
+  if (explicitFocusRef && exactFocusedRequests.length === 0) {
+    throw new Error(`repository_publication_request_review_focus_not_found:${explicitFocusRef}`);
+  }
+  const focusedRequests = exactFocusedRequests.length > 0 ? exactFocusedRequests : requests;
   const focusedRequest = selectFocusedRequest(requests, focusRef);
-  const focusedRequestId = focusedRequest?.repository_publication_request_id ?? focusRef ?? null;
+  const focusedRequestId = focusedRequest?.repository_publication_request_id ?? null;
   const latestAdmission = focusedRequestId
     ? admissions.find((entry) => entry?.repository_publication_request_id === focusedRequestId) ?? null
     : null;
