@@ -68,6 +68,9 @@ export async function runSiteNextWorkflowLive(
 
   const overviewSiteId = listBefore.summary.next_site_id ?? listBefore.summary.route_target ?? null;
   const overviewAction = listBefore.summary.next_action ?? 'monitor_sites';
+  const overviewOperationId = listBefore.summary.next_operation_id ?? null;
+  const overviewOperationAction = listBefore.summary.next_operation_next_action ?? null;
+  const overviewOperationReason = listBefore.summary.next_operation_reason ?? null;
 
   if (routeAction === 'monitor_sites') {
     if (overviewSiteId && overviewAction !== 'monitor_sites') {
@@ -88,6 +91,10 @@ export async function runSiteNextWorkflowLive(
         worker_url: config.workerUrl,
         delegated_workflow: delegatedResult.delegated_workflow ?? 'current_site_action',
         delegated_route_action: routeAction,
+        delegated_site_action: overviewAction,
+        delegated_operation_id: overviewOperationId,
+        delegated_operation_action: overviewOperationAction,
+        delegated_operation_reason: overviewOperationReason,
         selected_site_id: overviewSiteId,
         list_before_next: listBefore.summary,
         focus_result: null,
@@ -102,6 +109,10 @@ export async function runSiteNextWorkflowLive(
       worker_url: config.workerUrl,
       delegated_workflow: 'monitor_sites',
       delegated_route_action: routeAction,
+      delegated_site_action: overviewAction,
+      delegated_operation_id: overviewOperationId,
+      delegated_operation_action: overviewOperationAction,
+      delegated_operation_reason: overviewOperationReason,
       selected_site_id: null,
       list_before_next: listBefore.summary,
       delegated_result: null,
@@ -170,6 +181,10 @@ export async function runSiteNextWorkflowLive(
       worker_url: config.workerUrl,
       delegated_workflow: delegatedResult.delegated_workflow ?? 'focus_site',
       delegated_route_action: routeAction,
+      delegated_site_action: overviewAction,
+      delegated_operation_id: overviewOperationId,
+      delegated_operation_action: overviewOperationAction,
+      delegated_operation_reason: overviewOperationReason,
       selected_site_id: selectedSiteId,
       list_before_next: listBefore.summary,
       focus_result: focusResult,

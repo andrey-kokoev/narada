@@ -60,6 +60,10 @@ test('runSiteNextWorkflowLive returns monitor_sites when no site needs focus', a
   assert.equal(result.schema, 'narada.cloudflare_carrier.site_next_workflow_live.v1');
   assert.equal(result.delegated_workflow, 'monitor_sites');
   assert.equal(result.delegated_route_action, 'monitor_sites');
+  assert.equal(result.delegated_site_action, 'monitor_sites');
+  assert.equal(result.delegated_operation_id, null);
+  assert.equal(result.delegated_operation_action, null);
+  assert.equal(result.delegated_operation_reason, null);
   assert.equal(result.selected_site_id, null);
   assert.equal(invocations.length, 1);
 });
@@ -103,6 +107,10 @@ test('runSiteNextWorkflowLive delegates current site action when route monitors 
 
   assert.equal(result.delegated_workflow, 'refresh_site_continuity_loop');
   assert.equal(result.delegated_route_action, 'monitor_sites');
+  assert.equal(result.delegated_site_action, 'refresh_site_continuity_loop');
+  assert.equal(result.delegated_operation_id, null);
+  assert.equal(result.delegated_operation_action, null);
+  assert.equal(result.delegated_operation_reason, null);
   assert.equal(result.selected_site_id, 'site_alpha');
   assert.equal(result.focus_result, null);
   assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.site_action_workflow_live.v1');
@@ -170,6 +178,10 @@ test('runSiteNextWorkflowLive delegates focus_next_site to site focus workflow',
 
   assert.equal(result.delegated_workflow, 'prepare_next_site_binding');
   assert.equal(result.delegated_route_action, 'focus_next_site');
+  assert.equal(result.delegated_site_action, 'bind_cloudflare_product_next_site_locally');
+  assert.equal(result.delegated_operation_id, null);
+  assert.equal(result.delegated_operation_action, null);
+  assert.equal(result.delegated_operation_reason, null);
   assert.equal(result.selected_site_id, 'site_alpha');
   assert.equal(result.focus_result.schema, 'narada.cloudflare_carrier.site_focus_workflow_live.v1');
   assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.site_action_workflow_live.v1');
@@ -254,6 +266,10 @@ test('runSiteNextWorkflowLive retries site list once when top-level readback sta
   assert.equal(result.list_after_next.next_action, 'monitor_sites');
   assert.equal(result.list_after_next_followup.next_action, 'monitor_sites');
   assert.equal(result.list_after_next_delayed_followup, null);
+  assert.equal(result.delegated_site_action, 'focus_next_operation');
+  assert.equal(result.delegated_operation_id, null);
+  assert.equal(result.delegated_operation_action, null);
+  assert.equal(result.delegated_operation_reason, null);
   assert.equal(invocations.length, 5);
 });
 
@@ -345,10 +361,71 @@ test('runSiteNextWorkflowLive performs one delayed re-read when the immediate fo
   });
 
   assert.deepEqual(waits, [20_000]);
+  assert.equal(result.delegated_site_action, 'focus_next_operation');
+  assert.equal(result.delegated_operation_id, null);
+  assert.equal(result.delegated_operation_action, null);
+  assert.equal(result.delegated_operation_reason, null);
   assert.equal(result.list_after_next.next_action, 'monitor_sites');
   assert.equal(result.list_after_next_followup.next_action, 'focus_next_operation');
   assert.equal(result.list_after_next_delayed_followup.next_action, 'monitor_sites');
   assert.equal(invocations.length, 6);
+});
+
+test('runSiteNextWorkflowLive carries selected operation lane from site-list overview', async () => {
+  const result = await runSiteNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    expectedRouteAction: 'focus_next_site',
+    expectedSiteId: 'site_alpha',
+    expectedSiteAction: 'focus_next_operation',
+    auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      const scriptName = args[0].split(/[\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-product-read.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            site_count: 2,
+            next_site_id: 'site_alpha',
+            next_action: 'focus_next_operation',
+            next_operation_id: 'operation_alpha',
+            next_operation_next_action: 'review_site_continuity_reconciliation_execution',
+            next_operation_reason: 'operation_operator_focus_needs_review',
+            next_operation_focus_kind: null,
+            next_operation_focus_ref: 'site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:39:01.453Z:completed',
+            route_next_action: 'focus_next_site',
+            route_target: 'site_alpha',
+          },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-site-focus-workflow-live.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.site_focus_workflow_live.v1',
+          status: 'ok',
+          selected_site_id: 'site_alpha',
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-site-action-workflow-live.mjs') {
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.site_action_workflow_live.v1',
+          status: 'ok',
+          delegated_workflow: 'focus_next_operation',
+          delegated_action: 'focus_next_operation',
+          read_after_action: {
+            next_action: 'monitor_site',
+          },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+
+  assert.equal(result.delegated_route_action, 'focus_next_site');
+  assert.equal(result.delegated_site_action, 'focus_next_operation');
+  assert.equal(result.delegated_operation_id, 'operation_alpha');
+  assert.equal(result.delegated_operation_action, 'review_site_continuity_reconciliation_execution');
+  assert.equal(result.delegated_operation_reason, 'operation_operator_focus_needs_review');
 });
 
 test('runSiteNextWorkflowLive rejects unsupported site route actions', async () => {
