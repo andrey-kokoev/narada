@@ -741,6 +741,23 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   });
   assert.match(operationReadSessionPathTaskText, /Task Lifecycle Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
 
+  const operationReadOperationPathTaskText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_live',
+      current_status: 'active',
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'task',
+      workflow_next_action: 'focus_operation_path_task',
+      workflow_reason: 'operation_path_has_open_task',
+      posture_next_action: 'monitor_operations',
+    },
+  });
+  assert.match(operationReadOperationPathTaskText, /Task Lifecycle Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+
   const operationReadLifecycleSessionText = formatProductSurfaceText({
     operation: 'operation.read',
     worker_url: 'https://carrier.example.test',

@@ -87,7 +87,7 @@ const ROUTE_TO_WORKFLOW = new Map([
   ['focus_lifecycle_directive_delivery', { name: 'directive_delivery', script: directiveDeliveryReviewScript, flag: null }],
   ['focus_task_path_evidence', { name: 'task_lifecycle_review', script: taskLifecycleReadScript, flag: null }],
   ['focus_operation_path_attention', { name: 'evidence', script: evidenceReadScript, flag: null }],
-  ['focus_operation_path_task', { name: 'evidence', script: evidenceReadScript, flag: null }],
+  ['focus_operation_path_task', { name: 'task_lifecycle_review', script: taskLifecycleReadScript, flag: null }],
   ['read_session_evidence', { name: 'session_evidence', script: sessionEvidenceReadScript, flag: null }],
   ['inspect_session_evidence', { name: 'session_evidence', script: sessionEvidenceReadScript, flag: null }],
   ['focus_session_path_evidence', { name: 'session_evidence', script: sessionEvidenceReadScript, flag: null }],
