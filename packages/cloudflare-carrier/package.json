@@ -140,6 +140,8 @@
     "product:repository-publication:readiness:text": "node scripts/cloudflare-carrier-repository-publication-readiness.mjs --format text",
     "product:authority-transfer": "node scripts/cloudflare-carrier-authority-transfer-read.mjs",
     "product:authority-transfer:text": "node scripts/cloudflare-carrier-authority-transfer-read.mjs --format text",
+    "product:session:evidence": "node scripts/cloudflare-carrier-session-evidence-read.mjs",
+    "product:session:evidence:text": "node scripts/cloudflare-carrier-session-evidence-read.mjs --format text",
     "product:repository-publication:cloudflare-execution": "node scripts/cloudflare-carrier-repository-publication-cloudflare-execution.mjs",
     "product:repository-publication:cloudflare-execution:text": "node scripts/cloudflare-carrier-repository-publication-cloudflare-execution.mjs --format text",
     "authority-transfer:readiness-smoke:live": "node scripts/cloudflare-carrier-authority-transfer-readiness-live-smoke.mjs",

@@ -248,6 +248,7 @@ export function summarizeProductSurface(operation, body, options = {}) {
       health: lifecycle?.health ?? null,
       next_action: lifecycle?.next_action ?? body?.operation_product_surface?.next_action ?? null,
       session_count: lifecycle?.session_count ?? body?.operation_product_surface?.session_count ?? 0,
+      active_session_id: Array.isArray(body?.sessions) ? body.sessions[0]?.carrier_session_id ?? body.sessions[0]?.session_id ?? null : null,
       task_count: lifecycle?.task_count ?? body?.operation_product_surface?.task_count ?? 0,
       workflow_next_action: workflowRoute?.next_action ?? null,
       workflow_reason: workflowRoute?.reason ?? null,
@@ -511,13 +512,15 @@ export function formatProductSurfaceText(result) {
     if (summary.workflow_next_action === 'focus_lifecycle_continuity' || summary.workflow_next_action === 'focus_lifecycle_continuity_loop_report') {
       lines.push(`Continuity Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:continuity:workflow:live -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --expected-pre-action ${summary.workflow_next_action ?? 'refresh_site_continuity_loop'} --operator-session-file <operator-session-file> --execute-operation-continuity`);
     }
+    if (summary.workflow_next_action === 'focus_session_path_evidence') {
+      lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --carrier-session-id ${summary.active_session_id ?? '<session-id>'} --operator-session-file <operator-session-file>`);
+    }
     if (
       summary.workflow_next_action === 'review_operation_operator_focus'
       || summary.workflow_next_action === 'review_carrier_evidence_replay'
       || summary.workflow_next_action === 'focus_lifecycle_read_evidence'
       || summary.workflow_next_action === 'focus_operation_path_attention'
       || summary.workflow_next_action === 'focus_operation_path_task'
-      || summary.workflow_next_action === 'focus_session_path_evidence'
       || summary.workflow_next_action === 'focus_session_path_task'
       || summary.workflow_next_action === 'focus_evidence'
       || summary.workflow_next_action === 'focus_open_attention'

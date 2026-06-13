@@ -20,6 +20,7 @@ const mailboxSendAcceptedReadScript = resolve(scriptDir, 'cloudflare-carrier-mai
 const mailboxSendConfirmationReadScript = resolve(scriptDir, 'cloudflare-carrier-mailbox-send-confirmation-read.mjs');
 const directiveDeliveryReviewScript = resolve(scriptDir, 'cloudflare-carrier-directive-delivery-review.mjs');
 const operationScopeReadScript = resolve(scriptDir, 'cloudflare-carrier-operation-scope-read.mjs');
+const sessionEvidenceReadScript = resolve(scriptDir, 'cloudflare-carrier-session-evidence-read.mjs');
 const siteAuthorityReadScript = resolve(scriptDir, 'cloudflare-carrier-site-authority-read.mjs');
 const webhookDelayShadowReadScript = resolve(scriptDir, 'cloudflare-carrier-webhook-delay-shadow-read.mjs');
 const localIngressRequestReadScript = resolve(scriptDir, 'cloudflare-carrier-local-ingress-request-read.mjs');
@@ -87,7 +88,7 @@ const ROUTE_TO_WORKFLOW = new Map([
   ['focus_task_path_evidence', { name: 'task_lifecycle_review', script: taskLifecycleReadScript, flag: null }],
   ['focus_operation_path_attention', { name: 'evidence', script: evidenceReadScript, flag: null }],
   ['focus_operation_path_task', { name: 'evidence', script: evidenceReadScript, flag: null }],
-  ['focus_session_path_evidence', { name: 'evidence', script: evidenceReadScript, flag: null }],
+  ['focus_session_path_evidence', { name: 'session_evidence', script: sessionEvidenceReadScript, flag: null }],
   ['focus_session_path_task', { name: 'evidence', script: evidenceReadScript, flag: null }],
   ['focus_authority_path_evidence', { name: 'site_authority', script: siteAuthorityReadScript, flag: null }],
   ['focus_authority_evidence', { name: 'site_authority', script: siteAuthorityReadScript, flag: null }],
@@ -529,6 +530,15 @@ function buildWorkflowArgs(config, workflow, operationId, readSummary = {}) {
       ? readSummary.local_resident_session_ref.trim()
       : '';
     if (localResidentSessionRef) args.push('--local-resident-session-ref', localResidentSessionRef);
+  }
+  if (workflow.name === 'session_evidence') {
+    const carrierSessionId = typeof readSummary.active_session_id === 'string' && readSummary.active_session_id.trim()
+      ? readSummary.active_session_id.trim()
+      : typeof readSummary.workflow_focus_ref === 'string' && readSummary.workflow_focus_ref.trim()
+        ? readSummary.workflow_focus_ref.trim()
+        : '';
+    if (!carrierSessionId) throw new Error('operation_next_workflow_session_evidence_requires_active_session_id');
+    args.push('--carrier-session-id', carrierSessionId);
   }
   if (workflow.name === 'focus_review') {
     const focusKind = typeof readSummary.workflow_focus_kind === 'string' && readSummary.workflow_focus_kind.trim()

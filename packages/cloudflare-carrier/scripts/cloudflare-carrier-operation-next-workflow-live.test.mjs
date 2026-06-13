@@ -1210,7 +1210,7 @@ test('runOperationNextWorkflowLive delegates focus_evidence to operation evidenc
   assert.equal(invocations[2][0].split(/[\\/]/).pop(), 'cloudflare-carrier-operation-evidence-read.mjs');
 });
 
-test('runOperationNextWorkflowLive delegates focus_session_path_evidence to operation evidence read', async () => {
+test('runOperationNextWorkflowLive delegates focus_session_path_evidence to session evidence read', async () => {
   const invocations = [];
   const result = await runOperationNextWorkflowLive({
     workerUrl: 'https://carrier.example',
@@ -1239,20 +1239,19 @@ test('runOperationNextWorkflowLive delegates focus_session_path_evidence to oper
           schema: 'narada.cloudflare_carrier.product_read.v1',
           summary: {
             operation_id: 'operation_alpha',
+            active_session_id: 'session_alpha',
             workflow_next_action: 'focus_session_path_evidence',
           },
         });
       }
-      if (scriptName === 'cloudflare-carrier-operation-evidence-read.mjs') {
+      if (scriptName === 'cloudflare-carrier-session-evidence-read.mjs') {
         return JSON.stringify({
-          schema: 'narada.cloudflare_carrier.operation_evidence_read.v1',
+          schema: 'narada.cloudflare_carrier.session_evidence_read.v1',
           status: 'ok',
           summary: {
             operation_id: 'operation_alpha',
-            carrier_event_count: 0,
-            reviewable_focus_kind: null,
-            reviewable_focus_ref: null,
-            latest_focus_review: null,
+            carrier_session_id: 'session_alpha',
+            event_count: 0,
           },
         });
       }
@@ -1260,10 +1259,11 @@ test('runOperationNextWorkflowLive delegates focus_session_path_evidence to oper
     },
   });
 
-  assert.equal(result.delegated_workflow, 'evidence');
+  assert.equal(result.delegated_workflow, 'session_evidence');
   assert.equal(result.delegated_route_action, 'focus_session_path_evidence');
-  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.operation_evidence_read.v1');
-  assert.equal(invocations[2][0].split(/[\\/]/).pop(), 'cloudflare-carrier-operation-evidence-read.mjs');
+  assert.equal(result.delegated_result.schema, 'narada.cloudflare_carrier.session_evidence_read.v1');
+  assert.equal(invocations[2][0].split(/[\\/]/).pop(), 'cloudflare-carrier-session-evidence-read.mjs');
+  assert.equal(invocations[2][invocations[2].indexOf('--carrier-session-id') + 1], 'session_alpha');
 });
 
 test('runOperationNextWorkflowLive delegates focus_lifecycle_start_session to operation session workflow', async () => {

@@ -675,6 +675,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
     summary: {
       site_id: 'site_alpha',
       operation_id: 'operation_live',
+      active_session_id: 'session_alpha',
       current_status: 'active',
       phase: 'inhabited',
       health: 'attention',
@@ -684,7 +685,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       posture_next_action: 'monitor_operations',
     },
   });
-  assert.match(operationReadSessionPathEvidenceText, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(operationReadSessionPathEvidenceText, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
 
   const operationReadLifecycleSessionText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1686,6 +1687,7 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     health: 'attention',
     next_action: 'continuity_packet',
     session_count: 1,
+    active_session_id: null,
     task_count: 3,
     scope_loaded: true,
     workflow_next_action: 'review_site_continuity_reconciliation_execution',
