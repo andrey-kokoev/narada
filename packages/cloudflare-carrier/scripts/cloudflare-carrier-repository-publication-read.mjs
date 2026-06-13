@@ -232,6 +232,7 @@ export function summarizeRepositoryPublicationSurface(operation, body = {}, para
       latest_publication_execution_id: latest?.publication_execution_id ?? null,
       latest_publication_status: latest?.publication_status ?? null,
       latest_publication_reason: latest?.publication_reason ?? latest?.windows_admission_reason ?? null,
+      latest_evidence_posture: latest?.evidence_posture ?? null,
       latest_published_commit_ref: latest?.published_commit_ref ?? null,
       repository_publication_evidence_authority: body.repository_publication_evidence_authority ?? null,
       repository_publication_admission_authority: body.repository_publication_admission_authority ?? null,
@@ -323,6 +324,7 @@ export function formatRepositoryPublicationReadText(result) {
     if (summary.repository_publication_request_id) lines.push(`Filter Request: ${summary.repository_publication_request_id}`);
     if (summary.latest_repository_publication_evidence_id) lines.push(`Latest Evidence: ${summary.latest_repository_publication_evidence_id}`);
     if (summary.latest_publication_execution_id) lines.push(`Latest Execution: ${summary.latest_publication_execution_id}`);
+    if (summary.latest_evidence_posture) lines.push(`Current Posture: ${summary.latest_evidence_posture}`);
     if (summary.latest_publication_status) {
       lines.push(`Latest Publication Status: ${summary.latest_publication_status}${summary.latest_publication_reason ? ` reason=${summary.latest_publication_reason}` : ''}`);
     }

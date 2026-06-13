@@ -173,6 +173,7 @@ test('readRepositoryPublicationSurface posts evidence list envelope and summariz
         publication_execution_id: 'publication-execution-1',
         publication_status: 'completed',
         windows_admission_reason: null,
+        evidence_posture: 'windows_repository_publication_resolved_cloudflare_recorded_evidence',
         published_commit_ref: 'git:commit:123456',
       }],
     });
@@ -191,6 +192,7 @@ test('readRepositoryPublicationSurface posts evidence list envelope and summariz
   assert.equal(result.summary.latest_repository_publication_evidence_id, 'repository-publication-evidence-1');
   assert.equal(result.summary.latest_published_commit_ref, 'git:commit:123456');
   assert.equal(result.summary.latest_publication_reason, null);
+  assert.equal(result.summary.latest_evidence_posture, 'windows_repository_publication_resolved_cloudflare_recorded_evidence');
 });
 
 test('readRepositoryPublicationSurface refuses focused evidence id that is not present', async () => {
@@ -230,6 +232,7 @@ test('summarizeRepositoryPublicationSurface narrows evidence summary to focused 
         repository_publication_request_id: 'repository-publication-request-2',
         publication_execution_id: 'publication-execution-2',
         publication_status: 'completed',
+        evidence_posture: 'windows_repository_publication_resolved_cloudflare_recorded_evidence',
         published_commit_ref: 'git:commit:2222',
       },
       {
@@ -238,6 +241,7 @@ test('summarizeRepositoryPublicationSurface narrows evidence summary to focused 
         publication_execution_id: 'publication-execution-1',
         publication_status: 'refused',
         windows_admission_reason: 'repository_publication_push_not_enabled',
+        evidence_posture: 'windows_repository_publication_refused_cloudflare_recorded_evidence',
         published_commit_ref: 'git:commit:1111',
       },
     ],
@@ -251,6 +255,7 @@ test('summarizeRepositoryPublicationSurface narrows evidence summary to focused 
   assert.equal(summary.focused_repository_publication_evidence_id, 'repository-publication-evidence-1');
   assert.equal(summary.latest_repository_publication_evidence_id, 'repository-publication-evidence-1');
   assert.equal(summary.latest_publication_reason, 'repository_publication_push_not_enabled');
+  assert.equal(summary.latest_evidence_posture, 'windows_repository_publication_refused_cloudflare_recorded_evidence');
   assert.equal(summary.latest_published_commit_ref, 'git:commit:1111');
 });
 
@@ -269,6 +274,7 @@ test('formatRepositoryPublicationReadText surfaces evidence refusal reason', () 
       repository_publication_request_id: 'repository-publication-request-1',
       latest_repository_publication_evidence_id: 'repository-publication-evidence-1',
       latest_publication_execution_id: 'publication-execution-1',
+      latest_evidence_posture: 'windows_repository_publication_refused_cloudflare_recorded_evidence',
       latest_publication_status: 'refused',
       latest_publication_reason: 'repository_publication_push_not_enabled',
       repository_publication_evidence_authority: 'windows_repository_publication_executor',
@@ -277,6 +283,7 @@ test('formatRepositoryPublicationReadText surfaces evidence refusal reason', () 
     },
   });
 
+  assert.match(text, /Current Posture: windows_repository_publication_refused_cloudflare_recorded_evidence/);
   assert.match(text, /Latest Publication Status: refused reason=repository_publication_push_not_enabled/);
 });
 
