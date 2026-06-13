@@ -24,6 +24,8 @@ export async function readMailboxSendAccepted(config, fetchImpl = fetch) {
 export function summarizeMailboxSendAccepted(body = {}) {
   const sends = Array.isArray(body?.sends) ? body.sends : [];
   const latest = sends[0] ?? null;
+  const latestRecord = latest?.record ?? null;
+  const latestRequest = latestRecord?.send_request ?? null;
   return {
     site_id: body?.site_id ?? null,
     send_count: sends.length,
@@ -31,8 +33,17 @@ export function summarizeMailboxSendAccepted(body = {}) {
     mailbox_send_admission: body?.mailbox_send_admission ?? null,
     mailbox_mutation_admission: body?.mailbox_mutation_admission ?? null,
     latest_send_accepted_id: latest?.send_accepted_id ?? null,
-    latest_message_id: latest?.message_id ?? null,
-    latest_subject: latest?.subject ?? null,
+    latest_message_id:
+      latest?.message_id ??
+      latest?.source_message_ref ??
+      latestRecord?.source_message_ref ??
+      latestRequest?.source_message_ref ??
+      null,
+    latest_subject:
+      latest?.subject ??
+      latestRecord?.subject ??
+      latestRequest?.subject ??
+      null,
     latest_recorded_at: latest?.recorded_at ?? latest?.generated_at ?? null,
   };
 }

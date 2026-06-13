@@ -31,8 +31,12 @@ test('summarizeMailboxSendAccepted lifts latest accepted send details', () => {
     mailbox_mutation_admission: 'not_admitted',
     sends: [{
       send_accepted_id: 'mailbox_send_accepted_alpha',
-      message_id: 'message_alpha',
-      subject: 'Accepted subject',
+      source_message_ref: 'message_alpha',
+      record: {
+        send_request: {
+          source_message_ref: 'message_alpha',
+        },
+      },
       recorded_at: '2026-06-13T03:59:01.000Z',
     }],
   });
@@ -40,6 +44,8 @@ test('summarizeMailboxSendAccepted lifts latest accepted send details', () => {
   assert.equal(summary.send_count, 1);
   assert.equal(summary.mailbox_send_authority, 'cloudflare_graph_mailbox_send');
   assert.equal(summary.latest_send_accepted_id, 'mailbox_send_accepted_alpha');
+  assert.equal(summary.latest_message_id, 'message_alpha');
+  assert.equal(summary.latest_subject, null);
 });
 
 test('readMailboxSendAccepted returns summarized mailbox send acceptance', async () => {
@@ -56,19 +62,20 @@ test('readMailboxSendAccepted returns summarized mailbox send acceptance', async
       mailbox_send_authority: 'cloudflare_graph_mailbox_send',
       mailbox_send_admission: 'admitted',
       mailbox_mutation_admission: 'not_admitted',
-      sends: [{ send_accepted_id: 'mailbox_send_accepted_alpha', message_id: 'message_alpha', subject: 'Accepted subject' }],
+      sends: [{ send_accepted_id: 'mailbox_send_accepted_alpha', source_message_ref: 'message_alpha' }],
     }),
     json: async () => ({
       site_id: 'site_alpha',
       mailbox_send_authority: 'cloudflare_graph_mailbox_send',
       mailbox_send_admission: 'admitted',
       mailbox_mutation_admission: 'not_admitted',
-      sends: [{ send_accepted_id: 'mailbox_send_accepted_alpha', message_id: 'message_alpha', subject: 'Accepted subject' }],
+      sends: [{ send_accepted_id: 'mailbox_send_accepted_alpha', source_message_ref: 'message_alpha' }],
     }),
   }));
 
   assert.equal(result.schema, 'narada.cloudflare_carrier.mailbox_send_accepted_read.v1');
   assert.equal(result.summary.latest_send_accepted_id, 'mailbox_send_accepted_alpha');
+  assert.equal(result.summary.latest_message_id, 'message_alpha');
 });
 
 test('formatMailboxSendAcceptedReadText prints mailbox send acceptance summary', () => {
@@ -83,12 +90,12 @@ test('formatMailboxSendAcceptedReadText prints mailbox send acceptance summary',
       mailbox_mutation_admission: 'not_admitted',
       latest_send_accepted_id: 'mailbox_send_accepted_alpha',
       latest_message_id: 'message_alpha',
-      latest_subject: 'Accepted subject',
+      latest_subject: null,
       latest_recorded_at: '2026-06-13T03:59:01.000Z',
     },
   });
 
   assert.match(text, /Mailbox Send Accepted: ok/);
   assert.match(text, /Send Acceptance: count=1 authority=cloudflare_graph_mailbox_send admission=admitted/);
-  assert.match(text, /Latest Accepted: id=mailbox_send_accepted_alpha message=message_alpha subject=Accepted subject/);
+  assert.match(text, /Latest Accepted: id=mailbox_send_accepted_alpha message=message_alpha subject=none/);
 });
