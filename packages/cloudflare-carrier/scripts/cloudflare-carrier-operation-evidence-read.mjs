@@ -169,6 +169,10 @@ export function formatOperationEvidenceReadText(result) {
   if (summary.reviewable_focus_kind && summary.reviewable_focus_ref) {
     lines.push(`Review Ack: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --focus-kind ${summary.reviewable_focus_kind} --focus-ref ${summary.reviewable_focus_ref} --operator-session-file <operator-session-file>`);
   }
+  if (summary.operation_id) {
+    lines.push(`Recovery Read: pnpm --filter @narada2/cloudflare-carrier product:operation:recovery:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Persistence Read: pnpm --filter @narada2/cloudflare-carrier product:operation:persistence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+  }
   return `${lines.join('\n')}\n`;
 }
 

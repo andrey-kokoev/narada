@@ -99,6 +99,8 @@ test('readOperationEvidence preserves product read envelope and text formatting 
   assert.match(text, /Operation Evidence Read: ok/);
   assert.match(text, /Carrier Sessions: session_1/);
   assert.match(text, /tool_result_received/);
+  assert.match(text, /Recovery Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Persistence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
 
 test('formatOperationEvidenceReadText recognizes Windows fallback evidence as reviewable focus', () => {
@@ -164,6 +166,8 @@ test('formatOperationEvidenceReadText distinguishes current reviewable focus fro
 
   assert.match(text, /Reviewable Focus: site_continuity_reconciliation_execution:site-continuity-reconciliation-execution:site_alpha:newer/);
   assert.match(text, /Latest Review: site_continuity_reconciliation_execution:site-continuity-reconciliation-execution:site_alpha:older status=acknowledged/);
+  assert.match(text, /Recovery Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Persistence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
 
 test('summarizeOperationEvidence makes local resident evidence posture explicit without inventing a Cloudflare session', () => {
