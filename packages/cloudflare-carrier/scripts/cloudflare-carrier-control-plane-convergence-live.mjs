@@ -126,6 +126,8 @@ export function formatControlPlaneConvergenceLiveText(result) {
   ];
   if (workerUrl) {
     lines.push(`Site List: pnpm --filter @narada2/cloudflare-carrier product:site:list:text -- --url ${workerUrl} --operator-session-file <operator-session-file>`);
+    lines.push(`Posture Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:posture:coherence:live:text -- --url ${workerUrl}${formatSiteArgs(result.posture_coherence?.checked_site_ids)} --operator-session-file <operator-session-file>`);
+    lines.push(`Durability Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text -- --url ${workerUrl}${formatSiteArgs(result.durability_coherence?.checked_site_ids)} --operator-session-file <operator-session-file>`);
   }
   if (workerUrl && ((result.site_pass_count ?? 0) > 0 || isActionableSiteRoute(result.initial_site_route)) && initialSiteId) {
     lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${initialSiteId} --operator-session-file <operator-session-file> --execute-site-next`);
@@ -151,6 +153,14 @@ export function formatControlPlaneConvergenceLiveText(result) {
 
 function isActionableSiteRoute(routeAction) {
   return routeAction != null && routeAction !== 'monitor_sites';
+}
+
+function formatSiteArgs(siteIds = []) {
+  if (!Array.isArray(siteIds)) return '';
+  return siteIds
+    .filter((siteId) => typeof siteId === 'string' && siteId.length > 0)
+    .map((siteId) => ` --site ${siteId}`)
+    .join('');
 }
 
 function buildSiteListArgs(config) {

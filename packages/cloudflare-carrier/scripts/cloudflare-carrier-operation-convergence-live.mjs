@@ -200,6 +200,8 @@ export function formatOperationConvergenceLiveText(result) {
   ];
   if (workerUrl) {
     lines.push(`Site List: pnpm --filter @narada2/cloudflare-carrier product:site:list:text -- --url ${workerUrl} --operator-session-file <operator-session-file>`);
+    lines.push(`Posture Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:posture:coherence:live:text -- --url ${workerUrl}${formatSiteArgs(result.posture_coherence?.checked_site_ids)} --operator-session-file <operator-session-file>`);
+    lines.push(`Durability Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text -- --url ${workerUrl}${formatSiteArgs(result.durability_coherence?.checked_site_ids)} --operator-session-file <operator-session-file>`);
   }
   for (const site of result.site_results ?? []) {
     lines.push(
@@ -222,6 +224,14 @@ export function formatOperationConvergenceLiveText(result) {
 
 function isActionableOperationRoute(routeAction) {
   return routeAction != null && routeAction !== 'monitor_operations';
+}
+
+function formatSiteArgs(siteIds = []) {
+  if (!Array.isArray(siteIds)) return '';
+  return siteIds
+    .filter((siteId) => typeof siteId === 'string' && siteId.length > 0)
+    .map((siteId) => ` --site ${siteId}`)
+    .join('');
 }
 
 function buildSiteListArgs(config) {

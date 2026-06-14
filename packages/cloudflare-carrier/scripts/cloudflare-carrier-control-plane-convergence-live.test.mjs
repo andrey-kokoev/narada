@@ -145,8 +145,8 @@ test('control plane convergence text surfaces direct workflow and read handoffs 
     initial_site_route: 'focus_next_site',
     final_site_route: 'monitor_sites',
     site_pass_count: 1,
-    posture_coherence: { status: 'ok', issue_count: 0 },
-    durability_coherence: { status: 'ok', issue_count: 0 },
+    posture_coherence: { status: 'ok', issue_count: 0, checked_site_ids: ['site_alpha'] },
+    durability_coherence: { status: 'ok', issue_count: 0, checked_site_ids: ['site_alpha'] },
     site_passes: [
       {
         pass: 1,
@@ -161,6 +161,8 @@ test('control plane convergence text surfaces direct workflow and read handoffs 
   });
 
   assert.match(text, /Site List: pnpm --filter @narada2\/cloudflare-carrier product:site:list:text -- --url https:\/\/carrier\.example --operator-session-file <operator-session-file>/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(text, /- pass=1 site=site_alpha route=focus_next_site delegated=focus_next_operation/);
   assert.match(text, /  Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
@@ -176,8 +178,8 @@ test('control plane convergence suppresses focused site and operation links with
     initial_site_route: 'focus_next_site',
     final_site_route: 'monitor_sites',
     site_pass_count: 1,
-    posture_coherence: { status: 'ok', issue_count: 0 },
-    durability_coherence: { status: 'ok', issue_count: 0 },
+    posture_coherence: { status: 'ok', issue_count: 0, checked_site_ids: ['site_alpha'] },
+    durability_coherence: { status: 'ok', issue_count: 0, checked_site_ids: ['site_alpha'] },
     site_passes: [
       {
         pass: 1,
@@ -201,8 +203,8 @@ test('control plane convergence suppresses worker-scoped links without a real wo
     initial_site_route: 'focus_next_site',
     final_site_route: 'monitor_sites',
     site_pass_count: 1,
-    posture_coherence: { status: 'ok', issue_count: 0 },
-    durability_coherence: { status: 'ok', issue_count: 0 },
+    posture_coherence: { status: 'ok', issue_count: 0, checked_site_ids: ['site_alpha'] },
+    durability_coherence: { status: 'ok', issue_count: 0, checked_site_ids: ['site_alpha'] },
     site_passes: [
       {
         pass: 1,
@@ -214,6 +216,8 @@ test('control plane convergence suppresses worker-scoped links without a real wo
   });
 
   assert.doesNotMatch(text, /^Site List:/m);
+  assert.doesNotMatch(text, /^Posture Coherence Review:/m);
+  assert.doesNotMatch(text, /^Durability Coherence Review:/m);
   assert.doesNotMatch(text, /^Site Next Workflow:/m);
   assert.doesNotMatch(text, /^  Site Next Workflow:/m);
   assert.doesNotMatch(text, /^  Site Read:/m);

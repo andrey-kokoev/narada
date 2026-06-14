@@ -151,8 +151,8 @@ test('operation convergence text surfaces direct workflow and read handoffs', ()
     status: 'ok',
     worker_url: 'https://carrier.example',
     checked_site_ids: ['site_alpha'],
-    posture_coherence: { status: 'ok', issue_count: 0 },
-    durability_coherence: { status: 'ok', issue_count: 0 },
+    posture_coherence: { status: 'ok', issue_count: 0, checked_site_ids: ['site_alpha'] },
+    durability_coherence: { status: 'ok', issue_count: 0, checked_site_ids: ['site_alpha'] },
     site_results: [
       {
         site_id: 'site_alpha',
@@ -165,6 +165,8 @@ test('operation convergence text surfaces direct workflow and read handoffs', ()
   });
 
   assert.match(text, /Site List: pnpm --filter @narada2\/cloudflare-carrier product:site:list:text -- --url https:\/\/carrier\.example --operator-session-file <operator-session-file>/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /- site=site_alpha initial=focus_next_operation final=monitor_operations passes=1 focused=operation_alpha/);
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
@@ -178,8 +180,8 @@ test('operation convergence suppresses focused site and operation links without 
     status: 'ok',
     worker_url: 'https://carrier.example',
     checked_site_ids: ['site_alpha'],
-    posture_coherence: { status: 'ok', issue_count: 0 },
-    durability_coherence: { status: 'ok', issue_count: 0 },
+    posture_coherence: { status: 'ok', issue_count: 0, checked_site_ids: ['site_alpha'] },
+    durability_coherence: { status: 'ok', issue_count: 0, checked_site_ids: ['site_alpha'] },
     site_results: [
       {
         site_id: '',
@@ -202,8 +204,8 @@ test('operation convergence suppresses worker-scoped links without a real worker
   const text = formatOperationConvergenceLiveText({
     status: 'ok',
     checked_site_ids: ['site_alpha'],
-    posture_coherence: { status: 'ok', issue_count: 0 },
-    durability_coherence: { status: 'ok', issue_count: 0 },
+    posture_coherence: { status: 'ok', issue_count: 0, checked_site_ids: ['site_alpha'] },
+    durability_coherence: { status: 'ok', issue_count: 0, checked_site_ids: ['site_alpha'] },
     site_results: [
       {
         site_id: 'site_alpha',
@@ -216,6 +218,8 @@ test('operation convergence suppresses worker-scoped links without a real worker
   });
 
   assert.doesNotMatch(text, /^Site List:/m);
+  assert.doesNotMatch(text, /^Posture Coherence Review:/m);
+  assert.doesNotMatch(text, /^Durability Coherence Review:/m);
   assert.doesNotMatch(text, /^  Site Read:/m);
   assert.doesNotMatch(text, /^  Site Next Workflow:/m);
   assert.doesNotMatch(text, /^  Operation List:/m);
