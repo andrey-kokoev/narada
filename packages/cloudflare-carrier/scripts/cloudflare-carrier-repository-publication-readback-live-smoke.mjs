@@ -17,6 +17,7 @@ export function parseRepositoryPublicationReadbackLiveSmokeArgs(argv = [], env =
   }
 
   const workerUrl = trimTrailingSlash(option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '');
+  const format = option(args, '--format') ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_READBACK_LIVE_FORMAT ?? 'json';
   const siteId = normalizeOptionalString(option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? null);
   const repositoryPublicationRequestId = normalizeOptionalString(
     option(args, '--repository-publication-request-id')
@@ -44,6 +45,7 @@ export function parseRepositoryPublicationReadbackLiveSmokeArgs(argv = [], env =
   const auth = resolveAuth(args, env) ?? resolveBearerFromEnv(env, repoRoot);
 
   if (!workerUrl) throw new Error('repository_publication_readback_live_smoke_requires_--url_or_CLOUDFLARE_CARRIER_URL');
+  if (!['json', 'text'].includes(format)) throw new Error(`repository_publication_readback_live_smoke_unknown_format:${format}`);
   if (!siteId) throw new Error('repository_publication_readback_live_smoke_requires_--site_or_CLOUDFLARE_CARRIER_SITE_ID');
   if (!repositoryPublicationRequestId) throw new Error('repository_publication_readback_live_smoke_requires_--repository-publication-request-id_or_CLOUDFLARE_REPOSITORY_PUBLICATION_READBACK_REQUEST_ID');
   if (!VALID_LANES.has(lane)) throw new Error(`repository_publication_readback_live_smoke_lane_unsupported:${lane}`);
@@ -51,6 +53,7 @@ export function parseRepositoryPublicationReadbackLiveSmokeArgs(argv = [], env =
 
   return {
     workerUrl,
+    format,
     siteId,
     repositoryPublicationRequestId,
     repositoryPublicationAdmissionId,
@@ -61,6 +64,32 @@ export function parseRepositoryPublicationReadbackLiveSmokeArgs(argv = [], env =
     limit,
     auth,
   };
+}
+
+export function formatRepositoryPublicationReadbackLiveSmokeText(result) {
+  const lines = [
+    `Repository Publication Readback Smoke: ${result.status}`,
+    `Worker: ${result.worker_url}`,
+    `Site: ${result.site_id}`,
+    `Lane: ${result.lane}`,
+    `Request: ${result.repository_publication_request_id}`,
+    `Admission: ${result.repository_publication_admission_id ?? 'none'}`,
+    `Execution: ${result.repository_publication_execution_id ?? 'none'}`,
+    `Evidence: ${result.repository_publication_evidence_id ?? 'none'}`,
+    `Counts: requests=${result.request_list_count ?? 0} admissions=${result.admission_count ?? 0} executions=${result.execution_count ?? 0} evidence=${result.evidence_count ?? 0}`,
+    `Request Review: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-request-id ${result.repository_publication_request_id} --operator-session-file <operator-session-file>`,
+    `Admission Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:admission:list:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-admission-id ${result.repository_publication_admission_id ?? '<repository-publication-admission-id>'} --operator-session-file <operator-session-file>`,
+  ];
+  if (result.repository_publication_execution_id) {
+    lines.push(`Execution Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-execution-id ${result.repository_publication_execution_id} --operator-session-file <operator-session-file>`);
+  }
+  if (result.repository_publication_evidence_id) {
+    lines.push(`Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:evidence:list:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-evidence-id ${result.repository_publication_evidence_id} --operator-session-file <operator-session-file>`);
+  }
+  if (result.operation_read_summary?.operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_read_summary.operation_id} --operator-session-file <operator-session-file>`);
+  }
+  return `${lines.join('\n')}\n`;
 }
 
 export async function runRepositoryPublicationReadbackLiveSmoke(config, fetchImpl = fetch) {
@@ -251,7 +280,11 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   try {
     const config = parseRepositoryPublicationReadbackLiveSmokeArgs(process.argv.slice(2));
     const result = await runRepositoryPublicationReadbackLiveSmoke(config);
-    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    if (config.format === 'text') {
+      process.stdout.write(formatRepositoryPublicationReadbackLiveSmokeText(result));
+    } else {
+      process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    }
   } catch (error) {
     process.stderr.write(JSON.stringify({ ok: false, code: error?.message ?? String(error), response: error?.response, summary: error?.summary }, null, 2) + '\n');
     process.exit(1);

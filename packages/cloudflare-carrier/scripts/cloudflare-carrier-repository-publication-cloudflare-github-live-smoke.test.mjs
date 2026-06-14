@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  formatRepositoryPublicationCloudflareGithubLiveSmokeText,
   parseRepositoryPublicationCloudflareGithubLiveSmokeArgs,
   runRepositoryPublicationCloudflareGithubLiveSmoke,
 } from './cloudflare-carrier-repository-publication-cloudflare-github-live-smoke.mjs';
@@ -9,6 +10,7 @@ import {
 test('parseRepositoryPublicationCloudflareGithubLiveSmokeArgs supports operator session auth', () => {
   const parsed = parseRepositoryPublicationCloudflareGithubLiveSmokeArgs([
     '--url', 'https://carrier.example.test',
+    '--format', 'text',
     '--operator-session-cookie', 'operator-session-cookie',
     '--site', 'site_alpha',
     '--repository-ref', 'github:andrey/site-alpha',
@@ -18,11 +20,36 @@ test('parseRepositoryPublicationCloudflareGithubLiveSmokeArgs supports operator 
   ], {}, { loadLocalEnv: false });
 
   assert.equal(parsed.workerUrl, 'https://carrier.example.test');
+  assert.equal(parsed.format, 'text');
   assert.deepEqual(parsed.auth, {
     kind: 'operator_session',
     value: 'operator-session-cookie',
     source: 'operator-session-cookie',
   });
+});
+
+test('formatRepositoryPublicationCloudflareGithubLiveSmokeText emits downstream operator reads', () => {
+  const text = formatRepositoryPublicationCloudflareGithubLiveSmokeText({
+    status: 'ok',
+    worker_url: 'https://carrier.example.test',
+    site_id: 'site_alpha',
+    operation_id: 'operation_repo_publication',
+    repository_publication_request_id: 'repository-publication-request-1',
+    repository_publication_admission_id: 'repository-publication-admission-1',
+    repository_publication_execution_id: 'cloudflare-execution-1',
+    repository_ref: 'github:andrey/site-alpha',
+    branch_ref: 'cloudflare-publication-live',
+    publication_status: 'completed',
+    repository_publication_request_authority: 'cloudflare_repository_publication_request_queue',
+    repository_publication_admission_authority: 'cloudflare_repository_publication_admission_controller',
+    repository_publication_executor_authority: 'cloudflare_github_repository_publication_executor',
+    direct_cloudflare_repository_mutation_admission: 'admitted_by_cloudflare_github_repository_publication',
+  });
+
+  assert.match(text, /Repository Publication Cloudflare GitHub Smoke: ok/);
+  assert.match(text, /Request Review: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text/);
+  assert.match(text, /Execution Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
 });
 
 test('runRepositoryPublicationCloudflareGithubLiveSmoke posts operator session cookie when provided', async () => {

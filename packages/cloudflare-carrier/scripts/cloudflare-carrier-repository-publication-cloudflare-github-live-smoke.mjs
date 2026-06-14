@@ -14,6 +14,7 @@ export function parseRepositoryPublicationCloudflareGithubLiveSmokeArgs(argv = [
   if (options.loadLocalEnv !== false) loadLocalEnv(join(repoRoot, '.env'), env);
 
   const workerUrl = trimTrailingSlash(option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '');
+  const format = option(args, '--format') ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_CLOUDFLARE_GITHUB_LIVE_FORMAT ?? 'json';
   const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? 'site_narada_cloudflare';
   const operationId = option(args, '--operation') ?? env.CLOUDFLARE_CARRIER_OPERATION_ID ?? 'operation_narada_cloudflare_control';
   const repositoryRef = option(args, '--repository-ref') ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_LIVE_REPOSITORY_REF ?? '';
@@ -27,6 +28,7 @@ export function parseRepositoryPublicationCloudflareGithubLiveSmokeArgs(argv = [
     throw new Error('cloudflare_github_repository_publication_live_smoke_requires_--execute-cloudflare-github_or_CLOUDFLARE_REPOSITORY_PUBLICATION_EXECUTE_LIVE=1');
   }
   if (!workerUrl) throw new Error('cloudflare_github_repository_publication_live_smoke_requires_--url_or_CLOUDFLARE_CARRIER_URL');
+  if (!['json', 'text'].includes(format)) throw new Error(`cloudflare_github_repository_publication_live_smoke_unknown_format:${format}`);
   if (!auth) throw new Error('cloudflare_github_repository_publication_live_smoke_requires_bearer_token_or_operator_session');
   if (!siteId) throw new Error('cloudflare_github_repository_publication_live_smoke_requires_site_id');
   if (!repositoryRef) {
@@ -41,6 +43,7 @@ export function parseRepositoryPublicationCloudflareGithubLiveSmokeArgs(argv = [
 
   return {
     workerUrl,
+    format,
     auth,
     siteId,
     operationId,
@@ -52,6 +55,27 @@ export function parseRepositoryPublicationCloudflareGithubLiveSmokeArgs(argv = [
     evidenceContractRef: option(args, '--evidence-contract-ref') ?? 'contract:cloudflare-github-repository-publication-execution-record:v1',
     rollbackRef: option(args, '--rollback-ref') ?? null,
   };
+}
+
+export function formatRepositoryPublicationCloudflareGithubLiveSmokeText(result) {
+  const lines = [
+    `Repository Publication Cloudflare GitHub Smoke: ${result.status}`,
+    `Worker: ${result.worker_url}`,
+    `Site: ${result.site_id}`,
+    `Operation: ${result.operation_id}`,
+    `Request: ${result.repository_publication_request_id}`,
+    `Admission: ${result.repository_publication_admission_id}`,
+    `Execution: ${result.repository_publication_execution_id}`,
+    `Target: repository=${result.repository_ref} branch=${result.branch_ref}`,
+    `Publication Status: ${result.publication_status ?? 'unknown'}`,
+    `Authorities: request=${result.repository_publication_request_authority ?? 'unknown'} admission=${result.repository_publication_admission_authority ?? 'unknown'} executor=${result.repository_publication_executor_authority ?? 'unknown'}`,
+    `Cloudflare Admission: ${result.direct_cloudflare_repository_mutation_admission ?? 'unknown'}`,
+    `Request Review: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-request-id ${result.repository_publication_request_id} --operator-session-file <operator-session-file>`,
+    `Admission Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:admission:list:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-admission-id ${result.repository_publication_admission_id} --operator-session-file <operator-session-file>`,
+    `Execution Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-execution-id ${result.repository_publication_execution_id} --operator-session-file <operator-session-file>`,
+    `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
+  ];
+  return `${lines.join('\n')}\n`;
 }
 
 export async function runRepositoryPublicationCloudflareGithubLiveSmoke(config, fetchImpl = fetch) {
@@ -244,8 +268,11 @@ function trimTrailingSlash(value) {
 }
 
 if (resolve(process.argv[1] ?? '') === scriptPath) {
-  const result = await runRepositoryPublicationCloudflareGithubLiveSmoke(
-    parseRepositoryPublicationCloudflareGithubLiveSmokeArgs(process.argv.slice(2)),
-  );
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  const config = parseRepositoryPublicationCloudflareGithubLiveSmokeArgs(process.argv.slice(2));
+  const result = await runRepositoryPublicationCloudflareGithubLiveSmoke(config);
+  if (config.format === 'text') {
+    process.stdout.write(formatRepositoryPublicationCloudflareGithubLiveSmokeText(result));
+  } else {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  }
 }

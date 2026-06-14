@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  formatRepositoryPublicationReadbackLiveSmokeText,
   parseRepositoryPublicationReadbackLiveSmokeArgs,
   runRepositoryPublicationReadbackLiveSmoke,
 } from './cloudflare-carrier-repository-publication-readback-live-smoke.mjs';
@@ -9,6 +10,7 @@ import {
 test('parseRepositoryPublicationReadbackLiveSmokeArgs builds cloudflare lane config with operator session auth', () => {
   const parsed = parseRepositoryPublicationReadbackLiveSmokeArgs([
     '--url', 'https://carrier.example.test/',
+    '--format', 'text',
     '--operator-session-cookie', 'operator-session-cookie',
     '--site', 'site_alpha',
     '--repository-publication-request-id', 'repository-publication-request-1',
@@ -19,6 +21,7 @@ test('parseRepositoryPublicationReadbackLiveSmokeArgs builds cloudflare lane con
   ], {});
 
   assert.equal(parsed.workerUrl, 'https://carrier.example.test');
+  assert.equal(parsed.format, 'text');
   assert.equal(parsed.siteId, 'site_alpha');
   assert.equal(parsed.repositoryPublicationRequestId, 'repository-publication-request-1');
   assert.equal(parsed.repositoryPublicationExecutionId, 'cloudflare-execution-1');
@@ -26,6 +29,31 @@ test('parseRepositoryPublicationReadbackLiveSmokeArgs builds cloudflare lane con
   assert.equal(parsed.lane, 'cloudflare');
   assert.equal(parsed.limit, 25);
   assert.deepEqual(parsed.auth, { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' });
+});
+
+test('formatRepositoryPublicationReadbackLiveSmokeText emits focused downstream reads', () => {
+  const text = formatRepositoryPublicationReadbackLiveSmokeText({
+    status: 'ok',
+    worker_url: 'https://carrier.example.test',
+    site_id: 'site_alpha',
+    lane: 'cloudflare',
+    repository_publication_request_id: 'repository-publication-request-1',
+    repository_publication_admission_id: 'repository-publication-admission-1',
+    repository_publication_execution_id: 'cloudflare-execution-1',
+    repository_publication_evidence_id: null,
+    request_list_count: 1,
+    admission_count: 1,
+    execution_count: 1,
+    evidence_count: 0,
+    operation_read_summary: { operation_id: 'operation-1' },
+  });
+
+  assert.match(text, /Repository Publication Readback Smoke: ok/);
+  assert.match(text, /Lane: cloudflare/);
+  assert.match(text, /Request Review: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text/);
+  assert.match(text, /Admission Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:admission:list:text/);
+  assert.match(text, /Execution Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
 });
 
 test('parseRepositoryPublicationReadbackLiveSmokeArgs refuses missing required inputs', () => {
