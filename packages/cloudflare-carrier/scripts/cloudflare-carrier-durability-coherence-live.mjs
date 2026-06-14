@@ -266,6 +266,12 @@ export function formatDurabilityCoherenceLiveText(result) {
     lines.push(
       `- ${site.site_id}: persistence=${site.site_read?.persistence_state ?? 'unknown'} recovery=${site.site_read?.recovery_state ?? 'unknown'} op=${site.selected_operation_id ?? 'none'} op_recovery=${site.operation_recovery?.recovery_state ?? 'none'} gaps=${site.operation_recovery?.recovery_gap_count ?? 0}`,
     );
+    lines.push(`  Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${site.site_id} --operator-session-file <operator-session-file>`);
+    if (site.selected_operation_id) {
+      lines.push(`  Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${site.site_id} --operation-id ${site.selected_operation_id} --operator-session-file <operator-session-file>`);
+      lines.push(`  Recovery Review: pnpm --filter @narada2/cloudflare-carrier product:operation:recovery:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${site.site_id} --operation-id ${site.selected_operation_id} --operator-session-file <operator-session-file>`);
+      lines.push(`  Persistence Review: pnpm --filter @narada2/cloudflare-carrier product:operation:persistence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${site.site_id} --operation-id ${site.selected_operation_id} --operator-session-file <operator-session-file>`);
+    }
   }
   if ((result?.issues?.length ?? 0) > 0) {
     lines.push('Issues:');
