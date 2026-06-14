@@ -151,6 +151,11 @@ export function formatOperationEvidenceReadText(result) {
     lines.push(`Local Resident Evidence: sessions=${summary.local_resident_session_count} bridge=${summary.local_resident_carrier_bridge_state ?? 'unknown'}`);
   }
   if (summary.carrier_session_ids?.length > 0) lines.push(`Carrier Sessions: ${summary.carrier_session_ids.join(', ')}`);
+  if (summary.site_id && summary.carrier_session_ids?.length > 0) {
+    for (const carrierSessionId of summary.carrier_session_ids) {
+      lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --carrier-session-id ${carrierSessionId} --operator-session-file <operator-session-file>`);
+    }
+  }
   if (summary.local_resident_session_refs?.length > 0) lines.push(`Local Resident Sessions: ${summary.local_resident_session_refs.join(', ')}`);
   if (summary.recent_carrier_events?.length > 0) {
     lines.push('Recent Carrier Events:');
