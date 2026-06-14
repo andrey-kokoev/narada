@@ -119,4 +119,5 @@ test('summaries and text output preserve session evidence detail', () => {
   assert.match(text, /Session: session_alpha/);
   assert.match(text, /Latest Event: provider_request_recorded/);
   assert.match(text, /Event Kinds: carrier_command_executed=1 provider_request_recorded=1/);
+  assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
 });

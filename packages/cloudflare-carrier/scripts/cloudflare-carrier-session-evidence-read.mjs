@@ -109,6 +109,11 @@ export function formatSessionEvidenceText(result) {
     `Latest Event: ${summary.latest_event_kind ?? 'none'}`,
     `Event Kinds: ${formatKeyValueMap(summary.event_kind_counts ?? {})}`,
   ];
+  if (summary.site_id && summary.carrier_session_id) {
+    lines.push(
+      `Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`,
+    );
+  }
   return `${lines.join('\n')}\n`;
 }
 
