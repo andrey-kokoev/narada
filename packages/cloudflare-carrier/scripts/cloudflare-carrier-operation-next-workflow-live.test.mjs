@@ -30,7 +30,7 @@ test('parseOperationNextWorkflowLiveArgs supports text format', () => {
   assert.equal(parsed.format, 'text');
 });
 
-test('formatOperationNextWorkflowLiveText renders direct follow-on reads', () => {
+test('formatOperationNextWorkflowLiveText renders direct follow-on reads and workflow handoff', () => {
   const text = formatOperationNextWorkflowLiveText({
     status: 'ok',
     worker_url: 'https://carrier.example',
@@ -52,7 +52,9 @@ test('formatOperationNextWorkflowLiveText renders direct follow-on reads', () =>
       },
     },
     read_after_next: {
-      workflow_next_action: 'refresh_site_continuity_loop',
+      workflow_next_action: 'review_site_continuity_reconciliation_execution',
+      workflow_focus_kind: 'site_continuity_reconciliation_execution',
+      workflow_focus_ref: 'site-continuity-reconciliation-execution:site_live_smoke:2026-06-14T00:17:12.374Z:completed',
       active_session_id: 'carrier_session_alpha',
     },
   });
@@ -60,9 +62,10 @@ test('formatOperationNextWorkflowLiveText renders direct follow-on reads', () =>
   assert.match(text, /^Operation Next Workflow: ok/m);
   assert.match(text, /Selected Operation: operation_alpha/);
   assert.match(text, /Delegated Workflow: session route=start_or_select_session/);
-  assert.match(text, /Post Action: refresh_site_continuity_loop/);
+  assert.match(text, /Post Action: review_site_continuity_reconciliation_execution/);
   assert.match(text, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Post Action Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_live_smoke:2026-06-14T00:17:12\.374Z:completed --operator-session-file <operator-session-file>/);
   assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text/);
 });
 

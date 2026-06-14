@@ -162,11 +162,34 @@ export function formatOperationNextWorkflowLiveText(result) {
     `Operation List: pnpm --filter @narada2/cloudflare-carrier product:operation:list:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`,
     `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.selected_operation_id} --operator-session-file <operator-session-file>`,
   ];
+  const postActionWorkflow = buildPostActionWorkflowCommand(result);
+  if (postActionWorkflow) {
+    lines.push(`Post Action Workflow: ${postActionWorkflow}`);
+  }
   const carrierSessionId = result.read_after_next?.active_session_id ?? result.delegated_result?.read_after_next?.active_session_id ?? null;
   if (carrierSessionId) {
     lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.selected_operation_id} --carrier-session-id ${carrierSessionId} --operator-session-file <operator-session-file>`);
   }
   return `${lines.join('\n')}\n`;
+}
+
+function buildPostActionWorkflowCommand(result) {
+  const nextAction = result.read_after_next?.workflow_next_action ?? null;
+  const focusKind = result.read_after_next?.workflow_focus_kind ?? null;
+  const focusRef = result.read_after_next?.workflow_focus_ref ?? null;
+  if (nextAction === 'start_or_select_session') {
+    return `pnpm --filter @narada2/cloudflare-carrier product:operation:session:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.selected_operation_id} --operator-session-file <operator-session-file> --execute-operation-session`;
+  }
+  if (nextAction === 'resume_operation_continuation') {
+    return `pnpm --filter @narada2/cloudflare-carrier product:operation:continuation:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.selected_operation_id} --operator-session-file <operator-session-file> --execute-operation-continuation-resume`;
+  }
+  if (nextAction === 'refresh_site_continuity_loop') {
+    return `pnpm --filter @narada2/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.selected_operation_id} --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity`;
+  }
+  if (nextAction === 'review_site_continuity_reconciliation_execution' && focusRef) {
+    return `pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.selected_operation_id} --focus-kind ${focusKind ?? 'site_continuity_reconciliation_execution'} --focus-ref ${focusRef} --operator-session-file <operator-session-file>`;
+  }
+  return null;
 }
 
 export async function runOperationNextWorkflowLive(
