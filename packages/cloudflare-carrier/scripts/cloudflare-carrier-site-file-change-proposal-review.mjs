@@ -248,7 +248,7 @@ export function formatSiteFileChangeProposalReviewText(result) {
     lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
   }
   if (summary.focused_proposal_id) {
-    lines.push(`Review Ack: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --focus-kind site_file_change_proposal --focus-ref ${summary.focused_proposal_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Review Ack: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'}${summary.operation_id ? ` --operation-id ${summary.operation_id}` : ''} --focus-kind site_file_change_proposal --focus-ref ${summary.focused_proposal_id} --operator-session-file <operator-session-file>`);
   }
   return `${lines.join('\n')}\n`;
 }

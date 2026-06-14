@@ -274,3 +274,20 @@ test('formatMailboxDraftReplyProposalReadText suppresses next workflow for passi
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
   assert.doesNotMatch(text, /Operation Next Workflow:/);
 });
+
+test('formatMailboxDraftReplyProposalReadText omits synthetic operation ids from review ack', () => {
+  const text = formatMailboxDraftReplyProposalReadText({
+    worker_url: 'https://carrier.example',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_narada_cloudflare',
+      workflow_next_action: 'review_mailbox_draft_reply_proposal',
+      workflow_reason: 'proposal_requires_ack',
+      proposal_count: 1,
+      focused_proposal_id: 'mailbox_draft_reply_proposal_live_1',
+    },
+  });
+
+  assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --focus-kind mailbox_draft_reply_proposal --focus-ref mailbox_draft_reply_proposal_live_1 --operator-session-file <operator-session-file>/);
+  assert.doesNotMatch(text, /Review Ack:.*<operation-id>/);
+});

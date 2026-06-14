@@ -439,3 +439,20 @@ test('formatRepositoryPublicationRequestReviewText makes missing evidence explic
   assert.match(text, /Linked Evidence: none status=unknown/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operation-id operation_site_read --operator-session-file <operator-session-file> --execute-operation-next/);
 });
+
+test('formatRepositoryPublicationRequestReviewText omits synthetic operation ids from review ack', () => {
+  const text = formatRepositoryPublicationRequestReviewText({
+    worker_url: 'https://carrier.example',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_narada_cloudflare',
+      workflow_next_action: 'review_repository_publication_request',
+      workflow_reason: 'request_requires_ack',
+      request_count: 1,
+      focused_repository_publication_request_id: 'repository_publication_request_live_1',
+    },
+  });
+
+  assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --focus-kind repository_publication_request --focus-ref repository_publication_request_live_1 --operator-session-file <operator-session-file>/);
+  assert.doesNotMatch(text, /Review Ack:.*<operation-id>/);
+});

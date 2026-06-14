@@ -194,6 +194,25 @@ test('formatOperationEvidenceReadText distinguishes current reviewable focus fro
   assert.match(text, /Persistence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
 
+test('formatOperationEvidenceReadText omits synthetic operation ids from review ack', () => {
+  const text = formatOperationEvidenceReadText({
+    worker_url: 'https://carrier.example',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      phase: 'inhabited',
+      health: 'ready',
+      current_status: 'active',
+      next_action: 'monitor_operation',
+      reviewable_focus_kind: 'site_continuity_reconciliation_execution',
+      reviewable_focus_ref: 'site-continuity-reconciliation-execution:site_alpha:current',
+    },
+  });
+
+  assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:current --operator-session-file <operator-session-file>/);
+  assert.doesNotMatch(text, /Review Ack:.*<operation-id>/);
+});
+
 test('summarizeOperationEvidence makes local resident evidence posture explicit without inventing a Cloudflare session', () => {
   const summary = summarizeOperationEvidence({
     operation: { operation_id: 'operation_alpha', site_id: 'site_live_smoke', status: 'active' },

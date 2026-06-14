@@ -173,7 +173,7 @@ export function formatOperationEvidenceReadText(result) {
   }
   if (summary.reviewable_focus_kind && summary.reviewable_focus_ref) {
     emittedLabels.add('Review Ack');
-    lines.push(`Review Ack: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --focus-kind ${summary.reviewable_focus_kind} --focus-ref ${summary.reviewable_focus_ref} --operator-session-file <operator-session-file>`);
+    lines.push(`Review Ack: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'}${summary.operation_id ? ` --operation-id ${summary.operation_id}` : ''} --focus-kind ${summary.reviewable_focus_kind} --focus-ref ${summary.reviewable_focus_ref} --operator-session-file <operator-session-file>`);
   }
   for (const { label, command } of buildOperationEvidenceWorkflowLinks(result, summary)) {
     if (emittedLabels.has(label)) continue;
