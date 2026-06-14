@@ -54,6 +54,7 @@ export function formatSiteFocusWorkflowLiveText(result) {
     lines.push(`Operation Focus: kind=${result.selected_operation_focus_kind ?? 'unknown'} ref=${result.selected_operation_focus_ref}`);
   }
   lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operator-session-file <operator-session-file>`);
+  lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operator-session-file <operator-session-file> --execute-site-next`);
   lines.push(`Site Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operator-session-file <operator-session-file> --execute-site-action`);
   if (result.selected_operation_id) {
     lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operation-id ${result.selected_operation_id} --operator-session-file <operator-session-file>`);

@@ -95,6 +95,7 @@ export function formatSiteActionWorkflowLiveText(result) {
     `Pre Action: ${result.read_before_action?.next_action ?? 'unknown'}`,
     `Post Action: ${result.read_after_action?.next_action ?? 'unknown'}`,
     `Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`,
+    `Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`,
   ];
   const operationId = result.read_after_action?.active_operation_id ?? result.read_before_action?.active_operation_id ?? null;
   if (operationId) {
