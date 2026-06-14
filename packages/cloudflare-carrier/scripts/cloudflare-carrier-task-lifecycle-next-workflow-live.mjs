@@ -23,7 +23,7 @@ export function parseTaskLifecycleNextWorkflowLiveArgs(argv = [], env = process.
   const operationId = option(args, '--operation-id') ?? env.CLOUDFLARE_CARRIER_OPERATION_ID ?? null;
   const taskId = option(args, '--task-id') ?? env.CLOUDFLARE_TASK_LIFECYCLE_TASK_ID ?? null;
   const carrierSessionId = option(args, '--carrier-session-id') ?? option(args, '--session-id') ?? env.CLOUDFLARE_CARRIER_SESSION_ID ?? null;
-  const agentId = option(args, '--agent-id') ?? env.CLOUDFLARE_CARRIER_AGENT_ID ?? 'agent.operator.task-lifecycle-next-live';
+  const agentId = option(args, '--agent-id') ?? env.CLOUDFLARE_CARRIER_AGENT_ID ?? null;
   const reportSummary = option(args, '--report-summary') ?? env.CLOUDFLARE_TASK_LIFECYCLE_REPORT_SUMMARY ?? 'Live next-step report from the governed task lifecycle workflow.';
   const auth = resolveAuth(args, env);
   const executeAcknowledged = flag(args, '--execute-task-lifecycle-next')
@@ -35,7 +35,6 @@ export function parseTaskLifecycleNextWorkflowLiveArgs(argv = [], env = process.
   if (!workerUrl) throw new Error('task_lifecycle_next_workflow_live_requires_--url_or_CLOUDFLARE_CARRIER_URL');
   if (!siteId) throw new Error('task_lifecycle_next_workflow_live_requires_site_id');
   if (!taskId && !carrierSessionId && !operationId) throw new Error('task_lifecycle_next_workflow_live_requires_task_id_or_carrier_session_id_or_operation_id');
-  if (!agentId) throw new Error('task_lifecycle_next_workflow_live_requires_agent_id');
   if (!auth) throw new Error('task_lifecycle_next_workflow_live_requires_bearer_token_or_operator_session');
 
   return {
@@ -58,6 +57,7 @@ export async function runTaskLifecycleNextWorkflowLive(config, { runNodeScript =
   const resolvedTaskId = summary.task_id ?? config.taskId ?? null;
   if (!resolvedTaskId) throw new Error('task_lifecycle_next_workflow_live_requires_resolved_task_id');
   const step = selectTaskLifecycleStep(summary);
+  const resolvedAgentId = resolveTaskLifecycleAgentId(config, summary, step);
 
   if (!step) {
     return {
@@ -73,7 +73,13 @@ export async function runTaskLifecycleNextWorkflowLive(config, { runNodeScript =
     };
   }
 
-  const delegatedResult = parseJsonStdout(await runNodeScript(buildStepArgs({ ...config, taskId: resolvedTaskId }, step), { cwd: packageRoot }), `task_lifecycle_${step}_result`);
+  const delegatedResult = parseJsonStdout(
+    await runNodeScript(
+      buildStepArgs({ ...config, taskId: resolvedTaskId, agentId: resolvedAgentId }, step),
+      { cwd: packageRoot },
+    ),
+    `task_lifecycle_${step}_result`,
+  );
   const readAfter = parseJsonStdout(await runNodeScript(buildTaskReadArgs(config), { cwd: packageRoot }), 'task_lifecycle_read_after_next');
   assert.equal(readAfter.schema, 'narada.cloudflare_carrier.task_lifecycle_read.v1');
 
@@ -97,6 +103,25 @@ function selectTaskLifecycleStep(summary = {}) {
   if (status === 'claimed') return 'report';
   if (status === 'open') return 'claim';
   return null;
+}
+
+function resolveTaskLifecycleAgentId(config, summary, step) {
+  if (!step) return config.agentId ?? null;
+  if (step === 'claim') {
+    if (!config.agentId) throw new Error('task_lifecycle_next_workflow_live_claim_requires_agent_id');
+    return config.agentId;
+  }
+  if (step === 'report') {
+    const reporterAgentId = config.agentId ?? summary.claimed_by_agent_id ?? null;
+    if (!reporterAgentId) throw new Error('task_lifecycle_next_workflow_live_report_requires_agent_id_or_claimed_by_agent_id');
+    return reporterAgentId;
+  }
+  if (step === 'finish') {
+    const finalizerAgentId = config.agentId ?? summary.reported_by_agent_id ?? summary.claimed_by_agent_id ?? null;
+    if (!finalizerAgentId) throw new Error('task_lifecycle_next_workflow_live_finish_requires_agent_id_or_recorded_agent_id');
+    return finalizerAgentId;
+  }
+  return config.agentId ?? null;
 }
 
 async function defaultRunNodeScript(args, options) {

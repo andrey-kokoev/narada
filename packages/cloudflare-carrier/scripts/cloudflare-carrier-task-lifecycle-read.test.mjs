@@ -253,7 +253,7 @@ test('formatTaskLifecycleReadText renders report and finish commands from focuse
       finish_id: null,
     },
   });
-  assert.match(claimedText, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live -- --url https:\/\/carrier\.example --site site_alpha --task-id task_claimed --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
+  assert.match(claimedText, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live -- --url https:\/\/carrier\.example --site site_alpha --task-id task_claimed --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
   assert.match(claimedText, /Report Command: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:report:text -- --url https:\/\/carrier\.example --site site_alpha --task-id task_claimed --reporter-agent <agent-id> --summary <summary> --operator-session-file <operator-session-file>/);
 
   const reportedText = formatTaskLifecycleReadText({
@@ -273,6 +273,53 @@ test('formatTaskLifecycleReadText renders report and finish commands from focuse
       finish_id: null,
     },
   });
-  assert.match(reportedText, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live -- --url https:\/\/carrier\.example --site site_alpha --task-id task_reported --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
+  assert.match(reportedText, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live -- --url https:\/\/carrier\.example --site site_alpha --task-id task_reported --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
   assert.match(reportedText, /Finish Command: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:finish:text -- --url https:\/\/carrier\.example --site site_alpha --task-id task_reported --finalizer-agent <agent-id> --finish-verdict accepted --operator-session-file <operator-session-file>/);
+});
+
+test('formatTaskLifecycleReadText reuses recorded agents for claimed and reported tasks', () => {
+  const claimedText = formatTaskLifecycleReadText({
+    worker_url: 'https://carrier.example',
+    auth_source: 'operator-session-file',
+    summary: {
+      ok: true,
+      site_id: 'site_alpha',
+      task_count: 1,
+      open_task_count: 1,
+      mutation_authority: 'cloudflare_task_lifecycle_d1',
+      mutation_class: 'task_claim',
+      cloudflare_write_admission: 'admitted',
+      task_id: 'task_claimed',
+      task_status: 'claimed',
+      claimed_by_agent_id: 'agent.claimed',
+      report_id: null,
+      finish_id: null,
+    },
+  });
+  assert.match(claimedText, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live -- --url https:\/\/carrier\.example --site site_alpha --task-id task_claimed --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
+  assert.doesNotMatch(claimedText, /--agent-id <agent-id>/);
+  assert.match(claimedText, /Report Command: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:report:text -- --url https:\/\/carrier\.example --site site_alpha --task-id task_claimed --reporter-agent agent\.claimed --summary <summary> --operator-session-file <operator-session-file>/);
+
+  const reportedText = formatTaskLifecycleReadText({
+    worker_url: 'https://carrier.example',
+    auth_source: 'operator-session-file',
+    summary: {
+      ok: true,
+      site_id: 'site_alpha',
+      task_count: 1,
+      open_task_count: 0,
+      mutation_authority: 'cloudflare_task_lifecycle_d1',
+      mutation_class: 'task_report',
+      cloudflare_write_admission: 'admitted',
+      task_id: 'task_reported',
+      task_status: 'claimed',
+      claimed_by_agent_id: 'agent.claimed',
+      reported_by_agent_id: 'agent.reported',
+      report_id: 'report_alpha',
+      finish_id: null,
+    },
+  });
+  assert.match(reportedText, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live -- --url https:\/\/carrier\.example --site site_alpha --task-id task_reported --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
+  assert.doesNotMatch(reportedText, /--agent-id <agent-id>/);
+  assert.match(reportedText, /Finish Command: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:finish:text -- --url https:\/\/carrier\.example --site site_alpha --task-id task_reported --finalizer-agent agent\.reported --finish-verdict accepted --operator-session-file <operator-session-file>/);
 });

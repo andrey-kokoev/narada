@@ -152,24 +152,30 @@ function formatTaskLifecycleNextCommands(result, summary) {
   const siteId = summary.site_id ?? result?.params?.site_id ?? '<site-id>';
   const taskId = summary.task_id ?? result?.params?.task_lifecycle_task_id ?? '<task-id>';
   if (!taskId) return [];
-  const workflowCommand = `Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`;
   const normalizedStatus = normalizeTaskStatus(summary.task_status);
+  const claimAgent = '<agent-id>';
+  const reportAgent = summary.claimed_by_agent_id ?? '<agent-id>';
+  const finishAgent = summary.reported_by_agent_id ?? summary.claimed_by_agent_id ?? '<agent-id>';
+  const workflowAgentOption = normalizedStatus === 'open'
+    ? ` --agent-id ${claimAgent}`
+    : '';
+  const workflowCommand = `Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live -- --url ${workerUrl} --site ${siteId} --task-id ${taskId}${workflowAgentOption} --operator-session-file <operator-session-file> --execute-task-lifecycle-next`;
   if (summary.report_id && !summary.finish_id) {
     return [
       workflowCommand,
-      `Finish Command: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:finish:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --finalizer-agent <agent-id> --finish-verdict accepted --operator-session-file <operator-session-file>`,
+      `Finish Command: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:finish:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --finalizer-agent ${finishAgent} --finish-verdict accepted --operator-session-file <operator-session-file>`,
     ];
   }
   if (normalizedStatus === 'claimed') {
     return [
       workflowCommand,
-      `Report Command: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:report:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --reporter-agent <agent-id> --summary <summary> --operator-session-file <operator-session-file>`,
+      `Report Command: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:report:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --reporter-agent ${reportAgent} --summary <summary> --operator-session-file <operator-session-file>`,
     ];
   }
   if (normalizedStatus === 'open') {
     return [
       workflowCommand,
-      `Claim Command: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:claim:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --claimant-agent <agent-id> --operator-session-file <operator-session-file>`,
+      `Claim Command: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:claim:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --claimant-agent ${claimAgent} --operator-session-file <operator-session-file>`,
     ];
   }
   return [];

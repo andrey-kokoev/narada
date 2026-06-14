@@ -303,3 +303,94 @@ test('runTaskLifecycleNextWorkflowLive resolves task id from operation focus bef
   assert.equal(result.selected_step, 'claim');
   assert.equal(invocations[0][invocations[0].indexOf('--operation-id') + 1], 'operation_alpha');
 });
+
+test('runTaskLifecycleNextWorkflowLive reuses claimed agent for report when agent id is omitted', async () => {
+  const invocations = [];
+  await runTaskLifecycleNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_alpha',
+    taskId: 'task_alpha',
+    agentId: null,
+    reportSummary: 'report summary',
+    auth: { kind: 'operator_session', value: 'session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-task-lifecycle-read.mjs') {
+        if (invocations.length === 1) {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.task_lifecycle_read.v1',
+            summary: {
+              task_id: 'task_alpha',
+              task_status: 'claimed',
+              claimed_by_agent_id: 'agent.claimed',
+              report_id: null,
+              finish_id: null,
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.task_lifecycle_read.v1',
+          summary: { task_id: 'task_alpha', task_status: 'closed', report_id: 'report_alpha', finish_id: null },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-task-lifecycle-report.mjs') {
+        assert.equal(args[args.indexOf('--reporter-agent') + 1], 'agent.claimed');
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.task_lifecycle_report.v1',
+          status: 'ok',
+          summary: { task_id: 'task_alpha', status: 'closed', report_id: 'report_alpha' },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+});
+
+test('runTaskLifecycleNextWorkflowLive reuses reported agent for finish when agent id is omitted', async () => {
+  const invocations = [];
+  await runTaskLifecycleNextWorkflowLive({
+    workerUrl: 'https://carrier.example',
+    siteId: 'site_alpha',
+    taskId: 'task_alpha',
+    agentId: null,
+    reportSummary: 'report summary',
+    auth: { kind: 'operator_session', value: 'session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => {
+      invocations.push(args);
+      const scriptName = args[0].split(/[\\\\/]/).pop();
+      if (scriptName === 'cloudflare-carrier-task-lifecycle-read.mjs') {
+        if (invocations.length === 1) {
+          return JSON.stringify({
+            schema: 'narada.cloudflare_carrier.task_lifecycle_read.v1',
+            summary: {
+              task_id: 'task_alpha',
+              task_status: 'closed',
+              claimed_by_agent_id: 'agent.claimed',
+              reported_by_agent_id: 'agent.reported',
+              report_id: 'report_alpha',
+              finish_id: null,
+            },
+          });
+        }
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.task_lifecycle_read.v1',
+          summary: { task_id: 'task_alpha', task_status: 'finished', report_id: 'report_alpha', finish_id: 'finish_alpha' },
+        });
+      }
+      if (scriptName === 'cloudflare-carrier-task-lifecycle-finish.mjs') {
+        assert.equal(args[args.indexOf('--finalizer-agent') + 1], 'agent.reported');
+        return JSON.stringify({
+          schema: 'narada.cloudflare_carrier.task_lifecycle_finish.v1',
+          status: 'ok',
+          summary: { task_id: 'task_alpha', status: 'finished', finish_id: 'finish_alpha' },
+        });
+      }
+      throw new Error(`unexpected_script:${scriptName}`);
+    },
+  });
+});
