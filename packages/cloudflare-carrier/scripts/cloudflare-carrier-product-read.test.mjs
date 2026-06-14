@@ -1253,6 +1253,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
     },
   });
   assert.match(operationReadRecoveryText, /Recovery Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_recovery --operator-session-file <operator-session-file>/);
+  assert.match(operationReadRecoveryText, /Persistence Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_recovery --operator-session-file <operator-session-file>/);
 
   const operationReadPersistenceText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1276,6 +1277,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
     },
   });
   assert.match(operationReadPersistenceText, /Persistence Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_persistence --operator-session-file <operator-session-file>/);
+  assert.match(operationReadPersistenceText, /Recovery Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_persistence --operator-session-file <operator-session-file>/);
 
   const operationReadContinuityText = formatProductSurfaceText({
     operation: 'operation.read',
