@@ -224,3 +224,28 @@ test('formatMailboxOutlookDraftReadText prints focused labels for focused reads'
   assert.match(text, /Focused Draft: id=draft_focus/);
   assert.match(text, /Focused Recorded: 2026-06-13T04:01:00.000Z/);
 });
+
+test('formatMailboxOutlookDraftReadText suppresses mailbox handoff without a real worker url', () => {
+  const text = formatMailboxOutlookDraftReadText({
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      draft_count: 1,
+      latest_draft_create_id: 'draft_live_1',
+      latest_account_ref: 'help@example.com',
+      latest_operation_id: 'operation_alpha',
+      latest_proposal_id: 'proposal_1',
+      latest_send_accepted_id: 'accepted_1',
+      latest_send_confirmation_id: 'confirmation_1',
+      latest_message_id: 'message_1',
+      latest_subject: 'Draft subject',
+    },
+  });
+
+  assert.doesNotMatch(text, /Proposal Read:/);
+  assert.doesNotMatch(text, /Accepted Read:/);
+  assert.doesNotMatch(text, /Confirmation Read:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /<worker-url>/);
+});

@@ -208,3 +208,24 @@ test('formatMailboxSendConfirmationReadText suppresses mailbox handoff without a
   assert.doesNotMatch(text, /Draft Read:/);
   assert.doesNotMatch(text, /<site-id>/);
 });
+
+test('formatMailboxSendConfirmationReadText suppresses mailbox handoff without a real worker url', () => {
+  const text = formatMailboxSendConfirmationReadText({
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      confirmation_count: 1,
+      latest_proposal_id: 'mailbox_send_proposal_alpha',
+      latest_send_accepted_id: 'mailbox_send_accepted_alpha',
+      latest_draft_create_id: 'mailbox_outlook_draft_create_alpha',
+      latest_operation_id: 'operation_alpha',
+    },
+  });
+
+  assert.doesNotMatch(text, /Proposal Read:/);
+  assert.doesNotMatch(text, /Accepted Read:/);
+  assert.doesNotMatch(text, /Draft Read:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /<worker-url>/);
+});

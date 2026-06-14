@@ -120,6 +120,7 @@ export function summarizeMailboxSendConfirmation(body = {}, options = {}) {
 
 export function formatMailboxSendConfirmationReadText(result) {
   const summary = result?.summary ?? {};
+  const workerUrl = result?.worker_url ?? null;
   const hasSiteId = Boolean(summary.site_id);
   const latestLabel = summary.focused_send_confirmation_id ? 'Focused Confirmation' : 'Latest Confirmation';
   const latestRecordedLabel = summary.focused_send_confirmation_id ? 'Focused Recorded' : 'Latest Recorded';
@@ -139,18 +140,18 @@ export function formatMailboxSendConfirmationReadText(result) {
   if (summary.latest_send_confirmation_id || summary.latest_message_id || summary.latest_subject) {
     lines.push(`${latestLabel}: id=${summary.latest_send_confirmation_id ?? 'none'} account=${summary.latest_account_ref ?? 'none'} message=${summary.latest_message_id ?? 'none'} subject=${summary.latest_subject ?? 'none'}`);
   }
-  if (hasSiteId && summary.latest_proposal_id) {
-    lines.push(`Proposal Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --focus-ref ${summary.latest_proposal_id} --operator-session-file <operator-session-file>`);
+  if (workerUrl && hasSiteId && summary.latest_proposal_id) {
+    lines.push(`Proposal Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${workerUrl} --site ${summary.site_id} --focus-ref ${summary.latest_proposal_id} --operator-session-file <operator-session-file>`);
   }
-  if (hasSiteId && summary.latest_send_accepted_id) {
-    lines.push(`Accepted Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --focus-ref ${summary.latest_send_accepted_id} --operator-session-file <operator-session-file>`);
+  if (workerUrl && hasSiteId && summary.latest_send_accepted_id) {
+    lines.push(`Accepted Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${workerUrl} --site ${summary.site_id} --focus-ref ${summary.latest_send_accepted_id} --operator-session-file <operator-session-file>`);
   }
-  if (hasSiteId && summary.latest_draft_create_id) {
-    lines.push(`Draft Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --focus-ref ${summary.latest_draft_create_id} --operator-session-file <operator-session-file>`);
+  if (workerUrl && hasSiteId && summary.latest_draft_create_id) {
+    lines.push(`Draft Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${workerUrl} --site ${summary.site_id} --focus-ref ${summary.latest_draft_create_id} --operator-session-file <operator-session-file>`);
   }
-  if (summary.site_id && summary.latest_operation_id) {
-    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file>`);
-    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+  if (workerUrl && summary.site_id && summary.latest_operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
   }
   if (summary.latest_body_preview) {
     lines.push(`Body Preview: ${summary.latest_body_preview}`);

@@ -326,3 +326,27 @@ test('formatMailboxDraftReplyProposalReadText suppresses mailbox handoff without
   assert.doesNotMatch(text, /Review Ack:/);
   assert.doesNotMatch(text, /<site-id>/);
 });
+
+test('formatMailboxDraftReplyProposalReadText suppresses mailbox handoff without a real worker url', () => {
+  const text = formatMailboxDraftReplyProposalReadText({
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_narada_cloudflare',
+      operation_id: 'operation_site_read',
+      proposal_count: 1,
+      focused_proposal_id: 'mailbox_draft_reply_proposal_live_1',
+      linked_draft_create_count: 1,
+      linked_draft_create_ids: ['mailbox_outlook_draft_create_live_1'],
+      linked_send_accepted_ids: ['mailbox_send_accepted_live_1'],
+      linked_send_confirmation_ids: ['mailbox_send_confirmation_live_1'],
+    },
+  });
+
+  assert.doesNotMatch(text, /Draft Read:/);
+  assert.doesNotMatch(text, /Accepted Read:/);
+  assert.doesNotMatch(text, /Confirmation Read:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /Review Ack:/);
+  assert.doesNotMatch(text, /<worker-url>/);
+});

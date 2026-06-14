@@ -112,6 +112,7 @@ export function summarizeMailboxOutlookDraft(body = {}, options = {}) {
 
 export function formatMailboxOutlookDraftReadText(result) {
   const summary = result?.summary ?? {};
+  const workerUrl = result?.worker_url ?? null;
   const latestLabel = summary.focused_draft_create_id ? 'Focused Draft' : 'Latest Draft';
   const latestRecordedLabel = summary.focused_draft_create_id ? 'Focused Recorded' : 'Latest Recorded';
   const lines = [
@@ -142,18 +143,18 @@ export function formatMailboxOutlookDraftReadText(result) {
   if (summary.latest_body_preview) {
     lines.push(`Body Preview: ${summary.latest_body_preview}`);
   }
-  if (summary.site_id && summary.latest_proposal_id) {
-    lines.push(`Proposal Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --focus-ref ${summary.latest_proposal_id} --operator-session-file <operator-session-file>`);
+  if (workerUrl && summary.site_id && summary.latest_proposal_id) {
+    lines.push(`Proposal Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${workerUrl} --site ${summary.site_id} --focus-ref ${summary.latest_proposal_id} --operator-session-file <operator-session-file>`);
   }
-  if (summary.site_id && summary.latest_send_accepted_id) {
-    lines.push(`Accepted Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --focus-ref ${summary.latest_send_accepted_id} --operator-session-file <operator-session-file>`);
+  if (workerUrl && summary.site_id && summary.latest_send_accepted_id) {
+    lines.push(`Accepted Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${workerUrl} --site ${summary.site_id} --focus-ref ${summary.latest_send_accepted_id} --operator-session-file <operator-session-file>`);
   }
-  if (summary.site_id && summary.latest_send_confirmation_id) {
-    lines.push(`Confirmation Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-confirmation:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --focus-ref ${summary.latest_send_confirmation_id} --operator-session-file <operator-session-file>`);
+  if (workerUrl && summary.site_id && summary.latest_send_confirmation_id) {
+    lines.push(`Confirmation Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-confirmation:text -- --url ${workerUrl} --site ${summary.site_id} --focus-ref ${summary.latest_send_confirmation_id} --operator-session-file <operator-session-file>`);
   }
-  if (summary.site_id && summary.latest_operation_id) {
-    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file>`);
-    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+  if (workerUrl && summary.site_id && summary.latest_operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
   }
   if (summary.latest_recorded_at) {
     lines.push(`${latestRecordedLabel}: ${summary.latest_recorded_at}`);
