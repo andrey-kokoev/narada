@@ -25,8 +25,11 @@ export function summarizeSiteAuthority(body = {}) {
   const siteAuthority = body?.site_authority ?? {};
   const map = siteAuthority?.map ?? {};
   const decisions = Array.isArray(siteAuthority?.decisions) ? siteAuthority.decisions : [];
+  const focusedWorkflowRoute = body?.focused_operation_lifecycle?.workflow_route ?? null;
   return {
     site_id: body?.site?.site_id ?? body?.site_id ?? map?.site_id ?? null,
+    active_operation_id: body?.focused_operation_lifecycle?.operation_id ?? body?.operation?.operation_id ?? null,
+    active_operation_next_action: focusedWorkflowRoute?.next_action ?? null,
     classifier_version: map?.classifier_version ?? null,
     embodiment_count: Array.isArray(map?.embodiments) ? map.embodiments.length : 0,
     entry_count: Array.isArray(map?.entries) ? map.entries.length : 0,
@@ -63,7 +66,13 @@ export function formatSiteAuthorityReadText(result) {
     lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
   }
   if (summary.site_id && isSiteAuthorityWorkflowAction(summary.next_action)) {
-    lines.push(`Site Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-action`);
+    lines.push(`Site Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id}${summary.active_operation_id ? ` --operation-id ${summary.active_operation_id}` : ''} --operator-session-file <operator-session-file> --execute-site-action`);
+  }
+  if (summary.site_id && summary.active_operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --operator-session-file <operator-session-file>`);
+    if (summary.active_operation_next_action) {
+      lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+    }
   }
   return `${lines.join('\n')}\n`;
 }

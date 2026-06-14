@@ -27,6 +27,10 @@ test('summarizeSiteScope lifts scope and inventory details', () => {
   const summary = summarizeSiteScope({
     site: { site_id: 'site_alpha', display_name: 'Alpha', status: 'active' },
     site_product_status: { health: 'attention', next_action: 'focus_site_operation' },
+    focused_operation_lifecycle: {
+      operation_id: 'operation_alpha',
+      workflow_route: { next_action: 'refresh_site_continuity_loop' },
+    },
     operations: [{ operation_id: 'op1' }, { operation_id: 'op2' }],
     memberships: [{ principal: 'a' }],
     authority_events: [{ event_id: 'evt1' }],
@@ -40,6 +44,8 @@ test('summarizeSiteScope lifts scope and inventory details', () => {
   assert.equal(summary.membership_count, 1);
   assert.equal(summary.authority_count, 3);
   assert.equal(summary.next_action, 'focus_site_operation');
+  assert.equal(summary.active_operation_id, 'operation_alpha');
+  assert.equal(summary.active_operation_next_action, 'refresh_site_continuity_loop');
 });
 
 test('readSiteScope returns summarized site scope', async () => {
@@ -75,6 +81,8 @@ test('formatSiteScopeReadText prints scope summary', () => {
       scope_loaded: true,
       health: 'attention',
       next_action: 'focus_site_operation',
+      active_operation_id: 'operation_alpha',
+      active_operation_next_action: 'refresh_site_continuity_loop',
       status: 'active',
       operation_count: 2,
       membership_count: 1,
@@ -90,5 +98,7 @@ test('formatSiteScopeReadText prints scope summary', () => {
   assert.match(text, /Inventory: operations=2 memberships=1 authority=3/);
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
-  assert.match(text, /Site Action Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:action:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-action/);
+  assert.match(text, /Site Action Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:action:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-site-action/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
 });

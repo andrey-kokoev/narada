@@ -24,6 +24,7 @@ export async function readSiteScope(config, fetchImpl = fetch) {
 export function summarizeSiteScope(body = {}) {
   const site = body?.site ?? {};
   const status = body?.site_product_status ?? body?.product_status ?? {};
+  const focusedWorkflowRoute = body?.focused_operation_lifecycle?.workflow_route ?? null;
   return {
     site_id: site?.site_id ?? body?.site_id ?? null,
     display_name: site?.display_name ?? null,
@@ -31,6 +32,8 @@ export function summarizeSiteScope(body = {}) {
     scope_loaded: Boolean(site?.site_id ?? body?.site_id),
     health: status?.health ?? null,
     next_action: status?.next_action ?? null,
+    active_operation_id: body?.focused_operation_lifecycle?.operation_id ?? body?.operation?.operation_id ?? null,
+    active_operation_next_action: focusedWorkflowRoute?.next_action ?? null,
     operation_count: Array.isArray(body?.operations) ? body.operations.length : 0,
     membership_count: Array.isArray(body?.memberships) ? body.memberships.length : 0,
     authority_count: (Array.isArray(body?.authority_events) ? body.authority_events.length : 0)
@@ -57,7 +60,13 @@ export function formatSiteScopeReadText(result) {
     lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
   }
   if (summary.site_id && isSiteScopeWorkflowAction(summary.next_action)) {
-    lines.push(`Site Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-action`);
+    lines.push(`Site Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id}${summary.active_operation_id ? ` --operation-id ${summary.active_operation_id}` : ''} --operator-session-file <operator-session-file> --execute-site-action`);
+  }
+  if (summary.site_id && summary.active_operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --operator-session-file <operator-session-file>`);
+    if (summary.active_operation_next_action) {
+      lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+    }
   }
   return `${lines.join('\n')}\n`;
 }
