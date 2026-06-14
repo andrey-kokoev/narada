@@ -244,6 +244,37 @@ test('summaries and text output preserve completion readiness and incomplete rea
   assert.doesNotMatch(text, /Incomplete Reason:/);
 });
 
+test('formatAuthorityTransferText emits direct site-action workflow handoff for transfer continuation', () => {
+  const text = formatAuthorityTransferText({
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      transfer_readiness: 'incomplete',
+      transfer_complete: false,
+      next_action: 'continue_authority_transfer',
+      domain_count: 12,
+      cloudflare_owned_count: 9,
+      windows_retained_count: 3,
+      remaining_windows_domain_count: 1,
+      remaining_windows_authority_count: 1,
+      slices: {
+        mailbox: { status_source_read_count: 2, draft_reply_proposal_count: 3, outlook_draft_create_count: 4, send_accepted_count: 5, send_confirmation_count: 6 },
+        site_file: { change_proposal_count: 7, materialization_count: 8 },
+        local_ingress: { request_count: 9 },
+        task_lifecycle: { task_count: 10 },
+        repository_publication: { readiness_status: 'ready', requested_repository_allowed: true, requested_branch_allowed: true, request_count: 11, execution_count: 12, evidence_count: 13 },
+      },
+      incomplete_reasons: ['remaining_windows_domains_present'],
+    },
+  });
+
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Action Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:action:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-action/);
+});
+
 function responseJson(status, body) {
   return {
     status,

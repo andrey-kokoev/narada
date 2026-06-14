@@ -175,10 +175,22 @@ export function formatAuthorityTransferText(result) {
     `Repository Publication: readiness=${summary.slices?.repository_publication?.readiness_status ?? 'unknown'} repository_allowed=${summary.slices?.repository_publication?.requested_repository_allowed ?? 'unknown'} branch_allowed=${summary.slices?.repository_publication?.requested_branch_allowed ?? 'unknown'}`,
     `Slices: mailbox=${summary.slices?.mailbox?.status_source_read_count ?? 0}/${summary.slices?.mailbox?.draft_reply_proposal_count ?? 0}/${summary.slices?.mailbox?.outlook_draft_create_count ?? 0}/${summary.slices?.mailbox?.send_accepted_count ?? 0}/${summary.slices?.mailbox?.send_confirmation_count ?? 0} site_file=${summary.slices?.site_file?.change_proposal_count ?? 0}/${summary.slices?.site_file?.materialization_count ?? 0} local_ingress=${summary.slices?.local_ingress?.request_count ?? 0} task_lifecycle=${summary.slices?.task_lifecycle?.task_count ?? 0} repository_publication=${summary.slices?.repository_publication?.request_count ?? 0}/${summary.slices?.repository_publication?.execution_count ?? 0}/${summary.slices?.repository_publication?.evidence_count ?? 0}`,
   ];
+  if (summary.site_id && summary.operation_id) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+  }
+  if (summary.site_id && isAuthorityTransferWorkflowAction(summary.next_action)) {
+    lines.push(`Site Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-action`);
+  }
   for (const reason of summary.incomplete_reasons ?? []) {
     lines.push(`Incomplete Reason: ${reason}`);
   }
   return `${lines.join('\n')}\n`;
+}
+
+function isAuthorityTransferWorkflowAction(action) {
+  return typeof action === 'string'
+    && (action.startsWith('transfer_') || action === 'continue_authority_transfer' || action === 'verify_full_cloudflare_authority');
 }
 
 async function inferRepositoryPublicationTarget(config, fetchImpl) {
