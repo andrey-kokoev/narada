@@ -156,7 +156,7 @@ test('durability coherence fails on recovery mismatch and site persistence drift
   assert.match(formatDurabilityCoherenceLiveText(result), /Durability Coherence: failed/);
 });
 
-test('durability coherence text surfaces direct site and operation durability reads', () => {
+test('durability coherence text surfaces direct workflow and durability reads', () => {
   const text = formatDurabilityCoherenceLiveText({
     status: 'ok',
     worker_url: 'https://worker.example',
@@ -165,8 +165,9 @@ test('durability coherence text surfaces direct site and operation durability re
     sites: [
       {
         site_id: 'site_alpha',
-        site_read: { persistence_state: 'durable', recovery_state: 'reconstructable' },
+        site_read: { persistence_state: 'durable', recovery_state: 'reconstructable', next_action: 'focus_next_operation' },
         selected_operation_id: 'operation_alpha',
+        operation_read: { workflow_next_action: 'refresh_site_continuity_loop' },
         operation_recovery: { recovery_state: 'reconstructable', recovery_gap_count: 0 },
       },
     ],
@@ -175,9 +176,11 @@ test('durability coherence text surfaces direct site and operation durability re
 
   assert.match(text, /Durability Coherence: ok/);
   assert.match(text, /Site Route: focus_next_site/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/worker\.example --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(text, /- site_alpha: persistence=durable recovery=reconstructable op=operation_alpha op_recovery=reconstructable gaps=0/);
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/worker\.example --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/worker\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/worker\.example --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.match(text, /Recovery Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/worker\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Persistence Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/worker\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });

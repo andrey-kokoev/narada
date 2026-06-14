@@ -262,13 +262,22 @@ export function formatDurabilityCoherenceLiveText(result) {
     `Sites Checked: ${result?.checked_site_ids?.length ?? 0}`,
     `Site Route: ${result?.site_list?.route_next_action ?? 'unknown'}`,
   ];
+  if (isActionableSiteRoute(result?.site_list?.route_next_action)) {
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --operator-session-file <operator-session-file> --execute-site-next`);
+  }
   for (const site of result?.sites ?? []) {
     lines.push(
       `- ${site.site_id}: persistence=${site.site_read?.persistence_state ?? 'unknown'} recovery=${site.site_read?.recovery_state ?? 'unknown'} op=${site.selected_operation_id ?? 'none'} op_recovery=${site.operation_recovery?.recovery_state ?? 'none'} gaps=${site.operation_recovery?.recovery_gap_count ?? 0}`,
     );
     lines.push(`  Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${site.site_id} --operator-session-file <operator-session-file>`);
+    if (isActionableSiteNextAction(site.site_read?.next_action)) {
+      lines.push(`  Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --operator-session-file <operator-session-file> --execute-site-next`);
+    }
     if (site.selected_operation_id) {
       lines.push(`  Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${site.site_id} --operation-id ${site.selected_operation_id} --operator-session-file <operator-session-file>`);
+      if (isActionableOperationNextAction(site.operation_read?.workflow_next_action)) {
+        lines.push(`  Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${site.site_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+      }
       lines.push(`  Recovery Review: pnpm --filter @narada2/cloudflare-carrier product:operation:recovery:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${site.site_id} --operation-id ${site.selected_operation_id} --operator-session-file <operator-session-file>`);
       lines.push(`  Persistence Review: pnpm --filter @narada2/cloudflare-carrier product:operation:persistence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${site.site_id} --operation-id ${site.selected_operation_id} --operator-session-file <operator-session-file>`);
     }
@@ -280,6 +289,18 @@ export function formatDurabilityCoherenceLiveText(result) {
     }
   }
   return `${lines.join('\n')}\n`;
+}
+
+function isActionableSiteRoute(routeAction) {
+  return routeAction != null && routeAction !== 'monitor_sites';
+}
+
+function isActionableSiteNextAction(nextAction) {
+  return nextAction != null && nextAction !== 'monitor_site';
+}
+
+function isActionableOperationNextAction(nextAction) {
+  return nextAction != null && nextAction !== 'monitor_operation';
 }
 
 function option(args, name) {

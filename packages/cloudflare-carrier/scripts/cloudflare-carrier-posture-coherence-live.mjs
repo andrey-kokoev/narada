@@ -315,11 +315,20 @@ export function formatPostureCoherenceLiveText(result) {
     `Site Route: ${result.site_list.route_next_action ?? 'unknown'}`,
     `Operation Count Summary: ${result.sites.map((site) => `${site.site_id}:${site.operation_list.operation_count ?? 0}`).join(', ') || 'none'}`,
   ];
+  if (isActionableSiteRoute(result.site_list?.route_next_action)) {
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --operator-session-file <operator-session-file> --execute-site-next`);
+  }
   for (const site of result.sites ?? []) {
     lines.push(`- ${site.site_id}: health=${site.site_read?.health ?? 'unknown'} next=${site.site_read?.next_action ?? 'none'} operations=${site.operation_list?.operation_count ?? 0}`);
     lines.push(`  Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${site.site_id} --operator-session-file <operator-session-file>`);
+    if (isActionableSiteNextAction(site.site_read?.next_action)) {
+      lines.push(`  Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --operator-session-file <operator-session-file> --execute-site-next`);
+    }
     if (site.operation_list?.next_operation_id) {
       lines.push(`  Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${site.site_id} --operation-id ${site.operation_list.next_operation_id} --operator-session-file <operator-session-file>`);
+      if (isActionableOperationListSummary(site.operation_list)) {
+        lines.push(`  Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${site.site_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+      }
     }
   }
   if (result.issues.length > 0) {
@@ -329,6 +338,21 @@ export function formatPostureCoherenceLiveText(result) {
     }
   }
   return `${lines.join('\n')}\n`;
+}
+
+function isActionableSiteRoute(routeAction) {
+  return routeAction != null && routeAction !== 'monitor_sites';
+}
+
+function isActionableSiteNextAction(nextAction) {
+  return nextAction != null && nextAction !== 'monitor_site';
+}
+
+function isActionableOperationListSummary(summary = {}) {
+  const routeAction = summary?.route_next_action ?? null;
+  const nextAction = summary?.next_action ?? null;
+  return routeAction === 'focus_next_operation'
+    || (nextAction != null && nextAction !== 'monitor_operations');
 }
 
 const invokedDirectly = process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1]);

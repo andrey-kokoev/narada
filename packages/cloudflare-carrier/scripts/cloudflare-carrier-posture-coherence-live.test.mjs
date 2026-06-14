@@ -152,7 +152,7 @@ test('runPostureCoherenceLive preserves operator session file for child product 
   assert.equal(calls[0][calls[0].indexOf('--operator-session-file') + 1], 'D:\\tmp\\operator-session.json');
 });
 
-test('formatPostureCoherenceLiveText surfaces direct site and operation reads for checked sites', () => {
+test('formatPostureCoherenceLiveText surfaces direct workflow and read handoffs for checked sites', () => {
   const text = formatPostureCoherenceLiveText({
     worker_url: 'https://carrier.example.test',
     status: 'ok',
@@ -168,6 +168,8 @@ test('formatPostureCoherenceLiveText surfaces direct site and operation reads fo
         operation_list: {
           operation_count: 3,
           next_operation_id: 'operation_alpha',
+          route_next_action: 'focus_next_operation',
+          next_action: 'use_focused_operation',
         },
       },
     ],
@@ -178,9 +180,11 @@ test('formatPostureCoherenceLiveText surfaces direct site and operation reads fo
   assert.match(text, /Status: ok/);
   assert.match(text, /Site Route: focus_next_site/);
   assert.match(text, /Operation Count Summary: site_alpha:3/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(text, /- site_alpha: health=attention next=focus_next_operation operations=3/);
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
 });
 
 test('runPostureCoherenceLive accepts focused continuity review without refocus under monitor route', async () => {
