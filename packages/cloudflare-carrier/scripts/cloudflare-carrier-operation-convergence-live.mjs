@@ -204,11 +204,18 @@ export function formatOperationConvergenceLiveText(result) {
     );
     lines.push(`  Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${site.site_id} --operator-session-file <operator-session-file>`);
     lines.push(`  Operation List: pnpm --filter @narada2/cloudflare-carrier product:operation:list:text -- --url ${result.worker_url} --site ${site.site_id} --operator-session-file <operator-session-file>`);
+    if ((site.pass_count ?? 0) > 0 || isActionableOperationRoute(site.initial_route)) {
+      lines.push(`  Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${site.site_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+    }
     if (site.focused_operation_id) {
       lines.push(`  Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${site.site_id} --operation-id ${site.focused_operation_id} --operator-session-file <operator-session-file>`);
     }
   }
   return `${lines.join('\n')}\n`;
+}
+
+function isActionableOperationRoute(routeAction) {
+  return routeAction != null && routeAction !== 'monitor_operations';
 }
 
 function buildSiteListArgs(config) {

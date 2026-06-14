@@ -138,7 +138,7 @@ test('control plane convergence executes focused site pass then proves posture a
   assert.match(formatControlPlaneConvergenceLiveText(result), /Control Plane Convergence: ok/);
 });
 
-test('control plane convergence text surfaces direct site and operation reads for each pass', () => {
+test('control plane convergence text surfaces direct workflow and read handoffs for each pass', () => {
   const text = formatControlPlaneConvergenceLiveText({
     status: 'ok',
     worker_url: 'https://carrier.example',
@@ -161,7 +161,9 @@ test('control plane convergence text surfaces direct site and operation reads fo
   });
 
   assert.match(text, /Site List: pnpm --filter @narada2\/cloudflare-carrier product:site:list:text -- --url https:\/\/carrier\.example --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(text, /- pass=1 site=site_alpha route=focus_next_site delegated=focus_next_operation/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });

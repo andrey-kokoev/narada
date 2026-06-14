@@ -146,7 +146,7 @@ test('operation convergence executes focused operation pass then proves monitori
   assert.match(formatOperationConvergenceLiveText(result), /Operation Convergence: ok/);
 });
 
-test('operation convergence text surfaces direct site and operation reads', () => {
+test('operation convergence text surfaces direct workflow and read handoffs', () => {
   const text = formatOperationConvergenceLiveText({
     status: 'ok',
     worker_url: 'https://carrier.example',
@@ -168,6 +168,7 @@ test('operation convergence text surfaces direct site and operation reads', () =
   assert.match(text, /- site=site_alpha initial=focus_next_operation final=monitor_operations passes=1 focused=operation_alpha/);
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
 
