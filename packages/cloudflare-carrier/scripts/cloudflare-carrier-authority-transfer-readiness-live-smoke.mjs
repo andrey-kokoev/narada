@@ -53,8 +53,10 @@ export function formatAuthorityTransferReadinessLiveSmokeText(result) {
     `Repository Publication: readiness=${repo.readiness_status ?? 'unknown'} repository_allowed=${repo.requested_repository_allowed ?? 'unknown'} branch_allowed=${repo.requested_branch_allowed ?? 'unknown'} git_push=${repo.cloudflare_git_push_admission ?? 'unknown'}`,
     `Mailbox Slice: status_source=${result.slices?.mailbox?.status_source_read_count ?? 0} draft_reply=${result.slices?.mailbox?.draft_reply_proposal_count ?? 0} send_confirmation=${result.slices?.mailbox?.send_confirmation_count ?? 0}`,
     `Task Lifecycle Slice: tasks=${result.slices?.task_lifecycle?.task_count ?? 0} partition=${result.slices?.task_lifecycle?.authority_partition ?? 'unknown'}`,
+    `Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`,
     `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
     `Authority Transfer Read: pnpm --filter @narada2/cloudflare-carrier product:authority-transfer:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
+    `Site Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-site-action`,
   ];
   return `${lines.join('\n')}\n`;
 }
