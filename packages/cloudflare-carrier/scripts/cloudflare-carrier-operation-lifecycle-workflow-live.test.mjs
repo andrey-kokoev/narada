@@ -54,6 +54,24 @@ test('parseOperationLifecycleWorkflowLiveArgs accepts text format', () => {
   assert.equal(parsed.format, 'text');
 });
 
+test('formatOperationLifecycleWorkflowLiveText suppresses guarded links without site id', () => {
+  const text = formatOperationLifecycleWorkflowLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    site_id: '',
+    operation_id: 'operation_live_alpha',
+    carrier_session_id: 'carrier_session_alpha',
+    read_after_resume: { workflow_next_action: 'start_or_select_session' },
+  });
+
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /Session Evidence:/);
+  assert.doesNotMatch(text, /Task Review:/);
+  assert.doesNotMatch(text, /Task Workflow:/);
+  assert.doesNotMatch(text, /Resume Workflow:/);
+});
+
 test('runOperationLifecycleWorkflowLive orchestrates lifecycle create, continuation, resume, and close', async () => {
   const invocations = [];
   const result = await runOperationLifecycleWorkflowLive({

@@ -71,6 +71,26 @@ test('formatOperationNextWorkflowLiveText renders direct follow-on reads and wor
   assert.match(text, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text/);
 });
 
+test('formatOperationNextWorkflowLiveText suppresses guarded links without site id', () => {
+  const text = formatOperationNextWorkflowLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    site_id: '',
+    selected_operation_id: 'operation_alpha',
+    read_after_next: {
+      workflow_next_action: 'start_or_select_session',
+      active_session_id: 'carrier_session_alpha',
+    },
+  });
+
+  assert.doesNotMatch(text, /Operation List:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Session Workflow:/);
+  assert.doesNotMatch(text, /Session Evidence:/);
+  assert.doesNotMatch(text, /Task Review:/);
+  assert.doesNotMatch(text, /Task Workflow:/);
+});
+
 test('runOperationNextWorkflowLive delegates local ingress request route to local ingress request read', async () => {
   const invocations = [];
   const result = await runOperationNextWorkflowLive({

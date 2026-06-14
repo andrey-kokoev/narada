@@ -150,6 +150,8 @@ export function parseOperationNextWorkflowLiveArgs(argv = [], env = process.env)
 }
 
 export function formatOperationNextWorkflowLiveText(result) {
+  const hasSiteId = typeof result.site_id === 'string' && result.site_id.length > 0;
+  const hasSelectedOperationId = typeof result.selected_operation_id === 'string' && result.selected_operation_id.length > 0;
   const lines = [
     `Operation Next Workflow: ${result.status}`,
     `Worker: ${result.worker_url}`,
@@ -159,15 +161,19 @@ export function formatOperationNextWorkflowLiveText(result) {
     `Pre Action: ${result.read_before_next?.workflow_next_action ?? 'unknown'}`,
     `Delegated Workflow: ${result.delegated_workflow ?? 'unknown'} route=${result.delegated_route_action ?? 'unknown'}`,
     `Post Action: ${result.read_after_next?.workflow_next_action ?? 'unknown'}`,
-    `Operation List: pnpm --filter @narada2/cloudflare-carrier product:operation:list:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`,
-    `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.selected_operation_id} --operator-session-file <operator-session-file>`,
   ];
+  if (hasSiteId) {
+    lines.push(`Operation List: pnpm --filter @narada2/cloudflare-carrier product:operation:list:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`);
+  }
+  if (hasSiteId && hasSelectedOperationId) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.selected_operation_id} --operator-session-file <operator-session-file>`);
+  }
   const postActionWorkflow = buildPostActionWorkflowCommand(result);
   if (postActionWorkflow) {
     lines.push(`${postActionWorkflow.label}: ${postActionWorkflow.command}`);
   }
   const carrierSessionId = result.read_after_next?.active_session_id ?? result.delegated_result?.read_after_next?.active_session_id ?? null;
-  if (carrierSessionId) {
+  if (hasSiteId && hasSelectedOperationId && carrierSessionId) {
     lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.selected_operation_id} --carrier-session-id ${carrierSessionId} --operator-session-file <operator-session-file>`);
     lines.push(`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result.worker_url} --site ${result.site_id} --carrier-session-id ${carrierSessionId} --operator-session-file <operator-session-file>`);
     lines.push(`Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --carrier-session-id ${carrierSessionId} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`);
@@ -176,6 +182,9 @@ export function formatOperationNextWorkflowLiveText(result) {
 }
 
 function buildPostActionWorkflowCommand(result) {
+  if (!hasConcreteSiteAndSelectedOperation(result)) {
+    return null;
+  }
   const nextAction = result.read_after_next?.workflow_next_action ?? null;
   const focusKind = result.read_after_next?.workflow_focus_kind ?? null;
   const focusRef = result.read_after_next?.workflow_focus_ref ?? null;
@@ -204,6 +213,13 @@ function buildPostActionWorkflowCommand(result) {
     };
   }
   return null;
+}
+
+function hasConcreteSiteAndSelectedOperation(result) {
+  return typeof result.site_id === 'string'
+    && result.site_id.length > 0
+    && typeof result.selected_operation_id === 'string'
+    && result.selected_operation_id.length > 0;
 }
 
 export async function runOperationNextWorkflowLive(
