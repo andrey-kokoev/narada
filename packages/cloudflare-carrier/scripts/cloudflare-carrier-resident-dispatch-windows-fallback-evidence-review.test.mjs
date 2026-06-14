@@ -82,6 +82,7 @@ test('readResidentDispatchWindowsFallbackEvidenceReview summarizes focused evide
             resident_dispatch_windows_fallback_evidence: [{
               fallback_evidence_id: 'resident_dispatch_windows_fallback_evidence_alpha',
               fallback_request_id: 'resident_dispatch_windows_fallback_request_alpha',
+              carrier_session_id: 'carrier_session_alpha',
               dispatch_decision_id: 'resident_dispatch_alpha',
               local_execution_id: 'windows_execution_alpha',
               local_execution_status: 'completed',
@@ -101,6 +102,7 @@ test('readResidentDispatchWindowsFallbackEvidenceReview summarizes focused evide
 
   assert.equal(result.summary.focused_fallback_evidence_id, 'resident_dispatch_windows_fallback_evidence_alpha');
   assert.equal(result.summary.focused_local_execution_id, 'windows_execution_alpha');
+  assert.equal(result.summary.carrier_session_id, 'carrier_session_alpha');
   assert.equal(result.summary.latest_focus_review.review_status, 'acknowledged');
 });
 
@@ -132,6 +134,7 @@ test('readResidentDispatchWindowsFallbackEvidenceReview supports direct focused 
               {
                 fallback_evidence_id: 'resident_dispatch_windows_fallback_evidence_alpha',
                 operation_id: 'operation_alpha',
+                cloudflare_carrier_session_id: 'carrier_session_alpha',
                 local_execution_id: 'windows_execution_alpha',
                 local_execution_status: 'completed',
               },
@@ -154,6 +157,7 @@ test('readResidentDispatchWindowsFallbackEvidenceReview supports direct focused 
   ]);
   assert.equal(result.summary.evidence_count, 1);
   assert.equal(result.summary.operation_id, 'operation_alpha');
+  assert.equal(result.summary.carrier_session_id, 'carrier_session_alpha');
   assert.equal(result.summary.focused_fallback_evidence_id, 'resident_dispatch_windows_fallback_evidence_alpha');
 });
 
@@ -195,6 +199,7 @@ test('formatResidentDispatchWindowsFallbackEvidenceReviewText prints review ack 
       focused_fallback_evidence_id: 'resident_dispatch_windows_fallback_evidence_alpha',
       focused_local_execution_id: 'windows_execution_alpha',
       focused_local_execution_status: 'completed',
+      carrier_session_id: 'carrier_session_alpha',
       focused_local_session_start_admission: 'admitted_by_windows_resident_loop',
       focused_direct_cloudflare_session_start_admission: 'not_admitted',
       latest_focus_review: {
@@ -207,6 +212,10 @@ test('formatResidentDispatchWindowsFallbackEvidenceReviewText prints review ack 
 
   assert.match(text, /Resident Dispatch Windows Fallback Evidence Review: ok/);
   assert.match(text, /Focused Review: resident_dispatch_windows_fallback_evidence:resident_dispatch_windows_fallback_evidence_alpha status=acknowledged/);
+  assert.match(text, /Cloudflare Carrier Session: carrier_session_alpha/);
+  assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example --site site_alpha --carrier-session-id carrier_session_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example --site site_alpha --carrier-session-id carrier_session_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --carrier-session-id carrier_session_alpha --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);

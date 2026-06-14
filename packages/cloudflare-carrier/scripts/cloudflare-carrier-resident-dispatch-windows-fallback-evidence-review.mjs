@@ -110,6 +110,7 @@ export function summarizeResidentDispatchWindowsFallbackEvidenceReview(operation
     focused_local_session_start_admission: focusedEvidence?.local_session_start_admission ?? null,
     focused_direct_cloudflare_session_start_admission: focusedEvidence?.direct_cloudflare_session_start_admission ?? null,
     focused_local_resident_session_ref: focusedEvidence?.local_resident_session_ref ?? null,
+    carrier_session_id: focusedEvidence?.carrier_session_id ?? focusedEvidence?.cloudflare_carrier_session_id ?? null,
     resident_dispatch_windows_fallback_evidence_authority:
       focusedEvidence?.local_executor_authority
       ?? evidenceBody?.resident_dispatch_windows_fallback_evidence_authority
@@ -145,6 +146,7 @@ export function formatResidentDispatchWindowsFallbackEvidenceReviewText(result) 
     lines.push(`Local Execution: ${summary.focused_local_execution_id ?? 'unknown'} status=${summary.focused_local_execution_status ?? 'unknown'}`);
   }
   if (summary.focused_local_resident_session_ref) lines.push(`Resident Session Ref: ${summary.focused_local_resident_session_ref}`);
+  if (summary.carrier_session_id) lines.push(`Cloudflare Carrier Session: ${summary.carrier_session_id}`);
   if (summary.focused_local_session_start_admission || summary.focused_direct_cloudflare_session_start_admission) {
     lines.push(`Admissions: session_start=${summary.focused_local_session_start_admission ?? 'unknown'} direct_cloudflare=${summary.focused_direct_cloudflare_session_start_admission ?? 'unknown'}`);
   }
@@ -160,6 +162,11 @@ export function formatResidentDispatchWindowsFallbackEvidenceReviewText(result) 
       ? 'Focused Review'
       : 'Latest Focus Review';
     lines.push(`${focusReviewLabel}: ${summary.latest_focus_review.focus_kind ?? 'unknown'}:${summary.latest_focus_review.focus_ref ?? 'unknown'} status=${summary.latest_focus_review.review_status ?? 'unknown'}`);
+  }
+  if (summary.site_id && summary.carrier_session_id) {
+    lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --carrier-session-id ${summary.carrier_session_id} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`);
   }
   if (summary.operation_id && summary.site_id) {
     lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
