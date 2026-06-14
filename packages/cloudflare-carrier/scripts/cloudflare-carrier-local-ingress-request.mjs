@@ -167,6 +167,11 @@ export function formatLocalIngressRequestText(result) {
       `Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`,
     );
   }
+  if (summary.site_id && summary.task_id) {
+    lines.push(
+      `Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --task-id ${summary.task_id} --operator-session-file <operator-session-file>`,
+    );
+  }
   return lines.join('\n') + '\n';
 }
 

@@ -199,6 +199,13 @@ test('createCloudflareRepositoryPublicationRequest posts the publication envelop
   assert.equal(JSON.stringify(result).includes('secret-token'), false);
   assert.equal(result.summary.repository_publication_request_authority, 'cloudflare_repository_publication_request_queue');
   assert.equal(result.summary.request_posture, 'cloudflare_queued_repository_publication_request_windows_must_admit_publish_and_return_evidence');
+
+  const text = formatRepositoryPublicationRequestText({
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: result.summary,
+  });
+  assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-12 --operator-session-file <operator-session-file>/);
 });
 
 test('summaries and text output preserve refusal evidence', () => {
@@ -229,6 +236,7 @@ test('summaries and text output preserve refusal evidence', () => {
   });
   assert.match(text, /Repository Publication Request: refused/);
   assert.match(text, /Cloudflare Git Push Admission: admitted/);
+  assert.equal(text.includes('Task Review:'), false);
 });
 
 function responseJson(status, body) {

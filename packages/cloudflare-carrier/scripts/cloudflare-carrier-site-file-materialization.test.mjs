@@ -344,6 +344,7 @@ test('formatSiteFileMaterializationText renders admitted and refused summaries w
   assert.match(refused, /Code: site_file_materialization_cutover_evidence_required/);
   assert.equal(refused.includes('Materialization Review:'), false);
   assert.equal(refused.includes('Proposal Review:'), false);
+  assert.equal(refused.includes('Task Review:'), false);
   assert.equal(refused.includes('Operation Review:'), false);
   assert.equal(refused.includes('secret-token'), false);
 });

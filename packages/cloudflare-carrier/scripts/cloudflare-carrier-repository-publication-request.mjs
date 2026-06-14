@@ -179,6 +179,9 @@ export function formatRepositoryPublicationRequestText(result) {
     ...(summary.authority_partition ? [`Authority Partition: ${summary.authority_partition}`] : []),
     ...(summary.recorded_by_principal_id ? [`Recorded By: ${summary.recorded_by_principal_id}`] : []),
     ...(summary.recorded_at ? [`Recorded At: ${summary.recorded_at}`] : []),
+    ...(summary.site_id && summary.task_id
+      ? [`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --task-id ${summary.task_id} --operator-session-file <operator-session-file>`]
+      : []),
   ].join('\n') + '\n';
 }
 
