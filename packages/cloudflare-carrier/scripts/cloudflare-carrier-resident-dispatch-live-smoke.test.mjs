@@ -56,6 +56,7 @@ test('formatResidentDispatchLiveSmokeText renders direct follow-on reads', () =>
   assert.match(text, /^Resident Dispatch Workflow: ok/m);
   assert.match(text, /Dispatch Decision: resident_dispatch_live_alpha/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
   assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text/);
 });
 

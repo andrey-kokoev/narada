@@ -38,6 +38,7 @@ test('formatWebhookDelayDirectiveLiveSmokeText emits downstream reads', () => {
 
   assert.match(text, /Webhook Delay Directive Smoke: ok/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
   assert.match(text, /Directive Delivery Review: pnpm --filter @narada2\/cloudflare-carrier product:directive:delivery:review:text/);
 });
 

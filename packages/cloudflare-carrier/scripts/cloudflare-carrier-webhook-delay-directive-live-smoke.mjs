@@ -61,6 +61,7 @@ export function formatWebhookDelayDirectiveLiveSmokeText(result) {
     `Authority: directive=${result.directive_authority ?? 'unknown'} fallback=${result.fallback_authority ?? 'unknown'} status=${result.fallback_status ?? 'unknown'}`,
     `Intent: action=${result.directive_action ?? 'unknown'} carrier_input=${result.carrier_input_operation ?? 'unknown'} visibility=${result.directive_visibility ?? 'unknown'} dispatch_to_provider=${result.dispatch_to_provider ?? 'unknown'}`,
     `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
+    `Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`,
     `Directive Delivery Review: pnpm --filter @narada2/cloudflare-carrier product:directive:delivery:review:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --focus-ref ${result.directive_record_id} --operator-session-file <operator-session-file>`,
   ];
   return `${lines.join('\n')}\n`;
