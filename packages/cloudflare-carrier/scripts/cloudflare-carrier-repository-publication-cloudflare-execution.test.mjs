@@ -167,6 +167,26 @@ test('summaries and text output preserve execution refusal evidence', () => {
   });
   assert.match(text, /Repository Publication Cloudflare Execution: refused/);
   assert.match(text, /Request: repository-publication-request-1/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
+});
+
+test('formatRepositoryPublicationCloudflareExecutionText suppresses site continuation without a real worker url', () => {
+  const text = formatRepositoryPublicationCloudflareExecutionText({
+    status: 'refused',
+    auth_source: 'flag:--token',
+    params: { site_id: 'site_alpha' },
+    summary: {
+      ok: false,
+      code: 'cloudflare_repository_publication_execution_admission_required',
+      site_id: 'site_alpha',
+      repository_publication_request_id: 'repository-publication-request-1',
+    },
+  });
+
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /<worker-url>/);
 });
 
 function responseJson(status, body) {

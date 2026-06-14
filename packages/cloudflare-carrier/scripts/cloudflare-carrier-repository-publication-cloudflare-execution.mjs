@@ -121,6 +121,8 @@ export function summarizeRepositoryPublicationCloudflareExecution(body = {}, par
 export function formatRepositoryPublicationCloudflareExecutionText(result) {
   const summary = result?.summary ?? summarizeRepositoryPublicationCloudflareExecution(result?.response ?? {}, result?.params ?? {});
   const ok = summary.ok === false || result?.status === 'refused' ? false : true;
+  const workerUrl = result?.worker_url ?? null;
+  const siteId = summary.site_id ?? result?.params?.site_id ?? null;
   return [
     `Repository Publication Cloudflare Execution: ${ok === false ? 'refused' : 'ok'}`,
     `Worker: ${result?.worker_url ?? 'unknown'}`,
@@ -151,6 +153,8 @@ export function formatRepositoryPublicationCloudflareExecutionText(result) {
     ...(summary.github_response_summary?.message ? [`GitHub Message: ${summary.github_response_summary.message}`] : []),
     ...(summary.github_response_summary?.ref ? [`GitHub Ref: ${summary.github_response_summary.ref}`] : []),
     ...(summary.github_response_summary?.object_sha ? [`GitHub Object SHA: ${summary.github_response_summary.object_sha}`] : []),
+    ...(workerUrl && siteId ? [`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`] : []),
+    ...(workerUrl && siteId ? [`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file> --execute-site-next`] : []),
   ].join('\n') + '\n';
 }
 

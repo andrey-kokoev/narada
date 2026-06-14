@@ -248,6 +248,8 @@ test('formatLocalIngressEvidenceText suppresses worker-scoped handoff without a 
     },
   });
 
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
   assert.doesNotMatch(text, /Request Review:/);
   assert.doesNotMatch(text, /<worker-url>/);
 });
@@ -340,6 +342,8 @@ test('formatLocalIngressEvidenceText renders recorded and refused summaries with
   assert.match(rendered, /Request: local-ingress-request-1/);
   assert.match(rendered, /Execution: local-execution-1/);
   assert.match(rendered, /Changed File: a.txt/);
+  assert.match(rendered, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(rendered, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(rendered, /Request Review: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --local-ingress-request-id local-ingress-request-1 --operator-session-file <operator-session-file>/);
   assert.equal(rendered.includes('secret-token'), false);
 

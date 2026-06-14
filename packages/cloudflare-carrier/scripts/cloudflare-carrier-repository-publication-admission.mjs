@@ -127,6 +127,8 @@ export function summarizeRepositoryPublicationAdmission(body = {}, params = {}) 
 export function formatRepositoryPublicationAdmissionText(result) {
   const summary = result?.summary ?? summarizeRepositoryPublicationAdmission(result?.response ?? {}, result?.params ?? {});
   const ok = summary.ok === false || result?.status === 'refused' ? false : true;
+  const workerUrl = result?.worker_url ?? null;
+  const siteId = summary.site_id ?? result?.params?.site_id ?? null;
   return [
     `Repository Publication Admission: ${ok === false ? 'refused' : 'ok'}`,
     `Worker: ${result?.worker_url ?? 'unknown'}`,
@@ -146,6 +148,8 @@ export function formatRepositoryPublicationAdmissionText(result) {
     ...(summary.authority_partition ? [`Authority Partition: ${summary.authority_partition}`] : []),
     ...(summary.recorded_by_principal_id ? [`Recorded By: ${summary.recorded_by_principal_id}`] : []),
     ...(summary.recorded_at ? [`Recorded At: ${summary.recorded_at}`] : []),
+    ...(workerUrl && siteId ? [`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`] : []),
+    ...(workerUrl && siteId ? [`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file> --execute-site-next`] : []),
   ].join('\n') + '\n';
 }
 
