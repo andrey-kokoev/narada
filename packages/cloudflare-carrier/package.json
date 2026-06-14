@@ -232,6 +232,7 @@
     "task-lifecycle:projection-write-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-projection-write-live-smoke.mjs",
     "task-lifecycle:projection-write-smoke:live:text": "node scripts/cloudflare-carrier-task-lifecycle-projection-write-live-smoke.mjs --format text",
     "task-lifecycle:source-state-write-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-source-state-write-live-smoke.mjs",
+    "task-lifecycle:source-state-write-smoke:live:text": "node scripts/cloudflare-carrier-task-lifecycle-source-state-write-live-smoke.mjs --format text",
     "task-lifecycle:assignment-write-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-assignment-write-live-smoke.mjs",
     "task-lifecycle:role-resolution-write-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-role-resolution-write-live-smoke.mjs",
     "task-lifecycle:roster-mutation-write-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-roster-mutation-write-live-smoke.mjs",
