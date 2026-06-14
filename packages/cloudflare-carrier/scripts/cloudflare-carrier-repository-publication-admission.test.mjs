@@ -177,6 +177,8 @@ test('summaries and text output preserve refusal evidence', () => {
   assert.match(text, /Request: repository-publication-request-missing/);
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Request Review: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --repository-publication-request-id repository-publication-request-missing --operator-session-file <operator-session-file>/);
 });
 
@@ -195,6 +197,8 @@ test('formatRepositoryPublicationAdmissionText suppresses site continuation with
 
   assert.doesNotMatch(text, /Site Read:/);
   assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Posture Coherence Review:/);
+  assert.doesNotMatch(text, /Durability Coherence Review:/);
   assert.doesNotMatch(text, /Request Review:/);
   assert.doesNotMatch(text, /<worker-url>/);
 });
