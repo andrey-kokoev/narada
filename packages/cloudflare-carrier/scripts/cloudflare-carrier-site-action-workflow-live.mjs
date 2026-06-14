@@ -94,14 +94,16 @@ export function formatSiteActionWorkflowLiveText(result) {
     `Action: ${result.delegated_action ?? 'unknown'}`,
     `Pre Action: ${result.read_before_action?.next_action ?? 'unknown'}`,
     `Post Action: ${result.read_after_action?.next_action ?? 'unknown'}`,
-    `Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`,
-    `Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`,
   ];
+  if (result.site_id) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
+  }
   const operationId = result.read_after_action?.active_operation_id ?? result.read_before_action?.active_operation_id ?? null;
   const operationAction = result.read_after_action?.active_operation_next_action ?? result.read_before_action?.active_operation_next_action ?? null;
   const operationFocusKind = result.read_after_action?.active_operation_focus_kind ?? result.read_before_action?.active_operation_focus_kind ?? null;
   const operationFocusRef = result.read_after_action?.active_operation_focus_ref ?? result.read_before_action?.active_operation_focus_ref ?? null;
-  if (operationId) {
+  if (result.site_id && operationId) {
     lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${operationId} --operator-session-file <operator-session-file>`);
     lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${operationId} --operator-session-file <operator-session-file> --execute-operation-next`);
     if (operationAction === 'refresh_site_continuity_loop') {
