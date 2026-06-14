@@ -18,6 +18,7 @@ const residentDispatchScript = resolve(scriptDir, 'cloudflare-carrier-resident-d
 export function parseOperationSessionWorkflowLiveArgs(argv = [], env = process.env) {
   const args = [...argv];
   const workerUrl = option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '';
+  const format = option(args, '--format') ?? env.CLOUDFLARE_CARRIER_OPERATION_SESSION_FORMAT ?? 'json';
   const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? 'site_live_smoke';
   const operationId = option(args, '--operation-id') ?? option(args, '--carrier-operation') ?? env.CLOUDFLARE_CARRIER_OPERATION_ID ?? '';
   const agentId = option(args, '--agent-id') ?? env.CLOUDFLARE_CARRIER_AGENT_ID ?? 'narada.cloudflare.operation.session.live';
@@ -34,12 +35,14 @@ export function parseOperationSessionWorkflowLiveArgs(argv = [], env = process.e
     throw new Error('operation_session_workflow_live_requires_--execute-operation-session_or_CLOUDFLARE_CARRIER_OPERATION_SESSION_EXECUTE_LIVE=1');
   }
   if (!workerUrl) throw new Error('operation_session_workflow_live_requires_--url_or_CLOUDFLARE_CARRIER_URL');
+  if (!['json', 'text'].includes(format)) throw new Error(`operation_session_workflow_live_unknown_format:${format}`);
   if (!siteId) throw new Error('operation_session_workflow_live_requires_site_id');
   if (!operationId) throw new Error('operation_session_workflow_live_requires_operation_id');
   if (!auth) throw new Error('operation_session_workflow_live_requires_bearer_token_or_operator_session');
 
   return {
     workerUrl,
+    format,
     siteId,
     operationId,
     agentId,
@@ -97,6 +100,26 @@ export async function runOperationSessionWorkflowLive(
     read_after_session: readAfter.summary,
     post_action_advanced: postActionAdvanced,
   };
+}
+
+export function formatOperationSessionWorkflowLiveText(result) {
+  const lines = [
+    `Operation Session Workflow: ${result.status}`,
+    `Worker: ${result.worker_url}`,
+    `Site: ${result.site_id}`,
+    `Operation: ${result.operation_id}`,
+    `Pre Action: ${result.pre_workflow_next_action ?? 'unknown'}`,
+    `Dispatch: state=${result.resident_dispatch?.dispatch_state ?? 'unknown'} session=${result.resident_dispatch?.carrier_session_id ?? 'none'} decision=${result.resident_dispatch?.dispatch_decision_id ?? 'none'}`,
+    `Post Action: next=${result.read_after_session?.workflow_next_action ?? 'unknown'} advanced=${result.post_action_advanced ? 'yes' : 'no'}`,
+    `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
+  ];
+  const carrierSessionId = result.read_after_session?.active_session_id
+    ?? result.resident_dispatch?.carrier_session_id
+    ?? null;
+  if (carrierSessionId) {
+    lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --carrier-session-id ${carrierSessionId} --operator-session-file <operator-session-file>`);
+  }
+  return `${lines.join('\n')}\n`;
 }
 
 async function defaultRunNodeScript(args, options) {
@@ -173,5 +196,9 @@ function flag(args, name) {
 if (resolve(process.argv[1] ?? '') === scriptPath) {
   const config = parseOperationSessionWorkflowLiveArgs(process.argv.slice(2));
   const result = await runOperationSessionWorkflowLive(config);
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  if (config.format === 'text') {
+    process.stdout.write(formatOperationSessionWorkflowLiveText(result));
+  } else {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  }
 }

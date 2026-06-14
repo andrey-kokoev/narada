@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  formatOperationSessionWorkflowLiveText,
   parseOperationSessionWorkflowLiveArgs,
   runOperationSessionWorkflowLive,
 } from './cloudflare-carrier-operation-session-workflow-live.mjs';
@@ -32,9 +33,23 @@ test('parseOperationSessionWorkflowLiveArgs supports operator session auth and d
     value: 'operator-session-cookie',
     source: 'operator-session-cookie',
   });
+  assert.equal(parsed.format, 'json');
   assert.equal(parsed.agentId, 'narada.cloudflare.operation.session.live');
   assert.equal(parsed.siteRef, 'cloudflare://site_live_smoke');
   assert.equal(parsed.expectedPreAction, 'start_or_select_session');
+});
+
+test('parseOperationSessionWorkflowLiveArgs accepts text format', () => {
+  const parsed = parseOperationSessionWorkflowLiveArgs([
+    '--url', 'https://carrier.example',
+    '--site', 'site_live_smoke',
+    '--operation-id', 'operation_live_alpha',
+    '--operator-session-cookie', 'operator-session-cookie',
+    '--execute-operation-session',
+    '--format', 'text',
+  ], {});
+
+  assert.equal(parsed.format, 'text');
 });
 
 test('runOperationSessionWorkflowLive bridges operation.read into resident dispatch and rereads the operation', async () => {
@@ -162,4 +177,27 @@ test('runOperationSessionWorkflowLive surfaces fallback posture without failing 
   assert.equal(result.resident_dispatch.dispatch_state, 'cloudflare_primary_failed_windows_fallback_available');
   assert.equal(result.read_after_session.workflow_next_action, 'start_or_select_session');
   assert.equal(result.post_action_advanced, false);
+});
+
+test('formatOperationSessionWorkflowLiveText surfaces direct follow-on reads', () => {
+  const text = formatOperationSessionWorkflowLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    site_id: 'site_live_smoke',
+    operation_id: 'operation_live_alpha',
+    pre_workflow_next_action: 'start_or_select_session',
+    resident_dispatch: {
+      dispatch_state: 'cloudflare_primary_started',
+      carrier_session_id: 'carrier_session_alpha',
+      dispatch_decision_id: 'dispatch_alpha',
+    },
+    read_after_session: {
+      workflow_next_action: 'monitor_operation',
+    },
+    post_action_advanced: true,
+  });
+
+  assert.match(text, /Operation Session Workflow: ok/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --carrier-session-id carrier_session_alpha --operator-session-file <operator-session-file>/);
 });
