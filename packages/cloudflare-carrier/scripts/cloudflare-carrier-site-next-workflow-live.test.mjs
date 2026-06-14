@@ -70,6 +70,7 @@ test('formatSiteNextWorkflowLiveText renders direct reads', () => {
   assert.match(text, /Operation Focus: kind=site_continuity_reconciliation_execution ref=focus-ref/);
   assert.match(text, /Site List: pnpm --filter @narada2\/cloudflare-carrier product:site:list:text/);
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
+  assert.match(text, /Site Action Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:action:workflow:live:text/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
   assert.match(text, /Post Route: monitor_sites next=monitor_sites/);
 });
