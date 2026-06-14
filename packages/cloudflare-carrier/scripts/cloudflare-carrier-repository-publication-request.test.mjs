@@ -206,6 +206,9 @@ test('createCloudflareRepositoryPublicationRequest posts the publication envelop
     summary: result.summary,
   });
   assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-12 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-12 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
 });
 
 test('summaries and text output preserve refusal evidence', () => {
@@ -237,6 +240,9 @@ test('summaries and text output preserve refusal evidence', () => {
   assert.match(text, /Repository Publication Request: refused/);
   assert.match(text, /Cloudflare Git Push Admission: admitted/);
   assert.equal(text.includes('Task Review:'), false);
+  assert.equal(text.includes('Task Workflow:'), false);
+  assert.equal(text.includes('Operation Review:'), false);
+  assert.equal(text.includes('Operation Next Workflow:'), false);
 });
 
 function responseJson(status, body) {
