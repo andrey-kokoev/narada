@@ -86,6 +86,7 @@ export async function runResidentDispatchWindowsFallbackExecute(config, fetchImp
   const selectedFallbackRequestId = selectedRequest.fallback_request_id ?? null;
   const selectedOperationId = selectedRequest.operation_id ?? config.operationId ?? null;
   const selectedDispatchDecisionId = selectedRequest.dispatch_decision_id ?? config.dispatchDecisionId ?? null;
+  const selectedCarrierSessionId = selectedRequest.carrier_session_id ?? requestLookup.summary?.carrier_session_id ?? null;
   assert.ok(selectedFallbackRequestId, 'resident_dispatch_windows_fallback_execute_request_missing_fallback_request_id');
   assert.ok(selectedOperationId, 'resident_dispatch_windows_fallback_execute_request_missing_operation_id');
   assert.ok(selectedDispatchDecisionId, 'resident_dispatch_windows_fallback_execute_request_missing_dispatch_decision_id');
@@ -138,6 +139,7 @@ export async function runResidentDispatchWindowsFallbackExecute(config, fetchImp
     local_execution_id: localExecutionId,
     local_resident_session_ref: localResidentSessionRef,
     fallback_evidence_id: fallbackEvidenceId,
+    carrier_session_id: selectedCarrierSessionId,
     request_lookup: requestLookup,
     evidence_result: evidenceResult,
     summary: {
@@ -146,6 +148,7 @@ export async function runResidentDispatchWindowsFallbackExecute(config, fetchImp
       local_executor_authority: evidenceResult.summary?.local_executor_authority ?? config.localExecutorAuthority,
       local_session_start_admission: evidenceResult.summary?.local_session_start_admission ?? null,
       direct_cloudflare_session_start_admission: evidenceResult.summary?.direct_cloudflare_session_start_admission ?? null,
+      carrier_session_id: selectedCarrierSessionId,
     },
   };
 }
@@ -168,9 +171,16 @@ export function formatResidentDispatchWindowsFallbackExecuteText(result = {}) {
     `Session Start Admission: ${result.summary?.local_session_start_admission ?? 'unknown'}`,
     `Direct Cloudflare Session Start: ${result.summary?.direct_cloudflare_session_start_admission ?? 'unknown'}`,
     `Executor Authority: ${result.summary?.local_executor_authority ?? 'unknown'}`,
+    ...(result.summary?.carrier_session_id ? [`Cloudflare Carrier Session: ${result.summary.carrier_session_id}`] : []),
   ];
+  if (result.site_id && result.summary?.carrier_session_id) {
+    lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --carrier-session-id ${result.summary.carrier_session_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --carrier-session-id ${result.summary.carrier_session_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --carrier-session-id ${result.summary.carrier_session_id} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`);
+  }
   if (result.site_id && result.operation_id) {
     lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
   }
   if (result.site_id && result.operation_id && result.fallback_evidence_id) {
     lines.push(`Resident Dispatch Windows Fallback Evidence Review: pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:review:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`);

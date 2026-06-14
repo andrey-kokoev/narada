@@ -49,6 +49,7 @@ test('runResidentDispatchWindowsFallbackExecute selects the pending request and 
         requests: [{
           fallback_request_id: 'fallback_request_alpha',
           operation_id: 'operation_alpha',
+          carrier_session_id: 'carrier_session_alpha',
           dispatch_decision_id: 'resident_dispatch_alpha',
           local_execution_admission: 'pending_windows_admission',
         }],
@@ -100,6 +101,7 @@ test('runResidentDispatchWindowsFallbackExecute selects the pending request and 
   assert.equal(result.fallback_evidence_id, 'fallback_request_alpha:evidence');
   assert.equal(result.local_execution_id, 'fallback_request_alpha:execution');
   assert.equal(result.summary.local_session_start_admission, 'admitted_by_windows_resident_loop');
+  assert.equal(result.summary.carrier_session_id, 'carrier_session_alpha');
   assert.equal(calls.length, 2);
 });
 
@@ -121,13 +123,19 @@ test('formatResidentDispatchWindowsFallbackExecuteText renders the execution sum
       local_session_start_admission: 'admitted_by_windows_resident_loop',
       direct_cloudflare_session_start_admission: 'not_admitted',
       local_executor_authority: 'windows_local_site_resident_loop',
+      carrier_session_id: 'carrier_session_alpha',
     },
   });
 
   assert.match(text, /Resident Dispatch Windows Fallback Execute/);
   assert.match(text, /Fallback Evidence: evidence_alpha/);
   assert.match(text, /Session Start Admission: admitted_by_windows_resident_loop/);
+  assert.match(text, /Cloudflare Carrier Session: carrier_session_alpha/);
+  assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example --site site_alpha --carrier-session-id carrier_session_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example --site site_alpha --carrier-session-id carrier_session_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --carrier-session-id carrier_session_alpha --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.match(text, /Resident Dispatch Windows Fallback Evidence Review: pnpm --filter @narada2\/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:review:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
 
