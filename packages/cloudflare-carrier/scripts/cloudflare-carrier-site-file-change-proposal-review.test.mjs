@@ -579,3 +579,19 @@ test('formatSiteFileChangeProposalReviewText omits synthetic operation ids from 
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --focus-kind site_file_change_proposal --focus-ref site_file_change_proposal_live_1 --operator-session-file <operator-session-file>/);
   assert.doesNotMatch(text, /Review Ack:.*<operation-id>/);
 });
+
+test('formatSiteFileChangeProposalReviewText suppresses review ack without site id', () => {
+  const text = formatSiteFileChangeProposalReviewText({
+    worker_url: 'https://carrier.example',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: null,
+      operation_id: 'operation_site_read',
+      workflow_next_action: 'review_site_file_change_proposal',
+      proposal_count: 1,
+      focused_proposal_id: 'site_file_change_proposal_live_1',
+    },
+  });
+
+  assert.equal(text.includes('Review Ack:'), false);
+});

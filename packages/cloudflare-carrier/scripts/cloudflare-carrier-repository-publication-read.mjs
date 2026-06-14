@@ -394,8 +394,8 @@ export function formatRepositoryPublicationReadText(result) {
       const decisionLabel = summary.focused_repository_publication_admission_id ? 'Focused Decision' : 'Latest Decision';
       lines.push(`${decisionLabel}: ${summary.latest_admission_action}${summary.latest_admission_reason ? ` reason=${summary.latest_admission_reason}` : ''}`);
     }
-    if (summary.latest_repository_publication_request_id) {
-      lines.push(`Request Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --repository-publication-request-id ${summary.latest_repository_publication_request_id} --operator-session-file <operator-session-file>`);
+    if (summary.site_id && summary.latest_repository_publication_request_id) {
+      lines.push(`Request Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --repository-publication-request-id ${summary.latest_repository_publication_request_id} --operator-session-file <operator-session-file>`);
     }
     lines.push(`Authority: admission=${summary.repository_publication_admission_authority ?? 'unknown'} executor=${summary.repository_publication_executor_authority ?? 'unknown'}`);
   } else if (summary.operation === 'repository_publication.evidence.list') {
@@ -408,8 +408,8 @@ export function formatRepositoryPublicationReadText(result) {
       lines.push(`Focused Publication Status: ${summary.focused_publication_status}${summary.focused_publication_reason ? ` reason=${summary.focused_publication_reason}` : ''}`);
     }
     if (summary.focused_published_commit_ref) lines.push(`Focused Published Commit: ${summary.focused_published_commit_ref}`);
-    if (summary.repository_publication_request_id) {
-      lines.push(`Request Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --repository-publication-request-id ${summary.repository_publication_request_id} --operator-session-file <operator-session-file>`);
+    if (summary.site_id && summary.repository_publication_request_id) {
+      lines.push(`Request Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --repository-publication-request-id ${summary.repository_publication_request_id} --operator-session-file <operator-session-file>`);
     }
     lines.push(`Authority: evidence=${summary.repository_publication_evidence_authority ?? 'unknown'} admission=${summary.repository_publication_admission_authority ?? 'unknown'} store=${summary.cloudflare_evidence_store_authority ?? 'unknown'}`);
   } else if (summary.operation === 'repository_publication.cloudflare_execution.list') {
@@ -430,8 +430,8 @@ export function formatRepositoryPublicationReadText(result) {
       if (summary.latest_published_commit_ref) lines.push(`Latest Published Commit: ${summary.latest_published_commit_ref}`);
       if (summary.latest_github_http_status != null) lines.push(`Latest GitHub HTTP Status: ${summary.latest_github_http_status}`);
     }
-    if (summary.repository_publication_request_id) {
-      lines.push(`Request Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --repository-publication-request-id ${summary.repository_publication_request_id} --operator-session-file <operator-session-file>`);
+    if (summary.site_id && summary.repository_publication_request_id) {
+      lines.push(`Request Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --repository-publication-request-id ${summary.repository_publication_request_id} --operator-session-file <operator-session-file>`);
     }
     lines.push(`Authority: executor=${summary.repository_publication_executor_authority ?? 'unknown'} admission=${summary.repository_publication_admission_authority ?? 'unknown'}`);
   }

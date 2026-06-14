@@ -352,6 +352,26 @@ test('formatSiteFileMaterializationText renders admitted and refused summaries w
   assert.equal(refused.includes('secret-token'), false);
 });
 
+test('formatSiteFileMaterializationText suppresses site-scoped handoffs without site id', () => {
+  const text = formatSiteFileMaterializationText({
+    status: 'ok',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'flag:--token',
+    summary: {
+      ok: true,
+      site_id: null,
+      materialization_id: 'materialization-1',
+      proposal_id: 'proposal-9',
+      operation_id: 'operation_alpha',
+    },
+  });
+
+  assert.equal(text.includes('Materialization Review:'), false);
+  assert.equal(text.includes('Proposal Review:'), false);
+  assert.equal(text.includes('Operation Review:'), false);
+  assert.equal(text.includes('Operation Next Workflow:'), false);
+});
+
 function responseJson(status, body) {
   return {
     status,

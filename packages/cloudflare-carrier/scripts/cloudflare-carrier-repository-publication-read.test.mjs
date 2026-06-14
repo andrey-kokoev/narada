@@ -551,6 +551,24 @@ test('formatRepositoryPublicationReadText surfaces focused admission and executi
   assert.match(executionText, /Request Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --repository-publication-request-id repository-publication-request-1 --operator-session-file <operator-session-file>/);
 });
 
+test('formatRepositoryPublicationReadText suppresses request handoff without site id', () => {
+  const text = formatRepositoryPublicationReadText({
+    status: 'ok',
+    operation: 'repository_publication.admission.list',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'flag:--token',
+    params: {},
+    summary: {
+      operation: 'repository_publication.admission.list',
+      site_id: null,
+      admission_count: 1,
+      latest_repository_publication_request_id: 'repository-publication-request-1',
+    },
+  });
+
+  assert.equal(text.includes('Request Read:'), false);
+});
+
 test('summaries and text output preserve refusal evidence for filtered execution list', () => {
   const summary = summarizeRepositoryPublicationSurface('repository_publication.cloudflare_execution.list', {
     ok: false,

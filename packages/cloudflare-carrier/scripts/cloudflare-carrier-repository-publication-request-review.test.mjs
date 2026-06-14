@@ -456,3 +456,27 @@ test('formatRepositoryPublicationRequestReviewText omits synthetic operation ids
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --focus-kind repository_publication_request --focus-ref repository_publication_request_live_1 --operator-session-file <operator-session-file>/);
   assert.doesNotMatch(text, /Review Ack:.*<operation-id>/);
 });
+
+test('formatRepositoryPublicationRequestReviewText suppresses site-scoped handoffs without site id', () => {
+  const text = formatRepositoryPublicationRequestReviewText({
+    worker_url: 'https://carrier.example',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: null,
+      operation_id: 'operation_site_read',
+      workflow_next_action: 'review_repository_publication_request',
+      request_count: 1,
+      focused_repository_publication_request_id: 'repository_publication_request_live_1',
+      linked_admission_id: 'admission_1',
+      linked_execution_id: 'execution_1',
+      linked_evidence_id: 'evidence_1',
+    },
+  });
+
+  assert.equal(text.includes('Admission Read:'), false);
+  assert.equal(text.includes('Execution Read:'), false);
+  assert.equal(text.includes('Evidence Read:'), false);
+  assert.equal(text.includes('Operation Review:'), false);
+  assert.equal(text.includes('Operation Next Workflow:'), false);
+  assert.equal(text.includes('Review Ack:'), false);
+});

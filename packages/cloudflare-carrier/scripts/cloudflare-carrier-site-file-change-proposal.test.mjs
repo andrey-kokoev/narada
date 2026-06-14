@@ -359,6 +359,28 @@ test('formatSiteFileChangeProposalText renders admitted and refused summaries wi
   assert.equal(refused.includes('secret-token'), false);
 });
 
+test('formatSiteFileChangeProposalText suppresses site-scoped handoffs without site id', () => {
+  const text = formatSiteFileChangeProposalText({
+    status: 'ok',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'flag:--token',
+    summary: {
+      ok: true,
+      site_id: null,
+      proposal_id: 'proposal-1',
+      operation_id: 'operation_alpha',
+      task_id: 'cloudflare-task-9',
+      files: [],
+    },
+  });
+
+  assert.equal(text.includes('Proposal Review:'), false);
+  assert.equal(text.includes('Task Review:'), false);
+  assert.equal(text.includes('Task Workflow:'), false);
+  assert.equal(text.includes('Operation Review:'), false);
+  assert.equal(text.includes('Operation Next Workflow:'), false);
+});
+
 function responseJson(status, body) {
   return {
     status,
