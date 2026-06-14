@@ -263,6 +263,8 @@
     "continuity:bindings:admit-next:text": "node scripts/cloudflare-site-continuity-bindings.mjs --action admit-next-binding --format text",
     "continuity:bindings:validate": "node scripts/cloudflare-site-continuity-bindings.mjs --action validate",
     "continuity:bindings:validate:text": "node scripts/cloudflare-site-continuity-bindings.mjs --action validate --format text",
+    "continuity:scheduled-task": "node scripts/cloudflare-site-continuity-scheduled-task.mjs",
+    "continuity:scheduled-task:text": "node scripts/cloudflare-site-continuity-scheduled-task.mjs --format text",
     "continuity:scheduler": "node scripts/cloudflare-site-continuity-scheduler.mjs",
     "continuity:status": "node scripts/cloudflare-site-continuity-scheduler.mjs --action status-all",
     "continuity:status:text": "node scripts/cloudflare-site-continuity-scheduler.mjs --action status-all --format text",
