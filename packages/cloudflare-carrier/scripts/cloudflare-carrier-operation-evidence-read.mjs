@@ -147,11 +147,15 @@ export function formatOperationEvidenceReadText(result) {
     `Posture Next: ${summary.posture_next_action ?? 'none'}`,
     `Carrier Evidence: state=${summary.carrier_evidence_read_state ?? 'unknown'} sessions=${summary.carrier_session_ids?.length ?? 0} events=${summary.carrier_event_count ?? 0}`,
   ];
+  const workerUrl = result?.worker_url ?? null;
+  if (workerUrl && summary.site_id) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
+  }
   if ((summary.local_resident_session_count ?? 0) > 0) {
     lines.push(`Local Resident Evidence: sessions=${summary.local_resident_session_count} bridge=${summary.local_resident_carrier_bridge_state ?? 'unknown'}`);
   }
   if (summary.carrier_session_ids?.length > 0) lines.push(`Carrier Sessions: ${summary.carrier_session_ids.join(', ')}`);
-  const workerUrl = result?.worker_url ?? null;
   if (workerUrl && summary.site_id && summary.carrier_session_ids?.length > 0) {
     for (const carrierSessionId of summary.carrier_session_ids) {
       lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${workerUrl} --site ${summary.site_id} --carrier-session-id ${carrierSessionId} --operator-session-file <operator-session-file>`);
@@ -189,6 +193,8 @@ export function formatOperationEvidenceReadText(result) {
     lines.push(`${label}: ${command}`);
   }
   if (workerUrl && summary.site_id && summary.operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
     if (!emittedLabels.has('Recovery Read')) {
       lines.push(`Recovery Read: pnpm --filter @narada2/cloudflare-carrier product:operation:recovery:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
     }

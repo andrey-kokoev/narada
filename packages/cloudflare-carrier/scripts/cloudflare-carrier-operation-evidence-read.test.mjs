@@ -196,6 +196,10 @@ test('formatOperationEvidenceReadText distinguishes current reviewable focus fro
 
   assert.match(text, /Reviewable Focus: site_continuity_reconciliation_execution:site-continuity-reconciliation-execution:site_alpha:newer/);
   assert.match(text, /Latest Review: site_continuity_reconciliation_execution:site-continuity-reconciliation-execution:site_alpha:older status=acknowledged/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.match(text, /Recovery Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Persistence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
@@ -262,6 +266,10 @@ test('formatOperationEvidenceReadText suppresses operator handoff without a real
   assert.doesNotMatch(text, /Review Ack:/);
   assert.doesNotMatch(text, /Recovery Read:/);
   assert.doesNotMatch(text, /Persistence Read:/);
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
   assert.doesNotMatch(text, /<site-id>/);
 });
 
@@ -291,6 +299,10 @@ test('formatOperationEvidenceReadText suppresses operator handoff without a real
   assert.doesNotMatch(text, /Review Ack:/);
   assert.doesNotMatch(text, /Recovery Read:/);
   assert.doesNotMatch(text, /Persistence Read:/);
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
   assert.doesNotMatch(text, /<worker-url>/);
 });
 
