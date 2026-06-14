@@ -162,7 +162,7 @@ function formatTaskLifecycleNextCommands(result, summary) {
   const workflowAgentOption = normalizedStatus === 'open'
     ? ` --agent-id ${claimAgent}`
     : '';
-  const workflowCommand = `Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live -- --url ${workerUrl} --site ${siteId} --task-id ${taskId}${workflowAgentOption} --operator-session-file <operator-session-file> --execute-task-lifecycle-next`;
+  const workflowCommand = `Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId}${workflowAgentOption} --operator-session-file <operator-session-file> --execute-task-lifecycle-next`;
   if (summary.report_id && !summary.finish_id) {
     return [
       workflowCommand,
