@@ -234,6 +234,8 @@ export function summarizeProductSurface(operation, body, options = {}) {
       repository_publication_evidence_count: focusedLifecycleStatus?.repository_publication_evidence_count ?? 0,
       repository_publication_provider_heartbeat_count: focusedLifecycleStatus?.repository_publication_provider_heartbeat_count ?? 0,
       membership_count: Array.isArray(body?.memberships) ? body.memberships.length : 0,
+      member_principal_id: body?.member_principal_id ?? null,
+      membership_role: body?.role ?? null,
       session_count: Array.isArray(body?.sessions) ? body.sessions.length : status?.session_count ?? 0,
       scope_loaded: Boolean(body?.site?.site_id ?? body?.site_id),
     };
