@@ -2457,7 +2457,7 @@ test('formatProductSurfaceText surfaces site scope and site operation focus comm
       session_count: 0,
     },
   });
-  assert.match(siteReadMembershipPutText, /Site Membership Put: pnpm --filter @narada2\/cloudflare-carrier product:site:membership:put:text -- --url https:\/\/carrier\.example\.test --site site_alpha --member-principal-id <principal-id> --role <role> --operator-session-file <operator-session-file>/);
+  assert.doesNotMatch(siteReadMembershipPutText, /Site Membership Put:/);
 
 
   const siteReadFocusText = formatProductSurfaceText({
