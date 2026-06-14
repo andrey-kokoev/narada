@@ -52,7 +52,7 @@ export function formatSiteFileChangeProposalLiveSmokeText(result) {
     `Authority: proposal=${result.proposal_authority ?? 'unknown'} filesystem_executor=${result.filesystem_executor_authority ?? 'unknown'}`,
     `Admissions: filesystem_mutation=${result.filesystem_mutation_admission ?? 'unknown'} repository_publication=${result.repository_publication_admission ?? 'unknown'}`,
     `Partition: ${result.site_file_change_authority_partition ?? 'unknown'}`,
-    `Proposal Review: pnpm --filter @narada2/cloudflare-carrier product:site-file-change-proposal:text -- --url ${result.worker_url} --site ${result.site_id} --focus-ref ${result.proposal_id} --operator-session-file <operator-session-file>`,
+    `Proposal Review: pnpm --filter @narada2/cloudflare-carrier product:site-file-change:proposal:review:text -- --url ${result.worker_url} --site ${result.site_id} --focus-ref ${result.proposal_id} --operator-session-file <operator-session-file>`,
     `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
   ];
   return `${lines.join('\n')}\n`;

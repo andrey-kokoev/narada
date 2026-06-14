@@ -35,7 +35,7 @@ test('formatSiteFileChangeProposalLiveSmokeText emits downstream reads', () => {
   });
 
   assert.match(text, /Site File Change Proposal Smoke: ok/);
-  assert.match(text, /Proposal Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file-change-proposal:text/);
+  assert.match(text, /Proposal Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file-change:proposal:review:text/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
 });
 
