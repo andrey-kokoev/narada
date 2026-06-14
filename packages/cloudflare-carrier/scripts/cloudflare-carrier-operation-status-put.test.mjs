@@ -219,7 +219,24 @@ test('formatOperationStatusPutText renders operator summary without auth materia
   assert.match(text, /Status: inactive/);
   assert.match(text, /Reason: operation_paused_by_operator/);
   assert.match(text, /Transition: active -> inactive/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.equal(text.includes('secret-token'), false);
+});
+
+test('formatOperationStatusPutText suppresses worker-scoped handoff without worker url', () => {
+  const text = formatOperationStatusPutText({
+    auth_source: 'operator-session-file',
+    params: { site_id: 'site_alpha', operation_id: 'operation_alpha', status: 'inactive' },
+    summary: summarizeOperationStatusPut({
+      reason: 'operation_paused_by_operator',
+      previous_status: 'active',
+      operation: { site_id: 'site_alpha', operation_id: 'operation_alpha', status: 'inactive', updated_at: '2026-06-11T00:00:00.000Z' },
+    }),
+  });
+
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
 });
 
 test('formatOperationStatusPutText renders refused lifecycle transition evidence', () => {

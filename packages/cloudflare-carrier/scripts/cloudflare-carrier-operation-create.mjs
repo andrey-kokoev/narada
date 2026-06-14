@@ -105,6 +105,7 @@ export function summarizeOperationCreateFailure(body = {}, params = {}) {
 export function formatOperationCreateText(result) {
   const summary = result?.summary ?? summarizeOperationCreate(result?.response ?? {});
   const refused = result?.status === 'refused' || summary?.ok === false;
+  const workerUrl = result?.worker_url ?? null;
   if (refused) {
     return [
       'Operation Create: refused',
@@ -119,13 +120,17 @@ export function formatOperationCreateText(result) {
   }
   return [
     'Operation Create: ok',
-    `Worker: ${result?.worker_url ?? 'unknown'}`,
+    `Worker: ${workerUrl ?? 'unknown'}`,
     `Auth: ${result?.auth_source ?? 'unknown'}`,
     `Site: ${summary.site_id ?? result?.params?.site_id ?? 'unknown'}`,
     `Operation: ${summary.operation_id ?? result?.params?.operation_id ?? 'unknown'}`,
     `Name: ${summary.display_name ?? result?.params?.display_name ?? 'unknown'}`,
     `Kind: ${summary.operation_kind ?? result?.params?.operation_kind ?? 'unknown'}`,
     `Status: ${summary.status ?? result?.params?.status ?? 'unknown'}`,
+    ...(workerUrl && summary.site_id && summary.operation_id ? [
+      `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`,
+      `Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`,
+    ] : []),
   ].join('\n') + '\n';
 }
 

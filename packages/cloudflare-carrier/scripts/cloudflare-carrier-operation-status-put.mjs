@@ -96,9 +96,10 @@ export function summarizeOperationStatusPut(body = {}, params = {}) {
 export function formatOperationStatusPutText(result) {
   const summary = result?.summary ?? summarizeOperationStatusPut(result?.response ?? {}, result?.params ?? {});
   const ok = summary.ok === false || result?.status === 'refused' ? false : true;
+  const workerUrl = result?.worker_url ?? null;
   return [
     `Operation Status Put: ${ok === false ? 'refused' : 'ok'}`,
-    `Worker: ${result?.worker_url ?? 'unknown'}`,
+    `Worker: ${workerUrl ?? 'unknown'}`,
     `Auth: ${result?.auth_source ?? 'unknown'}`,
     `Site: ${summary.site_id ?? result?.params?.site_id ?? 'unknown'}`,
     `Operation: ${summary.operation_id ?? result?.params?.operation_id ?? 'unknown'}`,
@@ -109,6 +110,10 @@ export function formatOperationStatusPutText(result) {
     ...(summary.previous_status ? [`Transition: ${summary.previous_status} -> ${summary.status ?? summary.requested_status ?? result?.params?.status ?? 'unknown'}`] : []),
     ...(summary.transition ? [`Transition Evidence: ${summary.transition}`] : []),
     `Updated: ${summary.updated_at ?? 'unknown'}`,
+    ...(ok !== false && workerUrl && summary.site_id && summary.operation_id ? [
+      `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`,
+      `Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`,
+    ] : []),
   ].join('\n') + '\n';
 }
 

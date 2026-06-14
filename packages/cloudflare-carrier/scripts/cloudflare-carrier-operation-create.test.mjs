@@ -206,7 +206,22 @@ test('formatOperationCreateText renders operator summary without auth material',
   assert.match(text, /Site: site_alpha/);
   assert.match(text, /Operation: operation_alpha/);
   assert.match(text, /Kind: productization/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.equal(text.includes('secret-token'), false);
+});
+
+test('formatOperationCreateText suppresses worker-scoped handoff without worker url', () => {
+  const text = formatOperationCreateText({
+    auth_source: 'operator-session-file',
+    params: { site_id: 'site_alpha', operation_id: 'operation_alpha', display_name: 'Alpha Operation', operation_kind: 'productization', status: 'active' },
+    summary: summarizeOperationCreate({
+      operation: { site_id: 'site_alpha', operation_id: 'operation_alpha', display_name: 'Alpha Operation', operation_kind: 'productization', status: 'active' },
+    }),
+  });
+
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
 });
 
 test('formatOperationCreateText renders refused operation creates without auth material', () => {
