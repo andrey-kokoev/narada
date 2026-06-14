@@ -136,7 +136,7 @@ export function summarizeLocalIngressRequest(body = {}, params = {}) {
 export function formatLocalIngressRequestText(result) {
   const summary = result?.summary ?? summarizeLocalIngressRequest(result?.response ?? {}, result?.params ?? {});
   const ok = summary.ok === false || result?.status === 'refused' ? false : true;
-  return [
+  const lines = [
     `Local Ingress Request: ${ok === false ? 'refused' : 'ok'}`,
     `Worker: ${result?.worker_url ?? 'unknown'}`,
     `Auth: ${result?.auth_source ?? 'unknown'}`,
@@ -158,7 +158,13 @@ export function formatLocalIngressRequestText(result) {
     ...(summary.rollback_plan_ref ? [`Rollback: ${summary.rollback_plan_ref}`] : []),
     ...(summary.recorded_by_principal_id ? [`Recorded By: ${summary.recorded_by_principal_id}`] : []),
     ...(summary.recorded_at ? [`Recorded At: ${summary.recorded_at}`] : []),
-  ].join('\n') + '\n';
+  ];
+  if (summary.site_id && summary.operation_id) {
+    lines.push(
+      `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`,
+    );
+  }
+  return lines.join('\n') + '\n';
 }
 
 function redactLocalIngressRequestParams(params = {}) {

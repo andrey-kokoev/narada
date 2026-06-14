@@ -300,6 +300,7 @@ test('formatLocalIngressRequestText renders queued and refused summaries without
   assert.match(queued, /Local Ingress Request: ok/);
   assert.match(queued, /Status: queued/);
   assert.match(queued, /Local Execution Admission: pending_windows_admission/);
+  assert.match(queued, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.equal(queued.includes('secret-token'), false);
 
   const refused = formatLocalIngressRequestText({
