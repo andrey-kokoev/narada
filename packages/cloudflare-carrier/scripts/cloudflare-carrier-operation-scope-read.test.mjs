@@ -90,4 +90,31 @@ test('formatOperationScopeReadText prints scope summary', () => {
   assert.match(text, /Scope Loaded: yes/);
   assert.match(text, /Workflow: action=read_operation_scope reason=operation_scope_not_loaded/);
   assert.match(text, /Inventory: sessions=1 tasks=2/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
+});
+
+test('formatOperationScopeReadText suppresses next workflow for passive routes', () => {
+  const text = formatOperationScopeReadText({
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation_id: 'operation_alpha',
+      site_id: 'site_alpha',
+      current_status: 'active',
+      scope_loaded: true,
+      phase: 'inhabited',
+      health: 'ready',
+      next_action: 'monitor_operation',
+      workflow_next_action: 'monitor_operation',
+      workflow_reason: 'complete',
+      session_count: 1,
+      task_count: 0,
+      persistence_state: 'durable',
+      recovery_state: 'reconstructable',
+    },
+  });
+
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
 });
