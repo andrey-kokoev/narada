@@ -124,7 +124,7 @@ test('formatOperationEvidenceReadText emits direct workflow handoff when the wor
     },
   });
 
-  assert.match(text, /Workflow Handoff: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:current --operator-session-file <operator-session-file>/);
+  assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:current --operator-session-file <operator-session-file>/);
 });
 
 test('formatOperationEvidenceReadText recognizes Windows fallback evidence as reviewable focus', () => {

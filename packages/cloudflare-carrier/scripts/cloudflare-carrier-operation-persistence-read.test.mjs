@@ -141,5 +141,5 @@ test('formatOperationPersistenceReadText emits direct workflow handoff when the 
     },
   });
 
-  assert.match(text, /Workflow Handoff: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Recovery Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
