@@ -341,6 +341,24 @@ test('formatDirectiveDeliveryReviewText uses focused undelivered label for narro
   assert.equal(text.includes('Operation Next Workflow:'), false);
 });
 
+test('formatDirectiveDeliveryReviewText suppresses site-scoped handoff without a real site id', () => {
+  const text = formatDirectiveDeliveryReviewText({
+    worker_url: 'https://carrier.example',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation_id: 'operation_alpha',
+      workflow_next_action: 'review_directive_delivery',
+      workflow_reason: 'undelivered_directives',
+      directive_record_count: 1,
+      focused_directive_record_id: 'directive_record_focus',
+    },
+  });
+
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /<site-id>/);
+});
+
 function responseJson(body) {
   return {
     ok: true,

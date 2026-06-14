@@ -180,3 +180,23 @@ test('formatLocalIngressRequestReadText prints local ingress request summary', (
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_site_read --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_site_read --operator-session-file <operator-session-file> --execute-operation-next/);
 });
+
+test('formatLocalIngressRequestReadText suppresses site-scoped handoff without a real site id', () => {
+  const text = formatLocalIngressRequestReadText({
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      request_count: 1,
+      focused_request_id: 'local_ingress_request_alpha',
+      latest_evidence_id: 'local_ingress_evidence_alpha',
+      latest_local_execution_id: 'windows_local_ingress_execution_alpha',
+      latest_execution_status: 'completed',
+      focused_operation_id: 'operation_site_read',
+    },
+  });
+
+  assert.doesNotMatch(text, /Evidence Read:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /<site-id>/);
+});

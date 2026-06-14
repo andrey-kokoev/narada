@@ -84,6 +84,7 @@ export function summarizeLocalIngressRequest(body = {}, evidenceBody = {}, optio
 
 export function formatLocalIngressRequestReadText(result) {
   const summary = result?.summary ?? {};
+  const hasSiteId = Boolean(summary.site_id);
   const lines = [
     'Local Ingress Request Review: ok',
     `Worker: ${result?.worker_url ?? 'unknown'}`,
@@ -102,8 +103,8 @@ export function formatLocalIngressRequestReadText(result) {
   }
   if (summary.latest_evidence_id || summary.latest_local_execution_id || summary.latest_execution_status) {
     lines.push(`Current Execution: evidence=${summary.latest_evidence_id ?? 'none'} local_execution=${summary.latest_local_execution_id ?? 'none'} status=${summary.latest_execution_status ?? 'unknown'}`);
-    if (summary.latest_evidence_id) {
-      lines.push(`Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:evidence:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --local-ingress-evidence-id ${summary.latest_evidence_id} --operator-session-file <operator-session-file>`);
+    if (hasSiteId && summary.latest_evidence_id) {
+      lines.push(`Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:evidence:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --local-ingress-evidence-id ${summary.latest_evidence_id} --operator-session-file <operator-session-file>`);
     }
   }
   if (summary.focused_operation_id || summary.focused_recorded_at) {
