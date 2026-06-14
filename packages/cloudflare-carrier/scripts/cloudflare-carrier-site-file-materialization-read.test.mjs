@@ -156,6 +156,8 @@ test('formatSiteFileMaterializationReadText prints the key review facts', () => 
   assert.match(text, /Latest Materialization: materialization-1 proposal=proposal-9 file=docs\/architecture\/cloudflare-carrier\/target.md effect=cloudflare_site_file_materialization_record posture=recorded/);
   assert.match(text, /Materialization Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file:materialization:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --site-file-materialization-id materialization-1 --operator-session-file <operator-session-file>/);
   assert.match(text, /Proposal Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file-change:proposal:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref proposal-9 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-9 --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-9 --operator-session-file <operator-session-file> --execute-operation-next/);
 });
@@ -183,6 +185,8 @@ test('formatSiteFileMaterializationReadText prints focused wording for direct hi
   assert.match(text, /Materializations: count=1 focused=materialization-9 authority=cloudflare_carrier_site admission=admitted/);
   assert.match(text, /Materialization Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file:materialization:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --site-file-materialization-id materialization-9 --operator-session-file <operator-session-file>/);
   assert.match(text, /Proposal Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file-change:proposal:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref proposal-9 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-9 --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-9 --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.match(text, /Focused Recorded: 2026-06-12T01:00:00.000Z/);
@@ -203,6 +207,8 @@ test('formatSiteFileMaterializationReadText suppresses worker-scoped handoffs wi
   assert.doesNotMatch(text, /<worker-url>/);
   assert.equal(text.includes('Materialization Review: pnpm'), false);
   assert.equal(text.includes('Proposal Review: pnpm'), false);
+  assert.equal(text.includes('Site Read: pnpm'), false);
+  assert.equal(text.includes('Site Next Workflow: pnpm'), false);
   assert.equal(text.includes('Operation Review: pnpm'), false);
   assert.equal(text.includes('Operation Next Workflow: pnpm'), false);
 });
