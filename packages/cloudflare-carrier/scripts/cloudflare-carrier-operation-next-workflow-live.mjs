@@ -169,6 +169,8 @@ export function formatOperationNextWorkflowLiveText(result) {
   const carrierSessionId = result.read_after_next?.active_session_id ?? result.delegated_result?.read_after_next?.active_session_id ?? null;
   if (carrierSessionId) {
     lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.selected_operation_id} --carrier-session-id ${carrierSessionId} --operator-session-file <operator-session-file>`);
+    lines.push(`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result.worker_url} --site ${result.site_id} --carrier-session-id ${carrierSessionId} --operator-session-file <operator-session-file>`);
+    lines.push(`Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --carrier-session-id ${carrierSessionId} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`);
   }
   return `${lines.join('\n')}\n`;
 }
