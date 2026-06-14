@@ -472,6 +472,13 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       continuity_reconciliation_execution_count: 1,
       persistence_state: 'durable',
       recovery_state: 'reconstructable',
+      local_ingress_request_count: 7,
+      local_ingress_evidence_count: 4,
+      local_ingress_provider_heartbeat_count: 20,
+      repository_publication_request_count: 25,
+      repository_publication_execution_count: 25,
+      repository_publication_evidence_count: 13,
+      repository_publication_provider_heartbeat_count: 20,
       membership_count: 2,
       session_count: 3,
     },
@@ -482,6 +489,15 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(siteReadText, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
   assert.match(siteReadText, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
   assert.match(siteReadText, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteReadText, /Local Ingress: requests=7 evidence=4 heartbeats=20/);
+  assert.match(siteReadText, /Local Ingress Request Review: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(siteReadText, /Local Ingress Evidence Review: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:evidence:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(siteReadText, /Local Ingress Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:provider:liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteReadText, /Repository Publication: requests=25 executions=25 evidence=13 heartbeats=20/);
+  assert.match(siteReadText, /Repository Publication Review: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(siteReadText, /Repository Publication Execution Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(siteReadText, /Repository Publication Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:evidence:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(siteReadText, /Repository Publication Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider:liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
   const operationListText = formatProductSurfaceText({
     operation: 'operation.list',
@@ -1958,6 +1974,13 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     continuity_reconciliation_execution_count: 1,
     persistence_state: 'durable',
     recovery_state: 'reconstructable',
+    local_ingress_request_count: 0,
+    local_ingress_evidence_count: 0,
+    local_ingress_provider_heartbeat_count: 0,
+    repository_publication_request_count: 0,
+    repository_publication_execution_count: 0,
+    repository_publication_evidence_count: 0,
+    repository_publication_provider_heartbeat_count: 0,
     scope_loaded: true,
     membership_count: 2,
     session_count: 1,
