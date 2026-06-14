@@ -104,12 +104,13 @@ export function summarizeRepositoryPublicationReadiness(body = {}, params = {}) 
 
 export function formatRepositoryPublicationReadinessText(result) {
   const summary = result?.summary ?? summarizeRepositoryPublicationReadiness(result?.response ?? {}, result?.params ?? {});
+  const siteId = summary.site_id ?? result?.params?.site_id ?? null;
   const ok = summary.ok === false || result?.status === 'refused' ? false : true;
   return [
     `Repository Publication Readiness: ${ok === false ? 'refused' : 'ok'}`,
     `Worker: ${result?.worker_url ?? 'unknown'}`,
     `Auth: ${result?.auth_source ?? 'unknown'}`,
-    `Site: ${summary.site_id ?? result?.params?.site_id ?? 'unknown'}`,
+    `Site: ${siteId ?? 'unknown'}`,
     ...(summary.code ? [`Code: ${summary.code}`] : []),
     ...(summary.status ? [`Status: ${summary.status}`] : []),
     ...(summary.readiness_status ? [`Readiness: ${summary.readiness_status}`] : []),
@@ -128,6 +129,8 @@ export function formatRepositoryPublicationReadinessText(result) {
     ...(summary.cloudflare_git_push_admission ? [`Cloudflare Git Push Admission: ${summary.cloudflare_git_push_admission}`] : []),
     ...(summary.direct_cloudflare_repository_mutation_admission ? [`Direct Cloudflare Repository Mutation: ${summary.direct_cloudflare_repository_mutation_admission}`] : []),
     ...(summary.authority_partition ? [`Authority Partition: ${summary.authority_partition}`] : []),
+    ...(siteId ? [`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${siteId} --operator-session-file <operator-session-file>`] : []),
+    ...(siteId ? [`Repository Publication Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${siteId} --operator-session-file <operator-session-file>`] : []),
   ].join('\n') + '\n';
 }
 
