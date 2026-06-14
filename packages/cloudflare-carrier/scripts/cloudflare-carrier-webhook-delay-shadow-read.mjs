@@ -116,7 +116,7 @@ export function formatWebhookDelayShadowReadText(result) {
     `Auth: ${result?.auth_source ?? 'unknown'}`,
     `Site: ${summary.site_id ?? 'unknown'}`,
     `Operation: ${summary.operation_id ?? 'unknown'}`,
-    `Workflow: action=${summary.workflow_next_action ?? 'none'} reason=${summary.workflow_reason ?? 'none'} focus=${summary.workflow_focus_ref ?? 'none'}`,
+    `Workflow Route: action=${summary.workflow_next_action ?? 'none'} reason=${summary.workflow_reason ?? 'none'} focus=${summary.workflow_focus_ref ?? 'none'}`,
     `Observations: count=${summary.observation_count ?? 0} focused=${summary.focused_observation_id ?? 'none'} classification=${summary.focused_classification_state ?? 'unknown'}`,
     `Dispatch: authority=${summary.focused_dispatch_authority ?? 'unknown'} action=${summary.focused_dispatch_action ?? 'unknown'}`,
   ];

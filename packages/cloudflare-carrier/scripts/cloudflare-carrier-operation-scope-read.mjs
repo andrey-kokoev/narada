@@ -55,7 +55,7 @@ export function formatOperationScopeReadText(result) {
     `Site: ${summary.site_id ?? 'unknown'}`,
     `Scope Loaded: ${summary.scope_loaded ? 'yes' : 'no'}`,
     `Lifecycle: status=${summary.current_status ?? 'unknown'} phase=${summary.phase ?? 'unknown'} health=${summary.health ?? 'unknown'} next=${summary.next_action ?? 'none'}`,
-    `Workflow: action=${summary.workflow_next_action ?? 'none'} reason=${summary.workflow_reason ?? 'none'}`,
+    `Workflow Route: action=${summary.workflow_next_action ?? 'none'} reason=${summary.workflow_reason ?? 'none'}`,
     `Inventory: sessions=${summary.session_count ?? 0} tasks=${summary.task_count ?? 0}`,
     `Durability: persistence=${summary.persistence_state ?? 'unknown'} recovery=${summary.recovery_state ?? 'unknown'}`,
   ];

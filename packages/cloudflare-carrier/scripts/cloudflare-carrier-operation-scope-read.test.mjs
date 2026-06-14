@@ -88,7 +88,7 @@ test('formatOperationScopeReadText prints scope summary', () => {
   assert.match(text, /Operation Scope: ok/);
   assert.match(text, /Kind: mailbox/);
   assert.match(text, /Scope Loaded: yes/);
-  assert.match(text, /Workflow: action=read_operation_scope reason=operation_scope_not_loaded/);
+  assert.match(text, /Workflow Route: action=read_operation_scope reason=operation_scope_not_loaded/);
   assert.match(text, /Inventory: sessions=1 tasks=2/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);

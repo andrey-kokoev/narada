@@ -305,7 +305,7 @@ test('formatDirectiveDeliveryReviewText renders directive review summary', () =>
   });
 
   assert.match(text, /Directive Delivery Review: ok/);
-  assert.match(text, /Workflow: action=review_directive_delivery reason=undelivered_directives focus=directive_record_focus/);
+  assert.match(text, /Workflow Route: action=review_directive_delivery reason=undelivered_directives focus=directive_record_focus/);
   assert.match(text, /Directive Records: count=2 focused=directive_record_focus undelivered=1 latest_undelivered=directive_record_focus/);
   assert.match(text, /Directive Deliveries: count=1 focused_delivery=none state=none ok=unknown/);
   assert.match(text, /Focused Directive: id=directive_record_focus classification=critical delay=18 critical=15 action=record_directive_emission_intent visibility=record_only/);

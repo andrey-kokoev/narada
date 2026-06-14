@@ -226,6 +226,7 @@ test('formatWebhookDelayShadowReadText prints shadow read summary', () => {
   });
 
   assert.match(text, /Webhook Delay Shadow Read: ok/);
+  assert.match(text, /Workflow Route: action=focus_webhook_delay_shadow_read reason=directive_intent_not_recorded_from_shadow_read focus=shadow_focus/);
   assert.match(text, /Observations: count=1 focused=shadow_focus classification=critical/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
