@@ -388,7 +388,7 @@ test('formatRepositoryPublicationRequestReviewText surfaces review ack command',
   assert.match(text, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:evidence:list:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --repository-publication-evidence-id evidence_1 --operator-session-file <operator-session-file>/);
   assert.match(text, /Focused Review: repository_publication_request:repository_publication_request_live_1 status=acknowledged/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operation-id operation_site_read --operator-session-file <operator-session-file>/);
-  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operation-id operation_site_read --execute-operation-next --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operation-id operation_site_read --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
 });
 
@@ -437,5 +437,5 @@ test('formatRepositoryPublicationRequestReviewText makes missing evidence explic
   });
 
   assert.match(text, /Linked Evidence: none status=unknown/);
-  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operation-id operation_site_read --execute-operation-next --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operation-id operation_site_read --operator-session-file <operator-session-file> --execute-operation-next/);
 });

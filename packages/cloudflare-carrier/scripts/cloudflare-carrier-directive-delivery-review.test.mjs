@@ -312,7 +312,7 @@ test('formatDirectiveDeliveryReviewText renders directive review summary', () =>
   assert.match(text, /Focused Admission: delivery_action=none dispatch_to_provider=false complete_without_provider=true/);
   assert.match(text, /Authority: record=cloudflare_directive_dual_record delivery=cloudflare_primary_directive_delivery dispatch=cloudflare_primary_dispatcher fallback=windows_fallback_dispatcher/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
-  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --execute-operation-next --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
 });
 
 test('formatDirectiveDeliveryReviewText uses focused undelivered label for narrowed historical reads', () => {
