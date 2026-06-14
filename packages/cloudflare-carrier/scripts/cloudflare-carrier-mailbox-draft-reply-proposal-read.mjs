@@ -152,6 +152,10 @@ export function formatMailboxDraftReplyProposalReadText(result) {
     );
   }
   lines.push(`Linked Draft Creates: ${summary.linked_draft_create_count ?? 0}`);
+  if (workerUrl && hasSiteId) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
+  }
   if (workerUrl && hasSiteId && summary.linked_draft_create_ids?.[0]) {
     lines.push(`Draft Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${workerUrl} --site ${summary.site_id} --focus-ref ${summary.linked_draft_create_ids[0]} --operator-session-file <operator-session-file>`);
   }

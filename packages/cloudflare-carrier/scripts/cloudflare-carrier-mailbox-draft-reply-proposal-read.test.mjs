@@ -304,6 +304,8 @@ test('formatMailboxDraftReplyProposalReadText omits synthetic operation ids from
 
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --focus-kind mailbox_draft_reply_proposal --focus-ref mailbox_draft_reply_proposal_live_1 --operator-session-file <operator-session-file>/);
   assert.doesNotMatch(text, /Review Ack:.*<operation-id>/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file> --execute-site-next/);
 });
 
 test('formatMailboxDraftReplyProposalReadText suppresses mailbox handoff without a real site id', () => {
@@ -324,6 +326,8 @@ test('formatMailboxDraftReplyProposalReadText suppresses mailbox handoff without
   assert.doesNotMatch(text, /Accepted Read:/);
   assert.doesNotMatch(text, /Confirmation Read:/);
   assert.doesNotMatch(text, /Review Ack:/);
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
   assert.doesNotMatch(text, /<site-id>/);
 });
 
@@ -348,5 +352,7 @@ test('formatMailboxDraftReplyProposalReadText suppresses mailbox handoff without
   assert.doesNotMatch(text, /Operation Review:/);
   assert.doesNotMatch(text, /Operation Next Workflow:/);
   assert.doesNotMatch(text, /Review Ack:/);
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
   assert.doesNotMatch(text, /<worker-url>/);
 });
