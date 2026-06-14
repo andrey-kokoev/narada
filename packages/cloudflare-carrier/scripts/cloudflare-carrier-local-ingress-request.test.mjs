@@ -226,6 +226,24 @@ test('createCloudflareLocalIngressRequest posts the local ingress envelope and r
   });
 });
 
+test('formatLocalIngressRequestText suppresses worker-scoped handoffs without a real worker url', () => {
+  const text = formatLocalIngressRequestText({
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      task_id: 'cloudflare-task-9',
+      requested_action_ref: 'local-windows-action:site-file-write:v1',
+    },
+  });
+
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /Task Review:/);
+  assert.doesNotMatch(text, /Task Workflow:/);
+  assert.doesNotMatch(text, /<worker-url>/);
+});
+
 test('createCloudflareLocalIngressRequest preserves structured refusal evidence', async () => {
   await assert.rejects(async () => createCloudflareLocalIngressRequest({
     workerUrl: 'https://carrier.example.test',

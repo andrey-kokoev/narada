@@ -134,11 +134,12 @@ export function summarizeLocalIngressEvidence(body = {}, params = {}) {
 }
 
 export function formatLocalIngressEvidenceText(result) {
+  const workerUrl = result?.worker_url ?? null;
   const summary = result?.summary ?? summarizeLocalIngressEvidence(result?.response ?? {}, result?.params ?? {});
   const ok = summary.ok === false || result?.status === 'refused' ? false : true;
   const lines = [
     `Local Ingress Evidence: ${ok === false ? 'refused' : 'ok'}`,
-    `Worker: ${result?.worker_url ?? 'unknown'}`,
+    `Worker: ${workerUrl ?? 'unknown'}`,
     `Auth: ${result?.auth_source ?? 'unknown'}`,
     `Site: ${summary.site_id ?? result?.params?.site_id ?? 'unknown'}`,
     ...(summary.code ? [`Code: ${summary.code}`] : []),
@@ -161,8 +162,8 @@ export function formatLocalIngressEvidenceText(result) {
     ...(summary.recorded_by_principal_id ? [`Recorded By: ${summary.recorded_by_principal_id}`] : []),
     ...(summary.recorded_at ? [`Recorded At: ${summary.recorded_at}`] : []),
   ];
-  if (summary.site_id && summary.local_ingress_request_id) {
-    lines.push(`Request Review: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:request:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --local-ingress-request-id ${summary.local_ingress_request_id} --operator-session-file <operator-session-file>`);
+  if (workerUrl && summary.site_id && summary.local_ingress_request_id) {
+    lines.push(`Request Review: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:request:review:text -- --url ${workerUrl} --site ${summary.site_id} --local-ingress-request-id ${summary.local_ingress_request_id} --operator-session-file <operator-session-file>`);
   }
   return `${lines.join('\n')}\n`;
 }

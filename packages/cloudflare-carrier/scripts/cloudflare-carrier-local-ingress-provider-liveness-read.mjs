@@ -68,13 +68,14 @@ export function summarizeLocalIngressProviderLiveness(body = {}, options = {}) {
 }
 
 export function formatLocalIngressProviderLivenessReadText(result) {
+  const workerUrl = result?.worker_url ?? null;
   const summary = result?.summary ?? {};
   const actionableNext = summary.next_action && !['none', 'monitor_local_ingress_provider_liveness'].includes(summary.next_action);
   const heartbeatLabel = summary.focused_local_ingress_provider_heartbeat_id ? 'focused' : 'latest';
   const timingLabel = summary.focused_local_ingress_provider_heartbeat_id ? 'Focused Timing' : 'Latest Timing';
   const lines = [
     'Local Ingress Provider Liveness: ok',
-    `Worker: ${result?.worker_url ?? 'unknown'}`,
+    `Worker: ${workerUrl ?? 'unknown'}`,
     `Auth: ${result?.auth_source ?? 'unknown'}`,
     `Site: ${summary.site_id ?? 'unknown'}`,
     `Liveness: state=${summary.state ?? 'unknown'} next=${summary.next_action ?? 'none'} authority=${summary.provider_liveness_authority ?? 'unknown'}`,
@@ -88,11 +89,11 @@ export function formatLocalIngressProviderLivenessReadText(result) {
   if (summary.direct_cloudflare_filesystem_mutation_admission || summary.repository_publication_admission) {
     lines.push(`Admissions: direct_cloudflare_filesystem_mutation=${summary.direct_cloudflare_filesystem_mutation_admission ?? 'unknown'} repository_publication=${summary.repository_publication_admission ?? 'unknown'}`);
   }
-  if (summary.site_id) {
-    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
-    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
+  if (workerUrl && summary.site_id) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
     if (actionableNext) {
-      lines.push(`Provider Liveness Refresh: pnpm --filter @narada2/cloudflare-carrier provider-liveness:refresh:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
+      lines.push(`Provider Liveness Refresh: pnpm --filter @narada2/cloudflare-carrier provider-liveness:refresh:live:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
     }
   }
   return `${lines.join('\n')}\n`;
