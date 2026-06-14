@@ -52,7 +52,31 @@ export function formatSiteScopeReadText(result) {
     `Inventory: operations=${summary.operation_count ?? 0} memberships=${summary.membership_count ?? 0} authority=${summary.authority_count ?? 0}`,
     `Durability: persistence=${summary.persistence_state ?? 'unknown'} recovery=${summary.recovery_state ?? 'unknown'}`,
   ];
+  if (summary.site_id) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
+  }
+  if (summary.site_id && isSiteScopeWorkflowAction(summary.next_action)) {
+    lines.push(`Site Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-action`);
+  }
   return `${lines.join('\n')}\n`;
+}
+
+function isSiteScopeWorkflowAction(action) {
+  return typeof action === 'string'
+    && (
+      action === 'focus_site_operation'
+      || action === 'focus_next_operation'
+      || action === 'read_site_scope'
+      || action === 'read_membership_site'
+      || action === 'read_site_authority'
+      || action === 'focus_membership_authority'
+      || action === 'inspect_inactive_membership'
+      || action === 'load_or_create_membership'
+      || action === 'put_membership'
+      || action.startsWith('transfer_')
+      || action === 'continue_authority_transfer'
+      || action === 'verify_full_cloudflare_authority'
+    );
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
