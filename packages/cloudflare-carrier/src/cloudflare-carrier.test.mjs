@@ -9218,6 +9218,13 @@ test('worker site.read and site.list surface operation attention from a sibling 
   assert.equal(listedBody.site_product_overview.next_operation_next_action, 'resume_operation_continuation');
   assert.equal(listedBody.site_product_overview.next_operation_reason, 'operation_lifecycle_needs_continuation');
   assert.equal(listedBody.site_product_overview.next_operation_active_session_id, 'carrier_session_control_ready');
+  assert.equal(listedBody.site_product_overview.next_operation_local_ingress_request_count, 0);
+  assert.equal(listedBody.site_product_overview.next_operation_local_ingress_evidence_count, 0);
+  assert.equal(listedBody.site_product_overview.next_operation_local_ingress_provider_heartbeat_count, 0);
+  assert.equal(listedBody.site_product_overview.next_operation_repository_publication_request_count, 0);
+  assert.equal(listedBody.site_product_overview.next_operation_repository_publication_execution_count, 0);
+  assert.equal(listedBody.site_product_overview.next_operation_repository_publication_evidence_count, 0);
+  assert.equal(listedBody.site_product_overview.next_operation_repository_publication_provider_heartbeat_count, 0);
   assert.equal(listedBody.site_posture_route.next_action, 'focus_next_site');
 });
 

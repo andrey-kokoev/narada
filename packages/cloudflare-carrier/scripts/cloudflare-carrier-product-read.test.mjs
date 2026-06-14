@@ -191,6 +191,13 @@ test('readProductSurface posts operation envelope and redacts auth material from
     next_operation_next_action: null,
     next_operation_reason: null,
     next_operation_active_session_id: null,
+    next_operation_local_ingress_request_count: 0,
+    next_operation_local_ingress_evidence_count: 0,
+    next_operation_local_ingress_provider_heartbeat_count: 0,
+    next_operation_repository_publication_request_count: 0,
+    next_operation_repository_publication_execution_count: 0,
+    next_operation_repository_publication_evidence_count: 0,
+    next_operation_repository_publication_provider_heartbeat_count: 0,
     next_operation_focus_kind: null,
     next_operation_focus_ref: null,
     health_counts: { ready: 1, attention: 0, incomplete: 0, other: 0 },
@@ -294,6 +301,13 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       next_operation_next_action: 'refresh_site_continuity_loop',
       next_operation_reason: 'operation_lifecycle_continuity_loop_stale',
       next_operation_active_session_id: 'session_alpha',
+      next_operation_local_ingress_request_count: 7,
+      next_operation_local_ingress_evidence_count: 4,
+      next_operation_local_ingress_provider_heartbeat_count: 20,
+      next_operation_repository_publication_request_count: 25,
+      next_operation_repository_publication_execution_count: 25,
+      next_operation_repository_publication_evidence_count: 13,
+      next_operation_repository_publication_provider_heartbeat_count: 20,
       next_operation_focus_kind: 'site_continuity_loop',
       next_operation_focus_ref: 'site_alpha',
       route_domain: 'site_posture',
@@ -314,6 +328,15 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(siteListFocusText, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
   assert.match(siteListFocusText, /Persistence Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(siteListFocusText, /Recovery Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Local Ingress: requests=7 evidence=4 heartbeats=20/);
+  assert.match(siteListFocusText, /Local Ingress Request Review: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Local Ingress Evidence Review: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:evidence:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Local Ingress Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:provider:liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Repository Publication: requests=25 executions=25 evidence=13 heartbeats=20/);
+  assert.match(siteListFocusText, /Repository Publication Review: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Repository Publication Execution Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Repository Publication Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:evidence:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Repository Publication Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider:liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(siteListFocusText, /Focus Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:focus:workflow:live -- --url https:\/\/carrier\.example\.test --focused-site-id site_alpha --operator-session-file <operator-session-file> --execute-site-focus/);
   assert.match(siteListFocusText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.match(siteListFocusText, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity/);
@@ -1882,6 +1905,13 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
       next_operation_next_action: 'refresh_site_continuity_loop',
       next_operation_reason: 'operation_lifecycle_continuity_loop_stale',
       next_operation_active_session_id: 'session_fixture',
+      next_operation_local_ingress_request_count: 7,
+      next_operation_local_ingress_evidence_count: 4,
+      next_operation_local_ingress_provider_heartbeat_count: 20,
+      next_operation_repository_publication_request_count: 25,
+      next_operation_repository_publication_execution_count: 25,
+      next_operation_repository_publication_evidence_count: 13,
+      next_operation_repository_publication_provider_heartbeat_count: 20,
       next_operation_focus_kind: 'site_continuity_loop',
       next_operation_focus_ref: 'site_fixture',
       health_counts: { ready: 0, attention: 1, incomplete: 0, other: 0 },
@@ -1906,6 +1936,13 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     next_operation_next_action: 'refresh_site_continuity_loop',
     next_operation_reason: 'operation_lifecycle_continuity_loop_stale',
     next_operation_active_session_id: 'session_fixture',
+    next_operation_local_ingress_request_count: 7,
+    next_operation_local_ingress_evidence_count: 4,
+    next_operation_local_ingress_provider_heartbeat_count: 20,
+    next_operation_repository_publication_request_count: 25,
+    next_operation_repository_publication_execution_count: 25,
+    next_operation_repository_publication_evidence_count: 13,
+    next_operation_repository_publication_provider_heartbeat_count: 20,
     next_operation_focus_kind: 'site_continuity_loop',
     next_operation_focus_ref: 'site_fixture',
     health_counts: { ready: 0, attention: 1, incomplete: 0, other: 0 },

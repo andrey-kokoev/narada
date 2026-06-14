@@ -2072,6 +2072,7 @@ function summarizeCloudflareSiteProductOverview(siteProductStatuses = [], sitePr
     : null;
   const actionableWorkflowRoute = actionableProjection?.focused_operation_lifecycle?.workflow_route ?? null;
   const actionableOperationId = actionableProjection?.focused_operation_lifecycle?.operation_id ?? null;
+  const actionableLifecycleStatus = actionableProjection?.focused_operation_lifecycle?.lifecycle_status ?? null;
   const actionableSessionRecord = actionableOperationId && Array.isArray(actionableProjection?.sessions)
     ? actionableProjection.sessions.find((item) => item?.operation_id === actionableOperationId) ?? actionableProjection.sessions[0] ?? null
     : null;
@@ -2098,6 +2099,13 @@ function summarizeCloudflareSiteProductOverview(siteProductStatuses = [], sitePr
     next_operation_next_action: actionableWorkflowRoute?.next_action ?? null,
     next_operation_reason: actionableWorkflowRoute?.reason ?? null,
     next_operation_active_session_id: actionableSessionRecord?.carrier_session_id ?? actionableSessionRecord?.session_id ?? null,
+    next_operation_local_ingress_request_count: actionableLifecycleStatus?.local_ingress_request_count ?? 0,
+    next_operation_local_ingress_evidence_count: actionableLifecycleStatus?.local_ingress_evidence_count ?? 0,
+    next_operation_local_ingress_provider_heartbeat_count: actionableLifecycleStatus?.local_ingress_provider_heartbeat_count ?? 0,
+    next_operation_repository_publication_request_count: actionableLifecycleStatus?.repository_publication_request_count ?? 0,
+    next_operation_repository_publication_execution_count: actionableLifecycleStatus?.repository_publication_execution_count ?? 0,
+    next_operation_repository_publication_evidence_count: actionableLifecycleStatus?.repository_publication_evidence_count ?? 0,
+    next_operation_repository_publication_provider_heartbeat_count: actionableLifecycleStatus?.repository_publication_provider_heartbeat_count ?? 0,
     next_operation_focus_kind: actionableFocusKind,
     next_operation_focus_ref: actionableFocusRef,
   };
