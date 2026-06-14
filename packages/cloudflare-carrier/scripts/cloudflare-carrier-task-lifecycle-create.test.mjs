@@ -101,6 +101,7 @@ test('createCloudflareTaskLifecycleTask posts task lifecycle create envelope and
             site_id: 'site_alpha',
           task_id: 'cloudflare-task-1',
           task_number: 1,
+          operation_id: 'operation_alpha',
           carrier_session_id: 'session_alpha',
           title: 'Real product task',
             status: 'opened',
@@ -158,6 +159,7 @@ test('createCloudflareTaskLifecycleTask posts task lifecycle create envelope and
     admission_id: 'admission_alpha',
     task_id: 'cloudflare-task-1',
     task_number: 1,
+    operation_id: 'operation_alpha',
     carrier_session_id: 'session_alpha',
     title: 'Real product task',
     status: 'opened',
@@ -200,6 +202,7 @@ test('createCloudflareTaskLifecycleTask preserves structured refusal evidence', 
         admission_id: 'admission_refused',
         task_id: null,
         task_number: null,
+        operation_id: null,
         carrier_session_id: null,
         title: 'Guard check task',
         status: null,
@@ -228,7 +231,7 @@ test('formatTaskLifecycleCreateText renders admitted and refused summaries witho
       mutation_authority: 'cloudflare_task_lifecycle_d1',
       cloudflare_write_admission: 'admitted',
       write_effect: 'task_lifecycle_create',
-      task: { site_id: 'site_alpha', task_id: 'cloudflare-task-1', task_number: 1, carrier_session_id: 'session_alpha', title: 'Real product task', status: 'opened' },
+      task: { site_id: 'site_alpha', task_id: 'cloudflare-task-1', task_number: 1, operation_id: 'operation_alpha', carrier_session_id: 'session_alpha', title: 'Real product task', status: 'opened' },
     }, { admission_id: 'admission_alpha' }),
     auth: { kind: 'bearer', value: 'secret-token' },
   });
@@ -237,6 +240,11 @@ test('formatTaskLifecycleCreateText renders admitted and refused summaries witho
   assert.match(admitted, /Task: cloudflare-task-1 #1/);
   assert.match(admitted, /Session: session_alpha/);
   assert.match(admitted, /Authority: mutation=cloudflare_task_lifecycle_d1 cloudflare_write=admitted effect=task_lifecycle_create/);
+  assert.match(admitted, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-1 --operator-session-file <operator-session-file>/);
+  assert.match(admitted, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-1 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
+  assert.match(admitted, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
+  assert.match(admitted, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(admitted, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.equal(admitted.includes('secret-token'), false);
 
   const refused = formatTaskLifecycleCreateText({
@@ -255,5 +263,10 @@ test('formatTaskLifecycleCreateText renders admitted and refused summaries witho
   assert.match(refused, /Task Lifecycle Create: refused/);
   assert.match(refused, /Code: task_lifecycle_create_not_admitted/);
   assert.match(refused, /Decision: action=refuse reason=windows_task_lifecycle_mutation_authority_retained/);
+  assert.doesNotMatch(refused, /Task Review:/);
+  assert.doesNotMatch(refused, /Task Workflow:/);
+  assert.doesNotMatch(refused, /Session Evidence:/);
+  assert.doesNotMatch(refused, /Operation Review:/);
+  assert.doesNotMatch(refused, /Operation Next Workflow:/);
   assert.equal(refused.includes('secret-token'), false);
 });

@@ -97,6 +97,7 @@ export function summarizeTaskLifecycleCreate(body = {}, params = {}) {
     admission_id: body.admission_id ?? params.admission_id ?? null,
     task_id: task.task_id ?? body.task_id ?? null,
     task_number: task.task_number ?? body.task_number ?? null,
+    operation_id: task.operation_id ?? body.operation_id ?? null,
     carrier_session_id: task.carrier_session_id ?? params.carrier_session_id ?? null,
     title: task.title ?? params.title ?? null,
     status: task.status ?? body.status ?? null,
@@ -114,7 +115,7 @@ export function summarizeTaskLifecycleCreate(body = {}, params = {}) {
 export function formatTaskLifecycleCreateText(result) {
   const summary = result?.summary ?? summarizeTaskLifecycleCreate(result?.response ?? {}, result?.params ?? {});
   const ok = summary.ok === false || result?.status === 'refused' ? false : true;
-  return [
+  const lines = [
     `Task Lifecycle Create: ${ok === false ? 'refused' : 'ok'}`,
     `Worker: ${result?.worker_url ?? 'unknown'}`,
     `Auth: ${result?.auth_source ?? 'unknown'}`,
@@ -130,7 +131,19 @@ export function formatTaskLifecycleCreateText(result) {
     ...(summary.cutover_point_ref ? [`Cutover: ${summary.cutover_point_ref}`] : []),
     ...(summary.governed_write_contract_ref ? [`Contract: ${summary.governed_write_contract_ref}`] : []),
     ...(summary.confirmation_evidence_ref ? [`Evidence: ${summary.confirmation_evidence_ref}`] : []),
-  ].join('\n') + '\n';
+  ];
+  if (summary.site_id && summary.task_id) {
+    lines.push(`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --task-id ${summary.task_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --task-id ${summary.task_id} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`);
+  }
+  if (summary.site_id && summary.carrier_session_id) {
+    lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`);
+  }
+  if (summary.site_id && summary.operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+  }
+  return lines.join('\n') + '\n';
 }
 
 function redactTaskLifecycleCreateParams(params = {}) {
