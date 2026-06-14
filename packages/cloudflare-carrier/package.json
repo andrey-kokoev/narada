@@ -186,6 +186,7 @@
     "mailbox:readback-smoke:live": "node scripts/cloudflare-carrier-mailbox-readback-live-smoke.mjs",
     "mailbox:readback-smoke:live:text": "node scripts/cloudflare-carrier-mailbox-readback-live-smoke.mjs --format text",
     "site-file-change:proposal-smoke:live": "node scripts/cloudflare-carrier-site-file-change-proposal-live-smoke.mjs",
+    "site-file-change:proposal-smoke:live:text": "node scripts/cloudflare-carrier-site-file-change-proposal-live-smoke.mjs --format text",
     "site-file:materialization-smoke:live": "node scripts/cloudflare-carrier-site-file-materialization-live-smoke.mjs",
     "local-ingress:request-smoke:live": "node scripts/cloudflare-carrier-local-ingress-request-live-smoke.mjs",
     "local-ingress:request-smoke:live:text": "node scripts/cloudflare-carrier-local-ingress-request-live-smoke.mjs --format text",
