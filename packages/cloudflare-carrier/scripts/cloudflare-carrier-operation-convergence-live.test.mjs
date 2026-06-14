@@ -146,6 +146,231 @@ test('operation convergence executes focused operation pass then proves monitori
   assert.match(formatOperationConvergenceLiveText(result), /Operation Convergence: ok/);
 });
 
+test('operation convergence text surfaces direct site and operation reads', () => {
+  const text = formatOperationConvergenceLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    checked_site_ids: ['site_alpha'],
+    posture_coherence: { status: 'ok', issue_count: 0 },
+    durability_coherence: { status: 'ok', issue_count: 0 },
+    site_results: [
+      {
+        site_id: 'site_alpha',
+        initial_route: 'focus_next_operation',
+        final_route: 'monitor_operations',
+        pass_count: 1,
+        focused_operation_id: 'operation_alpha',
+      },
+    ],
+  });
+
+  assert.match(text, /Site List: pnpm --filter @narada2\/cloudflare-carrier product:site:list:text -- --url https:\/\/carrier\.example --operator-session-file <operator-session-file>/);
+  assert.match(text, /- site=site_alpha initial=focus_next_operation final=monitor_operations passes=1 focused=operation_alpha/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+});
+
+test('operation convergence retries delayed operation list lag before declaring convergence', async () => {
+  let operationListReads = 0;
+  let operationReadReads = 0;
+  const result = await runOperationConvergenceLive({
+    workerUrl: 'https://carrier.example',
+    siteIds: ['site_alpha'],
+    maxOperationPasses: 4,
+    auth: { kind: 'operator_session', value: 'session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => JSON.stringify(mockResponse(args, {
+      'site.list': {
+        schema: 'narada.cloudflare_carrier.product_read.v1',
+        response: { site_product_statuses: [{ site_id: 'site_alpha' }] },
+      },
+      'operation.list:site_alpha': () => {
+        operationListReads += 1;
+        if (operationListReads === 1) {
+          return {
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              route_next_action: 'focus_next_operation',
+              next_operation_id: 'operation_alpha',
+              route_target: 'operation_alpha',
+            },
+          };
+        }
+        if (operationListReads === 2) {
+          return {
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              route_next_action: 'monitor_operations',
+              next_operation_id: 'operation_alpha',
+              route_target: 'operation_alpha',
+            },
+          };
+        }
+        if (operationListReads === 3) {
+          return {
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              route_next_action: 'focus_next_operation',
+              next_operation_id: 'operation_alpha',
+              route_target: 'operation_alpha',
+            },
+          };
+        }
+        return {
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            route_next_action: 'monitor_operations',
+            next_operation_id: 'operation_alpha',
+            route_target: 'operation_alpha',
+          },
+        };
+      },
+      'operation.next:site_alpha': {
+        schema: 'narada.cloudflare_carrier.operation_next_workflow_live.v1',
+        status: 'ok',
+        delegated_workflow: 'continuity',
+        delegated_route_action: 'refresh_site_continuity_loop',
+        read_after_next: { workflow_next_action: 'monitor_operation' },
+      },
+      'operation.read:site_alpha:operation_alpha': () => {
+        operationReadReads += 1;
+        if (operationReadReads === 1) {
+          return {
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: { workflow_next_action: 'refresh_site_continuity_loop' },
+          };
+        }
+        return {
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: { workflow_next_action: 'monitor_operation' },
+        };
+      },
+      posture: {
+        schema: 'narada.cloudflare_carrier.posture_coherence_live.v1',
+        status: 'ok',
+        checked_site_ids: ['site_alpha'],
+        issues: [],
+      },
+      durability: {
+        schema: 'narada.cloudflare_carrier.durability_coherence_live.v1',
+        status: 'ok',
+        checked_site_ids: ['site_alpha'],
+        issues: [],
+      },
+    })),
+    sleep: async () => {},
+  });
+
+  assert.equal(result.status, 'ok');
+  assert.equal(result.site_results[0].pass_count, 2);
+  assert.equal(result.site_results[0].final_route, 'monitor_operations');
+});
+
+test('operation convergence continues from focused operation when delayed list stays passive', async () => {
+  let operationListReads = 0;
+  let operationReadReads = 0;
+  let operationNextReads = 0;
+  const result = await runOperationConvergenceLive({
+    workerUrl: 'https://carrier.example',
+    siteIds: ['site_alpha'],
+    maxOperationPasses: 4,
+    auth: { kind: 'operator_session', value: 'session-cookie', source: 'operator-session-cookie' },
+    executeAcknowledged: true,
+  }, {
+    runNodeScript: async (args) => JSON.stringify(mockResponse(args, {
+      'site.list': {
+        schema: 'narada.cloudflare_carrier.product_read.v1',
+        response: { site_product_statuses: [{ site_id: 'site_alpha' }] },
+      },
+      'operation.list:site_alpha': () => {
+        operationListReads += 1;
+        if (operationListReads === 1) {
+          return {
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              route_next_action: 'focus_next_operation',
+              next_operation_id: 'operation_alpha',
+              route_target: 'operation_alpha',
+            },
+          };
+        }
+        if (operationListReads <= 3) {
+          return {
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: {
+              route_next_action: 'monitor_operations',
+              next_operation_id: 'operation_alpha',
+              route_target: 'operation_alpha',
+            },
+          };
+        }
+        return {
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: {
+            route_next_action: 'monitor_operations',
+            next_operation_id: 'operation_alpha',
+            route_target: 'operation_alpha',
+          },
+        };
+      },
+      'operation.next:site_alpha': () => {
+        operationNextReads += 1;
+        return {
+          schema: 'narada.cloudflare_carrier.operation_next_workflow_live.v1',
+          status: 'ok',
+          delegated_workflow: 'continuity',
+          delegated_route_action: operationNextReads === 1
+            ? 'refresh_site_continuity_loop'
+            : 'review_site_continuity_reconciliation_execution',
+          read_after_next: {
+            workflow_next_action: operationNextReads === 1
+              ? 'monitor_operation'
+              : 'monitor_operation',
+          },
+        };
+      },
+      'operation.read:site_alpha:operation_alpha': () => {
+        operationReadReads += 1;
+        if (operationReadReads === 1) {
+          return {
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: { workflow_next_action: 'refresh_site_continuity_loop' },
+          };
+        }
+        if (operationReadReads === 2) {
+          return {
+            schema: 'narada.cloudflare_carrier.product_read.v1',
+            summary: { workflow_next_action: 'review_site_continuity_reconciliation_execution' },
+          };
+        }
+        return {
+          schema: 'narada.cloudflare_carrier.product_read.v1',
+          summary: { workflow_next_action: 'monitor_operation' },
+        };
+      },
+      posture: {
+        schema: 'narada.cloudflare_carrier.posture_coherence_live.v1',
+        status: 'ok',
+        checked_site_ids: ['site_alpha'],
+        issues: [],
+      },
+      durability: {
+        schema: 'narada.cloudflare_carrier.durability_coherence_live.v1',
+        status: 'ok',
+        checked_site_ids: ['site_alpha'],
+        issues: [],
+      },
+    })),
+    sleep: async () => {},
+  });
+
+  assert.equal(result.status, 'ok');
+  assert.equal(result.site_results[0].pass_count, 2);
+  assert.equal(result.site_results[0].passes[1].delegated_route_action, 'review_site_continuity_reconciliation_execution');
+});
+
 test('operation convergence rejects unsupported route actions', async () => {
   await assert.rejects(
     async () => {

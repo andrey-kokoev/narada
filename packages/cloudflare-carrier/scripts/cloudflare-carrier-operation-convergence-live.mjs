@@ -42,7 +42,7 @@ export function parseOperationConvergenceLiveArgs(argv = [], env = process.env) 
 
 export async function runOperationConvergenceLive(
   config,
-  { runNodeScript = defaultRunNodeScript } = {},
+  { runNodeScript = defaultRunNodeScript, sleep = defaultSleep } = {},
 ) {
   const siteList = parseJsonStdout(
     await runNodeScript(buildSiteListArgs(config), { cwd: packageRoot }),
@@ -57,7 +57,7 @@ export async function runOperationConvergenceLive(
   const siteResults = [];
 
   for (const siteId of siteIds) {
-    const result = await convergeSiteOperations(siteId, config, runNodeScript);
+    const result = await convergeSiteOperations(siteId, config, runNodeScript, sleep);
     siteResults.push(result);
   }
 
@@ -91,20 +91,52 @@ export async function runOperationConvergenceLive(
   };
 }
 
-async function convergeSiteOperations(siteId, config, runNodeScript) {
+async function convergeSiteOperations(siteId, config, runNodeScript, sleep) {
   const passes = [];
+  let delayedMonitorFollowupUsed = false;
   let operationList = parseJsonStdout(
     await runNodeScript(buildOperationListArgs(config, siteId), { cwd: packageRoot }),
     `operation_convergence_operation_list_initial:${siteId}`,
   );
   assert.equal(operationList.schema, 'narada.cloudflare_carrier.product_read.v1');
 
-  for (let attempt = 0; attempt < config.maxOperationPasses; attempt += 1) {
+  for (let attempt = 0; attempt < config.maxOperationPasses;) {
     const routeAction = operationList.summary?.route_next_action ?? 'monitor_operations';
-    if (routeAction === 'monitor_operations') break;
+    if (routeAction === 'monitor_operations') {
+      const focusedOperationId = operationList.summary?.next_operation_id ?? operationList.summary?.route_target ?? null;
+      if (!focusedOperationId) break;
+      const focusedRead = parseJsonStdout(
+        await runNodeScript(buildOperationReadArgs(config, siteId, focusedOperationId), { cwd: packageRoot }),
+        `operation_convergence_operation_read_monitor_followup:${siteId}:${focusedOperationId}`,
+      );
+      assert.equal(focusedRead.schema, 'narada.cloudflare_carrier.product_read.v1');
+      if ((focusedRead.summary?.workflow_next_action ?? 'monitor_operation') === 'monitor_operation') break;
+      if (delayedMonitorFollowupUsed) {
+        operationList = {
+          ...operationList,
+          summary: {
+            ...(operationList.summary ?? {}),
+            route_next_action: 'focus_next_operation',
+            next_operation_id: focusedOperationId,
+            route_target: focusedOperationId,
+          },
+        };
+        delayedMonitorFollowupUsed = false;
+        continue;
+      }
+      delayedMonitorFollowupUsed = true;
+      await sleep(20_000);
+      operationList = parseJsonStdout(
+        await runNodeScript(buildOperationListArgs(config, siteId), { cwd: packageRoot }),
+        `operation_convergence_operation_list_delayed_followup:${siteId}:${attempt + 1}`,
+      );
+      assert.equal(operationList.schema, 'narada.cloudflare_carrier.product_read.v1');
+      continue;
+    }
     if (routeAction !== 'focus_next_operation') {
       throw new Error(`operation_convergence_live_route_unsupported:${siteId}:${routeAction}`);
     }
+    delayedMonitorFollowupUsed = false;
     const nextResult = parseJsonStdout(
       await runNodeScript(buildOperationNextArgs(config, siteId), { cwd: packageRoot }),
       `operation_convergence_next:${siteId}:${attempt + 1}`,
@@ -117,9 +149,10 @@ async function convergeSiteOperations(siteId, config, runNodeScript) {
       delegated_route_action: nextResult.delegated_route_action ?? null,
       read_after_next: nextResult.read_after_next ?? null,
     });
+    attempt += 1;
     operationList = parseJsonStdout(
       await runNodeScript(buildOperationListArgs(config, siteId), { cwd: packageRoot }),
-      `operation_convergence_operation_list_after:${siteId}:${attempt + 1}`,
+      `operation_convergence_operation_list_after:${siteId}:${attempt}`,
     );
     assert.equal(operationList.schema, 'narada.cloudflare_carrier.product_read.v1');
   }
@@ -163,11 +196,17 @@ export function formatOperationConvergenceLiveText(result) {
     `Sites Checked: ${result.checked_site_ids.length}`,
     `Posture Coherence: ${result.posture_coherence?.status ?? 'unknown'} issues=${result.posture_coherence?.issue_count ?? 0}`,
     `Durability Coherence: ${result.durability_coherence?.status ?? 'unknown'} issues=${result.durability_coherence?.issue_count ?? 0}`,
+    `Site List: pnpm --filter @narada2/cloudflare-carrier product:site:list:text -- --url ${result.worker_url} --operator-session-file <operator-session-file>`,
   ];
   for (const site of result.site_results ?? []) {
     lines.push(
       `- site=${site.site_id} initial=${site.initial_route} final=${site.final_route} passes=${site.pass_count} focused=${site.focused_operation_id ?? 'none'}`,
     );
+    lines.push(`  Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${site.site_id} --operator-session-file <operator-session-file>`);
+    lines.push(`  Operation List: pnpm --filter @narada2/cloudflare-carrier product:operation:list:text -- --url ${result.worker_url} --site ${site.site_id} --operator-session-file <operator-session-file>`);
+    if (site.focused_operation_id) {
+      lines.push(`  Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${site.site_id} --operation-id ${site.focused_operation_id} --operator-session-file <operator-session-file>`);
+    }
   }
   return `${lines.join('\n')}\n`;
 }
@@ -253,6 +292,10 @@ async function defaultRunNodeScript(args, options = {}) {
     maxBuffer: CHILD_STDIO_MAX_BUFFER,
   });
   return stdout;
+}
+
+function defaultSleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function parseJsonStdout(stdout, label) {
