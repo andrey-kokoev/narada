@@ -153,6 +153,28 @@ test('summaries and text output preserve list and refusal evidence', () => {
   assert.match(text, /Focus: site_continuity_reconciliation_execution:missing_focus/);
 });
 
+test('formatOperationFocusReviewText emits direct follow-on operation commands', () => {
+  const text = formatOperationFocusReviewText({
+    status: 'ok',
+    operation: 'operation_focus_review.acknowledge',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation_focus_review.acknowledge',
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      review_id: 'review_1',
+      focus_kind: 'site_continuity_reconciliation_execution',
+      focus_ref: 'reconciliation_1',
+      review_status: 'acknowledged',
+    },
+  });
+
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
+  assert.match(text, /Review List: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --operation operation_focus_review\.list --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+});
+
 function responseJson(status, body) {
   return {
     status,

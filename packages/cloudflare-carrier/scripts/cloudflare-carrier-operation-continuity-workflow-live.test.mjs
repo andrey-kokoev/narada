@@ -213,11 +213,16 @@ test('formatOperationContinuityWorkflowLiveText surfaces direct follow-on reads'
     continuity_execution_status: 'completed',
     continuity_execution_summary: { completed_site_count: 1, refused_site_count: 0 },
     continuity_health: { status: 'ok' },
-    read_after_continuity: { workflow_next_action: 'review_site_continuity_reconciliation_execution' },
+    read_after_continuity: {
+      workflow_next_action: 'review_site_continuity_reconciliation_execution',
+      workflow_focus_kind: 'site_continuity_reconciliation_execution',
+      workflow_focus_ref: 'site-continuity-reconciliation-execution:site_live_smoke:2026-06-14T00:17:12.374Z:completed',
+    },
     site_read_after_continuity: { next_action: 'focus_next_operation' },
   });
 
   assert.match(text, /Operation Continuity Workflow: ok/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_live_smoke --operator-session-file <operator-session-file>/);
+  assert.match(text, /Post Action Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_live_smoke:2026-06-14T00:17:12\.374Z:completed --operator-session-file <operator-session-file>/);
 });
