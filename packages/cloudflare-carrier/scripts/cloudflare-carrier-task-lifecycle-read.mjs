@@ -153,7 +153,7 @@ export function formatTaskLifecycleReadText(result) {
 function formatTaskLifecycleNextCommands(result, summary) {
   const workerUrl = result?.worker_url ?? '<worker-url>';
   const siteId = summary.site_id ?? result?.params?.site_id ?? '<site-id>';
-  const taskId = summary.task_id ?? result?.params?.task_lifecycle_task_id ?? '<task-id>';
+  const taskId = summary.task_id ?? result?.params?.task_lifecycle_task_id ?? null;
   if (!taskId) return [];
   const normalizedStatus = normalizeTaskStatus(summary.task_status);
   const claimAgent = '<agent-id>';
