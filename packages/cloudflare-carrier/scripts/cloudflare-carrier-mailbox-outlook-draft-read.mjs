@@ -130,6 +130,9 @@ export function formatMailboxOutlookDraftReadText(result) {
   if (summary.latest_body_preview) {
     lines.push(`Body Preview: ${summary.latest_body_preview}`);
   }
+  if (summary.site_id && summary.latest_proposal_id) {
+    lines.push(`Proposal Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --focus-ref ${summary.latest_proposal_id} --operator-session-file <operator-session-file>`);
+  }
   if (summary.site_id && summary.latest_operation_id) {
     lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file>`);
     lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);

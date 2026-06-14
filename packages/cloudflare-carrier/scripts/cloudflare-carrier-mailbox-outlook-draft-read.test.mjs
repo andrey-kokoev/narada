@@ -190,7 +190,7 @@ test('formatMailboxOutlookDraftReadText renders mailbox outlook draft summary', 
   assert.match(text, /Admissions: send=not_admitted mutation=not_admitted/);
   assert.match(text, /Current Posture: cloudflare_created_outlook_draft_send_not_admitted/);
   assert.match(text, /Latest Draft: id=draft_live_1 proposal=proposal_1 account=help@example.com message=message_1 subject=Draft subject/);
-  assert.doesNotMatch(text, /Proposal Read:/);
+  assert.match(text, /Proposal Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url https:\/\/carrier\.example --site site_alpha --focus-ref proposal_1 --operator-session-file <operator-session-file>/);
   assert.match(text, /Body Preview: Draft preview text\./);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
