@@ -63,6 +63,23 @@ test('parseOperationContinuationWorkflowLiveArgs defaults the agent id when omit
   assert.equal(parsed.agentId, 'narada.cloudflare.operation.continuation.live');
 });
 
+test('formatOperationContinuationWorkflowLiveText suppresses guarded links without site id', () => {
+  const text = formatOperationContinuationWorkflowLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    site_id: '',
+    selected_operation_id: 'operation_live_alpha',
+    continuation_resume_summary: { carrier_session_id: 'carrier_session_alpha' },
+    read_after_resume: { workflow_next_action: 'start_or_select_session' },
+  });
+
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /Session Evidence:/);
+  assert.doesNotMatch(text, /Task Review:/);
+  assert.doesNotMatch(text, /Task Workflow:/);
+});
+
 test('runOperationContinuationWorkflowLive selects continuation from operation.list then resumes it', async () => {
   const invocations = [];
   const result = await runOperationContinuationWorkflowLive({

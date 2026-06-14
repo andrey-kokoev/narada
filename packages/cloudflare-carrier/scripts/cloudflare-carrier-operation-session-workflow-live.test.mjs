@@ -52,6 +52,20 @@ test('parseOperationSessionWorkflowLiveArgs accepts text format', () => {
   assert.equal(parsed.format, 'text');
 });
 
+test('formatOperationSessionWorkflowLiveText suppresses guarded links without site id', () => {
+  const text = formatOperationSessionWorkflowLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    site_id: '',
+    operation_id: 'operation_live_alpha',
+    read_after_session: { active_session_id: 'carrier_session_alpha' },
+  });
+
+  assert.doesNotMatch(text, /Session Evidence:/);
+  assert.doesNotMatch(text, /Task Review:/);
+  assert.doesNotMatch(text, /Task Workflow:/);
+});
+
 test('runOperationSessionWorkflowLive bridges operation.read into resident dispatch and rereads the operation', async () => {
   const invocations = [];
   const result = await runOperationSessionWorkflowLive({
