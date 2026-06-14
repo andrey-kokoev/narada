@@ -72,6 +72,10 @@ export function formatRepositoryPublicationCloudflareGithubLiveSmokeText(result)
     `Authorities: request=${result.repository_publication_request_authority ?? 'unknown'} admission=${result.repository_publication_admission_authority ?? 'unknown'} executor=${result.repository_publication_executor_authority ?? 'unknown'}`,
     `Cloudflare Admission: ${result.direct_cloudflare_repository_mutation_admission ?? 'unknown'}`,
   ];
+  if (hasSiteId) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
+  }
   if (hasSiteId && result.repository_publication_request_id) {
     lines.push(`Request Review: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-request-id ${result.repository_publication_request_id} --operator-session-file <operator-session-file>`);
   }

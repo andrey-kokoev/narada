@@ -67,6 +67,8 @@ test('formatRepositoryPublicationCloudflareWorkflowLiveText renders direct reads
 
   assert.match(text, /^Repository Publication Cloudflare Workflow: ok/m);
   assert.match(text, /Execution: execution_1/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(text, /Request Review: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text/);
   assert.match(text, /Execution Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text/);
   assert.match(text, /Admission Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:admission:list:text/);
@@ -87,6 +89,8 @@ test('formatRepositoryPublicationCloudflareWorkflowLiveText suppresses downstrea
   assert.doesNotMatch(text, /Request Review:/);
   assert.doesNotMatch(text, /Execution Read:/);
   assert.doesNotMatch(text, /Admission Read:/);
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
 });
 
 test('runRepositoryPublicationCloudflareWorkflowLive runs execution then readback with shared ids', async () => {

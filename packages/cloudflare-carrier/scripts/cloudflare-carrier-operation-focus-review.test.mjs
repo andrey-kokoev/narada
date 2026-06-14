@@ -170,6 +170,8 @@ test('formatOperationFocusReviewText emits direct follow-on operation commands',
     },
   });
 
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.match(text, /Review List: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --operation operation_focus_review\.list --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
@@ -191,6 +193,8 @@ test('formatOperationFocusReviewText emits direct follow-on operation commands',
 
   assert.doesNotMatch(noWorker, /Operation Review:/);
   assert.doesNotMatch(noWorker, /Operation Next Workflow:/);
+  assert.doesNotMatch(noWorker, /Site Read:/);
+  assert.doesNotMatch(noWorker, /Site Next Workflow:/);
   assert.doesNotMatch(noWorker, /Review List:/);
 });
 

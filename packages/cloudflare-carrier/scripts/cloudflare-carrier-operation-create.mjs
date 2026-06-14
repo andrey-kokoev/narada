@@ -127,6 +127,10 @@ export function formatOperationCreateText(result) {
     `Name: ${summary.display_name ?? result?.params?.display_name ?? 'unknown'}`,
     `Kind: ${summary.operation_kind ?? result?.params?.operation_kind ?? 'unknown'}`,
     `Status: ${summary.status ?? result?.params?.status ?? 'unknown'}`,
+    ...(workerUrl && summary.site_id ? [
+      `Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`,
+      `Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-next`,
+    ] : []),
     ...(workerUrl && summary.site_id && summary.operation_id ? [
       `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`,
       `Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`,
