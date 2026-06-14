@@ -310,6 +310,34 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(siteListFocusText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.match(siteListFocusText, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity/);
 
+  const siteListContinuityReviewText = formatProductSurfaceText({
+    operation: 'site.list',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'site.list',
+      site_count: 2,
+      next_site_id: 'site_alpha',
+      next_health: 'attention',
+      next_action: 'focus_next_operation',
+      next_reason: 'operation_posture',
+      next_operation_id: 'operation_alpha',
+      next_operation_next_action: 'review_site_continuity_reconciliation_execution',
+      next_operation_reason: 'operation_operator_focus_needs_review',
+      next_operation_focus_kind: 'site_continuity_reconciliation_execution',
+      next_operation_focus_ref: 'site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:54:54.778Z:completed',
+      route_domain: 'site_posture',
+      route_command_state: 'site_posture_attention',
+      route_command_action: 'focus_next_site',
+      route_next_action: 'focus_next_site',
+      route_target: 'site_alpha',
+      route_status: 'needs_attention',
+      route_reason: 'operation_posture',
+    },
+  });
+  assert.match(siteListContinuityReviewText, /Candidate Operation Focus: kind=site_continuity_reconciliation_execution ref=site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:54:54.778Z:completed/);
+  assert.match(siteListContinuityReviewText, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:54:54.778Z:completed --operator-session-file <operator-session-file>/);
+
   const operationFallbackText = formatProductSurfaceText({
     operation: 'operation.read',
     worker_url: 'https://carrier.example.test',
@@ -1779,7 +1807,7 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     active_operation_id: 'operation_fixture',
     active_operation_next_action: 'review_site_continuity_reconciliation_execution',
     active_operation_workflow_reason: 'operation_operator_focus_needs_review',
-    active_operation_focus_kind: null,
+    active_operation_focus_kind: 'site_continuity_reconciliation_execution',
     active_operation_focus_ref: 'site-continuity-reconciliation-execution:site_fixture:2026-06-13T23:19:01.404Z:completed',
     health: 'attention',
     next_action: 'return_local_windows_continuity_packet',
@@ -1939,6 +1967,15 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
       focus_ref: 'site-continuity-reconciliation-execution:site_fixture:2026-06-13T21:59:01.308Z:completed',
     },
   }).next_action, 'review_site_continuity_reconciliation_execution');
+  assert.equal(summarizeProductSurface('operation.read', {
+    operation: { site_id: 'site_fixture', operation_id: 'operation_control', status: 'active' },
+    operation_lifecycle_status: { phase: 'inhabited', health: 'ready', next_action: 'monitor_operation', session_count: 1, task_count: 0 },
+    operation_workflow_route: {
+      next_action: 'review_site_continuity_reconciliation_execution',
+      reason: 'operation_operator_focus_needs_review',
+      focus_ref: 'site-continuity-reconciliation-execution:site_fixture:2026-06-13T21:59:01.308Z:completed',
+    },
+  }).workflow_focus_kind, 'site_continuity_reconciliation_execution');
 });
 test('formatProductSurfaceText surfaces site scope and site operation focus commands', () => {
   const siteReadScopeText = formatProductSurfaceText({
@@ -2007,7 +2044,7 @@ test('formatProductSurfaceText surfaces site scope and site operation focus comm
       active_operation_id: 'operation_alpha',
       active_operation_next_action: 'review_site_continuity_reconciliation_execution',
       active_operation_workflow_reason: 'operation_operator_focus_needs_review',
-      active_operation_focus_kind: null,
+      active_operation_focus_kind: 'site_continuity_reconciliation_execution',
       active_operation_focus_ref: 'site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:19:01.404Z:completed',
       health: 'attention',
       next_action: 'focus_next_operation',
@@ -2027,7 +2064,7 @@ test('formatProductSurfaceText surfaces site scope and site operation focus comm
     },
   });
   assert.match(siteReadContinuityReviewText, /Active Operation Route: operation=operation_alpha action=review_site_continuity_reconciliation_execution reason=operation_operator_focus_needs_review/);
-  assert.match(siteReadContinuityReviewText, /Active Operation Focus: kind=unknown ref=site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:19:01.404Z:completed/);
+  assert.match(siteReadContinuityReviewText, /Active Operation Focus: kind=site_continuity_reconciliation_execution ref=site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:19:01.404Z:completed/);
   assert.match(siteReadContinuityReviewText, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:19:01.404Z:completed --operator-session-file <operator-session-file>/);
 
   const siteReadContinuityRefreshText = formatProductSurfaceText({

@@ -144,6 +144,11 @@ export function summarizeProductSurface(operation, body, options = {}) {
   if (operation === 'site.list') {
     const overview = body?.site_product_overview ?? {};
     const sitePostureRoute = body?.site_posture_route ?? null;
+    const nextOperationFocusKind = normalizeWorkflowFocusKind(
+      overview.next_operation_next_action ?? null,
+      overview.next_operation_focus_kind ?? null,
+      overview.next_operation_focus_ref ?? null,
+    );
     return {
       operation,
       site_count: overview.site_count ?? body?.sites?.length ?? 0,
@@ -154,7 +159,7 @@ export function summarizeProductSurface(operation, body, options = {}) {
       next_operation_id: overview.next_operation_id ?? null,
       next_operation_next_action: overview.next_operation_next_action ?? null,
       next_operation_reason: overview.next_operation_reason ?? null,
-      next_operation_focus_kind: overview.next_operation_focus_kind ?? null,
+      next_operation_focus_kind: nextOperationFocusKind,
       next_operation_focus_ref: overview.next_operation_focus_ref ?? null,
       health_counts: overview.health_counts ?? null,
       route_domain: sitePostureRoute?.domain ?? null,
@@ -169,14 +174,20 @@ export function summarizeProductSurface(operation, body, options = {}) {
   if (operation === 'site.read') {
     const status = body?.site_product_status ?? body?.product_status ?? null;
     const focusedWorkflowRoute = body?.focused_operation_lifecycle?.workflow_route ?? null;
+    const activeOperationNextAction = focusedWorkflowRoute?.next_action ?? null;
+    const activeOperationFocusKind = normalizeWorkflowFocusKind(
+      activeOperationNextAction,
+      focusedWorkflowRoute?.focus_kind ?? null,
+      focusedWorkflowRoute?.focus_ref ?? focusedWorkflowRoute?.target ?? null,
+    );
     return {
       operation,
       site_id: body?.site?.site_id ?? body?.site_id ?? status?.site_id ?? null,
       display_name: body?.site?.display_name ?? null,
       active_operation_id: body?.focused_operation_lifecycle?.operation_id ?? body?.operation?.operation_id ?? null,
-      active_operation_next_action: focusedWorkflowRoute?.next_action ?? null,
+      active_operation_next_action: activeOperationNextAction,
       active_operation_workflow_reason: focusedWorkflowRoute?.reason ?? null,
-      active_operation_focus_kind: focusedWorkflowRoute?.focus_kind ?? null,
+      active_operation_focus_kind: activeOperationFocusKind,
       active_operation_focus_ref: focusedWorkflowRoute?.focus_ref ?? focusedWorkflowRoute?.target ?? null,
       health: status?.health ?? null,
       next_action: status?.next_action ?? null,
@@ -247,6 +258,12 @@ export function summarizeProductSurface(operation, body, options = {}) {
     const recoveryGaps = Array.isArray(recoveryPosture?.recovery_gaps) ? recoveryPosture.recovery_gaps : [];
     const lifecycleNextAction = lifecycle?.next_action ?? body?.operation_product_surface?.next_action ?? null;
     const workflowNextAction = workflowRoute?.next_action ?? null;
+    const workflowFocusRef = workflowRoute?.focus_ref ?? workflowRoute?.target ?? null;
+    const workflowFocusKind = normalizeWorkflowFocusKind(
+      workflowNextAction,
+      workflowRoute?.focus_kind ?? null,
+      workflowFocusRef,
+    );
     const nextAction = lifecycleNextAction && lifecycleNextAction !== 'monitor_operation'
       ? lifecycleNextAction
       : (workflowNextAction ?? lifecycleNextAction);
@@ -267,8 +284,8 @@ export function summarizeProductSurface(operation, body, options = {}) {
       task_count: lifecycle?.task_count ?? body?.operation_product_surface?.task_count ?? 0,
       workflow_next_action: workflowNextAction,
       workflow_reason: workflowRoute?.reason ?? null,
-      workflow_focus_kind: workflowRoute?.focus_kind ?? null,
-      workflow_focus_ref: workflowRoute?.focus_ref ?? workflowRoute?.target ?? null,
+      workflow_focus_kind: workflowFocusKind,
+      workflow_focus_ref: workflowFocusRef,
       workflow_action_command_kind: workflowRoute?.action_command_kind ?? null,
       workflow_action_command: workflowRoute?.action_command ?? null,
       workflow_continuity_direction_state: workflowRoute?.continuity_direction_state ?? null,
@@ -290,6 +307,17 @@ export function summarizeProductSurface(operation, body, options = {}) {
     };
   }
   return { operation };
+}
+
+function normalizeWorkflowFocusKind(nextAction, focusKind, focusRef) {
+  if (focusKind) return focusKind;
+  if (
+    nextAction === 'review_site_continuity_reconciliation_execution'
+    && focusRef
+  ) {
+    return 'site_continuity_reconciliation_execution';
+  }
+  return null;
 }
 
 export function summarizeProductReadFailure(operation, body = {}, params = {}) {
