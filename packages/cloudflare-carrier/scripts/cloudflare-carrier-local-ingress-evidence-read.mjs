@@ -62,6 +62,7 @@ export function summarizeLocalIngressEvidence(body = {}, options = {}) {
     authority_partition: body?.authority_partition ?? null,
     focused_evidence_id: latestEvidence?.local_ingress_evidence_id ?? null,
     focused_request_id: latestEvidence?.local_ingress_request_id ?? null,
+    focused_operation_id: latestEvidence?.operation_id ?? null,
     focused_local_execution_id: latestEvidence?.local_execution_id ?? null,
     focused_status: latestEvidence?.local_execution_status ?? null,
     focused_executor_authority: latestEvidence?.local_executor_authority ?? null,
@@ -107,6 +108,9 @@ export function formatLocalIngressEvidenceReadText(result) {
   }
   if (summary.focused_request_id) {
     lines.push(`Request Read: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:request:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --local-ingress-request-id ${summary.focused_request_id} --operator-session-file <operator-session-file>`);
+  }
+  if (summary.site_id && summary.focused_operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.focused_operation_id} --operator-session-file <operator-session-file>`);
   }
   if (summary.focused_recorded_at) {
     lines.push(`Focused Evidence: recorded=${summary.focused_recorded_at}`);

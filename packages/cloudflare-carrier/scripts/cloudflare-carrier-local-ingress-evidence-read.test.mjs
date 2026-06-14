@@ -141,6 +141,7 @@ test('formatLocalIngressEvidenceReadText prints local ingress evidence summary',
       focused_evidence_id: 'local_ingress_evidence_alpha',
       focused_status: 'completed',
       focused_request_id: 'local_ingress_request_alpha',
+      focused_operation_id: 'operation_site_alpha',
       focused_local_execution_id: 'windows_execution_alpha',
       focused_executor_authority: 'windows_local_ingress_executor',
       focused_windows_admission_action: 'admit',
@@ -174,5 +175,6 @@ test('formatLocalIngressEvidenceReadText prints local ingress evidence summary',
   assert.match(text, /Current Posture: windows_local_ingress_executed_cloudflare_recorded_evidence/);
   assert.match(text, /Admissions: windows=admit \/ local_ingress_execution_completed local_filesystem_mutation=admitted_by_windows_local_ingress/);
   assert.match(text, /Request Read: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --local-ingress-request-id local_ingress_request_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_site_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Focused Evidence: recorded=2026-06-13T04:31:00.000Z/);
 });
