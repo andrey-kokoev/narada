@@ -122,7 +122,6 @@ test('createTaskFromDirectiveIntent returns existing task when directive is alre
   assert.equal(result.mode, 'existing_task');
   assert.equal(result.existing_task_id, 'task_existing');
 });
-
 test('formatTaskLifecycleCreateFromDirectiveIntentText prints directive task create summary', () => {
   const text = formatTaskLifecycleCreateFromDirectiveIntentText({
     worker_url: 'https://carrier.example.test',
@@ -137,4 +136,8 @@ test('formatTaskLifecycleCreateFromDirectiveIntentText prints directive task cre
 
   assert.match(text, /Task Lifecycle Create From Directive Intent: ok/);
   assert.match(text, /Created Task: task_alpha/);
+  assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id task_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id task_alpha --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
 });

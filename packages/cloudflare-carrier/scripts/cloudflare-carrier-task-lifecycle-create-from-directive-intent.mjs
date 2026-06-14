@@ -107,6 +107,7 @@ export function selectDirectiveIntentWithoutTask(operationReadBody = {}) {
 }
 
 export function formatTaskLifecycleCreateFromDirectiveIntentText(result) {
+  const taskId = result?.existing_task_id ?? result?.created_task_id ?? null;
   const lines = [
     'Task Lifecycle Create From Directive Intent: ok',
     `Worker: ${result?.worker_url ?? 'unknown'}`,
@@ -119,8 +120,17 @@ export function formatTaskLifecycleCreateFromDirectiveIntentText(result) {
   ];
   if (result?.existing_task_id) lines.push(`Existing Task: ${result.existing_task_id}`);
   if (result?.created_task_id) lines.push(`Created Task: ${result.created_task_id}`);
+  if (result?.site_id && taskId) {
+    lines.push(`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result.worker_url ?? '<worker-url>'} --site ${result.site_id} --task-id ${taskId} --operator-session-file <operator-session-file>`);
+    lines.push(`Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${result.worker_url ?? '<worker-url>'} --site ${result.site_id} --task-id ${taskId} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`);
+  }
+  if (result?.site_id && result?.operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url ?? '<worker-url>'} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url ?? '<worker-url>'} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+  }
   return `${lines.join('\n')}\n`;
 }
+
 
 function option(args, name) {
   const index = args.indexOf(name);
