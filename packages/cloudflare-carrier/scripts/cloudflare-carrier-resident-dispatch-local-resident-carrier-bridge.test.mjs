@@ -162,4 +162,6 @@ test('formatResidentDispatchLocalResidentCarrierBridgeText prints key posture', 
   assert.match(text, /Bridge: local_resident_carrier_bridge_alpha/);
   assert.match(text, /Session Replay Admission: admitted_by_cloudflare_operator/);
   assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example --site site_live_smoke --carrier-session-id cloudflare-bridged:site_live_smoke:operation_live_alpha:1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Resident Dispatch Windows Fallback Evidence Review: pnpm --filter @narada2\/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:review:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --operator-session-file <operator-session-file>/);
 });

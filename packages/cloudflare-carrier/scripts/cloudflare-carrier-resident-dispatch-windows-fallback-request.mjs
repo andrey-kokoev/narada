@@ -162,6 +162,9 @@ export function formatResidentDispatchWindowsFallbackRequestText(result = {}) {
   if (result.site_id && summary.carrier_session_id) {
     lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`);
   }
+  if (result.site_id && result.operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`);
+  }
   return lines.join('\n');
 }
 

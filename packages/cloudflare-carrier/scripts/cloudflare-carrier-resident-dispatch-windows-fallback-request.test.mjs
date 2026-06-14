@@ -168,4 +168,5 @@ test('formatResidentDispatchWindowsFallbackRequestText prints key posture', () =
   assert.match(text, /Fallback Request: resident_fallback_request_alpha/);
   assert.match(text, /Execution Admission: pending_windows_admission/);
   assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example --site site_live_smoke --carrier-session-id carrier_session_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --operator-session-file <operator-session-file>/);
 });

@@ -144,7 +144,7 @@ export function summarizeResidentDispatchWindowsFallbackEvidence(operation, body
 export function formatResidentDispatchWindowsFallbackEvidenceText(result = {}) {
   const summary = result.summary ?? {};
   const response = result.response ?? {};
-  return [
+  const lines = [
     'Resident Dispatch Windows Fallback Evidence',
     `Worker: ${result.worker_url ?? 'unknown'}`,
     `Auth: ${result.auth_source ?? 'unknown'}`,
@@ -164,7 +164,14 @@ export function formatResidentDispatchWindowsFallbackEvidenceText(result = {}) {
     `Resident Session Ref: ${summary.local_resident_session_ref ?? 'unknown'}`,
     `Executor Authority: ${summary.local_executor_authority ?? 'unknown'}`,
     ...(response?.code ? [`Code: ${response.code}`] : []),
-  ].join('\n');
+  ];
+  if (result.site_id && result.operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`);
+  }
+  if (result.site_id && result.operation_id && summary.fallback_evidence_id) {
+    lines.push(`Resident Dispatch Windows Fallback Evidence Review: pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:review:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`);
+  }
+  return lines.join('\n');
 }
 
 async function main() {

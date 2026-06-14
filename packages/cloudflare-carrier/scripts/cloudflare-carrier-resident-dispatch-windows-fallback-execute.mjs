@@ -151,7 +151,7 @@ export async function runResidentDispatchWindowsFallbackExecute(config, fetchImp
 }
 
 export function formatResidentDispatchWindowsFallbackExecuteText(result = {}) {
-  return [
+  const lines = [
     'Resident Dispatch Windows Fallback Execute',
     `Worker: ${result.worker_url ?? 'unknown'}`,
     `Auth: ${result.auth_source ?? 'unknown'}`,
@@ -168,7 +168,14 @@ export function formatResidentDispatchWindowsFallbackExecuteText(result = {}) {
     `Session Start Admission: ${result.summary?.local_session_start_admission ?? 'unknown'}`,
     `Direct Cloudflare Session Start: ${result.summary?.direct_cloudflare_session_start_admission ?? 'unknown'}`,
     `Executor Authority: ${result.summary?.local_executor_authority ?? 'unknown'}`,
-  ].join('\n');
+  ];
+  if (result.site_id && result.operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`);
+  }
+  if (result.site_id && result.operation_id && result.fallback_evidence_id) {
+    lines.push(`Resident Dispatch Windows Fallback Evidence Review: pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:review:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`);
+  }
+  return lines.join('\n');
 }
 
 async function main() {

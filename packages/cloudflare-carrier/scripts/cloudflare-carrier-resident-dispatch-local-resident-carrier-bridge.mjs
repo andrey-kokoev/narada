@@ -179,6 +179,7 @@ export function summarizeResidentDispatchLocalResidentCarrierBridge(operation, b
 export function formatResidentDispatchLocalResidentCarrierBridgeText(result = {}) {
   const summary = result.summary ?? {};
   const response = result.response ?? {};
+  const operationId = summary.operation_id ?? result.operation_id ?? null;
   const lines = [
     'Local Resident Carrier Bridge',
     `Worker: ${result.worker_url ?? 'unknown'}`,
@@ -202,6 +203,12 @@ export function formatResidentDispatchLocalResidentCarrierBridgeText(result = {}
   ];
   if (result.site_id && summary.cloudflare_carrier_session_id) {
     lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --carrier-session-id ${summary.cloudflare_carrier_session_id} --operator-session-file <operator-session-file>`);
+  }
+  if (result.site_id && operationId) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --operation-id ${operationId} --operator-session-file <operator-session-file>`);
+  }
+  if (result.site_id && operationId && summary.fallback_evidence_id) {
+    lines.push(`Resident Dispatch Windows Fallback Evidence Review: pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:review:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --operation-id ${operationId} --operator-session-file <operator-session-file>`);
   }
   return lines.join('\n');
 }
