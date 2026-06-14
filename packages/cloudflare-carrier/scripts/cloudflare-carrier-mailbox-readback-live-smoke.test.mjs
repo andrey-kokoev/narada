@@ -54,6 +54,8 @@ test('formatMailboxReadbackLiveSmokeText emits downstream reads', () => {
 
   assert.match(text, /Mailbox Readback Smoke: ok/);
   assert.match(text, /Status Shadow: count=2/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
   assert.match(text, /Status Shadow Read: pnpm --filter @narada2\/cloudflare-carrier mailbox:status-shadow-smoke:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation operation_alpha --operator-session-file <operator-session-file>/);
@@ -61,6 +63,30 @@ test('formatMailboxReadbackLiveSmokeText emits downstream reads', () => {
   assert.match(text, /Draft Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref draft_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Send Accepted Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-accepted:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref accepted_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Send Confirmation Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-confirmation:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref confirmation_alpha --operator-session-file <operator-session-file>/);
+});
+
+test('formatMailboxReadbackLiveSmokeText suppresses worker-scoped handoffs without worker url', () => {
+  const text = formatMailboxReadbackLiveSmokeText({
+    status: 'ok',
+    worker_url: '',
+    site_id: 'site_alpha',
+    operation_id: 'operation_alpha',
+    mailbox_draft_reply_proposal_id: 'proposal_alpha',
+    mailbox_outlook_draft_create_id: 'draft_alpha',
+    mailbox_send_accepted_id: 'accepted_alpha',
+    mailbox_send_confirmation_id: 'confirmation_alpha',
+  });
+
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /Status Source Read:/);
+  assert.doesNotMatch(text, /Status Shadow Read:/);
+  assert.doesNotMatch(text, /Draft Proposal Read:/);
+  assert.doesNotMatch(text, /Draft Read:/);
+  assert.doesNotMatch(text, /Send Accepted Read:/);
+  assert.doesNotMatch(text, /Send Confirmation Read:/);
 });
 
 test('runMailboxReadbackLiveSmoke returns summarized mailbox readback state', async () => {

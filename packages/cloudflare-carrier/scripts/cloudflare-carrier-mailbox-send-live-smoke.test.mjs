@@ -54,11 +54,35 @@ test('formatMailboxSendLiveSmokeText emits downstream reads', () => {
 
   assert.match(text, /Mailbox Send Smoke: ok/);
   assert.match(text, /Proposal: proposal_alpha/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
   assert.match(text, /Proposal Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref proposal_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Draft Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text/);
   assert.match(text, /Send Accepted Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-accepted:text/);
   assert.match(text, /Send Confirmation Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-confirmation:text/);
+});
+
+test('formatMailboxSendLiveSmokeText suppresses worker-scoped handoffs without worker url', () => {
+  const text = formatMailboxSendLiveSmokeText({
+    status: 'ok',
+    worker_url: '',
+    site_id: 'site_alpha',
+    operation_id: 'operation_alpha',
+    proposal_id: 'proposal_alpha',
+    draft_create_id: 'draft_alpha',
+    send_accepted_id: 'send_alpha',
+    send_confirmation_id: 'confirm_alpha',
+  });
+
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /Proposal Read:/);
+  assert.doesNotMatch(text, /Draft Read:/);
+  assert.doesNotMatch(text, /Send Accepted Read:/);
+  assert.doesNotMatch(text, /Send Confirmation Read:/);
 });
 
 test('runMailboxSendLiveSmoke returns summarized send state', async () => {

@@ -77,6 +77,9 @@ export function parseMailboxSendLiveSmokeArgs(
 }
 
 export function formatMailboxSendLiveSmokeText(result) {
+  const workerUrl = typeof result.worker_url === 'string' && result.worker_url.length > 0 ? result.worker_url : null;
+  const siteId = typeof result.site_id === 'string' && result.site_id.length > 0 ? result.site_id : null;
+  const operationId = typeof result.operation_id === 'string' && result.operation_id.length > 0 ? result.operation_id : null;
   const lines = [
     `Mailbox Send Smoke: ${result.status}`,
     `Worker: ${result.worker_url}`,
@@ -91,13 +94,19 @@ export function formatMailboxSendLiveSmokeText(result) {
     `Send Confirmation: ${result.send_confirmation_id} authority=${result.mailbox_send_confirmation_authority ?? 'unknown'} delivery_admission=${result.delivery_confirmation_admission ?? 'unknown'}`,
     `Mutation Admission: ${result.mailbox_mutation_admission ?? 'unknown'}`,
     `Counts: accepted=${result.mailbox_send_accepted_count ?? 0} confirmations=${result.mailbox_send_confirmation_count ?? 0} partition=${result.mailbox_outlook_draft_create_authority_partition ?? 'unknown'}`,
-    `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
-    `Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`,
-    `Proposal Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${result.worker_url} --site ${result.site_id} --focus-ref ${result.proposal_id} --operator-session-file <operator-session-file>`,
-    `Draft Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${result.worker_url} --site ${result.site_id} --focus-ref ${result.draft_create_id} --operator-session-file <operator-session-file>`,
-    `Send Accepted Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${result.worker_url} --site ${result.site_id} --focus-ref ${result.send_accepted_id} --operator-session-file <operator-session-file>`,
-    `Send Confirmation Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-confirmation:text -- --url ${result.worker_url} --site ${result.site_id} --focus-ref ${result.send_confirmation_id} --operator-session-file <operator-session-file>`,
   ];
+  if (workerUrl && siteId) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file> --execute-site-next`);
+    lines.push(`Proposal Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${workerUrl} --site ${siteId} --focus-ref ${result.proposal_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Draft Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${workerUrl} --site ${siteId} --focus-ref ${result.draft_create_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Send Accepted Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${workerUrl} --site ${siteId} --focus-ref ${result.send_accepted_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Send Confirmation Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-confirmation:text -- --url ${workerUrl} --site ${siteId} --focus-ref ${result.send_confirmation_id} --operator-session-file <operator-session-file>`);
+  }
+  if (workerUrl && siteId && operationId) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file> --execute-operation-next`);
+  }
   return `${lines.join('\n')}\n`;
 }
 
