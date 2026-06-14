@@ -62,6 +62,7 @@ export function summarizeSiteFileMaterialization(body = {}, options = {}) {
     authority_partition: body?.authority_partition ?? null,
     latest_materialization_id: latest?.materialization_id ?? null,
     latest_proposal_id: latest?.proposal_id ?? latest?.record?.proposal_id ?? null,
+    latest_operation_id: latest?.operation_id ?? latest?.record?.operation_id ?? null,
     latest_file_path: latest?.file_path ?? latest?.record?.file_path ?? null,
     latest_write_effect: latest?.write_effect ?? latest?.record?.write_effect ?? null,
     latest_materialization_posture: latest?.materialization_posture ?? latest?.record?.materialization_posture ?? null,
@@ -101,6 +102,9 @@ export function formatSiteFileMaterializationReadText(result) {
   }
   if (summary.site_id && summary.latest_proposal_id) {
     lines.push(`Proposal Review: pnpm --filter @narada2/cloudflare-carrier product:site-file-change:proposal:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --focus-ref ${summary.latest_proposal_id} --operator-session-file <operator-session-file>`);
+  }
+  if (summary.site_id && summary.latest_operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file>`);
   }
   if (summary.latest_recorded_at) lines.push(`${recordedLabel}: ${summary.latest_recorded_at}`);
   return `${lines.join('\n')}\n`;

@@ -49,6 +49,7 @@ test('readSiteFileMaterialization returns a structured read result', async () =>
           materializations: [{
             materialization_id: 'materialization-1',
             proposal_id: 'proposal-9',
+            operation_id: 'operation-9',
             file_path: 'docs/architecture/cloudflare-carrier/target.md',
             write_effect: 'cloudflare_site_file_materialization_record',
             materialization_posture: 'recorded',
@@ -61,6 +62,7 @@ test('readSiteFileMaterialization returns a structured read result', async () =>
 
   assert.equal(result.schema, 'narada.cloudflare_carrier.site_file_materialization_read.v1');
   assert.equal(result.summary.latest_materialization_id, 'materialization-1');
+  assert.equal(result.summary.latest_operation_id, 'operation-9');
   assert.equal(result.summary.latest_file_path, 'docs/architecture/cloudflare-carrier/target.md');
 });
 
@@ -141,6 +143,7 @@ test('formatSiteFileMaterializationReadText prints the key review facts', () => 
       authority_partition: 'site_file_materialization_cloudflare_owned_windows_filesystem_and_publication_not_admitted',
       latest_materialization_id: 'materialization-1',
       latest_proposal_id: 'proposal-9',
+      latest_operation_id: 'operation-9',
       latest_file_path: 'docs/architecture/cloudflare-carrier/target.md',
       latest_write_effect: 'cloudflare_site_file_materialization_record',
       latest_materialization_posture: 'recorded',
@@ -153,6 +156,7 @@ test('formatSiteFileMaterializationReadText prints the key review facts', () => 
   assert.match(text, /Latest Materialization: materialization-1 proposal=proposal-9 file=docs\/architecture\/cloudflare-carrier\/target.md effect=cloudflare_site_file_materialization_record posture=recorded/);
   assert.match(text, /Materialization Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file:materialization:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --site-file-materialization-id materialization-1 --operator-session-file <operator-session-file>/);
   assert.match(text, /Proposal Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file-change:proposal:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref proposal-9 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-9 --operator-session-file <operator-session-file>/);
 });
 
 test('formatSiteFileMaterializationReadText prints focused wording for direct historical reads', () => {
@@ -168,6 +172,7 @@ test('formatSiteFileMaterializationReadText prints focused wording for direct hi
       cloudflare_site_file_materialization_admission: 'admitted',
       latest_materialization_id: 'materialization-9',
       latest_proposal_id: 'proposal-9',
+      latest_operation_id: 'operation-9',
       latest_file_path: 'docs/focused.md',
       latest_materialization_posture: 'recorded',
       latest_recorded_at: '2026-06-12T01:00:00.000Z',
@@ -178,5 +183,6 @@ test('formatSiteFileMaterializationReadText prints focused wording for direct hi
   assert.match(text, /Focused Materialization: materialization-9 proposal=proposal-9 file=docs\/focused.md posture=recorded/);
   assert.match(text, /Materialization Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file:materialization:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --site-file-materialization-id materialization-9 --operator-session-file <operator-session-file>/);
   assert.match(text, /Proposal Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file-change:proposal:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref proposal-9 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-9 --operator-session-file <operator-session-file>/);
   assert.match(text, /Focused Recorded: 2026-06-12T01:00:00.000Z/);
 });
