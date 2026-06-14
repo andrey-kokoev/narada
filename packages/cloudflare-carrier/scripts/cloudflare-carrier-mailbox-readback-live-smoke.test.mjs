@@ -32,6 +32,7 @@ test('formatMailboxReadbackLiveSmokeText emits downstream reads', () => {
     site_id: 'site_alpha',
     operation_id: 'operation_alpha',
     mailbox_status_source_read_count: 1,
+    mailbox_status_shadow_read_count: 2,
     mailbox_status_authority: 'cloudflare_graph_mailbox_status_source',
     mailbox_draft_reply_proposal_count: 2,
     mailbox_draft_reply_proposal_authority: 'cloudflare_carrier_site',
@@ -52,8 +53,10 @@ test('formatMailboxReadbackLiveSmokeText emits downstream reads', () => {
   });
 
   assert.match(text, /Mailbox Readback Smoke: ok/);
+  assert.match(text, /Status Shadow: count=2/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
+  assert.match(text, /Status Shadow Read: pnpm --filter @narada2\/cloudflare-carrier mailbox:status-shadow-smoke:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Draft Proposal Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref proposal_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Draft Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref draft_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Send Accepted Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-accepted:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref accepted_alpha --operator-session-file <operator-session-file>/);
@@ -90,8 +93,10 @@ test('runMailboxReadbackLiveSmoke returns summarized mailbox readback state', as
           mailbox_outlook_draft_creates: [{ draft_create_id: 'draft_alpha' }],
           mailbox_send_accepted_records: [{ send_accepted_id: 'accepted_alpha' }],
           mailbox_send_confirmations: [{ send_confirmation_id: 'confirmation_alpha' }],
+          mailbox_status_shadow_reads: [{ read_id: 'shadow_alpha' }],
           operation_product_surface: {
             mailbox_status_source_read_count: 1,
+            mailbox_status_shadow_read_count: 1,
             mailbox_status_authority: 'cloudflare_graph_mailbox_status_source',
             mailbox_authority_partition: 'mailbox_status_source_read_cloudflare_owned_send_and_mutation_not_admitted',
             mailbox_draft_reply_proposal_count: 0,
@@ -121,6 +126,7 @@ test('runMailboxReadbackLiveSmoke returns summarized mailbox readback state', as
   assert.equal(result.status, 'ok');
   assert.equal(result.auth_source, 'operator-session-cookie');
   assert.equal(result.mailbox_status_source_read_count, 1);
+  assert.equal(result.mailbox_status_shadow_read_count, 1);
   assert.equal(result.mailbox_draft_reply_proposal_id, 'proposal_alpha');
   assert.equal(result.mailbox_outlook_draft_create_id, 'draft_alpha');
   assert.equal(result.mailbox_send_accepted_id, 'accepted_alpha');

@@ -57,6 +57,7 @@ export function formatMailboxReadbackLiveSmokeText(result) {
     `Site: ${result.site_id}`,
     `Operation: ${result.operation_id}`,
     `Status Source: count=${result.mailbox_status_source_read_count ?? 0} authority=${result.mailbox_status_authority ?? 'unknown'}`,
+    `Status Shadow: count=${result.mailbox_status_shadow_read_count ?? 0}`,
     `Draft Reply Proposals: count=${result.mailbox_draft_reply_proposal_count ?? 0} authority=${result.mailbox_draft_reply_proposal_authority ?? 'unknown'}`,
     `Outlook Draft Creates: count=${result.mailbox_outlook_draft_create_count ?? 0} authority=${result.mailbox_outlook_draft_create_authority ?? 'unknown'} admission=${result.mailbox_outlook_draft_create_admission ?? 'unknown'}`,
     `Send Accepted: count=${result.mailbox_send_accepted_count ?? 0} authority=${result.mailbox_send_authority ?? 'unknown'} admission=${result.mailbox_send_admission ?? 'unknown'}`,
@@ -65,6 +66,7 @@ export function formatMailboxReadbackLiveSmokeText(result) {
     `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
     `Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`,
     `Status Source Read: pnpm --filter @narada2/cloudflare-carrier mailbox:status-source-smoke:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation ${result.operation_id} --operator-session-file <operator-session-file>`,
+    `Status Shadow Read: pnpm --filter @narada2/cloudflare-carrier mailbox:status-shadow-smoke:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation ${result.operation_id} --operator-session-file <operator-session-file>`,
     `Draft Proposal Read: ${draftProposalCommand}`,
     `Draft Read: ${draftReadCommand}`,
     `Send Accepted Read: ${sendAcceptedReadCommand}`,
@@ -106,6 +108,7 @@ export async function runMailboxReadbackLiveSmoke(config, { fetchImpl = fetch } 
       mailbox_outlook_draft_create_limit: 20,
       mailbox_send_accepted_limit: 20,
       mailbox_send_confirmation_limit: 20,
+      mailbox_status_shadow_limit: 20,
     },
   }, fetchImpl);
   assert.equal(operationRead.http_status, 200, JSON.stringify(operationRead.body));
@@ -113,7 +116,9 @@ export async function runMailboxReadbackLiveSmoke(config, { fetchImpl = fetch } 
   assert.equal(Array.isArray(operationRead.body.mailbox_outlook_draft_creates), true);
   assert.equal(Array.isArray(operationRead.body.mailbox_send_accepted_records), true);
   assert.equal(Array.isArray(operationRead.body.mailbox_send_confirmations), true);
+  assert.equal(Array.isArray(operationRead.body.mailbox_status_shadow_reads), true);
   assert.equal(typeof operationRead.body.operation_product_surface?.mailbox_status_source_read_count, 'number');
+  assert.equal(typeof operationRead.body.operation_product_surface?.mailbox_status_shadow_read_count, 'number');
   assert.equal(typeof operationRead.body.operation_product_surface?.mailbox_draft_reply_proposal_count, 'number');
   assert.equal(typeof operationRead.body.operation_product_surface?.mailbox_outlook_draft_create_count, 'number');
   assert.equal(typeof operationRead.body.operation_product_surface?.mailbox_send_accepted_count, 'number');
@@ -161,6 +166,7 @@ export async function runMailboxReadbackLiveSmoke(config, { fetchImpl = fetch } 
     site_id: config.siteId,
     operation_id: config.operationId,
     mailbox_status_source_read_count: operationRead.body.operation_product_surface.mailbox_status_source_read_count,
+    mailbox_status_shadow_read_count: operationRead.body.operation_product_surface.mailbox_status_shadow_read_count,
     mailbox_status_authority: operationRead.body.operation_product_surface.mailbox_status_authority,
     mailbox_authority_partition: operationRead.body.operation_product_surface.mailbox_authority_partition,
     mailbox_draft_reply_proposal_count: operationRead.body.operation_product_surface.mailbox_draft_reply_proposal_count,
