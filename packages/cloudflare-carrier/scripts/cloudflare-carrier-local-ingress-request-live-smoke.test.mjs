@@ -37,6 +37,7 @@ test('formatLocalIngressRequestLiveSmokeText emits downstream reads', () => {
   assert.match(text, /Local Ingress Request Smoke: ok/);
   assert.match(text, /Request Review: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:request:review:text/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
 });
 
 test('runLocalIngressRequestLiveSmoke returns summarized local-ingress state', async () => {

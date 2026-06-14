@@ -58,6 +58,7 @@ export function formatLocalIngressRequestLiveSmokeText(result) {
     `Partition: ${result.authority_partition ?? 'unknown'}`,
     `Request Review: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:request:review:text -- --url ${result.worker_url} --site ${result.site_id} --local-ingress-request-id ${result.local_ingress_request_id} --operator-session-file <operator-session-file>`,
     `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
+    `Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`,
   ];
   return `${lines.join('\n')}\n`;
 }
