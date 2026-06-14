@@ -69,6 +69,10 @@ export function formatSiteNextWorkflowLiveText(result) {
   if (result.worker_url && result.selected_site_id) {
     lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operator-session-file <operator-session-file>`);
     lines.push(`Site Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live:text -- --url ${result.worker_url} --site ${result.selected_site_id}${result.delegated_operation_id ? ` --operation-id ${result.delegated_operation_id}` : ''} --operator-session-file <operator-session-file> --execute-site-action`);
+    if (result.delegated_operation_action === 'refresh_site_continuity_loop' || result.delegated_operation_action === 'review_site_continuity_reconciliation_execution') {
+      lines.push(`Posture Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:posture:coherence:live:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operator-session-file <operator-session-file>`);
+      lines.push(`Durability Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operator-session-file <operator-session-file>`);
+    }
   }
   if (result.worker_url && result.delegated_operation_id && result.selected_site_id) {
     lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operation-id ${result.delegated_operation_id} --operator-session-file <operator-session-file>`);
