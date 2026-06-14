@@ -641,8 +641,15 @@ test('site continuity scheduler text summary surfaces local and inbound continui
       repoRoot: root,
       artifactDirectory,
       configuredSites: 'site_synced,site_missing',
+      projectionWorkerUrl: 'https://carrier.example',
+      operatorSessionFile: 'D:\\code\\narada\\.narada\\auth\\cloudflare-operator-session.json',
       now: () => '2026-06-11T10:31:00.000Z',
     });
+    plan.operator_next_action = 'focus_next_site';
+    plan.operator_next_target_site_id = 'site_missing';
+    plan.operator_next_reason = 'operation_posture';
+    plan.cloudflare_operation_next_operation_id = 'operation_site_missing_control';
+    plan.cloudflare_operation_next_action = 'refresh_site_continuity_loop';
     plan.scheduler_task_readback = {
       hidden_wrapper_readback: { status: 'matches_plan', path: 'hidden.vbs', embeds_credentials: false },
     };
@@ -655,6 +662,10 @@ test('site continuity scheduler text summary surfaces local and inbound continui
     assert.match(text, /Hidden Wrapper: matches_plan/);
     assert.match(text, /Local Sync: needs_attention \(1\)/);
     assert.match(text, /Local Inbound: needs_attention \(1\)/);
+    assert.match(text, /Site List: pnpm --filter @narada2\/cloudflare-carrier product:site:list:text -- --url https:\/\/carrier\.example --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json/);
+    assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json --site site_missing/);
+    assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json --site site_missing --operation-id operation_site_missing_control/);
+    assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json --execute-site-next/);
     assert.match(text, /- site_missing: sync=needs_attention inbound=needs_attention/);
     assert.match(text, /- site_synced: sync=synced inbound=synced/);
   } finally {
@@ -2529,11 +2540,18 @@ test('site continuity scheduler CLI emits status without Cloudflare access', asy
 });
 
 test('site continuity scheduler CLI emits operator text status when requested', async () => {
-  const result = await execFile(process.execPath, [SCRIPT_PATH, '--action', 'status', '--format', 'text'], { timeout: 30000, windowsHide: true });
+  const result = await execFile(process.execPath, [
+    SCRIPT_PATH,
+    '--action', 'status',
+    '--format', 'text',
+    '--url', 'https://carrier.example',
+    '--operator-session-file', 'D:\\code\\narada\\.narada\\auth\\cloudflare-operator-session.json',
+  ], { timeout: 30000, windowsHide: true });
 
   assert.match(result.stdout, /^Site Continuity\n/);
   assert.match(result.stdout, /Action: status/);
   assert.match(result.stdout, /Plan: status_only_no_cloudflare_access/);
+  assert.match(result.stdout, /Site List: pnpm --filter @narada2\/cloudflare-carrier product:site:list:text -- --url https:\/\/carrier\.example --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json/);
   assert.doesNotMatch(result.stdout, /^\{/);
 });
 

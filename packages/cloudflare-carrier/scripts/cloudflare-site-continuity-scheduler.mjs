@@ -49,6 +49,8 @@ export function buildSiteContinuitySchedulerPlan({
   sitesFilePath = process.env.NARADA_SITE_CONTINUITY_SITES_FILE ?? null,
   siteRegistryProjectionPath = process.env.NARADA_CLOUDFLARE_SITE_REGISTRY_PROJECTION ?? '.narada/site-registry/cloudflare-sites.json',
   maxArtifactAgeMinutes = process.env.NARADA_SITE_CONTINUITY_MAX_ARTIFACT_AGE_MINUTES ?? DEFAULT_MAX_SYNC_ARTIFACT_AGE_MINUTES,
+  projectionWorkerUrl = null,
+  operatorSessionFile = null,
   nodeCommand = resolveDefaultNodeCommand(),
   hiddenWrapperPath = null,
   now = () => new Date().toISOString(),
@@ -118,6 +120,8 @@ export function buildSiteContinuitySchedulerPlan({
     site_continuity_binding_registry_path: effectiveSiteContinuityBindingRegistryPath,
     sites_file_path: effectiveSitesFilePath,
     site_registry_projection_path: effectiveSiteRegistryProjectionPath,
+    projection_worker_url: normalizeOptionalString(projectionWorkerUrl),
+    operator_session_file: normalizeOptionalString(operatorSessionFile),
     configured_sites: localConfiguredSites,
     hidden_wrapper_path: wrapperPath,
     hidden_wrapper_kind: 'windows_wscript_vbs_hidden',
@@ -526,6 +530,16 @@ export function formatSiteContinuitySchedulerResultForText(result) {
   const operatorAction = result?.operator_next_action ?? lastScheduledHealth?.operator_next_action ?? null;
   const operatorTarget = result?.operator_next_target_site_id ?? lastScheduledHealth?.operator_next_target_site_id ?? null;
   const operatorReason = result?.operator_next_reason ?? lastScheduledHealth?.operator_next_reason ?? null;
+  const nextOperationId = result?.cloudflare_operation_next_operation_id ?? lastScheduledHealth?.cloudflare_operation_next_operation_id ?? null;
+  const nextOperationAction = result?.cloudflare_operation_next_action ?? lastScheduledHealth?.cloudflare_operation_next_action ?? null;
+  const projectionWorkerUrl = normalizeOptionalString(
+    result?.projection_worker_url
+    ?? result?.worker_url
+    ?? productPosture?.worker_url
+    ?? lastScheduledHealth?.worker_url
+    ?? null,
+  );
+  const operatorSessionFile = normalizeOptionalString(result?.operator_session_file ?? null);
   const localPostureStatuses = [localSyncArtifacts?.status, localInboundPackets?.status].filter(Boolean);
   const derivedLocalStatus = localPostureStatuses.length === 0
     ? null
@@ -560,6 +574,22 @@ export function formatSiteContinuitySchedulerResultForText(result) {
     }
   }
   if (operatorAction) lines.push(`Operator Next: ${operatorAction} target=${operatorTarget ?? 'none'} reason=${operatorReason ?? 'none'}`);
+  if (projectionWorkerUrl && operatorSessionFile) {
+    const baseArgs = `-- --url ${projectionWorkerUrl} --operator-session-file ${operatorSessionFile}`;
+    lines.push(`Site List: pnpm --filter @narada2/cloudflare-carrier product:site:list:text ${baseArgs}`);
+    if (operatorTarget) {
+      const siteArgs = `${baseArgs} --site ${operatorTarget}`;
+      lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text ${siteArgs}`);
+      if (nextOperationId) {
+        lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text ${siteArgs} --operation-id ${nextOperationId}`);
+      }
+      if (operatorAction === 'focus_next_site') {
+        lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text ${baseArgs} --execute-site-next`);
+      } else if (nextOperationId && nextOperationAction) {
+        lines.push(`Operation Review Focus: action=${nextOperationAction} operation=${nextOperationId}`);
+      }
+    }
+  }
 
   const syncBySite = new Map((localSyncArtifacts?.configured_site_sync_statuses ?? []).map((site) => [site.site_id, site]));
   const inboundBySite = new Map((localInboundPackets?.configured_site_inbound_statuses ?? []).map((site) => [site.site_id, site]));
@@ -2566,6 +2596,11 @@ function powershellString(value) {
 
 function vbsString(value) {
   return `"${String(value).replaceAll('"', '""')}"`;
+}
+
+function normalizeOptionalString(value) {
+  const normalized = String(value ?? '').trim();
+  return normalized || null;
 }
 
 export function parseArgs(argv) {
