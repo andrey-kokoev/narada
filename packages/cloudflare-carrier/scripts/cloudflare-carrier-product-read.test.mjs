@@ -1200,6 +1200,47 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   });
   assert.match(operationReadRepositoryPublicationEvidenceText, /Repository Publication Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:evidence:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
+  const operationReadProviderLifecycleSurfaceText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_lifecycle',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'inhabited',
+      health: 'ready',
+      next_action: 'monitor_operation',
+      workflow_next_action: 'monitor_operation',
+      workflow_reason: 'operation_ready',
+      session_count: 1,
+      active_session_id: 'carrier_session_alpha',
+      task_count: 2,
+      local_ingress_request_count: 3,
+      local_ingress_evidence_count: 2,
+      local_ingress_provider_heartbeat_count: 4,
+      repository_publication_request_count: 5,
+      repository_publication_execution_count: 6,
+      repository_publication_evidence_count: 7,
+      repository_publication_provider_heartbeat_count: 8,
+      persistence_state: 'durable',
+      recovery_state: 'reconstructable',
+      recovery_boundary_count: 1,
+      recovery_gap_count: 0,
+    },
+  });
+  assert.match(operationReadProviderLifecycleSurfaceText, /Local Ingress: requests=3 evidence=2 heartbeats=4/);
+  assert.match(operationReadProviderLifecycleSurfaceText, /Local Ingress Request Review: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_lifecycle --operator-session-file <operator-session-file>/);
+  assert.match(operationReadProviderLifecycleSurfaceText, /Local Ingress Evidence Review: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:evidence:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_lifecycle --operator-session-file <operator-session-file>/);
+  assert.match(operationReadProviderLifecycleSurfaceText, /Local Ingress Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:provider-liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationReadProviderLifecycleSurfaceText, /Repository Publication: requests=5 executions=6 evidence=7 heartbeats=8/);
+  assert.match(operationReadProviderLifecycleSurfaceText, /Repository Publication Review: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_lifecycle --operator-session-file <operator-session-file>/);
+  assert.match(operationReadProviderLifecycleSurfaceText, /Repository Publication Execution Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationReadProviderLifecycleSurfaceText, /Repository Publication Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:evidence:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationReadProviderLifecycleSurfaceText, /Repository Publication Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+
   const operationReadGenericFocusReviewText = formatProductSurfaceText({
     operation: 'operation.read',
     worker_url: 'https://carrier.example.test',
@@ -2046,6 +2087,13 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     session_count: 1,
     active_session_id: null,
     task_count: 3,
+    local_ingress_request_count: 0,
+    local_ingress_evidence_count: 0,
+    local_ingress_provider_heartbeat_count: 0,
+    repository_publication_request_count: 0,
+    repository_publication_execution_count: 0,
+    repository_publication_evidence_count: 0,
+    repository_publication_provider_heartbeat_count: 0,
     scope_loaded: true,
     workflow_next_action: 'review_site_continuity_reconciliation_execution',
     workflow_reason: 'operation_lifecycle_continuity_reconciliation_execution_attention',
