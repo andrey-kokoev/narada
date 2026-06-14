@@ -192,6 +192,7 @@
     "local-ingress:request-smoke:live": "node scripts/cloudflare-carrier-local-ingress-request-live-smoke.mjs",
     "local-ingress:request-smoke:live:text": "node scripts/cloudflare-carrier-local-ingress-request-live-smoke.mjs --format text",
     "provider-liveness:refresh:live": "node scripts/cloudflare-carrier-provider-liveness-refresh.mjs",
+    "provider-liveness:refresh:live:text": "node scripts/cloudflare-carrier-provider-liveness-refresh.mjs --format text",
     "provider-liveness:scheduler": "node scripts/cloudflare-carrier-provider-liveness-scheduler.mjs",
     "provider-liveness:status:live": "node scripts/cloudflare-carrier-provider-liveness-scheduler.mjs --action status --live",
     "provider-liveness:status:live:text": "node scripts/cloudflare-carrier-provider-liveness-scheduler.mjs --action status --live --format text",
