@@ -470,6 +470,7 @@ test('formatRepositoryPublicationReadText surfaces focused admission and executi
   assert.match(admissionText, /Focused Admission: repository-publication-admission-1/);
   assert.match(admissionText, /Focused Request: repository-publication-request-1/);
   assert.match(admissionText, /Focused Decision: admit reason=admitted_reason/);
+  assert.match(admissionText, /Request Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --repository-publication-request-id repository-publication-request-1 --operator-session-file <operator-session-file>/);
 
   const executionText = formatRepositoryPublicationReadText({
     status: 'ok',
@@ -481,6 +482,7 @@ test('formatRepositoryPublicationReadText surfaces focused admission and executi
       operation: 'repository_publication.cloudflare_execution.list',
       site_id: 'site_alpha',
       execution_count: 1,
+      repository_publication_request_id: 'repository-publication-request-1',
       focused_repository_publication_execution_id: 'repository-publication-execution-1',
       focused_publication_status: 'completed',
       focused_repository_ref: 'github:andrey/site-alpha',
@@ -495,6 +497,7 @@ test('formatRepositoryPublicationReadText surfaces focused admission and executi
   assert.match(executionText, /Focused Execution: repository-publication-execution-1/);
   assert.match(executionText, /Focused Publication Status: completed/);
   assert.match(executionText, /Focused GitHub HTTP Status: 200/);
+  assert.match(executionText, /Request Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --repository-publication-request-id repository-publication-request-1 --operator-session-file <operator-session-file>/);
 });
 
 test('summaries and text output preserve refusal evidence for filtered execution list', () => {

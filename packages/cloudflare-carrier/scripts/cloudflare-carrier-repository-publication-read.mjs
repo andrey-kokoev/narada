@@ -385,6 +385,9 @@ export function formatRepositoryPublicationReadText(result) {
       const decisionLabel = summary.focused_repository_publication_admission_id ? 'Focused Decision' : 'Latest Decision';
       lines.push(`${decisionLabel}: ${summary.latest_admission_action}${summary.latest_admission_reason ? ` reason=${summary.latest_admission_reason}` : ''}`);
     }
+    if (summary.latest_repository_publication_request_id) {
+      lines.push(`Request Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --repository-publication-request-id ${summary.latest_repository_publication_request_id} --operator-session-file <operator-session-file>`);
+    }
     lines.push(`Authority: admission=${summary.repository_publication_admission_authority ?? 'unknown'} executor=${summary.repository_publication_executor_authority ?? 'unknown'}`);
   } else if (summary.operation === 'repository_publication.evidence.list') {
     lines.push(`Evidence: count=${summary.evidence_count ?? 0}`);
@@ -417,6 +420,9 @@ export function formatRepositoryPublicationReadText(result) {
       if (summary.latest_branch_ref) lines.push(`Latest Branch: ${summary.latest_branch_ref}`);
       if (summary.latest_published_commit_ref) lines.push(`Latest Published Commit: ${summary.latest_published_commit_ref}`);
       if (summary.latest_github_http_status != null) lines.push(`Latest GitHub HTTP Status: ${summary.latest_github_http_status}`);
+    }
+    if (summary.repository_publication_request_id) {
+      lines.push(`Request Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --repository-publication-request-id ${summary.repository_publication_request_id} --operator-session-file <operator-session-file>`);
     }
     lines.push(`Authority: executor=${summary.repository_publication_executor_authority ?? 'unknown'} admission=${summary.repository_publication_admission_authority ?? 'unknown'}`);
   }
