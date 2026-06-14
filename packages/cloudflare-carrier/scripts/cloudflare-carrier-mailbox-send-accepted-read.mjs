@@ -71,6 +71,11 @@ export function summarizeMailboxSendAccepted(body = {}, options = {}) {
       ?? latestRecord?.draft_create_id
       ?? latestRequest?.draft_create_id
       ?? null,
+    latest_operation_id:
+      latest?.operation_id
+      ?? latestRecord?.operation_id
+      ?? latestRequest?.operation_id
+      ?? null,
     latest_outlook_draft_id:
       latest?.outlook_draft_id
       ?? latestRecord?.outlook_draft_id
@@ -119,6 +124,9 @@ export function formatMailboxSendAcceptedReadText(result) {
   }
   if (summary.latest_draft_create_id) {
     lines.push(`Draft Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.latest_draft_create_id} --operator-session-file <operator-session-file>`);
+  }
+  if (summary.site_id && summary.latest_operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file>`);
   }
   if (summary.latest_recorded_at) {
     lines.push(`${latestRecordedLabel}: ${summary.latest_recorded_at}`);

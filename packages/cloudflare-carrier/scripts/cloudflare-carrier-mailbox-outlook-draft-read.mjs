@@ -67,6 +67,11 @@ export function summarizeMailboxOutlookDraft(body = {}, options = {}) {
     authority_partition: body?.authority_partition ?? null,
     latest_draft_create_id: latest?.draft_create_id ?? null,
     latest_account_ref: latest?.account_ref ?? latestRecord?.account_ref ?? null,
+    latest_operation_id:
+      latest?.operation_id
+      ?? latestRecord?.operation_id
+      ?? latestProposal?.operation_id
+      ?? null,
     latest_proposal_id: latest?.proposal_id ?? latestRecord?.proposal_id ?? latestProposal?.proposal_id ?? null,
     latest_message_id:
       latest?.message_id ??
@@ -124,6 +129,9 @@ export function formatMailboxOutlookDraftReadText(result) {
   }
   if (summary.latest_body_preview) {
     lines.push(`Body Preview: ${summary.latest_body_preview}`);
+  }
+  if (summary.site_id && summary.latest_operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file>`);
   }
   if (summary.latest_recorded_at) {
     lines.push(`${latestRecordedLabel}: ${summary.latest_recorded_at}`);
