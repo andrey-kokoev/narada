@@ -48,6 +48,8 @@ test('summarizeMailboxOutlookDraft returns latest draft metadata', () => {
         account_ref: 'help@example.com',
         operation_id: 'operation_alpha',
         proposal_id: 'proposal_1',
+        send_accepted_id: 'accepted_1',
+        send_confirmation_id: 'confirmation_1',
         source_message_ref: 'message_1',
         subject: 'Draft subject',
         body_preview: 'Draft preview text.',
@@ -62,6 +64,8 @@ test('summarizeMailboxOutlookDraft returns latest draft metadata', () => {
   assert.equal(summary.latest_account_ref, 'help@example.com');
   assert.equal(summary.latest_operation_id, 'operation_alpha');
   assert.equal(summary.latest_proposal_id, 'proposal_1');
+  assert.equal(summary.latest_send_accepted_id, 'accepted_1');
+  assert.equal(summary.latest_send_confirmation_id, 'confirmation_1');
   assert.equal(summary.latest_message_id, 'message_1');
   assert.equal(summary.latest_subject, 'Draft subject');
   assert.equal(summary.latest_body_preview, 'Draft preview text.');
@@ -177,6 +181,8 @@ test('formatMailboxOutlookDraftReadText renders mailbox outlook draft summary', 
       latest_account_ref: 'help@example.com',
       latest_operation_id: 'operation_alpha',
       latest_proposal_id: 'proposal_1',
+      latest_send_accepted_id: 'accepted_1',
+      latest_send_confirmation_id: 'confirmation_1',
       latest_message_id: 'message_1',
       latest_subject: 'Draft subject',
       latest_body_preview: 'Draft preview text.',
@@ -191,6 +197,8 @@ test('formatMailboxOutlookDraftReadText renders mailbox outlook draft summary', 
   assert.match(text, /Current Posture: cloudflare_created_outlook_draft_send_not_admitted/);
   assert.match(text, /Latest Draft: id=draft_live_1 proposal=proposal_1 account=help@example.com message=message_1 subject=Draft subject/);
   assert.match(text, /Proposal Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url https:\/\/carrier\.example --site site_alpha --focus-ref proposal_1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Accepted Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-accepted:text -- --url https:\/\/carrier\.example --site site_alpha --focus-ref accepted_1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Confirmation Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-confirmation:text -- --url https:\/\/carrier\.example --site site_alpha --focus-ref confirmation_1 --operator-session-file <operator-session-file>/);
   assert.match(text, /Body Preview: Draft preview text\./);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);

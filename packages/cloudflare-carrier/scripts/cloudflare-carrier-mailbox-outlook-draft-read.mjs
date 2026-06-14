@@ -56,6 +56,8 @@ export function summarizeMailboxOutlookDraft(body = {}, options = {}) {
   const latest = focused ?? drafts[0] ?? null;
   const latestRecord = latest?.record ?? null;
   const latestProposal = latestRecord?.proposal ?? null;
+  const latestSendRequest = latestRecord?.send_request ?? null;
+  const latestConfirmationRequest = latestRecord?.confirmation_request ?? null;
   return {
     site_id: body?.site_id ?? null,
     draft_count: summarizedDrafts.length,
@@ -73,6 +75,16 @@ export function summarizeMailboxOutlookDraft(body = {}, options = {}) {
       ?? latestProposal?.operation_id
       ?? null,
     latest_proposal_id: latest?.proposal_id ?? latestRecord?.proposal_id ?? latestProposal?.proposal_id ?? null,
+    latest_send_accepted_id:
+      latest?.send_accepted_id
+      ?? latestRecord?.send_accepted_id
+      ?? latestSendRequest?.send_accepted_id
+      ?? null,
+    latest_send_confirmation_id:
+      latest?.send_confirmation_id
+      ?? latestRecord?.send_confirmation_id
+      ?? latestConfirmationRequest?.send_confirmation_id
+      ?? null,
     latest_message_id:
       latest?.message_id ??
       latest?.source_message_ref ??
@@ -132,6 +144,12 @@ export function formatMailboxOutlookDraftReadText(result) {
   }
   if (summary.site_id && summary.latest_proposal_id) {
     lines.push(`Proposal Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --focus-ref ${summary.latest_proposal_id} --operator-session-file <operator-session-file>`);
+  }
+  if (summary.site_id && summary.latest_send_accepted_id) {
+    lines.push(`Accepted Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --focus-ref ${summary.latest_send_accepted_id} --operator-session-file <operator-session-file>`);
+  }
+  if (summary.site_id && summary.latest_send_confirmation_id) {
+    lines.push(`Confirmation Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-confirmation:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --focus-ref ${summary.latest_send_confirmation_id} --operator-session-file <operator-session-file>`);
   }
   if (summary.site_id && summary.latest_operation_id) {
     lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file>`);
