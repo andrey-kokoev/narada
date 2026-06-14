@@ -132,7 +132,7 @@ export function formatOperationContinuityWorkflowLiveText(result) {
   ];
   const postActionWorkflow = buildPostContinuityWorkflowCommand(result);
   if (postActionWorkflow) {
-    lines.push(`Post Action Workflow: ${postActionWorkflow}`);
+    lines.push(`${postActionWorkflow.label}: ${postActionWorkflow.command}`);
   }
   return `${lines.join('\n')}\n`;
 }
@@ -142,7 +142,10 @@ function buildPostContinuityWorkflowCommand(result) {
   const focusKind = result.read_after_continuity?.workflow_focus_kind ?? null;
   const focusRef = result.read_after_continuity?.workflow_focus_ref ?? null;
   if (nextAction === 'review_site_continuity_reconciliation_execution' && focusRef) {
-    return `pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --focus-kind ${focusKind ?? 'site_continuity_reconciliation_execution'} --focus-ref ${focusRef} --operator-session-file <operator-session-file>`;
+    return {
+      label: 'Review Ack',
+      command: `pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --focus-kind ${focusKind ?? 'site_continuity_reconciliation_execution'} --focus-ref ${focusRef} --operator-session-file <operator-session-file>`,
+    };
   }
   return null;
 }

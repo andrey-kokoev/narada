@@ -116,7 +116,7 @@ export function formatOperationSessionWorkflowLiveText(result) {
   ];
   const postActionWorkflow = buildPostSessionWorkflowCommand(result);
   if (postActionWorkflow) {
-    lines.push(`Post Action Workflow: ${postActionWorkflow}`);
+    lines.push(`${postActionWorkflow.label}: ${postActionWorkflow.command}`);
   }
   const carrierSessionId = result.read_after_session?.active_session_id
     ?? result.resident_dispatch?.carrier_session_id
@@ -130,7 +130,10 @@ export function formatOperationSessionWorkflowLiveText(result) {
 function buildPostSessionWorkflowCommand(result) {
   const nextAction = result.read_after_session?.workflow_next_action ?? null;
   if (nextAction === 'refresh_site_continuity_loop') {
-    return `pnpm --filter @narada2/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity`;
+    return {
+      label: 'Continuity Workflow',
+      command: `pnpm --filter @narada2/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity`,
+    };
   }
   return null;
 }
