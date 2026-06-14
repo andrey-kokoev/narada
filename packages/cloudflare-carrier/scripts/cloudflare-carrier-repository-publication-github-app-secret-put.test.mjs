@@ -145,7 +145,7 @@ test('formatGithubAppSecretPutError renders structured command evidence', () => 
   assert.equal(body.spawn_error, 'spawn failed');
 });
 
-test('formatGithubAppSecretPutText emits readiness follow-ons', () => {
+test('formatGithubAppSecretPutText suppresses synthetic readiness follow-ons', () => {
   const output = formatGithubAppSecretPutText({
     status: 'ok',
     credential_mode: 'github_app_installation',
@@ -154,6 +154,7 @@ test('formatGithubAppSecretPutText emits readiness follow-ons', () => {
   });
 
   assert.match(output, /Repository Publication GitHub App Secret Put: ok/);
-  assert.match(output, /Repository Publication GitHub App Readiness Smoke:/);
-  assert.match(output, /Repository Publication Provider Liveness:/);
+  assert.doesNotMatch(output, /<worker-url>/);
+  assert.doesNotMatch(output, /Repository Publication GitHub App Readiness Smoke:/);
+  assert.doesNotMatch(output, /Repository Publication Provider Liveness:/);
 });

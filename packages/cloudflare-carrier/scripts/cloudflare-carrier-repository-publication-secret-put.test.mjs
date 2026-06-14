@@ -42,7 +42,7 @@ test('runRepositoryPublicationSecretPut writes configured secret', async () => {
   assert.equal(calls[0].tokenValue, 'ghp_test_token');
 });
 
-test('formatRepositoryPublicationSecretPutText emits readiness follow-ons', () => {
+test('formatRepositoryPublicationSecretPutText suppresses synthetic readiness follow-ons', () => {
   const output = formatRepositoryPublicationSecretPutText({
     status: 'ok',
     secret_name: REPOSITORY_PUBLICATION_SECRET_NAME,
@@ -51,6 +51,7 @@ test('formatRepositoryPublicationSecretPutText emits readiness follow-ons', () =
   });
 
   assert.match(output, /Repository Publication Secret Put: ok/);
-  assert.match(output, /Repository Publication Readiness Smoke:/);
-  assert.match(output, /Repository Publication Provider Liveness:/);
+  assert.doesNotMatch(output, /<worker-url>/);
+  assert.doesNotMatch(output, /Repository Publication Readiness Smoke:/);
+  assert.doesNotMatch(output, /Repository Publication Provider Liveness:/);
 });

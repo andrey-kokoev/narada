@@ -58,8 +58,6 @@ export function formatGithubAppSecretPutText(result) {
     `Credential Mode: ${result.credential_mode ?? 'unknown'}`,
     `Config: ${result.config_path}`,
     `Secrets Installed: ${result.installed?.length ?? 0}`,
-    'Repository Publication GitHub App Readiness Smoke: pnpm --filter @narada2/cloudflare-carrier repository-publication:readiness-github-app-smoke:live:text -- --url <worker-url> --site <site> --operator-session-file <operator-session-file>',
-    'Repository Publication Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url <worker-url> --site <site> --operator-session-file <operator-session-file>',
   ];
   return `${lines.join('\n')}\n`;
 }
