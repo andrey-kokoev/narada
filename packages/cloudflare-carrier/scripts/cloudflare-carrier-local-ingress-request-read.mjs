@@ -109,6 +109,9 @@ export function formatLocalIngressRequestReadText(result) {
   if (summary.focused_operation_id || summary.focused_recorded_at) {
     lines.push(`Focused Request: operation=${summary.focused_operation_id ?? 'none'} recorded=${summary.focused_recorded_at ?? 'unknown'}`);
   }
+  if (summary.site_id && summary.focused_operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.focused_operation_id} --operator-session-file <operator-session-file>`);
+  }
   return `${lines.join('\n')}\n`;
 }
 
