@@ -178,4 +178,5 @@ test('formatLocalIngressRequestReadText prints local ingress request summary', (
   assert.match(text, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:evidence:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --local-ingress-evidence-id local_ingress_evidence_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Focused Request: operation=operation_site_read recorded=2026-06-13T04:30:00.000Z/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_site_read --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_site_read --operator-session-file <operator-session-file> --execute-operation-next/);
 });

@@ -193,6 +193,7 @@ test('formatMailboxOutlookDraftReadText renders mailbox outlook draft summary', 
   assert.doesNotMatch(text, /Proposal Read:/);
   assert.match(text, /Body Preview: Draft preview text\./);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
 });
 
 test('formatMailboxOutlookDraftReadText prints focused labels for focused reads', () => {

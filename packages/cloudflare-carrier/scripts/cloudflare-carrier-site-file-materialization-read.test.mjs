@@ -157,6 +157,7 @@ test('formatSiteFileMaterializationReadText prints the key review facts', () => 
   assert.match(text, /Materialization Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file:materialization:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --site-file-materialization-id materialization-1 --operator-session-file <operator-session-file>/);
   assert.match(text, /Proposal Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file-change:proposal:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref proposal-9 --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-9 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-9 --operator-session-file <operator-session-file> --execute-operation-next/);
 });
 
 test('formatSiteFileMaterializationReadText prints focused wording for direct historical reads', () => {
@@ -184,5 +185,6 @@ test('formatSiteFileMaterializationReadText prints focused wording for direct hi
   assert.match(text, /Materialization Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file:materialization:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --site-file-materialization-id materialization-9 --operator-session-file <operator-session-file>/);
   assert.match(text, /Proposal Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file-change:proposal:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref proposal-9 --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-9 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-9 --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.match(text, /Focused Recorded: 2026-06-12T01:00:00.000Z/);
 });

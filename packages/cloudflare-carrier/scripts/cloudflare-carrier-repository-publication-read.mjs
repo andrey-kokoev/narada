@@ -356,6 +356,7 @@ export function formatRepositoryPublicationReadText(result) {
     if (summary.latest_repository_publication_request_id) lines.push(`Latest Request: ${summary.latest_repository_publication_request_id}`);
     if (summary.site_id && summary.latest_operation_id) {
       lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file>`);
+      lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
     }
     if (summary.latest_publication_ref) lines.push(`Publication: ${summary.latest_publication_ref}`);
     if (summary.latest_repository_ref) lines.push(`Repository: ${summary.latest_repository_ref}`);
@@ -366,6 +367,7 @@ export function formatRepositoryPublicationReadText(result) {
     if (summary.repository_publication_request_id) lines.push(`Request: ${summary.repository_publication_request_id}`);
     if (summary.site_id && summary.operation_id) {
       lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+      lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
     }
     if (summary.repository_publication_admission_id || summary.admission_action) {
       lines.push(`Admission: ${summary.repository_publication_admission_id ?? 'none'}${summary.admission_action ? ` action=${summary.admission_action}` : ''}`);

@@ -470,6 +470,7 @@ test('formatRepositoryPublicationReadText surfaces operation review on request s
 
   assert.match(requestListText, /Latest Request: repository-publication-request-1/);
   assert.match(requestListText, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-1 --operator-session-file <operator-session-file>/);
+  assert.match(requestListText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-1 --operator-session-file <operator-session-file> --execute-operation-next/);
 
   const requestNextText = formatRepositoryPublicationReadText({
     status: 'ok',
@@ -494,6 +495,7 @@ test('formatRepositoryPublicationReadText surfaces operation review on request s
 
   assert.match(requestNextText, /Request: repository-publication-request-1/);
   assert.match(requestNextText, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-1 --operator-session-file <operator-session-file>/);
+  assert.match(requestNextText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-1 --operator-session-file <operator-session-file> --execute-operation-next/);
 });
 
 test('formatRepositoryPublicationReadText surfaces focused admission and execution labels', () => {

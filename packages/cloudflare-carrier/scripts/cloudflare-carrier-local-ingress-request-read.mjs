@@ -111,6 +111,7 @@ export function formatLocalIngressRequestReadText(result) {
   }
   if (summary.site_id && summary.focused_operation_id) {
     lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.focused_operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.focused_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
   }
   return `${lines.join('\n')}\n`;
 }
