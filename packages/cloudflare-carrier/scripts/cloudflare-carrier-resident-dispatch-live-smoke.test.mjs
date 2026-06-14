@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  formatResidentDispatchLiveSmokeText,
   parseResidentDispatchLiveSmokeArgs,
   runResidentDispatchLiveSmoke,
 } from './cloudflare-carrier-resident-dispatch-live-smoke.mjs';
@@ -23,6 +24,39 @@ test('parseResidentDispatchLiveSmokeArgs supports operator session auth', () => 
     value: 'operator-session-cookie',
     source: 'operator-session-cookie',
   });
+});
+
+test('parseResidentDispatchLiveSmokeArgs supports text format', () => {
+  const parsed = parseResidentDispatchLiveSmokeArgs([
+    '--url', 'https://carrier.example',
+    '--site', 'site_live_smoke',
+    '--operation-id', 'operation_live_alpha',
+    '--operator-session-cookie', 'operator-session-cookie',
+    '--format', 'text',
+  ], {}, () => new Date('2026-06-12T00:00:00.000Z'));
+
+  assert.equal(parsed.format, 'text');
+});
+
+test('formatResidentDispatchLiveSmokeText renders direct follow-on reads', () => {
+  const text = formatResidentDispatchLiveSmokeText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    site_id: 'site_live_smoke',
+    operation_id: 'operation_live_alpha',
+    dispatch_decision_id: 'resident_dispatch_live_alpha',
+    carrier_session_id: 'carrier_session_live_alpha',
+    dispatch_state: 'cloudflare_primary_started',
+    dispatch_action: 'cloudflare_session_start',
+    fallback_status: 'available',
+    fallback_authority: 'windows_fallback_dispatcher',
+    workflow_next_action: 'monitor_operation',
+  });
+
+  assert.match(text, /^Resident Dispatch Workflow: ok/m);
+  assert.match(text, /Dispatch Decision: resident_dispatch_live_alpha/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text/);
 });
 
 test('runResidentDispatchLiveSmoke uses operator session cookie headers and returns readback summary', async () => {

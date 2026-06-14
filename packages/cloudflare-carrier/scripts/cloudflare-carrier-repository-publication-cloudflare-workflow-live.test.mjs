@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  formatRepositoryPublicationCloudflareWorkflowLiveText,
   parseRepositoryPublicationCloudflareWorkflowLiveArgs,
   runRepositoryPublicationCloudflareWorkflowLive,
 } from './cloudflare-carrier-repository-publication-cloudflare-workflow-live.mjs';
@@ -34,6 +35,41 @@ test('parseRepositoryPublicationCloudflareWorkflowLiveArgs supports operator ses
     value: 'operator-session-cookie',
     source: 'operator-session-cookie',
   });
+});
+
+test('parseRepositoryPublicationCloudflareWorkflowLiveArgs supports text format', () => {
+  const parsed = parseRepositoryPublicationCloudflareWorkflowLiveArgs([
+    '--url', 'https://carrier.example',
+    '--operator-session-cookie', 'operator-session-cookie',
+    '--repository-ref', 'github:andrey-kokoev/narada',
+    '--branch', 'refs/heads/cloudflare-live',
+    '--commit', '0123456789abcdef0123456789abcdef01234567',
+    '--format', 'text',
+    '--execute-cloudflare-github',
+  ], {});
+
+  assert.equal(parsed.format, 'text');
+});
+
+test('formatRepositoryPublicationCloudflareWorkflowLiveText renders direct reads', () => {
+  const text = formatRepositoryPublicationCloudflareWorkflowLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    site_id: 'site_narada_cloudflare',
+    operation_id: 'operation_repo_publication',
+    repository_publication_request_id: 'request_1',
+    repository_publication_admission_id: 'admission_1',
+    repository_publication_execution_id: 'execution_1',
+    repository_ref: 'github:andrey-kokoev/narada',
+    branch_ref: 'refs/heads/cloudflare-live',
+    publication_status: 'completed',
+  });
+
+  assert.match(text, /^Repository Publication Cloudflare Workflow: ok/m);
+  assert.match(text, /Execution: execution_1/);
+  assert.match(text, /Request Review: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text/);
+  assert.match(text, /Execution Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text/);
+  assert.match(text, /Admission Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:admission:list:text/);
 });
 
 test('runRepositoryPublicationCloudflareWorkflowLive runs execution then readback with shared ids', async () => {

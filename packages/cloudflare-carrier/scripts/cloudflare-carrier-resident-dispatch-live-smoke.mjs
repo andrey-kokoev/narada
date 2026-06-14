@@ -16,6 +16,7 @@ const DISPATCH_FALLBACK_STATUS_PREFIX = 'cloudflare_primary_failed_windows_fallb
 export function parseResidentDispatchLiveSmokeArgs(argv = [], env = process.env, now = () => new Date()) {
   const args = [...argv];
   const workerUrl = trimTrailingSlash(option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '');
+  const format = option(args, '--format') ?? env.CLOUDFLARE_RESIDENT_DISPATCH_LIVE_FORMAT ?? 'json';
   const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? 'site_narada_cloudflare';
   const siteRef = option(args, '--site-ref') ?? env.CLOUDFLARE_CARRIER_SITE_REF ?? `cloudflare://${siteId}`;
   const operationId = option(args, '--operation') ?? option(args, '--operation-id') ?? env.CLOUDFLARE_CARRIER_OPERATION_ID ?? 'operation_narada_cloudflare_control';
@@ -24,6 +25,7 @@ export function parseResidentDispatchLiveSmokeArgs(argv = [], env = process.env,
   const auth = resolveAuth(args, env);
 
   if (!workerUrl) throw new Error('resident_dispatch_live_smoke_requires_--url_or_CLOUDFLARE_CARRIER_URL');
+  if (!['json', 'text'].includes(format)) throw new Error(`resident_dispatch_live_smoke_unknown_format:${format}`);
   if (!auth) throw new Error('resident_dispatch_live_smoke_requires_bearer_token_or_operator_session');
   if (!siteId) throw new Error('resident_dispatch_live_smoke_requires_site_id');
 
@@ -33,6 +35,7 @@ export function parseResidentDispatchLiveSmokeArgs(argv = [], env = process.env,
 
   return {
     workerUrl,
+    format,
     siteId,
     siteRef,
     operationId,
@@ -43,6 +46,23 @@ export function parseResidentDispatchLiveSmokeArgs(argv = [], env = process.env,
     dispatchDecisionId,
     suffix,
   };
+}
+
+export function formatResidentDispatchLiveSmokeText(result) {
+  const lines = [
+    `Resident Dispatch Workflow: ${result.status}`,
+    `Worker: ${result.worker_url}`,
+    `Site: ${result.site_id}`,
+    `Operation: ${result.operation_id}`,
+    `Dispatch Decision: ${result.dispatch_decision_id}`,
+    `Carrier Session: ${result.carrier_session_id}`,
+    `Dispatch: state=${result.dispatch_state ?? 'unknown'} action=${result.dispatch_action ?? 'unknown'}`,
+    `Fallback: status=${result.fallback_status ?? 'unknown'} authority=${result.fallback_authority ?? 'unknown'}`,
+    `Workflow Next Action: ${result.workflow_next_action ?? 'unknown'}`,
+    `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
+    `Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --carrier-session-id ${result.carrier_session_id} --operator-session-file <operator-session-file>`,
+  ];
+  return `${lines.join('\n')}\n`;
 }
 
 export async function runResidentDispatchLiveSmoke(config, { fetchImpl = fetch } = {}) {
@@ -157,5 +177,9 @@ function trimTrailingSlash(value) {
 if (resolve(process.argv[1] ?? '') === scriptPath) {
   const config = parseResidentDispatchLiveSmokeArgs(process.argv.slice(2));
   const result = await runResidentDispatchLiveSmoke(config);
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  if (config.format === 'text') {
+    process.stdout.write(formatResidentDispatchLiveSmokeText(result));
+  } else {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  }
 }

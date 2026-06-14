@@ -16,6 +16,7 @@ const readbackScript = resolve(scriptDir, 'cloudflare-carrier-repository-publica
 export function parseRepositoryPublicationCloudflareWorkflowLiveArgs(argv = [], env = process.env) {
   const args = [...argv];
   const workerUrl = option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '';
+  const format = option(args, '--format') ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_CLOUDFLARE_WORKFLOW_FORMAT ?? 'json';
   const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? 'site_narada_cloudflare';
   const operationId = option(args, '--operation') ?? env.CLOUDFLARE_CARRIER_OPERATION_ID ?? 'operation_narada_cloudflare_control';
   const repositoryRef = option(args, '--repository-ref') ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_LIVE_REPOSITORY_REF ?? '';
@@ -38,6 +39,7 @@ export function parseRepositoryPublicationCloudflareWorkflowLiveArgs(argv = [], 
     throw new Error('repository_publication_cloudflare_workflow_live_requires_--execute-cloudflare-github_or_CLOUDFLARE_REPOSITORY_PUBLICATION_EXECUTE_LIVE=1');
   }
   if (!workerUrl) throw new Error('repository_publication_cloudflare_workflow_live_requires_--url_or_CLOUDFLARE_CARRIER_URL');
+  if (!['json', 'text'].includes(format)) throw new Error(`repository_publication_cloudflare_workflow_live_unknown_format:${format}`);
   if (!siteId) throw new Error('repository_publication_cloudflare_workflow_live_requires_site_id');
   if (!repositoryRef) {
     throw new Error('repository_publication_cloudflare_workflow_live_requires_--repository-ref_or_CLOUDFLARE_REPOSITORY_PUBLICATION_LIVE_REPOSITORY_REF');
@@ -54,6 +56,7 @@ export function parseRepositoryPublicationCloudflareWorkflowLiveArgs(argv = [], 
 
   return {
     workerUrl,
+    format,
     siteId,
     operationId,
     repositoryRef,
@@ -68,6 +71,35 @@ export function parseRepositoryPublicationCloudflareWorkflowLiveArgs(argv = [], 
     allowMissingGithubToken,
     executeAcknowledged,
   };
+}
+
+export function formatRepositoryPublicationCloudflareWorkflowLiveText(result) {
+  const lines = [
+    `Repository Publication Cloudflare Workflow: ${result.status}`,
+    `Worker: ${result.worker_url}`,
+    `Site: ${result.site_id}`,
+    `Operation: ${result.operation_id}`,
+    `Request: ${result.repository_publication_request_id ?? 'none'}`,
+    `Admission: ${result.repository_publication_admission_id ?? 'none'}`,
+    `Execution: ${result.repository_publication_execution_id ?? 'none'}`,
+    `Publication Status: ${result.publication_status ?? 'unknown'}`,
+  ];
+  if (result.repository_ref || result.branch_ref) {
+    lines.push(`Target: repository=${result.repository_ref ?? 'unknown'} branch=${result.branch_ref ?? 'unknown'}`);
+  }
+  if (result.next_required_action) {
+    lines.push(`Next Required Action: ${result.next_required_action}`);
+  }
+  if (result.repository_publication_request_id) {
+    lines.push(`Request Review: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-request-id ${result.repository_publication_request_id} --operator-session-file <operator-session-file>`);
+  }
+  if (result.repository_publication_execution_id) {
+    lines.push(`Execution Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-execution-id ${result.repository_publication_execution_id} --operator-session-file <operator-session-file>`);
+  }
+  if (result.repository_publication_admission_id) {
+    lines.push(`Admission Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:admission:list:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-admission-id ${result.repository_publication_admission_id} --operator-session-file <operator-session-file>`);
+  }
+  return `${lines.join('\n')}\n`;
 }
 
 export async function runRepositoryPublicationCloudflareWorkflowLive(
@@ -205,5 +237,9 @@ function parsePositiveInteger(value, fieldName) {
 if (resolve(process.argv[1] ?? '') === scriptPath) {
   const config = parseRepositoryPublicationCloudflareWorkflowLiveArgs(process.argv.slice(2));
   const result = await runRepositoryPublicationCloudflareWorkflowLive(config);
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  if (config.format === 'text') {
+    process.stdout.write(formatRepositoryPublicationCloudflareWorkflowLiveText(result));
+  } else {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  }
 }
