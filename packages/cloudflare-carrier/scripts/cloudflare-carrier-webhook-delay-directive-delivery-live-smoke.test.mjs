@@ -46,6 +46,27 @@ test('formatWebhookDelayDirectiveDeliveryLiveSmokeText emits downstream reads', 
   assert.match(text, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text/);
 });
 
+test('formatWebhookDelayDirectiveDeliveryLiveSmokeText suppresses follow-on reads without concrete worker', () => {
+  const text = formatWebhookDelayDirectiveDeliveryLiveSmokeText({
+    status: 'ok',
+    worker_url: null,
+    site_id: 'site_alpha',
+    operation_id: 'operation_alpha',
+    delivery_id: 'delivery_alpha',
+    directive_record_id: 'directive_record_alpha',
+    carrier_session_id: 'carrier_session_alpha',
+  });
+
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /Directive Delivery Review:/);
+  assert.doesNotMatch(text, /Session Evidence:/);
+  assert.doesNotMatch(text, /Task Review:/);
+  assert.doesNotMatch(text, /Task Workflow:/);
+});
+
 test('runWebhookDelayDirectiveDeliveryLiveSmoke returns summarized delivery state', async () => {
   const result = await runWebhookDelayDirectiveDeliveryLiveSmoke({
     workerUrl: 'https://carrier.example.test',

@@ -64,6 +64,25 @@ test('formatResidentDispatchLiveSmokeText renders direct follow-on reads', () =>
   assert.match(text, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text/);
 });
 
+test('formatResidentDispatchLiveSmokeText suppresses follow-on reads without concrete worker', () => {
+  const text = formatResidentDispatchLiveSmokeText({
+    status: 'ok',
+    worker_url: null,
+    site_id: 'site_live_smoke',
+    operation_id: 'operation_live_alpha',
+    dispatch_decision_id: 'resident_dispatch_live_alpha',
+    carrier_session_id: 'carrier_session_live_alpha',
+  });
+
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /Session Evidence:/);
+  assert.doesNotMatch(text, /Task Review:/);
+  assert.doesNotMatch(text, /Task Workflow:/);
+});
+
 test('runResidentDispatchLiveSmoke uses operator session cookie headers and returns readback summary', async () => {
   const calls = [];
   const result = await runResidentDispatchLiveSmoke({

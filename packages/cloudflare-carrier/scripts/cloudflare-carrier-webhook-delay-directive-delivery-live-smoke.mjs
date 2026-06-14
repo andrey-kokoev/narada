@@ -57,6 +57,11 @@ export function parseWebhookDelayDirectiveDeliveryLiveSmokeArgs(
 }
 
 export function formatWebhookDelayDirectiveDeliveryLiveSmokeText(result) {
+  const workerUrl = typeof result?.worker_url === 'string' && result.worker_url.length > 0 ? result.worker_url : null;
+  const siteId = typeof result?.site_id === 'string' && result.site_id.length > 0 ? result.site_id : null;
+  const operationId = typeof result?.operation_id === 'string' && result.operation_id.length > 0 ? result.operation_id : null;
+  const directiveRecordId = typeof result?.directive_record_id === 'string' && result.directive_record_id.length > 0 ? result.directive_record_id : null;
+  const carrierSessionId = typeof result?.carrier_session_id === 'string' && result.carrier_session_id.length > 0 ? result.carrier_session_id : null;
   const lines = [
     `Webhook Delay Directive Delivery Smoke: ${result.status}`,
     `Worker: ${result.worker_url}`,
@@ -66,15 +71,23 @@ export function formatWebhookDelayDirectiveDeliveryLiveSmokeText(result) {
     `Delivery: id=${result.delivery_id} directive_record=${result.directive_record_id} state=${result.delivery_state ?? 'unknown'}`,
     `Authority: directive=${result.directive_authority ?? 'unknown'} dispatch=${result.dispatch_authority ?? 'unknown'} fallback=${result.fallback_authority ?? 'unknown'} status=${result.fallback_status ?? 'unknown'}`,
     `Intent: action=${result.delivery_action ?? 'unknown'} carrier_input=${result.carrier_input_operation ?? 'unknown'} visibility=${result.directive_visibility ?? 'unknown'} dispatch_to_provider=${result.dispatch_to_provider ?? 'unknown'} terminal=${result.delivery_terminal_state ?? 'unknown'}`,
-    `Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`,
-    `Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`,
-    `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
-    `Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`,
-    `Directive Delivery Review: pnpm --filter @narada2/cloudflare-carrier product:directive:delivery:review:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --focus-ref ${result.directive_record_id} --operator-session-file <operator-session-file>`,
-    `Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --carrier-session-id ${result.carrier_session_id} --operator-session-file <operator-session-file>`,
-    `Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result.worker_url} --site ${result.site_id} --carrier-session-id ${result.carrier_session_id} --operator-session-file <operator-session-file>`,
-    `Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --carrier-session-id ${result.carrier_session_id} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`,
   ];
+  if (workerUrl && siteId) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file> --execute-site-next`);
+  }
+  if (workerUrl && siteId && operationId) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file> --execute-operation-next`);
+  }
+  if (workerUrl && siteId && operationId && directiveRecordId) {
+    lines.push(`Directive Delivery Review: pnpm --filter @narada2/cloudflare-carrier product:directive:delivery:review:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --focus-ref ${directiveRecordId} --operator-session-file <operator-session-file>`);
+  }
+  if (workerUrl && siteId && operationId && carrierSessionId) {
+    lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --carrier-session-id ${carrierSessionId} --operator-session-file <operator-session-file>`);
+    lines.push(`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${workerUrl} --site ${siteId} --carrier-session-id ${carrierSessionId} --operator-session-file <operator-session-file>`);
+    lines.push(`Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --carrier-session-id ${carrierSessionId} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`);
+  }
   return `${lines.join('\n')}\n`;
 }
 
