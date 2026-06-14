@@ -29,7 +29,11 @@ test('summarizeSiteScope lifts scope and inventory details', () => {
     site_product_status: { health: 'attention', next_action: 'focus_site_operation' },
     focused_operation_lifecycle: {
       operation_id: 'operation_alpha',
-      workflow_route: { next_action: 'refresh_site_continuity_loop' },
+      workflow_route: {
+        next_action: 'refresh_site_continuity_loop',
+        focus_kind: 'site_continuity_reconciliation_execution',
+        focus_ref: 'focus-ref',
+      },
     },
     operations: [{ operation_id: 'op1' }, { operation_id: 'op2' }],
     memberships: [{ principal: 'a' }],
@@ -46,6 +50,8 @@ test('summarizeSiteScope lifts scope and inventory details', () => {
   assert.equal(summary.next_action, 'focus_site_operation');
   assert.equal(summary.active_operation_id, 'operation_alpha');
   assert.equal(summary.active_operation_next_action, 'refresh_site_continuity_loop');
+  assert.equal(summary.active_operation_focus_kind, 'site_continuity_reconciliation_execution');
+  assert.equal(summary.active_operation_focus_ref, 'focus-ref');
 });
 
 test('readSiteScope returns summarized site scope', async () => {
@@ -83,6 +89,8 @@ test('formatSiteScopeReadText prints scope summary', () => {
       next_action: 'focus_site_operation',
       active_operation_id: 'operation_alpha',
       active_operation_next_action: 'refresh_site_continuity_loop',
+      active_operation_focus_kind: 'site_continuity_reconciliation_execution',
+      active_operation_focus_ref: 'focus-ref',
       status: 'active',
       operation_count: 2,
       membership_count: 1,
@@ -101,4 +109,32 @@ test('formatSiteScopeReadText prints scope summary', () => {
   assert.match(text, /Site Action Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:action:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-site-action/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
+  assert.match(text, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity/);
+  assert.doesNotMatch(text, /Review Ack:/);
+});
+
+test('formatSiteScopeReadText renders review ack from active operation route', () => {
+  const text = formatSiteScopeReadText({
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      display_name: 'Alpha',
+      scope_loaded: true,
+      health: 'attention',
+      next_action: 'focus_site_operation',
+      active_operation_id: 'operation_alpha',
+      active_operation_next_action: 'review_site_continuity_reconciliation_execution',
+      active_operation_focus_kind: 'site_continuity_reconciliation_execution',
+      active_operation_focus_ref: 'focus-ref',
+      status: 'active',
+      operation_count: 1,
+      membership_count: 1,
+      authority_count: 1,
+      persistence_state: 'durable',
+      recovery_state: 'reconstructable',
+    },
+  });
+
+  assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref focus-ref --operator-session-file <operator-session-file>/);
 });

@@ -30,6 +30,8 @@ export function summarizeSiteAuthority(body = {}) {
     site_id: body?.site?.site_id ?? body?.site_id ?? map?.site_id ?? null,
     active_operation_id: body?.focused_operation_lifecycle?.operation_id ?? body?.operation?.operation_id ?? null,
     active_operation_next_action: focusedWorkflowRoute?.next_action ?? null,
+    active_operation_focus_kind: focusedWorkflowRoute?.focus_kind ?? null,
+    active_operation_focus_ref: focusedWorkflowRoute?.focus_ref ?? focusedWorkflowRoute?.target ?? null,
     classifier_version: map?.classifier_version ?? null,
     embodiment_count: Array.isArray(map?.embodiments) ? map.embodiments.length : 0,
     entry_count: Array.isArray(map?.entries) ? map.entries.length : 0,
@@ -72,6 +74,12 @@ export function formatSiteAuthorityReadText(result) {
     lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --operator-session-file <operator-session-file>`);
     if (summary.active_operation_next_action) {
       lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+      if (summary.active_operation_next_action === 'refresh_site_continuity_loop') {
+        lines.push(`Continuity Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity`);
+      }
+      if (summary.active_operation_next_action === 'review_site_continuity_reconciliation_execution' && summary.active_operation_focus_ref) {
+        lines.push(`Review Ack: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --focus-kind ${summary.active_operation_focus_kind ?? 'site_continuity_reconciliation_execution'} --focus-ref ${summary.active_operation_focus_ref} --operator-session-file <operator-session-file>`);
+      }
     }
   }
   return `${lines.join('\n')}\n`;
