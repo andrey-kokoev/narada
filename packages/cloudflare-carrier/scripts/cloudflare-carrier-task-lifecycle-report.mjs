@@ -130,6 +130,8 @@ export function summarizeTaskLifecycleReport(body = {}, params = {}) {
     report_status: report.report_status ?? task.report_status ?? params.report_status ?? null,
     reporter_agent_id: report.reporter_agent_id ?? task.reported_by_agent_id ?? body.reporter_agent_id ?? params.reporter_agent_id ?? null,
     reporter_principal_id: report.reporter_principal_id ?? task.reported_by_principal_id ?? body.reporter_principal_id ?? params.reporter_principal_id ?? null,
+    operation_id: task.operation_id ?? report.operation_id ?? body.operation_id ?? params.operation_id ?? null,
+    carrier_session_id: task.carrier_session_id ?? report.carrier_session_id ?? body.carrier_session_id ?? params.carrier_session_id ?? null,
     claimed_by_agent_id: body.claimed_by_agent_id ?? task.claimed_by_agent_id ?? null,
     summary: report.summary ?? params.summary ?? null,
     changed_file_count: Array.isArray(report.changed_files) ? report.changed_files.length : Array.isArray(params.changed_files) ? params.changed_files.length : null,
@@ -177,6 +179,13 @@ export function formatTaskLifecycleReportText(result) {
     ...(summary.governed_write_contract_ref ? [`Contract: ${summary.governed_write_contract_ref}`] : []),
     ...(summary.confirmation_evidence_ref ? [`Evidence: ${summary.confirmation_evidence_ref}`] : []),
   ];
+  if (summary.site_id && summary.carrier_session_id) {
+    lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`);
+  }
+  if (summary.site_id && summary.operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+  }
   if (summary.site_id && summary.task_id) {
     lines.push(`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --task-id ${summary.task_id} --operator-session-file <operator-session-file>`);
     lines.push(`Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --task-id ${summary.task_id} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`);

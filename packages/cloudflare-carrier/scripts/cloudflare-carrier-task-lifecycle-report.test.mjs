@@ -184,7 +184,7 @@ test('reportCloudflareTaskLifecycleTask posts the task report envelope and redac
         governed_write_contract_ref: 'contract:report:v1',
         confirmation_evidence_ref: 'evidence:report:v1',
       },
-      task: { site_id: 'site_alpha', task_id: 'cloudflare-task-7', task_number: 7, status: 'closed' },
+      task: { site_id: 'site_alpha', task_id: 'cloudflare-task-7', task_number: 7, status: 'closed', operation_id: 'operation_alpha', carrier_session_id: 'session_alpha' },
     });
   });
 
@@ -219,6 +219,8 @@ test('reportCloudflareTaskLifecycleTask posts the task report envelope and redac
   assert.equal(result.summary.changed_file_count, 1);
   assert.equal(result.summary.verification_count, 1);
   assert.equal(result.summary.changed_file_evidence_admission, 'not_admitted');
+  assert.equal(result.summary.operation_id, 'operation_alpha');
+  assert.equal(result.summary.carrier_session_id, 'session_alpha');
 });
 
 test('reportCloudflareTaskLifecycleTask preserves structured refusal and conflict evidence', async () => {
@@ -272,6 +274,8 @@ test('formatTaskLifecycleReportText renders admitted and refused summaries witho
       task_number: 7,
       report_id: 'report-1',
       reporter_agent_id: 'agent_alpha',
+      operation_id: 'operation_alpha',
+      carrier_session_id: 'session_alpha',
       previous_status: 'claimed',
       new_status: 'closed',
       report_status: 'submitted',
@@ -297,6 +301,9 @@ test('formatTaskLifecycleReportText renders admitted and refused summaries witho
   assert.match(admitted, /Report: report-1/);
   assert.match(admitted, /Reporter: agent_alpha/);
   assert.match(admitted, /Changed File Evidence: not_admitted/);
+  assert.match(admitted, /Session Evidence:/);
+  assert.match(admitted, /Operation Review:/);
+  assert.match(admitted, /Operation Next Workflow:/);
   assert.match(admitted, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --operator-session-file <operator-session-file>/);
   assert.match(admitted, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
   assert.equal(admitted.includes('secret-token'), false);
