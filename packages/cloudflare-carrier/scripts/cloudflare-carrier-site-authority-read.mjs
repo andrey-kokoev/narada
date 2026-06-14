@@ -58,7 +58,25 @@ export function formatSiteAuthorityReadText(result) {
   if ((summary.authority_loci ?? []).length > 0) {
     lines.push(`Authority Loci: ${(summary.authority_loci ?? []).join(', ')}`);
   }
+  if (summary.site_id) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
+  }
+  if (summary.site_id && isSiteAuthorityWorkflowAction(summary.next_action)) {
+    lines.push(`Site Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-action`);
+  }
   return `${lines.join('\n')}\n`;
+}
+
+function isSiteAuthorityWorkflowAction(action) {
+  return typeof action === 'string'
+    && (
+      action === 'read_site_authority'
+      || action === 'focus_membership_authority'
+      || action === 'inspect_inactive_membership'
+      || action.startsWith('transfer_')
+      || action === 'continue_authority_transfer'
+      || action === 'verify_full_cloudflare_authority'
+    );
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

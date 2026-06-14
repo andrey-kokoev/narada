@@ -107,4 +107,6 @@ test('formatSiteAuthorityReadText prints authority summary', () => {
   assert.match(text, /Decisions: total=3 admitted=1 refused=1 projection_only=1/);
   assert.match(text, /Posture: health=attention next=read_site_authority/);
   assert.match(text, /Mutation Classes: task_artifact_mutation, read_model_projection/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Action Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:action:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-action/);
 });
