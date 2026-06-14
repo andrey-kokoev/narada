@@ -35,6 +35,7 @@ test('formatMailboxOutlookDraftCreateLiveSmokeText emits downstream reads', () =
     site_id: 'site_alpha',
     operation_id: 'operation_alpha',
     account_ref: 'mailbox@example.test',
+    proposal_id: 'proposal_alpha',
     draft_create_id: 'draft_alpha',
     outlook_draft_id: 'outlook_alpha',
     mailbox_outlook_draft_create_authority: 'cloudflare_graph_outlook_draft_create',
@@ -46,6 +47,8 @@ test('formatMailboxOutlookDraftCreateLiveSmokeText emits downstream reads', () =
   });
 
   assert.match(text, /Mailbox Outlook Draft Create Smoke: ok/);
+  assert.match(text, /Proposal: proposal_alpha/);
+  assert.match(text, /Proposal Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref proposal_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Draft Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
@@ -115,6 +118,7 @@ test('runMailboxOutlookDraftCreateLiveSmoke returns summarized draft-create stat
 
   assert.equal(result.status, 'ok');
   assert.equal(result.auth_source, 'operator-session-cookie');
+  assert.match(result.proposal_id, /^mailbox_draft_reply_proposal_live_/);
   assert.equal(result.mailbox_outlook_draft_create_authority, 'cloudflare_graph_outlook_draft_create');
   assert.equal(result.mailbox_outlook_draft_create_count, 1);
 });
