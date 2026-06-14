@@ -256,3 +256,20 @@ test('formatResidentDispatchWindowsFallbackEvidenceReviewText omits synthetic op
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_alpha --focus-kind resident_dispatch_windows_fallback_evidence --focus-ref resident_dispatch_windows_fallback_evidence_alpha --operator-session-file <operator-session-file>/);
   assert.doesNotMatch(text, /Review Ack:.*<operation-id>/);
 });
+
+test('formatResidentDispatchWindowsFallbackEvidenceReviewText suppresses review ack without site id', () => {
+  const text = formatResidentDispatchWindowsFallbackEvidenceReviewText({
+    worker_url: 'https://carrier.example',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: null,
+      operation_id: 'operation_alpha',
+      workflow_next_action: 'review_windows_fallback_resident_dispatch_evidence',
+      workflow_reason: 'windows_fallback_execution_recorded',
+      evidence_count: 1,
+      focused_fallback_evidence_id: 'resident_dispatch_windows_fallback_evidence_alpha',
+    },
+  });
+
+  assert.equal(text.includes('Review Ack:'), false);
+});

@@ -354,3 +354,30 @@ test('formatTaskLifecycleReadText suppresses task commands when no concrete task
   assert.doesNotMatch(text, /Report Command:/);
   assert.doesNotMatch(text, /Finish Command:/);
 });
+
+test('formatTaskLifecycleReadText suppresses task commands when no concrete site id exists', () => {
+  const text = formatTaskLifecycleReadText({
+    worker_url: 'https://carrier.example',
+    auth_source: 'operator-session-file',
+    summary: {
+      ok: true,
+      site_id: null,
+      task_count: 1,
+      open_task_count: 1,
+      mutation_authority: 'cloudflare_task_lifecycle_d1',
+      mutation_class: 'task_create',
+      cloudflare_write_admission: 'admitted',
+      task_id: 'task_9',
+      task_status: 'open',
+    },
+    params: {
+      site_id: null,
+      task_lifecycle_task_id: 'task_9',
+    },
+  });
+
+  assert.doesNotMatch(text, /Task Workflow:/);
+  assert.doesNotMatch(text, /Claim Command:/);
+  assert.doesNotMatch(text, /Report Command:/);
+  assert.doesNotMatch(text, /Finish Command:/);
+});
