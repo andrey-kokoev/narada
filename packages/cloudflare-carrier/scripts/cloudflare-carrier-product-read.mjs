@@ -524,6 +524,9 @@ export function formatProductSurfaceText(result) {
       const postureTargetSuffix = summary.posture_target ? ` target=${summary.posture_target}` : '';
       lines.push(`Posture Route: status=${summary.posture_next_status ?? 'unknown'} action=${summary.posture_next_action ?? 'none'} reason=${summary.posture_reason ?? 'none'}${postureTargetSuffix}`);
     }
+    if (summary.persistence_state || summary.recovery_state) {
+      lines.push(`Durability: persistence=${summary.persistence_state ?? 'unknown'} recovery=${summary.recovery_state ?? 'unknown'}`);
+    }
     if (summary.recovery_state || summary.recovery_boundary_count !== null || summary.recovery_gap_count !== null) {
       lines.push(`Recovery: state=${summary.recovery_state ?? 'unknown'} boundaries=${summary.recovery_boundary_count ?? 'unknown'} gaps=${summary.recovery_gap_count ?? 'unknown'}`);
       if (summary.recovery_next_action || summary.recovery_gap_keys?.length > 0) {

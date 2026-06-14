@@ -637,6 +637,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       posture_next_status: 'needs_attention',
       posture_next_action: 'review_operation',
       posture_reason: 'operation_needs_review',
+      persistence_state: 'durable',
       recovery_state: 'reconstructable',
       recovery_boundary_count: 12,
       recovery_boundary_keys: ['site_registry', 'carrier_evidence_index', 'site_file_materialization_store'],
@@ -681,6 +682,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       posture_next_status: 'ready',
       posture_next_action: 'monitor_operations',
       posture_reason: 'all_operations_monitoring',
+      persistence_state: 'durable',
       recovery_state: 'reconstructable',
       recovery_boundary_count: 12,
       recovery_boundary_keys: ['site_registry'],
@@ -691,6 +693,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   });
   assert.match(operationReadContinuityLoopText, /Workflow Focus: kind=site_continuity_loop ref=site_alpha/);
   assert.match(operationReadText, /Posture Route: status=needs_attention action=review_operation reason=operation_needs_review/);
+  assert.match(operationReadText, /Durability: persistence=durable recovery=reconstructable/);
   assert.match(operationReadText, /Recovery: state=reconstructable boundaries=12 gaps=0/);
   assert.match(operationReadText, /Recovery Next: action=monitor_recovery_posture gaps=none/);
   assert.match(operationReadText, /Recovery Boundaries: site_registry, carrier_evidence_index, site_file_materialization_store/);
