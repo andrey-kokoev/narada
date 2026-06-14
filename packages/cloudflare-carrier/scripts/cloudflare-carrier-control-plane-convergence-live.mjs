@@ -121,11 +121,21 @@ export function formatControlPlaneConvergenceLiveText(result) {
     `Site Passes: ${result.site_pass_count}`,
     `Posture Coherence: ${result.posture_coherence?.status ?? 'unknown'} issues=${result.posture_coherence?.issue_count ?? 0}`,
     `Durability Coherence: ${result.durability_coherence?.status ?? 'unknown'} issues=${result.durability_coherence?.issue_count ?? 0}`,
+    `Site List: pnpm --filter @narada2/cloudflare-carrier product:site:list:text -- --url ${result.worker_url} --operator-session-file <operator-session-file>`,
   ];
   for (const pass of result.site_passes ?? []) {
     lines.push(
       `- pass=${pass.pass} site=${pass.site_id ?? 'none'} route=${pass.route_action} delegated=${pass.delegated_result?.delegated_workflow ?? 'unknown'}`,
     );
+    if (pass.site_id) {
+      lines.push(`  Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${pass.site_id} --operator-session-file <operator-session-file>`);
+      const operationId = pass.delegated_result?.delegated_operation_id
+        ?? pass.delegated_result?.delegated_result?.selected_operation_id
+        ?? null;
+      if (operationId) {
+        lines.push(`  Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${pass.site_id} --operation-id ${operationId} --operator-session-file <operator-session-file>`);
+      }
+    }
   }
   return `${lines.join('\n')}\n`;
 }

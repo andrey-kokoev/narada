@@ -138,6 +138,34 @@ test('control plane convergence executes focused site pass then proves posture a
   assert.match(formatControlPlaneConvergenceLiveText(result), /Control Plane Convergence: ok/);
 });
 
+test('control plane convergence text surfaces direct site and operation reads for each pass', () => {
+  const text = formatControlPlaneConvergenceLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    initial_site_route: 'focus_next_site',
+    final_site_route: 'monitor_sites',
+    site_pass_count: 1,
+    posture_coherence: { status: 'ok', issue_count: 0 },
+    durability_coherence: { status: 'ok', issue_count: 0 },
+    site_passes: [
+      {
+        pass: 1,
+        site_id: 'site_alpha',
+        route_action: 'focus_next_site',
+        delegated_result: {
+          delegated_workflow: 'focus_next_operation',
+          delegated_operation_id: 'operation_alpha',
+        },
+      },
+    ],
+  });
+
+  assert.match(text, /Site List: pnpm --filter @narada2\/cloudflare-carrier product:site:list:text -- --url https:\/\/carrier\.example --operator-session-file <operator-session-file>/);
+  assert.match(text, /- pass=1 site=site_alpha route=focus_next_site delegated=focus_next_operation/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+});
+
 test('control plane convergence rejects unsupported site route actions', async () => {
   await assert.rejects(
     async () => {
