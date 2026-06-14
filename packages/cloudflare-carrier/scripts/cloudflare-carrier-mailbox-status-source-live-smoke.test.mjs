@@ -45,6 +45,7 @@ test('formatMailboxStatusSourceLiveSmokeText emits operator follow-on reads', ()
   });
 
   assert.match(text, /Mailbox Status Source Smoke: ok/);
+  assert.match(text, /Mailbox Readback Smoke: pnpm --filter @narada2\/cloudflare-carrier mailbox:readback-smoke:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
   assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
