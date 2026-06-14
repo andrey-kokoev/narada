@@ -141,11 +141,26 @@ export function formatOperationContinuationWorkflowLiveText(result) {
     `Queue After: needs_continuation=${result.list_after_resume?.needs_continuation_count ?? 'unknown'} next=${result.list_after_resume?.next_continuation_operation_id ?? 'none'}`,
     `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.selected_operation_id} --operator-session-file <operator-session-file>`,
   ];
+  const resumeWorkflow = buildPostResumeWorkflowCommand(result);
+  if (resumeWorkflow) {
+    lines.push(`Resume Workflow: ${resumeWorkflow}`);
+  }
   const carrierSessionId = result.continuation_resume_summary?.carrier_session_id ?? null;
   if (carrierSessionId) {
     lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.selected_operation_id} --carrier-session-id ${carrierSessionId} --operator-session-file <operator-session-file>`);
   }
   return `${lines.join('\n')}\n`;
+}
+
+function buildPostResumeWorkflowCommand(result) {
+  const nextAction = result.read_after_resume?.workflow_next_action ?? null;
+  if (nextAction === 'start_or_select_session') {
+    return `pnpm --filter @narada2/cloudflare-carrier product:operation:session:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.selected_operation_id} --operator-session-file <operator-session-file> --execute-operation-session`;
+  }
+  if (nextAction === 'refresh_site_continuity_loop') {
+    return `pnpm --filter @narada2/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.selected_operation_id} --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity`;
+  }
+  return null;
 }
 
 async function defaultRunNodeScript(args, options) {

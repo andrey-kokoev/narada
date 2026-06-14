@@ -160,7 +160,7 @@ test('runOperationContinuationWorkflowLive selects continuation from operation.l
   assert.ok(invocations[2].includes('--operator-session-cookie'));
 });
 
-test('formatOperationContinuationWorkflowLiveText surfaces direct follow-on reads', () => {
+test('formatOperationContinuationWorkflowLiveText surfaces direct follow-on workflows and reads', () => {
   const text = formatOperationContinuationWorkflowLiveText({
     status: 'ok',
     worker_url: 'https://carrier.example',
@@ -184,6 +184,7 @@ test('formatOperationContinuationWorkflowLiveText surfaces direct follow-on read
   });
 
   assert.match(text, /Operation Continuation Workflow: ok/);
+  assert.match(text, /Resume Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:session:workflow:live:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --operator-session-file <operator-session-file> --execute-operation-session/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --carrier-session-id carrier_session_operation_live_alpha_1 --operator-session-file <operator-session-file>/);
 });

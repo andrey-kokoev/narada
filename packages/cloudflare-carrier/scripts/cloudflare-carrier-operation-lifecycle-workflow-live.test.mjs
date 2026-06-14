@@ -192,7 +192,7 @@ test('runOperationLifecycleWorkflowLive orchestrates lifecycle create, continuat
   assert.ok(invocations[4].includes('--site-root'));
 });
 
-test('formatOperationLifecycleWorkflowLiveText surfaces direct follow-on reads', () => {
+test('formatOperationLifecycleWorkflowLiveText surfaces direct follow-on workflows and reads', () => {
   const text = formatOperationLifecycleWorkflowLiveText({
     status: 'ok',
     worker_url: 'https://carrier.example',
@@ -201,15 +201,18 @@ test('formatOperationLifecycleWorkflowLiveText surfaces direct follow-on reads',
     agent_id: 'agent.operator.lifecycle',
     carrier_session_id: 'carrier_session_operation_live_alpha_1',
     create_summary: { status: 'active', operation_kind: 'operator' },
-    read_after_create: { current_status: 'active' },
+    read_after_create: { current_status: 'active', workflow_next_action: 'start_or_select_session' },
     needs_continuation_summary: { requested_status: 'needs_continuation' },
     read_after_needs_continuation: { workflow_next_action: 'resume_operation_continuation' },
-    read_after_resume: { workflow_next_action: 'monitor_operation' },
+    read_after_resume: { workflow_next_action: 'refresh_site_continuity_loop' },
     close_summary: { requested_status: 'closed' },
     read_after_close: { current_status: 'closed' },
   });
 
   assert.match(text, /Operation Lifecycle Workflow: ok/);
+  assert.match(text, /Create Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:session:workflow:live:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --operator-session-file <operator-session-file> --execute-operation-session/);
+  assert.match(text, /Continuation Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuation:workflow:live:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --operator-session-file <operator-session-file> --execute-operation-continuation-resume/);
+  assert.match(text, /Resume Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --carrier-session-id carrier_session_operation_live_alpha_1 --operator-session-file <operator-session-file>/);
 });

@@ -179,7 +179,7 @@ test('runOperationSessionWorkflowLive surfaces fallback posture without failing 
   assert.equal(result.post_action_advanced, false);
 });
 
-test('formatOperationSessionWorkflowLiveText surfaces direct follow-on reads', () => {
+test('formatOperationSessionWorkflowLiveText surfaces direct follow-on workflows and reads', () => {
   const text = formatOperationSessionWorkflowLiveText({
     status: 'ok',
     worker_url: 'https://carrier.example',
@@ -192,12 +192,13 @@ test('formatOperationSessionWorkflowLiveText surfaces direct follow-on reads', (
       dispatch_decision_id: 'dispatch_alpha',
     },
     read_after_session: {
-      workflow_next_action: 'monitor_operation',
+      workflow_next_action: 'refresh_site_continuity_loop',
     },
     post_action_advanced: true,
   });
 
   assert.match(text, /Operation Session Workflow: ok/);
+  assert.match(text, /Post Action Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --carrier-session-id carrier_session_alpha --operator-session-file <operator-session-file>/);
 });
