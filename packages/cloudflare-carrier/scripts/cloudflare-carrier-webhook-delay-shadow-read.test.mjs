@@ -252,3 +252,25 @@ test('formatWebhookDelayShadowReadText suppresses next workflow for passive rout
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
   assert.doesNotMatch(text, /Operation Next Workflow:/);
 });
+
+test('formatWebhookDelayShadowReadText suppresses worker-scoped handoffs without worker url', () => {
+  const text = formatWebhookDelayShadowReadText({
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      workflow_next_action: 'focus_webhook_delay_shadow_read',
+      workflow_reason: 'directive_intent_not_recorded_from_shadow_read',
+      workflow_focus_ref: 'shadow_focus',
+      observation_count: 1,
+      focused_observation_id: 'shadow_focus',
+      focused_classification_state: 'critical',
+      focused_dispatch_authority: 'windows_primary_dispatcher',
+      focused_dispatch_action: 'none',
+    },
+  });
+
+  assert.doesNotMatch(text, /<worker-url>/);
+  assert.equal(text.includes('Operation Review:'), false);
+  assert.equal(text.includes('Operation Next Workflow:'), false);
+});

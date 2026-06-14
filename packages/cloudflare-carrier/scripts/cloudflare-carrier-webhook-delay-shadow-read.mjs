@@ -109,6 +109,7 @@ export function summarizeWebhookDelayShadow(operationBody = {}, shadowReadBody =
 
 export function formatWebhookDelayShadowReadText(result) {
   const summary = result?.summary ?? {};
+  const workerUrl = result?.worker_url ?? null;
   const actionableWorkflow = summary.workflow_next_action && summary.workflow_next_action !== 'none' && summary.workflow_next_action !== 'monitor_operation';
   const lines = [
     'Webhook Delay Shadow Read: ok',
@@ -123,11 +124,11 @@ export function formatWebhookDelayShadowReadText(result) {
   if (summary.focused_generated_at || summary.focused_source_summary_path) {
     lines.push(`Focused Timing: generated=${summary.focused_generated_at ?? 'unknown'} source=${summary.focused_source_summary_path ?? 'unknown'}`);
   }
-  if (summary.operation_id && summary.site_id) {
-    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+  if (workerUrl && summary.operation_id && summary.site_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
   }
-  if (actionableWorkflow && summary.operation_id && summary.site_id) {
-    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+  if (workerUrl && actionableWorkflow && summary.operation_id && summary.site_id) {
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
   }
   return `${lines.join('\n')}\n`;
 }

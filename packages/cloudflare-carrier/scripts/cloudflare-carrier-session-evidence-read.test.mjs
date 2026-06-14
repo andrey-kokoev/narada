@@ -124,3 +124,23 @@ test('summaries and text output preserve session evidence detail', () => {
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
 });
+
+test('formatSessionEvidenceText suppresses worker-scoped handoffs without worker url', () => {
+  const text = formatSessionEvidenceText({
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      carrier_session_id: 'session_alpha',
+      event_count: 2,
+      latest_event_kind: 'provider_request_recorded',
+      event_kind_counts: { provider_request_recorded: 2 },
+    },
+  });
+
+  assert.doesNotMatch(text, /<worker-url>/);
+  assert.doesNotMatch(text, /Task Review:/);
+  assert.doesNotMatch(text, /Task Workflow:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+});

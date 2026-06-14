@@ -273,3 +273,26 @@ test('formatResidentDispatchWindowsFallbackEvidenceReviewText suppresses review 
 
   assert.equal(text.includes('Review Ack:'), false);
 });
+
+test('formatResidentDispatchWindowsFallbackEvidenceReviewText suppresses worker-scoped handoffs without worker url', () => {
+  const text = formatResidentDispatchWindowsFallbackEvidenceReviewText({
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      workflow_next_action: 'review_windows_fallback_resident_dispatch_evidence',
+      workflow_reason: 'windows_fallback_execution_recorded',
+      evidence_count: 1,
+      focused_fallback_evidence_id: 'resident_dispatch_windows_fallback_evidence_alpha',
+      carrier_session_id: 'carrier_session_alpha',
+    },
+  });
+
+  assert.doesNotMatch(text, /<worker-url>/);
+  assert.equal(text.includes('Session Evidence:'), false);
+  assert.equal(text.includes('Task Review:'), false);
+  assert.equal(text.includes('Task Workflow:'), false);
+  assert.equal(text.includes('Operation Review:'), false);
+  assert.equal(text.includes('Operation Next Workflow:'), false);
+  assert.equal(text.includes('Review Ack:'), false);
+});
