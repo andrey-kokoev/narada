@@ -151,6 +151,8 @@ test('formatSiteFileMaterializationReadText prints the key review facts', () => 
   assert.match(text, /Site File Materialization Review: ok/);
   assert.match(text, /Materializations: count=1 authority=cloudflare_carrier_site admission=admitted/);
   assert.match(text, /Latest Materialization: materialization-1 proposal=proposal-9 file=docs\/architecture\/cloudflare-carrier\/target.md effect=cloudflare_site_file_materialization_record posture=recorded/);
+  assert.match(text, /Materialization Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file:materialization:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --site-file-materialization-id materialization-1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Proposal Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file-change:proposal:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref proposal-9 --operator-session-file <operator-session-file>/);
 });
 
 test('formatSiteFileMaterializationReadText prints focused wording for direct historical reads', () => {
@@ -174,5 +176,7 @@ test('formatSiteFileMaterializationReadText prints focused wording for direct hi
 
   assert.match(text, /Materializations: count=1 focused=materialization-9 authority=cloudflare_carrier_site admission=admitted/);
   assert.match(text, /Focused Materialization: materialization-9 proposal=proposal-9 file=docs\/focused.md posture=recorded/);
+  assert.match(text, /Materialization Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file:materialization:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --site-file-materialization-id materialization-9 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Proposal Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file-change:proposal:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref proposal-9 --operator-session-file <operator-session-file>/);
   assert.match(text, /Focused Recorded: 2026-06-12T01:00:00.000Z/);
 });

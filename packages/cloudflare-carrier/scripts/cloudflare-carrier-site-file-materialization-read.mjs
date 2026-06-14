@@ -96,6 +96,12 @@ export function formatSiteFileMaterializationReadText(result) {
       + `${summary.latest_materialization_posture ? ` posture=${summary.latest_materialization_posture}` : ''}`,
     );
   }
+  if (summary.site_id && summary.latest_materialization_id) {
+    lines.push(`Materialization Review: pnpm --filter @narada2/cloudflare-carrier product:site-file:materialization:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --site-file-materialization-id ${summary.latest_materialization_id} --operator-session-file <operator-session-file>`);
+  }
+  if (summary.site_id && summary.latest_proposal_id) {
+    lines.push(`Proposal Review: pnpm --filter @narada2/cloudflare-carrier product:site-file-change:proposal:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --focus-ref ${summary.latest_proposal_id} --operator-session-file <operator-session-file>`);
+  }
   if (summary.latest_recorded_at) lines.push(`${recordedLabel}: ${summary.latest_recorded_at}`);
   return `${lines.join('\n')}\n`;
 }
