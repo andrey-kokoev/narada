@@ -54,6 +54,24 @@ test('formatMailboxStatusShadowLiveSmokeText emits operator follow-on reads', ()
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
 });
 
+test('formatMailboxStatusShadowLiveSmokeText suppresses downstream links without site or operation ids', () => {
+  const text = formatMailboxStatusShadowLiveSmokeText({
+    status: 'ok',
+    worker_url: 'https://carrier.example.test',
+    site_id: '',
+    operation_id: '',
+    account_ref: 'mailbox:operator',
+    read_id: 'read_alpha',
+    mailbox_status_shadow_read_count: 2,
+  });
+
+  assert.doesNotMatch(text, /Mailbox Readback Smoke:/);
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+});
+
 test('runMailboxStatusShadowLiveSmoke returns summarized status-shadow state', async () => {
   const result = await runMailboxStatusShadowLiveSmoke({
     workerUrl: 'https://carrier.example.test',
