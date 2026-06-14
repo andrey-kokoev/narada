@@ -15,6 +15,7 @@
     "d1:migrations:local": "wrangler d1 migrations apply narada-cloudflare-carrier-tasks --local --config wrangler.toml",
     "d1:migrations:remote": "wrangler d1 migrations apply narada-cloudflare-carrier-tasks --remote --config wrangler.toml",
     "smoke:live": "node scripts/cloudflare-carrier-live-smoke.mjs",
+    "smoke:live:text": "node scripts/cloudflare-carrier-live-smoke.mjs --format text",
     "operator-session:capture": "node scripts/cloudflare-carrier-operator-session-capture.mjs",
     "operator-session:status": "node scripts/cloudflare-carrier-operator-session-status.mjs",
     "operator-session:status:text": "node scripts/cloudflare-carrier-operator-session-status.mjs --format text",
