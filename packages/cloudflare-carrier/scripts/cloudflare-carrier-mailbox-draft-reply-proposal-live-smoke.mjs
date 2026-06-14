@@ -74,6 +74,20 @@ export function formatMailboxDraftReplyProposalLiveSmokeText(result) {
       `Draft Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${result.worker_url} --site ${result.site_id} --focus-ref ${result.linked_draft_create_id} --operator-session-file <operator-session-file>`,
     );
   }
+  if (result.linked_send_accepted_id) {
+    lines.splice(
+      10,
+      0,
+      `Accepted Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${result.worker_url} --site ${result.site_id} --focus-ref ${result.linked_send_accepted_id} --operator-session-file <operator-session-file>`,
+    );
+  }
+  if (result.linked_send_confirmation_id) {
+    lines.splice(
+      11,
+      0,
+      `Confirmation Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-confirmation:text -- --url ${result.worker_url} --site ${result.site_id} --focus-ref ${result.linked_send_confirmation_id} --operator-session-file <operator-session-file>`,
+    );
+  }
   return `${lines.join('\n')}\n`;
 }
 
@@ -190,6 +204,8 @@ export async function runMailboxDraftReplyProposalLiveSmoke(config, { fetchImpl 
     mailbox_draft_reply_proposal_count: productSurface.mailbox_draft_reply_proposal_count,
     mailbox_outlook_draft_create_count: mailboxOutlookDraftCreates.length,
     linked_draft_create_id: linkedDraftCreate?.draft_create_id ?? linkedDraftCreate?.record?.draft_create_id ?? null,
+    linked_send_accepted_id: linkedDraftCreate?.send_accepted_id ?? linkedDraftCreate?.record?.send_accepted_id ?? null,
+    linked_send_confirmation_id: linkedDraftCreate?.send_confirmation_id ?? linkedDraftCreate?.record?.send_confirmation_id ?? null,
     operation_mailbox_outlook_draft_create_admission: productSurface.mailbox_outlook_draft_create_admission,
     mailbox_draft_reply_authority_partition: productSurface.mailbox_draft_reply_authority_partition,
   };
