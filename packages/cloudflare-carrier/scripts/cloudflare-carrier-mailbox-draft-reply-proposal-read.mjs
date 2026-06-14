@@ -145,6 +145,9 @@ export function formatMailboxDraftReplyProposalReadText(result) {
     );
   }
   lines.push(`Linked Draft Creates: ${summary.linked_draft_create_count ?? 0}`);
+  if (summary.linked_draft_create_ids?.[0]) {
+    lines.push(`Draft Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.linked_draft_create_ids[0]} --operator-session-file <operator-session-file>`);
+  }
   if (summary.focused_recorded_at || summary.focused_recorded_by_principal_id) {
     lines.push(`Recorded: ${summary.focused_recorded_at ?? 'unknown'} by ${summary.focused_recorded_by_principal_id ?? 'unknown'}`);
   }

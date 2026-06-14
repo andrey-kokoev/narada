@@ -236,7 +236,8 @@ test('formatMailboxDraftReplyProposalReadText surfaces review ack command', () =
       mailbox_outlook_draft_create_admission: 'not_admitted',
       mailbox_send_admission: 'not_admitted',
       mailbox_mutation_admission: 'not_admitted',
-      linked_draft_create_count: 0,
+      linked_draft_create_count: 1,
+      linked_draft_create_ids: ['mailbox_outlook_draft_create_live_1'],
       latest_focus_review: {
         focus_kind: 'mailbox_draft_reply_proposal',
         focus_ref: 'mailbox_draft_reply_proposal_live_1',
@@ -249,6 +250,7 @@ test('formatMailboxDraftReplyProposalReadText surfaces review ack command', () =
   assert.match(text, /Workflow Route: action=review_mailbox_draft_reply_proposal/);
   assert.match(text, /Body Preview: Draft reply preview text\./);
   assert.match(text, /Rationale: prove Cloudflare can hold draft reply proposal authority/);
+  assert.match(text, /Draft Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --focus-ref mailbox_outlook_draft_create_live_1 --operator-session-file <operator-session-file>/);
   assert.match(text, /Focused Review: mailbox_draft_reply_proposal:mailbox_draft_reply_proposal_live_1 status=acknowledged/);
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
 });
