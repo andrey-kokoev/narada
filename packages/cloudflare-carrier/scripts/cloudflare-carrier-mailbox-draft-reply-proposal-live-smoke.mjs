@@ -65,6 +65,7 @@ export function formatMailboxDraftReplyProposalLiveSmokeText(result) {
     `Counts: proposals=${result.mailbox_draft_reply_proposal_count ?? 0} drafts=${result.mailbox_outlook_draft_create_count ?? 0} partition=${result.mailbox_draft_reply_authority_partition ?? 'unknown'}`,
     `Proposal Review: pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${result.worker_url} --site ${result.site_id} --focus-ref ${result.proposal_id} --operator-session-file <operator-session-file>`,
     `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
+    `Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`,
   ];
   return `${lines.join('\n')}\n`;
 }

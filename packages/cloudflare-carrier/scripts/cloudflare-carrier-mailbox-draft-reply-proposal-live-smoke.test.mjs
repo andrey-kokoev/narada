@@ -47,6 +47,7 @@ test('formatMailboxDraftReplyProposalLiveSmokeText emits downstream reads', () =
   assert.match(text, /Mailbox Draft Reply Proposal Smoke: ok/);
   assert.match(text, /Proposal Review: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:draft-reply-proposal:text/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
 });
 
 test('runMailboxDraftReplyProposalLiveSmoke returns summarized proposal state', async () => {
