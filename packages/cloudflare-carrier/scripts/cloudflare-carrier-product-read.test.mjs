@@ -286,6 +286,30 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(siteListText, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.equal(siteListText.includes('secret-token'), false);
 
+  const siteListNoWorkerText = formatProductSurfaceText({
+    operation: 'site.list',
+    auth_source: 'flag:--token',
+    summary: {
+      operation: 'site.list',
+      site_count: 2,
+      next_site_id: 'site_alpha',
+      next_health: 'attention',
+      next_action: 'bind_cloudflare_product_next_site_locally',
+      next_reason: 'continuity_direction',
+      health_counts: { ready: 1, attention: 1 },
+      route_domain: 'site_posture',
+      route_command_state: 'site_posture_ready',
+      route_command_action: 'monitor_sites',
+      route_next_action: 'return_local_windows_continuity_packet',
+      route_target: 'site_alpha',
+      route_status: 'ready',
+      route_reason: 'continuity_direction',
+    },
+  });
+  assert.doesNotMatch(siteListNoWorkerText, /Site Read:/);
+  assert.doesNotMatch(siteListNoWorkerText, /Site Next Workflow:/);
+  assert.doesNotMatch(siteListNoWorkerText, /<worker-url>/);
+
   const siteListFocusText = formatProductSurfaceText({
     operation: 'site.list',
     worker_url: 'https://carrier.example.test',
@@ -1366,6 +1390,42 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(operationReadProviderLifecycleSurfaceText, /Repository Publication Execution Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(operationReadProviderLifecycleSurfaceText, /Repository Publication Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:evidence:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(operationReadProviderLifecycleSurfaceText, /Repository Publication Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+
+  const operationReadNoWorkerText = formatProductSurfaceText({
+    operation: 'operation.read',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_lifecycle',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'inhabited',
+      health: 'ready',
+      next_action: 'monitor_operation',
+      workflow_next_action: 'monitor_operation',
+      workflow_reason: 'operation_ready',
+      session_count: 1,
+      active_session_id: 'carrier_session_alpha',
+      task_count: 2,
+      local_ingress_request_count: 3,
+      local_ingress_evidence_count: 2,
+      local_ingress_provider_heartbeat_count: 4,
+      repository_publication_request_count: 5,
+      repository_publication_execution_count: 6,
+      repository_publication_evidence_count: 7,
+      repository_publication_provider_heartbeat_count: 8,
+      persistence_state: 'durable',
+      recovery_state: 'reconstructable',
+      recovery_boundary_count: 1,
+      recovery_gap_count: 0,
+    },
+  });
+  assert.doesNotMatch(operationReadNoWorkerText, /Task Review:/);
+  assert.doesNotMatch(operationReadNoWorkerText, /Session Evidence:/);
+  assert.doesNotMatch(operationReadNoWorkerText, /Local Ingress Request Review:/);
+  assert.doesNotMatch(operationReadNoWorkerText, /Repository Publication Review:/);
+  assert.doesNotMatch(operationReadNoWorkerText, /<worker-url>/);
 
   const operationReadGenericFocusReviewText = formatProductSurfaceText({
     operation: 'operation.read',

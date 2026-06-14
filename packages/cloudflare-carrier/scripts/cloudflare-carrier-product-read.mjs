@@ -417,6 +417,7 @@ export function summarizeProductReadFailure(operation, body = {}, params = {}) {
 export function formatProductSurfaceText(result) {
   const summary = result?.summary ?? summarizeProductSurface(result?.operation, result?.response ?? {});
   const operation = summary?.operation ?? result?.operation ?? 'unknown';
+  const workerUrl = result?.worker_url ?? null;
   const refused = result?.status === 'refused' || summary?.ok === false;
   const operationArg = (operationId) => operationId ? ` --operation-id ${operationId}` : '';
   const focusRefArg = (focusRef) => focusRef ? ` --focus-ref ${focusRef}` : '';
@@ -434,7 +435,7 @@ export function formatProductSurfaceText(result) {
     if (summary.operation_id) lines.push(`Operation: ${summary.operation_id}`);
     lines.push(`Refusal: action=${summary.action ?? 'deny'} reason=${summary.reason ?? 'unknown'}`);
     if (summary.status) lines.push(`Status: ${summary.status}`);
-    return `${lines.join('\n')}\n`;
+    return finalizeProductSurfaceLines(lines, workerUrl);
   }
   if (operation === 'site.list') {
     lines.push(`Sites: count=${summary.site_count ?? 0}`);
@@ -510,7 +511,7 @@ export function formatProductSurfaceText(result) {
       }
     }
     if (summary.health_counts) lines.push(`Health Counts: ${formatKeyValueMap(summary.health_counts)}`);
-    return `${lines.join('\n')}\n`;
+    return finalizeProductSurfaceLines(lines, workerUrl);
   }
   if (operation === 'site.read') {
     const hasSiteId = Boolean(summary.site_id);
@@ -945,9 +946,16 @@ export function formatProductSurfaceText(result) {
     ) {
       lines.push(`Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:operation:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id}${operationArg(summary.operation_id)} --operator-session-file <operator-session-file>`);
     }
-    return `${lines.join('\n')}\n`;
+    return finalizeProductSurfaceLines(lines, workerUrl);
   }
-  return `${lines.join('\n')}\n`;
+  return finalizeProductSurfaceLines(lines, workerUrl);
+}
+
+function finalizeProductSurfaceLines(lines, workerUrl) {
+  const filtered = workerUrl
+    ? lines
+    : lines.filter((line) => !line.includes('--url <worker-url>'));
+  return `${filtered.join('\n')}\n`;
 }
 
 export function resolveAuth(args = [], env = process.env) {
