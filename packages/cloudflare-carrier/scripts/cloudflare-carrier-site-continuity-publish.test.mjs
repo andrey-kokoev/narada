@@ -19,6 +19,7 @@ test('parseSiteContinuityPublishArgs builds publish request with operator sessio
   assert.equal(parsed.workerUrl, 'https://carrier.example.test');
   assert.equal(parsed.requestId, 'site_continuity_packet_publish_site_alpha');
   assert.equal(parsed.format, 'text');
+  assert.equal(parsed.operatorSessionFile, null);
   assert.deepEqual(parsed.auth, { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' });
   assert.deepEqual(parsed.params, { site_id: 'site_alpha' });
 });
@@ -121,12 +122,13 @@ test('publishCloudflareSiteContinuityPacket preserves structured refusal evidenc
 
 test('formatSiteContinuityPublishText renders operator summary without auth material', () => {
   const text = formatSiteContinuityPublishText({
-    status: 'ok',
-    worker_url: 'https://carrier.example.test',
-    auth_source: 'operator-session-file',
-    summary: {
-      ok: true,
-      site_id: 'site_alpha',
+      status: 'ok',
+      worker_url: 'https://carrier.example.test',
+      operator_session_file: 'D:\\narada\\.narada\\auth\\cloudflare-operator-session.json',
+      auth_source: 'operator-session-file',
+      summary: {
+        ok: true,
+        site_id: 'site_alpha',
       status: 'imported',
       packet_id: 'packet-1',
       source_embodiment_kind: 'cloudflare_carrier',
@@ -144,6 +146,9 @@ test('formatSiteContinuityPublishText renders operator summary without auth mate
   assert.match(text, /Direction: cloudflare_carrier -> local_windows/);
   assert.match(text, /Admission: projection_only reason=site_continuity_exchange_packet_projection_admitted/);
   assert.match(text, /Durability: refreshed_existing_packet/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
+  assert.match(text, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
   assert.doesNotMatch(text, /operator-session-cookie|secret-token/);
 });
 

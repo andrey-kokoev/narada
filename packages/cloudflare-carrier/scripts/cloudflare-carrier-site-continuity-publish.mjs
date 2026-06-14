@@ -8,6 +8,7 @@ export function parseSiteContinuityPublishArgs(argv = [], env = process.env, now
   const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? null;
   const requestId = option(args, '--request-id') ?? env.CLOUDFLARE_SITE_CONTINUITY_PUBLISH_REQUEST_ID ?? `site_continuity_packet_publish_${siteId ?? now()}`;
   const format = option(args, '--format') ?? env.CLOUDFLARE_SITE_CONTINUITY_PUBLISH_FORMAT ?? 'json';
+  const operatorSessionFile = option(args, '--operator-session-file') ?? env.CLOUDFLARE_OPERATOR_SESSION_FILE ?? null;
   const auth = resolveAuth(args, env);
 
   if (!workerUrl) throw new Error('site_continuity_publish_requires_--url_or_CLOUDFLARE_CARRIER_URL');
@@ -19,6 +20,7 @@ export function parseSiteContinuityPublishArgs(argv = [], env = process.env, now
     workerUrl,
     requestId,
     format,
+    operatorSessionFile,
     auth,
     params: { site_id: siteId },
   };
@@ -54,6 +56,7 @@ export async function publishCloudflareSiteContinuityPacket(config, fetchImpl = 
     status: 'ok',
     request_id: config.requestId,
     worker_url: config.workerUrl,
+    operator_session_file: config.operatorSessionFile ?? null,
     auth_source: config.auth.source,
     params: config.params,
     response: body,
@@ -85,7 +88,7 @@ export function summarizeSiteContinuityPublish(body = {}, params = {}) {
 export function formatSiteContinuityPublishText(result) {
   const summary = result?.summary ?? summarizeSiteContinuityPublish(result?.response ?? {}, result?.params ?? {});
   const ok = summary.ok === false || result?.status === 'refused' ? false : true;
-  return [
+  const lines = [
     `Site Continuity Publish: ${ok === false ? 'refused' : 'ok'}`,
     `Worker: ${result?.worker_url ?? 'unknown'}`,
     `Auth: ${result?.auth_source ?? 'unknown'}`,
@@ -101,7 +104,18 @@ export function formatSiteContinuityPublishText(result) {
     ...(summary.imported_at ? [`Imported At: ${summary.imported_at}`] : []),
     ...(summary.previous_imported_at ? [`Previous Imported At: ${summary.previous_imported_at}`] : []),
     ...(summary.imported_by_principal_id ? [`Imported By: ${summary.imported_by_principal_id}`] : []),
-  ].join('\n') + '\n';
+  ];
+
+  const worker = result?.worker_url ?? null;
+  const sessionFile = result?.operator_session_file ?? null;
+  if (worker && sessionFile && summary.site_id) {
+    const baseArgs = `-- --url ${worker} --site ${summary.site_id} --operator-session-file ${sessionFile}`;
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text ${baseArgs}`);
+    lines.push(`Operation List: pnpm --filter @narada2/cloudflare-carrier product:operation:list:text ${baseArgs}`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${worker} --operator-session-file ${sessionFile} --execute-site-next`);
+  }
+
+  return lines.join('\n') + '\n';
 }
 
 function option(args, name) {

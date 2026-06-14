@@ -60,6 +60,7 @@ test('parseSiteContinuityLoopReportArgs builds loop-report request from direct r
   assert.equal(parsed.requestId, 'site_continuity_loop_report_put_site_alpha');
   assert.equal(parsed.reportFile, reportFile);
   assert.equal(parsed.format, 'text');
+  assert.equal(parsed.operatorSessionFile, null);
   assert.deepEqual(parsed.auth, { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' });
   assert.equal(parsed.params.site_id, 'site_alpha');
   assert.equal(parsed.params.report.schema, 'narada.site_continuity_productized_loop.v1');
@@ -198,12 +199,13 @@ test('putSiteContinuityLoopReport preserves structured refusal evidence', async 
 
 test('formatSiteContinuityLoopReportText renders operator summary without auth material', () => {
   const text = formatSiteContinuityLoopReportText({
-    status: 'ok',
-    worker_url: 'https://carrier.example.test',
-    auth_source: 'operator-session-file',
-    summary: {
-      ok: true,
-      site_id: 'site_alpha',
+      status: 'ok',
+      worker_url: 'https://carrier.example.test',
+      operator_session_file: 'D:\\narada\\.narada\\auth\\cloudflare-operator-session.json',
+      auth_source: 'operator-session-file',
+      summary: {
+        ok: true,
+        site_id: 'site_alpha',
       status: 'recorded',
       loop_report_id: 'site-continuity-loop:site_alpha:2026-06-12T03:04:03.895Z',
       generated_at: '2026-06-12T03:04:03.895Z',
@@ -224,6 +226,9 @@ test('formatSiteContinuityLoopReportText renders operator summary without auth m
   assert.match(text, /Freshness Reason: site_continuity_loop_report_fresh/);
   assert.match(text, /Cloudflare Push: imported/);
   assert.match(text, /Durability: refreshed_existing_packet/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
+  assert.match(text, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
   assert.doesNotMatch(text, /operator-session-cookie|secret-token/);
 });
 
