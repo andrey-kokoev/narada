@@ -213,6 +213,8 @@ test('formatResidentDispatchWindowsFallbackEvidenceReviewText prints review ack 
   assert.match(text, /Resident Dispatch Windows Fallback Evidence Review: ok/);
   assert.match(text, /Focused Review: resident_dispatch_windows_fallback_evidence:resident_dispatch_windows_fallback_evidence_alpha status=acknowledged/);
   assert.match(text, /Cloudflare Carrier Session: carrier_session_alpha/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example --site site_alpha --carrier-session-id carrier_session_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example --site site_alpha --carrier-session-id carrier_session_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --carrier-session-id carrier_session_alpha --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
@@ -289,6 +291,8 @@ test('formatResidentDispatchWindowsFallbackEvidenceReviewText suppresses worker-
   });
 
   assert.doesNotMatch(text, /<worker-url>/);
+  assert.equal(text.includes('Site Read:'), false);
+  assert.equal(text.includes('Site Next Workflow:'), false);
   assert.equal(text.includes('Session Evidence:'), false);
   assert.equal(text.includes('Task Review:'), false);
   assert.equal(text.includes('Task Workflow:'), false);

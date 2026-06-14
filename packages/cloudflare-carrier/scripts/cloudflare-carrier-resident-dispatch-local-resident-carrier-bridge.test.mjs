@@ -161,9 +161,36 @@ test('formatResidentDispatchLocalResidentCarrierBridgeText prints key posture', 
   assert.match(text, /Local Resident Carrier Bridge/);
   assert.match(text, /Bridge: local_resident_carrier_bridge_alpha/);
   assert.match(text, /Session Replay Admission: admitted_by_cloudflare_operator/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_live_smoke --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_live_smoke --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example --site site_live_smoke --carrier-session-id cloudflare-bridged:site_live_smoke:operation_live_alpha:1 --operator-session-file <operator-session-file>/);
   assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example --site site_live_smoke --carrier-session-id cloudflare-bridged:site_live_smoke:operation_live_alpha:1 --operator-session-file <operator-session-file>/);
   assert.match(text, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_live_smoke --carrier-session-id cloudflare-bridged:site_live_smoke:operation_live_alpha:1 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.match(text, /Resident Dispatch Windows Fallback Evidence Review: pnpm --filter @narada2\/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:review:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --operator-session-file <operator-session-file>/);
+});
+
+test('formatResidentDispatchLocalResidentCarrierBridgeText suppresses worker-scoped handoffs without worker url', () => {
+  const text = formatResidentDispatchLocalResidentCarrierBridgeText({
+    site_id: 'site_live_smoke',
+    operation_id: 'operation_live_alpha',
+    status: 'ok',
+    summary: {
+      bridge_id: 'local_resident_carrier_bridge_alpha',
+      fallback_evidence_id: 'resident_fallback_evidence_alpha',
+      cloudflare_carrier_session_id: 'cloudflare-bridged:site_live_smoke:operation_live_alpha:1',
+    },
+    response: {},
+  });
+
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Session Evidence:/);
+  assert.doesNotMatch(text, /Task Review:/);
+  assert.doesNotMatch(text, /Task Workflow:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /Fallback Evidence Review:/);
+  assert.doesNotMatch(text, /--url unknown/);
 });

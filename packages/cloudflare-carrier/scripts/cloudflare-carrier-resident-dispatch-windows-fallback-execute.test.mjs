@@ -131,12 +131,35 @@ test('formatResidentDispatchWindowsFallbackExecuteText renders the execution sum
   assert.match(text, /Fallback Evidence: evidence_alpha/);
   assert.match(text, /Session Start Admission: admitted_by_windows_resident_loop/);
   assert.match(text, /Cloudflare Carrier Session: carrier_session_alpha/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example --site site_alpha --carrier-session-id carrier_session_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example --site site_alpha --carrier-session-id carrier_session_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --carrier-session-id carrier_session_alpha --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.match(text, /Resident Dispatch Windows Fallback Evidence Review: pnpm --filter @narada2\/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:review:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+});
+
+test('formatResidentDispatchWindowsFallbackExecuteText suppresses worker-scoped handoffs without worker url', () => {
+  const text = formatResidentDispatchWindowsFallbackExecuteText({
+    site_id: 'site_alpha',
+    operation_id: 'operation_alpha',
+    fallback_evidence_id: 'evidence_alpha',
+    summary: {
+      carrier_session_id: 'carrier_session_alpha',
+    },
+  });
+
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Session Evidence:/);
+  assert.doesNotMatch(text, /Task Review:/);
+  assert.doesNotMatch(text, /Task Workflow:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /Fallback Evidence Review:/);
+  assert.doesNotMatch(text, /--url unknown/);
 });
 
 function response(status, body) {

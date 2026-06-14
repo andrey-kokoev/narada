@@ -146,6 +146,7 @@ export function summarizeResidentDispatchWindowsFallbackEvidence(operation, body
 export function formatResidentDispatchWindowsFallbackEvidenceText(result = {}) {
   const summary = result.summary ?? {};
   const response = result.response ?? {};
+  const workerUrl = result.worker_url ?? null;
   const lines = [
     'Resident Dispatch Windows Fallback Evidence',
     `Worker: ${result.worker_url ?? 'unknown'}`,
@@ -168,17 +169,21 @@ export function formatResidentDispatchWindowsFallbackEvidenceText(result = {}) {
     ...(summary.carrier_session_id ? [`Cloudflare Carrier Session: ${summary.carrier_session_id}`] : []),
     ...(response?.code ? [`Code: ${response.code}`] : []),
   ];
-  if (result.site_id && summary.carrier_session_id) {
-    lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`);
-    lines.push(`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`);
-    lines.push(`Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --carrier-session-id ${summary.carrier_session_id} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`);
+  if (workerUrl && result.site_id) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${result.site_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
   }
-  if (result.site_id && result.operation_id) {
-    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`);
-    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+  if (workerUrl && result.site_id && summary.carrier_session_id) {
+    lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${workerUrl} --site ${result.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${workerUrl} --site ${result.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${workerUrl} --site ${result.site_id} --carrier-session-id ${summary.carrier_session_id} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`);
   }
-  if (result.site_id && result.operation_id && summary.fallback_evidence_id) {
-    lines.push(`Resident Dispatch Windows Fallback Evidence Review: pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:review:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`);
+  if (workerUrl && result.site_id && result.operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+  }
+  if (workerUrl && result.site_id && result.operation_id && summary.fallback_evidence_id) {
+    lines.push(`Resident Dispatch Windows Fallback Evidence Review: pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:review:text -- --url ${workerUrl} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`);
   }
   return lines.join('\n');
 }
