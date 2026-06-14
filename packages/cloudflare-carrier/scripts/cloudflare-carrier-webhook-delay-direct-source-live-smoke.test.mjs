@@ -38,6 +38,7 @@ test('formatWebhookDelayDirectSourceLiveSmokeText emits downstream reads', () =>
   assert.match(text, /Webhook Delay Direct Source Smoke: ok/);
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
 });
 
 test('runWebhookDelayDirectSourceLiveSmoke returns summarized direct source state', async () => {
