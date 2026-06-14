@@ -164,6 +164,8 @@ test('formatLocalIngressProviderLivenessReadText prints provider liveness summar
   assert.match(text, /Heartbeats: count=1 latest=heartbeat_alpha status=completed_and_recorded/);
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Provider Liveness Refresh: pnpm --filter @narada2\/cloudflare-carrier provider-liveness:refresh:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 });
 
@@ -198,6 +200,8 @@ test('formatLocalIngressProviderLivenessReadText suppresses refresh handoff for 
 
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.doesNotMatch(text, /Provider Liveness Refresh:/);
 });
 
@@ -212,6 +216,8 @@ test('formatLocalIngressProviderLivenessReadText suppresses worker-scoped handof
 
   assert.doesNotMatch(text, /Site Read:/);
   assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Posture Coherence Review:/);
+  assert.doesNotMatch(text, /Durability Coherence Review:/);
   assert.doesNotMatch(text, /Provider Liveness Refresh:/);
   assert.doesNotMatch(text, /<worker-url>/);
 });
