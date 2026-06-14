@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  formatOperationLifecycleWorkflowLiveText,
   parseOperationLifecycleWorkflowLiveArgs,
   runOperationLifecycleWorkflowLive,
 } from './cloudflare-carrier-operation-lifecycle-workflow-live.mjs';
@@ -34,8 +35,23 @@ test('parseOperationLifecycleWorkflowLiveArgs supports operator session auth', (
     value: 'operator-session-cookie',
     source: 'operator-session-cookie',
   });
+  assert.equal(parsed.format, 'json');
   assert.equal(parsed.continuationReason, 'operation_needs_operator_continuation');
   assert.equal(parsed.closeReason, 'operation_closed_after_live_workflow');
+});
+
+test('parseOperationLifecycleWorkflowLiveArgs accepts text format', () => {
+  const parsed = parseOperationLifecycleWorkflowLiveArgs([
+    '--url', 'https://carrier.example',
+    '--site', 'site_live_smoke',
+    '--operation-id', 'operation_live_alpha',
+    '--agent-id', 'agent.operator.lifecycle',
+    '--operator-session-cookie', 'operator-session-cookie',
+    '--execute-operation-lifecycle',
+    '--format', 'text',
+  ], {});
+
+  assert.equal(parsed.format, 'text');
 });
 
 test('runOperationLifecycleWorkflowLive orchestrates lifecycle create, continuation, resume, and close', async () => {
@@ -174,4 +190,26 @@ test('runOperationLifecycleWorkflowLive orchestrates lifecycle create, continuat
   assert.equal(invocations[7][0].split(/[\\/]/).pop(), 'cloudflare-carrier-product-read.mjs');
   assert.ok(invocations[0].includes('--operator-session-cookie'));
   assert.ok(invocations[4].includes('--site-root'));
+});
+
+test('formatOperationLifecycleWorkflowLiveText surfaces direct follow-on reads', () => {
+  const text = formatOperationLifecycleWorkflowLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    site_id: 'site_live_smoke',
+    operation_id: 'operation_live_alpha',
+    agent_id: 'agent.operator.lifecycle',
+    carrier_session_id: 'carrier_session_operation_live_alpha_1',
+    create_summary: { status: 'active', operation_kind: 'operator' },
+    read_after_create: { current_status: 'active' },
+    needs_continuation_summary: { requested_status: 'needs_continuation' },
+    read_after_needs_continuation: { workflow_next_action: 'resume_operation_continuation' },
+    read_after_resume: { workflow_next_action: 'monitor_operation' },
+    close_summary: { requested_status: 'closed' },
+    read_after_close: { current_status: 'closed' },
+  });
+
+  assert.match(text, /Operation Lifecycle Workflow: ok/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --carrier-session-id carrier_session_operation_live_alpha_1 --operator-session-file <operator-session-file>/);
 });

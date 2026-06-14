@@ -19,6 +19,7 @@ const continuationResumeScript = resolve(scriptDir, 'cloudflare-carrier-continua
 export function parseOperationLifecycleWorkflowLiveArgs(argv = [], env = process.env, now = () => Date.now()) {
   const args = [...argv];
   const workerUrl = option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '';
+  const format = option(args, '--format') ?? env.CLOUDFLARE_CARRIER_OPERATION_LIFECYCLE_FORMAT ?? 'json';
   const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? 'site_live_smoke';
   const operationId = option(args, '--operation-id') ?? option(args, '--carrier-operation') ?? env.CLOUDFLARE_CARRIER_OPERATION_ID ?? `operation_live_${now()}`;
   const displayName = option(args, '--display-name') ?? env.CLOUDFLARE_CARRIER_OPERATION_DISPLAY_NAME ?? 'Operation lifecycle live workflow';
@@ -35,6 +36,7 @@ export function parseOperationLifecycleWorkflowLiveArgs(argv = [], env = process
     throw new Error('operation_lifecycle_workflow_live_requires_--execute-operation-lifecycle_or_CLOUDFLARE_CARRIER_OPERATION_LIFECYCLE_EXECUTE_LIVE=1');
   }
   if (!workerUrl) throw new Error('operation_lifecycle_workflow_live_requires_--url_or_CLOUDFLARE_CARRIER_URL');
+  if (!['json', 'text'].includes(format)) throw new Error(`operation_lifecycle_workflow_live_unknown_format:${format}`);
   if (!siteId) throw new Error('operation_lifecycle_workflow_live_requires_site_id');
   if (!operationId) throw new Error('operation_lifecycle_workflow_live_requires_operation_id');
   if (!agentId) throw new Error('operation_lifecycle_workflow_live_requires_agent_id');
@@ -42,6 +44,7 @@ export function parseOperationLifecycleWorkflowLiveArgs(argv = [], env = process
 
   return {
     workerUrl,
+    format,
     siteId,
     operationId,
     displayName,
@@ -120,6 +123,25 @@ export async function runOperationLifecycleWorkflowLive(
     close_summary: close.summary,
     read_after_close: readAfterClose.summary,
   };
+}
+
+export function formatOperationLifecycleWorkflowLiveText(result) {
+  const lines = [
+    `Operation Lifecycle Workflow: ${result.status}`,
+    `Worker: ${result.worker_url}`,
+    `Site: ${result.site_id}`,
+    `Operation: ${result.operation_id}`,
+    `Agent: ${result.agent_id}`,
+    `Create: status=${result.create_summary?.status ?? result.read_after_create?.current_status ?? 'unknown'} kind=${result.create_summary?.operation_kind ?? 'unknown'}`,
+    `Needs Continuation: status=${result.needs_continuation_summary?.requested_status ?? result.needs_continuation_summary?.status ?? 'unknown'} next=${result.read_after_needs_continuation?.workflow_next_action ?? 'unknown'}`,
+    `Resume: session=${result.carrier_session_id ?? 'none'} next=${result.read_after_resume?.workflow_next_action ?? 'unknown'}`,
+    `Close: status=${result.close_summary?.requested_status ?? result.close_summary?.status ?? 'unknown'} final=${result.read_after_close?.current_status ?? 'unknown'}`,
+    `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
+  ];
+  if (result.carrier_session_id) {
+    lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --carrier-session-id ${result.carrier_session_id} --operator-session-file <operator-session-file>`);
+  }
+  return `${lines.join('\n')}\n`;
 }
 
 async function defaultRunNodeScript(args, options) {
@@ -211,5 +233,9 @@ function flag(args, name) {
 if (resolve(process.argv[1] ?? '') === scriptPath) {
   const config = parseOperationLifecycleWorkflowLiveArgs(process.argv.slice(2));
   const result = await runOperationLifecycleWorkflowLive(config);
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  if (config.format === 'text') {
+    process.stdout.write(formatOperationLifecycleWorkflowLiveText(result));
+  } else {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  }
 }
