@@ -137,6 +137,7 @@ export function formatOperationLifecycleWorkflowLiveText(result) {
     `Resume: session=${result.carrier_session_id ?? 'none'} next=${result.read_after_resume?.workflow_next_action ?? 'unknown'}`,
     `Close: status=${result.close_summary?.requested_status ?? result.close_summary?.status ?? 'unknown'} final=${result.read_after_close?.current_status ?? 'unknown'}`,
     `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
+    `Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`,
   ];
   const createFollowOn = buildOperationWorkflowCommand(result, result.read_after_create?.workflow_next_action ?? null);
   if (createFollowOn) lines.push(`Create Workflow: ${createFollowOn}`);

@@ -104,6 +104,7 @@ export function formatOperationFocusWorkflowLiveText(result) {
     `Focused Read: status=${result.read_focused?.current_status ?? 'unknown'} next=${result.read_focused?.workflow_next_action ?? 'unknown'}`,
     `Operation List: pnpm --filter @narada2/cloudflare-carrier product:operation:list:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`,
     `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.selected_operation_id} --operator-session-file <operator-session-file>`,
+    `Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.selected_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`,
   ];
   const focusedWorkflow = buildFocusedWorkflowCommand(result);
   if (focusedWorkflow) {

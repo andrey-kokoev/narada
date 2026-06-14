@@ -140,6 +140,7 @@ export function formatOperationContinuationWorkflowLiveText(result) {
     `Resume: session=${result.continuation_resume_summary?.carrier_session_id ?? 'none'} next=${result.read_after_resume?.workflow_next_action ?? 'unknown'}`,
     `Queue After: needs_continuation=${result.list_after_resume?.needs_continuation_count ?? 'unknown'} next=${result.list_after_resume?.next_continuation_operation_id ?? 'none'}`,
     `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.selected_operation_id} --operator-session-file <operator-session-file>`,
+    `Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.selected_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`,
   ];
   const resumeWorkflow = buildPostResumeWorkflowCommand(result);
   if (resumeWorkflow) {

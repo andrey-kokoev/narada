@@ -163,4 +163,5 @@ test('formatOperationFocusWorkflowLiveText surfaces direct follow-on workflows a
   assert.match(text, /Focused Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:session:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_attention --operator-session-file <operator-session-file> --execute-operation-session/);
   assert.match(text, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_attention --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_attention --operator-session-file <operator-session-file> --execute-operation-next/);
 });

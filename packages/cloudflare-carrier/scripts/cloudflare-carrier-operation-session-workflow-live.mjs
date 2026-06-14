@@ -112,6 +112,7 @@ export function formatOperationSessionWorkflowLiveText(result) {
     `Dispatch: state=${result.resident_dispatch?.dispatch_state ?? 'unknown'} session=${result.resident_dispatch?.carrier_session_id ?? 'none'} decision=${result.resident_dispatch?.dispatch_decision_id ?? 'none'}`,
     `Post Action: next=${result.read_after_session?.workflow_next_action ?? 'unknown'} advanced=${result.post_action_advanced ? 'yes' : 'no'}`,
     `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
+    `Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`,
   ];
   const postActionWorkflow = buildPostSessionWorkflowCommand(result);
   if (postActionWorkflow) {
