@@ -252,5 +252,25 @@ test('formatMailboxDraftReplyProposalReadText surfaces review ack command', () =
   assert.match(text, /Rationale: prove Cloudflare can hold draft reply proposal authority/);
   assert.match(text, /Draft Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --focus-ref mailbox_outlook_draft_create_live_1 --operator-session-file <operator-session-file>/);
   assert.match(text, /Focused Review: mailbox_draft_reply_proposal:mailbox_draft_reply_proposal_live_1 status=acknowledged/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
+});
+
+test('formatMailboxDraftReplyProposalReadText suppresses next workflow for passive routes', () => {
+  const text = formatMailboxDraftReplyProposalReadText({
+    worker_url: 'https://carrier.example',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_narada_cloudflare',
+      operation_id: 'operation_site_read',
+      workflow_next_action: 'monitor_operation',
+      workflow_reason: 'complete',
+      proposal_count: 1,
+      focused_proposal_id: 'mailbox_draft_reply_proposal_live_1',
+    },
+  });
+
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
 });

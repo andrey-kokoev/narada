@@ -120,6 +120,7 @@ export function summarizeMailboxDraftReplyProposal(body = {}, draftCreateBody = 
 
 export function formatMailboxDraftReplyProposalReadText(result) {
   const summary = result?.summary ?? {};
+  const actionableWorkflow = summary.workflow_next_action && summary.workflow_next_action !== 'none' && summary.workflow_next_action !== 'monitor_operation';
   const lines = [
     'Mailbox Draft Reply Proposal Read: ok',
     `Worker: ${result?.worker_url ?? 'unknown'}`,
@@ -157,6 +158,12 @@ export function formatMailboxDraftReplyProposalReadText(result) {
       ? 'Focused Review'
       : 'Latest Focus Review';
     lines.push(`${focusReviewLabel}: ${summary.latest_focus_review.focus_kind ?? 'unknown'}:${summary.latest_focus_review.focus_ref ?? 'unknown'} status=${summary.latest_focus_review.review_status ?? 'unknown'}`);
+  }
+  if (summary.operation_id && summary.site_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+  }
+  if (actionableWorkflow && summary.operation_id && summary.site_id) {
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
   }
   if (summary.focused_proposal_id) {
     lines.push(`Review Ack: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --focus-kind mailbox_draft_reply_proposal --focus-ref ${summary.focused_proposal_id} --operator-session-file <operator-session-file>`);
