@@ -165,6 +165,7 @@ export function summarizeDirectiveDeliveryReview(operationBody = {}, directiveRe
 
 export function formatDirectiveDeliveryReviewText(result) {
   const summary = result?.summary ?? {};
+  const actionableWorkflow = summary.workflow_next_action && summary.workflow_next_action !== 'none' && summary.workflow_next_action !== 'monitor_operation';
   const undeliveredLabel = summary.directive_record_count === 1
     && summary.focused_directive_record_id
     && summary.focused_directive_record_id === summary.latest_undelivered_directive_record_id
@@ -199,6 +200,12 @@ export function formatDirectiveDeliveryReviewText(result) {
   }
   if (summary.focused_fallback_status || summary.latest_recorded_at || summary.latest_delivery_recorded_at) {
     lines.push(`Timing: fallback=${summary.focused_fallback_status ?? 'unknown'} directive_recorded=${summary.latest_recorded_at ?? 'unknown'} delivery_recorded=${summary.latest_delivery_recorded_at ?? 'unknown'}`);
+  }
+  if (summary.operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+  }
+  if (actionableWorkflow && summary.operation_id) {
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id} --execute-operation-next --operator-session-file <operator-session-file>`);
   }
   return `${lines.join('\n')}\n`;
 }

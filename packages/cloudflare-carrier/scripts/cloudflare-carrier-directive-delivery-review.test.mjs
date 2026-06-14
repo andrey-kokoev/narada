@@ -275,6 +275,7 @@ test('formatDirectiveDeliveryReviewText renders directive review summary', () =>
     auth_source: 'operator-session-file',
     summary: {
       site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
       workflow_next_action: 'review_directive_delivery',
       workflow_reason: 'undelivered_directives',
       workflow_focus_ref: 'directive_record_focus',
@@ -310,6 +311,8 @@ test('formatDirectiveDeliveryReviewText renders directive review summary', () =>
   assert.match(text, /Focused Directive: id=directive_record_focus classification=critical delay=18 critical=15 action=record_directive_emission_intent visibility=record_only/);
   assert.match(text, /Focused Admission: delivery_action=none dispatch_to_provider=false complete_without_provider=true/);
   assert.match(text, /Authority: record=cloudflare_directive_dual_record delivery=cloudflare_primary_directive_delivery dispatch=cloudflare_primary_dispatcher fallback=windows_fallback_dispatcher/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --execute-operation-next --operator-session-file <operator-session-file>/);
 });
 
 test('formatDirectiveDeliveryReviewText uses focused undelivered label for narrowed historical reads', () => {
@@ -318,6 +321,7 @@ test('formatDirectiveDeliveryReviewText uses focused undelivered label for narro
     auth_source: 'operator-session-file',
     summary: {
       site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
       workflow_next_action: null,
       workflow_reason: null,
       workflow_focus_ref: 'directive_record_focus',
@@ -333,6 +337,8 @@ test('formatDirectiveDeliveryReviewText uses focused undelivered label for narro
   });
 
   assert.match(text, /Directive Records: count=1 focused=directive_record_focus undelivered=1 focused_undelivered=directive_record_focus/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.equal(text.includes('Operation Next Workflow:'), false);
 });
 
 function responseJson(body) {
