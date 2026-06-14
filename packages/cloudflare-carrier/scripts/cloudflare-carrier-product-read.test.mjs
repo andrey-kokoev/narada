@@ -1801,6 +1801,37 @@ test('formatProductSurfaceText emits site authority operator command for authori
   assert.match(authorityEvidenceText, /Site Authority: pnpm --filter @narada2\/cloudflare-carrier product:site:authority:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 });
 
+test('formatProductSurfaceText omits synthetic operation ids from authority transfer handoff', () => {
+  const authorityTransferText = formatProductSurfaceText({
+    operation: 'site.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'site.read',
+      site_id: 'site_alpha',
+      display_name: 'Site Alpha',
+      health: 'attention',
+      next_action: 'continue_authority_transfer',
+      continuity_state: 'packet_observed',
+      continuity_direction_state: 'bidirectional_packets_observed',
+      continuity_direction_missing: [],
+      continuity_loop_state: 'loop_report_observed',
+      continuity_reconciliation_execution_state: 'reconciliation_execution_observed',
+      continuity_reconciliation_execution_health: 'ready',
+      continuity_packet_count: 3,
+      continuity_loop_report_count: 20,
+      continuity_reconciliation_execution_count: 20,
+      persistence_state: 'durable',
+      recovery_state: 'reconstructable',
+      membership_count: 1,
+      session_count: 4,
+    },
+  });
+
+  assert.match(authorityTransferText, /Authority Transfer: pnpm --filter @narada2\/cloudflare-carrier product:authority-transfer:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.doesNotMatch(authorityTransferText, /Authority Transfer:.*<operation-id>/);
+});
+
 test('formatProductSurfaceText emits site authority operator command for authority path evidence route', () => {
   const authorityPathText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -2402,6 +2433,31 @@ test('formatProductSurfaceText surfaces site scope and site operation focus comm
     },
   });
   assert.match(siteReadNextOperationText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
+});
+
+test('formatProductSurfaceText omits synthetic next operation ids from site list handoff', () => {
+  const siteListText = formatProductSurfaceText({
+    operation: 'site.list',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'site.list',
+      site_count: 1,
+      next_site_id: 'site_alpha',
+      next_health: 'attention',
+      next_action: 'focus_next_operation',
+      next_reason: 'focused_site_has_pending_operation',
+      route_domain: 'site_posture',
+      route_command_state: 'site_posture_focus_next_site',
+      route_next_action: 'focus_next_site',
+      route_target: 'site_alpha',
+      route_status: 'attention',
+      route_reason: 'focused_site_has_pending_operation',
+    },
+  });
+
+  assert.match(siteListText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
+  assert.doesNotMatch(siteListText, /Operation Next Workflow:.*<operation-id>/);
 });
 
 test('formatProductSurfaceText surfaces operation scope command', () => {
