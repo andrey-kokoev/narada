@@ -52,6 +52,25 @@ test('formatRepositoryPublicationLiveSmokeText emits downstream operator reads',
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
 });
 
+test('formatRepositoryPublicationLiveSmokeText suppresses downstream reads without site id', () => {
+  const text = formatRepositoryPublicationLiveSmokeText({
+    status: 'ok',
+    worker_url: 'https://carrier.example.test',
+    site_id: '',
+    operation_id: 'operation_repo_publication',
+    repository_publication_request_id: 'repository-publication-request-1',
+    repository_publication_execution_id: 'cloudflare-execution-1',
+    repository_ref: 'github:andrey/site-alpha',
+    branch_ref: 'cloudflare-publication',
+    publication_status: 'completed',
+  });
+
+  assert.doesNotMatch(text, /Request Review:/);
+  assert.doesNotMatch(text, /Execution Read:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+});
+
 test('runRepositoryPublicationLiveSmoke returns blocked result when github token is missing and allowed', async () => {
   let callIndex = 0;
   const result = await runRepositoryPublicationLiveSmoke({

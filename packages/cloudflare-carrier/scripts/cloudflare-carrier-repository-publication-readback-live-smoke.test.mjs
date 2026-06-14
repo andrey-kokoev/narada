@@ -78,6 +78,31 @@ test('formatRepositoryPublicationReadbackLiveSmokeText suppresses admission read
   assert.doesNotMatch(text, /<repository-publication-admission-id>/);
 });
 
+test('formatRepositoryPublicationReadbackLiveSmokeText suppresses downstream reads without site id', () => {
+  const text = formatRepositoryPublicationReadbackLiveSmokeText({
+    status: 'ok',
+    worker_url: 'https://carrier.example.test',
+    site_id: '',
+    lane: 'cloudflare',
+    repository_publication_request_id: 'repository-publication-request-1',
+    repository_publication_admission_id: 'repository-publication-admission-1',
+    repository_publication_execution_id: 'cloudflare-execution-1',
+    repository_publication_evidence_id: 'repository-publication-evidence-1',
+    request_list_count: 1,
+    admission_count: 1,
+    execution_count: 1,
+    evidence_count: 1,
+    operation_read_summary: { operation_id: 'operation-1' },
+  });
+
+  assert.doesNotMatch(text, /Request Review:/);
+  assert.doesNotMatch(text, /Admission Read:/);
+  assert.doesNotMatch(text, /Execution Read:/);
+  assert.doesNotMatch(text, /Evidence Read:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+});
+
 test('parseRepositoryPublicationReadbackLiveSmokeArgs refuses missing required inputs', () => {
   assert.throws(
     () => parseRepositoryPublicationReadbackLiveSmokeArgs(['--site', 'site_alpha', '--repository-publication-request-id', 'repository-publication-request-1'], {}, { loadLocalEnv: false }),

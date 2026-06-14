@@ -62,6 +62,7 @@ export async function parseRepositoryPublicationLiveSmokeArgs(
 }
 
 export function formatRepositoryPublicationLiveSmokeText(result) {
+  const hasSiteId = typeof result.site_id === 'string' && result.site_id.length > 0;
   const lines = [
     `Repository Publication Smoke: ${result.status}`,
     `Worker: ${result.worker_url}`,
@@ -79,12 +80,16 @@ export function formatRepositoryPublicationLiveSmokeText(result) {
   if (result.next_required_action) {
     lines.push(`Next Required Action: ${result.next_required_action}`);
   }
-  lines.push(`Request Review: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-request-id ${result.repository_publication_request_id} --operator-session-file <operator-session-file>`);
-  if (result.repository_publication_execution_id) {
+  if (hasSiteId && result.repository_publication_request_id) {
+    lines.push(`Request Review: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-request-id ${result.repository_publication_request_id} --operator-session-file <operator-session-file>`);
+  }
+  if (hasSiteId && result.repository_publication_execution_id) {
     lines.push(`Execution Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-execution-id ${result.repository_publication_execution_id} --operator-session-file <operator-session-file>`);
   }
-  lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`);
-  lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+  if (hasSiteId && result.operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+  }
   return `${lines.join('\n')}\n`;
 }
 
