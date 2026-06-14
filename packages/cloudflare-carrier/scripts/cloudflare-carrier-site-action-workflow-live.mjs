@@ -99,6 +99,7 @@ export function formatSiteActionWorkflowLiveText(result) {
   const operationId = result.read_after_action?.active_operation_id ?? result.read_before_action?.active_operation_id ?? null;
   if (operationId) {
     lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${operationId} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${operationId} --operator-session-file <operator-session-file> --execute-operation-next`);
   }
   if (result.delegated_followup_result) {
     lines.push('Follow-up: executed');
