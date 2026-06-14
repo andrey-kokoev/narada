@@ -158,23 +158,27 @@ function formatTaskLifecycleNextCommands(result, summary) {
   if (!workerUrl || !siteId || !taskId) return [];
   const normalizedStatus = normalizeTaskStatus(summary.task_status);
   const claimAgent = '<agent-id>';
-  const reportAgent = summary.claimed_by_agent_id ?? '<agent-id>';
-  const finishAgent = summary.reported_by_agent_id ?? summary.claimed_by_agent_id ?? '<agent-id>';
+  const reportAgent = summary.claimed_by_agent_id ?? null;
+  const finishAgent = summary.reported_by_agent_id ?? summary.claimed_by_agent_id ?? null;
   const workflowAgentOption = normalizedStatus === 'open'
     ? ` --agent-id ${claimAgent}`
     : '';
   const workflowCommand = `Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId}${workflowAgentOption} --operator-session-file <operator-session-file> --execute-task-lifecycle-next`;
   if (summary.report_id && !summary.finish_id) {
-    return [
-      workflowCommand,
-      `Finish Command: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:finish:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --finalizer-agent ${finishAgent} --finish-verdict accepted --operator-session-file <operator-session-file>`,
-    ];
+    return finishAgent
+      ? [
+          workflowCommand,
+          `Finish Command: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:finish:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --finalizer-agent ${finishAgent} --finish-verdict accepted --operator-session-file <operator-session-file>`,
+        ]
+      : [workflowCommand];
   }
   if (normalizedStatus === 'claimed') {
-    return [
-      workflowCommand,
-      `Report Command: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:report:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --reporter-agent ${reportAgent} --summary <summary> --operator-session-file <operator-session-file>`,
-    ];
+    return reportAgent
+      ? [
+          workflowCommand,
+          `Report Command: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:report:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --reporter-agent ${reportAgent} --summary <summary> --operator-session-file <operator-session-file>`,
+        ]
+      : [workflowCommand];
   }
   if (normalizedStatus === 'open') {
     return [
