@@ -369,6 +369,8 @@ test('formatContinuationResumeText renders operator summary without auth materia
   assert.match(text, /Route: action=resume_operation_continuation reason=operation_lifecycle_needs_continuation/);
   assert.match(text, /Activation: status=active transition=needs_continuation_to_active reason=operator_resuming_continuation/);
   assert.match(text, /Session Event: kind=carrier_session_started sequence=1/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --carrier-session-id carrier_session_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --carrier-session-id carrier_session_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --carrier-session-id carrier_session_alpha --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
@@ -410,6 +412,8 @@ test('formatContinuationResumeText suppresses workflow handoff for passive route
     }),
   });
 
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --carrier-session-id carrier_session_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --carrier-session-id carrier_session_alpha --operator-session-file <operator-session-file>/);
@@ -454,9 +458,54 @@ test('formatContinuationResumeText suppresses worker-scoped handoffs without wor
   assert.doesNotMatch(text, /Session Evidence:/);
   assert.doesNotMatch(text, /Task Review:/);
   assert.doesNotMatch(text, /Task Workflow:/);
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
   assert.doesNotMatch(text, /Operation Review:/);
   assert.doesNotMatch(text, /Operation Next Workflow:/);
   assert.doesNotMatch(text, /--url unknown/);
+});
+
+test('formatContinuationResumeText suppresses site-scoped handoffs without site id', () => {
+  const text = formatContinuationResumeText({
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    params: {
+      operation_id: 'operation_alpha',
+      carrier_session_id: 'carrier_session_alpha',
+      agent_id: 'agent.operator',
+    },
+    summary: summarizeContinuationResume({
+      route: {
+        workflow_next_action: 'resume_operation_continuation',
+        workflow_reason: 'operation_lifecycle_needs_continuation',
+      },
+      activation: {
+        summary: {
+          status: 'active',
+          transition: 'needs_continuation_to_active',
+          reason: 'operator_resuming_continuation',
+        },
+      },
+      session_start: {
+        carrier_session_id: 'carrier_session_alpha',
+        event: { event_kind: 'carrier_session_started', sequence: 1 },
+      },
+    }, {
+      operation_id: 'operation_alpha',
+      carrier_session_id: 'carrier_session_alpha',
+      agent_id: 'agent.operator',
+      reason: 'operator_resuming_continuation',
+    }),
+  });
+
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Session Evidence:/);
+  assert.doesNotMatch(text, /Task Review:/);
+  assert.doesNotMatch(text, /Task Workflow:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /<site-id>/);
 });
 
 test('formatContinuationResumeText renders refused resume evidence', () => {

@@ -228,6 +228,10 @@ export function formatContinuationResumeText(result) {
   if (summary.route_next_action || summary.route_reason) lines.push(`Route: action=${summary.route_next_action ?? 'unknown'} reason=${summary.route_reason ?? 'none'}`);
   lines.push(`Activation: status=${summary.activation_status ?? 'unknown'} transition=${summary.activation_transition ?? 'none'} reason=${summary.activation_reason ?? 'none'}`);
   lines.push(`Session Event: kind=${summary.session_event_kind ?? 'unknown'} sequence=${summary.session_event_sequence ?? 'unknown'}`);
+  if (workerUrl && summary.site_id) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
+  }
   if (workerUrl && summary.site_id && summary.carrier_session_id) {
     lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${workerUrl} --site ${summary.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`);
     lines.push(`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${workerUrl} --site ${summary.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`);
