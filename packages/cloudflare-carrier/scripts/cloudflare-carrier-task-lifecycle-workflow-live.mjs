@@ -68,6 +68,9 @@ export function formatTaskLifecycleWorkflowLiveText(result) {
     `Read After Finish: status=${result.read_after_finish?.task_status ?? 'unknown'}`,
     `Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result.worker_url} --site ${result.site_id} --task-id ${result.task_id} --operator-session-file <operator-session-file>`,
   ];
+  if (result.read_after_finish?.operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.read_after_finish.operation_id} --operator-session-file <operator-session-file>`);
+  }
   return `${lines.join('\n')}\n`;
 }
 

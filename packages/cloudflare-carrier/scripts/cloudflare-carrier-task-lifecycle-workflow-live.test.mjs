@@ -38,7 +38,7 @@ test('formatTaskLifecycleWorkflowLiveText renders direct task read', () => {
     claim_summary: { status: 'claimed' },
     report_summary: { status: 'closed', report_id: 'report_alpha' },
     finish_summary: { status: 'finished', finish_id: 'finish_alpha' },
-    read_after_finish: { task_status: 'finished' },
+    read_after_finish: { task_status: 'finished', operation_id: 'operation_alpha' },
   });
 
   assert.match(text, /^Task Lifecycle Workflow: ok/m);
@@ -46,6 +46,7 @@ test('formatTaskLifecycleWorkflowLiveText renders direct task read', () => {
   assert.match(text, /Report: report_id=report_alpha status=closed/);
   assert.match(text, /Finish: finish_id=finish_alpha status=finished/);
   assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
 
 test('runTaskLifecycleWorkflowLive drives create claim report finish and read', async () => {
@@ -95,7 +96,7 @@ test('runTaskLifecycleWorkflowLive drives create claim report finish and read', 
         return JSON.stringify({
           schema: 'narada.cloudflare_carrier.task_lifecycle_read.v1',
           status: 'ok',
-          summary: { task_id: 'task_alpha', task_status: 'closed' },
+          summary: { task_id: 'task_alpha', task_status: 'closed', operation_id: 'operation_alpha' },
         });
       }
       throw new Error(`unexpected_script:${scriptName}`);
@@ -108,6 +109,7 @@ test('runTaskLifecycleWorkflowLive drives create claim report finish and read', 
   assert.equal(result.report_summary.report_id, 'report_alpha');
   assert.equal(result.finish_summary.finish_id, 'finish_alpha');
   assert.equal(result.read_after_finish.task_status, 'closed');
+  assert.equal(result.read_after_finish.operation_id, 'operation_alpha');
 
   assert.equal(invocations[0][0].split(/[\\/]/).pop(), 'cloudflare-carrier-task-lifecycle-create.mjs');
   assert.ok(invocations[0].includes('--admit-cloudflare-task-create'));

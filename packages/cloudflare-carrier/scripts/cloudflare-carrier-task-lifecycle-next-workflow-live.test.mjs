@@ -71,6 +71,7 @@ test('formatTaskLifecycleNextWorkflowLiveText renders direct follow-on reads', (
       task_status: 'closed',
       report_id: 'report_alpha',
       finish_id: null,
+      operation_id: 'operation_alpha',
       carrier_session_id: 'session_alpha',
     },
   });
@@ -79,6 +80,7 @@ test('formatTaskLifecycleNextWorkflowLiveText renders direct follow-on reads', (
   assert.match(text, /Selected Step: report/);
   assert.match(text, /After: status=closed report=report_alpha finish=none/);
   assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text/);
 });
 
