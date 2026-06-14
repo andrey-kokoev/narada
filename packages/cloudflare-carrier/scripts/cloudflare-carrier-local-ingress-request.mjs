@@ -168,6 +168,11 @@ export function formatLocalIngressRequestText(result) {
       `Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-next`,
     );
   }
+  if (workerUrl && summary.site_id && summary.local_ingress_request_id) {
+    lines.push(
+      `Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:evidence:review:text -- --url ${workerUrl} --site ${summary.site_id} --local-ingress-request-id ${summary.local_ingress_request_id} --operator-session-file <operator-session-file>`,
+    );
+  }
   if (workerUrl && summary.site_id && summary.operation_id) {
     lines.push(
       `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`,

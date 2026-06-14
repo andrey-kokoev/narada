@@ -47,6 +47,10 @@ export function parseLocalIngressRequestLiveSmokeArgs(argv = [], env = process.e
 }
 
 export function formatLocalIngressRequestLiveSmokeText(result) {
+  const workerUrl = result.worker_url ?? null;
+  const siteId = result.site_id ?? null;
+  const operationId = result.operation_id ?? null;
+  const requestId = result.local_ingress_request_id ?? null;
   const lines = [
     `Local Ingress Request Smoke: ${result.status}`,
     `Worker: ${result.worker_url}`,
@@ -56,12 +60,19 @@ export function formatLocalIngressRequestLiveSmokeText(result) {
     `Authority: request=${result.local_ingress_request_authority ?? 'unknown'} target=${result.target_authority_locus ?? 'unknown'} executor=${result.local_executor_authority ?? 'unknown'}`,
     `Admissions: local_execution=${result.local_execution_admission ?? 'unknown'} direct_cloudflare_fs=${result.direct_cloudflare_filesystem_mutation_admission ?? 'unknown'} repository_publication=${result.repository_publication_admission ?? 'unknown'}`,
     `Partition: ${result.authority_partition ?? 'unknown'}`,
-    `Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`,
-    `Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`,
-    `Request Review: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:request:review:text -- --url ${result.worker_url} --site ${result.site_id} --local-ingress-request-id ${result.local_ingress_request_id} --operator-session-file <operator-session-file>`,
-    `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
-    `Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`,
   ];
+  if (workerUrl && siteId) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file> --execute-site-next`);
+  }
+  if (workerUrl && siteId && requestId) {
+    lines.push(`Request Review: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:request:review:text -- --url ${workerUrl} --site ${siteId} --local-ingress-request-id ${requestId} --operator-session-file <operator-session-file>`);
+    lines.push(`Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:evidence:review:text -- --url ${workerUrl} --site ${siteId} --local-ingress-request-id ${requestId} --operator-session-file <operator-session-file>`);
+  }
+  if (workerUrl && siteId && operationId) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file> --execute-operation-next`);
+  }
   return `${lines.join('\n')}\n`;
 }
 

@@ -38,8 +38,26 @@ test('formatLocalIngressRequestLiveSmokeText emits downstream reads', () => {
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
   assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
   assert.match(text, /Request Review: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:request:review:text/);
+  assert.match(text, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:evidence:review:text/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
+});
+
+test('formatLocalIngressRequestLiveSmokeText suppresses focused handoffs without concrete worker and site targets', () => {
+  const text = formatLocalIngressRequestLiveSmokeText({
+    status: 'ok',
+    worker_url: null,
+    site_id: null,
+    operation_id: 'operation_alpha',
+    local_ingress_request_id: 'local_ingress_request_live_1',
+  });
+
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Request Review:/);
+  assert.doesNotMatch(text, /Evidence Read:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
 });
 
 test('runLocalIngressRequestLiveSmoke returns summarized local-ingress state', async () => {
