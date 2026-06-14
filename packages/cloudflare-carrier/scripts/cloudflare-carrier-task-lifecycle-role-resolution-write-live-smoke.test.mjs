@@ -39,6 +39,7 @@ test('formatTaskLifecycleRoleResolutionWriteLiveSmokeText emits downstream reads
   assert.match(text, /Task Lifecycle Role Resolution Write Smoke: ok/);
   assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
 });
 
 test('runTaskLifecycleRoleResolutionWriteLiveSmoke returns summarized role-resolution write state', async () => {

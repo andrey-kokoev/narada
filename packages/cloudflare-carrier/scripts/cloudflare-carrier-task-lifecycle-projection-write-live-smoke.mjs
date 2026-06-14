@@ -55,6 +55,7 @@ export function formatTaskLifecycleProjectionWriteLiveSmokeText(result) {
     `Counts: projection_write=${result.task_lifecycle_projection_write_count ?? 0} write_admissions=${result.task_lifecycle_write_admission_count ?? 0}`,
     `Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result.worker_url} --site ${result.site_id} --task-id ${result.task_id} --operator-session-file <operator-session-file>`,
     `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
+    `Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`,
   ];
   return `${lines.join('\n')}\n`;
 }

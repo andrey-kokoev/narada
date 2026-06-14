@@ -38,6 +38,7 @@ test('formatTaskLifecycleAssignmentWriteLiveSmokeText emits downstream reads', (
   assert.match(text, /Task Lifecycle Assignment Write Smoke: ok/);
   assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
 });
 
 test('runTaskLifecycleAssignmentWriteLiveSmoke returns summarized assignment write state', async () => {
