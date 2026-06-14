@@ -81,6 +81,8 @@ export function summarizeMailboxDraftReplyProposal(body = {}, draftCreateBody = 
   const linkedDraftCreates = focusedProposal
     ? draftCreates.filter((entry) => entry?.proposal_id === focusedProposal.proposal_id)
     : [];
+  const linkedSendAcceptedIds = linkedDraftCreates.map((entry) => entry?.send_accepted_id).filter(Boolean);
+  const linkedSendConfirmationIds = linkedDraftCreates.map((entry) => entry?.send_confirmation_id).filter(Boolean);
   const latestFocusReview = focusedProposal
     ? focusReviews.find((entry) => entry?.focus_kind === 'mailbox_draft_reply_proposal'
       && entry?.focus_ref === focusedProposal.proposal_id)
@@ -108,6 +110,8 @@ export function summarizeMailboxDraftReplyProposal(body = {}, draftCreateBody = 
     focused_recorded_by_principal_id: focusedProposal?.recorded_by_principal_id ?? focusedProposal?.record?.recorded_by_principal_id ?? null,
     linked_draft_create_count: linkedDraftCreates.length,
     linked_draft_create_ids: linkedDraftCreates.map((entry) => entry?.draft_create_id).filter(Boolean),
+    linked_send_accepted_ids: linkedSendAcceptedIds,
+    linked_send_confirmation_ids: linkedSendConfirmationIds,
     latest_focus_review: latestFocusReview ? {
       review_id: latestFocusReview.review_id ?? null,
       focus_kind: latestFocusReview.focus_kind ?? null,
@@ -148,6 +152,12 @@ export function formatMailboxDraftReplyProposalReadText(result) {
   lines.push(`Linked Draft Creates: ${summary.linked_draft_create_count ?? 0}`);
   if (summary.linked_draft_create_ids?.[0]) {
     lines.push(`Draft Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.linked_draft_create_ids[0]} --operator-session-file <operator-session-file>`);
+  }
+  if (summary.linked_send_accepted_ids?.[0]) {
+    lines.push(`Accepted Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.linked_send_accepted_ids[0]} --operator-session-file <operator-session-file>`);
+  }
+  if (summary.linked_send_confirmation_ids?.[0]) {
+    lines.push(`Confirmation Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-confirmation:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.linked_send_confirmation_ids[0]} --operator-session-file <operator-session-file>`);
   }
   if (summary.focused_recorded_at || summary.focused_recorded_by_principal_id) {
     lines.push(`Recorded: ${summary.focused_recorded_at ?? 'unknown'} by ${summary.focused_recorded_by_principal_id ?? 'unknown'}`);

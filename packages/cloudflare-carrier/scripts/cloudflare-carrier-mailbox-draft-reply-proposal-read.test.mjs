@@ -78,7 +78,12 @@ test('readMailboxDraftReplyProposal summarizes focused proposal and linked draft
           },
         ],
         mailbox_outlook_draft_creates: [
-          { draft_create_id: 'draft_create_1', proposal_id: 'mailbox_draft_reply_proposal_live_1' },
+          {
+            draft_create_id: 'draft_create_1',
+            proposal_id: 'mailbox_draft_reply_proposal_live_1',
+            send_accepted_id: 'mailbox_send_accepted_live_1',
+            send_confirmation_id: 'mailbox_send_confirmation_live_1',
+          },
           { draft_create_id: 'draft_create_2', proposal_id: 'different_proposal' },
         ],
         operation_focus_reviews: [
@@ -158,7 +163,12 @@ test('readMailboxDraftReplyProposal supports direct focused historical review', 
           ok: true,
           site_id: 'site_narada_cloudflare',
           drafts: [
-            { draft_create_id: 'draft_create_1', proposal_id: 'mailbox_draft_reply_proposal_live_1' },
+            {
+              draft_create_id: 'draft_create_1',
+              proposal_id: 'mailbox_draft_reply_proposal_live_1',
+              send_accepted_id: 'mailbox_send_accepted_live_1',
+              send_confirmation_id: 'mailbox_send_confirmation_live_1',
+            },
             { draft_create_id: 'draft_create_2', proposal_id: 'different_proposal' },
           ],
         });
@@ -238,6 +248,8 @@ test('formatMailboxDraftReplyProposalReadText surfaces review ack command', () =
       mailbox_mutation_admission: 'not_admitted',
       linked_draft_create_count: 1,
       linked_draft_create_ids: ['mailbox_outlook_draft_create_live_1'],
+      linked_send_accepted_ids: ['mailbox_send_accepted_live_1'],
+      linked_send_confirmation_ids: ['mailbox_send_confirmation_live_1'],
       latest_focus_review: {
         focus_kind: 'mailbox_draft_reply_proposal',
         focus_ref: 'mailbox_draft_reply_proposal_live_1',
@@ -251,6 +263,8 @@ test('formatMailboxDraftReplyProposalReadText surfaces review ack command', () =
   assert.match(text, /Body Preview: Draft reply preview text\./);
   assert.match(text, /Rationale: prove Cloudflare can hold draft reply proposal authority/);
   assert.match(text, /Draft Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --focus-ref mailbox_outlook_draft_create_live_1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Accepted Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-accepted:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --focus-ref mailbox_send_accepted_live_1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Confirmation Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-confirmation:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --focus-ref mailbox_send_confirmation_live_1 --operator-session-file <operator-session-file>/);
   assert.match(text, /Focused Review: mailbox_draft_reply_proposal:mailbox_draft_reply_proposal_live_1 status=acknowledged/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
