@@ -186,6 +186,33 @@ test('durability coherence text surfaces direct workflow and durability reads', 
   assert.match(text, /Persistence Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/worker\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
 
+test('durability coherence suppresses focused site and operation links without concrete ids', () => {
+  const text = formatDurabilityCoherenceLiveText({
+    status: 'ok',
+    worker_url: 'https://worker.example',
+    checked_site_ids: ['site_alpha'],
+    site_list: { route_next_action: 'focus_next_site', next_site_id: null, route_target: null },
+    sites: [
+      {
+        site_id: '',
+        site_read: { persistence_state: 'durable', recovery_state: 'reconstructable', next_action: 'focus_next_operation' },
+        selected_operation_id: '',
+        operation_read: { workflow_next_action: 'refresh_site_continuity_loop' },
+        operation_recovery: { recovery_state: 'reconstructable', recovery_gap_count: 0 },
+      },
+    ],
+    issues: [],
+  });
+
+  assert.doesNotMatch(text, /^Site Next Workflow:/m);
+  assert.doesNotMatch(text, /^  Site Read:/m);
+  assert.doesNotMatch(text, /^  Site Next Workflow:/m);
+  assert.doesNotMatch(text, /^  Operation Review:/m);
+  assert.doesNotMatch(text, /^  Operation Next Workflow:/m);
+  assert.doesNotMatch(text, /^  Recovery Review:/m);
+  assert.doesNotMatch(text, /^  Persistence Review:/m);
+});
+
 test('durability coherence retries once on transient fetch failure from child read', async () => {
   const attempts = new Map();
   const result = await runDurabilityCoherenceLive(

@@ -169,6 +169,32 @@ test('control plane convergence text surfaces direct workflow and read handoffs 
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
 
+test('control plane convergence suppresses focused site and operation links without concrete ids', () => {
+  const text = formatControlPlaneConvergenceLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    initial_site_route: 'focus_next_site',
+    final_site_route: 'monitor_sites',
+    site_pass_count: 1,
+    posture_coherence: { status: 'ok', issue_count: 0 },
+    durability_coherence: { status: 'ok', issue_count: 0 },
+    site_passes: [
+      {
+        pass: 1,
+        site_id: '',
+        route_action: 'focus_next_site',
+        delegated_result: { delegated_workflow: 'focus_next_operation', delegated_operation_id: '' },
+      },
+    ],
+  });
+
+  assert.doesNotMatch(text, /^Site Next Workflow:/m);
+  assert.doesNotMatch(text, /^  Site Next Workflow:/m);
+  assert.doesNotMatch(text, /^  Site Read:/m);
+  assert.doesNotMatch(text, /^  Operation Next Workflow:/m);
+  assert.doesNotMatch(text, /^  Operation Review:/m);
+});
+
 test('control plane convergence rejects unsupported site route actions', async () => {
   await assert.rejects(
     async () => {
