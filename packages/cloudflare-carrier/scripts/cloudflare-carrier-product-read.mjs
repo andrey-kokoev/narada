@@ -765,16 +765,16 @@ export function formatProductSurfaceText(result) {
       }
     }
     if (summary.workflow_next_action === 'review_mailbox_draft_reply_proposal') {
-      lines.push(`Mailbox Proposal Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'}${operationArg(summary.operation_id)} --operator-session-file <operator-session-file>`);
+      lines.push(`Mailbox Proposal Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'}${focusRefArg(summary.workflow_focus_ref) || operationArg(summary.operation_id)} --operator-session-file <operator-session-file>`);
     }
     if (summary.workflow_next_action === 'review_mailbox_send_confirmation') {
-      lines.push(`Mailbox Send Confirmation: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-confirmation:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
+      lines.push(`Mailbox Send Confirmation: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-confirmation:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'}${focusRefArg(summary.workflow_focus_ref)} --operator-session-file <operator-session-file>`);
     }
     if (summary.workflow_next_action === 'review_mailbox_send_acceptance') {
-      lines.push(`Mailbox Send Accepted: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
+      lines.push(`Mailbox Send Accepted: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'}${focusRefArg(summary.workflow_focus_ref)} --operator-session-file <operator-session-file>`);
     }
     if (summary.workflow_next_action === 'review_mailbox_outlook_draft_create' || summary.workflow_next_action === 'review_outlook_draft_create_evidence') {
-      lines.push(`Mailbox Outlook Draft Review: pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file>`);
+      lines.push(`Mailbox Outlook Draft Review: pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'}${focusRefArg(summary.workflow_focus_ref)} --operator-session-file <operator-session-file>`);
     }
     if (summary.workflow_next_action === 'review_directive_delivery') {
       lines.push(`Directive Delivery Review: pnpm --filter @narada2/cloudflare-carrier product:directive:delivery:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'}${operationArg(summary.operation_id)} --operator-session-file <operator-session-file>`);

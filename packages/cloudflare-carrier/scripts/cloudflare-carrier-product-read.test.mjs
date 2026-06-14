@@ -1138,7 +1138,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       recovery_gap_count: 0,
     },
   });
-  assert.match(operationReadMailboxText, /Mailbox Proposal Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_mailbox --operator-session-file <operator-session-file>/);
+  assert.match(operationReadMailboxText, /Mailbox Proposal Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref mailbox_draft_reply_proposal_live_1 --operator-session-file <operator-session-file>/);
 
   const operationReadDirectiveText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1224,11 +1224,12 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       next_action: 'mailbox_outlook_draft_create',
       workflow_next_action: 'review_mailbox_outlook_draft_create',
       workflow_reason: 'operation_operator_focus_needs_review',
+      workflow_focus_ref: 'mailbox_outlook_draft_create_live_1',
       session_count: 0,
       task_count: 0,
     },
   });
-  assert.match(operationReadOutlookDraftText, /Mailbox Outlook Draft Review: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationReadOutlookDraftText, /Mailbox Outlook Draft Review: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref mailbox_outlook_draft_create_live_1 --operator-session-file <operator-session-file>/);
 
   const operationReadOutlookDraftEvidenceText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1245,11 +1246,12 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       next_action: 'mailbox_outlook_draft_create',
       workflow_next_action: 'review_outlook_draft_create_evidence',
       workflow_reason: 'operation_operator_focus_needs_review',
+      workflow_focus_ref: 'mailbox_outlook_draft_evidence_live_1',
       session_count: 0,
       task_count: 0,
     },
   });
-  assert.match(operationReadOutlookDraftEvidenceText, /Mailbox Outlook Draft Review: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationReadOutlookDraftEvidenceText, /Mailbox Outlook Draft Review: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref mailbox_outlook_draft_evidence_live_1 --operator-session-file <operator-session-file>/);
 
   const operationReadRepositoryPublicationText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1980,11 +1982,12 @@ test('formatProductSurfaceText emits mailbox send review operator commands for o
       next_action: 'monitor_operation',
       workflow_next_action: 'review_mailbox_send_confirmation',
       workflow_reason: 'operation_operator_focus_needs_review',
+      workflow_focus_ref: 'mailbox_send_confirmation_live_1',
       session_count: 1,
       task_count: 0,
     },
   });
-  assert.match(confirmationText, /Mailbox Send Confirmation: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-confirmation:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(confirmationText, /Mailbox Send Confirmation: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-confirmation:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref mailbox_send_confirmation_live_1 --operator-session-file <operator-session-file>/);
 
   const acceptedText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -2001,11 +2004,12 @@ test('formatProductSurfaceText emits mailbox send review operator commands for o
       next_action: 'monitor_operation',
       workflow_next_action: 'review_mailbox_send_acceptance',
       workflow_reason: 'operation_operator_focus_needs_review',
+      workflow_focus_ref: 'mailbox_send_accepted_live_1',
       session_count: 1,
       task_count: 0,
     },
   });
-  assert.match(acceptedText, /Mailbox Send Accepted: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-accepted:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(acceptedText, /Mailbox Send Accepted: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-accepted:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref mailbox_send_accepted_live_1 --operator-session-file <operator-session-file>/);
 });
 
 test('summarizeProductSurface summarizes site and operation reads', () => {
