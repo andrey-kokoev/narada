@@ -546,7 +546,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       session_count: 3,
     },
   });
-  assert.match(siteReadText, /Site Action Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:action:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-action/);
+  assert.match(siteReadText, /Site Action Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:action:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file> --execute-site-action/);
   assert.match(siteReadText, /Active Operation Route: operation=operation_live action=refresh_site_continuity_loop reason=operation_lifecycle_continuity_loop_stale/);
   assert.match(siteReadText, /Durability: persistence=durable recovery=reconstructable/);
   assert.match(siteReadText, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);

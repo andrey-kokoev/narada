@@ -66,7 +66,7 @@ export function formatSiteNextWorkflowLiveText(result) {
   lines.push(`Site List: pnpm --filter @narada2/cloudflare-carrier product:site:list:text -- --url ${result.worker_url} --operator-session-file <operator-session-file>`);
   if (result.selected_site_id) {
     lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operator-session-file <operator-session-file>`);
-    lines.push(`Site Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operator-session-file <operator-session-file> --execute-site-action`);
+    lines.push(`Site Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live:text -- --url ${result.worker_url} --site ${result.selected_site_id}${result.delegated_operation_id ? ` --operation-id ${result.delegated_operation_id}` : ''} --operator-session-file <operator-session-file> --execute-site-action`);
   }
   if (result.delegated_operation_id && result.selected_site_id) {
     lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operation-id ${result.delegated_operation_id} --operator-session-file <operator-session-file>`);

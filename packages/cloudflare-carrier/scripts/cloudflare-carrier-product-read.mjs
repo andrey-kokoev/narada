@@ -514,7 +514,7 @@ export function formatProductSurfaceText(result) {
     lines.push(`Health: ${summary.health ?? 'unknown'}`);
     lines.push(`Next Action: ${summary.next_action ?? 'none'}`);
     lines.push(`Scope Loaded: ${summary.scope_loaded ? 'yes' : 'no'}`);
-    lines.push(`Site Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file> --execute-site-action`);
+    lines.push(`Site Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'}${operationArg(summary.active_operation_id)} --operator-session-file <operator-session-file> --execute-site-action`);
     if (summary.active_operation_next_action || summary.active_operation_workflow_reason) {
       lines.push(`Active Operation Route: operation=${summary.active_operation_id ?? 'none'} action=${summary.active_operation_next_action ?? 'none'} reason=${summary.active_operation_workflow_reason ?? 'none'}`);
     }
