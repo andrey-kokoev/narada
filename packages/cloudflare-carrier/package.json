@@ -238,6 +238,7 @@
     "task-lifecycle:role-resolution-write-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-role-resolution-write-live-smoke.mjs",
     "task-lifecycle:role-resolution-write-smoke:live:text": "node scripts/cloudflare-carrier-task-lifecycle-role-resolution-write-live-smoke.mjs --format text",
     "task-lifecycle:roster-mutation-write-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-roster-mutation-write-live-smoke.mjs",
+    "task-lifecycle:roster-mutation-write-smoke:live:text": "node scripts/cloudflare-carrier-task-lifecycle-roster-mutation-write-live-smoke.mjs --format text",
     "task-lifecycle:finish-smoke:live": "node scripts/cloudflare-carrier-task-lifecycle-finish-live-smoke.mjs",
     "task-lifecycle:finish-smoke:live:text": "node scripts/cloudflare-carrier-task-lifecycle-finish-live-smoke.mjs --format text",
     "resident-dispatch:smoke:live": "node scripts/cloudflare-carrier-resident-dispatch-live-smoke.mjs",
