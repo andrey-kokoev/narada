@@ -335,6 +335,7 @@ export function summarizeRepositoryPublicationSurface(operation, body = {}, para
 
 export function formatRepositoryPublicationReadText(result) {
   const summary = result?.summary ?? summarizeRepositoryPublicationSurface(result?.operation, result?.response ?? {}, result?.params ?? {});
+  const workerUrl = result?.worker_url ?? null;
   const refused = result?.status === 'refused' || summary?.ok === false;
   const lines = [
     `Repository Publication Read: ${labelForOperation(summary.operation ?? result?.operation ?? 'unknown')}${refused ? ' refused' : ''}`,
@@ -354,9 +355,9 @@ export function formatRepositoryPublicationReadText(result) {
   if (summary.operation === 'repository_publication.request.list') {
     lines.push(`Requests: count=${summary.request_count ?? 0}`);
     if (summary.latest_repository_publication_request_id) lines.push(`Latest Request: ${summary.latest_repository_publication_request_id}`);
-    if (summary.site_id && summary.latest_operation_id) {
-      lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file>`);
-      lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+    if (workerUrl && summary.site_id && summary.latest_operation_id) {
+      lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file>`);
+      lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
     }
     if (summary.latest_publication_ref) lines.push(`Publication: ${summary.latest_publication_ref}`);
     if (summary.latest_repository_ref) lines.push(`Repository: ${summary.latest_repository_ref}`);
@@ -365,9 +366,9 @@ export function formatRepositoryPublicationReadText(result) {
     lines.push(`Authority: request=${summary.repository_publication_request_authority ?? 'unknown'} executor=${summary.repository_publication_executor_authority ?? 'unknown'}`);
   } else if (summary.operation === 'repository_publication.request.next') {
     if (summary.repository_publication_request_id) lines.push(`Request: ${summary.repository_publication_request_id}`);
-    if (summary.site_id && summary.operation_id) {
-      lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
-      lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+    if (workerUrl && summary.site_id && summary.operation_id) {
+      lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+      lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
     }
     if (summary.repository_publication_admission_id || summary.admission_action) {
       lines.push(`Admission: ${summary.repository_publication_admission_id ?? 'none'}${summary.admission_action ? ` action=${summary.admission_action}` : ''}`);
@@ -394,8 +395,8 @@ export function formatRepositoryPublicationReadText(result) {
       const decisionLabel = summary.focused_repository_publication_admission_id ? 'Focused Decision' : 'Latest Decision';
       lines.push(`${decisionLabel}: ${summary.latest_admission_action}${summary.latest_admission_reason ? ` reason=${summary.latest_admission_reason}` : ''}`);
     }
-    if (summary.site_id && summary.latest_repository_publication_request_id) {
-      lines.push(`Request Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --repository-publication-request-id ${summary.latest_repository_publication_request_id} --operator-session-file <operator-session-file>`);
+    if (workerUrl && summary.site_id && summary.latest_repository_publication_request_id) {
+      lines.push(`Request Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${workerUrl} --site ${summary.site_id} --repository-publication-request-id ${summary.latest_repository_publication_request_id} --operator-session-file <operator-session-file>`);
     }
     lines.push(`Authority: admission=${summary.repository_publication_admission_authority ?? 'unknown'} executor=${summary.repository_publication_executor_authority ?? 'unknown'}`);
   } else if (summary.operation === 'repository_publication.evidence.list') {
@@ -408,8 +409,8 @@ export function formatRepositoryPublicationReadText(result) {
       lines.push(`Focused Publication Status: ${summary.focused_publication_status}${summary.focused_publication_reason ? ` reason=${summary.focused_publication_reason}` : ''}`);
     }
     if (summary.focused_published_commit_ref) lines.push(`Focused Published Commit: ${summary.focused_published_commit_ref}`);
-    if (summary.site_id && summary.repository_publication_request_id) {
-      lines.push(`Request Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --repository-publication-request-id ${summary.repository_publication_request_id} --operator-session-file <operator-session-file>`);
+    if (workerUrl && summary.site_id && summary.repository_publication_request_id) {
+      lines.push(`Request Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${workerUrl} --site ${summary.site_id} --repository-publication-request-id ${summary.repository_publication_request_id} --operator-session-file <operator-session-file>`);
     }
     lines.push(`Authority: evidence=${summary.repository_publication_evidence_authority ?? 'unknown'} admission=${summary.repository_publication_admission_authority ?? 'unknown'} store=${summary.cloudflare_evidence_store_authority ?? 'unknown'}`);
   } else if (summary.operation === 'repository_publication.cloudflare_execution.list') {
@@ -430,8 +431,8 @@ export function formatRepositoryPublicationReadText(result) {
       if (summary.latest_published_commit_ref) lines.push(`Latest Published Commit: ${summary.latest_published_commit_ref}`);
       if (summary.latest_github_http_status != null) lines.push(`Latest GitHub HTTP Status: ${summary.latest_github_http_status}`);
     }
-    if (summary.site_id && summary.repository_publication_request_id) {
-      lines.push(`Request Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --repository-publication-request-id ${summary.repository_publication_request_id} --operator-session-file <operator-session-file>`);
+    if (workerUrl && summary.site_id && summary.repository_publication_request_id) {
+      lines.push(`Request Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${workerUrl} --site ${summary.site_id} --repository-publication-request-id ${summary.repository_publication_request_id} --operator-session-file <operator-session-file>`);
     }
     lines.push(`Authority: executor=${summary.repository_publication_executor_authority ?? 'unknown'} admission=${summary.repository_publication_admission_authority ?? 'unknown'}`);
   }

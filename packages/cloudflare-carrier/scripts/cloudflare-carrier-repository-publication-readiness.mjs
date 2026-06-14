@@ -104,6 +104,7 @@ export function summarizeRepositoryPublicationReadiness(body = {}, params = {}) 
 
 export function formatRepositoryPublicationReadinessText(result) {
   const summary = result?.summary ?? summarizeRepositoryPublicationReadiness(result?.response ?? {}, result?.params ?? {});
+  const workerUrl = result?.worker_url ?? null;
   const siteId = summary.site_id ?? result?.params?.site_id ?? null;
   const ok = summary.ok === false || result?.status === 'refused' ? false : true;
   return [
@@ -129,9 +130,9 @@ export function formatRepositoryPublicationReadinessText(result) {
     ...(summary.cloudflare_git_push_admission ? [`Cloudflare Git Push Admission: ${summary.cloudflare_git_push_admission}`] : []),
     ...(summary.direct_cloudflare_repository_mutation_admission ? [`Direct Cloudflare Repository Mutation: ${summary.direct_cloudflare_repository_mutation_admission}`] : []),
     ...(summary.authority_partition ? [`Authority Partition: ${summary.authority_partition}`] : []),
-    ...(siteId ? [`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${siteId} --operator-session-file <operator-session-file>`] : []),
-    ...(siteId ? [`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${siteId} --operator-session-file <operator-session-file> --execute-site-next`] : []),
-    ...(siteId ? [`Repository Publication Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${siteId} --operator-session-file <operator-session-file>`] : []),
+    ...(workerUrl && siteId ? [`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`] : []),
+    ...(workerUrl && siteId ? [`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file> --execute-site-next`] : []),
+    ...(workerUrl && siteId ? [`Repository Publication Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`] : []),
   ].join('\n') + '\n';
 }
 

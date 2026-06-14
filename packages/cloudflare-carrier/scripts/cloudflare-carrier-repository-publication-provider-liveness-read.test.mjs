@@ -196,3 +196,28 @@ test('formatRepositoryPublicationProviderLivenessReadText suppresses refresh han
   assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.doesNotMatch(text, /Provider Liveness Refresh:/);
 });
+
+test('formatRepositoryPublicationProviderLivenessReadText suppresses worker-scoped handoffs without worker url', () => {
+  const text = formatRepositoryPublicationProviderLivenessReadText({
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      next_action: 'refresh_provider_liveness_state',
+    },
+  });
+});
+
+test('formatRepositoryPublicationProviderLivenessReadText suppresses worker-scoped handoffs without worker url', () => {
+  const text = formatRepositoryPublicationProviderLivenessReadText({
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      next_action: 'refresh_provider_liveness_state',
+    },
+  });
+
+  assert.doesNotMatch(text, /<worker-url>/);
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Provider Liveness Refresh:/);
+});

@@ -209,6 +209,25 @@ test('createCloudflareRepositoryPublicationRequest posts the publication envelop
   assert.match(text, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-12 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
+});
+
+test('formatRepositoryPublicationRequestText suppresses worker-scoped handoffs without worker url', () => {
+  const text = formatRepositoryPublicationRequestText({
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      task_id: 'cloudflare-task-12',
+      operation_id: 'operation_alpha',
+      requested_action_ref: 'repository-publication:release:v1',
+    },
+  });
+
+  assert.doesNotMatch(text, /<worker-url>/);
+  assert.doesNotMatch(text, /Task Review:/);
+  assert.doesNotMatch(text, /Task Workflow:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
 });
 
 test('summaries and text output preserve refusal evidence', () => {
@@ -237,6 +256,7 @@ test('summaries and text output preserve refusal evidence', () => {
     params: { site_id: 'site_alpha' },
     summary,
   });
+  assert.match(text, /Repository Publication Request: refused/);
   assert.match(text, /Repository Publication Request: refused/);
   assert.match(text, /Cloudflare Git Push Admission: admitted/);
   assert.equal(text.includes('Task Review:'), false);

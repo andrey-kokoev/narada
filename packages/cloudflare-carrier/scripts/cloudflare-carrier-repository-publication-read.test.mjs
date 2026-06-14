@@ -498,6 +498,40 @@ test('formatRepositoryPublicationReadText surfaces operation review on request s
   assert.match(requestNextText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-1 --operator-session-file <operator-session-file> --execute-operation-next/);
 });
 
+test('formatRepositoryPublicationReadText suppresses worker-scoped handoffs without worker url', () => {
+  const requestListText = formatRepositoryPublicationReadText({
+    status: 'ok',
+    operation: 'repository_publication.request.list',
+    auth_source: 'flag:--token',
+    params: { site_id: 'site_alpha' },
+    summary: {
+      operation: 'repository_publication.request.list',
+      site_id: 'site_alpha',
+      request_count: 1,
+      latest_repository_publication_request_id: 'repository-publication-request-1',
+      latest_operation_id: 'operation-1',
+    },
+  });
+  assert.doesNotMatch(requestListText, /<worker-url>/);
+  assert.doesNotMatch(requestListText, /Operation Review:/);
+  assert.doesNotMatch(requestListText, /Operation Next Workflow:/);
+
+  const admissionText = formatRepositoryPublicationReadText({
+    status: 'ok',
+    operation: 'repository_publication.admission.list',
+    auth_source: 'flag:--token',
+    params: { site_id: 'site_alpha' },
+    summary: {
+      operation: 'repository_publication.admission.list',
+      site_id: 'site_alpha',
+      admission_count: 1,
+      latest_repository_publication_request_id: 'repository-publication-request-1',
+    },
+  });
+  assert.doesNotMatch(admissionText, /<worker-url>/);
+  assert.doesNotMatch(admissionText, /Request Read:/);
+});
+
 test('formatRepositoryPublicationReadText surfaces focused admission and execution labels', () => {
   const admissionText = formatRepositoryPublicationReadText({
     status: 'ok',

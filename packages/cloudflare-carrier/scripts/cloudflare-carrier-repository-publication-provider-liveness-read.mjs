@@ -67,6 +67,7 @@ export function summarizeRepositoryPublicationProviderLiveness(body = {}, option
 
 export function formatRepositoryPublicationProviderLivenessReadText(result) {
   const summary = result?.summary ?? {};
+  const workerUrl = result?.worker_url ?? null;
   const actionableNext = summary.next_action && !['none', 'monitor_repository_publication_provider_liveness'].includes(summary.next_action);
   const heartbeatLabel = summary.focused_repository_publication_provider_heartbeat_id ? 'focused' : 'latest';
   const timingLabel = summary.focused_repository_publication_provider_heartbeat_id ? 'Focused Timing' : 'Latest Timing';
@@ -83,11 +84,11 @@ export function formatRepositoryPublicationProviderLivenessReadText(result) {
   if (summary.latest_generated_at || summary.latest_last_run_at) {
     lines.push(`${timingLabel}: generated=${summary.latest_generated_at ?? 'unknown'} last_run=${summary.latest_last_run_at ?? 'unknown'}`);
   }
-  if (summary.site_id) {
-    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
-    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
+  if (workerUrl && summary.site_id) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
     if (actionableNext) {
-      lines.push(`Provider Liveness Refresh: pnpm --filter @narada2/cloudflare-carrier provider-liveness:refresh:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
+      lines.push(`Provider Liveness Refresh: pnpm --filter @narada2/cloudflare-carrier provider-liveness:refresh:live:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
     }
   }
   return `${lines.join('\n')}\n`;
