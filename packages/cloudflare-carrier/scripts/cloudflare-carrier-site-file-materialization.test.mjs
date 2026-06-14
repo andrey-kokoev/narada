@@ -372,6 +372,28 @@ test('formatSiteFileMaterializationText suppresses site-scoped handoffs without 
   assert.equal(text.includes('Operation Next Workflow:'), false);
 });
 
+test('formatSiteFileMaterializationText suppresses worker-scoped handoffs without worker url', () => {
+  const text = formatSiteFileMaterializationText({
+    status: 'ok',
+    auth_source: 'flag:--token',
+    summary: {
+      ok: true,
+      site_id: 'site_alpha',
+      materialization_id: 'materialization-1',
+      proposal_id: 'proposal-9',
+      operation_id: 'operation_alpha',
+      task_id: 'cloudflare-task-9',
+    },
+  });
+
+  assert.doesNotMatch(text, /<worker-url>/);
+  assert.equal(text.includes('Materialization Review:'), false);
+  assert.equal(text.includes('Proposal Review:'), false);
+  assert.equal(text.includes('Task Review:'), false);
+  assert.equal(text.includes('Task Workflow:'), false);
+  assert.equal(text.includes('Operation Review:'), false);
+  assert.equal(text.includes('Operation Next Workflow:'), false);
+});
 function responseJson(status, body) {
   return {
     status,

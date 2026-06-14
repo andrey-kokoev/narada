@@ -72,6 +72,7 @@ export function summarizeSiteFileMaterialization(body = {}, options = {}) {
 
 export function formatSiteFileMaterializationReadText(result) {
   const summary = result?.summary ?? {};
+  const workerUrl = result?.worker_url ?? null;
   const recordedLabel = summary.focused_read ? 'Focused Recorded' : 'Latest Recorded';
   const materializationLead = summary.focused_read
     ? `Materializations: count=${summary.materialization_count ?? 0} focused=${summary.focused_materialization_id ?? 'none'} authority=${summary.site_file_materialization_authority ?? 'unknown'} admission=${summary.cloudflare_site_file_materialization_admission ?? 'unknown'}`
@@ -97,15 +98,15 @@ export function formatSiteFileMaterializationReadText(result) {
       + `${summary.latest_materialization_posture ? ` posture=${summary.latest_materialization_posture}` : ''}`,
     );
   }
-  if (summary.site_id && summary.latest_materialization_id) {
-    lines.push(`Materialization Review: pnpm --filter @narada2/cloudflare-carrier product:site-file:materialization:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --site-file-materialization-id ${summary.latest_materialization_id} --operator-session-file <operator-session-file>`);
+  if (workerUrl && summary.site_id && summary.latest_materialization_id) {
+    lines.push(`Materialization Review: pnpm --filter @narada2/cloudflare-carrier product:site-file:materialization:review:text -- --url ${workerUrl} --site ${summary.site_id} --site-file-materialization-id ${summary.latest_materialization_id} --operator-session-file <operator-session-file>`);
   }
-  if (summary.site_id && summary.latest_proposal_id) {
-    lines.push(`Proposal Review: pnpm --filter @narada2/cloudflare-carrier product:site-file-change:proposal:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --focus-ref ${summary.latest_proposal_id} --operator-session-file <operator-session-file>`);
+  if (workerUrl && summary.site_id && summary.latest_proposal_id) {
+    lines.push(`Proposal Review: pnpm --filter @narada2/cloudflare-carrier product:site-file-change:proposal:review:text -- --url ${workerUrl} --site ${summary.site_id} --focus-ref ${summary.latest_proposal_id} --operator-session-file <operator-session-file>`);
   }
-  if (summary.site_id && summary.latest_operation_id) {
-    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file>`);
-    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+  if (workerUrl && summary.site_id && summary.latest_operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
   }
   if (summary.latest_recorded_at) lines.push(`${recordedLabel}: ${summary.latest_recorded_at}`);
   return `${lines.join('\n')}\n`;
