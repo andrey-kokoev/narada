@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  formatOperationNextWorkflowLiveText,
   parseOperationNextWorkflowLiveArgs,
   runOperationNextWorkflowLive,
 } from './cloudflare-carrier-operation-next-workflow-live.mjs';
@@ -15,6 +16,54 @@ test('parseOperationNextWorkflowLiveArgs requires explicit execution acknowledge
     ], {}),
     /operation_next_workflow_live_requires_--execute-operation-next/,
   );
+});
+
+test('parseOperationNextWorkflowLiveArgs supports text format', () => {
+  const parsed = parseOperationNextWorkflowLiveArgs([
+    '--url', 'https://carrier.example',
+    '--site', 'site_live_smoke',
+    '--operator-session-cookie', 'operator-session-cookie',
+    '--format', 'text',
+    '--execute-operation-next',
+  ], {});
+
+  assert.equal(parsed.format, 'text');
+});
+
+test('formatOperationNextWorkflowLiveText renders direct follow-on reads', () => {
+  const text = formatOperationNextWorkflowLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    site_id: 'site_live_smoke',
+    selected_operation_id: 'operation_alpha',
+    list_before_next: {
+      route_next_action: 'focus_next_operation',
+      route_target: 'operation_alpha',
+      route_reason: 'operation_posture',
+    },
+    read_before_next: {
+      workflow_next_action: 'start_or_select_session',
+    },
+    delegated_workflow: 'session',
+    delegated_route_action: 'start_or_select_session',
+    delegated_result: {
+      read_after_next: {
+        active_session_id: 'carrier_session_alpha',
+      },
+    },
+    read_after_next: {
+      workflow_next_action: 'refresh_site_continuity_loop',
+      active_session_id: 'carrier_session_alpha',
+    },
+  });
+
+  assert.match(text, /^Operation Next Workflow: ok/m);
+  assert.match(text, /Selected Operation: operation_alpha/);
+  assert.match(text, /Delegated Workflow: session route=start_or_select_session/);
+  assert.match(text, /Post Action: refresh_site_continuity_loop/);
+  assert.match(text, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text/);
 });
 
 test('runOperationNextWorkflowLive delegates local ingress request route to local ingress request read', async () => {
