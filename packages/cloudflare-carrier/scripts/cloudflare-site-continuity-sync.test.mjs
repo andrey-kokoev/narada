@@ -445,6 +445,8 @@ test('site continuity read-cloudflare emits operator text handoff when using ope
     assert.match(result.stdout, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
     assert.match(result.stdout, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text/);
     assert.match(result.stdout, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url \S+ --site site_fixture --operator-session-file \S+ --execute-site-next/);
+    assert.match(result.stdout, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url \S+ --site site_fixture --operator-session-file \S+/);
+    assert.match(result.stdout, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url \S+ --site site_fixture --operator-session-file \S+/);
   } finally {
     await mock.close();
     await rm(root, { recursive: true, force: true });
@@ -515,6 +517,8 @@ test('site continuity sync-once emits operator text handoff when using operator 
     assert.match(result.stdout, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
     assert.match(result.stdout, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text/);
     assert.match(result.stdout, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url \S+ --site site_fixture --operator-session-file \S+ --execute-site-next/);
+    assert.match(result.stdout, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url \S+ --site site_fixture --operator-session-file \S+/);
+    assert.match(result.stdout, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url \S+ --site site_fixture --operator-session-file \S+/);
   } finally {
     await mock.close();
     await rm(root, { recursive: true, force: true });

@@ -626,6 +626,8 @@ function formatSiteContinuityBindingWorkflowText(plan, result) {
       lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text ${baseArgs}`);
       lines.push(`Operation List: pnpm --filter @narada2/cloudflare-carrier product:operation:list:text ${baseArgs}`);
       lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text ${baseArgs} --execute-site-next`);
+      lines.push(`Posture Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:posture:coherence:live:text ${baseArgs}`);
+      lines.push(`Durability Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text ${baseArgs}`);
     } else {
       lines.push(`Site List: pnpm --filter @narada2/cloudflare-carrier product:site:list:text -- --url ${plan.worker_url} --operator-session-file ${plan.operator_session_file}`);
     }

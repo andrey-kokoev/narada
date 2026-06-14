@@ -580,6 +580,8 @@ export function formatSiteContinuitySchedulerResultForText(result) {
     if (operatorTarget) {
       const siteArgs = `${baseArgs} --site ${operatorTarget}`;
       lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text ${siteArgs}`);
+      lines.push(`Posture Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:posture:coherence:live:text ${siteArgs}`);
+      lines.push(`Durability Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text ${siteArgs}`);
       if (nextOperationId) {
         lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text ${siteArgs} --operation-id ${nextOperationId}`);
         if (nextOperationAction) {
