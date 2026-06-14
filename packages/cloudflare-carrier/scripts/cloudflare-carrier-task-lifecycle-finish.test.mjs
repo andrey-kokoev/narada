@@ -296,6 +296,32 @@ test('formatTaskLifecycleFinishText renders admitted and refused summaries witho
   assert.match(admitted, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
   assert.equal(admitted.includes('secret-token'), false);
 
+  const noWorker = formatTaskLifecycleFinishText({
+    status: 'ok',
+    auth_source: 'flag:--token',
+    summary: {
+      ok: true,
+      site_id: 'site_alpha',
+      admission_id: 'admission_finish_1',
+      task_id: 'cloudflare-task-7',
+      task_number: 7,
+      finalizer_agent_id: 'agent_alpha',
+      operation_id: 'operation_alpha',
+      carrier_session_id: 'session_alpha',
+      previous_status: 'closed',
+      new_status: 'finished',
+      finish_verdict: 'accepted',
+      decision_action: 'admit',
+      decision_reason: 'cloudflare_task_finish_cutover_admitted',
+    },
+  });
+
+  assert.doesNotMatch(noWorker, /Session Evidence:/);
+  assert.doesNotMatch(noWorker, /Operation Review:/);
+  assert.doesNotMatch(noWorker, /Operation Next Workflow:/);
+  assert.doesNotMatch(noWorker, /Task Review:/);
+  assert.doesNotMatch(noWorker, /Task Workflow:/);
+
   const refused = formatTaskLifecycleFinishText({
     status: 'refused',
     worker_url: 'https://carrier.example.test',

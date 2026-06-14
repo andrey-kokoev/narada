@@ -308,6 +308,33 @@ test('formatTaskLifecycleReportText renders admitted and refused summaries witho
   assert.match(admitted, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
   assert.equal(admitted.includes('secret-token'), false);
 
+  const noWorker = formatTaskLifecycleReportText({
+    status: 'ok',
+    auth_source: 'flag:--token',
+    summary: {
+      ok: true,
+      site_id: 'site_alpha',
+      admission_id: 'admission_report_1',
+      task_id: 'cloudflare-task-7',
+      task_number: 7,
+      report_id: 'report-1',
+      reporter_agent_id: 'agent_alpha',
+      operation_id: 'operation_alpha',
+      carrier_session_id: 'session_alpha',
+      previous_status: 'claimed',
+      new_status: 'closed',
+      report_status: 'submitted',
+      decision_action: 'admit',
+      decision_reason: 'cloudflare_task_report_cutover_admitted',
+    },
+  });
+
+  assert.doesNotMatch(noWorker, /Session Evidence:/);
+  assert.doesNotMatch(noWorker, /Operation Review:/);
+  assert.doesNotMatch(noWorker, /Operation Next Workflow:/);
+  assert.doesNotMatch(noWorker, /Task Review:/);
+  assert.doesNotMatch(noWorker, /Task Workflow:/);
+
   const refused = formatTaskLifecycleReportText({
     status: 'refused',
     worker_url: 'https://carrier.example.test',

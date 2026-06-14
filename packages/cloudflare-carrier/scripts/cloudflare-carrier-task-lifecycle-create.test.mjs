@@ -247,6 +247,25 @@ test('formatTaskLifecycleCreateText renders admitted and refused summaries witho
   assert.match(admitted, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.equal(admitted.includes('secret-token'), false);
 
+  const noWorker = formatTaskLifecycleCreateText({
+    auth_source: 'operator-session-file',
+    params: { site_id: 'site_alpha', admission_id: 'admission_alpha', carrier_session_id: 'session_alpha', title: 'Real product task' },
+    summary: summarizeTaskLifecycleCreate({
+      ok: true,
+      decision: { action: 'admit', reason: 'cloudflare_task_create_cutover_admitted' },
+      mutation_authority: 'cloudflare_task_lifecycle_d1',
+      cloudflare_write_admission: 'admitted',
+      write_effect: 'task_lifecycle_create',
+      task: { site_id: 'site_alpha', task_id: 'cloudflare-task-1', task_number: 1, operation_id: 'operation_alpha', carrier_session_id: 'session_alpha', title: 'Real product task', status: 'opened' },
+    }, { admission_id: 'admission_alpha' }),
+  });
+
+  assert.doesNotMatch(noWorker, /Task Review:/);
+  assert.doesNotMatch(noWorker, /Task Workflow:/);
+  assert.doesNotMatch(noWorker, /Session Evidence:/);
+  assert.doesNotMatch(noWorker, /Operation Review:/);
+  assert.doesNotMatch(noWorker, /Operation Next Workflow:/);
+
   const refused = formatTaskLifecycleCreateText({
     status: 'refused',
     worker_url: 'https://carrier.example.test',
