@@ -428,7 +428,7 @@ test('site continuity binding text format emits operator handoff for target site
   assert.match(text, /Target Site: site_beta/);
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
   assert.match(text, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text/);
-  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_beta --operator-session-file D:\\narada\\\.narada\\auth\\cloudflare-operator-session\.json --execute-site-next/);
 });
 
 test('site continuity binding text format falls back to site list when no target site exists', () => {

@@ -670,7 +670,7 @@ function formatSiteContinuitySyncText(commandName, result, { operatorSessionFile
     const baseArgs = `-- --url ${worker} --site ${siteId} --operator-session-file ${sessionFile}`;
     lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text ${baseArgs}`);
     lines.push(`Operation List: pnpm --filter @narada2/cloudflare-carrier product:operation:list:text ${baseArgs}`);
-    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${worker} --operator-session-file ${sessionFile} --execute-site-next`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text ${baseArgs} --execute-site-next`);
     if (commandName === 'repository-publication-execute-pending') {
       const firstResult = Array.isArray(result?.results) ? result.results[0] ?? null : null;
       if (firstResult?.request_id) {

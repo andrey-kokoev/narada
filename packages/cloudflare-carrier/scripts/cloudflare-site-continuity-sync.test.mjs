@@ -444,7 +444,7 @@ test('site continuity read-cloudflare emits operator text handoff when using ope
     assert.match(result.stdout, /Exchange Packet:/);
     assert.match(result.stdout, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
     assert.match(result.stdout, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text/);
-    assert.match(result.stdout, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
+    assert.match(result.stdout, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url \S+ --site site_fixture --operator-session-file \S+ --execute-site-next/);
   } finally {
     await mock.close();
     await rm(root, { recursive: true, force: true });
@@ -514,7 +514,7 @@ test('site continuity sync-once emits operator text handoff when using operator 
     assert.match(result.stdout, /Durability Action: refreshed_existing_packet/);
     assert.match(result.stdout, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
     assert.match(result.stdout, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text/);
-    assert.match(result.stdout, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
+    assert.match(result.stdout, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url \S+ --site site_fixture --operator-session-file \S+ --execute-site-next/);
   } finally {
     await mock.close();
     await rm(root, { recursive: true, force: true });

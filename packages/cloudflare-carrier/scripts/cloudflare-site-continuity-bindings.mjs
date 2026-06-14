@@ -625,7 +625,7 @@ function formatSiteContinuityBindingWorkflowText(plan, result) {
       const baseArgs = `-- --url ${plan.worker_url} --site ${targetSiteId} --operator-session-file ${plan.operator_session_file}`;
       lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text ${baseArgs}`);
       lines.push(`Operation List: pnpm --filter @narada2/cloudflare-carrier product:operation:list:text ${baseArgs}`);
-      lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${plan.worker_url} --operator-session-file ${plan.operator_session_file} --execute-site-next`);
+      lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text ${baseArgs} --execute-site-next`);
     } else {
       lines.push(`Site List: pnpm --filter @narada2/cloudflare-carrier product:site:list:text -- --url ${plan.worker_url} --operator-session-file ${plan.operator_session_file}`);
     }

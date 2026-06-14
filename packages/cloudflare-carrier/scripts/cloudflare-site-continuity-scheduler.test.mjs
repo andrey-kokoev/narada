@@ -666,7 +666,7 @@ test('site continuity scheduler text summary surfaces local and inbound continui
     assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json --site site_missing/);
     assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json --site site_missing --operation-id operation_site_missing_control/);
     assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json --site site_missing --operation-id operation_site_missing_control --execute-operation-next/);
-    assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json --execute-site-next/);
+    assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json --site site_missing --execute-site-next/);
     assert.match(text, /- site_synced: sync=synced inbound=synced/);
   } finally {
     await rm(root, { recursive: true, force: true });

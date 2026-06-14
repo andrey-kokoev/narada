@@ -587,7 +587,7 @@ export function formatSiteContinuitySchedulerResultForText(result) {
         }
       }
       if (operatorAction === 'focus_next_site') {
-        lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text ${baseArgs} --execute-site-next`);
+        lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text ${siteArgs} --execute-site-next`);
       } else if (nextOperationId && nextOperationAction) {
         lines.push(`Operation Review Focus: action=${nextOperationAction} operation=${nextOperationId}`);
       }
