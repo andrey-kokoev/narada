@@ -136,7 +136,7 @@ export function summarizeLocalIngressEvidence(body = {}, params = {}) {
 export function formatLocalIngressEvidenceText(result) {
   const summary = result?.summary ?? summarizeLocalIngressEvidence(result?.response ?? {}, result?.params ?? {});
   const ok = summary.ok === false || result?.status === 'refused' ? false : true;
-  return [
+  const lines = [
     `Local Ingress Evidence: ${ok === false ? 'refused' : 'ok'}`,
     `Worker: ${result?.worker_url ?? 'unknown'}`,
     `Auth: ${result?.auth_source ?? 'unknown'}`,
@@ -160,7 +160,11 @@ export function formatLocalIngressEvidenceText(result) {
     ...(summary.authority_partition ? [`Authority Partition: ${summary.authority_partition}`] : []),
     ...(summary.recorded_by_principal_id ? [`Recorded By: ${summary.recorded_by_principal_id}`] : []),
     ...(summary.recorded_at ? [`Recorded At: ${summary.recorded_at}`] : []),
-  ].join('\n') + '\n';
+  ];
+  if (summary.site_id && summary.local_ingress_request_id) {
+    lines.push(`Request Review: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:request:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --local-ingress-request-id ${summary.local_ingress_request_id} --operator-session-file <operator-session-file>`);
+  }
+  return `${lines.join('\n')}\n`;
 }
 
 function collectChangedFiles(args, env) {
