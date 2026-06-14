@@ -114,6 +114,11 @@ export function formatSessionEvidenceText(result) {
       `Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`,
     );
   }
+  if (summary.site_id && summary.operation_id) {
+    lines.push(
+      `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`,
+    );
+  }
   return `${lines.join('\n')}\n`;
 }
 
