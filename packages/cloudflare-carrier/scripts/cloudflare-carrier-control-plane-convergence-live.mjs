@@ -138,7 +138,7 @@ export function formatControlPlaneConvergenceLiveText(result) {
         ?? pass.delegated_result?.delegated_result?.selected_operation_id
         ?? null;
       if (operationId) {
-        lines.push(`  Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${pass.site_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+        lines.push(`  Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${pass.site_id} --operation-id ${operationId} --operator-session-file <operator-session-file> --execute-operation-next`);
         lines.push(`  Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${pass.site_id} --operation-id ${operationId} --operator-session-file <operator-session-file>`);
       }
     }
