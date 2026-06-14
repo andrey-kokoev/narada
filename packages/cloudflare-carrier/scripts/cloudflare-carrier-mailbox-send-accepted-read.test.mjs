@@ -37,8 +37,10 @@ test('summarizeMailboxSendAccepted lifts latest accepted send details', () => {
       source_message_ref: 'message_alpha',
       record: {
         operation_id: 'operation_alpha',
+        send_confirmation_id: 'mailbox_send_confirmation_alpha',
         send_request: {
           operation_id: 'operation_alpha',
+          send_confirmation_id: 'mailbox_send_confirmation_alpha',
           source_message_ref: 'message_alpha',
         },
       },
@@ -52,6 +54,7 @@ test('summarizeMailboxSendAccepted lifts latest accepted send details', () => {
   assert.equal(summary.latest_proposal_id, null);
   assert.equal(summary.latest_draft_create_id, null);
   assert.equal(summary.latest_operation_id, 'operation_alpha');
+  assert.equal(summary.latest_send_confirmation_id, 'mailbox_send_confirmation_alpha');
   assert.equal(summary.latest_outlook_draft_id, null);
   assert.equal(summary.latest_send_posture, null);
   assert.equal(summary.latest_send_accepted_id, 'mailbox_send_accepted_alpha');
@@ -152,6 +155,7 @@ test('formatMailboxSendAcceptedReadText prints mailbox send acceptance summary',
       latest_proposal_id: 'mailbox_send_proposal_alpha',
       latest_draft_create_id: 'mailbox_outlook_draft_create_alpha',
       latest_operation_id: 'operation_alpha',
+      latest_send_confirmation_id: 'mailbox_send_confirmation_alpha',
       latest_outlook_draft_id: 'outlook_draft_alpha',
       latest_send_posture: 'cloudflare_graph_send_accepted_delivery_not_confirmed',
       latest_send_accepted_id: 'mailbox_send_accepted_alpha',
@@ -167,6 +171,7 @@ test('formatMailboxSendAcceptedReadText prints mailbox send acceptance summary',
   assert.match(text, /Latest Accepted: id=mailbox_send_accepted_alpha proposal=mailbox_send_proposal_alpha account=help@example.test message=message_alpha subject=none/);
   assert.match(text, /Proposal Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref mailbox_send_proposal_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Draft Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref mailbox_outlook_draft_create_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Confirmation Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-confirmation:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref mailbox_send_confirmation_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
 });
