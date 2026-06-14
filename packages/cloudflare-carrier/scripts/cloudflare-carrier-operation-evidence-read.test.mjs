@@ -213,6 +213,27 @@ test('formatOperationEvidenceReadText omits synthetic operation ids from review 
   assert.doesNotMatch(text, /Review Ack:.*<operation-id>/);
 });
 
+test('formatOperationEvidenceReadText suppresses workflow links without a real operation id', () => {
+  const text = formatOperationEvidenceReadText({
+    worker_url: 'https://carrier.example',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      workflow_next_action: 'refresh_site_continuity_loop',
+      workflow_reason: 'operation_lifecycle_continuity_loop_stale',
+      workflow_focus_kind: 'site_continuity_reconciliation_execution',
+      workflow_focus_ref: 'site-continuity-reconciliation-execution:site_alpha:current',
+      phase: 'inhabited',
+      health: 'ready',
+      current_status: 'active',
+      next_action: 'monitor_operation',
+    },
+  });
+
+  assert.doesNotMatch(text, /Continuity Workflow:/);
+  assert.doesNotMatch(text, /Review Ack:.*<operation-id>/);
+});
+
 test('summarizeOperationEvidence makes local resident evidence posture explicit without inventing a Cloudflare session', () => {
   const summary = summarizeOperationEvidence({
     operation: { operation_id: 'operation_alpha', site_id: 'site_live_smoke', status: 'active' },

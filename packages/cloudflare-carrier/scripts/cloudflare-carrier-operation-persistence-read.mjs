@@ -86,7 +86,8 @@ export function formatOperationPersistenceReadText(result) {
 function buildOperationPersistenceWorkflowLinks(result, summary) {
   const workerUrl = result?.worker_url ?? '<worker-url>';
   const siteId = summary.site_id ?? '<site-id>';
-  const operationId = summary.operation_id ?? '<operation-id>';
+  const operationId = summary.operation_id;
+  if (!operationId) return [];
   const links = [];
   if (summary.workflow_next_action === 'review_recovery_posture') {
     links.push({

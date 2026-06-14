@@ -118,6 +118,28 @@ test('formatOperationPersistenceReadText includes recovery follow-on command', (
   assert.match(text, /Recovery Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
 
+test('formatOperationPersistenceReadText suppresses workflow links without a real operation id', () => {
+  const text = formatOperationPersistenceReadText({
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      workflow_next_action: 'start_or_select_session',
+      workflow_reason: 'session_required',
+      current_status: 'active',
+      phase: 'inhabited',
+      health: 'incomplete',
+      lifecycle_next_action: 'carrier_evidence',
+      persistence_state: 'degraded',
+      persistence_active_boundary_count: 10,
+      persistence_durable_boundary_count: 12,
+      persistence_warning_count: 0,
+    },
+  });
+
+  assert.doesNotMatch(text, /Session Workflow:/);
+});
+
 test('formatOperationPersistenceReadText emits direct workflow handoff when the workflow route moves beyond persistence', () => {
   const text = formatOperationPersistenceReadText({
     worker_url: 'https://carrier.example.test',

@@ -155,3 +155,24 @@ test('formatOperationRecoveryReadText emits direct workflow handoff when the wor
 
   assert.match(text, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity/);
 });
+
+test('formatOperationRecoveryReadText suppresses workflow links without a real operation id', () => {
+  const text = formatOperationRecoveryReadText({
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      workflow_next_action: 'resume_operation_continuation',
+      workflow_reason: 'continuation_required',
+      current_status: 'active',
+      phase: 'inhabited',
+      health: 'ready',
+      lifecycle_next_action: 'monitor_operation',
+      recovery_state: 'reconstructable',
+      recovery_boundary_count: 12,
+      recovery_gap_count: 0,
+    },
+  });
+
+  assert.doesNotMatch(text, /Continuation Workflow:/);
+});
