@@ -26,7 +26,15 @@ test('provider liveness scheduler install plan is bounded and secret-free', asyn
   await writeFile(scheduledTaskEntrypoint, '#!/usr/bin/env node\n', 'utf8');
   await writeFile(join(root, '.env'), 'CLOUDFLARE_CARRIER_URL=https://worker.example\nCLOUDFLARE_CARRIER_TOKEN_FILE=.secrets/token\n', 'utf8');
   try {
-    const plan = buildProviderLivenessSchedulerPlan({ action: 'install', repoRoot: root, intervalMinutes: 2, nodeCommand: 'node' });
+    const plan = buildProviderLivenessSchedulerPlan({
+      action: 'install',
+      repoRoot: root,
+      intervalMinutes: 2,
+      nodeCommand: 'node',
+      workerUrl: 'https://carrier.example',
+      site: 'site_narada_cloudflare',
+      operatorSessionFile: 'D:\\code\\narada\\.narada\\auth\\cloudflare-operator-session.json',
+    });
 
     assert.equal(plan.schema, 'narada.cloudflare_carrier.provider_liveness_scheduler_plan.v1');
     assert.equal(plan.plan_status, 'dry_run_install_plan');
@@ -50,6 +58,9 @@ test('provider liveness scheduler install plan is bounded and secret-free', asyn
     assert.match(plan.direct_task_command, /--local-root/);
     assert.equal(plan.direct_task_command.includes('--refresh-trigger'), false);
     assert.equal(plan.hidden_wrapper_kind, 'windows_wscript_vbs_hidden');
+    assert.equal(plan.worker_url, 'https://carrier.example');
+    assert.equal(plan.site_id, 'site_narada_cloudflare');
+    assert.equal(plan.operator_session_file, 'D:\\code\\narada\\.narada\\auth\\cloudflare-operator-session.json');
     assert.match(plan.hidden_wrapper_content, /CreateObject\("WScript\.Shell"\)/);
     assert.match(plan.hidden_wrapper_content, /shell\.Run /);
     assert.match(plan.hidden_wrapper_content, /, 0, False/);
@@ -268,6 +279,9 @@ test('provider liveness scheduler text output summarizes operator posture', () =
   const text = formatProviderLivenessSchedulerText({
     task_name: '\\Narada\\CloudflareProviderLivenessRefresh',
     plan_status: 'status_only_no_cloudflare_access',
+    worker_url: 'https://narada-cloudflare-carrier.andrei-kokoev.workers.dev',
+    site_id: 'site_narada_cloudflare',
+    operator_session_file: 'D:\\code\\narada\\.narada\\auth\\cloudflare-operator-session.json',
     scheduler_task_readback: {
       status: 'ok',
       scheduled_task_state: 'Enabled',
@@ -291,12 +305,23 @@ test('provider liveness scheduler text output summarizes operator posture', () =
   assert.match(text, /Command: matches_plan/);
   assert.match(text, /Power: allows_battery_execution/);
   assert.match(text, /Hidden Wrapper: matches_plan/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/narada-cloudflare-carrier\.andrei-kokoev\.workers\.dev --site site_narada_cloudflare --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json/);
+  assert.match(text, /Local Ingress Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:provider-liveness:text -- --url https:\/\/narada-cloudflare-carrier\.andrei-kokoev\.workers\.dev --site site_narada_cloudflare --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json/);
+  assert.match(text, /Repository Publication Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url https:\/\/narada-cloudflare-carrier\.andrei-kokoev\.workers\.dev --site site_narada_cloudflare --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json/);
 });
 
 test('provider liveness scheduler CLI emits operator text status', async () => {
-  const result = await execFile(process.execPath, [SCRIPT_PATH, '--action', 'status', '--format', 'text'], { timeout: 30000, windowsHide: true });
+  const result = await execFile(process.execPath, [
+    SCRIPT_PATH,
+    '--action', 'status',
+    '--format', 'text',
+    '--url', 'https://carrier.example',
+    '--site', 'site_live_smoke',
+    '--operator-session-file', 'D:\\code\\narada\\.narada\\auth\\cloudflare-operator-session.json',
+  ], { timeout: 30000, windowsHide: true });
 
   assert.match(result.stdout, /Provider Liveness:/);
   assert.match(result.stdout, /Task: \\Narada\\CloudflareProviderLivenessRefresh/);
   assert.match(result.stdout, /Task Scheduler: live readback required/);
+  assert.match(result.stdout, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_live_smoke --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json/);
 });

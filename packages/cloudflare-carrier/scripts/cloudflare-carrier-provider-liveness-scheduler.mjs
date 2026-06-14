@@ -23,6 +23,9 @@ export function buildProviderLivenessSchedulerPlan({
   localRoot = null,
   nodeCommand = resolveDefaultNodeCommand(),
   hiddenWrapperPath = null,
+  workerUrl = null,
+  site = null,
+  operatorSessionFile = null,
   dryRun = true,
 } = {}) {
   const root = resolve(repoRoot);
@@ -49,6 +52,9 @@ export function buildProviderLivenessSchedulerPlan({
     local_root: effectiveLocalRoot,
     hidden_wrapper_path: wrapperPath,
     hidden_wrapper_kind: 'windows_wscript_vbs_hidden',
+    worker_url: normalizeOptionalString(workerUrl),
+    site_id: normalizeOptionalString(site),
+    operator_session_file: normalizeOptionalString(operatorSessionFile),
     scheduler_power_policy_target: 'allow_start_and_continue_on_battery',
     hidden_wrapper_content: hiddenWrapperContent,
     credential_posture: 'external_env_file_or_process_environment_only',
@@ -378,6 +384,15 @@ export function formatProviderLivenessSchedulerText(result) {
     lines.push(`Local Root: ${result?.local_root ?? 'unknown'}`);
     lines.push(`Task Scheduler: ${result?.status?.task_scheduler_query_required ? 'live readback required' : 'not required'}`);
   }
+  const workerUrl = normalizeOptionalString(result?.worker_url);
+  const siteId = normalizeOptionalString(result?.site_id);
+  const operatorSessionFile = normalizeOptionalString(result?.operator_session_file);
+  if (workerUrl && siteId && operatorSessionFile) {
+    const commandSuffix = `-- --url ${workerUrl} --site ${siteId} --operator-session-file ${operatorSessionFile}`;
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text ${commandSuffix}`);
+    lines.push(`Local Ingress Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:provider-liveness:text ${commandSuffix}`);
+    lines.push(`Repository Publication Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:provider-liveness:text ${commandSuffix}`);
+  }
   return `${lines.join('\n')}\n`;
 }
 
@@ -610,10 +625,18 @@ function parseArgs(argv) {
     else if (arg === '--local-root') args.localRoot = argv[++index];
     else if (arg === '--node-command') args.nodeCommand = argv[++index];
     else if (arg === '--hidden-wrapper-path') args.hiddenWrapperPath = argv[++index];
+    else if (arg === '--url') args.workerUrl = argv[++index];
+    else if (arg === '--site') args.site = argv[++index];
+    else if (arg === '--operator-session-file') args.operatorSessionFile = argv[++index];
     else if (arg === '--format') args.format = argv[++index];
     else throw new Error(`unknown_argument:${arg}`);
   }
   return args;
+}
+
+function normalizeOptionalString(value) {
+  const normalized = String(value ?? '').trim();
+  return normalized || null;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
