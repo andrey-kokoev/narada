@@ -306,6 +306,7 @@ test('provider liveness scheduler text output summarizes operator posture', () =
   assert.match(text, /Power: allows_battery_execution/);
   assert.match(text, /Hidden Wrapper: matches_plan/);
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/narada-cloudflare-carrier\.andrei-kokoev\.workers\.dev --site site_narada_cloudflare --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/narada-cloudflare-carrier\.andrei-kokoev\.workers\.dev --site site_narada_cloudflare --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json --execute-site-next/);
   assert.match(text, /Local Ingress Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:provider-liveness:text -- --url https:\/\/narada-cloudflare-carrier\.andrei-kokoev\.workers\.dev --site site_narada_cloudflare --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json/);
   assert.match(text, /Repository Publication Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url https:\/\/narada-cloudflare-carrier\.andrei-kokoev\.workers\.dev --site site_narada_cloudflare --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json/);
 });

@@ -130,6 +130,7 @@ export function formatRepositoryPublicationReadinessText(result) {
     ...(summary.direct_cloudflare_repository_mutation_admission ? [`Direct Cloudflare Repository Mutation: ${summary.direct_cloudflare_repository_mutation_admission}`] : []),
     ...(summary.authority_partition ? [`Authority Partition: ${summary.authority_partition}`] : []),
     ...(siteId ? [`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${siteId} --operator-session-file <operator-session-file>`] : []),
+    ...(siteId ? [`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${siteId} --operator-session-file <operator-session-file> --execute-site-next`] : []),
     ...(siteId ? [`Repository Publication Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${siteId} --operator-session-file <operator-session-file>`] : []),
   ].join('\n') + '\n';
 }

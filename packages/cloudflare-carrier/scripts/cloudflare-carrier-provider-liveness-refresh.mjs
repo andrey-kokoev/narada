@@ -65,6 +65,7 @@ export function formatProviderLivenessRefreshText(result) {
     lines.push(`- ${provider.provider}: status=${provider.status ?? 'unknown'} http=${provider.http_status ?? 'unknown'}`);
   }
   lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`);
+  lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
   if ((result.providers ?? []).some((provider) => provider.provider === 'local_ingress')) {
     lines.push(`Local Ingress Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:provider-liveness:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`);
   }

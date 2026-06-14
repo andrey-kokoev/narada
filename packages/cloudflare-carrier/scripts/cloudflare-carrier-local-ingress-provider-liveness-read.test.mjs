@@ -163,6 +163,7 @@ test('formatLocalIngressProviderLivenessReadText prints provider liveness summar
   assert.match(text, /Scheduler: state=fresh_from_scheduled_refresh task=\\Narada\\CloudflareProviderLivenessRefresh interval=2/);
   assert.match(text, /Heartbeats: count=1 latest=heartbeat_alpha status=completed_and_recorded/);
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(text, /Provider Liveness Refresh: pnpm --filter @narada2\/cloudflare-carrier provider-liveness:refresh:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 });
 
@@ -196,5 +197,6 @@ test('formatLocalIngressProviderLivenessReadText suppresses refresh handoff for 
   });
 
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.doesNotMatch(text, /Provider Liveness Refresh:/);
 });
