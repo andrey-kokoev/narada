@@ -241,6 +241,7 @@ export function summarizeRepositoryPublicationRequestReview(body = {}, options =
 
 export function formatRepositoryPublicationRequestReviewText(result) {
   const summary = result?.summary ?? {};
+  const actionableWorkflow = summary.workflow_next_action && summary.workflow_next_action !== 'none' && summary.workflow_next_action !== 'monitor_operation';
   const lines = [
     'Repository Publication Request Review: ok',
     `Worker: ${result?.worker_url ?? 'unknown'}`,
@@ -317,6 +318,12 @@ export function formatRepositoryPublicationRequestReviewText(result) {
       ? 'Focused Review'
       : 'Latest Focus Review';
     lines.push(`${focusReviewLabel}: ${summary.latest_focus_review.focus_kind ?? 'unknown'}:${summary.latest_focus_review.focus_ref ?? 'unknown'} status=${summary.latest_focus_review.review_status ?? 'unknown'}`);
+  }
+  if (summary.operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+  }
+  if (actionableWorkflow && summary.operation_id) {
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id} --execute-operation-next --operator-session-file <operator-session-file>`);
   }
   if (summary.focused_repository_publication_request_id) {
     lines.push(`Review Ack: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --focus-kind repository_publication_request --focus-ref ${summary.focused_repository_publication_request_id} --operator-session-file <operator-session-file>`);
