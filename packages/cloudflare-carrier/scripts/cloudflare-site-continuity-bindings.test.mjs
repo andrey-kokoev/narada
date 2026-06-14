@@ -9,6 +9,7 @@ import { createSiteContinuityBinding } from '@narada2/site-continuity';
 import {
   admitNextSiteContinuityBinding,
   buildBindingMaterializationPlan,
+  formatSiteContinuityBindingWorkflowText,
   listMaterializedSiteContinuityBindingRegistry,
   materializeSiteContinuityBindingRegistry,
   prepareNextSiteContinuityBindingPacket,
@@ -61,6 +62,23 @@ test('site continuity binding materializer writes registry from packet binding',
   assert.equal(registry.schema, 'narada.site_continuity_binding_registry.v1');
   assert.equal(registry.bindings.length, 1);
   assert.equal(registry.bindings[0].site_id, 'site_bound');
+});
+
+test('site continuity binding plan captures optional text/operator context', () => {
+  const plan = buildBindingMaterializationPlan({
+    cwd: 'D:\\code\\narada',
+    argv: [
+      '--action', 'prepare-next-binding-packet',
+      '--format', 'text',
+      '--url', 'https://carrier.example.test',
+      '--operator-session-file', 'D:\\narada\\.narada\\auth\\cloudflare-operator-session.json',
+    ],
+    env: {},
+  });
+
+  assert.equal(plan.format, 'text');
+  assert.equal(plan.worker_url, 'https://carrier.example.test');
+  assert.equal(plan.operator_session_file, 'D:\\narada\\.narada\\auth\\cloudflare-operator-session.json');
 });
 
 test('site continuity binding materializer writes registry from packet directory', async () => {
@@ -386,6 +404,46 @@ test('site continuity binding workflow lists operator-readable binding details',
     'cloudflare_carrier',
     'local_windows',
   ]);
+});
+
+test('site continuity binding text format emits operator handoff for target site actions', () => {
+  const text = formatSiteContinuityBindingWorkflowText({
+    action: 'admit-next-binding',
+    worker_url: 'https://carrier.example.test',
+    operator_session_file: 'D:\\narada\\.narada\\auth\\cloudflare-operator-session.json',
+    target_site_id: 'site_beta',
+  }, {
+    ok: true,
+    action: 'planned',
+    reason: 'site_continuity_binding_created',
+    target_site_id: 'site_beta',
+    registry_path: 'D:\\narada\\.narada\\site-continuity\\bindings.json',
+    binding_count: 2,
+    sites: ['site_alpha', 'site_beta'],
+    required_execution_flag: '--execute',
+  });
+
+  assert.match(text, /Site Continuity Bindings/);
+  assert.match(text, /Action: admit-next-binding/);
+  assert.match(text, /Target Site: site_beta/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
+  assert.match(text, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
+});
+
+test('site continuity binding text format falls back to site list when no target site exists', () => {
+  const text = formatSiteContinuityBindingWorkflowText({
+    action: 'materialize',
+    worker_url: 'https://carrier.example.test',
+    operator_session_file: 'D:\\narada\\.narada\\auth\\cloudflare-operator-session.json',
+  }, {
+    ok: true,
+    action: 'materialized',
+    binding_count: 0,
+    sites: [],
+  });
+
+  assert.match(text, /Site List: pnpm --filter @narada2\/cloudflare-carrier product:site:list:text/);
 });
 
 test('site continuity binding workflow refuses invalid materialized registry', async () => {

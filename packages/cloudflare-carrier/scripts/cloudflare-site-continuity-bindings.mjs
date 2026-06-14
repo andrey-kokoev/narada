@@ -29,6 +29,10 @@ async function main() {
     cwd: process.env.INIT_CWD ?? process.cwd(),
   });
   const result = await runSiteContinuityBindingWorkflow(plan);
+  if (plan.format === 'text') {
+    process.stdout.write(formatSiteContinuityBindingWorkflowText(plan, result));
+    return;
+  }
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
 
@@ -76,6 +80,7 @@ function buildBindingMaterializationPlan({ argv = [], env = process.env, cwd = p
   return {
     cwd,
     action: args.action ?? env.NARADA_SITE_CONTINUITY_BINDING_ACTION ?? 'materialize',
+    format: args.format ?? env.NARADA_SITE_CONTINUITY_BINDING_FORMAT ?? 'json',
     packet_paths: packetPaths,
     packet_directories: packetDirectories,
     output_path: outputPath,
@@ -98,6 +103,8 @@ function buildBindingMaterializationPlan({ argv = [], env = process.env, cwd = p
     authority_map_ref: args.authority_map_ref ?? env.NARADA_SITE_CONTINUITY_AUTHORITY_MAP_REF ?? null,
     registry_ref: args.registry_ref ?? env.NARADA_SITE_CONTINUITY_BINDING_REGISTRY_REF ?? 'local-cloud-site-continuity-bindings',
     generated_at: args.generated_at ?? env.NARADA_SITE_CONTINUITY_BINDING_GENERATED_AT ?? new Date().toISOString(),
+    worker_url: args.url ?? env.CLOUDFLARE_CARRIER_URL ?? null,
+    operator_session_file: args.operator_session_file ?? env.CLOUDFLARE_OPERATOR_SESSION_FILE ?? null,
     dry_run: args.dry_run === true,
     execute: args.execute === true,
   };
@@ -510,6 +517,21 @@ function parseArgs(argv) {
       index += 1;
       continue;
     }
+    if (arg === '--format') {
+      args.format = argv[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === '--url') {
+      args.url = argv[index + 1];
+      index += 1;
+      continue;
+    }
+    if (arg === '--operator-session-file') {
+      args.operator_session_file = argv[index + 1];
+      index += 1;
+      continue;
+    }
     if (arg === '--packet') {
       args.packet = [...asArray(args.packet), argv[index + 1]];
       index += 1;
@@ -560,6 +582,58 @@ function resolvePath(cwd, value) {
   return path.resolve(cwd, normalized);
 }
 
+function formatSiteContinuityBindingWorkflowText(plan, result) {
+  const lines = ['Site Continuity Bindings'];
+  lines.push(`Action: ${plan.action}`);
+  lines.push(`Status: ${result?.ok === false ? 'refused' : 'ok'}`);
+  if (result?.action) lines.push(`Result: ${result.action}`);
+  if (result?.reason) lines.push(`Reason: ${result.reason}`);
+
+  if (plan.action === 'materialize') {
+    lines.push(`Registry: ${result?.output_path ?? plan.effective_output_path}`);
+    lines.push(`Bindings: ${result?.binding_count ?? 0}`);
+  } else if (plan.action === 'validate') {
+    lines.push(`Registry: ${result?.registry_path ?? plan.effective_registry_path}`);
+    lines.push(`Bindings: ${result?.binding_count ?? 0}`);
+  } else if (plan.action === 'list') {
+    lines.push(`Registry: ${result?.registry_path ?? plan.effective_registry_path}`);
+    lines.push(`Bindings: ${result?.binding_count ?? 0}`);
+  } else if (plan.action === 'prepare-next-binding-packet') {
+    if (result?.target_site_id) lines.push(`Target Site: ${result.target_site_id}`);
+    if (result?.packet_id) lines.push(`Packet: ${result.packet_id}`);
+    if (result?.output_path) lines.push(`Prepared Packet: ${result.output_path}`);
+    if (result?.admission_action) lines.push(`Admission: ${result.admission_action}${result?.admission_reason ? ` reason=${result.admission_reason}` : ''}`);
+  } else if (plan.action === 'admit-next-binding') {
+    if (result?.target_site_id) lines.push(`Target Site: ${result.target_site_id}`);
+    if (result?.registry_path) lines.push(`Registry: ${result.registry_path}`);
+    if (result?.binding_count != null) lines.push(`Bindings: ${result.binding_count}`);
+    if (result?.required_execution_flag) lines.push(`Required Execution Flag: ${result.required_execution_flag}`);
+  }
+
+  const sites = Array.isArray(result?.sites) ? result.sites : [];
+  if (sites.length > 0) {
+    const labels = sites.map((site) => (typeof site === 'string' ? site : site?.site_id)).filter(Boolean);
+    if (labels.length > 0) lines.push(`Sites: ${labels.join(', ')}`);
+  }
+
+  if (plan.worker_url && plan.operator_session_file) {
+    const targetSiteId = result?.target_site_id
+      ?? (typeof sites[0] === 'string' ? sites[0] : sites[0]?.site_id)
+      ?? plan.target_site_id
+      ?? null;
+    if (targetSiteId) {
+      const baseArgs = `-- --url ${plan.worker_url} --site ${targetSiteId} --operator-session-file ${plan.operator_session_file}`;
+      lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text ${baseArgs}`);
+      lines.push(`Operation List: pnpm --filter @narada2/cloudflare-carrier product:operation:list:text ${baseArgs}`);
+      lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${plan.worker_url} --operator-session-file ${plan.operator_session_file} --execute-site-next`);
+    } else {
+      lines.push(`Site List: pnpm --filter @narada2/cloudflare-carrier product:site:list:text -- --url ${plan.worker_url} --operator-session-file ${plan.operator_session_file}`);
+    }
+  }
+
+  return `${lines.join('\n')}\n`;
+}
+
 const invokedPath = process.argv[1] ? path.resolve(process.argv[1]) : null;
 const modulePath = fileURLToPath(import.meta.url);
 if (invokedPath === modulePath) {
@@ -576,6 +650,7 @@ export {
   DEFAULT_PREPARED_PACKET_DIRECTORY,
   admitNextSiteContinuityBinding,
   buildBindingMaterializationPlan,
+  formatSiteContinuityBindingWorkflowText,
   listMaterializedSiteContinuityBindingRegistry,
   materializeSiteContinuityBindingRegistry,
   prepareNextSiteContinuityBindingPacket,
