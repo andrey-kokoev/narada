@@ -324,6 +324,8 @@ test('formatSiteFileMaterializationText renders admitted and refused summaries w
   assert.match(admitted, /Proposal Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file-change:proposal:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref proposal-9 --operator-session-file <operator-session-file>/);
   assert.match(admitted, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(admitted, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
+  assert.equal(admitted.includes('Task Review:'), false);
+  assert.equal(admitted.includes('Task Workflow:'), false);
   assert.equal(admitted.includes('secret-token'), false);
 
   const refused = formatSiteFileMaterializationText({
@@ -345,6 +347,7 @@ test('formatSiteFileMaterializationText renders admitted and refused summaries w
   assert.equal(refused.includes('Materialization Review:'), false);
   assert.equal(refused.includes('Proposal Review:'), false);
   assert.equal(refused.includes('Task Review:'), false);
+  assert.equal(refused.includes('Task Workflow:'), false);
   assert.equal(refused.includes('Operation Review:'), false);
   assert.equal(refused.includes('secret-token'), false);
 });

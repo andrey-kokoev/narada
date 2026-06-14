@@ -67,6 +67,7 @@ export function formatTaskLifecycleWorkflowLiveText(result) {
     `Finish: finish_id=${result.finish_summary?.finish_id ?? 'none'} status=${result.finish_summary?.status ?? 'unknown'}`,
     `Read After Finish: status=${result.read_after_finish?.task_status ?? 'unknown'}`,
     `Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result.worker_url} --site ${result.site_id} --task-id ${result.task_id} --operator-session-file <operator-session-file>`,
+    `Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --task-id ${result.task_id} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`,
   ];
   if (result.read_after_finish?.operation_id) {
     lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.read_after_finish.operation_id} --operator-session-file <operator-session-file>`);

@@ -49,6 +49,7 @@ test('formatLiveSmokeText emits direct downstream reads', () => {
   assert.match(output, /Site Next Workflow:/);
   assert.match(output, /Session Evidence:/);
   assert.match(output, /Task Review:/);
+  assert.match(output, /Task Workflow:/);
   assert.match(output, /Operation Review:/);
   assert.match(output, /Operation Next Workflow:/);
 });

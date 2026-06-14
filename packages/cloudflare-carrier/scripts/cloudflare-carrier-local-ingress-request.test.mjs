@@ -301,6 +301,7 @@ test('formatLocalIngressRequestText renders queued and refused summaries without
   assert.match(queued, /Status: queued/);
   assert.match(queued, /Local Execution Admission: pending_windows_admission/);
   assert.match(queued, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-9 --operator-session-file <operator-session-file>/);
+  assert.match(queued, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-9 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
   assert.match(queued, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(queued, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.equal(queued.includes('secret-token'), false);
@@ -320,6 +321,7 @@ test('formatLocalIngressRequestText renders queued and refused summaries without
   assert.match(refused, /Local Ingress Request: refused/);
   assert.match(refused, /Code: local_ingress_direct_cloudflare_filesystem_mutation_admission_invalid/);
   assert.equal(refused.includes('Task Review:'), false);
+  assert.equal(refused.includes('Task Workflow:'), false);
   assert.equal(refused.includes('secret-token'), false);
 });
 
