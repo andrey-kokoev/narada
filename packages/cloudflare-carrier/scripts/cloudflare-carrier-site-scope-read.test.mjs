@@ -113,6 +113,38 @@ test('formatSiteScopeReadText prints scope summary', () => {
   assert.doesNotMatch(text, /Review Ack:/);
 });
 
+test('formatSiteScopeReadText suppresses scoped handoffs without worker url', () => {
+  const text = formatSiteScopeReadText({
+    worker_url: null,
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      display_name: 'Alpha',
+      scope_loaded: true,
+      health: 'attention',
+      next_action: 'focus_site_operation',
+      active_operation_id: 'operation_alpha',
+      active_operation_next_action: 'refresh_site_continuity_loop',
+      active_operation_focus_kind: 'site_continuity_reconciliation_execution',
+      active_operation_focus_ref: 'focus-ref',
+      status: 'active',
+      operation_count: 2,
+      membership_count: 1,
+      authority_count: 3,
+      persistence_state: 'durable',
+      recovery_state: 'reconstructable',
+    },
+  });
+
+  assert.doesNotMatch(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
+  assert.doesNotMatch(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
+  assert.doesNotMatch(text, /Site Action Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:action:workflow:live:text/);
+  assert.doesNotMatch(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.doesNotMatch(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
+  assert.doesNotMatch(text, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live:text/);
+  assert.doesNotMatch(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
+});
+
 test('formatSiteScopeReadText renders review ack from active operation route', () => {
   const text = formatSiteScopeReadText({
     worker_url: 'https://carrier.example.test',

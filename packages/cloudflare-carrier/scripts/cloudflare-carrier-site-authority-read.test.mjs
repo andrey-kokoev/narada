@@ -132,6 +132,39 @@ test('formatSiteAuthorityReadText prints authority summary', () => {
   assert.doesNotMatch(text, /Review Ack:/);
 });
 
+test('formatSiteAuthorityReadText suppresses scoped handoffs without worker url', () => {
+  const text = formatSiteAuthorityReadText({
+    worker_url: null,
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      active_operation_id: 'operation_alpha',
+      active_operation_next_action: 'refresh_site_continuity_loop',
+      active_operation_focus_kind: 'site_continuity_reconciliation_execution',
+      active_operation_focus_ref: 'focus-ref',
+      classifier_version: 'site_authority_map.v1',
+      embodiment_count: 2,
+      entry_count: 3,
+      decision_count: 3,
+      admitted_count: 1,
+      refused_count: 1,
+      projection_only_count: 1,
+      health: 'attention',
+      next_action: 'read_site_authority',
+      mutation_classes: ['task_artifact_mutation', 'read_model_projection'],
+      authority_loci: ['cloudflare-carrier-task-store', 'cloudflare-carrier:projection'],
+    },
+  });
+
+  assert.doesNotMatch(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
+  assert.doesNotMatch(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
+  assert.doesNotMatch(text, /Site Action Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:action:workflow:live:text/);
+  assert.doesNotMatch(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.doesNotMatch(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
+  assert.doesNotMatch(text, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live:text/);
+  assert.doesNotMatch(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
+});
+
 test('formatSiteAuthorityReadText renders review ack from active operation route', () => {
   const text = formatSiteAuthorityReadText({
     worker_url: 'https://carrier.example.test',

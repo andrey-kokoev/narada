@@ -112,6 +112,37 @@ test('formatSiteActionWorkflowLiveText suppresses scoped handoffs without site i
   assert.doesNotMatch(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
 });
 
+test('formatSiteActionWorkflowLiveText suppresses scoped handoffs without worker url', () => {
+  const text = formatSiteActionWorkflowLiveText({
+    status: 'ok',
+    worker_url: null,
+    site_id: 'site_alpha',
+    delegated_workflow: 'focus_next_operation',
+    delegated_action: 'focus_next_operation',
+    read_before_action: {
+      next_action: 'focus_next_operation',
+      active_operation_id: 'operation_alpha',
+      active_operation_next_action: 'refresh_site_continuity_loop',
+      active_operation_focus_kind: 'site_continuity_reconciliation_execution',
+      active_operation_focus_ref: 'focus-ref',
+    },
+    read_after_action: {
+      next_action: 'monitor_site',
+      active_operation_id: 'operation_alpha',
+      active_operation_next_action: 'refresh_site_continuity_loop',
+      active_operation_focus_kind: 'site_continuity_reconciliation_execution',
+      active_operation_focus_ref: 'focus-ref',
+    },
+  });
+
+  assert.doesNotMatch(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
+  assert.doesNotMatch(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
+  assert.doesNotMatch(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.doesNotMatch(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
+  assert.doesNotMatch(text, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live:text/);
+  assert.doesNotMatch(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
+});
+
 test('formatSiteActionWorkflowLiveText renders review ack from active operation route', () => {
   const text = formatSiteActionWorkflowLiveText({
     status: 'ok',
