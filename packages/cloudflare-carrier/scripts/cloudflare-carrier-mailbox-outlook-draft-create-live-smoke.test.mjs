@@ -48,6 +48,7 @@ test('formatMailboxOutlookDraftCreateLiveSmokeText emits downstream reads', () =
   assert.match(text, /Mailbox Outlook Draft Create Smoke: ok/);
   assert.match(text, /Draft Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
 });
 
 test('runMailboxOutlookDraftCreateLiveSmoke returns summarized draft-create state', async () => {
