@@ -175,6 +175,10 @@ export function summarizeProductSurface(operation, body, options = {}) {
     const status = body?.site_product_status ?? body?.product_status ?? null;
     const focusedWorkflowRoute = body?.focused_operation_lifecycle?.workflow_route ?? null;
     const activeOperationNextAction = focusedWorkflowRoute?.next_action ?? null;
+    const activeOperationId = body?.focused_operation_lifecycle?.operation_id ?? body?.operation?.operation_id ?? null;
+    const activeSessionRecord = Array.isArray(body?.sessions)
+      ? body.sessions.find((item) => item?.operation_id === activeOperationId) ?? body.sessions[0] ?? null
+      : null;
     const activeOperationFocusKind = normalizeWorkflowFocusKind(
       activeOperationNextAction,
       focusedWorkflowRoute?.focus_kind ?? null,
@@ -184,7 +188,14 @@ export function summarizeProductSurface(operation, body, options = {}) {
       operation,
       site_id: body?.site?.site_id ?? body?.site_id ?? status?.site_id ?? null,
       display_name: body?.site?.display_name ?? null,
-      active_operation_id: body?.focused_operation_lifecycle?.operation_id ?? body?.operation?.operation_id ?? null,
+      active_operation_id: activeOperationId,
+      active_session_id:
+        body?.focused_operation_lifecycle?.active_session_id
+        ?? body?.focused_operation_lifecycle?.session_id
+        ?? body?.focused_operation_lifecycle?.carrier_session_id
+        ?? activeSessionRecord?.carrier_session_id
+        ?? activeSessionRecord?.session_id
+        ?? null,
       active_operation_next_action: activeOperationNextAction,
       active_operation_workflow_reason: focusedWorkflowRoute?.reason ?? null,
       active_operation_focus_kind: activeOperationFocusKind,
@@ -455,6 +466,13 @@ export function formatProductSurfaceText(result) {
     lines.push(`Evidence Counts: packets=${summary.continuity_packet_count ?? 0} loops=${summary.continuity_loop_report_count ?? 0} reconciliations=${summary.continuity_reconciliation_execution_count ?? 0}`);
     lines.push(`Durability: persistence=${summary.persistence_state ?? 'unknown'} recovery=${summary.recovery_state ?? 'unknown'}`);
     lines.push(`Authority: memberships=${summary.membership_count ?? 0} sessions=${summary.session_count ?? 0}`);
+    if (summary.active_operation_id) {
+      lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.active_operation_id} --operator-session-file <operator-session-file>`);
+      lines.push(`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.active_operation_id} --operator-session-file <operator-session-file>`);
+    }
+    if (summary.active_operation_id && summary.active_session_id) {
+      lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.active_operation_id} --carrier-session-id ${summary.active_session_id} --operator-session-file <operator-session-file>`);
+    }
     return `${lines.join('\n')}\n`;
   }
   if (operation === 'operation.list') {

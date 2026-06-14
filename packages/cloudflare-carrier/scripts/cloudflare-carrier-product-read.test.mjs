@@ -449,6 +449,8 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       operation: 'site.read',
       site_id: 'site_alpha',
       display_name: 'Alpha Site',
+      active_operation_id: 'operation_live',
+      active_session_id: 'session_alpha',
       health: 'ready',
       next_action: 'monitor_sites',
       continuity_state: 'packet_observed',
@@ -469,6 +471,9 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(siteReadText, /Site: site_alpha \(Alpha Site\)/);
   assert.match(siteReadText, /Action Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:action:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-action/);
   assert.match(siteReadText, /Durability: persistence=durable recovery=reconstructable/);
+  assert.match(siteReadText, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(siteReadText, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(siteReadText, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
 
   const operationListText = formatProductSurfaceText({
     operation: 'operation.list',
@@ -1868,11 +1873,18 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     cloudflare_persistence_posture: { state: 'durable' },
     cloudflare_recovery_posture: { state: 'reconstructable' },
     memberships: [{}, {}],
+    sessions: [
+      {
+        carrier_session_id: 'session_fixture',
+        operation_id: 'operation_fixture',
+      },
+    ],
   }), {
     operation: 'site.read',
     site_id: 'site_fixture',
     display_name: 'Fixture Site',
     active_operation_id: 'operation_fixture',
+    active_session_id: 'session_fixture',
     active_operation_next_action: 'review_site_continuity_reconciliation_execution',
     active_operation_workflow_reason: 'operation_operator_focus_needs_review',
     active_operation_focus_kind: 'site_continuity_reconciliation_execution',
@@ -1892,7 +1904,7 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     recovery_state: 'reconstructable',
     scope_loaded: true,
     membership_count: 2,
-    session_count: 2,
+    session_count: 1,
   });
 
   assert.deepEqual(summarizeProductSurface('operation.list', {
