@@ -41,10 +41,12 @@ export function parseRepositoryPublicationReadinessLiveSmokeArgs(argv = [], env 
 }
 
 export function formatRepositoryPublicationReadinessLiveSmokeText(result) {
+  const workerUrl = result?.worker_url ?? null;
+  const siteId = result?.site_id ?? null;
   const lines = [
     `Repository Publication Readiness Smoke: ${result.status}`,
-    `Worker: ${result.worker_url}`,
-    `Site: ${result.site_id}`,
+    `Worker: ${workerUrl}`,
+    `Site: ${siteId}`,
     `Target: repository=${result.repository_ref} branch=${result.branch_ref}`,
     `Credential Mode: ${result.github_credential_mode ?? 'unknown'}`,
     `GitHub App Configured: ${String(result.github_app_configured)}`,
@@ -55,9 +57,11 @@ export function formatRepositoryPublicationReadinessLiveSmokeText(result) {
   if (Array.isArray(result.missing_configuration) && result.missing_configuration.length > 0) {
     lines.push(`Missing Configuration: ${result.missing_configuration.join(', ')}`);
   }
-  lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`);
-  lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
-  lines.push(`Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`);
+  if (workerUrl && siteId) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file> --execute-site-next`);
+    lines.push(`Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
+  }
   return `${lines.join('\n')}\n`;
 }
 

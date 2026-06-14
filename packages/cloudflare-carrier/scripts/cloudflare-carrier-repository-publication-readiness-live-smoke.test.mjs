@@ -52,6 +52,29 @@ test('formatRepositoryPublicationReadinessLiveSmokeText emits provider liveness 
   assert.match(text, /Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider-liveness:text/);
 });
 
+test('formatRepositoryPublicationReadinessLiveSmokeText suppresses provider liveness follow-on without site id', () => {
+  const text = formatRepositoryPublicationReadinessLiveSmokeText({
+    status: 'ready',
+    worker_url: 'https://carrier.example.test',
+    site_id: null,
+    repository_ref: 'github:andrey/site-alpha',
+    branch_ref: 'cloudflare-publication',
+    github_credential_mode: 'github_app_installation',
+    github_app_configured: true,
+    cloudflare_git_push_admission: 'not_admitted',
+    direct_cloudflare_repository_mutation_admission: 'admitted_by_cloudflare_github_repository_publication',
+    allowed_repository_count: 1,
+    allowed_branch_count: 1,
+    requested_repository_allowed: true,
+    requested_branch_allowed: true,
+    missing_configuration: [],
+  });
+
+  assert.doesNotMatch(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
+  assert.doesNotMatch(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
+  assert.doesNotMatch(text, /Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider-liveness:text/);
+});
+
 test('runRepositoryPublicationReadinessLiveSmoke returns summarized readiness state', async () => {
   const result = await runRepositoryPublicationReadinessLiveSmoke({
     workerUrl: 'https://carrier.example.test',

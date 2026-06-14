@@ -45,6 +45,26 @@ test('formatProviderLivenessRefreshText emits downstream reads', () => {
   assert.match(text, /Repository Publication Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider-liveness:text/);
 });
 
+test('formatProviderLivenessRefreshText suppresses downstream reads without site id', () => {
+  const text = formatProviderLivenessRefreshText({
+    status: 'ok',
+    worker_url: 'https://carrier.example.test',
+    site_id: null,
+    local_root: { path: 'D:/site_alpha', state: 'directory_available', ok: true },
+    refresh_source: { provider_refresh_trigger: 'operator_refresh_unspecified', scheduler_task_name: null, scheduler_interval_minutes: null },
+    provider_count: 2,
+    providers: [
+      { provider: 'local_ingress', status: 'ready', http_status: 200 },
+      { provider: 'repository_publication', status: 'ready', http_status: 200 },
+    ],
+  });
+
+  assert.doesNotMatch(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
+  assert.doesNotMatch(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
+  assert.doesNotMatch(text, /Local Ingress Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:provider-liveness:text/);
+  assert.doesNotMatch(text, /Repository Publication Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider-liveness:text/);
+});
+
 test('runProviderLivenessRefresh returns summarized provider state with operator session auth', async () => {
   const result = await runProviderLivenessRefresh({
     workerUrl: 'https://carrier.example.test',
