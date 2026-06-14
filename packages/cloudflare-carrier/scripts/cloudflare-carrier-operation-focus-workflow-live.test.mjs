@@ -67,6 +67,23 @@ test('formatOperationFocusWorkflowLiveText suppresses guarded links without site
   assert.doesNotMatch(text, /Focused Workflow:/);
 });
 
+test('formatOperationFocusWorkflowLiveText suppresses guarded links without worker url', () => {
+  const text = formatOperationFocusWorkflowLiveText({
+    status: 'ok',
+    worker_url: '',
+    site_id: 'site_alpha',
+    selected_operation_id: 'operation_attention',
+    read_focused: { workflow_next_action: 'start_or_select_session' },
+  });
+
+  assert.doesNotMatch(text, /Operation List:/);
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /Focused Workflow:/);
+});
+
 test('runOperationFocusWorkflowLive selects next operation from posture and reads it', async () => {
   const calls = [];
   const result = await runOperationFocusWorkflowLive({

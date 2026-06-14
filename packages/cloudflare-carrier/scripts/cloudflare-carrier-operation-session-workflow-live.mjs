@@ -103,6 +103,7 @@ export async function runOperationSessionWorkflowLive(
 }
 
 export function formatOperationSessionWorkflowLiveText(result) {
+  const hasWorkerUrl = typeof result.worker_url === 'string' && result.worker_url.length > 0;
   const hasSiteId = typeof result.site_id === 'string' && result.site_id.length > 0;
   const hasOperationId = typeof result.operation_id === 'string' && result.operation_id.length > 0;
   const lines = [
@@ -113,10 +114,12 @@ export function formatOperationSessionWorkflowLiveText(result) {
     `Pre Action: ${result.pre_workflow_next_action ?? 'unknown'}`,
     `Dispatch: state=${result.resident_dispatch?.dispatch_state ?? 'unknown'} session=${result.resident_dispatch?.carrier_session_id ?? 'none'} decision=${result.resident_dispatch?.dispatch_decision_id ?? 'none'}`,
     `Post Action: next=${result.read_after_session?.workflow_next_action ?? 'unknown'} advanced=${result.post_action_advanced ? 'yes' : 'no'}`,
-    `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
-    `Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`,
   ];
-  if (hasSiteId) {
+  if (hasWorkerUrl && hasSiteId && hasOperationId) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+  }
+  if (hasWorkerUrl && hasSiteId) {
     lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`);
     lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
   }
@@ -127,7 +130,7 @@ export function formatOperationSessionWorkflowLiveText(result) {
   const carrierSessionId = result.read_after_session?.active_session_id
     ?? result.resident_dispatch?.carrier_session_id
     ?? null;
-  if (hasSiteId && carrierSessionId) {
+  if (hasWorkerUrl && hasSiteId && hasOperationId && carrierSessionId) {
     lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --carrier-session-id ${carrierSessionId} --operator-session-file <operator-session-file>`);
     lines.push(`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result.worker_url} --site ${result.site_id} --carrier-session-id ${carrierSessionId} --operator-session-file <operator-session-file>`);
     lines.push(`Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --carrier-session-id ${carrierSessionId} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`);
@@ -147,7 +150,9 @@ function buildPostSessionWorkflowCommand(result) {
 }
 
 function hasConcreteSiteAndOperation(result) {
-  return typeof result.site_id === 'string'
+  return typeof result.worker_url === 'string'
+    && result.worker_url.length > 0
+    && typeof result.site_id === 'string'
     && result.site_id.length > 0
     && typeof result.operation_id === 'string'
     && result.operation_id.length > 0;

@@ -68,6 +68,25 @@ test('formatOperationSessionWorkflowLiveText suppresses guarded links without si
   assert.doesNotMatch(text, /Site Next Workflow:/);
 });
 
+test('formatOperationSessionWorkflowLiveText suppresses guarded links without worker url', () => {
+  const text = formatOperationSessionWorkflowLiveText({
+    status: 'ok',
+    worker_url: '',
+    site_id: 'site_live_smoke',
+    operation_id: 'operation_live_alpha',
+    read_after_session: { active_session_id: 'carrier_session_alpha', workflow_next_action: 'refresh_site_continuity_loop' },
+  });
+
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Continuity Workflow:/);
+  assert.doesNotMatch(text, /Session Evidence:/);
+  assert.doesNotMatch(text, /Task Review:/);
+  assert.doesNotMatch(text, /Task Workflow:/);
+});
+
 test('runOperationSessionWorkflowLive bridges operation.read into resident dispatch and rereads the operation', async () => {
   const invocations = [];
   const result = await runOperationSessionWorkflowLive({

@@ -95,6 +95,30 @@ test('formatOperationNextWorkflowLiveText suppresses guarded links without site 
   assert.doesNotMatch(text, /Task Workflow:/);
 });
 
+test('formatOperationNextWorkflowLiveText suppresses guarded links without worker url', () => {
+  const text = formatOperationNextWorkflowLiveText({
+    status: 'ok',
+    worker_url: '',
+    site_id: 'site_live_smoke',
+    selected_operation_id: 'operation_alpha',
+    read_after_next: {
+      workflow_next_action: 'review_site_continuity_reconciliation_execution',
+      workflow_focus_kind: 'site_continuity_reconciliation_execution',
+      workflow_focus_ref: 'focus_ref',
+      active_session_id: 'carrier_session_alpha',
+    },
+  });
+
+  assert.doesNotMatch(text, /Operation List:/);
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Review Ack:/);
+  assert.doesNotMatch(text, /Session Evidence:/);
+  assert.doesNotMatch(text, /Task Review:/);
+  assert.doesNotMatch(text, /Task Workflow:/);
+});
+
 test('runOperationNextWorkflowLive delegates local ingress request route to local ingress request read', async () => {
   const invocations = [];
   const result = await runOperationNextWorkflowLive({

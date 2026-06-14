@@ -74,6 +74,30 @@ test('formatOperationLifecycleWorkflowLiveText suppresses guarded links without 
   assert.doesNotMatch(text, /Resume Workflow:/);
 });
 
+test('formatOperationLifecycleWorkflowLiveText suppresses guarded links without worker url', () => {
+  const text = formatOperationLifecycleWorkflowLiveText({
+    status: 'ok',
+    worker_url: '',
+    site_id: 'site_live_smoke',
+    operation_id: 'operation_live_alpha',
+    carrier_session_id: 'carrier_session_alpha',
+    read_after_create: { workflow_next_action: 'start_or_select_session' },
+    read_after_needs_continuation: { workflow_next_action: 'resume_operation_continuation' },
+    read_after_resume: { workflow_next_action: 'refresh_site_continuity_loop' },
+  });
+
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Create Workflow:/);
+  assert.doesNotMatch(text, /Continuation Workflow:/);
+  assert.doesNotMatch(text, /Resume Workflow:/);
+  assert.doesNotMatch(text, /Session Evidence:/);
+  assert.doesNotMatch(text, /Task Review:/);
+  assert.doesNotMatch(text, /Task Workflow:/);
+});
+
 test('runOperationLifecycleWorkflowLive orchestrates lifecycle create, continuation, resume, and close', async () => {
   const invocations = [];
   const result = await runOperationLifecycleWorkflowLive({

@@ -94,6 +94,7 @@ export async function runOperationFocusWorkflowLive(
 }
 
 export function formatOperationFocusWorkflowLiveText(result) {
+  const hasWorkerUrl = typeof result.worker_url === 'string' && result.worker_url.length > 0;
   const hasSiteId = typeof result.site_id === 'string' && result.site_id.length > 0;
   const hasSelectedOperationId = typeof result.selected_operation_id === 'string' && result.selected_operation_id.length > 0;
   const lines = [
@@ -105,12 +106,12 @@ export function formatOperationFocusWorkflowLiveText(result) {
     `List Route: ${result.list_before_focus?.route_next_action ?? 'unknown'} target=${result.list_before_focus?.route_target ?? 'none'} reason=${result.list_before_focus?.route_reason ?? 'unknown'}`,
     `Focused Read: status=${result.read_focused?.current_status ?? 'unknown'} next=${result.read_focused?.workflow_next_action ?? 'unknown'}`,
   ];
-  if (hasSiteId) {
+  if (hasWorkerUrl && hasSiteId) {
     lines.push(`Operation List: pnpm --filter @narada2/cloudflare-carrier product:operation:list:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`);
     lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`);
     lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
   }
-  if (hasSiteId && hasSelectedOperationId) {
+  if (hasWorkerUrl && hasSiteId && hasSelectedOperationId) {
     lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.selected_operation_id} --operator-session-file <operator-session-file>`);
     lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.selected_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
   }
@@ -139,7 +140,9 @@ function buildFocusedWorkflowCommand(result) {
 }
 
 function hasConcreteSiteAndSelectedOperation(result) {
-  return typeof result.site_id === 'string'
+  return typeof result.worker_url === 'string'
+    && result.worker_url.length > 0
+    && typeof result.site_id === 'string'
     && result.site_id.length > 0
     && typeof result.selected_operation_id === 'string'
     && result.selected_operation_id.length > 0;
