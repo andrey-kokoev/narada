@@ -213,6 +213,33 @@ test('durability coherence suppresses focused site and operation links without c
   assert.doesNotMatch(text, /^  Persistence Review:/m);
 });
 
+test('durability coherence suppresses worker-scoped links without a real worker url', () => {
+  const text = formatDurabilityCoherenceLiveText({
+    status: 'ok',
+    checked_site_ids: ['site_alpha'],
+    site_list: { route_next_action: 'focus_next_site', next_site_id: 'site_alpha', route_target: 'site_alpha' },
+    sites: [
+      {
+        site_id: 'site_alpha',
+        site_read: { persistence_state: 'durable', recovery_state: 'reconstructable', next_action: 'focus_next_operation' },
+        selected_operation_id: 'operation_alpha',
+        operation_read: { workflow_next_action: 'refresh_site_continuity_loop' },
+        operation_recovery: { recovery_state: 'reconstructable', recovery_gap_count: 0 },
+      },
+    ],
+    issues: [],
+  });
+
+  assert.doesNotMatch(text, /^Site Next Workflow:/m);
+  assert.doesNotMatch(text, /^  Site Read:/m);
+  assert.doesNotMatch(text, /^  Site Next Workflow:/m);
+  assert.doesNotMatch(text, /^  Operation Review:/m);
+  assert.doesNotMatch(text, /^  Operation Next Workflow:/m);
+  assert.doesNotMatch(text, /^  Recovery Review:/m);
+  assert.doesNotMatch(text, /^  Persistence Review:/m);
+  assert.doesNotMatch(text, /<worker-url>/);
+});
+
 test('durability coherence retries once on transient fetch failure from child read', async () => {
   const attempts = new Map();
   const result = await runDurabilityCoherenceLive(

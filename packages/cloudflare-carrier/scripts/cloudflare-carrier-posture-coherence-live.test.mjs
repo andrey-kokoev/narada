@@ -211,6 +211,29 @@ test('formatPostureCoherenceLiveText suppresses focused site and operation links
   assert.doesNotMatch(text, /^  Operation Next Workflow:/m);
 });
 
+test('formatPostureCoherenceLiveText suppresses worker-scoped links without a real worker url', () => {
+  const text = formatPostureCoherenceLiveText({
+    status: 'ok',
+    checked_site_ids: ['site_alpha'],
+    site_list: { route_next_action: 'focus_next_site', next_site_id: 'site_alpha', route_target: 'site_alpha' },
+    sites: [
+      {
+        site_id: 'site_alpha',
+        site_read: { health: 'attention', next_action: 'focus_next_operation' },
+        operation_list: { operation_count: 3, next_operation_id: 'operation_alpha', route_next_action: 'focus_next_operation', next_action: 'use_focused_operation' },
+      },
+    ],
+    issues: [],
+  });
+
+  assert.doesNotMatch(text, /^Site Next Workflow:/m);
+  assert.doesNotMatch(text, /^  Site Read:/m);
+  assert.doesNotMatch(text, /^  Site Next Workflow:/m);
+  assert.doesNotMatch(text, /^  Operation Review:/m);
+  assert.doesNotMatch(text, /^  Operation Next Workflow:/m);
+  assert.doesNotMatch(text, /<worker-url>/);
+});
+
 test('runPostureCoherenceLive accepts focused continuity review without refocus under monitor route', async () => {
   const result = await runPostureCoherenceLive({
     workerUrl: 'https://carrier.example.test',

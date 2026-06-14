@@ -198,6 +198,32 @@ test('operation convergence suppresses focused site and operation links without 
   assert.doesNotMatch(text, /^  Operation Review:/m);
 });
 
+test('operation convergence suppresses worker-scoped links without a real worker url', () => {
+  const text = formatOperationConvergenceLiveText({
+    status: 'ok',
+    checked_site_ids: ['site_alpha'],
+    posture_coherence: { status: 'ok', issue_count: 0 },
+    durability_coherence: { status: 'ok', issue_count: 0 },
+    site_results: [
+      {
+        site_id: 'site_alpha',
+        initial_route: 'focus_next_operation',
+        final_route: 'monitor_operations',
+        pass_count: 1,
+        focused_operation_id: 'operation_alpha',
+      },
+    ],
+  });
+
+  assert.doesNotMatch(text, /^Site List:/m);
+  assert.doesNotMatch(text, /^  Site Read:/m);
+  assert.doesNotMatch(text, /^  Site Next Workflow:/m);
+  assert.doesNotMatch(text, /^  Operation List:/m);
+  assert.doesNotMatch(text, /^  Operation Next Workflow:/m);
+  assert.doesNotMatch(text, /^  Operation Review:/m);
+  assert.doesNotMatch(text, /<worker-url>/);
+});
+
 test('operation convergence retries delayed operation list lag before declaring convergence', async () => {
   let operationListReads = 0;
   let operationReadReads = 0;

@@ -195,6 +195,33 @@ test('control plane convergence suppresses focused site and operation links with
   assert.doesNotMatch(text, /^  Operation Review:/m);
 });
 
+test('control plane convergence suppresses worker-scoped links without a real worker url', () => {
+  const text = formatControlPlaneConvergenceLiveText({
+    status: 'ok',
+    initial_site_route: 'focus_next_site',
+    final_site_route: 'monitor_sites',
+    site_pass_count: 1,
+    posture_coherence: { status: 'ok', issue_count: 0 },
+    durability_coherence: { status: 'ok', issue_count: 0 },
+    site_passes: [
+      {
+        pass: 1,
+        site_id: 'site_alpha',
+        route_action: 'focus_next_site',
+        delegated_result: { delegated_workflow: 'focus_next_operation', delegated_operation_id: 'operation_alpha' },
+      },
+    ],
+  });
+
+  assert.doesNotMatch(text, /^Site List:/m);
+  assert.doesNotMatch(text, /^Site Next Workflow:/m);
+  assert.doesNotMatch(text, /^  Site Next Workflow:/m);
+  assert.doesNotMatch(text, /^  Site Read:/m);
+  assert.doesNotMatch(text, /^  Operation Next Workflow:/m);
+  assert.doesNotMatch(text, /^  Operation Review:/m);
+  assert.doesNotMatch(text, /<worker-url>/);
+});
+
 test('control plane convergence rejects unsupported site route actions', async () => {
   await assert.rejects(
     async () => {
