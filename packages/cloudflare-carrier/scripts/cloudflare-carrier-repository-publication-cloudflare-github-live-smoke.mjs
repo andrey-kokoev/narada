@@ -58,6 +58,7 @@ export function parseRepositoryPublicationCloudflareGithubLiveSmokeArgs(argv = [
 }
 
 export function formatRepositoryPublicationCloudflareGithubLiveSmokeText(result) {
+  const hasSiteId = typeof result.site_id === 'string' && result.site_id.length > 0;
   const lines = [
     `Repository Publication Cloudflare GitHub Smoke: ${result.status}`,
     `Worker: ${result.worker_url}`,
@@ -70,12 +71,20 @@ export function formatRepositoryPublicationCloudflareGithubLiveSmokeText(result)
     `Publication Status: ${result.publication_status ?? 'unknown'}`,
     `Authorities: request=${result.repository_publication_request_authority ?? 'unknown'} admission=${result.repository_publication_admission_authority ?? 'unknown'} executor=${result.repository_publication_executor_authority ?? 'unknown'}`,
     `Cloudflare Admission: ${result.direct_cloudflare_repository_mutation_admission ?? 'unknown'}`,
-    `Request Review: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-request-id ${result.repository_publication_request_id} --operator-session-file <operator-session-file>`,
-    `Admission Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:admission:list:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-admission-id ${result.repository_publication_admission_id} --operator-session-file <operator-session-file>`,
-    `Execution Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-execution-id ${result.repository_publication_execution_id} --operator-session-file <operator-session-file>`,
-    `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
-    `Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`,
   ];
+  if (hasSiteId && result.repository_publication_request_id) {
+    lines.push(`Request Review: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-request-id ${result.repository_publication_request_id} --operator-session-file <operator-session-file>`);
+  }
+  if (hasSiteId && result.repository_publication_admission_id) {
+    lines.push(`Admission Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:admission:list:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-admission-id ${result.repository_publication_admission_id} --operator-session-file <operator-session-file>`);
+  }
+  if (hasSiteId && result.repository_publication_execution_id) {
+    lines.push(`Execution Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-execution-id ${result.repository_publication_execution_id} --operator-session-file <operator-session-file>`);
+  }
+  if (hasSiteId && result.operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+  }
   return `${lines.join('\n')}\n`;
 }
 

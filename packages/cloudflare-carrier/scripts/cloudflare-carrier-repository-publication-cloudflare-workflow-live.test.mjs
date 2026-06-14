@@ -72,6 +72,23 @@ test('formatRepositoryPublicationCloudflareWorkflowLiveText renders direct reads
   assert.match(text, /Admission Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:admission:list:text/);
 });
 
+test('formatRepositoryPublicationCloudflareWorkflowLiveText suppresses downstream reads without site id', () => {
+  const text = formatRepositoryPublicationCloudflareWorkflowLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    site_id: '',
+    operation_id: 'operation_repo_publication',
+    repository_publication_request_id: 'request_1',
+    repository_publication_admission_id: 'admission_1',
+    repository_publication_execution_id: 'execution_1',
+    publication_status: 'completed',
+  });
+
+  assert.doesNotMatch(text, /Request Review:/);
+  assert.doesNotMatch(text, /Execution Read:/);
+  assert.doesNotMatch(text, /Admission Read:/);
+});
+
 test('runRepositoryPublicationCloudflareWorkflowLive runs execution then readback with shared ids', async () => {
   const invocations = [];
   const result = await runRepositoryPublicationCloudflareWorkflowLive({

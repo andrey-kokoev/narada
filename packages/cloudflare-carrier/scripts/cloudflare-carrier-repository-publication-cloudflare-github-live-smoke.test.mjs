@@ -53,6 +53,27 @@ test('formatRepositoryPublicationCloudflareGithubLiveSmokeText emits downstream 
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
 });
 
+test('formatRepositoryPublicationCloudflareGithubLiveSmokeText suppresses downstream reads without concrete targets', () => {
+  const text = formatRepositoryPublicationCloudflareGithubLiveSmokeText({
+    status: 'ok',
+    worker_url: 'https://carrier.example.test',
+    site_id: '',
+    operation_id: '',
+    repository_publication_request_id: 'repository-publication-request-1',
+    repository_publication_admission_id: 'repository-publication-admission-1',
+    repository_publication_execution_id: 'cloudflare-execution-1',
+    repository_ref: 'github:andrey/site-alpha',
+    branch_ref: 'cloudflare-publication-live',
+    publication_status: 'completed',
+  });
+
+  assert.doesNotMatch(text, /Request Review:/);
+  assert.doesNotMatch(text, /Admission Read:/);
+  assert.doesNotMatch(text, /Execution Read:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+});
+
 test('runRepositoryPublicationCloudflareGithubLiveSmoke posts operator session cookie when provided', async () => {
   const requests = [];
   let callIndex = 0;
