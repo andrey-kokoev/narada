@@ -4,146 +4,205 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const args = process.argv.slice(2);
-const scriptDir = dirname(fileURLToPath(import.meta.url));
+import { authHeaders, resolveAuth } from './cloudflare-carrier-product-read.mjs';
+
+const scriptPath = fileURLToPath(import.meta.url);
+const scriptDir = dirname(scriptPath);
 const repoRoot = resolve(scriptDir, '../../..');
-loadLocalEnv(join(repoRoot, '.env'));
 
-const workerUrl = trimTrailingSlash(option('--url') ?? process.env.CLOUDFLARE_CARRIER_URL ?? '');
-const tokenFile = option('--token-file') ?? process.env.CLOUDFLARE_CARRIER_TOKEN_FILE ?? '';
-const bearerToken = option('--token') ?? (tokenFile ? readTokenFile(tokenFile) : process.env.CLOUDFLARE_CARRIER_TOKEN ?? '');
-const siteId = option('--site') ?? process.env.CLOUDFLARE_CARRIER_SITE_ID ?? 'site_narada_cloudflare';
-const operationId = option('--operation') ?? process.env.CLOUDFLARE_CARRIER_OPERATION_ID ?? 'operation_narada_cloudflare_control';
-const accountRef = option('--account') ?? process.env.CLOUDFLARE_MAILBOX_ACCOUNT_REF ?? 'help@global-maxima.com';
+export function parseMailboxDraftReplyProposalLiveSmokeArgs(
+  argv = [],
+  env = process.env,
+  { loadEnv = true } = {},
+) {
+  const args = [...argv];
+  if (loadEnv) loadLocalEnv(join(repoRoot, '.env'), env);
 
-if (!workerUrl) throw new Error('mailbox_draft_reply_proposal_live_smoke_requires_--url_or_CLOUDFLARE_CARRIER_URL');
-if (!bearerToken) throw new Error('mailbox_draft_reply_proposal_live_smoke_requires_--token_or_--token-file_or_CLOUDFLARE_CARRIER_TOKEN');
-if (!siteId) throw new Error('mailbox_draft_reply_proposal_live_smoke_requires_site_id');
-if (!accountRef) throw new Error('mailbox_draft_reply_proposal_live_smoke_requires_account_ref');
+  const workerUrl = trimTrailingSlash(option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '');
+  const format = option(args, '--format') ?? env.CLOUDFLARE_MAILBOX_DRAFT_REPLY_PROPOSAL_LIVE_SMOKE_FORMAT ?? 'json';
+  const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? 'site_narada_cloudflare';
+  const operationId = option(args, '--operation') ?? env.CLOUDFLARE_CARRIER_OPERATION_ID ?? 'operation_narada_cloudflare_control';
+  const accountRef = option(args, '--account') ?? env.CLOUDFLARE_MAILBOX_ACCOUNT_REF ?? 'help@global-maxima.com';
+  const sourceMessageRef = option(args, '--source-message') ?? null;
+  const subject = option(args, '--subject') ?? 'Re: live Cloudflare draft reply smoke';
+  const recipientCount = Number(option(args, '--recipient-count') ?? 1);
+  const bodyPreview = option(args, '--body-preview') ?? 'Live smoke proposal only. Outlook draft creation and send remain not admitted.';
+  const bodySha256 = option(args, '--body-sha256') ?? 'b'.repeat(64);
+  const rationale = option(args, '--rationale') ?? 'prove Cloudflare can hold draft reply proposal authority without Outlook mutation';
+  const auth = resolveAuth(args, env) ?? resolveBearerFromEnv(args, env);
 
-const suffix = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
-const proposalId = `mailbox_draft_reply_proposal_live_${suffix}`;
-const generatedAt = new Date().toISOString();
-const sourcePayload = {
-  schema: 'narada.sonar.mailbox_draft_reply_proposal.v1',
-  generated_at: generatedAt,
-  operation_id: operationId,
-  account_ref: accountRef,
-  source_message_ref: option('--source-message') ?? `graph-message-live-smoke-${suffix}`,
-  proposal_ref: `proposal:mailbox-draft-reply-live:${suffix}`,
-  subject: option('--subject') ?? 'Re: live Cloudflare draft reply smoke',
-  recipient_count: Number(option('--recipient-count') ?? 1),
-  body_preview: option('--body-preview') ?? 'Live smoke proposal only. Outlook draft creation and send remain not admitted.',
-  body_sha256: option('--body-sha256') ?? 'b'.repeat(64),
-  rationale: option('--rationale') ?? 'prove Cloudflare can hold draft reply proposal authority without Outlook mutation',
-  proposal_authority: 'cloudflare_carrier_site',
-  mailbox_outlook_draft_create_admission: 'not_admitted',
-  mailbox_send_admission: 'not_admitted',
-  mailbox_mutation_admission: 'not_admitted',
-  windows_draft_executor_fallback: 'available',
-  proposal_posture: 'proposal_only_no_outlook_draft_create',
-};
+  if (!workerUrl) throw new Error('mailbox_draft_reply_proposal_live_smoke_requires_--url_or_CLOUDFLARE_CARRIER_URL');
+  if (!['json', 'text'].includes(format)) throw new Error(`mailbox_draft_reply_proposal_live_smoke_unknown_format:${format}`);
+  if (!auth) throw new Error('mailbox_draft_reply_proposal_live_smoke_requires_bearer_token_or_operator_session');
+  if (!siteId) throw new Error('mailbox_draft_reply_proposal_live_smoke_requires_site_id');
+  if (!accountRef) throw new Error('mailbox_draft_reply_proposal_live_smoke_requires_account_ref');
 
-const refusedDraftCreate = await postCarrier({
-  operation: 'mailbox.draft_reply_proposal.record',
-  request_id: `mailbox_draft_reply_proposal_refused_draft_create_${suffix}`,
-  params: {
-    site_id: siteId,
-    proposal_id: `${proposalId}_refused_draft_create`,
-    source_payload: { ...sourcePayload, mailbox_outlook_draft_create_admission: 'admitted' },
-  },
-});
-assert.equal(refusedDraftCreate.http_status, 400, JSON.stringify(refusedDraftCreate.body));
-assert.equal(refusedDraftCreate.body.code, 'mailbox_draft_reply_proposal_draft_create_admission_invalid');
+  return {
+    workerUrl,
+    format,
+    auth,
+    siteId,
+    operationId,
+    accountRef,
+    sourceMessageRef,
+    subject,
+    recipientCount,
+    bodyPreview,
+    bodySha256,
+    rationale,
+  };
+}
 
-const refusedSend = await postCarrier({
-  operation: 'mailbox.draft_reply_proposal.record',
-  request_id: `mailbox_draft_reply_proposal_refused_send_${suffix}`,
-  params: {
-    site_id: siteId,
-    proposal_id: `${proposalId}_refused_send`,
-    source_payload: { ...sourcePayload, mailbox_send_admission: 'admitted' },
-  },
-});
-assert.equal(refusedSend.http_status, 400, JSON.stringify(refusedSend.body));
-assert.equal(refusedSend.body.code, 'mailbox_draft_reply_proposal_send_admission_invalid');
+export function formatMailboxDraftReplyProposalLiveSmokeText(result) {
+  const lines = [
+    `Mailbox Draft Reply Proposal Smoke: ${result.status}`,
+    `Worker: ${result.worker_url}`,
+    `Site: ${result.site_id}`,
+    `Operation: ${result.operation_id}`,
+    `Account: ${result.account_ref}`,
+    `Proposal: ${result.proposal_id}`,
+    `Authority: proposal=${result.proposal_authority ?? 'unknown'} draft_create=${result.mailbox_outlook_draft_create_admission ?? 'unknown'} send=${result.mailbox_send_admission ?? 'unknown'} mutation=${result.mailbox_mutation_admission ?? 'unknown'}`,
+    `Counts: proposals=${result.mailbox_draft_reply_proposal_count ?? 0} drafts=${result.mailbox_outlook_draft_create_count ?? 0} partition=${result.mailbox_draft_reply_authority_partition ?? 'unknown'}`,
+    `Proposal Review: pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${result.worker_url} --site ${result.site_id} --focus-ref ${result.proposal_id} --operator-session-file <operator-session-file>`,
+    `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
+  ];
+  return `${lines.join('\n')}\n`;
+}
 
-const recorded = await postCarrier({
-  operation: 'mailbox.draft_reply_proposal.record',
-  request_id: `mailbox_draft_reply_proposal_record_${suffix}`,
-  params: { site_id: siteId, proposal_id: proposalId, source_payload: sourcePayload },
-});
-assert.equal(recorded.http_status, 200, JSON.stringify(recorded.body));
-assert.equal(recorded.body.status, 'recorded');
-assert.equal(recorded.body.proposal_authority, 'cloudflare_carrier_site');
-assert.equal(recorded.body.mailbox_outlook_draft_create_admission, 'not_admitted');
-assert.equal(recorded.body.mailbox_send_admission, 'not_admitted');
-assert.equal(recorded.body.mailbox_mutation_admission, 'not_admitted');
+export async function runMailboxDraftReplyProposalLiveSmoke(config, { fetchImpl = fetch } = {}) {
+  const suffix = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
+  const proposalId = `mailbox_draft_reply_proposal_live_${suffix}`;
+  const generatedAt = new Date().toISOString();
+  const sourcePayload = {
+    schema: 'narada.sonar.mailbox_draft_reply_proposal.v1',
+    generated_at: generatedAt,
+    operation_id: config.operationId,
+    account_ref: config.accountRef,
+    source_message_ref: config.sourceMessageRef ?? `graph-message-live-smoke-${suffix}`,
+    proposal_ref: `proposal:mailbox-draft-reply-live:${suffix}`,
+    subject: config.subject,
+    recipient_count: config.recipientCount,
+    body_preview: config.bodyPreview,
+    body_sha256: config.bodySha256,
+    rationale: config.rationale,
+    proposal_authority: 'cloudflare_carrier_site',
+    mailbox_outlook_draft_create_admission: 'not_admitted',
+    mailbox_send_admission: 'not_admitted',
+    mailbox_mutation_admission: 'not_admitted',
+    windows_draft_executor_fallback: 'available',
+    proposal_posture: 'proposal_only_no_outlook_draft_create',
+  };
 
-const listed = await postCarrier({
-  operation: 'mailbox.draft_reply_proposal.list',
-  request_id: `mailbox_draft_reply_proposal_list_${suffix}`,
-  params: { site_id: siteId, mailbox_draft_reply_proposal_limit: 20 },
-});
-assert.equal(listed.http_status, 200, JSON.stringify(listed.body));
-assert.ok(listed.body.proposals.some((entry) => entry.proposal_id === proposalId));
-assert.equal(listed.body.proposal_authority, 'cloudflare_carrier_site');
-assert.equal(listed.body.mailbox_outlook_draft_create_admission, 'not_admitted');
-assert.equal(listed.body.mailbox_send_admission, 'not_admitted');
-assert.equal(listed.body.mailbox_mutation_admission, 'not_admitted');
-assert.equal(listed.body.authority_partition, 'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted');
+  const refusedDraftCreate = await postCarrier(config, {
+    operation: 'mailbox.draft_reply_proposal.record',
+    request_id: `mailbox_draft_reply_proposal_refused_draft_create_${suffix}`,
+    params: {
+      site_id: config.siteId,
+      proposal_id: `${proposalId}_refused_draft_create`,
+      source_payload: { ...sourcePayload, mailbox_outlook_draft_create_admission: 'admitted' },
+    },
+  }, fetchImpl);
+  assert.equal(refusedDraftCreate.http_status, 400, JSON.stringify(refusedDraftCreate.body));
+  assert.equal(refusedDraftCreate.body.code, 'mailbox_draft_reply_proposal_draft_create_admission_invalid');
 
-const operationRead = await postCarrier({
-  operation: 'operation.read',
-  request_id: `mailbox_draft_reply_proposal_operation_read_${suffix}`,
-  params: { site_id: siteId, operation_id: operationId, mailbox_draft_reply_proposal_limit: 20, mailbox_outlook_draft_create_limit: 20 },
-});
-assert.equal(operationRead.http_status, 200, JSON.stringify(operationRead.body));
-assert.ok(operationRead.body.mailbox_draft_reply_proposals.some((entry) => entry.proposal_id === proposalId));
-const mailboxOutlookDraftCreates = operationRead.body.mailbox_outlook_draft_creates ?? [];
-const productSurface = operationRead.body.operation_product_surface;
-assert.ok(productSurface.mailbox_draft_reply_proposal_count >= 1);
-const sendAcceptedCount = Number(productSurface.mailbox_send_accepted_count ?? 0);
-const sendConfirmationCount = Number(productSurface.mailbox_send_confirmation_count ?? 0);
-const expectedProductPartition = sendAcceptedCount > 0
-  ? sendConfirmationCount > 0
-    ? 'mailbox_draft_reply_proposal_cloudflare_recorded_send_and_confirmation_cloudflare_owned_outlook_draft_and_mutation_not_admitted'
-    : 'mailbox_draft_reply_proposal_cloudflare_recorded_send_cloudflare_owned_confirmation_outlook_draft_and_mutation_not_admitted'
-  : 'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted';
-assert.equal(productSurface.mailbox_draft_reply_proposal_authority, 'cloudflare_carrier_site');
-assert.equal(productSurface.mailbox_outlook_draft_create_admission, mailboxOutlookDraftCreates.length > 0 ? 'admitted' : 'not_admitted');
-assert.equal(productSurface.mailbox_send_admission, sendAcceptedCount > 0 ? 'admitted' : 'not_admitted');
-assert.equal(productSurface.mailbox_mutation_admission, 'not_admitted');
-assert.equal(productSurface.mailbox_draft_reply_authority_partition, expectedProductPartition);
+  const refusedSend = await postCarrier(config, {
+    operation: 'mailbox.draft_reply_proposal.record',
+    request_id: `mailbox_draft_reply_proposal_refused_send_${suffix}`,
+    params: {
+      site_id: config.siteId,
+      proposal_id: `${proposalId}_refused_send`,
+      source_payload: { ...sourcePayload, mailbox_send_admission: 'admitted' },
+    },
+  }, fetchImpl);
+  assert.equal(refusedSend.http_status, 400, JSON.stringify(refusedSend.body));
+  assert.equal(refusedSend.body.code, 'mailbox_draft_reply_proposal_send_admission_invalid');
 
-process.stdout.write(`${JSON.stringify({
-  schema: 'narada.cloudflare_carrier.mailbox_draft_reply_proposal_live_smoke.v1',
-  status: 'ok',
-  worker_url: workerUrl,
-  site_id: siteId,
-  operation_id: operationId,
-  account_ref: accountRef,
-  proposal_id: proposalId,
-  proposal_authority: recorded.body.proposal_authority,
-  mailbox_outlook_draft_create_admission: recorded.body.mailbox_outlook_draft_create_admission,
-  mailbox_send_admission: recorded.body.mailbox_send_admission,
-  mailbox_mutation_admission: recorded.body.mailbox_mutation_admission,
-  mailbox_draft_reply_proposal_count: operationRead.body.operation_product_surface.mailbox_draft_reply_proposal_count,
-  mailbox_outlook_draft_create_count: mailboxOutlookDraftCreates.length,
-  operation_mailbox_outlook_draft_create_admission: operationRead.body.operation_product_surface.mailbox_outlook_draft_create_admission,
-  mailbox_draft_reply_authority_partition: operationRead.body.operation_product_surface.mailbox_draft_reply_authority_partition,
-}, null, 2)}\n`);
+  const recorded = await postCarrier(config, {
+    operation: 'mailbox.draft_reply_proposal.record',
+    request_id: `mailbox_draft_reply_proposal_record_${suffix}`,
+    params: { site_id: config.siteId, proposal_id: proposalId, source_payload: sourcePayload },
+  }, fetchImpl);
+  assert.equal(recorded.http_status, 200, JSON.stringify(recorded.body));
+  assert.equal(recorded.body.status, 'recorded');
+  assert.equal(recorded.body.proposal_authority, 'cloudflare_carrier_site');
+  assert.equal(recorded.body.mailbox_outlook_draft_create_admission, 'not_admitted');
+  assert.equal(recorded.body.mailbox_send_admission, 'not_admitted');
+  assert.equal(recorded.body.mailbox_mutation_admission, 'not_admitted');
 
-async function postCarrier(body) {
-  const response = await fetch(`${workerUrl}/api/carrier`, {
+  const listed = await postCarrier(config, {
+    operation: 'mailbox.draft_reply_proposal.list',
+    request_id: `mailbox_draft_reply_proposal_list_${suffix}`,
+    params: { site_id: config.siteId, mailbox_draft_reply_proposal_limit: 20 },
+  }, fetchImpl);
+  assert.equal(listed.http_status, 200, JSON.stringify(listed.body));
+  assert.ok(listed.body.proposals.some((entry) => entry.proposal_id === proposalId));
+  assert.equal(listed.body.proposal_authority, 'cloudflare_carrier_site');
+  assert.equal(listed.body.mailbox_outlook_draft_create_admission, 'not_admitted');
+  assert.equal(listed.body.mailbox_send_admission, 'not_admitted');
+  assert.equal(listed.body.mailbox_mutation_admission, 'not_admitted');
+  assert.equal(listed.body.authority_partition, 'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted');
+
+  const operationRead = await postCarrier(config, {
+    operation: 'operation.read',
+    request_id: `mailbox_draft_reply_proposal_operation_read_${suffix}`,
+    params: { site_id: config.siteId, operation_id: config.operationId, mailbox_draft_reply_proposal_limit: 20, mailbox_outlook_draft_create_limit: 20 },
+  }, fetchImpl);
+  assert.equal(operationRead.http_status, 200, JSON.stringify(operationRead.body));
+  assert.ok(operationRead.body.mailbox_draft_reply_proposals.some((entry) => entry.proposal_id === proposalId));
+  const mailboxOutlookDraftCreates = operationRead.body.mailbox_outlook_draft_creates ?? [];
+  const productSurface = operationRead.body.operation_product_surface;
+  assert.ok(productSurface.mailbox_draft_reply_proposal_count >= 1);
+  const sendAcceptedCount = Number(productSurface.mailbox_send_accepted_count ?? 0);
+  const sendConfirmationCount = Number(productSurface.mailbox_send_confirmation_count ?? 0);
+  const expectedProductPartition = sendAcceptedCount > 0
+    ? sendConfirmationCount > 0
+      ? 'mailbox_draft_reply_proposal_cloudflare_recorded_send_and_confirmation_cloudflare_owned_outlook_draft_and_mutation_not_admitted'
+      : 'mailbox_draft_reply_proposal_cloudflare_recorded_send_cloudflare_owned_confirmation_outlook_draft_and_mutation_not_admitted'
+    : 'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted';
+  assert.equal(productSurface.mailbox_draft_reply_proposal_authority, 'cloudflare_carrier_site');
+  assert.equal(productSurface.mailbox_outlook_draft_create_admission, mailboxOutlookDraftCreates.length > 0 ? 'admitted' : 'not_admitted');
+  assert.equal(productSurface.mailbox_send_admission, sendAcceptedCount > 0 ? 'admitted' : 'not_admitted');
+  assert.equal(productSurface.mailbox_mutation_admission, 'not_admitted');
+  assert.equal(productSurface.mailbox_draft_reply_authority_partition, expectedProductPartition);
+
+  return {
+    schema: 'narada.cloudflare_carrier.mailbox_draft_reply_proposal_live_smoke.v1',
+    status: 'ok',
+    worker_url: config.workerUrl,
+    auth_source: config.auth.source,
+    site_id: config.siteId,
+    operation_id: config.operationId,
+    account_ref: config.accountRef,
+    proposal_id: proposalId,
+    proposal_authority: recorded.body.proposal_authority,
+    mailbox_outlook_draft_create_admission: recorded.body.mailbox_outlook_draft_create_admission,
+    mailbox_send_admission: recorded.body.mailbox_send_admission,
+    mailbox_mutation_admission: recorded.body.mailbox_mutation_admission,
+    mailbox_draft_reply_proposal_count: productSurface.mailbox_draft_reply_proposal_count,
+    mailbox_outlook_draft_create_count: mailboxOutlookDraftCreates.length,
+    operation_mailbox_outlook_draft_create_admission: productSurface.mailbox_outlook_draft_create_admission,
+    mailbox_draft_reply_authority_partition: productSurface.mailbox_draft_reply_authority_partition,
+  };
+}
+
+async function postCarrier(config, body, fetchImpl) {
+  const response = await fetchImpl(`${config.workerUrl}/api/carrier`, {
     method: 'POST',
-    headers: { authorization: `Bearer ${bearerToken}`, 'content-type': 'application/json' },
+    headers: { ...authHeaders(config.auth), 'content-type': 'application/json' },
     body: JSON.stringify(body),
   });
   return { http_status: response.status, body: await response.json().catch(() => ({})) };
 }
 
-function option(name) {
+function resolveBearerFromEnv(args, env) {
+  const tokenFile = option(args, '--token-file') ?? env.CLOUDFLARE_CARRIER_TOKEN_FILE ?? null;
+  if (tokenFile) return { kind: 'bearer', value: readTokenFile(tokenFile), source: tokenFile === env.CLOUDFLARE_CARRIER_TOKEN_FILE ? 'env:CLOUDFLARE_CARRIER_TOKEN_FILE' : 'token-file' };
+  const token = option(args, '--token') ?? env.CLOUDFLARE_CARRIER_TOKEN ?? null;
+  if (token) return { kind: 'bearer', value: token, source: option(args, '--token') ? 'flag:--token' : 'env:CLOUDFLARE_CARRIER_TOKEN' };
+  return null;
+}
+
+function option(args, name) {
   const index = args.indexOf(name);
   return index >= 0 ? args[index + 1] : null;
 }
@@ -154,7 +213,7 @@ function readTokenFile(tokenFilePath) {
   return readFileSync(resolved, 'utf8').trim();
 }
 
-function loadLocalEnv(envPath) {
+function loadLocalEnv(envPath, env = process.env) {
   if (!existsSync(envPath)) return;
   const content = readFileSync(envPath, 'utf8');
   for (const line of content.split(/\r?\n/)) {
@@ -164,10 +223,20 @@ function loadLocalEnv(envPath) {
     if (eq <= 0) continue;
     const key = trimmed.slice(0, eq).trim();
     const value = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, '');
-    if (!process.env[key]) process.env[key] = value;
+    if (!env[key]) env[key] = value;
   }
 }
 
 function trimTrailingSlash(value) {
   return String(value ?? '').replace(/\/+$/, '');
+}
+
+if (process.argv[1] === scriptPath) {
+  const config = parseMailboxDraftReplyProposalLiveSmokeArgs(process.argv.slice(2));
+  const result = await runMailboxDraftReplyProposalLiveSmoke(config);
+  if (config.format === 'text') {
+    process.stdout.write(formatMailboxDraftReplyProposalLiveSmokeText(result));
+  } else {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  }
 }
