@@ -20,6 +20,7 @@ const taskReadScript = resolve(scriptDir, 'cloudflare-carrier-task-lifecycle-rea
 export function parseTaskLifecycleWorkflowLiveArgs(argv = [], env = process.env, now = () => Date.now()) {
   const args = [...argv];
   const workerUrl = option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '';
+  const format = option(args, '--format') ?? env.CLOUDFLARE_TASK_LIFECYCLE_WORKFLOW_FORMAT ?? 'json';
   const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? 'site_narada_cloudflare';
   const agentId = option(args, '--agent-id') ?? env.CLOUDFLARE_CARRIER_AGENT_ID ?? 'agent.operator.task-lifecycle-workflow-live';
   const title = option(args, '--title') ?? env.CLOUDFLARE_TASK_LIFECYCLE_WORKFLOW_TITLE ?? `Cloudflare governed task workflow ${new Date(now()).toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}`;
@@ -33,6 +34,7 @@ export function parseTaskLifecycleWorkflowLiveArgs(argv = [], env = process.env,
     throw new Error('task_lifecycle_workflow_live_requires_--execute-task-lifecycle-workflow_or_CLOUDFLARE_TASK_LIFECYCLE_WORKFLOW_EXECUTE_LIVE=1');
   }
   if (!workerUrl) throw new Error('task_lifecycle_workflow_live_requires_--url_or_CLOUDFLARE_CARRIER_URL');
+  if (!['json', 'text'].includes(format)) throw new Error(`task_lifecycle_workflow_live_unknown_format:${format}`);
   if (!siteId) throw new Error('task_lifecycle_workflow_live_requires_site_id');
   if (!agentId) throw new Error('task_lifecycle_workflow_live_requires_agent_id');
   if (!title) throw new Error('task_lifecycle_workflow_live_requires_title');
@@ -41,6 +43,7 @@ export function parseTaskLifecycleWorkflowLiveArgs(argv = [], env = process.env,
 
   return {
     workerUrl,
+    format,
     siteId,
     agentId,
     title,
@@ -49,6 +52,23 @@ export function parseTaskLifecycleWorkflowLiveArgs(argv = [], env = process.env,
     auth,
     executeAcknowledged,
   };
+}
+
+export function formatTaskLifecycleWorkflowLiveText(result) {
+  const lines = [
+    `Task Lifecycle Workflow: ${result.status}`,
+    `Worker: ${result.worker_url}`,
+    `Site: ${result.site_id}`,
+    `Agent: ${result.agent_id}`,
+    `Task: ${result.task_id}`,
+    `Create: status=${result.create_summary?.status ?? 'unknown'}`,
+    `Claim: status=${result.claim_summary?.status ?? 'unknown'}`,
+    `Report: report_id=${result.report_summary?.report_id ?? 'none'} status=${result.report_summary?.status ?? 'unknown'}`,
+    `Finish: finish_id=${result.finish_summary?.finish_id ?? 'none'} status=${result.finish_summary?.status ?? 'unknown'}`,
+    `Read After Finish: status=${result.read_after_finish?.task_status ?? 'unknown'}`,
+    `Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result.worker_url} --site ${result.site_id} --task-id ${result.task_id} --operator-session-file <operator-session-file>`,
+  ];
+  return `${lines.join('\n')}\n`;
 }
 
 export async function runTaskLifecycleWorkflowLive(config, { runNodeScript = defaultRunNodeScript } = {}) {
@@ -208,5 +228,9 @@ function flag(args, name) {
 if (resolve(process.argv[1] ?? '') === scriptPath) {
   const config = parseTaskLifecycleWorkflowLiveArgs(process.argv.slice(2));
   const result = await runTaskLifecycleWorkflowLive(config);
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  if (config.format === 'text') {
+    process.stdout.write(formatTaskLifecycleWorkflowLiveText(result));
+  } else {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  }
 }

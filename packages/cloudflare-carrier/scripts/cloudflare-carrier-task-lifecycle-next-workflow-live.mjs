@@ -19,6 +19,7 @@ const taskFinishScript = resolve(scriptDir, 'cloudflare-carrier-task-lifecycle-f
 export function parseTaskLifecycleNextWorkflowLiveArgs(argv = [], env = process.env) {
   const args = [...argv];
   const workerUrl = option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '';
+  const format = option(args, '--format') ?? env.CLOUDFLARE_TASK_LIFECYCLE_NEXT_FORMAT ?? 'json';
   const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? 'site_narada_cloudflare';
   const operationId = option(args, '--operation-id') ?? env.CLOUDFLARE_CARRIER_OPERATION_ID ?? null;
   const taskId = option(args, '--task-id') ?? env.CLOUDFLARE_TASK_LIFECYCLE_TASK_ID ?? null;
@@ -33,12 +34,14 @@ export function parseTaskLifecycleNextWorkflowLiveArgs(argv = [], env = process.
     throw new Error('task_lifecycle_next_workflow_live_requires_--execute-task-lifecycle-next_or_CLOUDFLARE_TASK_LIFECYCLE_NEXT_EXECUTE_LIVE=1');
   }
   if (!workerUrl) throw new Error('task_lifecycle_next_workflow_live_requires_--url_or_CLOUDFLARE_CARRIER_URL');
+  if (!['json', 'text'].includes(format)) throw new Error(`task_lifecycle_next_workflow_live_unknown_format:${format}`);
   if (!siteId) throw new Error('task_lifecycle_next_workflow_live_requires_site_id');
   if (!taskId && !carrierSessionId && !operationId) throw new Error('task_lifecycle_next_workflow_live_requires_task_id_or_carrier_session_id_or_operation_id');
   if (!auth) throw new Error('task_lifecycle_next_workflow_live_requires_bearer_token_or_operator_session');
 
   return {
     workerUrl,
+    format,
     siteId,
     operationId,
     taskId,
@@ -48,6 +51,23 @@ export function parseTaskLifecycleNextWorkflowLiveArgs(argv = [], env = process.
     auth,
     executeAcknowledged,
   };
+}
+
+export function formatTaskLifecycleNextWorkflowLiveText(result) {
+  const lines = [
+    `Task Lifecycle Next Workflow: ${result.status}`,
+    `Worker: ${result.worker_url}`,
+    `Site: ${result.site_id}`,
+    `Task: ${result.task_id}`,
+    `Selected Step: ${result.selected_step}`,
+    `Before: status=${result.read_before_next?.task_status ?? 'unknown'} report=${result.read_before_next?.report_id ?? 'none'} finish=${result.read_before_next?.finish_id ?? 'none'}`,
+    `After: status=${result.read_after_next?.task_status ?? 'unknown'} report=${result.read_after_next?.report_id ?? 'none'} finish=${result.read_after_next?.finish_id ?? 'none'}`,
+    `Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result.worker_url} --site ${result.site_id} --task-id ${result.task_id} --operator-session-file <operator-session-file>`,
+  ];
+  if (result.read_after_next?.carrier_session_id) {
+    lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result.worker_url} --site ${result.site_id} --carrier-session-id ${result.read_after_next.carrier_session_id} --operator-session-file <operator-session-file>`);
+  }
+  return `${lines.join('\n')}\n`;
 }
 
 export async function runTaskLifecycleNextWorkflowLive(config, { runNodeScript = defaultRunNodeScript } = {}) {
@@ -244,5 +264,9 @@ function flag(args, name) {
 if (resolve(process.argv[1] ?? '') === scriptPath) {
   const config = parseTaskLifecycleNextWorkflowLiveArgs(process.argv.slice(2));
   const result = await runTaskLifecycleNextWorkflowLive(config);
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  if (config.format === 'text') {
+    process.stdout.write(formatTaskLifecycleNextWorkflowLiveText(result));
+  } else {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  }
 }

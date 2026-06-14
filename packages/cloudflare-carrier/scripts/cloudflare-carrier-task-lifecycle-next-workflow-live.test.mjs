@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  formatTaskLifecycleNextWorkflowLiveText,
   parseTaskLifecycleNextWorkflowLiveArgs,
   runTaskLifecycleNextWorkflowLive,
 } from './cloudflare-carrier-task-lifecycle-next-workflow-live.mjs';
@@ -39,6 +40,46 @@ test('parseTaskLifecycleNextWorkflowLiveArgs accepts operation focus without tas
 
   assert.equal(parsed.taskId, null);
   assert.equal(parsed.operationId, 'operation_alpha');
+});
+
+test('parseTaskLifecycleNextWorkflowLiveArgs supports text format', () => {
+  const parsed = parseTaskLifecycleNextWorkflowLiveArgs([
+    '--url', 'https://carrier.example',
+    '--site', 'site_alpha',
+    '--task-id', 'task_alpha',
+    '--operator-session-cookie', 'session-cookie',
+    '--format', 'text',
+    '--execute-task-lifecycle-next',
+  ]);
+
+  assert.equal(parsed.format, 'text');
+});
+
+test('formatTaskLifecycleNextWorkflowLiveText renders direct follow-on reads', () => {
+  const text = formatTaskLifecycleNextWorkflowLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    site_id: 'site_alpha',
+    task_id: 'task_alpha',
+    selected_step: 'report',
+    read_before_next: {
+      task_status: 'claimed',
+      report_id: null,
+      finish_id: null,
+    },
+    read_after_next: {
+      task_status: 'closed',
+      report_id: 'report_alpha',
+      finish_id: null,
+      carrier_session_id: 'session_alpha',
+    },
+  });
+
+  assert.match(text, /^Task Lifecycle Next Workflow: ok/m);
+  assert.match(text, /Selected Step: report/);
+  assert.match(text, /After: status=closed report=report_alpha finish=none/);
+  assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text/);
+  assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text/);
 });
 
 test('runTaskLifecycleNextWorkflowLive claims an open task', async () => {

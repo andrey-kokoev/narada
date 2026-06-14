@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  formatTaskLifecycleWorkflowLiveText,
   parseTaskLifecycleWorkflowLiveArgs,
   runTaskLifecycleWorkflowLive,
 } from './cloudflare-carrier-task-lifecycle-workflow-live.mjs';
@@ -11,6 +12,40 @@ test('parseTaskLifecycleWorkflowLiveArgs requires explicit execution acknowledge
     () => parseTaskLifecycleWorkflowLiveArgs(['--url', 'https://carrier.example', '--site', 'site_alpha', '--agent-id', 'agent.alpha', '--operator-session-cookie', 'session-cookie']),
     /task_lifecycle_workflow_live_requires_--execute-task-lifecycle-workflow_or_CLOUDFLARE_TASK_LIFECYCLE_WORKFLOW_EXECUTE_LIVE=1/,
   );
+});
+
+test('parseTaskLifecycleWorkflowLiveArgs supports text format', () => {
+  const parsed = parseTaskLifecycleWorkflowLiveArgs([
+    '--url', 'https://carrier.example',
+    '--site', 'site_alpha',
+    '--agent-id', 'agent.alpha',
+    '--operator-session-cookie', 'session-cookie',
+    '--format', 'text',
+    '--execute-task-lifecycle-workflow',
+  ], {});
+
+  assert.equal(parsed.format, 'text');
+});
+
+test('formatTaskLifecycleWorkflowLiveText renders direct task read', () => {
+  const text = formatTaskLifecycleWorkflowLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    site_id: 'site_alpha',
+    agent_id: 'agent.alpha',
+    task_id: 'task_alpha',
+    create_summary: { status: 'opened' },
+    claim_summary: { status: 'claimed' },
+    report_summary: { status: 'closed', report_id: 'report_alpha' },
+    finish_summary: { status: 'finished', finish_id: 'finish_alpha' },
+    read_after_finish: { task_status: 'finished' },
+  });
+
+  assert.match(text, /^Task Lifecycle Workflow: ok/m);
+  assert.match(text, /Task: task_alpha/);
+  assert.match(text, /Report: report_id=report_alpha status=closed/);
+  assert.match(text, /Finish: finish_id=finish_alpha status=finished/);
+  assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text/);
 });
 
 test('runTaskLifecycleWorkflowLive drives create claim report finish and read', async () => {
