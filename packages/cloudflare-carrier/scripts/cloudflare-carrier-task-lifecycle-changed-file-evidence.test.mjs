@@ -167,6 +167,8 @@ test('admitCloudflareTaskLifecycleChangedFileEvidence posts the evidence envelop
         task_id: 'cloudflare-task-7',
         task_number: 7,
         status: 'closed',
+        operation_id: 'operation_alpha',
+        carrier_session_id: 'session_alpha',
         changed_file_evidence_admission: 'admitted',
         changed_file_evidence_count: 1,
         reported_by_agent_id: 'agent_alpha',
@@ -212,6 +214,8 @@ test('admitCloudflareTaskLifecycleChangedFileEvidence posts the evidence envelop
     file_path: 'packages/cloudflare-carrier/src/cloudflare-worker.mjs',
     reporter_agent_id: 'agent_alpha',
     reporter_principal_id: null,
+    operation_id: 'operation_alpha',
+    carrier_session_id: 'session_alpha',
     reported_by_agent_id: 'agent_alpha',
     changed_file_evidence_admission: 'admitted',
     changed_file_evidence_count: 1,
@@ -294,6 +298,8 @@ test('formatTaskLifecycleChangedFileEvidenceText renders admitted and refused su
       evidence_id: 'evidence-1',
       file_path: 'a.txt',
       reporter_agent_id: 'agent_alpha',
+      operation_id: 'operation_alpha',
+      carrier_session_id: 'session_alpha',
       decision_action: 'admit',
       decision_reason: 'cloudflare_changed_file_evidence_cutover_admitted',
       mutation_authority: 'cloudflare_task_lifecycle_d1',
@@ -318,6 +324,9 @@ test('formatTaskLifecycleChangedFileEvidenceText renders admitted and refused su
   assert.match(admitted, /Report: report-1/);
   assert.match(admitted, /Changed File Evidence Count: 1/);
   assert.match(admitted, /Filesystem Mutation: not_admitted/);
+  assert.match(admitted, /Session Evidence:/);
+  assert.match(admitted, /Operation Review:/);
+  assert.match(admitted, /Operation Next Workflow:/);
   assert.match(admitted, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --operator-session-file <operator-session-file>/);
   assert.match(admitted, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
   assert.equal(admitted.includes('secret-token'), false);
