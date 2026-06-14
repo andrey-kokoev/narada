@@ -230,6 +230,8 @@ test('formatWebhookDelayShadowReadText prints shadow read summary', () => {
   assert.match(text, /Observations: count=1 focused=shadow_focus classification=critical/);
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
   assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
 });
@@ -274,6 +276,8 @@ test('formatWebhookDelayShadowReadText suppresses site-scoped handoffs without s
 
   assert.equal(text.includes('Site Read:'), false);
   assert.equal(text.includes('Site Next Workflow:'), false);
+  assert.equal(text.includes('Posture Coherence Review:'), false);
+  assert.equal(text.includes('Durability Coherence Review:'), false);
   assert.equal(text.includes('Operation Review:'), false);
   assert.equal(text.includes('Operation Next Workflow:'), false);
   assert.doesNotMatch(text, /<site-id>/);
@@ -299,6 +303,8 @@ test('formatWebhookDelayShadowReadText suppresses worker-scoped handoffs without
   assert.doesNotMatch(text, /<worker-url>/);
   assert.equal(text.includes('Site Read:'), false);
   assert.equal(text.includes('Site Next Workflow:'), false);
+  assert.equal(text.includes('Posture Coherence Review:'), false);
+  assert.equal(text.includes('Durability Coherence Review:'), false);
   assert.equal(text.includes('Operation Review:'), false);
   assert.equal(text.includes('Operation Next Workflow:'), false);
 });
