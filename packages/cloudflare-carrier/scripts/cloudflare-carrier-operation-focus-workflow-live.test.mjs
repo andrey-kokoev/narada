@@ -50,6 +50,21 @@ test('parseOperationFocusWorkflowLiveArgs accepts text format', () => {
   assert.equal(parsed.format, 'text');
 });
 
+test('formatOperationFocusWorkflowLiveText suppresses guarded links without site id', () => {
+  const text = formatOperationFocusWorkflowLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example.test',
+    site_id: '',
+    selected_operation_id: 'operation_attention',
+    read_focused: { workflow_next_action: 'start_or_select_session' },
+  });
+
+  assert.doesNotMatch(text, /Operation List:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /Focused Workflow:/);
+});
+
 test('runOperationFocusWorkflowLive selects next operation from posture and reads it', async () => {
   const calls = [];
   const result = await runOperationFocusWorkflowLive({

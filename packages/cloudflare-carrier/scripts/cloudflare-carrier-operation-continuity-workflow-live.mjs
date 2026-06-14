@@ -115,6 +115,8 @@ export async function runOperationContinuityWorkflowLive(
 }
 
 export function formatOperationContinuityWorkflowLiveText(result) {
+  const hasSiteId = typeof result.site_id === 'string' && result.site_id.length > 0;
+  const hasOperationId = typeof result.operation_id === 'string' && result.operation_id.length > 0;
   const lines = [
     `Operation Continuity Workflow: ${result.status}`,
     `Worker: ${result.worker_url}`,
@@ -125,11 +127,15 @@ export function formatOperationContinuityWorkflowLiveText(result) {
     `Continuity Health: status=${result.continuity_health?.status ?? 'unknown'}`,
     `Post Operation Action: ${result.read_after_continuity?.workflow_next_action ?? 'unknown'}`,
     `Post Site Action: ${result.site_read_after_continuity?.next_action ?? 'unknown'}`,
-    `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
-    `Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`,
-    `Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`,
-    `Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`,
   ];
+  if (hasSiteId && hasOperationId) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+  }
+  if (hasSiteId) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
+  }
   const postActionWorkflow = buildPostContinuityWorkflowCommand(result);
   if (postActionWorkflow) {
     lines.push(`${postActionWorkflow.label}: ${postActionWorkflow.command}`);
@@ -138,6 +144,9 @@ export function formatOperationContinuityWorkflowLiveText(result) {
 }
 
 function buildPostContinuityWorkflowCommand(result) {
+  if (!hasConcreteSiteAndOperation(result)) {
+    return null;
+  }
   const nextAction = result.read_after_continuity?.workflow_next_action ?? null;
   const focusKind = result.read_after_continuity?.workflow_focus_kind ?? null;
   const focusRef = result.read_after_continuity?.workflow_focus_ref ?? null;
@@ -148,6 +157,13 @@ function buildPostContinuityWorkflowCommand(result) {
     };
   }
   return null;
+}
+
+function hasConcreteSiteAndOperation(result) {
+  return typeof result.site_id === 'string'
+    && result.site_id.length > 0
+    && typeof result.operation_id === 'string'
+    && result.operation_id.length > 0;
 }
 
 async function defaultRunNodeScript(args, options) {

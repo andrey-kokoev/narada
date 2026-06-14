@@ -63,6 +63,25 @@ test('parseOperationContinuityWorkflowLiveArgs accepts continuity review pre-act
   assert.equal(parsed.expectedPreAction, 'review_continuity_loop_report');
 });
 
+test('formatOperationContinuityWorkflowLiveText suppresses guarded links without site id', () => {
+  const text = formatOperationContinuityWorkflowLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    site_id: '',
+    operation_id: 'operation_live_alpha',
+    read_after_continuity: {
+      workflow_next_action: 'review_site_continuity_reconciliation_execution',
+      workflow_focus_ref: 'focus_ref',
+    },
+  });
+
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Review Ack:/);
+});
+
 test('runOperationContinuityWorkflowLive orchestrates continuity refresh through existing live surfaces', async () => {
   const invocations = [];
   const result = await runOperationContinuityWorkflowLive({
