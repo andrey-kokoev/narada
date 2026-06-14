@@ -206,6 +206,7 @@ export function summarizeRepositoryPublicationSurface(operation, body = {}, para
       status: body.status ?? null,
       site_id: body.site_id ?? params.site_id ?? null,
       repository_publication_request_id: request?.repository_publication_request_id ?? null,
+      operation_id: request?.operation_id ?? null,
       repository_publication_admission_id: admission?.repository_publication_admission_id ?? null,
       admission_action: admission?.admission_action ?? null,
       pending_unadmitted_count: body.pending_unadmitted_count ?? 0,
@@ -353,6 +354,9 @@ export function formatRepositoryPublicationReadText(result) {
   if (summary.operation === 'repository_publication.request.list') {
     lines.push(`Requests: count=${summary.request_count ?? 0}`);
     if (summary.latest_repository_publication_request_id) lines.push(`Latest Request: ${summary.latest_repository_publication_request_id}`);
+    if (summary.site_id && summary.latest_operation_id) {
+      lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file>`);
+    }
     if (summary.latest_publication_ref) lines.push(`Publication: ${summary.latest_publication_ref}`);
     if (summary.latest_repository_ref) lines.push(`Repository: ${summary.latest_repository_ref}`);
     if (summary.latest_branch_ref) lines.push(`Branch: ${summary.latest_branch_ref}`);
@@ -360,6 +364,9 @@ export function formatRepositoryPublicationReadText(result) {
     lines.push(`Authority: request=${summary.repository_publication_request_authority ?? 'unknown'} executor=${summary.repository_publication_executor_authority ?? 'unknown'}`);
   } else if (summary.operation === 'repository_publication.request.next') {
     if (summary.repository_publication_request_id) lines.push(`Request: ${summary.repository_publication_request_id}`);
+    if (summary.site_id && summary.operation_id) {
+      lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+    }
     if (summary.repository_publication_admission_id || summary.admission_action) {
       lines.push(`Admission: ${summary.repository_publication_admission_id ?? 'none'}${summary.admission_action ? ` action=${summary.admission_action}` : ''}`);
     }

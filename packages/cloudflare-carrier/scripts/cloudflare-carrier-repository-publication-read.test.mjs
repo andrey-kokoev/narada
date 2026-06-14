@@ -147,6 +147,7 @@ test('readRepositoryPublicationSurface posts request.next envelope and summarize
       },
       request: {
         repository_publication_request_id: 'repository-publication-request-1',
+        operation_id: 'operation-1',
         publication_ref: 'publication:site-alpha:v1',
         repository_ref: 'github:andrey/site-alpha',
         branch_ref: 'main',
@@ -169,6 +170,7 @@ test('readRepositoryPublicationSurface posts request.next envelope and summarize
   assert.equal(result.schema, 'narada.cloudflare_carrier.repository_publication_read.v1');
   assert.equal(JSON.stringify(result).includes('secret-token'), false);
   assert.equal(result.summary.repository_publication_request_id, 'repository-publication-request-1');
+  assert.equal(result.summary.operation_id, 'operation-1');
   assert.equal(result.summary.pending_unadmitted_count, 2);
 });
 
@@ -445,6 +447,53 @@ test('formatRepositoryPublicationReadText surfaces evidence refusal reason', () 
   assert.match(text, /Current Posture: windows_repository_publication_refused_cloudflare_recorded_evidence/);
   assert.match(text, /Focused Publication Status: refused reason=repository_publication_push_not_enabled/);
   assert.match(text, /Request Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --repository-publication-request-id repository-publication-request-1 --operator-session-file <operator-session-file>/);
+});
+
+test('formatRepositoryPublicationReadText surfaces operation review on request surfaces', () => {
+  const requestListText = formatRepositoryPublicationReadText({
+    status: 'ok',
+    operation: 'repository_publication.request.list',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'flag:--token',
+    params: { site_id: 'site_alpha' },
+    summary: {
+      operation: 'repository_publication.request.list',
+      site_id: 'site_alpha',
+      request_count: 1,
+      latest_repository_publication_request_id: 'repository-publication-request-1',
+      latest_operation_id: 'operation-1',
+      latest_publication_ref: 'publication:site-alpha:v1',
+      repository_publication_request_authority: 'cloudflare_repository_publication_request_queue',
+      repository_publication_executor_authority: 'windows_repository_publication_executor',
+    },
+  });
+
+  assert.match(requestListText, /Latest Request: repository-publication-request-1/);
+  assert.match(requestListText, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-1 --operator-session-file <operator-session-file>/);
+
+  const requestNextText = formatRepositoryPublicationReadText({
+    status: 'ok',
+    operation: 'repository_publication.request.next',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'flag:--token',
+    params: { site_id: 'site_alpha' },
+    summary: {
+      operation: 'repository_publication.request.next',
+      site_id: 'site_alpha',
+      repository_publication_request_id: 'repository-publication-request-1',
+      operation_id: 'operation-1',
+      repository_publication_admission_id: 'repository-publication-admission-1',
+      admission_action: 'admit',
+      pending_unadmitted_count: 2,
+      repository_publication_request_authority: 'cloudflare_repository_publication_request_queue',
+      repository_publication_dispatch_authority: 'cloudflare_repository_publication_request_queue',
+      repository_publication_executor_authority: 'windows_repository_publication_executor',
+      repository_publication_admission_authority: 'cloudflare_repository_publication_admission_controller',
+    },
+  });
+
+  assert.match(requestNextText, /Request: repository-publication-request-1/);
+  assert.match(requestNextText, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-1 --operator-session-file <operator-session-file>/);
 });
 
 test('formatRepositoryPublicationReadText surfaces focused admission and execution labels', () => {
