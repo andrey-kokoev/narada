@@ -78,8 +78,10 @@ export function formatRepositoryPublicationReadbackLiveSmokeText(result) {
     `Evidence: ${result.repository_publication_evidence_id ?? 'none'}`,
     `Counts: requests=${result.request_list_count ?? 0} admissions=${result.admission_count ?? 0} executions=${result.execution_count ?? 0} evidence=${result.evidence_count ?? 0}`,
     `Request Review: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-request-id ${result.repository_publication_request_id} --operator-session-file <operator-session-file>`,
-    `Admission Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:admission:list:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-admission-id ${result.repository_publication_admission_id ?? '<repository-publication-admission-id>'} --operator-session-file <operator-session-file>`,
   ];
+  if (result.repository_publication_admission_id) {
+    lines.push(`Admission Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:admission:list:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-admission-id ${result.repository_publication_admission_id} --operator-session-file <operator-session-file>`);
+  }
   if (result.repository_publication_execution_id) {
     lines.push(`Execution Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url ${result.worker_url} --site ${result.site_id} --repository-publication-execution-id ${result.repository_publication_execution_id} --operator-session-file <operator-session-file>`);
   }

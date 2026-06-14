@@ -57,6 +57,27 @@ test('formatRepositoryPublicationReadbackLiveSmokeText emits focused downstream 
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
 });
 
+test('formatRepositoryPublicationReadbackLiveSmokeText suppresses admission read without a real admission id', () => {
+  const text = formatRepositoryPublicationReadbackLiveSmokeText({
+    status: 'ok',
+    worker_url: 'https://carrier.example.test',
+    site_id: 'site_alpha',
+    lane: 'cloudflare',
+    repository_publication_request_id: 'repository-publication-request-1',
+    repository_publication_admission_id: null,
+    repository_publication_execution_id: null,
+    repository_publication_evidence_id: null,
+    request_list_count: 1,
+    admission_count: 0,
+    execution_count: 0,
+    evidence_count: 0,
+    operation_read_summary: { operation_id: 'operation-1' },
+  });
+
+  assert.doesNotMatch(text, /Admission Read:/);
+  assert.doesNotMatch(text, /<repository-publication-admission-id>/);
+});
+
 test('parseRepositoryPublicationReadbackLiveSmokeArgs refuses missing required inputs', () => {
   assert.throws(
     () => parseRepositoryPublicationReadbackLiveSmokeArgs(['--site', 'site_alpha', '--repository-publication-request-id', 'repository-publication-request-1'], {}, { loadLocalEnv: false }),
