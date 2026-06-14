@@ -190,3 +190,21 @@ test('formatMailboxSendConfirmationReadText prints focused labels for focused re
   assert.match(text, /Focused Confirmation: id=mailbox_send_confirmation_focus/);
   assert.match(text, /Focused Recorded: 2026-06-13T04:01:00.000Z/);
 });
+
+test('formatMailboxSendConfirmationReadText suppresses mailbox handoff without a real site id', () => {
+  const text = formatMailboxSendConfirmationReadText({
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      confirmation_count: 1,
+      latest_proposal_id: 'mailbox_send_proposal_alpha',
+      latest_send_accepted_id: 'mailbox_send_accepted_alpha',
+      latest_draft_create_id: 'mailbox_outlook_draft_create_alpha',
+    },
+  });
+
+  assert.doesNotMatch(text, /Proposal Read:/);
+  assert.doesNotMatch(text, /Accepted Read:/);
+  assert.doesNotMatch(text, /Draft Read:/);
+  assert.doesNotMatch(text, /<site-id>/);
+});

@@ -125,6 +125,7 @@ export function summarizeMailboxDraftReplyProposal(body = {}, draftCreateBody = 
 export function formatMailboxDraftReplyProposalReadText(result) {
   const summary = result?.summary ?? {};
   const actionableWorkflow = summary.workflow_next_action && summary.workflow_next_action !== 'none' && summary.workflow_next_action !== 'monitor_operation';
+  const hasSiteId = Boolean(summary.site_id);
   const lines = [
     'Mailbox Draft Reply Proposal Read: ok',
     `Worker: ${result?.worker_url ?? 'unknown'}`,
@@ -150,14 +151,14 @@ export function formatMailboxDraftReplyProposalReadText(result) {
     );
   }
   lines.push(`Linked Draft Creates: ${summary.linked_draft_create_count ?? 0}`);
-  if (summary.linked_draft_create_ids?.[0]) {
-    lines.push(`Draft Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.linked_draft_create_ids[0]} --operator-session-file <operator-session-file>`);
+  if (hasSiteId && summary.linked_draft_create_ids?.[0]) {
+    lines.push(`Draft Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --focus-ref ${summary.linked_draft_create_ids[0]} --operator-session-file <operator-session-file>`);
   }
-  if (summary.linked_send_accepted_ids?.[0]) {
-    lines.push(`Accepted Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.linked_send_accepted_ids[0]} --operator-session-file <operator-session-file>`);
+  if (hasSiteId && summary.linked_send_accepted_ids?.[0]) {
+    lines.push(`Accepted Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --focus-ref ${summary.linked_send_accepted_ids[0]} --operator-session-file <operator-session-file>`);
   }
-  if (summary.linked_send_confirmation_ids?.[0]) {
-    lines.push(`Confirmation Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-confirmation:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.linked_send_confirmation_ids[0]} --operator-session-file <operator-session-file>`);
+  if (hasSiteId && summary.linked_send_confirmation_ids?.[0]) {
+    lines.push(`Confirmation Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-confirmation:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --focus-ref ${summary.linked_send_confirmation_ids[0]} --operator-session-file <operator-session-file>`);
   }
   if (summary.focused_recorded_at || summary.focused_recorded_by_principal_id) {
     lines.push(`Recorded: ${summary.focused_recorded_at ?? 'unknown'} by ${summary.focused_recorded_by_principal_id ?? 'unknown'}`);
@@ -175,8 +176,8 @@ export function formatMailboxDraftReplyProposalReadText(result) {
   if (actionableWorkflow && summary.operation_id && summary.site_id) {
     lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
   }
-  if (summary.focused_proposal_id) {
-    lines.push(`Review Ack: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'}${summary.operation_id ? ` --operation-id ${summary.operation_id}` : ''} --focus-kind mailbox_draft_reply_proposal --focus-ref ${summary.focused_proposal_id} --operator-session-file <operator-session-file>`);
+  if (hasSiteId && summary.focused_proposal_id) {
+    lines.push(`Review Ack: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id}${summary.operation_id ? ` --operation-id ${summary.operation_id}` : ''} --focus-kind mailbox_draft_reply_proposal --focus-ref ${summary.focused_proposal_id} --operator-session-file <operator-session-file>`);
   }
   return `${lines.join('\n')}\n`;
 }

@@ -305,3 +305,24 @@ test('formatMailboxDraftReplyProposalReadText omits synthetic operation ids from
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --focus-kind mailbox_draft_reply_proposal --focus-ref mailbox_draft_reply_proposal_live_1 --operator-session-file <operator-session-file>/);
   assert.doesNotMatch(text, /Review Ack:.*<operation-id>/);
 });
+
+test('formatMailboxDraftReplyProposalReadText suppresses mailbox handoff without a real site id', () => {
+  const text = formatMailboxDraftReplyProposalReadText({
+    worker_url: 'https://carrier.example',
+    auth_source: 'operator-session-file',
+    summary: {
+      proposal_count: 1,
+      focused_proposal_id: 'mailbox_draft_reply_proposal_live_1',
+      linked_draft_create_count: 1,
+      linked_draft_create_ids: ['mailbox_outlook_draft_create_live_1'],
+      linked_send_accepted_ids: ['mailbox_send_accepted_live_1'],
+      linked_send_confirmation_ids: ['mailbox_send_confirmation_live_1'],
+    },
+  });
+
+  assert.doesNotMatch(text, /Draft Read:/);
+  assert.doesNotMatch(text, /Accepted Read:/);
+  assert.doesNotMatch(text, /Confirmation Read:/);
+  assert.doesNotMatch(text, /Review Ack:/);
+  assert.doesNotMatch(text, /<site-id>/);
+});

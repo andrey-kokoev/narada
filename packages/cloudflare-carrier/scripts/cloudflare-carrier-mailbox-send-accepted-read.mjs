@@ -109,6 +109,7 @@ export function summarizeMailboxSendAccepted(body = {}, options = {}) {
 
 export function formatMailboxSendAcceptedReadText(result) {
   const summary = result?.summary ?? {};
+  const hasSiteId = Boolean(summary.site_id);
   const latestLabel = summary.focused_send_accepted_id ? 'Focused Accepted' : 'Latest Accepted';
   const latestRecordedLabel = summary.focused_send_accepted_id ? 'Focused Recorded' : 'Latest Recorded';
   const lines = [
@@ -127,14 +128,14 @@ export function formatMailboxSendAcceptedReadText(result) {
   if (summary.latest_send_accepted_id || summary.latest_message_id || summary.latest_subject) {
     lines.push(`${latestLabel}: id=${summary.latest_send_accepted_id ?? 'none'} proposal=${summary.latest_proposal_id ?? 'none'} account=${summary.latest_account_ref ?? 'none'} message=${summary.latest_message_id ?? 'none'} subject=${summary.latest_subject ?? 'none'}`);
   }
-  if (summary.latest_proposal_id) {
-    lines.push(`Proposal Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.latest_proposal_id} --operator-session-file <operator-session-file>`);
+  if (hasSiteId && summary.latest_proposal_id) {
+    lines.push(`Proposal Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --focus-ref ${summary.latest_proposal_id} --operator-session-file <operator-session-file>`);
   }
-  if (summary.latest_draft_create_id) {
-    lines.push(`Draft Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.latest_draft_create_id} --operator-session-file <operator-session-file>`);
+  if (hasSiteId && summary.latest_draft_create_id) {
+    lines.push(`Draft Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --focus-ref ${summary.latest_draft_create_id} --operator-session-file <operator-session-file>`);
   }
-  if (summary.latest_send_confirmation_id) {
-    lines.push(`Confirmation Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-confirmation:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.latest_send_confirmation_id} --operator-session-file <operator-session-file>`);
+  if (hasSiteId && summary.latest_send_confirmation_id) {
+    lines.push(`Confirmation Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-confirmation:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --focus-ref ${summary.latest_send_confirmation_id} --operator-session-file <operator-session-file>`);
   }
   if (summary.site_id && summary.latest_operation_id) {
     lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.latest_operation_id} --operator-session-file <operator-session-file>`);
