@@ -571,6 +571,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       session_count: 3,
     },
   });
+  assert.match(siteReadText, /Repository Publication Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider:liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(siteReadText, /Site Action Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:action:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file> --execute-site-action/);
   assert.match(siteReadText, /Active Operation Route: operation=operation_live action=refresh_site_continuity_loop reason=operation_lifecycle_continuity_loop_stale/);
   assert.match(siteReadText, /Durability: persistence=durable recovery=reconstructable/);
@@ -587,6 +588,47 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(siteReadText, /Repository Publication Execution Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
   assert.match(siteReadText, /Repository Publication Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:evidence:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
   assert.match(siteReadText, /Repository Publication Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider:liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+
+  const siteReadNoWorkerText = formatProductSurfaceText({
+    operation: 'site.read',
+    summary: {
+      operation: 'site.read',
+      site_id: 'site_alpha',
+      display_name: 'Alpha Site',
+      active_operation_id: 'operation_live',
+      active_operation_next_action: 'refresh_site_continuity_loop',
+      active_operation_workflow_reason: 'operation_lifecycle_continuity_loop_stale',
+      active_session_id: 'session_alpha',
+      health: 'ready',
+      next_action: 'monitor_sites',
+      continuity_state: 'packet_observed',
+      continuity_direction_state: 'bidirectional',
+      continuity_direction_missing: [],
+      continuity_loop_state: 'loop_report_observed',
+      continuity_reconciliation_execution_state: 'reconciliation_execution_observed',
+      continuity_reconciliation_execution_health: 'ready',
+      continuity_packet_count: 2,
+      continuity_loop_report_count: 1,
+      continuity_reconciliation_execution_count: 1,
+      persistence_state: 'durable',
+      recovery_state: 'reconstructable',
+      local_ingress_request_count: 7,
+      local_ingress_evidence_count: 4,
+      local_ingress_provider_heartbeat_count: 20,
+      repository_publication_request_count: 25,
+      repository_publication_execution_count: 25,
+      repository_publication_evidence_count: 13,
+      repository_publication_provider_heartbeat_count: 20,
+      membership_count: 2,
+      session_count: 3,
+    },
+  });
+  assert.doesNotMatch(siteReadNoWorkerText, /Site Action Workflow:/);
+  assert.doesNotMatch(siteReadNoWorkerText, /Operation Review:/);
+  assert.doesNotMatch(siteReadNoWorkerText, /Task Workflow:/);
+  assert.doesNotMatch(siteReadNoWorkerText, /Local Ingress Request Review:/);
+  assert.doesNotMatch(siteReadNoWorkerText, /Repository Publication Review:/);
+  assert.doesNotMatch(siteReadNoWorkerText, /<worker-url>/);
 
   const operationListText = formatProductSurfaceText({
     operation: 'operation.list',

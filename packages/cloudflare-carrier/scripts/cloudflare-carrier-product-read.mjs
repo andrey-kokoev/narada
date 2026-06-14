@@ -521,8 +521,8 @@ export function formatProductSurfaceText(result) {
     lines.push(`Health: ${summary.health ?? 'unknown'}`);
     lines.push(`Next Action: ${summary.next_action ?? 'none'}`);
     lines.push(`Scope Loaded: ${summary.scope_loaded ? 'yes' : 'no'}`);
-    if (hasSiteId) {
-      lines.push(`Site Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id}${operationArg(summary.active_operation_id)} --operator-session-file <operator-session-file> --execute-site-action`);
+    if (workerUrl && hasSiteId) {
+      lines.push(`Site Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id}${operationArg(summary.active_operation_id)} --operator-session-file <operator-session-file> --execute-site-action`);
     }
     if (summary.active_operation_next_action || summary.active_operation_workflow_reason) {
       lines.push(`Active Operation Route: operation=${summary.active_operation_id ?? 'none'} action=${summary.active_operation_next_action ?? 'none'} reason=${summary.active_operation_workflow_reason ?? 'none'}`);
@@ -530,54 +530,56 @@ export function formatProductSurfaceText(result) {
     if (summary.active_operation_focus_kind || summary.active_operation_focus_ref) {
       lines.push(`Active Operation Focus: kind=${summary.active_operation_focus_kind ?? 'unknown'} ref=${summary.active_operation_focus_ref ?? 'unknown'}`);
     }
-    if (hasSiteId && (summary.next_action === 'read_site_scope' || summary.next_action === 'read_membership_site')) {
-      lines.push(`Site Scope: pnpm --filter @narada2/cloudflare-carrier product:site:scope:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
+    if (workerUrl && hasSiteId && (summary.next_action === 'read_site_scope' || summary.next_action === 'read_membership_site')) {
+      lines.push(`Site Scope: pnpm --filter @narada2/cloudflare-carrier product:site:scope:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
     }
     if (
-      hasSiteId && (
+      workerUrl && hasSiteId && (
       (summary.next_action === 'focus_site_operation' || summary.next_action === 'focus_next_operation')
       || (summary.active_operation_id && (summary.active_operation_next_action || summary.active_operation_workflow_reason))
       )
     ) {
-      lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id}${summary.active_operation_id ? ` --operation-id ${summary.active_operation_id}` : ''} --operator-session-file <operator-session-file> --execute-operation-next`);
+      lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id}${summary.active_operation_id ? ` --operation-id ${summary.active_operation_id}` : ''} --operator-session-file <operator-session-file> --execute-operation-next`);
     }
     if (
-      hasSiteId && (
+      workerUrl && hasSiteId && (
       summary.next_action === 'read_site_authority'
       || summary.next_action === 'focus_membership_authority'
       || summary.next_action === 'inspect_inactive_membership'
       )
     ) {
-      lines.push(`Site Authority: pnpm --filter @narada2/cloudflare-carrier product:site:authority:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
+      lines.push(`Site Authority: pnpm --filter @narada2/cloudflare-carrier product:site:authority:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
     }
-    if (hasSiteId && (summary.next_action === 'load_or_create_membership' || summary.next_action === 'put_membership') && summary.member_principal_id && summary.membership_role) {
-      lines.push(`Site Membership Put: pnpm --filter @narada2/cloudflare-carrier product:site:membership:put:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --member-principal-id ${summary.member_principal_id} --role ${summary.membership_role} --operator-session-file <operator-session-file>`);
+    if (workerUrl && hasSiteId && (summary.next_action === 'load_or_create_membership' || summary.next_action === 'put_membership') && summary.member_principal_id && summary.membership_role) {
+      lines.push(`Site Membership Put: pnpm --filter @narada2/cloudflare-carrier product:site:membership:put:text -- --url ${workerUrl} --site ${summary.site_id} --member-principal-id ${summary.member_principal_id} --role ${summary.membership_role} --operator-session-file <operator-session-file>`);
     }
     if (
-      hasSiteId && (
+      workerUrl && hasSiteId && (
       (typeof summary.next_action === 'string' && summary.next_action.startsWith('transfer_'))
       || summary.next_action === 'continue_authority_transfer'
       || summary.next_action === 'verify_full_cloudflare_authority'
       )
     ) {
-      lines.push(`Authority Transfer: pnpm --filter @narada2/cloudflare-carrier product:authority-transfer:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id}${operationArg(summary.active_operation_id)} --operator-session-file <operator-session-file>`);
+      lines.push(`Authority Transfer: pnpm --filter @narada2/cloudflare-carrier product:authority-transfer:text -- --url ${workerUrl} --site ${summary.site_id}${operationArg(summary.active_operation_id)} --operator-session-file <operator-session-file>`);
     }
     if (
-      hasSiteId
+      workerUrl
+      && hasSiteId
       &&
       summary.active_operation_next_action === 'review_site_continuity_reconciliation_execution'
       && summary.active_operation_id
       && summary.active_operation_focus_ref
     ) {
-      lines.push(`Review Ack: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --focus-kind ${summary.active_operation_focus_kind ?? 'site_continuity_reconciliation_execution'} --focus-ref ${summary.active_operation_focus_ref} --operator-session-file <operator-session-file>`);
+      lines.push(`Review Ack: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --focus-kind ${summary.active_operation_focus_kind ?? 'site_continuity_reconciliation_execution'} --focus-ref ${summary.active_operation_focus_ref} --operator-session-file <operator-session-file>`);
     }
     if (
-      hasSiteId
+      workerUrl
+      && hasSiteId
       &&
       summary.active_operation_next_action === 'refresh_site_continuity_loop'
       && summary.active_operation_id
     ) {
-      lines.push(`Continuity Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity`);
+      lines.push(`Continuity Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity`);
     }
     lines.push(`Continuity: state=${summary.continuity_state ?? 'unknown'} direction=${summary.continuity_direction_state ?? 'unknown'} loop=${summary.continuity_loop_state ?? 'unknown'}`);
     if (summary.continuity_direction_missing?.length > 0) lines.push(`Continuity Missing: ${summary.continuity_direction_missing.join(', ')}`);
@@ -585,13 +587,13 @@ export function formatProductSurfaceText(result) {
     lines.push(`Evidence Counts: packets=${summary.continuity_packet_count ?? 0} loops=${summary.continuity_loop_report_count ?? 0} reconciliations=${summary.continuity_reconciliation_execution_count ?? 0}`);
     lines.push(`Durability: persistence=${summary.persistence_state ?? 'unknown'} recovery=${summary.recovery_state ?? 'unknown'}`);
     lines.push(`Authority: memberships=${summary.membership_count ?? 0} sessions=${summary.session_count ?? 0}`);
-    if (hasSiteId && summary.active_operation_id) {
-      lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --operator-session-file <operator-session-file>`);
-      lines.push(`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --operator-session-file <operator-session-file>`);
+    if (workerUrl && hasSiteId && summary.active_operation_id) {
+      lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --operator-session-file <operator-session-file>`);
+      lines.push(`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --operator-session-file <operator-session-file>`);
     }
-    if (hasSiteId && summary.active_operation_id && summary.active_session_id) {
-      lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --carrier-session-id ${summary.active_session_id} --operator-session-file <operator-session-file>`);
-      lines.push(`Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --carrier-session-id ${summary.active_session_id} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`);
+    if (workerUrl && hasSiteId && summary.active_operation_id && summary.active_session_id) {
+      lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --carrier-session-id ${summary.active_session_id} --operator-session-file <operator-session-file>`);
+      lines.push(`Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --carrier-session-id ${summary.active_session_id} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`);
     }
     const hasLocalIngressRequestRead = (summary.local_ingress_request_count ?? 0) > 0;
     const hasLocalIngressEvidenceRead = (summary.local_ingress_evidence_count ?? 0) > 0;
@@ -600,34 +602,34 @@ export function formatProductSurfaceText(result) {
     const hasRepositoryPublicationExecutionRead = (summary.repository_publication_execution_count ?? 0) > 0;
     const hasRepositoryPublicationEvidenceRead = (summary.repository_publication_evidence_count ?? 0) > 0;
     const hasRepositoryPublicationProviderRead = (summary.repository_publication_provider_heartbeat_count ?? 0) > 0;
-    if (hasSiteId && summary.active_operation_id && (hasLocalIngressRequestRead || hasLocalIngressEvidenceRead || hasLocalIngressProviderRead)) {
+    if (workerUrl && hasSiteId && summary.active_operation_id && (hasLocalIngressRequestRead || hasLocalIngressEvidenceRead || hasLocalIngressProviderRead)) {
       lines.push(`Local Ingress: requests=${summary.local_ingress_request_count ?? 0} evidence=${summary.local_ingress_evidence_count ?? 0} heartbeats=${summary.local_ingress_provider_heartbeat_count ?? 0}`);
       if (hasLocalIngressRequestRead) {
-        lines.push(`Local Ingress Request Review: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:request:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --operator-session-file <operator-session-file>`);
+        lines.push(`Local Ingress Request Review: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:request:review:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --operator-session-file <operator-session-file>`);
       }
       if (hasLocalIngressEvidenceRead) {
-        lines.push(`Local Ingress Evidence Review: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:evidence:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --operator-session-file <operator-session-file>`);
+        lines.push(`Local Ingress Evidence Review: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:evidence:review:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --operator-session-file <operator-session-file>`);
       }
       if (hasLocalIngressProviderRead) {
-        lines.push(`Local Ingress Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:provider:liveness:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
+        lines.push(`Local Ingress Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:provider:liveness:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
       }
     }
-    if (hasSiteId && summary.active_operation_id && (hasRepositoryPublicationRequestRead || hasRepositoryPublicationExecutionRead || hasRepositoryPublicationEvidenceRead || hasRepositoryPublicationProviderRead)) {
+    if (workerUrl && hasSiteId && summary.active_operation_id && (hasRepositoryPublicationRequestRead || hasRepositoryPublicationExecutionRead || hasRepositoryPublicationEvidenceRead || hasRepositoryPublicationProviderRead)) {
       lines.push(`Repository Publication: requests=${summary.repository_publication_request_count ?? 0} executions=${summary.repository_publication_execution_count ?? 0} evidence=${summary.repository_publication_evidence_count ?? 0} heartbeats=${summary.repository_publication_provider_heartbeat_count ?? 0}`);
       if (hasRepositoryPublicationRequestRead) {
-        lines.push(`Repository Publication Review: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --operator-session-file <operator-session-file>`);
+        lines.push(`Repository Publication Review: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --operator-session-file <operator-session-file>`);
       }
       if (hasRepositoryPublicationExecutionRead) {
-        lines.push(`Repository Publication Execution Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --operator-session-file <operator-session-file>`);
+        lines.push(`Repository Publication Execution Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --operator-session-file <operator-session-file>`);
       }
       if (hasRepositoryPublicationEvidenceRead) {
-        lines.push(`Repository Publication Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:evidence:list:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --operator-session-file <operator-session-file>`);
+        lines.push(`Repository Publication Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:evidence:list:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.active_operation_id} --operator-session-file <operator-session-file>`);
       }
       if (hasRepositoryPublicationProviderRead) {
-        lines.push(`Repository Publication Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:provider:liveness:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
+        lines.push(`Repository Publication Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:provider:liveness:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
       }
     }
-    return `${lines.join('\n')}\n`;
+    return finalizeProductSurfaceLines(lines, workerUrl);
   }
   if (operation === 'operation.list') {
     const hasSiteId = Boolean(summary.site_id);
