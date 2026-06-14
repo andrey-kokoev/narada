@@ -146,7 +146,7 @@ export function summarizeTaskLifecycleChangedFileEvidence(body = {}, params = {}
 export function formatTaskLifecycleChangedFileEvidenceText(result) {
   const summary = result?.summary ?? summarizeTaskLifecycleChangedFileEvidence(result?.response ?? {}, result?.params ?? {});
   const ok = summary.ok === false || result?.status === 'refused' ? false : true;
-  return [
+  const lines = [
     `Task Lifecycle Changed File Evidence: ${ok === false ? 'refused' : 'ok'}`,
     `Worker: ${result?.worker_url ?? 'unknown'}`,
     `Auth: ${result?.auth_source ?? 'unknown'}`,
@@ -173,7 +173,12 @@ export function formatTaskLifecycleChangedFileEvidenceText(result) {
     ...(summary.cutoverPointRef ? [`Cutover: ${summary.cutoverPointRef}`] : []),
     ...(summary.governed_write_contract_ref ? [`Contract: ${summary.governed_write_contract_ref}`] : []),
     ...(summary.confirmation_evidence_ref ? [`Evidence Ref: ${summary.confirmation_evidence_ref}`] : []),
-  ].join('\n') + '\n';
+  ];
+  if (summary.site_id && summary.task_id) {
+    lines.push(`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --task-id ${summary.task_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --task-id ${summary.task_id} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`);
+  }
+  return lines.join('\n') + '\n';
 }
 
 function redactTaskLifecycleChangedFileEvidenceParams(params = {}) {
