@@ -128,5 +128,6 @@ test('formatOperationRecoveryReadText prints recovery posture and evidence hando
   assert.match(text, /Operation Recovery Read: ok/);
   assert.match(text, /Recovery: state=local_resident_inhabitance_not_replayable boundaries=12 gaps=1/);
   assert.match(text, /Recovery Next: action=local_resident_carrier_evidence_not_admitted gaps=local_resident_carrier_evidence_not_admitted/);
+  assert.match(text, /Persistence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });

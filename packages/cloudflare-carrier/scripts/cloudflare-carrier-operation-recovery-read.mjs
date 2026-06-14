@@ -65,6 +65,7 @@ export function formatOperationRecoveryReadText(result) {
     lines.push(`Recovery Gaps: ${summary.recovery_gap_keys.join(', ')}`);
   }
   if (summary.operation_id) {
+    lines.push(`Persistence Read: pnpm --filter @narada2/cloudflare-carrier product:operation:persistence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
     lines.push(`Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:operation:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
   }
   return `${lines.join('\n')}\n`;

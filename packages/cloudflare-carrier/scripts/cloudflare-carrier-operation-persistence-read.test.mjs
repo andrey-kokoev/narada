@@ -112,5 +112,6 @@ test('formatOperationPersistenceReadText includes recovery follow-on command', (
   assert.match(text, /Operation Persistence Read: ok/);
   assert.match(text, /Persistence: state=degraded active=10 durable=12 warnings=1/);
   assert.match(text, /Persistence Next: action=carrier_evidence_truncated missing=cloudflare_site_registry_projection warnings=carrier_evidence_truncated/);
+  assert.match(text, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Recovery Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });

@@ -67,6 +67,7 @@ export function formatOperationPersistenceReadText(result) {
     lines.push(`Persistence Boundaries: ${summary.persistence_durable_boundary_keys.join(', ')}`);
   }
   if (summary.operation_id) {
+    lines.push(`Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:operation:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
     lines.push(`Recovery Read: pnpm --filter @narada2/cloudflare-carrier product:operation:recovery:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
   }
   return `${lines.join('\n')}\n`;
