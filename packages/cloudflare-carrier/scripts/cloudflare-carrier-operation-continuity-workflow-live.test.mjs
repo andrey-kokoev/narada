@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  formatOperationContinuityWorkflowLiveText,
   parseOperationContinuityWorkflowLiveArgs,
   runOperationContinuityWorkflowLive,
 } from './cloudflare-carrier-operation-continuity-workflow-live.mjs';
@@ -32,7 +33,21 @@ test('parseOperationContinuityWorkflowLiveArgs supports operator session auth', 
     value: 'operator-session-cookie',
     source: 'operator-session-cookie',
   });
+  assert.equal(parsed.format, 'json');
   assert.equal(parsed.expectedPreAction, 'refresh_site_continuity_loop');
+});
+
+test('parseOperationContinuityWorkflowLiveArgs accepts text format', () => {
+  const parsed = parseOperationContinuityWorkflowLiveArgs([
+    '--url', 'https://carrier.example',
+    '--site', 'site_live_smoke',
+    '--operation-id', 'operation_live_alpha',
+    '--operator-session-cookie', 'operator-session-cookie',
+    '--execute-operation-continuity',
+    '--format', 'text',
+  ], {});
+
+  assert.equal(parsed.format, 'text');
 });
 
 test('parseOperationContinuityWorkflowLiveArgs accepts continuity review pre-actions', () => {
@@ -186,4 +201,23 @@ test('runOperationContinuityWorkflowLive accepts continuity packet review as the
 
   assert.equal(result.pre_workflow_next_action, 'review_continuity_packet');
   assert.equal(result.read_after_continuity.workflow_next_action, 'monitor_operation');
+});
+
+test('formatOperationContinuityWorkflowLiveText surfaces direct follow-on reads', () => {
+  const text = formatOperationContinuityWorkflowLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    site_id: 'site_live_smoke',
+    operation_id: 'operation_live_alpha',
+    pre_workflow_next_action: 'refresh_site_continuity_loop',
+    continuity_execution_status: 'completed',
+    continuity_execution_summary: { completed_site_count: 1, refused_site_count: 0 },
+    continuity_health: { status: 'ok' },
+    read_after_continuity: { workflow_next_action: 'review_site_continuity_reconciliation_execution' },
+    site_read_after_continuity: { next_action: 'focus_next_operation' },
+  });
+
+  assert.match(text, /Operation Continuity Workflow: ok/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_live_smoke --operator-session-file <operator-session-file>/);
 });

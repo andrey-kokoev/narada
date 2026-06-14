@@ -18,6 +18,7 @@ const DEFAULT_OPERATION_CONTINUATION_AGENT_ID = 'narada.cloudflare.operation.con
 export function parseOperationContinuationWorkflowLiveArgs(argv = [], env = process.env) {
   const args = [...argv];
   const workerUrl = option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '';
+  const format = option(args, '--format') ?? env.CLOUDFLARE_CARRIER_OPERATION_CONTINUATION_FORMAT ?? 'json';
   const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? 'site_live_smoke';
   const expectedOperationId = option(args, '--operation-id') ?? option(args, '--carrier-operation') ?? env.CLOUDFLARE_CARRIER_OPERATION_ID ?? null;
   const agentId = option(args, '--agent-id') ?? env.CLOUDFLARE_CARRIER_AGENT_ID ?? DEFAULT_OPERATION_CONTINUATION_AGENT_ID;
@@ -32,11 +33,13 @@ export function parseOperationContinuationWorkflowLiveArgs(argv = [], env = proc
     throw new Error('operation_continuation_workflow_live_requires_--execute-operation-continuation-resume_or_CLOUDFLARE_CARRIER_OPERATION_CONTINUATION_EXECUTE_LIVE=1');
   }
   if (!workerUrl) throw new Error('operation_continuation_workflow_live_requires_--url_or_CLOUDFLARE_CARRIER_URL');
+  if (!['json', 'text'].includes(format)) throw new Error(`operation_continuation_workflow_live_unknown_format:${format}`);
   if (!siteId) throw new Error('operation_continuation_workflow_live_requires_site_id');
   if (!auth) throw new Error('operation_continuation_workflow_live_requires_bearer_token_or_operator_session');
 
   return {
     workerUrl,
+    format,
     siteId,
     expectedOperationId,
     agentId,
@@ -126,6 +129,25 @@ export async function runOperationContinuationWorkflowLive(
   };
 }
 
+export function formatOperationContinuationWorkflowLiveText(result) {
+  const lines = [
+    `Operation Continuation Workflow: ${result.status}`,
+    `Worker: ${result.worker_url}`,
+    `Site: ${result.site_id}`,
+    `Selected Operation: ${result.selected_operation_id}`,
+    `Pre Action: ${result.pre_workflow_next_action ?? 'unknown'}`,
+    `Queue Before: needs_continuation=${result.list_before_resume?.needs_continuation_count ?? 'unknown'} next=${result.list_before_resume?.next_continuation_operation_id ?? 'none'}`,
+    `Resume: session=${result.continuation_resume_summary?.carrier_session_id ?? 'none'} next=${result.read_after_resume?.workflow_next_action ?? 'unknown'}`,
+    `Queue After: needs_continuation=${result.list_after_resume?.needs_continuation_count ?? 'unknown'} next=${result.list_after_resume?.next_continuation_operation_id ?? 'none'}`,
+    `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.selected_operation_id} --operator-session-file <operator-session-file>`,
+  ];
+  const carrierSessionId = result.continuation_resume_summary?.carrier_session_id ?? null;
+  if (carrierSessionId) {
+    lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.selected_operation_id} --carrier-session-id ${carrierSessionId} --operator-session-file <operator-session-file>`);
+  }
+  return `${lines.join('\n')}\n`;
+}
+
 async function defaultRunNodeScript(args, options) {
   const result = await execFile(process.execPath, args, { ...options, timeout: 120000, windowsHide: true });
   return result.stdout;
@@ -201,5 +223,9 @@ function flag(args, name) {
 if (resolve(process.argv[1] ?? '') === scriptPath) {
   const config = parseOperationContinuationWorkflowLiveArgs(process.argv.slice(2));
   const result = await runOperationContinuationWorkflowLive(config);
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  if (config.format === 'text') {
+    process.stdout.write(formatOperationContinuationWorkflowLiveText(result));
+  } else {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  }
 }

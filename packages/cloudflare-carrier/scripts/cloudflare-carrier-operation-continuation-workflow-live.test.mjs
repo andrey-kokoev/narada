@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  formatOperationContinuationWorkflowLiveText,
   parseOperationContinuationWorkflowLiveArgs,
   runOperationContinuationWorkflowLive,
 } from './cloudflare-carrier-operation-continuation-workflow-live.mjs';
@@ -33,8 +34,22 @@ test('parseOperationContinuationWorkflowLiveArgs supports operator session auth 
     value: 'operator-session-cookie',
     source: 'operator-session-cookie',
   });
+  assert.equal(parsed.format, 'json');
   assert.equal(parsed.expectedOperationId, 'operation_live_alpha');
   assert.equal(parsed.expectedPreAction, 'resume_operation_continuation');
+});
+
+test('parseOperationContinuationWorkflowLiveArgs accepts text format', () => {
+  const parsed = parseOperationContinuationWorkflowLiveArgs([
+    '--url', 'https://carrier.example',
+    '--site', 'site_live_smoke',
+    '--operation-id', 'operation_live_alpha',
+    '--operator-session-cookie', 'operator-session-cookie',
+    '--execute-operation-continuation-resume',
+    '--format', 'text',
+  ], {});
+
+  assert.equal(parsed.format, 'text');
 });
 
 test('parseOperationContinuationWorkflowLiveArgs defaults the agent id when omitted', () => {
@@ -143,4 +158,32 @@ test('runOperationContinuationWorkflowLive selects continuation from operation.l
   assert.equal(invocations[4][0].split(/[\\/]/).pop(), 'cloudflare-carrier-product-read.mjs');
   assert.ok(invocations[0].includes('--continuation'));
   assert.ok(invocations[2].includes('--operator-session-cookie'));
+});
+
+test('formatOperationContinuationWorkflowLiveText surfaces direct follow-on reads', () => {
+  const text = formatOperationContinuationWorkflowLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    site_id: 'site_live_smoke',
+    selected_operation_id: 'operation_live_alpha',
+    pre_workflow_next_action: 'resume_operation_continuation',
+    list_before_resume: {
+      needs_continuation_count: 1,
+      next_continuation_operation_id: 'operation_live_alpha',
+    },
+    continuation_resume_summary: {
+      carrier_session_id: 'carrier_session_operation_live_alpha_1',
+    },
+    read_after_resume: {
+      workflow_next_action: 'start_or_select_session',
+    },
+    list_after_resume: {
+      needs_continuation_count: 0,
+      next_continuation_operation_id: null,
+    },
+  });
+
+  assert.match(text, /Operation Continuation Workflow: ok/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_live_alpha --carrier-session-id carrier_session_operation_live_alpha_1 --operator-session-file <operator-session-file>/);
 });
