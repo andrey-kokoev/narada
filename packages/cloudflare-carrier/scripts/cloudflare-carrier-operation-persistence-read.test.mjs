@@ -49,6 +49,8 @@ test('summarizeOperationPersistence condenses persistence posture from operation
     operation_id: 'operation_alpha',
     workflow_next_action: 'review_persistence_posture',
     workflow_reason: 'persistence_posture_needs_attention',
+    workflow_focus_kind: null,
+    workflow_focus_ref: null,
     current_status: 'active',
     phase: 'inhabited',
     health: 'incomplete',
@@ -114,4 +116,30 @@ test('formatOperationPersistenceReadText includes recovery follow-on command', (
   assert.match(text, /Persistence Next: action=carrier_evidence_truncated missing=cloudflare_site_registry_projection warnings=carrier_evidence_truncated/);
   assert.match(text, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Recovery Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+});
+
+test('formatOperationPersistenceReadText emits direct workflow handoff when the workflow route moves beyond persistence', () => {
+  const text = formatOperationPersistenceReadText({
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      workflow_next_action: 'review_recovery_posture',
+      workflow_reason: 'recovery_posture_needs_attention',
+      current_status: 'active',
+      phase: 'inhabited',
+      health: 'incomplete',
+      lifecycle_next_action: 'carrier_evidence',
+      persistence_state: 'degraded',
+      persistence_active_boundary_count: 10,
+      persistence_durable_boundary_count: 12,
+      persistence_warning_count: 0,
+      persistence_missing_boundaries: [],
+      persistence_warnings: [],
+      persistence_durable_boundary_keys: ['session_snapshot'],
+    },
+  });
+
+  assert.match(text, /Workflow Handoff: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });

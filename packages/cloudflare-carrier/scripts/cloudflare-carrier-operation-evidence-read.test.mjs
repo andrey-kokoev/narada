@@ -103,6 +103,30 @@ test('readOperationEvidence preserves product read envelope and text formatting 
   assert.match(text, /Persistence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
 
+test('formatOperationEvidenceReadText emits direct workflow handoff when the workflow route is explicit', () => {
+  const text = formatOperationEvidenceReadText({
+    worker_url: 'https://carrier.example',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      phase: 'inhabited',
+      health: 'ready',
+      current_status: 'active',
+      next_action: 'monitor_operation',
+      posture_next_action: 'focus_next_operation',
+      workflow_next_action: 'review_site_continuity_reconciliation_execution',
+      workflow_focus_kind: 'site_continuity_reconciliation_execution',
+      workflow_focus_ref: 'site-continuity-reconciliation-execution:site_alpha:current',
+      carrier_evidence_read_state: 'loaded',
+      carrier_session_ids: ['session_1'],
+      carrier_event_count: 1,
+    },
+  });
+
+  assert.match(text, /Workflow Handoff: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:current --operator-session-file <operator-session-file>/);
+});
+
 test('formatOperationEvidenceReadText recognizes Windows fallback evidence as reviewable focus', () => {
   const text = formatOperationEvidenceReadText({
     worker_url: 'https://carrier.example',

@@ -112,6 +112,8 @@ test('formatOperationRecoveryReadText prints recovery posture and evidence hando
       operation_id: 'operation_alpha',
       workflow_next_action: 'review_recovery_posture',
       workflow_reason: 'recovery_posture_needs_attention',
+      workflow_focus_kind: 'site_continuity_reconciliation_execution',
+      workflow_focus_ref: 'site-continuity-reconciliation-execution:site_alpha:current',
       current_status: 'active',
       phase: 'inhabited',
       health: 'incomplete',
@@ -130,4 +132,26 @@ test('formatOperationRecoveryReadText prints recovery posture and evidence hando
   assert.match(text, /Recovery Next: action=local_resident_carrier_evidence_not_admitted gaps=local_resident_carrier_evidence_not_admitted/);
   assert.match(text, /Persistence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+});
+
+test('formatOperationRecoveryReadText emits direct workflow handoff when the workflow route moves beyond recovery', () => {
+  const text = formatOperationRecoveryReadText({
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      workflow_next_action: 'refresh_site_continuity_loop',
+      workflow_reason: 'operation_lifecycle_continuity_loop_stale',
+      current_status: 'active',
+      phase: 'inhabited',
+      health: 'ready',
+      lifecycle_next_action: 'monitor_operation',
+      recovery_state: 'reconstructable',
+      recovery_boundary_count: 12,
+      recovery_gap_count: 0,
+    },
+  });
+
+  assert.match(text, /Workflow Handoff: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity/);
 });

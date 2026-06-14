@@ -100,6 +100,10 @@ export function summarizeOperationEvidence(body = {}, options = {}) {
     health: operationSummary.health ?? body?.operation_lifecycle_status?.health ?? null,
     next_action: operationSummary.next_action ?? body?.operation_lifecycle_status?.next_action ?? null,
     posture_next_action: operationSummary.posture_next_action ?? body?.operation_posture_route?.next_action ?? null,
+    workflow_next_action: operationSummary.workflow_next_action ?? null,
+    workflow_reason: operationSummary.workflow_reason ?? null,
+    workflow_focus_kind: operationSummary.workflow_focus_kind ?? null,
+    workflow_focus_ref: operationSummary.workflow_focus_ref ?? null,
     carrier_evidence_read_state: body?.carrier_evidence_read_status?.state ?? body?.carrier_evidence_read_status?.status ?? null,
     carrier_session_ids: sessions.map((session) => session?.carrier_session_id ?? session?.session_id).filter(Boolean),
     local_resident_session_refs: localResidentSessionRefs,
@@ -169,11 +173,40 @@ export function formatOperationEvidenceReadText(result) {
   if (summary.reviewable_focus_kind && summary.reviewable_focus_ref) {
     lines.push(`Review Ack: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id ?? '<operation-id>'} --focus-kind ${summary.reviewable_focus_kind} --focus-ref ${summary.reviewable_focus_ref} --operator-session-file <operator-session-file>`);
   }
+  const workflowHandoff = buildOperationEvidenceWorkflowHandoff(result, summary);
+  if (workflowHandoff) {
+    lines.push(`Workflow Handoff: ${workflowHandoff}`);
+  }
   if (summary.operation_id) {
     lines.push(`Recovery Read: pnpm --filter @narada2/cloudflare-carrier product:operation:recovery:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
     lines.push(`Persistence Read: pnpm --filter @narada2/cloudflare-carrier product:operation:persistence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
   }
   return `${lines.join('\n')}\n`;
+}
+
+function buildOperationEvidenceWorkflowHandoff(result, summary) {
+  const workerUrl = result?.worker_url ?? '<worker-url>';
+  const siteId = summary.site_id ?? '<site-id>';
+  const operationId = summary.operation_id ?? '<operation-id>';
+  if (summary.workflow_next_action === 'review_recovery_posture') {
+    return `pnpm --filter @narada2/cloudflare-carrier product:operation:recovery:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file>`;
+  }
+  if (summary.workflow_next_action === 'review_persistence_posture') {
+    return `pnpm --filter @narada2/cloudflare-carrier product:operation:persistence:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file>`;
+  }
+  if (summary.workflow_next_action === 'start_or_select_session') {
+    return `pnpm --filter @narada2/cloudflare-carrier product:operation:session:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file> --execute-operation-session`;
+  }
+  if (summary.workflow_next_action === 'resume_operation_continuation') {
+    return `pnpm --filter @narada2/cloudflare-carrier product:operation:continuation:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file> --execute-operation-continuation-resume`;
+  }
+  if (summary.workflow_next_action === 'refresh_site_continuity_loop') {
+    return `pnpm --filter @narada2/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity`;
+  }
+  if (summary.workflow_next_action === 'review_site_continuity_reconciliation_execution' && summary.workflow_focus_ref) {
+    return `pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --focus-kind ${summary.workflow_focus_kind ?? 'site_continuity_reconciliation_execution'} --focus-ref ${summary.workflow_focus_ref} --operator-session-file <operator-session-file>`;
+  }
+  return null;
 }
 
 function option(args, name) {
