@@ -66,6 +66,8 @@ export function formatTaskLifecycleWorkflowLiveText(result) {
     `Report: report_id=${result.report_summary?.report_id ?? 'none'} status=${result.report_summary?.status ?? 'unknown'}`,
     `Finish: finish_id=${result.finish_summary?.finish_id ?? 'none'} status=${result.finish_summary?.status ?? 'unknown'}`,
     `Read After Finish: status=${result.read_after_finish?.task_status ?? 'unknown'}`,
+    `Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`,
+    `Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`,
     `Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result.worker_url} --site ${result.site_id} --task-id ${result.task_id} --operator-session-file <operator-session-file>`,
     `Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --task-id ${result.task_id} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`,
   ];

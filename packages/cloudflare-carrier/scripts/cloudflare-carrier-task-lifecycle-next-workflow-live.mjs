@@ -62,6 +62,8 @@ export function formatTaskLifecycleNextWorkflowLiveText(result) {
     `Selected Step: ${result.selected_step}`,
     `Before: status=${result.read_before_next?.task_status ?? 'unknown'} report=${result.read_before_next?.report_id ?? 'none'} finish=${result.read_before_next?.finish_id ?? 'none'}`,
     `After: status=${result.read_after_next?.task_status ?? 'unknown'} report=${result.read_after_next?.report_id ?? 'none'} finish=${result.read_after_next?.finish_id ?? 'none'}`,
+    `Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`,
+    `Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`,
     `Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result.worker_url} --site ${result.site_id} --task-id ${result.task_id} --operator-session-file <operator-session-file>`,
     `Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --task-id ${result.task_id} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`,
   ];
