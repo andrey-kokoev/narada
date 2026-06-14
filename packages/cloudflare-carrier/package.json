@@ -188,6 +188,7 @@
     "site-file-change:proposal-smoke:live": "node scripts/cloudflare-carrier-site-file-change-proposal-live-smoke.mjs",
     "site-file-change:proposal-smoke:live:text": "node scripts/cloudflare-carrier-site-file-change-proposal-live-smoke.mjs --format text",
     "site-file:materialization-smoke:live": "node scripts/cloudflare-carrier-site-file-materialization-live-smoke.mjs",
+    "site-file:materialization-smoke:live:text": "node scripts/cloudflare-carrier-site-file-materialization-live-smoke.mjs --format text",
     "local-ingress:request-smoke:live": "node scripts/cloudflare-carrier-local-ingress-request-live-smoke.mjs",
     "local-ingress:request-smoke:live:text": "node scripts/cloudflare-carrier-local-ingress-request-live-smoke.mjs --format text",
     "provider-liveness:refresh:live": "node scripts/cloudflare-carrier-provider-liveness-refresh.mjs",
