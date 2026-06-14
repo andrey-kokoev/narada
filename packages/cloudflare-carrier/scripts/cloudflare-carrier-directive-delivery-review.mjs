@@ -202,11 +202,12 @@ export function formatDirectiveDeliveryReviewText(result) {
   if (summary.focused_fallback_status || summary.latest_recorded_at || summary.latest_delivery_recorded_at) {
     lines.push(`Timing: fallback=${summary.focused_fallback_status ?? 'unknown'} directive_recorded=${summary.latest_recorded_at ?? 'unknown'} delivery_recorded=${summary.latest_delivery_recorded_at ?? 'unknown'}`);
   }
-  if (hasSiteId && summary.operation_id) {
-    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+  const workerUrl = result?.worker_url ?? null;
+  if (workerUrl && hasSiteId && summary.operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
   }
-  if (hasSiteId && actionableWorkflow && summary.operation_id) {
-    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+  if (workerUrl && hasSiteId && actionableWorkflow && summary.operation_id) {
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
   }
   return `${lines.join('\n')}\n`;
 }

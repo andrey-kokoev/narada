@@ -118,3 +118,28 @@ test('formatOperationScopeReadText suppresses next workflow for passive routes',
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
   assert.doesNotMatch(text, /Operation Next Workflow:/);
 });
+
+test('formatOperationScopeReadText suppresses worker-scoped handoffs without a real worker url', () => {
+  const text = formatOperationScopeReadText({
+    auth_source: 'operator-session-file',
+    summary: {
+      operation_id: 'operation_alpha',
+      site_id: 'site_alpha',
+      current_status: 'active',
+      scope_loaded: true,
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'carrier_evidence',
+      workflow_next_action: 'read_operation_scope',
+      workflow_reason: 'operation_scope_not_loaded',
+      session_count: 1,
+      task_count: 2,
+      persistence_state: 'durable',
+      recovery_state: 'reconstructable',
+    },
+  });
+
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /<worker-url>/);
+});

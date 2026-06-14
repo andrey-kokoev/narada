@@ -45,11 +45,12 @@ export function summarizeOperationScope(body = {}) {
 }
 
 export function formatOperationScopeReadText(result) {
+  const workerUrl = result?.worker_url ?? null;
   const summary = result?.summary ?? {};
   const actionableWorkflow = summary.workflow_next_action && summary.workflow_next_action !== 'none' && summary.workflow_next_action !== 'monitor_operation';
   const lines = [
     'Operation Scope: ok',
-    `Worker: ${result?.worker_url ?? 'unknown'}`,
+    `Worker: ${workerUrl ?? 'unknown'}`,
     `Auth: ${result?.auth_source ?? 'unknown'}`,
     `Operation: ${summary.operation_id ?? 'unknown'}`,
     `Site: ${summary.site_id ?? 'unknown'}`,
@@ -62,11 +63,11 @@ export function formatOperationScopeReadText(result) {
   if (summary.operation_kind) {
     lines.splice(5, 0, `Kind: ${summary.operation_kind}`);
   }
-  if (summary.operation_id && summary.site_id) {
-    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+  if (workerUrl && summary.operation_id && summary.site_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
   }
-  if (actionableWorkflow && summary.operation_id && summary.site_id) {
-    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+  if (workerUrl && actionableWorkflow && summary.operation_id && summary.site_id) {
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
   }
   return `${lines.join('\n')}\n`;
 }

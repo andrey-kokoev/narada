@@ -359,6 +359,24 @@ test('formatDirectiveDeliveryReviewText suppresses site-scoped handoff without a
   assert.doesNotMatch(text, /<site-id>/);
 });
 
+test('formatDirectiveDeliveryReviewText suppresses worker-scoped handoff without a real worker url', () => {
+  const text = formatDirectiveDeliveryReviewText({
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      workflow_next_action: 'review_directive_delivery',
+      workflow_reason: 'undelivered_directives',
+      directive_record_count: 1,
+      focused_directive_record_id: 'directive_record_focus',
+    },
+  });
+
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /<worker-url>/);
+});
+
 function responseJson(body) {
   return {
     ok: true,

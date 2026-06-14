@@ -480,3 +480,27 @@ test('formatRepositoryPublicationRequestReviewText suppresses site-scoped handof
   assert.equal(text.includes('Operation Next Workflow:'), false);
   assert.equal(text.includes('Review Ack:'), false);
 });
+
+test('formatRepositoryPublicationRequestReviewText suppresses worker-scoped handoffs without worker url', () => {
+  const text = formatRepositoryPublicationRequestReviewText({
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_narada_cloudflare',
+      operation_id: 'operation_site_read',
+      workflow_next_action: 'review_repository_publication_request',
+      request_count: 1,
+      focused_repository_publication_request_id: 'repository_publication_request_live_1',
+      linked_admission_id: 'admission_1',
+      linked_execution_id: 'execution_1',
+      linked_evidence_id: 'evidence_1',
+    },
+  });
+
+  assert.equal(text.includes('Admission Read:'), false);
+  assert.equal(text.includes('Execution Read:'), false);
+  assert.equal(text.includes('Evidence Read:'), false);
+  assert.equal(text.includes('Operation Review:'), false);
+  assert.equal(text.includes('Operation Next Workflow:'), false);
+  assert.equal(text.includes('Review Ack:'), false);
+  assert.equal(text.includes('<worker-url>'), false);
+});

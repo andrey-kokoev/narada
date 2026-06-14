@@ -107,12 +107,13 @@ export function formatLocalIngressEvidenceReadText(result) {
   if (summary.local_ingress_evidence_authority || summary.authority_partition || summary.focused_evidence_posture) {
     lines.push(`Authority: evidence=${summary.local_ingress_evidence_authority ?? 'unknown'} posture=${summary.focused_evidence_posture ?? 'unknown'} partition=${summary.authority_partition ?? 'unknown'}`);
   }
-  if (hasSiteId && summary.focused_request_id) {
-    lines.push(`Request Read: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:request:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --local-ingress-request-id ${summary.focused_request_id} --operator-session-file <operator-session-file>`);
+  const workerUrl = result?.worker_url ?? null;
+  if (workerUrl && hasSiteId && summary.focused_request_id) {
+    lines.push(`Request Read: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:request:review:text -- --url ${workerUrl} --site ${summary.site_id} --local-ingress-request-id ${summary.focused_request_id} --operator-session-file <operator-session-file>`);
   }
-  if (summary.site_id && summary.focused_operation_id) {
-    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.focused_operation_id} --operator-session-file <operator-session-file>`);
-    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.focused_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+  if (workerUrl && summary.site_id && summary.focused_operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.focused_operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.focused_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
   }
   if (summary.focused_recorded_at) {
     lines.push(`Focused Evidence: recorded=${summary.focused_recorded_at}`);

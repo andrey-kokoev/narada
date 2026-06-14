@@ -197,3 +197,21 @@ test('formatLocalIngressEvidenceReadText suppresses site-scoped handoff without 
   assert.doesNotMatch(text, /Operation Next Workflow:/);
   assert.doesNotMatch(text, /<site-id>/);
 });
+
+test('formatLocalIngressEvidenceReadText suppresses worker-scoped handoff without a real worker url', () => {
+  const text = formatLocalIngressEvidenceReadText({
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      evidence_count: 1,
+      focused_evidence_id: 'local_ingress_evidence_alpha',
+      focused_request_id: 'local_ingress_request_alpha',
+      focused_operation_id: 'operation_site_alpha',
+    },
+  });
+
+  assert.doesNotMatch(text, /Request Read:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /<worker-url>/);
+});

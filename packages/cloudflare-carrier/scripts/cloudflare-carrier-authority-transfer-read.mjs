@@ -161,10 +161,11 @@ export function summarizeAuthorityTransfer(operationBody = {}, readinessSummary 
 }
 
 export function formatAuthorityTransferText(result) {
+  const workerUrl = result?.worker_url ?? null;
   const summary = result?.summary ?? {};
   const lines = [
     'Authority Transfer: ok',
-    `Worker: ${result?.worker_url ?? 'unknown'}`,
+    `Worker: ${workerUrl ?? 'unknown'}`,
     `Auth: ${result?.auth_source ?? 'unknown'}`,
     `Site: ${summary.site_id ?? 'unknown'}`,
     `Operation: ${summary.operation_id ?? 'unknown'}`,
@@ -175,15 +176,15 @@ export function formatAuthorityTransferText(result) {
     `Repository Publication: readiness=${summary.slices?.repository_publication?.readiness_status ?? 'unknown'} repository_allowed=${summary.slices?.repository_publication?.requested_repository_allowed ?? 'unknown'} branch_allowed=${summary.slices?.repository_publication?.requested_branch_allowed ?? 'unknown'}`,
     `Slices: mailbox=${summary.slices?.mailbox?.status_source_read_count ?? 0}/${summary.slices?.mailbox?.draft_reply_proposal_count ?? 0}/${summary.slices?.mailbox?.outlook_draft_create_count ?? 0}/${summary.slices?.mailbox?.send_accepted_count ?? 0}/${summary.slices?.mailbox?.send_confirmation_count ?? 0} site_file=${summary.slices?.site_file?.change_proposal_count ?? 0}/${summary.slices?.site_file?.materialization_count ?? 0} local_ingress=${summary.slices?.local_ingress?.request_count ?? 0} task_lifecycle=${summary.slices?.task_lifecycle?.task_count ?? 0} repository_publication=${summary.slices?.repository_publication?.request_count ?? 0}/${summary.slices?.repository_publication?.execution_count ?? 0}/${summary.slices?.repository_publication?.evidence_count ?? 0}`,
   ];
-  if (summary.site_id && summary.operation_id) {
-    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
-    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
-    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
-    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
-    lines.push(`Mailbox Readback Smoke: pnpm --filter @narada2/cloudflare-carrier mailbox:readback-smoke:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation ${summary.operation_id} --operator-session-file <operator-session-file>`);
+  if (workerUrl && summary.site_id && summary.operation_id) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+    lines.push(`Mailbox Readback Smoke: pnpm --filter @narada2/cloudflare-carrier mailbox:readback-smoke:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation ${summary.operation_id} --operator-session-file <operator-session-file>`);
   }
-  if (summary.site_id && isAuthorityTransferWorkflowAction(summary.next_action)) {
-    lines.push(`Site Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id}${summary.operation_id ? ` --operation-id ${summary.operation_id}` : ''} --operator-session-file <operator-session-file> --execute-site-action`);
+  if (workerUrl && summary.site_id && isAuthorityTransferWorkflowAction(summary.next_action)) {
+    lines.push(`Site Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id}${summary.operation_id ? ` --operation-id ${summary.operation_id}` : ''} --operator-session-file <operator-session-file> --execute-site-action`);
   }
   for (const reason of summary.incomplete_reasons ?? []) {
     lines.push(`Incomplete Reason: ${reason}`);

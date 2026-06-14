@@ -278,6 +278,34 @@ test('formatAuthorityTransferText emits direct site-action workflow handoff for 
   assert.match(text, /Site Action Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:action:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-site-action/);
 });
 
+test('formatAuthorityTransferText suppresses worker-scoped handoffs without a real worker url', () => {
+  const text = formatAuthorityTransferText({
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      transfer_readiness: 'incomplete',
+      transfer_complete: false,
+      next_action: 'continue_authority_transfer',
+      slices: {
+        mailbox: { status_source_read_count: 0, draft_reply_proposal_count: 0, outlook_draft_create_count: 0, send_accepted_count: 0, send_confirmation_count: 0 },
+        site_file: { change_proposal_count: 0, materialization_count: 0 },
+        local_ingress: { request_count: 0 },
+        task_lifecycle: { task_count: 0 },
+        repository_publication: { request_count: 0, execution_count: 0, evidence_count: 0 },
+      },
+    },
+  });
+
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /Mailbox Readback Smoke:/);
+  assert.doesNotMatch(text, /Site Action Workflow:/);
+  assert.doesNotMatch(text, /<worker-url>/);
+});
+
 function responseJson(status, body) {
   return {
     status,
