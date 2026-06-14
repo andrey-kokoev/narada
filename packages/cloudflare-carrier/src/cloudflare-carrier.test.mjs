@@ -1515,6 +1515,21 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(operationReadAfterFailedReconciliationExecutionBody.operation_activity_timeline.items.some((item) => item.activity_kind === 'site_continuity_reconciliation_execution' && item.focus_ref === failedReconciliationExecutionId), true, JSON.stringify(operationReadAfterFailedReconciliationExecutionBody.operation_activity_timeline.items));
   assert.equal(operationReadAfterFailedReconciliationExecutionBody.operation_product_surface.activity_timeline.items.some((item) => item.activity_kind === 'site_continuity_reconciliation_execution' && item.focus_ref === failedReconciliationExecutionId), true, JSON.stringify(operationReadAfterFailedReconciliationExecutionBody.operation_product_surface.activity_timeline.items));
 
+  const siteListAfterFailedReconciliationExecution = await worker.fetch(jsonRequest({
+    operation: 'site.list',
+    request_id: 'request_site_list_after_failed_reconciliation_execution',
+    params: {},
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(siteListAfterFailedReconciliationExecution.status, 200);
+  const siteListAfterFailedReconciliationExecutionBody = await siteListAfterFailedReconciliationExecution.json();
+  assert.equal(siteListAfterFailedReconciliationExecutionBody.site_product_overview.next_site_id, 'site_fixture');
+  assert.equal(siteListAfterFailedReconciliationExecutionBody.site_product_overview.next_action, 'focus_next_operation');
+  assert.equal(siteListAfterFailedReconciliationExecutionBody.site_product_overview.next_operation_id, 'operation_site_read');
+  assert.equal(siteListAfterFailedReconciliationExecutionBody.site_product_overview.next_operation_next_action, 'review_site_continuity_reconciliation_execution');
+  assert.equal(siteListAfterFailedReconciliationExecutionBody.site_product_overview.next_operation_reason, 'operation_lifecycle_continuity_reconciliation_execution_attention');
+  assert.equal(siteListAfterFailedReconciliationExecutionBody.site_product_overview.next_operation_focus_kind, 'site_continuity_reconciliation_execution');
+  assert.equal(siteListAfterFailedReconciliationExecutionBody.site_product_overview.next_operation_focus_ref, failedReconciliationExecutionId);
+
   const reconciliationExecutionFocusReview = await worker.fetch(jsonRequest({
     operation: 'operation_focus_review.acknowledge',
     request_id: 'request_operation_focus_review_reconciliation_execution',
