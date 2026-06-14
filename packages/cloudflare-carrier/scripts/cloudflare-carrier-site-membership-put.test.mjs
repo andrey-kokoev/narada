@@ -121,4 +121,23 @@ test('formatSiteMembershipPutText renders governed membership summary', () => {
   assert.match(text, /Member: principal:alpha/);
   assert.match(text, /Role: viewer/);
   assert.match(text, /Authority Decision: action=admit locus=cloudflare_site_registry/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
+});
+
+test('formatSiteMembershipPutText suppresses site handoff without worker url', () => {
+  const text = formatSiteMembershipPutText({
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      member_principal_id: 'principal:alpha',
+      membership_role: 'viewer',
+      membership_status: 'active',
+      decision_action: 'admit',
+      authority_locus_kind: 'cloudflare_site_registry',
+    },
+  });
+
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
 });

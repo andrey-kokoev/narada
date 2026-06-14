@@ -97,9 +97,10 @@ export function summarizeSiteMembershipPut(body = {}, params = {}) {
 export function formatSiteMembershipPutText(result) {
   const summary = result?.summary ?? summarizeSiteMembershipPut(result?.response ?? {}, result?.params ?? {});
   const refused = result?.status === 'refused';
+  const workerUrl = result?.worker_url ?? null;
   const lines = [
     `Site Membership Put: ${refused ? 'refused' : 'ok'}`,
-    `Worker: ${result?.worker_url ?? 'unknown'}`,
+    `Worker: ${workerUrl ?? 'unknown'}`,
     `Auth: ${result?.auth_source ?? 'unknown'}`,
     `Site: ${summary.site_id ?? result?.params?.site_id ?? 'unknown'}`,
     `Member: ${summary.member_principal_id ?? result?.params?.member_principal_id ?? 'unknown'}`,
@@ -113,6 +114,10 @@ export function formatSiteMembershipPutText(result) {
     lines.push(`Authority Decision: action=${summary.decision_action ?? 'unknown'} locus=${summary.authority_locus_kind ?? 'unknown'}${summary.decision_reason ? ` reason=${summary.decision_reason}` : ''}`);
   }
   if (summary.updated_at) lines.push(`Updated: ${summary.updated_at}`);
+  if (!refused && workerUrl && summary.site_id) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
+  }
   return lines.join('\n') + '\n';
 }
 
