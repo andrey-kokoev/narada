@@ -127,6 +127,7 @@ export function formatOperationContinuityWorkflowLiveText(result) {
     `Post Site Action: ${result.site_read_after_continuity?.next_action ?? 'unknown'}`,
     `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
     `Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`,
+    `Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`,
   ];
   const postActionWorkflow = buildPostContinuityWorkflowCommand(result);
   if (postActionWorkflow) {

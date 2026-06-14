@@ -65,6 +65,7 @@ export function formatMailboxStatusShadowLiveSmokeText(result) {
     `Authority: status=${result.mailbox_status_authority ?? 'unknown'} write=${result.mailbox_write_authority ?? 'unknown'} send=${result.mailbox_send_admission ?? 'unknown'} mutation=${result.mailbox_mutation_admission ?? 'unknown'}`,
     `Counts: shadow_reads=${result.mailbox_status_shadow_read_count ?? 0} partition=${result.mailbox_authority_partition ?? 'unknown'}`,
     `Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`,
+    `Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`,
     `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
     `Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`,
   ];

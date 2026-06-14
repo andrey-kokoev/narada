@@ -50,6 +50,7 @@ export function formatLiveSmokeText(result) {
     `Tool Effect: posture=${result.tool_effect_posture ?? 'unknown'} adapter=${result.tool_effect_adapter_kind ?? 'none'}`,
     `Task Mutation: create=${result.task_create_status ?? 'unknown'} update=${result.task_update_status ?? 'unknown'} persisted=${Array.isArray(result.persisted_tasks) ? result.persisted_tasks.length : 0}`,
     `Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`,
+    `Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`,
     `Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result.worker_url} --site ${result.site_id} --carrier-session-id ${result.carrier_session_id} --operator-session-file <operator-session-file>`,
     `Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result.worker_url} --site ${result.site_id} --carrier-session-id ${result.carrier_session_id} --operator-session-file <operator-session-file>`,
   ];
