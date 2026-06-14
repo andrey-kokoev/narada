@@ -417,6 +417,48 @@ test('formatContinuationResumeText suppresses workflow handoff for passive route
   assert.doesNotMatch(text, /Operation Next Workflow:/);
 });
 
+test('formatContinuationResumeText suppresses worker-scoped handoffs without worker url', () => {
+  const text = formatContinuationResumeText({
+    auth_source: 'operator-session-file',
+    params: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      carrier_session_id: 'carrier_session_alpha',
+      agent_id: 'agent.operator',
+    },
+    summary: summarizeContinuationResume({
+      route: {
+        workflow_next_action: 'resume_operation_continuation',
+        workflow_reason: 'operation_lifecycle_needs_continuation',
+      },
+      activation: {
+        summary: {
+          status: 'active',
+          transition: 'needs_continuation_to_active',
+          reason: 'operator_resuming_continuation',
+        },
+      },
+      session_start: {
+        carrier_session_id: 'carrier_session_alpha',
+        event: { event_kind: 'carrier_session_started', sequence: 1 },
+      },
+    }, {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      carrier_session_id: 'carrier_session_alpha',
+      agent_id: 'agent.operator',
+      reason: 'operator_resuming_continuation',
+    }),
+  });
+
+  assert.doesNotMatch(text, /Session Evidence:/);
+  assert.doesNotMatch(text, /Task Review:/);
+  assert.doesNotMatch(text, /Task Workflow:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /--url unknown/);
+});
+
 test('formatContinuationResumeText renders refused resume evidence', () => {
   const text = formatContinuationResumeText({
     status: 'refused',

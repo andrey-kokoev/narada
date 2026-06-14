@@ -210,9 +210,10 @@ export function formatContinuationResumeText(result) {
   const summary = result?.summary ?? summarizeContinuationResume(result ?? {}, result?.params ?? {});
   const refused = result?.status === 'refused' || summary?.ok === false;
   const actionableRoute = summary.route_next_action && !['none', 'monitor_operation'].includes(summary.route_next_action);
+  const workerUrl = result?.worker_url ?? null;
   const lines = [
     `Continuation Resume: ${refused ? 'refused' : 'ok'}`,
-    `Worker: ${result?.worker_url ?? 'unknown'}`,
+    `Worker: ${workerUrl ?? 'unknown'}`,
     `Auth: ${result?.auth_source ?? 'unknown'}`,
     `Site: ${summary.site_id ?? result?.params?.site_id ?? 'unknown'}`,
     `Operation: ${summary.operation_id ?? result?.params?.operation_id ?? 'unknown'}`,
@@ -227,15 +228,15 @@ export function formatContinuationResumeText(result) {
   if (summary.route_next_action || summary.route_reason) lines.push(`Route: action=${summary.route_next_action ?? 'unknown'} reason=${summary.route_reason ?? 'none'}`);
   lines.push(`Activation: status=${summary.activation_status ?? 'unknown'} transition=${summary.activation_transition ?? 'none'} reason=${summary.activation_reason ?? 'none'}`);
   lines.push(`Session Event: kind=${summary.session_event_kind ?? 'unknown'} sequence=${summary.session_event_sequence ?? 'unknown'}`);
-  if (summary.site_id && summary.carrier_session_id) {
-    lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result?.worker_url ?? 'unknown'} --site ${summary.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`);
-    lines.push(`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result?.worker_url ?? 'unknown'} --site ${summary.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`);
-    lines.push(`Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${result?.worker_url ?? 'unknown'} --site ${summary.site_id} --carrier-session-id ${summary.carrier_session_id} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`);
+  if (workerUrl && summary.site_id && summary.carrier_session_id) {
+    lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${workerUrl} --site ${summary.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${workerUrl} --site ${summary.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --carrier-session-id ${summary.carrier_session_id} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`);
   }
-  if (summary.site_id && summary.operation_id) {
-    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? 'unknown'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+  if (workerUrl && summary.site_id && summary.operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
     if (actionableRoute) {
-      lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? 'unknown'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+      lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
     }
   }
   return `${lines.join('\n')}\n`;
