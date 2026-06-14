@@ -173,6 +173,31 @@ test('operation convergence text surfaces direct workflow and read handoffs', ()
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
 
+test('operation convergence suppresses focused site and operation links without concrete ids', () => {
+  const text = formatOperationConvergenceLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    checked_site_ids: ['site_alpha'],
+    posture_coherence: { status: 'ok', issue_count: 0 },
+    durability_coherence: { status: 'ok', issue_count: 0 },
+    site_results: [
+      {
+        site_id: '',
+        initial_route: 'focus_next_operation',
+        final_route: 'monitor_operations',
+        pass_count: 1,
+        focused_operation_id: '',
+      },
+    ],
+  });
+
+  assert.doesNotMatch(text, /^  Site Read:/m);
+  assert.doesNotMatch(text, /^  Site Next Workflow:/m);
+  assert.doesNotMatch(text, /^  Operation List:/m);
+  assert.doesNotMatch(text, /^  Operation Next Workflow:/m);
+  assert.doesNotMatch(text, /^  Operation Review:/m);
+});
+
 test('operation convergence retries delayed operation list lag before declaring convergence', async () => {
   let operationListReads = 0;
   let operationReadReads = 0;

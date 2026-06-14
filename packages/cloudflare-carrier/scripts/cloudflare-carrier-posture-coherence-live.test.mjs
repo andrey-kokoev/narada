@@ -188,6 +188,29 @@ test('formatPostureCoherenceLiveText surfaces direct workflow and read handoffs 
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
 });
 
+test('formatPostureCoherenceLiveText suppresses focused site and operation links without concrete ids', () => {
+  const text = formatPostureCoherenceLiveText({
+    worker_url: 'https://carrier.example.test',
+    status: 'ok',
+    checked_site_ids: ['site_alpha'],
+    site_list: { route_next_action: 'focus_next_site', next_site_id: null, route_target: null },
+    sites: [
+      {
+        site_id: '',
+        site_read: { health: 'attention', next_action: 'focus_next_operation' },
+        operation_list: { operation_count: 3, next_operation_id: '', route_next_action: 'focus_next_operation', next_action: 'use_focused_operation' },
+      },
+    ],
+    issues: [],
+  });
+
+  assert.doesNotMatch(text, /^Site Next Workflow:/m);
+  assert.doesNotMatch(text, /^  Site Read:/m);
+  assert.doesNotMatch(text, /^  Site Next Workflow:/m);
+  assert.doesNotMatch(text, /^  Operation Review:/m);
+  assert.doesNotMatch(text, /^  Operation Next Workflow:/m);
+});
+
 test('runPostureCoherenceLive accepts focused continuity review without refocus under monitor route', async () => {
   const result = await runPostureCoherenceLive({
     workerUrl: 'https://carrier.example.test',
