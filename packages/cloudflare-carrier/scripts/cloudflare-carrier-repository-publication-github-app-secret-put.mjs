@@ -20,6 +20,7 @@ export function parseGithubAppSecretPutArgs(argv = [], env = process.env, roots 
   const args = [...argv];
   loadLocalEnv(join(roots.repoRoot, '.env'), env);
 
+  const format = option(args, '--format') ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_SECRET_PUT_FORMAT ?? 'json';
   const configPath = option(args, '--config') ?? 'wrangler.toml';
   const appId = option(args, '--app-id') ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_ID_VALUE ?? '';
   const installationId = option(args, '--installation-id') ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_INSTALLATION_ID_VALUE ?? '';
@@ -30,6 +31,7 @@ export function parseGithubAppSecretPutArgs(argv = [], env = process.env, roots 
       ?? (privateKeyFile ? readSecretFile(privateKeyFile, roots.repoRoot) : ''),
   );
 
+  if (!['json', 'text'].includes(format)) throw new Error(`repository_publication_github_app_secret_put_unknown_format:${format}`);
   if (!appId) throw new Error('repository_publication_github_app_secret_put_requires_--app-id_or_CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_ID_VALUE');
   if (!installationId) throw new Error('repository_publication_github_app_secret_put_requires_--installation-id_or_CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_INSTALLATION_ID_VALUE');
   if (!privateKey) throw new Error('repository_publication_github_app_secret_put_requires_--private-key_or_--private-key-file_or_CLOUDFLARE_REPOSITORY_PUBLICATION_GITHUB_APP_PRIVATE_KEY_VALUE');
@@ -39,6 +41,7 @@ export function parseGithubAppSecretPutArgs(argv = [], env = process.env, roots 
   assert.match(privateKey, /-----END PRIVATE KEY-----/, 'repository publication GitHub App private key must be PKCS8 PEM');
 
   return {
+    format,
     configPath,
     packageRoot: roots.packageRoot,
     secrets: [
@@ -47,6 +50,18 @@ export function parseGithubAppSecretPutArgs(argv = [], env = process.env, roots 
       { secretName: REPOSITORY_PUBLICATION_GITHUB_APP_SECRET_NAMES.privateKey, value: privateKey, source: privateKeyFile ? 'private_key_file' : 'explicit_private_key_value' },
     ],
   };
+}
+
+export function formatGithubAppSecretPutText(result) {
+  const lines = [
+    `Repository Publication GitHub App Secret Put: ${result.status}`,
+    `Credential Mode: ${result.credential_mode ?? 'unknown'}`,
+    `Config: ${result.config_path}`,
+    `Secrets Installed: ${result.installed?.length ?? 0}`,
+    'Repository Publication GitHub App Readiness Smoke: pnpm --filter @narada2/cloudflare-carrier repository-publication:readiness-github-app-smoke:live:text -- --url <worker-url> --site <site> --operator-session-file <operator-session-file>',
+    'Repository Publication Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url <worker-url> --site <site> --operator-session-file <operator-session-file>',
+  ];
+  return `${lines.join('\n')}\n`;
 }
 
 export async function installGithubAppSecrets(config, secretWriter = putSecret) {
@@ -135,7 +150,11 @@ export function formatGithubAppSecretPutError(error) {
 async function main(argv = process.argv.slice(2), env = process.env) {
   const config = parseGithubAppSecretPutArgs(argv, env);
   const result = await installGithubAppSecrets(config);
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  if (config.format === 'text') {
+    process.stdout.write(formatGithubAppSecretPutText(result));
+  } else {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  }
 }
 
 function option(args, name) {

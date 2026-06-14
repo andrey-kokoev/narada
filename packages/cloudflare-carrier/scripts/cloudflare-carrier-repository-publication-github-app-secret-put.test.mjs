@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import {
   REPOSITORY_PUBLICATION_GITHUB_APP_SECRET_NAMES,
+  formatGithubAppSecretPutText,
   formatGithubAppSecretPutError,
   installGithubAppSecrets,
   parseGithubAppSecretPutArgs,
@@ -19,6 +20,7 @@ test('parseGithubAppSecretPutArgs normalizes complete CLI configuration', () => 
   ], {}, { packageRoot: 'D:/repo/packages/cloudflare-carrier', repoRoot: 'D:/repo' });
 
   assert.equal(config.configPath, 'wrangler.preview.toml');
+  assert.equal(config.format, 'json');
   assert.equal(config.packageRoot, 'D:/repo/packages/cloudflare-carrier');
   assert.deepEqual(config.secrets.map((secret) => secret.secretName), [
     REPOSITORY_PUBLICATION_GITHUB_APP_SECRET_NAMES.appId,
@@ -26,6 +28,17 @@ test('parseGithubAppSecretPutArgs normalizes complete CLI configuration', () => 
     REPOSITORY_PUBLICATION_GITHUB_APP_SECRET_NAMES.privateKey,
   ]);
   assert.equal(config.secrets[2].value, privateKey.replace(/\\n/g, '\n'));
+});
+
+test('parseGithubAppSecretPutArgs accepts text format', () => {
+  const config = parseGithubAppSecretPutArgs([
+    '--app-id', '12345',
+    '--installation-id', '67890',
+    '--private-key', privateKey,
+    '--format', 'text',
+  ], {}, { packageRoot: 'D:/repo/packages/cloudflare-carrier', repoRoot: 'D:/repo' });
+
+  assert.equal(config.format, 'text');
 });
 
 test('parseGithubAppSecretPutArgs refuses invalid credential shape', () => {
@@ -130,4 +143,17 @@ test('formatGithubAppSecretPutError renders structured command evidence', () => 
   assert.equal(body.stdout, 'ok [redacted]');
   assert.equal(body.stderr, 'failed [redacted]');
   assert.equal(body.spawn_error, 'spawn failed');
+});
+
+test('formatGithubAppSecretPutText emits readiness follow-ons', () => {
+  const output = formatGithubAppSecretPutText({
+    status: 'ok',
+    credential_mode: 'github_app_installation',
+    config_path: 'wrangler.toml',
+    installed: [{ secret_name: 'a' }, { secret_name: 'b' }, { secret_name: 'c' }],
+  });
+
+  assert.match(output, /Repository Publication GitHub App Secret Put: ok/);
+  assert.match(output, /Repository Publication GitHub App Readiness Smoke:/);
+  assert.match(output, /Repository Publication Provider Liveness:/);
 });
