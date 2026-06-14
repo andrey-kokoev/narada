@@ -70,6 +70,7 @@ export function formatSiteNextWorkflowLiveText(result) {
   }
   if (result.delegated_operation_id && result.selected_site_id) {
     lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operation-id ${result.delegated_operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operation-id ${result.delegated_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
   }
   const postRoute = result.list_after_next?.route_next_action ?? null;
   if (postRoute) {
