@@ -493,6 +493,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       operation_count: 1,
       active_operation_id: 'operation_live',
       next_operation_id: 'operation_live',
+      next_operation_active_session_id: 'session_alpha',
       next_operation_status: 'inactive',
       operation_status_counts: { inactive: 1 },
       next_status: 'needs_attention',
@@ -512,6 +513,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(operationListText, /Next Operation Status: inactive/);
   assert.match(operationListText, /Focused Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
   assert.match(operationListText, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(operationListText, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
   assert.match(operationListText, /Persistence Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
   assert.match(operationListText, /Recovery Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
   assert.match(operationListText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
@@ -1937,6 +1939,15 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
       next_focus_ref: 'operation_control',
       health_counts: { ready: 0, needs_attention: 1 },
     },
+    focused_operation_lifecycle: {
+      operation_id: 'operation_control',
+      activity_timeline: [
+        {
+          focus_kind: 'operation_session',
+          focus_ref: 'carrier_session_operation_control',
+        },
+      ],
+    },
     operation_posture_route: {
       domain: 'operation_posture',
       command_state: 'operation_posture_attention',
@@ -1953,6 +1964,7 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     operation_count: 2,
     active_operation_id: 'operation_control',
     next_operation_id: 'operation_control',
+    next_operation_active_session_id: 'carrier_session_operation_control',
     next_operation_status: 'inactive',
     needs_continuation_count: 1,
     next_continuation_operation_id: 'operation_continue',

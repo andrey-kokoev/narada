@@ -228,8 +228,24 @@ export function summarizeProductSurface(operation, body, options = {}) {
     const overview = body?.operation_posture_overview ?? body?.operation_product_overview ?? {};
     const postureRoute = body?.operation_posture_route ?? null;
     const projectionError = body?.operation_product_projection_error ?? null;
+    const focusedActivityTimeline = Array.isArray(body?.focused_operation_lifecycle?.activity_timeline)
+      ? body.focused_operation_lifecycle.activity_timeline
+      : Array.isArray(body?.focused_operation_lifecycle?.activity_timeline?.items)
+        ? body.focused_operation_lifecycle.activity_timeline.items
+        : [];
     const nextOperationId = overview.next_operation_id ?? operations[0]?.operation_id ?? null;
     const nextOperation = nextOperationId ? operations.find((item) => item?.operation_id === nextOperationId) ?? null : null;
+    const nextOperationSessionRecord = nextOperationId && Array.isArray(body?.sessions)
+      ? body.sessions.find((item) => item?.operation_id === nextOperationId) ?? body.sessions[0] ?? null
+      : null;
+    const nextOperationSessionActivity = nextOperationId && body?.focused_operation_lifecycle?.operation_id === nextOperationId
+      ? focusedActivityTimeline.find(
+        (item) => (
+          (item?.focus_kind === 'operation_session' && typeof item?.focus_ref === 'string' && item.focus_ref.trim())
+          || (item?.activity_kind === 'operation_session_binding' && typeof item?.source_ref === 'string' && item.source_ref.trim())
+        ),
+      ) ?? null
+      : null;
     const continuationOperations = operations.filter((item) => item?.status === 'needs_continuation');
     const nextContinuationOperation = continuationOperations[0] ?? null;
     const nextOperationFocusKind = normalizeWorkflowFocusKind(
@@ -245,6 +261,12 @@ export function summarizeProductSurface(operation, body, options = {}) {
       active_operation_id: overview.active_operation_id ?? null,
       next_operation_id: nextOperationId,
       next_operation_status: nextOperation?.status ?? null,
+      next_operation_active_session_id:
+        nextOperationSessionRecord?.carrier_session_id
+        ?? nextOperationSessionRecord?.session_id
+        ?? (body?.focused_operation_lifecycle?.operation_id === nextOperationId
+          ? body?.focused_operation_lifecycle?.active_session_id ?? nextOperationSessionActivity?.focus_ref ?? nextOperationSessionActivity?.source_ref ?? null
+          : null),
       needs_continuation_count: continuationOperations.length,
       next_continuation_operation_id: nextContinuationOperation?.operation_id ?? null,
       next_continuation_operation_status: nextContinuationOperation?.status ?? null,
@@ -502,6 +524,9 @@ export function formatProductSurfaceText(result) {
     if (summary.next_operation_id) {
       lines.push(`Focused Read: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.next_operation_id} --operator-session-file <operator-session-file>`);
       lines.push(`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.next_operation_id} --operator-session-file <operator-session-file>`);
+      if (summary.next_operation_active_session_id) {
+        lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.next_operation_id} --carrier-session-id ${summary.next_operation_active_session_id} --operator-session-file <operator-session-file>`);
+      }
       lines.push(`Persistence Review: pnpm --filter @narada2/cloudflare-carrier product:operation:persistence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.next_operation_id} --operator-session-file <operator-session-file>`);
       lines.push(`Recovery Review: pnpm --filter @narada2/cloudflare-carrier product:operation:recovery:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.next_operation_id} --operator-session-file <operator-session-file>`);
       if (summary.next_status === 'needs_attention' || summary.next_action === 'refresh_site_continuity_loop' || summary.next_action === 'review_site_continuity_reconciliation_execution') {
