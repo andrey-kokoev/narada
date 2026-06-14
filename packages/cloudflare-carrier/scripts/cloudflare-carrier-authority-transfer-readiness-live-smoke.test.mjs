@@ -40,6 +40,7 @@ test('formatAuthorityTransferReadinessLiveSmokeText emits downstream reads', () 
   assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
+  assert.match(text, /Mailbox Readback Smoke: pnpm --filter @narada2\/cloudflare-carrier mailbox:readback-smoke:live:text/);
   assert.match(text, /Authority Transfer Read: pnpm --filter @narada2\/cloudflare-carrier product:authority-transfer:text/);
   assert.match(text, /Site Action Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:action:workflow:live:text/);
 });
