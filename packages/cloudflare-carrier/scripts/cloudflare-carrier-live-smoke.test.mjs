@@ -47,6 +47,8 @@ test('formatLiveSmokeText emits direct downstream reads', () => {
   assert.match(output, /Live Smoke: ok/);
   assert.match(output, /Site Read:/);
   assert.match(output, /Site Next Workflow:/);
+  assert.match(output, /Posture Coherence Review:/);
+  assert.match(output, /Durability Coherence Review:/);
   assert.match(output, /Session Evidence:/);
   assert.match(output, /Task Review:/);
   assert.match(output, /Task Workflow:/);
@@ -75,6 +77,8 @@ test('formatLiveSmokeText suppresses guarded links without concrete ids', () => 
 
   assert.doesNotMatch(output, /Site Read:/);
   assert.doesNotMatch(output, /Site Next Workflow:/);
+  assert.doesNotMatch(output, /Posture Coherence Review:/);
+  assert.doesNotMatch(output, /Durability Coherence Review:/);
   assert.doesNotMatch(output, /Session Evidence:/);
   assert.doesNotMatch(output, /Task Review:/);
   assert.doesNotMatch(output, /Task Workflow:/);
