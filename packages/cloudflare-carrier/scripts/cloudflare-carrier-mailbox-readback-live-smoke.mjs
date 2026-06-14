@@ -39,6 +39,18 @@ export function parseMailboxReadbackLiveSmokeArgs(
 }
 
 export function formatMailboxReadbackLiveSmokeText(result) {
+  const draftProposalCommand = result.mailbox_draft_reply_proposal_id
+    ? `pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${result.worker_url} --site ${result.site_id} --focus-ref ${result.mailbox_draft_reply_proposal_id} --operator-session-file <operator-session-file>`
+    : `pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`;
+  const draftReadCommand = result.mailbox_outlook_draft_create_id
+    ? `pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${result.worker_url} --site ${result.site_id} --focus-ref ${result.mailbox_outlook_draft_create_id} --operator-session-file <operator-session-file>`
+    : `pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`;
+  const sendAcceptedReadCommand = result.mailbox_send_accepted_id
+    ? `pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${result.worker_url} --site ${result.site_id} --focus-ref ${result.mailbox_send_accepted_id} --operator-session-file <operator-session-file>`
+    : `pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`;
+  const sendConfirmationReadCommand = result.mailbox_send_confirmation_id
+    ? `pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-confirmation:text -- --url ${result.worker_url} --site ${result.site_id} --focus-ref ${result.mailbox_send_confirmation_id} --operator-session-file <operator-session-file>`
+    : `pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-confirmation:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`;
   const lines = [
     `Mailbox Readback Smoke: ${result.status}`,
     `Worker: ${result.worker_url}`,
@@ -53,10 +65,10 @@ export function formatMailboxReadbackLiveSmokeText(result) {
     `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
     `Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`,
     `Status Source Read: pnpm --filter @narada2/cloudflare-carrier mailbox:status-source-smoke:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation ${result.operation_id} --operator-session-file <operator-session-file>`,
-    `Draft Proposal Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
-    `Draft Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
-    `Send Accepted Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
-    `Send Confirmation Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-confirmation:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
+    `Draft Proposal Read: ${draftProposalCommand}`,
+    `Draft Read: ${draftReadCommand}`,
+    `Send Accepted Read: ${sendAcceptedReadCommand}`,
+    `Send Confirmation Read: ${sendConfirmationReadCommand}`,
   ];
   return `${lines.join('\n')}\n`;
 }
@@ -136,6 +148,11 @@ export async function runMailboxReadbackLiveSmoke(config, { fetchImpl = fetch } 
   assert.equal(operationRead.body.operation_product_surface.mailbox_mutation_admission, 'not_admitted');
   assert.ok(operationRead.body.authority_transfer_posture, 'missing authority transfer posture');
 
+  const latestDraftReplyProposal = operationRead.body.mailbox_draft_reply_proposals[0] ?? null;
+  const latestOutlookDraftCreate = operationRead.body.mailbox_outlook_draft_creates[0] ?? null;
+  const latestSendAccepted = operationRead.body.mailbox_send_accepted_records[0] ?? null;
+  const latestSendConfirmation = operationRead.body.mailbox_send_confirmations[0] ?? null;
+
   return {
     schema: 'narada.cloudflare_carrier.mailbox_readback_live_smoke.v1',
     status: 'ok',
@@ -148,15 +165,31 @@ export async function runMailboxReadbackLiveSmoke(config, { fetchImpl = fetch } 
     mailbox_authority_partition: operationRead.body.operation_product_surface.mailbox_authority_partition,
     mailbox_draft_reply_proposal_count: operationRead.body.operation_product_surface.mailbox_draft_reply_proposal_count,
     mailbox_draft_reply_proposal_authority: operationRead.body.operation_product_surface.mailbox_draft_reply_proposal_authority,
+    mailbox_draft_reply_proposal_id:
+      latestDraftReplyProposal?.proposal_id
+      ?? latestDraftReplyProposal?.record?.proposal_id
+      ?? null,
     mailbox_draft_reply_authority_partition: operationRead.body.operation_product_surface.mailbox_draft_reply_authority_partition,
     mailbox_outlook_draft_create_count: operationRead.body.operation_product_surface.mailbox_outlook_draft_create_count,
     mailbox_outlook_draft_create_authority: operationRead.body.operation_product_surface.mailbox_outlook_draft_create_authority,
     mailbox_outlook_draft_create_admission: operationRead.body.operation_product_surface.mailbox_outlook_draft_create_admission,
+    mailbox_outlook_draft_create_id:
+      latestOutlookDraftCreate?.draft_create_id
+      ?? latestOutlookDraftCreate?.record?.draft_create_id
+      ?? null,
     mailbox_outlook_draft_create_authority_partition: operationRead.body.operation_product_surface.mailbox_outlook_draft_create_authority_partition,
     mailbox_send_accepted_count: operationRead.body.operation_product_surface.mailbox_send_accepted_count,
     mailbox_send_authority: operationRead.body.operation_product_surface.mailbox_send_authority,
+    mailbox_send_accepted_id:
+      latestSendAccepted?.send_accepted_id
+      ?? latestSendAccepted?.record?.send_accepted_id
+      ?? null,
     mailbox_send_confirmation_count: operationRead.body.operation_product_surface.mailbox_send_confirmation_count,
     mailbox_send_confirmation_authority: operationRead.body.operation_product_surface.mailbox_send_confirmation_authority,
+    mailbox_send_confirmation_id:
+      latestSendConfirmation?.send_confirmation_id
+      ?? latestSendConfirmation?.record?.send_confirmation_id
+      ?? null,
     mailbox_send_admission: operationRead.body.operation_product_surface.mailbox_send_admission,
     mailbox_send_delivery_confirmation_admission: operationRead.body.operation_product_surface.mailbox_send_delivery_confirmation_admission,
     mailbox_mutation_admission: operationRead.body.operation_product_surface.mailbox_mutation_admission,
