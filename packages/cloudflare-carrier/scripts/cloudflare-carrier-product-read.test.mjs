@@ -1960,6 +1960,9 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
       next_action: 'review_operation',
       reason: 'operation_needs_review',
     },
+    cloudflare_persistence_posture: {
+      state: 'durable',
+    },
     cloudflare_recovery_posture: {
       state: 'reconstructable',
       recovery_boundary_count: 12,
@@ -1999,6 +2002,7 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     posture_next_action: 'review_operation',
     posture_target: null,
     posture_reason: 'operation_needs_review',
+    persistence_state: 'durable',
     recovery_state: 'reconstructable',
     recovery_boundary_count: 12,
     recovery_boundary_keys: ['site_registry', 'carrier_evidence_index', 'site_file_materialization_store'],

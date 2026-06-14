@@ -200,7 +200,11 @@ export function summarizeProductSurface(operation, body, options = {}) {
       continuity_packet_count: status?.continuity_packet_count ?? 0,
       continuity_loop_report_count: status?.continuity_loop_report_count ?? 0,
       continuity_reconciliation_execution_count: status?.continuity_reconciliation_execution_count ?? 0,
-      persistence_state: status?.cloudflare_persistence_posture?.state ?? body?.cloudflare_persistence_posture?.state ?? null,
+      persistence_state:
+        status?.cloudflare_persistence_posture?.state
+        ?? body?.cloudflare_persistence_posture?.state
+        ?? body?.operation_product_surface?.persistence_posture?.state
+        ?? null,
       recovery_state: status?.cloudflare_recovery_posture?.state ?? body?.cloudflare_recovery_posture?.state ?? null,
       membership_count: Array.isArray(body?.memberships) ? body.memberships.length : 0,
       session_count: Array.isArray(body?.sessions) ? body.sessions.length : status?.session_count ?? 0,
@@ -259,6 +263,11 @@ export function summarizeProductSurface(operation, body, options = {}) {
     const workflowRoute = body?.operation_workflow_route ?? body?.operation_product_surface?.workflow_route ?? null;
     const postureRoute = body?.operation_posture_route ?? body?.operation_product_surface?.posture_route ?? null;
     const postureOverview = body?.operation_posture_overview ?? body?.operation_product_surface?.posture_overview ?? null;
+    const persistencePosture =
+      body?.cloudflare_persistence_posture
+      ?? body?.operation_product_surface?.cloudflare_persistence_posture
+      ?? body?.operation_product_surface?.persistence_posture
+      ?? null;
     const recoveryPosture = body?.cloudflare_recovery_posture ?? body?.operation_product_surface?.cloudflare_recovery_posture ?? null;
     const projectionError = body?.operation_product_projection_error ?? null;
     const recoveryBoundaries = Array.isArray(recoveryPosture?.recovery_boundaries) ? recoveryPosture.recovery_boundaries : [];
@@ -301,6 +310,7 @@ export function summarizeProductSurface(operation, body, options = {}) {
       posture_next_action: postureRoute?.next_action ?? postureOverview?.next_action ?? null,
       posture_target: postureRoute?.target ?? postureOverview?.next_operation_id ?? null,
       posture_reason: postureRoute?.reason ?? postureOverview?.next_reason ?? null,
+      persistence_state: persistencePosture?.state ?? null,
       recovery_state: recoveryPosture?.state ?? null,
       recovery_boundary_count: recoveryPosture?.recovery_boundary_count ?? null,
       recovery_boundary_keys: recoveryBoundaries.map((boundary) => boundary?.key).filter(Boolean),
