@@ -391,6 +391,8 @@ export function formatProviderLivenessSchedulerText(result) {
     const commandSuffix = `-- --url ${workerUrl} --site ${siteId} --operator-session-file ${operatorSessionFile}`;
     lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text ${commandSuffix}`);
     lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text ${commandSuffix} --execute-site-next`);
+    lines.push(`Posture Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:posture:coherence:live:text ${commandSuffix}`);
+    lines.push(`Durability Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text ${commandSuffix}`);
     lines.push(`Local Ingress Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:provider-liveness:text ${commandSuffix}`);
     lines.push(`Repository Publication Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:provider-liveness:text ${commandSuffix}`);
   }
