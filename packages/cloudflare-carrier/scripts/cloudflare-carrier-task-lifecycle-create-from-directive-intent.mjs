@@ -121,6 +121,10 @@ export function formatTaskLifecycleCreateFromDirectiveIntentText(result) {
   ];
   if (result?.existing_task_id) lines.push(`Existing Task: ${result.existing_task_id}`);
   if (result?.created_task_id) lines.push(`Created Task: ${result.created_task_id}`);
+  if (workerUrl && result?.site_id) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${result.site_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
+  }
   if (workerUrl && result?.site_id && taskId) {
     lines.push(`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${workerUrl} --site ${result.site_id} --task-id ${taskId} --operator-session-file <operator-session-file>`);
     lines.push(`Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${workerUrl} --site ${result.site_id} --task-id ${taskId} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`);

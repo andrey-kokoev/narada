@@ -283,6 +283,8 @@ test('formatTaskLifecycleClaimText renders admitted and refused summaries withou
   assert.match(admitted, /Claimant: agent_alpha/);
   assert.match(admitted, /Decision: action=admit reason=cloudflare_task_claim_cutover_admitted conflict_policy=opened_only_no_overwrite/);
   assert.match(admitted, /Assignment Authority: assignment-authority:claim:v1/);
+  assert.match(admitted, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(admitted, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(admitted, /Session Evidence:/);
   assert.match(admitted, /Operation Review:/);
   assert.match(admitted, /Operation Next Workflow:/);
@@ -309,6 +311,8 @@ test('formatTaskLifecycleClaimText renders admitted and refused summaries withou
     },
   });
 
+  assert.doesNotMatch(noWorker, /Site Read:/);
+  assert.doesNotMatch(noWorker, /Site Next Workflow:/);
   assert.doesNotMatch(noWorker, /Session Evidence:/);
   assert.doesNotMatch(noWorker, /Operation Review:/);
   assert.doesNotMatch(noWorker, /Operation Next Workflow:/);

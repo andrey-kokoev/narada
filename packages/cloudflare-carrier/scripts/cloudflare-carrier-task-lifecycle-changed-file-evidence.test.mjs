@@ -324,6 +324,8 @@ test('formatTaskLifecycleChangedFileEvidenceText renders admitted and refused su
   assert.match(admitted, /Report: report-1/);
   assert.match(admitted, /Changed File Evidence Count: 1/);
   assert.match(admitted, /Filesystem Mutation: not_admitted/);
+  assert.match(admitted, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(admitted, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(admitted, /Session Evidence:/);
   assert.match(admitted, /Operation Review:/);
   assert.match(admitted, /Operation Next Workflow:/);
@@ -379,6 +381,8 @@ test('formatTaskLifecycleChangedFileEvidenceText suppresses worker-scoped handof
   });
 
   assert.doesNotMatch(text, /<worker-url>/);
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
   assert.doesNotMatch(text, /Session Evidence:/);
   assert.doesNotMatch(text, /Operation Review:/);
   assert.doesNotMatch(text, /Operation Next Workflow:/);

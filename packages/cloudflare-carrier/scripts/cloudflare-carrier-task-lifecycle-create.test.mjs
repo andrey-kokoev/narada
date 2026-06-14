@@ -240,6 +240,8 @@ test('formatTaskLifecycleCreateText renders admitted and refused summaries witho
   assert.match(admitted, /Task: cloudflare-task-1 #1/);
   assert.match(admitted, /Session: session_alpha/);
   assert.match(admitted, /Authority: mutation=cloudflare_task_lifecycle_d1 cloudflare_write=admitted effect=task_lifecycle_create/);
+  assert.match(admitted, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(admitted, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(admitted, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-1 --operator-session-file <operator-session-file>/);
   assert.match(admitted, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-1 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
   assert.match(admitted, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
@@ -260,6 +262,8 @@ test('formatTaskLifecycleCreateText renders admitted and refused summaries witho
     }, { admission_id: 'admission_alpha' }),
   });
 
+  assert.doesNotMatch(noWorker, /Site Read:/);
+  assert.doesNotMatch(noWorker, /Site Next Workflow:/);
   assert.doesNotMatch(noWorker, /Task Review:/);
   assert.doesNotMatch(noWorker, /Task Workflow:/);
   assert.doesNotMatch(noWorker, /Session Evidence:/);
