@@ -319,6 +319,12 @@ export function summarizeProductSurface(operation, body, options = {}) {
 function normalizeWorkflowFocusKind(nextAction, focusKind, focusRef) {
   if (focusKind) return focusKind;
   if (
+    nextAction === 'refresh_site_continuity_loop'
+    && focusRef
+  ) {
+    return 'site_continuity_loop';
+  }
+  if (
     nextAction === 'review_site_continuity_reconciliation_execution'
     && focusRef
   ) {

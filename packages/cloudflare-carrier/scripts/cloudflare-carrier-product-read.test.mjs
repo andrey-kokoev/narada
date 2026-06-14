@@ -292,7 +292,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       next_operation_id: 'operation_alpha',
       next_operation_next_action: 'refresh_site_continuity_loop',
       next_operation_reason: 'operation_lifecycle_continuity_loop_stale',
-      next_operation_focus_kind: null,
+      next_operation_focus_kind: 'site_continuity_loop',
       next_operation_focus_ref: 'site_alpha',
       route_domain: 'site_posture',
       route_command_state: 'site_posture_attention',
@@ -305,7 +305,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   });
   assert.match(siteListFocusText, /Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live -- --url https:\/\/carrier\.example\.test --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(siteListFocusText, /Candidate Operation Route: operation=operation_alpha action=refresh_site_continuity_loop reason=operation_lifecycle_continuity_loop_stale/);
-  assert.match(siteListFocusText, /Candidate Operation Focus: kind=unknown ref=site_alpha/);
+  assert.match(siteListFocusText, /Candidate Operation Focus: kind=site_continuity_loop ref=site_alpha/);
   assert.match(siteListFocusText, /Focus Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:focus:workflow:live -- --url https:\/\/carrier\.example\.test --focused-site-id site_alpha --operator-session-file <operator-session-file> --execute-site-focus/);
   assert.match(siteListFocusText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.match(siteListFocusText, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity/);
@@ -543,6 +543,8 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       next_status: 'needs_attention',
       next_action: 'refresh_site_continuity_loop',
       next_reason: 'operation_lifecycle_continuity_loop_stale',
+      next_operation_focus_kind: 'site_continuity_loop',
+      next_operation_focus_ref: 'site_alpha',
       route_domain: 'operation_posture',
       route_command_state: 'operation_posture_ready',
       route_command_action: 'monitor_operations',
@@ -554,6 +556,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   });
   assert.match(operationListContinuityText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.match(operationListContinuityText, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity/);
+  assert.match(operationListContinuityText, /Next Operation Focus: kind=site_continuity_loop ref=site_alpha/);
 
   const operationListContinuityReviewText = formatProductSurfaceText({
     operation: 'operation.list',
@@ -650,6 +653,43 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(operationReadText, /Workflow Continuity: direction=cloudflare_to_local_windows_only missing=local_windows_to_cloudflare/);
   assert.match(operationReadText, /Workflow Command: kind=site_continuity_reconciliation_review command=pnpm site:continuity:reconciliation -- review --id reconciliation_execution_failed/);
   assert.match(operationReadText, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --focus-kind site_continuity_reconciliation_execution --focus-ref reconciliation_execution_failed --operator-session-file <operator-session-file>/);
+
+  const operationReadContinuityLoopText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_live',
+      current_status: 'active',
+      status_transition_count: 0,
+      latest_status_from: null,
+      latest_status_to: null,
+      latest_status_recorded_at: null,
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'refresh_site_continuity_loop',
+      session_count: 1,
+      task_count: 0,
+      workflow_next_action: 'refresh_site_continuity_loop',
+      workflow_reason: 'operation_lifecycle_continuity_loop_stale',
+      workflow_focus_kind: 'site_continuity_loop',
+      workflow_focus_ref: 'site_alpha',
+      workflow_action_command_kind: 'site_continuity_loop_refresh',
+      workflow_action_command: 'pnpm site:continuity:loop -- sync-cloudflare --site site_alpha --url <worker-url> --token-file <token-file>',
+      workflow_continuity_direction_state: 'bidirectional_packets_observed',
+      workflow_continuity_direction_missing: [],
+      posture_next_status: 'ready',
+      posture_next_action: 'monitor_operations',
+      posture_reason: 'all_operations_monitoring',
+      recovery_state: 'reconstructable',
+      recovery_boundary_count: 12,
+      recovery_boundary_keys: ['site_registry'],
+      recovery_gap_count: 0,
+      recovery_gap_keys: [],
+      recovery_next_action: 'monitor_recovery_posture',
+    },
+  });
+  assert.match(operationReadContinuityLoopText, /Workflow Focus: kind=site_continuity_loop ref=site_alpha/);
   assert.match(operationReadText, /Posture Route: status=needs_attention action=review_operation reason=operation_needs_review/);
   assert.match(operationReadText, /Recovery: state=reconstructable boundaries=12 gaps=0/);
   assert.match(operationReadText, /Recovery Next: action=monitor_recovery_posture gaps=none/);
@@ -1741,7 +1781,7 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
       next_operation_id: 'operation_fixture',
       next_operation_next_action: 'refresh_site_continuity_loop',
       next_operation_reason: 'operation_lifecycle_continuity_loop_stale',
-      next_operation_focus_kind: null,
+      next_operation_focus_kind: 'site_continuity_loop',
       next_operation_focus_ref: 'site_fixture',
       health_counts: { ready: 0, attention: 1, incomplete: 0, other: 0 },
     },
@@ -1764,7 +1804,7 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     next_operation_id: 'operation_fixture',
     next_operation_next_action: 'refresh_site_continuity_loop',
     next_operation_reason: 'operation_lifecycle_continuity_loop_stale',
-    next_operation_focus_kind: null,
+    next_operation_focus_kind: 'site_continuity_loop',
     next_operation_focus_ref: 'site_fixture',
     health_counts: { ready: 0, attention: 1, incomplete: 0, other: 0 },
     route_domain: 'site_posture',
