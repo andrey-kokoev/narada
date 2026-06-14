@@ -567,6 +567,51 @@ test('site continuity sync records reconciliation execution evidence in Cloudfla
   }
 });
 
+test('site continuity reconciliation execution emits operator text handoff when using operator session file', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-reconciliation-text-'));
+  const executionPath = join(root, 'execution.json');
+  const sessionFile = join(root, 'operator-session.json');
+  const execution = {
+    schema: 'narada.cloudflare_carrier.site_continuity_reconciliation_execution.v1',
+    site_id: 'site_fixture',
+    status: 'completed',
+    generated_at: '2026-06-14T06:00:00.000Z',
+  };
+  await writeFile(executionPath, `${JSON.stringify(execution, null, 2)}\n`, 'utf8');
+  await writeFile(sessionFile, JSON.stringify({ cookie: 'narada_operator_session=session-fixture' }), 'utf8');
+  const mock = await startCarrierMock((body) => {
+    if (body.operation === 'site.continuity.reconciliation_execution.put') {
+      return { body: { ok: true, status: 'recorded' } };
+    }
+    return { status: 400, body: { ok: false, code: 'unexpected_operation' } };
+  });
+  try {
+    const result = await runSync([
+      'reconciliation-execution-put',
+      '--site', 'site_fixture',
+      '--execution', executionPath,
+      '--url', mock.url,
+      '--operator-session-file', sessionFile,
+      '--format', 'text',
+    ], {
+      env: {
+        CLOUDFLARE_CARRIER_TOKEN: '',
+        CLOUDFLARE_OPERATOR_SESSION_COOKIE: '',
+      },
+    });
+
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(result.stdout, /Command: reconciliation-execution-put/);
+    assert.match(result.stdout, /Execution Recorded: yes/);
+    assert.match(result.stdout, /Execution Status: completed/);
+    assert.match(result.stdout, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
+    assert.match(result.stdout, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text/);
+  } finally {
+    await mock.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('site continuity sync refuses direct Cloudflare repository publication evidence before network', async () => {
   const result = await runSync(['repository-publication-evidence-put', '--site', 'site_fixture'], {
     input: JSON.stringify({
@@ -592,6 +637,54 @@ test('site continuity sync refuses direct Cloudflare repository publication evid
   assert.equal(body.admission.action, 'refuse');
   assert.equal(body.admission.reason, 'repository_publication_evidence_invalid');
   assert.ok(body.admission.validation_errors.includes('repository_publication_evidence_cloudflare_git_push_admission_invalid'));
+});
+
+test('site continuity publication evidence emits operator text handoff when using operator session file', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-publication-evidence-text-'));
+  const sessionFile = join(root, 'operator-session.json');
+  await writeFile(sessionFile, JSON.stringify({ cookie: 'narada_operator_session=session-fixture' }), 'utf8');
+  const evidence = {
+    repository_publication_request_id: 'repository-publication-request-fixture',
+    publication_execution_id: 'repository-publication-execution-fixture',
+    repository_ref: 'github:andrey-kokoev/narada',
+    branch_ref: 'main',
+    source_change_ref: 'git:commit:fixture',
+    windows_admission_action: 'refuse',
+    publication_status: 'refused',
+    cloudflare_git_push_admission: 'not_admitted',
+    direct_cloudflare_repository_mutation_admission: 'not_admitted',
+  };
+  const mock = await startCarrierMock((body) => {
+    if (body.operation === 'repository_publication.evidence.put') {
+      return { body: { ok: true, status: 'recorded' } };
+    }
+    return { status: 400, body: { ok: false, code: 'unexpected_operation' } };
+  });
+  try {
+    const result = await runSync([
+      'repository-publication-evidence-put',
+      '--site', 'site_fixture',
+      '--url', mock.url,
+      '--operator-session-file', sessionFile,
+      '--format', 'text',
+    ], {
+      input: JSON.stringify({ evidence }),
+      env: {
+        CLOUDFLARE_CARRIER_TOKEN: '',
+        CLOUDFLARE_OPERATOR_SESSION_COOKIE: '',
+      },
+    });
+
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(result.stdout, /Command: repository-publication-evidence-put/);
+    assert.match(result.stdout, /Request: repository-publication-request-fixture/);
+    assert.match(result.stdout, /Execution: repository-publication-execution-fixture/);
+    assert.match(result.stdout, /Publication Request Review: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text/);
+    assert.match(result.stdout, /Publication Execution Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text/);
+  } finally {
+    await mock.close();
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test('site continuity sync executes pending repository publication requests by returning local refusal evidence without implicit push', async () => {
@@ -667,6 +760,75 @@ test('site continuity sync executes pending repository publication requests by r
     assert.equal(heartbeat.direct_cloudflare_repository_mutation_admission, 'not_admitted');
   } finally {
     await mock.close();
+  }
+});
+
+test('site continuity pending publication execution emits operator text handoff when using operator session file', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-publication-pending-text-'));
+  const sessionFile = join(root, 'operator-session.json');
+  await writeFile(sessionFile, JSON.stringify({ cookie: 'narada_operator_session=session-fixture' }), 'utf8');
+  const mock = await startCarrierMock((body) => {
+    if (body.operation === 'repository_publication.request.next') {
+      return {
+        body: {
+          ok: true,
+          status: 'selected',
+          admission: {
+            repository_publication_admission_id: 'repository-publication-admission-fixture',
+            admission_action: 'admit',
+            repository_publication_admission: 'admitted_by_cloudflare_repository_publication',
+          },
+          request: {
+            repository_publication_request_id: 'repository-publication-request-fixture',
+            publication_ref: 'repository-publication:fixture',
+            requested_action_ref: 'repository-publication-action:fixture',
+            repository_ref: 'github:andrey-kokoev/narada',
+            branch_ref: 'main',
+            source_change_ref: 'git:commit:fixture-source',
+            cloudflare_repository_publication_admission: {
+              repository_publication_admission_id: 'repository-publication-admission-fixture',
+              admission_action: 'admit',
+              repository_publication_admission: 'admitted_by_cloudflare_repository_publication',
+            },
+            repository_publication_admission: 'pending_windows_publication_admission',
+            cloudflare_git_push_admission: 'not_admitted',
+            direct_cloudflare_repository_mutation_admission: 'not_admitted',
+          },
+        },
+      };
+    }
+    if (body.operation === 'repository_publication.evidence.put') {
+      return { body: { ok: true, status: 'recorded' } };
+    }
+    if (body.operation === 'repository_publication.provider_heartbeat.put') {
+      return { body: { ok: true, status: 'recorded' } };
+    }
+    return { status: 400, body: { ok: false, code: 'unexpected_operation' } };
+  });
+  try {
+    const result = await runSync([
+      'repository-publication-execute-pending',
+      '--site', 'site_fixture',
+      '--repo', SCRIPT_CWD,
+      '--url', mock.url,
+      '--operator-session-file', sessionFile,
+      '--format', 'text',
+    ], {
+      env: {
+        CLOUDFLARE_CARRIER_TOKEN: '',
+        CLOUDFLARE_OPERATOR_SESSION_COOKIE: '',
+      },
+    });
+
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(result.stdout, /Command: repository-publication-execute-pending/);
+    assert.match(result.stdout, /Selection: selected requests=1/);
+    assert.match(result.stdout, /Publication Request Review: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text/);
+    assert.match(result.stdout, /Publication Execution Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text/);
+    assert.match(result.stdout, /Publication Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider-liveness:text/);
+  } finally {
+    await mock.close();
+    await rm(root, { recursive: true, force: true });
   }
 });
 

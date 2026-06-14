@@ -449,6 +449,8 @@ if (command === 'repository-publication-evidence-put') {
     site_id: siteId,
     worker_url: workerUrl,
     auth_source: auth.source,
+    repository_publication_request_id: evidence.repository_publication_request_id ?? null,
+    publication_execution_id: evidence.publication_execution_id ?? null,
     local_evidence_admission: admission,
     cloudflare_response: pushed.body,
   });
@@ -636,6 +638,9 @@ function formatSiteContinuitySyncText(commandName, result, { operatorSessionFile
     if (packet?.source_embodiment_kind || packet?.target_embodiment_kind) {
       lines.push(`Embodiments: ${packet?.source_embodiment_kind ?? 'unknown'} -> ${packet?.target_embodiment_kind ?? 'unknown'}`);
     }
+  } else if (commandName === 'reconciliation-execution-put') {
+    lines.push(`Execution Recorded: ${result?.reconciliation_execution_recorded === true ? 'yes' : 'no'}`);
+    if (result?.execution_status) lines.push(`Execution Status: ${result.execution_status}`);
   } else if (commandName === 'sync-once') {
     lines.push(`Push Recorded: ${result?.local_to_cloudflare_recorded === true ? 'yes' : 'no'}`);
     lines.push(`Return Observed: ${result?.cloudflare_to_local_windows_returned === true ? 'yes' : 'no'}`);
@@ -646,6 +651,19 @@ function formatSiteContinuitySyncText(commandName, result, { operatorSessionFile
     if (result?.continuity_loop_report?.cloudflare_push?.durability_action) {
       lines.push(`Durability Action: ${result.continuity_loop_report.cloudflare_push.durability_action}`);
     }
+  } else if (commandName === 'repository-publication-execute-pending') {
+    lines.push(`Selection: ${result?.request_selection_status ?? 'unknown'} requests=${result?.request_count ?? 0}`);
+    lines.push(`Evidence Recorded: ${result?.evidence_recorded_count ?? 0}`);
+    lines.push(`Provider Heartbeat: ${result?.provider_heartbeat_recorded === true ? 'recorded' : 'not_recorded'}`);
+    const firstResult = Array.isArray(result?.results) ? result.results[0] ?? null : null;
+    if (firstResult?.request_id) lines.push(`Request: ${firstResult.request_id} status=${firstResult.status ?? 'unknown'}`);
+    if (firstResult?.evidence?.publication_execution_id) {
+      lines.push(`Execution: ${firstResult.evidence.publication_execution_id}`);
+    }
+  } else if (commandName === 'repository-publication-evidence-put') {
+    lines.push(`Evidence Recorded: ${result?.status === 'ok' ? 'yes' : 'no'}`);
+    if (result?.repository_publication_request_id) lines.push(`Request: ${result.repository_publication_request_id}`);
+    if (result?.publication_execution_id) lines.push(`Execution: ${result.publication_execution_id}`);
   }
 
   if (worker && sessionFile && siteId && siteId !== 'unknown') {
@@ -653,6 +671,23 @@ function formatSiteContinuitySyncText(commandName, result, { operatorSessionFile
     lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text ${baseArgs}`);
     lines.push(`Operation List: pnpm --filter @narada2/cloudflare-carrier product:operation:list:text ${baseArgs}`);
     lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${worker} --operator-session-file ${sessionFile} --execute-site-next`);
+    if (commandName === 'repository-publication-execute-pending') {
+      const firstResult = Array.isArray(result?.results) ? result.results[0] ?? null : null;
+      if (firstResult?.request_id) {
+        lines.push(`Publication Request Review: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text ${baseArgs} --repository-publication-request-id ${firstResult.request_id}`);
+      }
+      if (firstResult?.evidence?.publication_execution_id) {
+        lines.push(`Publication Execution Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text ${baseArgs} --repository-publication-execution-id ${firstResult.evidence.publication_execution_id}`);
+      }
+      lines.push(`Publication Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:provider-liveness:text ${baseArgs}`);
+    } else if (commandName === 'repository-publication-evidence-put') {
+      if (result?.repository_publication_request_id) {
+        lines.push(`Publication Request Review: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text ${baseArgs} --repository-publication-request-id ${result.repository_publication_request_id}`);
+      }
+      if (result?.publication_execution_id) {
+        lines.push(`Publication Execution Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text ${baseArgs} --repository-publication-execution-id ${result.publication_execution_id}`);
+      }
+    }
   }
 
   return `${lines.join('\n')}\n`;
