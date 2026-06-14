@@ -178,7 +178,7 @@ export function formatOperationEvidenceReadText(result) {
     const reviewLabel = reviewableMatchesLatestReview ? 'Focused Review' : 'Latest Review';
     lines.push(`${reviewLabel}: ${summary.latest_focus_review.focus_kind ?? 'unknown'}:${summary.latest_focus_review.focus_ref ?? 'unknown'} status=${summary.latest_focus_review.review_status ?? 'unknown'}`);
   }
-  if (summary.reviewable_focus_kind && summary.reviewable_focus_ref) {
+  if (summary.site_id && summary.reviewable_focus_kind && summary.reviewable_focus_ref) {
     emittedLabels.add('Review Ack');
     lines.push(`Review Ack: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'}${summary.operation_id ? ` --operation-id ${summary.operation_id}` : ''} --focus-kind ${summary.reviewable_focus_kind} --focus-ref ${summary.reviewable_focus_ref} --operator-session-file <operator-session-file>`);
   }
@@ -187,7 +187,7 @@ export function formatOperationEvidenceReadText(result) {
     emittedLabels.add(label);
     lines.push(`${label}: ${command}`);
   }
-  if (summary.operation_id) {
+  if (summary.site_id && summary.operation_id) {
     if (!emittedLabels.has('Recovery Read')) {
       lines.push(`Recovery Read: pnpm --filter @narada2/cloudflare-carrier product:operation:recovery:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
     }
@@ -200,9 +200,9 @@ export function formatOperationEvidenceReadText(result) {
 
 function buildOperationEvidenceWorkflowLinks(result, summary) {
   const workerUrl = result?.worker_url ?? '<worker-url>';
-  const siteId = summary.site_id ?? '<site-id>';
+  const siteId = summary.site_id;
   const operationId = summary.operation_id;
-  if (!operationId) return [];
+  if (!siteId || !operationId) return [];
   const links = [];
   if (summary.workflow_next_action === 'review_recovery_posture') {
     links.push({

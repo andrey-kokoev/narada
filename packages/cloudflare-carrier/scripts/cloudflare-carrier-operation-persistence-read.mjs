@@ -74,7 +74,7 @@ export function formatOperationPersistenceReadText(result) {
     emittedLabels.add(label);
     lines.push(`${label}: ${command}`);
   }
-  if (summary.operation_id) {
+  if (summary.site_id && summary.operation_id) {
     lines.push(`Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:operation:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
     if (!emittedLabels.has('Recovery Read')) {
       lines.push(`Recovery Read: pnpm --filter @narada2/cloudflare-carrier product:operation:recovery:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
@@ -85,9 +85,9 @@ export function formatOperationPersistenceReadText(result) {
 
 function buildOperationPersistenceWorkflowLinks(result, summary) {
   const workerUrl = result?.worker_url ?? '<worker-url>';
-  const siteId = summary.site_id ?? '<site-id>';
+  const siteId = summary.site_id;
   const operationId = summary.operation_id;
-  if (!operationId) return [];
+  if (!siteId || !operationId) return [];
   const links = [];
   if (summary.workflow_next_action === 'review_recovery_posture') {
     links.push({

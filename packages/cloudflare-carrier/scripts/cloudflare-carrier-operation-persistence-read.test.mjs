@@ -165,3 +165,27 @@ test('formatOperationPersistenceReadText emits direct workflow handoff when the 
 
   assert.match(text, /Recovery Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
+
+test('formatOperationPersistenceReadText suppresses operator handoff without a real site id', () => {
+  const text = formatOperationPersistenceReadText({
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation_id: 'operation_alpha',
+      workflow_next_action: 'review_recovery_posture',
+      workflow_reason: 'recovery_posture_needs_attention',
+      current_status: 'active',
+      phase: 'inhabited',
+      health: 'incomplete',
+      lifecycle_next_action: 'carrier_evidence',
+      persistence_state: 'degraded',
+      persistence_active_boundary_count: 10,
+      persistence_durable_boundary_count: 12,
+      persistence_warning_count: 0,
+    },
+  });
+
+  assert.doesNotMatch(text, /Evidence Read:/);
+  assert.doesNotMatch(text, /Recovery Read:/);
+  assert.doesNotMatch(text, /<site-id>/);
+});

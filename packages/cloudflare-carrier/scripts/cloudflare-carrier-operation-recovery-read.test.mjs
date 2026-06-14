@@ -176,3 +176,27 @@ test('formatOperationRecoveryReadText suppresses workflow links without a real o
 
   assert.doesNotMatch(text, /Continuation Workflow:/);
 });
+
+test('formatOperationRecoveryReadText suppresses operator handoff without a real site id', () => {
+  const text = formatOperationRecoveryReadText({
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation_id: 'operation_alpha',
+      workflow_next_action: 'refresh_site_continuity_loop',
+      workflow_reason: 'operation_lifecycle_continuity_loop_stale',
+      current_status: 'active',
+      phase: 'inhabited',
+      health: 'ready',
+      lifecycle_next_action: 'monitor_operation',
+      recovery_state: 'reconstructable',
+      recovery_boundary_count: 12,
+      recovery_gap_count: 0,
+    },
+  });
+
+  assert.doesNotMatch(text, /Continuity Workflow:/);
+  assert.doesNotMatch(text, /Persistence Read:/);
+  assert.doesNotMatch(text, /Evidence Read:/);
+  assert.doesNotMatch(text, /<site-id>/);
+});
