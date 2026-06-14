@@ -200,9 +200,12 @@ function safeToken(value) {
 
 const workerUrl = option('--url') ?? process.env.CLOUDFLARE_CARRIER_URL;
 const auth = resolveAuth(args, process.env);
+const outputFormat = option('--format') ?? 'json';
+const operatorSessionFile = option('--operator-session-file') ?? process.env.CLOUDFLARE_OPERATOR_SESSION_FILE ?? null;
 
 if (!workerUrl) fail('site_continuity_sync_requires_--url_or_CLOUDFLARE_CARRIER_URL');
 if (!auth) fail('site_continuity_sync_requires_bearer_token_or_operator_session');
+if (!['json', 'text'].includes(outputFormat)) fail(`unsupported_output_format:${outputFormat}`);
 
 if (command === 'pull-cloudflare') {
   const siteId = requiredOption('--site');
@@ -214,7 +217,7 @@ if (command === 'pull-cloudflare') {
   if (admission.action === 'refuse') {
     failJson('cloudflare_site_continuity_packet_refused_before_export', { admission });
   }
-  await writeJson(option('--out'), {
+  await writeOutput(option('--out'), {
     schema: 'narada.site_continuity_cloudflare_pull.v1',
     status: 'ok',
     site_id: siteId,
@@ -239,7 +242,7 @@ if (command === 'push-cloudflare') {
   if (packet.site_id && siteId !== packet.site_id) failJson('site_continuity_push_site_id_mismatch', { site_id: siteId, packet_site_id: packet.site_id });
   const pushed = await post({ operation: 'site.continuity.packet.put', params: { site_id: siteId, packet } });
   if (pushed.http_status !== 200 || pushed.body?.ok === false) failApi('cloudflare_site_continuity_packet_push_failed', pushed);
-  await writeJson(option('--out'), {
+  await writeOutput(option('--out'), {
     schema: 'narada.site_continuity_cloudflare_push.v1',
     status: 'ok',
     site_id: siteId,
@@ -255,7 +258,7 @@ if (command === 'read-cloudflare') {
   const siteId = requiredOption('--site');
   const read = await post({ operation: 'site.read', params: { site_id: siteId } });
   if (read.http_status !== 200 || read.body?.ok === false) failApi('cloudflare_site_read_failed', read);
-  await writeJson(option('--out'), {
+  await writeOutput(option('--out'), {
     schema: 'narada.site_continuity_cloudflare_read.v1',
     status: 'ok',
     site_id: siteId,
@@ -277,7 +280,7 @@ if (command === 'reconciliation-execution-put') {
   }
   const pushed = await post({ operation: 'site.continuity.reconciliation_execution.put', params: { site_id: siteId, execution } });
   if (pushed.http_status !== 200 || pushed.body?.ok === false) failApi('cloudflare_site_continuity_reconciliation_execution_push_failed', pushed);
-  await writeJson(option('--out'), {
+  await writeOutput(option('--out'), {
     schema: 'narada.site_continuity_cloudflare_reconciliation_execution_push.v1',
     status: 'ok',
     site_id: siteId,
@@ -329,7 +332,7 @@ if (command === 'sync-once') {
   });
   const reportPut = await post({ operation: 'site.continuity.loop.report.put', params: { site_id: siteId, report: loopReport } });
   if (reportPut.http_status !== 200 || reportPut.body?.ok === false) failApi('cloudflare_site_continuity_loop_report_push_failed', reportPut);
-  await writeJson(option('--out'), {
+  await writeOutput(option('--out'), {
     schema: 'narada.site_continuity_cloudflare_sync_once.v1',
     status: 'ok',
     site_id: siteId,
@@ -410,7 +413,7 @@ if (command === 'repository-publication-execute-pending') {
       direct_cloudflare_repository_mutation_admission: 'not_admitted',
     },
   });
-  await writeJson(option('--out'), {
+  await writeOutput(option('--out'), {
     schema: 'narada.repository_publication_cloudflare_pending_execution.v1',
     status: results.every((result) => result.status === 'evidence_recorded') && heartbeat.http_status === 200 && heartbeat.body?.ok !== false ? 'ok' : 'needs_attention',
     site_id: siteId,
@@ -440,7 +443,7 @@ if (command === 'repository-publication-evidence-put') {
   }
   const pushed = await post({ operation: 'repository_publication.evidence.put', params: { site_id: siteId, source_payload: evidence } });
   if (pushed.http_status !== 200 || pushed.body?.ok === false) failApi('cloudflare_repository_publication_evidence_push_failed', pushed);
-  await writeJson(option('--out'), {
+  await writeOutput(option('--out'), {
     schema: 'narada.repository_publication_cloudflare_evidence_push.v1',
     status: 'ok',
     site_id: siteId,
@@ -554,6 +557,20 @@ async function writeJson(path, value) {
   stdout.write(text);
 }
 
+async function writeOutput(path, value) {
+  if (outputFormat === 'text') {
+    const text = formatSiteContinuitySyncText(command, value, { operatorSessionFile });
+    if (path) {
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(path, text, 'utf8');
+      return;
+    }
+    stdout.write(text);
+    return;
+  }
+  await writeJson(path, value);
+}
+
 async function post(body) {
   const response = await fetch(apiUrl(), {
     method: 'POST',
@@ -598,5 +615,45 @@ function fail(code) {
 }
 
 function printHelp() {
-  stdout.write(`Narada Cloudflare site-continuity transport\n\nCommands:\n  pull-cloudflare --site <site_id> [--out <packet.json>]\n  push-cloudflare --packet <packet.json> [--site <site_id>] [--out <result.json>]\n  read-cloudflare --site <site_id> [--out <result.json>]\n  reconciliation-execution-put --site <site_id> --execution <execution.json> [--out <result.json>]\n  sync-once --packet <packet.json> [--site <site_id>] [--out <result.json>] [--local-inbound-dir <dir>]\n  repository-publication-execute-pending --site <site_id> [--repo <path>] [--limit <n>] [--push] [--remote <name>] [--out <result.json>]\n  repository-publication-evidence-put --site <site_id> [--evidence <evidence.json>] [--out <result.json>]\n\nAuth:\n  --url <worker-url> or CLOUDFLARE_CARRIER_URL\n  --token-file <path> or CLOUDFLARE_CARRIER_TOKEN_FILE\n  --token <bearer-token> or CLOUDFLARE_CARRIER_TOKEN\n  --operator-session-file <path> or CLOUDFLARE_OPERATOR_SESSION_FILE\n  --operator-session-cookie <cookie> or CLOUDFLARE_OPERATOR_SESSION_COOKIE\n\nNotes:\n  pull-cloudflare exports the packet emitted by site.read.\n  push-cloudflare imports a packet through site.continuity.packet.put.\n  reconciliation-execution-put records Windows reconciliation execution evidence in Cloudflare without granting Cloudflare execution authority.\n  sync-once imports the local packet, then returns the Cloudflare packet for local observation.\n  The script refuses locally invalid/executable-mutation packets before sending them.\n  repository-publication-execute-pending consumes queued Cloudflare publication requests and returns Windows-side evidence; it only runs git push when --push is explicit.\n  repository-publication-evidence-put returns Windows-side publication evidence to Cloudflare without granting Cloudflare git push authority.\n`);
+  stdout.write(`Narada Cloudflare site-continuity transport\n\nCommands:\n  pull-cloudflare --site <site_id> [--out <packet.json>]\n  push-cloudflare --packet <packet.json> [--site <site_id>] [--out <result.json>]\n  read-cloudflare --site <site_id> [--out <result.json>]\n  reconciliation-execution-put --site <site_id> --execution <execution.json> [--out <result.json>]\n  sync-once --packet <packet.json> [--site <site_id>] [--out <result.json>] [--local-inbound-dir <dir>]\n  repository-publication-execute-pending --site <site_id> [--repo <path>] [--limit <n>] [--push] [--remote <name>] [--out <result.json>]\n  repository-publication-evidence-put --site <site_id> [--evidence <evidence.json>] [--out <result.json>]\n\nAuth:\n  --url <worker-url> or CLOUDFLARE_CARRIER_URL\n  --token-file <path> or CLOUDFLARE_CARRIER_TOKEN_FILE\n  --token <bearer-token> or CLOUDFLARE_CARRIER_TOKEN\n  --operator-session-file <path> or CLOUDFLARE_OPERATOR_SESSION_FILE\n  --operator-session-cookie <cookie> or CLOUDFLARE_OPERATOR_SESSION_COOKIE\n\nOutput:\n  --format json|text (default json)\n\nNotes:\n  pull-cloudflare exports the packet emitted by site.read.\n  push-cloudflare imports a packet through site.continuity.packet.put.\n  reconciliation-execution-put records Windows reconciliation execution evidence in Cloudflare without granting Cloudflare execution authority.\n  sync-once imports the local packet, then returns the Cloudflare packet for local observation.\n  The script refuses locally invalid/executable-mutation packets before sending them.\n  repository-publication-execute-pending consumes queued Cloudflare publication requests and returns Windows-side evidence; it only runs git push when --push is explicit.\n  repository-publication-evidence-put returns Windows-side publication evidence to Cloudflare without granting Cloudflare git push authority.\n`);
+}
+
+function formatSiteContinuitySyncText(commandName, result, { operatorSessionFile: sessionFile = null } = {}) {
+  const lines = ['Site Continuity Sync'];
+  const siteId = result?.site_id ?? 'unknown';
+  const status = result?.status ?? 'unknown';
+  const worker = result?.worker_url ?? workerUrl ?? null;
+
+  lines.push(`Command: ${commandName}`);
+  lines.push(`Status: ${status}`);
+  lines.push(`Site: ${siteId}`);
+  if (result?.auth_source) lines.push(`Auth: ${result.auth_source}`);
+
+  if (commandName === 'read-cloudflare') {
+    const packet = result?.site_continuity?.exchange_packet ?? null;
+    lines.push(`Packets: ${Array.isArray(result?.site_continuity_packets) ? result.site_continuity_packets.length : 0}`);
+    if (packet?.packet_id) lines.push(`Exchange Packet: ${packet.packet_id}`);
+    if (packet?.source_embodiment_kind || packet?.target_embodiment_kind) {
+      lines.push(`Embodiments: ${packet?.source_embodiment_kind ?? 'unknown'} -> ${packet?.target_embodiment_kind ?? 'unknown'}`);
+    }
+  } else if (commandName === 'sync-once') {
+    lines.push(`Push Recorded: ${result?.local_to_cloudflare_recorded === true ? 'yes' : 'no'}`);
+    lines.push(`Return Observed: ${result?.cloudflare_to_local_windows_returned === true ? 'yes' : 'no'}`);
+    lines.push(`Inbound Artifact: ${result?.cloudflare_to_local_windows_local_artifact_written === true ? 'written' : 'not_written'}`);
+    if (result?.pushed_packet_id || result?.pulled_packet_id) {
+      lines.push(`Packets: pushed=${result?.pushed_packet_id ?? 'none'} pulled=${result?.pulled_packet_id ?? 'none'}`);
+    }
+    if (result?.continuity_loop_report?.cloudflare_push?.durability_action) {
+      lines.push(`Durability Action: ${result.continuity_loop_report.cloudflare_push.durability_action}`);
+    }
+  }
+
+  if (worker && sessionFile && siteId && siteId !== 'unknown') {
+    const baseArgs = `-- --url ${worker} --site ${siteId} --operator-session-file ${sessionFile}`;
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text ${baseArgs}`);
+    lines.push(`Operation List: pnpm --filter @narada2/cloudflare-carrier product:operation:list:text ${baseArgs}`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${worker} --operator-session-file ${sessionFile} --execute-site-next`);
+  }
+
+  return `${lines.join('\n')}\n`;
 }

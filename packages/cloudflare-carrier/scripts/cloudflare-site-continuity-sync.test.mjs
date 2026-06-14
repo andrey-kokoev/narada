@@ -88,6 +88,7 @@ test('site continuity sync help describes supported transports', async () => {
   assert.match(result.stdout, /repository-publication-execute-pending/);
   assert.match(result.stdout, /repository-publication-evidence-put/);
   assert.match(result.stdout, /operator-session-file/);
+  assert.match(result.stdout, /--format json\|text/);
 });
 
 test('site continuity sync accepts operator session auth for Cloudflare transport', async () => {
@@ -389,6 +390,131 @@ test('site continuity sync cycle pushes local packet and returns Cloudflare pack
     assert.equal(mock.requests[2].operation, 'site.continuity.loop.report.put');
     assert.equal(mock.requests[2].params.site_id, 'site_fixture');
     assert.equal(mock.requests[2].params.report.schema, 'narada.site_continuity_productized_loop.v1');
+  } finally {
+    await mock.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('site continuity read-cloudflare emits operator text handoff when using operator session file', async () => {
+  const binding = createSiteContinuityBinding({ site_id: 'site_fixture' });
+  const packet = createSiteContinuityExchangePacket({
+    binding,
+    source_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER,
+    target_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS,
+    projections: [
+      {
+        projection_class: 'site_read_model',
+        source_cursor: 'cloudflare-read-text-cursor',
+      },
+    ],
+  });
+  const mock = await startCarrierMock((body) => {
+    if (body.operation === 'site.read') {
+      return {
+        body: {
+          ok: true,
+          site_continuity: { exchange_packet: packet },
+          site_continuity_packets: [packet],
+        },
+      };
+    }
+    return { status: 400, body: { ok: false, code: 'unexpected_operation' } };
+  });
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-read-text-'));
+  const sessionFile = join(root, 'operator-session.json');
+  try {
+    await writeFile(sessionFile, JSON.stringify({ cookie: 'narada_operator_session=session-fixture' }), 'utf8');
+    const result = await runSync([
+      'read-cloudflare',
+      '--site', 'site_fixture',
+      '--url', mock.url,
+      '--operator-session-file', sessionFile,
+      '--format', 'text',
+    ], {
+      env: {
+        CLOUDFLARE_CARRIER_TOKEN: '',
+        CLOUDFLARE_OPERATOR_SESSION_COOKIE: '',
+      },
+    });
+
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(result.stdout, /Site Continuity Sync/);
+    assert.match(result.stdout, /Command: read-cloudflare/);
+    assert.match(result.stdout, /Exchange Packet:/);
+    assert.match(result.stdout, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
+    assert.match(result.stdout, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text/);
+    assert.match(result.stdout, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
+  } finally {
+    await mock.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('site continuity sync-once emits operator text handoff when using operator session file', async () => {
+  const binding = createSiteContinuityBinding({ site_id: 'site_fixture' });
+  const localPacket = createSiteContinuityExchangePacket({
+    binding,
+    source_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS,
+    target_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER,
+    projections: [
+      {
+        projection_class: 'site_read_model',
+        source_cursor: 'local-sync-text-cursor',
+      },
+    ],
+  });
+  const cloudflarePacket = createSiteContinuityExchangePacket({
+    binding,
+    source_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.CLOUDFLARE_CARRIER,
+    target_embodiment_kind: SITE_CONTINUITY_EMBODIMENT_KINDS.LOCAL_WINDOWS,
+    projections: [
+      {
+        projection_class: 'site_read_model',
+        source_cursor: 'cloudflare-sync-text-cursor',
+      },
+    ],
+  });
+  const mock = await startCarrierMock((body) => {
+    if (body.operation === 'site.continuity.packet.put') {
+      return { body: { ok: true, status: 'imported', packet_record: { packet_id: body.params.packet.packet_id, durability_action: 'refreshed_existing_packet' } } };
+    }
+    if (body.operation === 'site.read') {
+      return { body: { ok: true, site_continuity: { exchange_packet: cloudflarePacket } } };
+    }
+    if (body.operation === 'site.continuity.loop.report.put') {
+      return { body: { ok: true, status: 'recorded' } };
+    }
+    return { status: 400, body: { ok: false, code: 'unexpected_operation' } };
+  });
+  const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-sync-text-'));
+  const sessionFile = join(root, 'operator-session.json');
+  const inboundDirectory = join(root, 'inbound');
+  try {
+    await writeFile(sessionFile, JSON.stringify({ cookie: 'narada_operator_session=session-fixture' }), 'utf8');
+    const result = await runSync([
+      'sync-once',
+      '--site', 'site_fixture',
+      '--url', mock.url,
+      '--operator-session-file', sessionFile,
+      '--local-inbound-dir', inboundDirectory,
+      '--format', 'text',
+    ], {
+      input: JSON.stringify({ packet: localPacket }),
+      env: {
+        CLOUDFLARE_CARRIER_TOKEN: '',
+        CLOUDFLARE_OPERATOR_SESSION_COOKIE: '',
+      },
+    });
+
+    assert.equal(result.code, 0, result.stderr);
+    assert.match(result.stdout, /Command: sync-once/);
+    assert.match(result.stdout, /Push Recorded: yes/);
+    assert.match(result.stdout, /Return Observed: yes/);
+    assert.match(result.stdout, /Durability Action: refreshed_existing_packet/);
+    assert.match(result.stdout, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
+    assert.match(result.stdout, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text/);
+    assert.match(result.stdout, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
   } finally {
     await mock.close();
     await rm(root, { recursive: true, force: true });
