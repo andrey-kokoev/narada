@@ -143,6 +143,10 @@ export function formatOperationLifecycleWorkflowLiveText(result) {
     lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`);
     lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
   }
+  if (hasSiteId) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
+  }
   const createFollowOn = buildOperationWorkflowCommand(result, result.read_after_create?.workflow_next_action ?? null);
   if (createFollowOn) lines.push(`Create Workflow: ${createFollowOn}`);
   const continuationFollowOn = buildOperationWorkflowCommand(result, result.read_after_needs_continuation?.workflow_next_action ?? null);
