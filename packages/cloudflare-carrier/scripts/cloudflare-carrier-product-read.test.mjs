@@ -390,6 +390,26 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   });
   assert.match(operationFallbackText, /Resident Dispatch Windows Fallback Request: pnpm --filter @narada2\/cloudflare-carrier product:resident-dispatch:windows-fallback-request:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --dispatch-decision-id resident_dispatch_alpha --operator-session-file <operator-session-file>/);
 
+  const operationFallbackWithoutDecisionText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      current_status: 'active',
+      status_transition_count: 1,
+      phase: 'active_uninhabited',
+      health: 'incomplete',
+      next_action: 'session',
+      workflow_next_action: 'request_windows_fallback_resident_dispatch',
+      workflow_reason: 'windows_fallback_request_not_recorded',
+      session_count: 0,
+      task_count: 0,
+    },
+  });
+  assert.doesNotMatch(operationFallbackWithoutDecisionText, /Resident Dispatch Windows Fallback Request:/);
+
   const operationFallbackPendingText = formatProductSurfaceText({
     operation: 'operation.read',
     worker_url: 'https://carrier.example.test',
@@ -471,6 +491,25 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
     },
   });
   assert.match(operationTaskFocusText, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id task_123 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
+
+  const operationTaskFocusWithoutTargetText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      current_status: 'active',
+      status_transition_count: 1,
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'task',
+      workflow_next_action: 'focus_open_task',
+      session_count: 0,
+      task_count: 1,
+    },
+  });
+  assert.doesNotMatch(operationTaskFocusWithoutTargetText, /Task Workflow:.*--task-id/);
 
   const siteReadText = formatProductSurfaceText({
     operation: 'site.read',
@@ -955,6 +994,23 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   });
   assert.match(operationReadSessionPathTaskText, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --carrier-session-id session_alpha --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
 
+  const operationReadSessionPathTaskWithoutSessionText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_live',
+      current_status: 'active',
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'carrier_evidence',
+      workflow_next_action: 'focus_session_path_task',
+      workflow_reason: 'session_path_has_open_task',
+      posture_next_action: 'monitor_operations',
+    },
+  });
+  assert.doesNotMatch(operationReadSessionPathTaskWithoutSessionText, /Task Workflow:.*--carrier-session-id/);
+
   const operationReadOperationPathTaskText = formatProductSurfaceText({
     operation: 'operation.read',
     worker_url: 'https://carrier.example.test',
@@ -998,6 +1054,30 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   });
   assert.match(operationReadContinuityReviewWithoutKindText, /Next Action: review_site_continuity_reconciliation_execution/);
   assert.match(operationReadContinuityReviewWithoutKindText, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:2026-06-13T21:59:01.308Z:completed --operator-session-file <operator-session-file>/);
+
+  const operationReadContinuityReviewWithoutRefText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    summary: {
+      operation: 'operation.read',
+      site_id: 'site_alpha',
+      operation_id: 'operation_live',
+      current_status: 'active',
+      status_transition_count: 0,
+      phase: 'inhabited',
+      health: 'ready',
+      next_action: 'review_site_continuity_reconciliation_execution',
+      workflow_next_action: 'review_site_continuity_reconciliation_execution',
+      workflow_reason: 'operation_operator_focus_needs_review',
+      workflow_focus_kind: 'site_continuity_reconciliation_execution',
+      session_count: 1,
+      task_count: 0,
+      recovery_state: 'reconstructable',
+      recovery_boundary_count: 0,
+      recovery_gap_count: 0,
+    },
+  });
+  assert.doesNotMatch(operationReadContinuityReviewWithoutRefText, /Review Ack:/);
 
   const operationReadLifecycleSessionText = formatProductSurfaceText({
     operation: 'operation.read',
