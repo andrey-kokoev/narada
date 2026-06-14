@@ -47,6 +47,7 @@ test('formatRepositoryPublicationReadinessLiveSmokeText emits provider liveness 
   });
 
   assert.match(text, /Repository Publication Readiness Smoke: ready/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider-liveness:text/);
 });
 

@@ -55,6 +55,7 @@ export function formatRepositoryPublicationReadinessLiveSmokeText(result) {
   if (Array.isArray(result.missing_configuration) && result.missing_configuration.length > 0) {
     lines.push(`Missing Configuration: ${result.missing_configuration.join(', ')}`);
   }
+  lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`);
   lines.push(`Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`);
   return `${lines.join('\n')}\n`;
 }
