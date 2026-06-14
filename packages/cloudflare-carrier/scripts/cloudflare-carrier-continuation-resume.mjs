@@ -209,6 +209,7 @@ export function summarizeContinuationResumeFailure(body = {}, params = {}) {
 export function formatContinuationResumeText(result) {
   const summary = result?.summary ?? summarizeContinuationResume(result ?? {}, result?.params ?? {});
   const refused = result?.status === 'refused' || summary?.ok === false;
+  const actionableRoute = summary.route_next_action && !['none', 'monitor_operation'].includes(summary.route_next_action);
   const lines = [
     `Continuation Resume: ${refused ? 'refused' : 'ok'}`,
     `Worker: ${result?.worker_url ?? 'unknown'}`,
@@ -226,6 +227,12 @@ export function formatContinuationResumeText(result) {
   if (summary.route_next_action || summary.route_reason) lines.push(`Route: action=${summary.route_next_action ?? 'unknown'} reason=${summary.route_reason ?? 'none'}`);
   lines.push(`Activation: status=${summary.activation_status ?? 'unknown'} transition=${summary.activation_transition ?? 'none'} reason=${summary.activation_reason ?? 'none'}`);
   lines.push(`Session Event: kind=${summary.session_event_kind ?? 'unknown'} sequence=${summary.session_event_sequence ?? 'unknown'}`);
+  if (summary.site_id && summary.operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? 'unknown'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+    if (actionableRoute) {
+      lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? 'unknown'} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+    }
+  }
   return `${lines.join('\n')}\n`;
 }
 

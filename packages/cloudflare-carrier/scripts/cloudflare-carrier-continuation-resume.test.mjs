@@ -369,7 +369,46 @@ test('formatContinuationResumeText renders operator summary without auth materia
   assert.match(text, /Route: action=resume_operation_continuation reason=operation_lifecycle_needs_continuation/);
   assert.match(text, /Activation: status=active transition=needs_continuation_to_active reason=operator_resuming_continuation/);
   assert.match(text, /Session Event: kind=carrier_session_started sequence=1/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.equal(text.includes('secret-token'), false);
+});
+
+test('formatContinuationResumeText suppresses workflow handoff for passive routes', () => {
+  const text = formatContinuationResumeText({
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    params: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      carrier_session_id: 'carrier_session_alpha',
+      agent_id: 'agent.operator',
+    },
+    summary: summarizeContinuationResume({
+      route: {
+        workflow_next_action: 'monitor_operation',
+        workflow_reason: 'operation_is_stable',
+      },
+      activation: {
+        summary: {
+          status: 'active',
+          transition: 'needs_continuation_to_active',
+        },
+      },
+      session_start: {
+        carrier_session_id: 'carrier_session_alpha',
+        event: { event_kind: 'carrier_session_started', sequence: 1 },
+      },
+    }, {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      carrier_session_id: 'carrier_session_alpha',
+      agent_id: 'agent.operator',
+    }),
+  });
+
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
 });
 
 test('formatContinuationResumeText renders refused resume evidence', () => {
