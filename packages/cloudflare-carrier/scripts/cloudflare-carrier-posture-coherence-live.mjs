@@ -306,7 +306,7 @@ function options(args, name) {
   return values;
 }
 
-function renderText(result) {
+export function formatPostureCoherenceLiveText(result) {
   const lines = [
     'Posture Coherence',
     `Worker: ${result.worker_url}`,
@@ -315,6 +315,13 @@ function renderText(result) {
     `Site Route: ${result.site_list.route_next_action ?? 'unknown'}`,
     `Operation Count Summary: ${result.sites.map((site) => `${site.site_id}:${site.operation_list.operation_count ?? 0}`).join(', ') || 'none'}`,
   ];
+  for (const site of result.sites ?? []) {
+    lines.push(`- ${site.site_id}: health=${site.site_read?.health ?? 'unknown'} next=${site.site_read?.next_action ?? 'none'} operations=${site.operation_list?.operation_count ?? 0}`);
+    lines.push(`  Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${site.site_id} --operator-session-file <operator-session-file>`);
+    if (site.operation_list?.next_operation_id) {
+      lines.push(`  Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${site.site_id} --operation-id ${site.operation_list.next_operation_id} --operator-session-file <operator-session-file>`);
+    }
+  }
   if (result.issues.length > 0) {
     lines.push('Issues:');
     for (const entry of result.issues) {
@@ -329,7 +336,7 @@ if (invokedDirectly) {
   const config = parsePostureCoherenceLiveArgs(process.argv.slice(2), process.env);
   const result = await runPostureCoherenceLive(config);
   if (config.format === 'text') {
-    process.stdout.write(renderText(result));
+    process.stdout.write(formatPostureCoherenceLiveText(result));
   } else {
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   }
