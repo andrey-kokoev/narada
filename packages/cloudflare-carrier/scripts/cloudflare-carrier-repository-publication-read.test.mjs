@@ -444,6 +444,7 @@ test('formatRepositoryPublicationReadText surfaces evidence refusal reason', () 
   assert.match(text, /Focused Execution: publication-execution-1/);
   assert.match(text, /Current Posture: windows_repository_publication_refused_cloudflare_recorded_evidence/);
   assert.match(text, /Focused Publication Status: refused reason=repository_publication_push_not_enabled/);
+  assert.match(text, /Request Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --repository-publication-request-id repository-publication-request-1 --operator-session-file <operator-session-file>/);
 });
 
 test('formatRepositoryPublicationReadText surfaces focused admission and execution labels', () => {
