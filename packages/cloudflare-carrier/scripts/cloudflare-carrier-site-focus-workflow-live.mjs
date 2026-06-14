@@ -17,6 +17,7 @@ const CHILD_STDIO_MAX_BUFFER = 64 * 1024 * 1024;
 export function parseSiteFocusWorkflowLiveArgs(argv = [], env = process.env) {
   const args = [...argv];
   const workerUrl = option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '';
+  const format = option(args, '--format') ?? env.CLOUDFLARE_CARRIER_SITE_FOCUS_FORMAT ?? 'json';
   const expectedSiteId = option(args, '--focused-site-id') ?? option(args, '--site-id') ?? env.CLOUDFLARE_CARRIER_FOCUSED_SITE_ID ?? null;
   const expectedRouteAction = option(args, '--expected-route-action') ?? env.CLOUDFLARE_CARRIER_SITE_FOCUS_EXPECTED_ROUTE_ACTION ?? 'focus_next_site';
   const auth = resolveAuth(args, env);
@@ -27,15 +28,36 @@ export function parseSiteFocusWorkflowLiveArgs(argv = [], env = process.env) {
     throw new Error('site_focus_workflow_live_requires_--execute-site-focus_or_CLOUDFLARE_CARRIER_SITE_FOCUS_EXECUTE_LIVE=1');
   }
   if (!workerUrl) throw new Error('site_focus_workflow_live_requires_--url_or_CLOUDFLARE_CARRIER_URL');
+  if (!['json', 'text'].includes(format)) throw new Error(`site_focus_workflow_live_unknown_format:${format}`);
   if (!auth) throw new Error('site_focus_workflow_live_requires_bearer_token_or_operator_session');
 
   return {
     workerUrl,
+    format,
     expectedSiteId,
     expectedRouteAction,
     auth,
     executeAcknowledged,
   };
+}
+
+export function formatSiteFocusWorkflowLiveText(result) {
+  const lines = [
+    `Site Focus Workflow: ${result.status}`,
+    `Worker: ${result.worker_url}`,
+    `Selected Site: ${result.selected_site_id}`,
+    `Expected Route: ${result.expected_route_action ?? 'unknown'}`,
+    `Site Action: ${result.selected_site_action ?? 'unknown'}`,
+    `Selected Operation: ${result.selected_operation_id ?? 'none'} action=${result.selected_operation_action ?? 'unknown'} reason=${result.selected_operation_reason ?? 'unknown'}`,
+  ];
+  if (result.selected_operation_focus_ref) {
+    lines.push(`Operation Focus: kind=${result.selected_operation_focus_kind ?? 'unknown'} ref=${result.selected_operation_focus_ref}`);
+  }
+  lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operator-session-file <operator-session-file>`);
+  if (result.selected_operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operation-id ${result.selected_operation_id} --operator-session-file <operator-session-file>`);
+  }
+  return `${lines.join('\n')}\n`;
 }
 
 export async function runSiteFocusWorkflowLive(
@@ -157,5 +179,9 @@ function flag(args, name) {
 if (resolve(process.argv[1] ?? '') === scriptPath) {
   const config = parseSiteFocusWorkflowLiveArgs(process.argv.slice(2));
   const result = await runSiteFocusWorkflowLive(config);
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  if (config.format === 'text') {
+    process.stdout.write(formatSiteFocusWorkflowLiveText(result));
+  } else {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  }
 }

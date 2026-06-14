@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  formatSiteFocusWorkflowLiveText,
   parseSiteFocusWorkflowLiveArgs,
   runSiteFocusWorkflowLive,
 } from './cloudflare-carrier-site-focus-workflow-live.mjs';
@@ -32,6 +33,39 @@ test('parseSiteFocusWorkflowLiveArgs accepts operator session auth', () => {
     value: 'session-value',
     source: 'operator-session-cookie',
   });
+});
+
+test('parseSiteFocusWorkflowLiveArgs supports text format', () => {
+  const parsed = parseSiteFocusWorkflowLiveArgs([
+    '--url', 'https://carrier.example.test',
+    '--focused-site-id', 'site_alpha',
+    '--operator-session-cookie', 'narada_operator_session=session-value',
+    '--format', 'text',
+    '--execute-site-focus',
+  ], {});
+
+  assert.equal(parsed.format, 'text');
+});
+
+test('formatSiteFocusWorkflowLiveText renders direct reads', () => {
+  const text = formatSiteFocusWorkflowLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example.test',
+    selected_site_id: 'site_alpha',
+    expected_route_action: 'focus_next_site',
+    selected_site_action: 'focus_next_operation',
+    selected_operation_id: 'operation_alpha',
+    selected_operation_action: 'refresh_site_continuity_loop',
+    selected_operation_reason: 'operation_lifecycle_continuity_loop_stale',
+    selected_operation_focus_kind: 'site_continuity_reconciliation_execution',
+    selected_operation_focus_ref: 'focus-ref',
+  });
+
+  assert.match(text, /^Site Focus Workflow: ok/m);
+  assert.match(text, /Selected Site: site_alpha/);
+  assert.match(text, /Operation Focus: kind=site_continuity_reconciliation_execution ref=focus-ref/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
 });
 
 test('runSiteFocusWorkflowLive selects next site from posture and reads it', async () => {

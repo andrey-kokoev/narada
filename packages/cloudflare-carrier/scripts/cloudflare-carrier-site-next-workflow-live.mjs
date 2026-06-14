@@ -20,6 +20,7 @@ const SITE_LIST_STALE_RECHECK_DELAY_MS = 20_000;
 export function parseSiteNextWorkflowLiveArgs(argv = [], env = process.env) {
   const args = [...argv];
   const workerUrl = option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '';
+  const format = option(args, '--format') ?? env.CLOUDFLARE_CARRIER_SITE_NEXT_FORMAT ?? 'json';
   const expectedRouteAction = option(args, '--expected-route-action') ?? env.CLOUDFLARE_CARRIER_SITE_NEXT_EXPECTED_ROUTE_ACTION ?? null;
   const expectedSiteId = option(args, '--focused-site-id') ?? option(args, '--site-id') ?? env.CLOUDFLARE_CARRIER_FOCUSED_SITE_ID ?? null;
   const expectedSiteAction = option(args, '--expected-action') ?? env.CLOUDFLARE_CARRIER_SITE_NEXT_EXPECTED_ACTION ?? null;
@@ -33,10 +34,12 @@ export function parseSiteNextWorkflowLiveArgs(argv = [], env = process.env) {
     throw new Error('site_next_workflow_live_requires_--execute-site-next_or_CLOUDFLARE_CARRIER_SITE_NEXT_EXECUTE_LIVE=1');
   }
   if (!workerUrl) throw new Error('site_next_workflow_live_requires_--url_or_CLOUDFLARE_CARRIER_URL');
+  if (!['json', 'text'].includes(format)) throw new Error(`site_next_workflow_live_unknown_format:${format}`);
   if (!auth) throw new Error('site_next_workflow_live_requires_bearer_token_or_operator_session');
 
   return {
     workerUrl,
+    format,
     expectedRouteAction,
     expectedSiteId,
     expectedSiteAction,
@@ -45,6 +48,33 @@ export function parseSiteNextWorkflowLiveArgs(argv = [], env = process.env) {
     auth,
     executeAcknowledged,
   };
+}
+
+export function formatSiteNextWorkflowLiveText(result) {
+  const lines = [
+    `Site Next Workflow: ${result.status}`,
+    `Worker: ${result.worker_url}`,
+    `Delegated Route: ${result.delegated_route_action ?? 'unknown'}`,
+    `Selected Site: ${result.selected_site_id ?? 'none'}`,
+    `Delegated Workflow: ${result.delegated_workflow ?? 'unknown'}`,
+    `Site Action: ${result.delegated_site_action ?? 'unknown'}`,
+    `Operation: ${result.delegated_operation_id ?? 'none'} action=${result.delegated_operation_action ?? 'unknown'} reason=${result.delegated_operation_reason ?? 'unknown'}`,
+  ];
+  if (result.delegated_operation_focus_ref) {
+    lines.push(`Operation Focus: kind=${result.delegated_operation_focus_kind ?? 'unknown'} ref=${result.delegated_operation_focus_ref}`);
+  }
+  lines.push(`Site List: pnpm --filter @narada2/cloudflare-carrier product:site:list:text -- --url ${result.worker_url} --operator-session-file <operator-session-file>`);
+  if (result.selected_site_id) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operator-session-file <operator-session-file>`);
+  }
+  if (result.delegated_operation_id && result.selected_site_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operation-id ${result.delegated_operation_id} --operator-session-file <operator-session-file>`);
+  }
+  const postRoute = result.list_after_next?.route_next_action ?? null;
+  if (postRoute) {
+    lines.push(`Post Route: ${postRoute} next=${result.list_after_next?.next_action ?? 'unknown'}`);
+  }
+  return `${lines.join('\n')}\n`;
 }
 
 export async function runSiteNextWorkflowLive(
@@ -296,5 +326,9 @@ function flag(args, name) {
 if (resolve(process.argv[1] ?? '') === scriptPath) {
   const config = parseSiteNextWorkflowLiveArgs(process.argv.slice(2));
   const result = await runSiteNextWorkflowLive(config);
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  if (config.format === 'text') {
+    process.stdout.write(formatSiteNextWorkflowLiveText(result));
+  } else {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  }
 }

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  formatSiteActionWorkflowLiveText,
   parseSiteActionWorkflowLiveArgs,
   runSiteActionWorkflowLive,
 } from './cloudflare-carrier-site-action-workflow-live.mjs';
@@ -37,6 +38,45 @@ test('parseSiteActionWorkflowLiveArgs supports refs and operator session auth', 
     value: 'operator-session-cookie',
     source: 'operator-session-cookie',
   });
+});
+
+test('parseSiteActionWorkflowLiveArgs supports text format', () => {
+  const parsed = parseSiteActionWorkflowLiveArgs([
+    '--url', 'https://carrier.example',
+    '--site', 'site_alpha',
+    '--operator-session-cookie', 'operator-session-cookie',
+    '--format', 'text',
+    '--execute-site-action',
+  ], {});
+
+  assert.equal(parsed.format, 'text');
+});
+
+test('formatSiteActionWorkflowLiveText renders direct reads', () => {
+  const text = formatSiteActionWorkflowLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    site_id: 'site_alpha',
+    delegated_workflow: 'focus_next_operation',
+    delegated_action: 'focus_next_operation',
+    read_before_action: {
+      next_action: 'focus_next_operation',
+      active_operation_id: 'operation_alpha',
+    },
+    read_after_action: {
+      next_action: 'monitor_site',
+      active_operation_id: 'operation_alpha',
+    },
+    delegated_followup_result: { status: 'ok' },
+  });
+
+  assert.match(text, /^Site Action Workflow: ok/m);
+  assert.match(text, /Site: site_alpha/);
+  assert.match(text, /Pre Action: focus_next_operation/);
+  assert.match(text, /Post Action: monitor_site/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Follow-up: executed/);
 });
 
 test('runSiteActionWorkflowLive returns monitor result without delegation', async () => {

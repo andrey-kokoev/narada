@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  formatSiteNextWorkflowLiveText,
   parseSiteNextWorkflowLiveArgs,
   runSiteNextWorkflowLive,
 } from './cloudflare-carrier-site-next-workflow-live.mjs';
@@ -31,6 +32,46 @@ test('parseSiteNextWorkflowLiveArgs supports operator session auth', () => {
     value: 'operator-session-cookie',
     source: 'operator-session-cookie',
   });
+});
+
+test('parseSiteNextWorkflowLiveArgs supports text format', () => {
+  const parsed = parseSiteNextWorkflowLiveArgs([
+    '--url', 'https://carrier.example',
+    '--focused-site-id', 'site_alpha',
+    '--operator-session-cookie', 'operator-session-cookie',
+    '--format', 'text',
+    '--execute-site-next',
+  ], {});
+
+  assert.equal(parsed.format, 'text');
+});
+
+test('formatSiteNextWorkflowLiveText renders direct reads', () => {
+  const text = formatSiteNextWorkflowLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    delegated_route_action: 'focus_next_site',
+    delegated_workflow: 'focus_next_operation',
+    delegated_site_action: 'focus_next_operation',
+    delegated_operation_id: 'operation_alpha',
+    delegated_operation_action: 'refresh_site_continuity_loop',
+    delegated_operation_reason: 'operation_lifecycle_continuity_loop_stale',
+    delegated_operation_focus_kind: 'site_continuity_reconciliation_execution',
+    delegated_operation_focus_ref: 'focus-ref',
+    selected_site_id: 'site_alpha',
+    list_after_next: {
+      route_next_action: 'monitor_sites',
+      next_action: 'monitor_sites',
+    },
+  });
+
+  assert.match(text, /^Site Next Workflow: ok/m);
+  assert.match(text, /Selected Site: site_alpha/);
+  assert.match(text, /Operation Focus: kind=site_continuity_reconciliation_execution ref=focus-ref/);
+  assert.match(text, /Site List: pnpm --filter @narada2\/cloudflare-carrier product:site:list:text/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Post Route: monitor_sites next=monitor_sites/);
 });
 
 test('runSiteNextWorkflowLive returns monitor_sites when no site needs focus', async () => {

@@ -48,6 +48,7 @@ function resolveActionWorkflow(action) {
 export function parseSiteActionWorkflowLiveArgs(argv = [], env = process.env) {
   const args = [...argv];
   const workerUrl = option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '';
+  const format = option(args, '--format') ?? env.CLOUDFLARE_CARRIER_SITE_ACTION_FORMAT ?? 'json';
   const siteId = option(args, '--site') ?? option(args, '--focused-site-id') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? env.CLOUDFLARE_CARRIER_FOCUSED_SITE_ID ?? null;
   const expectedAction = option(args, '--expected-action') ?? env.CLOUDFLARE_CARRIER_SITE_ACTION_EXPECTED_ACTION ?? null;
   const localSiteRef = option(args, '--local-site-ref') ?? env.CLOUDFLARE_CARRIER_LOCAL_SITE_REF ?? null;
@@ -64,11 +65,13 @@ export function parseSiteActionWorkflowLiveArgs(argv = [], env = process.env) {
     throw new Error('site_action_workflow_live_requires_--execute-site-action_or_CLOUDFLARE_CARRIER_SITE_ACTION_EXECUTE_LIVE=1');
   }
   if (!workerUrl) throw new Error('site_action_workflow_live_requires_--url_or_CLOUDFLARE_CARRIER_URL');
+  if (!['json', 'text'].includes(format)) throw new Error(`site_action_workflow_live_unknown_format:${format}`);
   if (!siteId) throw new Error('site_action_workflow_live_requires_--site_or_--focused-site-id');
   if (!auth) throw new Error('site_action_workflow_live_requires_bearer_token_or_operator_session');
 
   return {
     workerUrl,
+    format,
     siteId,
     expectedAction,
     localSiteRef,
@@ -80,6 +83,27 @@ export function parseSiteActionWorkflowLiveArgs(argv = [], env = process.env) {
     auth,
     executeAcknowledged,
   };
+}
+
+export function formatSiteActionWorkflowLiveText(result) {
+  const lines = [
+    `Site Action Workflow: ${result.status}`,
+    `Worker: ${result.worker_url}`,
+    `Site: ${result.site_id}`,
+    `Delegated Workflow: ${result.delegated_workflow ?? 'unknown'}`,
+    `Action: ${result.delegated_action ?? 'unknown'}`,
+    `Pre Action: ${result.read_before_action?.next_action ?? 'unknown'}`,
+    `Post Action: ${result.read_after_action?.next_action ?? 'unknown'}`,
+    `Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`,
+  ];
+  const operationId = result.read_after_action?.active_operation_id ?? result.read_before_action?.active_operation_id ?? null;
+  if (operationId) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${operationId} --operator-session-file <operator-session-file>`);
+  }
+  if (result.delegated_followup_result) {
+    lines.push('Follow-up: executed');
+  }
+  return `${lines.join('\n')}\n`;
 }
 
 export async function runSiteActionWorkflowLive(
@@ -280,5 +304,9 @@ function flag(args, name) {
 if (resolve(process.argv[1] ?? '') === scriptPath) {
   const config = parseSiteActionWorkflowLiveArgs(process.argv.slice(2));
   const result = await runSiteActionWorkflowLive(config);
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  if (config.format === 'text') {
+    process.stdout.write(formatSiteActionWorkflowLiveText(result));
+  } else {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  }
 }
