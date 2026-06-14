@@ -2687,3 +2687,40 @@ test('formatProductSurfaceText surfaces operation scope command', () => {
   assert.match(operationReadScopeText, /Operation Scope: pnpm --filter @narada2\/cloudflare-carrier product:operation:scope:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
 
+test('formatProductSurfaceText suppresses operation.read site-scoped handoff without a real site id', () => {
+  const operationReadText = formatProductSurfaceText({
+    operation: 'operation.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.read',
+      operation_id: 'operation_alpha',
+      current_status: 'active',
+      status_transition_count: 1,
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'task',
+      scope_loaded: false,
+      workflow_next_action: 'read_operation_scope',
+      workflow_reason: 'operation_scope_not_loaded',
+      active_session_id: 'session_alpha',
+      session_count: 1,
+      task_count: 1,
+      local_ingress_request_count: 1,
+      repository_publication_request_count: 1,
+      persistence_state: 'durable',
+      recovery_state: 'reconstructable',
+    },
+  });
+
+  assert.doesNotMatch(operationReadText, /Task Review:/);
+  assert.doesNotMatch(operationReadText, /Session Evidence:/);
+  assert.doesNotMatch(operationReadText, /Task Workflow:/);
+  assert.doesNotMatch(operationReadText, /Local Ingress Request Review:/);
+  assert.doesNotMatch(operationReadText, /Repository Publication Review:/);
+  assert.doesNotMatch(operationReadText, /Operation Scope:/);
+  assert.doesNotMatch(operationReadText, /Persistence Review:/);
+  assert.doesNotMatch(operationReadText, /Recovery Review:/);
+  assert.doesNotMatch(operationReadText, /<site-id>/);
+});
+
