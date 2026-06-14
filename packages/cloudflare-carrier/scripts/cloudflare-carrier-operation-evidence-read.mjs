@@ -154,6 +154,8 @@ export function formatOperationEvidenceReadText(result) {
   if (summary.site_id && summary.carrier_session_ids?.length > 0) {
     for (const carrierSessionId of summary.carrier_session_ids) {
       lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --carrier-session-id ${carrierSessionId} --operator-session-file <operator-session-file>`);
+      lines.push(`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --carrier-session-id ${carrierSessionId} --operator-session-file <operator-session-file>`);
+      lines.push(`Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --carrier-session-id ${carrierSessionId} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`);
     }
   }
   if (summary.local_resident_session_refs?.length > 0) lines.push(`Local Resident Sessions: ${summary.local_resident_session_refs.join(', ')}`);

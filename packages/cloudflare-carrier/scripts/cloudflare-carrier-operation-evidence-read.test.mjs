@@ -99,6 +99,8 @@ test('readOperationEvidence preserves product read envelope and text formatting 
   assert.match(text, /Operation Evidence Read: ok/);
   assert.match(text, /Carrier Sessions: session_1/);
   assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example --site site_live_smoke --carrier-session-id session_1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example --site site_live_smoke --carrier-session-id session_1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_live_smoke --carrier-session-id session_1 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
   assert.match(text, /tool_result_received/);
   assert.match(text, /Recovery Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Persistence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_alpha --operator-session-file <operator-session-file>/);
@@ -127,6 +129,8 @@ test('formatOperationEvidenceReadText emits direct workflow handoff when the wor
 
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:current --operator-session-file <operator-session-file>/);
   assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example --site site_alpha --carrier-session-id session_1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example --site site_alpha --carrier-session-id session_1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --carrier-session-id session_1 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
 });
 
 test('formatOperationEvidenceReadText recognizes Windows fallback evidence as reviewable focus', () => {

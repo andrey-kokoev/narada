@@ -203,6 +203,8 @@ export function formatResidentDispatchLocalResidentCarrierBridgeText(result = {}
   ];
   if (result.site_id && summary.cloudflare_carrier_session_id) {
     lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --carrier-session-id ${summary.cloudflare_carrier_session_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --carrier-session-id ${summary.cloudflare_carrier_session_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --carrier-session-id ${summary.cloudflare_carrier_session_id} --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next`);
   }
   if (result.site_id && operationId) {
     lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --operation-id ${operationId} --operator-session-file <operator-session-file>`);
