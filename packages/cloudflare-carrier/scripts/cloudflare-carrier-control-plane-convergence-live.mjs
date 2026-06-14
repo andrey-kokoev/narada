@@ -113,6 +113,7 @@ export async function runControlPlaneConvergenceLive(
 }
 
 export function formatControlPlaneConvergenceLiveText(result) {
+  const initialSiteId = result.site_passes?.[0]?.site_id ?? null;
   const lines = [
     `Control Plane Convergence: ${result.status}`,
     `Worker: ${result.worker_url}`,
@@ -124,14 +125,14 @@ export function formatControlPlaneConvergenceLiveText(result) {
     `Site List: pnpm --filter @narada2/cloudflare-carrier product:site:list:text -- --url ${result.worker_url} --operator-session-file <operator-session-file>`,
   ];
   if ((result.site_pass_count ?? 0) > 0 || isActionableSiteRoute(result.initial_site_route)) {
-    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --operator-session-file <operator-session-file> --execute-site-next`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url}${initialSiteId ? ` --site ${initialSiteId}` : ''} --operator-session-file <operator-session-file> --execute-site-next`);
   }
   for (const pass of result.site_passes ?? []) {
     lines.push(
       `- pass=${pass.pass} site=${pass.site_id ?? 'none'} route=${pass.route_action} delegated=${pass.delegated_result?.delegated_workflow ?? 'unknown'}`,
     );
     if (pass.site_id) {
-      lines.push(`  Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --operator-session-file <operator-session-file> --execute-site-next`);
+      lines.push(`  Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${pass.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
       lines.push(`  Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${pass.site_id} --operator-session-file <operator-session-file>`);
       const operationId = pass.delegated_result?.delegated_operation_id
         ?? pass.delegated_result?.delegated_result?.selected_operation_id

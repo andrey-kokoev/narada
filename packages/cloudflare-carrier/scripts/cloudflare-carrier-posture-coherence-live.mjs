@@ -307,6 +307,7 @@ function options(args, name) {
 }
 
 export function formatPostureCoherenceLiveText(result) {
+  const routeSiteId = result.site_list?.route_target ?? result.site_list?.next_site_id ?? null;
   const lines = [
     'Posture Coherence',
     `Worker: ${result.worker_url}`,
@@ -316,13 +317,13 @@ export function formatPostureCoherenceLiveText(result) {
     `Operation Count Summary: ${result.sites.map((site) => `${site.site_id}:${site.operation_list.operation_count ?? 0}`).join(', ') || 'none'}`,
   ];
   if (isActionableSiteRoute(result.site_list?.route_next_action)) {
-    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --operator-session-file <operator-session-file> --execute-site-next`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url}${routeSiteId ? ` --site ${routeSiteId}` : ''} --operator-session-file <operator-session-file> --execute-site-next`);
   }
   for (const site of result.sites ?? []) {
     lines.push(`- ${site.site_id}: health=${site.site_read?.health ?? 'unknown'} next=${site.site_read?.next_action ?? 'none'} operations=${site.operation_list?.operation_count ?? 0}`);
     lines.push(`  Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${site.site_id} --operator-session-file <operator-session-file>`);
     if (isActionableSiteNextAction(site.site_read?.next_action)) {
-      lines.push(`  Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --operator-session-file <operator-session-file> --execute-site-next`);
+      lines.push(`  Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${site.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
     }
     if (site.operation_list?.next_operation_id) {
       lines.push(`  Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${site.site_id} --operation-id ${site.operation_list.next_operation_id} --operator-session-file <operator-session-file>`);

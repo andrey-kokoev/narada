@@ -157,7 +157,7 @@ test('formatPostureCoherenceLiveText surfaces direct workflow and read handoffs 
     worker_url: 'https://carrier.example.test',
     status: 'ok',
     checked_site_ids: ['site_alpha'],
-    site_list: { route_next_action: 'focus_next_site' },
+    site_list: { route_next_action: 'focus_next_site', next_site_id: 'site_alpha' },
     sites: [
       {
         site_id: 'site_alpha',
@@ -180,8 +180,9 @@ test('formatPostureCoherenceLiveText surfaces direct workflow and read handoffs 
   assert.match(text, /Status: ok/);
   assert.match(text, /Site Route: focus_next_site/);
   assert.match(text, /Operation Count Summary: site_alpha:3/);
-  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --operator-session-file <operator-session-file> --execute-site-next/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(text, /- site_alpha: health=attention next=focus_next_operation operations=3/);
+  assert.match(text, /  Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
