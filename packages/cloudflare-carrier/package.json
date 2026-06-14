@@ -157,6 +157,7 @@
     "product:repository-publication:cloudflare-execution": "node scripts/cloudflare-carrier-repository-publication-cloudflare-execution.mjs",
     "product:repository-publication:cloudflare-execution:text": "node scripts/cloudflare-carrier-repository-publication-cloudflare-execution.mjs --format text",
     "authority-transfer:readiness-smoke:live": "node scripts/cloudflare-carrier-authority-transfer-readiness-live-smoke.mjs",
+    "authority-transfer:readiness-smoke:live:text": "node scripts/cloudflare-carrier-authority-transfer-readiness-live-smoke.mjs --format text",
     "webhook-delay:shadow-smoke:live": "node scripts/cloudflare-carrier-webhook-delay-shadow-live-smoke.mjs",
     "webhook-delay:shadow-smoke:live:text": "node scripts/cloudflare-carrier-webhook-delay-shadow-live-smoke.mjs --format text",
     "webhook-delay:observation-primary-smoke:live": "node scripts/cloudflare-carrier-webhook-delay-observation-primary-live-smoke.mjs",
