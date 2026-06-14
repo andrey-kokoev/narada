@@ -328,6 +328,8 @@ test('formatSiteFileChangeProposalText renders admitted and refused summaries wi
   assert.match(admitted, /Site File Change Proposal: ok/);
   assert.match(admitted, /Proposal Id: proposal-1/);
   assert.match(admitted, /Filesystem Mutation: not_admitted/);
+  assert.match(admitted, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(admitted, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(admitted, /Proposal Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file-change:proposal:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref proposal-1 --operator-session-file <operator-session-file>/);
   assert.match(admitted, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-9 --operator-session-file <operator-session-file>/);
   assert.match(admitted, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-9 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
@@ -375,6 +377,8 @@ test('formatSiteFileChangeProposalText suppresses site-scoped handoffs without s
   });
 
   assert.equal(text.includes('Proposal Review:'), false);
+  assert.equal(text.includes('Site Read:'), false);
+  assert.equal(text.includes('Site Next Workflow:'), false);
   assert.equal(text.includes('Task Review:'), false);
   assert.equal(text.includes('Task Workflow:'), false);
   assert.equal(text.includes('Operation Review:'), false);
@@ -395,6 +399,8 @@ test('formatSiteFileChangeProposalText suppresses worker-scoped handoffs without
   });
 
   assert.doesNotMatch(text, /<worker-url>/);
+  assert.equal(text.includes('Site Read:'), false);
+  assert.equal(text.includes('Site Next Workflow:'), false);
   assert.equal(text.includes('Proposal Review:'), false);
   assert.equal(text.includes('Task Review:'), false);
   assert.equal(text.includes('Task Workflow:'), false);

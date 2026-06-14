@@ -320,6 +320,8 @@ test('formatSiteFileMaterializationText renders admitted and refused summaries w
   assert.match(admitted, /Site File Materialization: ok/);
   assert.match(admitted, /Materialization Id: materialization-1/);
   assert.match(admitted, /Windows Filesystem Mutation: not_admitted/);
+  assert.match(admitted, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(admitted, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(admitted, /Materialization Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file:materialization:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --site-file-materialization-id materialization-1 --operator-session-file <operator-session-file>/);
   assert.match(admitted, /Proposal Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file-change:proposal:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref proposal-9 --operator-session-file <operator-session-file>/);
   assert.match(admitted, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
@@ -367,6 +369,8 @@ test('formatSiteFileMaterializationText suppresses site-scoped handoffs without 
   });
 
   assert.equal(text.includes('Materialization Review:'), false);
+  assert.equal(text.includes('Site Read:'), false);
+  assert.equal(text.includes('Site Next Workflow:'), false);
   assert.equal(text.includes('Proposal Review:'), false);
   assert.equal(text.includes('Operation Review:'), false);
   assert.equal(text.includes('Operation Next Workflow:'), false);
@@ -387,6 +391,8 @@ test('formatSiteFileMaterializationText suppresses worker-scoped handoffs withou
   });
 
   assert.doesNotMatch(text, /<worker-url>/);
+  assert.equal(text.includes('Site Read:'), false);
+  assert.equal(text.includes('Site Next Workflow:'), false);
   assert.equal(text.includes('Materialization Review:'), false);
   assert.equal(text.includes('Proposal Review:'), false);
   assert.equal(text.includes('Task Review:'), false);
