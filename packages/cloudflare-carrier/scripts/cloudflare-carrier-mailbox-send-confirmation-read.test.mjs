@@ -145,6 +145,7 @@ test('formatMailboxSendConfirmationReadText prints mailbox send confirmation sum
       mailbox_send_delivery_confirmation_admission: 'admitted',
       mailbox_mutation_admission: 'not_admitted',
       latest_account_ref: 'help@example.test',
+      latest_proposal_id: 'mailbox_send_proposal_alpha',
       latest_confirmation_posture: 'graph_sent_message_observed_delivery_not_claimed',
       latest_send_accepted_id: 'mailbox_send_accepted_alpha',
       latest_draft_create_id: 'mailbox_outlook_draft_create_alpha',
@@ -162,6 +163,7 @@ test('formatMailboxSendConfirmationReadText prints mailbox send confirmation sum
   assert.match(text, /Send Confirmation: count=1 authority=cloudflare_graph_sent_items_reconciliation admission=admitted/);
   assert.match(text, /Current Posture: graph_sent_message_observed_delivery_not_claimed/);
   assert.match(text, /Latest Confirmation: id=mailbox_send_confirmation_alpha account=help@example.test message=message_alpha subject=Confirmed subject/);
+  assert.match(text, /Proposal Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref mailbox_send_proposal_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Accepted Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-accepted:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref mailbox_send_accepted_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Draft Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref mailbox_outlook_draft_create_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);

@@ -67,6 +67,11 @@ export function summarizeMailboxSendConfirmation(body = {}, options = {}) {
       ?? latestRecord?.account_ref
       ?? latestRequest?.account_ref
       ?? null,
+    latest_proposal_id:
+      latest?.proposal_id
+      ?? latestRecord?.proposal_id
+      ?? latestRequest?.proposal_id
+      ?? null,
     latest_confirmation_posture:
       latest?.confirmation_posture
       ?? latestRecord?.confirmation_posture
@@ -132,6 +137,9 @@ export function formatMailboxSendConfirmationReadText(result) {
   }
   if (summary.latest_send_confirmation_id || summary.latest_message_id || summary.latest_subject) {
     lines.push(`${latestLabel}: id=${summary.latest_send_confirmation_id ?? 'none'} account=${summary.latest_account_ref ?? 'none'} message=${summary.latest_message_id ?? 'none'} subject=${summary.latest_subject ?? 'none'}`);
+  }
+  if (summary.latest_proposal_id) {
+    lines.push(`Proposal Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.latest_proposal_id} --operator-session-file <operator-session-file>`);
   }
   if (summary.latest_send_accepted_id) {
     lines.push(`Accepted Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.latest_send_accepted_id} --operator-session-file <operator-session-file>`);
