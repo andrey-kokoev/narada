@@ -234,6 +234,7 @@ test('formatTaskLifecycleReadText renders focused task summary', () => {
   assert.match(text, /Session: session_alpha/);
   assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example --site site_alpha --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.match(text, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live -- --url https:\/\/carrier\.example --site site_alpha --task-id task_9 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
   assert.match(text, /Claim Command: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:claim:text -- --url https:\/\/carrier\.example --site site_alpha --task-id task_9 --claimant-agent <agent-id> --operator-session-file <operator-session-file>/);
 });

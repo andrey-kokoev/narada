@@ -66,6 +66,7 @@ export function formatTaskLifecycleNextWorkflowLiveText(result) {
   ];
   if (result.read_after_next?.operation_id) {
     lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.read_after_next.operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.read_after_next.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
   }
   if (result.read_after_next?.carrier_session_id) {
     lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result.worker_url} --site ${result.site_id} --carrier-session-id ${result.read_after_next.carrier_session_id} --operator-session-file <operator-session-file>`);

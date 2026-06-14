@@ -47,6 +47,7 @@ test('formatTaskLifecycleWorkflowLiveText renders direct task read', () => {
   assert.match(text, /Finish: finish_id=finish_alpha status=finished/);
   assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
 });
 
 test('runTaskLifecycleWorkflowLive drives create claim report finish and read', async () => {
