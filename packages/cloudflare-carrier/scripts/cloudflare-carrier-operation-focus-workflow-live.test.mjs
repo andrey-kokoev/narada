@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  formatOperationFocusWorkflowLiveText,
   parseOperationFocusWorkflowLiveArgs,
   runOperationFocusWorkflowLive,
 } from './cloudflare-carrier-operation-focus-workflow-live.mjs';
@@ -26,6 +27,7 @@ test('parseOperationFocusWorkflowLiveArgs accepts operator session auth', () => 
   ], {});
 
   assert.equal(parsed.workerUrl, 'https://carrier.example.test');
+  assert.equal(parsed.format, 'json');
   assert.equal(parsed.siteId, 'site_alpha');
   assert.equal(parsed.expectedOperationId, null);
   assert.equal(parsed.expectedRouteAction, 'focus_next_operation');
@@ -34,6 +36,18 @@ test('parseOperationFocusWorkflowLiveArgs accepts operator session auth', () => 
     value: 'session-value',
     source: 'operator-session-cookie',
   });
+});
+
+test('parseOperationFocusWorkflowLiveArgs accepts text format', () => {
+  const parsed = parseOperationFocusWorkflowLiveArgs([
+    '--url', 'https://carrier.example.test',
+    '--site', 'site_alpha',
+    '--operator-session-cookie', 'narada_operator_session=session-value',
+    '--execute-operation-focus',
+    '--format', 'text',
+  ], {});
+
+  assert.equal(parsed.format, 'text');
 });
 
 test('runOperationFocusWorkflowLive selects next operation from posture and reads it', async () => {
@@ -125,4 +139,27 @@ test('runOperationFocusWorkflowLive rejects unexpected route action', async () =
     },
     /operation_focus_workflow_live_expected_route_action_mismatch:focus_next_operation:monitor_operations/,
   );
+});
+
+test('formatOperationFocusWorkflowLiveText surfaces direct follow-on reads', () => {
+  const text = formatOperationFocusWorkflowLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example.test',
+    site_id: 'site_alpha',
+    selected_operation_id: 'operation_attention',
+    expected_route_action: 'focus_next_operation',
+    list_before_focus: {
+      route_next_action: 'focus_next_operation',
+      route_target: 'operation_attention',
+      route_reason: 'operation_needs_review',
+    },
+    read_focused: {
+      current_status: 'inactive',
+      workflow_next_action: 'start_or_select_session',
+    },
+  });
+
+  assert.match(text, /Operation Focus Workflow: ok/);
+  assert.match(text, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_attention --operator-session-file <operator-session-file>/);
 });

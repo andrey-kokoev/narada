@@ -16,6 +16,7 @@ const productReadScript = resolve(scriptDir, 'cloudflare-carrier-product-read.mj
 export function parseOperationFocusWorkflowLiveArgs(argv = [], env = process.env) {
   const args = [...argv];
   const workerUrl = option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '';
+  const format = option(args, '--format') ?? env.CLOUDFLARE_CARRIER_OPERATION_FOCUS_FORMAT ?? 'json';
   const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? 'site_live_smoke';
   const expectedOperationId = option(args, '--operation-id') ?? option(args, '--carrier-operation') ?? env.CLOUDFLARE_CARRIER_OPERATION_ID ?? null;
   const expectedRouteAction = option(args, '--expected-route-action') ?? env.CLOUDFLARE_CARRIER_OPERATION_FOCUS_EXPECTED_ROUTE_ACTION ?? 'focus_next_operation';
@@ -27,11 +28,13 @@ export function parseOperationFocusWorkflowLiveArgs(argv = [], env = process.env
     throw new Error('operation_focus_workflow_live_requires_--execute-operation-focus_or_CLOUDFLARE_CARRIER_OPERATION_FOCUS_EXECUTE_LIVE=1');
   }
   if (!workerUrl) throw new Error('operation_focus_workflow_live_requires_--url_or_CLOUDFLARE_CARRIER_URL');
+  if (!['json', 'text'].includes(format)) throw new Error(`operation_focus_workflow_live_unknown_format:${format}`);
   if (!siteId) throw new Error('operation_focus_workflow_live_requires_site_id');
   if (!auth) throw new Error('operation_focus_workflow_live_requires_bearer_token_or_operator_session');
 
   return {
     workerUrl,
+    format,
     siteId,
     expectedOperationId,
     expectedRouteAction,
@@ -88,6 +91,21 @@ export async function runOperationFocusWorkflowLive(
     list_before_focus: listBefore.summary,
     read_focused: readFocused.summary,
   };
+}
+
+export function formatOperationFocusWorkflowLiveText(result) {
+  const lines = [
+    `Operation Focus Workflow: ${result.status}`,
+    `Worker: ${result.worker_url}`,
+    `Site: ${result.site_id}`,
+    `Selected Operation: ${result.selected_operation_id}`,
+    `Expected Route: ${result.expected_route_action ?? 'unknown'}`,
+    `List Route: ${result.list_before_focus?.route_next_action ?? 'unknown'} target=${result.list_before_focus?.route_target ?? 'none'} reason=${result.list_before_focus?.route_reason ?? 'unknown'}`,
+    `Focused Read: status=${result.read_focused?.current_status ?? 'unknown'} next=${result.read_focused?.workflow_next_action ?? 'unknown'}`,
+    `Operation List: pnpm --filter @narada2/cloudflare-carrier product:operation:list:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`,
+    `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.selected_operation_id} --operator-session-file <operator-session-file>`,
+  ];
+  return `${lines.join('\n')}\n`;
 }
 
 async function defaultRunNodeScript(args, options) {
@@ -150,5 +168,9 @@ function flag(args, name) {
 if (resolve(process.argv[1] ?? '') === scriptPath) {
   const config = parseOperationFocusWorkflowLiveArgs(process.argv.slice(2));
   const result = await runOperationFocusWorkflowLive(config);
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  if (config.format === 'text') {
+    process.stdout.write(formatOperationFocusWorkflowLiveText(result));
+  } else {
+    process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  }
 }

@@ -92,6 +92,7 @@
     "product:operation:lifecycle:workflow:live": "node scripts/cloudflare-carrier-operation-lifecycle-workflow-live.mjs",
     "product:operation:lifecycle:workflow:live:text": "node scripts/cloudflare-carrier-operation-lifecycle-workflow-live.mjs --format text",
     "product:operation:focus:workflow:live": "node scripts/cloudflare-carrier-operation-focus-workflow-live.mjs",
+    "product:operation:focus:workflow:live:text": "node scripts/cloudflare-carrier-operation-focus-workflow-live.mjs --format text",
     "product:operation:next:workflow:live": "node scripts/cloudflare-carrier-operation-next-workflow-live.mjs",
     "product:operation:session:workflow:live": "node scripts/cloudflare-carrier-operation-session-workflow-live.mjs",
     "product:operation:session:workflow:live:text": "node scripts/cloudflare-carrier-operation-session-workflow-live.mjs --format text",
