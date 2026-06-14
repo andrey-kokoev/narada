@@ -381,3 +381,33 @@ test('formatTaskLifecycleReadText suppresses task commands when no concrete site
   assert.doesNotMatch(text, /Report Command:/);
   assert.doesNotMatch(text, /Finish Command:/);
 });
+
+test('formatTaskLifecycleReadText suppresses worker-scoped handoffs without worker url', () => {
+  const text = formatTaskLifecycleReadText({
+    auth_source: 'operator-session-file',
+    summary: {
+      ok: true,
+      site_id: 'site_alpha',
+      task_count: 1,
+      open_task_count: 1,
+      mutation_authority: 'cloudflare_task_lifecycle_d1',
+      mutation_class: 'task_create',
+      cloudflare_write_admission: 'admitted',
+      task_id: 'task_9',
+      task_status: 'open',
+      operation_id: 'operation_alpha',
+      carrier_session_id: 'session_alpha',
+    },
+    params: {
+      site_id: 'site_alpha',
+      task_lifecycle_task_id: 'task_9',
+    },
+  });
+
+  assert.doesNotMatch(text, /<worker-url>/);
+  assert.doesNotMatch(text, /Session Evidence:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /Task Workflow:/);
+  assert.doesNotMatch(text, /Claim Command:/);
+});

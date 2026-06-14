@@ -125,6 +125,7 @@ export function summarizeTaskLifecycleRead(body = {}, params = {}) {
 
 export function formatTaskLifecycleReadText(result) {
   const summary = result?.summary ?? summarizeTaskLifecycleRead(result?.response ?? {}, result?.params ?? {});
+  const workerUrl = result?.worker_url ?? null;
   return [
     `Task Lifecycle Review: ${summary.ok === false ? 'refused' : 'ok'}`,
     `Worker: ${result?.worker_url ?? 'unknown'}`,
@@ -136,9 +137,9 @@ export function formatTaskLifecycleReadText(result) {
     `Status: ${summary.task_status ?? 'unknown'}`,
     ...(summary.task_title ? [`Title: ${summary.task_title}`] : []),
     ...(summary.carrier_session_id ? [`Session: ${summary.carrier_session_id}`] : []),
-    ...(summary.carrier_session_id ? [`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? 'unknown'} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`] : []),
-    ...(summary.operation_id ? [`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? 'unknown'} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`] : []),
-    ...(summary.operation_id ? [`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? 'unknown'} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`] : []),
+    ...(workerUrl && summary.site_id && summary.carrier_session_id ? [`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${workerUrl} --site ${summary.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`] : []),
+    ...(workerUrl && summary.site_id && summary.operation_id ? [`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`] : []),
+    ...(workerUrl && summary.site_id && summary.operation_id ? [`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`] : []),
     ...(summary.claimed_by_agent_id ? [`Claimed By: ${summary.claimed_by_agent_id}`] : []),
     ...(summary.reported_by_agent_id ? [`Reported By: ${summary.reported_by_agent_id}`] : []),
     ...(summary.finished_by_agent_id ? [`Finished By: ${summary.finished_by_agent_id}`] : []),
@@ -151,10 +152,10 @@ export function formatTaskLifecycleReadText(result) {
 }
 
 function formatTaskLifecycleNextCommands(result, summary) {
-  const workerUrl = result?.worker_url ?? '<worker-url>';
+  const workerUrl = result?.worker_url ?? null;
   const siteId = summary.site_id ?? result?.params?.site_id ?? null;
   const taskId = summary.task_id ?? result?.params?.task_lifecycle_task_id ?? null;
-  if (!siteId || !taskId) return [];
+  if (!workerUrl || !siteId || !taskId) return [];
   const normalizedStatus = normalizeTaskStatus(summary.task_status);
   const claimAgent = '<agent-id>';
   const reportAgent = summary.claimed_by_agent_id ?? '<agent-id>';

@@ -357,6 +357,35 @@ test('formatTaskLifecycleChangedFileEvidenceText renders admitted and refused su
   assert.equal(refused.includes('operator-session-cookie'), false);
 });
 
+test('formatTaskLifecycleChangedFileEvidenceText suppresses worker-scoped handoffs without worker url', () => {
+  const text = formatTaskLifecycleChangedFileEvidenceText({
+    status: 'ok',
+    auth_source: 'flag:--token',
+    summary: {
+      ok: true,
+      site_id: 'site_alpha',
+      admission_id: 'admission_evidence_1',
+      task_id: 'cloudflare-task-7',
+      task_number: 7,
+      report_id: 'report-1',
+      evidence_id: 'evidence-1',
+      file_path: 'a.txt',
+      reporter_agent_id: 'agent_alpha',
+      operation_id: 'operation_alpha',
+      carrier_session_id: 'session_alpha',
+      decision_action: 'admit',
+      decision_reason: 'cloudflare_changed_file_evidence_cutover_admitted',
+    },
+  });
+
+  assert.doesNotMatch(text, /<worker-url>/);
+  assert.doesNotMatch(text, /Session Evidence:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /Task Review:/);
+  assert.doesNotMatch(text, /Task Workflow:/);
+});
+
 function responseJson(status, body) {
   return {
     status,

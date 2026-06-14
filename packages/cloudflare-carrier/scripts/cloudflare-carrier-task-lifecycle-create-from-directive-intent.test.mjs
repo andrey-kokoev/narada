@@ -141,3 +141,21 @@ test('formatTaskLifecycleCreateFromDirectiveIntentText prints directive task cre
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
 });
+
+test('formatTaskLifecycleCreateFromDirectiveIntentText suppresses worker-scoped handoffs without worker url', () => {
+  const text = formatTaskLifecycleCreateFromDirectiveIntentText({
+    auth_source: 'operator-session-file',
+    site_id: 'site_alpha',
+    operation_id: 'operation_alpha',
+    mode: 'task_created',
+    directive_record_id: 'directive_alpha',
+    title: 'directive directive_alpha delayed webhook_delay 15',
+    created_task_id: 'task_alpha',
+  });
+
+  assert.doesNotMatch(text, /<worker-url>/);
+  assert.doesNotMatch(text, /Task Review:/);
+  assert.doesNotMatch(text, /Task Workflow:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+});
