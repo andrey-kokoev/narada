@@ -137,6 +137,8 @@ export function formatTaskLifecycleReadText(result) {
     `Status: ${summary.task_status ?? 'unknown'}`,
     ...(summary.task_title ? [`Title: ${summary.task_title}`] : []),
     ...(summary.carrier_session_id ? [`Session: ${summary.carrier_session_id}`] : []),
+    ...(workerUrl && summary.site_id ? [`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`] : []),
+    ...(workerUrl && summary.site_id ? [`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-next`] : []),
     ...(workerUrl && summary.site_id && summary.carrier_session_id ? [`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${workerUrl} --site ${summary.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`] : []),
     ...(workerUrl && summary.site_id && summary.operation_id ? [`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`] : []),
     ...(workerUrl && summary.site_id && summary.operation_id ? [`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`] : []),
