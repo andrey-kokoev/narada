@@ -149,7 +149,28 @@ test('formatSiteContinuityPublishText renders operator summary without auth mate
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
   assert.match(text, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text/);
   assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file D:\\narada\\\.narada\\auth\\cloudflare-operator-session\.json --execute-site-next/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file D:\\narada\\\.narada\\auth\\cloudflare-operator-session\.json/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file D:\\narada\\\.narada\\auth\\cloudflare-operator-session\.json/);
   assert.doesNotMatch(text, /operator-session-cookie|secret-token/);
+});
+
+test('formatSiteContinuityPublishText suppresses operator follow-ons without operator session file', () => {
+  const text = formatSiteContinuityPublishText({
+    status: 'ok',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'flag:--token',
+    summary: {
+      ok: true,
+      site_id: 'site_alpha',
+      status: 'imported',
+    },
+  });
+
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Operation List:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Posture Coherence Review:/);
+  assert.doesNotMatch(text, /Durability Coherence Review:/);
 });
 
 test('summarizeSiteContinuityPublish falls back to params when response is partial', () => {
