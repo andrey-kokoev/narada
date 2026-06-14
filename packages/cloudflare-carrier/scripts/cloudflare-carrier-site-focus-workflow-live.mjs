@@ -59,6 +59,12 @@ export function formatSiteFocusWorkflowLiveText(result) {
   if (result.selected_operation_id) {
     lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operation-id ${result.selected_operation_id} --operator-session-file <operator-session-file>`);
     lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operation-id ${result.selected_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+    if (result.selected_operation_action === 'refresh_site_continuity_loop') {
+      lines.push(`Continuity Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operation-id ${result.selected_operation_id} --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity`);
+    }
+    if (result.selected_operation_action === 'review_site_continuity_reconciliation_execution' && result.selected_operation_focus_ref) {
+      lines.push(`Review Ack: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operation-id ${result.selected_operation_id} --focus-kind ${result.selected_operation_focus_kind ?? 'site_continuity_reconciliation_execution'} --focus-ref ${result.selected_operation_focus_ref} --operator-session-file <operator-session-file>`);
+    }
   }
   return `${lines.join('\n')}\n`;
 }

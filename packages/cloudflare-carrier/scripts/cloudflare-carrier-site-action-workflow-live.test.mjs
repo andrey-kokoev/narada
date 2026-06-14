@@ -81,6 +81,32 @@ test('formatSiteActionWorkflowLiveText renders direct reads', () => {
   assert.match(text, /Follow-up: executed/);
 });
 
+test('formatSiteActionWorkflowLiveText renders review ack from active operation route', () => {
+  const text = formatSiteActionWorkflowLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    site_id: 'site_alpha',
+    delegated_workflow: 'site_authority',
+    delegated_action: 'read_site_authority',
+    read_before_action: {
+      next_action: 'read_site_authority',
+      active_operation_id: 'operation_alpha',
+      active_operation_next_action: 'review_site_continuity_reconciliation_execution',
+      active_operation_focus_kind: 'site_continuity_reconciliation_execution',
+      active_operation_focus_ref: 'focus-ref',
+    },
+    read_after_action: {
+      next_action: 'monitor_site',
+      active_operation_id: 'operation_alpha',
+      active_operation_next_action: 'review_site_continuity_reconciliation_execution',
+      active_operation_focus_kind: 'site_continuity_reconciliation_execution',
+      active_operation_focus_ref: 'focus-ref',
+    },
+  });
+
+  assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref focus-ref --operator-session-file <operator-session-file>/);
+});
+
 test('runSiteActionWorkflowLive returns monitor result without delegation', async () => {
   const invocations = [];
   const result = await runSiteActionWorkflowLive({

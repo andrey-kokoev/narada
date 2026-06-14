@@ -98,9 +98,18 @@ export function formatSiteActionWorkflowLiveText(result) {
     `Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`,
   ];
   const operationId = result.read_after_action?.active_operation_id ?? result.read_before_action?.active_operation_id ?? null;
+  const operationAction = result.read_after_action?.active_operation_next_action ?? result.read_before_action?.active_operation_next_action ?? null;
+  const operationFocusKind = result.read_after_action?.active_operation_focus_kind ?? result.read_before_action?.active_operation_focus_kind ?? null;
+  const operationFocusRef = result.read_after_action?.active_operation_focus_ref ?? result.read_before_action?.active_operation_focus_ref ?? null;
   if (operationId) {
     lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${operationId} --operator-session-file <operator-session-file>`);
     lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${operationId} --operator-session-file <operator-session-file> --execute-operation-next`);
+    if (operationAction === 'refresh_site_continuity_loop') {
+      lines.push(`Continuity Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${operationId} --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity`);
+    }
+    if (operationAction === 'review_site_continuity_reconciliation_execution' && operationFocusRef) {
+      lines.push(`Review Ack: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${operationId} --focus-kind ${operationFocusKind ?? 'site_continuity_reconciliation_execution'} --focus-ref ${operationFocusRef} --operator-session-file <operator-session-file>`);
+    }
   }
   if (result.delegated_followup_result) {
     lines.push('Follow-up: executed');
