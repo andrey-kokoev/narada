@@ -227,4 +227,27 @@ test('formatWebhookDelayShadowReadText prints shadow read summary', () => {
 
   assert.match(text, /Webhook Delay Shadow Read: ok/);
   assert.match(text, /Observations: count=1 focused=shadow_focus classification=critical/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
+});
+
+test('formatWebhookDelayShadowReadText suppresses next workflow for passive routes', () => {
+  const text = formatWebhookDelayShadowReadText({
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      workflow_next_action: 'monitor_operation',
+      workflow_reason: 'complete',
+      observation_count: 1,
+      focused_observation_id: 'shadow_focus',
+      focused_classification_state: 'critical',
+      focused_dispatch_authority: 'windows_primary_dispatcher',
+      focused_dispatch_action: 'none',
+    },
+  });
+
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
 });
