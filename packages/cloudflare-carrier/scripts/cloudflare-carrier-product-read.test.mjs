@@ -570,9 +570,12 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       next_status: 'needs_attention',
       next_action: 'review_site_continuity_reconciliation_execution',
       next_reason: 'operation_operator_focus_needs_review',
+      next_operation_focus_kind: 'site_continuity_reconciliation_execution',
+      next_operation_focus_ref: 'site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:54:54.778Z:completed',
     },
   });
-  assert.match(operationListContinuityReviewText, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --focus-kind site_continuity_reconciliation_execution --focus-ref <focus-ref> --operator-session-file <operator-session-file>/);
+  assert.match(operationListContinuityReviewText, /Next Operation Focus: kind=site_continuity_reconciliation_execution ref=site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:54:54.778Z:completed/);
+  assert.match(operationListContinuityReviewText, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:54:54.778Z:completed --operator-session-file <operator-session-file>/);
 
   const continuationListText = formatProductSurfaceText({
     operation: 'operation.list',
@@ -1840,6 +1843,8 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
       next_status: 'needs_attention',
       next_action: 'review_operation',
       next_reason: 'operation_needs_review',
+      next_focus_kind: 'operation_review',
+      next_focus_ref: 'operation_control',
       health_counts: { ready: 0, needs_attention: 1 },
     },
     operation_posture_route: {
@@ -1867,6 +1872,8 @@ test('summarizeProductSurface summarizes site and operation reads', () => {
     next_status: 'needs_attention',
     next_action: 'review_operation',
     next_reason: 'operation_needs_review',
+    next_operation_focus_kind: 'operation_review',
+    next_operation_focus_ref: 'operation_control',
     health_counts: { ready: 0, needs_attention: 1 },
     route_domain: 'operation_posture',
     route_command_state: 'operation_posture_attention',

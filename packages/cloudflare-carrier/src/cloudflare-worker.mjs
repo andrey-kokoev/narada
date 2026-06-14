@@ -355,6 +355,8 @@ export function normalizeCloudflareOperationPostureOverview(overview = null, rou
       next_status: focusedStatus,
       next_action: focusedWorkflowRoute.next_action,
       next_reason: focusedWorkflowRoute.reason ?? overview.next_reason,
+      next_focus_kind: focusedWorkflowRoute.focus_kind ?? overview.next_focus_kind ?? null,
+      next_focus_ref: focusedWorkflowRoute.focus_ref ?? overview.next_focus_ref ?? null,
     };
   }
   return {
@@ -375,6 +377,8 @@ export function normalizeCloudflareOperationPostureOverview(overview = null, rou
     next_status: 'ready',
     next_action: 'monitor_operations',
     next_reason: 'all_operations_monitoring',
+    next_focus_kind: null,
+    next_focus_ref: null,
   };
 }
 
@@ -2114,6 +2118,25 @@ function summarizeCloudflareOperationPostureOverview(operations = [], product = 
     || items.find((item) => item.operation.operation_id === activeOperationId)
     || items[0]
     || null;
+  const focusedWorkflowRoute = product.focused_operation_lifecycle?.workflow_route ?? product.operation_workflow_route ?? null;
+  const focusedOperationId = product.focused_operation_lifecycle?.operation_id ?? product.operation?.operation_id ?? null;
+  const nextWorkflowRoute = next?.operation?.operation_id && next.operation.operation_id === focusedOperationId
+    ? focusedWorkflowRoute
+    : null;
+  const continuityReviewFocusRef = next?.operation?.operation_id && next.operation.operation_id === focusedOperationId
+    ? product.focused_operation_lifecycle?.lifecycle_status?.site_continuity_reconciliation_execution_status?.latest_execution_id ?? null
+    : null;
+  const nextFocusRef = next?.command?.focus_ref
+    ?? nextWorkflowRoute?.focus_ref
+    ?? next?.command?.target
+    ?? nextWorkflowRoute?.target
+    ?? (next?.command?.next_action === 'review_site_continuity_reconciliation_execution' ? continuityReviewFocusRef : null)
+    ?? null;
+  const nextFocusKind = next?.command?.focus_kind
+    ?? nextWorkflowRoute?.focus_kind
+    ?? (next?.command?.next_action === 'review_site_continuity_reconciliation_execution' && nextFocusRef
+      ? 'site_continuity_reconciliation_execution'
+      : null);
   const route = product.operation_posture_route || null;
   const focusedLifecycle = product.focused_operation_lifecycle?.lifecycle_status || null;
   if (
@@ -2134,6 +2157,8 @@ function summarizeCloudflareOperationPostureOverview(operations = [], product = 
       next_status: 'ready',
       next_action: 'monitor_operations',
       next_reason: 'all_operations_monitoring',
+      next_focus_kind: null,
+      next_focus_ref: null,
     };
   }
   return {
@@ -2148,6 +2173,8 @@ function summarizeCloudflareOperationPostureOverview(operations = [], product = 
     next_status: next?.status || 'ready',
     next_action: next?.command?.next_action || 'monitor_operations',
     next_reason: next ? cloudflareOperationPostureReason(next) : 'all_operations_monitoring',
+    next_focus_kind: nextFocusKind,
+    next_focus_ref: nextFocusRef,
   };
 }
 
@@ -2331,6 +2358,8 @@ export function summarizeCloudflareOperationWorkflowRoute({
         action: operatorFocus.action || 'review_operation_operator_focus',
         target: operatorFocus.focus_ref || operatorFocus.source_ref || operatorFocus.activity_id || operationId,
         reason: 'operation_operator_focus_needs_review',
+        focus_kind: operatorFocus.focus_kind || operatorFocus.activity_kind || null,
+        focus_ref: operatorFocus.focus_ref || operatorFocus.source_ref || operatorFocus.activity_id || null,
       }
     : next;
   const ready = routedNext.action === 'monitor_operation';

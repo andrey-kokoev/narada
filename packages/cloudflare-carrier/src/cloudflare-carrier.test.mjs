@@ -1530,6 +1530,20 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(siteListAfterFailedReconciliationExecutionBody.site_product_overview.next_operation_focus_kind, 'site_continuity_reconciliation_execution');
   assert.equal(siteListAfterFailedReconciliationExecutionBody.site_product_overview.next_operation_focus_ref, failedReconciliationExecutionId);
 
+  const operationListAfterFailedReconciliationExecution = await worker.fetch(jsonRequest({
+    operation: 'operation.list',
+    request_id: 'request_operation_list_after_failed_reconciliation_execution',
+    params: { site_id: 'site_fixture' },
+  }, { token: 'test-admin-token', path: '/api/carrier' }), env);
+  assert.equal(operationListAfterFailedReconciliationExecution.status, 200);
+  const operationListAfterFailedReconciliationExecutionBody = await operationListAfterFailedReconciliationExecution.json();
+  assert.equal(operationListAfterFailedReconciliationExecutionBody.operation_posture_overview.next_operation_id, 'operation_site_read');
+  assert.equal(operationListAfterFailedReconciliationExecutionBody.operation_posture_overview.next_status, 'needs_attention');
+  assert.equal(operationListAfterFailedReconciliationExecutionBody.operation_posture_overview.next_action, 'review_site_continuity_reconciliation_execution');
+  assert.equal(operationListAfterFailedReconciliationExecutionBody.operation_posture_overview.next_reason, 'operation_operator_focus_needs_review');
+  assert.equal(operationListAfterFailedReconciliationExecutionBody.operation_posture_overview.next_focus_kind, 'site_continuity_reconciliation_execution');
+  assert.equal(operationListAfterFailedReconciliationExecutionBody.operation_posture_overview.next_focus_ref, failedReconciliationExecutionId);
+
   const reconciliationExecutionFocusReview = await worker.fetch(jsonRequest({
     operation: 'operation_focus_review.acknowledge',
     request_id: 'request_operation_focus_review_reconciliation_execution',
@@ -8991,6 +9005,8 @@ test('normalizeCloudflareOperationPostureOverview surfaces focused workflow when
         status: 'needs_attention',
         next_action: 'refresh_site_continuity_loop',
         reason: 'operation_lifecycle_continuity_loop_stale',
+        focus_kind: 'operation_continuity_loop',
+        focus_ref: 'operation_control',
       },
     },
     3,
@@ -8999,6 +9015,8 @@ test('normalizeCloudflareOperationPostureOverview surfaces focused workflow when
   assert.equal(normalized.next_status, 'needs_attention');
   assert.equal(normalized.next_action, 'refresh_site_continuity_loop');
   assert.equal(normalized.next_reason, 'operation_lifecycle_continuity_loop_stale');
+  assert.equal(normalized.next_focus_kind, 'operation_continuity_loop');
+  assert.equal(normalized.next_focus_ref, 'operation_control');
   assert.deepEqual(normalized.health_counts, { ready: 2, needs_attention: 1 });
 });
 
@@ -9035,6 +9053,8 @@ test('normalizeCloudflareOperationPostureOverview collapses stale evidence revie
   assert.equal(normalized.next_status, 'ready');
   assert.equal(normalized.next_action, 'monitor_operations');
   assert.equal(normalized.next_reason, 'all_operations_monitoring');
+  assert.equal(normalized.next_focus_kind, null);
+  assert.equal(normalized.next_focus_ref, null);
   assert.deepEqual(normalized.health_counts, { ready: 5, needs_attention: 0 });
 });
 
