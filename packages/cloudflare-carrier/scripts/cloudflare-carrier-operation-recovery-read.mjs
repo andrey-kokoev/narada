@@ -71,20 +71,21 @@ export function formatOperationRecoveryReadText(result) {
     emittedLabels.add(label);
     lines.push(`${label}: ${command}`);
   }
-  if (summary.site_id && summary.operation_id) {
+  const workerUrl = result?.worker_url ?? null;
+  if (workerUrl && summary.site_id && summary.operation_id) {
     if (!emittedLabels.has('Persistence Read')) {
-      lines.push(`Persistence Read: pnpm --filter @narada2/cloudflare-carrier product:operation:persistence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+      lines.push(`Persistence Read: pnpm --filter @narada2/cloudflare-carrier product:operation:persistence:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
     }
-    lines.push(`Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:operation:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:operation:evidence:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
   }
   return `${lines.join('\n')}\n`;
 }
 
 function buildOperationRecoveryWorkflowLinks(result, summary) {
-  const workerUrl = result?.worker_url ?? '<worker-url>';
+  const workerUrl = result?.worker_url ?? null;
   const siteId = summary.site_id;
   const operationId = summary.operation_id;
-  if (!siteId || !operationId) return [];
+  if (!workerUrl || !siteId || !operationId) return [];
   const links = [];
   if (summary.workflow_next_action === 'review_persistence_posture') {
     links.push({

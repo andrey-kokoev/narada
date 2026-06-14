@@ -265,6 +265,35 @@ test('formatOperationEvidenceReadText suppresses operator handoff without a real
   assert.doesNotMatch(text, /<site-id>/);
 });
 
+test('formatOperationEvidenceReadText suppresses operator handoff without a real worker url', () => {
+  const text = formatOperationEvidenceReadText({
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      workflow_next_action: 'review_site_continuity_reconciliation_execution',
+      workflow_focus_kind: 'site_continuity_reconciliation_execution',
+      workflow_focus_ref: 'site-continuity-reconciliation-execution:site_alpha:current',
+      reviewable_focus_kind: 'site_continuity_reconciliation_execution',
+      reviewable_focus_ref: 'site-continuity-reconciliation-execution:site_alpha:current',
+      carrier_session_ids: ['session_alpha'],
+      phase: 'inhabited',
+      health: 'ready',
+      current_status: 'active',
+      next_action: 'monitor_operation',
+      carrier_evidence_read_state: 'loaded',
+    },
+  });
+
+  assert.doesNotMatch(text, /Session Evidence:/);
+  assert.doesNotMatch(text, /Task Review:/);
+  assert.doesNotMatch(text, /Task Workflow:/);
+  assert.doesNotMatch(text, /Review Ack:/);
+  assert.doesNotMatch(text, /Recovery Read:/);
+  assert.doesNotMatch(text, /Persistence Read:/);
+  assert.doesNotMatch(text, /<worker-url>/);
+});
+
 test('summarizeOperationEvidence makes local resident evidence posture explicit without inventing a Cloudflare session', () => {
   const summary = summarizeOperationEvidence({
     operation: { operation_id: 'operation_alpha', site_id: 'site_live_smoke', status: 'active' },

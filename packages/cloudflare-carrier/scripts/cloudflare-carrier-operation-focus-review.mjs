@@ -183,12 +183,13 @@ export function formatOperationFocusReviewText(result) {
   }
   if (summary.operation_focus_review_authority) lines.push(`Authority: ${summary.operation_focus_review_authority}`);
   if (summary.review_admission) lines.push(`Admission: ${summary.review_admission}`);
-  if (summary.site_id && summary.operation_id) {
-    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
-    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+  const workerUrl = result?.worker_url ?? null;
+  if (workerUrl && summary.site_id && summary.operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
   }
-  if (summary.site_id) {
-    lines.push(`Review List: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --operation operation_focus_review.list --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
+  if (workerUrl && summary.site_id) {
+    lines.push(`Review List: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --operation operation_focus_review.list --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
   }
   return `${lines.join('\n')}\n`;
 }

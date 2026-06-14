@@ -200,3 +200,27 @@ test('formatOperationRecoveryReadText suppresses operator handoff without a real
   assert.doesNotMatch(text, /Evidence Read:/);
   assert.doesNotMatch(text, /<site-id>/);
 });
+
+test('formatOperationRecoveryReadText suppresses operator handoff without a real worker url', () => {
+  const text = formatOperationRecoveryReadText({
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      workflow_next_action: 'refresh_site_continuity_loop',
+      workflow_reason: 'operation_lifecycle_continuity_loop_stale',
+      current_status: 'active',
+      phase: 'inhabited',
+      health: 'ready',
+      lifecycle_next_action: 'monitor_operation',
+      recovery_state: 'reconstructable',
+      recovery_boundary_count: 12,
+      recovery_gap_count: 0,
+    },
+  });
+
+  assert.doesNotMatch(text, /Continuity Workflow:/);
+  assert.doesNotMatch(text, /Persistence Read:/);
+  assert.doesNotMatch(text, /Evidence Read:/);
+  assert.doesNotMatch(text, /<worker-url>/);
+});

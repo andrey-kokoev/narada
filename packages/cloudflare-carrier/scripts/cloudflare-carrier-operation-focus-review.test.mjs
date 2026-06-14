@@ -173,6 +173,25 @@ test('formatOperationFocusReviewText emits direct follow-on operation commands',
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.match(text, /Review List: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --operation operation_focus_review\.list --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+
+  const noWorker = formatOperationFocusReviewText({
+    status: 'ok',
+    operation: 'operation_focus_review.acknowledge',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation_focus_review.acknowledge',
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      review_id: 'review_1',
+      focus_kind: 'site_continuity_reconciliation_execution',
+      focus_ref: 'reconciliation_1',
+      review_status: 'acknowledged',
+    },
+  });
+
+  assert.doesNotMatch(noWorker, /Operation Review:/);
+  assert.doesNotMatch(noWorker, /Operation Next Workflow:/);
+  assert.doesNotMatch(noWorker, /Review List:/);
 });
 
 function responseJson(status, body) {
