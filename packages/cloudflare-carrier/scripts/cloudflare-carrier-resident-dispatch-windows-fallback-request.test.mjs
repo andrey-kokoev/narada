@@ -75,9 +75,11 @@ test('createResidentDispatchWindowsFallbackRequest posts worker operation and su
         return {
           ok: true,
           status: 'recorded',
+          carrier_session_id: 'carrier_session_alpha',
           fallback_request: {
             fallback_request_id: 'resident_fallback_request_alpha',
             dispatch_decision_id: 'resident_dispatch_alpha',
+            carrier_session_id: 'carrier_session_alpha',
             requested_action_ref: 'local-windows-action:resident-session-start:v1',
             requested_action_summary: 'request governed Windows resident session start after Cloudflare primary dispatch fallback',
             local_execution_admission: 'pending_windows_admission',
@@ -92,6 +94,7 @@ test('createResidentDispatchWindowsFallbackRequest posts worker operation and su
   assert.equal(result.status, 'ok');
   assert.equal(result.summary.fallback_request_id, 'resident_fallback_request_alpha');
   assert.equal(result.summary.request_status, 'recorded');
+  assert.equal(result.summary.carrier_session_id, 'carrier_session_alpha');
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, 'https://carrier.example/api/carrier');
   assert.equal(calls[0].body.operation, 'resident_dispatch.windows_fallback_request.create');
@@ -150,6 +153,7 @@ test('formatResidentDispatchWindowsFallbackRequestText prints key posture', () =
       request_status: 'selected',
       request_count: 1,
       fallback_request_id: 'resident_fallback_request_alpha',
+      carrier_session_id: 'carrier_session_alpha',
       requested_action_ref: 'local-windows-action:resident-session-start:v1',
       requested_action_summary: 'request governed Windows resident session start after Cloudflare primary dispatch fallback',
       local_execution_admission: 'pending_windows_admission',
@@ -163,4 +167,5 @@ test('formatResidentDispatchWindowsFallbackRequestText prints key posture', () =
   assert.match(text, /Operation: resident_dispatch\.windows_fallback_request\.list/);
   assert.match(text, /Fallback Request: resident_fallback_request_alpha/);
   assert.match(text, /Execution Admission: pending_windows_admission/);
+  assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example --site site_live_smoke --carrier-session-id carrier_session_alpha --operator-session-file <operator-session-file>/);
 });

@@ -179,7 +179,7 @@ export function summarizeResidentDispatchLocalResidentCarrierBridge(operation, b
 export function formatResidentDispatchLocalResidentCarrierBridgeText(result = {}) {
   const summary = result.summary ?? {};
   const response = result.response ?? {};
-  return [
+  const lines = [
     'Local Resident Carrier Bridge',
     `Worker: ${result.worker_url ?? 'unknown'}`,
     `Auth: ${result.auth_source ?? 'unknown'}`,
@@ -199,7 +199,11 @@ export function formatResidentDispatchLocalResidentCarrierBridgeText(result = {}
     `Runtime Session Start: ${summary.cloudflare_runtime_session_start_admission ?? 'unknown'}`,
     `Bridge Authority: ${summary.bridge_authority ?? 'unknown'}`,
     ...(response?.code ? [`Code: ${response.code}`] : []),
-  ].join('\n');
+  ];
+  if (result.site_id && summary.cloudflare_carrier_session_id) {
+    lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --carrier-session-id ${summary.cloudflare_carrier_session_id} --operator-session-file <operator-session-file>`);
+  }
+  return lines.join('\n');
 }
 
 async function main() {

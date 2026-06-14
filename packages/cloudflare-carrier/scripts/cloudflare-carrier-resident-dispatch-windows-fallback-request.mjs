@@ -113,6 +113,7 @@ export function summarizeResidentDispatchWindowsFallbackRequest(operation, body 
       fallback_request_id: request?.fallback_request_id ?? null,
       request_status: body?.status ?? null,
       dispatch_decision_id: request?.dispatch_decision_id ?? null,
+      carrier_session_id: request?.carrier_session_id ?? null,
       requested_action_ref: request?.requested_action_ref ?? null,
       requested_action_summary: request?.requested_action_summary ?? null,
       local_execution_admission: request?.local_execution_admission ?? null,
@@ -126,6 +127,7 @@ export function summarizeResidentDispatchWindowsFallbackRequest(operation, body 
     fallback_request_id: request?.fallback_request_id ?? request?.request_id ?? null,
     request_status: body?.status ?? null,
     dispatch_decision_id: request?.dispatch_decision_id ?? null,
+    carrier_session_id: request?.carrier_session_id ?? body?.carrier_session_id ?? body?.request?.carrier_session_id ?? null,
     requested_action_ref: request?.requested_action_ref ?? null,
     requested_action_summary: request?.requested_action_summary ?? null,
     local_execution_admission: request?.local_execution_admission ?? null,
@@ -137,7 +139,7 @@ export function summarizeResidentDispatchWindowsFallbackRequest(operation, body 
 export function formatResidentDispatchWindowsFallbackRequestText(result = {}) {
   const summary = result.summary ?? {};
   const response = result.response ?? {};
-  return [
+  const lines = [
     'Resident Dispatch Windows Fallback Request',
     `Worker: ${result.worker_url ?? 'unknown'}`,
     `Auth: ${result.auth_source ?? 'unknown'}`,
@@ -156,7 +158,11 @@ export function formatResidentDispatchWindowsFallbackRequestText(result = {}) {
     `Windows Fallback Ref: ${summary.windows_fallback_ref ?? 'unknown'}`,
     `Executor Authority: ${summary.local_executor_authority ?? 'unknown'}`,
     ...(response?.code ? [`Code: ${response.code}`] : []),
-  ].join('\n');
+  ];
+  if (result.site_id && summary.carrier_session_id) {
+    lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result.worker_url ?? 'unknown'} --site ${result.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`);
+  }
+  return lines.join('\n');
 }
 
 async function main() {
