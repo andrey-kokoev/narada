@@ -582,6 +582,9 @@ export function formatSiteContinuitySchedulerResultForText(result) {
       lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text ${siteArgs}`);
       if (nextOperationId) {
         lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text ${siteArgs} --operation-id ${nextOperationId}`);
+        if (nextOperationAction) {
+          lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text ${siteArgs} --operation-id ${nextOperationId} --execute-operation-next`);
+        }
       }
       if (operatorAction === 'focus_next_site') {
         lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text ${baseArgs} --execute-site-next`);
