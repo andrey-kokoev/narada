@@ -182,7 +182,6 @@ test('readResidentDispatchWindowsFallbackEvidenceReview fails explicitly when fo
     },
   })), /resident_dispatch_windows_fallback_evidence_review_focus_not_found:missing_evidence/);
 });
-
 test('formatResidentDispatchWindowsFallbackEvidenceReviewText prints review ack command', () => {
   const text = formatResidentDispatchWindowsFallbackEvidenceReviewText({
     worker_url: 'https://carrier.example',
@@ -208,6 +207,26 @@ test('formatResidentDispatchWindowsFallbackEvidenceReviewText prints review ack 
 
   assert.match(text, /Resident Dispatch Windows Fallback Evidence Review: ok/);
   assert.match(text, /Focused Review: resident_dispatch_windows_fallback_evidence:resident_dispatch_windows_fallback_evidence_alpha status=acknowledged/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
   assert.match(text, /--focus-kind resident_dispatch_windows_fallback_evidence/);
+});
+
+test('formatResidentDispatchWindowsFallbackEvidenceReviewText suppresses next workflow for passive routes', () => {
+  const text = formatResidentDispatchWindowsFallbackEvidenceReviewText({
+    worker_url: 'https://carrier.example',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      operation_id: 'operation_alpha',
+      workflow_next_action: 'monitor_operation',
+      workflow_reason: 'complete',
+      evidence_count: 1,
+      focused_fallback_evidence_id: 'resident_dispatch_windows_fallback_evidence_alpha',
+    },
+  });
+
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
 });
