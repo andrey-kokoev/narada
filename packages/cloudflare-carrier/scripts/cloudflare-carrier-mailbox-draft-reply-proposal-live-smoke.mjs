@@ -67,6 +67,13 @@ export function formatMailboxDraftReplyProposalLiveSmokeText(result) {
     `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
     `Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`,
   ];
+  if (result.linked_draft_create_id) {
+    lines.splice(
+      9,
+      0,
+      `Draft Read: pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${result.worker_url} --site ${result.site_id} --focus-ref ${result.linked_draft_create_id} --operator-session-file <operator-session-file>`,
+    );
+  }
   return `${lines.join('\n')}\n`;
 }
 
@@ -151,6 +158,7 @@ export async function runMailboxDraftReplyProposalLiveSmoke(config, { fetchImpl 
   assert.equal(operationRead.http_status, 200, JSON.stringify(operationRead.body));
   assert.ok(operationRead.body.mailbox_draft_reply_proposals.some((entry) => entry.proposal_id === proposalId));
   const mailboxOutlookDraftCreates = operationRead.body.mailbox_outlook_draft_creates ?? [];
+  const linkedDraftCreate = mailboxOutlookDraftCreates.find((entry) => entry?.proposal_id === proposalId) ?? null;
   const productSurface = operationRead.body.operation_product_surface;
   assert.ok(productSurface.mailbox_draft_reply_proposal_count >= 1);
   const sendAcceptedCount = Number(productSurface.mailbox_send_accepted_count ?? 0);
@@ -181,6 +189,7 @@ export async function runMailboxDraftReplyProposalLiveSmoke(config, { fetchImpl 
     mailbox_mutation_admission: recorded.body.mailbox_mutation_admission,
     mailbox_draft_reply_proposal_count: productSurface.mailbox_draft_reply_proposal_count,
     mailbox_outlook_draft_create_count: mailboxOutlookDraftCreates.length,
+    linked_draft_create_id: linkedDraftCreate?.draft_create_id ?? linkedDraftCreate?.record?.draft_create_id ?? null,
     operation_mailbox_outlook_draft_create_admission: productSurface.mailbox_outlook_draft_create_admission,
     mailbox_draft_reply_authority_partition: productSurface.mailbox_draft_reply_authority_partition,
   };

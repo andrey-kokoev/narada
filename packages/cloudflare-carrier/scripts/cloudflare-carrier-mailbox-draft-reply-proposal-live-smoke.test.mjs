@@ -41,11 +41,13 @@ test('formatMailboxDraftReplyProposalLiveSmokeText emits downstream reads', () =
     mailbox_mutation_admission: 'not_admitted',
     mailbox_draft_reply_proposal_count: 1,
     mailbox_outlook_draft_create_count: 0,
+    linked_draft_create_id: 'draft_alpha',
     mailbox_draft_reply_authority_partition: 'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted',
   });
 
   assert.match(text, /Mailbox Draft Reply Proposal Smoke: ok/);
   assert.match(text, /Proposal Review: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:draft-reply-proposal:text/);
+  assert.match(text, /Draft Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref draft_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
 });
@@ -96,13 +98,13 @@ test('runMailboxDraftReplyProposalLiveSmoke returns summarized proposal state', 
         const proposalId = extractProposalId(body.request_id);
         return responseJson(200, {
           mailbox_draft_reply_proposals: [{ proposal_id: proposalId }],
-          mailbox_outlook_draft_creates: [],
+          mailbox_outlook_draft_creates: [{ draft_create_id: 'draft_alpha', proposal_id: proposalId }],
           operation_product_surface: {
             mailbox_draft_reply_proposal_count: 1,
             mailbox_send_accepted_count: 0,
             mailbox_send_confirmation_count: 0,
             mailbox_draft_reply_proposal_authority: 'cloudflare_carrier_site',
-            mailbox_outlook_draft_create_admission: 'not_admitted',
+            mailbox_outlook_draft_create_admission: 'admitted',
             mailbox_send_admission: 'not_admitted',
             mailbox_mutation_admission: 'not_admitted',
             mailbox_draft_reply_authority_partition: 'mailbox_draft_reply_proposal_cloudflare_recorded_outlook_draft_send_and_mutation_not_admitted',
@@ -117,6 +119,7 @@ test('runMailboxDraftReplyProposalLiveSmoke returns summarized proposal state', 
   assert.equal(result.auth_source, 'operator-session-cookie');
   assert.equal(result.proposal_authority, 'cloudflare_carrier_site');
   assert.equal(result.mailbox_draft_reply_proposal_count, 1);
+  assert.equal(result.linked_draft_create_id, 'draft_alpha');
 });
 
 function extractProposalId(requestId) {
