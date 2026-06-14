@@ -37,6 +37,7 @@ test('formatMailboxSendLiveSmokeText emits downstream reads', () => {
     operation_id: 'operation_alpha',
     account_ref: 'mailbox@example.test',
     to_recipient: 'recipient@example.test',
+    proposal_id: 'proposal_alpha',
     draft_create_id: 'draft_alpha',
     outlook_draft_id: 'outlook_alpha',
     send_accepted_id: 'send_alpha',
@@ -52,7 +53,9 @@ test('formatMailboxSendLiveSmokeText emits downstream reads', () => {
   });
 
   assert.match(text, /Mailbox Send Smoke: ok/);
+  assert.match(text, /Proposal: proposal_alpha/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
+  assert.match(text, /Proposal Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref proposal_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Draft Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text/);
   assert.match(text, /Send Accepted Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-accepted:text/);
   assert.match(text, /Send Confirmation Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-confirmation:text/);
@@ -162,6 +165,7 @@ test('runMailboxSendLiveSmoke returns summarized send state', async () => {
 
   assert.equal(result.status, 'ok');
   assert.equal(result.auth_source, 'operator-session-cookie');
+  assert.match(result.proposal_id, /^mailbox_send_live_proposal_/);
   assert.equal(result.outlook_draft_id, 'outlook_alpha');
   assert.equal(result.mailbox_send_authority, 'cloudflare_graph_mailbox_send');
   assert.equal(result.mailbox_send_confirmation_authority, 'cloudflare_graph_sent_items_reconciliation');
