@@ -540,5 +540,25 @@ test('formatSiteFileChangeProposalReviewText surfaces review ack command', () =>
   assert.match(text, /Current Posture: cloudflare_site_file_store_only_no_windows_filesystem_write_no_repository_publication/);
   assert.match(text, /Focused Review: site_file_change_proposal:site_file_change_proposal_live_1 status=acknowledged/);
   assert.match(text, /Requested Posture: proposal_only_no_filesystem_write/);
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
+});
+
+test('formatSiteFileChangeProposalReviewText suppresses next workflow for passive routes', () => {
+  const text = formatSiteFileChangeProposalReviewText({
+    worker_url: 'https://carrier.example',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_narada_cloudflare',
+      operation_id: 'operation_site_read',
+      workflow_next_action: 'monitor_operation',
+      workflow_reason: 'complete',
+      proposal_count: 1,
+      focused_proposal_id: 'site_file_change_proposal_live_1',
+    },
+  });
+
+  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
 });
