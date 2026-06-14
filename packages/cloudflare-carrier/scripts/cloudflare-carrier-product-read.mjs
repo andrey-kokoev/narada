@@ -159,6 +159,7 @@ export function summarizeProductSurface(operation, body, options = {}) {
       next_operation_id: overview.next_operation_id ?? null,
       next_operation_next_action: overview.next_operation_next_action ?? null,
       next_operation_reason: overview.next_operation_reason ?? null,
+      next_operation_active_session_id: overview.next_operation_active_session_id ?? null,
       next_operation_focus_kind: nextOperationFocusKind,
       next_operation_focus_ref: overview.next_operation_focus_ref ?? null,
       health_counts: overview.health_counts ?? null,
@@ -399,6 +400,9 @@ export function formatProductSurfaceText(result) {
     if (summary.next_site_id && summary.next_operation_id) {
       lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.next_site_id} --operation-id ${summary.next_operation_id} --operator-session-file <operator-session-file>`);
       lines.push(`Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.next_site_id} --operation-id ${summary.next_operation_id} --operator-session-file <operator-session-file>`);
+      if (summary.next_operation_active_session_id) {
+        lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.next_site_id} --operation-id ${summary.next_operation_id} --carrier-session-id ${summary.next_operation_active_session_id} --operator-session-file <operator-session-file>`);
+      }
       lines.push(`Persistence Review: pnpm --filter @narada2/cloudflare-carrier product:operation:persistence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.next_site_id} --operation-id ${summary.next_operation_id} --operator-session-file <operator-session-file>`);
       lines.push(`Recovery Review: pnpm --filter @narada2/cloudflare-carrier product:operation:recovery:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.next_site_id} --operation-id ${summary.next_operation_id} --operator-session-file <operator-session-file>`);
     }

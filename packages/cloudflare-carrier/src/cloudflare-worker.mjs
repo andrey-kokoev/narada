@@ -2071,6 +2071,10 @@ function summarizeCloudflareSiteProductOverview(siteProductStatuses = [], sitePr
     ) === firstActionable.site_id)
     : null;
   const actionableWorkflowRoute = actionableProjection?.focused_operation_lifecycle?.workflow_route ?? null;
+  const actionableOperationId = actionableProjection?.focused_operation_lifecycle?.operation_id ?? null;
+  const actionableSessionRecord = actionableOperationId && Array.isArray(actionableProjection?.sessions)
+    ? actionableProjection.sessions.find((item) => item?.operation_id === actionableOperationId) ?? actionableProjection.sessions[0] ?? null
+    : null;
   const actionableFocusRef = actionableWorkflowRoute?.focus_ref ?? actionableWorkflowRoute?.target ?? null;
   const actionableFocusKind = actionableWorkflowRoute?.focus_kind
     ?? (actionableWorkflowRoute?.next_action === 'review_site_continuity_reconciliation_execution' && actionableFocusRef
@@ -2093,6 +2097,7 @@ function summarizeCloudflareSiteProductOverview(siteProductStatuses = [], sitePr
     next_operation_id: actionableProjection?.focused_operation_lifecycle?.operation_id ?? null,
     next_operation_next_action: actionableWorkflowRoute?.next_action ?? null,
     next_operation_reason: actionableWorkflowRoute?.reason ?? null,
+    next_operation_active_session_id: actionableSessionRecord?.carrier_session_id ?? actionableSessionRecord?.session_id ?? null,
     next_operation_focus_kind: actionableFocusKind,
     next_operation_focus_ref: actionableFocusRef,
   };
