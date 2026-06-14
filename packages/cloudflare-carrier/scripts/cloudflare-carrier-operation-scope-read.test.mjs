@@ -90,6 +90,8 @@ test('formatOperationScopeReadText prints scope summary', () => {
   assert.match(text, /Scope Loaded: yes/);
   assert.match(text, /Workflow Route: action=read_operation_scope reason=operation_scope_not_loaded/);
   assert.match(text, /Inventory: sessions=1 tasks=2/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
 });
@@ -119,6 +121,33 @@ test('formatOperationScopeReadText suppresses next workflow for passive routes',
   assert.doesNotMatch(text, /Operation Next Workflow:/);
 });
 
+test('formatOperationScopeReadText suppresses site-scoped handoffs without a real site id', () => {
+  const text = formatOperationScopeReadText({
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation_id: 'operation_alpha',
+      current_status: 'active',
+      scope_loaded: true,
+      phase: 'inhabited',
+      health: 'attention',
+      next_action: 'carrier_evidence',
+      workflow_next_action: 'read_operation_scope',
+      workflow_reason: 'operation_scope_not_loaded',
+      session_count: 1,
+      task_count: 2,
+      persistence_state: 'durable',
+      recovery_state: 'reconstructable',
+    },
+  });
+
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /<site-id>/);
+});
+
 test('formatOperationScopeReadText suppresses worker-scoped handoffs without a real worker url', () => {
   const text = formatOperationScopeReadText({
     auth_source: 'operator-session-file',
@@ -141,5 +170,7 @@ test('formatOperationScopeReadText suppresses worker-scoped handoffs without a r
 
   assert.doesNotMatch(text, /Operation Review:/);
   assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
   assert.doesNotMatch(text, /<worker-url>/);
 });

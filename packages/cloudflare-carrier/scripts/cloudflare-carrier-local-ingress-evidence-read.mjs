@@ -108,6 +108,10 @@ export function formatLocalIngressEvidenceReadText(result) {
     lines.push(`Authority: evidence=${summary.local_ingress_evidence_authority ?? 'unknown'} posture=${summary.focused_evidence_posture ?? 'unknown'} partition=${summary.authority_partition ?? 'unknown'}`);
   }
   const workerUrl = result?.worker_url ?? null;
+  if (workerUrl && hasSiteId) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
+  }
   if (workerUrl && hasSiteId && summary.focused_request_id) {
     lines.push(`Request Read: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:request:review:text -- --url ${workerUrl} --site ${summary.site_id} --local-ingress-request-id ${summary.focused_request_id} --operator-session-file <operator-session-file>`);
   }

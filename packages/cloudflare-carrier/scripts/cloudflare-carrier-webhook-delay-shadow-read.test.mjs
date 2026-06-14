@@ -228,6 +228,8 @@ test('formatWebhookDelayShadowReadText prints shadow read summary', () => {
   assert.match(text, /Webhook Delay Shadow Read: ok/);
   assert.match(text, /Workflow Route: action=focus_webhook_delay_shadow_read reason=directive_intent_not_recorded_from_shadow_read focus=shadow_focus/);
   assert.match(text, /Observations: count=1 focused=shadow_focus classification=critical/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
 });
@@ -253,6 +255,30 @@ test('formatWebhookDelayShadowReadText suppresses next workflow for passive rout
   assert.doesNotMatch(text, /Operation Next Workflow:/);
 });
 
+test('formatWebhookDelayShadowReadText suppresses site-scoped handoffs without site id', () => {
+  const text = formatWebhookDelayShadowReadText({
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation_id: 'operation_alpha',
+      workflow_next_action: 'focus_webhook_delay_shadow_read',
+      workflow_reason: 'directive_intent_not_recorded_from_shadow_read',
+      workflow_focus_ref: 'shadow_focus',
+      observation_count: 1,
+      focused_observation_id: 'shadow_focus',
+      focused_classification_state: 'critical',
+      focused_dispatch_authority: 'windows_primary_dispatcher',
+      focused_dispatch_action: 'none',
+    },
+  });
+
+  assert.equal(text.includes('Site Read:'), false);
+  assert.equal(text.includes('Site Next Workflow:'), false);
+  assert.equal(text.includes('Operation Review:'), false);
+  assert.equal(text.includes('Operation Next Workflow:'), false);
+  assert.doesNotMatch(text, /<site-id>/);
+});
+
 test('formatWebhookDelayShadowReadText suppresses worker-scoped handoffs without worker url', () => {
   const text = formatWebhookDelayShadowReadText({
     auth_source: 'operator-session-file',
@@ -271,6 +297,8 @@ test('formatWebhookDelayShadowReadText suppresses worker-scoped handoffs without
   });
 
   assert.doesNotMatch(text, /<worker-url>/);
+  assert.equal(text.includes('Site Read:'), false);
+  assert.equal(text.includes('Site Next Workflow:'), false);
   assert.equal(text.includes('Operation Review:'), false);
   assert.equal(text.includes('Operation Next Workflow:'), false);
 });

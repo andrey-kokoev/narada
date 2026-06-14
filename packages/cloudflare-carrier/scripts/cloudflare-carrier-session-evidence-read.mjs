@@ -110,6 +110,14 @@ export function formatSessionEvidenceText(result) {
     `Latest Event: ${summary.latest_event_kind ?? 'none'}`,
     `Event Kinds: ${formatKeyValueMap(summary.event_kind_counts ?? {})}`,
   ];
+  if (workerUrl && summary.site_id) {
+    lines.push(
+      `Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`,
+    );
+    lines.push(
+      `Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-next`,
+    );
+  }
   if (workerUrl && summary.site_id && summary.carrier_session_id) {
     lines.push(
       `Task Review: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:review:text -- --url ${workerUrl} --site ${summary.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`,
