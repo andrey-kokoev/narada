@@ -44,6 +44,8 @@ export function parseAuthorityTransferReadinessLiveSmokeArgs(argv = [], env = pr
 export function formatAuthorityTransferReadinessLiveSmokeText(result) {
   const posture = result.authority_transfer_posture ?? {};
   const repo = result.slices?.repository_publication ?? {};
+  const hasSiteId = typeof result.site_id === 'string' && result.site_id.length > 0;
+  const hasOperationId = typeof result.operation_id === 'string' && result.operation_id.length > 0;
   const lines = [
     `Authority Transfer Readiness Smoke: ${result.status}`,
     `Worker: ${result.worker_url}`,
@@ -53,14 +55,18 @@ export function formatAuthorityTransferReadinessLiveSmokeText(result) {
     `Repository Publication: readiness=${repo.readiness_status ?? 'unknown'} repository_allowed=${repo.requested_repository_allowed ?? 'unknown'} branch_allowed=${repo.requested_branch_allowed ?? 'unknown'} git_push=${repo.cloudflare_git_push_admission ?? 'unknown'}`,
     `Mailbox Slice: status_source=${result.slices?.mailbox?.status_source_read_count ?? 0} draft_reply=${result.slices?.mailbox?.draft_reply_proposal_count ?? 0} send_confirmation=${result.slices?.mailbox?.send_confirmation_count ?? 0}`,
     `Task Lifecycle Slice: tasks=${result.slices?.task_lifecycle?.task_count ?? 0} partition=${result.slices?.task_lifecycle?.authority_partition ?? 'unknown'}`,
-    `Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`,
-    `Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`,
-    `Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
-    `Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`,
-    `Mailbox Readback Smoke: pnpm --filter @narada2/cloudflare-carrier mailbox:readback-smoke:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation ${result.operation_id} --operator-session-file <operator-session-file>`,
-    `Authority Transfer Read: pnpm --filter @narada2/cloudflare-carrier product:authority-transfer:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`,
-    `Site Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-site-action`,
   ];
+  if (hasSiteId) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
+  }
+  if (hasSiteId && hasOperationId) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+    lines.push(`Mailbox Readback Smoke: pnpm --filter @narada2/cloudflare-carrier mailbox:readback-smoke:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation ${result.operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Authority Transfer Read: pnpm --filter @narada2/cloudflare-carrier product:authority-transfer:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${result.operation_id} --operator-session-file <operator-session-file> --execute-site-action`);
+  }
   return `${lines.join('\n')}\n`;
 }
 

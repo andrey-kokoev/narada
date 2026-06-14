@@ -45,6 +45,25 @@ test('formatAuthorityTransferReadinessLiveSmokeText emits downstream reads', () 
   assert.match(text, /Site Action Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:action:workflow:live:text/);
 });
 
+test('formatAuthorityTransferReadinessLiveSmokeText suppresses guarded links without site or operation ids', () => {
+  const text = formatAuthorityTransferReadinessLiveSmokeText({
+    status: 'incomplete',
+    worker_url: 'https://carrier.example.test',
+    site_id: '',
+    operation_id: '',
+    authority_transfer_posture: {},
+    slices: { repository_publication: {} },
+  });
+
+  assert.doesNotMatch(text, /Site Read:/);
+  assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Operation Review:/);
+  assert.doesNotMatch(text, /Operation Next Workflow:/);
+  assert.doesNotMatch(text, /Mailbox Readback Smoke:/);
+  assert.doesNotMatch(text, /Authority Transfer Read:/);
+  assert.doesNotMatch(text, /Site Action Workflow:/);
+});
+
 test('runAuthorityTransferReadinessLiveSmoke returns summarized readiness state', async () => {
   const result = await runAuthorityTransferReadinessLiveSmoke({
     workerUrl: 'https://carrier.example.test',

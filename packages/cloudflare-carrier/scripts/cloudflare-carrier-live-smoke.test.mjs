@@ -53,3 +53,31 @@ test('formatLiveSmokeText emits direct downstream reads', () => {
   assert.match(output, /Operation Review:/);
   assert.match(output, /Operation Next Workflow:/);
 });
+
+test('formatLiveSmokeText suppresses guarded links without concrete ids', () => {
+  const output = formatLiveSmokeText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    carrier_session_id: '',
+    site_id: '',
+    operation_id: '',
+    agent_id: 'narada.live.smoke',
+    goal: { text: 'prove live cloudflare carrier', state: 'active' },
+    provider_adapter_posture: 'cloudflare-workers-ai',
+    provider_request_status: 'completed',
+    provider_execution_enabled: true,
+    tool_effect_posture: 'configured',
+    tool_effect_adapter_kind: 'cloudflare-tool-effect-boundary',
+    task_create_status: 'ok',
+    task_update_status: 'ok',
+    persisted_tasks: [{ task_id: 'task-1' }],
+  });
+
+  assert.doesNotMatch(output, /Site Read:/);
+  assert.doesNotMatch(output, /Site Next Workflow:/);
+  assert.doesNotMatch(output, /Session Evidence:/);
+  assert.doesNotMatch(output, /Task Review:/);
+  assert.doesNotMatch(output, /Task Workflow:/);
+  assert.doesNotMatch(output, /Operation Review:/);
+  assert.doesNotMatch(output, /Operation Next Workflow:/);
+});
