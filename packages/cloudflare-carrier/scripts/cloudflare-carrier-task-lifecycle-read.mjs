@@ -136,6 +136,7 @@ export function formatTaskLifecycleReadText(result) {
     `Status: ${summary.task_status ?? 'unknown'}`,
     ...(summary.task_title ? [`Title: ${summary.task_title}`] : []),
     ...(summary.carrier_session_id ? [`Session: ${summary.carrier_session_id}`] : []),
+    ...(summary.carrier_session_id ? [`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? 'unknown'} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`] : []),
     ...(summary.claimed_by_agent_id ? [`Claimed By: ${summary.claimed_by_agent_id}`] : []),
     ...(summary.reported_by_agent_id ? [`Reported By: ${summary.reported_by_agent_id}`] : []),
     ...(summary.finished_by_agent_id ? [`Finished By: ${summary.finished_by_agent_id}`] : []),
