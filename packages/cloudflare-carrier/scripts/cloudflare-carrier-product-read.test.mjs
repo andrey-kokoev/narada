@@ -1918,6 +1918,47 @@ test('formatProductSurfaceText omits synthetic operation ids from authority tran
   assert.doesNotMatch(authorityTransferText, /Authority Transfer:.*<operation-id>/);
 });
 
+test('formatProductSurfaceText suppresses site.read operator handoff without a real site id', () => {
+  const siteReadText = formatProductSurfaceText({
+    operation: 'site.read',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'site.read',
+      display_name: 'Site Alpha',
+      health: 'attention',
+      next_action: 'continue_authority_transfer',
+      active_operation_id: 'operation_alpha',
+      active_operation_next_action: 'refresh_site_continuity_loop',
+      active_session_id: 'session_alpha',
+      member_principal_id: 'principal:alpha',
+      membership_role: 'viewer',
+      continuity_state: 'packet_observed',
+      continuity_direction_state: 'bidirectional_packets_observed',
+      continuity_direction_missing: [],
+      continuity_loop_state: 'loop_report_observed',
+      continuity_reconciliation_execution_state: 'reconciliation_execution_observed',
+      continuity_reconciliation_execution_health: 'ready',
+      continuity_packet_count: 3,
+      continuity_loop_report_count: 20,
+      continuity_reconciliation_execution_count: 20,
+      persistence_state: 'durable',
+      recovery_state: 'reconstructable',
+      membership_count: 1,
+      session_count: 4,
+      local_ingress_request_count: 1,
+      repository_publication_request_count: 1,
+    },
+  });
+
+  assert.doesNotMatch(siteReadText, /Site Action Workflow:/);
+  assert.doesNotMatch(siteReadText, /Authority Transfer:/);
+  assert.doesNotMatch(siteReadText, /Operation Review:/);
+  assert.doesNotMatch(siteReadText, /Task Workflow:/);
+  assert.doesNotMatch(siteReadText, /Repository Publication Review:/);
+  assert.doesNotMatch(siteReadText, /<site-id>/);
+});
+
 test('formatProductSurfaceText emits site authority operator command for authority path evidence route', () => {
   const authorityPathText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -2577,6 +2618,44 @@ test('formatProductSurfaceText omits synthetic next operation ids from site list
 
   assert.match(siteListText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.doesNotMatch(siteListText, /Operation Next Workflow:.*<operation-id>/);
+});
+
+test('formatProductSurfaceText suppresses operation.list operator handoff without a real site id', () => {
+  const operationListText = formatProductSurfaceText({
+    operation: 'operation.list',
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      operation: 'operation.list',
+      operation_count: 2,
+      active_operation_id: 'operation_active',
+      next_operation_id: 'operation_next',
+      next_operation_active_session_id: 'session_alpha',
+      next_status: 'needs_attention',
+      next_action: 'refresh_site_continuity_loop',
+      next_reason: 'continuity_loop_needs_refresh',
+      next_operation_focus_kind: 'site_continuity_reconciliation_execution',
+      next_operation_focus_ref: 'focus_alpha',
+      continuation_mode: 'resume',
+      needs_continuation_count: 1,
+      next_continuation_operation_id: 'operation_resume',
+      continuation_next_action: 'resume_operation_continuation',
+      route_domain: 'operation_posture',
+      route_command_state: 'operation_posture_focus_next_operation',
+      route_next_action: 'focus_next_operation',
+      route_target: 'operation_next',
+      route_status: 'attention',
+      route_reason: 'focused_operation_needs_attention',
+    },
+  });
+
+  assert.doesNotMatch(operationListText, /Focused Read:/);
+  assert.doesNotMatch(operationListText, /Task Review:/);
+  assert.doesNotMatch(operationListText, /Session Evidence:/);
+  assert.doesNotMatch(operationListText, /Operation Next Workflow:/);
+  assert.doesNotMatch(operationListText, /Continuation Resume:/);
+  assert.doesNotMatch(operationListText, /Focus Workflow:/);
+  assert.doesNotMatch(operationListText, /<site-id>/);
 });
 
 test('formatProductSurfaceText surfaces operation scope command', () => {
