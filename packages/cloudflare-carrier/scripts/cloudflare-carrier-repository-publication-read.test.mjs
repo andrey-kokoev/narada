@@ -469,6 +469,8 @@ test('formatRepositoryPublicationReadText surfaces operation review on request s
   });
 
   assert.match(requestListText, /Latest Request: repository-publication-request-1/);
+  assert.match(requestListText, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(requestListText, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(requestListText, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-1 --operator-session-file <operator-session-file>/);
   assert.match(requestListText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-1 --operator-session-file <operator-session-file> --execute-operation-next/);
 
@@ -494,6 +496,8 @@ test('formatRepositoryPublicationReadText surfaces operation review on request s
   });
 
   assert.match(requestNextText, /Request: repository-publication-request-1/);
+  assert.match(requestNextText, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(requestNextText, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(requestNextText, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-1 --operator-session-file <operator-session-file>/);
   assert.match(requestNextText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-1 --operator-session-file <operator-session-file> --execute-operation-next/);
 });
@@ -513,6 +517,8 @@ test('formatRepositoryPublicationReadText suppresses worker-scoped handoffs with
     },
   });
   assert.doesNotMatch(requestListText, /<worker-url>/);
+  assert.doesNotMatch(requestListText, /Site Read:/);
+  assert.doesNotMatch(requestListText, /Site Next Workflow:/);
   assert.doesNotMatch(requestListText, /Operation Review:/);
   assert.doesNotMatch(requestListText, /Operation Next Workflow:/);
 
@@ -529,6 +535,8 @@ test('formatRepositoryPublicationReadText suppresses worker-scoped handoffs with
     },
   });
   assert.doesNotMatch(admissionText, /<worker-url>/);
+  assert.doesNotMatch(admissionText, /Site Read:/);
+  assert.doesNotMatch(admissionText, /Site Next Workflow:/);
   assert.doesNotMatch(admissionText, /Request Read:/);
 });
 
