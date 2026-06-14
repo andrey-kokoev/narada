@@ -137,7 +137,7 @@ test('formatRepositoryPublicationProviderLivenessReadText prints provider livene
     summary: {
       site_id: 'site_alpha',
       state: 'fresh',
-      next_action: 'monitor_repository_publication_provider_liveness',
+      next_action: 'refresh_provider_liveness_state',
       provider_liveness_authority: 'cloudflare_repository_publication_provider_liveness_store',
       scheduler_state: 'fresh_from_scheduled_refresh',
       scheduler_task_name: '\\Narada\\CloudflareProviderLivenessRefresh',
@@ -155,9 +155,11 @@ test('formatRepositoryPublicationProviderLivenessReadText prints provider livene
   });
 
   assert.match(text, /Repository Publication Provider Liveness: ok/);
-  assert.match(text, /Liveness: state=fresh next=monitor_repository_publication_provider_liveness authority=cloudflare_repository_publication_provider_liveness_store/);
+  assert.match(text, /Liveness: state=fresh next=refresh_provider_liveness_state authority=cloudflare_repository_publication_provider_liveness_store/);
   assert.match(text, /Scheduler: state=fresh_from_scheduled_refresh task=\\Narada\\CloudflareProviderLivenessRefresh interval=2/);
   assert.match(text, /Heartbeats: count=1 latest=heartbeat_repo_alpha status=completed_and_recorded/);
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Provider Liveness Refresh: pnpm --filter @narada2\/cloudflare-carrier provider-liveness:refresh:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 });
 
 test('formatRepositoryPublicationProviderLivenessReadText uses focused labels for focused reads', () => {
@@ -177,4 +179,18 @@ test('formatRepositoryPublicationProviderLivenessReadText uses focused labels fo
 
   assert.match(text, /Heartbeats: count=1 focused=heartbeat_repo_alpha status=completed_and_recorded/);
   assert.match(text, /Focused Timing: generated=2026-06-13T03:46:01.000Z last_run=2026-06-13T03:46:00.000Z/);
+});
+
+test('formatRepositoryPublicationProviderLivenessReadText suppresses refresh handoff for passive next action', () => {
+  const text = formatRepositoryPublicationProviderLivenessReadText({
+    worker_url: 'https://carrier.example.test',
+    auth_source: 'operator-session-file',
+    summary: {
+      site_id: 'site_alpha',
+      next_action: 'monitor_repository_publication_provider_liveness',
+    },
+  });
+
+  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.doesNotMatch(text, /Provider Liveness Refresh:/);
 });

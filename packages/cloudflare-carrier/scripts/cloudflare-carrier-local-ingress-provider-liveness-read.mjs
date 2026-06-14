@@ -69,6 +69,7 @@ export function summarizeLocalIngressProviderLiveness(body = {}, options = {}) {
 
 export function formatLocalIngressProviderLivenessReadText(result) {
   const summary = result?.summary ?? {};
+  const actionableNext = summary.next_action && !['none', 'monitor_local_ingress_provider_liveness'].includes(summary.next_action);
   const heartbeatLabel = summary.focused_local_ingress_provider_heartbeat_id ? 'focused' : 'latest';
   const timingLabel = summary.focused_local_ingress_provider_heartbeat_id ? 'Focused Timing' : 'Latest Timing';
   const lines = [
@@ -86,6 +87,12 @@ export function formatLocalIngressProviderLivenessReadText(result) {
   }
   if (summary.direct_cloudflare_filesystem_mutation_admission || summary.repository_publication_admission) {
     lines.push(`Admissions: direct_cloudflare_filesystem_mutation=${summary.direct_cloudflare_filesystem_mutation_admission ?? 'unknown'} repository_publication=${summary.repository_publication_admission ?? 'unknown'}`);
+  }
+  if (summary.site_id) {
+    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
+    if (actionableNext) {
+      lines.push(`Provider Liveness Refresh: pnpm --filter @narada2/cloudflare-carrier provider-liveness:refresh:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
+    }
   }
   return `${lines.join('\n')}\n`;
 }
