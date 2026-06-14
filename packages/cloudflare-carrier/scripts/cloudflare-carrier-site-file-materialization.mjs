@@ -158,7 +158,7 @@ export function summarizeSiteFileMaterialization(body = {}, params = {}) {
 export function formatSiteFileMaterializationText(result) {
   const summary = result?.summary ?? summarizeSiteFileMaterialization(result?.response ?? {}, result?.params ?? {});
   const ok = summary.ok === false || result?.status === 'refused' ? false : true;
-  return [
+  const lines = [
     `Site File Materialization: ${ok === false ? 'refused' : 'ok'}`,
     `Worker: ${result?.worker_url ?? 'unknown'}`,
     `Auth: ${result?.auth_source ?? 'unknown'}`,
@@ -182,7 +182,17 @@ export function formatSiteFileMaterializationText(result) {
     ...(summary.confirmation_evidence_ref ? [`Evidence: ${summary.confirmation_evidence_ref}`] : []),
     ...(summary.recorded_by_principal_id ? [`Recorded By: ${summary.recorded_by_principal_id}`] : []),
     ...(summary.recorded_at ? [`Recorded At: ${summary.recorded_at}`] : []),
-  ].join('\n') + '\n';
+  ];
+  if (summary.materialization_id) {
+    lines.push(`Materialization Review: pnpm --filter @narada2/cloudflare-carrier product:site-file:materialization:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --site-file-materialization-id ${summary.materialization_id} --operator-session-file <operator-session-file>`);
+  }
+  if (summary.proposal_id) {
+    lines.push(`Proposal Review: pnpm --filter @narada2/cloudflare-carrier product:site-file-change:proposal:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.proposal_id} --operator-session-file <operator-session-file>`);
+  }
+  if (summary.operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+  }
+  return `${lines.join('\n')}\n`;
 }
 
 function redactSiteFileMaterializationParams(params = {}) {

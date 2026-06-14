@@ -122,7 +122,7 @@ export function summarizeSiteFileChangeProposal(body = {}, params = {}) {
 export function formatSiteFileChangeProposalText(result) {
   const summary = result?.summary ?? summarizeSiteFileChangeProposal(result?.response ?? {}, result?.params ?? {});
   const ok = summary.ok === false || result?.status === 'refused' ? false : true;
-  return [
+  const lines = [
     `Site File Change Proposal: ${ok === false ? 'refused' : 'ok'}`,
     `Worker: ${result?.worker_url ?? 'unknown'}`,
     `Auth: ${result?.auth_source ?? 'unknown'}`,
@@ -141,7 +141,14 @@ export function formatSiteFileChangeProposalText(result) {
     ...summary.files.slice(0, 5).map((file) => `File: ${file.file_path} kind=${file.change_kind}${file.material_source_ref ? ` material=${file.material_source_ref}` : ''}`),
     ...(summary.recorded_by_principal_id ? [`Recorded By: ${summary.recorded_by_principal_id}`] : []),
     ...(summary.recorded_at ? [`Recorded At: ${summary.recorded_at}`] : []),
-  ].join('\n') + '\n';
+  ];
+  if (summary.proposal_id) {
+    lines.push(`Proposal Review: pnpm --filter @narada2/cloudflare-carrier product:site-file-change:proposal:review:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --focus-ref ${summary.proposal_id} --operator-session-file <operator-session-file>`);
+  }
+  if (summary.operation_id) {
+    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+  }
+  return `${lines.join('\n')}\n`;
 }
 
 function parseProposalFiles(args, env) {

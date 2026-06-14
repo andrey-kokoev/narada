@@ -328,6 +328,8 @@ test('formatSiteFileChangeProposalText renders admitted and refused summaries wi
   assert.match(admitted, /Site File Change Proposal: ok/);
   assert.match(admitted, /Proposal Id: proposal-1/);
   assert.match(admitted, /Filesystem Mutation: not_admitted/);
+  assert.match(admitted, /Proposal Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file-change:proposal:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref proposal-1 --operator-session-file <operator-session-file>/);
+  assert.match(admitted, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.equal(admitted.includes('secret-token'), false);
 
   const refused = formatSiteFileChangeProposalText({
@@ -347,6 +349,8 @@ test('formatSiteFileChangeProposalText renders admitted and refused summaries wi
 
   assert.match(refused, /Site File Change Proposal: refused/);
   assert.match(refused, /Code: site_authority_denied/);
+  assert.equal(refused.includes('Proposal Review:'), false);
+  assert.equal(refused.includes('Operation Review:'), false);
   assert.equal(refused.includes('secret-token'), false);
 });
 

@@ -306,6 +306,7 @@ test('formatSiteFileMaterializationText renders admitted and refused summaries w
       file_path: 'docs/architecture/cloudflare-carrier/target.md',
       content_sha256: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
       content_ref: 'cloudflare-site-file-store:target-md:v1',
+      operation_id: 'operation_alpha',
       site_file_materialization_authority: 'cloudflare_carrier_site',
       cloudflare_site_file_materialization_admission: 'admitted',
       filesystem_executor_authority: 'cloudflare_site_file_store',
@@ -319,6 +320,9 @@ test('formatSiteFileMaterializationText renders admitted and refused summaries w
   assert.match(admitted, /Site File Materialization: ok/);
   assert.match(admitted, /Materialization Id: materialization-1/);
   assert.match(admitted, /Windows Filesystem Mutation: not_admitted/);
+  assert.match(admitted, /Materialization Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file:materialization:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --site-file-materialization-id materialization-1 --operator-session-file <operator-session-file>/);
+  assert.match(admitted, /Proposal Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file-change:proposal:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref proposal-9 --operator-session-file <operator-session-file>/);
+  assert.match(admitted, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.equal(admitted.includes('secret-token'), false);
 
   const refused = formatSiteFileMaterializationText({
@@ -337,6 +341,9 @@ test('formatSiteFileMaterializationText renders admitted and refused summaries w
 
   assert.match(refused, /Site File Materialization: refused/);
   assert.match(refused, /Code: site_file_materialization_cutover_evidence_required/);
+  assert.equal(refused.includes('Materialization Review:'), false);
+  assert.equal(refused.includes('Proposal Review:'), false);
+  assert.equal(refused.includes('Operation Review:'), false);
   assert.equal(refused.includes('secret-token'), false);
 });
 
