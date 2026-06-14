@@ -283,6 +283,8 @@ test('formatTaskLifecycleFinishText renders admitted and refused summaries witho
   assert.match(admitted, /Status: finished previous=closed verdict=accepted/);
   assert.match(admitted, /Decision: action=admit reason=cloudflare_task_finish_cutover_admitted conflict_policy=closed_report_only_finish_no_overwrite/);
   assert.match(admitted, /Finish Authority: finish-authority:finish:v1/);
+  assert.match(admitted, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --operator-session-file <operator-session-file>/);
+  assert.match(admitted, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
   assert.equal(admitted.includes('secret-token'), false);
 
   const refused = formatTaskLifecycleFinishText({
@@ -306,6 +308,8 @@ test('formatTaskLifecycleFinishText renders admitted and refused summaries witho
   assert.match(refused, /Code: task_lifecycle_finish_not_admitted/);
   assert.match(refused, /Finalizer: principal_alpha/);
   assert.match(refused, /Decision: action=refuse reason=windows_task_lifecycle_mutation_authority_retained/);
+  assert.match(refused, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --operator-session-file <operator-session-file>/);
+  assert.match(refused, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
   assert.equal(refused.includes('operator-session-cookie'), false);
 });
 
