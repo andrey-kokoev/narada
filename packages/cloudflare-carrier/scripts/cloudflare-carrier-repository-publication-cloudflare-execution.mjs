@@ -155,6 +155,7 @@ export function formatRepositoryPublicationCloudflareExecutionText(result) {
     ...(summary.github_response_summary?.object_sha ? [`GitHub Object SHA: ${summary.github_response_summary.object_sha}`] : []),
     ...(workerUrl && siteId ? [`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`] : []),
     ...(workerUrl && siteId ? [`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file> --execute-site-next`] : []),
+    ...(workerUrl && siteId && summary.repository_publication_request_id ? [`Request Review: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text -- --url ${workerUrl} --site ${siteId} --repository-publication-request-id ${summary.repository_publication_request_id} --operator-session-file <operator-session-file>`] : []),
   ].join('\n') + '\n';
 }
 

@@ -169,6 +169,7 @@ test('summaries and text output preserve execution refusal evidence', () => {
   assert.match(text, /Request: repository-publication-request-1/);
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
+  assert.match(text, /Request Review: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --repository-publication-request-id repository-publication-request-1 --operator-session-file <operator-session-file>/);
 });
 
 test('formatRepositoryPublicationCloudflareExecutionText suppresses site continuation without a real worker url', () => {
@@ -186,6 +187,7 @@ test('formatRepositoryPublicationCloudflareExecutionText suppresses site continu
 
   assert.doesNotMatch(text, /Site Read:/);
   assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Request Review:/);
   assert.doesNotMatch(text, /<worker-url>/);
 });
 
