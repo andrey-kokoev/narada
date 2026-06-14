@@ -491,7 +491,7 @@ export function formatProductSurfaceText(result) {
       if (summary.route_next_action === 'focus_next_site' && summary.next_site_id) {
         lines.push(`Focus Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:focus:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --focused-site-id ${summary.next_site_id} --operator-session-file <operator-session-file> --execute-site-focus`);
         if (summary.next_action === 'focus_next_operation') {
-          lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.next_site_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+          lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.next_site_id} --operation-id ${summary.next_operation_id ?? '<operation-id>'} --operator-session-file <operator-session-file> --execute-operation-next`);
           if (summary.next_operation_next_action === 'refresh_site_continuity_loop' && summary.next_operation_id) {
             lines.push(`Continuity Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.next_site_id} --operation-id ${summary.next_operation_id} --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity`);
           }
@@ -523,7 +523,7 @@ export function formatProductSurfaceText(result) {
       (summary.next_action === 'focus_site_operation' || summary.next_action === 'focus_next_operation')
       || (summary.active_operation_id && (summary.active_operation_next_action || summary.active_operation_workflow_reason))
     ) {
-      lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file> --execute-operation-next`);
+      lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'}${summary.active_operation_id ? ` --operation-id ${summary.active_operation_id}` : ''} --operator-session-file <operator-session-file> --execute-operation-next`);
     }
     if (
       summary.next_action === 'read_site_authority'
@@ -624,7 +624,7 @@ export function formatProductSurfaceText(result) {
       lines.push(`Persistence Review: pnpm --filter @narada2/cloudflare-carrier product:operation:persistence:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.next_operation_id} --operator-session-file <operator-session-file>`);
       lines.push(`Recovery Review: pnpm --filter @narada2/cloudflare-carrier product:operation:recovery:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.next_operation_id} --operator-session-file <operator-session-file>`);
       if (summary.next_status === 'needs_attention' || summary.next_action === 'refresh_site_continuity_loop' || summary.next_action === 'review_site_continuity_reconciliation_execution') {
-        lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operator-session-file <operator-session-file> --execute-operation-next`);
+        lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.next_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
       }
       if (summary.next_action === 'refresh_site_continuity_loop') {
         lines.push(`Continuity Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url ${result?.worker_url ?? '<worker-url>'} --site ${summary.site_id ?? '<site-id>'} --operation-id ${summary.next_operation_id} --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity`);
