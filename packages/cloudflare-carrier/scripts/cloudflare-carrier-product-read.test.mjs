@@ -693,6 +693,37 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
     },
   });
   assert.match(operationListEvidenceText, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(operationListText, /Focus Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file> --execute-operation-focus/);
+
+  const operationListNoWorkerText = formatProductSurfaceText({
+    operation: 'operation.list',
+    summary: {
+      operation: 'operation.list',
+      site_id: 'site_alpha',
+      operation_count: 1,
+      active_operation_id: 'operation_live',
+      next_operation_id: 'operation_live',
+      next_operation_active_session_id: 'session_alpha',
+      next_operation_status: 'inactive',
+      operation_status_counts: { inactive: 1 },
+      next_status: 'needs_attention',
+      next_action: 'review_operation',
+      next_reason: 'operation_needs_review',
+      route_domain: 'operation_posture',
+      route_command_state: 'operation_posture_attention',
+      route_command_action: 'focus_next_operation',
+      route_next_action: 'focus_next_operation',
+      route_target: 'operation_live',
+      route_status: 'needs_attention',
+      route_reason: 'operation_needs_review',
+    },
+  });
+  assert.doesNotMatch(operationListNoWorkerText, /Focused Read:/);
+  assert.doesNotMatch(operationListNoWorkerText, /Task Workflow:/);
+  assert.doesNotMatch(operationListNoWorkerText, /Persistence Review:/);
+  assert.doesNotMatch(operationListNoWorkerText, /Continuation Read:/);
+  assert.doesNotMatch(operationListNoWorkerText, /Focus Workflow:/);
+  assert.doesNotMatch(operationListNoWorkerText, /<worker-url>/);
 
   const operationListContinuityText = formatProductSurfaceText({
     operation: 'operation.list',
@@ -722,6 +753,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   });
   assert.match(operationListContinuityText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.match(operationListContinuityText, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity/);
+  assert.match(operationListContinuityText, /Next Operation Focus: kind=site_continuity_loop ref=site_alpha/);
   assert.match(operationListContinuityText, /Next Operation Focus: kind=site_continuity_loop ref=site_alpha/);
 
   const operationListContinuityReviewText = formatProductSurfaceText({
