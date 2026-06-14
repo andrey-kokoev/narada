@@ -70,6 +70,8 @@ test('formatSiteFocusWorkflowLiveText renders direct reads', () => {
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
   assert.match(text, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 });
 
 test('formatSiteFocusWorkflowLiveText suppresses scoped handoffs without selected site id', () => {
@@ -92,6 +94,8 @@ test('formatSiteFocusWorkflowLiveText suppresses scoped handoffs without selecte
   assert.doesNotMatch(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
   assert.doesNotMatch(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
   assert.doesNotMatch(text, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live:text/);
+  assert.doesNotMatch(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text/);
+  assert.doesNotMatch(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text/);
   assert.doesNotMatch(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
 });
 
@@ -115,9 +119,10 @@ test('formatSiteFocusWorkflowLiveText suppresses scoped handoffs without worker 
   assert.doesNotMatch(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
   assert.doesNotMatch(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
   assert.doesNotMatch(text, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live:text/);
+  assert.doesNotMatch(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text/);
+  assert.doesNotMatch(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text/);
   assert.doesNotMatch(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
 });
-
 test('runSiteFocusWorkflowLive selects next site from posture and reads it', async () => {
   const calls = [];
   const result = await runSiteFocusWorkflowLive({
