@@ -1,0 +1,23 @@
+{
+  "schema": "narada.cloudflare_site_registry.snapshot.v1",
+  "generated_at": "2026-06-14T03:10:14.548Z",
+  "source": "cloudflare_carrier_site_list",
+  "source_operation": "site.list",
+  "worker_url": "https://narada-cloudflare-carrier.andrei-kokoev.workers.dev",
+  "site_count": 2,
+  "sites": [
+    {
+      "site_id": "site_live_smoke",
+      "display_name": "Live Smoke Site",
+      "site_ref": null,
+      "status": "active"
+    },
+    {
+      "site_id": "site_narada_cloudflare",
+      "display_name": "Narada Cloudflare Site",
+      "site_ref": "cloudflare://narada-cloudflare-carrier",
+      "status": "active"
+    }
+  ],
+  "embeds_credentials": false
+}

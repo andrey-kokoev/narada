@@ -1,0 +1,38 @@
+{
+  "schema": "narada.site.identity.v0",
+  "site_id": "narada-proper",
+  "authority_locus": {
+    "site_root": ".",
+    "locus_type": "narada_proper"
+  },
+  "public_keys": [
+    {
+      "key_id": "site-ed25519-2026-06",
+      "algorithm": "Ed25519",
+      "public_key": "MCowBQYDK2VwAyEAbIZ2QB8Qyd6IPv7IcYGQOU-I7JgtuB77kvK6tDN6BJ4",
+      "public_key_encoding": "spki_der_base64url",
+      "fingerprint_sha256": "438f003faca7d581d31369ba79b3fd7e2b7892a60444482def93a0e13d321507",
+      "fingerprint_preimage": "spki_der",
+      "purpose": [
+        "site_identity",
+        "sign_declarations",
+        "sign_crossings",
+        "sign_probe_reports"
+      ],
+      "created_at": "2026-06-09T02:00:52.633Z",
+      "expires_at": null,
+      "status": "active"
+    }
+  ],
+  "created_at": "2026-06-09T02:00:52.633Z",
+  "status": "active",
+  "rotation_policy": {
+    "mode": "operator_governed_local_secret_storage",
+    "overlap_required": true,
+    "revocation_record_required": true
+  },
+  "evidence_refs": [
+    "task:#502",
+    "tool:tools/site-identity/materialize-site-identity.mjs"
+  ]
+}
