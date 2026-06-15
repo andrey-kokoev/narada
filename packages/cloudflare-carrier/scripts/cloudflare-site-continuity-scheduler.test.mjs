@@ -2675,6 +2675,18 @@ test('site continuity scheduler read-last summarizes local sync artifact', async
     assert.equal(summary.continuity_loop_freshness_state, 'fresh');
     assert.equal(summary.continuity_loop_report_age_minutes, 1);
     assert.equal(summary.continuity_loop_stale_after_minutes, 5);
+
+    const plan = buildSiteContinuitySchedulerPlan({
+      action: 'read-last',
+      repoRoot: root,
+      outputPath,
+      projectionWorkerUrl: 'https://worker.example',
+      operatorSessionFile: join(root, '.narada/auth/cloudflare-operator-session.json'),
+    });
+    const text = formatSiteContinuitySchedulerResultForText(plan);
+    assert.match(text, /Loop Report: site-continuity-loop:site_fixture:2026-06-11T09:00:00\.000Z/);
+    assert.match(text, /Loop Report Artifact Path: .*site-continuity-loop-report\.json/);
+    assert.match(text, /Loop Report Review: pnpm --filter @narada2\/cloudflare-carrier product:site-continuity:loop-report:text -- --url https:\/\/worker\.example --operator-session-file .*cloudflare-operator-session\.json --site site_fixture --report-file .*site-continuity-loop-report\.json/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

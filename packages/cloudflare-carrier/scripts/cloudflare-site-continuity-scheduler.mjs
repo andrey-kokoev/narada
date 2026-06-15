@@ -533,6 +533,7 @@ export function formatSiteContinuitySchedulerResultForText(result) {
   const nextOperationId = result?.cloudflare_operation_next_operation_id ?? lastScheduledHealth?.cloudflare_operation_next_operation_id ?? null;
   const nextOperationAction = result?.cloudflare_operation_next_action ?? lastScheduledHealth?.cloudflare_operation_next_action ?? null;
   const lastSync = result?.last_sync ?? null;
+  const loopReportSiteId = normalizeOptionalString(lastSync?.site_id ?? operatorTarget ?? null);
   const projectionWorkerUrl = normalizeOptionalString(
     result?.projection_worker_url
     ?? result?.worker_url
@@ -575,6 +576,12 @@ export function formatSiteContinuitySchedulerResultForText(result) {
     }
   }
   if (operatorAction) lines.push(`Operator Next: ${operatorAction} target=${operatorTarget ?? 'none'} reason=${operatorReason ?? 'none'}`);
+  if (lastSync?.continuity_loop_report_id) {
+    lines.push(`Loop Report: ${lastSync.continuity_loop_report_id}`);
+  }
+  if (lastSync?.continuity_loop_report_artifact_path) {
+    lines.push(`Loop Report Artifact Path: ${lastSync.continuity_loop_report_artifact_path}`);
+  }
   if (projectionWorkerUrl && operatorSessionFile) {
     const baseArgs = `-- --url ${projectionWorkerUrl} --operator-session-file ${operatorSessionFile}`;
     lines.push(`Site List: pnpm --filter @narada2/cloudflare-carrier product:site:list:text ${baseArgs}`);
@@ -595,14 +602,8 @@ export function formatSiteContinuitySchedulerResultForText(result) {
         lines.push(`Operation Review Focus: action=${nextOperationAction} operation=${nextOperationId}`);
       }
     }
-    if (lastSync?.continuity_loop_report_id) {
-      lines.push(`Loop Report: ${lastSync.continuity_loop_report_id}`);
-    }
-    if (lastSync?.continuity_loop_report_artifact_path) {
-      lines.push(`Loop Report Artifact Path: ${lastSync.continuity_loop_report_artifact_path}`);
-    }
-    if (operatorTarget && lastSync?.continuity_loop_report_artifact_path) {
-      const siteArgs = `${baseArgs} --site ${operatorTarget}`;
+    if (loopReportSiteId && lastSync?.continuity_loop_report_artifact_path) {
+      const siteArgs = `${baseArgs} --site ${loopReportSiteId}`;
       lines.push(`Loop Report Review: pnpm --filter @narada2/cloudflare-carrier product:site-continuity:loop-report:text ${siteArgs} --report-file ${lastSync.continuity_loop_report_artifact_path}`);
     }
   }
