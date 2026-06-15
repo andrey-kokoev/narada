@@ -303,15 +303,19 @@ test('opencode runtime is admitted by the contract', () => {
   assert.equal(sharedRuntimeContract.admitted_runtime_substrate_kinds.includes('opencode'), true);
 });
 
-test('opencode dry-run resolves as ambient-carrier-tools', () => {
+test('opencode dry-run resolves as opencode-native-mcp', () => {
   const output = runOk(['--runtime', 'opencode']);
   assert.equal(output.runtime_substrate_kind, 'opencode');
-  assert.equal(output.tool_fabric_adapter_kind, 'ambient-carrier-tools');
-  assert.equal(output.tool_fabric_adapter.tool_fabric_adapter_kind, 'ambient-carrier-tools');
+  assert.equal(output.tool_fabric_adapter_kind, 'opencode-native-mcp');
+  assert.equal(output.tool_fabric_adapter.tool_fabric_adapter_kind, 'opencode-native-mcp');
   assert.equal(output.tool_fabric_adapter.runtime_substrate_kind, 'opencode');
+  assert.equal(output.tool_fabric_adapter.expected_tools.includes('agent_context_startup_sequence'), true);
+  assert.equal(output.tool_fabric_adapter.expected_tools.includes('mcp_output_show'), true);
   assert.equal(output.context_isolation.status, 'isolated');
   assert.equal(output.context_isolation.runtime, 'opencode');
-  assert.equal(output.runtime_args.length, 0);
+  assert.equal(output.runtime_args.length, 2);
+  assert.equal(output.runtime_args[0], '--prompt');
+  assert.ok(output.runtime_args[1].includes('Use agent_context_startup_sequence first'));
   assert.equal(output.mcp_fabric, null);
   assert.equal(output.mcp_tool_approval, null);
 });

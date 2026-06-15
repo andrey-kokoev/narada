@@ -201,6 +201,7 @@ const ADMITTED_TOOL_FABRIC_ADAPTER_KINDS = Object.freeze([
   'narada-agent-tui-terminal-interactive-loop',
   'pi-extension-mcp-bridge',
   'claude-code-native-mcp',
+  'opencode-native-mcp',
   'ambient-carrier-tools',
 ]);
 function naradaPackageDirectoryName(packageName) {
@@ -337,12 +338,12 @@ function resolveToolFabricAdapter(runtimeName) {
   if (runtimeName === 'opencode') {
     return {
       schema: TOOL_FABRIC_ADAPTER_CONTRACT_SCHEMA,
-      tool_fabric_adapter_kind: 'ambient-carrier-tools',
+      tool_fabric_adapter_kind: 'opencode-native-mcp',
       tool_fabric_source: 'substrate-native',
       runtime_substrate_kind: runtimeName,
-      adapter_entrypoint: null,
-      expected_tools: [],
-      states: ['runtime_known', 'adapter_selected', 'no_narada_mcp_claim'],
+      adapter_entrypoint: 'opencode --prompt',
+      expected_tools: ['agent_context_startup_sequence', 'mcp_output_show', 'task_lifecycle_next'],
+      states: ['runtime_known', 'adapter_selected', 'source_declared', 'native_prompt_injection_required', 'launch_ready'],
     };
   }
   return {
@@ -763,6 +764,7 @@ function resolveRuntimeCommand(runtimeName) {
 }
 
 function runtimeSpawnOptions(runtimeName) {
+  if (runtimeName === 'opencode') return { shell: true };
   return {};
 }
 
@@ -1149,7 +1151,10 @@ function buildSpawnArgs(runtime, identity, capabilityPolicy = {}, providerResolu
   }
 
   if (runtime === 'opencode') {
-    return [];
+    return [
+      '--prompt',
+      `You are ${identity}. The human is Operator. This session was launched by Narada agent-start. Narada tools are attached through the Site MCP fabric declared in .ai/mcp. Use agent_context_startup_sequence first. Treat operator startup nudges as this MCP startup affordance, not shell or file discovery. If the startup MCP tool is unavailable, report the missing MCP capability. When a Narada tool returns reader_tool=mcp_output_show, call mcp_output_show with the returned output_ref before deciding next work.`,
+    ];
   }
 
   const spawnArgs = ['-S', identity];
