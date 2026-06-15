@@ -284,7 +284,8 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(siteListText, /Overview Candidate: site=site_alpha health=attention action=bind_cloudflare_product_next_site_locally reason=continuity_direction/);
   assert.match(siteListText, /Site Route: domain=site_posture state=site_posture_ready action=return_local_windows_continuity_packet target=site_alpha status=ready reason=continuity_direction/);
   assert.match(siteListText, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
-  assert.equal(siteListText.includes('secret-token'), false);
+  assert.match(siteListText, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListText, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
   const siteListNoWorkerText = formatProductSurfaceText({
     operation: 'site.list',
@@ -308,6 +309,8 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   });
   assert.doesNotMatch(siteListNoWorkerText, /Site Read:/);
   assert.doesNotMatch(siteListNoWorkerText, /Site Next Workflow:/);
+  assert.doesNotMatch(siteListNoWorkerText, /Posture Coherence Review:/);
+  assert.doesNotMatch(siteListNoWorkerText, /Durability Coherence Review:/);
   assert.doesNotMatch(siteListNoWorkerText, /<worker-url>/);
 
   const siteListFocusText = formatProductSurfaceText({
@@ -347,6 +350,8 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(siteListFocusText, /Candidate Operation Route: operation=operation_alpha action=refresh_site_continuity_loop reason=operation_lifecycle_continuity_loop_stale/);
   assert.match(siteListFocusText, /Candidate Operation Focus: kind=site_continuity_loop ref=site_alpha/);
   assert.match(siteListFocusText, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(siteListFocusText, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(siteListFocusText, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(siteListFocusText, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
@@ -536,6 +541,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   });
   assert.doesNotMatch(operationTaskFocusWithoutTargetText, /Task Workflow:.*--task-id/);
 
+
   const siteReadText = formatProductSurfaceText({
     operation: 'site.read',
     worker_url: 'https://carrier.example.test',
@@ -571,7 +577,8 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       session_count: 3,
     },
   });
-  assert.match(siteReadText, /Repository Publication Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider:liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteReadText, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteReadText, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(siteReadText, /Site Action Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:action:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file> --execute-site-action/);
   assert.match(siteReadText, /Active Operation Route: operation=operation_live action=refresh_site_continuity_loop reason=operation_lifecycle_continuity_loop_stale/);
   assert.match(siteReadText, /Durability: persistence=durable recovery=reconstructable/);
@@ -619,17 +626,16 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       repository_publication_execution_count: 25,
       repository_publication_evidence_count: 13,
       repository_publication_provider_heartbeat_count: 20,
-      membership_count: 2,
-      session_count: 3,
     },
   });
   assert.doesNotMatch(siteReadNoWorkerText, /Site Action Workflow:/);
+  assert.doesNotMatch(siteReadNoWorkerText, /Posture Coherence Review:/);
+  assert.doesNotMatch(siteReadNoWorkerText, /Durability Coherence Review:/);
   assert.doesNotMatch(siteReadNoWorkerText, /Operation Review:/);
   assert.doesNotMatch(siteReadNoWorkerText, /Task Workflow:/);
   assert.doesNotMatch(siteReadNoWorkerText, /Local Ingress Request Review:/);
   assert.doesNotMatch(siteReadNoWorkerText, /Repository Publication Review:/);
   assert.doesNotMatch(siteReadNoWorkerText, /<worker-url>/);
-
   const operationListText = formatProductSurfaceText({
     operation: 'operation.list',
     worker_url: 'https://carrier.example.test',

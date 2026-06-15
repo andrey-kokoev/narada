@@ -448,6 +448,8 @@ export function formatProductSurfaceText(result) {
     }
     if (workerUrl && summary.next_site_id) {
       lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${summary.next_site_id} --operator-session-file <operator-session-file>`);
+      lines.push(`Posture Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:posture:coherence:live:text -- --url ${workerUrl} --site ${summary.next_site_id} --operator-session-file <operator-session-file>`);
+      lines.push(`Durability Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text -- --url ${workerUrl} --site ${summary.next_site_id} --operator-session-file <operator-session-file>`);
     }
     if (workerUrl && summary.next_site_id && summary.next_operation_id) {
       lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.next_site_id} --operation-id ${summary.next_operation_id} --operator-session-file <operator-session-file>`);
@@ -498,6 +500,10 @@ export function formatProductSurfaceText(result) {
       lines.push(`Site Route: domain=${summary.route_domain ?? 'unknown'} state=${summary.route_command_state ?? 'unknown'} action=${summary.route_next_action ?? 'none'} target=${summary.route_target ?? 'none'} status=${summary.route_status ?? 'unknown'} reason=${summary.route_reason ?? 'none'}`);
       if (workerUrl) {
         lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl}${routeSiteId ? ` --site ${routeSiteId}` : ''} --operator-session-file <operator-session-file> --execute-site-next`);
+        if (routeSiteId) {
+          lines.push(`Posture Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:posture:coherence:live:text -- --url ${workerUrl} --site ${routeSiteId} --operator-session-file <operator-session-file>`);
+          lines.push(`Durability Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text -- --url ${workerUrl} --site ${routeSiteId} --operator-session-file <operator-session-file>`);
+        }
       }
       if (workerUrl && summary.route_next_action === 'focus_next_site' && summary.next_site_id) {
         lines.push(`Focus Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:focus:workflow:live:text -- --url ${workerUrl} --focused-site-id ${summary.next_site_id} --operator-session-file <operator-session-file> --execute-site-focus`);
@@ -522,6 +528,8 @@ export function formatProductSurfaceText(result) {
     lines.push(`Next Action: ${summary.next_action ?? 'none'}`);
     lines.push(`Scope Loaded: ${summary.scope_loaded ? 'yes' : 'no'}`);
     if (workerUrl && hasSiteId) {
+      lines.push(`Posture Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:posture:coherence:live:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
+      lines.push(`Durability Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
       lines.push(`Site Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id}${operationArg(summary.active_operation_id)} --operator-session-file <operator-session-file> --execute-site-action`);
     }
     if (summary.active_operation_next_action || summary.active_operation_workflow_reason) {
