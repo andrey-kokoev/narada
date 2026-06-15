@@ -546,6 +546,8 @@ export function formatSiteContinuitySchedulerResultForText(result) {
   const operatorReason = result?.operator_next_reason ?? lastScheduledHealth?.operator_next_reason ?? null;
   const nextOperationId = result?.cloudflare_operation_next_operation_id ?? lastScheduledHealth?.cloudflare_operation_next_operation_id ?? null;
   const nextOperationAction = result?.cloudflare_operation_next_action ?? lastScheduledHealth?.cloudflare_operation_next_action ?? null;
+  const reconciliationPlan = result?.reconciliation_plan ?? null;
+  const selectedReconciliationSites = reconciliationPlan?.selected_sites ?? [];
   const lastSync = result?.last_sync ?? null;
   const loopReportSiteId = normalizeOptionalString(lastSync?.site_id ?? operatorTarget ?? null);
   const projectionWorkerUrl = normalizeOptionalString(
@@ -610,6 +612,15 @@ export function formatSiteContinuitySchedulerResultForText(result) {
   }
   if (lastReconciliationExecution?.artifact_path) {
     lines.push(`Reconciliation Artifact Path: ${lastReconciliationExecution.artifact_path}`);
+  }
+  if (reconciliationPlan) {
+    lines.push(`Reconciliation Plan: status=${reconciliationPlan.status ?? 'unknown'} selected=${reconciliationPlan.selected_site_count ?? selectedReconciliationSites.length} ready=${reconciliationPlan.command_ready_count ?? 0} blocked=${reconciliationPlan.command_blocked_count ?? 0}`);
+    for (const site of selectedReconciliationSites) {
+      lines.push(`Reconcile Site: ${site.site_id ?? 'unknown'} packet=${site.packet_path ?? 'none'} source=${site.packet_path_source ?? 'unknown'} command=${site.command_status ?? 'unknown'}`);
+      if (site.sync_command) {
+        lines.push(`Reconcile Sync Once: ${site.sync_command}`);
+      }
+    }
   }
   if (projectionWorkerUrl && operatorSessionFile) {
     const baseArgs = `-- --url ${projectionWorkerUrl} --operator-session-file ${operatorSessionFile}`;

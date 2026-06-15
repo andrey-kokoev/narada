@@ -437,6 +437,11 @@ test('site continuity reconciliation plan resolves one packet per configured sit
     assert.match(plan.reconciliation_plan.selected_sites[0].sync_command, /--local-inbound-dir/);
     assert.match(plan.reconciliation_plan.selected_sites[0].sync_command, /inbound/);
     assert.match(plan.reconciliation_plan.selected_sites[1].sync_command, /site_beta-packet\.json/);
+    const text = formatSiteContinuitySchedulerResultForText(plan);
+    assert.match(text, /Reconciliation Plan: status=ready selected=2 ready=2 blocked=0/);
+    assert.match(text, /Reconcile Site: site_alpha packet=.*site_alpha-packet\.json source=packet_directory command=ready/);
+    assert.match(text, /Reconcile Sync Once: .*sync-once --site site_alpha --packet .*site_alpha-packet\.json --out .*site_alpha-sync\.json --local-inbound-dir .*inbound/);
+    assert.match(text, /Reconcile Site: site_beta packet=.*site_beta-packet\.json source=packet_directory command=ready/);
     assert.doesNotMatch(JSON.stringify(plan), /secret|token/i);
   } finally {
     await rm(root, { recursive: true, force: true });
