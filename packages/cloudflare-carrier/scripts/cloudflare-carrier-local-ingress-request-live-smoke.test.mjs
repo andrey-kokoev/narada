@@ -37,6 +37,8 @@ test('formatLocalIngressRequestLiveSmokeText emits downstream reads', () => {
   assert.match(text, /Local Ingress Request Smoke: ok/);
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
   assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text/);
   assert.match(text, /Request Review: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:request:review:text/);
   assert.match(text, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:evidence:review:text/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
@@ -54,6 +56,8 @@ test('formatLocalIngressRequestLiveSmokeText suppresses focused handoffs without
 
   assert.doesNotMatch(text, /Site Read:/);
   assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Posture Coherence Review:/);
+  assert.doesNotMatch(text, /Durability Coherence Review:/);
   assert.doesNotMatch(text, /Request Review:/);
   assert.doesNotMatch(text, /Evidence Read:/);
   assert.doesNotMatch(text, /Operation Review:/);
