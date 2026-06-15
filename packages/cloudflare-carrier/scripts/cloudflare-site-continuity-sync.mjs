@@ -687,6 +687,9 @@ function formatSiteContinuitySyncText(commandName, result, { operatorSessionFile
     if (result?.pushed_packet_id || result?.pulled_packet_id) {
       lines.push(`Packets: pushed=${result?.pushed_packet_id ?? 'none'} pulled=${result?.pulled_packet_id ?? 'none'}`);
     }
+    if (result?.local_inbound_artifact?.artifact_path) {
+      lines.push(`Inbound Artifact Path: ${result.local_inbound_artifact.artifact_path}`);
+    }
     if (result?.continuity_loop_report?.loop_report_id) {
       lines.push(`Loop Report: ${result.continuity_loop_report.loop_report_id}`);
     }
@@ -718,6 +721,9 @@ function formatSiteContinuitySyncText(commandName, result, { operatorSessionFile
     lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text ${baseArgs} --execute-site-next`);
     lines.push(`Posture Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:posture:coherence:live:text ${baseArgs}`);
     lines.push(`Durability Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text ${baseArgs}`);
+    if (commandName === 'sync-once' && result?.local_inbound_artifact?.artifact_path) {
+      lines.push(`Inbound Packet Materialize: pnpm --filter @narada2/cloudflare-carrier continuity:bindings -- --packet ${result.local_inbound_artifact.artifact_path}`);
+    }
     if (commandName === 'sync-once' && result?.continuity_loop_report_artifact?.artifact_path) {
       lines.push(`Loop Report Publish: pnpm --filter @narada2/cloudflare-carrier product:site-continuity:loop-report:text ${baseArgs} --report-file ${result.continuity_loop_report_artifact.artifact_path}`);
     }

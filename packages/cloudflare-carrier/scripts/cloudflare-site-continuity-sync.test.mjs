@@ -524,6 +524,8 @@ test('site continuity sync-once emits operator text handoff when using operator 
     assert.match(result.stdout, /Command: sync-once/);
     assert.match(result.stdout, /Push Recorded: yes/);
     assert.match(result.stdout, /Return Observed: yes/);
+    assert.match(result.stdout, /Inbound Artifact: written/);
+    assert.match(result.stdout, /Inbound Artifact Path: .*cloudflare-inbound\.json/);
     assert.match(result.stdout, /Loop Report Artifact: written/);
     assert.match(result.stdout, /Loop Report: site-continuity-loop:site_fixture:/);
     assert.match(result.stdout, /Loop Report Artifact Path: .*site-continuity-loop-report\.json/);
@@ -533,6 +535,7 @@ test('site continuity sync-once emits operator text handoff when using operator 
     assert.match(result.stdout, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url \S+ --site site_fixture --operator-session-file \S+ --execute-site-next/);
     assert.match(result.stdout, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url \S+ --site site_fixture --operator-session-file \S+/);
     assert.match(result.stdout, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url \S+ --site site_fixture --operator-session-file \S+/);
+    assert.match(result.stdout, /Inbound Packet Materialize: pnpm --filter @narada2\/cloudflare-carrier continuity:bindings -- --packet .*cloudflare-inbound\.json/);
     assert.match(result.stdout, /Loop Report Publish: pnpm --filter @narada2\/cloudflare-carrier product:site-continuity:loop-report:text -- --url \S+ --site site_fixture --operator-session-file \S+ --report-file .*site-continuity-loop-report\.json/);
   } finally {
     await mock.close();
