@@ -654,6 +654,16 @@ test('site continuity scheduler text summary surfaces local and inbound continui
       continuity_loop_report_id: 'site-continuity-loop:site_missing:2026-06-11T10:30:00.000Z',
       continuity_loop_report_artifact_path: 'D:\\code\\narada\\.narada\\site-continuity\\site_missing-loop-report.json',
     };
+    plan.last_reconciliation_execution = {
+      artifact_present: true,
+      status: 'completed',
+      reconciliation_plan_status: 'ready',
+      selected_site_count: 1,
+      completed_site_count: 1,
+      failed_site_count: 0,
+      artifact_path: 'D:\\code\\narada\\.narada\\site-continuity\\reconcile-last.json',
+      site_ids: ['site_missing'],
+    };
     plan.scheduler_task_readback = {
       hidden_wrapper_readback: { status: 'matches_plan', path: 'hidden.vbs', embeds_credentials: false },
     };
@@ -676,6 +686,9 @@ test('site continuity scheduler text summary surfaces local and inbound continui
     assert.match(text, /Loop Report: site-continuity-loop:site_missing:2026-06-11T10:30:00\.000Z/);
     assert.match(text, /Loop Report Artifact Path: D:\\code\\narada\\\.narada\\site-continuity\\site_missing-loop-report\.json/);
     assert.match(text, /Loop Report Review: pnpm --filter @narada2\/cloudflare-carrier product:site-continuity:loop-report:text -- --url https:\/\/carrier\.example --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json --site site_missing --report-file D:\\code\\narada\\\.narada\\site-continuity\\site_missing-loop-report\.json/);
+    assert.match(text, /Reconciliation Execution: status=completed plan=ready selected=1 completed=1 failed=0/);
+    assert.match(text, /Reconciliation Artifact Path: D:\\code\\narada\\\.narada\\site-continuity\\reconcile-last\.json/);
+    assert.match(text, /Reconciliation Execution Record: pnpm --filter @narada2\/cloudflare-carrier exec node scripts\/cloudflare-site-continuity-sync\.mjs reconciliation-execution-put --site site_missing --execution D:\\code\\narada\\\.narada\\site-continuity\\reconcile-last\.json --url https:\/\/carrier\.example --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json/);
     assert.match(text, /- site_synced: sync=synced inbound=synced/);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -2438,6 +2451,7 @@ test('site continuity reconcile-execute runs ready sites through sync-once argv 
     assert.equal(executionSummary.cloudflare_reconciliation_execution_evidence_status, 'recorded');
     assert.equal(executionSummary.cloudflare_reconciliation_execution_recorded_count, 1);
     assert.equal(executionSummary.cloudflare_reconciliation_execution_failed_count, 0);
+    assert.deepEqual(executionSummary.site_ids, ['site_bound']);
     assert.deepEqual(executionSummary.result_status_counts, { completed: 1 });
 
     const healthSnapshot = JSON.parse(await readFile(healthOutputPath, 'utf8'));
@@ -2638,7 +2652,9 @@ test('site continuity scheduler read-last reports missing local sync artifact', 
 test('site continuity scheduler read-last summarizes local sync artifact', async () => {
   const root = await mkdtemp(join(tmpdir(), 'narada-site-continuity-read-last-'));
   const outputPath = join(root, '.narada/site-continuity/cloudflare-sync-last.json');
+  const reconciliationExecutionOutputPath = join(root, '.narada/site-continuity/reconciliation/cloudflare-reconcile-last.json');
   await mkdir(join(root, '.narada/site-continuity'), { recursive: true });
+  await mkdir(dirname(reconciliationExecutionOutputPath), { recursive: true });
   await writeFile(outputPath, `${JSON.stringify({
     schema: 'narada.site_continuity_cloudflare_sync_once.v1',
     status: 'ok',
@@ -2670,6 +2686,22 @@ test('site continuity scheduler read-last summarizes local sync artifact', async
       },
     },
   }, null, 2)}\n`, 'utf8');
+  await writeFile(reconciliationExecutionOutputPath, `${JSON.stringify({
+    schema: 'narada.cloudflare_carrier.site_continuity_reconciliation_execution.v1',
+    status: 'completed',
+    generated_at: '2026-06-11T09:00:30.000Z',
+    persisted_at: '2026-06-11T09:00:31.000Z',
+    reconciliation_plan_status: 'ready',
+    selected_site_count: 1,
+    executed_site_count: 1,
+    completed_site_count: 1,
+    failed_site_count: 0,
+    cloudflare_mutation_admission: 'executed_via_guarded_site_continuity_sync_once_and_records_reconciliation_execution_evidence',
+    filesystem_mutation_admission: 'sync_once_inbound_packet_and_reconciliation_execution_artifact_write_only',
+    results: [
+      { site_id: 'site_fixture', status: 'completed' },
+    ],
+  }, null, 2)}\n`, 'utf8');
   try {
     const summary = readLastSyncArtifact(outputPath, { now: () => '2026-06-11T09:01:00.000Z' });
     assert.equal(summary.state, 'read');
@@ -2698,13 +2730,19 @@ test('site continuity scheduler read-last summarizes local sync artifact', async
       action: 'read-last',
       repoRoot: root,
       outputPath,
+      reconciliationExecutionOutputPath,
       projectionWorkerUrl: 'https://worker.example',
       operatorSessionFile: join(root, '.narada/auth/cloudflare-operator-session.json'),
     });
+    assert.equal(plan.last_reconciliation_execution.status, 'completed');
+    assert.deepEqual(plan.last_reconciliation_execution.site_ids, ['site_fixture']);
     const text = formatSiteContinuitySchedulerResultForText(plan);
     assert.match(text, /Loop Report: site-continuity-loop:site_fixture:2026-06-11T09:00:00\.000Z/);
     assert.match(text, /Loop Report Artifact Path: .*site-continuity-loop-report\.json/);
     assert.match(text, /Loop Report Review: pnpm --filter @narada2\/cloudflare-carrier product:site-continuity:loop-report:text -- --url https:\/\/worker\.example --operator-session-file .*cloudflare-operator-session\.json --site site_fixture --report-file .*site-continuity-loop-report\.json/);
+    assert.match(text, /Reconciliation Execution: status=completed plan=ready selected=1 completed=1 failed=0/);
+    assert.match(text, /Reconciliation Artifact Path: .*cloudflare-reconcile-last\.json/);
+    assert.match(text, /Reconciliation Execution Record: pnpm --filter @narada2\/cloudflare-carrier exec node scripts\/cloudflare-site-continuity-sync\.mjs reconciliation-execution-put --site site_fixture --execution .*cloudflare-reconcile-last\.json --url https:\/\/worker\.example --operator-session-file .*cloudflare-operator-session\.json/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

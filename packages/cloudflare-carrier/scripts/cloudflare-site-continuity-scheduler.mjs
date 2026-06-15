@@ -186,6 +186,7 @@ export function buildSiteContinuitySchedulerPlan({
         plan_status: 'last_sync_artifact_read_only_no_cloudflare_access',
         scheduled_task_command: ['schtasks', '/Query', '/TN', taskName, '/V', '/FO', 'LIST'],
         last_sync: readLastSyncArtifact(effectiveOutputPath),
+        last_reconciliation_execution: readLastReconciliationExecutionArtifact(effectiveReconciliationExecutionOutputPath),
       };
     case 'read-health-last':
     case 'health-last':
@@ -526,6 +527,7 @@ export function formatSiteContinuitySchedulerResultForText(result) {
   const localSyncArtifacts = result?.local_sync_artifacts ?? null;
   const localInboundPackets = result?.local_inbound_packets ?? null;
   const lastScheduledHealth = result?.last_scheduled_health ?? null;
+  const lastReconciliationExecution = result?.last_reconciliation_execution ?? null;
   const productPosture = result?.cloudflare_product_posture ?? lastScheduledHealth ?? null;
   const operatorAction = result?.operator_next_action ?? lastScheduledHealth?.operator_next_action ?? null;
   const operatorTarget = result?.operator_next_target_site_id ?? lastScheduledHealth?.operator_next_target_site_id ?? null;
@@ -582,6 +584,12 @@ export function formatSiteContinuitySchedulerResultForText(result) {
   if (lastSync?.continuity_loop_report_artifact_path) {
     lines.push(`Loop Report Artifact Path: ${lastSync.continuity_loop_report_artifact_path}`);
   }
+  if (lastReconciliationExecution?.artifact_present) {
+    lines.push(`Reconciliation Execution: status=${lastReconciliationExecution.status ?? 'unknown'} plan=${lastReconciliationExecution.reconciliation_plan_status ?? 'unknown'} selected=${lastReconciliationExecution.selected_site_count ?? 0} completed=${lastReconciliationExecution.completed_site_count ?? 0} failed=${lastReconciliationExecution.failed_site_count ?? 0}`);
+  }
+  if (lastReconciliationExecution?.artifact_path) {
+    lines.push(`Reconciliation Artifact Path: ${lastReconciliationExecution.artifact_path}`);
+  }
   if (projectionWorkerUrl && operatorSessionFile) {
     const baseArgs = `-- --url ${projectionWorkerUrl} --operator-session-file ${operatorSessionFile}`;
     lines.push(`Site List: pnpm --filter @narada2/cloudflare-carrier product:site:list:text ${baseArgs}`);
@@ -605,6 +613,11 @@ export function formatSiteContinuitySchedulerResultForText(result) {
     if (loopReportSiteId && lastSync?.continuity_loop_report_artifact_path) {
       const siteArgs = `${baseArgs} --site ${loopReportSiteId}`;
       lines.push(`Loop Report Review: pnpm --filter @narada2/cloudflare-carrier product:site-continuity:loop-report:text ${siteArgs} --report-file ${lastSync.continuity_loop_report_artifact_path}`);
+    }
+    if (lastReconciliationExecution?.artifact_path && Array.isArray(lastReconciliationExecution.site_ids)) {
+      for (const siteId of lastReconciliationExecution.site_ids) {
+        lines.push(`Reconciliation Execution Record: pnpm --filter @narada2/cloudflare-carrier exec node scripts/cloudflare-site-continuity-sync.mjs reconciliation-execution-put --site ${siteId} --execution ${lastReconciliationExecution.artifact_path} --url ${projectionWorkerUrl} --operator-session-file ${operatorSessionFile}`);
+      }
     }
   }
 
@@ -2020,6 +2033,7 @@ export function readLastReconciliationExecutionArtifact(outputPath) {
     cloudflare_reconciliation_execution_evidence_status: artifact.cloudflare_reconciliation_execution_evidence?.status ?? null,
     cloudflare_reconciliation_execution_recorded_count: artifact.cloudflare_reconciliation_execution_evidence?.recorded_count ?? null,
     cloudflare_reconciliation_execution_failed_count: artifact.cloudflare_reconciliation_execution_evidence?.failed_count ?? null,
+    site_ids: [...new Set((artifact.results ?? []).map((entry) => normalizeOptionalString(entry?.site_id)).filter(Boolean))],
     result_status_counts: countResultStatuses(artifact.results ?? []),
   };
 }
