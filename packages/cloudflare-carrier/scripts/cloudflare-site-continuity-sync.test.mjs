@@ -369,6 +369,7 @@ test('site continuity sync cycle pushes local packet and returns Cloudflare pack
     assert.equal(inboundArtifact.packet.packet_id, cloudflarePacket.packet_id);
     assert.equal(inboundArtifact.filesystem_mutation_admission, 'local_inbound_packet_artifact_write_only');
     assert.equal(body.continuity_loop_report.schema, 'narada.site_continuity_productized_loop.v1');
+    assert.match(body.continuity_loop_report.loop_report_id, /^site-continuity-loop:site_fixture:/);
     assert.equal(body.continuity_loop_report.site_id, 'site_fixture');
     assert.equal(body.continuity_loop_report.status, 'ok');
     assert.equal(body.continuity_loop_report.cloudflare_push.status, 'imported');
@@ -513,6 +514,7 @@ test('site continuity sync-once emits operator text handoff when using operator 
     assert.match(result.stdout, /Command: sync-once/);
     assert.match(result.stdout, /Push Recorded: yes/);
     assert.match(result.stdout, /Return Observed: yes/);
+    assert.match(result.stdout, /Loop Report: site-continuity-loop:site_fixture:/);
     assert.match(result.stdout, /Durability Action: refreshed_existing_packet/);
     assert.match(result.stdout, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
     assert.match(result.stdout, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text/);

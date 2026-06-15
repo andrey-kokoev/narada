@@ -519,6 +519,7 @@ function buildSiteContinuityLoopReport({ siteId, localPacket, cloudflarePacket, 
   const packetRecord = pushed.body?.packet_record ?? null;
   return {
     schema: 'narada.site_continuity_productized_loop.v1',
+    loop_report_id: `site-continuity-loop:${siteId}:${generatedAt}`,
     site_id: siteId,
     status: 'ok',
     generated_at: generatedAt,
@@ -647,6 +648,9 @@ function formatSiteContinuitySyncText(commandName, result, { operatorSessionFile
     lines.push(`Inbound Artifact: ${result?.cloudflare_to_local_windows_local_artifact_written === true ? 'written' : 'not_written'}`);
     if (result?.pushed_packet_id || result?.pulled_packet_id) {
       lines.push(`Packets: pushed=${result?.pushed_packet_id ?? 'none'} pulled=${result?.pulled_packet_id ?? 'none'}`);
+    }
+    if (result?.continuity_loop_report?.loop_report_id) {
+      lines.push(`Loop Report: ${result.continuity_loop_report.loop_report_id}`);
     }
     if (result?.continuity_loop_report?.cloudflare_push?.durability_action) {
       lines.push(`Durability Action: ${result.continuity_loop_report.cloudflare_push.durability_action}`);
