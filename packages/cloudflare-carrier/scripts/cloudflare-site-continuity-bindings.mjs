@@ -603,6 +603,7 @@ function formatSiteContinuityBindingWorkflowText(plan, result) {
     if (result?.packet_id) lines.push(`Packet: ${result.packet_id}`);
     if (result?.output_path) lines.push(`Prepared Packet: ${result.output_path}`);
     if (result?.admission_action) lines.push(`Admission: ${result.admission_action}${result?.admission_reason ? ` reason=${result.admission_reason}` : ''}`);
+    if (result?.materialize_hint) lines.push(`Materialize Registry: ${result.materialize_hint}`);
   } else if (plan.action === 'admit-next-binding') {
     if (result?.target_site_id) lines.push(`Target Site: ${result.target_site_id}`);
     if (result?.registry_path) lines.push(`Registry: ${result.registry_path}`);

@@ -408,24 +408,27 @@ test('site continuity binding workflow lists operator-readable binding details',
 
 test('site continuity binding text format emits operator handoff for target site actions', () => {
   const text = formatSiteContinuityBindingWorkflowText({
-    action: 'admit-next-binding',
+    action: 'prepare-next-binding-packet',
     worker_url: 'https://carrier.example.test',
     operator_session_file: 'D:\\narada\\.narada\\auth\\cloudflare-operator-session.json',
     target_site_id: 'site_beta',
   }, {
     ok: true,
-    action: 'planned',
-    reason: 'site_continuity_binding_created',
+    action: 'written',
+    reason: 'site_continuity_binding_packet_prepared',
     target_site_id: 'site_beta',
-    registry_path: 'D:\\narada\\.narada\\site-continuity\\bindings.json',
-    binding_count: 2,
-    sites: ['site_alpha', 'site_beta'],
-    required_execution_flag: '--execute',
+    packet_id: 'site-continuity-packet-v1-site_beta-local-windows-cloudflare',
+    output_path: 'D:\\narada\\.narada\\site-continuity\\prepared\\site_beta-packet.json',
+    admission_action: 'projection_only',
+    admission_reason: 'site_continuity_exchange_packet_projection_admitted',
+    materialize_hint: 'pnpm --filter @narada2/cloudflare-carrier continuity:bindings -- --packet D:\\narada\\.narada\\site-continuity\\prepared\\site_beta-packet.json',
   });
 
   assert.match(text, /Site Continuity Bindings/);
-  assert.match(text, /Action: admit-next-binding/);
+  assert.match(text, /Action: prepare-next-binding-packet/);
   assert.match(text, /Target Site: site_beta/);
+  assert.match(text, /Prepared Packet: D:\\narada\\\.narada\\site-continuity\\prepared\\site_beta-packet\.json/);
+  assert.match(text, /Materialize Registry: pnpm --filter @narada2\/cloudflare-carrier continuity:bindings -- --packet D:\\narada\\\.narada\\site-continuity\\prepared\\site_beta-packet\.json/);
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
   assert.match(text, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text/);
   assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_beta --operator-session-file D:\\narada\\\.narada\\auth\\cloudflare-operator-session\.json --execute-site-next/);
