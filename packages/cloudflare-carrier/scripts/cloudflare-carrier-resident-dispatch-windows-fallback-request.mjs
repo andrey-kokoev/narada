@@ -163,6 +163,8 @@ export function formatResidentDispatchWindowsFallbackRequestText(result = {}) {
   if (workerUrl && result.site_id) {
     lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${result.site_id} --operator-session-file <operator-session-file>`);
     lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${result.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
+    lines.push(`Posture Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:posture:coherence:live:text -- --url ${workerUrl} --site ${result.site_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Durability Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text -- --url ${workerUrl} --site ${result.site_id} --operator-session-file <operator-session-file>`);
   }
   if (workerUrl && result.site_id && summary.carrier_session_id) {
     lines.push(`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${workerUrl} --site ${result.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`);

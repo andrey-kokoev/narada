@@ -163,6 +163,8 @@ test('formatResidentDispatchLocalResidentCarrierBridgeText prints key posture', 
   assert.match(text, /Session Replay Admission: admitted_by_cloudflare_operator/);
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_live_smoke --operator-session-file <operator-session-file>/);
   assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_live_smoke --operator-session-file <operator-session-file> --execute-site-next/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example --site site_live_smoke --operator-session-file <operator-session-file>/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example --site site_live_smoke --operator-session-file <operator-session-file>/);
   assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example --site site_live_smoke --carrier-session-id cloudflare-bridged:site_live_smoke:operation_live_alpha:1 --operator-session-file <operator-session-file>/);
   assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example --site site_live_smoke --carrier-session-id cloudflare-bridged:site_live_smoke:operation_live_alpha:1 --operator-session-file <operator-session-file>/);
   assert.match(text, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_live_smoke --carrier-session-id cloudflare-bridged:site_live_smoke:operation_live_alpha:1 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
@@ -186,6 +188,8 @@ test('formatResidentDispatchLocalResidentCarrierBridgeText suppresses worker-sco
 
   assert.doesNotMatch(text, /Site Read:/);
   assert.doesNotMatch(text, /Site Next Workflow:/);
+  assert.doesNotMatch(text, /Posture Coherence Review:/);
+  assert.doesNotMatch(text, /Durability Coherence Review:/);
   assert.doesNotMatch(text, /Session Evidence:/);
   assert.doesNotMatch(text, /Task Review:/);
   assert.doesNotMatch(text, /Task Workflow:/);
