@@ -446,6 +446,8 @@ test('formatRepositoryPublicationReadText surfaces evidence refusal reason', () 
   assert.match(text, /Focused Execution: publication-execution-1/);
   assert.match(text, /Current Posture: windows_repository_publication_refused_cloudflare_recorded_evidence/);
   assert.match(text, /Focused Publication Status: refused reason=repository_publication_push_not_enabled/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Request Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --repository-publication-request-id repository-publication-request-1 --operator-session-file <operator-session-file>/);
 });
 
@@ -471,6 +473,8 @@ test('formatRepositoryPublicationReadText surfaces operation review on request s
   assert.match(requestListText, /Latest Request: repository-publication-request-1/);
   assert.match(requestListText, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(requestListText, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
+  assert.match(requestListText, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(requestListText, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(requestListText, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-1 --operator-session-file <operator-session-file>/);
   assert.match(requestListText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-1 --operator-session-file <operator-session-file> --execute-operation-next/);
 
@@ -498,6 +502,8 @@ test('formatRepositoryPublicationReadText surfaces operation review on request s
   assert.match(requestNextText, /Request: repository-publication-request-1/);
   assert.match(requestNextText, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(requestNextText, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
+  assert.match(requestNextText, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(requestNextText, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(requestNextText, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-1 --operator-session-file <operator-session-file>/);
   assert.match(requestNextText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation-1 --operator-session-file <operator-session-file> --execute-operation-next/);
 });
@@ -519,6 +525,8 @@ test('formatRepositoryPublicationReadText suppresses worker-scoped handoffs with
   assert.doesNotMatch(requestListText, /<worker-url>/);
   assert.doesNotMatch(requestListText, /Site Read:/);
   assert.doesNotMatch(requestListText, /Site Next Workflow:/);
+  assert.doesNotMatch(requestListText, /Posture Coherence Review:/);
+  assert.doesNotMatch(requestListText, /Durability Coherence Review:/);
   assert.doesNotMatch(requestListText, /Operation Review:/);
   assert.doesNotMatch(requestListText, /Operation Next Workflow:/);
 
@@ -537,6 +545,8 @@ test('formatRepositoryPublicationReadText suppresses worker-scoped handoffs with
   assert.doesNotMatch(admissionText, /<worker-url>/);
   assert.doesNotMatch(admissionText, /Site Read:/);
   assert.doesNotMatch(admissionText, /Site Next Workflow:/);
+  assert.doesNotMatch(admissionText, /Posture Coherence Review:/);
+  assert.doesNotMatch(admissionText, /Durability Coherence Review:/);
   assert.doesNotMatch(admissionText, /Request Read:/);
 });
 
@@ -563,6 +573,8 @@ test('formatRepositoryPublicationReadText surfaces focused admission and executi
   assert.match(admissionText, /Focused Admission: repository-publication-admission-1/);
   assert.match(admissionText, /Focused Request: repository-publication-request-1/);
   assert.match(admissionText, /Focused Decision: admit reason=admitted_reason/);
+  assert.match(admissionText, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(admissionText, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(admissionText, /Request Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --repository-publication-request-id repository-publication-request-1 --operator-session-file <operator-session-file>/);
 
   const executionText = formatRepositoryPublicationReadText({
@@ -590,6 +602,8 @@ test('formatRepositoryPublicationReadText surfaces focused admission and executi
   assert.match(executionText, /Focused Execution: repository-publication-execution-1/);
   assert.match(executionText, /Focused Publication Status: completed/);
   assert.match(executionText, /Focused GitHub HTTP Status: 200/);
+  assert.match(executionText, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(executionText, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(executionText, /Request Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --repository-publication-request-id repository-publication-request-1 --operator-session-file <operator-session-file>/);
 });
 
@@ -608,6 +622,8 @@ test('formatRepositoryPublicationReadText suppresses request handoff without sit
     },
   });
 
+  assert.equal(text.includes('Posture Coherence Review:'), false);
+  assert.equal(text.includes('Durability Coherence Review:'), false);
   assert.equal(text.includes('Request Read:'), false);
 });
 
