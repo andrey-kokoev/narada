@@ -609,14 +609,23 @@ export function formatSiteContinuitySchedulerResultForText(result) {
   }
 
   const syncBySite = new Map((localSyncArtifacts?.configured_site_sync_statuses ?? []).map((site) => [site.site_id, site]));
+  const syncArtifactsBySite = new Map((localSyncArtifacts?.artifacts ?? []).map((artifact) => [artifact.site_id, artifact]));
   const inboundBySite = new Map((localInboundPackets?.configured_site_inbound_statuses ?? []).map((site) => [site.site_id, site]));
-  const siteIds = [...new Set([...syncBySite.keys(), ...inboundBySite.keys()])].sort();
+  const siteIds = [...new Set([...syncBySite.keys(), ...syncArtifactsBySite.keys(), ...inboundBySite.keys()])].sort();
   if (siteIds.length > 0) {
     lines.push('Site Details:');
     for (const siteId of siteIds) {
       const sync = syncBySite.get(siteId);
+      const syncArtifact = syncArtifactsBySite.get(siteId);
       const inbound = inboundBySite.get(siteId);
-      lines.push(`- ${siteId}: sync=${sync?.status ?? 'unknown'} inbound=${inbound?.status ?? 'unknown'}`);
+      lines.push(`- ${siteId}: sync=${sync?.status ?? syncArtifact?.status ?? 'unknown'} inbound=${inbound?.status ?? 'unknown'}`);
+      if (syncArtifact?.continuity_loop_report_id) {
+        lines.push(`  Loop Report: ${syncArtifact.continuity_loop_report_id}`);
+      }
+      if (projectionWorkerUrl && operatorSessionFile && syncArtifact?.continuity_loop_report_artifact_path) {
+        const siteArgs = `-- --url ${projectionWorkerUrl} --operator-session-file ${operatorSessionFile} --site ${siteId}`;
+        lines.push(`  Loop Report Review: pnpm --filter @narada2/cloudflare-carrier product:site-continuity:loop-report:text ${siteArgs} --report-file ${syncArtifact.continuity_loop_report_artifact_path}`);
+      }
     }
   }
   return `${lines.join('\n')}\n`;

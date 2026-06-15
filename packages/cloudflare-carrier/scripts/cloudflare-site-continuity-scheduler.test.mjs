@@ -1254,8 +1254,16 @@ test('site continuity scheduler status-all inventories local sync artifacts', as
     worker_url: 'https://worker.example',
     pushed_packet_id: 'packet-alpha-local',
     pulled_packet_id: 'packet-alpha-cloudflare',
+    continuity_loop_report_local_artifact_written: true,
+    continuity_loop_report_artifact: {
+      schema: 'narada.site_continuity_cloudflare_loop_report_local_artifact.v1',
+      written: true,
+      artifact_path: join(artifactDirectory, 'site-alpha-loop-report.json'),
+      continuity_loop_report_id: 'site-continuity-loop:site_alpha:2026-06-11T10:00:00.000Z',
+    },
     continuity_loop_report_recorded: true,
     continuity_loop_report: {
+      loop_report_id: 'site-continuity-loop:site_alpha:2026-06-11T10:00:00.000Z',
       status: 'ok',
       site_id: 'site_alpha',
       generated_at: '2026-06-11T10:00:00.000Z',
@@ -1297,12 +1305,22 @@ test('site continuity scheduler status-all inventories local sync artifacts', as
       repoRoot: root,
       outputPath,
       artifactDirectory,
+      projectionWorkerUrl: 'https://worker.example',
+      operatorSessionFile: join(root, '.narada/auth/cloudflare-operator-session.json'),
       now: () => '2026-06-11T09:01:00.000Z',
     });
     assert.equal(plan.plan_status, 'local_sync_artifact_inventory_read_only_no_cloudflare_access');
     assert.equal(plan.local_sync_artifacts.artifact_count, 2);
     assert.equal(plan.local_sync_artifacts.status, 'needs_attention');
     assert.equal(plan.embeds_credentials, false);
+
+    const text = formatSiteContinuitySchedulerResultForText(plan);
+    assert.match(text, /Site Details:/);
+    assert.match(text, /- site_alpha: sync=synced inbound=unknown/);
+    assert.match(text, /  Loop Report: site-continuity-loop:site_alpha:2026-06-11T10:00:00\.000Z/);
+    assert.match(text, /  Loop Report Review: pnpm --filter @narada2\/cloudflare-carrier product:site-continuity:loop-report:text -- --url https:\/\/worker\.example --operator-session-file .*cloudflare-operator-session\.json --site site_alpha --report-file .*site-alpha-loop-report\.json/);
+    assert.match(text, /- site_beta: sync=needs_attention inbound=unknown/);
+    assert.doesNotMatch(text, /site_beta[\s\S]*Loop Report Review:/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
