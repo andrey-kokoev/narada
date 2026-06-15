@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join } from "node:path/posix";
 import {
   detectMode,
   resolveSiteRoot,
@@ -16,7 +16,7 @@ import {
 } from "../src/path-utils.js";
 
 describe("path-utils", () => {
-  const testRoot = join(tmpdir(), "narada-linux-test-" + Date.now());
+  const testRoot = join(tmpdir().replace(/\\/g, "/"), "narada-linux-test-" + Date.now());
 
   beforeEach(async () => {
     process.env.NARADA_SITE_ROOT = testRoot;

@@ -5,7 +5,7 @@
  * docs/product/unattended-operation-layer.md §2.
  */
 
-import { join } from "node:path";
+import { join } from "node:path/posix";
 import { stat, rm } from "node:fs/promises";
 import { resolveSiteRoot } from "./path-utils.js";
 import type { LinuxSiteMode } from "./types.js";

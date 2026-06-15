@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join } from "node:path/posix";
 import { mkdir } from "node:fs/promises";
 import { existsSync, accessSync, constants } from "node:fs";
 import { homedir } from "node:os";

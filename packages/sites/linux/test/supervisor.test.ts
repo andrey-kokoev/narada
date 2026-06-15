@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdir, rm, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join } from "node:path/posix";
 import {
   generateSystemdService,
   generateSystemdTimer,
@@ -17,7 +17,7 @@ import {
 import { resolveSiteRoot } from "../src/path-utils.js";
 
 describe("supervisor", () => {
-  const testRoot = join(tmpdir(), "narada-linux-supervisor-test-" + Date.now());
+  const testRoot = join(tmpdir().replace(/\\/g, "/"), "narada-linux-supervisor-test-" + Date.now());
   const siteId = "test-site";
   const mode = "user" as const;
 

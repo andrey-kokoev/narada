@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join } from "node:path/posix";
 import { checkLockHealth, recoverStuckLock } from "../src/recovery.js";
 
 describe("recovery", () => {
@@ -12,7 +12,7 @@ describe("recovery", () => {
 
   beforeEach(() => {
     originalEnv = process.env.NARADA_SITE_ROOT;
-    tmpDir = mkdtempSync(join(tmpdir(), "narada-linux-recovery-"));
+    tmpDir = mkdtempSync(join(tmpdir().replace(/\\/g, "/"), "narada-linux-recovery-"));
     process.env.NARADA_SITE_ROOT = tmpDir;
   });
 
@@ -43,6 +43,7 @@ describe("recovery", () => {
 
     it("reports stuck for an old lock", async () => {
       mkdirSync(lockDir(), { recursive: true });
+      utimesSync(lockDir(), new Date(Date.now() - 2000), new Date(Date.now() - 2000));
       const report = await checkLockHealth(siteId, mode, 0);
       expect(report.status).toBe("stuck");
       expect(report.ageMs).toBeDefined();
@@ -67,6 +68,7 @@ describe("recovery", () => {
 
     it("returns true and removes stale lock", async () => {
       mkdirSync(lockDir(), { recursive: true });
+      utimesSync(lockDir(), new Date(Date.now() - 2000), new Date(Date.now() - 2000));
       const recovered = await recoverStuckLock(siteId, mode, 0);
       expect(recovered).toBe(true);
 

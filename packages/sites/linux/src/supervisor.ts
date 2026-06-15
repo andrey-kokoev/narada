@@ -1,4 +1,4 @@
-import { join } from "node:path";
+import { join } from "node:path/posix";
 import { writeFile, mkdir, rm } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { resolveSiteRoot } from "./path-utils.js";
