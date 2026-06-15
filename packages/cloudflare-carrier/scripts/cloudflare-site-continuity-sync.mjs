@@ -17,6 +17,35 @@ if (command === 'help' || command === '--help' || command === '-h') {
   process.exit(0);
 }
 
+async function persistLocalLoopReportArtifact({ siteId, loopReport, artifactDirectory, generatedAt }) {
+  const base = {
+    schema: 'narada.site_continuity_cloudflare_loop_report_local_artifact.v1',
+    status: 'ok',
+    site_id: siteId,
+    generated_at: generatedAt,
+    source: 'site.continuity.loop.report.put',
+    target: 'local_windows_site_continuity_artifact_store',
+    filesystem_mutation_admission: 'local_continuity_loop_report_artifact_write_only',
+    continuity_loop_report_id: loopReport?.loop_report_id ?? null,
+    continuity_loop_report: loopReport,
+  };
+  if (!artifactDirectory) {
+    return {
+      ...base,
+      status: 'not_configured',
+      written: false,
+      reason: 'local_loop_report_artifact_directory_not_configured',
+    };
+  }
+  const artifactPath = `${artifactDirectory.replace(/[\\/]+$/, '')}/${safeToken(siteId)}-${safeToken(loopReport?.loop_report_id ?? generatedAt)}-site-continuity-loop-report.json`;
+  await writeJson(artifactPath, base);
+  return {
+    ...base,
+    written: true,
+    artifact_path: artifactPath,
+  };
+}
+
 function classifyRepositoryPublicationRequest(request) {
   const errors = [];
   if (!request || typeof request !== 'object' || Array.isArray(request)) errors.push('repository_publication_request_object_required');
@@ -330,6 +359,12 @@ if (command === 'sync-once') {
     inboundDirectory: option('--local-inbound-dir'),
     generatedAt: new Date().toISOString(),
   });
+  const localLoopReportArtifact = await persistLocalLoopReportArtifact({
+    siteId,
+    loopReport,
+    artifactDirectory: option('--local-inbound-dir'),
+    generatedAt: new Date().toISOString(),
+  });
   const reportPut = await post({ operation: 'site.continuity.loop.report.put', params: { site_id: siteId, report: loopReport } });
   if (reportPut.http_status !== 200 || reportPut.body?.ok === false) failApi('cloudflare_site_continuity_loop_report_push_failed', reportPut);
   await writeOutput(option('--out'), {
@@ -346,7 +381,9 @@ if (command === 'sync-once') {
     cloudflare_to_local_windows_returned: true,
     cloudflare_to_local_windows_local_artifact_written: localInboundArtifact.written,
     continuity_loop_report_recorded: true,
+    continuity_loop_report_local_artifact_written: localLoopReportArtifact.written,
     local_inbound_artifact: localInboundArtifact,
+    continuity_loop_report_artifact: localLoopReportArtifact,
     cloudflare_response: pushed.body,
     continuity_loop_report_response: reportPut.body,
     continuity_loop_report: loopReport,
@@ -646,11 +683,15 @@ function formatSiteContinuitySyncText(commandName, result, { operatorSessionFile
     lines.push(`Push Recorded: ${result?.local_to_cloudflare_recorded === true ? 'yes' : 'no'}`);
     lines.push(`Return Observed: ${result?.cloudflare_to_local_windows_returned === true ? 'yes' : 'no'}`);
     lines.push(`Inbound Artifact: ${result?.cloudflare_to_local_windows_local_artifact_written === true ? 'written' : 'not_written'}`);
+    lines.push(`Loop Report Artifact: ${result?.continuity_loop_report_local_artifact_written === true ? 'written' : 'not_written'}`);
     if (result?.pushed_packet_id || result?.pulled_packet_id) {
       lines.push(`Packets: pushed=${result?.pushed_packet_id ?? 'none'} pulled=${result?.pulled_packet_id ?? 'none'}`);
     }
     if (result?.continuity_loop_report?.loop_report_id) {
       lines.push(`Loop Report: ${result.continuity_loop_report.loop_report_id}`);
+    }
+    if (result?.continuity_loop_report_artifact?.artifact_path) {
+      lines.push(`Loop Report Artifact Path: ${result.continuity_loop_report_artifact.artifact_path}`);
     }
     if (result?.continuity_loop_report?.cloudflare_push?.durability_action) {
       lines.push(`Durability Action: ${result.continuity_loop_report.cloudflare_push.durability_action}`);
@@ -677,6 +718,9 @@ function formatSiteContinuitySyncText(commandName, result, { operatorSessionFile
     lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text ${baseArgs} --execute-site-next`);
     lines.push(`Posture Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:posture:coherence:live:text ${baseArgs}`);
     lines.push(`Durability Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text ${baseArgs}`);
+    if (commandName === 'sync-once' && result?.continuity_loop_report_artifact?.artifact_path) {
+      lines.push(`Loop Report Publish: pnpm --filter @narada2/cloudflare-carrier product:site-continuity:loop-report:text ${baseArgs} --report-file ${result.continuity_loop_report_artifact.artifact_path}`);
+    }
     if (commandName === 'repository-publication-execute-pending') {
       const firstResult = Array.isArray(result?.results) ? result.results[0] ?? null : null;
       if (firstResult?.request_id) {

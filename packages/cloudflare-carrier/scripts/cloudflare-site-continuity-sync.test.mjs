@@ -357,6 +357,7 @@ test('site continuity sync cycle pushes local packet and returns Cloudflare pack
     assert.equal(body.cloudflare_to_local_windows_returned, true);
     assert.equal(body.cloudflare_to_local_windows_local_artifact_written, true);
     assert.equal(body.continuity_loop_report_recorded, true);
+    assert.equal(body.continuity_loop_report_local_artifact_written, true);
     assert.equal(body.local_inbound_artifact.schema, 'narada.site_continuity_cloudflare_to_local_windows_inbound_packet.v1');
     assert.equal(body.local_inbound_artifact.status, 'ok');
     assert.equal(body.local_inbound_artifact.written, true);
@@ -368,8 +369,17 @@ test('site continuity sync cycle pushes local packet and returns Cloudflare pack
     assert.equal(inboundArtifact.schema, 'narada.site_continuity_cloudflare_to_local_windows_inbound_packet.v1');
     assert.equal(inboundArtifact.packet.packet_id, cloudflarePacket.packet_id);
     assert.equal(inboundArtifact.filesystem_mutation_admission, 'local_inbound_packet_artifact_write_only');
+    assert.equal(body.continuity_loop_report_artifact.schema, 'narada.site_continuity_cloudflare_loop_report_local_artifact.v1');
+    assert.equal(body.continuity_loop_report_artifact.status, 'ok');
+    assert.equal(body.continuity_loop_report_artifact.written, true);
+    assert.equal(body.continuity_loop_report_artifact.site_id, 'site_fixture');
     assert.equal(body.continuity_loop_report.schema, 'narada.site_continuity_productized_loop.v1');
     assert.match(body.continuity_loop_report.loop_report_id, /^site-continuity-loop:site_fixture:/);
+    assert.equal(body.continuity_loop_report_artifact.continuity_loop_report_id, body.continuity_loop_report.loop_report_id);
+    const loopReportArtifact = JSON.parse(await readFile(body.continuity_loop_report_artifact.artifact_path, 'utf8'));
+    assert.equal(loopReportArtifact.schema, 'narada.site_continuity_cloudflare_loop_report_local_artifact.v1');
+    assert.equal(loopReportArtifact.continuity_loop_report.loop_report_id, body.continuity_loop_report.loop_report_id);
+    assert.equal(loopReportArtifact.filesystem_mutation_admission, 'local_continuity_loop_report_artifact_write_only');
     assert.equal(body.continuity_loop_report.site_id, 'site_fixture');
     assert.equal(body.continuity_loop_report.status, 'ok');
     assert.equal(body.continuity_loop_report.cloudflare_push.status, 'imported');
@@ -514,13 +524,16 @@ test('site continuity sync-once emits operator text handoff when using operator 
     assert.match(result.stdout, /Command: sync-once/);
     assert.match(result.stdout, /Push Recorded: yes/);
     assert.match(result.stdout, /Return Observed: yes/);
+    assert.match(result.stdout, /Loop Report Artifact: written/);
     assert.match(result.stdout, /Loop Report: site-continuity-loop:site_fixture:/);
+    assert.match(result.stdout, /Loop Report Artifact Path: .*site-continuity-loop-report\.json/);
     assert.match(result.stdout, /Durability Action: refreshed_existing_packet/);
     assert.match(result.stdout, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
     assert.match(result.stdout, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text/);
     assert.match(result.stdout, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url \S+ --site site_fixture --operator-session-file \S+ --execute-site-next/);
     assert.match(result.stdout, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url \S+ --site site_fixture --operator-session-file \S+/);
     assert.match(result.stdout, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url \S+ --site site_fixture --operator-session-file \S+/);
+    assert.match(result.stdout, /Loop Report Publish: pnpm --filter @narada2\/cloudflare-carrier product:site-continuity:loop-report:text -- --url \S+ --site site_fixture --operator-session-file \S+ --report-file .*site-continuity-loop-report\.json/);
   } finally {
     await mock.close();
     await rm(root, { recursive: true, force: true });
