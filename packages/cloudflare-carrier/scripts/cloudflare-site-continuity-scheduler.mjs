@@ -532,6 +532,7 @@ export function formatSiteContinuitySchedulerResultForText(result) {
   const operatorReason = result?.operator_next_reason ?? lastScheduledHealth?.operator_next_reason ?? null;
   const nextOperationId = result?.cloudflare_operation_next_operation_id ?? lastScheduledHealth?.cloudflare_operation_next_operation_id ?? null;
   const nextOperationAction = result?.cloudflare_operation_next_action ?? lastScheduledHealth?.cloudflare_operation_next_action ?? null;
+  const lastSync = result?.last_sync ?? null;
   const projectionWorkerUrl = normalizeOptionalString(
     result?.projection_worker_url
     ?? result?.worker_url
@@ -593,6 +594,16 @@ export function formatSiteContinuitySchedulerResultForText(result) {
       } else if (nextOperationId && nextOperationAction) {
         lines.push(`Operation Review Focus: action=${nextOperationAction} operation=${nextOperationId}`);
       }
+    }
+    if (lastSync?.continuity_loop_report_id) {
+      lines.push(`Loop Report: ${lastSync.continuity_loop_report_id}`);
+    }
+    if (lastSync?.continuity_loop_report_artifact_path) {
+      lines.push(`Loop Report Artifact Path: ${lastSync.continuity_loop_report_artifact_path}`);
+    }
+    if (operatorTarget && lastSync?.continuity_loop_report_artifact_path) {
+      const siteArgs = `${baseArgs} --site ${operatorTarget}`;
+      lines.push(`Loop Report Review: pnpm --filter @narada2/cloudflare-carrier product:site-continuity:loop-report:text ${siteArgs} --report-file ${lastSync.continuity_loop_report_artifact_path}`);
     }
   }
 
@@ -1893,6 +1904,7 @@ export function readLastSyncArtifact(
     };
   }
   const loopReport = artifact?.continuity_loop_report ?? null;
+  const loopReportArtifact = artifact?.continuity_loop_report_artifact ?? null;
   const cloudflarePush = loopReport?.cloudflare_push ?? null;
   const loopReportFreshness = summarizeLoopReportFreshness(loopReport, { now, staleAfterMs: loopStaleAfterMs });
   const status = artifact?.status === 'ok'
@@ -1926,6 +1938,9 @@ export function readLastSyncArtifact(
     cloudflare_push_imported_at: cloudflarePush?.imported_at ?? null,
     cloudflare_push_previous_imported_at: cloudflarePush?.previous_imported_at ?? null,
     continuity_loop_report_recorded: artifact?.continuity_loop_report_recorded ?? null,
+    continuity_loop_report_id: loopReport?.loop_report_id ?? loopReportArtifact?.continuity_loop_report_id ?? null,
+    continuity_loop_report_artifact_written: artifact?.continuity_loop_report_local_artifact_written ?? loopReportArtifact?.written ?? false,
+    continuity_loop_report_artifact_path: loopReportArtifact?.artifact_path ?? null,
     continuity_loop_freshness_state: loopReportFreshness.freshness_state,
     continuity_loop_report_age_minutes: loopReportFreshness.age_minutes,
     continuity_loop_stale_after_minutes: Math.floor(loopStaleAfterMs / 60000),

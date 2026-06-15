@@ -650,6 +650,10 @@ test('site continuity scheduler text summary surfaces local and inbound continui
     plan.operator_next_reason = 'operation_posture';
     plan.cloudflare_operation_next_operation_id = 'operation_site_missing_control';
     plan.cloudflare_operation_next_action = 'refresh_site_continuity_loop';
+    plan.last_sync = {
+      continuity_loop_report_id: 'site-continuity-loop:site_missing:2026-06-11T10:30:00.000Z',
+      continuity_loop_report_artifact_path: 'D:\\code\\narada\\.narada\\site-continuity\\site_missing-loop-report.json',
+    };
     plan.scheduler_task_readback = {
       hidden_wrapper_readback: { status: 'matches_plan', path: 'hidden.vbs', embeds_credentials: false },
     };
@@ -669,6 +673,9 @@ test('site continuity scheduler text summary surfaces local and inbound continui
     assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json --site site_missing --operation-id operation_site_missing_control/);
     assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json --site site_missing --operation-id operation_site_missing_control --execute-operation-next/);
     assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json --site site_missing --execute-site-next/);
+    assert.match(text, /Loop Report: site-continuity-loop:site_missing:2026-06-11T10:30:00\.000Z/);
+    assert.match(text, /Loop Report Artifact Path: D:\\code\\narada\\\.narada\\site-continuity\\site_missing-loop-report\.json/);
+    assert.match(text, /Loop Report Review: pnpm --filter @narada2\/cloudflare-carrier product:site-continuity:loop-report:text -- --url https:\/\/carrier\.example --operator-session-file D:\\code\\narada\\\.narada\\auth\\cloudflare-operator-session\.json --site site_missing --report-file D:\\code\\narada\\\.narada\\site-continuity\\site_missing-loop-report\.json/);
     assert.match(text, /- site_synced: sync=synced inbound=synced/);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -2621,9 +2628,17 @@ test('site continuity scheduler read-last summarizes local sync artifact', async
     worker_url: 'https://worker.example',
     pushed_packet_id: 'packet-local',
     pulled_packet_id: 'packet-cloudflare',
+    continuity_loop_report_local_artifact_written: true,
+    continuity_loop_report_artifact: {
+      schema: 'narada.site_continuity_cloudflare_loop_report_local_artifact.v1',
+      written: true,
+      artifact_path: join(root, '.narada/site-continuity/site-continuity-loop-report.json'),
+      continuity_loop_report_id: 'site-continuity-loop:site_fixture:2026-06-11T09:00:00.000Z',
+    },
     continuity_loop_report_recorded: true,
     continuity_loop_report: {
       schema: 'narada.site_continuity_productized_loop.v1',
+      loop_report_id: 'site-continuity-loop:site_fixture:2026-06-11T09:00:00.000Z',
       site_id: 'site_fixture',
       status: 'ok',
       generated_at: '2026-06-11T09:00:00.000Z',
@@ -2654,6 +2669,9 @@ test('site continuity scheduler read-last summarizes local sync artifact', async
     assert.equal(summary.cloudflare_push_imported_at, '2026-06-11T09:00:00.000Z');
     assert.equal(summary.cloudflare_push_previous_imported_at, '2026-06-11T08:59:00.000Z');
     assert.equal(summary.continuity_loop_report_recorded, true);
+    assert.equal(summary.continuity_loop_report_id, 'site-continuity-loop:site_fixture:2026-06-11T09:00:00.000Z');
+    assert.equal(summary.continuity_loop_report_artifact_written, true);
+    assert.equal(summary.continuity_loop_report_artifact_path, join(root, '.narada/site-continuity/site-continuity-loop-report.json'));
     assert.equal(summary.continuity_loop_freshness_state, 'fresh');
     assert.equal(summary.continuity_loop_report_age_minutes, 1);
     assert.equal(summary.continuity_loop_stale_after_minutes, 5);
