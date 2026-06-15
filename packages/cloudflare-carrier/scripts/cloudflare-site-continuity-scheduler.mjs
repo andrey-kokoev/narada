@@ -633,6 +633,12 @@ export function formatSiteContinuitySchedulerResultForText(result) {
       const syncArtifact = syncArtifactsBySite.get(siteId);
       const inbound = inboundBySite.get(siteId);
       lines.push(`- ${siteId}: sync=${sync?.status ?? syncArtifact?.status ?? 'unknown'} inbound=${inbound?.status ?? 'unknown'}`);
+      if (inbound?.packet_id) {
+        lines.push(`  Inbound Packet: ${inbound.packet_id}`);
+      }
+      if (inbound?.artifact_path) {
+        lines.push(`  Inbound Packet Materialize: pnpm --filter @narada2/cloudflare-carrier continuity:bindings -- --packet ${inbound.artifact_path}`);
+      }
       if (syncArtifact?.continuity_loop_report_id) {
         lines.push(`  Loop Report: ${syncArtifact.continuity_loop_report_id}`);
       }

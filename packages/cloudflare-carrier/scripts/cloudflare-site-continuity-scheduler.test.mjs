@@ -1324,6 +1324,10 @@ test('site continuity scheduler status-all inventories local sync artifacts', as
       failed_count: 0,
     },
   }, null, 2)}\n`, 'utf8');
+  await writeInboundPacketArtifact(artifactDirectory, 'site_alpha', {
+    packetId: 'site-alpha-inbound-packet',
+    generatedAt: '2026-06-11T10:00:00.000Z',
+  });
   await writeFile(join(artifactDirectory, 'notes.txt'), 'ignored\n', 'utf8');
   try {
     const inventory = readLocalSyncArtifactInventory(artifactDirectory, {
@@ -1343,6 +1347,7 @@ test('site continuity scheduler status-all inventories local sync artifacts', as
       outputPath,
       artifactDirectory,
       reconciliationExecutionOutputPath,
+      configuredSites: 'site_alpha,site_beta',
       projectionWorkerUrl: 'https://worker.example',
       operatorSessionFile: join(root, '.narada/auth/cloudflare-operator-session.json'),
       now: () => '2026-06-11T09:01:00.000Z',
@@ -1354,11 +1359,13 @@ test('site continuity scheduler status-all inventories local sync artifacts', as
 
     const text = formatSiteContinuitySchedulerResultForText(plan);
     assert.match(text, /Site Details:/);
-    assert.match(text, /- site_alpha: sync=synced inbound=unknown/);
+    assert.match(text, /- site_alpha: sync=synced inbound=synced/);
+    assert.match(text, /  Inbound Packet: site-alpha-inbound-packet/);
+    assert.match(text, /  Inbound Packet Materialize: pnpm --filter @narada2\/cloudflare-carrier continuity:bindings -- --packet .*site_alpha-cloudflare-inbound\.json/);
     assert.match(text, /  Loop Report: site-continuity-loop:site_alpha:2026-06-11T10:00:00\.000Z/);
     assert.match(text, /  Loop Report Review: pnpm --filter @narada2\/cloudflare-carrier product:site-continuity:loop-report:text -- --url https:\/\/worker\.example --operator-session-file .*cloudflare-operator-session\.json --site site_alpha --report-file .*site-alpha-loop-report\.json/);
     assert.match(text, /  Reconciliation Execution Record: pnpm --filter @narada2\/cloudflare-carrier exec node scripts\/cloudflare-site-continuity-sync\.mjs reconciliation-execution-put --site site_alpha --execution .*cloudflare-reconcile-last\.json --url https:\/\/worker\.example --operator-session-file .*cloudflare-operator-session\.json/);
-    assert.match(text, /- site_beta: sync=needs_attention inbound=unknown/);
+    assert.match(text, /- site_beta: sync=needs_attention inbound=needs_attention/);
     assert.doesNotMatch(text, /site_beta[\s\S]*Loop Report Review:/);
     assert.doesNotMatch(text, /site_beta[\s\S]*Reconciliation Execution Record:/);
   } finally {
