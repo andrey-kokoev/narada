@@ -624,6 +624,7 @@ export function formatSiteContinuitySchedulerResultForText(result) {
   const syncBySite = new Map((localSyncArtifacts?.configured_site_sync_statuses ?? []).map((site) => [site.site_id, site]));
   const syncArtifactsBySite = new Map((localSyncArtifacts?.artifacts ?? []).map((artifact) => [artifact.site_id, artifact]));
   const inboundBySite = new Map((localInboundPackets?.configured_site_inbound_statuses ?? []).map((site) => [site.site_id, site]));
+  const reconciliationSites = new Set(lastReconciliationExecution?.site_ids ?? []);
   const siteIds = [...new Set([...syncBySite.keys(), ...syncArtifactsBySite.keys(), ...inboundBySite.keys()])].sort();
   if (siteIds.length > 0) {
     lines.push('Site Details:');
@@ -638,6 +639,9 @@ export function formatSiteContinuitySchedulerResultForText(result) {
       if (projectionWorkerUrl && operatorSessionFile && syncArtifact?.continuity_loop_report_artifact_path) {
         const siteArgs = `-- --url ${projectionWorkerUrl} --operator-session-file ${operatorSessionFile} --site ${siteId}`;
         lines.push(`  Loop Report Review: pnpm --filter @narada2/cloudflare-carrier product:site-continuity:loop-report:text ${siteArgs} --report-file ${syncArtifact.continuity_loop_report_artifact_path}`);
+      }
+      if (projectionWorkerUrl && operatorSessionFile && lastReconciliationExecution?.artifact_path && reconciliationSites.has(siteId)) {
+        lines.push(`  Reconciliation Execution Record: pnpm --filter @narada2/cloudflare-carrier exec node scripts/cloudflare-site-continuity-sync.mjs reconciliation-execution-put --site ${siteId} --execution ${lastReconciliationExecution.artifact_path} --url ${projectionWorkerUrl} --operator-session-file ${operatorSessionFile}`);
       }
     }
   }
