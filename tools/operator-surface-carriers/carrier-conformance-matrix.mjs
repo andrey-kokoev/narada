@@ -71,6 +71,20 @@ const CARRIER_ROWS = Object.freeze([
       'Effect mediation is explicit artifact flow, not universal interception of all carrier actions.',
     ],
   },
+  {
+    carrier: 'opencode',
+    launch_supported: true,
+    default_intelligence_auth_path: 'No Narada intelligence provider; OpenCode manages its own provider/config',
+    mcp_fabric_source: 'None — excluded from MCP fabric loading; uses ambient-carrier-tools with no_narada_mcp_claim; MCP servers loaded from ~/.config/opencode/opencode.jsonc',
+    native_shell_posture: 'Not enforced by Narada; OpenCode manages its own tool execution',
+    mutating_call_handling: 'No Narada code-mediated admission loop; ambient-carrier-tools pattern only',
+    startup_sequence_availability: 'Not available — no MCP fabric loaded; OpenCode reads AGENTS.md for startup instructions',
+    evidence_level: EVIDENCE_LEVELS.CODE_ENFORCED,
+    known_gaps: [
+      'OpenCode is a pass-through carrier; Narada does not inject MCP tools.',
+      'Shell execution provenance is carrier-native, not Narada code-mediated.',
+    ],
+  },
 ]);
 
 function currentLaunchRegistrySummary(launchRegistryPath = DEFAULT_LAUNCH_REGISTRY) {

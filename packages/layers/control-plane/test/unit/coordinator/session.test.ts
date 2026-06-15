@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import Database from "better-sqlite3";
+import Database from "../../../src/sqlite/database.js";
 import { SqliteCoordinatorStore } from "../../../src/coordinator/store.js";
 import type { AgentSession } from "../../../src/coordinator/types.js";
 
 describe("AgentSession store operations", () => {
-  let db: Database.Database;
+  let db: Database;
   let store: SqliteCoordinatorStore;
 
   beforeEach(() => {

@@ -12,7 +12,7 @@
  *   node tools/incubation/dry-run-agent-start.mjs --identity narada-andrey.architect --runtime kimi --write
  */
 
-import Database from 'better-sqlite3';
+import Database from '@narada2/sqlite';
 import { readFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';

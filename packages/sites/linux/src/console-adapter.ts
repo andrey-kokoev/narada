@@ -79,7 +79,7 @@ export class LinuxSiteObservationApi implements SiteObservationApi {
   }
 
   async getStuckWorkItems(): Promise<StuckWorkItem[]> {
-    const { default: DatabaseCtor } = await import("better-sqlite3");
+    const { Database: DatabaseCtor } = await import("@narada2/control-plane");
     const db = new DatabaseCtor(siteDbPath(this.siteId, this.mode));
     try {
       const tableCheck = db.prepare(
@@ -126,7 +126,7 @@ export class LinuxSiteObservationApi implements SiteObservationApi {
   }
 
   async getPendingOutboundCommands(): Promise<PendingOutboundCommand[]> {
-    const { default: DatabaseCtor } = await import("better-sqlite3");
+    const { Database: DatabaseCtor } = await import("@narada2/control-plane");
     const db = new DatabaseCtor(siteDbPath(this.siteId, this.mode));
     try {
       const tableCheck = db.prepare(
@@ -176,7 +176,7 @@ export class LinuxSiteObservationApi implements SiteObservationApi {
   }
 
   async getPendingDrafts(): Promise<PendingDraft[]> {
-    const { default: DatabaseCtor } = await import("better-sqlite3");
+    const { Database: DatabaseCtor } = await import("@narada2/control-plane");
     const db = new DatabaseCtor(siteDbPath(this.siteId, this.mode));
     try {
       const tableCheck = db.prepare(

@@ -13,7 +13,7 @@ import {
   type QuiescenceIndicator,
 } from '@narada2/control-plane';
 
-// Lazy-load better-sqlite3 to avoid eager native-module load in test environments
+// Lazy-load SQLite driver to avoid eager native-module load in test environments
 async function loadControlPlaneSnapshot(
   dbPath: string,
   scopeId: string,

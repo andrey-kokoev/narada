@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import Database from "better-sqlite3";
+import Database from "@narada2/sqlite";
 import { SqliteFactStore } from "@narada2/control-plane";
 import { createScopeService } from "../../src/service.js";
 import { createLogger } from "../../src/lib/logger.js";

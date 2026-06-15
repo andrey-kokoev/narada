@@ -2,13 +2,13 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import Database from "better-sqlite3";
+import Database from "@narada2/sqlite";
 import { SqliteSiteCoordinator } from "../../src/coordinator.js";
 import type { SiteHealthRecord, CycleTraceRecord } from "../../src/types.js";
 
 describe("SqliteSiteCoordinator", () => {
   let tempDir: string;
-  let db: Database.Database;
+  let db: Database;
   let coordinator: SqliteSiteCoordinator;
 
   beforeEach(() => {

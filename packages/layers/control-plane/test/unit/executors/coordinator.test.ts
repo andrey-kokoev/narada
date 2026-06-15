@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import Database from "better-sqlite3";
+import Database from "../../../src/sqlite/database.js";
 import { SqliteProcessExecutionStore } from "../../../src/executors/store.js";
 import { ExecutionCoordinator } from "../../../src/executors/coordinator.js";
 import { SqliteOutboundStore } from "../../../src/outbound/store.js";
@@ -7,7 +7,7 @@ import { SqliteIntentStore } from "../../../src/intent/store.js";
 import { SqliteCoordinatorStore } from "../../../src/coordinator/store.js";
 
 describe("ExecutionCoordinator", () => {
-  let db: Database.Database;
+  let db: Database;
   let processStore: SqliteProcessExecutionStore;
   let outboundStore: SqliteOutboundStore;
   let intentStore: SqliteIntentStore;

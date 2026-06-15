@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import Database from "better-sqlite3";
+import Database from "../../../src/sqlite/database.js";
 import { SqliteProcessExecutionStore } from "../../../src/executors/store.js";
 import { SqliteIntentStore } from "../../../src/intent/store.js";
 import { SqliteOutboundStore } from "../../../src/outbound/store.js";
@@ -25,7 +25,7 @@ class MockMessageFinder implements MessageFinder {
 }
 
 describe("ConfirmationReplay", () => {
-  let db: Database.Database;
+  let db: Database;
   let processStore: SqliteProcessExecutionStore;
   let intentStore: SqliteIntentStore;
   let outboundStore: SqliteOutboundStore;

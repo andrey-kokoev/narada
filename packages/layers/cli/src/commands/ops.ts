@@ -100,7 +100,7 @@ interface OpsReport {
   suggestedActions: string[];
 }
 
-// Lazy-load better-sqlite3 to avoid eager native-module load in test environments
+// Lazy-load SQLite driver to avoid eager native-module load in test environments
 async function loadOpsReport(
   scopeId: string,
   rootDir: string,

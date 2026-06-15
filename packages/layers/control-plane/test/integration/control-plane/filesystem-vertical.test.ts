@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import Database from "better-sqlite3";
+import Database from "../../../src/sqlite/database.js";
 import { SqliteFactStore } from "../../../src/facts/store.js";
 import { SqliteProcessExecutionStore } from "../../../src/executors/store.js";
 import { ProcessExecutor } from "../../../src/executors/process-executor.js";

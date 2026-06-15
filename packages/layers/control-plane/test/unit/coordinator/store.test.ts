@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import Database from "better-sqlite3";
+import Database from "../../../src/sqlite/database.js";
 import { SqliteCoordinatorStore } from "../../../src/coordinator/store.js";
 import { SqliteOutboundStore } from "../../../src/outbound/store.js";
 import {
@@ -10,7 +10,7 @@ import {
 import { createOutboundCommand, createOutboundVersion } from "../outbound/fixtures.js";
 
 describe("SqliteCoordinatorStore", () => {
-  let db: Database.Database;
+  let db: Database;
   let store: SqliteCoordinatorStore;
   let outboundStore: SqliteOutboundStore;
 

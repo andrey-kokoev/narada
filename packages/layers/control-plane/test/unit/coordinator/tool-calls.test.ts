@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import Database from "better-sqlite3";
+import Database from "../../../src/sqlite/database.js";
 import { SqliteCoordinatorStore } from "../../../src/coordinator/store.js";
 import type { ToolCallRecord, WorkItem, ExecutionAttempt } from "../../../src/coordinator/types.js";
 
 describe("SqliteCoordinatorStore — tool_call_records", () => {
-  let db: Database.Database;
+  let db: Database;
   let store: SqliteCoordinatorStore;
 
   beforeEach(() => {

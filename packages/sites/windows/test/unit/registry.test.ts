@@ -8,7 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import Database from "better-sqlite3";
+import Database from "@narada2/sqlite";
 import { createSiteContinuityExchangePacket } from "@narada2/site-continuity";
 import {
   SiteRegistry,
@@ -139,7 +139,7 @@ describe("resolveSitesBaseDir", () => {
 });
 
 describe("SiteRegistry", () => {
-  let db: Database.Database;
+  let db: Database;
   let registry: SiteRegistry;
   let tempDir = "";
 

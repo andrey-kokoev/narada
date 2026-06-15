@@ -60,8 +60,11 @@ function saveEntries(entries: TelemetryEntry[]): void {
 
 /**
  * Heuristic: does the captured output contain evidence that the test suite
- * completed with all tests passing? This is used to distinguish harmless
- * better-sqlite3 teardown crashes from genuine infrastructure failures.
+ * completed with all tests passing? This was historically used to distinguish
+ * harmless better-sqlite3 teardown crashes from genuine infrastructure failures.
+ * After the migration to node:sqlite, teardown crashes are no longer expected
+ * and are classified as infrastructure-failure. This helper is retained only
+ * for diagnostic context.
  */
 function hasTestSuitePassedEvidence(stderr: string, stdout: string): boolean {
   const combined = stderr + stdout;
@@ -99,7 +102,9 @@ export function classifyStep(
 
   if (exitStatus === 0) return "success";
 
-  // Known better-sqlite3 / V8 teardown noise signatures
+  // After the migration from better-sqlite3 to node:sqlite, exit code 133
+  // and V8 teardown crash signatures are no longer expected as harmless
+  // teardown noise. Treat them as infrastructure failures.
   const teardownSignatures = [
     "Fatal JavaScript invalid size error",
     "V8_Fatal",
@@ -111,12 +116,6 @@ export function classifyStep(
   );
 
   if (exitStatus === 133 || looksLikeTeardownCrash) {
-    // Step-level classification must be evidence-based. Without proof that
-    // the suite completed successfully, a crash is treated as a genuine
-    // infrastructure failure rather than harmless teardown noise.
-    if (hasTestSuitePassedEvidence(stderr, stdout)) {
-      return "known-teardown-noise";
-    }
     return "infrastructure-failure";
   }
 

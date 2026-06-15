@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import Database from "better-sqlite3";
+import Database from "../../../src/sqlite/database.js";
 import {
   admitEmailOperatorRequest,
   createConfirmationChallenge,
@@ -44,7 +44,7 @@ const tokenExchange: TokenExchangeClient = {
 };
 
 describe("email-originated operator confirmation", () => {
-  let db: Database.Database;
+  let db: Database;
   let coordinatorStore: SqliteCoordinatorStore;
 
   beforeEach(() => {

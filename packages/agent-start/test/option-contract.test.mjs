@@ -298,3 +298,30 @@ test('admission options expose admission result without launching', () => {
   assert.equal(typeof output.admission_id, 'string');
   assert.match(output.admission_id, /^codexadm_/);
 });
+
+test('opencode runtime is admitted by the contract', () => {
+  assert.equal(sharedRuntimeContract.admitted_runtime_substrate_kinds.includes('opencode'), true);
+});
+
+test('opencode dry-run resolves as ambient-carrier-tools', () => {
+  const output = runOk(['--runtime', 'opencode']);
+  assert.equal(output.runtime_substrate_kind, 'opencode');
+  assert.equal(output.tool_fabric_adapter_kind, 'ambient-carrier-tools');
+  assert.equal(output.tool_fabric_adapter.tool_fabric_adapter_kind, 'ambient-carrier-tools');
+  assert.equal(output.tool_fabric_adapter.runtime_substrate_kind, 'opencode');
+  assert.equal(output.context_isolation.status, 'isolated');
+  assert.equal(output.context_isolation.runtime, 'opencode');
+  assert.equal(output.runtime_args.length, 0);
+  assert.equal(output.mcp_fabric, null);
+  assert.equal(output.mcp_tool_approval, null);
+});
+
+test('opencode sets NARADA_OPENCODE_COMMAND in required environment', () => {
+  const output = runOk(['--runtime', 'opencode']);
+  assert.equal(output.required_environment.NARADA_OPENCODE_COMMAND, 'opencode');
+});
+
+test('opencode sets NARADA_OPENCODE_COMMAND in would_set_environment', () => {
+  const output = runOk(['--runtime', 'opencode']);
+  assert.equal(output.would_set_environment.NARADA_OPENCODE_COMMAND, 'opencode');
+});

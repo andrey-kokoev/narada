@@ -2,27 +2,10 @@
 import { readFileSync, existsSync, mkdirSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { createRequire } from 'module';
+import Database from '@narada2/sqlite';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const siteRoot = resolve(__dirname, '..', '..');
-const require = createRequire(import.meta.url);
-
-// Resolve better-sqlite3 from known install locations
-function resolveBetterSqlite3() {
-  const candidates = [
-    resolve(siteRoot, 'node_modules', 'better-sqlite3'),
-    resolve(siteRoot, 'node_modules', '.pnpm', 'node_modules', 'better-sqlite3'),
-    resolve(siteRoot, 'tools', 'agent-context', 'node_modules', 'better-sqlite3'),
-    resolve(siteRoot, 'tools', 'incubation', 'node_modules', 'better-sqlite3'),
-  ];
-  for (const p of candidates) {
-    if (existsSync(p)) return p;
-  }
-  throw new Error('better-sqlite3 not found in any known location');
-}
-
-const Database = require(resolveBetterSqlite3());
 
 const dbDir = resolve(siteRoot, '.ai', 'db');
 if (!existsSync(dbDir)) mkdirSync(dbDir, { recursive: true });

@@ -91,6 +91,14 @@
       "posture": "carrier_action_admission_contracts"
     },
     {
+      "package": "@narada2/carrier-command-contract",
+      "path": "packages/carrier-command-contract",
+      "roles": [
+        "descriptor_contract"
+      ],
+      "posture": "carrier_command_contracts"
+    },
+    {
       "package": "@narada2/carrier-protocol",
       "path": "packages/carrier-protocol",
       "roles": [
@@ -98,6 +106,46 @@
         "descriptor_contract"
       ],
       "posture": "carrier_protocol_contracts"
+    },
+    {
+      "package": "@narada2/carrier-protocol-contract",
+      "path": "packages/carrier-protocol-contract",
+      "roles": [
+        "descriptor_contract"
+      ],
+      "posture": "carrier_protocol_contracts"
+    },
+    {
+      "package": "@narada2/carrier-provider-contract",
+      "path": "packages/carrier-provider-contract",
+      "roles": [
+        "descriptor_contract"
+      ],
+      "posture": "carrier_provider_contracts"
+    },
+    {
+      "package": "@narada2/carrier-rendering-contract",
+      "path": "packages/carrier-rendering-contract",
+      "roles": [
+        "descriptor_contract"
+      ],
+      "posture": "carrier_rendering_contracts"
+    },
+    {
+      "package": "@narada2/carrier-routing-contract",
+      "path": "packages/carrier-routing-contract",
+      "roles": [
+        "descriptor_contract"
+      ],
+      "posture": "carrier_routing_contracts"
+    },
+    {
+      "package": "@narada2/carrier-runtime-contract",
+      "path": "packages/carrier-runtime-contract",
+      "roles": [
+        "descriptor_contract"
+      ],
+      "posture": "carrier_runtime_contracts"
     },
     {
       "package": "@narada2/charters",
@@ -117,12 +165,29 @@
       "posture": "governed_command_surface"
     },
     {
+      "package": "@narada2/cloudflare-carrier",
+      "path": "packages/cloudflare-carrier",
+      "roles": [
+        "runtime_authority"
+      ],
+      "posture": "cloudflare_carrier_runtime"
+    },
+    {
       "package": "@narada2/cloudflare-site",
       "path": "packages/sites/cloudflare",
       "roles": [
         "platform_template"
       ],
       "posture": "cloudflare_site_materialization_template"
+    },
+    {
+      "package": "@narada2/cloudflare-site-registry",
+      "path": "packages/cloudflare-site-registry",
+      "roles": [
+        "runtime_authority",
+        "platform_template"
+      ],
+      "posture": "cloudflare_site_registry_runtime"
     },
     {
       "package": "@narada2/control-plane",
@@ -192,6 +257,15 @@
       "posture": "mcp_fabric_runtime_boundary"
     },
     {
+      "package": "@narada2/mcp-protocol-contract",
+      "path": "packages/mcp-protocol-contract",
+      "roles": [
+        "mcp_boundary",
+        "descriptor_contract"
+      ],
+      "posture": "mcp_protocol_contracts"
+    },
+    {
       "package": "@narada2/mcp-shell-windows",
       "path": "packages/mcp-shell-windows",
       "roles": [
@@ -220,7 +294,7 @@
     },
     {
       "package": "@narada2/mcp-transport",
-      "path": "packages/mcp-transport",
+      "path": "packages/_archive/mcp-transport-legacy",
       "roles": [
         "mcp_boundary",
         "runtime_authority"
@@ -263,6 +337,14 @@
       "posture": "search_vertical"
     },
     {
+      "package": "@narada2/site-authority-map",
+      "path": "packages/site-authority-map",
+      "roles": [
+        "descriptor_contract"
+      ],
+      "posture": "site_authority_map_contracts"
+    },
+    {
       "package": "@narada2/site-common-tools",
       "path": "packages/site-common-tools",
       "roles": [
@@ -278,6 +360,14 @@
         "descriptor_contract"
       ],
       "posture": "site_config_descriptors_no_live_registry_mutation"
+    },
+    {
+      "package": "@narada2/site-continuity",
+      "path": "packages/site-continuity",
+      "roles": [
+        "runtime_authority"
+      ],
+      "posture": "site_continuity_runtime"
     },
     {
       "package": "@narada2/site-inbox",
@@ -329,6 +419,14 @@
         "descriptor_contract"
       ],
       "posture": "adapter_interface_only_no_sqlite_dependency"
+    },
+    {
+      "package": "@narada2/sqlite",
+      "path": "packages/sqlite",
+      "roles": [
+        "runtime_authority"
+      ],
+      "posture": "sqlite_runtime_binding"
     },
     {
       "package": "@narada2/task-governance",

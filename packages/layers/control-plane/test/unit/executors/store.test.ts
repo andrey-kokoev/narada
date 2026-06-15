@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import Database from "better-sqlite3";
+import Database from "../../../src/sqlite/database.js";
 import { SqliteProcessExecutionStore } from "../../../src/executors/store.js";
 
 describe("SqliteProcessExecutionStore", () => {
-  let db: Database.Database;
+  let db: Database;
   let store: SqliteProcessExecutionStore;
 
   beforeEach(() => {

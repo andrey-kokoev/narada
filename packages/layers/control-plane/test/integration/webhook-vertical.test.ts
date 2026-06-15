@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import Database from "better-sqlite3";
+import Database from "../../src/sqlite/database.js";
 import {
   WebhookSource,
   InMemoryWebhookEventQueue,
@@ -72,8 +72,8 @@ function insertEvaluation(
 
 describe("Webhook Vertical Integration", () => {
   let rootDir: string;
-  let db: Database.Database;
-  let factDb: Database.Database;
+  let db: Database;
+  let factDb: Database;
 
   beforeEach(async () => {
     rootDir = await mkdtemp(join(tmpdir(), "efs-webhook-"));

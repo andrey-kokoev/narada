@@ -9,8 +9,10 @@
   "admitted_providers": [
     "codex-subscription",
     "kimi-api",
+    "kimi-code-api",
     "openai-api",
-    "anthropic-api"
+    "anthropic-api",
+    "deepseek-api"
   ],
   "scripted_provider_adapter_kind": "scripted_provider_adapter",
   "production_provider_adapter_kind": "codex_subscription_adapter",

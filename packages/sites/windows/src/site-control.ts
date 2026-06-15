@@ -1,4 +1,4 @@
-import type { Database } from "better-sqlite3";
+import type { Database } from "@narada2/control-plane";
 import {
   executeOperatorAction,
   SqliteCoordinatorStore,
@@ -144,7 +144,7 @@ export function createWindowsSiteControlClient(
   const variant = site.variant;
 
   const contextFactory: WindowsSiteControlContextFactory = async (_siteId, _scopeId) => {
-    const { default: DatabaseCtor } = await import("better-sqlite3");
+    const { Database: DatabaseCtor } = await import("@narada2/control-plane");
     const db = new DatabaseCtor(siteDbPath(_siteId, variant)) as Database;
 
     const coordinatorStore = new SqliteCoordinatorStore({ db });

@@ -5,14 +5,14 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import Database from "better-sqlite3";
+import Database from "@narada2/sqlite";
 import type { Source, SourceBatch, SourceRecord } from "@narada2/control-plane";
 import { WindowsCycleCoordinator } from "../../src/cycle-coordinator.js";
 import { createLiveSyncStepHandler } from "../../src/cycle-step.js";
 import { createGraphSource } from "../../src/graph-source.js";
 
 describe("createLiveSyncStepHandler", () => {
-  let db: Database.Database;
+  let db: Database;
   let coordinator: WindowsCycleCoordinator;
 
   beforeEach(() => {

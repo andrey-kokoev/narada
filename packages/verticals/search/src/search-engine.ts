@@ -4,7 +4,7 @@
  * Provides a consistent API over FTS5 (primary) with fallback handling
  */
 
-import type Database from 'better-sqlite3';
+import type Database from '@narada2/sqlite';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createSearchDb, closeSearchDb } from './db.js';
@@ -20,7 +20,7 @@ export interface SearchEngineOptions {
 
 export class SearchEngine {
   private rootDir: string;
-  private db: Database.Database | null = null;
+  private db: Database | null = null;
   private indexer: Fts5Indexer | null = null;
   private queryEngine: Fts5QueryEngine | null = null;
   private initialized = false;

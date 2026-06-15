@@ -1,4 +1,4 @@
-import type { Database } from "better-sqlite3";
+import type { Database } from "@narada2/control-plane";
 import type {
   SiteHealthRecord,
   CycleTraceRecord,
@@ -221,7 +221,7 @@ export async function openCoordinatorDb(
   siteId: string,
   variant: WindowsSiteVariant
 ): Promise<Database> {
-  const { default: DatabaseCtor } = await import("better-sqlite3");
+  const { Database: DatabaseCtor } = await import("@narada2/control-plane");
   const dbPath = siteDbPath(siteId, variant);
   return new DatabaseCtor(dbPath) as Database;
 }

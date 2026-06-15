@@ -312,6 +312,7 @@ export function buildOutputRefToolContent({
     truncated: true,
     output_ref: stored.ref,
     reader_tool: 'mcp_output_show',
+    site_root: siteRoot,
     inline_limit: limit,
     full_output_char_length: stored.full_output_char_length,
   };
@@ -320,7 +321,10 @@ export function buildOutputRefToolContent({
 
 export function outputShow({ siteRoot, args, maxBytes = DEFAULT_OUTPUT_MAX_BYTES, outputDir = DEFAULT_OUTPUT_DIR }) {
   const input = asRecord(args);
-  const record = readOutputRecord({ siteRoot, ref: requireOutputRef(input, 'output_show_requires_ref'), maxBytes, outputDir });
+  const effectiveSiteRoot = typeof input.target_site_root === 'string' && input.target_site_root.trim().length > 0
+    ? resolve(input.target_site_root.trim())
+    : siteRoot;
+  const record = readOutputRecord({ siteRoot: effectiveSiteRoot, ref: requireOutputRef(input, 'output_show_requires_ref'), maxBytes, outputDir });
   return publicOutputShowRecord(record, {
     outputLimit: normalizeOutputShowLimit(input.output_limit),
     compact: input.compact === true,
@@ -338,6 +342,7 @@ export function listOutputTools() {
           ref: { type: 'string', description: 'Output ref, e.g. mcp_output:<id>.' },
           output_limit: { type: 'integer', description: 'Maximum characters of stored output to inline. Defaults to 10000.' },
           compact: { type: 'boolean', description: 'Return a compact lifecycle-oriented summary while preserving the output ref for full audit expansion.' },
+          target_site_root: { type: 'string', description: 'Optional explicit target Site root where the output was written. Defaults to this MCP server site root.' },
         },
         required: ['ref'],
       },

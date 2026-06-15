@@ -332,7 +332,7 @@ describe('doctor command', () => {
     expect(report.checks.find((check) => check.name === 'package-build-posture')?.status).toBe('pass');
     expect(report.checks.find((check) => check.name === 'governance-commands-allowed')?.status).toBe('pass');
     expect(report.cli_execution_posture).toMatchObject({ governance_commands_allowed: true, dist_fresh: true });
-    expect(report.checks.find((check) => check.name === 'better-sqlite3-native')).toBeDefined();
+    expect(report.checks.find((check) => check.name === 'node-sqlite-available')).toBeDefined();
     expect(report.checks.find((check) => check.name === 'sqlite-runtime-posture')).toBeDefined();
   });
 
@@ -341,7 +341,6 @@ describe('doctor command', () => {
       '/repo/package.json': '{}',
       '/repo/pnpm-lock.yaml': '',
       '/repo/node_modules/.bin/narada': '',
-      '/repo/node_modules/better-sqlite3/index.js': '',
       '/repo/packages/layers/cli/dist/main.js': '',
       '/repo/packages/layers/cli/src/main.ts': '',
     });

@@ -10,7 +10,6 @@ import { SqliteTaskLifecycleStore, openTaskLifecycleStore } from '../../src/lib/
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import Database from "better-sqlite3";
 
 describe('test-run command', () => {
   let tempDir: string;

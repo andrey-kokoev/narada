@@ -1,8 +1,9 @@
 import { join } from "node:path";
 import { FileLock, computeHealthTransition } from "@narada2/control-plane";
 import type { MacosSiteConfig, MacosCycleResult } from "./types.js";
-import { ensureSiteDir, resolveSiteRoot } from "./path-utils.js";
+import { ensureSiteDir, resolveSiteRoot, siteDbPath } from "./path-utils.js";
 import { SqliteSiteCoordinator } from "./coordinator.js";
+import Database from "@narada2/sqlite";
 
 export interface CycleConfig {
   ceilingMs: number;
@@ -142,9 +143,7 @@ export class DefaultMacosSiteRunner implements MacosSiteRunner {
     try {
       await ensureSiteDir(config.site_id);
 
-      const { default: DatabaseCtor } = await import("better-sqlite3");
-      const { siteDbPath } = await import("./path-utils.js");
-      const db = new DatabaseCtor(siteDbPath(config.site_id));
+      const db = new Database(siteDbPath(config.site_id));
       const coordinator = new SqliteSiteCoordinator(db);
 
       try {
@@ -229,9 +228,7 @@ export class DefaultMacosSiteRunner implements MacosSiteRunner {
 
       // Update health on failure
       try {
-        const { default: DatabaseCtor } = await import("better-sqlite3");
-        const { siteDbPath } = await import("./path-utils.js");
-        const db = new DatabaseCtor(siteDbPath(config.site_id));
+        const db = new Database(siteDbPath(config.site_id));
         const failCoordinator = new SqliteSiteCoordinator(db);
         try {
           const previousHealth = failCoordinator.getHealth(config.site_id);

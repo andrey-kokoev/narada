@@ -3,6 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "dependencies": {
+    "@narada2/mcp-transport": "workspace:*",
+    "@narada2/sqlite": "workspace:*"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "exports": {
     "./task-lifecycle-mcp-resolution": "./src/task-lifecycle-mcp-resolution.mjs"
   },

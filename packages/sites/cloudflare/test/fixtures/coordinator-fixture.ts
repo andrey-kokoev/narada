@@ -7,7 +7,7 @@
  */
 
 import { vi } from "vitest";
-import Database from "better-sqlite3";
+import Database from "@narada2/sqlite";
 import { NaradaSiteCoordinator } from "../../src/coordinator.js";
 import { createMockState } from "./mock-sqlite.js";
 import type { CycleCoordinator, SiteCoordinator } from "../../src/coordinator.js";
@@ -180,7 +180,7 @@ export function createMockSiteCoordinator(
 }
 
 /** Real SQLite-backed NaradaSiteCoordinator for schema-accurate integration tests. */
-export function createRealCoordinator(db?: Database.Database): NaradaSiteCoordinator {
+export function createRealCoordinator(db?: Database): NaradaSiteCoordinator {
   const database = db ?? new Database(":memory:");
   return new NaradaSiteCoordinator(createMockState(database));
 }

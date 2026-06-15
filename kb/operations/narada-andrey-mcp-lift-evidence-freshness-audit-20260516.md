@@ -10,7 +10,7 @@ Source Site inspected read-only: `C:/Users/Andrey/Narada`
 - `C:/Users/Andrey/Narada/site-lift/lift-catalog.json` - catalog mtime `2026-05-09 19:35:01`, advisory export manifest.
 - `C:/Users/Andrey/Narada/.ai/mcp/*.json` - generated client transport snippets, mtimes `2026-04-30` through `2026-05-08`.
 - `C:/Users/Andrey/Narada/tools/mcp-payload-file.mjs` and `.test.mjs` - payload/output-ref helper, mtimes `2026-05-14`.
-- Server/test source under `tools/typed-mcp`, `tools/task-lifecycle`, `tools/mcp-servers`, `tools/operator-surface`, `tools/capability-lifecycle`, `tools/site-lift`, `tools/site-probe`, `tools/site-connectivity`, `tools/site-identity`, `tools/agent-context`, and `tools/adoptable-deltas`.
+- Server/test source under `tools/typed-mcp`, `tools/task-lifecycle`, `tools/mcp-servers`, `tools/operator-surface`, `tools/capability-lifecycle`, `tools/site-lift`, `tools/site-probe`, `tools/site-connectivity`, `tools/site-identity`, and `tools/agent-context`.
 - Git evidence: latest relevant commit `7e9794b6ffb07f4154550ea1afdec16023f43445` at `2026-05-14T16:45:02-05:00`, `Define MCP ref composition contract`.
 
 ## Classification

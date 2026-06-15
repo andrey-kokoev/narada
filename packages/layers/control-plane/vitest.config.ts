@@ -1,6 +1,15 @@
 import { defineConfig } from 'vitest/config';
+import { resolve } from 'node:path';
 
 export default defineConfig({
+  resolve: {
+    alias: [
+      { find: /^sqlite$/, replacement: resolve(__dirname, 'src/sqlite/node-sqlite-shim.ts') },
+    ],
+  },
+  ssr: {
+    external: ['node:sqlite'],
+  },
   test: {
     globals: true,
     environment: 'node',

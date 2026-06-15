@@ -220,7 +220,6 @@ function New-NaradaSiteStartupContract {
         "$siteId-site-probe",
         "$siteId-site-connectivity",
         "$siteId-site-identity",
-        "$siteId-adoptable-deltas",
         "$siteId-filesystem",
         "$siteId-test",
         "$siteId-shell",

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import Database from "better-sqlite3";
+import Database from "@narada2/sqlite";
 import { NaradaSiteCoordinator } from "../../src/coordinator.js";
 import { runCycle } from "../../src/runner.js";
 import { R2Adapter } from "../../src/storage/r2-adapter.js";
@@ -83,7 +83,7 @@ function createMockEnv(coordinator: NaradaSiteCoordinator, bucket: R2Bucket): Cl
 // ---------------------------------------------------------------------------
 
 describe("Cloudflare Site smoke fixture", () => {
-  let db: Database.Database;
+  let db: Database;
   let coordinator: NaradaSiteCoordinator;
   let bucket: R2Bucket;
   let adapter: R2Adapter;

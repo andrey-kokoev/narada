@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import Database from "better-sqlite3";
+import Database from "../../../src/sqlite/database.js";
 import { SqliteCoordinatorStore } from "../../../src/coordinator/store.js";
 import { SqliteOutboundStore } from "../../../src/outbound/store.js";
 import { SqliteIntentStore } from "../../../src/intent/store.js";
@@ -10,7 +10,7 @@ import { TimerContextStrategy } from "../../../src/foreman/context.js";
 import type { Fact } from "../../../src/facts/types.js";
 
 describe("generalized work object model", () => {
-  let db: Database.Database;
+  let db: Database;
   let coordinatorStore: SqliteCoordinatorStore;
   let outboundStore: SqliteOutboundStore;
   let intentStore: SqliteIntentStore;

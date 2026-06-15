@@ -75,27 +75,13 @@ recordRun({
   stepTimings,
   classification,
   summary:
-    classification === "known-teardown-noise"
-      ? "Tests passed; known better-sqlite3 teardown noise at exit"
-      : result.exitStatus === 0
-        ? "Full suite passed"
-        : "Full suite failed",
+    result.exitStatus === 0
+      ? "Full suite passed"
+      : "Full suite failed",
 });
 
 printMetricsHint();
 
-if (result.exitStatus !== 0 && classification !== "known-teardown-noise") {
+if (result.exitStatus !== 0) {
   process.exit(1);
-}
-
-if (classification === "known-teardown-noise") {
-  console.log(
-    `\n${colors.yellow}⚠ Known teardown noise detected (${result.exitStatus}).${colors.reset}`,
-  );
-  console.log(
-    `${colors.dim}   This is a harmless better-sqlite3 cleanup artifact that occurs after all tests pass.${colors.reset}`,
-  );
-  console.log(
-    `${colors.dim}   It does not indicate a product regression. See AGENTS.md for details.${colors.reset}\n`,
-  );
 }

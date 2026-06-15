@@ -17,7 +17,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $RuntimeContractSchema = 'narada.runtime_substrate_kind.v1'
-$AdmittedRuntimeSubstrateKinds = @('kimi', 'codex', 'agent-cli')
+$AdmittedRuntimeSubstrateKinds = @('kimi', 'codex', 'agent-cli', 'agent-tui', 'pi', 'claude-code', 'opencode')
 
 function Get-RuntimeKindRefusal {
     param(

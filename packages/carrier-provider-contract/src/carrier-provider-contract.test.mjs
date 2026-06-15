@@ -36,6 +36,15 @@ test('provider environment uses provider-specific env precedence', () => {
   assert.equal(kimi.baseUrl, 'https://kimi.example');
   assert.equal(kimi.model, 'kimi-custom');
   assert.equal(kimi.apiKey, 'kimi-key');
+
+  const kimiCode = providerEnvironment('kimi-code-api', metadata, {
+    KIMI_CODE_API_KEY: 'kimi-code-key',
+    NARADA_AI_API_KEY: 'generic-key',
+  });
+
+  assert.equal(kimiCode.baseUrl, 'https://api.kimi.com/coding/');
+  assert.equal(kimiCode.model, 'kimi-k2.6');
+  assert.equal(kimiCode.apiKey, 'kimi-code-key');
 });
 
 test('provider adapter contract lists admitted carrier providers', () => {
@@ -44,8 +53,10 @@ test('provider adapter contract lists admitted carrier providers', () => {
   assert.deepEqual(admittedProviderNames(contract), [
     'codex-subscription',
     'kimi-api',
+    'kimi-code-api',
     'openai-api',
     'anthropic-api',
+    'deepseek-api',
   ]);
 });
 

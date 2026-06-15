@@ -1,4 +1,4 @@
-import Database from "better-sqlite3";
+import Database from "@narada2/sqlite";
 
 export class MockSqlStorageCursor<T extends Record<string, SqlStorageValue>> implements SqlStorageCursor<T> {
   private index = 0;
@@ -19,21 +19,22 @@ export class MockSqlStorageCursor<T extends Record<string, SqlStorageValue>> imp
 }
 
 export class MockSqlStorage implements SqlStorage {
-  private readonly db: Database.Database;
-  constructor(db: Database.Database) { this.db = db; }
+  private readonly db: Database;
+  constructor(db: Database) { this.db = db; }
   get databaseSize(): number { return 0; }
   exec<T extends Record<string, SqlStorageValue>>(query: string, ...bindings: unknown[]): SqlStorageCursor<T> {
+    const normalized = bindings.map((b) => (b === undefined ? null : b));
     const stmt = this.db.prepare(query);
     if (!query.trim().match(/^select\b/i)) {
-      stmt.run(...bindings);
+      stmt.run(...normalized);
       return new MockSqlStorageCursor<T>([]) as unknown as SqlStorageCursor<T>;
     }
-    const rows = stmt.all(...bindings) as T[];
+    const rows = stmt.all(...normalized) as T[];
     return new MockSqlStorageCursor<T>(rows) as unknown as SqlStorageCursor<T>;
   }
 }
 
-export function createMockState(db: Database.Database): DurableObjectState {
+export function createMockState(db: Database): DurableObjectState {
   const sql = new MockSqlStorage(db);
   return {
     storage: { sql, get: async () => undefined, put: async () => {}, delete: async () => {}, list: async () => new Map(), transaction: async (fn: () => Promise<void>) => fn() },

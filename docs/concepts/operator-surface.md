@@ -104,6 +104,19 @@ A v0 `SessionBinding` declaration should be able to carry:
 - Terminal tabs and windows may be Operator Surface adapters without being the canonical trace substrate.
 - Stable focus identity is ergonomic continuity, not proof that the correct authority locus was used.
 
+## Operator Surface Message Bus Posture
+
+The Operator Surface Message Bus is a development and observability projection surface. It may render traffic, power local diagnostics, and assist UI development, but it must not be used for production routing of reactive agent traffic.
+
+Specifically, the bus must not:
+
+- deliver messages to a reactor,
+- trigger reactor evaluation,
+- carry reactor proposals,
+- or carry outbound replies.
+
+Production reactors consume admitted facts or inbox envelopes from the Site durable substrate and route proposed effects through the canonical intent and outbox path. See [Reactor Pattern](reactor-pattern.md) for the target shape.
+
 ## Relationship To Site Embodiments
 
 Site `embodiments` declare where a Site is operationally present and how those presences relate to authority. Operator Surfaces live one layer above embodiments: they are addressable ways to inhabit, inspect, or recover work through an embodiment.

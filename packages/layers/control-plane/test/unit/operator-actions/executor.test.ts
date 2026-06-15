@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import Database from "../../../src/sqlite/database.js";
 import { SqliteOutboundStore } from "../../../src/outbound/store.js";
 import { SqliteCoordinatorStore } from "../../../src/coordinator/store.js";
 import { SqliteIntentStore } from "../../../src/intent/store.js";
@@ -53,10 +54,9 @@ describe("executeOperatorAction — approve_draft_for_send", () => {
   let coordinatorStore: SqliteCoordinatorStore;
   let outboundStore: SqliteOutboundStore;
   let intentStore: SqliteIntentStore;
-  let db: import("better-sqlite3").Database;
+  let db: Database;
 
   beforeEach(() => {
-    const Database = require("better-sqlite3");
     db = new Database(":memory:");
     coordinatorStore = new SqliteCoordinatorStore({ db });
     coordinatorStore.initSchema();
@@ -253,10 +253,9 @@ describe("executeOperatorAction — retry_auth_failed", () => {
   let coordinatorStore: SqliteCoordinatorStore;
   let outboundStore: SqliteOutboundStore;
   let intentStore: SqliteIntentStore;
-  let db: import("better-sqlite3").Database;
+  let db: Database;
 
   beforeEach(() => {
-    const Database = require("better-sqlite3");
     db = new Database(":memory:");
     coordinatorStore = new SqliteCoordinatorStore({ db });
     coordinatorStore.initSchema();

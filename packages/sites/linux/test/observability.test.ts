@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir, homedir } from "node:os";
 import { join } from "node:path";
-import Database from "better-sqlite3";
+import { Database } from "@narada2/control-plane";
 import type { LinuxSiteMode } from "../src/types.js";
 import {
   getLinuxSiteStatus,

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import Database from "better-sqlite3";
+import Database from "../../../src/sqlite/database.js";
 import { mkdtemp, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -28,7 +28,7 @@ import type { GraphDraftClient, DraftReadResult } from "../../../src/outbound/gr
 import type { ParticipantResolver } from "../../../src/outbound/send-reply-worker.js";
 
 describe("live operation smoke test — support-thread-login-issue", () => {
-  let db: Database.Database;
+  let db: Database;
   let coordinatorStore: SqliteCoordinatorStore;
   let outboundStore: SqliteOutboundStore;
   let intentStore: SqliteIntentStore;

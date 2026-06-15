@@ -1,4 +1,4 @@
-import Database from "better-sqlite3";
+import Database from "./src/sqlite/database.js";
 import { SqliteCoordinatorStore } from "./src/coordinator/store.js";
 import { SqliteOutboundStore } from "./src/outbound/store.js";
 

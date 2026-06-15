@@ -36,6 +36,10 @@ test('runtime substrate contract admits carrier substrates and codex isolation b
   assert.equal(contract.admitted_runtime_substrate_kinds.includes('codex'), true);
   assert.equal(contract.admitted_runtime_substrate_kinds.includes('agent-cli'), true);
   assert.equal(contract.admitted_runtime_substrate_kinds.includes('agent-tui'), true);
+  assert.equal(contract.admitted_runtime_substrate_kinds.includes('kimi'), true);
+  assert.equal(contract.admitted_runtime_substrate_kinds.includes('pi'), true);
+  assert.equal(contract.admitted_runtime_substrate_kinds.includes('claude-code'), true);
+  assert.equal(contract.admitted_runtime_substrate_kinds.includes('opencode'), true);
   assert.equal(contract.codex_context_isolation.runtime_substrate_kind, 'codex');
   assert.equal(contract.codex_context_isolation.forbidden_resume_modes.includes('codex resume --last'), true);
 });

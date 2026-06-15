@@ -59,6 +59,9 @@ export function classifyStep(exitStatus, stderr, stdout) {
 
   if (exitStatus === 0) return "success";
 
+  // After the migration from better-sqlite3 to node:sqlite, exit code 133
+  // and V8 teardown crash signatures are no longer expected as harmless
+  // teardown noise. Treat them as infrastructure failures.
   const teardownSignatures = [
     "Fatal JavaScript invalid size error",
     "V8_Fatal",
@@ -70,9 +73,6 @@ export function classifyStep(exitStatus, stderr, stdout) {
   );
 
   if (exitStatus === 133 || looksLikeTeardownCrash) {
-    if (hasTestSuitePassedEvidence(stderr, stdout)) {
-      return "known-teardown-noise";
-    }
     return "infrastructure-failure";
   }
 

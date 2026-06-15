@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
-import Database from "better-sqlite3";
+import Database from "../../../src/sqlite/database.js";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,7 +8,7 @@ import { SqliteProcessExecutionStore } from "../../../src/executors/store.js";
 import { DeliverableExecutor } from "../../../src/executors/deliverable-executor.js";
 
 describe("DeliverableExecutor", () => {
-  let db: Database.Database;
+  let db: Database;
   let intentStore: SqliteIntentStore;
   let executionStore: SqliteProcessExecutionStore;
   let siteRootDir: string;

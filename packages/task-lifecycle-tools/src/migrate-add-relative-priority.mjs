@@ -14,23 +14,7 @@
 
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { createRequire } from 'node:module';
-
-const require = createRequire(import.meta.url);
-
-function resolveBetterSqlite3() {
-  try { return require('better-sqlite3'); } catch {
-    try { return require(resolve(process.cwd(), 'node_modules', 'better-sqlite3')); } catch {
-      try { return require(resolve(process.cwd(), 'node_modules', '.pnpm', 'node_modules', 'better-sqlite3')); } catch {
-        try { return require(resolve(process.cwd(), 'tools', 'agent-context', 'node_modules', 'better-sqlite3')); } catch {
-          return require(resolve(process.cwd(), 'tools', 'incubation', 'node_modules', 'better-sqlite3'));
-        }
-      }
-    }
-  }
-}
-
-const Database = resolveBetterSqlite3();
+import Database from '@narada2/sqlite';
 
 const cwd = process.argv[2] || process.cwd();
 const dryRun = process.argv.includes('--dry-run');

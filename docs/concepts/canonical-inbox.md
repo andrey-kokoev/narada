@@ -18,6 +18,12 @@ and its intake edge have delivered or preserved material. The Inbox does not
 own the communication relation, UI projection, outbound reply path, or operator
 approval.
 
+## Reactors
+
+A [reactor](reactor-pattern.md) may submit proposed reactions as inbox envelopes. The envelope is inert until an authority admits it and converts it into an intent or outbound command. This lets an external agent reactor evaluate chat messages or other facts without bypassing the Intent boundary or the outbound worker.
+
+The reactor's charter governs what kinds of proposals it may submit, but the Inbox does not enforce the charter. Enforcement happens at admission or when the proposal is promoted into the control plane.
+
 ## CLI Surface
 
 ```bash

@@ -2,11 +2,11 @@
  * FTS5 Query Engine - search using SQLite FTS5
  */
 
-import type Database from 'better-sqlite3';
+import type Database from '@narada2/sqlite';
 import type { SearchQuery, SearchResult, SearchDocument } from './types.js';
 
 export interface Fts5QueryOptions {
-  db: Database.Database;
+  db: Database;
 }
 
 /**
@@ -61,7 +61,7 @@ function buildMatchExpression(query: SearchQuery): string {
 }
 
 export class Fts5QueryEngine {
-  private db: Database.Database;
+  private db: Database;
 
   constructor(options: Fts5QueryOptions) {
     this.db = options.db;

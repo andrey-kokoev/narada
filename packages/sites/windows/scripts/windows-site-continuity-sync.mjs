@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, win32, posix } from 'node:path';
 import { homedir } from 'node:os';
 import { stdin, stdout, stderr } from 'node:process';
-import Database from 'better-sqlite3';
+import Database from '@narada2/sqlite';
 import {
   SITE_CONTINUITY_EMBODIMENT_KINDS,
   SITE_CONTINUITY_EXCHANGE_CLASSES,
@@ -81,7 +81,7 @@ if (command === 'import-windows') {
 if (command === 'list-windows') {
   const siteId = requiredOption('--site');
   const dbPath = option('--registry') ?? resolveRegistryDbPath();
-  const db = new Database(dbPath, { readonly: false });
+  const db = new Database(dbPath);
   try {
     ensureContinuityPacketSchema(db);
     await writeJson(option('--out'), {

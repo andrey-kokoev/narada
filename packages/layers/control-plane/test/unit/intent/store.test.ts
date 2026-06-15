@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import Database from "better-sqlite3";
+import Database from "../../../src/sqlite/database.js";
 import { SqliteIntentStore } from "../../../src/intent/store.js";
 import type { Intent } from "../../../src/intent/types.js";
 
 describe("SqliteIntentStore", () => {
-  let db: Database.Database;
+  let db: Database;
   let store: SqliteIntentStore;
 
   beforeEach(() => {

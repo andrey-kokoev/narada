@@ -8,7 +8,7 @@
  * All stores share one SQLite database.
  */
 
-import type { Database } from "better-sqlite3";
+import type { Database } from "@narada2/control-plane";
 import {
   SqliteCoordinatorStore,
   SqliteOutboundStore,
@@ -73,7 +73,7 @@ export class WindowsCycleCoordinator {
     // Speed up first-time schema creation by disabling fsync during DDL.
     // Schema init can involve 20+ implicit transactions; with synchronous=FULL
     // each one fsyncs, causing 10–20s delays on slow filesystems.
-    const prevSync = this.db.pragma("synchronous", { simple: true }) as number;
+    const prevSync = this.db.pragma("synchronous") as number;
     this.db.pragma("synchronous = OFF");
     this.coordinatorStore.initSchema();
     this.outboundStore.initSchema();

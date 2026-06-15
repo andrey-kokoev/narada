@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import Database from "better-sqlite3";
+import Database from "@narada2/sqlite";
 import { SiteRegistry, RegisteredSite } from "../../src/registry.js";
 import {
   ControlRequestRouter,
@@ -35,7 +35,7 @@ function createThrowingClient(error: Error): SiteControlClient {
 
 describe("ControlRequestRouter", () => {
   let tempDir: string;
-  let db: Database.Database;
+  let db: Database;
   let registry: SiteRegistry;
 
   beforeEach(() => {

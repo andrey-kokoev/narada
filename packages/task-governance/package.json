@@ -113,9 +113,11 @@
     "test:governance": "vitest run test/lib/task-governance.test.ts --pool=forks --no-file-parallelism --maxWorkers=1 --minWorkers=1 --testTimeout=120000 --hookTimeout=120000"
   },
   "dependencies": {
+    "@narada2/mcp-transport": "workspace:*",
     "@narada2/task-governance-core": "link:../../../narada-core/packages/task-governance-core",
     "@narada2/control-plane": "workspace:*",
-    "@narada2/intent-zones": "workspace:*"
+    "@narada2/intent-zones": "workspace:*",
+    "@narada2/sqlite": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
@@ -123,6 +125,6 @@
     "vitest": "^1.0.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   }
 }

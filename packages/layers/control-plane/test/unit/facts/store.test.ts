@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import Database from "better-sqlite3";
+import Database from "../../../src/sqlite/database.js";
 import { SqliteFactStore } from "../../../src/facts/store.js";
 import type { FactType, FactProvenance } from "../../../src/facts/types.js";
 

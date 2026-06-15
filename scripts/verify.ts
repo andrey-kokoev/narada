@@ -66,15 +66,8 @@ for (const step of steps) {
     console.log(`${colors.green}✓${colors.reset} ${colors.dim}(${(result.durationMs / 1000).toFixed(1)}s)${colors.reset}`);
   } else {
     console.log(`${colors.red}✗${colors.reset}`);
-    const isTeardownNoise = stepClass === "known-teardown-noise";
-    if (isTeardownNoise) {
-      console.error(`\n${colors.yellow}--- ${step.name}: known teardown noise ---${colors.reset}`);
-      console.error(`${colors.dim}Tests passed, but the process exited with a harmless better-sqlite3 cleanup artifact.${colors.reset}`);
-      console.error(`${colors.dim}This is not a product regression. See AGENTS.md for details.${colors.reset}`);
-    } else {
-      console.error(`\n${colors.red}--- ${step.name} failed ---${colors.reset}`);
-      console.error(result.stderr || result.stdout || "Unknown error");
-    }
+    console.error(`\n${colors.red}--- ${step.name} failed ---${colors.reset}`);
+    console.error(result.stderr || result.stdout || "Unknown error");
     failed = true;
     failedStep = step.name;
     break;
@@ -90,8 +83,8 @@ function severity(c: ReturnType<typeof classifyStep>): number {
   switch (c) {
     case "assertion-failure": return 3;
     case "infrastructure-failure": return 2;
-    case "known-teardown-noise": return 1;
     case "success": return 0;
+    default: return 2;
   }
 }
 const classification = stepClassifications.reduce((worst, current) =>
@@ -107,20 +100,12 @@ recordRun({
   exitSignal: null,
   stepTimings,
   classification,
-  summary: classification === "known-teardown-noise"
-    ? `Known teardown noise at: ${failedStep}`
-    : failed ? `Failed at: ${failedStep}` : "All steps passed",
+  summary: failed ? `Failed at: ${failedStep}` : "All steps passed",
 });
 
 if (failed) {
-  if (classification === "known-teardown-noise") {
-    console.log(`${colors.yellow}⚠ Verification incomplete due to known teardown noise.${colors.reset}`);
-    console.log(`${colors.dim}The step that crashed (${failedStep}) passed its tests before the harmless cleanup artifact.${colors.reset}`);
-    console.log(`${colors.dim}You may re-run \`pnpm verify\` or escalate to package-scoped tests if needed.${colors.reset}`);
-  } else {
-    console.log(`${colors.red}Verification failed.${colors.reset}`);
-    console.log(`${colors.dim}Fix the failing step above, then run \`pnpm verify\` again.${colors.reset}`);
-  }
+  console.log(`${colors.red}Verification failed.${colors.reset}`);
+  console.log(`${colors.dim}Fix the failing step above, then run \`pnpm verify\` again.${colors.reset}`);
   printMetricsHint();
   process.exit(1);
 } else {

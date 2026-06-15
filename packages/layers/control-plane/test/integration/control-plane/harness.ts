@@ -1,4 +1,4 @@
-import Database from "better-sqlite3";
+import Database from "../../../src/sqlite/database.js";
 import { createTestDb } from "../../db-lifecycle.js";
 import { SqliteCoordinatorStore } from "../../../src/coordinator/store.js";
 import { SqliteOutboundStore } from "../../../src/outbound/store.js";
@@ -20,7 +20,7 @@ export function makeRuntimePolicy(overrides?: Partial<RuntimePolicy>): RuntimePo
 }
 
 export interface Harness {
-  db: Database.Database;
+  db: Database;
   coordinatorStore: SqliteCoordinatorStore;
   outboundStore: SqliteOutboundStore;
   intentStore: SqliteIntentStore;

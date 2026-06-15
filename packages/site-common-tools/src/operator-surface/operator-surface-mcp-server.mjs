@@ -3,7 +3,7 @@ import { spawn } from 'child_process';
 import { createHash } from 'crypto';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs';
 import { dirname, resolve, join, relative } from 'path';
-import { createRequire } from 'module';
+import Database from '@narada2/sqlite';
 import { fileURLToPath } from 'url';
 import net from 'net';
 import {
@@ -18,7 +18,6 @@ import { NARADA_USER_SITE_LOCUS, resolveDeprecatedNaradaAndreySiteLocus } from '
 import { buildOutputRefToolContent, enforceInlinePayloadLimit, resolveToolPayloadArgs } from '../mcp-payload-file.mjs';
 
 const PROTOCOL_VERSION = '2024-11-05';
-const require = createRequire(import.meta.url);
 
 let activeOutputToolName = null;
 
@@ -84,7 +83,6 @@ const operatorSurfaceRuntimeDbPath = join(pcSiteRoot, 'runtime', 'operator-surfa
 const oslPidPath = join(pcSiteRoot, 'runtime', 'window-surface-overlay.pid');
 const pcOverlayDir = join(pcSiteRoot, 'tools', 'window-surface-overlay');
 const yasbPipe = '\\\\.\\pipe\\yasb_pipe_cli';
-const Database = require(resolveBetterSqlite3());
 let operatorDb = null;
 let runtimeDb = null;
 
@@ -3355,21 +3353,6 @@ function probeNamedPipe(pipePath, timeoutMs) {
       resolve({ pipe: pipePath, accessible: false, timed_out: true });
     });
   });
-}
-
-function resolveBetterSqlite3() {
-  const candidates = [
-    join(siteRoot, 'node_modules', 'better-sqlite3'),
-    join(siteRoot, 'tools', 'agent-context', 'node_modules', 'better-sqlite3'),
-    join(siteRoot, 'tools', 'incubation', 'node_modules', 'better-sqlite3'),
-    join(repoRoot, 'node_modules', 'better-sqlite3'),
-    join(repoRoot, 'tools', 'agent-context', 'node_modules', 'better-sqlite3'),
-    join(repoRoot, 'tools', 'incubation', 'node_modules', 'better-sqlite3'),
-  ];
-  for (const candidate of candidates) {
-    if (existsSync(candidate)) return candidate;
-  }
-  throw new Error('better_sqlite3_not_found');
 }
 
 function openOperatorSurfaceDb() {

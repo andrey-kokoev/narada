@@ -43,7 +43,7 @@ for (const pkg of HEAVY_PACKAGES) {
   stepClassifications.push(stepClass);
   combinedStdout += result.stdout;
   combinedStderr += result.stderr;
-  if (result.exitStatus !== 0 && stepClass !== "known-teardown-noise") {
+  if (result.exitStatus !== 0) {
     failed = true;
   }
 }
@@ -66,7 +66,7 @@ const remainingClass = classifyStep(result.exitStatus, result.stderr, result.std
 stepClassifications.push(remainingClass);
 combinedStdout += result.stdout;
 combinedStderr += result.stderr;
-if (result.exitStatus !== 0 && remainingClass !== "known-teardown-noise") {
+if (result.exitStatus !== 0) {
   failed = true;
 }
 
@@ -74,13 +74,13 @@ const finishedAt = new Date().toISOString();
 const totalDuration = stepTimings.reduce((sum, s) => sum + s.durationMs, 0);
 
 // Overall classification: most severe among step classifications
-// precedence: assertion-failure > infrastructure-failure > known-teardown-noise > success
+// precedence: assertion-failure > infrastructure-failure > success
 function severity(c: ReturnType<typeof classifyStep>): number {
   switch (c) {
     case "assertion-failure": return 3;
     case "infrastructure-failure": return 2;
-    case "known-teardown-noise": return 1;
     case "success": return 0;
+    default: return 2;
   }
 }
 const classification = stepClassifications.reduce((worst, current) =>
@@ -96,11 +96,9 @@ recordRun({
   exitSignal: null,
   stepTimings,
   classification,
-  summary: classification === "known-teardown-noise"
-    ? "Tests passed; known better-sqlite3 teardown noise"
-    : classification === "success"
-      ? "All unit tests passed"
-      : "Some unit tests failed",
+  summary: classification === "success"
+    ? "All unit tests passed"
+    : "Some unit tests failed",
 });
 
 printMetricsHint();

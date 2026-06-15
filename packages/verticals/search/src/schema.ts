@@ -2,12 +2,12 @@
  * Database schema for FTS5 search
  */
 
-import type Database from 'better-sqlite3';
+import type Database from '@narada2/sqlite';
 
 /**
  * Initialize the FTS5 schema
  */
-export function initSchema(db: Database.Database): void {
+export function initSchema(db: Database): void {
   db.exec(`
     -- FTS5 virtual table for full-text search
     CREATE VIRTUAL TABLE IF NOT EXISTS message_search USING fts5(
@@ -51,7 +51,7 @@ export function initSchema(db: Database.Database): void {
 /**
  * Drop all search tables (for complete rebuild)
  */
-export function dropSchema(db: Database.Database): void {
+export function dropSchema(db: Database): void {
   db.exec(`
     DROP TABLE IF EXISTS message_search;
     DROP TABLE IF EXISTS message_index_meta;
@@ -62,13 +62,13 @@ export function dropSchema(db: Database.Database): void {
 /**
  * Optimize the FTS5 index
  */
-export function optimizeIndex(db: Database.Database): void {
+export function optimizeIndex(db: Database): void {
   db.exec("INSERT INTO message_search(message_search) VALUES('optimize')");
 }
 
 /**
  * Rebuild the FTS5 index
  */
-export function rebuildIndex(db: Database.Database): void {
+export function rebuildIndex(db: Database): void {
   db.exec("INSERT INTO message_search(message_search) VALUES('rebuild')");
 }

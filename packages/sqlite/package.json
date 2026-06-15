@@ -1,0 +1,49 @@
+{
+  "name": "@narada2/sqlite",
+  "version": "0.1.0",
+  "description": "Node.js built-in SQLite binding wrapper with a better-sqlite3-compatible API",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/sqlite"
+  },
+  "keywords": [
+    "narada",
+    "sqlite",
+    "node:sqlite"
+  ],
+  "author": "Narada <team@narada.dev>",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.3.0"
+  },
+  "homepage": "https://github.com/andrey-kokoev/narada",
+  "bugs": {
+    "url": "https://github.com/andrey-kokoev/narada/issues"
+  }
+}

@@ -35,3 +35,7 @@ The default visibility posture is `operator_visible`. Carrier input normalizatio
 - Suppressed interjections still emit session evidence.
 
 This keeps observation useful without turning the observer into an autoimmune repair daemon.
+
+## Reactor Distinction
+
+A [reactor](reactor-pattern.md) is not a Conversation Observer. A reactor evaluates admitted facts against a charter and may propose an effect. An observer is read-only. Conflating the two would let an observer smuggle effect authority into a read-only role.

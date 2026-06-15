@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import Database from "better-sqlite3";
+import Database from "../../../src/sqlite/database.js";
 import { SqliteCoordinatorStore } from "../../../src/coordinator/store.js";
 import { SqliteScheduler } from "../../../src/scheduler/scheduler.js";
 import type { WorkItem } from "../../../src/coordinator/types.js";
 
 describe("SqliteScheduler", () => {
-  let db: Database.Database;
+  let db: Database;
   let store: SqliteCoordinatorStore;
   let scheduler: SqliteScheduler;
 

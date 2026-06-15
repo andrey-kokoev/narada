@@ -18,7 +18,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import Database from "better-sqlite3";
+import Database from "@narada2/sqlite";
 import { SqliteCoordinatorStore } from "@narada2/control-plane";
 import { SqliteOutboundStore } from "@narada2/control-plane";
 
@@ -56,7 +56,7 @@ function makeMissingInfoFact(overrides?: Partial<FixtureMailFact>): FixtureMailF
 }
 
 describe("Email Marketing Operation Integration Proof (Task 393)", () => {
-  let db: Database.Database;
+  let db: Database;
   let coordinatorStore: SqliteCoordinatorStore;
   let outboundStore: SqliteOutboundStore;
 

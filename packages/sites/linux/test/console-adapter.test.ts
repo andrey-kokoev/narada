@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import Database from "better-sqlite3";
+import { Database } from "@narada2/control-plane";
 import type { RegisteredSite } from "@narada2/windows-site";
 import {
   linuxSiteAdapter,
@@ -279,7 +279,7 @@ describe("LinuxSiteControlClient", () => {
     workItem?: { work_item_id: string; status: string; error_message?: string | null };
   }): LinuxSiteControlContextFactory {
     return async () => {
-      const dbClose = { close: () => undefined } as Database.Database;
+      const dbClose = { close: () => undefined } as Database;
       const operatorRequests: Array<Record<string, unknown>> = [];
       const outboundTransitions: Array<Record<string, unknown>> = [];
       const updatedCommands: Array<Record<string, unknown>> = [];

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import Database from "better-sqlite3";
+import Database from "../../../src/sqlite/database.js";
 import { SqliteProcessExecutionStore } from "../../../src/executors/store.js";
 import { SqliteIntentStore } from "../../../src/intent/store.js";
 import { SqliteOutboundStore } from "../../../src/outbound/store.js";
@@ -11,7 +11,7 @@ import {
 
 describe("ConfirmationResolver", () => {
   describe("ProcessConfirmationResolver", () => {
-    let db: Database.Database;
+    let db: Database;
     let executionStore: SqliteProcessExecutionStore;
     let resolver: ProcessConfirmationResolver;
 
@@ -159,7 +159,7 @@ describe("ConfirmationResolver", () => {
   });
 
   describe("MailConfirmationResolver", () => {
-    let db: Database.Database;
+    let db: Database;
     let outboundStore: SqliteOutboundStore;
     let intentStore: SqliteIntentStore;
     let resolver: MailConfirmationResolver;
@@ -350,7 +350,7 @@ describe("ConfirmationResolver", () => {
   });
 
   describe("CompositeConfirmationResolver", () => {
-    let db: Database.Database;
+    let db: Database;
     let executionStore: SqliteProcessExecutionStore;
     let outboundStore: SqliteOutboundStore;
     let intentStore: SqliteIntentStore;

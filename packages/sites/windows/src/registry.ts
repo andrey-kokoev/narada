@@ -11,7 +11,7 @@ import { win32, posix } from "node:path";
 import { homedir } from "node:os";
 import { readdirSync, existsSync, readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
-import type { Database } from "better-sqlite3";
+import type { Database } from "@narada2/control-plane";
 import type { WindowsAuthorityLocus, WindowsSiteVariant, SiteVariant } from "./types.js";
 import {
   classifySiteContinuityExchangePacket,
@@ -658,6 +658,6 @@ export class SiteRegistry {
 export async function openRegistryDb(dbPath: string): Promise<Database> {
   const { dirname } = await import("node:path");
   await mkdir(dirname(dbPath), { recursive: true });
-  const Database = (await import("better-sqlite3")).default;
-  return new Database(dbPath);
+  const { Database: DatabaseCtor } = await import("@narada2/control-plane");
+  return new DatabaseCtor(dbPath) as Database;
 }

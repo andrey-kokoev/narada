@@ -170,6 +170,22 @@ export interface Evaluation {
   created_at: string;
 }
 
+/** Durable record of a reactor evaluation output */
+export interface ReactorOutputRow {
+  output_id: string;
+  reactor_id: string;
+  charter_id: string;
+  context_id: string;
+  scope_id: string;
+  evaluated_at: string;
+  outcome: string;
+  confidence_json: string;
+  summary: string;
+  proposals_json: string;
+  escalation_json: string | null;
+  created_at: string;
+}
+
 /** Durable record of a tool invocation */
 export type ToolCallStatus =
   | "pending"
@@ -279,6 +295,12 @@ export interface CoordinatorStore {
   getEvaluationByExecutionId(executionId: string): Evaluation | undefined;
   getEvaluationsByWorkItem(workItemId: string): Evaluation[];
   getEvaluationsByContext(contextId: string, scopeId: string): Evaluation[];
+
+  // Reactor outputs
+  insertReactorOutput(output: ReactorOutputRow): void;
+  getReactorOutputById(outputId: string): ReactorOutputRow | undefined;
+  getReactorOutputsByContext(contextId: string, scopeId: string): ReactorOutputRow[];
+  getReactorOutputsByReactor(reactorId: string, limit?: number): ReactorOutputRow[];
 
   // Agent sessions
   insertAgentSession(session: AgentSession): void;

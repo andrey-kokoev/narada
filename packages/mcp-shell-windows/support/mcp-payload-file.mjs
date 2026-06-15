@@ -1,1 +1,1 @@
-export * from '../../mcp-transport/src/mcp-payload-file.mjs';
+export * from '@narada2/mcp-transport';

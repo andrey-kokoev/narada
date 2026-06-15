@@ -13,7 +13,7 @@ const naradaProperRoot = resolve(packageRoot, '..', '..');
 const fixtureRegistryPath = join(__dirname, 'fixtures', 'launch-registry.psd1');
 const packagedLauncherPath = join(naradaProperRoot, 'packages', 'agent-start', 'src', 'narada-agent-start.ts');
 const tsxLoaderPath = pathToFileURL(require.resolve('tsx')).href;
-const admittedCarrierMatrix = Object.freeze(['agent-cli', 'agent-tui', 'codex']);
+const admittedCarrierMatrix = Object.freeze(['agent-cli', 'agent-tui', 'codex', 'opencode']);
 const requiredFields = Object.freeze(['Agent', 'NaradaRoot', 'WorkspaceRoot', 'SiteRoot', 'Launcher', 'Runtime']);
 const nonNaradaProperSites = Object.freeze([
   'narada-andrey',

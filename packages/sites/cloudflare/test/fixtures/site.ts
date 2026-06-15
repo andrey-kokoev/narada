@@ -1,11 +1,11 @@
-import Database from "better-sqlite3";
+import Database from "@narada2/sqlite";
 import { NaradaSiteCoordinator } from "../../src/coordinator.js";
 import { createMockState } from "./mock-sqlite.js";
 
 export interface SiteFixture {
   siteId: string;
   coordinator: NaradaSiteCoordinator;
-  db: Database.Database;
+  db: Database;
 
   seedContext(contextId: string, scopeId: string, primaryCharter: string): void;
   seedWorkItem(workItemId: string, contextId: string, scopeId: string, status: string): void;

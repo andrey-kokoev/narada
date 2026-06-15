@@ -37,7 +37,7 @@ for (const pkg of INTEGRATION_PACKAGES) {
   });
   const stepClass = classifyStep(result.exitStatus, result.stderr, result.stdout);
   stepClassifications.push(stepClass);
-  if (result.exitStatus !== 0 && stepClass !== "known-teardown-noise") {
+  if (result.exitStatus !== 0) {
     failed = true;
   }
 }
@@ -49,8 +49,8 @@ function severity(c: ReturnType<typeof classifyStep>): number {
   switch (c) {
     case "assertion-failure": return 3;
     case "infrastructure-failure": return 2;
-    case "known-teardown-noise": return 1;
     case "success": return 0;
+    default: return 2;
   }
 }
 const classification = stepClassifications.reduce((worst, current) =>
@@ -66,11 +66,9 @@ recordRun({
   exitSignal: null,
   stepTimings,
   classification,
-  summary: classification === "known-teardown-noise"
-    ? "Tests passed; known better-sqlite3 teardown noise"
-    : classification === "success"
-      ? "All integration tests passed"
-      : "Some integration tests failed",
+  summary: classification === "success"
+    ? "All integration tests passed"
+    : "Some integration tests failed",
 });
 
 printMetricsHint();

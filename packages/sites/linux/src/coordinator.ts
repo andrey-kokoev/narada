@@ -1,4 +1,4 @@
-import type { Database } from "better-sqlite3";
+import type { Database } from "@narada2/control-plane";
 import type { SiteHealthRecord, CycleTraceRecord, LinuxSiteMode } from "./types.js";
 import { siteDbPath } from "./path-utils.js";
 
@@ -182,7 +182,7 @@ export async function openCoordinatorDb(
   siteId: string,
   mode: LinuxSiteMode
 ): Promise<Database> {
-  const { default: DatabaseCtor } = await import("better-sqlite3");
+  const { Database: DatabaseCtor } = await import("@narada2/control-plane");
   const dbPath = siteDbPath(siteId, mode);
   return new DatabaseCtor(dbPath) as Database;
 }

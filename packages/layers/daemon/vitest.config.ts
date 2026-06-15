@@ -9,7 +9,7 @@ export default defineConfig({
     hookTimeout: 30000,
     server: {
       deps: {
-        inline: ['better-sqlite3', '@narada2/control-plane'],
+        inline: ['@narada2/control-plane'],
       },
     },
   },

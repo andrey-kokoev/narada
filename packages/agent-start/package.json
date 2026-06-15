@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "type": "module",
   "private": true,
+  "dependencies": {
+    "@narada2/agent-context-mcp": "workspace:*"
+  },
   "bin": {
     "narada-agent-start": "./src/narada-agent-start.ts",
     "narada-agent-start-verify-launchers": "./bin/verify-registered-site-launchers.mjs"

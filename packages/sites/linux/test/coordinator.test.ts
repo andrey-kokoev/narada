@@ -2,11 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import Database from "better-sqlite3";
+import { Database } from "@narada2/control-plane";
 import { SqliteSiteCoordinator } from "../src/coordinator.js";
 
 describe("SqliteSiteCoordinator", () => {
-  let db: Database.Database;
+  let db: Database;
   let coordinator: SqliteSiteCoordinator;
   const dbPath = join(tmpdir(), `narada-linux-coord-test-${Date.now()}.db`);
 

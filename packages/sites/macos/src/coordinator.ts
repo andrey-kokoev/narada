@@ -1,4 +1,4 @@
-import type { Database } from "better-sqlite3";
+import Database from "@narada2/sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { SiteHealthRecord, CycleTraceRecord } from "./types.js";
@@ -178,7 +178,5 @@ export class SqliteSiteCoordinator implements MacosSiteCoordinator {
 export function openCoordinatorDb(siteId: string): Database {
   const dbPath = siteDbPath(siteId);
   mkdirSync(dirname(dbPath), { recursive: true });
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const DatabaseCtor = require("better-sqlite3");
-  return new DatabaseCtor(dbPath);
+  return new Database(dbPath);
 }

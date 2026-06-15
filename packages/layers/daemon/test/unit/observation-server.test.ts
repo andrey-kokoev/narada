@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import { get, request as httpRequest } from "node:http";
-import Database from "better-sqlite3";
+import Database from "@narada2/sqlite";
 import {
   SqliteCoordinatorStore,
   SqliteOutboundStore,

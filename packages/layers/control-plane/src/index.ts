@@ -923,3 +923,45 @@ export type {
   VerifyMicrosoftAuthOptions,
   VerifyMicrosoftAuthResult,
 } from "./operator-actions/microsoft-auth.js";
+
+
+// Reactor pattern: fact consumers that evaluate against a charter and may propose effects
+export {
+  DefaultReactorRegistry,
+  InKernelReactor,
+  AgentReactorBridge,
+  governReactorOutput,
+  materializeProposal,
+  materializeApprovedProposals,
+} from "./reactor/index.js";
+export type {
+  Reactor,
+  ReactorId,
+  ReactorCharter,
+  ReactorTrigger,
+  ReactorRule,
+  ReactorRuleCondition,
+  ReactorRuleConsequence,
+  ReactorProposalKind,
+  ReactorConfidence,
+  ReactorInput,
+  ReactorOutput,
+  ReactorProposal,
+  ReactorGovernanceResult,
+  ReactorRegistry,
+  ReactorRegistryOptions,
+  InKernelReactorOptions,
+  AgentReactorRuntime,
+  AgentReactorBridgeOptions,
+  ReactorGovernanceOptions,
+  MaterializeProposalOptions,
+} from "./reactor/index.js";
+
+export {
+  buildReactorOutputRow,
+  persistReactorOutput,
+} from "./reactor/index.js";
+
+export {
+  NodeSqliteReactorOutputStore,
+} from "./reactor/index.js";

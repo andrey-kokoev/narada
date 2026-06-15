@@ -57,7 +57,7 @@ export class DefaultLinuxSiteRunner implements LinuxSiteRunner {
     try {
       await ensureSiteDir(config.site_id, config.mode);
 
-      const { default: DatabaseCtor } = await import("better-sqlite3");
+      const { Database: DatabaseCtor } = await import("@narada2/control-plane");
       const db = new DatabaseCtor(siteDbPath(config.site_id, config.mode));
       const coordinator = new SqliteSiteCoordinator(db);
 
@@ -138,7 +138,7 @@ export class DefaultLinuxSiteRunner implements LinuxSiteRunner {
 
       // Update health on failure
       try {
-        const { default: DatabaseCtor } = await import("better-sqlite3");
+        const { Database: DatabaseCtor } = await import("@narada2/control-plane");
         const db = new DatabaseCtor(siteDbPath(config.site_id, config.mode));
         const failCoordinator = new SqliteSiteCoordinator(db);
         try {

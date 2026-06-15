@@ -56,6 +56,15 @@ packages/layers/control-plane/
 │   │   └── views.ts             # Derived projections
 │   ├── projector/               # Event application
 │   │   └── apply-event.ts       # applyEvent() function
+│   ├── reactor/                 # Reactor pattern: fact consumers that may propose effects
+│   │   ├── types.ts             # Reactor, ReactorCharter, ReactorOutput, ReactorProposal
+│   │   ├── registry.ts          # ReactorRegistry and DefaultReactorRegistry
+│   │   ├── evaluator.ts         # InKernelReactor (mechanical, in-kernel)
+│   │   ├── agent-bridge.ts      # AgentReactorBridge (external agent runtime)
+│   │   ├── governance.ts        # governReactorOutput()
+│   │   ├── proposals.ts         # materializeProposal(), materializeApprovedProposals()
+│   │   ├── persist.ts           # persistReactorOutput() runtime integration
+│   │   └── index.ts             # Public reactor API
 │   ├── recovery/                # Crash recovery
 │   │   └── cleanup-tmp.ts       # Temp file cleanup
 │   ├── scheduler/               # Work-item scheduler and lease manager
@@ -117,6 +126,13 @@ packages/layers/control-plane/
 | [`src/foreman/handoff.ts`](src/foreman/handoff.ts) | `OutboundHandoff` — atomic decision → outbound command transaction |
 | [`src/charter/index.ts`](src/charter/index.ts) | `CharterRunner`, `buildInvocationEnvelope`, `buildEvaluationRecord` (runner returns output only) |
 | [`src/charter/envelope.ts`](src/charter/envelope.ts) | `persistEvaluation` — runtime integration responsibility; daemon dispatch persists before `foreman.resolveWorkItem()` |
+| [`src/reactor/index.ts`](src/reactor/index.ts) | Reactor public API: `Reactor`, `ReactorCharter`, `InKernelReactor`, `AgentReactorBridge`, `governReactorOutput`, proposal materialization |
+| [`src/reactor/evaluator.ts`](src/reactor/evaluator.ts) | `InKernelReactor` — mechanical, deterministic in-kernel reactor |
+| [`src/reactor/agent-bridge.ts`](src/reactor/agent-bridge.ts) | `AgentReactorBridge` — boundary for external agent runtime reactors |
+| [`src/reactor/governance.ts`](src/reactor/governance.ts) | `governReactorOutput()` — bounds reactor proposals before admission |
+| [`src/reactor/proposals.ts`](src/reactor/proposals.ts) | `materializeProposal()` — converts approved proposals to inbox envelopes |
+| [`src/reactor/persist.ts`](src/reactor/persist.ts) | `persistReactorOutput()` — runtime integration that writes reactor outputs to coordinator store |
+| [`src/coordinator/types.ts`](src/coordinator/types.ts) | `ReactorOutputRow` — durable reactor output schema |
 | [`src/outbound/types.ts`](src/outbound/types.ts) | `OutboundCommand`, `OutboundVersion`, state machine transitions |
 | [`src/outbound/store.ts`](src/outbound/store.ts) | `SqliteOutboundStore` — commands, versions, managed drafts |
 | [`src/outbound/send-reply-worker.ts`](src/outbound/send-reply-worker.ts) | Draft creation, reuse, and send worker |

@@ -23,15 +23,7 @@
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-let Database;
-try {
-  const bs3 = await import('better-sqlite3');
-  Database = bs3.default;
-} catch (error) {
-  console.error('[FAIL] better-sqlite3 is not installed. Run: npm install');
-  process.exit(1);
-}
+import Database from '@narada2/sqlite';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = join(__dirname, '..', '..');

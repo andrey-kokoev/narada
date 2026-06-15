@@ -2,13 +2,13 @@
  * FTS5 Indexer - builds and maintains the search index
  */
 
-import type Database from 'better-sqlite3';
+import type Database from '@narada2/sqlite';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { SearchDocument, IndexerStats } from './types.js';
 
 export interface Fts5IndexerOptions {
-  db: Database.Database;
+  db: Database;
 }
 
 /**
@@ -61,7 +61,7 @@ async function loadDocument(recordPath: string, messageId: string): Promise<Sear
 }
 
 export class Fts5Indexer {
-  private db: Database.Database;
+  private db: Database;
 
   constructor(options: Fts5IndexerOptions) {
     this.db = options.db;

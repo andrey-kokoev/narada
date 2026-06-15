@@ -93,7 +93,7 @@ async function previewForScope(
   const coordinatorDbPath = join(dbDir, 'coordinator.db');
   const factsDbPath = join(dbDir, 'facts.db');
 
-  // Lazy-load better-sqlite3 to avoid eager native-module load
+  // Lazy-load SQLite driver to avoid eager native-module load
   const {
     Database,
     SqliteCoordinatorStore,

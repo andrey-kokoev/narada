@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import Database from "better-sqlite3";
+import Database from "../../../src/sqlite/database.js";
 import { mkdtemp, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -230,7 +230,7 @@ const scenarioRunners: Record<string, CharterRunner> = {
 };
 
 describe("mailbox scenario library — evaluation and resolution shapes", () => {
-  let db: Database.Database;
+  let db: Database;
   let coordinatorStore: SqliteCoordinatorStore;
   let outboundStore: SqliteOutboundStore;
   let intentStore: SqliteIntentStore;

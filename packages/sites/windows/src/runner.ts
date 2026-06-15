@@ -75,7 +75,7 @@ export class DefaultWindowsSiteRunner implements WindowsSiteRunner {
     try {
       await ensureSiteDir(config.site_id, config.variant);
 
-      const { default: DatabaseCtor } = await import("better-sqlite3");
+      const { Database: DatabaseCtor } = await import("@narada2/control-plane");
       const { siteDbPath } = await import("./path-utils.js");
       const db = new DatabaseCtor(siteDbPath(config.site_id, config.variant));
       const coordinator = new WindowsCycleCoordinator(db);
@@ -265,7 +265,7 @@ export class DefaultWindowsSiteRunner implements WindowsSiteRunner {
 
       // Update health on failure
       try {
-        const { default: DatabaseCtor } = await import("better-sqlite3");
+        const { Database: DatabaseCtor } = await import("@narada2/control-plane");
         const { siteDbPath } = await import("./path-utils.js");
         const db = new DatabaseCtor(siteDbPath(config.site_id, config.variant));
         const failCoordinator = new WindowsCycleCoordinator(db);
@@ -326,7 +326,7 @@ export class DefaultWindowsSiteRunner implements WindowsSiteRunner {
     // Best-effort trace write if not already done
     if (stepResults.length === 0) {
       try {
-        const { default: DatabaseCtor } = await import("better-sqlite3");
+        const { Database: DatabaseCtor } = await import("@narada2/control-plane");
         const { siteDbPath } = await import("./path-utils.js");
         const db = new DatabaseCtor(siteDbPath(config.site_id, config.variant));
         const traceCoordinator = new WindowsCycleCoordinator(db);

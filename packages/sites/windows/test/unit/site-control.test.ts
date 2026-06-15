@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import Database from "better-sqlite3";
+import Database from "@narada2/sqlite";
 import { SiteRegistry } from "../../src/registry.js";
 import {
   WindowsSiteControlClient,
@@ -14,7 +14,7 @@ import { ControlRequestRouter } from "../../src/router.js";
 
 describe("WindowsSiteControlClient", () => {
   let tempDir: string;
-  let db: Database.Database;
+  let db: Database;
   let registry: SiteRegistry;
 
   let originalSiteRoot: string | undefined;
@@ -55,7 +55,7 @@ describe("WindowsSiteControlClient", () => {
     workItem?: { work_item_id: string; status: string; error_message?: string | null };
   }): WindowsSiteControlContextFactory {
     return async () => {
-      const dbClose = { close: () => undefined } as Database.Database;
+      const dbClose = { close: () => undefined } as Database;
       const operatorRequests: Array<Record<string, unknown>> = [];
       const outboundTransitions: Array<Record<string, unknown>> = [];
       const updatedCommands: Array<Record<string, unknown>> = [];

@@ -99,9 +99,16 @@ function loadSiteEnvFile(path) {
   }
 }
 
+function siteNaradaRoot(siteRoot) {
+  const normalized = resolve(String(siteRoot ?? ''));
+  return normalized.toLowerCase().endsWith('\\.narada') || normalized.toLowerCase().endsWith('/.narada')
+    ? normalized
+    : join(normalized, '.narada');
+}
+
 function loadSiteEnvFiles(siteRoot) {
   loadSiteEnvFile(join(siteRoot, '.env'));
-  loadSiteEnvFile(join(siteRoot, '.narada', '.env'));
+  loadSiteEnvFile(join(siteNaradaRoot(siteRoot), '.env'));
 }
 
 function parseArgs(argv) {
@@ -138,9 +145,14 @@ if ((args.runtime ?? 'kimi') !== 'agent-tui') {
   runNaradaProperLegacyLauncherIfNeeded(process.argv.slice(2), rootDir, NARADA_PROPER_ROOT);
 }
 const candidateSiteToolsRoot = args.site_tools_root ?? join(rootDir, 'tools');
-const siteLocalToolsRoot = join(rootDir, '.narada', 'tools');
+const siteLocalToolsRoot = join(siteNaradaRoot(rootDir), 'tools');
 const packagedCommonToolsRoot = join(NARADA_PROPER_ROOT, 'packages', 'site-common-tools', 'src');
-const packagedAgentContextSessionStartPath = join(NARADA_PROPER_ROOT, 'packages', 'agent-context-tools', 'src', 'session-start.mjs');
+let packagedAgentContextSessionStartPath;
+try {
+  packagedAgentContextSessionStartPath = require.resolve('@narada2/agent-context-mcp/session-start');
+} catch {
+  packagedAgentContextSessionStartPath = join(NARADA_PROPER_ROOT, 'packages', 'agent-context-tools', 'src', 'session-start.mjs');
+}
 const commonToolsRoot = existsSync(join(candidateSiteToolsRoot, 'incubation', 'write-file-utf8.mjs'))
   ? candidateSiteToolsRoot
   : existsSync(join(siteLocalToolsRoot, 'incubation', 'write-file-utf8.mjs'))
@@ -320,6 +332,17 @@ function resolveToolFabricAdapter(runtimeName) {
       adapter_entrypoint: 'claude --mcp-config',
       expected_tools: ['agent_context_startup_sequence', 'mcp_output_show', 'task_lifecycle_next', 'task_lifecycle_un_defer'],
       states: ['runtime_known', 'adapter_selected', 'source_declared', 'native_mcp_config_required', 'launch_ready'],
+    };
+  }
+  if (runtimeName === 'opencode') {
+    return {
+      schema: TOOL_FABRIC_ADAPTER_CONTRACT_SCHEMA,
+      tool_fabric_adapter_kind: 'ambient-carrier-tools',
+      tool_fabric_source: 'substrate-native',
+      runtime_substrate_kind: runtimeName,
+      adapter_entrypoint: null,
+      expected_tools: [],
+      states: ['runtime_known', 'adapter_selected', 'no_narada_mcp_claim'],
     };
   }
   return {
@@ -612,11 +635,11 @@ function agentCliSessionName(identityName) {
 }
 
 function siteCarrierControlPath(sessionId) {
-  return join(sessionSiteRoot, '.narada', 'crew', 'nars-sessions', sessionId, 'control.jsonl');
+  return join(siteNaradaRoot(sessionSiteRoot), 'crew', 'nars-sessions', sessionId, 'control.jsonl');
 }
 
 function siteCarrierSessionPath(sessionId) {
-  return join(sessionSiteRoot, '.narada', 'crew', 'nars-sessions', sessionId, 'session.jsonl');
+  return join(siteNaradaRoot(sessionSiteRoot), 'crew', 'nars-sessions', sessionId, 'session.jsonl');
 }
 
 function materializeCarrierLaunchFiles(sessionId, startingCarrierInput) {
@@ -732,6 +755,9 @@ function resolveRuntimeCommand(runtimeName) {
   }
   if (runtimeName === 'claude-code') {
     return process.env.NARADA_CLAUDE_CODE_COMMAND ?? DEFAULT_CLAUDE_CODE_COMMAND;
+  }
+  if (runtimeName === 'opencode') {
+    return process.env.NARADA_OPENCODE_COMMAND ?? 'opencode';
   }
   return runtimeName;
 }
@@ -1122,6 +1148,10 @@ function buildSpawnArgs(runtime, identity, capabilityPolicy = {}, providerResolu
     ];
   }
 
+  if (runtime === 'opencode') {
+    return [];
+  }
+
   const spawnArgs = ['-S', identity];
   if (yoloFlag) {
     spawnArgs.push('-y');
@@ -1267,7 +1297,7 @@ const carrierActions = {
   codex_mcp_registration: codexMcpRegistrationStatus(identity, startResult.agent_start_event),
 };
 
-if (runtime !== 'kimi') {
+if (runtime !== 'kimi' && runtime !== 'opencode') {
   try {
     mcpFabric = loadSiteMcpFabric(sessionSiteRoot, { required: true, validateRegistry: true });
   } catch (error) {
@@ -1296,6 +1326,9 @@ const requiredEnvironment = {
   ...(runtime === 'claude-code' ? {
     NARADA_CLAUDE_CODE_COMMAND: process.env.NARADA_CLAUDE_CODE_COMMAND ?? DEFAULT_CLAUDE_CODE_COMMAND,
     NARADA_CLAUDE_CODE_MODEL: process.env.NARADA_CLAUDE_CODE_MODEL ?? DEFAULT_CLAUDE_CODE_MODEL,
+  } : {}),
+  ...(runtime === 'opencode' ? {
+    NARADA_OPENCODE_COMMAND: process.env.NARADA_OPENCODE_COMMAND ?? 'opencode',
   } : {}),
   NARADA_AGENT_ID: identity,
   NARADA_AGENT_START_EVENT_ID: startResult.agent_start_event,
@@ -1350,7 +1383,7 @@ const output = {
   intelligence_provider_resolution: intelligenceProviderResolution,
   required_environment: requiredEnvironment,
   would_set_environment: startResult.would_set_environment
-    ? { ...startResult.would_set_environment, ...carrierEnvironment, ...intelligenceProviderEnv, ...agentTuiEnvironment, ...(runtime === 'pi' ? { NARADA_PI_COMMAND: process.env.NARADA_PI_COMMAND ?? 'pi', NARADA_PI_PROVIDER: process.env.NARADA_PI_PROVIDER ?? DEFAULT_PI_PROVIDER, NARADA_PI_MODEL: process.env.NARADA_PI_MODEL ?? DEFAULT_PI_MODEL } : {}), ...(runtime === 'claude-code' ? { NARADA_CLAUDE_CODE_COMMAND: process.env.NARADA_CLAUDE_CODE_COMMAND ?? DEFAULT_CLAUDE_CODE_COMMAND, NARADA_CLAUDE_CODE_MODEL: process.env.NARADA_CLAUDE_CODE_MODEL ?? DEFAULT_CLAUDE_CODE_MODEL } : {}), NARADA_AGENT_ID: identity, NARADA_AGENT_START_EVENT_ID: startResult.agent_start_event, NARADA_SITE_ROOT: environmentSiteRoot,
+    ? { ...startResult.would_set_environment, ...carrierEnvironment, ...intelligenceProviderEnv, ...agentTuiEnvironment, ...(runtime === 'pi' ? { NARADA_PI_COMMAND: process.env.NARADA_PI_COMMAND ?? 'pi', NARADA_PI_PROVIDER: process.env.NARADA_PI_PROVIDER ?? DEFAULT_PI_PROVIDER, NARADA_PI_MODEL: process.env.NARADA_PI_MODEL ?? DEFAULT_PI_MODEL } : {}), ...(runtime === 'claude-code' ? { NARADA_CLAUDE_CODE_COMMAND: process.env.NARADA_CLAUDE_CODE_COMMAND ?? DEFAULT_CLAUDE_CODE_COMMAND, NARADA_CLAUDE_CODE_MODEL: process.env.NARADA_CLAUDE_CODE_MODEL ?? DEFAULT_CLAUDE_CODE_MODEL } : {}), ...(runtime === 'opencode' ? { NARADA_OPENCODE_COMMAND: process.env.NARADA_OPENCODE_COMMAND ?? 'opencode' } : {}), NARADA_AGENT_ID: identity, NARADA_AGENT_START_EVENT_ID: startResult.agent_start_event, NARADA_SITE_ROOT: environmentSiteRoot,
   NARADA_WORKSPACE_ROOT: workspaceRoot, NARADA_AGENT_CONTEXT_DB: dbPath }
     : startResult.would_set_environment,
   carrier_session: carrierSessionRegistration,
@@ -1400,6 +1433,9 @@ const child = spawn(resolveRuntimeCommand(runtime), spawnArgs, {
     ...(runtime === 'claude-code' ? {
       NARADA_CLAUDE_CODE_COMMAND: process.env.NARADA_CLAUDE_CODE_COMMAND ?? DEFAULT_CLAUDE_CODE_COMMAND,
       NARADA_CLAUDE_CODE_MODEL: process.env.NARADA_CLAUDE_CODE_MODEL ?? DEFAULT_CLAUDE_CODE_MODEL,
+    } : {}),
+    ...(runtime === 'opencode' ? {
+      NARADA_OPENCODE_COMMAND: process.env.NARADA_OPENCODE_COMMAND ?? 'opencode',
     } : {}),
     NARADA_AGENT_ID: identity,
     NARADA_AGENT_START_EVENT_ID: startResult.agent_start_event,

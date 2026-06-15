@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import Database from "better-sqlite3";
+import Database from "@narada2/sqlite";
 import { createScopeService, createSyncService } from "../../src/service.js";
 import { createLogger } from "../../src/lib/logger.js";
 import {
@@ -122,7 +122,8 @@ describe("releaseActiveLeases", () => {
     await scopeService.dispatchContext.getObservationApiScope();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await scopeService.dispatchContext.close();
     rmSync(rootDir, { recursive: true, force: true });
   });
 

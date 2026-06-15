@@ -21,7 +21,7 @@ beforeEach(() => {
 });
 
 // Database lifecycle: close all tracked databases after each test file
-// to prevent better-sqlite3 V8 fatal crashes during process teardown.
+// to prevent node:sqlite teardown issues during process exit.
 import { closeAllTestDatabases } from "./db-lifecycle.js";
 
 afterAll(() => {

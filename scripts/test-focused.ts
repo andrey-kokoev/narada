@@ -205,24 +205,13 @@ recordRun({
   ],
   classification,
   summary:
-    classification === "known-teardown-noise"
-      ? "Tests passed; known better-sqlite3 teardown noise"
-      : classification === "success"
-        ? "Focused test passed"
-        : "Focused test failed",
+    classification === "success"
+      ? "Focused test passed"
+      : "Focused test failed",
 });
 
 printMetricsHint();
 
-if (result.exitStatus !== 0 && classification !== "known-teardown-noise") {
+if (result.exitStatus !== 0) {
   process.exit(result.exitStatus ?? 1);
-}
-
-if (classification === "known-teardown-noise") {
-  console.log(
-    `\n${colors.yellow}⚠ Known teardown noise detected (${result.exitStatus}).${colors.reset}`,
-  );
-  console.log(
-    `${colors.dim}   This is a harmless better-sqlite3 cleanup artifact that occurs after all tests pass.${colors.reset}`,
-  );
 }

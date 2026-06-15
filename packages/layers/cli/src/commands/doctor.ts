@@ -1,4 +1,3 @@
-import { createRequire } from 'node:module';
 import { dirname, resolve, join } from 'node:path';
 import { access, readFile, stat } from 'node:fs/promises';
 import type { CommandContext } from '../lib/command-wrapper.js';
@@ -7,7 +6,7 @@ import { createFormatter } from '../lib/formatter.js';
 import { inspectAuthorityClonePosture } from '../lib/narada-proper-authority.js';
 import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig, loadCharterEnv, loadEnvFile } from '@narada2/control-plane';
 import { CodexCharterRunner, MockCharterRunner, KimiCliCharterRunner, getRecoveryGuidance } from '@narada2/charters';
-import { selectSqliteRuntime } from '@narada2/task-governance-core/sqlite-runtime';
+import { detectNodeSqliteAvailability, selectSqliteRuntime } from '@narada2/task-governance-core/sqlite-runtime';
 
 export interface DoctorOptions {
   config?: string;
@@ -379,41 +378,26 @@ async function doctorBootstrap(
       : undefined,
   });
 
-  try {
-    const requireFromRoot = createRequire(join(root, 'package.json'));
-    const Database = requireFromRoot('better-sqlite3') as typeof import('better-sqlite3');
-    const db = new Database(':memory:');
-    db.close();
-    checks.push({
-      name: 'better-sqlite3-native',
-      status: 'pass',
-      detail: 'better-sqlite3 native binding loads',
-    });
-  } catch (error) {
-    checks.push({
-      name: 'better-sqlite3-native',
-      status: 'fail',
-      detail: error instanceof Error ? error.message : String(error),
-      remediation: 'Run `pnpm rebuild better-sqlite3` or reinstall with native build scripts enabled.',
-      remediation_command: 'pnpm rebuild better-sqlite3',
-      remediation_args: ['pnpm', 'rebuild', 'better-sqlite3'],
-    });
-  }
-
-  const sqlitePosture = selectSqliteRuntime({
-    betterSqlite3Available: checks.find((check) => check.name === 'better-sqlite3-native')?.status === 'pass',
+  const nodeSqliteAvailable = detectNodeSqliteAvailability();
+  checks.push({
+    name: 'node-sqlite-available',
+    status: nodeSqliteAvailable ? 'pass' : 'fail',
+    detail: nodeSqliteAvailable
+      ? 'node:sqlite built-in module is available'
+      : 'node:sqlite built-in module is unavailable',
+    remediation: nodeSqliteAvailable
+      ? undefined
+      : 'Use Node.js 22 or later with the node:sqlite built-in module enabled.',
   });
+
+  const sqlitePosture = selectSqliteRuntime({ nodeSqliteAvailable });
   checks.push({
     name: 'sqlite-runtime-posture',
     status: sqlitePosture.supported ? 'pass' : 'fail',
     detail: `${sqlitePosture.selected}; ${sqlitePosture.reason}`,
     remediation: sqlitePosture.remediation,
-    remediation_command: sqlitePosture.remediation?.includes('pnpm rebuild better-sqlite3')
-      ? 'pnpm rebuild better-sqlite3'
-      : undefined,
-    remediation_args: sqlitePosture.remediation?.includes('pnpm rebuild better-sqlite3')
-      ? ['pnpm', 'rebuild', 'better-sqlite3']
-      : undefined,
+    remediation_command: undefined,
+    remediation_args: undefined,
   });
 
   const repairPlan = checks

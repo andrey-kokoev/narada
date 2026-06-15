@@ -2441,7 +2441,7 @@ function inspectInboxReadiness(cwdInput: string, inboxDbPath: unknown): Record<s
     inbox_db_accessible: inboxDbAccessible,
     inbox_db_detail: inboxDbDetail,
     sqlite_binding_loaded: true,
-    sqlite_binding_detail: 'better-sqlite3 loaded by CLI process',
+    sqlite_binding_detail: 'node:sqlite loaded by CLI process',
     cli_build_present: existsSync(cliBuildPath),
     cli_build_detail: existsSync(cliBuildPath) ? cliBuildPath : `${cliBuildPath} missing; run pnpm --filter @narada2/cli build`,
   };

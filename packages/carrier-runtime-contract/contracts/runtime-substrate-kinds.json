@@ -6,7 +6,8 @@
     "agent-cli",
     "pi",
     "claude-code",
-    "agent-tui"
+    "agent-tui",
+    "opencode"
   ],
   "codex_context_isolation": {
     "runtime": "codex",

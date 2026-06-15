@@ -2,7 +2,7 @@
  * Database connection management for FTS5 search
  */
 
-import Database from 'better-sqlite3';
+import Database from '@narada2/sqlite';
 import { join } from 'node:path';
 
 export interface DatabaseOptions {
@@ -13,7 +13,7 @@ export interface DatabaseOptions {
 /**
  * Create and configure the search database
  */
-export function createSearchDb(options: DatabaseOptions): Database.Database {
+export function createSearchDb(options: DatabaseOptions): Database {
   const dbPath = options.databasePath || join(options.rootDir, '.search.db');
   const db = new Database(dbPath);
 
@@ -29,7 +29,7 @@ export function createSearchDb(options: DatabaseOptions): Database.Database {
 /**
  * Close database connection safely
  */
-export function closeSearchDb(db: Database.Database): void {
+export function closeSearchDb(db: Database): void {
   try {
     db.close();
   } catch {
