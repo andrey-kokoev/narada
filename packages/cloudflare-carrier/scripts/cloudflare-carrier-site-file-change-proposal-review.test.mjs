@@ -542,6 +542,8 @@ test('formatSiteFileChangeProposalReviewText surfaces review ack command', () =>
   assert.match(text, /Requested Posture: proposal_only_no_filesystem_write/);
   assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
   assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text/);
   assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
   assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
   assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
@@ -596,7 +598,10 @@ test('formatSiteFileChangeProposalReviewText suppresses review ack without site 
     },
   });
 
-  assert.equal(text.includes('Review Ack:'), false);
+  assert.equal(text.includes('Site Read:'), false);
+  assert.equal(text.includes('Site Next Workflow:'), false);
+  assert.equal(text.includes('Posture Coherence Review:'), false);
+  assert.equal(text.includes('Durability Coherence Review:'), false);
   assert.equal(text.includes('Site Read:'), false);
   assert.equal(text.includes('Site Next Workflow:'), false);
 });
