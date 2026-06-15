@@ -86,6 +86,7 @@ export function parseSiteActionWorkflowLiveArgs(argv = [], env = process.env) {
 }
 
 export function formatSiteActionWorkflowLiveText(result) {
+  const delegatedResult = result.delegated_result ?? null;
   const lines = [
     `Site Action Workflow: ${result.status}`,
     `Worker: ${result.worker_url}`,
@@ -116,6 +117,20 @@ export function formatSiteActionWorkflowLiveText(result) {
       lines.push(`Durability Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text -- --url ${result.worker_url} --site ${result.site_id} --operator-session-file <operator-session-file>`);
       lines.push(`Review Ack: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result.worker_url} --site ${result.site_id} --operation-id ${operationId} --focus-kind ${operationFocusKind ?? 'site_continuity_reconciliation_execution'} --focus-ref ${operationFocusRef} --operator-session-file <operator-session-file>`);
     }
+  }
+  if (delegatedResult && (result.delegated_action === 'bind_cloudflare_product_next_site_locally' || result.delegated_workflow === 'prepare_next_site_binding')) {
+    if (delegatedResult.target_site_id) lines.push(`Binding Target Site: ${delegatedResult.target_site_id}`);
+    if (delegatedResult.packet_id) lines.push(`Binding Packet: ${delegatedResult.packet_id}`);
+    if (delegatedResult.output_path) lines.push(`Prepared Packet: ${delegatedResult.output_path}`);
+    if (delegatedResult.materialize_hint) lines.push(`Materialize Registry: ${delegatedResult.materialize_hint}`);
+  }
+  if (delegatedResult && (result.delegated_action === 'publish_cloudflare_continuity_packet' || result.delegated_workflow === 'publish_continuity_packet')) {
+    const publishSummary = delegatedResult.summary ?? delegatedResult;
+    if (publishSummary.packet_id) lines.push(`Published Packet: ${publishSummary.packet_id}`);
+    if (publishSummary.packet_admission_action) {
+      lines.push(`Packet Admission: ${publishSummary.packet_admission_action}${publishSummary.packet_admission_reason ? ` reason=${publishSummary.packet_admission_reason}` : ''}`);
+    }
+    if (publishSummary.durability_action) lines.push(`Publish Durability: ${publishSummary.durability_action}`);
   }
   if (result.delegated_followup_result) {
     lines.push('Follow-up: executed');

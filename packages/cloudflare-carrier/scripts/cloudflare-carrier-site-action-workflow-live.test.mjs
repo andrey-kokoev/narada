@@ -86,6 +86,61 @@ test('formatSiteActionWorkflowLiveText renders direct reads', () => {
   assert.match(text, /Follow-up: executed/);
 });
 
+test('formatSiteActionWorkflowLiveText renders delegated continuity binding handoff', () => {
+  const text = formatSiteActionWorkflowLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    site_id: 'site_alpha',
+    delegated_workflow: 'prepare_next_site_binding',
+    delegated_action: 'bind_cloudflare_product_next_site_locally',
+    read_before_action: {
+      next_action: 'bind_cloudflare_product_next_site_locally',
+    },
+    read_after_action: {
+      next_action: 'monitor_site',
+    },
+    delegated_result: {
+      target_site_id: 'site_beta',
+      packet_id: 'site-continuity-packet-v1-site_beta',
+      output_path: 'D:/code/narada/.narada/site-continuity/packets/site_beta-packet.json',
+      materialize_hint: 'pnpm --filter @narada2/cloudflare-carrier continuity:bindings -- --packet D:/code/narada/.narada/site-continuity/packets/site_beta-packet.json',
+    },
+  });
+
+  assert.match(text, /Binding Target Site: site_beta/);
+  assert.match(text, /Binding Packet: site-continuity-packet-v1-site_beta/);
+  assert.match(text, /Prepared Packet: D:\/code\/narada\/.narada\/site-continuity\/packets\/site_beta-packet\.json/);
+  assert.match(text, /Materialize Registry: pnpm --filter @narada2\/cloudflare-carrier continuity:bindings -- --packet D:\/code\/narada\/.narada\/site-continuity\/packets\/site_beta-packet\.json/);
+});
+
+test('formatSiteActionWorkflowLiveText renders delegated continuity publish summary', () => {
+  const text = formatSiteActionWorkflowLiveText({
+    status: 'ok',
+    worker_url: 'https://carrier.example',
+    site_id: 'site_alpha',
+    delegated_workflow: 'publish_continuity_packet',
+    delegated_action: 'publish_cloudflare_continuity_packet',
+    read_before_action: {
+      next_action: 'publish_cloudflare_continuity_packet',
+    },
+    read_after_action: {
+      next_action: 'monitor_site',
+    },
+    delegated_result: {
+      summary: {
+        packet_id: 'packet-alpha',
+        packet_admission_action: 'imported',
+        packet_admission_reason: 'site_continuity_packet_imported',
+        durability_action: 'refreshed_existing_packet',
+      },
+    },
+  });
+
+  assert.match(text, /Published Packet: packet-alpha/);
+  assert.match(text, /Packet Admission: imported reason=site_continuity_packet_imported/);
+  assert.match(text, /Publish Durability: refreshed_existing_packet/);
+});
+
 test('formatSiteActionWorkflowLiveText suppresses scoped handoffs without site id', () => {
   const text = formatSiteActionWorkflowLiveText({
     status: 'ok',
