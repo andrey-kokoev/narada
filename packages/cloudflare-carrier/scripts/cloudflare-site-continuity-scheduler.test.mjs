@@ -342,8 +342,11 @@ test('site continuity scheduled health reports binding preparation readiness wit
   assert.equal(missingRefs.reason, 'site_continuity_binding_refs_missing');
   assert.equal(missingRefs.target_site_id, 'site_beta');
   assert.deepEqual(missingRefs.required_inputs, ['local_site_ref', 'cloudflare_site_ref']);
+  assert.equal(missingRefs.local_site_ref, null);
+  assert.equal(missingRefs.cloudflare_site_ref, null);
   assert.equal(missingRefs.local_site_ref_available, false);
   assert.equal(missingRefs.cloudflare_site_ref_available, false);
+  assert.equal(missingRefs.prepare_command, null);
   assert.equal(missingRefs.embeds_credentials, false);
 
   const ready = summarizeCloudflareProductBindingPreparation({
@@ -360,8 +363,31 @@ test('site continuity scheduled health reports binding preparation readiness wit
   assert.equal(ready.state, 'ready');
   assert.equal(ready.status, 'ok');
   assert.deepEqual(ready.required_inputs, []);
+  assert.equal(ready.local_site_ref, 'file:///D:/code/narada');
+  assert.equal(ready.cloudflare_site_ref, 'cloudflare://site-beta');
   assert.equal(ready.local_site_ref_available, true);
   assert.equal(ready.cloudflare_site_ref_available, true);
+  assert.equal(ready.prepare_command, 'pnpm --filter @narada2/cloudflare-carrier continuity:bindings:prepare-next -- --local-site-ref file:///D:/code/narada --cloudflare-site-ref cloudflare://site-beta');
+});
+
+test('site continuity scheduler text emits concrete binding preparation handoff when refs are ready', () => {
+  const text = formatSiteContinuitySchedulerResultForText({
+    status: 'needs_attention',
+    action: 'health',
+    cloudflare_product_binding_preparation: {
+      state: 'ready',
+      status: 'ok',
+      reason: 'site_continuity_binding_refs_available',
+      target_site_id: 'site_beta',
+      required_inputs: [],
+      local_site_ref: 'file:///D:/code/narada',
+      cloudflare_site_ref: 'cloudflare://site-beta',
+      prepare_command: 'pnpm --filter @narada2/cloudflare-carrier continuity:bindings:prepare-next -- --local-site-ref file:///D:/code/narada --cloudflare-site-ref cloudflare://site-beta',
+    },
+  });
+
+  assert.match(text, /Binding Preparation: ready target=site_beta reason=site_continuity_binding_refs_available/);
+  assert.match(text, /Binding Packet Prepare: pnpm --filter @narada2\/cloudflare-carrier continuity:bindings:prepare-next -- --local-site-ref file:\/\/\/D:\/code\/narada --cloudflare-site-ref cloudflare:\/\/site-beta/);
 });
 
 test('site continuity reconciliation plan resolves one packet per configured site from packet directory', async () => {
@@ -2088,6 +2114,9 @@ test('site continuity scheduled health reports remote product next-site outside 
     assert.equal(healthSummary.cloudflare_product_binding_preparation_status, 'needs_attention');
     assert.equal(healthSummary.cloudflare_product_binding_preparation_reason, 'site_continuity_binding_refs_missing');
     assert.deepEqual(healthSummary.cloudflare_product_binding_preparation_required_inputs, ['local_site_ref', 'cloudflare_site_ref']);
+    assert.equal(healthSummary.cloudflare_product_binding_preparation_local_site_ref, null);
+    assert.equal(healthSummary.cloudflare_product_binding_preparation_cloudflare_site_ref, null);
+    assert.equal(healthSummary.cloudflare_product_binding_preparation_prepare_command, null);
     assert.equal(healthSummary.operator_next_action, 'bind_cloudflare_product_next_site_locally');
     assert.equal(healthSummary.operator_next_target_site_id, 'site_beta');
     assert.equal(healthSummary.operator_next_reason, 'cloudflare_product_next_site_not_in_local_continuity_set');

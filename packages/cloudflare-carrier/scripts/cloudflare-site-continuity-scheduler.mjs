@@ -528,6 +528,18 @@ export function formatSiteContinuitySchedulerResultForText(result) {
   const localInboundPackets = result?.local_inbound_packets ?? null;
   const lastScheduledHealth = result?.last_scheduled_health ?? null;
   const lastReconciliationExecution = result?.last_reconciliation_execution ?? null;
+  const bindingPreparation = result?.cloudflare_product_binding_preparation ?? (lastScheduledHealth
+    ? {
+      state: lastScheduledHealth.cloudflare_product_binding_preparation_state ?? null,
+      status: lastScheduledHealth.cloudflare_product_binding_preparation_status ?? null,
+      reason: lastScheduledHealth.cloudflare_product_binding_preparation_reason ?? null,
+      target_site_id: lastScheduledHealth.operator_next_target_site_id ?? null,
+      required_inputs: lastScheduledHealth.cloudflare_product_binding_preparation_required_inputs ?? [],
+      local_site_ref: lastScheduledHealth.cloudflare_product_binding_preparation_local_site_ref ?? null,
+      cloudflare_site_ref: lastScheduledHealth.cloudflare_product_binding_preparation_cloudflare_site_ref ?? null,
+      prepare_command: lastScheduledHealth.cloudflare_product_binding_preparation_prepare_command ?? null,
+    }
+    : null);
   const productPosture = result?.cloudflare_product_posture ?? lastScheduledHealth ?? null;
   const operatorAction = result?.operator_next_action ?? lastScheduledHealth?.operator_next_action ?? null;
   const operatorTarget = result?.operator_next_target_site_id ?? lastScheduledHealth?.operator_next_target_site_id ?? null;
@@ -578,6 +590,15 @@ export function formatSiteContinuitySchedulerResultForText(result) {
     }
   }
   if (operatorAction) lines.push(`Operator Next: ${operatorAction} target=${operatorTarget ?? 'none'} reason=${operatorReason ?? 'none'}`);
+  if (bindingPreparation?.state || bindingPreparation?.status) {
+    lines.push(`Binding Preparation: ${bindingPreparation.state ?? 'unknown'} target=${bindingPreparation.target_site_id ?? 'none'} reason=${bindingPreparation.reason ?? 'none'}`);
+    if (Array.isArray(bindingPreparation.required_inputs) && bindingPreparation.required_inputs.length > 0) {
+      lines.push(`Binding Preparation Inputs: ${bindingPreparation.required_inputs.join(', ')}`);
+    }
+    if (bindingPreparation.prepare_command) {
+      lines.push(`Binding Packet Prepare: ${bindingPreparation.prepare_command}`);
+    }
+  }
   if (lastSync?.continuity_loop_report_id) {
     lines.push(`Loop Report: ${lastSync.continuity_loop_report_id}`);
   }
@@ -1024,6 +1045,9 @@ export function summarizeCloudflareProductBindingPreparation({
     : missingInputs.length > 0
       ? 'blocked_missing_refs'
       : 'ready';
+  const prepareCommand = state === 'ready'
+    ? `pnpm --filter @narada2/cloudflare-carrier continuity:bindings:prepare-next -- --local-site-ref ${localSiteRef} --cloudflare-site-ref ${cloudflareSiteRef}`
+    : null;
   return {
     schema: 'narada.cloudflare_carrier.product_binding_preparation.v1',
     state,
@@ -1036,10 +1060,13 @@ export function summarizeCloudflareProductBindingPreparation({
     target_site_id: targetSiteId,
     operator_action: operatorAction,
     required_inputs: missingInputs,
+    local_site_ref: localSiteRef,
+    cloudflare_site_ref: cloudflareSiteRef,
     local_site_ref_available: Boolean(localSiteRef),
     cloudflare_site_ref_available: Boolean(cloudflareSiteRef),
     local_site_record_state: localRecord ? 'found' : 'missing',
     cloudflare_site_projection_state: projectedRecord ? 'found' : 'missing',
+    prepare_command: prepareCommand,
     command_hint: operatorAction
       ? 'pnpm --filter @narada2/cloudflare-carrier continuity:bindings:prepare-next -- --local-site-ref <file-or-site-ref> --cloudflare-site-ref <cloudflare-site-ref>'
       : null,
@@ -2123,6 +2150,9 @@ export function readLastScheduledHealthSnapshot(outputPath) {
     cloudflare_product_binding_preparation_status: artifact.cloudflare_product_binding_preparation?.status ?? null,
     cloudflare_product_binding_preparation_reason: artifact.cloudflare_product_binding_preparation?.reason ?? null,
     cloudflare_product_binding_preparation_required_inputs: artifact.cloudflare_product_binding_preparation?.required_inputs ?? [],
+    cloudflare_product_binding_preparation_local_site_ref: artifact.cloudflare_product_binding_preparation?.local_site_ref ?? null,
+    cloudflare_product_binding_preparation_cloudflare_site_ref: artifact.cloudflare_product_binding_preparation?.cloudflare_site_ref ?? null,
+    cloudflare_product_binding_preparation_prepare_command: artifact.cloudflare_product_binding_preparation?.prepare_command ?? null,
     operator_next_action: operatorNextAction.action,
     operator_next_target_site_id: operatorNextAction.target_site_id,
     operator_next_reason: operatorNextAction.reason,
