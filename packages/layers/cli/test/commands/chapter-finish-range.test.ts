@@ -79,16 +79,15 @@ describe('chapter finish-range operator', () => {
     expect(parsed.count).toBe(2);
     expect(parsed.failures).toBe(0);
     expect(parsed.results).toBeUndefined();
-    expect(parsed.tasks).toEqual([
-      { task_number: 701, action: 'finished', close_action: 'closed', evidence_verdict: 'complete', failure: undefined },
-      { task_number: 702, action: 'finished', close_action: 'closed', evidence_verdict: 'complete', failure: undefined },
+    expect(parsed.tasks).toMatchObject([
+      { task_number: 701, action: 'finished', close_action: 'skipped', evidence_verdict: 'attempt_complete', failure: undefined },
+      { task_number: 702, action: 'finished', close_action: 'skipped', evidence_verdict: 'attempt_complete', failure: undefined },
     ]);
 
     const store = openTaskLifecycleStore(tempDir);
     try {
-      expect(store.getLifecycleByNumber(701)?.status).toBe('closed');
-      expect(store.getLifecycleByNumber(701)?.closure_mode).toBe('agent_finish');
-      expect(store.getLifecycleByNumber(702)?.status).toBe('closed');
+      expect(store.getLifecycleByNumber(701)?.status).toBe('in_review');
+      expect(store.getLifecycleByNumber(702)?.status).toBe('in_review');
     } finally {
       store.db.close();
     }

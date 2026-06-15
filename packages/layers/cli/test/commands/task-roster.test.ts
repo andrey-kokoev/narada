@@ -505,12 +505,17 @@ describe('task roster operator', () => {
       expect(entry?.status).toBe('reviewing');
       expect(entry?.task).toBe(370);
 
-      // Assignment record created with review intent (released immediately)
-      const assignment = await loadAssignment(tempDir, '20260420-370-test');
-      expect(assignment).not.toBeNull();
-      expect(assignment.assignments).toHaveLength(1);
-      expect(assignment.assignments[0].intent).toBe('review');
-      expect(assignment.assignments[0].released_at).not.toBeNull();
+      // Review intent recorded as a released task_assignment row
+      const store = openTaskLifecycleStore(tempDir);
+      let reviewAssignment;
+      try {
+        const assignments = store.getAssignments('20260420-370-test');
+        reviewAssignment = assignments.find((a) => a.intent === 'review');
+      } finally {
+        store.db.close();
+      }
+      expect(reviewAssignment).toBeDefined();
+      expect(reviewAssignment!.released_at).not.toBeNull();
     });
   });
 

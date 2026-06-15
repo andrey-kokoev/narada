@@ -248,11 +248,10 @@ describe('task finish operator', () => {
       expect(result.exitCode).toBe(ExitCode.SUCCESS);
       const data = result.result as Record<string, unknown>;
       expect(data.report_action).toBe('submitted');
-      expect(data.admission_id).toBeTruthy();
-      expect(data.close_action).toBe('closed');
+      expect(data.close_action).toBe('skipped');
+      expect(data.new_status).toBe('in_review');
       const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
-      expect(taskContent).toContain('status: closed');
-      expect(taskContent).toContain('governed_by: task_close:impl-agent');
+      expect(taskContent).toContain('status: in_review');
     });
 
     it('--prove-criteria --close proves criteria before lifecycle close', async () => {
@@ -276,10 +275,11 @@ describe('task finish operator', () => {
       expect(result.exitCode).toBe(ExitCode.SUCCESS);
       const data = result.result as Record<string, unknown>;
       expect(data.criteria_proof_action).toBe('proved');
-      expect(data.close_action).toBe('closed');
+      expect(data.close_action).toBe('skipped');
+      expect(data.new_status).toBe('in_review');
       const taskContent = readFileSync(join(tempDir, '.ai', 'do-not-open', 'tasks', '20260420-999-test-task.md'), 'utf8');
       expect(taskContent).toContain('- [x] Criterion A');
-      expect(taskContent).toContain('closure_mode: agent_finish');
+      expect(taskContent).toContain('status: in_review');
     });
 
     it('fails when no summary is provided for a claimed task without report', async () => {

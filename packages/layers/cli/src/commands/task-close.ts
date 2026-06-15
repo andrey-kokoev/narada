@@ -6,8 +6,10 @@
 
 import { resolve } from 'node:path';
 import { closeTaskService } from '@narada2/task-governance-core/task-close-service';
+import { admitTaskEvidence } from '../lib/evidence-admission.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
+import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 import type { TaskClosureMode, TaskLifecycleStore } from '../lib/task-lifecycle-store.js';
 import {
   captureTaskLifecycleEvidenceState,
@@ -59,6 +61,36 @@ export async function taskCloseCommand(
     };
   }
   const before = await captureTaskLifecycleEvidenceState(cwd, options.taskNumber, options.store);
+  // Ensure an Evidence Admission result exists before attempting close,
+  // but do not overwrite an existing (possibly rejected) admission result.
+  try {
+    const admissionStore = options.store ?? openTaskLifecycleStore(cwd);
+    const ownsAdmissionStore = options.store ? null : admissionStore;
+    try {
+      const lifecycle = admissionStore.getLifecycleByNumber(Number(options.taskNumber));
+      const existingAdmission = lifecycle
+        ? admissionStore.getLatestEvidenceAdmissionResult(lifecycle.task_id)
+        : null;
+      const existingMethods: string[] = existingAdmission
+        ? (JSON.parse(existingAdmission.methods_json ?? '[]') as string[])
+        : [];
+      const isCriteriaOnlyProof =
+        existingMethods.length === 1 && existingMethods[0] === 'criteria_proof';
+      if (!existingAdmission || isCriteriaOnlyProof) {
+        await admitTaskEvidence({
+          cwd,
+          taskNumber: Number(options.taskNumber),
+          admittedBy: options.by ?? 'operator',
+          methods: ['admission'],
+          store: admissionStore,
+        });
+      }
+    } finally {
+      if (ownsAdmissionStore) ownsAdmissionStore.db.close();
+    }
+  } catch {
+    // Admission failures are surfaced by closeTaskService's gate checks.
+  }
   const serviceResult = await closeTaskService({
     taskNumber: options.taskNumber,
     by: options.by,

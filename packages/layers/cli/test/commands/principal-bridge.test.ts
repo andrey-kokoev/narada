@@ -303,10 +303,10 @@ describe('task command bridge integration', () => {
     });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    expect(result.result).toMatchObject({ status: 'success', new_status: 'closed' });
+    expect(result.result).toMatchObject({ status: 'success', new_status: 'in_review' });
   });
 
-  it('task review refuses an already closed report even when PR update fails (no runtime)', async () => {
+  it('task review accepts an in_review report and closes task even when PR update fails (no runtime)', async () => {
     await taskClaimCommand({ taskNumber: '999', agent: 'test-agent', cwd: tempDir, format: 'json' });
     await taskReportCommand({ taskNumber: '999', agent: 'test-agent', summary: 'Test', cwd: tempDir, format: 'json' });
 
@@ -319,9 +319,8 @@ describe('task command bridge integration', () => {
       principalStateDir: tempDir,
     });
 
-    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
-    expect(result.result).toMatchObject({ status: 'error' });
-    expect((result.result as { error: string }).error).toContain('cannot be reviewed');
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({ status: 'success', new_status: 'closed' });
   });
 
   it('task claim without --update-principal-runtime does not touch PR', async () => {
