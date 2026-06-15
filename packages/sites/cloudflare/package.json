@@ -11,7 +11,7 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   },
   "repository": {
     "type": "git",
@@ -42,7 +42,8 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260421.1",
-    "better-sqlite3": "^12.9.0",
+    "@narada2/sqlite": "workspace:*",
+    "@types/node": "^22.0.0",
     "typescript": "^5.3.0",
     "vitest": "^1.0.0"
   },
