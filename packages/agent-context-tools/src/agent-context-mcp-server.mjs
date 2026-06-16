@@ -99,6 +99,14 @@ const SERVER_NAME = 'narada-andrey-agent-context-mcp';
 const SERVER_VERSION = '0.0.2';
 const SERVER_BOOTED_AT = new Date().toISOString();
 
+// Opencode's native MCP client validates tool results against an outputSchema when present
+// and requires a matching structuredContent field. Startup/hydration tools return a large
+// JSON object, so we inline the human-readable content and mirror the payload in
+// structuredContent with a permissive schema.
+const STARTUP_TOOL_INLINE_LIMIT = 100_000;
+const PERMISSIVE_OBJECT_OUTPUT_SCHEMA = { type: 'object', additionalProperties: true };
+const STARTUP_TOOL_NAMES = new Set(['agent_context_hydrate_current', 'agent_context_startup_sequence']);
+
 const EXPECTED_TOOL_GROUPS = {
   core: ['agent_context_doctor', 'agent_context_whoami', 'agent_context_hydrate_current', 'agent_context_startup_sequence', 'startup_sequence', 'agent_context_restart', 'agent_context_pause'],
 
@@ -106,6 +114,22 @@ const EXPECTED_TOOL_GROUPS = {
   movement_trace: ['agent_context_is_movement_trace_record', 'agent_context_is_movement_trace_list', 'agent_context_is_movement_trace_show'],
 };
 const EXPECTED_TOOL_NAMES = [...new Set(Object.values(EXPECTED_TOOL_GROUPS).flat())];
+
+function buildToolResult({ siteRoot, toolName, value, payloadSource, isError = false }) {
+  const isStartupTool = STARTUP_TOOL_NAMES.has(toolName);
+  const contentResult = buildOutputRefToolContent({
+    siteRoot,
+    toolName,
+    value: attachPayloadSource(value, payloadSource),
+    limit: isStartupTool ? STARTUP_TOOL_INLINE_LIMIT : undefined,
+    isError,
+  });
+  if (!isStartupTool || isError) return contentResult;
+  return {
+    ...contentResult,
+    structuredContent: attachPayloadSource(value, payloadSource),
+  };
+}
 
 function startupSequenceInputSchema() {
   return {
@@ -320,11 +344,13 @@ const TOOLS = [
     name: 'agent_context_hydrate_current',
     description: 'Single-command startup hydration for the current mechanically bound session. Requires NARADA_AGENT_ID, then returns whoami, checkpoint, bootstrap, capability policy, posture, and task_lifecycle_next.',
     inputSchema: startupSequenceInputSchema(),
+    outputSchema: PERMISSIVE_OBJECT_OUTPUT_SCHEMA,
   },
   {
     name: 'agent_context_startup_sequence',
     description: 'Canonical operator-facing startup hydration command. Delegates to the current agent_context_hydrate_current startup behavior.',
     inputSchema: startupSequenceInputSchema(),
+    outputSchema: PERMISSIVE_OBJECT_OUTPUT_SCHEMA,
   },
 
   {
@@ -1132,16 +1158,18 @@ async function handleRequest(request) {
         sendError(request, -32602, `Unknown tool: ${name}`);
         return;
     }
-    sendResponse(request, buildOutputRefToolContent({
+    sendResponse(request, buildToolResult({
       siteRoot,
       toolName: name,
-      value: attachPayloadSource(result, payloadResolution.payloadSource),
+      value: result,
+      payloadSource: payloadResolution.payloadSource,
     }));
   } catch (error) {
-    sendResponse(request, buildOutputRefToolContent({
+    sendResponse(request, buildToolResult({
       siteRoot,
       toolName: name,
       value: { status: 'error', message: error.message },
+      payloadSource: null,
       isError: true,
     }));
   }
