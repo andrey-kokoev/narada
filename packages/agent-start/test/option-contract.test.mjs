@@ -322,10 +322,10 @@ test('opencode dry-run resolves as opencode-native-mcp', () => {
 
 test('opencode sets NARADA_OPENCODE_COMMAND in required environment', () => {
   const output = runOk(['--runtime', 'opencode']);
-  assert.equal(output.required_environment.NARADA_OPENCODE_COMMAND, 'opencode');
+  assert.equal(output.required_environment.NARADA_OPENCODE_COMMAND, process.env.NARADA_OPENCODE_COMMAND ?? 'opencode');
 });
 
 test('opencode sets NARADA_OPENCODE_COMMAND in would_set_environment', () => {
   const output = runOk(['--runtime', 'opencode']);
-  assert.equal(output.would_set_environment.NARADA_OPENCODE_COMMAND, 'opencode');
+  assert.equal(output.would_set_environment.NARADA_OPENCODE_COMMAND, process.env.NARADA_OPENCODE_COMMAND ?? 'opencode');
 });

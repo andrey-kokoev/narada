@@ -764,8 +764,14 @@ function resolveRuntimeCommand(runtimeName) {
 }
 
 function runtimeSpawnOptions(runtimeName) {
-  if (runtimeName === 'opencode') return { shell: true };
+  if (runtimeName === 'opencode') return { shell: false };
   return {};
+}
+
+function shellQuote(arg) {
+  const text = String(arg);
+  if (!/[\s"'\\]/.test(text)) return text;
+  return '"' + text.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
 }
 
 function newCarrierSessionId() {
@@ -1312,7 +1318,7 @@ if (runtime !== 'kimi' && runtime !== 'opencode') {
 
 const spawnArgs = buildSpawnArgs(runtime, identity, startResult.capability_policy, intelligenceProviderResolution, carrierSessionRegistration);
 const toolFabricAdapter = resolveToolFabricAdapter(runtime);
-const execCommand = [resolveRuntimeCommand(runtime), ...spawnArgs].join(' ');
+const execCommand = [resolveRuntimeCommand(runtime), ...spawnArgs.map(shellQuote)].join(' ');
 const carrierEnvironment = carrierSessionRegistration.environment ?? {};
 const agentTuiEnvironment = agentTuiTerminalEnvironment();
 const startingCarrierInput = resolveStartingCarrierInput();
@@ -1429,7 +1435,11 @@ if (runtime === 'agent-cli' || runtime === AGENT_TUI_RUNTIME) {
   materializeCarrierLaunchFiles(carrierSessionRegistration.carrier_session_id, startingCarrierInput);
 }
 
-const child = spawn(resolveRuntimeCommand(runtime), spawnArgs, {
+const isOpencodeWin32 = runtime === 'opencode' && process.platform === 'win32';
+const spawnCommand = isOpencodeWin32 ? 'cmd.exe' : resolveRuntimeCommand(runtime);
+const spawnCommandArgs = isOpencodeWin32 ? ['/c', resolveRuntimeCommand(runtime), ...spawnArgs] : spawnArgs;
+
+const child = spawn(spawnCommand, spawnCommandArgs, {
   stdio: 'inherit',
   cwd: process.cwd(),
   env: {
