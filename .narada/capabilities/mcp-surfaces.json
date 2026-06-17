@@ -192,8 +192,8 @@
     {
       "surface_id": "narada-proper.surface.inbox-mcp.v1",
       "status": "live_agent_facing_target_local",
-      "path": "D:/code/mcp-surfaces/packages/inbox-mcp/dist/src/main.js",
-      "package": "@narada2/inbox-mcp",
+      "path": "D:/code/mcp-surfaces/packages/site-inbox-mcp/dist/src/main.js",
+      "package": "@narada2/site-inbox-mcp",
       "transport": "stdio",
       "mutation_posture": "site_local_inbox_authority",
       "client_config": {
