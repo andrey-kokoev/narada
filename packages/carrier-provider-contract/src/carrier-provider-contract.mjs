@@ -9,7 +9,13 @@ export const PROVIDER_SUPPORT_STATES = Object.freeze({
   REMOVED: 'removed',
 });
 
-export const DEFAULT_CARRIER_PROVIDER = 'kimi-api';
+export const PROVIDER_CREDENTIAL_REQUIREMENT_KINDS = Object.freeze({
+  NONE: 'none',
+  API_KEY_SECRET: 'api_key_secret',
+  LOCAL_CODEX_SUBSCRIPTION: 'local_codex_subscription',
+});
+
+export const DEFAULT_CARRIER_PROVIDER = 'kimi-code-api';
 
 export function loadProviderRegistry(url = new URL('../contracts/provider-registry.json', import.meta.url)) {
   return Object.freeze(JSON.parse(readFileSync(url, 'utf-8')));

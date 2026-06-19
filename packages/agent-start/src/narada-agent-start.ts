@@ -80,6 +80,8 @@ function normalizePath(value) {
   return resolve(String(value ?? '')).replace(/[\\/]+$/, '').toLowerCase();
 }
 
+const SITE_ENV_BINDINGS = new Map();
+
 function loadSiteEnvFile(path) {
   if (!existsSync(path)) return;
   const text = readFileSync(path, 'utf8');
@@ -96,6 +98,7 @@ function loadSiteEnvFile(path) {
       value = value.slice(1, -1);
     }
     process.env[name] = value;
+    SITE_ENV_BINDINGS.set(name, { source_field: 'site_env', source_path: path });
   }
 }
 
@@ -109,6 +112,30 @@ function siteNaradaRoot(siteRoot) {
 function loadSiteEnvFiles(siteRoot) {
   loadSiteEnvFile(join(siteRoot, '.env'));
   loadSiteEnvFile(join(siteNaradaRoot(siteRoot), '.env'));
+}
+
+function nonEmptyString(value) {
+  return value !== null && value !== undefined && String(value).trim() !== '';
+}
+
+function resolveIntelligenceProviderInputSource(argumentValue, environmentValue, runtimeName) {
+  if (nonEmptyString(argumentValue)) {
+    return { source_field: 'cli_argument' };
+  }
+  if (runtimeName === 'agent-cli' && nonEmptyString(environmentValue)) {
+    const siteBinding = SITE_ENV_BINDINGS.get('NARADA_INTELLIGENCE_PROVIDER');
+    if (siteBinding) return siteBinding;
+    if (nonEmptyString(process.env.NARADA_INTELLIGENCE_PROVIDER_SOURCE_FIELD)) {
+      return {
+        source_field: String(process.env.NARADA_INTELLIGENCE_PROVIDER_SOURCE_FIELD).trim(),
+        source_path: nonEmptyString(process.env.NARADA_INTELLIGENCE_PROVIDER_SOURCE_PATH)
+          ? String(process.env.NARADA_INTELLIGENCE_PROVIDER_SOURCE_PATH).trim()
+          : null,
+      };
+    }
+    return { source_field: 'environment' };
+  }
+  return { source_field: null };
 }
 
 function parseArgs(argv) {
@@ -182,7 +209,10 @@ const targetSiteId = args.target_site_id ?? process.env.NARADA_TARGET_SITE_ID ??
 const targetSiteRoot = args.target_site_root ?? process.env.NARADA_TARGET_SITE_ROOT ?? null;
 const sessionSiteRoot = targetSiteRoot ?? rootDir;
 loadSiteEnvFiles(sessionSiteRoot);
-const intelligenceProviderInput = args.intelligence_provider ?? (runtimeInput === 'agent-cli' ? process.env.NARADA_INTELLIGENCE_PROVIDER : null) ?? null;
+const intelligenceProviderArgInput = args.intelligence_provider ?? null;
+const intelligenceProviderEnvInput = runtimeInput === 'agent-cli' ? process.env.NARADA_INTELLIGENCE_PROVIDER : null;
+const intelligenceProviderInput = intelligenceProviderArgInput ?? intelligenceProviderEnvInput ?? null;
+const intelligenceProviderInputSource = resolveIntelligenceProviderInputSource(intelligenceProviderArgInput, intelligenceProviderEnvInput, runtimeInput);
 const dbPath = args.db ?? join(sessionSiteRoot, '.ai', 'state', 'agent-context.sqlite');
 const require = createRequire(import.meta.url);
 const RUNTIME_SUBSTRATE_KINDS_PACKET = Object.freeze(JSON.parse(readFileSync(resolveNaradaPackageExport('@narada2/carrier-runtime-contract', './runtime-substrate-kinds'), 'utf8')));
@@ -247,7 +277,19 @@ const INTELLIGENCE_PROVIDER_METADATA_PATH = process.env.NARADA_INTELLIGENCE_PROV
 const INTELLIGENCE_PROVIDER_METADATA_PACKET = Object.freeze(JSON.parse(readFileSync(INTELLIGENCE_PROVIDER_METADATA_PATH, 'utf8')));
 const INTELLIGENCE_PROVIDER_METADATA = Object.freeze(INTELLIGENCE_PROVIDER_METADATA_PACKET.providers);
 const ADMITTED_INTELLIGENCE_PROVIDERS = Object.freeze(Object.keys(INTELLIGENCE_PROVIDER_METADATA));
-const DEFAULT_AGENT_CLI_INTELLIGENCE_PROVIDER = 'kimi-api';
+const DEFAULT_AGENT_CLI_INTELLIGENCE_PROVIDER = INTELLIGENCE_PROVIDER_METADATA_PACKET.default_provider ?? 'kimi-code-api';
+const PROVIDER_SECRET_STORE_MODE_ENV = 'NARADA_PROVIDER_SECRET_STORE';
+const SECRET_MANAGEMENT_LOOKUP_TIMEOUT_MS = 5000;
+const SECRET_MANAGEMENT_LOOKUP_SCRIPT = `
+$ErrorActionPreference = 'SilentlyContinue'
+$name = [Environment]::GetEnvironmentVariable('NARADA_SECRET_LOOKUP_NAME', 'Process')
+if ([string]::IsNullOrWhiteSpace($name)) { exit 3 }
+if (-not (Get-Module -ListAvailable -Name Microsoft.PowerShell.SecretManagement)) { exit 10 }
+Import-Module Microsoft.PowerShell.SecretManagement -ErrorAction Stop
+$secret = Get-Secret -Name $name -AsPlainText -ErrorAction SilentlyContinue
+if ($null -eq $secret -or [string]::IsNullOrWhiteSpace([string]$secret)) { exit 2 }
+[Console]::Out.Write([string]$secret)
+`;
 const DEFAULT_PI_PROVIDER = 'openai-codex';
 const DEFAULT_PI_MODEL = 'gpt-5.5';
 const DEFAULT_CLAUDE_CODE_COMMAND = 'claude';
@@ -449,11 +491,11 @@ function requiredNextProviderSupportStep(state, adapterKind) {
   return 'Provider is verified for launch.';
 }
 
-function normalizeIntelligenceProvider(value, runtimeName) {
-  return resolveIntelligenceProviderLaunch(value, runtimeName);
+function normalizeIntelligenceProvider(value, runtimeName, inputSource = { source_field: null }) {
+  return resolveIntelligenceProviderLaunch(value, runtimeName, inputSource);
 }
 
-function resolveIntelligenceProviderLaunch(value, runtimeName) {
+function resolveIntelligenceProviderLaunch(value, runtimeName, inputSource = { source_field: null }) {
   const states = [];
   const pushState = (state, detail = {}) => states.push({ state, ...detail });
   const inputAbsent = value === null || value === undefined || String(value).trim() === '';
@@ -485,6 +527,7 @@ function resolveIntelligenceProviderLaunch(value, runtimeName) {
   pushState('runtime_supports_provider_selection', { runtime_substrate_kind: runtimeName });
 
   const providerContract = INTELLIGENCE_PROVIDER_METADATA[provider];
+  const credentialRequirement = providerCredentialRequirement(provider, providerContract);
   const support = resolveProviderSupportState(providerContract);
   if (!support.ready) {
     pushState('launch_refused', { reason_code: 'intelligence_provider_support_state_not_ready', support_state: support.state });
@@ -495,13 +538,16 @@ function resolveIntelligenceProviderLaunch(value, runtimeName) {
   const resolution = withResolutionStates({
     schema: INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
     intelligence_provider: provider,
-    source_field: inputAbsent ? 'default_for_agent_cli' : 'intelligence_provider',
+    source_field: inputAbsent ? 'default_for_agent_cli' : inputSource.source_field ?? 'intelligence_provider',
+    source_path: inputAbsent ? null : inputSource.source_path ?? null,
     request_adapter: providerContract.adapter_kind,
     support_state: support.state,
     default_model: providerContract.default_model,
     model_env: providerContract.model_env_names[0],
     api_base_url_env: providerContract.base_url_env_names[0],
-    api_key_env: providerContract.credential_env_names[0],
+    api_key_env: credentialRequirement.kind === 'api_key_secret' ? credentialRequirement.env_names[0] : undefined,
+    credential_requirement_kind: credentialRequirement.kind,
+    credential_requirement: redactProviderCredentialRequirement(credentialRequirement),
   }, states);
   pushState('environment_resolved', {
     model_env: resolution.model_env,
@@ -520,19 +566,193 @@ function withResolutionStates(outcome, states) {
 }
 
 function intelligenceProviderEnvironment(providerResolution) {
-  if (!providerResolution) return {};
+  return intelligenceProviderEnvironmentProjection(providerResolution).env;
+}
+
+function intelligenceProviderEnvironmentProjection(providerResolution) {
+  if (!providerResolution) return { env: {}, credential: null };
   const provider = providerResolution.intelligence_provider;
   const metadata = INTELLIGENCE_PROVIDER_METADATA[provider];
+  const credential = resolveProviderCredential(provider, metadata);
   const env = {
     NARADA_INTELLIGENCE_PROVIDER: provider,
     NARADA_AI_BASE_URL: firstEnvironmentValue(metadata.base_url_env_names) ?? metadata.base_url,
     NARADA_AI_MODEL: firstEnvironmentValue(metadata.model_env_names) ?? metadata.default_model,
-    NARADA_AI_API_KEY: firstEnvironmentValue(metadata.credential_env_names) ?? '',
   };
-  if (provider === 'anthropic-api') {
-    env.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? '';
+  if (credential.primary_credential_env) {
+    env[credential.primary_credential_env] = credential.value ?? '';
   }
-  return env;
+  return { env, credential: redactProviderCredentialResolution(credential) };
+}
+
+function resolveProviderCredential(provider, metadata) {
+  const credentialRequirement = providerCredentialRequirement(provider, metadata);
+  const credentialEnvNames = [...(credentialRequirement.env_names ?? [])].filter(Boolean);
+  const primaryCredentialEnv = credentialEnvNames[0] ?? null;
+  const secretRef = credentialRequirement.secret_ref ?? null;
+  if (credentialRequirement.kind !== 'api_key_secret') {
+    return {
+      credential_required: false,
+      credential_present: false,
+      credential_source: credentialRequirement.kind === 'local_codex_subscription' ? 'local_codex_subscription' : 'not_required',
+      credential_requirement_kind: credentialRequirement.kind,
+      credential_requirement: redactProviderCredentialRequirement(credentialRequirement),
+      credential_secret_ref: null,
+      primary_credential_env: null,
+      credential_env_names: [],
+      source_env: null,
+      value: '',
+    };
+  }
+
+  const secretValue = providerCredentialFromSecretStore(secretRef);
+  if (secretValue) {
+    return {
+      credential_required: true,
+      credential_present: true,
+      credential_source: 'secret_store',
+      credential_requirement_kind: credentialRequirement.kind,
+      credential_requirement: redactProviderCredentialRequirement(credentialRequirement),
+      credential_secret_ref: secretRef,
+      primary_credential_env: primaryCredentialEnv,
+      credential_env_names: credentialEnvNames,
+      source_env: null,
+      value: secretValue,
+    };
+  }
+
+  const envValue = firstEnvironmentValueWithName(credentialEnvNames);
+  if (envValue) {
+    return {
+      credential_required: true,
+      credential_present: true,
+      credential_source: 'environment',
+      credential_requirement_kind: credentialRequirement.kind,
+      credential_requirement: redactProviderCredentialRequirement(credentialRequirement),
+      credential_secret_ref: secretRef,
+      primary_credential_env: primaryCredentialEnv,
+      credential_env_names: credentialEnvNames,
+      source_env: envValue.name,
+      value: envValue.value,
+    };
+  }
+
+  return {
+    credential_required: true,
+    credential_present: false,
+    credential_source: 'missing',
+    credential_requirement_kind: credentialRequirement.kind,
+    credential_requirement: redactProviderCredentialRequirement(credentialRequirement),
+    credential_secret_ref: secretRef,
+    primary_credential_env: primaryCredentialEnv,
+    credential_env_names: credentialEnvNames,
+    source_env: null,
+    value: '',
+  };
+}
+
+function providerCredentialRequirement(provider, metadata) {
+  const requirement = metadata.credential_requirement ?? null;
+  if (requirement?.kind) {
+    return {
+      kind: requirement.kind,
+      secret_ref: requirement.secret_ref ?? providerCredentialSecretRef(provider, metadata),
+      env_names: [...(requirement.env_names ?? metadata.credential_env_names ?? [])].filter(Boolean),
+    };
+  }
+  const credentialEnvNames = [...(metadata.credential_env_names ?? [])].filter(Boolean);
+  if (credentialEnvNames.length === 0) {
+    return { kind: 'none', secret_ref: null, env_names: [] };
+  }
+  return {
+    kind: 'api_key_secret',
+    secret_ref: providerCredentialSecretRef(provider, metadata),
+    env_names: credentialEnvNames,
+  };
+}
+
+function redactProviderCredentialRequirement(requirement) {
+  if (!requirement) return null;
+  return {
+    kind: requirement.kind,
+    secret_ref: requirement.secret_ref ?? null,
+    env_names: [...(requirement.env_names ?? [])],
+  };
+}
+
+function providerCredentialSecretRef(provider, metadata) {
+  if (metadata.credential_secret_ref) return metadata.credential_secret_ref;
+  if ((metadata.credential_env_names ?? []).length === 0) return null;
+  return `narada/provider/${provider}/api-key`;
+}
+
+function providerSecretStoreEnabled() {
+  const mode = String(process.env[PROVIDER_SECRET_STORE_MODE_ENV] ?? '').trim().toLowerCase();
+  return !['0', 'false', 'off', 'disabled', 'none'].includes(mode);
+}
+
+function providerCredentialFromSecretStore(secretRef) {
+  if (!secretRef || !providerSecretStoreEnabled()) return null;
+  const result = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', SECRET_MANAGEMENT_LOOKUP_SCRIPT], {
+    encoding: 'utf8',
+    timeout: SECRET_MANAGEMENT_LOOKUP_TIMEOUT_MS,
+    windowsHide: true,
+    env: {
+      ...process.env,
+      NARADA_SECRET_LOOKUP_NAME: secretRef,
+    },
+  });
+  if (result.error || result.status !== 0) return null;
+  const value = String(result.stdout ?? '').trim();
+  return value || null;
+}
+
+function redactProviderCredentialResolution(credential) {
+  if (!credential) return null;
+  const { value: _value, ...redacted } = credential;
+  return redacted;
+}
+
+function annotateIntelligenceProviderCredential(providerResolution, credential) {
+  if (!providerResolution || !credential) return providerResolution;
+  return {
+    ...providerResolution,
+    credential,
+    credential_secret_ref: credential.credential_secret_ref,
+    credential_source: credential.credential_source,
+    credential_present: credential.credential_present,
+    credential_env_names: credential.credential_env_names,
+    credential_requirement_kind: credential.credential_requirement_kind,
+    credential_requirement: credential.credential_requirement,
+  };
+}
+
+function providerCredentialRefusal(providerResolution, credential) {
+  const states = [
+    ...(providerResolution?.resolution_states ?? []),
+    {
+      state: 'launch_refused',
+      reason_code: 'intelligence_provider_credential_missing',
+      credential_requirement_kind: credential.credential_requirement_kind,
+      credential_secret_ref: credential.credential_secret_ref,
+      credential_env_names: credential.credential_env_names,
+    },
+  ];
+  return withResolutionStates({
+    schema: INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
+    status: 'refused',
+    reason_code: 'intelligence_provider_credential_missing',
+    intelligence_provider: providerResolution?.intelligence_provider,
+    api_key_env: credential.primary_credential_env,
+    credential_requirement_kind: credential.credential_requirement_kind,
+    credential_requirement: credential.credential_requirement,
+    credential_secret_ref: credential.credential_secret_ref,
+    credential_env_names: credential.credential_env_names,
+    credential_source: 'missing',
+    credential_present: false,
+    reason: `No API key credential is available for provider '${providerResolution?.intelligence_provider}'.`,
+    required_next_step: `Store the key with PowerShell SecretManagement as '${credential.credential_secret_ref}' or set one of: ${credential.credential_env_names.join(' or ')}`,
+  }, states);
 }
 
 function materializeAgentTuiMcpConfig() {
@@ -569,6 +789,14 @@ function firstEnvironmentValue(names = []) {
   return null;
 }
 
+function firstEnvironmentValueWithName(names = []) {
+  for (const name of names) {
+    const value = process.env[name];
+    if (value) return { name, value };
+  }
+  return null;
+}
+
 async function loadAgentStartRenderer() {
   if (agentStartRenderer) return agentStartRenderer;
   const rendererUrl = pathToFileURL(resolveNaradaPackageExport('@narada2/agent-start-renderer')).href;
@@ -594,15 +822,22 @@ if (runtimeResolution.status === 'refused') {
   await failRuntimeRefusal(runtimeResolution);
 }
 const runtime = runtimeResolution.runtime_substrate_kind;
-const intelligenceProviderResolution = normalizeIntelligenceProvider(intelligenceProviderInput, runtime);
+const intelligenceProviderResolution = normalizeIntelligenceProvider(intelligenceProviderInput, runtime, intelligenceProviderInputSource);
 if (intelligenceProviderResolution?.status === 'refused') {
   await failIntelligenceProviderRefusal(intelligenceProviderResolution);
 }
-const intelligenceProviderEnv = intelligenceProviderEnvironment(intelligenceProviderResolution);
 
 if (!identity) {
   console.error('Usage: node start-agent.mjs <identity> [--runtime <runtime>] [--db <path>] [--json] [--dry-run] [--exec] [--wait] [--yolo] [--enable-native-shell] [--target-site-id <site-id>] [--target-site-root <path>]');
   process.exit(1);
+}
+
+const intelligenceProviderProjection = intelligenceProviderEnvironmentProjection(intelligenceProviderResolution);
+const intelligenceProviderEnv = intelligenceProviderProjection.env;
+const intelligenceProviderCredential = intelligenceProviderProjection.credential;
+const intelligenceProviderOutputResolution = annotateIntelligenceProviderCredential(intelligenceProviderResolution, intelligenceProviderCredential);
+if (intelligenceProviderCredential?.credential_required && !intelligenceProviderCredential.credential_present) {
+  await failIntelligenceProviderRefusal(providerCredentialRefusal(intelligenceProviderOutputResolution, intelligenceProviderCredential));
 }
 
 function kimiSessionDir(identity) {
@@ -1204,6 +1439,18 @@ function writeLaunchResult(result) {
   return path;
 }
 
+function redactEnvironmentForOutput(env = {}) {
+  return Object.fromEntries(Object.entries(env).map(([key, value]) => [
+    key,
+    shouldRedactEnvironmentValue(key, value) ? '<set>' : value,
+  ]));
+}
+
+function shouldRedactEnvironmentValue(key, value) {
+  if (!value) return false;
+  return /(_API_KEY|_TOKEN|_SECRET|PASSWORD|CREDENTIAL)/i.test(String(key));
+}
+
 function writeStdout(payload) {
   return new Promise((resolve, reject) => {
     process.stdout.write(payload, (error) => {
@@ -1324,7 +1571,7 @@ const agentTuiEnvironment = agentTuiTerminalEnvironment();
 const startingCarrierInput = resolveStartingCarrierInput();
 const environmentSiteRoot = sessionSiteRoot;
 const workspaceRoot = process.cwd();
-const requiredEnvironment = {
+const requiredEnvironment = redactEnvironmentForOutput({
   ...(startResult.required_environment ?? {}),
   ...carrierEnvironment,
   ...intelligenceProviderEnv,
@@ -1346,7 +1593,32 @@ const requiredEnvironment = {
   NARADA_SITE_ROOT: environmentSiteRoot,
   NARADA_WORKSPACE_ROOT: workspaceRoot,
   NARADA_AGENT_CONTEXT_DB: dbPath,
-};
+});
+const wouldSetEnvironment = startResult.would_set_environment
+  ? redactEnvironmentForOutput({
+    ...startResult.would_set_environment,
+    ...carrierEnvironment,
+    ...intelligenceProviderEnv,
+    ...agentTuiEnvironment,
+    ...(runtime === 'pi' ? {
+      NARADA_PI_COMMAND: process.env.NARADA_PI_COMMAND ?? 'pi',
+      NARADA_PI_PROVIDER: process.env.NARADA_PI_PROVIDER ?? DEFAULT_PI_PROVIDER,
+      NARADA_PI_MODEL: process.env.NARADA_PI_MODEL ?? DEFAULT_PI_MODEL,
+    } : {}),
+    ...(runtime === 'claude-code' ? {
+      NARADA_CLAUDE_CODE_COMMAND: process.env.NARADA_CLAUDE_CODE_COMMAND ?? DEFAULT_CLAUDE_CODE_COMMAND,
+      NARADA_CLAUDE_CODE_MODEL: process.env.NARADA_CLAUDE_CODE_MODEL ?? DEFAULT_CLAUDE_CODE_MODEL,
+    } : {}),
+    ...(runtime === 'opencode' ? {
+      NARADA_OPENCODE_COMMAND: process.env.NARADA_OPENCODE_COMMAND ?? 'opencode',
+    } : {}),
+    NARADA_AGENT_ID: identity,
+    NARADA_AGENT_START_EVENT_ID: startResult.agent_start_event,
+    NARADA_SITE_ROOT: environmentSiteRoot,
+    NARADA_WORKSPACE_ROOT: workspaceRoot,
+    NARADA_AGENT_CONTEXT_DB: dbPath,
+  })
+  : startResult.would_set_environment;
 const agentCliLaunch = runtime === 'agent-cli'
   ? {
 schema: 'narada.agent_start.agent_cli.v0',
@@ -1390,13 +1662,10 @@ const output = {
     skipped: mcpFabric.skipped,
   } : null,
   intelligence_provider_contract_schema: INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
-  intelligence_provider: intelligenceProviderResolution?.intelligence_provider ?? null,
-  intelligence_provider_resolution: intelligenceProviderResolution,
+  intelligence_provider: intelligenceProviderOutputResolution?.intelligence_provider ?? null,
+  intelligence_provider_resolution: intelligenceProviderOutputResolution,
   required_environment: requiredEnvironment,
-  would_set_environment: startResult.would_set_environment
-    ? { ...startResult.would_set_environment, ...carrierEnvironment, ...intelligenceProviderEnv, ...agentTuiEnvironment, ...(runtime === 'pi' ? { NARADA_PI_COMMAND: process.env.NARADA_PI_COMMAND ?? 'pi', NARADA_PI_PROVIDER: process.env.NARADA_PI_PROVIDER ?? DEFAULT_PI_PROVIDER, NARADA_PI_MODEL: process.env.NARADA_PI_MODEL ?? DEFAULT_PI_MODEL } : {}), ...(runtime === 'claude-code' ? { NARADA_CLAUDE_CODE_COMMAND: process.env.NARADA_CLAUDE_CODE_COMMAND ?? DEFAULT_CLAUDE_CODE_COMMAND, NARADA_CLAUDE_CODE_MODEL: process.env.NARADA_CLAUDE_CODE_MODEL ?? DEFAULT_CLAUDE_CODE_MODEL } : {}), ...(runtime === 'opencode' ? { NARADA_OPENCODE_COMMAND: process.env.NARADA_OPENCODE_COMMAND ?? 'opencode' } : {}), NARADA_AGENT_ID: identity, NARADA_AGENT_START_EVENT_ID: startResult.agent_start_event, NARADA_SITE_ROOT: environmentSiteRoot,
-  NARADA_WORKSPACE_ROOT: workspaceRoot, NARADA_AGENT_CONTEXT_DB: dbPath }
-    : startResult.would_set_environment,
+  would_set_environment: wouldSetEnvironment,
   carrier_session: carrierSessionRegistration,
   starting_carrier_input: startingCarrierInputOutput(startingCarrierInput),
   exec: execFlag,

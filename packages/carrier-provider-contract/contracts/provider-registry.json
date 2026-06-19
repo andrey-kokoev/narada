@@ -1,7 +1,7 @@
 {
   "schema": "narada.carrier.provider_registry.v1",
   "description": "Authoritative provider metadata for carrier provider resolution, launcher projection, docs, and drift tests.",
-  "default_provider": "kimi-api",
+  "default_provider": "kimi-code-api",
   "support_states": [
     "declared",
     "admitted_unsupported",
@@ -9,6 +9,11 @@
     "verified_supported",
     "deprecated",
     "removed"
+  ],
+  "credential_requirement_kinds": [
+    "none",
+    "api_key_secret",
+    "local_codex_subscription"
   ],
   "providers": {
     "openai-api": {
@@ -19,7 +24,13 @@
       "support_state": "verified_supported",
       "base_url_env_names": ["NARADA_AI_BASE_URL"],
       "model_env_names": ["NARADA_AI_MODEL"],
-      "credential_env_names": ["NARADA_AI_API_KEY"]
+      "credential_env_names": ["NARADA_OPENAI_API_KEY", "OPENAI_API_KEY"],
+      "credential_secret_ref": "narada/provider/openai-api/api-key",
+      "credential_requirement": {
+        "kind": "api_key_secret",
+        "secret_ref": "narada/provider/openai-api/api-key",
+        "env_names": ["NARADA_OPENAI_API_KEY", "OPENAI_API_KEY"]
+      }
     },
     "kimi-api": {
       "meaning": "Kimi/Moonshot API via OpenAI-compatible chat completions.",
@@ -29,7 +40,13 @@
       "support_state": "verified_supported",
       "base_url_env_names": ["NARADA_KIMI_API_BASE_URL", "NARADA_AI_BASE_URL"],
       "model_env_names": ["NARADA_KIMI_MODEL", "NARADA_AI_MODEL"],
-      "credential_env_names": ["NARADA_KIMI_API_KEY", "NARADA_AI_API_KEY"]
+      "credential_env_names": ["NARADA_KIMI_API_KEY", "KIMI_API_KEY"],
+      "credential_secret_ref": "narada/provider/kimi-api/api-key",
+      "credential_requirement": {
+        "kind": "api_key_secret",
+        "secret_ref": "narada/provider/kimi-api/api-key",
+        "env_names": ["NARADA_KIMI_API_KEY", "KIMI_API_KEY"]
+      }
     },
     "kimi-code-api": {
       "meaning": "Kimi Code API via OpenAI-compatible chat completions; uses KIMI_CODE_API_KEY against api.kimi.com/coding/v1.",
@@ -39,7 +56,13 @@
       "support_state": "verified_supported",
       "base_url_env_names": ["NARADA_KIMI_CODE_API_BASE_URL", "NARADA_AI_BASE_URL"],
       "model_env_names": ["NARADA_KIMI_CODE_MODEL", "NARADA_AI_MODEL"],
-      "credential_env_names": ["KIMI_CODE_API_KEY", "NARADA_AI_API_KEY"]
+      "credential_env_names": ["NARADA_KIMI_CODE_API_KEY", "KIMI_CODE_API_KEY"],
+      "credential_secret_ref": "narada/provider/kimi-code-api/api-key",
+      "credential_requirement": {
+        "kind": "api_key_secret",
+        "secret_ref": "narada/provider/kimi-code-api/api-key",
+        "env_names": ["NARADA_KIMI_CODE_API_KEY", "KIMI_CODE_API_KEY"]
+      }
     },
     "anthropic-api": {
       "meaning": "Anthropic API via the Anthropic Messages API.",
@@ -49,7 +72,13 @@
       "support_state": "verified_supported",
       "base_url_env_names": ["NARADA_AI_BASE_URL"],
       "model_env_names": ["NARADA_AI_MODEL"],
-      "credential_env_names": ["ANTHROPIC_API_KEY", "NARADA_AI_API_KEY"]
+      "credential_env_names": ["NARADA_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY"],
+      "credential_secret_ref": "narada/provider/anthropic-api/api-key",
+      "credential_requirement": {
+        "kind": "api_key_secret",
+        "secret_ref": "narada/provider/anthropic-api/api-key",
+        "env_names": ["NARADA_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY"]
+      }
     },
     "deepseek-api": {
       "meaning": "DeepSeek API via OpenAI-compatible chat completions.",
@@ -59,7 +88,13 @@
       "support_state": "verified_supported",
       "base_url_env_names": ["DEEPSEEK_API_BASE_URL", "NARADA_AI_BASE_URL"],
       "model_env_names": ["DEEPSEEK_MODEL", "NARADA_AI_MODEL"],
-      "credential_env_names": ["DEEPSEEK_API_KEY", "NARADA_AI_API_KEY"]
+      "credential_env_names": ["NARADA_DEEPSEEK_API_KEY", "DEEPSEEK_API_KEY"],
+      "credential_secret_ref": "narada/provider/deepseek-api/api-key",
+      "credential_requirement": {
+        "kind": "api_key_secret",
+        "secret_ref": "narada/provider/deepseek-api/api-key",
+        "env_names": ["NARADA_DEEPSEEK_API_KEY", "DEEPSEEK_API_KEY"]
+      }
     },
     "codex-subscription": {
       "meaning": "Local Codex CLI subscription auth via codex mcp-server; no OpenAI API key or API billing path.",
@@ -69,7 +104,10 @@
       "support_state": "verified_supported",
       "base_url_env_names": [],
       "model_env_names": ["NARADA_CODEX_MODEL", "NARADA_AI_MODEL"],
-      "credential_env_names": []
+      "credential_env_names": [],
+      "credential_requirement": {
+        "kind": "local_codex_subscription"
+      }
     }
   }
 }
