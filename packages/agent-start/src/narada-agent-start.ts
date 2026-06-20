@@ -420,7 +420,9 @@ async function failToolFabricRefusal(error) {
     site_root: sessionSiteRoot,
     reason: error instanceof Error ? error.message : String(error),
     details: error instanceof McpFabricError ? error.details : {},
-    required_next_step: 'Materialize a valid Site-local .ai/mcp fabric before launching this runtime.',
+    required_next_step: error instanceof McpFabricError && error.details?.temporary_leak_identification_tool === true
+      ? 'Rename or remove non-canonical MCP server entries so every launched server name starts with narada-. This temporary gate exists to identify MCP authority leaks.'
+      : 'Materialize a valid Site-local .ai/mcp fabric before launching this runtime.',
   };
   if (jsonOutput) {
     await writeStdout(`${JSON.stringify(refusal, null, 2)}\n`);
@@ -428,6 +430,22 @@ async function failToolFabricRefusal(error) {
     console.error(`[FAIL] ${reasonCode}: ${refusal.reason}`);
   }
   process.exit(1);
+}
+
+function assertTemporaryNaradaPrefixedMcpServerNameGate(fabric) {
+  const serverNames = mcpServerNames(fabric);
+  const offendingServerNames = serverNames.filter((serverName) => !serverName.startsWith('narada-'));
+  if (offendingServerNames.length === 0) return;
+  throw new McpFabricError(
+    'temporary_mcp_server_name_missing_narada_prefix',
+    `Temporary MCP leak identification gate refused non-canonical server names: ${offendingServerNames.join(', ')}`,
+    {
+      temporary_leak_identification_tool: true,
+      expected_server_name_prefix: 'narada-',
+      offending_server_names: offendingServerNames,
+      admitted_server_names: serverNames,
+    },
+  );
 }
 
 async function failIntelligenceProviderRefusal(refusal) {
@@ -1558,6 +1576,7 @@ const carrierActions = {
 if (runtime !== 'kimi' && runtime !== 'opencode') {
   try {
     mcpFabric = loadSiteMcpFabric(sessionSiteRoot, { required: true, validateRegistry: true });
+    assertTemporaryNaradaPrefixedMcpServerNameGate(mcpFabric);
   } catch (error) {
     await failToolFabricRefusal(error);
   }

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,14 +9,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const naradaRoot = join(__dirname, '..', '..');
 const packagedAgentStart = join(naradaRoot, 'packages', 'agent-start', 'src', 'narada-agent-start.ts');
 
-function runJson(entrypoint, extraArgs = []) {
+function runJson(entrypoint, extraArgs = [], siteRoot = naradaRoot, identity = 'narada.architect') {
   const result = spawnSync(process.execPath, [
     '--import',
     'tsx',
     entrypoint,
-    'narada.architect',
-    '--site-root', naradaRoot,
-    '--target-site-root', naradaRoot,
+    identity,
+    '--site-root', siteRoot,
+    '--target-site-root', siteRoot,
     '--runtime', 'agent-cli',
     '--dry-run',
     '--json',
@@ -30,6 +31,35 @@ function runJson(entrypoint, extraArgs = []) {
   });
   assert.equal(result.status, 0, result.stderr || result.stdout);
   return JSON.parse(result.stdout);
+}
+
+function writeJson(path, value) {
+  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+}
+
+function createTemporarySiteWithMcpServer(serverName) {
+  const siteRoot = mkdtempSync(join(naradaRoot, '.ai', 'tmp', 'agent-start-prefix-gate-'));
+  mkdirSync(join(siteRoot, '.ai', 'agents'), { recursive: true });
+  mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
+  writeJson(join(siteRoot, '.ai', 'agents', 'roster.json'), {
+    agents: [
+      {
+        agent_id: 'sonar.resident',
+        role: 'resident',
+        capabilities: [],
+      },
+    ],
+  });
+  writeJson(join(siteRoot, '.ai', 'mcp', 'fixture.json'), {
+    mcpServers: {
+      [serverName]: {
+        command: 'node',
+        args: ['-e', 'process.exit(0)'],
+        tools: ['fixture_tool'],
+      },
+    },
+  });
+  return siteRoot;
 }
 
 function assertModernAgentCliLaunch(result) {
@@ -50,29 +80,54 @@ function assertModernAgentCliLaunch(result) {
 }
 
 test('packaged agent-start emits modern Narada proper agent-cli launch evidence', () => {
-  assertModernAgentCliLaunch(runJson(packagedAgentStart));
+  const siteRoot = createTemporarySiteWithMcpServer('narada-sonar-sop');
+  try {
+    assertModernAgentCliLaunch(runJson(packagedAgentStart, [], siteRoot, 'sonar.resident'));
+  } finally {
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
+test('packaged agent-start temporary MCP prefix gate refuses short server names', () => {
+  const siteRoot = createTemporarySiteWithMcpServer('sonar-sop');
+  try {
+    const result = spawnSync(process.execPath, [
+      '--import',
+      'tsx',
+      packagedAgentStart,
+      'sonar.resident',
+      '--site-root', siteRoot,
+      '--target-site-root', siteRoot,
+      '--runtime', 'agent-cli',
+      '--dry-run',
+      '--json',
+    ], {
+      cwd: naradaRoot,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        NARADA_PROPER_ROOT: naradaRoot,
+      },
+    });
+    assert.equal(result.status, 1, result.stderr || result.stdout);
+    const refusal = JSON.parse(result.stdout);
+    assert.equal(refusal.status, 'refused');
+    assert.equal(refusal.reason_code, 'temporary_mcp_server_name_missing_narada_prefix');
+    assert.equal(refusal.details.temporary_leak_identification_tool, true);
+    assert.deepEqual(refusal.details.offending_server_names, ['sonar-sop']);
+    assert.equal(refusal.required_next_step.includes('temporary gate exists to identify MCP authority leaks'), true);
+  } finally {
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
 });
 
 test('packaged agent-start defaults Narada proper startup to agent-cli', () => {
-  const result = spawnSync(process.execPath, [
-    '--import',
-    'tsx',
-    packagedAgentStart,
-    'narada.architect',
-    '--site-root', naradaRoot,
-    '--target-site-root', naradaRoot,
-    '--dry-run',
-    '--json',
-  ], {
-    cwd: naradaRoot,
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      NARADA_PROPER_ROOT: naradaRoot,
-    },
-  });
-  assert.equal(result.status, 0, result.stderr || result.stdout);
-  const launch = JSON.parse(result.stdout);
-  assert.equal(launch.runtime, 'agent-cli');
-  assert.equal(launch.runtime_substrate_kind, 'agent-cli');
+  const siteRoot = createTemporarySiteWithMcpServer('narada-sonar-sop');
+  try {
+    const launch = runJson(packagedAgentStart, [], siteRoot, 'sonar.resident');
+    assert.equal(launch.runtime, 'agent-cli');
+    assert.equal(launch.runtime_substrate_kind, 'agent-cli');
+  } finally {
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
 });
