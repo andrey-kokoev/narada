@@ -24,8 +24,17 @@ export class GraphDeltaWalker {
   }
 
   async walkFromCursor(cursor?: string | null): Promise<GraphDeltaWalkResult> {
-    let url =
-      cursor ?? this.client.buildFolderMessagesDeltaUrl(this.userId, this.folderId);
+    const baseUrl = this.client.buildFolderMessagesDeltaUrl(this.userId, this.folderId);
+    try {
+      return await this.walkFromUrl(cursor ?? baseUrl);
+    } catch (error) {
+      if (!cursor || !isStaleDeltaCursorError(error)) throw error;
+      return this.walkFromUrl(baseUrl);
+    }
+  }
+
+  private async walkFromUrl(startUrl: string): Promise<GraphDeltaWalkResult> {
+    let url = startUrl;
 
     const messages: GraphDeltaMessage[] = [];
     let deltaLink: string | undefined;
@@ -47,4 +56,15 @@ export class GraphDeltaWalker {
       nextCursor: deltaLink,
     };
   }
+}
+
+function isStaleDeltaCursorError(error: unknown): boolean {
+  const record = error && typeof error === 'object' ? error as Record<string, unknown> : {};
+  const metadata = record.metadata && typeof record.metadata === 'object' ? record.metadata as Record<string, unknown> : {};
+  const text = [
+    error instanceof Error ? error.message : String(error),
+    metadata.response,
+    metadata.status,
+  ].join('\n');
+  return /SyncStateNotFound/i.test(text) || /Graph API error \(410\)/.test(text) || /\b410\b/.test(text);
 }

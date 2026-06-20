@@ -211,4 +211,71 @@ describe("DefaultGraphAdapter", () => {
     expect(seenUrls[2]).toBe("cursor-0");
     expect(seenUrls[3]).toBe("cursor-1");
   });
+
+  it("recovers a stale Graph delta cursor by restarting from the folder base delta URL", async () => {
+    const seenUrls: string[] = [];
+    let callIndex = 0;
+
+    const client = new GraphHttpClient({
+      tokenProvider: new StaticBearerTokenProvider({
+        accessToken: "test-token",
+      }),
+      fetchImpl: async (input) => {
+        seenUrls.push(String(input));
+        if (callIndex++ === 0) {
+          return new Response(JSON.stringify({ error: { code: "SyncStateNotFound", message: "Sync state not found." } }), {
+            status: 410,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(
+          JSON.stringify({
+            value: [
+              {
+                id: "msg-fresh",
+                changeKey: "ck-fresh",
+                conversationId: "conv-1",
+                subject: "fresh sync",
+                parentFolderId: "folder-1",
+                isRead: false,
+                isDraft: false,
+                hasAttachments: false,
+                body: { contentType: "text", content: "fresh" },
+              },
+            ],
+            "@odata.deltaLink": "fresh-cursor",
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      },
+      retryConfig: { maxAttempts: 1 },
+    });
+
+    const adapter = new DefaultGraphAdapter({
+      mailbox_id: "mailbox_primary",
+      user_id: "user@example.com",
+      client,
+      adapter_scope: {
+        mailbox_id: "mailbox_primary",
+        included_container_refs: ["folder-1"],
+        included_item_kinds: ["message"],
+        attachment_policy: "metadata_only",
+        body_policy: "text_only",
+      },
+      body_policy: "text_only",
+      attachment_policy: "metadata_only",
+      include_headers: false,
+      normalize_folder_ref: normalizeFolderRef,
+      normalize_flagged: normalizeFlagged,
+    });
+
+    const batch = await adapter.fetch_since("stale-cursor");
+
+    expect(seenUrls).toHaveLength(2);
+    expect(seenUrls[0]).toBe("stale-cursor");
+    expect(seenUrls[1]).toContain("/mailFolders/folder-1/messages/delta");
+    expect(batch.prior_cursor).toBe("stale-cursor");
+    expect(batch.next_cursor).toBe("fresh-cursor");
+    expect(batch.events[0]?.message_id).toBe("msg-fresh");
+  });
 });
