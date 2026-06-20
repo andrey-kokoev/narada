@@ -868,6 +868,17 @@ assert.match(thrownMessage(() => assertValidControlInputRecord({ ...control, inp
 const normalizedLegacyControl = normalizeControlInputRecord({ content: 'legacy', source: 'manual_operator', transport: 'control_jsonl' });
 assert.equal(normalizedLegacyControl.schema, CONTROL_INPUT_EVENT_SCHEMA);
 assert.equal(normalizedLegacyControl.input.content, 'legacy');
+const normalizedProtocolControl = normalizeControlInputRecord(agentVisibleDirectiveInput, { transport: 'control_jsonl' });
+assert.equal(normalizedProtocolControl.schema, CONTROL_INPUT_EVENT_SCHEMA);
+assert.equal(normalizedProtocolControl.input.source_kind, 'system');
+assert.equal(normalizedProtocolControl.input.directive_id, 'dir_agent_visible');
+const normalizedWrappedProtocolControl = normalizeControlInputRecord({
+  control_event_id: 'control_wrapped_protocol_1',
+  written_at: '2026-05-30T00:00:03.000Z',
+  input: agentVisibleDirectiveInput,
+});
+assert.equal(normalizedWrappedProtocolControl.input.source_kind, 'system');
+assert.equal(normalizedWrappedProtocolControl.input.directive_id, 'dir_agent_visible');
 
 const payloadRef = createPayloadRef({ payload_ref: 'mcp_payload:payload_test@v1', summary: 'large result' });
 assert.equal(payloadRef.schema, PAYLOAD_REF_SCHEMA);

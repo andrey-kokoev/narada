@@ -50,6 +50,34 @@ try {
   rmSync(emptySite, { recursive: true, force: true });
 }
 
+const duplicateSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-duplicate-'));
+mkdirSync(join(duplicateSite, '.ai', 'mcp'), { recursive: true });
+try {
+  writeFileSync(join(duplicateSite, '.ai', 'mcp', 'one-mcp.json'), `${JSON.stringify({
+    mcpServers: {
+      duplicate: { command: 'node', args: ['one.mjs'] },
+    },
+  }, null, 2)}\n`, 'utf8');
+  writeFileSync(join(duplicateSite, '.ai', 'mcp', 'two-mcp.json'), `${JSON.stringify({
+    mcpServers: {
+      duplicate: { command: 'node', args: ['two.mjs'] },
+    },
+  }, null, 2)}\n`, 'utf8');
+  assert.throws(
+    () => loadSiteMcpFabric(duplicateSite, { required: true }),
+    (error) => {
+      assert.equal(error instanceof McpFabricError, true);
+      assert.equal(error.code, 'mcp_fabric_duplicate_server_conflict');
+      assert.equal(error.details.repair_plan.kind, 'duplicate_server_conflict');
+      assert.deepEqual(error.details.repair_plan.conflicting_files.map((item) => item.file), ['one-mcp.json', 'two-mcp.json']);
+      assert.match(error.details.repair_plan.recommended_actions.join('\n'), /Keep exactly one canonical MCP server definition/);
+      return true;
+    },
+  );
+} finally {
+  rmSync(duplicateSite, { recursive: true, force: true });
+}
+
 const siteRoot = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-'));
 mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
 mkdirSync(join(siteRoot, '.narada', 'capabilities'), { recursive: true });
@@ -242,7 +270,14 @@ assert.equal(legacyFabric.registry_validation.status, 'mismatch');
 assert.equal(legacyFabric.registry_validation.missing[0].surface_id, 'stale.surface');
 assert.throws(
   () => loadSiteMcpFabric(legacyRegistrySite, { required: true, validateRegistry: true }),
-  /MCP fabric does not match registry/,
+  (error) => {
+    assert.equal(error instanceof McpFabricError, true);
+    assert.equal(error.code, 'mcp_fabric_registry_mismatch');
+    assert.equal(error.details.repair_plan.kind, 'registry_generated_file_mismatch');
+    assert.equal(error.details.repair_plan.missing[0].surface_id, 'stale.surface');
+    assert.equal(error.details.repair_plan.missing[0].generated_file, 'stale-mcp.json');
+    return true;
+  },
 );
 rmSync(legacyRegistrySite, { recursive: true, force: true });
 

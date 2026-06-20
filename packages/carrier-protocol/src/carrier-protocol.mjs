@@ -1141,11 +1141,20 @@ export function normalizeControlInputRecord(record, defaults = {}) {
     assertValidControlInputRecord(record);
     return record;
   }
+  if (record.schema === INPUT_EVENT_SCHEMA) {
+    return createControlInputRecord({
+      control_event_id: record.control_event_id ?? createControlEventId(),
+      written_at: record.written_at ?? record.created_at ?? nowIso(),
+      input: normalizeInputEvent(record),
+    });
+  }
   if (record.input && isObject(record.input)) {
     return createControlInputRecord({
       control_event_id: record.control_event_id ?? record.event_id ?? createControlEventId(),
       written_at: record.written_at ?? record.created_at ?? nowIso(),
-      input: normalizeLegacyInputRecord(record.input, { transport: 'control_jsonl', ...defaults }),
+      input: record.input.schema === INPUT_EVENT_SCHEMA
+        ? normalizeInputEvent(record.input)
+        : normalizeLegacyInputRecord(record.input, { transport: 'control_jsonl', ...defaults }),
     });
   }
   return createControlInputRecord({

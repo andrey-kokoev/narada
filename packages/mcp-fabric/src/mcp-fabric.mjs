@@ -50,11 +50,15 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
 
       if (servers[serverName]) {
         if (canonicalJson(servers[serverName]) !== canonicalJson(normalized)) {
-          throw new McpFabricError('mcp_fabric_duplicate_server_conflict', `Conflicting MCP server definition for ${serverName}`, {
+          const details = {
             serverName,
             firstFile: sources[serverName],
             secondFile: file,
-          });
+            siteRoot,
+            mcpDir,
+          };
+          details.repair_plan = mcpFabricRepairPlan('mcp_fabric_duplicate_server_conflict', details);
+          throw new McpFabricError('mcp_fabric_duplicate_server_conflict', `Conflicting MCP server definition for ${serverName}`, details);
         }
         continue;
       }
@@ -89,12 +93,14 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
 
   const registryValidation = validateFabricAgainstRegistry(siteRoot, mcpDir, files, servers);
   if (validateRegistry === true && registryValidation.status === 'mismatch') {
-    throw new McpFabricError('mcp_fabric_registry_mismatch', `MCP fabric does not match registry ${normalize(registryValidation.registry_path)}`, {
+    const details = {
       siteRoot,
       mcpDir,
       registryPath: registryValidation.registry_path,
       missing: registryValidation.missing,
-    });
+    };
+    details.repair_plan = mcpFabricRepairPlan('mcp_fabric_registry_mismatch', details);
+    throw new McpFabricError('mcp_fabric_registry_mismatch', `MCP fabric does not match registry ${normalize(registryValidation.registry_path)}`, details);
   }
 
   return {
@@ -405,7 +411,54 @@ function doctorDiagnostic(error, phase) {
     message: error instanceof Error ? error.message : String(error),
     phase,
     details: error?.details ?? {},
+    repair_plan: error?.details?.repair_plan ?? null,
   };
+}
+
+function mcpFabricRepairPlan(code, details = {}) {
+  if (code === 'mcp_fabric_duplicate_server_conflict') {
+    return {
+      schema: 'narada.mcp.fabric.repair_plan.v1',
+      kind: 'duplicate_server_conflict',
+      status: 'manual_review_required',
+      server_name: details.serverName ?? null,
+      conflicting_files: [details.firstFile, details.secondFile].filter(Boolean).map((file) => ({
+        file,
+        path: details.mcpDir ? join(details.mcpDir, file) : file,
+      })),
+      recommended_actions: [
+        'Keep exactly one canonical MCP server definition for this server name.',
+        'Regenerate Site MCP client configs from the Site surface registry if either file is generated.',
+        'Remove or rename the stale duplicate file only after confirming it is not the registered surface owner.',
+      ],
+      verification: [
+        'Run MCP fabric doctor after the duplicate is removed or regenerated.',
+        'Confirm the server name appears once and initializes from the intended generated file.',
+      ],
+    };
+  }
+  if (code === 'mcp_fabric_registry_mismatch') {
+    return {
+      schema: 'narada.mcp.fabric.repair_plan.v1',
+      kind: 'registry_generated_file_mismatch',
+      status: 'regenerate_or_remove_stale_registry_entry',
+      registry_path: details.registryPath ?? null,
+      missing: (details.missing ?? []).map((item) => ({
+        surface_id: item.surface_id,
+        generated_file: item.generated_file,
+        expected_path: details.mcpDir && item.generated_file ? join(details.mcpDir, item.generated_file) : item.generated_file,
+      })),
+      recommended_actions: [
+        'Regenerate missing MCP client config files from the authoritative Site surface registry.',
+        'If a registry surface is obsolete, remove or retire that registry entry instead of leaving a missing generated file.',
+      ],
+      verification: [
+        'Run MCP fabric doctor with registry validation enabled.',
+        'Confirm registry_validation.status is ok.',
+      ],
+    };
+  }
+  return null;
 }
 
 function stopDoctorProcess(proc) {
