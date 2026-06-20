@@ -30,8 +30,8 @@ export function validateCharterRuntimeConfig(cfg: ExchangeFsSyncConfig): void {
     if (!apiKey) {
       throw new Error(
         runtime === "kimi-api"
-          ? "Charter runtime is configured as kimi-api but no API key is provided. Set config.charter.api_key or NARADA_KIMI_API_KEY / KIMI_API_KEY environment variable."
-          : "Charter runtime is configured as codex-api but no API key is provided. Set config.charter.api_key or NARADA_OPENAI_API_KEY / OPENAI_API_KEY environment variable.",
+          ? "Charter runtime is configured as kimi-api but no API key is provided. Set config.charter.api_key or KIMI_API_KEY environment variable."
+          : "Charter runtime is configured as codex-api but no API key is provided. Set config.charter.api_key or OPENAI_API_KEY environment variable.",
       );
     }
     return;

@@ -43,7 +43,7 @@ Graph API credentials are **required**. Klaviyo credentials are **not required**
 | Graph client ID | `GRAPH_CLIENT_ID` | — | `graph.client_id` | ✅ Yes |
 | Graph client secret | `GRAPH_CLIENT_SECRET` | `graph_client_secret` | `graph.client_secret` | ✅ Yes (client-credentials flow) |
 | Graph user ID | — | — | `graph.user_id` | ✅ Yes (mailbox identity) |
-| Charter API key | `NARADA_OPENAI_API_KEY` or `OPENAI_API_KEY` | `charter_api_key` | `charter.api_key` | ✅ Yes (if charter runtime is `codex-api`) |
+| Charter API key | `OPENAI_API_KEY` | `charter_api_key` | `charter.api_key` | ✅ Yes (if charter runtime is `codex-api`) |
 | Klaviyo API key | `KLAVIYO_API_KEY` | `klaviyo_api_key` | `klaviyo.api_key` | ❌ No — v0 does not resolve Klaviyo credentials |
 
 **Verify credentials are present (do not print values):**

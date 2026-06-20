@@ -39,7 +39,7 @@ export interface CharterEnvConfig {
 
 export function loadCharterEnv(): CharterEnvConfig {
   return {
-    openai_api_key: readEnv("NARADA_OPENAI_API_KEY") ?? readEnv("OPENAI_API_KEY"),
-    kimi_api_key: readEnv("NARADA_KIMI_API_KEY") ?? readEnv("KIMI_API_KEY"),
+    openai_api_key: readEnv("OPENAI_API_KEY"),
+    kimi_api_key: readEnv("KIMI_API_KEY"),
   };
 }

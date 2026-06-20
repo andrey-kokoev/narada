@@ -56,7 +56,7 @@ export function getRecoveryGuidance(
     case "unconfigured":
       return {
         operator_action:
-          "Configure a real charter runtime in config.json: set `charter.runtime` to 'codex-api' or 'kimi-api' and provide an API key via `charter.api_key` or the `NARADA_OPENAI_API_KEY` / `NARADA_KIMI_API_KEY` environment variable.",
+          "Configure a real charter runtime in config.json: set `charter.runtime` to 'codex-api' or 'kimi-api' and provide an API key via `charter.api_key` or the `OPENAI_API_KEY` / `KIMI_API_KEY` environment variable.",
         safe_behavior:
           "In production, Narada will skip charter execution when the runtime is unconfigured. Work items remain opened and will be executed once a real runtime is attached. Sync continues normally.",
         inspectable:

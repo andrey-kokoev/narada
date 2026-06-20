@@ -100,7 +100,7 @@ packages:
   - `GRAPH_TENANT_ID`
   - `GRAPH_CLIENT_ID`
   - `GRAPH_CLIENT_SECRET`
-  - `NARADA_KIMI_API_KEY` (for live charter evaluation; omit for mock/offline)
+  - `KIMI_API_KEY` (for live charter evaluation; omit for mock/offline)
 - [ ] `~/src/narada.sonar/config/config.json` validates against schema
 - [ ] Data directory `/home/andrey/mailboxes/help-global-maxima` exists (created by first sync if absent)
 - [ ] Evidence directory exists (see below)
