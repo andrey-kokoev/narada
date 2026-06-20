@@ -70,7 +70,7 @@ Ensure the chapter's changes are squashed or grouped into a logical commit serie
 - `want-mailbox` exposes `--graph-user-id`, `--folders`, `--data-root-dir`.
 - Preflight checks env vars, legacy `scope.graph`, and modern `sources[]` before failing.
 - `narada doctor` checks daemon process, health file, sync freshness, and work-queue state.
-- Generated `.env.example` includes `GRAPH_ACCESS_TOKEN` and `NARADA_OPENAI_API_KEY`.
+- Generated `.env.example` includes `GRAPH_ACCESS_TOKEN` and `OPENAI_API_KEY`.
 
 **Vertical neutrality** ✅
 - Daemon `createScopeService` conditionally builds Graph infrastructure; timer-only scope starts and syncs without crashing.

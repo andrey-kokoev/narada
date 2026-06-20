@@ -271,7 +271,7 @@ export function keychainServiceName(siteId: string, secretName: string): string;
 /**
  * Resolve a secret using the macOS precedence chain:
  *   1. macOS Keychain (`security find-generic-password`)
- *   2. Environment variable (`NARADA_{SITE_ID}_{SECRET_NAME}`)
+ *   2. Environment variable (`SITE_{SITE_ID}_{SECRET_NAME}`)
  *   3. `.env` file in site root
  *   4. Config file value (passed as options.configValue)
  */

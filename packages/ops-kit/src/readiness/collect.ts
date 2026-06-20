@@ -196,22 +196,22 @@ export function preflight(options: PreflightOptions): ReadinessReport {
 
     const runtime = options.scope.charter?.runtime ?? "mock";
     if (runtime === "codex-api") {
-      const ok = !!(options.scope.charter?.api_key || process.env.NARADA_OPENAI_API_KEY || process.env.OPENAI_API_KEY);
+      const ok = !!(options.scope.charter?.api_key || process.env.OPENAI_API_KEY);
       pushCheck(checks, {
         category: "charter",
         name: "codex-api",
         status: ok ? "pass" : "fail",
         detail: "OpenAI-compatible charter runtime",
-        remediation: ok ? undefined : "Set NARADA_OPENAI_API_KEY or config.charter.api_key",
+        remediation: ok ? undefined : "Set OPENAI_API_KEY or config.charter.api_key",
       });
     } else if (runtime === "kimi-api") {
-      const ok = !!(options.scope.charter?.api_key || process.env.NARADA_KIMI_API_KEY || process.env.KIMI_API_KEY);
+      const ok = !!(options.scope.charter?.api_key || process.env.KIMI_API_KEY);
       pushCheck(checks, {
         category: "charter",
         name: "kimi-api",
         status: ok ? "pass" : "fail",
         detail: "Kimi-compatible charter runtime",
-        remediation: ok ? undefined : "Set NARADA_KIMI_API_KEY or config.charter.api_key",
+        remediation: ok ? undefined : "Set KIMI_API_KEY or config.charter.api_key",
       });
     }
   }

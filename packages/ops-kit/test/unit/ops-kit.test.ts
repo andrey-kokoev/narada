@@ -200,7 +200,7 @@ describe("ops-kit", () => {
 
     const envExample = fs.readFileSync(path.join(repoPath, ".env.example"), "utf-8");
     expect(envExample).toContain("GRAPH_ACCESS_TOKEN=");
-    expect(envExample).toContain("NARADA_OPENAI_API_KEY=");
+    expect(envExample).toContain("OPENAI_API_KEY=");
     expect(envExample).toContain("GRAPH_TENANT_ID=");
     expect(envExample).toContain("GRAPH_CLIENT_SECRET=");
 
@@ -256,7 +256,7 @@ describe("ops-kit", () => {
     };
     const report = preflight("help@example.com", { configPath, coordinatorConfig: coordinator, mailboxIdForTools: "help@example.com" } as any);
     expect(report.status).toBe("fail");
-    expect(report.nextActions.some((x) => x.includes("NARADA_KIMI_API_KEY"))).toBe(true);
+    expect(report.nextActions.some((x) => x.includes("KIMI_API_KEY"))).toBe(true);
     expect(report.nextActions.some((x) => x.includes("PGPASSWORD"))).toBe(true);
   });
 

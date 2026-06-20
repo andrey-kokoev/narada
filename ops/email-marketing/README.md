@@ -68,7 +68,7 @@ cp .env.example .env
 #   GRAPH_CLIENT_ID
 #   GRAPH_CLIENT_SECRET
 #   GRAPH_ACCESS_TOKEN
-#   NARADA_MARKETING_CHARTER_API_KEY
+#   MARKETING_CHARTER_API_KEY
 ```
 
 **Credential resolution order** (highest to lowest precedence):
@@ -174,7 +174,7 @@ complete. The dry run (Task 403) validates the full pipeline.
 | `GRAPH_CLIENT_ID` | Required | Required | `.env` → config |
 | `GRAPH_CLIENT_SECRET` | Required | Required | `.env` → config |
 | `GRAPH_ACCESS_TOKEN` | Required | Required | `.env` → Credential Manager → config |
-| `NARADA_MARKETING_CHARTER_API_KEY` | Required | Required | `.env` → config |
+| `MARKETING_CHARTER_API_KEY` | Required | Required | `.env` → config |
 | `KLAVIYO_API_KEY` | Not used | Required | `.env` → config |
 
 ---

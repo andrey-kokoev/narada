@@ -725,7 +725,7 @@ Resolved in `buildGraphTokenProvider()`.
 ### Charter Runtime API Key
 | Source | Env Var | Config Key |
 |--------|---------|------------|
-| OpenAI API key | `NARADA_OPENAI_API_KEY` or `OPENAI_API_KEY` | `charter.api_key` |
+| OpenAI API key | `OPENAI_API_KEY` | `charter.api_key` |
 
 Resolved in `validateCharterRuntimeConfig()`.
 

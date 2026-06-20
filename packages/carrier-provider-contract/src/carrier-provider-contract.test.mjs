@@ -23,7 +23,7 @@ test('provider registry exposes carrier-level defaults and support states', () =
   assert.equal(registry.providers['kimi-api'].credential_secret_ref, 'narada/provider/kimi-api/api-key');
   assert.equal(registry.providers['kimi-api'].credential_requirement.kind, PROVIDER_CREDENTIAL_REQUIREMENT_KINDS.API_KEY_SECRET);
   assert.equal(registry.providers['kimi-api'].credential_requirement.secret_ref, 'narada/provider/kimi-api/api-key');
-  assert.deepEqual(registry.providers['kimi-api'].credential_requirement.env_names, ['NARADA_KIMI_API_KEY', 'KIMI_API_KEY']);
+  assert.deepEqual(registry.providers['kimi-api'].credential_requirement.env_names, ['KIMI_API_KEY']);
   assert.equal(registry.providers['openai-api'].credential_secret_ref, 'narada/provider/openai-api/api-key');
   assert.equal(registry.providers['codex-subscription'].credential_secret_ref, undefined);
   assert.equal(registry.providers['codex-subscription'].credential_requirement.kind, PROVIDER_CREDENTIAL_REQUIREMENT_KINDS.LOCAL_CODEX_SUBSCRIPTION);
@@ -38,32 +38,28 @@ test('provider environment uses provider-specific env precedence', () => {
     NARADA_AI_BASE_URL: 'https://generic.example',
     NARADA_KIMI_MODEL: 'kimi-custom',
     NARADA_AI_MODEL: 'generic-model',
-    NARADA_KIMI_API_KEY: 'kimi-key',
     KIMI_API_KEY: 'kimi-native-key',
   });
 
   assert.equal(kimi.baseUrl, 'https://kimi.example');
   assert.equal(kimi.model, 'kimi-custom');
-  assert.equal(kimi.apiKey, 'kimi-key');
+  assert.equal(kimi.apiKey, 'kimi-native-key');
 
   const kimiCode = providerEnvironment('kimi-code-api', metadata, {
-    NARADA_KIMI_CODE_API_KEY: 'kimi-code-key',
     KIMI_CODE_API_KEY: 'kimi-code-native-key',
   });
 
   assert.equal(kimiCode.baseUrl, 'https://api.kimi.com/coding/');
   assert.equal(kimiCode.model, 'kimi-k2.6');
-  assert.equal(kimiCode.apiKey, 'kimi-code-key');
+  assert.equal(kimiCode.apiKey, 'kimi-code-native-key');
 
   const openai = providerEnvironment('openai-api', metadata, {
-    NARADA_OPENAI_API_KEY: 'openai-key',
     OPENAI_API_KEY: 'openai-native-key',
-    NARADA_AI_API_KEY: 'generic-key',
   });
-  assert.equal(openai.apiKey, 'openai-key');
+  assert.equal(openai.apiKey, 'openai-native-key');
 
   const noGenericFallback = providerEnvironment('kimi-api', metadata, {
-    NARADA_AI_API_KEY: 'generic-key',
+    UNUSED_API_KEY: 'generic-key',
   });
   assert.equal(noGenericFallback.apiKey, '');
 });

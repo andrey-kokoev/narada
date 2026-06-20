@@ -21,12 +21,12 @@ export interface ResolveSecretOptions {
 
 /**
  * Build the environment variable name for a secret.
- * Format: NARADA_{SITE_ID}_{SECRET_NAME} (uppercased, sanitized).
+ * Format: SITE_{SITE_ID}_{SECRET_NAME} (uppercased, sanitized).
  */
 export function envVarName(siteId: string, secretName: string): string {
   const safeSiteId = siteId.replace(/[^a-zA-Z0-9_]/g, "_").toUpperCase();
   const safeSecret = secretName.replace(/[^a-zA-Z0-9_]/g, "_").toUpperCase();
-  return `NARADA_${safeSiteId}_${safeSecret}`;
+  return `SITE_${safeSiteId}_${safeSecret}`;
 }
 
 /**
@@ -86,7 +86,7 @@ async function resolveFromCredentialManager(
  *
  * Native Windows precedence (highest to lowest):
  *   1. Windows Credential Manager
- *   2. Environment variable (NARADA_{SITE_ID}_{SECRET_NAME})
+ *   2. Environment variable (SITE_{SITE_ID}_{SECRET_NAME})
  *   3. .env file in site root
  *   4. Config file value (passed as options.configValue)
  *

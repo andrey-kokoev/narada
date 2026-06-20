@@ -39,7 +39,7 @@ Override: `NARADA_SITE_ROOT` environment variable
 Secrets are resolved in this precedence:
 
 1. **macOS Keychain** — `security find-generic-password -s "dev.narada.site.{site_id}.{secret_name}" -w`
-2. **Environment variable** — `NARADA_{SITE_ID}_{SECRET_NAME}`
+2. **Environment variable** — `SITE_{SITE_ID}_{SECRET_NAME}`
 3. **`.env` file** — in the Site root directory
 4. **Config value** — passed as `options.configValue`
 

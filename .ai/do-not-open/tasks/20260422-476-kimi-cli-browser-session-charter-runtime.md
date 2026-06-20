@@ -8,7 +8,7 @@ closed: 2026-04-22
 
 ## Context
 
-Narada currently treats `charter.runtime: "kimi-api"` as an OpenAI-compatible API-key runtime. That path requires `charter.api_key`, `NARADA_KIMI_API_KEY`, or `KIMI_API_KEY`.
+Narada currently treats `charter.runtime: "kimi-api"` as an OpenAI-compatible API-key runtime. That path requires `charter.api_key` or `KIMI_API_KEY`.
 
 This is too narrow. The local machine already has Kimi CLI installed and browser-authenticated:
 

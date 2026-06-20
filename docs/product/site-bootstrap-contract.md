@@ -325,12 +325,12 @@ Credentials are capability-bearing secrets, not ordinary Site knowledge. Site co
 
 **Windows native:**
 1. Windows Credential Manager (`keytar`)
-2. Environment variable (`NARADA_{SITE_ID}_{SECRET_NAME}`)
+2. Environment variable (`SITE_{SITE_ID}_{SECRET_NAME}`)
 3. `.env` file in Site root
 4. Config file value
 
 **WSL / Linux / macOS:**
-1. Environment variable (`NARADA_{SITE_ID}_{SECRET_NAME}`)
+1. Environment variable (`SITE_{SITE_ID}_{SECRET_NAME}`)
 2. `.env` file in Site root
 3. Config file value
 

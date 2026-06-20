@@ -24,12 +24,12 @@
       "support_state": "verified_supported",
       "base_url_env_names": ["NARADA_AI_BASE_URL"],
       "model_env_names": ["NARADA_AI_MODEL"],
-      "credential_env_names": ["NARADA_OPENAI_API_KEY", "OPENAI_API_KEY"],
+      "credential_env_names": ["OPENAI_API_KEY"],
       "credential_secret_ref": "narada/provider/openai-api/api-key",
       "credential_requirement": {
         "kind": "api_key_secret",
         "secret_ref": "narada/provider/openai-api/api-key",
-        "env_names": ["NARADA_OPENAI_API_KEY", "OPENAI_API_KEY"]
+        "env_names": ["OPENAI_API_KEY"]
       }
     },
     "kimi-api": {
@@ -40,12 +40,12 @@
       "support_state": "verified_supported",
       "base_url_env_names": ["NARADA_KIMI_API_BASE_URL", "NARADA_AI_BASE_URL"],
       "model_env_names": ["NARADA_KIMI_MODEL", "NARADA_AI_MODEL"],
-      "credential_env_names": ["NARADA_KIMI_API_KEY", "KIMI_API_KEY"],
+      "credential_env_names": ["KIMI_API_KEY"],
       "credential_secret_ref": "narada/provider/kimi-api/api-key",
       "credential_requirement": {
         "kind": "api_key_secret",
         "secret_ref": "narada/provider/kimi-api/api-key",
-        "env_names": ["NARADA_KIMI_API_KEY", "KIMI_API_KEY"]
+        "env_names": ["KIMI_API_KEY"]
       }
     },
     "kimi-code-api": {
@@ -56,12 +56,12 @@
       "support_state": "verified_supported",
       "base_url_env_names": ["NARADA_KIMI_CODE_API_BASE_URL", "NARADA_AI_BASE_URL"],
       "model_env_names": ["NARADA_KIMI_CODE_MODEL", "NARADA_AI_MODEL"],
-      "credential_env_names": ["NARADA_KIMI_CODE_API_KEY", "KIMI_CODE_API_KEY"],
+      "credential_env_names": ["KIMI_CODE_API_KEY"],
       "credential_secret_ref": "narada/provider/kimi-code-api/api-key",
       "credential_requirement": {
         "kind": "api_key_secret",
         "secret_ref": "narada/provider/kimi-code-api/api-key",
-        "env_names": ["NARADA_KIMI_CODE_API_KEY", "KIMI_CODE_API_KEY"]
+        "env_names": ["KIMI_CODE_API_KEY"]
       }
     },
     "anthropic-api": {
@@ -72,12 +72,12 @@
       "support_state": "verified_supported",
       "base_url_env_names": ["NARADA_AI_BASE_URL"],
       "model_env_names": ["NARADA_AI_MODEL"],
-      "credential_env_names": ["NARADA_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY"],
+      "credential_env_names": ["ANTHROPIC_API_KEY"],
       "credential_secret_ref": "narada/provider/anthropic-api/api-key",
       "credential_requirement": {
         "kind": "api_key_secret",
         "secret_ref": "narada/provider/anthropic-api/api-key",
-        "env_names": ["NARADA_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY"]
+        "env_names": ["ANTHROPIC_API_KEY"]
       }
     },
     "deepseek-api": {
@@ -88,12 +88,12 @@
       "support_state": "verified_supported",
       "base_url_env_names": ["DEEPSEEK_API_BASE_URL", "NARADA_AI_BASE_URL"],
       "model_env_names": ["DEEPSEEK_MODEL", "NARADA_AI_MODEL"],
-      "credential_env_names": ["NARADA_DEEPSEEK_API_KEY", "DEEPSEEK_API_KEY"],
+      "credential_env_names": ["DEEPSEEK_API_KEY"],
       "credential_secret_ref": "narada/provider/deepseek-api/api-key",
       "credential_requirement": {
         "kind": "api_key_secret",
         "secret_ref": "narada/provider/deepseek-api/api-key",
-        "env_names": ["NARADA_DEEPSEEK_API_KEY", "DEEPSEEK_API_KEY"]
+        "env_names": ["DEEPSEEK_API_KEY"]
       }
     },
     "codex-subscription": {

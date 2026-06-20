@@ -28,7 +28,7 @@ Examples:
 ```text
 NARADA_HELP_GRAPH_ACCESS_TOKEN
 NARADA_HELP_GRAPH_TENANT_ID
-NARADA_HELP_KIMI_API_KEY
+HELP_KIMI_API_KEY
 ```
 
 Where `HELP` is the `site_id` (normalized: uppercase, hyphen-safe).

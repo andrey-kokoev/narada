@@ -100,14 +100,14 @@ function dryRunEnv(runtime) {
   if (runtime === 'codex') return { NARADA_CODEX_CLI_SCRIPT: packagedLauncherPath };
   if (runtime === 'agent-cli') return {
     NARADA_PROVIDER_SECRET_STORE: 'disabled',
-    NARADA_KIMI_CODE_API_KEY: 'test-key',
+    KIMI_CODE_API_KEY: 'test-key',
   };
   if (runtime === 'agent-tui') return {
     NARADA_PROVIDER_SECRET_STORE: 'disabled',
     NARADA_INTELLIGENCE_PROVIDER: 'kimi-code-api',
     NARADA_AI_BASE_URL: 'https://api.kimi.com/coding/',
     NARADA_AI_MODEL: 'kimi-k2.6',
-    NARADA_KIMI_CODE_API_KEY: 'test-key',
+    KIMI_CODE_API_KEY: 'test-key',
   };
   return {};
 }

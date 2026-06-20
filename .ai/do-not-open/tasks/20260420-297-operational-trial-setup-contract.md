@@ -72,7 +72,7 @@ Define the exact setup contract for running the `help@global-maxima.com` mailbox
 - **Narada consumption:** `narada.sonar` uses `file:../narada/packages/...` dependencies plus pnpm workspace entries. This means `pnpm install` in `narada.sonar` is required after `pnpm build` in `narada` to sync file-link artifacts.
 - **Stale links observed:** At time of inventory, `narada.sonar/node_modules/@narada2/cli/dist/commands/` was missing ~45 files that exist in `narada/packages/layers/cli/dist/commands/`. This would cause `ERR_MODULE_NOT_FOUND` on CLI invocation. Documented in setup contract as a known issue with remediation.
 - **Outbound posture:** Config has `require_human_approval: false`, but `allowed_actions` excludes `send_reply`, so the effective posture is draft-only. This is safe for trial.
-- **Charter runtime:** Configured for `kimi-api` (Moonshot). Trial can run with mock/offline runner by omitting `NARADA_KIMI_API_KEY`.
+- **Charter runtime:** Configured for `kimi-api` (Moonshot). Trial can run with mock/offline runner by omitting `KIMI_API_KEY`.
 - **Knowledge directory:** `narada.sonar/mailboxes/help@global-maxima.com/knowledge/` is empty. Trial may proceed with empty knowledge (non-authoritative), but populating it improves reply quality.
 
 ### Boundary Preservation

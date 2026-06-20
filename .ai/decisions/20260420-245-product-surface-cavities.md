@@ -55,7 +55,7 @@ Each cavity is classified by **user-facing impact**, **implementation area**, an
 - `narada init --interactive` writes modern `scopes[]` but to `./config.json`, not `./config/config.json`
 - `want-mailbox` CLI missing `--graph-user-id`, `--folders`, `--data-root-dir` (library supports them)
 - Preflight only checks env vars, ignores config-file credentials
-- `.env.example` missing `GRAPH_ACCESS_TOKEN` and `NARADA_OPENAI_API_KEY`
+- `.env.example` missing `GRAPH_ACCESS_TOKEN` and `OPENAI_API_KEY`
 - Daemon defaults to `./config.json`, not ops-repo `./config/config.json`
 - No `narada doctor` command for post-activation health check
 

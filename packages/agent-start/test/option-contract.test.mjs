@@ -31,7 +31,7 @@ const baseArgs = [
 ];
 const baseTestEnv = {
   NARADA_PROVIDER_SECRET_STORE: 'disabled',
-  NARADA_KIMI_CODE_API_KEY: 'test-key',
+  KIMI_CODE_API_KEY: 'test-key',
 };
 
 function run(extraArgs = [], extraEnv = {}) {
@@ -59,7 +59,7 @@ function agentTuiEnv() {
     NARADA_INTELLIGENCE_PROVIDER: 'kimi-code-api',
     NARADA_AI_BASE_URL: 'https://api.kimi.com/coding/',
     NARADA_AI_MODEL: 'kimi-k2.6',
-    NARADA_KIMI_CODE_API_KEY: 'test-key',
+    KIMI_CODE_API_KEY: 'test-key',
   };
 }
 
@@ -96,7 +96,7 @@ test('pc site root option is exposed in dry-run output when supplied', () => {
 });
 
 test('agent-cli resolves provider credential from environment fallback and redacts output', () => {
-  const output = runOk(['--runtime', 'agent-cli', '--intelligence-provider', 'kimi-api'], { NARADA_KIMI_API_KEY: 'super-secret-test-key' });
+  const output = runOk(['--runtime', 'agent-cli', '--intelligence-provider', 'kimi-api'], { KIMI_API_KEY: 'super-secret-test-key' });
   const env = output.required_environment;
   assert.equal(output.intelligence_provider_resolution.source_field, 'cli_argument');
   assert.equal(output.intelligence_provider_resolution.credential_present, true);
@@ -104,15 +104,15 @@ test('agent-cli resolves provider credential from environment fallback and redac
   assert.equal(output.intelligence_provider_resolution.credential_requirement_kind, 'api_key_secret');
   assert.equal(output.intelligence_provider_resolution.credential_requirement.kind, 'api_key_secret');
   assert.equal(output.intelligence_provider_resolution.credential_secret_ref, 'narada/provider/kimi-api/api-key');
-  assert.equal(output.intelligence_provider_resolution.credential.source_env, 'NARADA_KIMI_API_KEY');
-  assert.equal(env.NARADA_KIMI_API_KEY, '<set>');
+  assert.equal(output.intelligence_provider_resolution.credential.source_env, 'KIMI_API_KEY');
+  assert.equal(env.KIMI_API_KEY, '<set>');
   assert.doesNotMatch(JSON.stringify(output), /super-secret-test-key/);
 });
 
 test('agent-cli fails launcher preflight when API provider credential is missing', () => {
   const result = runFailed(['--runtime', 'agent-cli'], {
     NARADA_PROVIDER_SECRET_STORE: 'disabled',
-    NARADA_KIMI_CODE_API_KEY: '',
+    KIMI_CODE_API_KEY: '',
     KIMI_CODE_API_KEY: '',
   });
   const refusal = JSON.parse(result.stdout);
@@ -121,7 +121,7 @@ test('agent-cli fails launcher preflight when API provider credential is missing
   assert.equal(refusal.credential_requirement_kind, 'api_key_secret');
   assert.equal(refusal.credential_requirement.kind, 'api_key_secret');
   assert.equal(refusal.credential_secret_ref, 'narada/provider/kimi-code-api/api-key');
-  assert.deepEqual(refusal.credential_env_names, ['NARADA_KIMI_CODE_API_KEY', 'KIMI_CODE_API_KEY']);
+  assert.deepEqual(refusal.credential_env_names, ['KIMI_CODE_API_KEY']);
 });
 
 test('agent-cli accepts explicit intelligence provider and materializes provider env', () => {
@@ -164,7 +164,7 @@ test('agent-cli can resolve intelligence provider from target site env file', ()
 test('agent-cli can resolve intelligence provider from ambient environment', () => {
   const output = runOk(['--runtime', 'agent-cli'], {
     NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
-    NARADA_KIMI_CODE_API_KEY: '',
+    KIMI_CODE_API_KEY: '',
   });
   assert.equal(output.intelligence_provider_resolution.source_field, 'environment');
   assert.equal(output.required_environment.NARADA_INTELLIGENCE_PROVIDER, 'codex-subscription');
@@ -175,7 +175,7 @@ test('agent-cli reports launcher env provider source when supplied by workspace 
     NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
     NARADA_INTELLIGENCE_PROVIDER_SOURCE_FIELD: 'launcher_env',
     NARADA_INTELLIGENCE_PROVIDER_SOURCE_PATH: 'C:/Users/Andrey/Narada/.env',
-    NARADA_KIMI_CODE_API_KEY: '',
+    KIMI_CODE_API_KEY: '',
   });
   assert.equal(output.intelligence_provider_resolution.source_field, 'launcher_env');
   assert.equal(output.intelligence_provider_resolution.source_path, 'C:/Users/Andrey/Narada/.env');
@@ -185,11 +185,11 @@ test('agent-cli reports launcher env provider source when supplied by workspace 
 test('agent-cli default provider falls back to registry default', () => {
   const output = runOk(['--runtime', 'agent-cli'], {
     NARADA_INTELLIGENCE_PROVIDER: '',
-    NARADA_KIMI_CODE_API_KEY: 'kimi-code-test-key',
+    KIMI_CODE_API_KEY: 'kimi-code-test-key',
   });
   assert.equal(output.intelligence_provider_resolution.source_field, 'default_for_agent_cli');
   assert.equal(output.required_environment.NARADA_INTELLIGENCE_PROVIDER, 'kimi-code-api');
-  assert.equal(output.required_environment.NARADA_KIMI_CODE_API_KEY, '<set>');
+  assert.equal(output.required_environment.KIMI_CODE_API_KEY, '<set>');
 });
 
 test('agent-cli exec launches package bin through node, not PowerShell', () => {
@@ -258,8 +258,7 @@ test('agent-tui materializes provider env without requiring ambient provider env
   assert.equal(env.NARADA_INTELLIGENCE_PROVIDER, 'kimi-code-api');
   assert.equal(env.NARADA_AI_BASE_URL, 'https://api.kimi.com/coding/');
   assert.equal(env.NARADA_AI_MODEL, 'kimi-k2.6');
-  assert.equal(Object.hasOwn(env, 'NARADA_KIMI_CODE_API_KEY'), true);
-  assert.equal(Object.hasOwn(env, 'NARADA_AI_API_KEY'), false);
+  assert.equal(Object.hasOwn(env, 'KIMI_CODE_API_KEY'), true);
   assert.equal(output.tool_fabric_adapter.expected_tools.includes('agent_context_startup_sequence'), true);
   assert.equal(output.tool_fabric_adapter.expected_tools.includes('mcp_output_show'), true);
   assert.equal(output.tool_fabric_adapter.expected_tools.includes('task_lifecycle_next'), true);

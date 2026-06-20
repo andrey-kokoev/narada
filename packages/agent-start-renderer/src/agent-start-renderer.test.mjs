@@ -18,7 +18,7 @@ test('formats agent-start preamble with redacted API keys and startup sequence',
     },
     required_environment: {
       NARADA_AGENT_ID: 'site.builder',
-      NARADA_AI_API_KEY: 'secret',
+      KIMI_API_KEY: 'secret',
     },
     startup_command: { name: 'agent_context_startup_sequence', arguments: {}, display: 'agent_context_startup_sequence({})' },
     startup_sequence: [{ tool: 'agent_context_startup_sequence', arguments: {} }],
@@ -28,7 +28,7 @@ test('formats agent-start preamble with redacted API keys and startup sequence',
 
   assert.match(text, /agent_start_event: evt_1/);
   assert.match(text, /identity: site\.builder/);
-  assert.match(text, /NARADA_AI_API_KEY=<set>/);
+  assert.match(text, /KIMI_API_KEY=<set>/);
   assert.doesNotMatch(text, /secret/);
   assert.match(text, /startup_command: agent_context_startup_sequence\(\{\}\)/);
   assert.match(text, /agent_context_startup_sequence \{\}/);
@@ -64,12 +64,12 @@ test('does not redact empty API key values', () => {
     role: 'builder',
     runtime: 'agent-cli',
     required_environment: {
-      NARADA_AI_API_KEY: '',
+      KIMI_API_KEY: '',
     },
     startup_sequence: [],
   }, { colorEnabled: false });
 
-  assert.match(text, /NARADA_AI_API_KEY=/);
+  assert.match(text, /KIMI_API_KEY=/);
   assert.doesNotMatch(text, /<set>/);
 });
 

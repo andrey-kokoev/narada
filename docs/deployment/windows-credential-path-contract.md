@@ -42,7 +42,7 @@ Secrets are resolved by name for a given site. The resolution order is:
 
 #### Environment Variables
 
-Format: `NARADA_{SITE_ID}_{SECRET_NAME}`
+Format: `SITE_{SITE_ID}_{SECRET_NAME}`
 
 - Site ID and secret name are uppercased.
 - Non-alphanumeric characters (except `_` and `-`) are replaced with `_`.
@@ -51,7 +51,7 @@ Examples:
 
 | Site ID | Secret Name | Env Var |
 |---------|-------------|---------|
-| `prod` | `api_key` | `NARADA_PROD_API_KEY` |
+| `prod` | `api_key` | `SITE_PROD_API_KEY` |
 | `my-site.dev` | `client-secret` | `NARADA_MY_SITE_DEV_CLIENT_SECRET` |
 
 #### Credential Manager Targets
@@ -79,7 +79,7 @@ const required = await resolveSecretRequired("prod", "api_key", "wsl");
 // → string (throws with actionable message if not found)
 
 // Build names manually
-envVarName("prod", "api_key");           // "NARADA_PROD_API_KEY"
+envVarName("prod", "api_key");           // "SITE_PROD_API_KEY"
 credentialManagerTarget("prod", "api_key"); // "Narada/prod/api_key"
 ```
 

@@ -18,7 +18,7 @@
 |----------------|------|-------|---------|
 | **§2.1 Native precedence**: CM → env → `.env` → config | `credentials.ts:120-142` | `credentials.test.ts:60-108` | ✅ Pass |
 | **§2.1 WSL precedence**: env → `.env` → config | `credentials.ts:125-142` | `credentials.test.ts:60-108` | ✅ Pass |
-| **§2.2 Env naming**: `NARADA_{SITE_ID}_{SECRET_NAME}` uppercased, sanitized | `credentials.ts:26-30` | `credentials.test.ts:12-21` | ✅ Pass |
+| **§2.2 Env naming**: `SITE_{SITE_ID}_{SECRET_NAME}` uppercased, sanitized | `credentials.ts:26-30` | `credentials.test.ts:12-21` | ✅ Pass |
 | **§2.2 CM target**: `Narada/{site_id}/{secret_name}` | `credentials.ts:36-40` | `credentials.test.ts:24-29` | ✅ Pass |
 | **§2.4 Native on non-Windows throws** | `credentials.ts:107-113` | `credentials.test.ts:115-126` | ✅ Pass |
 | **§2.4 Missing secret returns `null`** | `credentials.ts:144` | `credentials.test.ts:110-113` | ✅ Pass |

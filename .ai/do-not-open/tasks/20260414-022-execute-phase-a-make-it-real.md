@@ -36,7 +36,7 @@ Phase A was decomposed into 5 implementation tasks:
 - Added `CharterRuntimeConfig` to `ExchangeFsSyncConfig` in `packages/exchange-fs-sync/src/config/types.ts`
 - Added defaults (`runtime: "mock"`) in `packages/exchange-fs-sync/src/config/defaults.ts`
 - Added parsing and validation in `packages/exchange-fs-sync/src/config/load.ts`
-- Added `loadCharterEnv()` in `packages/exchange-fs-sync/src/config/env.ts` for `OPENAI_API_KEY` / `NARADA_OPENAI_API_KEY`
+- Added `loadCharterEnv()` in `packages/exchange-fs-sync/src/config/env.ts` for `OPENAI_API_KEY`
 - Updated `config.example.json`
 - Fixed existing config loader test to account for new `charter` field
 

@@ -375,7 +375,7 @@ Installs the `narada` CLI shim so the binary is available on PATH.
 
 | Source | Env Var | Config Key |
 |--------|---------|------------|
-| OpenAI API key | `NARADA_OPENAI_API_KEY` or `OPENAI_API_KEY` | `charter.api_key` |
+| OpenAI API key | `OPENAI_API_KEY` | `charter.api_key` |
 
 ### Secure storage
 

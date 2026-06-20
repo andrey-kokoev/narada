@@ -15,7 +15,7 @@ Narada’s production charter runtime will be the **Codex/OpenAI-compatible API 
 
 - **Production default**: `CodexCharterRunner` invoked via OpenAI-compatible HTTP API.
 - **Dev/test fallback**: `MockCharterRunner` remains available via explicit override or when no API key is configured.
-- **Secrets surface**: `OPENAI_API_KEY` (or `NARADA_OPENAI_API_KEY`) via environment variable; optional model/base URL overrides via config.
+- **Secrets surface**: `OPENAI_API_KEY` via environment variable; optional model/base URL overrides via config.
 - **Observability**: HTTP request/response logging at the adapter level; no new tracing infrastructure required for Phase A.
 - **Tool integration**: Tools will be invoked in-process by the daemon (the API runner receives tool schemas; the daemon executes approved tool calls and returns results to the runner).
 

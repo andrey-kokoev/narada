@@ -19,7 +19,7 @@ Add charter runtime configuration to the `exchange-fs-sync` config schema, loade
 
 4. `packages/exchange-fs-sync/src/config/env.ts`
    - Add `loadCharterEnv()` returning `{ openai_api_key?: string }`
-   - Read `OPENAI_API_KEY` and `NARADA_OPENAI_API_KEY`
+   - Read `OPENAI_API_KEY`
 
 5. `packages/exchange-fs-sync/config.example.json`
    - Add example `charter` section

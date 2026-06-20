@@ -13,12 +13,12 @@ import {
 
 describe("envVarName", () => {
   it("formats basic names", () => {
-    expect(envVarName("prod", "api_key")).toBe("NARADA_PROD_API_KEY");
+    expect(envVarName("prod", "api_key")).toBe("SITE_PROD_API_KEY");
   });
 
   it("sanitizes special characters", () => {
     expect(envVarName("my-site.dev", "client-secret")).toBe(
-      "NARADA_MY_SITE_DEV_CLIENT_SECRET",
+      "SITE_MY_SITE_DEV_CLIENT_SECRET",
     );
   });
 });
@@ -39,7 +39,7 @@ describe("resolveSecret", () => {
     tmpDir = mkdtempSync(join(tmpdir(), "cred-test-"));
     // Clear narada env vars
     for (const key of Object.keys(process.env)) {
-      if (key.startsWith("NARADA_")) delete process.env[key];
+      if ((key.startsWith("NARADA_") || key.startsWith("SITE_"))) delete process.env[key];
     }
     delete process.env.NARADA_SITE_ROOT;
     _setTestExecImpl(undefined);
@@ -48,7 +48,7 @@ describe("resolveSecret", () => {
   afterEach(() => {
     // Restore env
     for (const key of Object.keys(process.env)) {
-      if (key.startsWith("NARADA_")) delete process.env[key];
+      if ((key.startsWith("NARADA_") || key.startsWith("SITE_"))) delete process.env[key];
     }
     for (const [key, value] of Object.entries(originalEnv)) {
       process.env[key] = value;
@@ -73,7 +73,7 @@ describe("resolveSecret", () => {
       throw new Error("not found");
     });
 
-    process.env.NARADA_PROD_API_KEY = "env-secret";
+    process.env.SITE_PROD_API_KEY = "env-secret";
     const result = await resolveSecret("prod", "api_key");
     expect(result).toBe("env-secret");
   });
@@ -84,7 +84,7 @@ describe("resolveSecret", () => {
     });
 
     const envFile = join(tmpDir, ".env");
-    writeFileSync(envFile, "NARADA_PROD_API_KEY=dotenv-secret\n", "utf-8");
+    writeFileSync(envFile, "SITE_PROD_API_KEY=dotenv-secret\n", "utf-8");
     const result = await resolveSecret("prod", "api_key", {
       envFilePath: envFile,
     });
@@ -107,9 +107,9 @@ describe("resolveSecret", () => {
       throw new Error("not found");
     });
 
-    process.env.NARADA_PROD_API_KEY = "env-wins";
+    process.env.SITE_PROD_API_KEY = "env-wins";
     const envFile = join(tmpDir, ".env");
-    writeFileSync(envFile, "NARADA_PROD_API_KEY=dotenv-loses\n", "utf-8");
+    writeFileSync(envFile, "SITE_PROD_API_KEY=dotenv-loses\n", "utf-8");
     const result = await resolveSecret("prod", "api_key", {
       envFilePath: envFile,
     });
@@ -119,7 +119,7 @@ describe("resolveSecret", () => {
   it("Keychain wins over env var", async () => {
     _setTestExecImpl(async () => ({ stdout: "keychain-wins\n", stderr: "" }));
 
-    process.env.NARADA_PROD_API_KEY = "env-loses";
+    process.env.SITE_PROD_API_KEY = "env-loses";
     const result = await resolveSecret("prod", "api_key");
     expect(result).toBe("keychain-wins");
   });
@@ -129,7 +129,7 @@ describe("resolveSecret", () => {
       throw new Error("not found");
     });
 
-    process.env.NARADA_PROD_API_KEY = "";
+    process.env.SITE_PROD_API_KEY = "";
     const result = await resolveSecret("prod", "api_key", {
       configValue: "config-secret",
     });
@@ -154,7 +154,7 @@ describe("resolveSecret", () => {
     const siteRoot = join(tmpDir, "prod");
     mkdirSync(siteRoot, { recursive: true });
     const envFile = join(siteRoot, ".env");
-    writeFileSync(envFile, "NARADA_PROD_API_KEY=site-dotenv\n", "utf-8");
+    writeFileSync(envFile, "SITE_PROD_API_KEY=site-dotenv\n", "utf-8");
 
     const result = await resolveSecret("prod", "api_key");
     expect(result).toBe("site-dotenv");
@@ -165,7 +165,7 @@ describe("resolveSecretRequired", () => {
   beforeEach(() => {
     _setTestExecImpl(undefined);
     for (const key of Object.keys(process.env)) {
-      if (key.startsWith("NARADA_")) delete process.env[key];
+      if ((key.startsWith("NARADA_") || key.startsWith("SITE_"))) delete process.env[key];
     }
   });
 
