@@ -131,6 +131,14 @@ export interface ScheduledTaskInfo {
   command: string;
 }
 
+export interface SupervisorWatchdogTaskOptions extends TaskSchedulerOptions {
+  supervisorScriptPath?: string;
+}
+
+function psDoubleQuoted(value: string): string {
+  return value.replace(/`/g, '``').replace(/"/g, '`"');
+}
+
 /**
  * Generate the PowerShell command to register a scheduled task for a Site.
  */
@@ -162,6 +170,46 @@ $Principal = New-ScheduledTaskPrincipal -UserId "$env:USERNAME" -LogonType Inter
 
 Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal -Force
 Write-Host "Registered scheduled task: $TaskName (every ${intervalMinutes} minutes)"
+`.trim();
+}
+
+/**
+ * Generate a Windows Scheduled Task installer for an idempotent supervisor watchdog.
+ *
+ * The task intentionally invokes `supervisor.ps1 start` at logon and on a recurring
+ * interval. The supervisor start command owns stale-PID/dead-child detection, so a
+ * child daemon that exits after the scheduled task becomes Ready is restarted by
+ * the next watchdog tick instead of requiring manual task restart.
+ */
+export function generateSupervisorWatchdogTaskScript(
+  options: SupervisorWatchdogTaskOptions,
+): string {
+  const {
+    siteId,
+    siteRoot,
+    intervalMinutes = 5,
+    supervisorScriptPath = join(siteRoot, 'scripts', 'supervisor.ps1'),
+    taskName = `Narada-Supervisor-${siteId}`,
+  } = options;
+
+  return `
+# Register Narada supervisor watchdog task for site: ${siteId}
+$TaskName = "${psDoubleQuoted(taskName)}"
+$SiteRoot = "${psDoubleQuoted(siteRoot)}"
+$SupervisorScript = "${psDoubleQuoted(supervisorScriptPath)}"
+
+if (-not (Test-Path -LiteralPath $SupervisorScript)) {
+    throw "narada_supervisor_script_missing: $SupervisorScript"
+}
+
+$Action = New-ScheduledTaskAction -Execute "pwsh.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File '$SupervisorScript' start -SiteRoot '$SiteRoot'" -WorkingDirectory $SiteRoot
+$LogonTrigger = New-ScheduledTaskTrigger -AtLogOn
+$WatchdogTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes ${intervalMinutes}) -RepetitionDuration (New-TimeSpan -Days 3650)
+$Settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes ${Math.max(2, intervalMinutes - 1)})
+$Principal = New-ScheduledTaskPrincipal -UserId "$env:USERNAME" -LogonType Interactive
+
+Register-ScheduledTask -TaskName $TaskName -Action $Action -Trigger @($LogonTrigger, $WatchdogTrigger) -Settings $Settings -Principal $Principal -Force
+Write-Host "Registered supervisor watchdog task: $TaskName (logon + every ${intervalMinutes} minutes)"
 `.trim();
 }
 

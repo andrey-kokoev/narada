@@ -6,6 +6,7 @@ import {
   generateSystemdUnits,
   generateCronEntry,
   generateShellScript,
+  generateSupervisorWatchdogTaskScript,
   writeSystemdUnits,
   writeShellScript,
 } from "../../src/supervisor.js";
@@ -93,6 +94,25 @@ describe("supervisor templates", () => {
       const path = await writeShellScript(config);
       const content = readFileSync(path, "utf8");
       expect(content).toContain("#!/bin/bash");
+    });
+  });
+
+  describe("generateSupervisorWatchdogTaskScript", () => {
+    it("generates a logon and recurring watchdog for the idempotent Windows supervisor", () => {
+      const script = generateSupervisorWatchdogTaskScript({
+        siteId: "test-site",
+        siteRoot: tempDir,
+        intervalMinutes: 3,
+      });
+
+      expect(script).toContain("Narada-Supervisor-test-site");
+      expect(script).toContain("supervisor.ps1");
+      expect(script).toContain(" start -SiteRoot ");
+      expect(script).toContain("New-ScheduledTaskTrigger -AtLogOn");
+      expect(script).toContain("RepetitionInterval (New-TimeSpan -Minutes 3)");
+      expect(script).toContain("-MultipleInstances IgnoreNew");
+      expect(script).toContain("-RestartCount 3");
+      expect(script).toContain("Register-ScheduledTask");
     });
   });
 });

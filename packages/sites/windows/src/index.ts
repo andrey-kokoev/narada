@@ -84,6 +84,7 @@ export {
   generateShellScript,
   writeShellScript,
   generateRegisterTaskScript,
+  generateSupervisorWatchdogTaskScript,
   generateUnregisterTaskScript,
   generateTaskStatusScript,
   buildTaskInfo,
