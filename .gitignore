@@ -24,6 +24,8 @@ config.json
 .ai/runtime/
 .ai/mcp/
 .ai/operator-surface-send-queue/
+.feedback/
+.sop/
 .crew/agent-shortcuts/
 .narada/crew/agent-start-events/
 .narada/crew/agent-start-results/
@@ -34,8 +36,10 @@ config.json
 .narada/crew/nars-sessions/
 .narada/auth/
 .narada/site-continuity/
+.narada/site-tool-surface.manifest.json
 .narada/tmp/
 packages/*/target/
 packages/layers/cli/.ai/inbox.db
 packages/layers/cli/.ai/inbox.db-*
 packages/layers/cli/.ai/mutation-evidence/
+tools/operator-surface-carriers/
