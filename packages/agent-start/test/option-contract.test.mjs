@@ -104,7 +104,7 @@ test('agent-cli resolves provider credential from environment fallback and redac
   assert.equal(output.intelligence_provider_resolution.credential_source, 'environment');
   assert.equal(output.intelligence_provider_resolution.credential_requirement_kind, 'api_key_secret');
   assert.equal(output.intelligence_provider_resolution.credential_requirement.kind, 'api_key_secret');
-  assert.equal(output.intelligence_provider_resolution.credential_secret_ref, 'provider/kimi-api/credential');
+  assert.equal(output.intelligence_provider_resolution.credential_secret_ref, 'narada/provider/kimi-api/api-key');
   assert.equal(output.intelligence_provider_resolution.credential.source_env, 'KIMI_API_KEY');
   assert.equal(env.KIMI_API_KEY, '<set>');
   assert.doesNotMatch(JSON.stringify(output), /super-secret-test-key/);
@@ -120,7 +120,7 @@ test('agent-cli fails launcher preflight when API provider credential is missing
   assert.equal(refusal.intelligence_provider, 'kimi-code-api');
   assert.equal(refusal.credential_requirement_kind, 'api_key_secret');
   assert.equal(refusal.credential_requirement.kind, 'api_key_secret');
-  assert.equal(refusal.credential_secret_ref, 'provider/kimi-code-api/credential');
+  assert.equal(refusal.credential_secret_ref, 'narada/provider/kimi-code-api/api-key');
   assert.deepEqual(refusal.credential_env_names, ['KIMI_CODE_API_KEY']);
 });
 

@@ -20,11 +20,11 @@ test('provider registry exposes carrier-level defaults and support states', () =
   assert.deepEqual(registry.support_states, Object.values(PROVIDER_SUPPORT_STATES));
   assert.deepEqual(registry.credential_requirement_kinds, Object.values(PROVIDER_CREDENTIAL_REQUIREMENT_KINDS));
   assert.equal(registry.providers['codex-subscription'].support_state, PROVIDER_SUPPORT_STATES.VERIFIED_SUPPORTED);
-  assert.equal(registry.providers['kimi-api'].credential_secret_ref, 'provider/kimi-api/credential');
+  assert.equal(registry.providers['kimi-api'].credential_secret_ref, 'narada/provider/kimi-api/api-key');
   assert.equal(registry.providers['kimi-api'].credential_requirement.kind, PROVIDER_CREDENTIAL_REQUIREMENT_KINDS.API_KEY_SECRET);
-  assert.equal(registry.providers['kimi-api'].credential_requirement.secret_ref, 'provider/kimi-api/credential');
+  assert.equal(registry.providers['kimi-api'].credential_requirement.secret_ref, 'narada/provider/kimi-api/api-key');
   assert.deepEqual(registry.providers['kimi-api'].credential_requirement.env_names, ['KIMI_API_KEY']);
-  assert.equal(registry.providers['openai-api'].credential_secret_ref, 'provider/openai-api/credential');
+  assert.equal(registry.providers['openai-api'].credential_secret_ref, 'narada/provider/openai-api/api-key');
   assert.equal(registry.providers['codex-subscription'].credential_secret_ref, undefined);
   assert.equal(registry.providers['codex-subscription'].credential_requirement.kind, PROVIDER_CREDENTIAL_REQUIREMENT_KINDS.LOCAL_CODEX_SUBSCRIPTION);
 });

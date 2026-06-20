@@ -25,10 +25,10 @@
       "base_url_env_names": ["OPENAI_BASE_URL"],
       "model_env_names": ["OPENAI_MODEL"],
       "credential_env_names": ["OPENAI_API_KEY"],
-      "credential_secret_ref": "provider/openai-api/credential",
+      "credential_secret_ref": "narada/provider/openai-api/api-key",
       "credential_requirement": {
         "kind": "api_key_secret",
-        "secret_ref": "provider/openai-api/credential",
+        "secret_ref": "narada/provider/openai-api/api-key",
         "env_names": ["OPENAI_API_KEY"]
       }
     },
@@ -41,10 +41,10 @@
       "base_url_env_names": ["KIMI_API_BASE_URL"],
       "model_env_names": ["KIMI_MODEL"],
       "credential_env_names": ["KIMI_API_KEY"],
-      "credential_secret_ref": "provider/kimi-api/credential",
+      "credential_secret_ref": "narada/provider/kimi-api/api-key",
       "credential_requirement": {
         "kind": "api_key_secret",
-        "secret_ref": "provider/kimi-api/credential",
+        "secret_ref": "narada/provider/kimi-api/api-key",
         "env_names": ["KIMI_API_KEY"]
       }
     },
@@ -57,10 +57,10 @@
       "base_url_env_names": ["KIMI_CODE_API_BASE_URL"],
       "model_env_names": ["KIMI_CODE_MODEL"],
       "credential_env_names": ["KIMI_CODE_API_KEY"],
-      "credential_secret_ref": "provider/kimi-code-api/credential",
+      "credential_secret_ref": "narada/provider/kimi-code-api/api-key",
       "credential_requirement": {
         "kind": "api_key_secret",
-        "secret_ref": "provider/kimi-code-api/credential",
+        "secret_ref": "narada/provider/kimi-code-api/api-key",
         "env_names": ["KIMI_CODE_API_KEY"]
       }
     },
@@ -73,10 +73,10 @@
       "base_url_env_names": ["ANTHROPIC_BASE_URL"],
       "model_env_names": ["ANTHROPIC_MODEL"],
       "credential_env_names": ["ANTHROPIC_API_KEY"],
-      "credential_secret_ref": "provider/anthropic-api/credential",
+      "credential_secret_ref": "narada/provider/anthropic-api/api-key",
       "credential_requirement": {
         "kind": "api_key_secret",
-        "secret_ref": "provider/anthropic-api/credential",
+        "secret_ref": "narada/provider/anthropic-api/api-key",
         "env_names": ["ANTHROPIC_API_KEY"]
       }
     },
@@ -89,10 +89,10 @@
       "base_url_env_names": ["DEEPSEEK_API_BASE_URL"],
       "model_env_names": ["DEEPSEEK_MODEL"],
       "credential_env_names": ["DEEPSEEK_API_KEY"],
-      "credential_secret_ref": "provider/deepseek-api/credential",
+      "credential_secret_ref": "narada/provider/deepseek-api/api-key",
       "credential_requirement": {
         "kind": "api_key_secret",
-        "secret_ref": "provider/deepseek-api/credential",
+        "secret_ref": "narada/provider/deepseek-api/api-key",
         "env_names": ["DEEPSEEK_API_KEY"]
       }
     },

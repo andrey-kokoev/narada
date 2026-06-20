@@ -655,6 +655,8 @@ function intelligenceProviderEnvironmentProjection(providerResolution) {
   const model = firstEnvironmentValue(metadata.model_env_names) ?? metadata.default_model;
   const env = {
     NARADA_INTELLIGENCE_PROVIDER: provider,
+    NARADA_AI_BASE_URL: baseUrl,
+    NARADA_AI_MODEL: model,
   };
   const primaryBaseUrlEnv = metadata.base_url_env_names?.[0];
   if (primaryBaseUrlEnv) {
@@ -784,7 +786,7 @@ function redactProviderCredentialRequirement(requirement) {
 function providerCredentialSecretRef(provider, metadata) {
   if (metadata.credential_secret_ref) return metadata.credential_secret_ref;
   if ((metadata.credential_env_names ?? []).length === 0) return null;
-  return `provider/${provider}/credential`;
+  return `narada/provider/${provider}/api-key`;
 }
 
 function providerSecretStoreEnabled() {
