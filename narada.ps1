@@ -27,11 +27,17 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$naradaProperRoot = $PSScriptRoot
 
 if ($Command -eq "carrier") {
-  $carrier = "C:\Users\Andrey\Narada\tools\carrier\Start-NaradaCarrier.ps1"
+  $naradaHome = if ($env:NARADA_HOME) { $env:NARADA_HOME } elseif ($env:USERPROFILE) { Join-Path $env:USERPROFILE "Narada" } else { $naradaProperRoot }
+  $carrierCandidates = @(
+    (Join-Path $naradaHome "tools\carrier\Start-NaradaCarrier.ps1"),
+    (Join-Path $naradaProperRoot "tools\carrier\Start-NaradaCarrier.ps1")
+  )
+  $carrier = $carrierCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
   if (-not (Test-Path -LiteralPath $carrier -PathType Leaf)) {
-    throw "narada_carrier_start_missing: $carrier"
+    throw "narada_carrier_start_missing: searched $($carrierCandidates -join ', ')"
   }
   $carrierFlags = @($RemainingArgs)
   if ($Site) { $carrierFlags += @("-Site", $Site) }
@@ -49,7 +55,6 @@ if ($Command -ne "agent-start") {
 }
 
 $siteRoot = if ($env:NARADA_LAUNCH_REGISTRY_SITE_ROOT) { $env:NARADA_LAUNCH_REGISTRY_SITE_ROOT } else { $PSScriptRoot }
-$naradaProperRoot = $PSScriptRoot
 $agentStart = Join-Path $naradaProperRoot "packages\agent-start\src\narada-agent-start.ts"
 if (-not (Test-Path -LiteralPath $agentStart)) {
   throw "packaged_agent_start_missing: $agentStart"

@@ -22,13 +22,13 @@
       "default_model": "gpt-5.5",
       "adapter_kind": "openai-compatible-chat-completions",
       "support_state": "verified_supported",
-      "base_url_env_names": ["NARADA_AI_BASE_URL"],
-      "model_env_names": ["NARADA_AI_MODEL"],
+      "base_url_env_names": ["OPENAI_BASE_URL"],
+      "model_env_names": ["OPENAI_MODEL"],
       "credential_env_names": ["OPENAI_API_KEY"],
-      "credential_secret_ref": "narada/provider/openai-api/api-key",
+      "credential_secret_ref": "provider/openai-api/credential",
       "credential_requirement": {
         "kind": "api_key_secret",
-        "secret_ref": "narada/provider/openai-api/api-key",
+        "secret_ref": "provider/openai-api/credential",
         "env_names": ["OPENAI_API_KEY"]
       }
     },
@@ -38,13 +38,13 @@
       "default_model": "kimi-k2.6",
       "adapter_kind": "openai-compatible-chat-completions",
       "support_state": "verified_supported",
-      "base_url_env_names": ["NARADA_KIMI_API_BASE_URL", "NARADA_AI_BASE_URL"],
-      "model_env_names": ["NARADA_KIMI_MODEL", "NARADA_AI_MODEL"],
+      "base_url_env_names": ["KIMI_API_BASE_URL"],
+      "model_env_names": ["KIMI_MODEL"],
       "credential_env_names": ["KIMI_API_KEY"],
-      "credential_secret_ref": "narada/provider/kimi-api/api-key",
+      "credential_secret_ref": "provider/kimi-api/credential",
       "credential_requirement": {
         "kind": "api_key_secret",
-        "secret_ref": "narada/provider/kimi-api/api-key",
+        "secret_ref": "provider/kimi-api/credential",
         "env_names": ["KIMI_API_KEY"]
       }
     },
@@ -54,13 +54,13 @@
       "default_model": "kimi-k2.6",
       "adapter_kind": "openai-compatible-chat-completions",
       "support_state": "verified_supported",
-      "base_url_env_names": ["NARADA_KIMI_CODE_API_BASE_URL", "NARADA_AI_BASE_URL"],
-      "model_env_names": ["NARADA_KIMI_CODE_MODEL", "NARADA_AI_MODEL"],
+      "base_url_env_names": ["KIMI_CODE_API_BASE_URL"],
+      "model_env_names": ["KIMI_CODE_MODEL"],
       "credential_env_names": ["KIMI_CODE_API_KEY"],
-      "credential_secret_ref": "narada/provider/kimi-code-api/api-key",
+      "credential_secret_ref": "provider/kimi-code-api/credential",
       "credential_requirement": {
         "kind": "api_key_secret",
-        "secret_ref": "narada/provider/kimi-code-api/api-key",
+        "secret_ref": "provider/kimi-code-api/credential",
         "env_names": ["KIMI_CODE_API_KEY"]
       }
     },
@@ -70,13 +70,13 @@
       "default_model": "claude-sonnet-4.6",
       "adapter_kind": "anthropic-messages",
       "support_state": "verified_supported",
-      "base_url_env_names": ["NARADA_AI_BASE_URL"],
-      "model_env_names": ["NARADA_AI_MODEL"],
+      "base_url_env_names": ["ANTHROPIC_BASE_URL"],
+      "model_env_names": ["ANTHROPIC_MODEL"],
       "credential_env_names": ["ANTHROPIC_API_KEY"],
-      "credential_secret_ref": "narada/provider/anthropic-api/api-key",
+      "credential_secret_ref": "provider/anthropic-api/credential",
       "credential_requirement": {
         "kind": "api_key_secret",
-        "secret_ref": "narada/provider/anthropic-api/api-key",
+        "secret_ref": "provider/anthropic-api/credential",
         "env_names": ["ANTHROPIC_API_KEY"]
       }
     },
@@ -86,13 +86,13 @@
       "default_model": "deepseek-v4-flash",
       "adapter_kind": "openai-compatible-chat-completions",
       "support_state": "verified_supported",
-      "base_url_env_names": ["DEEPSEEK_API_BASE_URL", "NARADA_AI_BASE_URL"],
-      "model_env_names": ["DEEPSEEK_MODEL", "NARADA_AI_MODEL"],
+      "base_url_env_names": ["DEEPSEEK_API_BASE_URL"],
+      "model_env_names": ["DEEPSEEK_MODEL"],
       "credential_env_names": ["DEEPSEEK_API_KEY"],
-      "credential_secret_ref": "narada/provider/deepseek-api/api-key",
+      "credential_secret_ref": "provider/deepseek-api/credential",
       "credential_requirement": {
         "kind": "api_key_secret",
-        "secret_ref": "narada/provider/deepseek-api/api-key",
+        "secret_ref": "provider/deepseek-api/credential",
         "env_names": ["DEEPSEEK_API_KEY"]
       }
     },
@@ -103,7 +103,7 @@
       "adapter_kind": "codex-mcp-server",
       "support_state": "verified_supported",
       "base_url_env_names": [],
-      "model_env_names": ["NARADA_CODEX_MODEL", "NARADA_AI_MODEL"],
+      "model_env_names": ["CODEX_MODEL", "NARADA_CODEX_MODEL"],
       "credential_env_names": [],
       "credential_requirement": {
         "kind": "local_codex_subscription"

@@ -279,6 +279,8 @@ const INTELLIGENCE_PROVIDER_METADATA = Object.freeze(INTELLIGENCE_PROVIDER_METAD
 const ADMITTED_INTELLIGENCE_PROVIDERS = Object.freeze(Object.keys(INTELLIGENCE_PROVIDER_METADATA));
 const DEFAULT_AGENT_CLI_INTELLIGENCE_PROVIDER = INTELLIGENCE_PROVIDER_METADATA_PACKET.default_provider ?? 'kimi-code-api';
 const PROVIDER_SECRET_STORE_MODE_ENV = 'NARADA_PROVIDER_SECRET_STORE';
+const CODEX_SUBSCRIPTION_PREFLIGHT_ENV = 'NARADA_CODEX_SUBSCRIPTION_PREFLIGHT';
+const CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS = 60000;
 const SECRET_MANAGEMENT_LOOKUP_TIMEOUT_MS = 5000;
 const SECRET_MANAGEMENT_LOOKUP_SCRIPT = `
 $ErrorActionPreference = 'SilentlyContinue'
@@ -315,6 +317,63 @@ function runtimeRefusal(candidate) {
     admitted_runtime_substrate_kinds: [...ADMITTED_RUNTIME_SUBSTRATE_KINDS],
     reason: 'runtime_substrate_kind is not admitted by narada.runtime_substrate_kind.v1',
     required_next_step: 'Admit the new runtime in a later contract version before startup or materialization accepts it.',
+  };
+}
+
+function codexSubscriptionPreflightEnabled() {
+  const mode = String(process.env[CODEX_SUBSCRIPTION_PREFLIGHT_ENV] ?? '').trim().toLowerCase();
+  return !['0', 'false', 'off', 'disabled', 'skip', 'none'].includes(mode);
+}
+
+function codexSubscriptionPreflight(provider) {
+  const mode = String(process.env[CODEX_SUBSCRIPTION_PREFLIGHT_ENV] ?? '').trim().toLowerCase();
+  if (dryRun && mode !== 'force') {
+    return {
+      schema: 'narada.codex_subscription.preflight.v1',
+      status: 'skipped_dry_run',
+      ok: true,
+      provider,
+      command: 'codex exec --json',
+      reason: 'Dry-run validates launch shape without making a provider call.',
+    };
+  }
+  if (!codexSubscriptionPreflightEnabled()) {
+    return {
+      schema: 'narada.codex_subscription.preflight.v1',
+      status: 'disabled_by_environment',
+      ok: true,
+      provider,
+      command: 'codex exec --json',
+      environment_variable: CODEX_SUBSCRIPTION_PREFLIGHT_ENV,
+    };
+  }
+
+  const command = process.env.NARADA_CODEX_COMMAND ?? 'codex';
+  const prompt = 'Return exactly: ok';
+  const result = spawnSync(command, ['exec', '--json', prompt], {
+    cwd: sessionSiteRoot,
+    encoding: 'utf8',
+    timeout: CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS,
+    windowsHide: true,
+    env: { ...process.env },
+  });
+  const stdout = String(result.stdout ?? '');
+  const stderr = String(result.stderr ?? '');
+  const combined = `${stdout}\n${stderr}`;
+  const unauthorized = /401\s+Unauthorized|Unauthorized/i.test(combined);
+  return {
+    schema: 'narada.codex_subscription.preflight.v1',
+    status: result.status === 0 ? 'passed' : unauthorized ? 'failed_unauthorized' : 'failed',
+    ok: result.status === 0,
+    provider,
+    command: `${command} exec --json`,
+    exit_code: result.status,
+    signal: result.signal,
+    error: result.error ? result.error.message : null,
+    unauthorized,
+    stdout_first_line: stdout.split(/\r?\n/).find((line) => line.trim()) ?? '',
+    stderr_first_line: stderr.split(/\r?\n/).find((line) => line.trim()) ?? '',
+    timeout_ms: CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS,
   };
 }
 
@@ -592,11 +651,19 @@ function intelligenceProviderEnvironmentProjection(providerResolution) {
   const provider = providerResolution.intelligence_provider;
   const metadata = INTELLIGENCE_PROVIDER_METADATA[provider];
   const credential = resolveProviderCredential(provider, metadata);
+  const baseUrl = firstEnvironmentValue(metadata.base_url_env_names) ?? metadata.base_url;
+  const model = firstEnvironmentValue(metadata.model_env_names) ?? metadata.default_model;
   const env = {
     NARADA_INTELLIGENCE_PROVIDER: provider,
-    NARADA_AI_BASE_URL: firstEnvironmentValue(metadata.base_url_env_names) ?? metadata.base_url,
-    NARADA_AI_MODEL: firstEnvironmentValue(metadata.model_env_names) ?? metadata.default_model,
   };
+  const primaryBaseUrlEnv = metadata.base_url_env_names?.[0];
+  if (primaryBaseUrlEnv) {
+    env[primaryBaseUrlEnv] = baseUrl;
+  }
+  const primaryModelEnv = metadata.model_env_names?.[0];
+  if (primaryModelEnv) {
+    env[primaryModelEnv] = model;
+  }
   if (credential.primary_credential_env) {
     env[credential.primary_credential_env] = credential.value ?? '';
   }
@@ -609,6 +676,22 @@ function resolveProviderCredential(provider, metadata) {
   const primaryCredentialEnv = credentialEnvNames[0] ?? null;
   const secretRef = credentialRequirement.secret_ref ?? null;
   if (credentialRequirement.kind !== 'api_key_secret') {
+    if (credentialRequirement.kind === 'local_codex_subscription') {
+      const preflight = codexSubscriptionPreflight(provider);
+      return {
+        credential_required: true,
+        credential_present: preflight.ok,
+        credential_source: preflight.status,
+        credential_requirement_kind: credentialRequirement.kind,
+        credential_requirement: redactProviderCredentialRequirement(credentialRequirement),
+        credential_secret_ref: null,
+        primary_credential_env: null,
+        credential_env_names: [],
+        source_env: null,
+        value: '',
+        preflight,
+      };
+    }
     return {
       credential_required: false,
       credential_present: false,
@@ -701,7 +784,7 @@ function redactProviderCredentialRequirement(requirement) {
 function providerCredentialSecretRef(provider, metadata) {
   if (metadata.credential_secret_ref) return metadata.credential_secret_ref;
   if ((metadata.credential_env_names ?? []).length === 0) return null;
-  return `narada/provider/${provider}/api-key`;
+  return `provider/${provider}/credential`;
 }
 
 function providerSecretStoreEnabled() {
@@ -746,6 +829,28 @@ function annotateIntelligenceProviderCredential(providerResolution, credential) 
 }
 
 function providerCredentialRefusal(providerResolution, credential) {
+  if (credential.credential_requirement_kind === 'local_codex_subscription') {
+    return withResolutionStates({
+      schema: INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
+      status: 'refused',
+      reason_code: 'local_codex_subscription_auth_unavailable',
+      intelligence_provider: providerResolution?.intelligence_provider,
+      credential_requirement_kind: credential.credential_requirement_kind,
+      credential_requirement: credential.credential_requirement,
+      credential_source: credential.credential_source,
+      credential_present: false,
+      preflight: credential.preflight,
+      reason: 'The selected provider uses local Codex subscription auth, but the Codex CLI preflight did not complete successfully.',
+      required_next_step: 'Run codex login or repair local Codex subscription auth, then retry the launcher. For an intentional diagnostic bypass, set NARADA_CODEX_SUBSCRIPTION_PREFLIGHT=disabled.',
+    }, [
+      ...(providerResolution?.resolution_states ?? []),
+      {
+        state: 'launch_refused',
+        reason_code: 'local_codex_subscription_auth_unavailable',
+        credential_requirement_kind: credential.credential_requirement_kind,
+      },
+    ]);
+  }
   const states = [
     ...(providerResolution?.resolution_states ?? []),
     {

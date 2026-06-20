@@ -101,7 +101,7 @@ describe("ToolRunner", () => {
         false_cmd: {
           id: "false_cmd",
           source_type: "local_executable",
-          executable_path: "false",
+          executable_path: process.execPath,
         },
       });
 

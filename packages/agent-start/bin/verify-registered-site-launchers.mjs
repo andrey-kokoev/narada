@@ -127,7 +127,7 @@ function validateLaunch(record, runtime, launch) {
     if (env.NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION !== 'true') failures.push({ reason: 'agent_tui_provider_execution_env_missing', actual: env.NARADA_AGENT_TUI_ENABLE_PROVIDER_EXECUTION });
     if (env.NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND !== 'codex_subscription_adapter') failures.push({ reason: 'agent_tui_provider_adapter_env_mismatch', actual: env.NARADA_AGENT_TUI_PROVIDER_ADAPTER_KIND });
     if (!env.NARADA_INTELLIGENCE_PROVIDER) failures.push({ reason: 'agent_tui_intelligence_provider_env_missing' });
-    if (!env.NARADA_AI_MODEL) failures.push({ reason: 'agent_tui_model_env_missing' });
+    if (!env.KIMI_CODE_MODEL && !env.CODEX_MODEL) failures.push({ reason: 'agent_tui_model_env_missing' });
   }
 
   return failures;
