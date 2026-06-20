@@ -50,7 +50,7 @@ Graph API credentials are **required**. Klaviyo credentials are **not required**
 
 ```bash
 # Env vars
-env | grep -E '^(GRAPH_|NARADA_OPENAI|OPENAI_)' | cut -d= -f1
+env | grep -E '^(GRAPH_|OPENAI_)' | cut -d= -f1
 
 # Secure storage (Windows Credential Manager)
 narada doctor --site <site-id> --verbose
