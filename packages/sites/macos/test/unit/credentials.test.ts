@@ -13,7 +13,7 @@ import {
 
 describe("envVarName", () => {
   it("formats basic names", () => {
-    expect(envVarName("prod", "api_key")).toBe("NARADA_PROD_API_KEY");
+    expect(envVarName("prod", "api_key")).toBe("NARADA_PROD_API_CREDENTIAL");
   });
 
   it("sanitizes special characters", () => {
@@ -73,7 +73,7 @@ describe("resolveSecret", () => {
       throw new Error("not found");
     });
 
-    process.env.NARADA_PROD_API_KEY = "env-secret";
+    process.env.NARADA_PROD_API_CREDENTIAL = "env-secret";
     const result = await resolveSecret("prod", "api_key");
     expect(result).toBe("env-secret");
   });
@@ -84,7 +84,7 @@ describe("resolveSecret", () => {
     });
 
     const envFile = join(tmpDir, ".env");
-    writeFileSync(envFile, "NARADA_PROD_API_KEY=dotenv-secret\n", "utf-8");
+    writeFileSync(envFile, "NARADA_PROD_API_CREDENTIAL=dotenv-secret\n", "utf-8");
     const result = await resolveSecret("prod", "api_key", {
       envFilePath: envFile,
     });
@@ -107,9 +107,9 @@ describe("resolveSecret", () => {
       throw new Error("not found");
     });
 
-    process.env.NARADA_PROD_API_KEY = "env-wins";
+    process.env.NARADA_PROD_API_CREDENTIAL = "env-wins";
     const envFile = join(tmpDir, ".env");
-    writeFileSync(envFile, "NARADA_PROD_API_KEY=dotenv-loses\n", "utf-8");
+    writeFileSync(envFile, "NARADA_PROD_API_CREDENTIAL=dotenv-loses\n", "utf-8");
     const result = await resolveSecret("prod", "api_key", {
       envFilePath: envFile,
     });
@@ -119,7 +119,7 @@ describe("resolveSecret", () => {
   it("Keychain wins over env var", async () => {
     _setTestExecImpl(async () => ({ stdout: "keychain-wins\n", stderr: "" }));
 
-    process.env.NARADA_PROD_API_KEY = "env-loses";
+    process.env.NARADA_PROD_API_CREDENTIAL = "env-loses";
     const result = await resolveSecret("prod", "api_key");
     expect(result).toBe("keychain-wins");
   });
@@ -129,7 +129,7 @@ describe("resolveSecret", () => {
       throw new Error("not found");
     });
 
-    process.env.NARADA_PROD_API_KEY = "";
+    process.env.NARADA_PROD_API_CREDENTIAL = "";
     const result = await resolveSecret("prod", "api_key", {
       configValue: "config-secret",
     });
@@ -154,7 +154,7 @@ describe("resolveSecret", () => {
     const siteRoot = join(tmpDir, "prod");
     mkdirSync(siteRoot, { recursive: true });
     const envFile = join(siteRoot, ".env");
-    writeFileSync(envFile, "NARADA_PROD_API_KEY=site-dotenv\n", "utf-8");
+    writeFileSync(envFile, "NARADA_PROD_API_CREDENTIAL=site-dotenv\n", "utf-8");
 
     const result = await resolveSecret("prod", "api_key");
     expect(result).toBe("site-dotenv");

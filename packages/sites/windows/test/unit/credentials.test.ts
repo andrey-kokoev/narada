@@ -11,7 +11,7 @@ import {
 
 describe("envVarName", () => {
   it("formats basic names", () => {
-    expect(envVarName("prod", "api_key")).toBe("NARADA_PROD_API_KEY");
+    expect(envVarName("prod", "api_key")).toBe("NARADA_PROD_API_CREDENTIAL");
   });
 
   it("sanitizes special characters", () => {
@@ -58,13 +58,13 @@ describe("resolveSecret", () => {
   });
 
   it("returns env var value when present", async () => {
-    process.env.NARADA_PROD_API_KEY = "env-secret";
+    process.env.NARADA_PROD_API_CREDENTIAL = "env-secret";
     const result = await resolveSecret("prod", "api_key", "wsl");
     expect(result).toBe("env-secret");
   });
 
   it("ignores empty string env var and falls through", async () => {
-    process.env.NARADA_PROD_API_KEY = "";
+    process.env.NARADA_PROD_API_CREDENTIAL = "";
     const result = await resolveSecret("prod", "api_key", "wsl", {
       configValue: "config-secret",
     });
@@ -73,7 +73,7 @@ describe("resolveSecret", () => {
 
   it("reads .env file when env var is absent", async () => {
     const envFile = join(tmpDir, ".env");
-    writeFileSync(envFile, "NARADA_PROD_API_KEY=dotenv-secret\n", "utf-8");
+    writeFileSync(envFile, "NARADA_PROD_API_CREDENTIAL=dotenv-secret\n", "utf-8");
     const result = await resolveSecret("prod", "api_key", "wsl", {
       envFilePath: envFile,
     });
@@ -81,9 +81,9 @@ describe("resolveSecret", () => {
   });
 
   it("env var wins over .env file", async () => {
-    process.env.NARADA_PROD_API_KEY = "env-wins";
+    process.env.NARADA_PROD_API_CREDENTIAL = "env-wins";
     const envFile = join(tmpDir, ".env");
-    writeFileSync(envFile, "NARADA_PROD_API_KEY=dotenv-loses\n", "utf-8");
+    writeFileSync(envFile, "NARADA_PROD_API_CREDENTIAL=dotenv-loses\n", "utf-8");
     const result = await resolveSecret("prod", "api_key", "wsl", {
       envFilePath: envFile,
     });
@@ -92,7 +92,7 @@ describe("resolveSecret", () => {
 
   it(".env file wins over config value", async () => {
     const envFile = join(tmpDir, ".env");
-    writeFileSync(envFile, "NARADA_PROD_API_KEY=dotenv-wins\n", "utf-8");
+    writeFileSync(envFile, "NARADA_PROD_API_CREDENTIAL=dotenv-wins\n", "utf-8");
     const result = await resolveSecret("prod", "api_key", "wsl", {
       envFilePath: envFile,
       configValue: "config-loses",
@@ -131,7 +131,7 @@ describe("resolveSecret", () => {
     Object.defineProperty(process, "platform", { value: "win32" });
     process.env.LOCALAPPDATA = "C:\\Users\\Test\\AppData\\Local";
 
-    process.env.NARADA_PROD_API_KEY = "win-secret";
+    process.env.NARADA_PROD_API_CREDENTIAL = "win-secret";
     const result = await resolveSecret("prod", "api_key", "native");
     expect(result).toBe("win-secret");
 
@@ -165,7 +165,7 @@ describe("resolveSecretRequired", () => {
   });
 
   it("returns value when found", async () => {
-    process.env.NARADA_PROD_API_KEY = "found-it";
+    process.env.NARADA_PROD_API_CREDENTIAL = "found-it";
     const result = await resolveSecretRequired("prod", "api_key", "wsl");
     expect(result).toBe("found-it");
   });
@@ -181,7 +181,7 @@ describe("resolveSecretRequired", () => {
   it("error mentions env var name", async () => {
     await expect(
       resolveSecretRequired("prod", "api_key", "wsl")
-    ).rejects.toThrow(/NARADA_PROD_API_KEY/);
+    ).rejects.toThrow(/NARADA_PROD_API_CREDENTIAL/);
   });
 
   it("error mentions Credential Manager target for native", async () => {

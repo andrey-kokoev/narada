@@ -26,7 +26,8 @@ export interface ResolveSecretOptions {
  */
 export function envVarName(siteId: string, secretName: string): string {
   const safeSiteId = siteId.replace(/[^a-zA-Z0-9_]/g, "_").toUpperCase();
-  const safeSecret = secretName.replace(/[^a-zA-Z0-9_]/g, "_").toUpperCase();
+  const normalizedSecret = secretName.replace(/[^a-zA-Z0-9_]/g, "_").toUpperCase();
+  const safeSecret = normalizedSecret === "API_KEY" ? "API_CREDENTIAL" : normalizedSecret;
   return `NARADA_${safeSiteId}_${safeSecret}`;
 }
 

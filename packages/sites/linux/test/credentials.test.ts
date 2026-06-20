@@ -32,7 +32,7 @@ describe("credentials", () => {
 
   describe("envVarName", () => {
     it("builds uppercased sanitized env var name", () => {
-      expect(envVarName("my-site", "api-key")).toBe("NARADA_MY_SITE_API_KEY");
+      expect(envVarName("my-site", "api-key")).toBe("NARADA_MY_SITE_API_CREDENTIAL");
     });
 
     it("handles alphanumeric site ids and secrets", () => {
@@ -47,7 +47,7 @@ describe("credentials", () => {
     });
 
     it("resolves from environment variable in both modes", async () => {
-      process.env.NARADA_TEST_SITE_API_KEY = "env-value";
+      process.env.NARADA_TEST_SITE_API_CREDENTIAL = "env-value";
 
       const systemResult = await resolveSecret("test-site", "system", "api-key");
       expect(systemResult).toBe("env-value");
@@ -61,7 +61,7 @@ describe("credentials", () => {
       await mkdir(siteRoot, { recursive: true });
       await writeFile(
         join(siteRoot, ".env"),
-        'NARADA_TEST_SITE_API_KEY="dotenv-value"\n',
+        'NARADA_TEST_SITE_API_CREDENTIAL="dotenv-value"\n',
         "utf8"
       );
 
@@ -77,12 +77,12 @@ describe("credentials", () => {
     });
 
     it("prefers env var over .env and config", async () => {
-      process.env.NARADA_TEST_SITE_API_KEY = "env-wins";
+      process.env.NARADA_TEST_SITE_API_CREDENTIAL = "env-wins";
       const siteRoot = join(testRoot, "test-site");
       await mkdir(siteRoot, { recursive: true });
       await writeFile(
         join(siteRoot, ".env"),
-        'NARADA_TEST_SITE_API_KEY="dotenv-loses"\n',
+        'NARADA_TEST_SITE_API_CREDENTIAL="dotenv-loses"\n',
         "utf8"
       );
 
@@ -97,7 +97,7 @@ describe("credentials", () => {
       await mkdir(siteRoot, { recursive: true });
       await writeFile(
         join(siteRoot, ".env"),
-        'NARADA_TEST_SITE_API_KEY="dotenv-wins"\n',
+        'NARADA_TEST_SITE_API_CREDENTIAL="dotenv-wins"\n',
         "utf8"
       );
 
@@ -108,7 +108,7 @@ describe("credentials", () => {
     });
 
     it("ignores empty strings in env var", async () => {
-      process.env.NARADA_TEST_SITE_API_KEY = "";
+      process.env.NARADA_TEST_SITE_API_CREDENTIAL = "";
       const result = await resolveSecret("test-site", "user", "api-key", {
         configValue: "fallback",
       });
@@ -120,7 +120,7 @@ describe("credentials", () => {
       await mkdir(siteRoot, { recursive: true });
       await writeFile(
         join(siteRoot, ".env"),
-        'NARADA_TEST_SITE_API_KEY=""\n',
+        'NARADA_TEST_SITE_API_CREDENTIAL=""\n',
         "utf8"
       );
 
@@ -135,7 +135,7 @@ describe("credentials", () => {
       await mkdir(siteRoot, { recursive: true });
       await writeFile(
         join(siteRoot, ".env"),
-        `NARADA_TEST_SITE_API_KEY='single-quoted'\nNARADA_TEST_SITE_OTHER="double-quoted"\n`,
+        `NARADA_TEST_SITE_API_CREDENTIAL='single-quoted'\nNARADA_TEST_SITE_OTHER="double-quoted"\n`,
         "utf8"
       );
 
@@ -150,7 +150,7 @@ describe("credentials", () => {
       const customEnv = join(testRoot, "custom.env");
       await writeFile(
         customEnv,
-        'NARADA_TEST_SITE_API_KEY="custom-env-value"\n',
+        'NARADA_TEST_SITE_API_CREDENTIAL="custom-env-value"\n',
         "utf8"
       );
 
@@ -163,7 +163,7 @@ describe("credentials", () => {
     it("does not require live secret stores", async () => {
       // This test verifies that v0 resolution works without systemd,
       // Secret Service, or pass installed.
-      process.env.NARADA_TEST_SITE_API_KEY = "works-without-stores";
+      process.env.NARADA_TEST_SITE_API_CREDENTIAL = "works-without-stores";
       const result = await resolveSecret("test-site", "system", "api-key");
       expect(result).toBe("works-without-stores");
     });
@@ -171,7 +171,7 @@ describe("credentials", () => {
 
   describe("resolveSecretRequired", () => {
     it("returns the secret when found", async () => {
-      process.env.NARADA_TEST_SITE_API_KEY = "found-it";
+      process.env.NARADA_TEST_SITE_API_CREDENTIAL = "found-it";
       const result = await resolveSecretRequired("test-site", "user", "api-key");
       expect(result).toBe("found-it");
     });
