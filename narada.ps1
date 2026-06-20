@@ -1,13 +1,17 @@
 param(
   [Parameter(Position = 0)]
-  [ValidateSet("agent-start")]
+  [ValidateSet("agent-start", "carrier")]
   [string]$Command = "agent-start",
   [Alias("AgentId")]
   [string]$Agent,
+  [string]$Site,
+  [string]$SiteRoot,
   [string]$Runtime = "agent-cli",
   [switch]$Exec,
   [switch]$DryRun,
+  [switch]$MaterializeOnly,
   [switch]$Json,
+  [switch]$FromShim,
   [switch]$EnableNativeShell,
   [switch]$AgentTuiInteractiveLoop,
   [switch]$AgentTuiProviderExecution,
@@ -16,10 +20,29 @@ param(
   [string]$StartingCarrierInput,
   [string]$StartingCarrierInputFile,
   [string]$AgentTuiStartingDirective,
-  [string]$AgentTuiStartingDirectiveFile
+  [string]$AgentTuiStartingDirectiveFile,
+
+  [Parameter(ValueFromRemainingArguments = $true)]
+  [string[]]$RemainingArgs
 )
 
 $ErrorActionPreference = "Stop"
+
+if ($Command -eq "carrier") {
+  $carrier = "C:\Users\Andrey\Narada\tools\carrier\Start-NaradaCarrier.ps1"
+  if (-not (Test-Path -LiteralPath $carrier -PathType Leaf)) {
+    throw "narada_carrier_start_missing: $carrier"
+  }
+  $carrierFlags = @($RemainingArgs)
+  if ($Site) { $carrierFlags += @("-Site", $Site) }
+  if ($SiteRoot) { $carrierFlags += @("-SiteRoot", $SiteRoot) }
+  if ($DryRun) { $carrierFlags += "-DryRun" }
+  if ($MaterializeOnly) { $carrierFlags += "-MaterializeOnly" }
+  if ($Json) { $carrierFlags += "-Json" }
+  if ($FromShim) { $carrierFlags += "-FromShim" }
+  & $carrier @carrierFlags
+  exit $LASTEXITCODE
+}
 
 if ($Command -ne "agent-start") {
   throw "unsupported_command: $Command"
@@ -56,6 +79,11 @@ $env:NARADA_AGENT_ID = $Agent
 $env:NARADA_TARGET_SITE_ROOT = $siteRoot
 $env:NARADA_LAUNCH_REGISTRY_SITE_ROOT = $siteRoot
 $tsxLoader = "file:///D:/code/narada/node_modules/.pnpm/tsx@4.21.0/node_modules/tsx/dist/loader.mjs"
-& node --import $tsxLoader $agentStart @flags
-exit $LASTEXITCODE
+Push-Location -LiteralPath $PSScriptRoot
+try {
+  & node --import $tsxLoader $agentStart @flags
+  exit $LASTEXITCODE
+} finally {
+  Pop-Location
+}
 

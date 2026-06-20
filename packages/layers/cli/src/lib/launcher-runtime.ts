@@ -1,0 +1,796 @@
+import { accessSync, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { basename, dirname, join, parse, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+export interface LaunchResultSummary {
+  path: string;
+  mtime_ms: number;
+  schema?: string;
+  status?: string;
+  agent_start_event?: string;
+  identity?: string;
+  runtime?: string;
+  runtime_substrate_kind?: string;
+  site_root?: string;
+  target_site_root?: string;
+  session_site_root?: string;
+  carrier_session_id?: string;
+  control_path?: string;
+  control_path_exists?: boolean;
+  session_path?: string;
+  session_path_exists?: boolean;
+  launch_source?: string;
+  parent_pid?: number;
+  parent_process_alive?: boolean | null;
+  started_at?: string;
+  expires_at?: string;
+}
+
+export interface CarrierStatusOptions {
+  siteRoot: string;
+  agent?: string;
+  runtime?: string;
+  now?: Date;
+}
+
+export interface AgentStartOptions {
+  siteRoot: string;
+  agent: string;
+  runtime: string;
+  dryRun?: boolean;
+  exec?: boolean;
+  wait?: boolean;
+  enableNativeShell?: boolean;
+  launchSource?: string;
+}
+
+export interface AgentStartCommandResult {
+  schema: 'narada.agent_start.command_result.v0';
+  status: 'success' | 'failed' | 'not_available';
+  mutation_performed: boolean;
+  site_root: string;
+  agent: string;
+  runtime: string;
+  command: string[];
+  execution?: CommandExecutionResult;
+  parsed_stdout?: unknown;
+  error?: string;
+}
+
+export interface CarrierStatusResult {
+  schema: 'narada.carrier.status.v0';
+  status: 'ok' | 'not_found';
+  mutation_performed: false;
+  site_root: string;
+  agent?: string;
+  runtime?: string;
+  latest?: LaunchResultSummary;
+  launch_results_dir: string;
+  launch_results_seen: number;
+  candidates_scanned: number;
+}
+
+export interface SchedulerDaemonPlanOptions {
+  siteRoot: string;
+  taskName?: string;
+  hidden?: boolean;
+  dryRun?: boolean;
+  execute?: boolean;
+}
+
+export interface SchedulerDaemonStatusResult {
+  schema: 'narada.scheduler.site_daemon.status.v0';
+  status: 'ok' | 'not_found' | 'unsupported' | 'access_denied' | 'error';
+  mutation_performed: boolean;
+  site_root: string;
+  task_name: string;
+  platform: NodeJS.Platform;
+  scheduler: 'windows_task_scheduler';
+  task?: unknown;
+  error?: string;
+}
+
+export interface SchedulerDaemonInstallPlan {
+  schema: 'narada.scheduler.site_daemon.install_plan.v0';
+  status: 'planned' | 'requires_elevation' | 'unsupported';
+  mutation_performed: boolean;
+  site_root: string;
+  task_name: string;
+  platform: NodeJS.Platform;
+  hidden: boolean;
+  dry_run: boolean;
+  elevation_required: boolean;
+  elevation_available: false;
+  elevation_packet?: {
+    kind: 'windows_scheduled_task_install';
+    task_name: string;
+    site_root: string;
+    command: string;
+    arguments: string[];
+    hidden_runner?: string;
+    supervisor?: string;
+  };
+  checks: Array<{ name: string; ok: boolean; path?: string; detail?: string }>;
+  execution?: CommandExecutionResult;
+}
+
+export interface CommandExecutionResult {
+  status: 'success' | 'failed';
+  exit_code: number;
+  stdout: string;
+  stderr: string;
+  error?: string;
+}
+
+export interface SiteCommandResult {
+  schema: 'narada.site_command_result.v0';
+  status: 'success' | 'failed' | 'not_available';
+  mutation_performed: boolean;
+  site_root: string;
+  command: string[];
+  execution?: CommandExecutionResult;
+  parsed_stdout?: unknown;
+  error?: string;
+}
+
+interface LaunchResultRecord {
+  schema?: unknown;
+  status?: unknown;
+  agent_start_event?: unknown;
+  identity?: unknown;
+  runtime?: unknown;
+  runtime_substrate_kind?: unknown;
+  target_site_root?: unknown;
+  session_site_root?: unknown;
+  launch_source?: unknown;
+  expires_at?: unknown;
+  agent_cli_launch?: {
+    control_path?: unknown;
+    session_path?: unknown;
+  };
+  nars_launch?: {
+    control_path?: unknown;
+    session_path?: unknown;
+  };
+  required_environment?: {
+    NARADA_AGENT_ID?: unknown;
+    NARADA_CARRIER_SESSION_ID?: unknown;
+    NARADA_SITE_ROOT?: unknown;
+  };
+  carrier_actions?: {
+    carrier_session_registration?: {
+      carrier_session_id?: unknown;
+      record?: {
+        started_at?: unknown;
+        parent_process?: {
+          pid?: unknown;
+        };
+      };
+    };
+  };
+  carrier_session?: {
+    carrier_session_id?: unknown;
+    record?: {
+      started_at?: unknown;
+      parent_process?: {
+        pid?: unknown;
+      };
+    };
+  };
+  runtime_args?: unknown;
+  started_at?: unknown;
+  created_at?: unknown;
+}
+
+export function getCarrierStatus(options: CarrierStatusOptions): CarrierStatusResult {
+  const siteRoot = resolve(options.siteRoot);
+  const launchResultsDir = join(siteRoot, '.ai', 'runtime', 'agent-start-results');
+  const allSummaries = readLaunchResults(launchResultsDir);
+  const summaries = allSummaries
+    .filter((summary) => !options.agent || summary.identity === options.agent)
+    .filter((summary) => {
+      if (!options.runtime) return true;
+      return summary.runtime === options.runtime || summary.runtime_substrate_kind === options.runtime;
+    })
+    .sort((a, b) => b.mtime_ms - a.mtime_ms);
+  const latest = summaries[0];
+
+  return {
+    schema: 'narada.carrier.status.v0',
+    status: latest ? 'ok' : 'not_found',
+    mutation_performed: false,
+    site_root: siteRoot,
+    agent: options.agent,
+    runtime: options.runtime,
+    latest,
+    launch_results_dir: launchResultsDir,
+    launch_results_seen: allSummaries.length,
+    candidates_scanned: summaries.length,
+  };
+}
+
+export function getCarrierControlPath(options: CarrierStatusOptions): CarrierStatusResult {
+  return getCarrierStatus(options);
+}
+
+export function runAgentStartCommand(options: AgentStartOptions): AgentStartCommandResult {
+  const siteRoot = resolve(options.siteRoot);
+  const naradaRoot = naradaProperRoot();
+  const agentStart = join(naradaRoot, 'packages', 'agent-start', 'src', 'narada-agent-start.ts');
+  const args = [
+    '--import',
+    'tsx',
+    agentStart,
+    options.agent,
+    '--target-site-root',
+    siteRoot,
+    '--site-root',
+    siteRoot,
+    '--runtime',
+    options.runtime,
+    '--launch-source',
+    options.launchSource ?? 'narada carrier start',
+    '--json',
+  ];
+  if (options.dryRun) args.push('--dry-run');
+  if (options.exec) args.push('--exec');
+  if (options.wait) args.push('--wait');
+  if (options.enableNativeShell) args.push('--enable-native-shell');
+
+  if (!existsSync(agentStart)) {
+    return {
+      schema: 'narada.agent_start.command_result.v0',
+      status: 'not_available',
+      mutation_performed: false,
+      site_root: siteRoot,
+      agent: options.agent,
+      runtime: options.runtime,
+      command: [process.execPath, ...args],
+      error: `agent-start entrypoint not found: ${agentStart}`,
+    };
+  }
+
+  const execution = runProcess(process.execPath, args, naradaRoot, {
+    NARADA_TARGET_SITE_ROOT: siteRoot,
+    NARADA_LAUNCH_REGISTRY_SITE_ROOT: siteRoot,
+    NARADA_AGENT_ID: options.agent,
+  });
+  const parsed = tryParseJson(execution.stdout) ?? tryParseFirstJsonObject(execution.stdout);
+  return {
+    schema: 'narada.agent_start.command_result.v0',
+    status: execution.status,
+    mutation_performed: execution.status === 'success' && options.dryRun !== true,
+    site_root: siteRoot,
+    agent: options.agent,
+    runtime: options.runtime,
+    command: [process.execPath, ...args],
+    execution: {
+      ...execution,
+      stdout: parsed ? '' : truncateText(execution.stdout, 1000),
+      stderr: truncateText(execution.stderr, 1000),
+    },
+    parsed_stdout: parsed,
+    error: execution.status === 'success' ? undefined : execution.stderr || execution.error,
+  };
+}
+
+export function getSchedulerSiteDaemonStatus(
+  options: SchedulerDaemonPlanOptions,
+  queryTask: (taskName: string) => unknown = queryWindowsScheduledTask,
+): SchedulerDaemonStatusResult {
+  const siteRoot = resolve(options.siteRoot);
+  const taskName = options.taskName ?? defaultSiteDaemonTaskName(siteRoot);
+  if (process.platform !== 'win32') {
+    return {
+      schema: 'narada.scheduler.site_daemon.status.v0',
+      status: 'unsupported',
+      mutation_performed: false,
+      site_root: siteRoot,
+      task_name: taskName,
+      platform: process.platform,
+      scheduler: 'windows_task_scheduler',
+      error: 'Windows Task Scheduler status is only available on win32.',
+    };
+  }
+  try {
+    const task = queryTask(taskName);
+    return {
+      schema: 'narada.scheduler.site_daemon.status.v0',
+      status: task ? 'ok' : 'not_found',
+      mutation_performed: false,
+      site_root: siteRoot,
+      task_name: taskName,
+      platform: process.platform,
+      scheduler: 'windows_task_scheduler',
+      task,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      schema: 'narada.scheduler.site_daemon.status.v0',
+      status: isAccessDeniedMessage(message) ? 'access_denied' : 'error',
+      mutation_performed: false,
+      site_root: siteRoot,
+      task_name: taskName,
+      platform: process.platform,
+      scheduler: 'windows_task_scheduler',
+      error: message,
+    };
+  }
+}
+
+export function queryWindowsScheduledTask(taskName: string): unknown {
+  const script = [
+    '$ErrorActionPreference = "Stop"',
+    '$taskName = $env:NARADA_SCHEDULER_TASK_NAME',
+    'try {',
+    '  $task = Get-ScheduledTask -TaskName $taskName -ErrorAction Stop',
+    '  $task | Select-Object TaskName, TaskPath, State, URI | ConvertTo-Json -Compress',
+    '  exit 0',
+    '} catch {',
+    '  if ($_.Exception.Message -match "No MSFT_ScheduledTask" -or $_.Exception.Message -match "not found") { exit 2 }',
+    '  Write-Error $_',
+    '  exit 1',
+    '}',
+  ].join('; ');
+  const result = spawnSync('powershell.exe', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-Command',
+    script,
+  ], {
+    encoding: 'utf8',
+    timeout: 10_000,
+    windowsHide: true,
+    env: {
+      ...process.env,
+      NARADA_SCHEDULER_TASK_NAME: taskName,
+    },
+  });
+
+  if (result.status === 2) return null;
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error((result.stderr || result.stdout || `scheduler_query_failed:${result.status}`).trim());
+  }
+  const stdout = result.stdout.trim();
+  return stdout ? JSON.parse(stdout) : null;
+}
+
+export function planSchedulerSiteDaemonInstall(
+  options: SchedulerDaemonPlanOptions,
+): SchedulerDaemonInstallPlan {
+  const siteRoot = resolve(options.siteRoot);
+  const taskName = options.taskName ?? defaultSiteDaemonTaskName(siteRoot);
+  const supervisor = join(siteRoot, 'scripts', 'supervisor.ps1');
+  const hiddenRunner = join(siteRoot, 'scripts', 'Run-Hidden.vbs');
+  const hidden = options.hidden ?? false;
+  const checks = [
+    pathCheck('site_root', siteRoot),
+    pathCheck('supervisor', supervisor),
+    ...(hidden ? [pathCheck('hidden_runner', hiddenRunner)] : []),
+  ];
+  const elevationPacket = {
+    kind: 'windows_scheduled_task_install' as const,
+    task_name: taskName,
+    site_root: siteRoot,
+    command: hidden ? 'wscript.exe' : 'pwsh.exe',
+    arguments: hidden
+      ? [
+          '//B',
+          hiddenRunner,
+          'pwsh.exe',
+          '-NoProfile',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-File',
+          supervisor,
+          'start',
+          '-SiteRoot',
+          siteRoot,
+        ]
+      : [
+          '-NoProfile',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-File',
+          supervisor,
+          'start',
+          '-SiteRoot',
+          siteRoot,
+        ],
+    hidden_runner: hidden ? hiddenRunner : undefined,
+    supervisor,
+  };
+
+  const plan: SchedulerDaemonInstallPlan = {
+    schema: 'narada.scheduler.site_daemon.install_plan.v0',
+    status: process.platform === 'win32' ? 'requires_elevation' : 'unsupported',
+    mutation_performed: false,
+    site_root: siteRoot,
+    task_name: taskName,
+    platform: process.platform,
+    hidden,
+    dry_run: options.dryRun ?? true,
+    elevation_required: true,
+    elevation_available: false,
+    elevation_packet: process.platform === 'win32' ? elevationPacket : undefined,
+    checks,
+  };
+  if (!options.execute) return plan;
+  if (process.platform !== 'win32') return plan;
+  const elevation = windowsElevationState();
+  if (!elevation.elevated) {
+    return {
+      ...plan,
+      status: 'requires_elevation',
+      execution: {
+        status: 'failed',
+        exit_code: 5,
+        stdout: '',
+        stderr: 'Windows Scheduled Task installation requires an elevated PowerShell session.',
+      },
+    };
+  }
+  const execution = runPowerShell([
+    '$ErrorActionPreference = "Stop"',
+    '$taskName = $env:NARADA_SCHEDULER_TASK_NAME',
+    '$siteRoot = $env:NARADA_SITE_ROOT',
+    '$hiddenRunner = $env:NARADA_HIDDEN_RUNNER',
+    '$supervisor = $env:NARADA_SUPERVISOR',
+    '$execute = if ($env:NARADA_SCHEDULER_HIDDEN -eq "1") { "wscript.exe" } else { "pwsh.exe" }',
+    '$arguments = if ($env:NARADA_SCHEDULER_HIDDEN -eq "1") { "//B `"$hiddenRunner`" pwsh.exe -NoProfile -ExecutionPolicy Bypass -File `"$supervisor`" start -SiteRoot `"$siteRoot`"" } else { "-NoProfile -ExecutionPolicy Bypass -File `"$supervisor`" start -SiteRoot `"$siteRoot`"" }',
+    '$action = New-ScheduledTaskAction -Execute $execute -Argument $arguments -WorkingDirectory $siteRoot',
+    '$logonTrigger = New-ScheduledTaskTrigger -AtLogOn',
+    '$watchdogTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).Date -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration (New-TimeSpan -Days 3650)',
+    '$settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Seconds 0)',
+    '$task = New-ScheduledTask -Action $action -Trigger @($logonTrigger, $watchdogTrigger) -Settings $settings -Description "Narada Site daemon supervised startup."',
+    'Register-ScheduledTask -TaskName $taskName -InputObject $task -Force | Out-Null',
+    '[pscustomobject]@{schema="narada.scheduler.site_daemon.install_execution.v0";status="success";task_name=$taskName;site_root=$siteRoot} | ConvertTo-Json -Compress',
+  ], {
+    NARADA_SCHEDULER_TASK_NAME: taskName,
+    NARADA_SITE_ROOT: siteRoot,
+    NARADA_HIDDEN_RUNNER: hiddenRunner,
+    NARADA_SUPERVISOR: supervisor,
+    NARADA_SCHEDULER_HIDDEN: hidden ? '1' : '0',
+  });
+  return {
+    ...plan,
+    status: execution.status === 'success' ? 'planned' : 'requires_elevation',
+    mutation_performed: execution.status === 'success',
+    execution,
+  };
+}
+
+export function setSchedulerSiteDaemonEnabled(
+  options: SchedulerDaemonPlanOptions & { enabled: boolean },
+): SchedulerDaemonStatusResult & { execution?: CommandExecutionResult; elevation_required?: boolean } {
+  const siteRoot = resolve(options.siteRoot);
+  const taskName = options.taskName ?? defaultSiteDaemonTaskName(siteRoot);
+  if (process.platform !== 'win32') {
+    return {
+      schema: 'narada.scheduler.site_daemon.status.v0',
+      status: 'unsupported',
+      mutation_performed: false,
+      site_root: siteRoot,
+      task_name: taskName,
+      platform: process.platform,
+      scheduler: 'windows_task_scheduler',
+      error: 'Windows Task Scheduler mutation is only available on win32.',
+    };
+  }
+  const elevation = windowsElevationState();
+  if (!elevation.elevated) {
+    return {
+      schema: 'narada.scheduler.site_daemon.status.v0',
+      status: 'error',
+      mutation_performed: false,
+      site_root: siteRoot,
+      task_name: taskName,
+      platform: process.platform,
+      scheduler: 'windows_task_scheduler',
+      elevation_required: true,
+      error: 'Windows Scheduled Task mutation requires an elevated PowerShell session.',
+    };
+  }
+  const execution = runPowerShell([
+    '$ErrorActionPreference = "Stop"',
+    '$taskName = $env:NARADA_SCHEDULER_TASK_NAME',
+    'if ($env:NARADA_SCHEDULER_ENABLE -eq "1") { Enable-ScheduledTask -TaskName $taskName | Out-Null } else { Disable-ScheduledTask -TaskName $taskName | Out-Null }',
+    '$task = Get-ScheduledTask -TaskName $taskName',
+    '$task | Select-Object TaskName, TaskPath, State, URI | ConvertTo-Json -Compress',
+  ], {
+    NARADA_SCHEDULER_TASK_NAME: taskName,
+    NARADA_SCHEDULER_ENABLE: options.enabled ? '1' : '0',
+  });
+  return {
+    schema: 'narada.scheduler.site_daemon.status.v0',
+    status: execution.status === 'success' ? 'ok' : 'error',
+    mutation_performed: execution.status === 'success',
+    site_root: siteRoot,
+    task_name: taskName,
+    platform: process.platform,
+    scheduler: 'windows_task_scheduler',
+    task: tryParseJson(execution.stdout),
+    execution,
+    error: execution.status === 'success' ? undefined : execution.stderr || execution.error,
+  };
+}
+
+export function runSiteCliCommand(siteRootInput: string, args: string[]): SiteCommandResult {
+  const siteRoot = resolve(siteRootInput);
+  const cli = join(siteRoot, 'scripts', 'narada-sonar.ts');
+  if (!existsSync(cli)) {
+    return {
+      schema: 'narada.site_command_result.v0',
+      status: 'not_available',
+      mutation_performed: false,
+      site_root: siteRoot,
+      command: args,
+      error: `Site CLI not found: ${cli}`,
+    };
+  }
+  const execution = runProcess(process.execPath, [cli, ...args, '--format', 'json'], siteRoot);
+  const parsed = tryParseJson(execution.stdout);
+  return {
+    schema: 'narada.site_command_result.v0',
+    status: execution.status,
+    mutation_performed: execution.status === 'success' && isMutatingSiteCommand(args),
+    site_root: siteRoot,
+    command: args,
+    execution: {
+      ...execution,
+      stdout: parsed ? '' : truncateText(execution.stdout, 1000),
+      stderr: truncateText(execution.stderr, 1000),
+    },
+    parsed_stdout: parsed,
+  };
+}
+
+function isMutatingSiteCommand(args: string[]): boolean {
+  const [domain, action] = args;
+  if (domain === 'loop') return ['pause', 'resume', 'run', 'drain'].includes(String(action));
+  if (domain === 'resident') {
+    return ['summon', 'recover-carrier', 'recover-stale', 'resolve', 'refuse', 'cleanup-runtime'].includes(String(action));
+  }
+  return false;
+}
+
+function readLaunchResults(launchResultsDir: string): LaunchResultSummary[] {
+  if (!existsSync(launchResultsDir)) return [];
+  return readdirSync(launchResultsDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.result.json'))
+    .map((entry) => readLaunchResult(join(launchResultsDir, entry.name)))
+    .filter((summary): summary is LaunchResultSummary => Boolean(summary));
+}
+
+function readLaunchResult(path: string): LaunchResultSummary | null {
+  try {
+    const stats = statSync(path);
+    const record = JSON.parse(readFileSync(path, 'utf8')) as LaunchResultRecord;
+    const carrierSessionRegistration = record.carrier_actions?.carrier_session_registration;
+    const carrierSessionId = stringValue(
+      record.carrier_session?.carrier_session_id
+        ?? carrierSessionRegistration?.carrier_session_id
+        ?? record.required_environment?.NARADA_CARRIER_SESSION_ID,
+    );
+    const controlPath = stringValue(
+      record.agent_cli_launch?.control_path
+        ?? record.nars_launch?.control_path
+        ?? controlPathFromRuntimeArgs(record.runtime_args)
+        ?? (carrierSessionId
+          ? join(
+              siteRootFromLaunchResultPath(path),
+              '.narada',
+              'crew',
+              'nars-sessions',
+              carrierSessionId,
+              'control.jsonl',
+            )
+          : undefined),
+    );
+    const sessionPath = stringValue(
+      record.agent_cli_launch?.session_path
+        ?? record.nars_launch?.session_path,
+    );
+    const parentPid = numberValue(
+      record.carrier_session?.record?.parent_process?.pid
+        ?? carrierSessionRegistration?.record?.parent_process?.pid,
+    );
+    return {
+      path,
+      mtime_ms: stats.mtimeMs,
+      schema: stringValue(record.schema),
+      status: stringValue(record.status),
+      agent_start_event: stringValue(record.agent_start_event),
+      identity: stringValue(record.identity ?? record.required_environment?.NARADA_AGENT_ID),
+      runtime: stringValue(record.runtime),
+      runtime_substrate_kind: stringValue(record.runtime_substrate_kind),
+      site_root: stringValue(record.required_environment?.NARADA_SITE_ROOT),
+      target_site_root: stringValue(record.target_site_root),
+      session_site_root: stringValue(record.session_site_root),
+      carrier_session_id: carrierSessionId,
+      control_path: controlPath,
+      control_path_exists: controlPath ? existsSync(controlPath) : false,
+      session_path: sessionPath,
+      session_path_exists: sessionPath ? existsSync(sessionPath) : false,
+      launch_source: stringValue(record.launch_source),
+      parent_pid: parentPid,
+      parent_process_alive: parentPid ? isProcessAlive(parentPid) : null,
+      started_at: stringValue(
+        record.started_at
+          ?? record.carrier_session?.record?.started_at
+          ?? carrierSessionRegistration?.record?.started_at
+          ?? record.created_at,
+      ),
+      expires_at: stringValue(record.expires_at),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function defaultSiteDaemonTaskName(siteRoot: string): string {
+  const leaf = basename(siteRoot).replace(/[^A-Za-z0-9_.-]+/g, '-');
+  return leaf === 'narada.sonar' ? 'Narada-Sonar-Daemon' : `Narada-${leaf}-Daemon`;
+}
+
+function pathCheck(name: string, path: string): { name: string; ok: boolean; path: string; detail?: string } {
+  try {
+    accessSync(path);
+    return { name, ok: true, path };
+  } catch {
+    return { name, ok: false, path, detail: 'missing_or_unreadable' };
+  }
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as { code?: string }).code === 'EPERM';
+  }
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function controlPathFromRuntimeArgs(args: unknown): string | undefined {
+  if (!Array.isArray(args)) return undefined;
+  const index = args.findIndex((arg) => String(arg) === '--control-jsonl');
+  return index >= 0 ? stringValue(args[index + 1]) : undefined;
+}
+
+function siteRootFromLaunchResultPath(path: string): string {
+  return dirname(dirname(dirname(dirname(path))));
+}
+
+function naradaProperRoot(): string {
+  return findNaradaProperRoot(dirname(fileURLToPath(import.meta.url)))
+    ?? findNaradaProperRoot(process.cwd())
+    ?? resolve(process.cwd());
+}
+
+function findNaradaProperRoot(start: string): string | null {
+  let current = resolve(start);
+  const root = parse(current).root;
+  while (current && current !== root) {
+    if (existsSync(join(current, 'packages', 'agent-start', 'src', 'narada-agent-start.ts'))) {
+      return current;
+    }
+    current = dirname(current);
+  }
+  return null;
+}
+
+function windowsElevationState(): { elevated: boolean; execution: CommandExecutionResult } {
+  const execution = runPowerShell([
+    '$identity = [Security.Principal.WindowsIdentity]::GetCurrent()',
+    '$principal = [Security.Principal.WindowsPrincipal]::new($identity)',
+    '$isAdmin = $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)',
+    'if ($isAdmin) { "true" } else { "false" }',
+  ]);
+  return {
+    elevated: execution.status === 'success' && execution.stdout.trim() === 'true',
+    execution,
+  };
+}
+
+function isAccessDeniedMessage(message: string): boolean {
+  return /\b(access denied|unauthorized|permission denied|requires elevation)\b/i.test(message);
+}
+
+function runPowerShell(commands: string[], env: Record<string, string> = {}): CommandExecutionResult {
+  return runProcess('powershell.exe', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-Command',
+    commands.join('; '),
+  ], process.cwd(), env);
+}
+
+function runProcess(
+  command: string,
+  args: string[],
+  cwd: string,
+  env: Record<string, string> = {},
+): CommandExecutionResult {
+  const result = spawnSync(command, args, {
+    cwd,
+    encoding: 'utf8',
+    timeout: 120_000,
+    windowsHide: true,
+    env: {
+      ...process.env,
+      NODE_OPTIONS: appendNodeOption(process.env.NODE_OPTIONS, '--disable-warning=ExperimentalWarning'),
+      OUTPUT_FORMAT: 'json',
+      ...env,
+    },
+  });
+  const exitCode = result.status ?? (result.error ? 1 : 0);
+  return {
+    status: exitCode === 0 ? 'success' : 'failed',
+    exit_code: exitCode,
+    stdout: String(result.stdout ?? '').trim(),
+    stderr: String(result.stderr ?? '').trim(),
+    error: result.error ? result.error.message : undefined,
+  };
+}
+
+function tryParseJson(value: string): unknown {
+  try {
+    return value ? JSON.parse(value) : null;
+  } catch {
+    return null;
+  }
+}
+
+function tryParseFirstJsonObject(value: string): unknown {
+  const start = value.indexOf('{');
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = start; index < value.length; index++) {
+    const char = value[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+    } else if (char === '{') {
+      depth++;
+    } else if (char === '}') {
+      depth--;
+      if (depth === 0) return tryParseJson(value.slice(start, index + 1));
+    }
+  }
+  return null;
+}
+
+function appendNodeOption(existing: string | undefined, option: string): string {
+  const current = String(existing ?? '').trim();
+  return current.includes(option) ? current : [current, option].filter(Boolean).join(' ');
+}
+
+function truncateText(value: string, max: number): string {
+  return value.length <= max ? value : `${value.slice(0, max)}... [truncated ${value.length - max} chars]`;
+}

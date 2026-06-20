@@ -1,0 +1,289 @@
+import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  carrierControlPathCommand,
+  carrierDrainCommand,
+  carrierReloadCommand,
+  carrierStartCommand,
+  carrierReadinessCommand,
+  carrierStatusCommand,
+} from '../../src/commands/carrier.js';
+import {
+  siteLoopDrainCommand,
+  siteLoopStatusCommand,
+} from '../../src/commands/site-loop.js';
+import {
+  schedulerSiteDaemonInstallCommand,
+  schedulerSiteDaemonStatusCommand,
+} from '../../src/commands/scheduler.js';
+import { getSchedulerSiteDaemonStatus } from '../../src/lib/launcher-runtime.js';
+import type { CommandContext } from '../../src/lib/command-wrapper.js';
+import { ExitCode } from '../../src/lib/exit-codes.js';
+
+function createMockContext(): CommandContext {
+  const logger = {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    trace: vi.fn(),
+  };
+  return {
+    configPath: '/test/config.json',
+    logger: logger as unknown as CommandContext['logger'],
+    verbose: false,
+  };
+}
+
+const tempDirs: string[] = [];
+
+async function tempSite(): Promise<string> {
+  const dir = join(process.cwd(), '.ai', 'tmp-tests', `carrier-launcher-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  await mkdir(dir, { recursive: true });
+  tempDirs.push(dir);
+  return dir;
+}
+
+async function writeLaunchResult(siteRoot: string, name: string, identity: string): Promise<string> {
+  const resultDir = join(siteRoot, '.ai', 'runtime', 'agent-start-results');
+  await mkdir(resultDir, { recursive: true });
+  const controlPath = join(siteRoot, '.narada', 'crew', 'nars-sessions', 'carrier_test', 'control.jsonl');
+  await mkdir(join(siteRoot, '.narada', 'crew', 'nars-sessions', 'carrier_test'), { recursive: true });
+  await writeFile(controlPath, '', 'utf8');
+  const path = join(resultDir, `${name}.result.json`);
+  await writeFile(path, `${JSON.stringify({
+    schema: 'narada.agent_start.result.v0',
+    status: 'materialized',
+    agent_start_event: name,
+    identity,
+    runtime: 'agent-cli',
+    runtime_substrate_kind: 'agent-cli',
+    target_site_root: siteRoot,
+    required_environment: {
+      NARADA_SITE_ROOT: siteRoot,
+      NARADA_CARRIER_SESSION_ID: 'carrier_test',
+    },
+    agent_cli_launch: {
+      control_path: controlPath,
+      session_path: join(siteRoot, '.narada', 'crew', 'nars-sessions', 'carrier_test', 'session.jsonl'),
+    },
+    carrier_session: {
+      carrier_session_id: 'carrier_test',
+      record: {
+        started_at: '2026-06-20T00:00:00.000Z',
+        parent_process: {
+          pid: process.pid,
+        },
+      },
+    },
+  })}\n`, 'utf8');
+  return controlPath;
+}
+
+async function writeLaunchResultWithoutControlFile(siteRoot: string, name: string): Promise<void> {
+  const resultDir = join(siteRoot, '.ai', 'runtime', 'agent-start-results');
+  await mkdir(resultDir, { recursive: true });
+  await writeFile(join(resultDir, `${name}.result.json`), `${JSON.stringify({
+    schema: 'narada.agent_start.result.v0',
+    status: 'materialized',
+    agent_start_event: name,
+    required_environment: {
+      NARADA_AGENT_ID: 'sonar.resident',
+      NARADA_CARRIER_SESSION_ID: 'carrier_missing_control',
+    },
+    runtime_args: [
+      'agent-cli',
+      '--control-jsonl',
+      join(siteRoot, '.narada', 'crew', 'nars-sessions', 'carrier_missing_control', 'control.jsonl'),
+    ],
+  })}\n`, 'utf8');
+}
+
+afterEach(async () => {
+  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+});
+
+describe('carrier launcher CLI commands', () => {
+  it('reads latest carrier launch result and control path evidence', async () => {
+    const siteRoot = await tempSite();
+    const controlPath = await writeLaunchResult(siteRoot, 'evt-test', 'sonar.resident');
+
+    const status = await carrierStatusCommand({
+      siteRoot,
+      agent: 'sonar.resident',
+      format: 'json',
+    }, createMockContext());
+
+    expect(status.exitCode).toBe(ExitCode.SUCCESS);
+    expect((status.result as { latest: { carrier_session_id: string } }).latest.carrier_session_id).toBe('carrier_test');
+    expect((status.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
+
+    const control = await carrierControlPathCommand({
+      siteRoot,
+      agent: 'sonar.resident',
+      format: 'json',
+    }, createMockContext());
+
+    expect(control.exitCode).toBe(ExitCode.SUCCESS);
+    expect((control.result as { control_path: string }).control_path).toBe(controlPath);
+  });
+
+  it('returns bounded readiness from live parent process evidence', async () => {
+    const siteRoot = await tempSite();
+    await writeLaunchResult(siteRoot, 'evt-ready', 'sonar.resident');
+
+    const readiness = await carrierReadinessCommand({
+      siteRoot,
+      agent: 'sonar.resident',
+      timeout: 0,
+      format: 'json',
+    }, createMockContext());
+
+    expect(readiness.exitCode).toBe(ExitCode.SUCCESS);
+    expect((readiness.result as { status: string }).status).toBe('ready');
+    expect((readiness.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
+  });
+
+  it('does not report readiness when the launch result only records a missing control path', async () => {
+    const siteRoot = await tempSite();
+    await writeLaunchResultWithoutControlFile(siteRoot, 'evt-missing-control');
+
+    const readiness = await carrierReadinessCommand({
+      siteRoot,
+      agent: 'sonar.resident',
+      timeout: 0,
+      format: 'json',
+    }, createMockContext());
+
+    expect(readiness.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect((readiness.result as { status: string }).status).toBe('not_ready');
+    expect((readiness.result as { checks: { control_path_exists: boolean } }).checks.control_path_exists).toBe(false);
+  });
+
+  it('plans scheduler install as explicit non-mutating elevation packet', async () => {
+    const siteRoot = await tempSite();
+    await mkdir(join(siteRoot, 'scripts'), { recursive: true });
+    await writeFile(join(siteRoot, 'scripts', 'supervisor.ps1'), 'param()\n', 'utf8');
+    await writeFile(join(siteRoot, 'scripts', 'Run-Hidden.vbs'), "' noop\n", 'utf8');
+
+    const install = await schedulerSiteDaemonInstallCommand({
+      siteRoot,
+      taskName: 'Narada-Test-Daemon',
+      hidden: true,
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(install.exitCode).toBe(ExitCode.SUCCESS);
+    expect((install.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
+    expect((install.result as { elevation_required: boolean }).elevation_required).toBe(true);
+    expect((install.result as { elevation_packet: { task_name: string } }).elevation_packet.task_name).toBe('Narada-Test-Daemon');
+  });
+
+  it('reports unavailable Site command surfaces without fake live mutation', async () => {
+    const siteRoot = await tempSite();
+
+    const start = await carrierStartCommand({
+      siteRoot,
+      agent: 'sonar.resident',
+      runtime: 'agent-cli',
+      format: 'json',
+    }, createMockContext());
+
+    expect(start.exitCode).toBe(ExitCode.INVALID_CONFIG);
+    expect((start.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
+    expect((start.result as { status: string }).status).toBe('site_launcher_unavailable');
+
+    const siteLoop = await siteLoopStatusCommand({
+      siteRoot,
+      format: 'json',
+    }, createMockContext());
+
+    expect(siteLoop.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect((siteLoop.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
+    expect((siteLoop.result as { site_command: { status: string } }).site_command.status).toBe('not_available');
+  });
+
+  it('routes non-agent-cli runtime requests through canonical agent-start instead of the Site hardcoded launcher', async () => {
+    const siteRoot = resolve(process.cwd(), '..', '..', 'mcp-fabric', 'test', 'fixtures', 'site-valid');
+
+    const start = await carrierStartCommand({
+      siteRoot,
+      agent: 'sonar.resident',
+      runtime: 'codex',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect([ExitCode.SUCCESS, ExitCode.GENERAL_ERROR]).toContain(start.exitCode);
+    expect((start.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
+    expect((start.result as { runtime: string }).runtime).toBe('codex');
+    expect((start.result as { agent_start: { command: string[] } }).agent_start.command).toContain('--runtime');
+    expect((start.result as { agent_start: { command: string[] } }).agent_start.command).toContain('codex');
+    expect((start.result as { site_command?: unknown }).site_command).toBeUndefined();
+  });
+
+  it('exposes carrier reload as a restart-backed lifecycle operation for agent-cli', async () => {
+    const siteRoot = await tempSite();
+
+    const reload = await carrierReloadCommand({
+      siteRoot,
+      agent: 'sonar.resident',
+      runtime: 'agent-cli',
+      format: 'json',
+    }, createMockContext());
+
+    expect([ExitCode.GENERAL_ERROR, ExitCode.INVALID_CONFIG]).toContain(reload.exitCode);
+    expect((reload.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
+    expect((reload.result as { strategy: string }).strategy).toBe('restart');
+    expect((reload.result as { restart: { status: string } }).restart.status).toBe('site_launcher_unavailable');
+  });
+
+  it('keeps drain commands bounded when the Site launcher is unavailable', async () => {
+    const siteRoot = await tempSite();
+
+    const carrierDrain = await carrierDrainCommand({
+      siteRoot,
+      agent: 'sonar.resident',
+      runtime: 'agent-cli',
+      format: 'json',
+    }, createMockContext());
+    const loopDrain = await siteLoopDrainCommand({
+      siteRoot,
+      format: 'json',
+    }, createMockContext());
+
+    expect(carrierDrain.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect((carrierDrain.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
+    expect((carrierDrain.result as { site_command: { status: string } }).site_command.status).toBe('not_available');
+    expect(loopDrain.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect((loopDrain.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
+  });
+
+  it('reports scheduler status without mutating platform state', async () => {
+    const siteRoot = await tempSite();
+    const status = await schedulerSiteDaemonStatusCommand({
+      siteRoot,
+      taskName: 'Narada-Test-Daemon',
+      format: 'json',
+    }, createMockContext());
+
+    expect(status.exitCode).toBe(ExitCode.SUCCESS);
+    expect((status.result as { mutation_performed: boolean }).mutation_performed).toBe(false);
+    expect(['unsupported', 'not_found', 'ok', 'access_denied']).toContain((status.result as { status: string }).status);
+  });
+
+  it('classifies scheduler access failures separately from missing scheduled tasks', async () => {
+    const siteRoot = await tempSite();
+    const status = getSchedulerSiteDaemonStatus({
+      siteRoot,
+      taskName: 'Narada-Test-Daemon',
+    }, () => {
+      throw new Error('Access denied');
+    });
+
+    expect(status.status).toBe('access_denied');
+    expect(status.mutation_performed).toBe(false);
+  });
+});

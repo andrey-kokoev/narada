@@ -8,6 +8,30 @@ export { backupCommand, type BackupOptions, type BackupResult, type BackupManife
 export { restoreCommand, type RestoreOptions, type RestoreResult } from './commands/restore.js';
 export { verifyBackupCommand, type VerifyBackupOptions, type VerifyBackupResult } from './commands/verify-backup.js';
 export { listBackupCommand, type ListBackupOptions } from './commands/backup-ls.js';
+export {
+  carrierControlPathCommand,
+  carrierDrainCommand,
+  carrierReadinessCommand,
+  carrierReloadCommand,
+  carrierRestartCommand,
+  carrierStartCommand,
+  carrierStatusCommand,
+  type CarrierCommandOptions,
+} from './commands/carrier.js';
+export {
+  schedulerSiteDaemonDisableCommand,
+  schedulerSiteDaemonEnableCommand,
+  schedulerSiteDaemonInstallCommand,
+  schedulerSiteDaemonStatusCommand,
+  type SchedulerSiteDaemonOptions,
+} from './commands/scheduler.js';
+export {
+  siteLoopPauseCommand,
+  siteLoopRecoverCommand,
+  siteLoopResumeCommand,
+  siteLoopStatusCommand,
+  type SiteLoopOptions,
+} from './commands/site-loop.js';
 
 // Lib exports
 export { ExitCode, ExitCodeDescriptions } from './lib/exit-codes.js';
