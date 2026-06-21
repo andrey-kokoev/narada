@@ -1,3 +1,5 @@
+import { join } from 'node:path';
+
 export function resolveToolFabricAdapter(runtimeName, { schema, agentTuiRuntime }) {
   const source = '.ai/mcp';
   if (runtimeName === 'codex') {
@@ -76,6 +78,164 @@ export function resolveToolFabricAdapter(runtimeName, { schema, agentTuiRuntime 
     expected_tools: [],
     states: ['runtime_known', 'adapter_selected', 'no_narada_mcp_claim'],
   };
+}
+
+function codexTomlString(value) {
+  return JSON.stringify(String(value));
+}
+
+function codexTomlArray(values) {
+  return `[${values.map(codexTomlString).join(', ')}]`;
+}
+
+export function codexMcpDefinitionArgs(servers) {
+  return servers.flatMap((server) => [
+    '-c',
+    `mcp_servers.${server.name}.command=${codexTomlString(server.command)}`,
+    '-c',
+    `mcp_servers.${server.name}.args=${codexTomlArray(server.args)}`,
+    '-c',
+    `mcp_servers.${server.name}.env_vars=${codexTomlArray(server.env_vars)}`,
+    ...(server.startup_timeout_sec ? [
+      '-c',
+      `mcp_servers.${server.name}.startup_timeout_sec=${Number(server.startup_timeout_sec)}`,
+    ] : []),
+  ]);
+}
+
+function startupAffordancePrompt(identity, carrierDescription) {
+  return `You are ${identity}. The human is Operator. This session was launched by Narada agent-start. ${carrierDescription} Use agent_context_startup_sequence first. Treat operator startup nudges as this MCP startup affordance, not shell or file discovery. If the startup MCP tool is unavailable, report the missing MCP capability. When a Narada tool returns reader_tool=mcp_output_show, call mcp_output_show with the returned output_ref before deciding next work.`;
+}
+
+export function buildCarrierSpawnArgs(runtimeName, {
+  agentTuiRuntime,
+  identity,
+  yoloFlag,
+  enableNativeShellFlag,
+  processPlatform,
+  codexCliScriptPath,
+  codexMcpServerDefinitions,
+  agentRuntimeServerScriptPath,
+  agentCliSessionName,
+  carrierSessionRegistration,
+  sessionSiteRoot,
+  naradaPackageRoot,
+  siteCarrierControlPath,
+  siteCarrierSessionPath,
+  agentTuiRuntimeLoop,
+  agentTuiMaxSteps,
+  agentTuiInteractiveLoopMaxSteps,
+  piCliScriptPath,
+  rootDir,
+  piProvider,
+  piModel,
+  claudeCodeMcpConfig,
+  claudeCodeModel,
+}) {
+  if (runtimeName === 'codex') {
+    const args = [
+      '--ask-for-approval',
+      'never',
+      ...codexMcpDefinitionArgs(codexMcpServerDefinitions()),
+    ];
+    args.push('--disable', 'apps');
+    if (!enableNativeShellFlag) {
+      args.push('--disable', 'shell_tool');
+    }
+    if (processPlatform === 'win32') {
+      return [codexCliScriptPath(), ...args];
+    }
+    return args;
+  }
+
+  if (runtimeName === 'agent-cli') {
+    const sessionId = carrierSessionRegistration?.carrier_session_id ?? agentCliSessionName(identity);
+    return [
+      agentRuntimeServerScriptPath(),
+      '--identity',
+      identity,
+      '--session',
+      sessionId,
+      '--site-root',
+      sessionSiteRoot,
+    ];
+  }
+
+  if (runtimeName === agentTuiRuntime) {
+    const sessionId = carrierSessionRegistration?.carrier_session_id ?? agentCliSessionName(identity);
+    return [
+      'run',
+      '--manifest-path',
+      join(naradaPackageRoot('@narada2/agent-tui'), 'Cargo.toml'),
+      '--bin',
+      'narada-agent-tui',
+      '--',
+      '--identity',
+      identity,
+      '--session',
+      sessionId,
+      '--site-root',
+      sessionSiteRoot,
+      '--control-jsonl',
+      siteCarrierControlPath(sessionId),
+      '--session-jsonl',
+      siteCarrierSessionPath(sessionId),
+      agentTuiRuntimeLoop === true ? '--runtime-loop' : '--interactive-loop',
+      '--max-steps',
+      String(agentTuiMaxSteps ?? agentTuiInteractiveLoopMaxSteps),
+    ];
+  }
+
+  if (runtimeName === 'pi') {
+    return [
+      piCliScriptPath(),
+      '--provider',
+      piProvider,
+      '--model',
+      piModel,
+      '--session-dir',
+      join(rootDir, '.ai', 'runtime', 'pi-sessions', identity),
+      '--extension',
+      join(rootDir, '.pi', 'extensions', 'narada-mcp-bridge.ts'),
+      '--append-system-prompt',
+      startupAffordancePrompt(identity, 'Narada tools are attached through the Narada-owned Pi MCP bridge generated from the Site-local .ai/mcp fabric.'),
+    ];
+  }
+
+  if (runtimeName === 'claude-code') {
+    return [
+      '--model',
+      claudeCodeModel,
+      '--permission-mode',
+      'dontAsk',
+      '--disallowedTools',
+      'Bash',
+      'Edit',
+      'Write',
+      'MultiEdit',
+      'NotebookEdit',
+      'WebFetch',
+      'WebSearch',
+      '--strict-mcp-config',
+      '--mcp-config',
+      JSON.stringify(claudeCodeMcpConfig()),
+      '--append-system-prompt',
+      startupAffordancePrompt(identity, 'Narada tools are attached through Claude Code native MCP config generated from the Site MCP fabric.'),
+    ];
+  }
+
+  if (runtimeName === 'opencode') {
+    return [
+      '--prompt',
+      startupAffordancePrompt(identity, 'Narada tools are attached through the Site MCP fabric declared in .ai/mcp.'),
+    ];
+  }
+
+  const spawnArgs = ['-S', identity];
+  if (yoloFlag) {
+    spawnArgs.push('-y');
+  }
+  return spawnArgs;
 }
 
 export function resolveRuntimeCommand(runtimeName, {

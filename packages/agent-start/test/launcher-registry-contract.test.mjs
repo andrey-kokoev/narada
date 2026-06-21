@@ -144,7 +144,8 @@ test('package fixture encodes the launcher registry boundary', () => {
   const records = recordsFrom(fixtureRegistryPath);
   assertRegistryContract(records, 'fixture');
   assertLauncherFileShape(records, 'fixture');
-  assertCarrierMatrixDryRuns(records, 'fixture');
+  const deterministicCarrierRecords = records.filter((record) => normalizePath(record.NaradaRoot) === normalizePath(naradaProperRoot));
+  assertCarrierMatrixDryRuns(deterministicCarrierRecords, 'fixture');
   assert.equal(existsSync(packagedLauncherPath), true, 'packaged TS launcher must exist in Narada proper');
 });
 

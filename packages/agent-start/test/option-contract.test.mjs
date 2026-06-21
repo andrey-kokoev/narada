@@ -260,9 +260,18 @@ test('agent-cli default provider falls back to registry default', () => {
 
 test('agent-cli exec launches package bin through node, not PowerShell', () => {
   const output = runOk(['--runtime', 'agent-cli', '--exec']);
+  const sessionId = output.carrier_session.carrier_session_id;
   assert.equal(output.exec_command.startsWith(process.execPath), true);
   assert.equal(output.exec_command.includes('pwsh'), false);
   assert.equal(output.runtime_args[0].endsWith('agent-runtime-server.mjs'), true);
+  assert.deepEqual(output.runtime_args.slice(1), [
+    '--identity',
+    identity,
+    '--session',
+    sessionId,
+    '--site-root',
+    naradaProperRoot,
+  ]);
   assert.equal(output.runtime_args.includes('--control-jsonl'), false);
   assert.equal(output.runtime_args.includes('--session-jsonl'), false);
 });
@@ -303,7 +312,11 @@ test('codex resolves CLI script from PATH and disables native shell by default',
   assert.equal(output.would_set_environment.NARADA_AGENT_ID, identity);
   assert.equal(output.would_set_environment.NARADA_AGENT_START_EVENT_ID, output.agent_start_event);
   assert.equal(output.runtime_args.includes('shell_tool'), true);
+  const codexArgOffset = process.platform === 'win32' ? 1 : 0;
   if (process.platform === 'win32') assert.equal(output.runtime_args[0], fakeCodexScript);
+  assert.deepEqual(output.runtime_args.slice(codexArgOffset, codexArgOffset + 2), ['--ask-for-approval', 'never']);
+  assert.equal(output.runtime_args.includes('--disable'), true);
+  assert.deepEqual(output.runtime_args.slice(-4), ['--disable', 'apps', '--disable', 'shell_tool']);
 
   const explicitOutput = runOk(['--runtime', 'codex'], { NARADA_CODEX_CLI_SCRIPT: launcherPath });
   if (process.platform === 'win32') assert.equal(explicitOutput.runtime_args[0], launcherPath);
@@ -332,9 +345,31 @@ test('agent-tui materializes provider env without requiring ambient provider env
   assert.equal(output.tool_fabric_adapter.expected_tools.includes('task_lifecycle_next'), true);
   assert.equal(output.runtime_args.includes('--max-steps'), true);
   assert.equal(output.runtime_args.includes('42'), true);
+  const sessionId = output.carrier_session.carrier_session_id;
   const manifestPath = output.runtime_args[output.runtime_args.indexOf('--manifest-path') + 1];
   assert.equal(manifestPath.endsWith(join('agent-tui', 'Cargo.toml')), true);
   assert.notEqual(manifestPath, join(naradaProperRoot, 'packages', 'agent-tui', 'Cargo.toml'));
+  assert.deepEqual(output.runtime_args, [
+    'run',
+    '--manifest-path',
+    manifestPath,
+    '--bin',
+    'narada-agent-tui',
+    '--',
+    '--identity',
+    identity,
+    '--session',
+    sessionId,
+    '--site-root',
+    naradaProperRoot,
+    '--control-jsonl',
+    join(naradaProperRoot, '.narada', 'crew', 'nars-sessions', sessionId, 'control.jsonl'),
+    '--session-jsonl',
+    join(naradaProperRoot, '.narada', 'crew', 'nars-sessions', sessionId, 'session.jsonl'),
+    '--interactive-loop',
+    '--max-steps',
+    '42',
+  ]);
   assert.equal(existsSync(env.NARADA_AGENT_TUI_MCP_CONFIG), false, 'dry-run must not write generated agent-tui config');
 });
 
