@@ -325,6 +325,43 @@ function codexSubscriptionPreflightEnabled() {
   return !['0', 'false', 'off', 'disabled', 'skip', 'none'].includes(mode);
 }
 
+function findOnPath(names) {
+  const dirs = String(process.env.PATH ?? '').split(delimiter).filter(Boolean);
+  for (const dir of dirs) {
+    for (const name of names) {
+      const candidate = join(dir, name);
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+function codexPreflightCommand() {
+  const explicit = process.env.NARADA_CODEX_COMMAND;
+  if (explicit) return { command: explicit, prefixArgs: [] };
+  if (process.platform !== 'win32') return { command: 'codex', prefixArgs: [] };
+  const found = findOnPath(['codex.ps1', 'codex.cmd', 'codex.exe']);
+  if (found?.endsWith('.ps1')) return { command: 'pwsh', prefixArgs: ['-NoProfile', '-File', found] };
+  if (found) return { command: found, prefixArgs: [] };
+  return { command: 'pwsh', prefixArgs: ['-NoProfile', '-Command', 'codex'] };
+}
+
+function codexAuthHome() {
+  if (process.env.NARADA_CODEX_AUTH_HOME) return process.env.NARADA_CODEX_AUTH_HOME;
+  const userRoot = process.env.USERPROFILE || process.env.HOME || homedir();
+  return userRoot ? join(userRoot, '.codex') : null;
+}
+
+function codexSubscriptionPreflightEnv() {
+  const env = { ...process.env };
+  delete env.OPENAI_API_KEY;
+  delete env.OPENAI_BASE_URL;
+  delete env.OPENAI_MODEL;
+  const authHome = codexAuthHome();
+  if (authHome && !env.NARADA_CODEX_AUTH_HOME) env.NARADA_CODEX_AUTH_HOME = authHome;
+  return env;
+}
+
 function codexSubscriptionPreflight(provider) {
   const mode = String(process.env[CODEX_SUBSCRIPTION_PREFLIGHT_ENV] ?? '').trim().toLowerCase();
   if (dryRun && mode !== 'force') {
@@ -348,14 +385,14 @@ function codexSubscriptionPreflight(provider) {
     };
   }
 
-  const command = process.env.NARADA_CODEX_COMMAND ?? 'codex';
+  const command = codexPreflightCommand();
   const prompt = 'Return exactly: ok';
-  const result = spawnSync(command, ['exec', '--json', prompt], {
+  const result = spawnSync(command.command, [...command.prefixArgs, 'exec', '--json', prompt], {
     cwd: sessionSiteRoot,
     encoding: 'utf8',
     timeout: CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS,
     windowsHide: true,
-    env: { ...process.env },
+    env: codexSubscriptionPreflightEnv(),
   });
   const stdout = String(result.stdout ?? '');
   const stderr = String(result.stderr ?? '');
@@ -366,7 +403,7 @@ function codexSubscriptionPreflight(provider) {
     status: result.status === 0 ? 'passed' : unauthorized ? 'failed_unauthorized' : 'failed',
     ok: result.status === 0,
     provider,
-    command: `${command} exec --json`,
+    command: `${command.command} ${[...command.prefixArgs, 'exec', '--json'].join(' ')}`,
     exit_code: result.status,
     signal: result.signal,
     error: result.error ? result.error.message : null,
@@ -670,6 +707,24 @@ function intelligenceProviderEnvironmentProjection(providerResolution) {
     env[credential.primary_credential_env] = credential.value ?? '';
   }
   return { env, credential: redactProviderCredentialResolution(credential) };
+}
+
+function mcpProviderCredentialEnvironment() {
+  if (runtime !== 'agent-cli' && runtime !== AGENT_TUI_RUNTIME && runtime !== 'claude-code') return {};
+  const env = {};
+  for (const [provider, metadata] of Object.entries(INTELLIGENCE_PROVIDER_METADATA)) {
+    const requirement = providerCredentialRequirement(provider, metadata);
+    if (requirement.kind !== 'api_key_secret') continue;
+    const credential = resolveProviderCredential(provider, metadata);
+    if (!credential?.credential_present || !credential.primary_credential_env || !credential.value) continue;
+    env[credential.primary_credential_env] = credential.value;
+    const primaryBaseUrlEnv = metadata.base_url_env_names?.[0];
+    const baseUrl = primaryBaseUrlEnv ? (firstEnvironmentValue(metadata.base_url_env_names) ?? metadata.base_url) : null;
+    if (primaryBaseUrlEnv && baseUrl) {
+      env[primaryBaseUrlEnv] = baseUrl;
+    }
+  }
+  return env;
 }
 
 function resolveProviderCredential(provider, metadata) {
@@ -989,6 +1044,10 @@ function agentCliLauncherScriptPath() {
 
 function agentCliScriptPath() {
   return resolveNaradaPackageBin('@narada2/agent-cli', 'narada-agent-cli');
+}
+
+function agentRuntimeServerScriptPath() {
+  return resolveNaradaPackageBin('@narada2/agent-cli', 'agent-runtime-server');
 }
 
 function agentCliSessionName(identityName) {
@@ -1439,17 +1498,13 @@ function buildSpawnArgs(runtime, identity, capabilityPolicy = {}, providerResolu
   if (runtime === 'agent-cli') {
     const sessionId = carrierSessionRegistration?.carrier_session_id ?? agentCliSessionName(identity);
     return [
-      agentCliScriptPath(),
+      agentRuntimeServerScriptPath(),
       '--identity',
       identity,
       '--session',
       sessionId,
       '--site-root',
       sessionSiteRoot,
-      '--control-jsonl',
-      siteCarrierControlPath(sessionId),
-      '--session-jsonl',
-      siteCarrierSessionPath(sessionId),
     ];
   }
 
@@ -1694,6 +1749,7 @@ const toolFabricAdapter = resolveToolFabricAdapter(runtime);
 const execCommand = [resolveRuntimeCommand(runtime), ...spawnArgs.map(shellQuote)].join(' ');
 const carrierEnvironment = carrierSessionRegistration.environment ?? {};
 const agentTuiEnvironment = agentTuiTerminalEnvironment();
+const mcpProviderCredentialEnv = mcpProviderCredentialEnvironment();
 const startingCarrierInput = resolveStartingCarrierInput();
 const environmentSiteRoot = sessionSiteRoot;
 const workspaceRoot = process.cwd();
@@ -1701,6 +1757,7 @@ const requiredEnvironment = redactEnvironmentForOutput({
   ...(startResult.required_environment ?? {}),
   ...carrierEnvironment,
   ...intelligenceProviderEnv,
+  ...mcpProviderCredentialEnv,
   ...agentTuiEnvironment,
   ...(runtime === 'pi' ? {
     NARADA_PI_COMMAND: process.env.NARADA_PI_COMMAND ?? 'pi',
@@ -1725,6 +1782,7 @@ const wouldSetEnvironment = startResult.would_set_environment
     ...startResult.would_set_environment,
     ...carrierEnvironment,
     ...intelligenceProviderEnv,
+    ...mcpProviderCredentialEnv,
     ...agentTuiEnvironment,
     ...(runtime === 'pi' ? {
       NARADA_PI_COMMAND: process.env.NARADA_PI_COMMAND ?? 'pi',
@@ -1840,6 +1898,7 @@ const child = spawn(spawnCommand, spawnCommandArgs, {
   env: {
     ...process.env,
     ...intelligenceProviderEnv,
+    ...mcpProviderCredentialEnv,
     ...(runtime === 'claude-code' ? {
       NARADA_CLAUDE_CODE_COMMAND: process.env.NARADA_CLAUDE_CODE_COMMAND ?? DEFAULT_CLAUDE_CODE_COMMAND,
       NARADA_CLAUDE_CODE_MODEL: process.env.NARADA_CLAUDE_CODE_MODEL ?? DEFAULT_CLAUDE_CODE_MODEL,

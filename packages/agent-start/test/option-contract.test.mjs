@@ -110,6 +110,16 @@ test('agent-cli resolves provider credential from environment fallback and redac
   assert.doesNotMatch(JSON.stringify(output), /super-secret-test-key/);
 });
 
+test('agent-cli projects provider credentials for MCP child surfaces without leaking values', () => {
+  const output = runOk(['--runtime', 'agent-cli', '--intelligence-provider', 'codex-subscription'], {
+    DEEPSEEK_API_KEY: 'deepseek-secret-test-key',
+    DEEPSEEK_API_BASE_URL: 'https://deepseek.example.test',
+  });
+  assert.equal(output.required_environment.DEEPSEEK_API_KEY, '<set>');
+  assert.equal(output.required_environment.DEEPSEEK_API_BASE_URL, 'https://deepseek.example.test');
+  assert.doesNotMatch(JSON.stringify(output), /deepseek-secret-test-key/);
+});
+
 test('agent-cli fails launcher preflight when API provider credential is missing', () => {
   const result = runFailed(['--runtime', 'agent-cli'], {
     NARADA_PROVIDER_SECRET_STORE: 'disabled',
@@ -203,6 +213,41 @@ test('agent-cli refuses codex-subscription when Codex local auth preflight fails
   assert.match(refusal.preflight.status, /^failed/);
 });
 
+test('agent-cli codex-subscription preflight resolves Windows codex.ps1 and scrubs OpenAI API env', { skip: process.platform !== 'win32' }, () => {
+  const fakeBin = mkdtempSync(join(tmpdir(), 'narada-codex-preflight-ps1-'));
+  const capturePath = join(fakeBin, 'capture.json');
+  const fakeCodex = join(fakeBin, 'codex.ps1');
+  writeFileSync(fakeCodex, `
+$capture = [ordered]@{
+  args = $args
+  openai_api_key_present = [bool]$env:OPENAI_API_KEY
+  openai_base_url_present = [bool]$env:OPENAI_BASE_URL
+  openai_model_present = [bool]$env:OPENAI_MODEL
+  narada_codex_auth_home_present = [bool]$env:NARADA_CODEX_AUTH_HOME
+}
+$capture | ConvertTo-Json -Compress | Set-Content -LiteralPath '${capturePath.replaceAll('\\', '\\\\')}' -NoNewline
+Write-Output '{"type":"thread.started","thread_id":"fixture"}'
+exit 0
+`, 'utf8');
+
+  const output = runOk(['--runtime', 'agent-cli', '--intelligence-provider', 'codex-subscription'], {
+    NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: 'force',
+    NARADA_CODEX_COMMAND: '',
+    PATH: `${fakeBin}${process.env.PATH ? `;${process.env.PATH}` : ''}`,
+    OPENAI_API_KEY: 'stale-key-must-not-reach-preflight',
+    OPENAI_BASE_URL: 'https://stale.example',
+    OPENAI_MODEL: 'stale-model',
+  });
+  assert.equal(output.intelligence_provider_resolution.credential.preflight.status, 'passed');
+  assert.match(output.intelligence_provider_resolution.credential.preflight.command, /pwsh .*codex\.ps1 exec --json/);
+  const capture = JSON.parse(readFileSync(capturePath, 'utf8'));
+  assert.deepEqual(capture.args.slice(0, 3), ['exec', '--json', 'Return exactly: ok']);
+  assert.equal(capture.openai_api_key_present, false);
+  assert.equal(capture.openai_base_url_present, false);
+  assert.equal(capture.openai_model_present, false);
+  assert.equal(capture.narada_codex_auth_home_present, true);
+});
+
 test('agent-cli default provider falls back to registry default', () => {
   const output = runOk(['--runtime', 'agent-cli'], {
     NARADA_INTELLIGENCE_PROVIDER: '',
@@ -217,7 +262,9 @@ test('agent-cli exec launches package bin through node, not PowerShell', () => {
   const output = runOk(['--runtime', 'agent-cli', '--exec']);
   assert.equal(output.exec_command.startsWith(process.execPath), true);
   assert.equal(output.exec_command.includes('pwsh'), false);
-  assert.equal(output.runtime_args[0].endsWith('narada-agent-cli.mjs'), true);
+  assert.equal(output.runtime_args[0].endsWith('agent-runtime-server.mjs'), true);
+  assert.equal(output.runtime_args.includes('--control-jsonl'), false);
+  assert.equal(output.runtime_args.includes('--session-jsonl'), false);
 });
 
 test('non-agent-cli runtime refuses explicit intelligence provider selection', () => {

@@ -186,6 +186,7 @@ export const CARRIER_CONTROL_METHODS = Object.freeze([
   'observers.status',
   'observer.mute',
   'observer.unmute',
+  'agent-cli.command',
 ]);
 
 const RFC3339_UTC_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
@@ -274,6 +275,7 @@ export function classifyCarrierControlRequest(request = {}) {
   if (method === 'observers.status') return { ...base, method_kind: 'observers_status' };
   if (method === 'observer.mute') return { ...base, method_kind: 'observer_set_muted', observer_action: 'mute' };
   if (method === 'observer.unmute') return { ...base, method_kind: 'observer_set_muted', observer_action: 'unmute' };
+  if (method === 'agent-cli.command') return { ...base, method_kind: 'agent_cli_command' };
   return {
     ...base,
     method_kind: 'unsupported',
