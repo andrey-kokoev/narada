@@ -25,6 +25,12 @@ import { createRequire } from 'node:module';
 import { spawn, spawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
+import {
+  resolveRuntimeCommand as resolveCarrierRuntimeCommand,
+  resolveToolFabricAdapter as resolveCarrierToolFabricAdapter,
+  runtimeSpawnOptions,
+  shellQuote,
+} from './carrier-launch-adapter.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRootDir = join(__dirname, '..');
@@ -415,85 +421,10 @@ function codexSubscriptionPreflight(provider) {
 }
 
 function resolveToolFabricAdapter(runtimeName) {
-  const source = '.ai/mcp';
-  if (runtimeName === 'codex') {
-    return {
-      schema: TOOL_FABRIC_ADAPTER_CONTRACT_SCHEMA,
-      tool_fabric_adapter_kind: 'codex-native-mcp',
-      tool_fabric_source: source,
-      runtime_substrate_kind: runtimeName,
-      adapter_entrypoint: null,
-      expected_tools: ['agent_context_startup_sequence', 'mcp_output_show', 'task_lifecycle_next'],
-      states: ['runtime_known', 'adapter_selected', 'source_declared', 'launch_ready'],
-    };
-  }
-  if (runtimeName === 'agent-cli') {
-    return {
-      schema: TOOL_FABRIC_ADAPTER_CONTRACT_SCHEMA,
-      tool_fabric_adapter_kind: 'narada-agent-cli-mcp-client',
-      tool_fabric_source: source,
-      runtime_substrate_kind: runtimeName,
-      adapter_entrypoint: 'package:@narada2/agent-cli#narada-agent-cli',
-      expected_tools: ['agent_context_startup_sequence', 'mcp_output_show', 'task_lifecycle_next'],
-      states: ['runtime_known', 'adapter_selected', 'source_declared', 'launch_ready'],
-    };
-
-  }
-  if (runtimeName === AGENT_TUI_RUNTIME) {
-    return {
-      schema: TOOL_FABRIC_ADAPTER_CONTRACT_SCHEMA,
-      tool_fabric_adapter_kind: 'narada-agent-tui-terminal-interactive-loop',
-      tool_fabric_source: 'control_jsonl_session_jsonl',
-      runtime_substrate_kind: runtimeName,
-      adapter_entrypoint: 'package:@narada2/agent-tui#narada-agent-tui',
-      expected_tools: ['agent_context_startup_sequence', 'mcp_output_show', 'task_lifecycle_next'],
-      states: ['runtime_known', 'adapter_selected', 'terminal_loop_carrier', 'launch_ready'],
-    };
-  }
-  if (runtimeName === 'pi') {
-    return {
-      schema: TOOL_FABRIC_ADAPTER_CONTRACT_SCHEMA,
-      tool_fabric_adapter_kind: 'pi-extension-mcp-bridge',
-      tool_fabric_source: source,
-      runtime_substrate_kind: runtimeName,
-      adapter_entrypoint: '.pi/extensions/narada-mcp-bridge.ts',
-      expected_tools: ['agent_context_startup_sequence', 'mcp_output_show', 'task_lifecycle_next', 'task_lifecycle_un_defer'],
-      states: ['runtime_known', 'adapter_selected', 'source_declared', 'narada_owned_extension_bridge', 'launch_ready'],
-      admission_basis: 'Narada-owned Pi extension bridges Site-local .ai/mcp tools into Pi; MCP servers remain Site-local authority surfaces.',
-    };
-  }
-  if (runtimeName === 'claude-code') {
-    return {
-      schema: TOOL_FABRIC_ADAPTER_CONTRACT_SCHEMA,
-      tool_fabric_adapter_kind: 'claude-code-native-mcp',
-      tool_fabric_source: source,
-      runtime_substrate_kind: runtimeName,
-      adapter_entrypoint: 'claude --mcp-config',
-      expected_tools: ['agent_context_startup_sequence', 'mcp_output_show', 'task_lifecycle_next', 'task_lifecycle_un_defer'],
-      states: ['runtime_known', 'adapter_selected', 'source_declared', 'native_mcp_config_required', 'launch_ready'],
-    };
-  }
-  if (runtimeName === 'opencode') {
-    return {
-      schema: TOOL_FABRIC_ADAPTER_CONTRACT_SCHEMA,
-      tool_fabric_adapter_kind: 'opencode-native-mcp',
-      tool_fabric_source: 'substrate-native',
-      runtime_substrate_kind: runtimeName,
-      adapter_entrypoint: 'opencode --prompt',
-      expected_tools: ['agent_context_startup_sequence', 'mcp_output_show', 'task_lifecycle_next'],
-      states: ['runtime_known', 'adapter_selected', 'source_declared', 'native_prompt_injection_required', 'launch_ready'],
-    };
-  }
-  return {
-
+  return resolveCarrierToolFabricAdapter(runtimeName, {
     schema: TOOL_FABRIC_ADAPTER_CONTRACT_SCHEMA,
-    tool_fabric_adapter_kind: 'ambient-carrier-tools',
-    tool_fabric_source: 'substrate-native',
-    runtime_substrate_kind: runtimeName,
-    adapter_entrypoint: null,
-    expected_tools: [],
-    states: ['runtime_known', 'adapter_selected', 'no_narada_mcp_claim'],
-  };
+    agentTuiRuntime: AGENT_TUI_RUNTIME,
+  });
 }
 
 async function failRuntimeRefusal(refusal) {
@@ -1161,36 +1092,15 @@ function startingCarrierInputOutput(startingCarrierInput) {
 }
 
 function resolveRuntimeCommand(runtimeName) {
-  if (runtimeName === AGENT_TUI_RUNTIME) {
-    return 'cargo';
-  }
-  if (process.platform === 'win32' && runtimeName === 'codex') {
-    return process.execPath;
-  }
-  if (runtimeName === 'agent-cli') {
-    return process.execPath;
-  }
-  if (runtimeName === 'pi') {
-    return stableNodeCommand();
-  }
-  if (runtimeName === 'claude-code') {
-    return process.env.NARADA_CLAUDE_CODE_COMMAND ?? DEFAULT_CLAUDE_CODE_COMMAND;
-  }
-  if (runtimeName === 'opencode') {
-    return process.env.NARADA_OPENCODE_COMMAND ?? 'opencode';
-  }
-  return runtimeName;
-}
-
-function runtimeSpawnOptions(runtimeName) {
-  if (runtimeName === 'opencode') return { shell: false };
-  return {};
-}
-
-function shellQuote(arg) {
-  const text = String(arg);
-  if (!/[\s"'\\]/.test(text)) return text;
-  return '"' + text.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+  return resolveCarrierRuntimeCommand(runtimeName, {
+    agentTuiRuntime: AGENT_TUI_RUNTIME,
+    processPlatform: process.platform,
+    processExecPath: process.execPath,
+    stableNodeCommand,
+    defaultClaudeCodeCommand: DEFAULT_CLAUDE_CODE_COMMAND,
+    claudeCodeCommand: process.env.NARADA_CLAUDE_CODE_COMMAND,
+    opencodeCommand: process.env.NARADA_OPENCODE_COMMAND,
+  });
 }
 
 function newCarrierSessionId() {
