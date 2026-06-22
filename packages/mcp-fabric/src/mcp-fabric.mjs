@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { basename, isAbsolute, join, normalize, resolve } from 'node:path';
+import { basename, isAbsolute, join, normalize, relative, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { loadMcpSurfaceRegistry, registrySurfaces, siteControlRoot } from '../../carrier-action-admission/src/tool-metadata.mjs';
@@ -228,6 +228,7 @@ export async function runMcpFabricDoctor(siteRoot, options = {}) {
     };
   }
 
+  const configDiagnostics = buildGeneratedConfigDiagnostics(siteRoot, fabric);
   const rows = [];
   for (const [serverName, server] of Object.entries(fabric.servers)) {
     rows.push(await probeMcpServer({
@@ -235,6 +236,7 @@ export async function runMcpFabricDoctor(siteRoot, options = {}) {
       serverName,
       server,
       sourceFile: fabric.sources?.[serverName] ?? null,
+      configDiagnostic: configDiagnostics.servers_by_name?.[serverName] ?? null,
       timeoutMs,
       env: options.env ?? process.env,
     }));
@@ -247,6 +249,7 @@ export async function runMcpFabricDoctor(siteRoot, options = {}) {
     mcp_dir: fabric.mcp_dir,
     files: fabric.files,
     registry_validation: fabric.registry_validation ?? null,
+    generated_config_diagnostics: configDiagnostics,
     rows,
     diagnostics: [],
   };
@@ -276,7 +279,7 @@ export function renderMcpFabricDoctorTable(report) {
   ], tableRows);
 }
 
-async function probeMcpServer({ siteRoot, serverName, server, sourceFile, timeoutMs, env }) {
+async function probeMcpServer({ siteRoot, serverName, server, sourceFile, configDiagnostic, timeoutMs, env }) {
   const diagnostics = [];
   const stdoutPollution = [];
   const stderrLines = [];
@@ -288,7 +291,18 @@ async function probeMcpServer({ siteRoot, serverName, server, sourceFile, timeou
   let proc = null;
   const entrypoint = resolveServerEntrypoint(server, siteRoot);
   if (entrypoint && !existsSync(entrypoint.path)) {
-    diagnostics.push({ code: "entry_missing", message: entrypoint.path, phase: "preflight", details: entrypoint });
+    diagnostics.push({
+      code: 'entry_missing',
+      message: entrypoint.path,
+      phase: 'preflight',
+      details: {
+        ...entrypoint,
+        config_provenance: configDiagnostic?.provenance ?? null,
+        generated_config: configDiagnostic?.generated_config ?? null,
+        repair_scope: configDiagnostic?.repair_scope ?? null,
+      },
+      repair_plan: entrypointRepairPlan(entrypoint, configDiagnostic),
+    });
     return { file: sourceFile, server: serverName, command: commandSummary, path_normalization: pathNormalization, initialize_status: "not_run", tools_list_status: "not_run", tools_list_count: null, first_diagnostic: `${diagnostics[0].code}: ${diagnostics[0].message}`, diagnostics };
   }
 
@@ -480,6 +494,163 @@ function mcpFabricRepairPlan(code, details = {}) {
     };
   }
   return null;
+}
+
+function entrypointRepairPlan(entrypoint, configDiagnostic) {
+  if (!configDiagnostic) return null;
+  return {
+    schema: 'narada.mcp.fabric.repair_plan.v1',
+    kind: 'stale_generated_config_entrypoint',
+    status: configDiagnostic.repair_scope === 'ignored_local_projection_repair'
+      ? 'repair_ignored_local_projection'
+      : 'repair_durable_repo_source',
+    entrypoint_path: entrypoint.path,
+    generated_config: configDiagnostic.generated_config,
+    provenance: configDiagnostic.provenance,
+    regeneration: configDiagnostic.regeneration,
+    repair_scope: configDiagnostic.repair_scope,
+    recommended_actions: configDiagnostic.repair_scope === 'ignored_local_projection_repair'
+      ? [
+          'Regenerate the ignored local MCP client config from the durable Site surface registry.',
+          'Do not commit the ignored local projection; commit only registry/source changes if the durable surface contract is wrong.',
+        ]
+      : [
+          'Repair the durable MCP config source or registry entry that produced the stale entrypoint path.',
+          'Regenerate the Site MCP client config after the durable source is corrected.',
+        ],
+    verification: [
+      'Run MCP fabric doctor again and confirm the entry_missing diagnostic is gone.',
+      'Confirm generated_config_diagnostics reports the expected repair_scope.',
+    ],
+  };
+}
+
+function buildGeneratedConfigDiagnostics(siteRoot, fabric) {
+  const registry = loadMcpSurfaceRegistry(siteRoot);
+  const generatedConfigs = [];
+  const serversByName = {};
+  const surfaces = registry.status === 'loaded' ? registry.surfaces : [];
+  for (const surface of surfaces) {
+    const generatedPath = stringOrNull(surface?.client_config?.generated_path);
+    if (!generatedPath) continue;
+    const configPath = resolve(siteRoot, generatedPath);
+    const generatedFile = basename(generatedPath);
+    generatedConfigs.push({
+      surface_id: stringOrNull(surface?.surface_id),
+      server_name: stringOrNull(surface?.server_name ?? surface?.client_config?.server_name),
+      generated_path: generatedPath,
+      generated_file: generatedFile,
+      config_path: configPath,
+      config_present: existsSync(configPath),
+      config_ignored: isIgnoredLocalProjection(siteRoot, configPath),
+      provenance: surfaceProvenance(surface, registry.path),
+      regeneration: surfaceRegeneration(surface, siteRoot),
+    });
+  }
+
+  const staleEntrypoints = [];
+  for (const [serverName, server] of Object.entries(fabric.servers ?? {})) {
+    const sourceFile = fabric.sources?.[serverName] ?? null;
+    const diagnostic = generatedConfigs.find((config) => {
+      if (config.server_name && config.server_name !== serverName) return false;
+      if (server.surface_id && config.surface_id === server.surface_id) return true;
+      return sourceFile && config.generated_file === sourceFile;
+    }) ?? null;
+    if (!diagnostic) continue;
+    const repairScope = diagnostic.config_ignored
+      ? 'ignored_local_projection_repair'
+      : 'durable_repo_repair';
+    const serverDiagnostic = {
+      generated_config: {
+        path: diagnostic.config_path,
+        generated_path: diagnostic.generated_path,
+        present: diagnostic.config_present,
+        ignored: diagnostic.config_ignored,
+      },
+      provenance: diagnostic.provenance,
+      regeneration: diagnostic.regeneration,
+      repair_scope: repairScope,
+    };
+    const entrypoint = resolveServerEntrypoint(server, siteRoot);
+    if (entrypoint && !existsSync(entrypoint.path)) {
+      staleEntrypoints.push({
+        server_name: serverName,
+        surface_id: diagnostic.surface_id,
+        entrypoint_path: entrypoint.path,
+        entrypoint_source: entrypoint.source,
+        generated_config: serverDiagnostic.generated_config,
+        provenance: serverDiagnostic.provenance,
+        regeneration: serverDiagnostic.regeneration,
+        repair_scope: repairScope,
+      });
+    }
+    serversByName[serverName] = serverDiagnostic;
+  }
+
+  const withRepairScope = generatedConfigs.map((config) => ({
+    ...config,
+    repair_scope: config.config_ignored
+      ? 'ignored_local_projection_repair'
+      : 'durable_repo_repair',
+  }));
+  return {
+    schema: 'narada.mcp.fabric.generated_config_diagnostics.v1',
+    status: staleEntrypoints.length === 0 ? 'ok' : 'stale_entrypoints',
+    registry_path: registry.path,
+    generated_configs: withRepairScope,
+    stale_entrypoints: staleEntrypoints,
+    ignored_local_repair_count: withRepairScope.filter((config) => config.repair_scope === 'ignored_local_projection_repair').length,
+    durable_repo_repair_count: withRepairScope.filter((config) => config.repair_scope === 'durable_repo_repair').length,
+    servers_by_name: serversByName,
+  };
+}
+
+function surfaceProvenance(surface, registryPath) {
+  return {
+    registry_path: registryPath,
+    source_file: stringOrNull(surface?.client_config?.source_file ?? surface?.source_file) ?? registryPath,
+    generated_by: stringOrNull(surface?.client_config?.generated_by ?? surface?.generated_by) ?? null,
+  };
+}
+
+function surfaceRegeneration(surface, siteRoot) {
+  return {
+    command: stringOrNull(surface?.client_config?.regeneration_command ?? surface?.regeneration_command)
+      ?? `pnpm --filter @narada2/typed-mcp-surface exec node src/generate-carrier-mcp-config.mjs --site-root ${siteRoot} --carrier all --write`,
+    source_file: stringOrNull(surface?.client_config?.regeneration_source_file ?? surface?.client_config?.source_file ?? surface?.source_file)
+      ?? stringOrNull(surface?.client_config?.generated_from)
+      ?? '.narada/capabilities/mcp-surfaces.json',
+  };
+}
+
+function isIgnoredLocalProjection(siteRoot, path) {
+  const gitignorePath = join(siteRoot, '.gitignore');
+  if (!existsSync(gitignorePath)) return false;
+  const relativePath = normalizePortablePathText(relative(siteRoot, path));
+  const patterns = readFileSync(gitignorePath, 'utf8')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith('#') && !line.startsWith('!'));
+  return patterns.some((pattern) => gitignorePatternMatches(pattern, relativePath));
+}
+
+function gitignorePatternMatches(pattern, relativePath) {
+  const normalizedPattern = normalizePortablePathText(pattern.replace(/^\//, ''));
+  if (normalizedPattern.endsWith('/')) {
+    return relativePath.startsWith(normalizedPattern.slice(0, -1));
+  }
+  if (normalizedPattern.includes('*')) {
+    const escaped = normalizedPattern
+      .split('*')
+      .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+      .join('[^/]*');
+    return new RegExp(`^${escaped}$`).test(relativePath);
+  }
+  return relativePath === normalizedPattern || relativePath.startsWith(`${normalizedPattern}/`);
+}
+
+function stringOrNull(value) {
+  return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
 function stopDoctorProcess(proc) {
