@@ -50,7 +50,7 @@ test('provider environment uses provider-specific env precedence', () => {
   });
 
   assert.equal(kimiCode.baseUrl, 'https://api.kimi.com/coding/');
-  assert.equal(kimiCode.model, 'kimi-k2.6');
+  assert.equal(kimiCode.model, 'kimi-k2.7');
   assert.equal(kimiCode.apiKey, 'kimi-code-native-key');
 
   const openai = providerEnvironment('openai-api', metadata, {

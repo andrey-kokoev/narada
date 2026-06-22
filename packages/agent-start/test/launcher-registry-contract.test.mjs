@@ -108,7 +108,7 @@ function dryRunEnv(runtime) {
     NARADA_CODEX_SUBSCRIPTION_PREFLIGHT: 'disabled',
     NARADA_INTELLIGENCE_PROVIDER: 'kimi-code-api',
     KIMI_CODE_API_BASE_URL: 'https://api.kimi.com/coding/',
-    KIMI_CODE_MODEL: 'kimi-k2.6',
+    KIMI_CODE_MODEL: 'kimi-k2.7',
     KIMI_CODE_API_KEY: 'test-key',
   };
   return {};
