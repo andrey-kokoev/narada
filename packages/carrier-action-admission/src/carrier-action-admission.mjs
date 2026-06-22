@@ -207,6 +207,7 @@ function classifyCarrierActionRequest(toolName, args = {}, options = {}) {
   }
 
   const metadata = normalizeToolMetadata(options.toolMetadata);
+  const mutationNameConflict = knownMutationNameClassification(toolName);
   if (options.toolAvailable === false) {
     return {
       family: 'missing_mcp_tool',
@@ -219,6 +220,18 @@ function classifyCarrierActionRequest(toolName, args = {}, options = {}) {
   }
 
   if (metadata?.read_only === true) {
+    if (mutationNameConflict) {
+      return {
+        ...mutationNameConflict,
+        reason: `read_only_metadata_conflicts_with_${mutationNameConflict.family}`,
+        classifier_source: metadata.source ?? 'tool_metadata_name_conflict',
+        metadata_conflict: {
+          read_only: true,
+          metadata_reason: metadata.reason ?? null,
+          metadata_source: metadata.source ?? null,
+        },
+      };
+    }
     return {
       ...readOnlyClassification(metadata.reason ?? 'tool_catalog_metadata_read_only'),
       classifier_source: metadata.source ?? 'tool_metadata',
@@ -285,6 +298,28 @@ function classifyCarrierActionRequest(toolName, args = {}, options = {}) {
     };
   }
   return { ...refusedClassification('unknown_non_read_only_tool_family', null, 'unknown_action_family'), classifier_source: metadata?.source ?? 'closed_name_fallback' };
+}
+
+function knownMutationNameClassification(toolName) {
+  if (FALLBACK_MUTATING_TOOLS.has(toolName)) {
+    const family = normalizeActionFamily(toolName);
+    if (family) return familyClassification(family, 'closed_name_fallback_mutating_tool');
+    return refusedClassification('unsupported_mutating_tool_family', 'narada_proper_authority');
+  }
+  if (isCommandIntentTool(toolName)) return familyClassification('command', 'command_intent_request_requires_admission');
+  if (isRawCommandTool(toolName)) return refusedClassification('raw_command_execution_refused', 'command_execution_intent_service', 'command');
+  if (/^task_lifecycle_/i.test(toolName)) return familyClassification('task_lifecycle_mutation', 'task_lifecycle_mutation_requires_canonical_task_authority');
+  if (/^(inbox_|narada_inbox_)/i.test(toolName)) return familyClassification('inbox_admission', 'inbox_mutation_requires_canonical_inbox_authority');
+  if (isOutboxOrPublicationTool(toolName)) {
+    return {
+      family: 'outbox_publication',
+      authority_owner: 'canonical_outbox_service',
+      decision: 'refused',
+      reason: 'family_not_supported_in_v1_slice',
+      secret_findings: [],
+    };
+  }
+  return null;
 }
 
 function normalizeToolMetadata(metadata) {

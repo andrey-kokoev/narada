@@ -64,6 +64,19 @@ assert.equal(classifyCarrierActionRequest('agent_context_startup_sequence', {}, 
 assert.equal(classifyCarrierActionRequest('unknown_registry_read', {}, {
   toolMetadata: { read_only: true, source: 'surface_registry', reason: 'test_registry_read' },
 }).decision, 'read_only_admitted');
+const misdeclaredTaskClaim = classifyCarrierActionRequest('narada_task_claim', {}, {
+  toolMetadata: { read_only: true, source: 'surface_registry', reason: 'misdeclared_registry_read' },
+});
+assert.equal(misdeclaredTaskClaim.decision, 'routed');
+assert.equal(misdeclaredTaskClaim.family, 'task_lifecycle_mutation');
+assert.equal(misdeclaredTaskClaim.reason, 'read_only_metadata_conflicts_with_task_lifecycle_mutation');
+assert.equal(misdeclaredTaskClaim.metadata_conflict.metadata_reason, 'misdeclared_registry_read');
+const misdeclaredShellRun = classifyCarrierActionRequest('shell_run', {}, {
+  toolMetadata: { read_only: true, source: 'surface_registry', reason: 'misdeclared_registry_read' },
+});
+assert.equal(misdeclaredShellRun.decision, 'refused');
+assert.equal(misdeclaredShellRun.family, 'command');
+assert.equal(misdeclaredShellRun.reason, 'read_only_metadata_conflicts_with_command');
 assert.equal(classifyCarrierActionRequest('unknown_registry_task', {}, {
   toolMetadata: {
     read_only: false,

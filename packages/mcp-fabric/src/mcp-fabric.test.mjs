@@ -352,6 +352,25 @@ assert.equal(windowsFabric.servers.windows.args[1], `${windowsPathSite.replaceAl
 assert.equal(windowsFabric.servers.windows.target_site_root, `${windowsPathSite.replaceAll('\\', '/')}/subdir`);
 rmSync(windowsPathSite, { recursive: true, force: true });
 
+const traversalSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-traversal-'));
+mkdirSync(join(traversalSite, '.ai', 'mcp'), { recursive: true });
+writeFileSync(join(traversalSite, '.ai', 'mcp', 'traversal-mcp.json'), `${JSON.stringify({
+  mcpServers: {
+    traversal: {
+      command: 'node',
+      args: ['../outside/server.mjs'],
+      target_site_root: '../outside',
+    },
+  },
+}, null, 2)}\n`, 'utf8');
+assert.throws(
+  () => loadSiteMcpFabric(traversalSite, { required: true }),
+  (error) => error.code === 'mcp_fabric_server_path_outside_site_root'
+    && error.details.server_name === 'traversal'
+    && error.details.field === 'args[0]',
+);
+rmSync(traversalSite, { recursive: true, force: true });
+
 const missingEntrypointSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-missing-entry-'));
 mkdirSync(join(missingEntrypointSite, '.ai', 'mcp'), { recursive: true });
 mkdirSync(join(missingEntrypointSite, '.narada', 'capabilities'), { recursive: true });

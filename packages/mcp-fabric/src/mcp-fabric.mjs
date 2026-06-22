@@ -723,13 +723,23 @@ function normalizeServerConfig(serverName, rawServer, siteRoot) {
   const transport = rawServer.transport ?? (rawServer.command ? 'stdio' : null);
   if (transport !== 'stdio') return null;
   const command = normalizeCommand(rawServer.command);
-  const portableSiteRoot = siteRoot.replaceAll('\\', '/');
+  const siteRootResolved = resolve(siteRoot);
+  const portableSiteRoot = siteRootResolved.replaceAll('\\', '/');
   const targetSiteRoot = rawServer.target_site_root
     ? String(rawServer.target_site_root).replaceAll('{site_root}', portableSiteRoot)
     : portableSiteRoot;
   const args = Array.isArray(rawServer.args)
     ? rawServer.args.map((arg) => normalizePortablePathText(String(arg).replaceAll('{site_root}', portableSiteRoot)))
     : [];
+  const normalizedTargetSiteRoot = normalizePortablePathText(targetSiteRoot);
+  const pathPolicyViolation = firstServerPathPolicyViolation(serverName, siteRootResolved, args, normalizedTargetSiteRoot);
+  if (pathPolicyViolation) {
+    throw new McpFabricError(
+      'mcp_fabric_server_path_outside_site_root',
+      `MCP server ${serverName} contains a path outside the Site root`,
+      pathPolicyViolation,
+    );
+  }
   return {
     transport: 'stdio',
     command,
@@ -738,10 +748,53 @@ function normalizeServerConfig(serverName, rawServer, siteRoot) {
     env_vars: Array.isArray(rawServer.env_vars) ? rawServer.env_vars.map(String) : [],
     ...rawServerToolList(rawServer),
     ...(rawServer.surface_id ? { surface_id: String(rawServer.surface_id) } : {}),
-    target_site_root: normalizePortablePathText(targetSiteRoot),
+    target_site_root: normalizedTargetSiteRoot,
     ...(rawServer.authority_posture ? { authority_posture: String(rawServer.authority_posture) } : {}),
     ...(Number.isFinite(Number(rawServer.startup_timeout_sec)) ? { startup_timeout_sec: Number(rawServer.startup_timeout_sec) } : {}),
   };
+}
+
+function firstServerPathPolicyViolation(serverName, siteRoot, args, targetSiteRoot) {
+  const siteRootResolved = resolve(siteRoot);
+  for (const [index, arg] of args.entries()) {
+    const violation = pathPolicyViolationForValue({
+      siteRoot,
+      siteRootResolved,
+      value: arg,
+      field: `args[${index}]`,
+      serverName,
+    });
+    if (violation) return violation;
+  }
+  if (targetSiteRoot) {
+    return pathPolicyViolationForValue({
+      siteRoot,
+      siteRootResolved,
+      value: targetSiteRoot,
+      field: 'target_site_root',
+      serverName,
+    });
+  }
+  return null;
+}
+
+function pathPolicyViolationForValue({ siteRoot, siteRootResolved, value, field, serverName }) {
+  const text = String(value ?? '');
+  if (!/(^|[\\/])\.\.([\\/]|$)/.test(text)) return null;
+  const candidate = isAbsolute(text) ? resolve(text) : resolve(siteRoot, text);
+  if (isPathInside(candidate, siteRootResolved)) return null;
+  return {
+    server_name: serverName,
+    field,
+    value: text,
+    resolved_path: normalizePortablePathText(candidate),
+    site_root: normalizePortablePathText(siteRootResolved),
+  };
+}
+
+function isPathInside(candidate, root) {
+  const rel = relative(root, candidate);
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
 }
 
 function validateFabricAgainstRegistry(siteRoot, mcpDir, files, servers) {
