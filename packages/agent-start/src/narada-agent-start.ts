@@ -328,9 +328,9 @@ function runtimeRefusal(candidate) {
   };
 }
 
-function codexSubscriptionPreflightEnabled() {
+function codexSubscriptionPreflightForced() {
   const mode = String(process.env[CODEX_SUBSCRIPTION_PREFLIGHT_ENV] ?? '').trim().toLowerCase();
-  return !['0', 'false', 'off', 'disabled', 'skip', 'none'].includes(mode);
+  return mode === 'force';
 }
 
 function findOnPath(names) {
@@ -372,24 +372,18 @@ function codexSubscriptionPreflightEnv() {
 
 function codexSubscriptionPreflight(provider) {
   const mode = String(process.env[CODEX_SUBSCRIPTION_PREFLIGHT_ENV] ?? '').trim().toLowerCase();
-  if (dryRun && mode !== 'force') {
+  if (!codexSubscriptionPreflightForced()) {
     return {
       schema: 'narada.codex_subscription.preflight.v1',
-      status: 'skipped_dry_run',
+      status: 'deferred_until_first_provider_call',
       ok: true,
       provider,
       command: 'codex exec --json',
-      reason: 'Dry-run validates launch shape without making a provider call.',
-    };
-  }
-  if (!codexSubscriptionPreflightEnabled()) {
-    return {
-      schema: 'narada.codex_subscription.preflight.v1',
-      status: 'disabled_by_environment',
-      ok: true,
-      provider,
-      command: 'codex exec --json',
+      mode: mode || 'default',
       environment_variable: CODEX_SUBSCRIPTION_PREFLIGHT_ENV,
+      reason: dryRun
+        ? 'Dry-run validates launch shape without making a provider call.'
+        : 'Launch defers local Codex subscription auth validation until the first provider call.',
     };
   }
 
@@ -470,6 +464,8 @@ function assertTemporaryNaradaPrefixedMcpServerNameGate(fabric) {
     `Temporary MCP leak identification gate refused non-canonical server names: ${offendingServerNames.join(', ')}`,
     {
       temporary_leak_identification_tool: true,
+      lifecycle_decision: 'retain_until_registry_authority_gate_replaces_prefix_heuristic',
+      replacement_path: 'Replace this temporary prefix gate with registry-backed authority validation that proves every launchable MCP server is generated from or matched to the target Site surface registry.',
       expected_server_name_prefix: 'narada-',
       offending_server_names: offendingServerNames,
       admitted_server_names: serverNames,
@@ -831,7 +827,7 @@ function providerCredentialRefusal(providerResolution, credential) {
       credential_present: false,
       preflight: credential.preflight,
       reason: 'The selected provider uses local Codex subscription auth, but the Codex CLI preflight did not complete successfully.',
-      required_next_step: 'Run codex login or repair local Codex subscription auth, then retry the launcher. For an intentional diagnostic bypass, set NARADA_CODEX_SUBSCRIPTION_PREFLIGHT=disabled.',
+      required_next_step: 'Run codex login or repair local Codex subscription auth, then retry the launcher. Remove NARADA_CODEX_SUBSCRIPTION_PREFLIGHT=force to use deferred launch validation.',
     }, [
       ...(providerResolution?.resolution_states ?? []),
       {

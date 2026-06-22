@@ -132,14 +132,16 @@ test('agent-cli fails launcher preflight when API provider credential is missing
   assert.equal(refusal.credential_requirement.kind, 'api_key_secret');
   assert.equal(refusal.credential_secret_ref, 'narada/provider/kimi-code-api/api-key');
   assert.deepEqual(refusal.credential_env_names, ['KIMI_CODE_API_KEY']);
+  assert.equal(refusal.required_next_step, "Store the key with PowerShell SecretManagement as 'narada/provider/kimi-code-api/api-key' or set one of: KIMI_CODE_API_KEY");
+  assert.equal(refusal.resolution_states.at(-1).reason_code, 'intelligence_provider_credential_missing');
 });
 
 test('agent-cli accepts explicit intelligence provider and materializes provider env', () => {
   const output = runOk(['--runtime', 'agent-cli', '--intelligence-provider', 'codex-subscription']);
   assert.equal(output.intelligence_provider_resolution.support_state, 'verified_supported');
-  assert.equal(output.intelligence_provider_resolution.credential_source, 'skipped_dry_run');
+  assert.equal(output.intelligence_provider_resolution.credential_source, 'deferred_until_first_provider_call');
   assert.equal(output.intelligence_provider_resolution.credential_present, true);
-  assert.equal(output.intelligence_provider_resolution.credential.preflight.status, 'skipped_dry_run');
+  assert.equal(output.intelligence_provider_resolution.credential.preflight.status, 'deferred_until_first_provider_call');
   assert.equal(output.intelligence_provider_resolution.credential_requirement_kind, 'local_codex_subscription');
   assert.equal(output.intelligence_provider_resolution.credential_requirement.kind, 'local_codex_subscription');
   assert.equal(output.intelligence_provider_resolution.credential_secret_ref, null);
@@ -211,6 +213,9 @@ test('agent-cli refuses codex-subscription when Codex local auth preflight fails
   assert.equal(refusal.intelligence_provider, 'codex-subscription');
   assert.equal(refusal.preflight.ok, false);
   assert.match(refusal.preflight.status, /^failed/);
+  assert.equal(Object.hasOwn(refusal.preflight, 'stderr_first_line'), true);
+  assert.equal(Object.hasOwn(refusal.preflight, 'stdout_first_line'), true);
+  assert.equal(refusal.required_next_step, 'Run codex login or repair local Codex subscription auth, then retry the launcher. Remove NARADA_CODEX_SUBSCRIPTION_PREFLIGHT=force to use deferred launch validation.');
 });
 
 test('agent-cli codex-subscription preflight resolves Windows codex.ps1 and scrubs OpenAI API env', { skip: process.platform !== 'win32' }, () => {
@@ -263,6 +268,11 @@ test('agent-cli exec launches package bin through node, not PowerShell', () => {
   const sessionId = output.carrier_session.carrier_session_id;
   assert.equal(output.exec_command.startsWith(process.execPath), true);
   assert.equal(output.exec_command.includes('pwsh'), false);
+  assert.equal(output.agent_cli_launch.command, process.execPath);
+  assert.equal(output.agent_cli_launch.carrier_relation, 'interactive_agent_cli');
+  assert.equal(output.agent_cli_launch.control_transport, 'jsonl_sideband_file');
+  assert.equal(output.agent_cli_launch.reads_only_target_site_mcp_fabric, true);
+  assert.equal(output.agent_cli_launch.user_site_mcp_injected, false);
   assert.equal(output.runtime_args[0].endsWith('agent-runtime-server.mjs'), true);
   assert.deepEqual(output.runtime_args.slice(1), [
     '--identity',
@@ -274,6 +284,73 @@ test('agent-cli exec launches package bin through node, not PowerShell', () => {
   ]);
   assert.equal(output.runtime_args.includes('--control-jsonl'), false);
   assert.equal(output.runtime_args.includes('--session-jsonl'), false);
+});
+
+test('agent-cli dry-run records event-id propagation residual at runtime-server boundary', () => {
+  const output = runOk(['--runtime', 'agent-cli', '--exec']);
+  const sessionId = output.carrier_session.carrier_session_id;
+  assert.equal(output.required_environment.NARADA_AGENT_ID, identity);
+  assert.equal(output.required_environment.NARADA_CARRIER_SESSION_ID, sessionId);
+  assert.equal(output.agent_start_event, undefined);
+  assert.equal(output.required_environment.NARADA_AGENT_START_EVENT_ID, undefined);
+  assert.equal(output.would_set_environment.NARADA_AGENT_START_EVENT_ID, undefined);
+  assert.equal(output.carrier_session.record.agent_start_event_id, null);
+  assert.equal(output.agent_cli_launch.control_path.includes(sessionId), true);
+  assert.equal(output.agent_cli_launch.session_path.includes(sessionId), true);
+});
+
+test('target site MCP fabric remains isolated from user site fabric', () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-mcp-isolation-'));
+  mkdirSync(join(siteRoot, '.ai'), { recursive: true });
+  mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
+  copyFileSync(join(naradaProperRoot, '.ai', 'task-lifecycle.db'), join(siteRoot, '.ai', 'task-lifecycle.db'));
+  writeFileSync(join(siteRoot, '.ai', 'mcp', 'target-only.json'), JSON.stringify({
+    mcpServers: {
+      'narada-target-only': {
+        transport: 'stdio',
+        command: 'node',
+        args: ['--version'],
+        tools: ['agent_context_startup_sequence'],
+        target_site_root: '{site_root}',
+      },
+    },
+  }, null, 2), 'utf8');
+
+  const output = runOk(['--runtime', 'agent-cli', '--target-site-root', siteRoot, '--exec']);
+  assert.equal(output.session_site_root, siteRoot);
+  assert.equal(output.mcp_fabric.site_root, siteRoot);
+  assert.deepEqual(output.mcp_fabric.server_names, ['narada-target-only']);
+  assert.equal(output.mcp_fabric.server_names.some((name) => name.includes('user')), false);
+  assert.equal(output.agent_cli_launch.site_mcp_fabric, join(siteRoot, '.ai', 'mcp'));
+  assert.equal(output.agent_cli_launch.reads_only_target_site_mcp_fabric, true);
+  assert.equal(output.agent_cli_launch.user_site_mcp_injected, false);
+  assert.equal(output.required_environment.NARADA_SITE_ROOT, siteRoot);
+  assert.equal(output.runtime_args[output.runtime_args.indexOf('--site-root') + 1], siteRoot);
+});
+
+test('temporary MCP prefix gate reports lifecycle and replacement path', () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-prefix-gate-'));
+  mkdirSync(join(siteRoot, '.ai'), { recursive: true });
+  mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
+  copyFileSync(join(naradaProperRoot, '.ai', 'task-lifecycle.db'), join(siteRoot, '.ai', 'task-lifecycle.db'));
+  writeFileSync(join(siteRoot, '.ai', 'mcp', 'bad-prefix.json'), JSON.stringify({
+    mcpServers: {
+      leaked: {
+        transport: 'stdio',
+        command: 'node',
+        args: ['--version'],
+      },
+    },
+  }, null, 2), 'utf8');
+
+  const result = runFailed(['--runtime', 'agent-cli', '--target-site-root', siteRoot]);
+  const refusal = JSON.parse(result.stdout);
+  assert.equal(refusal.reason_code, 'temporary_mcp_server_name_missing_narada_prefix');
+  assert.equal(refusal.details.temporary_leak_identification_tool, true);
+  assert.equal(refusal.details.lifecycle_decision, 'retain_until_registry_authority_gate_replaces_prefix_heuristic');
+  assert.match(refusal.details.replacement_path, /registry-backed authority validation/);
+  assert.deepEqual(refusal.details.offending_server_names, ['leaked']);
+  assert.match(refusal.required_next_step, /temporary gate exists to identify MCP authority leaks/);
 });
 
 test('non-agent-cli runtime refuses explicit intelligence provider selection', () => {
