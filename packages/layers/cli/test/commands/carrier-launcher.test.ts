@@ -205,6 +205,43 @@ describe('carrier launcher CLI commands', () => {
     expect((siteLoop.result as { site_command: { status: string } }).site_command.status).toBe('not_available');
   });
 
+  it('requires explicit agent identity for carrier start', async () => {
+    const siteRoot = await tempSite();
+
+    await expect(carrierStartCommand({
+      siteRoot,
+      runtime: 'agent-cli',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext())).rejects.toThrow(/agent_required/);
+  });
+
+  it('passes workspace root and intelligence provider through canonical agent-start', async () => {
+    const workspaceRoot = resolve(process.cwd(), '..', '..', '..');
+    const siteRoot = workspaceRoot;
+    const agentStartDir = join(workspaceRoot, 'packages', 'agent-start', 'src');
+    await mkdir(agentStartDir, { recursive: true });
+    await writeFile(join(agentStartDir, 'narada-agent-start.ts'), '', 'utf8');
+
+    const start = await carrierStartCommand({
+      siteRoot,
+      workspaceRoot,
+      agent: 'narada.architect',
+      runtime: 'agent-cli',
+      intelligenceProvider: 'codex-subscription',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(start.exitCode, JSON.stringify(start.result)).toBe(ExitCode.SUCCESS);
+    expect((start.result as { workspace_root: string }).workspace_root).toBe(workspaceRoot);
+    expect((start.result as { intelligence_provider: string }).intelligence_provider).toBe('codex-subscription');
+    const agentStart = (start.result as { agent_start: { parsed_stdout: { cwd: string; required_environment: Record<string, string> } } }).agent_start;
+    expect(agentStart.parsed_stdout.cwd).toBe(workspaceRoot);
+    expect(agentStart.parsed_stdout.required_environment.NARADA_WORKSPACE_ROOT).toBe(workspaceRoot);
+    expect(agentStart.parsed_stdout.required_environment.NARADA_INTELLIGENCE_PROVIDER).toBe('codex-subscription');
+  });
+
   it('routes non-agent-cli runtime requests through canonical agent-start instead of the Site hardcoded launcher', async () => {
     const siteRoot = resolve(process.cwd(), '..', '..', 'mcp-fabric', 'test', 'fixtures', 'site-valid');
 

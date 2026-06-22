@@ -11,8 +11,10 @@ import {
 export interface CarrierCommandOptions {
   siteRoot?: string;
   site?: string;
+  workspaceRoot?: string;
   agent?: string;
   runtime?: string;
+  intelligenceProvider?: string;
   timeout?: number;
   dryRun?: boolean;
   materializeOnly?: boolean;
@@ -107,9 +109,10 @@ export async function carrierStartCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const siteRoot = requireSiteRoot(options);
   const runtime = options.runtime ?? 'agent-cli';
+  const agent = requireAgent(options);
   const existing = getCarrierStatus({
     siteRoot,
-    agent: options.agent ?? 'sonar.resident',
+    agent,
     runtime,
   });
   if (existing.latest?.control_path_exists && existing.latest.parent_process_alive !== false) {
@@ -118,7 +121,7 @@ export async function carrierStartCommand(
       status: 'already_running',
       mutation_performed: false,
       site_root: siteRoot,
-      agent: options.agent ?? 'sonar.resident',
+      agent,
       runtime,
       carrier: existing,
     };
@@ -130,8 +133,10 @@ export async function carrierStartCommand(
   if (runtime !== 'agent-cli' || options.dryRun || options.materializeOnly || options.exec) {
     const start = runAgentStartCommand({
       siteRoot,
-      agent: options.agent ?? 'sonar.resident',
+      workspaceRoot: options.workspaceRoot,
+      agent,
       runtime,
+      intelligenceProvider: options.intelligenceProvider,
       dryRun: options.dryRun ?? (!options.materializeOnly && !options.exec),
       exec: options.exec,
       wait: options.wait,
@@ -143,8 +148,10 @@ export async function carrierStartCommand(
       status: start.status,
       mutation_performed: start.mutation_performed,
       site_root: siteRoot,
-      agent: options.agent ?? 'sonar.resident',
+      workspace_root: options.workspaceRoot ?? null,
+      agent,
       runtime,
+      intelligence_provider: options.intelligenceProvider ?? null,
       mode: options.exec ? 'exec' : options.materializeOnly ? 'materialize_only' : 'dry_run',
       agent_start: start,
     };
@@ -164,7 +171,7 @@ export async function carrierStartCommand(
       status: siteResult.status,
       mutation_performed: siteResult.mutation_performed,
       site_root: siteRoot,
-      agent: options.agent ?? 'sonar.resident',
+      agent,
       runtime,
       site_command: siteResult,
     };
@@ -178,7 +185,7 @@ export async function carrierStartCommand(
     status: 'site_launcher_unavailable',
     mutation_performed: false,
     site_root: siteRoot,
-    agent: options.agent,
+    agent,
     runtime: options.runtime,
     reason: 'No Site CLI launcher was found; generic agent-start fallback is not yet safe to invoke from this finite command.',
   };
@@ -194,13 +201,14 @@ export async function carrierRestartCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const siteRoot = requireSiteRoot(options);
   const runtime = options.runtime ?? 'agent-cli';
+  const agent = requireAgent(options);
   if (runtime !== 'agent-cli') {
     const result = {
       schema: 'narada.carrier.restart_plan.v0',
       status: 'runtime_launcher_unavailable',
       mutation_performed: false,
       site_root: siteRoot,
-      agent: options.agent,
+      agent,
       runtime,
       reason: `Live finite-command carrier restart is not wired for runtime ${runtime}.`,
     };
@@ -227,7 +235,7 @@ export async function carrierRestartCommand(
       status: success ? 'success' : 'failed',
       mutation_performed: recover.mutation_performed || start.mutation_performed,
       site_root: siteRoot,
-      agent: options.agent ?? 'sonar.resident',
+      agent,
       runtime,
       recover,
       start,
@@ -242,7 +250,7 @@ export async function carrierRestartCommand(
     status: 'site_launcher_unavailable',
     mutation_performed: false,
     site_root: siteRoot,
-    agent: options.agent,
+    agent,
     runtime: options.runtime,
     reason: 'No Site CLI launcher was found; generic agent-start fallback is not yet safe to invoke from this finite command.',
   };
@@ -258,8 +266,9 @@ export async function carrierDrainCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const siteRoot = requireSiteRoot(options);
   const runtime = options.runtime ?? 'agent-cli';
+  const agent = requireAgent(options);
   if (runtime !== 'agent-cli') {
-    const result = unsupportedCarrierLifecycle('drain', siteRoot, options.agent, runtime);
+    const result = unsupportedCarrierLifecycle('drain', siteRoot, agent, runtime);
     return {
       exitCode: ExitCode.INVALID_CONFIG,
       result: formattedResult(result, result.reason, options.format ?? 'auto'),
@@ -268,7 +277,7 @@ export async function carrierDrainCommand(
   const siteResult = runSiteCliCommand(siteRoot, [
     'loop',
     'drain',
-    'sonar.email-resident',
+    agent,
     '--ensure-resident',
   ]);
   const result = {
@@ -276,7 +285,7 @@ export async function carrierDrainCommand(
     status: siteResult.status,
     mutation_performed: siteResult.mutation_performed,
     site_root: siteRoot,
-    agent: options.agent ?? 'sonar.resident',
+    agent,
     runtime,
     site_command: siteResult,
   };
@@ -292,6 +301,7 @@ export async function carrierReloadCommand(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const siteRoot = requireSiteRoot(options);
   const runtime = options.runtime ?? 'agent-cli';
+  const agent = requireAgent(options);
   if (runtime === 'agent-cli') {
     const restart = await carrierRestartCommand(options, _context);
     const restartResult = restart.result as { status?: string; mutation_performed?: boolean };
@@ -300,7 +310,7 @@ export async function carrierReloadCommand(
       status: restartResult.status ?? 'failed',
       mutation_performed: restartResult.mutation_performed === true,
       site_root: siteRoot,
-      agent: options.agent ?? 'sonar.resident',
+      agent,
       runtime,
       strategy: 'restart',
       restart: restart.result,
@@ -310,7 +320,7 @@ export async function carrierReloadCommand(
       result: formattedResult(result, `carrier reload ${result.status}`, options.format ?? 'auto'),
     };
   }
-  const result = unsupportedCarrierLifecycle('reload', siteRoot, options.agent, runtime);
+  const result = unsupportedCarrierLifecycle('reload', siteRoot, agent, runtime);
   return {
     exitCode: ExitCode.INVALID_CONFIG,
     result: formattedResult(result, result.reason, options.format ?? 'auto'),
@@ -340,6 +350,14 @@ function requireSiteRoot(options: CarrierCommandOptions): string {
     throw new Error('site_root_required: pass --site-root <path> or --site <path>');
   }
   return siteRoot;
+}
+
+function requireAgent(options: CarrierCommandOptions): string {
+  const agent = options.agent?.trim();
+  if (!agent) {
+    throw new Error('agent_required: pass --agent <id>');
+  }
+  return agent;
 }
 
 function formatCarrierStatus(status: ReturnType<typeof getCarrierStatus>): string {

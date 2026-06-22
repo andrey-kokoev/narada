@@ -1,7 +1,10 @@
 import { accessSync, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { basename, dirname, join, parse, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const requireFromLauncherRuntime = createRequire(import.meta.url);
 
 export interface LaunchResultSummary {
   path: string;
@@ -27,6 +30,10 @@ export interface LaunchResultSummary {
   expires_at?: string;
 }
 
+function tsxImportPath(): string {
+  return pathToFileURL(requireFromLauncherRuntime.resolve('tsx')).href;
+}
+
 export interface CarrierStatusOptions {
   siteRoot: string;
   agent?: string;
@@ -36,8 +43,10 @@ export interface CarrierStatusOptions {
 
 export interface AgentStartOptions {
   siteRoot: string;
+  workspaceRoot?: string;
   agent: string;
   runtime: string;
+  intelligenceProvider?: string;
   dryRun?: boolean;
   exec?: boolean;
   wait?: boolean;
@@ -216,11 +225,12 @@ export function getCarrierControlPath(options: CarrierStatusOptions): CarrierSta
 
 export function runAgentStartCommand(options: AgentStartOptions): AgentStartCommandResult {
   const siteRoot = resolve(options.siteRoot);
-  const naradaRoot = naradaProperRoot();
+  const workspaceRoot = options.workspaceRoot ? resolve(options.workspaceRoot) : naradaProperRoot();
+  const naradaRoot = explicitNaradaProperRoot(workspaceRoot) ?? naradaProperRoot();
   const agentStart = join(naradaRoot, 'packages', 'agent-start', 'src', 'narada-agent-start.ts');
   const args = [
     '--import',
-    'tsx',
+    tsxImportPath(),
     agentStart,
     options.agent,
     '--target-site-root',
@@ -233,6 +243,7 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     options.launchSource ?? 'narada carrier start',
     '--json',
   ];
+  if (options.intelligenceProvider) args.push('--intelligence-provider', options.intelligenceProvider);
   if (options.dryRun) args.push('--dry-run');
   if (options.exec) args.push('--exec');
   if (options.wait) args.push('--wait');
@@ -251,10 +262,12 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     };
   }
 
-  const execution = runProcess(process.execPath, args, naradaRoot, {
+  const execution = runProcess(process.execPath, args, workspaceRoot, {
     NARADA_TARGET_SITE_ROOT: siteRoot,
     NARADA_LAUNCH_REGISTRY_SITE_ROOT: siteRoot,
+    NARADA_LAUNCH_REGISTRY_WORKSPACE_ROOT: workspaceRoot,
     NARADA_AGENT_ID: options.agent,
+    ...(options.intelligenceProvider ? { NARADA_INTELLIGENCE_PROVIDER: options.intelligenceProvider } : {}),
   });
   const parsed = tryParseJson(execution.stdout) ?? tryParseFirstJsonObject(execution.stdout);
   return {
@@ -675,16 +688,26 @@ function siteRootFromLaunchResultPath(path: string): string {
 }
 
 function naradaProperRoot(): string {
-  return findNaradaProperRoot(dirname(fileURLToPath(import.meta.url)))
+  const moduleDir = dirname(fileURLToPath(import.meta.url));
+  const packageLayoutRoot = resolve(moduleDir, '..', '..', '..', '..', '..');
+  return explicitNaradaProperRoot(packageLayoutRoot)
+    ?? findNaradaProperRoot(moduleDir)
     ?? findNaradaProperRoot(process.cwd())
     ?? resolve(process.cwd());
+}
+
+function explicitNaradaProperRoot(candidate: string): string | null {
+  const resolved = resolve(candidate);
+  return existsSync(join(resolved, 'packages', 'agent-start', 'src', 'narada-agent-start.ts'))
+    ? resolved
+    : null;
 }
 
 function findNaradaProperRoot(start: string): string | null {
   let current = resolve(start);
   const root = parse(current).root;
   while (current && current !== root) {
-    if (existsSync(join(current, 'packages', 'agent-start', 'src', 'narada-agent-start.ts'))) {
+    if (explicitNaradaProperRoot(current)) {
       return current;
     }
     current = dirname(current);

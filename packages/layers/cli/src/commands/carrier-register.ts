@@ -86,8 +86,10 @@ export function registerCarrierCommands(program: Command): void {
     .description('Start or plan a carrier through the canonical agent-start runtime adapter')
     .option('--site-root <path>', 'Target Site root')
     .option('--site <path>', 'Alias for --site-root')
+    .option('--workspace-root <path>', 'Workspace root for the launched carrier')
     .option('--agent <id>', 'Agent identity')
     .option('--runtime <runtime>', 'Runtime substrate')
+    .option('--intelligence-provider <provider>', 'agent-cli intelligence provider')
     .option('--dry-run', 'Plan the runtime launch without writing launch artifacts or spawning', false)
     .option('--materialize-only', 'Write launch artifacts without spawning the runtime', false)
     .option('--exec', 'Spawn the runtime process after materializing launch artifacts', false)
@@ -101,8 +103,10 @@ export function registerCarrierCommands(program: Command): void {
       invocation: (runtime, opts) => carrierStartCommand({
         siteRoot: opts.siteRoot as string | undefined,
         site: opts.site as string | undefined,
+        workspaceRoot: opts.workspaceRoot as string | undefined,
         agent: opts.agent as string | undefined,
         runtime: (opts.runtime as string | undefined) ?? runtime,
+        intelligenceProvider: opts.intelligenceProvider as string | undefined,
         dryRun: opts.dryRun as boolean | undefined,
         materializeOnly: opts.materializeOnly as boolean | undefined,
         exec: opts.exec as boolean | undefined,
