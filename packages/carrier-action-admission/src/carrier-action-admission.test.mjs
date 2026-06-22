@@ -14,6 +14,7 @@ import {
   siteEvidenceRoot,
   stableRequestId,
 } from './carrier-action-admission.mjs';
+import { resolveToolMetadata } from './tool-metadata.mjs';
 
 function tempSite(prefix = 'narada-action-admission-') {
   return mkdtempSync(join(tmpdir(), prefix));
@@ -74,13 +75,56 @@ assert.equal(classifyCarrierActionRequest('unknown_registry_task', {}, {
 }).classifier_source, 'surface_registry');
 const registryUnlisted = classifyCarrierActionRequest('fs_read_file', {}, {
   toolMetadata: {
+    name: 'fs_read_file',
     source: 'surface_registry_unlisted',
     registry_metadata_authoritative: true,
     reason: 'surface_registry_tool_not_declared',
+    server_name: 'site-filesystem',
+    surface_id: 'surface.filesystem',
+    registry_source: 'D:/site/.narada/capabilities/mcp-surfaces.json',
+    generated_file: 'site-filesystem-mcp.json',
+    live_tool_catalog_seen: true,
   },
 });
 assert.equal(registryUnlisted.decision, 'refused');
 assert.equal(registryUnlisted.reason, 'surface_registry_tool_not_declared');
+assert.equal(registryUnlisted.registry_diagnostics.server_name, 'site-filesystem');
+assert.equal(registryUnlisted.registry_diagnostics.surface_id, 'surface.filesystem');
+assert.equal(registryUnlisted.registry_diagnostics.registry_source, 'D:/site/.narada/capabilities/mcp-surfaces.json');
+assert.equal(registryUnlisted.registry_diagnostics.generated_file, 'site-filesystem-mcp.json');
+assert.equal(registryUnlisted.registry_diagnostics.candidate_registry_patch.classification, 'add_to_read_only_tools');
+assert.equal(registryUnlisted.registry_diagnostics.candidate_registry_patch.target_contract_field, 'tool_contract.read_only_tools');
+const resolvedRegistryUnlisted = resolveToolMetadata({
+  toolName: 'narada_inbox_submit',
+  server: {
+    name: 'site-inbox',
+    surface_id: 'surface.inbox',
+    source_file: 'site-inbox-mcp.json',
+    registry_source: 'D:/site/.narada/capabilities/mcp-surfaces.json',
+    registry_metadata_authoritative: true,
+    registry_tools: {},
+  },
+  tool: { name: 'narada_inbox_submit' },
+});
+assert.equal(resolvedRegistryUnlisted.server_name, 'site-inbox');
+assert.equal(resolvedRegistryUnlisted.surface_id, 'surface.inbox');
+assert.equal(resolvedRegistryUnlisted.generated_file, 'site-inbox-mcp.json');
+assert.equal(resolvedRegistryUnlisted.live_tool_catalog_seen, true);
+const registryUnlistedRequest = createCarrierActionRequest({
+  agentId: 'narada.test',
+  carrierSessionId: 'carrier_registry',
+  turnId: 'turn_registry',
+  toolCallId: 'call_registry',
+  toolName: 'narada_inbox_submit',
+  args: { envelope_id: 'env_1' },
+  siteRoot: workspaceRoot,
+  toolMetadata: resolvedRegistryUnlisted,
+});
+assert.equal(registryUnlistedRequest.requested_action.registry_diagnostics.server_name, 'site-inbox');
+assert.equal(registryUnlistedRequest.requested_action.registry_diagnostics.surface_id, 'surface.inbox');
+assert.equal(registryUnlistedRequest.requested_action.registry_diagnostics.generated_file, 'site-inbox-mcp.json');
+assert.equal(registryUnlistedRequest.requested_action.registry_diagnostics.candidate_registry_patch.classification, 'add_to_mutating_tools');
+assert.equal(registryUnlistedRequest.requested_action.classifier_metadata.registry_patch_candidate.classification, 'add_to_mutating_tools');
 assert.equal(classifyCarrierActionRequest('inbox_submit', {}).authority_owner, 'canonical_inbox_service');
 assert.equal(classifyCarrierActionRequest('outbox_send', {}).authority_owner, 'canonical_outbox_service');
 assert.equal(classifyCarrierActionRequest('outbox_send', {}).decision, 'refused');

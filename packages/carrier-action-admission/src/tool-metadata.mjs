@@ -122,6 +122,9 @@ function loadMcpSurfaceRegistry(siteRoot) {
 
 function projectSurfaceTools(surface) {
   const surfaceId = stringOrNull(surface?.surface_id);
+  const serverName = registryServerNames(surface)[0] ?? null;
+  const generatedPath = stringOrNull(surface?.client_config?.generated_path);
+  const generatedFile = generatedPath ? basename(generatedPath) : null;
   const contract = surface?.tool_contract ?? {};
   const tools = {};
   const readOnlyTools = stringArray(contract.read_only_tools);
@@ -137,6 +140,8 @@ function projectSurfaceTools(surface) {
       authority_owner: 'target_site_read_policy',
       source: 'surface_registry',
       surface_id: surfaceId,
+      server_name: serverName,
+      generated_file: generatedFile,
       reason: 'surface_registry_read_only_tool',
     };
   }
@@ -148,6 +153,8 @@ function projectSurfaceTools(surface) {
       authority_owner: inferAuthorityOwner(tool),
       source: 'surface_registry',
       surface_id: surfaceId,
+      server_name: serverName,
+      generated_file: generatedFile,
       reason: 'surface_registry_mutating_tool',
     };
   }
@@ -159,6 +166,8 @@ function projectSurfaceTools(surface) {
       authority_owner: null,
       source: 'surface_registry',
       surface_id: surfaceId,
+      server_name: serverName,
+      generated_file: generatedFile,
       reason: 'surface_registry_refused_tool',
       refused: true,
     };
@@ -170,6 +179,8 @@ function projectSurfaceTools(surface) {
       ...fallback,
       source: 'surface_registry',
       surface_id: surfaceId,
+      server_name: serverName,
+      generated_file: generatedFile,
       reason: `surface_registry_registered_live_tool_${fallback.read_only ? 'read_only' : 'mutating'}`,
     };
   }
@@ -219,6 +230,7 @@ function resolveToolMetadata({ toolName, server = null, tool = null }) {
       available: !!tool,
       server_name: server?.name ?? null,
       registry_source: server?.registry_source ?? null,
+      generated_file: registryMetadata.generated_file ?? server?.source_file ?? server?.generated_file ?? null,
       registry_metadata_authoritative: server?.registry_metadata_authoritative === true,
       live_tool_catalog_seen: !!tool,
     };
@@ -232,7 +244,9 @@ function resolveToolMetadata({ toolName, server = null, tool = null }) {
       source: 'surface_registry_unlisted',
       available: !!tool,
       server_name: server?.name ?? null,
+      surface_id: server?.surface_id ?? null,
       registry_source: server?.registry_source ?? null,
+      generated_file: server?.source_file ?? server?.generated_file ?? null,
       registry_metadata_authoritative: true,
       live_tool_catalog_seen: !!tool,
       reason: 'surface_registry_tool_not_declared',

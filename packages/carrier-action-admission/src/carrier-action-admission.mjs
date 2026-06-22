@@ -81,6 +81,80 @@ function secretFinding(path, matchKind, trigger) {
   };
 }
 
+function registryToolNotDeclaredDiagnostics(toolName, metadata) {
+  const reason = metadata?.reason ?? 'surface_registry_tool_not_declared';
+  if (!metadata || reason !== 'surface_registry_tool_not_declared') return null;
+  const patch = candidateRegistryPatchClassification(toolName, metadata);
+  return {
+    schema: 'narada.carrier_action.registry_tool_not_declared_diagnostics.v1',
+    status: 'visible_tool_missing_from_surface_registry_contract',
+    tool_name: toolName,
+    server_name: stringFieldOrNull(metadata.server_name),
+    surface_id: stringFieldOrNull(metadata.surface_id),
+    registry_source: stringFieldOrNull(metadata.registry_source),
+    generated_file: stringFieldOrNull(metadata.generated_file),
+    live_tool_catalog_seen: metadata.live_tool_catalog_seen === true,
+    registry_metadata_authoritative: metadata.registry_metadata_authoritative === true,
+    candidate_registry_patch: patch,
+  };
+}
+
+function candidateRegistryPatchClassification(toolName, metadata) {
+  const fallback = fallbackRegistryPatchClassification(toolName);
+  const surfaceId = stringFieldOrNull(metadata.surface_id);
+  const registrySource = stringFieldOrNull(metadata.registry_source);
+  const generatedFile = stringFieldOrNull(metadata.generated_file);
+  const serverName = stringFieldOrNull(metadata.server_name);
+  return {
+    schema: 'narada.carrier_action.registry_patch_candidate.v1',
+    classification: fallback.classification,
+    confidence: fallback.confidence,
+    tool_name: toolName,
+    surface_id: surfaceId,
+    server_name: serverName,
+    registry_source: registrySource,
+    generated_file: generatedFile,
+    target_contract_field: fallback.target_contract_field,
+    recommended_action: registryPatchRecommendedAction(fallback, { surfaceId, registrySource, generatedFile, serverName }),
+  };
+}
+
+function fallbackRegistryPatchClassification(toolName) {
+  if (FALLBACK_READ_ONLY_TOOLS.has(toolName)) {
+    return {
+      classification: 'add_to_read_only_tools',
+      target_contract_field: 'tool_contract.read_only_tools',
+      confidence: 'high',
+    };
+  }
+  if (FALLBACK_MUTATING_TOOLS.has(toolName) || normalizeActionFamily(toolName)) {
+    return {
+      classification: 'add_to_mutating_tools',
+      target_contract_field: 'tool_contract.mutating_tools',
+      confidence: 'medium',
+    };
+  }
+  return {
+    classification: 'manual_review_required',
+    target_contract_field: null,
+    confidence: 'low',
+  };
+}
+
+function registryPatchRecommendedAction(fallback, { surfaceId, registrySource, generatedFile, serverName }) {
+  if (!fallback.target_contract_field) {
+    return 'Review the live MCP tool and update the authoritative surface registry contract only after assigning its authority family.';
+  }
+  const target = surfaceId ? `surface ${surfaceId}` : serverName ? `server ${serverName}` : 'the matching surface';
+  const source = registrySource ? ` in ${registrySource}` : '';
+  const generated = generatedFile ? `, then regenerate ${generatedFile}` : '';
+  return `Add this tool to ${fallback.target_contract_field} for ${target}${source}${generated}.`;
+}
+
+function stringFieldOrNull(value) {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
 function secretDiagnosticSummary(findings) {
   return findings.map((finding) => ({
     path: finding.path,
@@ -167,9 +241,12 @@ function classifyCarrierActionRequest(toolName, args = {}, options = {}) {
     }
   }
   if (metadata?.registry_metadata_authoritative === true) {
+    const registryDiagnostics = registryToolNotDeclaredDiagnostics(toolName, metadata);
     return {
       ...refusedClassification(metadata.reason ?? 'surface_registry_tool_not_declared', metadata.authority_owner ?? null, metadata.family ?? 'unknown_action_family'),
       classifier_source: metadata.source ?? 'surface_registry',
+      registry_diagnostics: registryDiagnostics,
+      remediation: registryDiagnostics?.candidate_registry_patch?.recommended_action ?? null,
     };
   }
 
@@ -337,6 +414,7 @@ function createCarrierActionRequest({
       payload_secret_findings: classification.secret_findings,
       payload_secret_diagnostics: classification.secret_diagnostics ?? [],
       safe_remediation: classification.remediation ?? null,
+      registry_diagnostics: classification.registry_diagnostics ?? null,
       raw_arguments_recorded: false,
       raw_secret_values_recorded: false,
       classifier_source: classification.classifier_source ?? 'closed_name_fallback',
@@ -353,9 +431,13 @@ function classifierMetadataSummary(toolMetadata) {
     surface_id: typeof metadata.surface_id === 'string' ? metadata.surface_id : null,
     server_name: typeof metadata.server_name === 'string' ? metadata.server_name : null,
     registry_source: typeof metadata.registry_source === 'string' ? metadata.registry_source : null,
+    generated_file: typeof metadata.generated_file === 'string' ? metadata.generated_file : null,
     registry_metadata_authoritative: metadata.registry_metadata_authoritative === true,
     live_tool_catalog_seen: metadata.live_tool_catalog_seen === true,
     available: metadata.available === true,
+    registry_patch_candidate: (metadata.reason ?? 'surface_registry_tool_not_declared') === 'surface_registry_tool_not_declared'
+      ? candidateRegistryPatchClassification(metadata.name ?? '<unknown>', metadata)
+      : null,
   };
 }
 
