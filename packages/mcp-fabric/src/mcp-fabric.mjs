@@ -16,16 +16,23 @@ export class McpFabricError extends Error {
 export function loadSiteMcpFabric(siteRoot, options = {}) {
   const required = options.required ?? false;
   const validateRegistry = options.validateRegistry ?? 'diagnostic';
-  const mcpDir = join(siteRoot, '.ai', 'mcp');
+  const fabricDirectory = resolveSiteMcpFabricDirectory(siteRoot);
+  const mcpDir = fabricDirectory.mcpDir;
   if (!existsSync(mcpDir)) {
     if (!required) {
       const empty = emptyFabric(siteRoot, mcpDir);
+      empty.source = fabricDirectory.source;
+      empty.candidate_mcp_dirs = fabricDirectory.candidates;
       if (validateRegistry !== false) {
         empty.registry_validation = validateFabricAgainstRegistry(siteRoot, mcpDir, [], {});
       }
       return empty;
     }
-    throw new McpFabricError('mcp_fabric_missing', `MCP fabric directory not found: ${mcpDir}`, { siteRoot, mcpDir });
+    throw new McpFabricError('mcp_fabric_missing', `MCP fabric directory not found: ${mcpDir}`, {
+      siteRoot,
+      mcpDir,
+      candidate_mcp_dirs: fabricDirectory.candidates,
+    });
   }
 
   const files = readdirSync(mcpDir, { withFileTypes: true })
@@ -106,14 +113,28 @@ export function loadSiteMcpFabric(siteRoot, options = {}) {
   return {
     schema: 'narada.mcp.fabric.loaded.v1',
     site_root: siteRoot,
-    source: '.ai/mcp',
+    source: fabricDirectory.source,
     mcp_dir: mcpDir,
+    candidate_mcp_dirs: fabricDirectory.candidates,
     files,
     servers,
     sources,
     skipped,
     registry_validation: validateRegistry === false ? undefined : registryValidation,
   };
+}
+
+function resolveSiteMcpFabricDirectory(siteRoot) {
+  const primary = join(siteRoot, '.ai', 'mcp');
+  const contained = join(siteRoot, '.narada', '.ai', 'mcp');
+  const candidates = [primary, contained];
+  if (existsSync(primary)) {
+    return { mcpDir: primary, source: '.ai/mcp', candidates };
+  }
+  if (existsSync(contained)) {
+    return { mcpDir: contained, source: '.narada/.ai/mcp', candidates };
+  }
+  return { mcpDir: primary, source: '.ai/mcp', candidates };
 }
 
 export function codexMcpEnvVarNames() {

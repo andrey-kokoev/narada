@@ -27,11 +27,31 @@ try {
       assert.equal(error.code, 'mcp_fabric_missing');
       assert.equal(error.details.siteRoot, missingSite);
       assert.equal(error.details.mcpDir, join(missingSite, '.ai', 'mcp'));
+      assert.deepEqual(error.details.candidate_mcp_dirs, [
+        join(missingSite, '.ai', 'mcp'),
+        join(missingSite, '.narada', '.ai', 'mcp'),
+      ]);
       return true;
     },
   );
 } finally {
   rmSync(missingSite, { recursive: true, force: true });
+}
+
+const containedSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-contained-'));
+mkdirSync(join(containedSite, '.narada', '.ai', 'mcp'), { recursive: true });
+try {
+  writeFileSync(join(containedSite, '.narada', '.ai', 'mcp', 'contained-mcp.json'), `${JSON.stringify({
+    mcpServers: {
+      contained: { command: 'node', args: ['contained.mjs'] },
+    },
+  }, null, 2)}\n`, 'utf8');
+  const containedFabric = loadSiteMcpFabric(containedSite, { required: true });
+  assert.equal(containedFabric.source, '.narada/.ai/mcp');
+  assert.equal(containedFabric.mcp_dir, join(containedSite, '.narada', '.ai', 'mcp'));
+  assert.deepEqual(mcpServerNames(containedFabric), ['contained']);
+} finally {
+  rmSync(containedSite, { recursive: true, force: true });
 }
 
 const emptySite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-empty-'));
