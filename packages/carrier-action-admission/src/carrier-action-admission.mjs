@@ -19,7 +19,11 @@ const CLASSIFIER_VERSION = 'carrier_action_admission.metadata_aware_policy.v1';
 const POLICY_VERSION = 'carrier_action_admission.agent_runtime_server_operational_candidates.v1';
 
 const SECRET_KEY_PATTERN = /(api[_-]?key|authorization|bearer|client[_-]?secret|credential|password|private[_-]?key|secret|token)/i;
-const SECRET_VALUE_PATTERN = /(-----BEGIN [A-Z ]*PRIVATE KEY-----|Bearer\s+[A-Za-z0-9._~+/=-]{12,}|sk-[A-Za-z0-9_-]{12,})/i;
+const SECRET_VALUE_PATTERNS = [
+  { kind: 'private_key_block', pattern: /-----BEGIN [A-Z ]*PRIVATE KEY-----/i },
+  { kind: 'bearer_token_literal', pattern: /Bearer\s+[A-Za-z0-9._~+/=-]{12,}/i },
+  { kind: 'openai_style_secret_key', pattern: /(?<![A-Za-z0-9_-])sk-[A-Za-z0-9_-]{12,}(?![A-Za-z0-9_-])/i },
+];
 
 function candidateDir(siteRoot) {
   return join(actionAdmissionDir(siteRoot), 'candidates');
@@ -43,27 +47,58 @@ function safeIdPart(value) {
 }
 
 function inspectPayloadForSecrets(value, path = []) {
-  return [...new Set(inspectPayloadForSecretsRaw(value, path))];
+  return [...new Set(inspectPayloadForSecretFindings(value, path).map((finding) => finding.path))];
 }
 
-function inspectPayloadForSecretsRaw(value, path = []) {
+function inspectPayloadForSecretFindings(value, path = []) {
   const findings = [];
   if (Array.isArray(value)) {
-    value.forEach((item, index) => findings.push(...inspectPayloadForSecretsRaw(item, [...path, String(index)])));
+    value.forEach((item, index) => findings.push(...inspectPayloadForSecretFindings(item, [...path, String(index)])));
     return findings;
   }
   if (value && typeof value === 'object') {
     for (const [key, child] of Object.entries(value)) {
       const childPath = [...path, key];
-      if (SECRET_KEY_PATTERN.test(key)) findings.push(childPath.join('.'));
-      findings.push(...inspectPayloadForSecretsRaw(child, childPath));
+      if (SECRET_KEY_PATTERN.test(key)) findings.push(secretFinding(childPath, 'sensitive_key_name', 'argument_key'));
+      findings.push(...inspectPayloadForSecretFindings(child, childPath));
     }
     return findings;
   }
-  if (typeof value === 'string' && SECRET_VALUE_PATTERN.test(value)) {
-    findings.push(path.join('.') || '<payload>');
+  if (typeof value === 'string') {
+    for (const candidate of SECRET_VALUE_PATTERNS) {
+      if (candidate.pattern.test(value)) findings.push(secretFinding(path, candidate.kind, 'argument_value'));
+    }
   }
   return findings;
+}
+
+function secretFinding(path, matchKind, trigger) {
+  return {
+    path: path.join('.') || '<payload>',
+    trigger,
+    match_kind: matchKind,
+    values_recorded: false,
+  };
+}
+
+function secretDiagnosticSummary(findings) {
+  return findings.map((finding) => ({
+    path: finding.path,
+    trigger: finding.trigger,
+    match_kind: finding.match_kind,
+    why: finding.trigger === 'argument_key'
+      ? 'Argument key name is conventionally used for credentials or secrets.'
+      : 'Argument value matched a credential-shaped literal pattern.',
+    values_recorded: false,
+    safe_retry: safeRetryForSecretFinding(finding),
+  }));
+}
+
+function safeRetryForSecretFinding(finding) {
+  if (finding.path === 'path') {
+    return 'If this is a source-file read, retry with a normal repository path. Credential-shaped substrings embedded in ordinary words are ignored; explicit secret paths or values remain refused.';
+  }
+  return 'Remove credential-bearing arguments, pass opaque payload refs where supported, or use a dedicated secret-authority surface.';
 }
 
 function argumentSummary(args = {}) {
@@ -82,7 +117,8 @@ function argumentSummary(args = {}) {
 }
 
 function classifyCarrierActionRequest(toolName, args = {}, options = {}) {
-  const secretFindings = [...new Set(inspectPayloadForSecrets(args))];
+  const secretFindingDetails = inspectPayloadForSecretFindings(args);
+  const secretFindings = [...new Set(secretFindingDetails.map((finding) => finding.path))];
   if (secretFindings.length > 0 || credentialLikeTool(toolName)) {
     return {
       family: 'credential_access',
@@ -90,6 +126,8 @@ function classifyCarrierActionRequest(toolName, args = {}, options = {}) {
       decision: 'refused',
       reason: 'secret_or_credential_bearing_request',
       secret_findings: secretFindings,
+      secret_diagnostics: secretDiagnosticSummary(secretFindingDetails),
+      remediation: 'Carrier action admission refuses credential-bearing requests without recording raw values. Use a non-secret read request, narrower non-secret arguments, an opaque payload ref, or the dedicated secret-authority path as appropriate.',
       classifier_source: 'payload_secret_scan',
     };
   }
@@ -297,6 +335,8 @@ function createCarrierActionRequest({
       classification_reason: classification.reason,
       argument_summary: argumentSummary(args),
       payload_secret_findings: classification.secret_findings,
+      payload_secret_diagnostics: classification.secret_diagnostics ?? [],
+      safe_remediation: classification.remediation ?? null,
       raw_arguments_recorded: false,
       raw_secret_values_recorded: false,
       classifier_source: classification.classifier_source ?? 'closed_name_fallback',
@@ -326,6 +366,7 @@ function decideCarrierActionRequest(request) {
     authority_owner: request.target_locus?.authority_hint ?? null,
     reason: action.classification_reason ?? null,
     secret_findings: action.payload_secret_findings ?? [],
+    remediation: action.safe_remediation ?? null,
   };
   const decisionShape = decisionForClassification(classification);
   return {
@@ -342,6 +383,7 @@ function decideCarrierActionRequest(request) {
     execution_attempt_ref: null,
     confirmation_ref: null,
     evidence_path: null,
+    remediation: classification.remediation,
     request,
   };
 }

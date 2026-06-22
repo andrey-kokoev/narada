@@ -53,6 +53,9 @@ assert.equal(classifyCarrierActionRequest('startup_sequence', {}).decision, 'ref
 assert.equal(classifyCarrierActionRequest('fs_read_file', {}).decision, 'read_only_admitted');
 assert.equal(classifyCarrierActionRequest('fs_glob_search', {}).decision, 'read_only_admitted');
 assert.equal(classifyCarrierActionRequest('fs_grep_search', {}).decision, 'read_only_admitted');
+const sourcePathRead = classifyCarrierActionRequest('fs_read_file', { path: 'packages/task-lifecycle-mcp/src/mcp-freshness-service.ts' });
+assert.equal(sourcePathRead.decision, 'read_only_admitted');
+assert.equal(sourcePathRead.reason, 'closed_name_fallback_read_only_tool');
 assert.equal(classifyCarrierActionRequest('read_file', {}).decision, 'refused');
 assert.equal(classifyCarrierActionRequest('glob_search', {}).decision, 'refused');
 assert.equal(classifyCarrierActionRequest('grep_search', {}).decision, 'refused');
@@ -100,6 +103,9 @@ assert.equal(secretClassification.family, 'credential_access');
 assert.equal(secretClassification.authority_owner, 'capability_secret_authority');
 assert.equal(secretClassification.decision, 'refused');
 assert.deepEqual(secretClassification.secret_findings, ['env.API_TOKEN']);
+assert.deepEqual(secretClassification.secret_diagnostics.map((entry) => entry.path), ['env.API_TOKEN', 'env.API_TOKEN']);
+assert.equal(secretClassification.secret_diagnostics.every((entry) => entry.values_recorded === false), true);
+assert.match(secretClassification.remediation, /dedicated secret-authority path/);
 
 const request = createCarrierActionRequest({
   agentId: 'narada.test',
@@ -163,6 +169,8 @@ const secretWrite = createAndWriteCarrierActionAdmission({
 const secretText = readFileSync(secretWrite.path, 'utf8');
 assert.equal(secretWrite.decision.decision, 'refused');
 assert.equal(secretWrite.decision.reason, 'secret_or_credential_bearing_request');
+assert.match(secretWrite.decision.remediation, /refuses credential-bearing requests/);
+assert.deepEqual(secretWrite.decision.request.requested_action.payload_secret_diagnostics.map((entry) => entry.match_kind), ['sensitive_key_name', 'openai_style_secret_key']);
 assert.doesNotMatch(secretText, /sk-anothersecretvalue123456/);
 
 const commandWrite = createAndWriteCarrierActionAdmission({
