@@ -34,7 +34,10 @@ import {
   writeLaunchResultFile,
 } from './carrier-launch-artifacts.ts';
 import {
+  buildAgentCliLaunchPacket,
+  buildCarrierEnvironmentProjection,
   buildCarrierSpawnArgs,
+  runtimeSpecificEnvironment,
   resolveRuntimeCommand as resolveCarrierRuntimeCommand,
   resolveToolFabricAdapter as resolveCarrierToolFabricAdapter,
   runtimeSpawnOptions,
@@ -1338,18 +1341,6 @@ function writeLaunchResult(result) {
   return writeLaunchResultFile(result, { siteRoot: rootDir });
 }
 
-function redactEnvironmentForOutput(env = {}) {
-  return Object.fromEntries(Object.entries(env).map(([key, value]) => [
-    key,
-    shouldRedactEnvironmentValue(key, value) ? '<set>' : value,
-  ]));
-}
-
-function shouldRedactEnvironmentValue(key, value) {
-  if (!value) return false;
-  return /(_API_KEY|_TOKEN|_SECRET|PASSWORD|CREDENTIAL)/i.test(String(key));
-}
-
 function writeStdout(payload) {
   return new Promise((resolve, reject) => {
     process.stdout.write(payload, (error) => {
@@ -1472,71 +1463,34 @@ const mcpProviderCredentialEnv = mcpProviderCredentialEnvironment();
 const startingCarrierInput = resolveStartingCarrierInput();
 const environmentSiteRoot = sessionSiteRoot;
 const workspaceRoot = process.cwd();
-const requiredEnvironment = redactEnvironmentForOutput({
-  ...(startResult.required_environment ?? {}),
-  ...carrierEnvironment,
-  ...intelligenceProviderEnv,
-  ...mcpProviderCredentialEnv,
-  ...agentTuiEnvironment,
-  ...(runtime === 'pi' ? {
-    NARADA_PI_COMMAND: process.env.NARADA_PI_COMMAND ?? 'pi',
-    NARADA_PI_PROVIDER: process.env.NARADA_PI_PROVIDER ?? DEFAULT_PI_PROVIDER,
-    NARADA_PI_MODEL: process.env.NARADA_PI_MODEL ?? DEFAULT_PI_MODEL,
-  } : {}),
-  ...(runtime === 'claude-code' ? {
-    NARADA_CLAUDE_CODE_COMMAND: process.env.NARADA_CLAUDE_CODE_COMMAND ?? DEFAULT_CLAUDE_CODE_COMMAND,
-    NARADA_CLAUDE_CODE_MODEL: process.env.NARADA_CLAUDE_CODE_MODEL ?? DEFAULT_CLAUDE_CODE_MODEL,
-  } : {}),
-  ...(runtime === 'opencode' ? {
-    NARADA_OPENCODE_COMMAND: process.env.NARADA_OPENCODE_COMMAND ?? 'opencode',
-  } : {}),
-  NARADA_AGENT_ID: identity,
-  NARADA_AGENT_START_EVENT_ID: startResult.agent_start_event,
-  NARADA_SITE_ROOT: environmentSiteRoot,
-  NARADA_WORKSPACE_ROOT: workspaceRoot,
-  NARADA_AGENT_CONTEXT_DB: dbPath,
+const runtimeEnvironment = runtimeSpecificEnvironment(runtime, {
+  processEnv: process.env,
+  defaultPiProvider: DEFAULT_PI_PROVIDER,
+  defaultPiModel: DEFAULT_PI_MODEL,
+  defaultClaudeCodeCommand: DEFAULT_CLAUDE_CODE_COMMAND,
+  defaultClaudeCodeModel: DEFAULT_CLAUDE_CODE_MODEL,
 });
-const wouldSetEnvironment = startResult.would_set_environment
-  ? redactEnvironmentForOutput({
-    ...startResult.would_set_environment,
-    ...carrierEnvironment,
-    ...intelligenceProviderEnv,
-    ...mcpProviderCredentialEnv,
-    ...agentTuiEnvironment,
-    ...(runtime === 'pi' ? {
-      NARADA_PI_COMMAND: process.env.NARADA_PI_COMMAND ?? 'pi',
-      NARADA_PI_PROVIDER: process.env.NARADA_PI_PROVIDER ?? DEFAULT_PI_PROVIDER,
-      NARADA_PI_MODEL: process.env.NARADA_PI_MODEL ?? DEFAULT_PI_MODEL,
-    } : {}),
-    ...(runtime === 'claude-code' ? {
-      NARADA_CLAUDE_CODE_COMMAND: process.env.NARADA_CLAUDE_CODE_COMMAND ?? DEFAULT_CLAUDE_CODE_COMMAND,
-      NARADA_CLAUDE_CODE_MODEL: process.env.NARADA_CLAUDE_CODE_MODEL ?? DEFAULT_CLAUDE_CODE_MODEL,
-    } : {}),
-    ...(runtime === 'opencode' ? {
-      NARADA_OPENCODE_COMMAND: process.env.NARADA_OPENCODE_COMMAND ?? 'opencode',
-    } : {}),
-    NARADA_AGENT_ID: identity,
-    NARADA_AGENT_START_EVENT_ID: startResult.agent_start_event,
-    NARADA_SITE_ROOT: environmentSiteRoot,
-    NARADA_WORKSPACE_ROOT: workspaceRoot,
-    NARADA_AGENT_CONTEXT_DB: dbPath,
-  })
-  : startResult.would_set_environment;
-const agentCliLaunch = runtime === 'agent-cli'
-  ? {
-schema: 'narada.agent_start.agent_cli.v0',
-control_transport: 'jsonl_sideband_file',
-carrier_relation: 'interactive_agent_cli',
-command: process.execPath,
-session_dir: dirname(siteCarrierControlPath(carrierSessionRegistration.carrier_session_id)),
-control_path: siteCarrierControlPath(carrierSessionRegistration.carrier_session_id),
-session_path: siteCarrierSessionPath(carrierSessionRegistration.carrier_session_id),
-site_mcp_fabric: join(sessionSiteRoot, '.ai', 'mcp'),
-reads_only_target_site_mcp_fabric: true,
-user_site_mcp_injected: false,
-native_shell_authority_admitted: false,
-  }
-  : null;
+const { requiredEnvironment, wouldSetEnvironment } = buildCarrierEnvironmentProjection({
+  runtimeName: runtime,
+  startResult,
+  carrierEnvironment,
+  intelligenceProviderEnv,
+  mcpProviderCredentialEnv,
+  agentTuiEnvironment,
+  runtimeEnvironment,
+  identity,
+  agentStartEventId: startResult.agent_start_event,
+  environmentSiteRoot,
+  workspaceRoot,
+  dbPath,
+});
+const agentCliLaunch = buildAgentCliLaunchPacket(runtime, {
+  processExecPath: process.execPath,
+  carrierSessionRegistration,
+  sessionSiteRoot,
+  siteCarrierControlPath,
+  siteCarrierSessionPath,
+});
 
 const output = {
   ...startResult,
@@ -1618,13 +1572,7 @@ const child = spawn(spawnCommand, spawnCommandArgs, {
     ...process.env,
     ...intelligenceProviderEnv,
     ...mcpProviderCredentialEnv,
-    ...(runtime === 'claude-code' ? {
-      NARADA_CLAUDE_CODE_COMMAND: process.env.NARADA_CLAUDE_CODE_COMMAND ?? DEFAULT_CLAUDE_CODE_COMMAND,
-      NARADA_CLAUDE_CODE_MODEL: process.env.NARADA_CLAUDE_CODE_MODEL ?? DEFAULT_CLAUDE_CODE_MODEL,
-    } : {}),
-    ...(runtime === 'opencode' ? {
-      NARADA_OPENCODE_COMMAND: process.env.NARADA_OPENCODE_COMMAND ?? 'opencode',
-    } : {}),
+    ...(runtime === 'pi' ? {} : runtimeEnvironment),
     NARADA_AGENT_ID: identity,
     NARADA_AGENT_START_EVENT_ID: startResult.agent_start_event,
     NARADA_CARRIER_SESSION_ID: carrierSessionRegistration.carrier_session_id,

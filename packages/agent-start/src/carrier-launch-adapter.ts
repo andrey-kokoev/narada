@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 export function resolveToolFabricAdapter(runtimeName, { schema, agentTuiRuntime }) {
   const source = '.ai/mcp';
@@ -259,6 +259,112 @@ export function resolveRuntimeCommand(runtimeName, {
 export function runtimeSpawnOptions(runtimeName) {
   if (runtimeName === 'opencode') return { shell: false };
   return {};
+}
+
+export function runtimeSpecificEnvironment(runtimeName, {
+  processEnv = {},
+  defaultPiProvider,
+  defaultPiModel,
+  defaultClaudeCodeCommand,
+  defaultClaudeCodeModel,
+} = {}) {
+  if (runtimeName === 'pi') {
+    return {
+      NARADA_PI_COMMAND: processEnv.NARADA_PI_COMMAND ?? 'pi',
+      NARADA_PI_PROVIDER: processEnv.NARADA_PI_PROVIDER ?? defaultPiProvider,
+      NARADA_PI_MODEL: processEnv.NARADA_PI_MODEL ?? defaultPiModel,
+    };
+  }
+  if (runtimeName === 'claude-code') {
+    return {
+      NARADA_CLAUDE_CODE_COMMAND: processEnv.NARADA_CLAUDE_CODE_COMMAND ?? defaultClaudeCodeCommand,
+      NARADA_CLAUDE_CODE_MODEL: processEnv.NARADA_CLAUDE_CODE_MODEL ?? defaultClaudeCodeModel,
+    };
+  }
+  if (runtimeName === 'opencode') {
+    return {
+      NARADA_OPENCODE_COMMAND: processEnv.NARADA_OPENCODE_COMMAND ?? 'opencode',
+    };
+  }
+  return {};
+}
+
+export function redactEnvironmentForOutput(env = {}) {
+  return Object.fromEntries(Object.entries(env).map(([key, value]) => [
+    key,
+    shouldRedactEnvironmentValue(key, value) ? '<set>' : value,
+  ]));
+}
+
+function shouldRedactEnvironmentValue(key, value) {
+  if (!value) return false;
+  return /(_API_KEY|_TOKEN|_SECRET|PASSWORD|CREDENTIAL)/i.test(String(key));
+}
+
+export function buildCarrierEnvironmentProjection({
+  runtimeName,
+  startResult,
+  carrierEnvironment = {},
+  intelligenceProviderEnv = {},
+  mcpProviderCredentialEnv = {},
+  agentTuiEnvironment = {},
+  runtimeEnvironment = {},
+  identity,
+  agentStartEventId,
+  environmentSiteRoot,
+  workspaceRoot,
+  dbPath,
+}) {
+  const commonEnvironment = {
+    ...carrierEnvironment,
+    ...intelligenceProviderEnv,
+    ...mcpProviderCredentialEnv,
+    ...agentTuiEnvironment,
+    ...runtimeEnvironment,
+    NARADA_AGENT_ID: identity,
+    NARADA_AGENT_START_EVENT_ID: agentStartEventId,
+    NARADA_SITE_ROOT: environmentSiteRoot,
+    NARADA_WORKSPACE_ROOT: workspaceRoot,
+    NARADA_AGENT_CONTEXT_DB: dbPath,
+  };
+  return {
+    requiredEnvironment: redactEnvironmentForOutput({
+      ...(startResult.required_environment ?? {}),
+      ...commonEnvironment,
+    }),
+    wouldSetEnvironment: startResult.would_set_environment
+      ? redactEnvironmentForOutput({
+        ...startResult.would_set_environment,
+        ...commonEnvironment,
+      })
+      : startResult.would_set_environment,
+    runtimeEnvironment,
+    runtimeName,
+  };
+}
+
+export function buildAgentCliLaunchPacket(runtimeName, {
+  processExecPath,
+  carrierSessionRegistration,
+  sessionSiteRoot,
+  siteCarrierControlPath,
+  siteCarrierSessionPath,
+}) {
+  if (runtimeName !== 'agent-cli') return null;
+  const sessionId = carrierSessionRegistration.carrier_session_id;
+  return {
+    schema: 'narada.agent_start.agent_cli.v0',
+    control_transport: 'jsonl_sideband_file',
+    carrier_relation: 'interactive_agent_cli',
+    command: processExecPath,
+    session_dir: dirname(siteCarrierControlPath(sessionId)),
+    control_path: siteCarrierControlPath(sessionId),
+    session_path: siteCarrierSessionPath(sessionId),
+    site_mcp_fabric: join(sessionSiteRoot, '.ai', 'mcp'),
+    reads_only_target_site_mcp_fabric: true,
+    user_site_mcp_injected: false,
+    native_shell_authority_admitted: false,
+  };
 }
 
 export function shellQuote(arg) {
