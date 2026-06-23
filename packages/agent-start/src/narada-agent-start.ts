@@ -18,7 +18,7 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { delimiter, join, dirname, resolve } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -44,6 +44,25 @@ import {
   shellQuote,
 } from './carrier-launch-adapter.ts';
 import { createNaradaPackageResolver } from './narada-package-resolver.ts';
+import {
+  codexContextIsolationStatus,
+  codexSubscriptionPreflight as runCodexSubscriptionPreflight,
+  resolveCodexCliScriptPath,
+} from './codex-subscription-support.ts';
+import {
+  INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
+  loadIntelligenceProviderRegistry,
+  loadSiteEnvFiles,
+  resolveIntelligenceProviderInputSource,
+  resolveIntelligenceProviderLaunch,
+  withResolutionStates,
+} from './provider-resolution.ts';
+import {
+  annotateIntelligenceProviderCredential,
+  intelligenceProviderEnvironmentProjection as projectIntelligenceProviderEnvironment,
+  mcpProviderCredentialEnvironment as projectMcpProviderCredentialEnvironment,
+  providerCredentialRefusal as buildProviderCredentialRefusal,
+} from './provider-credential-projection.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRootDir = join(__dirname, '..');
@@ -100,55 +119,6 @@ function normalizePath(value) {
 }
 
 const SITE_ENV_BINDINGS = new Map();
-
-function loadSiteEnvFile(path) {
-  if (!existsSync(path)) return;
-  const text = readFileSync(path, 'utf8');
-  for (const line of text.split(/\r?\n/)) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const separatorIndex = trimmed.indexOf('=');
-    if (separatorIndex <= 0) continue;
-    const name = trimmed.slice(0, separatorIndex).trim();
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) continue;
-    if (process.env[name]) continue;
-    let value = trimmed.slice(separatorIndex + 1).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-      value = value.slice(1, -1);
-    }
-    process.env[name] = value;
-    SITE_ENV_BINDINGS.set(name, { source_field: 'site_env', source_path: path });
-  }
-}
-
-function loadSiteEnvFiles(siteRoot) {
-  loadSiteEnvFile(join(siteRoot, '.env'));
-  loadSiteEnvFile(join(siteNaradaRoot(siteRoot), '.env'));
-}
-
-function nonEmptyString(value) {
-  return value !== null && value !== undefined && String(value).trim() !== '';
-}
-
-function resolveIntelligenceProviderInputSource(argumentValue, environmentValue, runtimeName) {
-  if (nonEmptyString(argumentValue)) {
-    return { source_field: 'cli_argument' };
-  }
-  if (runtimeName === 'agent-cli' && nonEmptyString(environmentValue)) {
-    const siteBinding = SITE_ENV_BINDINGS.get('NARADA_INTELLIGENCE_PROVIDER');
-    if (siteBinding) return siteBinding;
-    if (nonEmptyString(process.env.NARADA_INTELLIGENCE_PROVIDER_SOURCE_FIELD)) {
-      return {
-        source_field: String(process.env.NARADA_INTELLIGENCE_PROVIDER_SOURCE_FIELD).trim(),
-        source_path: nonEmptyString(process.env.NARADA_INTELLIGENCE_PROVIDER_SOURCE_PATH)
-          ? String(process.env.NARADA_INTELLIGENCE_PROVIDER_SOURCE_PATH).trim()
-          : null,
-      };
-    }
-    return { source_field: 'environment' };
-  }
-  return { source_field: null };
-}
 
 function parseArgs(argv) {
   const result = {};
@@ -220,11 +190,14 @@ const showAdmission = args.show_admission ?? null;
 const targetSiteId = args.target_site_id ?? process.env.NARADA_TARGET_SITE_ID ?? null;
 const targetSiteRoot = args.target_site_root ?? process.env.NARADA_TARGET_SITE_ROOT ?? null;
 const sessionSiteRoot = targetSiteRoot ?? rootDir;
-loadSiteEnvFiles(sessionSiteRoot);
+loadSiteEnvFiles(sessionSiteRoot, { siteNaradaRoot, processEnv: process.env, siteEnvBindings: SITE_ENV_BINDINGS });
 const intelligenceProviderArgInput = args.intelligence_provider ?? null;
 const intelligenceProviderEnvInput = runtimeInput === 'agent-cli' ? process.env.NARADA_INTELLIGENCE_PROVIDER : null;
 const intelligenceProviderInput = intelligenceProviderArgInput ?? intelligenceProviderEnvInput ?? null;
-const intelligenceProviderInputSource = resolveIntelligenceProviderInputSource(intelligenceProviderArgInput, intelligenceProviderEnvInput, runtimeInput);
+const intelligenceProviderInputSource = resolveIntelligenceProviderInputSource(intelligenceProviderArgInput, intelligenceProviderEnvInput, runtimeInput, {
+  processEnv: process.env,
+  siteEnvBindings: SITE_ENV_BINDINGS,
+});
 const dbPath = args.db ?? join(sessionSiteRoot, '.ai', 'state', 'agent-context.sqlite');
 const require = createRequire(import.meta.url);
 const naradaPackages = createNaradaPackageResolver({
@@ -240,7 +213,6 @@ const AGENT_TUI_TERMINAL_MODE = 'interactive_loop';
 const AGENT_TUI_INTERACTIVE_LOOP_MAX_STEPS = '100000';
 const ADMITTED_RUNTIME_SUBSTRATE_KINDS = Object.freeze(RUNTIME_SUBSTRATE_KINDS_PACKET.admitted_runtime_substrate_kinds);
 const TOOL_FABRIC_ADAPTER_CONTRACT_SCHEMA = 'narada.tool_fabric_adapter_kind.v1';
-const INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA = 'narada.intelligence_provider.v1';
 const ADMITTED_TOOL_FABRIC_ADAPTER_KINDS = Object.freeze([
   'codex-native-mcp',
   'narada-agent-cli-mcp-client',
@@ -262,39 +234,16 @@ function resolveNaradaPackageBin(packageName, binName) {
   return naradaPackages.resolvePackageBin(packageName, binName);
 }
 const INTELLIGENCE_PROVIDER_METADATA_PATH = process.env.NARADA_INTELLIGENCE_PROVIDER_METADATA_PATH ?? resolveNaradaPackageExport('@narada2/carrier-provider-contract', './provider-registry');
-const INTELLIGENCE_PROVIDER_METADATA_PACKET = Object.freeze(JSON.parse(readFileSync(INTELLIGENCE_PROVIDER_METADATA_PATH, 'utf8')));
-const INTELLIGENCE_PROVIDER_METADATA = Object.freeze(INTELLIGENCE_PROVIDER_METADATA_PACKET.providers);
-const ADMITTED_INTELLIGENCE_PROVIDERS = Object.freeze(Object.keys(INTELLIGENCE_PROVIDER_METADATA));
-const DEFAULT_AGENT_CLI_INTELLIGENCE_PROVIDER = INTELLIGENCE_PROVIDER_METADATA_PACKET.default_provider ?? 'kimi-code-api';
-const PROVIDER_SECRET_STORE_MODE_ENV = 'NARADA_PROVIDER_SECRET_STORE';
-const CODEX_SUBSCRIPTION_PREFLIGHT_ENV = 'NARADA_CODEX_SUBSCRIPTION_PREFLIGHT';
-const CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS = 60000;
-const SECRET_MANAGEMENT_LOOKUP_TIMEOUT_MS = 5000;
-const SECRET_MANAGEMENT_LOOKUP_SCRIPT = `
-$ErrorActionPreference = 'SilentlyContinue'
-$name = [Environment]::GetEnvironmentVariable('NARADA_SECRET_LOOKUP_NAME', 'Process')
-if ([string]::IsNullOrWhiteSpace($name)) { exit 3 }
-if (-not (Get-Module -ListAvailable -Name Microsoft.PowerShell.SecretManagement)) { exit 10 }
-Import-Module Microsoft.PowerShell.SecretManagement -ErrorAction Stop
-$secret = Get-Secret -Name $name -AsPlainText -ErrorAction SilentlyContinue
-if ($null -eq $secret -or [string]::IsNullOrWhiteSpace([string]$secret)) { exit 2 }
-[Console]::Out.Write([string]$secret)
-`;
+const INTELLIGENCE_PROVIDER_REGISTRY = loadIntelligenceProviderRegistry(INTELLIGENCE_PROVIDER_METADATA_PATH);
+const INTELLIGENCE_PROVIDER_METADATA = INTELLIGENCE_PROVIDER_REGISTRY.metadata;
+const ADMITTED_INTELLIGENCE_PROVIDERS = INTELLIGENCE_PROVIDER_REGISTRY.admittedProviders;
+const DEFAULT_AGENT_CLI_INTELLIGENCE_PROVIDER = INTELLIGENCE_PROVIDER_REGISTRY.defaultProvider;
 const DEFAULT_PI_PROVIDER = 'openai-codex';
 const DEFAULT_PI_MODEL = 'gpt-5.5';
 const DEFAULT_CLAUDE_CODE_COMMAND = 'claude';
 const DEFAULT_CLAUDE_CODE_MODEL = 'sonnet';
 let mcpFabric = null;
 let agentStartRenderer = null;
-const PROVIDER_SUPPORT_STATES = Object.freeze({
-  DECLARED: 'declared',
-  ADMITTED_UNSUPPORTED: 'admitted_unsupported',
-  ADAPTER_IMPLEMENTED: 'adapter_implemented',
-  VERIFIED_SUPPORTED: 'verified_supported',
-  DEPRECATED: 'deprecated',
-  REMOVED: 'removed',
-});
-
 function runtimeRefusal(candidate) {
   const candidateRuntime = String(candidate ?? '');
   return {
@@ -305,94 +254,6 @@ function runtimeRefusal(candidate) {
     admitted_runtime_substrate_kinds: [...ADMITTED_RUNTIME_SUBSTRATE_KINDS],
     reason: 'runtime_substrate_kind is not admitted by narada.runtime_substrate_kind.v1',
     required_next_step: 'Admit the new runtime in a later contract version before startup or materialization accepts it.',
-  };
-}
-
-function codexSubscriptionPreflightForced() {
-  const mode = String(process.env[CODEX_SUBSCRIPTION_PREFLIGHT_ENV] ?? '').trim().toLowerCase();
-  return mode === 'force';
-}
-
-function findOnPath(names) {
-  const dirs = String(process.env.PATH ?? '').split(delimiter).filter(Boolean);
-  for (const dir of dirs) {
-    for (const name of names) {
-      const candidate = join(dir, name);
-      if (existsSync(candidate)) return candidate;
-    }
-  }
-  return null;
-}
-
-function codexPreflightCommand() {
-  const explicit = process.env.NARADA_CODEX_COMMAND;
-  if (explicit) return { command: explicit, prefixArgs: [] };
-  if (process.platform !== 'win32') return { command: 'codex', prefixArgs: [] };
-  const found = findOnPath(['codex.ps1', 'codex.cmd', 'codex.exe']);
-  if (found?.endsWith('.ps1')) return { command: 'pwsh', prefixArgs: ['-NoProfile', '-File', found] };
-  if (found) return { command: found, prefixArgs: [] };
-  return { command: 'pwsh', prefixArgs: ['-NoProfile', '-Command', 'codex'] };
-}
-
-function codexAuthHome() {
-  if (process.env.NARADA_CODEX_AUTH_HOME) return process.env.NARADA_CODEX_AUTH_HOME;
-  const userRoot = process.env.USERPROFILE || process.env.HOME || homedir();
-  return userRoot ? join(userRoot, '.codex') : null;
-}
-
-function codexSubscriptionPreflightEnv() {
-  const env = { ...process.env };
-  delete env.OPENAI_API_KEY;
-  delete env.OPENAI_BASE_URL;
-  delete env.OPENAI_MODEL;
-  const authHome = codexAuthHome();
-  if (authHome && !env.NARADA_CODEX_AUTH_HOME) env.NARADA_CODEX_AUTH_HOME = authHome;
-  return env;
-}
-
-function codexSubscriptionPreflight(provider) {
-  const mode = String(process.env[CODEX_SUBSCRIPTION_PREFLIGHT_ENV] ?? '').trim().toLowerCase();
-  if (!codexSubscriptionPreflightForced()) {
-    return {
-      schema: 'narada.codex_subscription.preflight.v1',
-      status: 'deferred_until_first_provider_call',
-      ok: true,
-      provider,
-      command: 'codex exec --json',
-      mode: mode || 'default',
-      environment_variable: CODEX_SUBSCRIPTION_PREFLIGHT_ENV,
-      reason: dryRun
-        ? 'Dry-run validates launch shape without making a provider call.'
-        : 'Launch defers local Codex subscription auth validation until the first provider call.',
-    };
-  }
-
-  const command = codexPreflightCommand();
-  const prompt = 'Return exactly: ok';
-  const result = spawnSync(command.command, [...command.prefixArgs, 'exec', '--json', prompt], {
-    cwd: sessionSiteRoot,
-    encoding: 'utf8',
-    timeout: CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS,
-    windowsHide: true,
-    env: codexSubscriptionPreflightEnv(),
-  });
-  const stdout = String(result.stdout ?? '');
-  const stderr = String(result.stderr ?? '');
-  const combined = `${stdout}\n${stderr}`;
-  const unauthorized = /401\s+Unauthorized|Unauthorized/i.test(combined);
-  return {
-    schema: 'narada.codex_subscription.preflight.v1',
-    status: result.status === 0 ? 'passed' : unauthorized ? 'failed_unauthorized' : 'failed',
-    ok: result.status === 0,
-    provider,
-    command: `${command.command} ${[...command.prefixArgs, 'exec', '--json'].join(' ')}`,
-    exit_code: result.status,
-    signal: result.signal,
-    error: result.error ? result.error.message : null,
-    unauthorized,
-    stdout_first_line: stdout.split(/\r?\n/).find((line) => line.trim()) ?? '',
-    stderr_first_line: stderr.split(/\r?\n/).find((line) => line.trim()) ?? '',
-    timeout_ms: CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS,
   };
 }
 
@@ -463,385 +324,57 @@ async function failIntelligenceProviderRefusal(refusal) {
   process.exit(1);
 }
 
-function intelligenceProviderRefusal(candidate) {
-  return {
-    schema: INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
-    status: 'refused',
-    reason_code: 'intelligence_provider_unsupported',
-    candidate_intelligence_provider: String(candidate ?? ''),
-    admitted_intelligence_providers: [...ADMITTED_INTELLIGENCE_PROVIDERS],
-    reason: 'intelligence_provider is not admitted by narada.intelligence_provider.v1',
-    required_next_step: 'Use one of the admitted intelligence provider values or update the versioned intelligence provider contract first.',
-  };
-}
-
-function intelligenceProviderStateRefusal(provider, providerContract) {
-  const support = resolveProviderSupportState(providerContract);
-  return {
-    schema: INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
-    status: 'refused',
-    reason_code: 'intelligence_provider_support_state_not_ready',
-    intelligence_provider: provider,
-    support_state: support.state,
-    request_adapter: providerContract.adapter_kind,
-    reason: `intelligence_provider ${provider} is admitted but not launch-ready: ${support.state}`,
-    required_next_step: support.required_next_step,
-  };
-}
-
-function resolveProviderSupportState(providerContract) {
-  const state = normalizeProviderSupportState(providerContract.support_state ?? providerContract.support_status);
-  return {
-    state,
-    ready: state === PROVIDER_SUPPORT_STATES.VERIFIED_SUPPORTED || state === PROVIDER_SUPPORT_STATES.DEPRECATED,
-    required_next_step: requiredNextProviderSupportStep(state, providerContract.adapter_kind),
-  };
-}
-
-function normalizeProviderSupportState(value) {
-  if (value === 'supported') return PROVIDER_SUPPORT_STATES.VERIFIED_SUPPORTED;
-  if (value === 'unsupported_until_adapter_exists') return PROVIDER_SUPPORT_STATES.ADMITTED_UNSUPPORTED;
-  if (value === 'unsupported_until_reviewed') return PROVIDER_SUPPORT_STATES.ADAPTER_IMPLEMENTED;
-  return value ?? PROVIDER_SUPPORT_STATES.DECLARED;
-}
-
-function requiredNextProviderSupportStep(state, adapterKind) {
-  if (state === PROVIDER_SUPPORT_STATES.DECLARED) return 'Admit provider policy and choose a request adapter before launch.';
-  if (state === PROVIDER_SUPPORT_STATES.ADMITTED_UNSUPPORTED) return `Implement request adapter ${adapterKind} and move the provider to adapter_implemented.`;
-  if (state === PROVIDER_SUPPORT_STATES.ADAPTER_IMPLEMENTED) return 'Verify launcher, docs, credential mapping, and runtime tests before marking verified_supported.';
-  if (state === PROVIDER_SUPPORT_STATES.REMOVED) return 'Use an admitted replacement provider or restore the provider through a new contract revision.';
-  if (state === PROVIDER_SUPPORT_STATES.DEPRECATED) return 'Provider remains launchable for compatibility; migrate to a non-deprecated provider.';
-  return 'Provider is verified for launch.';
-}
-
 function normalizeIntelligenceProvider(value, runtimeName, inputSource = { source_field: null }) {
-  return resolveIntelligenceProviderLaunch(value, runtimeName, inputSource);
-}
-
-function resolveIntelligenceProviderLaunch(value, runtimeName, inputSource = { source_field: null }) {
-  const states = [];
-  const pushState = (state, detail = {}) => states.push({ state, ...detail });
-  const inputAbsent = value === null || value === undefined || String(value).trim() === '';
-  if (inputAbsent) {
-    pushState('input_absent');
-    if (runtimeName !== 'agent-cli') return null;
-    value = DEFAULT_AGENT_CLI_INTELLIGENCE_PROVIDER;
-    pushState('default_provider_selected', { intelligence_provider: value });
-  }
-
-  const provider = String(value).trim();
-  if (!ADMITTED_INTELLIGENCE_PROVIDERS.includes(provider)) {
-    pushState('launch_refused', { reason_code: 'intelligence_provider_unsupported' });
-    return withResolutionStates(intelligenceProviderRefusal(provider), states);
-  }
-  pushState('provider_known', { intelligence_provider: provider });
-
-  if (runtimeName !== 'agent-cli') {
-    pushState('launch_refused', { reason_code: 'intelligence_provider_runtime_unsupported' });
-    return withResolutionStates({
-      schema: INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
-      status: 'refused',
-      reason_code: 'intelligence_provider_runtime_unsupported',
-      intelligence_provider: provider,
-      runtime_substrate_kind: runtimeName,
-      reason: '-IntelligenceProvider currently applies only to -Runtime agent-cli. Kimi and Codex CLI provider selection remains owned by those carriers.',
-    }, states);
-  }
-  pushState('runtime_supports_provider_selection', { runtime_substrate_kind: runtimeName });
-
-  const providerContract = INTELLIGENCE_PROVIDER_METADATA[provider];
-  const credentialRequirement = providerCredentialRequirement(provider, providerContract);
-  const support = resolveProviderSupportState(providerContract);
-  if (!support.ready) {
-    pushState('launch_refused', { reason_code: 'intelligence_provider_support_state_not_ready', support_state: support.state });
-    return withResolutionStates(intelligenceProviderStateRefusal(provider, providerContract), states);
-  }
-  pushState('adapter_supported', { request_adapter: providerContract.adapter_kind, support_state: support.state });
-
-  const resolution = withResolutionStates({
+  return resolveIntelligenceProviderLaunch(value, runtimeName, inputSource, {
+    metadataByProvider: INTELLIGENCE_PROVIDER_METADATA,
+    admittedProviders: ADMITTED_INTELLIGENCE_PROVIDERS,
+    defaultProvider: DEFAULT_AGENT_CLI_INTELLIGENCE_PROVIDER,
     schema: INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
-    intelligence_provider: provider,
-    source_field: inputAbsent ? 'default_for_agent_cli' : inputSource.source_field ?? 'intelligence_provider',
-    source_path: inputAbsent ? null : inputSource.source_path ?? null,
-    request_adapter: providerContract.adapter_kind,
-    support_state: support.state,
-    default_model: providerContract.default_model,
-    model_env: providerContract.model_env_names[0],
-    api_base_url_env: providerContract.base_url_env_names[0],
-    api_key_env: credentialRequirement.kind === 'api_key_secret' ? credentialRequirement.env_names[0] : undefined,
-    credential_requirement_kind: credentialRequirement.kind,
-    credential_requirement: redactProviderCredentialRequirement(credentialRequirement),
-  }, states);
-  pushState('environment_resolved', {
-    model_env: resolution.model_env,
-    api_base_url_env: resolution.api_base_url_env,
-    api_key_env: resolution.api_key_env,
   });
-  pushState('launch_ready');
-  return resolution;
 }
 
-function withResolutionStates(outcome, states) {
-  return {
-    ...outcome,
-    resolution_states: states,
-  };
+function codexSubscriptionPreflight(provider) {
+  return runCodexSubscriptionPreflight(provider, {
+    processEnv: process.env,
+    processPlatform: process.platform,
+    sessionSiteRoot,
+    dryRun,
+  });
 }
 
 function intelligenceProviderEnvironment(providerResolution) {
-  return intelligenceProviderEnvironmentProjection(providerResolution).env;
+  return projectIntelligenceProviderEnvironment(providerResolution, {
+    metadataByProvider: INTELLIGENCE_PROVIDER_METADATA,
+    processEnv: process.env,
+    codexSubscriptionPreflight,
+  }).env;
 }
 
 function intelligenceProviderEnvironmentProjection(providerResolution) {
-  if (!providerResolution) return { env: {}, credential: null };
-  const provider = providerResolution.intelligence_provider;
-  const metadata = INTELLIGENCE_PROVIDER_METADATA[provider];
-  const credential = resolveProviderCredential(provider, metadata);
-  const baseUrl = firstEnvironmentValue(metadata.base_url_env_names) ?? metadata.base_url;
-  const model = firstEnvironmentValue(metadata.model_env_names) ?? metadata.default_model;
-  const env = {
-    NARADA_INTELLIGENCE_PROVIDER: provider,
-    NARADA_AI_BASE_URL: baseUrl,
-    NARADA_AI_MODEL: model,
-  };
-  const primaryBaseUrlEnv = metadata.base_url_env_names?.[0];
-  if (primaryBaseUrlEnv) {
-    env[primaryBaseUrlEnv] = baseUrl;
-  }
-  const primaryModelEnv = metadata.model_env_names?.[0];
-  if (primaryModelEnv) {
-    env[primaryModelEnv] = model;
-  }
-  if (credential.primary_credential_env) {
-    env[credential.primary_credential_env] = credential.value ?? '';
-  }
-  return { env, credential: redactProviderCredentialResolution(credential) };
+  return projectIntelligenceProviderEnvironment(providerResolution, {
+    metadataByProvider: INTELLIGENCE_PROVIDER_METADATA,
+    processEnv: process.env,
+    codexSubscriptionPreflight,
+  });
 }
 
 function mcpProviderCredentialEnvironment() {
-  if (runtime !== 'agent-cli' && runtime !== AGENT_TUI_RUNTIME && runtime !== 'claude-code') return {};
-  const env = {};
-  for (const [provider, metadata] of Object.entries(INTELLIGENCE_PROVIDER_METADATA)) {
-    const requirement = providerCredentialRequirement(provider, metadata);
-    if (requirement.kind !== 'api_key_secret') continue;
-    const credential = resolveProviderCredential(provider, metadata);
-    if (!credential?.credential_present || !credential.primary_credential_env || !credential.value) continue;
-    env[credential.primary_credential_env] = credential.value;
-    const primaryBaseUrlEnv = metadata.base_url_env_names?.[0];
-    const baseUrl = primaryBaseUrlEnv ? (firstEnvironmentValue(metadata.base_url_env_names) ?? metadata.base_url) : null;
-    if (primaryBaseUrlEnv && baseUrl) {
-      env[primaryBaseUrlEnv] = baseUrl;
-    }
-  }
-  return env;
-}
-
-function resolveProviderCredential(provider, metadata) {
-  const credentialRequirement = providerCredentialRequirement(provider, metadata);
-  const credentialEnvNames = [...(credentialRequirement.env_names ?? [])].filter(Boolean);
-  const primaryCredentialEnv = credentialEnvNames[0] ?? null;
-  const secretRef = credentialRequirement.secret_ref ?? null;
-  if (credentialRequirement.kind !== 'api_key_secret') {
-    if (credentialRequirement.kind === 'local_codex_subscription') {
-      const preflight = codexSubscriptionPreflight(provider);
-      return {
-        credential_required: true,
-        credential_present: preflight.ok,
-        credential_source: preflight.status,
-        credential_requirement_kind: credentialRequirement.kind,
-        credential_requirement: redactProviderCredentialRequirement(credentialRequirement),
-        credential_secret_ref: null,
-        primary_credential_env: null,
-        credential_env_names: [],
-        source_env: null,
-        value: '',
-        preflight,
-      };
-    }
-    return {
-      credential_required: false,
-      credential_present: false,
-      credential_source: credentialRequirement.kind === 'local_codex_subscription' ? 'local_codex_subscription' : 'not_required',
-      credential_requirement_kind: credentialRequirement.kind,
-      credential_requirement: redactProviderCredentialRequirement(credentialRequirement),
-      credential_secret_ref: null,
-      primary_credential_env: null,
-      credential_env_names: [],
-      source_env: null,
-      value: '',
-    };
-  }
-
-  const secretValue = providerCredentialFromSecretStore(secretRef);
-  if (secretValue) {
-    return {
-      credential_required: true,
-      credential_present: true,
-      credential_source: 'secret_store',
-      credential_requirement_kind: credentialRequirement.kind,
-      credential_requirement: redactProviderCredentialRequirement(credentialRequirement),
-      credential_secret_ref: secretRef,
-      primary_credential_env: primaryCredentialEnv,
-      credential_env_names: credentialEnvNames,
-      source_env: null,
-      value: secretValue,
-    };
-  }
-
-  const envValue = firstEnvironmentValueWithName(credentialEnvNames);
-  if (envValue) {
-    return {
-      credential_required: true,
-      credential_present: true,
-      credential_source: 'environment',
-      credential_requirement_kind: credentialRequirement.kind,
-      credential_requirement: redactProviderCredentialRequirement(credentialRequirement),
-      credential_secret_ref: secretRef,
-      primary_credential_env: primaryCredentialEnv,
-      credential_env_names: credentialEnvNames,
-      source_env: envValue.name,
-      value: envValue.value,
-    };
-  }
-
   return {
-    credential_required: true,
-    credential_present: false,
-    credential_source: 'missing',
-    credential_requirement_kind: credentialRequirement.kind,
-    credential_requirement: redactProviderCredentialRequirement(credentialRequirement),
-    credential_secret_ref: secretRef,
-    primary_credential_env: primaryCredentialEnv,
-    credential_env_names: credentialEnvNames,
-    source_env: null,
-    value: '',
-  };
-}
-
-function providerCredentialRequirement(provider, metadata) {
-  const requirement = metadata.credential_requirement ?? null;
-  if (requirement?.kind) {
-    return {
-      kind: requirement.kind,
-      secret_ref: requirement.secret_ref ?? providerCredentialSecretRef(provider, metadata),
-      env_names: [...(requirement.env_names ?? metadata.credential_env_names ?? [])].filter(Boolean),
-    };
-  }
-  const credentialEnvNames = [...(metadata.credential_env_names ?? [])].filter(Boolean);
-  if (credentialEnvNames.length === 0) {
-    return { kind: 'none', secret_ref: null, env_names: [] };
-  }
-  return {
-    kind: 'api_key_secret',
-    secret_ref: providerCredentialSecretRef(provider, metadata),
-    env_names: credentialEnvNames,
-  };
-}
-
-function redactProviderCredentialRequirement(requirement) {
-  if (!requirement) return null;
-  return {
-    kind: requirement.kind,
-    secret_ref: requirement.secret_ref ?? null,
-    env_names: [...(requirement.env_names ?? [])],
-  };
-}
-
-function providerCredentialSecretRef(provider, metadata) {
-  if (metadata.credential_secret_ref) return metadata.credential_secret_ref;
-  if ((metadata.credential_env_names ?? []).length === 0) return null;
-  return `narada/provider/${provider}/api-key`;
-}
-
-function providerSecretStoreEnabled() {
-  const mode = String(process.env[PROVIDER_SECRET_STORE_MODE_ENV] ?? '').trim().toLowerCase();
-  return !['0', 'false', 'off', 'disabled', 'none'].includes(mode);
-}
-
-function providerCredentialFromSecretStore(secretRef) {
-  if (!secretRef || !providerSecretStoreEnabled()) return null;
-  const result = spawnSync('pwsh', ['-NoProfile', '-NonInteractive', '-Command', SECRET_MANAGEMENT_LOOKUP_SCRIPT], {
-    encoding: 'utf8',
-    timeout: SECRET_MANAGEMENT_LOOKUP_TIMEOUT_MS,
-    windowsHide: true,
-    env: {
-      ...process.env,
-      NARADA_SECRET_LOOKUP_NAME: secretRef,
-    },
-  });
-  if (result.error || result.status !== 0) return null;
-  const value = String(result.stdout ?? '').trim();
-  return value || null;
-}
-
-function redactProviderCredentialResolution(credential) {
-  if (!credential) return null;
-  const { value: _value, ...redacted } = credential;
-  return redacted;
-}
-
-function annotateIntelligenceProviderCredential(providerResolution, credential) {
-  if (!providerResolution || !credential) return providerResolution;
-  return {
-    ...providerResolution,
-    credential,
-    credential_secret_ref: credential.credential_secret_ref,
-    credential_source: credential.credential_source,
-    credential_present: credential.credential_present,
-    credential_env_names: credential.credential_env_names,
-    credential_requirement_kind: credential.credential_requirement_kind,
-    credential_requirement: credential.credential_requirement,
+    ...projectMcpProviderCredentialEnvironment({
+      runtime,
+      agentTuiRuntime: AGENT_TUI_RUNTIME,
+      metadataByProvider: INTELLIGENCE_PROVIDER_METADATA,
+      processEnv: process.env,
+      codexSubscriptionPreflight,
+    }),
   };
 }
 
 function providerCredentialRefusal(providerResolution, credential) {
-  if (credential.credential_requirement_kind === 'local_codex_subscription') {
-    return withResolutionStates({
-      schema: INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
-      status: 'refused',
-      reason_code: 'local_codex_subscription_auth_unavailable',
-      intelligence_provider: providerResolution?.intelligence_provider,
-      credential_requirement_kind: credential.credential_requirement_kind,
-      credential_requirement: credential.credential_requirement,
-      credential_source: credential.credential_source,
-      credential_present: false,
-      preflight: credential.preflight,
-      reason: 'The selected provider uses local Codex subscription auth, but the Codex CLI preflight did not complete successfully.',
-      required_next_step: 'Run codex login or repair local Codex subscription auth, then retry the launcher. Remove NARADA_CODEX_SUBSCRIPTION_PREFLIGHT=force to use deferred launch validation.',
-    }, [
-      ...(providerResolution?.resolution_states ?? []),
-      {
-        state: 'launch_refused',
-        reason_code: 'local_codex_subscription_auth_unavailable',
-        credential_requirement_kind: credential.credential_requirement_kind,
-      },
-    ]);
-  }
-  const states = [
-    ...(providerResolution?.resolution_states ?? []),
-    {
-      state: 'launch_refused',
-      reason_code: 'intelligence_provider_credential_missing',
-      credential_requirement_kind: credential.credential_requirement_kind,
-      credential_secret_ref: credential.credential_secret_ref,
-      credential_env_names: credential.credential_env_names,
-    },
-  ];
-  return withResolutionStates({
+  return buildProviderCredentialRefusal(providerResolution, credential, {
     schema: INTELLIGENCE_PROVIDER_CONTRACT_SCHEMA,
-    status: 'refused',
-    reason_code: 'intelligence_provider_credential_missing',
-    intelligence_provider: providerResolution?.intelligence_provider,
-    api_key_env: credential.primary_credential_env,
-    credential_requirement_kind: credential.credential_requirement_kind,
-    credential_requirement: credential.credential_requirement,
-    credential_secret_ref: credential.credential_secret_ref,
-    credential_env_names: credential.credential_env_names,
-    credential_source: 'missing',
-    credential_present: false,
-    reason: `No API key credential is available for provider '${providerResolution?.intelligence_provider}'.`,
-    required_next_step: `Store the key with PowerShell SecretManagement as '${credential.credential_secret_ref}' or set one of: ${credential.credential_env_names.join(' or ')}`,
-  }, states);
+    withResolutionStates,
+  });
 }
 
 function materializeAgentTuiMcpConfig() {
@@ -1073,19 +606,6 @@ function carrierSessionLegacyUnbound(error) {
   };
 }
 
-function codexContextIsolationStatus({ exec = false, dryRun = false } = {}) {
-  return {
-    status: exec && !dryRun ? 'fresh_launcher_bound' : 'fresh_launch_planned',
-    code: exec && !dryRun ? 'codex_fresh_launcher_bound' : 'codex_fresh_launch_planned',
-    runtime: 'codex',
-    runtime_substrate_kind: 'codex',
-    reason: 'Narada can start a fresh Codex carrier with a bound agent identity and MCP-only posture. Exact resume proof remains a separate unadmitted boundary.',
-    operator_message: 'Use launcher-started fresh Codex sessions for bound identity. Do not use codex resume --last, ambient picker selection, or manual session selection as authority.',
-    safe_action: 'For continuation, resume only by an exact Codex session id after Narada has admitted and verified that session evidence.',
-    forbidden_resume_modes: ['codex resume --last', 'ambient picker selection', 'manual session selection as authority'],
-  };
-}
-
 function nativeShellExceptionStatus() {
   if (runtime !== 'codex') return null;
   if (!enableNativeShellFlag) {
@@ -1176,53 +696,8 @@ function codexMcpApprovalArgs(serverNames) {
   ]);
 }
 
-function optionalEnvironmentValue(name) {
-  const value = process.env[name];
-  return value === undefined || value === '' ? null : value;
-}
-
-function resolveCodexCliScriptFromPackage() {
-  const candidates = [
-    '@openai/codex/bin/codex.js',
-    '@openai/codex/bin/codex',
-  ];
-  for (const candidate of candidates) {
-    try {
-      const resolved = require.resolve(candidate);
-      if (existsSync(resolved)) return resolved;
-    } catch {
-      // Try the next known package entrypoint shape.
-    }
-  }
-  return null;
-}
-
-function pathDirectories() {
-  const pathValue = process.env.PATH ?? process.env.Path ?? '';
-  return pathValue.split(delimiter).filter((entry) => entry.length > 0);
-}
-
-function resolveCodexCliScriptFromPath() {
-  for (const directory of pathDirectories()) {
-    const adjacentPackageScript = join(directory, 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
-    if (existsSync(adjacentPackageScript)) return adjacentPackageScript;
-  }
-  return null;
-}
-
 function codexCliScriptPath() {
-  const explicitScriptPath = optionalEnvironmentValue('NARADA_CODEX_CLI_SCRIPT');
-  if (explicitScriptPath !== null) {
-    if (!existsSync(explicitScriptPath)) {
-      throw new Error(`codex_cli_script_missing: ${explicitScriptPath}`);
-    }
-    return explicitScriptPath;
-  }
-
-  const resolvedScriptPath = resolveCodexCliScriptFromPackage() ?? resolveCodexCliScriptFromPath();
-  if (resolvedScriptPath !== null) return resolvedScriptPath;
-
-  throw new Error('codex_cli_script_unresolved: set NARADA_CODEX_CLI_SCRIPT or install @openai/codex on PATH');
+  return resolveCodexCliScriptPath({ processEnv: process.env, requireLike: require, exists: existsSync });
 }
 function claudeCodeMcpConfig() {
   return projectFabricForClaudeCode(mcpFabric, mcpEnvironmentValues());
