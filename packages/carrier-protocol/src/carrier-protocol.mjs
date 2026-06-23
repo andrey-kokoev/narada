@@ -8,6 +8,7 @@ export const PROVIDER_OUTPUT_PAYLOAD_SCHEMA = 'narada.agent_tui.provider_output_
 export const TURN_TERMINAL_PAYLOAD_SCHEMA = 'narada.agent_tui.turn_terminal_payload.v0';
 export const SESSION_EVENT_FIXTURE_MANIFEST_SCHEMA = 'narada.carrier.session_event_fixture_manifest.v1';
 export const TOOL_EFFECT_ADMISSION_CASES_SCHEMA = 'narada.carrier.tool_effect_admission_cases.v1';
+export const NARS_LIFECYCLE_HOOK_SCHEMA = 'narada.nars.lifecycle_hook.v1';
 export const CANONICAL_STARTUP_COMMAND_NAME = 'agent_context_startup_sequence';
 export const LEGACY_STARTUP_COMMAND_NAME = 'startup_sequence';
 
@@ -176,6 +177,93 @@ export const SESSION_EVENT_KINDS = Object.freeze([
   'carrier_diagnostic_recorded',
   'carrier_session_closed',
 ]);
+export const NARS_SESSION_LIFECYCLE_HOOKS = Object.freeze([
+  'beforeSessionBind',
+  'afterSessionStarted',
+  'afterSessionStatus',
+  'beforeSessionClose',
+  'afterSessionClosed',
+  'onSessionError',
+]);
+export const NARS_TURN_LIFECYCLE_HOOKS = Object.freeze([
+  'beforeDirectiveAccept',
+  'afterDirectiveAccepted',
+  'beforeTurnStart',
+  'onAssistantMessage',
+  'onToolCall',
+  'onToolResult',
+  'onCommandResult',
+  'afterTurnComplete',
+  'onRuntimeError',
+]);
+export const NARS_LIFECYCLE_HOOKS = Object.freeze([
+  ...NARS_SESSION_LIFECYCLE_HOOKS,
+  ...NARS_TURN_LIFECYCLE_HOOKS,
+]);
+export const NARS_SESSION_EVENT_KINDS = Object.freeze([
+  'session_started',
+  'session_status',
+  'session_closed',
+  'runtime_error',
+]);
+export const NARS_TURN_EVENT_KINDS = Object.freeze([
+  'directive_received',
+  'directive_receipt_recorded',
+  'directive_carrier_accepted_recorded',
+  'turn_started',
+  'assistant_message',
+  'assistant_message_stream',
+  'tool_call',
+  'tool_result',
+  'command_result',
+  'turn_complete',
+  'turn_interrupted',
+  'turn_failed',
+  'runtime_error',
+]);
+export const NARS_RUNTIME_EVENT_KINDS = Object.freeze([
+  ...NARS_SESSION_EVENT_KINDS,
+  ...NARS_TURN_EVENT_KINDS.filter((eventKind) => !NARS_SESSION_EVENT_KINDS.includes(eventKind)),
+]);
+export const NARS_RUNTIME_EVENT_ALIASES = Object.freeze({
+  carrier_command_result: 'command_result',
+  directive_complete: 'turn_complete',
+  error: 'runtime_error',
+});
+export const NARS_TURN_TERMINAL_STATES = Object.freeze([
+  'accepted',
+  'completed',
+  'completed_after_dispatch',
+  'completed_without_provider',
+  'interrupted',
+  'interrupted_requested',
+  'failed',
+  'rejected',
+  'unsupported',
+  'invalid',
+  'unavailable',
+]);
+export const NARS_SESSION_TERMINAL_STATES = Object.freeze([
+  'closed',
+  'failed',
+]);
+export const NARS_EVENT_TO_LIFECYCLE_HOOKS = Object.freeze({
+  session_started: Object.freeze(['afterSessionStarted']),
+  session_status: Object.freeze(['afterSessionStatus']),
+  session_closed: Object.freeze(['beforeSessionClose', 'afterSessionClosed']),
+  directive_received: Object.freeze(['beforeDirectiveAccept']),
+  directive_carrier_accepted_recorded: Object.freeze(['afterDirectiveAccepted']),
+  turn_started: Object.freeze(['beforeTurnStart']),
+  assistant_message: Object.freeze(['onAssistantMessage']),
+  assistant_message_stream: Object.freeze(['onAssistantMessage']),
+  tool_call: Object.freeze(['onToolCall']),
+  tool_result: Object.freeze(['onToolResult']),
+  command_result: Object.freeze(['onCommandResult']),
+  turn_complete: Object.freeze(['afterTurnComplete']),
+  turn_interrupted: Object.freeze(['afterTurnComplete']),
+  turn_failed: Object.freeze(['afterTurnComplete', 'onRuntimeError']),
+  runtime_error: Object.freeze(['onRuntimeError']),
+});
 export const CARRIER_CONTROL_METHODS = Object.freeze([
   'session.status',
   'session.close',
@@ -211,6 +299,11 @@ export const CARRIER_PROTOCOL_SCHEMAS = Object.freeze({
   session_event: Object.freeze({
     schema: SESSION_EVENT_SCHEMA,
     required: Object.freeze(['schema', 'event_kind', 'event_id', 'occurred_at', 'carrier_session_id', 'agent_id', 'site_id', 'site_root', 'payload']),
+  }),
+  nars_lifecycle_hook: Object.freeze({
+    schema: NARS_LIFECYCLE_HOOK_SCHEMA,
+    required: Object.freeze(['schema', 'hook', 'hook_kind', 'agent_id', 'session_id', 'timestamp']),
+    optional: Object.freeze(['event_kind', 'request_id', 'turn_id', 'directive_id', 'terminal_state', 'error', 'metadata', 'source_event']),
   }),
   payload_ref: Object.freeze({
     schema: PAYLOAD_REF_SCHEMA,
@@ -1524,6 +1617,112 @@ export function validateSessionEvent(event) {
 export function assertValidSessionEvent(event) {
   const errors = validateSessionEvent(event);
   if (errors.length > 0) throw new Error(`invalid_carrier_session_event:${errors.join(',')}`);
+}
+
+export function normalizeNarsRuntimeEventKind(eventKind) {
+  if (typeof eventKind !== 'string') return eventKind;
+  return NARS_RUNTIME_EVENT_ALIASES[eventKind] ?? eventKind;
+}
+
+export function narsLifecycleHookKind(hook) {
+  if (NARS_SESSION_LIFECYCLE_HOOKS.includes(hook)) return 'session';
+  if (NARS_TURN_LIFECYCLE_HOOKS.includes(hook)) return 'turn';
+  return null;
+}
+
+export function isNarsRuntimeEventKind(eventKind) {
+  return NARS_RUNTIME_EVENT_KINDS.includes(normalizeNarsRuntimeEventKind(eventKind));
+}
+
+export function narsLifecycleHooksForEvent(event) {
+  const eventKind = normalizeNarsRuntimeEventKind(isObject(event) ? event.event : event);
+  return NARS_EVENT_TO_LIFECYCLE_HOOKS[eventKind] ?? Object.freeze([]);
+}
+
+export function createNarsLifecycleHookPayload({
+  hook,
+  agent_id,
+  session_id,
+  request_id = undefined,
+  turn_id = undefined,
+  directive_id = undefined,
+  event_kind = undefined,
+  timestamp = nowIso(),
+  terminal_state = undefined,
+  error = undefined,
+  metadata = undefined,
+  source_event = undefined,
+}) {
+  const normalizedEventKind = event_kind === undefined ? undefined : normalizeNarsRuntimeEventKind(event_kind);
+  const payload = {
+    schema: NARS_LIFECYCLE_HOOK_SCHEMA,
+    hook,
+    hook_kind: narsLifecycleHookKind(hook),
+    agent_id,
+    session_id,
+    timestamp,
+    ...(normalizedEventKind === undefined ? {} : { event_kind: normalizedEventKind }),
+    ...(request_id === undefined ? {} : { request_id }),
+    ...(turn_id === undefined ? {} : { turn_id }),
+    ...(directive_id === undefined ? {} : { directive_id }),
+    ...(terminal_state === undefined ? {} : { terminal_state }),
+    ...(error === undefined ? {} : { error }),
+    ...(metadata === undefined ? {} : { metadata }),
+    ...(source_event === undefined ? {} : { source_event }),
+  };
+  assertValidNarsLifecycleHookPayload(payload);
+  return payload;
+}
+
+export function narsLifecycleHookPayloadFromEvent({ hook, event, timestamp = nowIso(), metadata = undefined }) {
+  const eventKind = normalizeNarsRuntimeEventKind(event?.event);
+  return createNarsLifecycleHookPayload({
+    hook,
+    agent_id: event?.agent_id,
+    session_id: event?.session_id,
+    request_id: event?.request_id,
+    turn_id: event?.turn_id,
+    directive_id: event?.directive_id,
+    event_kind: eventKind,
+    timestamp: event?.timestamp ?? timestamp,
+    terminal_state: event?.terminal_state,
+    error: event?.error ?? (event?.code || event?.message ? { code: event.code ?? 'runtime_error', message: event.message ?? String(event.code) } : undefined),
+    metadata,
+    source_event: event,
+  });
+}
+
+export function validateNarsLifecycleHookPayload(payload) {
+  const errors = [];
+  if (!isObject(payload)) return ['nars_lifecycle_hook_not_object'];
+  if (payload.schema !== NARS_LIFECYCLE_HOOK_SCHEMA) errors.push(`invalid_schema:${String(payload.schema)}`);
+  for (const field of CARRIER_PROTOCOL_SCHEMAS.nars_lifecycle_hook.required) {
+    if (!hasOwn(payload, field)) errors.push(`missing_required_field:${field}`);
+  }
+  const hookKind = narsLifecycleHookKind(payload.hook);
+  if (!hookKind) errors.push(`invalid_hook:${String(payload.hook)}`);
+  if (payload.hook_kind !== hookKind) errors.push(`invalid_hook_kind:${String(payload.hook_kind)}`);
+  for (const field of ['agent_id', 'session_id']) {
+    if (typeof payload[field] !== 'string' || payload[field].length === 0) errors.push(`invalid_${field}`);
+  }
+  if (!isRfc3339Utc(payload.timestamp)) errors.push('invalid_timestamp');
+  if (payload.event_kind !== undefined && !isNarsRuntimeEventKind(payload.event_kind)) errors.push(`invalid_event_kind:${String(payload.event_kind)}`);
+  for (const field of ['request_id', 'turn_id', 'directive_id', 'terminal_state']) {
+    if (payload[field] !== undefined && payload[field] !== null && typeof payload[field] !== 'string') errors.push(`invalid_${field}`);
+  }
+  if (payload.terminal_state !== undefined && payload.terminal_state !== null) {
+    const terminalStates = payload.hook_kind === 'session' ? NARS_SESSION_TERMINAL_STATES : NARS_TURN_TERMINAL_STATES;
+    if (!terminalStates.includes(payload.terminal_state)) errors.push(`invalid_terminal_state:${String(payload.terminal_state)}`);
+  }
+  if (payload.error !== undefined && payload.error !== null && typeof payload.error !== 'string' && !isObject(payload.error)) errors.push('invalid_error');
+  if (payload.metadata !== undefined && payload.metadata !== null && !isObject(payload.metadata)) errors.push('invalid_metadata');
+  if (payload.source_event !== undefined && payload.source_event !== null && !isObject(payload.source_event)) errors.push('invalid_source_event');
+  return errors;
+}
+
+export function assertValidNarsLifecycleHookPayload(payload) {
+  const errors = validateNarsLifecycleHookPayload(payload);
+  if (errors.length > 0) throw new Error(`invalid_nars_lifecycle_hook:${errors.join(',')}`);
 }
 
 export function createQueueLifecycleSessionEvent({ lifecycle, input_event_id, carrier_session_id, agent_id, site_id, site_root, payload = {} }) {

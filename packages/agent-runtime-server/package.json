@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit --allowJs --checkJs false bin/narada-agent-runtime-server.mjs src/server-wrapper.mjs"
   },
   "dependencies": {
-    "@narada2/agent-cli": "workspace:*"
+    "@narada2/agent-cli": "workspace:*",
+    "@narada2/carrier-protocol": "workspace:*"
   }
 }

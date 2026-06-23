@@ -134,6 +134,121 @@ Events should include stable identity fields whenever possible:
 
 Tool events must preserve the distinction between request, admission/refusal, execution attempt, result, and external confirmation. A successful tool call is not itself authority or confirmation.
 
+## Lifecycle Hook Contract
+
+Lifecycle hooks are runtime callbacks correlated with emitted events. They are not evidence events, are not authority records, and must not be treated as confirmation that an external effect occurred. Evidence remains the structured event stream and the relevant MCP authority surface.
+
+Schema and vocabulary owner:
+
+```text
+@narada2/carrier-protocol
+```
+
+Invoker owner:
+
+```text
+@narada2/agent-runtime-server
+```
+
+The current implementation invokes hooks at the runtime-server wrapper boundary while the carrier substrate remains `@narada2/agent-cli`. Future carrier adapters must map their native events into the same NARS lifecycle vocabulary before dispatching hooks.
+
+### Hook Payload
+
+Hook payloads use schema `narada.nars.lifecycle_hook.v1` and include:
+
+| Field | Required | Meaning |
+| --- | --- | --- |
+| `schema` | yes | Hook payload schema id. |
+| `hook` | yes | Hook name, for example `beforeTurnStart`. |
+| `hook_kind` | yes | `session` or `turn`. |
+| `agent_id` | yes | Durable Narada agent id. |
+| `session_id` | yes | Durable carrier/session id. |
+| `timestamp` | yes | UTC timestamp of the dispatch boundary. |
+| `event_kind` | no | Canonical NARS event kind correlated with this hook. |
+| `request_id` | no | Operator/control input id when the hook belongs to a request. |
+| `turn_id` | no | Provider/carrier turn id when the hook belongs to a turn. |
+| `directive_id` | no | Directive id when the hook is directive-related. |
+| `terminal_state` | no | Terminal state when the correlated event is terminal. |
+| `error` | no | Bounded sanitized error object or string. |
+| `metadata` | no | Runtime-local metadata; not authority. |
+| `source_event` | no | The normalized event that caused dispatch, when available. |
+
+### Session Hooks
+
+| Hook | Ordering | Semantics |
+| --- | --- | --- |
+| `beforeSessionBind` | before carrier child/session binding is accepted | Exactly once per NARS process when binding inputs are available. Failure before session start is launch-fatal once hooks become externally pluggable. |
+| `afterSessionStarted` | after `session_started` is observed/emitted | At least once per resumed observable session handle; consumers must dedupe by `session_id` and source event. |
+| `afterSessionStatus` | after `session_status` is observed/emitted | At least once per status request. Status hooks are observational only. |
+| `beforeSessionClose` | when `session_closed` is observed, before closeout observers run | At least once for a close event; current wrapper observes it at event boundary rather than before carrier internals close. |
+| `afterSessionClosed` | after `session_closed` is observed/emitted | At least once for closeout evidence and handoff generation. |
+| `onSessionError` | when a runtime error is session-scoped | At least once per observed session-scoped runtime fault. |
+
+### Turn Hooks
+
+| Hook | Ordering | Semantics |
+| --- | --- | --- |
+| `beforeDirectiveAccept` | before or at `directive_received` | At least once per directive accepted into carrier flow. |
+| `afterDirectiveAccepted` | after `directive_carrier_accepted_recorded` | At least once per accepted directive evidence event. |
+| `beforeTurnStart` | before or at `turn_started` | Exactly once for each provider turn id in a normal turn. No provider-free heartbeat turn is required. |
+| `onAssistantMessage` | when assistant text is observed | At least once; streaming may produce multiple calls before final content. |
+| `onToolCall` | when `tool_call` is observed | At least once per observed tool call. This is not tool admission or effect confirmation. |
+| `onToolResult` | when `tool_result` is observed | At least once per observed tool result. Result status may be ok, denied, failed, blocked, or error. |
+| `onCommandResult` | when runtime command output is observed | At least once per slash/operator command result. Existing adapter event `carrier_command_result` maps to canonical `command_result`. |
+| `afterTurnComplete` | after `turn_complete`, `turn_interrupted`, or `turn_failed` | Exactly once per terminal provider turn id when the carrier emits one terminal event; provider-free directives may map from `directive_complete`. |
+| `onRuntimeError` | when runtime-level `error`, `runtime_error`, or `turn_failed` is observed | At least once per observed runtime fault. Ordinary tool failure should remain `onToolResult`, not `onRuntimeError`, unless it also faults the runtime. |
+
+### Ordering Summary
+
+Normal operator turn:
+
+```text
+beforeSessionBind
+afterSessionStarted
+beforeTurnStart
+onAssistantMessage* / onToolCall* / onToolResult*
+afterTurnComplete
+```
+
+System directive that reaches the provider:
+
+```text
+beforeDirectiveAccept
+afterDirectiveAccepted
+beforeTurnStart
+...
+afterTurnComplete
+```
+
+Provider-free heartbeat directive:
+
+```text
+beforeDirectiveAccept
+afterDirectiveAccepted
+afterTurnComplete
+```
+
+Closeout:
+
+```text
+beforeSessionClose
+afterSessionClosed
+```
+
+### Idempotency And Failure
+
+Hook consumers must dedupe by `(hook, session_id, request_id, turn_id, event_kind, source_event timestamp/id)` because resumed sessions, replay, or wrapper reattachment may replay observable events. Hooks that run before a carrier action should be exactly once inside one live NARS process. Hooks that follow emitted evidence are at-least-once observations.
+
+Failure policy:
+
+| Phase | Policy |
+| --- | --- |
+| Before session start | Fail launch before accepting work once external hooks are admitted. Current internal dispatcher records bounded failure diagnostics. |
+| During an active turn | Emit/record a bounded runtime hook failure, redact credentials, and do not convert the hook failure into tool authority or external effect evidence. |
+| During closeout | Prefer preserving `session_closed` evidence and handoff files; report hook failure separately. Closeout hooks must not block durable session recovery unless the contract explicitly promotes them to a required closeout gate. |
+
+Implementation tasks derive directly from this contract: extend `@narada2/carrier-protocol` vocabulary, dispatch from `@narada2/agent-runtime-server`, map current `@narada2/agent-cli` events into the shared vocabulary, and keep docs/tests tied to the shared package.
+
 ## Command Contract
 
 Slash and operator commands are runtime commands, not provider prompts.
@@ -255,6 +370,9 @@ pwsh -NoProfile -File C:\Users\Andrey\Narada\tools\agent-start\Test-AgentStartCo
 
 Expected coverage:
 
+- shared lifecycle hook/event vocabulary and payload schema in `@narada2/carrier-protocol`;
+- runtime-server hook ordering, alias mapping, and redacted hook failure behavior;
+- agent-cli server events expose a `lifecycle_event` projection compatible with the shared vocabulary;
 - package exports and binary ownership for `@narada2/agent-runtime-server`;
 - `agent-start` resolves `narada-agent-runtime-server` from the package bin;
 - startup event id and session id propagate to the runtime server boundary;
@@ -262,6 +380,22 @@ Expected coverage:
 - projected terminal input maps ordinary text, slash commands, and JSON frames correctly;
 - command help/dispatch comes from a shared command contract;
 - provider credentials are projected and redacted by launch materialization, not by generated wrappers.
+
+Normal-turn verification example:
+
+```powershell
+pnpm --filter @narada2/carrier-protocol test
+pnpm --filter @narada2/agent-runtime-server test
+pnpm --filter @narada2/agent-cli test
+```
+
+Failure-path verification example:
+
+```powershell
+pnpm --filter @narada2/agent-runtime-server test
+```
+
+The runtime-server tests cover a hook throwing an error containing a secret-like token and assert the diagnostic is bounded and redacted.
 
 ## Current Convergence Work
 

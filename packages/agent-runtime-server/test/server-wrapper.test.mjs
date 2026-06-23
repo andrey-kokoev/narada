@@ -7,9 +7,13 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   agentCliBinPath,
+  createNarsLifecycleHookDispatcher,
+  dispatchNarsLifecycleHook,
+  dispatchNarsLifecycleHooksForEvent,
   formatStartupMcpEvent,
   formatStartupMcpSummary,
   formatWrapperStatusEvent,
+  lifecycleBindingFromArgs,
 } from '../src/server-wrapper.mjs';
 
 const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
@@ -75,6 +79,97 @@ test('wrapper status snapshots keep the wrapper schema stable', () => {
   assert.equal(snapshot.request_posture, 'clean');
   assert.equal(snapshot.operational_posture, 'healthy');
   assert.equal(snapshot.session_event_count, 2);
+});
+
+test('lifecycle dispatcher maps NARS events to ordered hook calls', async () => {
+  const observed = [];
+  const handler = {};
+  for (const hook of [
+    'beforeSessionBind',
+    'afterSessionStarted',
+    'beforeDirectiveAccept',
+    'afterDirectiveAccepted',
+    'beforeTurnStart',
+    'onToolCall',
+    'onToolResult',
+    'onCommandResult',
+    'afterTurnComplete',
+    'beforeSessionClose',
+    'afterSessionClosed',
+  ]) {
+    handler[hook] = (payload) => observed.push(`${hook}:${payload.event_kind ?? 'manual'}`);
+  }
+  const dispatcher = createNarsLifecycleHookDispatcher({ hooks: [handler], clock: () => '2026-06-23T00:00:00.000Z' });
+  await dispatchNarsLifecycleHook(dispatcher, 'beforeSessionBind', {
+    agent_id: 'narada.test',
+    session_id: 'runtime-package-test',
+  });
+  const baseEvent = {
+    agent_id: 'narada.test',
+    session_id: 'runtime-package-test',
+    request_id: 'input_test',
+    turn_id: 'turn_test',
+    timestamp: '2026-06-23T00:00:00.000Z',
+  };
+  for (const event of [
+    { event: 'session_started', ...baseEvent },
+    { event: 'directive_received', directive_id: 'dir_test', ...baseEvent },
+    { event: 'directive_carrier_accepted_recorded', directive_id: 'dir_test', ...baseEvent },
+    { event: 'turn_started', ...baseEvent },
+    { event: 'tool_call', tool: 'fs_read_file', ...baseEvent },
+    { event: 'tool_result', tool: 'fs_read_file', terminal_state: 'completed', ...baseEvent },
+    { event: 'carrier_command_result', command: '/status', terminal_state: 'completed', ...baseEvent },
+    { event: 'turn_complete', terminal_state: 'completed', ...baseEvent },
+    { event: 'session_closed', terminal_state: 'closed', ...baseEvent },
+  ]) {
+    await dispatchNarsLifecycleHooksForEvent(dispatcher, event);
+  }
+  assert.deepEqual(observed, [
+    'beforeSessionBind:manual',
+    'afterSessionStarted:session_started',
+    'beforeDirectiveAccept:directive_received',
+    'afterDirectiveAccepted:directive_carrier_accepted_recorded',
+    'beforeTurnStart:turn_started',
+    'onToolCall:tool_call',
+    'onToolResult:tool_result',
+    'onCommandResult:command_result',
+    'afterTurnComplete:turn_complete',
+    'beforeSessionClose:session_closed',
+    'afterSessionClosed:session_closed',
+  ]);
+});
+
+test('lifecycle dispatcher reports bounded redacted hook failures', async () => {
+  const dispatcher = createNarsLifecycleHookDispatcher({
+    hooks: [{ onToolCall: () => { throw new Error('API_KEY=abc123 failed'); } }],
+    clock: () => '2026-06-23T00:00:00.000Z',
+  });
+  const result = await dispatchNarsLifecycleHooksForEvent(dispatcher, {
+    event: 'tool_call',
+    agent_id: 'narada.test',
+    session_id: 'runtime-package-test',
+    request_id: 'input_test',
+    turn_id: 'turn_test',
+    timestamp: '2026-06-23T00:00:00.000Z',
+  });
+  assert.equal(result.failures.length, 1);
+  assert.equal(result.failures[0].code, 'nars_lifecycle_hook_failed');
+  assert.equal(result.failures[0].error.message.includes('abc123'), false);
+  assert.equal(result.failures[0].error.message.includes('<redacted>'), true);
+});
+
+test('lifecycle binding is derived from runtime args before session bind', () => {
+  assert.deepEqual(lifecycleBindingFromArgs(['--server', '--identity', 'narada.test', '--session', 'runtime-package-test'], {
+    NARADA_SITE_ROOT: 'D:/code/narada.test',
+    NARADA_AGENT_START_EVENT_ID: 'evt_test',
+  }), {
+    agent_id: 'narada.test',
+    session_id: 'runtime-package-test',
+    metadata: {
+      site_root: 'D:/code/narada.test',
+      agent_start_event_id: 'evt_test',
+    },
+  });
 });
 
 test('narada-owned entrypoint delegates server mode to agent-cli', async () => {

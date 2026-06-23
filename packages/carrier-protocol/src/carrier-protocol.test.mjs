@@ -11,6 +11,13 @@ import {
   PROVIDER_REQUEST_PAYLOAD_SCHEMA,
   PROVIDER_OUTPUT_PAYLOAD_SCHEMA,
   CARRIER_DIRECTIVE_EMITTER_REGISTRY,
+  NARS_LIFECYCLE_HOOK_SCHEMA,
+  NARS_LIFECYCLE_HOOKS,
+  NARS_RUNTIME_EVENT_KINDS,
+  NARS_SESSION_EVENT_KINDS,
+  NARS_SESSION_LIFECYCLE_HOOKS,
+  NARS_TURN_EVENT_KINDS,
+  NARS_TURN_LIFECYCLE_HOOKS,
   OBSERVER_VISIBILITIES,
   DIRECTIVE_KINDS,
   DIRECTIVE_SUPPRESSION_REASONS,
@@ -42,6 +49,7 @@ import {
   createCarrierDiagnosticSessionEvent,
   createControlInputRecord,
   createInputEvent,
+  createNarsLifecycleHookPayload,
   createInterruptRequestedSessionEvent,
   createPayloadRef,
   createPayloadPolicy,
@@ -56,6 +64,9 @@ import {
   isStartupNudge,
   isTerminalTurnState,
   classifyCarrierObserverInput,
+  narsLifecycleHookPayloadFromEvent,
+  narsLifecycleHooksForEvent,
+  normalizeNarsRuntimeEventKind,
   normalizeControlInputRecord,
   normalizeInputEvent,
   normalizeLegacyInputRecord,
@@ -63,6 +74,7 @@ import {
   startupCommandFromLaunchPacket,
   validateControlInputRecord,
   validateInputEvent,
+  validateNarsLifecycleHookPayload,
   validatePayloadRef,
   validatePayloadPolicy,
   validateSessionEvent,
@@ -114,6 +126,69 @@ assert.deepEqual(PAYLOAD_REF_READER_TOOLS, ['mcp_payload_read', 'mcp_payload_sho
 assert.deepEqual(TOOL_RESULT_STATUSES, ['ok', 'denied', 'failed']);
 assert.deepEqual(TOOL_EFFECT_ADMISSION_ACTIONS, ['admit', 'deny']);
 assert.deepEqual(TOOL_EFFECT_ADMISSION_REASONS, ['read_only_tool_effect_admitted', 'tool_effect_adapter_unconfigured', 'tool_effect_admission_required', 'unsupported_tool_effect', 'tool_effect_authority_denied', 'write_tool_effect_admitted']);
+assert.equal(CARRIER_PROTOCOL_SCHEMAS.nars_lifecycle_hook.schema, NARS_LIFECYCLE_HOOK_SCHEMA);
+assert.deepEqual(NARS_SESSION_LIFECYCLE_HOOKS, ['beforeSessionBind', 'afterSessionStarted', 'afterSessionStatus', 'beforeSessionClose', 'afterSessionClosed', 'onSessionError']);
+assert.deepEqual(NARS_TURN_LIFECYCLE_HOOKS, ['beforeDirectiveAccept', 'afterDirectiveAccepted', 'beforeTurnStart', 'onAssistantMessage', 'onToolCall', 'onToolResult', 'onCommandResult', 'afterTurnComplete', 'onRuntimeError']);
+assert.deepEqual(NARS_LIFECYCLE_HOOKS, [...NARS_SESSION_LIFECYCLE_HOOKS, ...NARS_TURN_LIFECYCLE_HOOKS]);
+assert.deepEqual(NARS_SESSION_EVENT_KINDS, ['session_started', 'session_status', 'session_closed', 'runtime_error']);
+assert.deepEqual(NARS_TURN_EVENT_KINDS, ['directive_received', 'directive_receipt_recorded', 'directive_carrier_accepted_recorded', 'turn_started', 'assistant_message', 'assistant_message_stream', 'tool_call', 'tool_result', 'command_result', 'turn_complete', 'turn_interrupted', 'turn_failed', 'runtime_error']);
+assert.equal(NARS_RUNTIME_EVENT_KINDS.includes('command_result'), true);
+assert.equal(normalizeNarsRuntimeEventKind('carrier_command_result'), 'command_result');
+assert.equal(normalizeNarsRuntimeEventKind('directive_complete'), 'turn_complete');
+assert.deepEqual(narsLifecycleHooksForEvent({ event: 'tool_call' }), ['onToolCall']);
+assert.deepEqual(narsLifecycleHooksForEvent({ event: 'carrier_command_result' }), ['onCommandResult']);
+assert.deepEqual(narsLifecycleHooksForEvent({ event: 'session_closed' }), ['beforeSessionClose', 'afterSessionClosed']);
+const hookPayload = createNarsLifecycleHookPayload({
+  hook: 'onToolResult',
+  agent_id: 'sonar.resident',
+  session_id: 'carrier_test',
+  request_id: 'input_test',
+  turn_id: 'turn_test',
+  event_kind: 'tool_result',
+  timestamp: '2026-06-23T00:00:00.000Z',
+  terminal_state: 'completed',
+});
+assert.equal(hookPayload.schema, NARS_LIFECYCLE_HOOK_SCHEMA);
+assert.equal(hookPayload.hook_kind, 'turn');
+assert.deepEqual(validateNarsLifecycleHookPayload(hookPayload), []);
+assert.deepEqual(narsLifecycleHookPayloadFromEvent({
+  hook: 'onRuntimeError',
+  event: {
+    event: 'error',
+    agent_id: 'sonar.resident',
+    session_id: 'carrier_test',
+    request_id: 'input_test',
+    timestamp: '2026-06-23T00:00:01.000Z',
+    code: 'provider_failed',
+    message: 'provider failed',
+  },
+}), {
+  schema: NARS_LIFECYCLE_HOOK_SCHEMA,
+  hook: 'onRuntimeError',
+  hook_kind: 'turn',
+  agent_id: 'sonar.resident',
+  session_id: 'carrier_test',
+  timestamp: '2026-06-23T00:00:01.000Z',
+  event_kind: 'runtime_error',
+  request_id: 'input_test',
+  error: { code: 'provider_failed', message: 'provider failed' },
+  source_event: {
+    event: 'error',
+    agent_id: 'sonar.resident',
+    session_id: 'carrier_test',
+    request_id: 'input_test',
+    timestamp: '2026-06-23T00:00:01.000Z',
+    code: 'provider_failed',
+    message: 'provider failed',
+  },
+});
+assert.match(thrownMessage(() => createNarsLifecycleHookPayload({
+  hook: 'onToolCall',
+  agent_id: 'sonar.resident',
+  session_id: 'carrier_test',
+  timestamp: '2026-06-23T00:00:00.000Z',
+  terminal_state: 'closed',
+})), /invalid_terminal_state:closed/);
 assert.equal(toolEffectAdmissionCases.schema, TOOL_EFFECT_ADMISSION_CASES_SCHEMA);
 for (const fixtureCase of toolEffectAdmissionCases.cases) {
   assert.deepEqual(classifyToolEffectAdmission(fixtureCase.tool_call, fixtureCase.state), fixtureCase.expected, fixtureCase.name);

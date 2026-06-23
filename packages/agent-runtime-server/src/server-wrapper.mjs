@@ -15,6 +15,13 @@ import {
   formatStartupMcpSummary,
   formatWrapperStatusEvent,
 } from '@narada2/agent-cli/runtime-server-events';
+import {
+  createNarsLifecycleHookDispatcher,
+  dispatchNarsLifecycleHook,
+  dispatchNarsLifecycleHooksForEvent,
+  lifecycleBindingFromArgs,
+  lifecycleHookFailureLine,
+} from './lifecycle-hooks.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -64,6 +71,15 @@ async function main() {
   const rawJsonl = requestedArgs.includes('--raw-jsonl');
   const forwardedArgs = requestedArgs.filter((arg) => arg !== '--wrapper-events-jsonl' && arg !== '--raw-jsonl');
   const args = forwardedArgs.includes('--server') ? forwardedArgs : ['--server', ...forwardedArgs];
+  const lifecycleDispatcher = createNarsLifecycleHookDispatcher();
+  const lifecycleBinding = lifecycleBindingFromArgs(args, process.env);
+  try {
+    const result = await dispatchNarsLifecycleHook(lifecycleDispatcher, 'beforeSessionBind', lifecycleBinding);
+    for (const failure of result.failures) console.error(lifecycleHookFailureLine(failure));
+  } catch (error) {
+    console.error(`[agent-runtime-server] lifecycle hook dispatch failed: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  }
   const child = spawn(process.execPath, [agentCliBinPath(), ...args], {
     stdio: [rawJsonl ? 'inherit' : 'pipe', 'pipe', 'pipe'],
     env: process.env,
@@ -101,6 +117,11 @@ async function main() {
       if (!line) continue;
       try {
         const event = JSON.parse(line);
+        dispatchNarsLifecycleHooksForEvent(lifecycleDispatcher, event)
+          .then((result) => {
+            for (const failure of result.failures) console.error(lifecycleHookFailureLine(failure));
+          })
+          .catch((error) => console.error(`[agent-runtime-server] lifecycle hook dispatch failed: ${error instanceof Error ? error.message : String(error)}`));
         if (!rawJsonl) {
           for (const rendered of renderProjectedEvent(event)) {
             if (typeof rendered === 'string') {
@@ -144,5 +165,10 @@ export {
   formatStartupMcpEvent,
   formatStartupMcpSummary,
   formatWrapperStatusEvent,
+  createNarsLifecycleHookDispatcher,
+  dispatchNarsLifecycleHook,
+  dispatchNarsLifecycleHooksForEvent,
+  lifecycleBindingFromArgs,
+  lifecycleHookFailureLine,
   main,
 };
