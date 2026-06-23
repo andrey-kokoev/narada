@@ -43,6 +43,7 @@ import {
   runtimeSpawnOptions,
   shellQuote,
 } from './carrier-launch-adapter.ts';
+import { createNaradaPackageResolver } from './narada-package-resolver.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRootDir = join(__dirname, '..');
@@ -226,6 +227,10 @@ const intelligenceProviderInput = intelligenceProviderArgInput ?? intelligencePr
 const intelligenceProviderInputSource = resolveIntelligenceProviderInputSource(intelligenceProviderArgInput, intelligenceProviderEnvInput, runtimeInput);
 const dbPath = args.db ?? join(sessionSiteRoot, '.ai', 'state', 'agent-context.sqlite');
 const require = createRequire(import.meta.url);
+const naradaPackages = createNaradaPackageResolver({
+  naradaProperRoot: NARADA_PROPER_ROOT,
+  importerUrl: import.meta.url,
+});
 const RUNTIME_SUBSTRATE_KINDS_PACKET = Object.freeze(JSON.parse(readFileSync(resolveNaradaPackageExport('@narada2/carrier-runtime-contract', './runtime-substrate-kinds'), 'utf8')));
 const RUNTIME_CONTRACT_SCHEMA = RUNTIME_SUBSTRATE_KINDS_PACKET.schema;
 const AGENT_TUI_RUNTIME = 'agent-tui';
@@ -245,44 +250,16 @@ const ADMITTED_TOOL_FABRIC_ADAPTER_KINDS = Object.freeze([
   'opencode-native-mcp',
   'ambient-carrier-tools',
 ]);
-function naradaPackageDirectoryName(packageName) {
-  const parts = String(packageName).split('/');
-  return parts[parts.length - 1];
-}
-
 function naradaPackageRoot(packageName) {
-  try {
-    return dirname(require.resolve(`${packageName}/package.json`));
-  } catch {
-    const siblingRoot = join(dirname(NARADA_PROPER_ROOT), naradaPackageDirectoryName(packageName));
-    if (existsSync(join(siblingRoot, 'package.json'))) return siblingRoot;
-    return join(NARADA_PROPER_ROOT, 'packages', naradaPackageDirectoryName(packageName));
-  }
-}
-
-function readNaradaPackageJson(packageName) {
-  return JSON.parse(readFileSync(join(naradaPackageRoot(packageName), 'package.json'), 'utf8'));
+  return naradaPackages.packageRoot(packageName);
 }
 
 function resolveNaradaPackageExport(packageName, exportName = '.') {
-  const packageJson = readNaradaPackageJson(packageName);
-  const exportsMap = packageJson.exports ?? {};
-  const target = typeof exportsMap === 'string' && exportName === '.'
-    ? exportsMap
-    : exportsMap[exportName];
-  if (!target) {
-    throw new Error(`narada_package_export_missing: ${packageName} ${exportName}`);
-  }
-  return join(naradaPackageRoot(packageName), target);
+  return naradaPackages.resolvePackageExport(packageName, exportName);
 }
 
 function resolveNaradaPackageBin(packageName, binName) {
-  const packageJson = readNaradaPackageJson(packageName);
-  const target = typeof packageJson.bin === 'string' ? packageJson.bin : packageJson.bin?.[binName];
-  if (!target) {
-    throw new Error(`narada_package_bin_missing: ${packageName} ${binName}`);
-  }
-  return join(naradaPackageRoot(packageName), target);
+  return naradaPackages.resolvePackageBin(packageName, binName);
 }
 const INTELLIGENCE_PROVIDER_METADATA_PATH = process.env.NARADA_INTELLIGENCE_PROVIDER_METADATA_PATH ?? resolveNaradaPackageExport('@narada2/carrier-provider-contract', './provider-registry');
 const INTELLIGENCE_PROVIDER_METADATA_PACKET = Object.freeze(JSON.parse(readFileSync(INTELLIGENCE_PROVIDER_METADATA_PATH, 'utf8')));
