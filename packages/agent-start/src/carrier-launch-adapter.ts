@@ -19,7 +19,7 @@ export function resolveToolFabricAdapter(runtimeName, { schema, agentTuiRuntime 
       tool_fabric_adapter_kind: 'narada-agent-cli-mcp-client',
       tool_fabric_source: source,
       runtime_substrate_kind: runtimeName,
-      adapter_entrypoint: 'package:@narada2/agent-cli#narada-agent-cli',
+      adapter_entrypoint: 'package:@narada2/agent-runtime-server#narada-agent-runtime-server',
       expected_tools: ['agent_context_startup_sequence', 'mcp_output_show', 'task_lifecycle_next'],
       states: ['runtime_known', 'adapter_selected', 'source_declared', 'launch_ready'],
     };

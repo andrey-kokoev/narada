@@ -4,7 +4,8 @@
   "type": "module",
   "private": true,
   "dependencies": {
-    "@narada2/agent-context-mcp": "workspace:*"
+    "@narada2/agent-context-mcp": "workspace:*",
+    "@narada2/agent-runtime-server": "workspace:*"
   },
   "bin": {
     "narada-agent-start": "./src/narada-agent-start.ts",

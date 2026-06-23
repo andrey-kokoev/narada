@@ -299,7 +299,7 @@ model conversation != Agent identity
 
 ## First Implementation Direction
 
-The first implementation should be a Narada-owned `agent-cli` server mode rather than a vendor SDK integration.
+The first implementation is the Narada-owned `@narada2/agent-runtime-server` package. It provides the `narada-agent-runtime-server` / `agent-runtime-server` entrypoint and delegates carrier execution to the packaged `@narada2/agent-cli` server substrate.
 
 Reason:
 
@@ -307,7 +307,7 @@ Reason:
 agent-cli already owns Narada identity binding, session persistence, MCP discovery, and provider adapter posture.
 ```
 
-The coherent next move is to add a long-lived machine protocol to that substrate and keep Codex, Claude Code, Pi, Kimi, and API providers as replaceable adapters behind it.
+The coherent ownership split is that Narada proper owns the Agent Runtime Server package and stable runtime-server entrypoint, while `agent-cli` remains the current carrier substrate behind that entrypoint. Codex, Claude Code, Pi, Kimi, and API providers stay replaceable adapters behind the carrier/runtime boundary.
 
 ## De-Arbitrarization Result
 

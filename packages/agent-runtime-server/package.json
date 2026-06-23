@@ -1,0 +1,21 @@
+{
+  "name": "@narada2/agent-runtime-server",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "narada-agent-runtime-server": "./bin/narada-agent-runtime-server.mjs",
+    "agent-runtime-server": "./bin/narada-agent-runtime-server.mjs"
+  },
+  "exports": {
+    ".": "./src/server-wrapper.mjs",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "typecheck": "tsc --noEmit --allowJs --checkJs false bin/narada-agent-runtime-server.mjs src/server-wrapper.mjs"
+  },
+  "dependencies": {
+    "@narada2/agent-cli": "workspace:*"
+  }
+}

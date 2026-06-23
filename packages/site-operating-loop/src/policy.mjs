@@ -13,7 +13,7 @@ export const DEFAULT_SITE_OPERATING_LOOP_POLICY = {
   },
   carrier: {
     preferred: 'interactive_agent_cli',
-    fallback: 'agent-runtime-server',
+    fallback: 'narada-agent-runtime-server',
     fallback_enabled: true,
     require_policy_current: true,
   },

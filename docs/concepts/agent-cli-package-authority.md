@@ -1,10 +1,10 @@
 # Agent CLI Package Authority
 
-`D:\code\narada` is the source authority for the Narada agent CLI carrier.
+`D:\code\narada` is the source authority for the Narada agent CLI carrier and the Narada Agent Runtime Server package.
 
 ## Hard Rule
 
-Narada agent-cli is package-owned by Narada proper.
+Narada agent-cli and Narada Agent Runtime Server entrypoints are package-owned by Narada proper.
 
 No User Site, client Site, project Site, or PC runtime surface may vendor a mutable
 `tools\agent-cli` implementation copy. If a Site needs `agent-cli`, it must launch
@@ -19,6 +19,17 @@ package: @narada2/agent-cli
 bin:     narada-agent-cli
 ```
 
+Agent Runtime Server entrypoint:
+
+```text
+package: @narada2/agent-runtime-server
+bin:     narada-agent-runtime-server
+alias:   agent-runtime-server
+```
+
+The alias is compatibility-only. New launch/materialization code should resolve
+`narada-agent-runtime-server` from `@narada2/agent-runtime-server`.
+
 Provider metadata:
 
 ```text
@@ -31,7 +42,7 @@ prompts, directives, and runtime state. They must not own carrier implementation
 provider resolution, streaming behavior, slash commands, or directive sideband
 semantics.
 
-`C:\Users\Andrey\Narada` is the operator/user-site control surface. It may contain launchers, registry configuration, and operator affordances, but it delegates carrier execution to Narada proper's packaged `narada-agent-cli`.
+`C:\Users\Andrey\Narada` is the operator/user-site control surface. It may contain launchers, registry configuration, and operator affordances, but it delegates carrier execution to Narada proper's packaged `narada-agent-cli` and machine-addressable runtime-server execution to `narada-agent-runtime-server`.
 
 Site-local `start-agent.mjs` files are no longer admitted compatibility shims. Agent startup authority is the packaged `@narada2/agent-start` TypeScript entrypoint, reached through the site PowerShell surface or package bin metadata.
 
@@ -42,7 +53,8 @@ Site-local `start-agent.mjs` files are no longer admitted compatibility shims. A
 - resolve the target Site root and workspace root;
 - pass launch identity, session, model, provider, and control JSONL path;
 - render operator-facing launch status;
-- choose the packaged `narada-agent-cli` binary.
+- choose the packaged `narada-agent-cli` binary for direct interactive carrier execution;
+- choose the packaged `narada-agent-runtime-server` binary for machine-addressable server execution.
 
 It must not:
 
@@ -50,6 +62,7 @@ It must not:
 - require an API key for `codex-subscription`;
 - fork provider metadata or provider resolution;
 - bypass the package-owned carrier queue, directive sideband, or MCP fabric loading.
+- resolve the runtime server from `@narada2/agent-cli` except through the compatibility-only `agent-runtime-server` shim.
 
 ## Dry-Run Invariant
 
@@ -66,5 +79,6 @@ Run the package and cutover checks after changing carrier launch code:
 ```powershell
 pnpm --filter @narada2/agent-cli test
 pnpm --filter @narada2/agent-cli typecheck
+pnpm --filter @narada2/agent-runtime-server test
 pwsh -NoProfile -File C:\Users\Andrey\Narada\tools\agent-start\Test-AgentCliPackageCutover.ps1
 ```

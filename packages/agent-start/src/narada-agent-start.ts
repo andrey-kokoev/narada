@@ -979,7 +979,7 @@ function agentCliScriptPath() {
 }
 
 function agentRuntimeServerScriptPath() {
-  return resolveNaradaPackageBin('@narada2/agent-cli', 'agent-runtime-server');
+  return resolveNaradaPackageBin('@narada2/agent-runtime-server', 'narada-agent-runtime-server');
 }
 
 function agentCliSessionName(identityName) {

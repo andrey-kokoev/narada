@@ -53,6 +53,7 @@
   "devDependencies": {
     "@changesets/cli": "^2.27.1",
     "@narada2/agent-cli": "workspace:*",
+    "@narada2/agent-runtime-server": "workspace:*",
     "@narada2/agent-tui": "workspace:*",
     "@narada2/cli": "workspace:*",
     "@types/node": "^22.0.0",
