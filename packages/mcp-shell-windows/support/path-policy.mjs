@@ -4,7 +4,12 @@ import { isAbsolute, relative, resolve } from 'node:path';
 export function enforceAgentPathPolicy({ siteRoot, agentId = process.env.NARADA_AGENT_ID, absolutePath, operation }) {
   const policyResult = resolveAgentPathPolicy(siteRoot, agentId);
   if (!policyResult.configured) {
-    return { status: 'not_configured', agent_id: agentId ?? null };
+    return {
+      status: 'not_configured',
+      agent_id: agentId ?? null,
+      roster_enforcement: policyResult.roster_enforcement ?? 'not_applicable',
+      reason: policyResult.reason,
+    };
   }
   if (!policyResult.allowed) {
     throw new Error(policyResult.error);
@@ -30,21 +35,33 @@ export function enforceAgentPathPolicy({ siteRoot, agentId = process.env.NARADA_
 }
 
 export function resolveAgentPathPolicy(siteRoot, agentId = process.env.NARADA_AGENT_ID) {
-  if (!agentId) return { configured: false, allowed: true, reason: 'agent_unbound' };
+  if (!agentId) return { configured: false, allowed: true, roster_enforcement: 'not_applicable', reason: 'agent_unbound' };
 
   const rosterPath = resolve(siteRoot, '.ai', 'agents', 'roster.json');
   let roster;
   try {
     roster = JSON.parse(readFileSync(rosterPath, 'utf8'));
   } catch (err) {
-    return { configured: false, allowed: true, reason: `roster_unavailable: ${err.message}` };
+    return { configured: false, allowed: true, roster_enforcement: 'not_applicable', reason: `roster_unavailable: ${err.message}` };
   }
+
+  const rosterEnforced = siteEnforcesAgentPathRoster(roster);
 
   const agent = roster.agents?.find((candidate) => candidate.agent_id === agentId);
   if (!agent) {
+    if (!rosterEnforced) {
+      return {
+        configured: false,
+        allowed: true,
+        agent_id: agentId,
+        roster_enforcement: 'disabled',
+        reason: 'identity_not_in_roster_but_site_path_roster_enforcement_not_enabled',
+      };
+    }
     return {
       configured: true,
       allowed: false,
+      roster_enforcement: 'enabled',
       error: `path_policy_identity_not_in_roster: ${agentId}`,
     };
   }
@@ -52,11 +69,11 @@ export function resolveAgentPathPolicy(siteRoot, agentId = process.env.NARADA_AG
   const policy = agent.capability_policy?.path_policy
     ?? agent.capability_policy?.filesystem_path_policy
     ?? null;
-  if (!policy) return { configured: false, allowed: true, agent_id: agentId };
+  if (!policy) return { configured: false, allowed: true, agent_id: agentId, roster_enforcement: rosterEnforced ? 'enabled' : 'disabled' };
 
   const mode = policy.mode ?? 'allowlist';
   if (mode !== 'allowlist') {
-    return { configured: false, allowed: true, agent_id: agentId, reason: `path_policy_mode_${mode}` };
+    return { configured: false, allowed: true, agent_id: agentId, roster_enforcement: rosterEnforced ? 'enabled' : 'disabled', reason: `path_policy_mode_${mode}` };
   }
 
   const roots = normalizePolicyRoots(siteRoot, policy);
@@ -64,6 +81,7 @@ export function resolveAgentPathPolicy(siteRoot, agentId = process.env.NARADA_AG
     return {
       configured: true,
       allowed: false,
+      roster_enforcement: rosterEnforced ? 'enabled' : 'disabled',
       error: `path_policy_empty_allowlist: ${agentId}`,
     };
   }
@@ -72,6 +90,7 @@ export function resolveAgentPathPolicy(siteRoot, agentId = process.env.NARADA_AG
     configured: true,
     allowed: true,
     agent_id: agentId,
+    roster_enforcement: rosterEnforced ? 'enabled' : 'disabled',
     mode,
     allowed_roots: roots,
   };
@@ -105,6 +124,12 @@ function normalizePolicyRoots(siteRoot, policy) {
   }
 
   return roots;
+}
+
+function siteEnforcesAgentPathRoster(roster) {
+  return roster?.enforce_agent_path_policy === true
+    || roster?.path_policy?.enforce_agent_roster === true
+    || roster?.site_policy?.enforce_agent_path_policy === true;
 }
 
 function isPathWithin(candidatePath, rootPath) {
