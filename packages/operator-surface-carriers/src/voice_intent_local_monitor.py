@@ -60,19 +60,33 @@ def emit_state_event(runtime_root, pc_site_root, run_id, state, reason=None, det
 def play_debug_cue(args, state):
     if args.debug_audio_cues == "disabled":
         return
+    if args.debug_audio_cues != "debug" and state not in ("sensing_started", "sensing_stopped"):
+        return
     if os.name != "nt":
         return
-    tones = {
-        "sensing_started": (660, 90),
-        "recording_started": (880, 90),
-        "transcription_submitted": (1040, 110),
+    sounds = {
+        "sensing_started": "Asterisk",
+        "sensing_stopped": "Beep",
+        "recording_started": "Exclamation",
+        "recording_stopped": "Beep",
+        "transcription_submitted": "Question",
     }
-    tone = tones.get(state)
-    if not tone:
+    sound = sounds.get(state)
+    if not sound:
         return
     try:
-        import winsound  # type: ignore
-        winsound.Beep(*tone)
+        subprocess.run(
+            [
+                "powershell.exe",
+                "-NoProfile",
+                "-Command",
+                f"[System.Media.SystemSounds]::{sound}.Play(); Start-Sleep -Milliseconds 180",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=2,
+            check=False,
+        )
     except Exception:
         return
 
@@ -408,7 +422,7 @@ def main():
     parser.add_argument("--recognition-adapter", choices=["none", "local-whisper", "openai-transcriptions", "cloudflare-worker"], default="none")
     parser.add_argument("--dispatch-dry-run", action="store_true")
     parser.add_argument("--retain-audio", action="store_true")
-    parser.add_argument("--debug-audio-cues", choices=["enabled", "disabled"], default="enabled")
+    parser.add_argument("--debug-audio-cues", choices=["enabled", "disabled", "debug"], default="enabled")
     args = parser.parse_args()
 
     if args.check_live_audio:
@@ -486,6 +500,7 @@ def main():
         }
         write_json(runtime_root / "calibration.json", calibration)
         print(json.dumps(calibration, indent=2))
+        play_debug_cue(args, "sensing_stopped")
         return 0
 
     segments = vad_segments(frames, args.threshold, args.speech_start_ms, args.silence_end_ms)
@@ -508,6 +523,7 @@ def main():
         retained_audio_path = write_selected_wav(frames, selected_audio, actual_sample_rate, runtime_root / "utterance.wav")
     if selected:
         state_events.append(emit_state_event(runtime_root, args.pc_site_root, run_id, "recording_stopped", detail={"retained_audio_path": retained_audio_path}))
+        play_debug_cue(args, "recording_stopped")
 
     privacy = {
         "raw_audio_retained": bool(retained_audio_path),
@@ -601,6 +617,7 @@ def main():
     }
     write_json(runtime_root / "run.json", summary)
     print(json.dumps(summary, indent=2))
+    play_debug_cue(args, "sensing_stopped")
     return 0
 
 
