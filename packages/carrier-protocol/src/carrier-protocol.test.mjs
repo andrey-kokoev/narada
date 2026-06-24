@@ -130,13 +130,14 @@ assert.equal(CARRIER_PROTOCOL_SCHEMAS.nars_lifecycle_hook.schema, NARS_LIFECYCLE
 assert.deepEqual(NARS_SESSION_LIFECYCLE_HOOKS, ['beforeSessionBind', 'afterSessionStarted', 'afterSessionStatus', 'beforeSessionClose', 'afterSessionClosed', 'onSessionError']);
 assert.deepEqual(NARS_TURN_LIFECYCLE_HOOKS, ['beforeDirectiveAccept', 'afterDirectiveAccepted', 'beforeTurnStart', 'onAssistantMessage', 'onToolCall', 'onToolResult', 'onCommandResult', 'afterTurnComplete', 'onRuntimeError']);
 assert.deepEqual(NARS_LIFECYCLE_HOOKS, [...NARS_SESSION_LIFECYCLE_HOOKS, ...NARS_TURN_LIFECYCLE_HOOKS]);
-assert.deepEqual(NARS_SESSION_EVENT_KINDS, ['session_started', 'session_status', 'session_closed', 'runtime_error']);
+assert.deepEqual(NARS_SESSION_EVENT_KINDS, ['session_started', 'session_status', 'session_health', 'session_closed', 'runtime_error']);
 assert.deepEqual(NARS_TURN_EVENT_KINDS, ['directive_received', 'directive_receipt_recorded', 'directive_carrier_accepted_recorded', 'turn_started', 'assistant_message', 'assistant_message_stream', 'tool_call', 'tool_result', 'command_result', 'turn_complete', 'turn_interrupted', 'turn_failed', 'runtime_error']);
 assert.equal(NARS_RUNTIME_EVENT_KINDS.includes('command_result'), true);
 assert.equal(normalizeNarsRuntimeEventKind('carrier_command_result'), 'command_result');
 assert.equal(normalizeNarsRuntimeEventKind('directive_complete'), 'turn_complete');
 assert.deepEqual(narsLifecycleHooksForEvent({ event: 'tool_call' }), ['onToolCall']);
 assert.deepEqual(narsLifecycleHooksForEvent({ event: 'carrier_command_result' }), ['onCommandResult']);
+assert.deepEqual(narsLifecycleHooksForEvent({ event: 'session_health' }), ['afterSessionStatus']);
 assert.deepEqual(narsLifecycleHooksForEvent({ event: 'session_closed' }), ['beforeSessionClose', 'afterSessionClosed']);
 const hookPayload = createNarsLifecycleHookPayload({
   hook: 'onToolResult',
@@ -230,6 +231,26 @@ assert.deepEqual(classifyCarrierControlRequest({ id: 'status-1', method: 'sessio
   observer_action: null,
   error: null,
   method_kind: 'session_status',
+});
+assert.deepEqual(classifyCarrierControlRequest({ id: 'health-1', method: 'session.health' }), {
+  request_id: 'health-1',
+  method: 'session.health',
+  concurrent_allowed: true,
+  allowed_when_closed: true,
+  native_control_input: false,
+  observer_action: null,
+  error: null,
+  method_kind: 'session_health',
+});
+assert.deepEqual(classifyCarrierControlRequest({ id: 'events-1', method: 'session.events.subscribe' }), {
+  request_id: 'events-1',
+  method: 'session.events.subscribe',
+  concurrent_allowed: true,
+  allowed_when_closed: true,
+  native_control_input: false,
+  observer_action: null,
+  error: null,
+  method_kind: 'session_events_subscribe',
 });
 assert.equal(classifyCarrierControlRequest({ id: 'interrupt-1', method: 'conversation.interrupt' }).method_kind, 'conversation_interrupt');
 assert.equal(classifyCarrierControlRequest({ id: 'interrupt-1', method: 'conversation.interrupt' }).concurrent_allowed, true);

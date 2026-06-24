@@ -203,6 +203,7 @@ export const NARS_LIFECYCLE_HOOKS = Object.freeze([
 export const NARS_SESSION_EVENT_KINDS = Object.freeze([
   'session_started',
   'session_status',
+  'session_health',
   'session_closed',
   'runtime_error',
 ]);
@@ -250,6 +251,7 @@ export const NARS_SESSION_TERMINAL_STATES = Object.freeze([
 export const NARS_EVENT_TO_LIFECYCLE_HOOKS = Object.freeze({
   session_started: Object.freeze(['afterSessionStarted']),
   session_status: Object.freeze(['afterSessionStatus']),
+  session_health: Object.freeze(['afterSessionStatus']),
   session_closed: Object.freeze(['beforeSessionClose', 'afterSessionClosed']),
   directive_received: Object.freeze(['beforeDirectiveAccept']),
   directive_carrier_accepted_recorded: Object.freeze(['afterDirectiveAccepted']),
@@ -266,6 +268,8 @@ export const NARS_EVENT_TO_LIFECYCLE_HOOKS = Object.freeze({
 });
 export const CARRIER_CONTROL_METHODS = Object.freeze([
   'session.status',
+  'session.health',
+  'session.events.subscribe',
   'session.close',
   'conversation.interrupt',
   'conversation.send',
@@ -361,6 +365,8 @@ export function classifyCarrierControlRequest(request = {}) {
     return { ...base, method_kind: 'carrier_input_deliver' };
   }
   if (method === 'session.status') return { ...base, method_kind: 'session_status', allowed_when_closed: true };
+  if (method === 'session.health') return { ...base, method_kind: 'session_health', allowed_when_closed: true, concurrent_allowed: true };
+  if (method === 'session.events.subscribe') return { ...base, method_kind: 'session_events_subscribe', allowed_when_closed: true, concurrent_allowed: true };
   if (method === 'session.close') return { ...base, method_kind: 'session_close', allowed_when_closed: true };
   if (method === 'conversation.interrupt') return { ...base, method_kind: 'conversation_interrupt', concurrent_allowed: true };
   if (method === 'conversation.send') return { ...base, method_kind: 'conversation_send' };
