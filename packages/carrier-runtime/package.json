@@ -1,0 +1,30 @@
+{
+  "name": "@narada2/carrier-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "narada": {
+    "package_role": "nars_carrier_runtime_substrate",
+    "owns": [
+      "provider_runtime_adapters",
+      "mcp_runtime_fabric",
+      "carrier_substrate_support_modules"
+    ]
+  },
+  "exports": {
+    ".": "./src/index.mjs",
+    "./provider-adapters": "./src/provider-adapters.mjs",
+    "./provider-resolution": "./src/provider-resolution.mjs",
+    "./mcp-runtime": "./src/mcp-runtime.mjs",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test src/*.test.mjs",
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/provider-adapters.mjs src/provider-resolution.mjs src/mcp-runtime.mjs"
+  },
+  "dependencies": {
+    "@narada2/carrier-action-admission": "workspace:*",
+    "@narada2/carrier-provider-contract": "workspace:*",
+    "@narada2/mcp-fabric": "workspace:*"
+  }
+}
