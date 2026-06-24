@@ -3,17 +3,29 @@
   "version": "0.1.0",
   "type": "module",
   "private": true,
+  "narada": {
+    "package_role": "nars_runtime_server",
+    "owns": [
+      "server_request_handling",
+      "session_status_and_health_projection",
+      "runtime_event_subscription",
+      "runtime_lifecycle_hooks",
+      "carrier_substrate_handoff"
+    ],
+    "carrier_substrate": "@narada2/agent-cli --carrier-server-substrate"
+  },
   "bin": {
     "narada-agent-runtime-server": "./bin/narada-agent-runtime-server.mjs",
     "agent-runtime-server": "./bin/narada-agent-runtime-server.mjs"
   },
   "exports": {
     ".": "./src/server-wrapper.mjs",
+    "./runtime-server-events": "./src/runtime-server-events.mjs",
     "./package.json": "./package.json"
   },
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false bin/narada-agent-runtime-server.mjs src/server-wrapper.mjs"
+    "typecheck": "tsc --noEmit --allowJs --checkJs false bin/narada-agent-runtime-server.mjs src/server-wrapper.mjs src/runtime-server-events.mjs"
   },
   "dependencies": {
     "@narada2/agent-cli": "workspace:*",
