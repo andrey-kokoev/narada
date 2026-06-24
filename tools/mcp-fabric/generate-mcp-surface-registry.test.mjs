@@ -48,6 +48,8 @@ assert.deepEqual(inferredToolContract('fixture-agent-context').read_only_tools, 
   'agent_context_list_sessions',
 ]);
 assert.equal(inferredToolContract('fixture-task-lifecycle').read_only_tools.includes('task_lifecycle_next'), true);
+assert.equal(inferredToolContract('fixture-task-lifecycle').mutating_tools.includes('task_lifecycle_claim'), true);
+assert.equal(inferredToolContract('fixture-task-lifecycle').mutating_tools.includes('task_lifecycle_run_tests'), true);
 assert.equal(deriveSiteId(siteRoot), 'client-site');
 
 const result = writeMcpSurfaceRegistry(join(workspace, 'client-site'), { generatedAt: '2026-01-01T00:00:00.000Z' });

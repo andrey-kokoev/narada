@@ -8,6 +8,7 @@ import {
   classifyCarrierActionRequest,
   createAndWriteCarrierActionAdmission,
   createCarrierActionRequest,
+  decideCarrierActionRequest,
   inspectPayloadForSecrets,
   listCarrierActionDecisions,
   showCarrierActionDecision,
@@ -50,6 +51,11 @@ assert.deepEqual(classifyCarrierActionRequest('task_lifecycle_claim', { task_num
   classifier_source: 'closed_name_fallback',
 });
 assert.equal(classifyCarrierActionRequest('agent_context_startup_sequence', {}).decision, 'read_only_admitted');
+const taskShowReadOnlyMetadata = classifyCarrierActionRequest('task_lifecycle_show', { task_number: 1318 }, {
+  toolMetadata: { read_only: true, source: 'surface_registry', reason: 'surface_registry_read_only_tool' },
+});
+assert.equal(taskShowReadOnlyMetadata.decision, 'read_only_admitted');
+assert.equal(taskShowReadOnlyMetadata.reason, 'surface_registry_read_only_tool');
 assert.equal(classifyCarrierActionRequest('startup_sequence', {}).decision, 'refused');
 assert.equal(classifyCarrierActionRequest('fs_read_file', {}).decision, 'read_only_admitted');
 assert.equal(classifyCarrierActionRequest('fs_glob_search', {}).decision, 'read_only_admitted');
@@ -143,7 +149,47 @@ assert.equal(classifyCarrierActionRequest('outbox_send', {}).authority_owner, 'c
 assert.equal(classifyCarrierActionRequest('outbox_send', {}).decision, 'refused');
 assert.equal(classifyCarrierActionRequest('command_request_create', {}).decision, 'routed');
 assert.equal(classifyCarrierActionRequest('shell_run', {}).decision, 'refused');
+assert.equal(classifyCarrierActionRequest('write_file', {}).family, 'site_file_mutation');
+assert.equal(classifyCarrierActionRequest('write_file', {}).decision, 'routed');
+assert.equal(classifyCarrierActionRequest('execute_command', {}).family, 'command');
+assert.equal(classifyCarrierActionRequest('execute_command', {}).decision, 'routed');
 assert.equal(classifyCarrierActionRequest('unknown_mutate', {}).reason, 'unknown_non_read_only_tool_family');
+
+const delegatedWriteHandoff = {
+  schema: 'narada.nars.delegated_authority_handoff.v1',
+  crossing_regime: 'nars_runtime_server_to_carrier_substrate',
+  parse_status: 'accepted',
+  authority_ref: 'task:1329',
+  authority_mode: 'write',
+  allowed_action_families: ['site_file_mutation', 'task_lifecycle_mutation', 'command'],
+};
+for (const [toolName, expectedFamily] of [
+  ['write_file', 'site_file_mutation'],
+  ['task_lifecycle_claim', 'task_lifecycle_mutation'],
+  ['execute_command', 'command'],
+]) {
+  const classification = classifyCarrierActionRequest(toolName, { id: 'value omitted' }, {
+    delegatedAuthorityHandoff: delegatedWriteHandoff,
+  });
+  assert.equal(classification.family, expectedFamily);
+  assert.equal(classification.decision, 'delegated_mutation_admitted');
+  assert.equal(classification.carrier_mutation_admitted, true);
+  assert.equal(classification.delegated_authority.authority_ref, 'task:1329');
+}
+const readOnlyUnderWrite = classifyCarrierActionRequest('fs_read_file', { path: 'README.md' }, {
+  delegatedAuthorityHandoff: delegatedWriteHandoff,
+});
+assert.equal(readOnlyUnderWrite.decision, 'read_only_admitted');
+assert.equal(readOnlyUnderWrite.carrier_mutation_admitted, undefined);
+const secretUnderWrite = classifyCarrierActionRequest('write_file', {
+  path: 'safe.txt',
+  content: 'sk-testsecretvalue123456',
+}, {
+  delegatedAuthorityHandoff: delegatedWriteHandoff,
+});
+assert.equal(secretUnderWrite.decision, 'refused');
+assert.equal(secretUnderWrite.reason, 'secret_or_credential_bearing_request');
+assert.equal(secretUnderWrite.authority_owner, 'capability_secret_authority');
 
 const secretFindings = inspectPayloadForSecrets({
   env: {
@@ -200,7 +246,7 @@ assert.equal(decision.schema, 'narada.carrier_action_admission_decision.v0');
 assert.equal(decision.decision, 'routed');
 assert.equal(decision.reason, 'task_lifecycle_mutation_requires_canonical_task_authority');
 assert.equal(decision.classifier_version, 'carrier_action_admission.metadata_aware_policy.v1');
-assert.equal(decision.policy_version, 'carrier_action_admission.agent_runtime_server_operational_candidates.v1');
+assert.equal(decision.policy_version, 'carrier_action_admission.delegated_governed_mutations.v1');
 assert.match(decision.created_at, /T/);
 assert.equal(decision.carrier_mutation_admitted, false);
 assert.equal(persisted.evidence_path, path);
@@ -254,6 +300,37 @@ const readOnlyWrite = createAndWriteCarrierActionAdmission({
 });
 assert.equal(readOnlyWrite.decision.decision, 'read_only_admitted');
 assert.equal(readOnlyWrite.decision.candidate_ref, null);
+
+const delegatedWrite = createAndWriteCarrierActionAdmission({
+  agentId: 'narada.test',
+  carrierSessionId: 'carrier_5',
+  turnId: 'turn_5',
+  toolCallId: 'call_5',
+  toolName: 'write_file',
+  args: { path: 'safe.txt', content: 'raw mutation payload must not persist' },
+  siteRoot: workspaceRoot,
+  delegatedAuthorityHandoff: delegatedWriteHandoff,
+});
+const delegatedWriteText = readFileSync(delegatedWrite.path, 'utf8');
+assert.equal(delegatedWrite.decision.decision, 'delegated_mutation_admitted');
+assert.equal(delegatedWrite.decision.carrier_mutation_admitted, true);
+assert.equal(delegatedWrite.decision.candidate_ref, null);
+assert.equal(delegatedWrite.decision.request.requested_action.delegated_authority.authority_ref, 'task:1329');
+assert.doesNotMatch(delegatedWriteText, /raw mutation payload must not persist/);
+
+const delegatedDecisionRequest = createCarrierActionRequest({
+  agentId: 'narada.test',
+  carrierSessionId: 'carrier_6',
+  turnId: 'turn_6',
+  toolCallId: 'call_6',
+  toolName: 'execute_command',
+  args: { command: 'raw command must not persist' },
+  siteRoot: workspaceRoot,
+  delegatedAuthorityHandoff: delegatedWriteHandoff,
+});
+const delegatedDecision = decideCarrierActionRequest(delegatedDecisionRequest);
+assert.equal(delegatedDecision.decision, 'delegated_mutation_admitted');
+assert.equal(delegatedDecision.carrier_mutation_admitted, true);
 
 const oldRecord = {
   schema: 'narada.carrier_action_admission_decision.v0',

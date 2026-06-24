@@ -15,8 +15,9 @@ const DECISION_SCHEMA = 'narada.carrier_action_admission_decision.v0';
 const TASK_CANDIDATE_SCHEMA = 'narada.carrier_action_candidate.task.v1';
 const INBOX_CANDIDATE_SCHEMA = 'narada.carrier_action_candidate.inbox.v1';
 const COMMAND_CANDIDATE_SCHEMA = 'narada.carrier_action_candidate.command.v1';
+const SITE_FILE_CANDIDATE_SCHEMA = 'narada.carrier_action_candidate.site_file.v1';
 const CLASSIFIER_VERSION = 'carrier_action_admission.metadata_aware_policy.v1';
-const POLICY_VERSION = 'carrier_action_admission.agent_runtime_server_operational_candidates.v1';
+const POLICY_VERSION = 'carrier_action_admission.delegated_governed_mutations.v1';
 
 const SECRET_KEY_PATTERN = /(api[_-]?key|authorization|bearer|client[_-]?secret|credential|password|private[_-]?key|secret|token)/i;
 const SECRET_VALUE_PATTERNS = [
@@ -206,6 +207,11 @@ function classifyCarrierActionRequest(toolName, args = {}, options = {}) {
     };
   }
 
+  const withDelegatedAuthority = (classification) => applyDelegatedAuthorityAdmission(
+    classification,
+    toolName,
+    options,
+  );
   const metadata = normalizeToolMetadata(options.toolMetadata);
   const mutationNameConflict = knownMutationNameClassification(toolName);
   if (options.toolAvailable === false) {
@@ -246,11 +252,11 @@ function classifyCarrierActionRequest(toolName, args = {}, options = {}) {
     }
     const metadataFamily = normalizeActionFamily(metadata.family ?? metadata.authority_class ?? toolName);
     if (metadataFamily) {
-      return {
+      return withDelegatedAuthority({
         ...familyClassification(metadataFamily, metadata.reason ?? 'tool_catalog_metadata_non_read_only'),
         authority_owner: metadata.authority_owner ?? familyClassification(metadataFamily, metadata.reason).authority_owner,
         classifier_source: metadata.source ?? 'tool_metadata',
-      };
+      });
     }
   }
   if (metadata?.registry_metadata_authoritative === true) {
@@ -271,21 +277,27 @@ function classifyCarrierActionRequest(toolName, args = {}, options = {}) {
   }
   if (FALLBACK_MUTATING_TOOLS.has(toolName)) {
     const family = normalizeActionFamily(toolName);
-    if (family) return { ...familyClassification(family, 'closed_name_fallback_mutating_tool'), classifier_source: 'closed_name_fallback' };
+    if (family) return withDelegatedAuthority({ ...familyClassification(family, 'closed_name_fallback_mutating_tool'), classifier_source: 'closed_name_fallback' });
     return { ...refusedClassification('unsupported_mutating_tool_family', 'narada_proper_authority'), classifier_source: 'closed_name_fallback' };
   }
 
   if (isCommandIntentTool(toolName)) {
-    return { ...familyClassification('command', 'command_intent_request_requires_admission'), classifier_source: 'closed_name_fallback' };
+    return withDelegatedAuthority({ ...familyClassification('command', 'command_intent_request_requires_admission'), classifier_source: 'closed_name_fallback' });
+  }
+  if (isExecuteCommandTool(toolName)) {
+    return withDelegatedAuthority({ ...familyClassification('command', 'command_execution_requires_delegated_authority'), classifier_source: 'closed_name_fallback' });
   }
   if (isRawCommandTool(toolName)) {
     return { ...refusedClassification('raw_command_execution_refused', 'command_execution_intent_service', 'command'), classifier_source: 'closed_name_fallback' };
   }
+  if (isFileMutationTool(toolName)) {
+    return withDelegatedAuthority({ ...familyClassification('site_file_mutation', 'site_file_mutation_requires_delegated_authority'), classifier_source: 'closed_name_fallback' });
+  }
   if (/^task_lifecycle_/i.test(toolName)) {
-    return { ...familyClassification('task_lifecycle_mutation', 'task_lifecycle_mutation_requires_canonical_task_authority'), classifier_source: 'closed_name_fallback' };
+    return withDelegatedAuthority({ ...familyClassification('task_lifecycle_mutation', 'task_lifecycle_mutation_requires_canonical_task_authority'), classifier_source: 'closed_name_fallback' });
   }
   if (/^(inbox_|narada_inbox_)/i.test(toolName)) {
-    return { ...familyClassification('inbox_admission', 'inbox_mutation_requires_canonical_inbox_authority'), classifier_source: 'closed_name_fallback' };
+    return withDelegatedAuthority({ ...familyClassification('inbox_admission', 'inbox_mutation_requires_canonical_inbox_authority'), classifier_source: 'closed_name_fallback' });
   }
   if (isOutboxOrPublicationTool(toolName)) {
     return {
@@ -301,13 +313,16 @@ function classifyCarrierActionRequest(toolName, args = {}, options = {}) {
 }
 
 function knownMutationNameClassification(toolName) {
+  if (FALLBACK_READ_ONLY_TOOLS.has(toolName)) return null;
   if (FALLBACK_MUTATING_TOOLS.has(toolName)) {
     const family = normalizeActionFamily(toolName);
     if (family) return familyClassification(family, 'closed_name_fallback_mutating_tool');
     return refusedClassification('unsupported_mutating_tool_family', 'narada_proper_authority');
   }
   if (isCommandIntentTool(toolName)) return familyClassification('command', 'command_intent_request_requires_admission');
+  if (isExecuteCommandTool(toolName)) return familyClassification('command', 'command_execution_requires_delegated_authority');
   if (isRawCommandTool(toolName)) return refusedClassification('raw_command_execution_refused', 'command_execution_intent_service', 'command');
+  if (isFileMutationTool(toolName)) return familyClassification('site_file_mutation', 'site_file_mutation_requires_delegated_authority');
   if (/^task_lifecycle_/i.test(toolName)) return familyClassification('task_lifecycle_mutation', 'task_lifecycle_mutation_requires_canonical_task_authority');
   if (/^(inbox_|narada_inbox_)/i.test(toolName)) return familyClassification('inbox_admission', 'inbox_mutation_requires_canonical_inbox_authority');
   if (isOutboxOrPublicationTool(toolName)) {
@@ -365,6 +380,15 @@ function familyClassification(family, reason) {
       secret_findings: [],
     };
   }
+  if (family === 'site_file_mutation') {
+    return {
+      family,
+      authority_owner: 'target_site_file_authority',
+      decision: 'routed',
+      reason,
+      secret_findings: [],
+    };
+  }
   if (family === 'outbox_publication') {
     return {
       family,
@@ -381,7 +405,8 @@ function normalizeActionFamily(value) {
   const text = String(value ?? '');
   if (/task_lifecycle|task_work|narada_task|admit_task|materialize_task/i.test(text)) return 'task_lifecycle_mutation';
   if (/inbox|envelope/i.test(text)) return 'inbox_admission';
-  if (/command_request|command_intent/i.test(text)) return 'command';
+  if (/^command$|command_request|command_intent|execute_command/i.test(text)) return 'command';
+  if (/site_file_mutation|write_file|fs_write_file|file_write|filesystem_write/i.test(text)) return 'site_file_mutation';
   if (/outbox|publication|mail_|email_|draft|send|reply/i.test(text)) return 'outbox_publication';
   return null;
 }
@@ -408,8 +433,103 @@ function isRawCommandTool(toolName) {
   return /^(shell|native|exec|process)(_|$)/i.test(toolName) || /(^|_)(shell|command|exec|process)(_run|_start|$)/i.test(toolName);
 }
 
+function isExecuteCommandTool(toolName) {
+  return /(^|_)(execute_command|command_execute)($|_)/i.test(toolName);
+}
+
+function isFileMutationTool(toolName) {
+  return /(^|_)(write_file|fs_write_file|file_write|filesystem_write)($|_)/i.test(toolName);
+}
+
 function isOutboxOrPublicationTool(toolName) {
   return /^(outbox_|mail_|email_|publication_)/i.test(toolName) || /(^|_)(draft|send|reply|publish|publication)(_send|$)/i.test(toolName);
+}
+
+function applyDelegatedAuthorityAdmission(classification, toolName, options = {}) {
+  if (classification.decision !== 'routed') return classification;
+  if (!options.delegatedAuthorityHandoff) return classification;
+  const handoff = normalizeDelegatedAuthorityHandoff(options.delegatedAuthorityHandoff);
+  const decision = delegatedAuthorityDecision({ handoff, family: classification.family, toolName });
+  if (!decision.admitted) {
+    return {
+      ...classification,
+      delegated_authority: decision.diagnostic,
+    };
+  }
+  return {
+    ...classification,
+    decision: 'delegated_mutation_admitted',
+    reason: 'delegated_authority_permits_governed_mutation',
+    carrier_mutation_admitted: true,
+    delegated_authority: decision.diagnostic,
+  };
+}
+
+function normalizeDelegatedAuthorityHandoff(handoff) {
+  if (!handoff || typeof handoff !== 'object' || Array.isArray(handoff)) return null;
+  return handoff;
+}
+
+function delegatedAuthorityDecision({ handoff, family, toolName }) {
+  const base = {
+    schema: 'narada.carrier_action.delegated_authority_check.v1',
+    admitted: false,
+    authority_ref: stringFieldOrNull(handoff?.authority_ref),
+    family,
+    tool_name: toolName,
+  };
+  if (!handoff) return { admitted: false, diagnostic: { ...base, reason: 'delegated_authority_missing' } };
+  if (handoff.parse_status && handoff.parse_status !== 'accepted') {
+    return { admitted: false, diagnostic: { ...base, reason: 'delegated_authority_invalid' } };
+  }
+  if (handoff.schema !== 'narada.nars.delegated_authority_handoff.v1') {
+    return { admitted: false, diagnostic: { ...base, reason: 'delegated_authority_schema_mismatch' } };
+  }
+  if (handoff.crossing_regime !== 'nars_runtime_server_to_carrier_substrate') {
+    return { admitted: false, diagnostic: { ...base, reason: 'delegated_authority_crossing_regime_mismatch' } };
+  }
+  if (!base.authority_ref) {
+    return { admitted: false, diagnostic: { ...base, reason: 'delegated_authority_ref_missing' } };
+  }
+  if (!delegatedHandoffGrantsWrite(handoff, family, toolName)) {
+    return { admitted: false, diagnostic: { ...base, reason: 'delegated_authority_write_not_granted' } };
+  }
+  return {
+    admitted: true,
+    diagnostic: {
+      ...base,
+      admitted: true,
+      reason: 'delegated_authority_write_granted',
+      authority_mode: stringFieldOrNull(handoff.authority_mode ?? handoff.authority ?? handoff.mode),
+    },
+  };
+}
+
+function delegatedHandoffGrantsWrite(handoff, family, toolName) {
+  if (handoff.delegated_mutation_authority === true) return delegatedHandoffScopeAllows(handoff, family, toolName);
+  const mode = String(handoff.authority_mode ?? handoff.authority ?? handoff.mode ?? '').toLowerCase();
+  if (['write', 'mutation', 'mutating'].includes(mode)) return delegatedHandoffScopeAllows(handoff, family, toolName);
+  const permissions = stringList([
+    ...(Array.isArray(handoff.permissions) ? handoff.permissions : []),
+    ...(Array.isArray(handoff.capabilities) ? handoff.capabilities : []),
+  ]);
+  if (permissions.some((entry) => ['write', 'mutation', 'mutating', 'delegated_mutation'].includes(entry))) {
+    return delegatedHandoffScopeAllows(handoff, family, toolName);
+  }
+  return false;
+}
+
+function delegatedHandoffScopeAllows(handoff, family, toolName) {
+  const allowedFamilies = stringList(handoff.allowed_action_families ?? handoff.mutating_families);
+  const allowedTools = stringList(handoff.allowed_tools ?? handoff.mutating_tools);
+  if (allowedFamilies.length === 0 && allowedTools.length === 0) return true;
+  return allowedFamilies.includes(String(family).toLowerCase()) || allowedTools.includes(String(toolName).toLowerCase());
+}
+
+function stringList(value) {
+  return Array.isArray(value)
+    ? value.filter((entry) => typeof entry === 'string').map((entry) => entry.toLowerCase())
+    : [];
 }
 
 function createCarrierActionRequest({
@@ -423,8 +543,13 @@ function createCarrierActionRequest({
   sourceKind = 'agent_runtime_server_turn',
   toolMetadata = null,
   toolAvailable = true,
+  delegatedAuthorityHandoff = null,
 }) {
-  const classification = classifyCarrierActionRequest(toolName, args, { toolMetadata, toolAvailable });
+  const classification = classifyCarrierActionRequest(toolName, args, {
+    toolMetadata,
+    toolAvailable,
+    delegatedAuthorityHandoff,
+  });
   const requestId = stableRequestId({ carrierSessionId, turnId, toolCallId });
   return {
     schema: REQUEST_SCHEMA,
@@ -454,6 +579,7 @@ function createCarrierActionRequest({
       raw_secret_values_recorded: false,
       classifier_source: classification.classifier_source ?? 'closed_name_fallback',
       classifier_metadata: classifierMetadataSummary(toolMetadata),
+      delegated_authority: classification.delegated_authority ?? null,
     },
   };
 }
@@ -484,6 +610,7 @@ function decideCarrierActionRequest(request) {
     reason: action.classification_reason ?? null,
     secret_findings: action.payload_secret_findings ?? [],
     remediation: action.safe_remediation ?? null,
+    delegated_authority: action.delegated_authority ?? null,
   };
   const decisionShape = decisionForClassification(classification);
   return {
@@ -495,7 +622,7 @@ function decideCarrierActionRequest(request) {
     decision: decisionShape.decision,
     reason: decisionShape.reason,
     authority_owner: decisionShape.authority_owner,
-    carrier_mutation_admitted: false,
+    carrier_mutation_admitted: decisionShape.carrier_mutation_admitted === true,
     candidate_ref: null,
     execution_attempt_ref: null,
     confirmation_ref: null,
@@ -521,10 +648,33 @@ function decisionForClassification(classification) {
     };
   }
   if (['task_lifecycle_mutation', 'inbox_admission', 'command'].includes(classification.family)) {
+    if (classification.delegated_authority?.admitted === true) {
+      return {
+        decision: 'delegated_mutation_admitted',
+        reason: classification.reason ?? 'delegated_authority_permits_governed_mutation',
+        authority_owner: classification.authority_owner,
+        carrier_mutation_admitted: true,
+      };
+    }
     return {
       decision: 'routed',
       reason: classification.reason ?? `${classification.family}_routed_to_candidate`,
       authority_owner: classification.authority_owner,
+    };
+  }
+  if (classification.family === 'site_file_mutation') {
+    if (classification.delegated_authority?.admitted === true) {
+      return {
+        decision: 'delegated_mutation_admitted',
+        reason: classification.reason ?? 'delegated_authority_permits_governed_mutation',
+        authority_owner: classification.authority_owner ?? 'target_site_file_authority',
+        carrier_mutation_admitted: true,
+      };
+    }
+    return {
+      decision: 'routed',
+      reason: classification.reason ?? 'site_file_mutation_routed_to_candidate',
+      authority_owner: classification.authority_owner ?? 'target_site_file_authority',
     };
   }
   if (classification.family === 'outbox_publication') {
@@ -597,6 +747,7 @@ function createCarrierActionCandidate(decision, evidencePath) {
   if (family === 'task_lifecycle_mutation') return { ...common, candidate_kind: 'task_candidate' };
   if (family === 'inbox_admission') return { ...common, candidate_kind: 'inbox_proposal' };
   if (family === 'command') return { ...common, candidate_kind: 'command_request' };
+  if (family === 'site_file_mutation') return { ...common, candidate_kind: 'site_file_mutation' };
   throw new Error(`Unsupported routed candidate family: ${family}`);
 }
 
@@ -604,6 +755,7 @@ function candidateSchemaForFamily(family) {
   if (family === 'task_lifecycle_mutation') return TASK_CANDIDATE_SCHEMA;
   if (family === 'inbox_admission') return INBOX_CANDIDATE_SCHEMA;
   if (family === 'command') return COMMAND_CANDIDATE_SCHEMA;
+  if (family === 'site_file_mutation') return SITE_FILE_CANDIDATE_SCHEMA;
   return 'narada.carrier_action_candidate.unknown.v1';
 }
 
@@ -611,6 +763,7 @@ function candidateExtensionForFamily(family) {
   if (family === 'task_lifecycle_mutation') return 'task';
   if (family === 'inbox_admission') return 'inbox';
   if (family === 'command') return 'command';
+  if (family === 'site_file_mutation') return 'site-file';
   return 'unknown';
 }
 
@@ -633,6 +786,7 @@ export {
   INBOX_CANDIDATE_SCHEMA,
   POLICY_VERSION,
   REQUEST_SCHEMA,
+  SITE_FILE_CANDIDATE_SCHEMA,
   TASK_CANDIDATE_SCHEMA,
   actionAdmissionDir,
   argumentSummary,

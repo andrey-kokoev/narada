@@ -280,7 +280,8 @@ function resolveToolMetadata({ toolName, server = null, tool = null }) {
 function inferFamily(toolName) {
   if (/task_lifecycle|task_work|narada_task|admit_task|materialize_task/i.test(toolName)) return 'task_lifecycle_mutation';
   if (/inbox|envelope/i.test(toolName)) return 'inbox_admission';
-  if (/command_request|command_intent/i.test(toolName)) return 'command';
+  if (/command_request|command_intent|execute_command/i.test(toolName)) return 'command';
+  if (/write_file|fs_write_file|file_write|filesystem_write/i.test(toolName)) return 'site_file_mutation';
   if (/outbox|publication|mail_|email_|draft|send|reply/i.test(toolName)) return 'outbox_publication';
   return 'unknown_action_family';
 }
@@ -290,6 +291,7 @@ function inferAuthorityOwner(toolName) {
   if (family === 'task_lifecycle_mutation') return 'task_governance_service';
   if (family === 'inbox_admission') return 'canonical_inbox_service';
   if (family === 'command') return 'command_execution_intent_service';
+  if (family === 'site_file_mutation') return 'target_site_file_authority';
   if (family === 'outbox_publication') return 'canonical_outbox_service';
   return null;
 }
