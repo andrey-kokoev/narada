@@ -12,8 +12,8 @@ export const DEFAULT_SITE_OPERATING_LOOP_POLICY = {
     busy_turn_timeout_ms: 10 * 60_000,
   },
   carrier: {
-    preferred: 'interactive_agent_cli',
-    fallback: 'narada-agent-runtime-server',
+    preferred: 'narada-agent-runtime-server',
+    fallback: 'agent-cli-compatibility-shim',
     fallback_enabled: true,
     require_policy_current: true,
   },

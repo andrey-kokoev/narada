@@ -984,6 +984,33 @@ const output = {
   runtime_args: spawnArgs,
   exec_command: execFlag ? execCommand : null,
   context_isolation: runtime === 'codex' ? codexContextIsolationStatus({ exec: execFlag, dryRun }) : { status: 'isolated', runtime },
+  nars_health: runtime === 'agent-cli' ? {
+    schema: 'narada.agent_start.nars_health_discovery.v1',
+    owner: '@narada2/agent-runtime-server',
+    method: 'session.health',
+    http_path: '/health',
+    endpoint: null,
+    endpoint_available_at_launch_materialization: false,
+    discovery_field: 'session_started.health_endpoint',
+    note: 'The loopback HTTP endpoint is bound by the runtime server after process start; inspect session_started.health_endpoint or session.health for the live URL.',
+  } : null,
+  nars_events: runtime === 'agent-cli' ? {
+    schema: 'narada.agent_start.nars_event_stream_discovery.v1',
+    owner: '@narada2/agent-runtime-server',
+    method: 'session.events.subscribe',
+    transport_kind: 'websocket',
+    websocket_path: '/events',
+    endpoint: null,
+    endpoint_available_at_launch_materialization: false,
+    discovery_field: 'session_started.event_endpoint',
+    supports_replay: true,
+    locality: 'loopback_only_by_default',
+    attach_commands: {
+      agent_cli: 'narada-agent-cli --attach <session_started.event_endpoint>',
+      protocol: '{"id":"events-1","method":"session.events.subscribe","params":{"include_replay":true,"max_replay":20}}',
+    },
+    note: 'The loopback WebSocket endpoint is bound by the runtime server after process start; inspect session_started.event_endpoint for the live URL.',
+  } : null,
   launch_result_path: null,
 };
 

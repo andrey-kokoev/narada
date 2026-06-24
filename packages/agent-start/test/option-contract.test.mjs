@@ -269,7 +269,14 @@ test('agent-cli exec launches package bin through node, not PowerShell', () => {
   assert.equal(output.exec_command.startsWith(process.execPath), true);
   assert.equal(output.exec_command.includes('pwsh'), false);
   assert.equal(output.agent_cli_launch.command, process.execPath);
-  assert.equal(output.agent_cli_launch.carrier_relation, 'interactive_agent_cli');
+  assert.equal(output.agent_cli_launch.carrier_relation, 'narada_agent_runtime_server');
+  assert.deepEqual(output.agent_cli_launch.runtime_server, {
+    package: '@narada2/agent-runtime-server',
+    entrypoint: 'narada-agent-runtime-server',
+    compatibility_alias: 'agent-runtime-server',
+  });
+  assert.equal(output.agent_cli_launch.private_carrier_substrate.relation, 'transitional_private_adapter');
+  assert.equal(output.agent_cli_launch.private_carrier_substrate.package, '@narada2/agent-cli');
   assert.equal(output.agent_cli_launch.control_transport, 'jsonl_sideband_file');
   assert.equal(output.agent_cli_launch.reads_only_target_site_mcp_fabric, true);
   assert.equal(output.agent_cli_launch.user_site_mcp_injected, false);

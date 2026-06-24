@@ -53,7 +53,7 @@ Load-bearing boundaries:
 | Launcher planner | Selecting agents, Sites, runtime choice, and launch packet validation. | Provider execution, conversation state, tool execution. |
 | `@narada2/agent-start` | Identity/session/event creation, Site MCP fabric validation, provider selection, credential projection, launch result materialization. | Runtime protocol, slash command semantics, provider turn loop. |
 | `@narada2/agent-runtime-server` | Stable machine-addressable session entrypoint, protocol projection, session handoff, carrier-server wrapper. | Provider credentials, task truth, external effect authority. |
-| Carrier substrate, currently `@narada2/agent-cli` | MCP client, provider turn loop, operator projection, session operations, slash-command execution. | NARS package authority or launcher planning. |
+| Private carrier substrate, currently `@narada2/agent-cli --carrier-server-substrate` | MCP client, provider turn loop, carrier-local session operations, slash-command execution, and event emission under NARS supervision. | Public NARS package authority, launcher planning, or terminal-client attach/projection responsibilities. |
 | Authority MCP surfaces | Admitted mutations and authoritative facts. | Model judgment or carrier convenience. |
 
 ## Session Binding
@@ -94,11 +94,25 @@ Minimum request methods:
 | `conversation.send` | Submit one operator/automation turn and run until terminal state. |
 | `conversation.interrupt` | Request bounded interruption of an active turn. |
 | `session.status` | Inspect identity, readiness, active turn, MCP posture, and blockers. |
+| `session.health` | Return the stable runtime health probe shape used by local health transports. |
+| `session.events.subscribe` | Attach to the runtime event stream with replay, filters, and cursor semantics. |
 | `session.resume` | Reattach to an existing session handle. |
 | `session.close` | Close or hand off a session with terminal evidence. |
 | `command.execute` | Execute a slash/operator command through the carrier command contract. |
 
 Human terminal input is not raw JSONL. A terminal attached to NARS is a projection of the protocol: ordinary lines become `conversation.send`, slash commands become `command.execute`, and status/help affordances render from runtime state.
+
+## Client And Runtime Split
+
+NARS is the runtime owner. `@narada2/agent-runtime-server` owns session binding, provider/carrier turn execution, MCP fabric hosting, tool dispatch, durable `events.jsonl`, status/health/event subscription state, and lifecycle hook dispatch. Client packages must not silently recreate those responsibilities.
+
+`@narada2/agent-cli`, `agent-tui`, and future `agent-web-ui` are peer clients/projections over the NARS protocol. Their durable responsibilities are terminal/UI input handling, human-readable event rendering, local command affordances, and explicit attach/resume UX. In attach mode, ordinary operator text becomes `conversation.send`; slash commands become protocol frames such as `command.execute`, `session.status`, `session.health`, `session.events.subscribe`, `conversation.interrupt`, and `session.close`; incoming event envelopes are rendered through the client projection.
+
+Temporary compatibility paths are admitted only while launchers and tests migrate: public `agent-cli --server` is a compatibility alias that delegates to `@narada2/agent-runtime-server`; the runtime server may invoke the private `@narada2/agent-cli --carrier-server-substrate` adapter while the current carrier implementation is being split further. `@narada2/agent-cli` may retain `agent-runtime-server` compatibility shim exports that delegate to `@narada2/agent-runtime-server`.
+
+### Compatibility Removal Criteria
+
+Remove those compatibility paths only when registered launchers resolve `narada-agent-runtime-server` from `@narada2/agent-runtime-server`, attach-mode clients cover operator workflows, and runtime/provider/MCP tests live under the NARS owning package.
 
 ## Event Shape
 
@@ -134,6 +148,120 @@ Events should include stable identity fields whenever possible:
 
 Tool events must preserve the distinction between request, admission/refusal, execution attempt, result, and external confirmation. A successful tool call is not itself authority or confirmation.
 
+## Runtime Health Contract
+
+NARS health is owned by `@narada2/agent-runtime-server`. Its authoritative method is `session.health`; HTTP `GET /health`, terminal `/status` summaries, and launcher discovery fields are projections of the same runtime health builder. Site/control-plane health endpoints remain separate surfaces with separate owners.
+
+`session.health` is a small local probe for runtime liveness, readiness, and operator posture. It does not replace `session.status`: `session.status` may expose richer session operations, command handoffs, queue posture, and debugging detail, while `session.health` must stay stable enough for supervisors and operator tools to poll. It also does not replace `heartbeat.json`: the heartbeat file is durable on-disk evidence written for crash/recovery observation, while `session.health` is a request/response projection of current runtime state that may reference heartbeat freshness.
+
+The response schema is `narada.nars.health.v1`:
+
+```json
+{
+  "schema": "narada.nars.health.v1",
+  "status": "healthy",
+  "generated_at": "2026-06-23T00:00:00.000Z",
+  "agent_id": "sonar.resident",
+  "session_id": "carrier_...",
+  "site_root": "D:/code/narada.sonar",
+  "runtime": "narada-agent-runtime-server",
+  "runtime_mode": "server",
+  "started_at": "2026-06-23T00:00:00.000Z",
+  "heartbeat": {
+    "path": "D:/code/narada.sonar/.narada/crew/nars-sessions/carrier_.../heartbeat.json",
+    "last_written_at": "2026-06-23T00:00:00.000Z",
+    "age_ms": 250,
+    "freshness": "fresh"
+  },
+  "mcp": {
+    "operational_state": "healthy",
+    "server_count": 15,
+    "startup_failure_count": 0,
+    "runtime_fault_count": 0
+  },
+  "activity": {
+    "last_event_kind": "turn_complete",
+    "last_event_at": "2026-06-23T00:00:00.000Z",
+    "active_turn_state": null,
+    "last_terminal_state": "completed"
+  },
+  "posture": {
+    "request_posture": "clean",
+    "operational_posture": "healthy"
+  },
+  "recommended_action": "review_session_summary",
+  "recommended_command": "narada-agent-cli --identity sonar.resident --session carrier_... --session-read"
+}
+```
+
+Allowed `status` values are `starting`, `healthy`, `degraded`, `unhealthy`, and `closing`. `healthy` means the runtime accepted its binding, the session event loop is alive, MCP posture is usable, and heartbeat freshness is within the configured local threshold. `degraded` means the runtime can still answer and may accept some operations, but one or more posture components require attention, such as MCP startup/runtime faults or stale heartbeat evidence. `unhealthy` means the runtime cannot safely accept meaningful work, has lost required binding, or has a runtime-level fault that should drive recovery. `starting` and `closing` are bounded transition states.
+
+Heartbeat freshness is reported as `fresh`, `stale`, `missing`, or `unknown`. Implementations should compute it from one shared runtime helper so `session.health`, HTTP `/health`, and terminal/status projection agree. Freshness thresholds are local runtime policy, not Site law; if no threshold is configured, the response must report `unknown` rather than inventing authority.
+
+HTTP `GET /health` is a local-only projection of `session.health`. It should bind to loopback by default and must not expose provider credentials, raw MCP secrets, global Codex configuration, or external management operations. A non-2xx status is reserved for `unhealthy` runtime conditions defined above; `degraded` may still return 200 with a degraded body unless a caller explicitly requests readiness semantics.
+
+NARS does not define a separate HTTP `GET /ready` endpoint yet. Readiness is a field in `session.health`/`/health` until a concrete supervisor or load-balancer contract needs a distinct endpoint.
+
+## Event Subscription Contract
+
+NARS event subscription is owned by `@narada2/agent-runtime-server`. The canonical protocol method is `session.events.subscribe`; WebSocket `/events`, raw stdout JSONL, terminal projections, and future SSE transports are projections or compatibility surfaces over the same sequenced runtime event stream.
+
+`session.events.subscribe` request parameters:
+
+```json
+{
+  "id": "events-1",
+  "method": "session.events.subscribe",
+  "params": {
+    "include_replay": true,
+    "since_sequence": 42,
+    "since_timestamp": "2026-06-23T00:00:00.000Z",
+    "max_replay": 100,
+    "filters": {
+      "event_kinds": ["assistant_message", "tool_call", "tool_result"],
+      "families": ["session", "turn"],
+      "request_id": "input_...",
+      "turn_id": "turn_..."
+    }
+  }
+}
+```
+
+`since_sequence` is preferred over `since_timestamp` when both are present. Sequence numbers are monotonically increasing within one NARS session and are exposed as both `event_sequence` and `sequence` for compatibility while the vocabulary settles. `include_replay=false` starts at the next live event. `max_replay` is bounded by runtime policy; implementations must not replay unbounded transcripts to a slow or newly attached client.
+
+The subscription acknowledgement schema is `narada.nars.events.subscription.v1`:
+
+```json
+{
+  "schema": "narada.nars.events.subscription.v1",
+  "event": "session_events_subscription_started",
+  "request_id": "events-1",
+  "subscription_id": "sub_events-1",
+  "transport": "websocket",
+  "replay_count": 3,
+  "cursor": { "last_sequence": 45, "next_sequence": 46 },
+  "filters": {}
+}
+```
+
+Live and replayed events are wrapped for subscription transports using `narada.nars.events.envelope.v1`:
+
+```json
+{
+  "schema": "narada.nars.events.envelope.v1",
+  "event": "session_event",
+  "subscription_id": "sub_events-1",
+  "cursor": { "sequence": 46, "next_sequence": 47 },
+  "payload": { "event": "assistant_message", "event_sequence": 46 }
+}
+```
+
+Backpressure is local-runtime policy. The minimum contract is deterministic bounded buffering: slow subscribers may be dropped or receive a structured error, but must not block the carrier event loop or corrupt durable `events.jsonl`. Reconnect uses the last acknowledged `cursor.sequence` as `since_sequence`; clients should tolerate idempotent replay of the last seen event and de-duplicate by sequence.
+
+WebSocket `ws://127.0.0.1:<port>/events` is the first durable co-presence projection. It is local-bound by default, sends `session.events.subscribe` acknowledgements and event envelopes over the socket, and accepts ordinary NARS protocol frames such as `session.status`, `session.health`, `conversation.send`, `conversation.interrupt`, `command.execute`, and `session.close` by forwarding them into the same runtime session. It must not synthesize a second provider/carrier runtime and must not fall back to ambient global MCP or Codex configuration.
+
+Raw stdout JSONL remains a compatibility projection for single attached processes. Durable `events.jsonl` remains the readback/recovery log. Lifecycle hooks remain callbacks correlated with events; they are not the event subscription authority and must not replace `session.events.subscribe` for client co-presence.
+
 ## Lifecycle Hook Contract
 
 Lifecycle hooks are runtime callbacks correlated with emitted events. They are not evidence events, are not authority records, and must not be treated as confirmation that an external effect occurred. Evidence remains the structured event stream and the relevant MCP authority surface.
@@ -150,7 +278,7 @@ Invoker owner:
 @narada2/agent-runtime-server
 ```
 
-The current implementation invokes hooks at the runtime-server wrapper boundary while the carrier substrate remains `@narada2/agent-cli`. Future carrier adapters must map their native events into the same NARS lifecycle vocabulary before dispatching hooks.
+The current implementation invokes hooks at the runtime-server boundary while the private carrier substrate remains `@narada2/agent-cli --carrier-server-substrate`. Future carrier adapters must map their native events into the same NARS lifecycle vocabulary before dispatching hooks.
 
 ### Hook Payload
 
@@ -269,10 +397,10 @@ The command vocabulary should be sourced from `@narada2/carrier-command-contract
 
 NARS is vendor-neutral. Carrier substrates are replaceable adapters behind the NARS contract.
 
-Current carrier substrate:
+Current private carrier substrate:
 
 ```text
-@narada2/agent-cli server substrate
+@narada2/agent-cli --carrier-server-substrate
 ```
 
 Allowed adapter responsibilities:
@@ -281,14 +409,15 @@ Allowed adapter responsibilities:
 - load the Site MCP fabric passed by launch materialization;
 - execute provider turns;
 - emit normalized session and turn events;
-- render a human terminal projection when requested;
-- expose session operations needed by automation and observers.
+- expose carrier-local session operations needed by automation and observers.
 
 Forbidden adapter ownership:
 
 - choosing Site root from ambient Codex/global config;
 - choosing provider defaults outside launch materialization;
 - owning the stable NARS binary name;
+- owning public server request admission, status/health projection, event subscription, or lifecycle dispatch outside `@narada2/agent-runtime-server`;
+- rendering terminal-client projections from the private carrier substrate path;
 - treating vendor SDK permission state as Narada authority;
 - converting slash commands into model prompts;
 - mutating task/mail/outbox state without the relevant MCP authority surface.

@@ -593,7 +593,7 @@ When proposing changes that touch public types, docs, or package surfaces, verif
 | [`docs/concepts/authority-revealing-inversion.md`](docs/concepts/authority-revealing-inversion.md) | Authority-revealing review lens | Reviewing artifact-first proposals |
 | [`docs/concepts/capa-operation.md`](docs/concepts/capa-operation.md) | Corrective/preventive action | Handling recurrence-risk incidents |
 | [`docs/concepts/agent-carrier.md`](docs/concepts/agent-carrier.md) | Agent Carrier concept and launch packet contract | Understanding how carriers embody agents without owning authority |
-| [`docs/concepts/nars-runtime-contract.md`](docs/concepts/nars-runtime-contract.md) | NARS runtime contract | Implementing or verifying runtime-server events, lifecycle hooks, and carrier adapters |
+| [`docs/concepts/nars-runtime-contract.md`](docs/concepts/nars-runtime-contract.md) | NARS runtime contract | Implementing or verifying runtime-server package authority, canonical entrypoint, compatibility shims, lifecycle hooks, and carrier adapters |
 | [`docs/concepts/reactor-pattern.md`](docs/concepts/reactor-pattern.md) | Reactor pattern for chat/agent reactions | Designing a component that evaluates facts and proposes effects |
 
 ---

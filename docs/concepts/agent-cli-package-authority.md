@@ -42,7 +42,7 @@ prompts, directives, and runtime state. They must not own carrier implementation
 provider resolution, streaming behavior, slash commands, or directive sideband
 semantics.
 
-`C:\Users\Andrey\Narada` is the operator/user-site control surface. It may contain launchers, registry configuration, and operator affordances, but it delegates carrier execution to Narada proper's packaged `narada-agent-cli` and machine-addressable runtime-server execution to `narada-agent-runtime-server`.
+`C:\Users\Andrey\Narada` is the operator/user-site control surface. It may contain launchers, registry configuration, and operator affordances, but machine-addressable carrier execution delegates to Narada proper's packaged `narada-agent-runtime-server` entrypoint. The runtime server may still use the packaged `narada-agent-cli --carrier-server-substrate` adapter internally as a transitional private substrate.
 
 Site-local `start-agent.mjs` files are no longer admitted compatibility shims. Agent startup authority is the packaged `@narada2/agent-start` TypeScript entrypoint, reached through the site PowerShell surface or package bin metadata.
 
@@ -53,8 +53,8 @@ Site-local `start-agent.mjs` files are no longer admitted compatibility shims. A
 - resolve the target Site root and workspace root;
 - pass launch identity, session, model, provider, and control JSONL path;
 - render operator-facing launch status;
-- choose the packaged `narada-agent-cli` binary for direct interactive carrier execution;
-- choose the packaged `narada-agent-runtime-server` binary for machine-addressable server execution.
+- choose the packaged `narada-agent-runtime-server` binary for machine-addressable carrier execution;
+- use direct `narada-agent-cli` execution only as a documented compatibility fallback or private runtime-server substrate.
 
 It must not:
 

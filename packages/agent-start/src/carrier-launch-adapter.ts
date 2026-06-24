@@ -355,7 +355,18 @@ export function buildAgentCliLaunchPacket(runtimeName, {
   return {
     schema: 'narada.agent_start.agent_cli.v0',
     control_transport: 'jsonl_sideband_file',
-    carrier_relation: 'interactive_agent_cli',
+    carrier_relation: 'narada_agent_runtime_server',
+    runtime_server: {
+      package: '@narada2/agent-runtime-server',
+      entrypoint: 'narada-agent-runtime-server',
+      compatibility_alias: 'agent-runtime-server',
+    },
+    private_carrier_substrate: {
+      package: '@narada2/agent-cli',
+      entrypoint: 'narada-agent-cli',
+      mode: '--carrier-server-substrate',
+      relation: 'transitional_private_adapter',
+    },
     command: processExecPath,
     session_dir: dirname(siteCarrierControlPath(sessionId)),
     control_path: siteCarrierControlPath(sessionId),

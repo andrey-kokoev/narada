@@ -69,13 +69,15 @@ function assertModernAgentCliLaunch(result) {
   assert.equal(result.tool_fabric_adapter_kind, 'narada-agent-cli-mcp-client');
   assert.equal(result.agent_cli_launch.schema, 'narada.agent_start.agent_cli.v0');
   assert.equal(result.agent_cli_launch.control_transport, 'jsonl_sideband_file');
-  assert.equal(result.agent_cli_launch.carrier_relation, 'interactive_agent_cli');
+  assert.equal(result.agent_cli_launch.carrier_relation, 'narada_agent_runtime_server');
+  assert.equal(result.agent_cli_launch.runtime_server.package, '@narada2/agent-runtime-server');
+  assert.equal(result.agent_cli_launch.runtime_server.entrypoint, 'narada-agent-runtime-server');
+  assert.equal(result.agent_cli_launch.private_carrier_substrate.relation, 'transitional_private_adapter');
   assert.equal(result.agent_cli_launch.command, process.execPath);
-  assert.equal(result.runtime_args[0].endsWith('narada-agent-cli.mjs'), true);
+  assert.equal(result.runtime_args[0].endsWith('agent-runtime-server.mjs'), true);
   assert.equal(result.runtime_args.includes('--session'), true);
   assert.equal(result.runtime_args.includes(result.carrier_session.carrier_session_id), true);
-  assert.equal(result.runtime_args.includes('--control-jsonl'), true);
-  assert.equal(result.runtime_args.includes(result.agent_cli_launch.control_path), true);
+  assert.equal(result.runtime_args.includes('--control-jsonl'), false);
   assert.match(result.agent_cli_launch.control_path, /[\\/]\.narada[\\/]crew[\\/]nars-sessions[\\/]carrier_/);
 }
 
