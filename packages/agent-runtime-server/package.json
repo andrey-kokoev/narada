@@ -12,7 +12,8 @@
       "runtime_lifecycle_hooks",
       "carrier_substrate_handoff"
     ],
-    "carrier_substrate": "@narada2/agent-cli --carrier-server-substrate"
+    "carrier_substrate": "@narada2/carrier-runtime in-process",
+    "compatibility_dependency_adapter": "@narada2/agent-cli runtime helper exports until request handlers and turn/tool execution move fully into @narada2/carrier-runtime"
   },
   "bin": {
     "narada-agent-runtime-server": "./bin/narada-agent-runtime-server.mjs",
@@ -29,6 +30,7 @@
   },
   "dependencies": {
     "@narada2/agent-cli": "workspace:*",
+    "@narada2/carrier-runtime": "workspace:*",
     "@narada2/carrier-protocol": "workspace:*"
   }
 }

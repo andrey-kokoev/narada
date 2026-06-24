@@ -3,14 +3,19 @@ import {
   isNarsRuntimeEventKind,
   normalizeNarsRuntimeEventKind,
 } from '../../carrier-protocol/src/carrier-protocol.mjs';
+import { normalizeCarrierRuntimeContext } from './carrier-runtime-context.mjs';
 
 export async function runCarrierServerMode({
   input = process.stdin,
   output = process.stdout,
   callChatApiFn,
   config,
+  runtimeContext,
   dependencies,
 } = {}) {
+  const ctx = runtimeContext
+    ? normalizeCarrierRuntimeContext(runtimeContext)
+    : normalizeCarrierRuntimeContext(config);
   const {
     identity,
     session,
@@ -19,14 +24,14 @@ export async function runCarrierServerMode({
     eventsPath,
     intelligenceProvider,
     narsDelegatedAuthorityHandoff = null,
-    transcriptDisplaySettings = {},
-    sessionSettings = {},
+    displaySettings = {},
+    providerSettings = {},
     operationHeartbeatDirectiveEnabled = false,
     operationHeartbeatDirectiveIntervalMs,
     operationHeartbeatDirectiveInitialDelayMs,
     healthUrl = null,
     eventStreamUrl = null,
-  } = config ?? {};
+  } = ctx;
   const {
     discoverAndStartMcpServers,
     aggregateTools,
@@ -64,8 +69,8 @@ export async function runCarrierServerMode({
   const state = {
     activeTurn: null,
     closed: false,
-    displaySettings: { ...transcriptDisplaySettings },
-    sessionSettings: { ...sessionSettings },
+    displaySettings: { ...displaySettings },
+    sessionSettings: { ...providerSettings },
     pendingRequests: new Set(),
     startedAt: new Date().toISOString(),
     sessionEventCount: 0,
@@ -137,7 +142,7 @@ export async function runCarrierServerMode({
     ...createOperationalPostureSnapshot({ state, mcpOperationalState: mcpStatus.mcp_operational_state }),
     tool_count: allTools.length,
     mcp_servers: mcpServerSummaryEntries(mcpServers),
-    tool_outputs: transcriptDisplaySettings.toolOutputs ? 'shown' : 'hidden',
+    tool_outputs: displaySettings.toolOutputs ? 'shown' : 'hidden',
     approvals: 'disabled',
     help: '/help',
     health_endpoint: healthUrl,

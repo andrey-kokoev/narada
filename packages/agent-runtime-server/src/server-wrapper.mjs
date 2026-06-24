@@ -1,9 +1,8 @@
-import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
-import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
-import { createProjectedTerminalBridge } from '@narada2/agent-cli/projected-terminal';
+import { PassThrough } from 'node:stream';
+import { createCarrierRuntimeContext } from '@narada2/carrier-runtime/carrier-runtime-context';
+import { runCarrierServerMode } from '@narada2/carrier-runtime/server-mode';
 import {
   formatPreflightWorkflowEvent,
   formatPreflightWorkflowSummary,
@@ -24,13 +23,6 @@ import {
   lifecycleBindingFromArgs,
   lifecycleHookFailureLine,
 } from './lifecycle-hooks.mjs';
-
-const require = createRequire(import.meta.url);
-
-function agentCliBinPath() {
-  const packageJsonPath = require.resolve('@narada2/agent-cli/package.json');
-  return join(dirname(packageJsonPath), 'bin', 'narada-agent-cli.mjs');
-}
 
 function websocketAcceptValue(key) {
   return createHash('sha1')
@@ -220,6 +212,49 @@ function parseEventStreamOptions(args, env = process.env) {
   };
 }
 
+async function loadCompatibilityRuntimeDependencies() {
+  const [agentCli, projectedTerminal] = await Promise.all([
+    import('@narada2/agent-cli'),
+    import('@narada2/agent-cli/projected-terminal'),
+  ]);
+  const dependencyNames = [
+    'discoverAndStartMcpServers',
+    'aggregateTools',
+    'createMcpStatusSnapshot',
+    'readMcpPreflightArtifact',
+    'createMcpPreflightArtifactSnapshot',
+    'loadRolePrompt',
+    'loadSession',
+    'createInputQueue',
+    'runServerInputEvent',
+    'emitServerEvent',
+    'recordMcpPreflightArtifactLinkage',
+    'recordMcpStartupFailures',
+    'createOperationHeartbeatDirectiveEmitter',
+    'handleServerRequestLine',
+    'closeMcpServers',
+    'recordSessionRequestIssue',
+    'noteSessionActivity',
+    'createSessionActivitySnapshot',
+    'createOperationalPostureSnapshot',
+    'mcpServerSummaryEntries',
+    'normalizeCarrierGoalState',
+    'carrierGoalStatusLabel',
+    'recordCarrierDiagnostic',
+  ];
+  const dependencies = {};
+  for (const name of dependencyNames) {
+    if (typeof agentCli[name] !== 'function') throw new Error(`missing_agent_cli_runtime_helper:${name}`);
+    dependencies[name] = agentCli[name];
+  }
+  if (typeof agentCli.callChatApi !== 'function') throw new Error('missing_agent_cli_runtime_helper:callChatApi');
+  return {
+    callChatApiFn: agentCli.callChatApi,
+    dependencies,
+    createProjectedTerminalBridge: projectedTerminal.createProjectedTerminalBridge,
+  };
+}
+
 function eventMatchesFilters(event, filters = {}) {
   if (!filters || typeof filters !== 'object') return true;
   const eventKind = event.event ?? event.event_kind ?? null;
@@ -334,12 +369,8 @@ function parseHealthOptions(args, env = process.env) {
   };
 }
 
-function carrierSubstrateArgs(forwardedArgs = []) {
-  if (forwardedArgs.includes('--carrier-server-substrate')) return forwardedArgs;
-  if (forwardedArgs.includes('--server')) {
-    return forwardedArgs.map((arg) => (arg === '--server' ? '--carrier-server-substrate' : arg));
-  }
-  return ['--carrier-server-substrate', ...forwardedArgs];
+function carrierRuntimeArgs(forwardedArgs = []) {
+  return forwardedArgs.filter((arg) => arg !== '--server' && arg !== '--carrier-server-substrate');
 }
 
 function argValue(args = [], name) {
@@ -376,8 +407,8 @@ function createDelegatedAuthorityHandoff({ args = [], env = process.env, generat
       entrypoint: 'narada-agent-runtime-server',
     },
     target: {
-      package: '@narada2/agent-cli',
-      mode: 'carrier-server-substrate',
+      package: '@narada2/carrier-runtime',
+      mode: 'in-process',
     },
     generated_at: generatedAt,
     agent_id: binding.agent_id,
@@ -495,7 +526,7 @@ async function main() {
   const rawJsonl = requestedArgs.includes('--raw-jsonl');
   const parsedHealth = parseHealthOptions(requestedArgs.filter((arg) => arg !== '--wrapper-events-jsonl' && arg !== '--raw-jsonl'));
   const parsedEvents = parseEventStreamOptions(parsedHealth.forwardedArgs);
-  const args = carrierSubstrateArgs(parsedEvents.forwardedArgs);
+  const args = carrierRuntimeArgs(parsedEvents.forwardedArgs);
   const lifecycleDispatcher = createNarsLifecycleHookDispatcher();
   const lifecycleBinding = lifecycleBindingFromArgs(args, process.env);
   const delegatedAuthorityHandoff = createDelegatedAuthorityHandoff({ args, env: process.env });
@@ -509,38 +540,29 @@ async function main() {
   let healthProjection = null;
   let eventStreamProjection = null;
   const eventHub = createEventHub();
-  const childEnv = { ...process.env };
-  let child = null;
+  const runtimeInput = new PassThrough();
+  const runtimeOutput = new PassThrough();
   if (parsedHealth.health.enabled) {
     healthProjection = await startHealthProjection({
-      childStdin: () => child?.stdin,
+      childStdin: () => runtimeInput,
       host: parsedHealth.health.host,
       port: parsedHealth.health.port,
     });
-    childEnv.NARADA_HEALTH_URL = healthProjection.url;
     process.env.NARADA_HEALTH_URL = healthProjection.url;
   }
   if (parsedEvents.events.enabled) {
     eventStreamProjection = await startEventStreamProjection({
-      childStdin: () => child?.stdin,
+      childStdin: () => runtimeInput,
       eventHub,
       host: parsedEvents.events.host,
       port: parsedEvents.events.port,
     });
-    childEnv.NARADA_EVENT_STREAM_URL = eventStreamProjection.url;
-    childEnv.NARADA_WEBSOCKET_URL = eventStreamProjection.url;
     process.env.NARADA_EVENT_STREAM_URL = eventStreamProjection.url;
     process.env.NARADA_WEBSOCKET_URL = eventStreamProjection.url;
   }
-  child = spawn(process.execPath, [agentCliBinPath(), ...args], {
-    stdio: [rawJsonl ? 'inherit' : 'pipe', 'pipe', 'pipe'],
-    env: {
-      ...childEnv,
-      NARADA_NARS_AUTHORITY_HANDOFF: JSON.stringify(delegatedAuthorityHandoff),
-    },
-    cwd: process.cwd(),
-    windowsHide: false,
-  });
+  process.env.NARADA_NARS_AUTHORITY_HANDOFF = JSON.stringify(delegatedAuthorityHandoff);
+
+  const compatibilityRuntime = await loadCompatibilityRuntimeDependencies();
 
   const state = {
     startupSummaryPrinted: false,
@@ -552,15 +574,17 @@ async function main() {
   let renderProjectedEvent = () => [];
 
   if (!rawJsonl) {
-    const projectedTerminal = createProjectedTerminalBridge({
+    const projectedTerminal = compatibilityRuntime.createProjectedTerminalBridge({
       input: process.stdin,
       output: process.stdout,
-      childStdin: child.stdin,
+      childStdin: runtimeInput,
     });
     writeProjectedOutput = projectedTerminal.writeProjectedOutput;
     renderProjectedEvent = projectedTerminal.renderEvent;
+  } else {
+    process.stdin.pipe(runtimeInput);
   }
-  child.stdout.on('data', (chunk) => {
+  runtimeOutput.on('data', (chunk) => {
     const text = String(chunk);
     if (rawJsonl) process.stdout.write(text);
     stdoutBuffer += text;
@@ -594,32 +618,51 @@ async function main() {
     }
   });
 
-  child.stderr.on('data', (chunk) => {
-    process.stderr.write(String(chunk));
-  });
-
-  child.on('error', (error) => {
+  try {
+    await runCarrierServerMode({
+      input: runtimeInput,
+      output: runtimeOutput,
+      callChatApiFn: compatibilityRuntime.callChatApiFn,
+      runtimeContext: createCarrierRuntimeContext({
+        identity: lifecycleBinding.agent_id,
+        session: lifecycleBinding.session_id,
+        siteRoot: process.env.NARADA_SITE_ROOT,
+        intelligenceProvider: process.env.NARADA_INTELLIGENCE_PROVIDER,
+        narsDelegatedAuthorityHandoff: delegatedAuthorityHandoff,
+        providerSettings: {
+          model: process.env.NARADA_AI_MODEL ?? process.env.CODEX_MODEL,
+          thinking: process.env.NARADA_AI_THINKING,
+          stream: process.env.NARADA_AGENT_CLI_STREAM !== '0',
+        },
+        displaySettings: {
+          toolOutputs: process.env.NARADA_AGENT_CLI_TOOL_OUTPUTS !== '0',
+        },
+        operationHeartbeatDirectiveEnabled: process.env.NARADA_OPERATION_HEARTBEAT_DIRECTIVE_ENABLED === '1',
+        operationHeartbeatDirectiveIntervalMs: Number.parseInt(process.env.NARADA_OPERATION_HEARTBEAT_DIRECTIVE_INTERVAL_MS ?? '60000', 10),
+        operationHeartbeatDirectiveInitialDelayMs: Number.parseInt(process.env.NARADA_OPERATION_HEARTBEAT_DIRECTIVE_INITIAL_DELAY_MS ?? '60000', 10),
+        healthUrl: process.env.NARADA_HEALTH_URL ?? null,
+        eventStreamUrl: process.env.NARADA_EVENT_STREAM_URL ?? null,
+      }),
+      dependencies: compatibilityRuntime.dependencies,
+    });
+    healthProjection?.rejectAll(new Error('carrier_closed'));
+    healthProjection?.server.close();
+    eventStreamProjection?.server.close();
+    process.exit(0);
+  } catch (error) {
     healthProjection?.rejectAll(error);
     healthProjection?.server.close();
     eventStreamProjection?.server.close();
-    console.error(`[agent-runtime-server] failed to start carrier: ${error.message}`);
+    console.error(`[agent-runtime-server] carrier runtime failed: ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
-  });
-
-  const exitCode = await new Promise((resolve) => {
-    child.on('close', (code) => resolve(typeof code === 'number' ? code : 1));
-  });
-  healthProjection?.rejectAll(new Error('carrier_closed'));
-  healthProjection?.server.close();
-  eventStreamProjection?.server.close();
-  process.exit(exitCode);
+  }
 }
 
 export {
-  agentCliBinPath,
   parseHealthOptions,
   parseEventStreamOptions,
-  carrierSubstrateArgs,
+  carrierRuntimeArgs,
+  loadCompatibilityRuntimeDependencies,
   createDelegatedAuthorityHandoff,
   createEventHub,
   startHealthProjection,

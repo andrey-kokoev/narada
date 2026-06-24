@@ -131,6 +131,9 @@ importers:
       '@narada2/carrier-protocol':
         specifier: workspace:*
         version: link:../carrier-protocol
+      '@narada2/carrier-runtime':
+        specifier: workspace:*
+        version: link:../carrier-runtime
 
   packages/agent-start:
     dependencies:
@@ -158,6 +161,18 @@ importers:
   packages/carrier-rendering-contract: {}
 
   packages/carrier-routing-contract: {}
+
+  packages/carrier-runtime:
+    dependencies:
+      '@narada2/carrier-action-admission':
+        specifier: workspace:*
+        version: link:../carrier-action-admission
+      '@narada2/carrier-provider-contract':
+        specifier: workspace:*
+        version: link:../carrier-provider-contract
+      '@narada2/mcp-fabric':
+        specifier: workspace:*
+        version: link:../mcp-fabric
 
   packages/carrier-runtime-contract: {}
 

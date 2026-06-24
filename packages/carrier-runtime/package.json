@@ -14,6 +14,7 @@
   },
   "exports": {
     ".": "./src/index.mjs",
+    "./carrier-runtime-context": "./src/carrier-runtime-context.mjs",
     "./provider-adapters": "./src/provider-adapters.mjs",
     "./provider-resolution": "./src/provider-resolution.mjs",
     "./mcp-runtime": "./src/mcp-runtime.mjs",
@@ -22,7 +23,7 @@
   },
   "scripts": {
     "test": "node --test src/*.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/provider-adapters.mjs src/provider-resolution.mjs src/mcp-runtime.mjs src/server-mode.mjs"
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/provider-adapters.mjs src/provider-resolution.mjs src/mcp-runtime.mjs src/server-mode.mjs src/carrier-runtime-context.mjs"
   },
   "dependencies": {
     "@narada2/carrier-action-admission": "workspace:*",
