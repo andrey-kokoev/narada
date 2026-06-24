@@ -8,6 +8,7 @@
     "owns": [
       "provider_runtime_adapters",
       "mcp_runtime_fabric",
+      "carrier_server_mode",
       "carrier_substrate_support_modules"
     ]
   },
@@ -16,11 +17,12 @@
     "./provider-adapters": "./src/provider-adapters.mjs",
     "./provider-resolution": "./src/provider-resolution.mjs",
     "./mcp-runtime": "./src/mcp-runtime.mjs",
+    "./server-mode": "./src/server-mode.mjs",
     "./package.json": "./package.json"
   },
   "scripts": {
     "test": "node --test src/*.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/provider-adapters.mjs src/provider-resolution.mjs src/mcp-runtime.mjs"
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/provider-adapters.mjs src/provider-resolution.mjs src/mcp-runtime.mjs src/server-mode.mjs"
   },
   "dependencies": {
     "@narada2/carrier-action-admission": "workspace:*",
