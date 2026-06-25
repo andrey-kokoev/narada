@@ -61,6 +61,54 @@ function commandFrame(command, value = '') {
   };
 }
 
+export const BRACKETED_PASTE_START = '\x1b[200~';
+export const BRACKETED_PASTE_END = '\x1b[201~';
+
+export function countReadlineSubmissionsForPaste(value) {
+  return (String(value ?? '').match(/\r\n|\r|\n/g) ?? []).length;
+}
+
+export function createBracketedPasteComposer({ onPaste = () => {}, onSuppressLines = () => {} } = {}) {
+  let active = false;
+  let buffer = '';
+
+  return {
+    feed(chunk) {
+      let text = Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk ?? '');
+      let observedPaste = false;
+      while (text) {
+        if (!active) {
+          const startIndex = text.indexOf(BRACKETED_PASTE_START);
+          if (startIndex === -1) return observedPaste;
+          observedPaste = true;
+          active = true;
+          buffer = '';
+          text = text.slice(startIndex + BRACKETED_PASTE_START.length);
+          continue;
+        }
+
+        const endIndex = text.indexOf(BRACKETED_PASTE_END);
+        if (endIndex === -1) {
+          buffer += text;
+          return true;
+        }
+
+        buffer += text.slice(0, endIndex);
+        const pastedText = buffer;
+        buffer = '';
+        active = false;
+        onSuppressLines(countReadlineSubmissionsForPaste(pastedText));
+        onPaste(pastedText);
+        text = text.slice(endIndex + BRACKETED_PASTE_END.length);
+      }
+      return observedPaste;
+    },
+    isActive() {
+      return active;
+    },
+  };
+}
+
 export function createProjectedSlashCommandAction(line) {
   const trimmed = String(line ?? '').trim();
   if (!trimmed) return null;

@@ -1,7 +1,10 @@
 import readline from 'node:readline';
 import { createTerminalStyle, formatTerminalMessageBlockLines } from './terminal-style.mjs';
 import {
+  BRACKETED_PASTE_END,
+  BRACKETED_PASTE_START,
   createExplicitJsonControlFrame,
+  createBracketedPasteComposer,
   createOperatorConversationFrame,
   createProjectedSlashCommandAction,
   projectedHelpText,
@@ -109,40 +112,42 @@ export function createProjectedTerminalBridge({
   });
   const writeProjectedOutput = createProjectedOutputWriter({ rl, interactive, output });
   const operatorState = { streamedTurns: new Set(), style };
+  let suppressedPasteLineEvents = 0;
 
-  if (interactive) rl.prompt();
-  rl.on('line', (line) => {
-    const explicitJsonControl = createExplicitJsonControlFrame(line);
-    if (explicitJsonControl) {
-      if (explicitJsonControl.error) {
-        writeProjectedOutput(`agent-cli: ${explicitJsonControl.error}\n`);
-      } else {
+  const submitOperatorInput = (line, { forceConversation = false } = {}) => {
+    if (!forceConversation) {
+      const explicitJsonControl = createExplicitJsonControlFrame(line);
+      if (explicitJsonControl) {
+        if (explicitJsonControl.error) {
+          writeProjectedOutput(`agent-cli: ${explicitJsonControl.error}\n`);
+        } else {
+          rewriteInteractivePrompt({ interactive, output, operatorState, line, style });
+          childStdin?.write(`${JSON.stringify(explicitJsonControl.frame)}\n`);
+        }
+        if (interactive && explicitJsonControl.error) rl.prompt(true);
+        return;
+      }
+
+      const slashCommand = createProjectedSlashCommandAction(line);
+      if (slashCommand) {
         rewriteInteractivePrompt({ interactive, output, operatorState, line, style });
-        childStdin?.write(`${JSON.stringify(explicitJsonControl.frame)}\n`);
+        if (slashCommand.kind === 'frame') {
+          childStdin?.write(`${JSON.stringify(slashCommand.frame)}\n`);
+        } else if (slashCommand.kind === 'local_help') {
+          const rendered = formatTerminalMessageBlockLines({
+            label: 'agent-cli',
+            lines: wrapIndentedLines(projectedHelpText(), { indent: '', columns: terminalColumns(operatorState) - 2 }),
+            style,
+            labelStyle: style.label,
+          }).join('\n');
+          writeProjectedOutput(`${rendered}\n`, { preserveCurrentLine: true });
+        } else if (slashCommand.kind === 'clear') {
+          output.write('\x1b[2J\x1b[3J\x1b[H');
+        } else if (slashCommand.kind === 'message') {
+          writeProjectedOutput(`${style.label('agent-cli')}${style.muted(':')} ${slashCommand.message}\n`, { preserveCurrentLine: true });
+        }
+        return;
       }
-      if (interactive && explicitJsonControl.error) rl.prompt(true);
-      return;
-    }
-
-    const slashCommand = createProjectedSlashCommandAction(line);
-    if (slashCommand) {
-      rewriteInteractivePrompt({ interactive, output, operatorState, line, style });
-      if (slashCommand.kind === 'frame') {
-        childStdin?.write(`${JSON.stringify(slashCommand.frame)}\n`);
-      } else if (slashCommand.kind === 'local_help') {
-        const rendered = formatTerminalMessageBlockLines({
-          label: 'agent-cli',
-          lines: wrapIndentedLines(projectedHelpText(), { indent: '', columns: terminalColumns(operatorState) - 2 }),
-          style,
-          labelStyle: style.label,
-        }).join('\n');
-        writeProjectedOutput(`${rendered}\n`, { preserveCurrentLine: true });
-      } else if (slashCommand.kind === 'clear') {
-        output.write('\x1b[2J\x1b[3J\x1b[H');
-      } else if (slashCommand.kind === 'message') {
-        writeProjectedOutput(`${style.label('agent-cli')}${style.muted(':')} ${slashCommand.message}\n`, { preserveCurrentLine: true });
-      }
-      return;
     }
 
     const frame = createOperatorConversationFrame(line);
@@ -155,8 +160,35 @@ export function createProjectedTerminalBridge({
       markThinkingRendered(operatorState, agentId);
     }
     if (frame) childStdin?.write(`${JSON.stringify(frame)}\n`);
+  };
+
+  if (interactive) {
+    output.write('\x1b[?2004h');
+    const pasteComposer = createBracketedPasteComposer({
+      onSuppressLines: (count) => {
+        suppressedPasteLineEvents += count;
+      },
+      onPaste: (text) => {
+        rl.line = '';
+        rl.cursor = 0;
+        submitOperatorInput(text, { forceConversation: /\r|\n/.test(String(text ?? '')) });
+      },
+    });
+    input.prependListener('data', (chunk) => {
+      pasteComposer.feed(chunk);
+    });
+  }
+
+  if (interactive) rl.prompt();
+  rl.on('line', (line) => {
+    if (suppressedPasteLineEvents > 0) {
+      suppressedPasteLineEvents -= 1;
+      return;
+    }
+    submitOperatorInput(line);
   });
   rl.on('close', () => {
+    if (interactive) output.write('\x1b[?2004l');
     childStdin?.end();
   });
 
@@ -179,3 +211,8 @@ function rewriteInteractivePrompt({ interactive, output, operatorState, line, st
   });
   if (rewritten) output.write(rewritten);
 }
+
+export const bracketedPasteControlSequences = {
+  start: BRACKETED_PASTE_START,
+  end: BRACKETED_PASTE_END,
+};

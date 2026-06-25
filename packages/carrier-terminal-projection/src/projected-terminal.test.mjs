@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict';
+import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import {
+  bracketedPasteControlSequences,
   createOperatorStyle,
+  createProjectedTerminalBridge,
   createProjectedSlashCommandAction,
   renderMarkdownForProjectedTerminal,
   renderOperatorEvent,
   styleInlineCode,
 } from './projected-terminal.mjs';
+import { countReadlineSubmissionsForPaste, createBracketedPasteComposer } from './projected-input.mjs';
 
 test('projected slash commands produce NARS protocol frames', () => {
   assert.equal(createProjectedSlashCommandAction('/help').kind, 'local_help');
@@ -59,4 +63,78 @@ test('projected stream renders triple-backtick code blocks as code', () => {
   assert.equal(rendered.length, 1);
   assert.equal(rendered[0].raw.includes('```'), false);
   assert.equal(rendered[0].raw.includes('\x1b[90m  do everything atomically or roll everything back\x1b[0m'), true);
+});
+
+test('bracketed paste composer emits one paste payload and suppresses readline submissions', () => {
+  const pasted = 'Commit: abc\nMessage: hello\n\nWhat changed:\n- one';
+  const seen = [];
+  let suppressed = 0;
+  const composer = createBracketedPasteComposer({
+    onSuppressLines: (count) => { suppressed += count; },
+    onPaste: (text) => { seen.push(text); },
+  });
+
+  assert.equal(countReadlineSubmissionsForPaste(pasted), 4);
+  assert.equal(composer.feed(`${bracketedPasteControlSequences.start}${pasted}${bracketedPasteControlSequences.end}`), true);
+  assert.deepEqual(seen, [pasted]);
+  assert.equal(suppressed, 4);
+  assert.equal(composer.isActive(), false);
+});
+
+test('projected terminal bridge submits bracketed multiline paste as one conversation frame', async () => {
+  const input = new PassThrough();
+  input.isTTY = true;
+  input.setRawMode = () => input;
+  const output = new PassThrough();
+  output.isTTY = true;
+  output.columns = 100;
+  const childStdin = new PassThrough();
+  const frames = [];
+  childStdin.on('data', (chunk) => {
+    for (const line of chunk.toString('utf8').trim().split(/\n/).filter(Boolean)) frames.push(JSON.parse(line));
+  });
+
+  const bridge = createProjectedTerminalBridge({
+    input,
+    output,
+    childStdin,
+    style: createOperatorStyle({ enabled: false }),
+  });
+  const pasted = 'Commit: f08e99bd\nMessage: Move synced email workflow behind SOP shell\n\nWhat changed:\n- Refactored loop body';
+  input.write(`${bracketedPasteControlSequences.start}${pasted}${bracketedPasteControlSequences.end}`);
+  await new Promise((resolve) => setImmediate(resolve));
+  bridge.rl.close();
+
+  assert.equal(frames.length, 1);
+  assert.equal(frames[0].method, 'conversation.send');
+  assert.equal(frames[0].params.message, pasted);
+});
+
+test('projected terminal bridge treats multiline slash-looking paste as conversation text', async () => {
+  const input = new PassThrough();
+  input.isTTY = true;
+  input.setRawMode = () => input;
+  const output = new PassThrough();
+  output.isTTY = true;
+  output.columns = 100;
+  const childStdin = new PassThrough();
+  const frames = [];
+  childStdin.on('data', (chunk) => {
+    for (const line of chunk.toString('utf8').trim().split(/\n/).filter(Boolean)) frames.push(JSON.parse(line));
+  });
+
+  const bridge = createProjectedTerminalBridge({
+    input,
+    output,
+    childStdin,
+    style: createOperatorStyle({ enabled: false }),
+  });
+  const pasted = '/status\nthis is copied prose, not a command sequence';
+  input.write(`${bracketedPasteControlSequences.start}${pasted}${bracketedPasteControlSequences.end}`);
+  await new Promise((resolve) => setImmediate(resolve));
+  bridge.rl.close();
+
+  assert.equal(frames.length, 1);
+  assert.equal(frames[0].method, 'conversation.send');
+  assert.equal(frames[0].params.message, pasted);
 });
