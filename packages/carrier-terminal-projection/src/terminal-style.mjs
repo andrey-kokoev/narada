@@ -5,6 +5,7 @@ export function createTerminalStyle({ enabled = true } = {}) {
     header: (text) => color('36', text),
     tool: (text) => color('35', text),
     assistant: (text) => color('37', text),
+    bold: (text) => color('1', text),
     label: (text) => color('1;36', text),
     operator: (text) => color('1;32', text),
     operatorDirective: (text) => color('1;33', text),
