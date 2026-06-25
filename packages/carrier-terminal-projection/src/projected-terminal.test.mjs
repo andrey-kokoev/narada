@@ -105,11 +105,11 @@ test('projected terminal bridge inserts bracketed multiline paste and submits on
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.equal(frames.length, 0);
-  assert.equal(bridge.rl.line, pasted);
+  assert.equal(bridge.composer.getDraft(), pasted);
 
   input.write('\r');
   await new Promise((resolve) => setImmediate(resolve));
-  bridge.rl.close();
+  bridge.close();
 
   assert.equal(frames.length, 1);
   assert.equal(frames[0].method, 'conversation.send');
@@ -140,13 +140,44 @@ test('projected terminal bridge keeps multiline slash-looking paste as draft unt
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.equal(frames.length, 0);
-  assert.equal(bridge.rl.line, pasted);
+  assert.equal(bridge.composer.getDraft(), pasted);
 
   input.write('\r');
   await new Promise((resolve) => setImmediate(resolve));
-  bridge.rl.close();
+  bridge.close();
 
   assert.equal(frames.length, 1);
   assert.equal(frames[0].method, 'conversation.send');
   assert.equal(frames[0].params.message, pasted);
+});
+
+test('projected terminal bridge repaints multiline draft after async output', async () => {
+  const input = new PassThrough();
+  input.isTTY = true;
+  input.setRawMode = () => input;
+  const output = new PassThrough();
+  output.isTTY = true;
+  output.columns = 100;
+  let terminalText = '';
+  output.on('data', (chunk) => { terminalText += chunk.toString('utf8'); });
+  const childStdin = new PassThrough();
+
+  const bridge = createProjectedTerminalBridge({
+    input,
+    output,
+    childStdin,
+    style: createOperatorStyle({ enabled: false }),
+  });
+  const pasted = 'line 1\nline 2\nline 3';
+  input.write(`${bracketedPasteControlSequences.start}${pasted}${bracketedPasteControlSequences.end}`);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  bridge.writeProjectedOutput('agent-cli: turn complete 2026-06-25T16:06:09\n');
+  await new Promise((resolve) => setImmediate(resolve));
+  bridge.close();
+
+  const plain = terminalText.replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '');
+  assert.equal(plain.includes('line 3or > line 1'), false);
+  assert.equal(plain.includes('agent-cli: turn complete 2026-06-25T16:06:09\noperator > line 1\n  line 2\n  line 3'), true);
+  assert.equal(bridge.composer.getDraft(), pasted);
 });

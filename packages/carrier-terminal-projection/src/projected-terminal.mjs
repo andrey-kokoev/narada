@@ -1,5 +1,4 @@
 import readline from 'node:readline';
-import { PassThrough } from 'node:stream';
 import { createTerminalStyle, formatTerminalMessageBlockLines } from './terminal-style.mjs';
 import {
   BRACKETED_PASTE_END,
@@ -80,14 +79,13 @@ export function rewriteSubmittedOperatorPromptForTest({
   return `${clearPreviousTerminalRows(rawPromptRows)}\n${renderedLines.join('\n')}\n`;
 }
 
-export function createProjectedOutputWriter({ rl = null, interactive = false, output = process.stdout } = {}) {
+export function createProjectedOutputWriter({ composer = null, interactive = false, output = process.stdout } = {}) {
   return (text, { preserveCurrentLine = false, prompt = true } = {}) => {
     if (interactive && !preserveCurrentLine) {
-      readline.clearLine(output, 0);
-      readline.cursorTo(output, 0);
+      composer?.clear();
     }
     output.write(text);
-    if (interactive && prompt) rl?.prompt(true);
+    if (interactive && prompt) composer?.render();
   };
 }
 
@@ -104,16 +102,11 @@ export function createProjectedTerminalBridge({
   style = createOperatorStyle({ enabled: colorEnabled({ output }) }),
 } = {}) {
   const interactive = Boolean(input.isTTY && output.isTTY);
-  const readlineInput = interactive ? new PassThrough() : input;
-  const rl = readline.createInterface({
-    input: readlineInput,
-    output: interactive ? output : undefined,
-    terminal: interactive,
-    prompt: interactive ? createOperatorPrompt(style) : undefined,
-  });
-  const writeProjectedOutput = createProjectedOutputWriter({ rl, interactive, output });
   const operatorState = { streamedTurns: new Set(), style };
-  const previousRawMode = interactive && typeof input.setRawMode === 'function' ? input.isRaw : null;
+  let rl = null;
+  let composer = null;
+  let writeProjectedOutput = null;
+  const previousRawMode = interactive && typeof input.setRawMode === 'function' ? Boolean(input.isRaw) : null;
   let onInputData = null;
 
   const submitOperatorInput = (line, { forceConversation = false } = {}) => {
@@ -123,16 +116,15 @@ export function createProjectedTerminalBridge({
         if (explicitJsonControl.error) {
           writeProjectedOutput(`agent-cli: ${explicitJsonControl.error}\n`);
         } else {
-          rewriteInteractivePrompt({ interactive, output, operatorState, line, style });
+          if (interactive) writeSubmittedOperatorPrompt({ output, operatorState, line, style });
           childStdin?.write(`${JSON.stringify(explicitJsonControl.frame)}\n`);
         }
-        if (interactive && explicitJsonControl.error) rl.prompt(true);
         return;
       }
 
       const slashCommand = createProjectedSlashCommandAction(line);
       if (slashCommand) {
-        rewriteInteractivePrompt({ interactive, output, operatorState, line, style });
+        if (interactive) writeSubmittedOperatorPrompt({ output, operatorState, line, style });
         if (slashCommand.kind === 'frame') {
           childStdin?.write(`${JSON.stringify(slashCommand.frame)}\n`);
         } else if (slashCommand.kind === 'local_help') {
@@ -154,7 +146,7 @@ export function createProjectedTerminalBridge({
 
     const frame = createOperatorConversationFrame(line);
     if (frame && interactive) {
-      rewriteInteractivePrompt({ interactive, output, operatorState, line, style });
+      writeSubmittedOperatorPrompt({ output, operatorState, line, style });
       const agentId = projectedAgentId(operatorState);
       output.write(`${assistantEmissionHeader(operatorState, style, agentId)} thinking...\n`);
       operatorState.localThinkingRendered = true;
@@ -165,50 +157,188 @@ export function createProjectedTerminalBridge({
   };
 
   if (interactive) {
+    composer = createTerminalComposer({
+      output,
+      style,
+      columns: () => output.columns || 80,
+      onSubmit: (line) => {
+        submitOperatorInput(line, { forceConversation: /\r|\n/.test(String(line ?? '')) });
+      },
+    });
+    writeProjectedOutput = createProjectedOutputWriter({ composer, interactive, output });
     output.write('\x1b[?2004h');
     if (typeof input.setRawMode === 'function') input.setRawMode(true);
     input.resume?.();
     const inputFilter = createBracketedPasteInputFilter({
       onText: (text) => {
-        if (text) readlineInput.write(text);
+        composer.feed(text);
       },
       onPaste: (text) => {
-        insertReadlineDraftText(rl, text);
+        composer.insert(text);
       },
     });
     onInputData = (chunk) => inputFilter.feed(chunk);
     input.on('data', onInputData);
+    composer.render();
+  } else {
+    rl = readline.createInterface({ input });
+    writeProjectedOutput = createProjectedOutputWriter({ interactive, output });
+    rl.on('line', (line) => {
+      submitOperatorInput(line, { forceConversation: /\r|\n/.test(String(line ?? '')) });
+    });
+    rl.on('close', () => {
+      childStdin?.end();
+    });
   }
 
-  if (interactive) rl.prompt();
-  rl.on('line', (line) => {
-    submitOperatorInput(line, { forceConversation: /\r|\n/.test(String(line ?? '')) });
-  });
-  rl.on('close', () => {
+  const close = () => {
     if (interactive && onInputData) input.off('data', onInputData);
-    if (interactive) output.write('\x1b[?2004l');
-    if (interactive && previousRawMode !== null && typeof input.setRawMode === 'function') input.setRawMode(!!previousRawMode);
+    if (interactive) {
+      composer?.clear();
+      output.write('\x1b[?2004l');
+    }
+    if (interactive && previousRawMode !== null && typeof input.setRawMode === 'function') input.setRawMode(previousRawMode);
     childStdin?.end();
-  });
+  };
 
   return {
     interactive,
     rl,
+    composer,
     operatorState,
     writeProjectedOutput,
     renderEvent: (event) => renderOperatorEvent(event, operatorState),
+    close,
   };
 }
 
-function rewriteInteractivePrompt({ interactive, output, operatorState, line, style }) {
-  if (!interactive) return;
-  const rewritten = rewriteSubmittedOperatorPromptForTest({
+function writeSubmittedOperatorPrompt({ output, operatorState, line, style }) {
+  const rendered = renderSubmittedOperatorPrompt({
     line,
     agentId: projectedAgentId(operatorState),
     columns: output.columns || 80,
     style,
   });
-  if (rewritten) output.write(rewritten);
+  if (rendered) output.write(rendered);
+}
+
+function renderSubmittedOperatorPrompt({
+  line,
+  agentId = 'agent',
+  columns = 80,
+  style = createOperatorStyle({ enabled: false }),
+  now = new Date(),
+} = {}) {
+  const text = String(line ?? '');
+  if (text.includes('\n') || text.includes('\r')) return '';
+  const promptLabel = `operator -> ${agentId}`;
+  const prefix = `${promptLabel}: `;
+  const firstLineWidth = Math.max(16, columns - stripAnsi(prefix).length);
+  const lines = wrapTerminalLine(text, firstLineWidth);
+  const [first = '', ...rest] = lines;
+  const renderedLines = [
+    `${style.operator('operator')} ${style.muted('->')} ${style.agent(agentId)}${style.muted(':')} ${first}`,
+    ...rest.map((wrapped) => `  ${wrapped}`),
+  ];
+  appendSuffixToLastLine(renderedLines, ` ${style.timestamp(formatTimestamp(now))}`);
+  return `${renderedLines.join('\n')}\n`;
+}
+
+function createTerminalComposer({ output, style, columns = () => 80, onSubmit = () => {} } = {}) {
+  let draft = '';
+  let cursor = 0;
+  let renderedRows = 0;
+
+  const api = {
+    getDraft() {
+      return draft;
+    },
+    getCursor() {
+      return cursor;
+    },
+    insert(text) {
+      const value = String(text ?? '');
+      if (!value) return;
+      draft = `${draft.slice(0, cursor)}${value}${draft.slice(cursor)}`;
+      cursor += value.length;
+      api.render();
+    },
+    backspace() {
+      if (cursor <= 0) return;
+      draft = `${draft.slice(0, cursor - 1)}${draft.slice(cursor)}`;
+      cursor -= 1;
+      api.render();
+    },
+    feed(text) {
+      const value = String(text ?? '');
+      for (const char of value) {
+        if (char === '\r' || char === '\n') {
+          api.submit();
+          continue;
+        }
+        if (char === '\x7f' || char === '\b') {
+          api.backspace();
+          continue;
+        }
+        if (char >= ' ' || char === '\t') api.insert(char);
+      }
+    },
+    submit() {
+      const value = draft;
+      if (!value.trim()) {
+        api.render();
+        return;
+      }
+      api.clear();
+      draft = '';
+      cursor = 0;
+      onSubmit(value);
+    },
+    clear() {
+      if (renderedRows <= 0) return;
+      output.write(clearRenderedComposerRows(renderedRows));
+      renderedRows = 0;
+    },
+    render() {
+      api.clear();
+      const rendered = renderComposerDraft({ draft, style });
+      output.write(rendered);
+      renderedRows = composerRenderedRows(rendered, columns());
+    },
+  };
+
+  return api;
+}
+
+function renderComposerDraft({ draft, style }) {
+  const prompt = createOperatorPrompt(style);
+  const lines = normalizeDraftForDisplay(draft).split('\n');
+  const [first = '', ...rest] = lines;
+  return [
+    `${prompt}${first}`,
+    ...rest.map((line) => `  ${line}`),
+  ].join('\n');
+}
+
+function normalizeDraftForDisplay(draft) {
+  return String(draft ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+
+function composerRenderedRows(rendered, columns) {
+  const width = Math.max(1, Number(columns) || 80);
+  return String(rendered ?? '').split('\n').reduce((count, line) => (
+    count + Math.max(1, Math.ceil(stripAnsi(line).length / width))
+  ), 0);
+}
+
+function clearRenderedComposerRows(rows) {
+  const count = Math.max(0, Math.floor(Number(rows) || 0));
+  if (count <= 0) return '';
+  let sequence = '\r\x1b[2K';
+  for (let index = 1; index < count; index += 1) {
+    sequence += '\x1b[1A\r\x1b[2K';
+  }
+  return sequence;
 }
 
 function createBracketedPasteInputFilter({ onText = () => {}, onPaste = () => {} } = {}) {
@@ -246,16 +376,6 @@ function createBracketedPasteInputFilter({ onText = () => {}, onPaste = () => {}
       }
     },
   };
-}
-
-function insertReadlineDraftText(rl, text) {
-  const value = String(text ?? '');
-  if (!value) return;
-  const line = typeof rl.line === 'string' ? rl.line : '';
-  const cursor = typeof rl.cursor === 'number' ? rl.cursor : line.length;
-  rl.line = `${line.slice(0, cursor)}${value}${line.slice(cursor)}`;
-  rl.cursor = cursor + value.length;
-  rl._refreshLine?.();
 }
 
 export const bracketedPasteControlSequences = {
