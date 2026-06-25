@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
+import { codexCommand } from '@narada2/carrier-provider-support/codex-subscription-command';
 import { spawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
 
@@ -11,27 +12,9 @@ export function codexSubscriptionPreflightForced(processEnv = process.env) {
   return mode === 'force';
 }
 
-function findOnPath(names, processEnv = process.env) {
-  const dirs = String(processEnv.PATH ?? processEnv.Path ?? '').split(delimiter).filter(Boolean);
-  for (const dir of dirs) {
-    for (const name of names) {
-      const candidate = join(dir, name);
-      if (existsSync(candidate)) return candidate;
-    }
-  }
-  return null;
-}
-
 export function codexPreflightCommand(processEnv = process.env, processPlatform = process.platform) {
-  const explicit = processEnv.NARADA_CODEX_COMMAND;
-  if (explicit) return { command: explicit, prefixArgs: [] };
-  if (processPlatform !== 'win32') return { command: 'codex', prefixArgs: [] };
-  const found = findOnPath(['codex.ps1', 'codex.cmd', 'codex.exe'], processEnv);
-  if (found?.endsWith('.ps1')) return { command: 'pwsh', prefixArgs: ['-NoProfile', '-File', found] };
-  if (found) return { command: found, prefixArgs: [] };
-  return { command: 'pwsh', prefixArgs: ['-NoProfile', '-Command', 'codex'] };
+  return codexCommand({ processEnv, platform: processPlatform, exists: existsSync });
 }
-
 export function codexAuthHome(processEnv = process.env) {
   if (processEnv.NARADA_CODEX_AUTH_HOME) return processEnv.NARADA_CODEX_AUTH_HOME;
   const userRoot = processEnv.USERPROFILE || processEnv.HOME || homedir();

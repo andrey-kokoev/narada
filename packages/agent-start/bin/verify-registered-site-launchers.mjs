@@ -97,7 +97,7 @@ function parseJsonOutput(output) {
 
 function expectedAdapter(runtime) {
   if (runtime === 'codex') return 'codex-native-mcp';
-  if (runtime === 'agent-cli' || runtime === 'agent-runtime-server') return 'narada-agent-cli-mcp-client';
+  if (runtime === 'agent-cli' || runtime === 'agent-runtime-server') return 'narada-agent-runtime-server-mcp-client';
   if (runtime === 'agent-tui') return 'narada-agent-tui-terminal-interactive-loop';
   if (runtime === 'pi') return 'pi-extension-mcp-bridge';
   if (runtime === 'claude-code') return 'claude-code-native-mcp';

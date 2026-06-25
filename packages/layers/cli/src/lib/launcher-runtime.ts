@@ -591,8 +591,8 @@ function readLaunchResult(path: string): LaunchResultSummary | null {
         ?? record.required_environment?.NARADA_CARRIER_SESSION_ID,
     );
     const controlPath = stringValue(
-      record.agent_cli_launch?.control_path
-        ?? record.nars_launch?.control_path
+      record.nars_launch?.control_path
+        ?? record.agent_cli_launch?.control_path
         ?? controlPathFromRuntimeArgs(record.runtime_args)
         ?? (carrierSessionId
           ? join(
@@ -606,8 +606,8 @@ function readLaunchResult(path: string): LaunchResultSummary | null {
           : undefined),
     );
     const sessionPath = stringValue(
-      record.agent_cli_launch?.session_path
-        ?? record.nars_launch?.session_path,
+      record.nars_launch?.session_path
+        ?? record.agent_cli_launch?.session_path,
     );
     const parentPid = numberValue(
       record.carrier_session?.record?.parent_process?.pid

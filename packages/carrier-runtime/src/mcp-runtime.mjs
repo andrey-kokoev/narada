@@ -374,7 +374,7 @@ async function discoverAndStartMcpServers(siteRoot) {
           stderr: stderrDiagnostics,
         });
         failures.push(failure);
-        console.error(`[agent-cli] Failed to initialize MCP server ${serverName}: ${failure.message}`);
+        console.error(`[carrier-runtime] Failed to initialize MCP server ${serverName}: ${failure.message}`);
         await stopMcpStartupProcess(proc);
         continue;
       }
@@ -390,7 +390,7 @@ async function discoverAndStartMcpServers(siteRoot) {
           stderr: stderrDiagnostics,
         };
         failures.push(failure);
-        console.error(`[agent-cli] ${failure.message}`);
+        console.error(`[carrier-runtime] ${failure.message}`);
         await stopMcpStartupProcess(proc);
         continue;
       }
@@ -413,7 +413,7 @@ async function discoverAndStartMcpServers(siteRoot) {
         args: serverConfig.args,
       });
       failures.push(failure);
-      console.error(`[agent-cli] Failed to start MCP server ${serverName}: ${failure.message}`);
+      console.error(`[carrier-runtime] Failed to start MCP server ${serverName}: ${failure.message}`);
     }
   }
 

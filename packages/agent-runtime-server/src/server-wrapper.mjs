@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { PassThrough } from 'node:stream';
 import { createCarrierRuntimeContext } from '@narada2/carrier-runtime/carrier-runtime-context';
+import { createCarrierRuntimeDependencies } from '@narada2/carrier-runtime/runtime-dependencies';
 import { runCarrierServerMode } from '@narada2/carrier-runtime/server-mode';
+import { createProjectedTerminalBridge } from '@narada2/carrier-terminal-projection/projected-terminal';
 import {
   formatPreflightWorkflowEvent,
   formatPreflightWorkflowSummary,
@@ -212,46 +214,11 @@ function parseEventStreamOptions(args, env = process.env) {
   };
 }
 
-async function loadCompatibilityRuntimeDependencies() {
-  const [agentCli, projectedTerminal] = await Promise.all([
-    import('@narada2/agent-cli'),
-    import('@narada2/agent-cli/projected-terminal'),
-  ]);
-  const dependencyNames = [
-    'discoverAndStartMcpServers',
-    'aggregateTools',
-    'createMcpStatusSnapshot',
-    'readMcpPreflightArtifact',
-    'createMcpPreflightArtifactSnapshot',
-    'loadRolePrompt',
-    'loadSession',
-    'createInputQueue',
-    'runServerInputEvent',
-    'emitServerEvent',
-    'recordMcpPreflightArtifactLinkage',
-    'recordMcpStartupFailures',
-    'createOperationHeartbeatDirectiveEmitter',
-    'handleServerRequestLine',
-    'closeMcpServers',
-    'recordSessionRequestIssue',
-    'noteSessionActivity',
-    'createSessionActivitySnapshot',
-    'createOperationalPostureSnapshot',
-    'mcpServerSummaryEntries',
-    'normalizeCarrierGoalState',
-    'carrierGoalStatusLabel',
-    'recordCarrierDiagnostic',
-  ];
-  const dependencies = {};
-  for (const name of dependencyNames) {
-    if (typeof agentCli[name] !== 'function') throw new Error(`missing_agent_cli_runtime_helper:${name}`);
-    dependencies[name] = agentCli[name];
-  }
-  if (typeof agentCli.callChatApi !== 'function') throw new Error('missing_agent_cli_runtime_helper:callChatApi');
+async function loadRuntimeDependencies(runtimeContext = {}) {
+  const runtimeDependencies = createCarrierRuntimeDependencies({ runtimeContext });
   return {
-    callChatApiFn: agentCli.callChatApi,
-    dependencies,
-    createProjectedTerminalBridge: projectedTerminal.createProjectedTerminalBridge,
+    ...runtimeDependencies,
+    createProjectedTerminalBridge,
   };
 }
 
@@ -370,7 +337,7 @@ function parseHealthOptions(args, env = process.env) {
 }
 
 function carrierRuntimeArgs(forwardedArgs = []) {
-  return forwardedArgs.filter((arg) => arg !== '--server' && arg !== '--carrier-server-substrate');
+  return forwardedArgs.filter((arg) => arg !== '--server');
 }
 
 function argValue(args = [], name) {
@@ -562,7 +529,27 @@ async function main() {
   }
   process.env.NARADA_NARS_AUTHORITY_HANDOFF = JSON.stringify(delegatedAuthorityHandoff);
 
-  const compatibilityRuntime = await loadCompatibilityRuntimeDependencies();
+  const runtimeContext = createCarrierRuntimeContext({
+    identity: lifecycleBinding.agent_id,
+    session: lifecycleBinding.session_id,
+    siteRoot: process.env.NARADA_SITE_ROOT,
+    intelligenceProvider: process.env.NARADA_INTELLIGENCE_PROVIDER,
+    narsDelegatedAuthorityHandoff: delegatedAuthorityHandoff,
+    providerSettings: {
+      model: process.env.NARADA_AI_MODEL ?? process.env.CODEX_MODEL,
+      thinking: process.env.NARADA_AI_THINKING,
+      stream: process.env.NARADA_AGENT_CLI_STREAM !== '0',
+    },
+    displaySettings: {
+      toolOutputs: process.env.NARADA_AGENT_CLI_TOOL_OUTPUTS !== '0',
+    },
+    operationHeartbeatDirectiveEnabled: process.env.NARADA_OPERATION_HEARTBEAT_DIRECTIVE_ENABLED === '1',
+    operationHeartbeatDirectiveIntervalMs: Number.parseInt(process.env.NARADA_OPERATION_HEARTBEAT_DIRECTIVE_INTERVAL_MS ?? '60000', 10),
+    operationHeartbeatDirectiveInitialDelayMs: Number.parseInt(process.env.NARADA_OPERATION_HEARTBEAT_DIRECTIVE_INITIAL_DELAY_MS ?? '60000', 10),
+    healthUrl: process.env.NARADA_HEALTH_URL ?? null,
+    eventStreamUrl: process.env.NARADA_EVENT_STREAM_URL ?? null,
+  });
+  const runtimeDependencies = await loadRuntimeDependencies(runtimeContext);
 
   const state = {
     startupSummaryPrinted: false,
@@ -574,7 +561,7 @@ async function main() {
   let renderProjectedEvent = () => [];
 
   if (!rawJsonl) {
-    const projectedTerminal = compatibilityRuntime.createProjectedTerminalBridge({
+    const projectedTerminal = runtimeDependencies.createProjectedTerminalBridge({
       input: process.stdin,
       output: process.stdout,
       childStdin: runtimeInput,
@@ -622,28 +609,9 @@ async function main() {
     await runCarrierServerMode({
       input: runtimeInput,
       output: runtimeOutput,
-      callChatApiFn: compatibilityRuntime.callChatApiFn,
-      runtimeContext: createCarrierRuntimeContext({
-        identity: lifecycleBinding.agent_id,
-        session: lifecycleBinding.session_id,
-        siteRoot: process.env.NARADA_SITE_ROOT,
-        intelligenceProvider: process.env.NARADA_INTELLIGENCE_PROVIDER,
-        narsDelegatedAuthorityHandoff: delegatedAuthorityHandoff,
-        providerSettings: {
-          model: process.env.NARADA_AI_MODEL ?? process.env.CODEX_MODEL,
-          thinking: process.env.NARADA_AI_THINKING,
-          stream: process.env.NARADA_AGENT_CLI_STREAM !== '0',
-        },
-        displaySettings: {
-          toolOutputs: process.env.NARADA_AGENT_CLI_TOOL_OUTPUTS !== '0',
-        },
-        operationHeartbeatDirectiveEnabled: process.env.NARADA_OPERATION_HEARTBEAT_DIRECTIVE_ENABLED === '1',
-        operationHeartbeatDirectiveIntervalMs: Number.parseInt(process.env.NARADA_OPERATION_HEARTBEAT_DIRECTIVE_INTERVAL_MS ?? '60000', 10),
-        operationHeartbeatDirectiveInitialDelayMs: Number.parseInt(process.env.NARADA_OPERATION_HEARTBEAT_DIRECTIVE_INITIAL_DELAY_MS ?? '60000', 10),
-        healthUrl: process.env.NARADA_HEALTH_URL ?? null,
-        eventStreamUrl: process.env.NARADA_EVENT_STREAM_URL ?? null,
-      }),
-      dependencies: compatibilityRuntime.dependencies,
+      callChatApiFn: runtimeDependencies.callChatApiFn,
+      runtimeContext,
+      dependencies: runtimeDependencies.dependencies,
     });
     healthProjection?.rejectAll(new Error('carrier_closed'));
     healthProjection?.server.close();
@@ -662,7 +630,7 @@ export {
   parseHealthOptions,
   parseEventStreamOptions,
   carrierRuntimeArgs,
-  loadCompatibilityRuntimeDependencies,
+  loadRuntimeDependencies,
   createDelegatedAuthorityHandoff,
   createEventHub,
   startHealthProjection,

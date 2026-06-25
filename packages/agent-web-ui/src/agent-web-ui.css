@@ -1,0 +1,182 @@
+:root {
+  color-scheme: light dark;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f6f7f9;
+  color: #1d252f;
+}
+
+.composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 12px;
+  border-top: 1px solid #c0c8d2;
+  background: #ffffff;
+}
+
+.composer textarea {
+  min-width: 0;
+  resize: vertical;
+  border: 1px solid #c8d0da;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.composer button {
+  align-self: end;
+  min-height: 42px;
+  border: 1px solid #314256;
+  border-radius: 6px;
+  padding: 0 18px;
+  background: #24364a;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+.shell {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  min-height: 100vh;
+}
+
+.status {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  background: #d5dbe3;
+  border-bottom: 1px solid #c0c8d2;
+}
+
+.status > div {
+  min-width: 0;
+  padding: 12px 14px;
+  background: #ffffff;
+}
+
+.label {
+  display: block;
+  margin-bottom: 4px;
+  color: #5f6f82;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.status span:last-child {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 13px;
+}
+
+.events {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  list-style: none;
+}
+
+.event {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  min-height: 42px;
+  border: 1px solid #d8dee7;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.event-heading {
+  padding: 11px 12px;
+  border-right: 1px solid #e2e7ee;
+  color: #314256;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.event-detail {
+  margin: 0;
+  min-width: 0;
+  padding: 11px 12px;
+  overflow: hidden;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 13px/1.45 ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+
+.event-error,
+.event-websocket_error,
+.event-web_ui_decode_error {
+  border-color: #d17b7b;
+}
+
+@media (max-width: 760px) {
+  .status {
+    grid-template-columns: 1fr;
+  }
+
+  .event {
+    grid-template-columns: 1fr;
+  }
+
+  .event-heading {
+    border-right: 0;
+    border-bottom: 1px solid #e2e7ee;
+  }
+
+  .composer {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    background: #11161d;
+    color: #e7edf5;
+  }
+
+  .status {
+    background: #2b3440;
+    border-color: #313c49;
+  }
+
+  .status > div,
+  .event {
+    background: #171e27;
+  }
+
+  .label {
+    color: #93a4b8;
+  }
+
+  .event,
+  .event-heading {
+    border-color: #2f3a47;
+  }
+
+  .event-heading {
+    color: #c4d0de;
+  }
+
+  .composer {
+    background: #171e27;
+    border-color: #313c49;
+  }
+
+  .composer textarea {
+    border-color: #3c4857;
+    background: #11161d;
+    color: #e7edf5;
+  }
+}

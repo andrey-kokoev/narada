@@ -55,6 +55,7 @@
     "@narada2/agent-cli": "workspace:*",
     "@narada2/agent-runtime-server": "workspace:*",
     "@narada2/agent-tui": "workspace:*",
+    "@narada2/agent-web-ui": "workspace:*",
     "@narada2/cli": "workspace:*",
     "@types/node": "^22.0.0",
     "oxbuild": "^0.1.5",

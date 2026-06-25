@@ -64,9 +64,14 @@ async function writeLaunchResult(siteRoot: string, name: string, identity: strin
       NARADA_SITE_ROOT: siteRoot,
       NARADA_CARRIER_SESSION_ID: 'carrier_test',
     },
+    nars_launch: {
+      control_path: controlPath,
+      session_path: join(siteRoot, '.narada', 'crew', 'nars-sessions', 'carrier_test', 'session.jsonl'),
+    },
     agent_cli_launch: {
       control_path: controlPath,
       session_path: join(siteRoot, '.narada', 'crew', 'nars-sessions', 'carrier_test', 'session.jsonl'),
+      compatibility_alias_for: 'nars_launch',
     },
     carrier_session: {
       carrier_session_id: 'carrier_test',

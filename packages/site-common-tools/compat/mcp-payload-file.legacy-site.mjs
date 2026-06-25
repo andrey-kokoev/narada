@@ -229,6 +229,9 @@ function isPayloadWorkspaceTool(toolName) {
 export function payloadCreate({ siteRoot, args, maxBytes = DEFAULT_MAX_BYTES, payloadDir = DEFAULT_PAYLOAD_DIR }) {
   const input = asRecord(args);
   const payload = asPayloadObject(input.payload, 'payload_create_payload_must_be_object');
+  if (Object.keys(payload).length === 0 && input.allow_empty !== true) {
+    throw new Error('payload_create_empty_payload_requires_allow_empty: payload object is empty; pass allow_empty=true only when an empty immutable payload is intentional. Common mistake: put domain fields under payload, e.g. {"payload":{"summary":"..."}}, not alongside it.');
+  }
   const payloadId = input.payload_id ? validatePayloadId(String(input.payload_id)) : randomPayloadId();
   const createdAt = new Date().toISOString();
   const ref = buildPayloadRef(payloadId, 1);
@@ -656,9 +659,11 @@ export function listPayloadTools() {
       description: 'Create immutable transient MCP payload revision v1 under .ai/tmp/mcp-payloads/workspace.',
       inputSchema: {
         type: 'object',
+        additionalProperties: false,
         properties: {
           payload_id: { type: 'string', description: 'Optional stable id segment. Defaults to a generated id.' },
-          payload: { type: 'object', description: 'JSON object payload to store as v1.' },
+          payload: { type: 'object', description: 'Required nested domain object to store as v1. Put tool arguments inside this field, e.g. {"payload":{"summary":"..."}}. Empty objects require allow_empty=true.' },
+          allow_empty: { type: 'boolean', description: 'Set true only when intentionally creating an empty payload object.' },
           created_by: { type: 'string', description: 'Optional acting identity for non-agent callers. Agent sessions use the bound NARADA_AGENT_ID and reject mismatches.' },
         },
         required: ['payload'],

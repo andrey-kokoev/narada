@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { detectSameOperatorReview, detectSelfReview, getReviewAcceptanceProvenance } from './operator-identity.mjs';
 import { deriveClosureAuthority } from './closure-authority.mjs';
 import { validateRecoveryTruthfulnessBody } from './recovery-truthfulness-guard.mjs';
+import { resolveTaskRolePolicy } from './task-role-policy.mjs';
 
 export function buildWorkboard({ store, siteRoot = null, agentId, agentRole, allTasks }) {
   const all_in_review = [];
@@ -50,9 +51,10 @@ export function buildWorkboard({ store, siteRoot = null, agentId, agentRole, all
       // Table may not exist in fresh or minimal stores
     }
 
+    const rolePolicy = resolveTaskRolePolicy({ siteRoot, taskSpec: spec });
     let roleMatch = true;
     if (['opened', 'needs_continuation'].includes(task.status)) {
-      if (targetRole) {
+      if (targetRole && rolePolicy.role_enforcement === 'strict') {
         roleMatch = agentRole === targetRole;
       }
     }
@@ -68,9 +70,10 @@ export function buildWorkboard({ store, siteRoot = null, agentId, agentRole, all
       preferred_agent_id: preferredAgentId,
       updated_at: task.updated_at,
       relative_priority: task.relative_priority ?? 0,
+      role_policy: rolePolicy,
     };
     item.preferred_agent_relation = preferredAgentRelation(preferredAgentId, agentId);
-    item.routing_policy = 'preferred_agent_id_is_soft_affinity_target_role_is_role_gate';
+    item.routing_policy = `preferred_agent_id_is_soft_affinity_target_role_enforcement_${rolePolicy.role_enforcement}`;
     item.parent_coordinator_actionability = deriveParentCoordinatorActionability({ task, spec, lifecycleByNumber });
     item.closure_authority = deriveClosureAuthority(task);
     item.pre_claim_warnings = buildPreClaimWarnings({ item, assignment, agentId });
@@ -90,9 +93,19 @@ export function buildWorkboard({ store, siteRoot = null, agentId, agentRole, all
         ...item,
         claim_authority: 'not_claimable_role_binding_mismatch',
         visibility: 'downstream_role_context',
-        reason: `Task target_role=${targetRole}; querying agent role binding=${agentRole ?? 'unknown'}. Role binding is an eligibility filter, not mutation authority.`, 
+        reason: `Task target_role=${targetRole}; querying agent role binding=${agentRole ?? 'unknown'}. Role enforcement policy=${rolePolicy.role_enforcement}.`, 
       });
       continue;
+    }
+    if (targetRole && agentRole !== targetRole && rolePolicy.role_enforcement === 'warn') {
+      item.pre_claim_warnings.push({
+        kind: 'target_role_mismatch',
+        severity: 'warning',
+        target_role: targetRole,
+        agent_role: agentRole ?? null,
+        role_policy: rolePolicy,
+        message: `Task target_role=${targetRole}; querying agent role binding=${agentRole ?? 'unknown'}. Policy warns but does not block.`,
+      });
     }
 
     if (task.status === 'in_review') {

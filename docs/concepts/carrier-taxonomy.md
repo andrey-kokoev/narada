@@ -1,6 +1,6 @@
 # Carrier Taxonomy
 
-Narada uses **carrier** words for several related layers. Keep them separate so local CLI carriers, TUI carriers, Codex-as-carrier, and future Cloudflare carriers can share runtime semantics without sharing presentation or deployment mechanics.
+Narada uses **carrier** words for several related layers. Keep them separate so NARS-backed local sessions, TUI/client surfaces, Codex-as-carrier, and future Cloudflare carriers can share runtime semantics without sharing presentation or deployment mechanics.
 
 ## Layer Model
 
@@ -20,7 +20,7 @@ The order above is explanatory, not a call stack. A carrier may bundle several l
 | Term | Owns | Does not own |
 | --- | --- | --- |
 | `Carrier` | Runs one bounded carrier session according to Narada rules: input admission, turn boundaries, interruption, provider dispatch, session evidence, closeout, and status. | UI layout, transport mechanics, deployment substrate, durable Agent authority. |
-| `CarrierKind` | The semantic implementation family whose behavior contract is being claimed, such as `agent-cli`, `agent-tui`, `codex-as-carrier`, or `cloudflare-carrier`. | Whether the carrier is local, remote, terminal, web, Worker, Durable Object, or container-hosted. |
+| `CarrierKind` | The semantic implementation family whose behavior contract is being claimed, such as `narada-agent-runtime-server`, `agent-tui`, `codex-as-carrier`, or `cloudflare-carrier`. | Whether the carrier is local, remote, terminal, web, Worker, Durable Object, container-hosted, or projected through `agent-cli`. |
 | `CarrierHost` | The execution environment where carrier state and code live, such as `local-process`, `cloudflare-worker`, `cloudflare-durable-object`, or `container`. | Carrier semantics or protocol meaning. |
 | `CarrierTransport` | The IO mechanism crossing the carrier boundary, such as `interactive-terminal`, `jsonl-stdio`, `control-jsonl`, `websocket`, `sse`, or `http`. | Admission, authority, turn creation, or transcript meaning. |
 | `CarrierProtocol` | Canonical message shapes and event vocabulary: input events, control records, session events, payload refs, command effects, terminal states, observer metadata. | Carrier-specific rendering, process launch, or storage backend selection. |
@@ -44,13 +44,13 @@ A **CarrierSurface** is UX. It renders and collects input, but it must not redef
 
 ## Examples
 
-### Local Interactive CLI
+### Local Interactive CLI Projection
 
 ```json
 {
-  "carrier_kind": "agent-cli",
+  "carrier_kind": "narada-agent-runtime-server",
   "carrier_host": "local-process",
-  "carrier_surface": "line-oriented-cli",
+  "carrier_surface": "agent-cli",
   "carrier_transport": "interactive-terminal",
   "carrier_protocol": "narada.carrier.v1"
 }
@@ -60,7 +60,7 @@ A **CarrierSurface** is UX. It renders and collects input, but it must not redef
 
 ```json
 {
-  "carrier_kind": "agent-cli",
+  "carrier_kind": "narada-agent-runtime-server",
   "carrier_host": "local-process",
   "carrier_surface": "none-or-supervising-console",
   "carrier_transport": "jsonl-stdio",

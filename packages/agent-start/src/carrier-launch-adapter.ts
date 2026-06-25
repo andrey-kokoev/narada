@@ -16,7 +16,7 @@ export function resolveToolFabricAdapter(runtimeName, { schema, agentTuiRuntime 
   if (runtimeName === 'agent-cli') {
     return {
       schema,
-      tool_fabric_adapter_kind: 'narada-agent-cli-mcp-client',
+      tool_fabric_adapter_kind: 'narada-agent-runtime-server-mcp-client',
       tool_fabric_source: source,
       runtime_substrate_kind: runtimeName,
       adapter_entrypoint: 'package:@narada2/agent-runtime-server#narada-agent-runtime-server',
@@ -343,7 +343,7 @@ export function buildCarrierEnvironmentProjection({
   };
 }
 
-export function buildAgentCliLaunchPacket(runtimeName, {
+export function buildNarsLaunchPacket(runtimeName, {
   processExecPath,
   carrierSessionRegistration,
   sessionSiteRoot,
@@ -353,19 +353,16 @@ export function buildAgentCliLaunchPacket(runtimeName, {
   if (runtimeName !== 'agent-cli') return null;
   const sessionId = carrierSessionRegistration.carrier_session_id;
   return {
-    schema: 'narada.agent_start.agent_cli.v0',
+    schema: 'narada.agent_start.nars_launch.v1',
+    carrier_runtime_kind: 'narada-agent-runtime-server',
+    operator_surface_kind: 'agent-cli',
+    compatibility_runtime_alias: 'agent-cli',
     control_transport: 'jsonl_sideband_file',
     carrier_relation: 'narada_agent_runtime_server',
     runtime_server: {
       package: '@narada2/agent-runtime-server',
       entrypoint: 'narada-agent-runtime-server',
       compatibility_alias: 'agent-runtime-server',
-    },
-    private_carrier_substrate: {
-      package: '@narada2/agent-cli',
-      entrypoint: 'narada-agent-cli',
-      mode: '--carrier-server-substrate',
-      relation: 'transitional_private_adapter',
     },
     command: processExecPath,
     session_dir: dirname(siteCarrierControlPath(sessionId)),
@@ -377,6 +374,8 @@ export function buildAgentCliLaunchPacket(runtimeName, {
     native_shell_authority_admitted: false,
   };
 }
+
+export const buildAgentCliLaunchPacket = buildNarsLaunchPacket;
 
 export function shellQuote(arg) {
   const text = String(arg);

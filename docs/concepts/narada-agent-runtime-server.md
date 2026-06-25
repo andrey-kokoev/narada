@@ -299,15 +299,11 @@ model conversation != Agent identity
 
 ## First Implementation Direction
 
-The first implementation is the Narada-owned `@narada2/agent-runtime-server` package. It provides the `narada-agent-runtime-server` / `agent-runtime-server` entrypoint and delegates carrier execution to the packaged `@narada2/agent-cli` server substrate.
+The implementation is the Narada-owned `@narada2/agent-runtime-server` package. It provides the `narada-agent-runtime-server` / `agent-runtime-server` entrypoint and runs carrier execution in-process through `@narada2/carrier-runtime`.
 
-Reason:
+Reason: NARS owns identity binding, session persistence, MCP discovery, provider turn execution, tool dispatch, and event/session evidence for the live carrier runtime. `agent-cli` owns terminal/client projection and attach/session utilities only.
 
-```text
-agent-cli already owns Narada identity binding, session persistence, MCP discovery, and provider adapter posture.
-```
-
-The coherent ownership split is that Narada proper owns the Agent Runtime Server package and stable runtime-server entrypoint, while `agent-cli` remains the current carrier substrate behind that entrypoint. Codex, Claude Code, Pi, Kimi, and API providers stay replaceable adapters behind the carrier/runtime boundary.
+The coherent ownership split is that Narada proper owns the Agent Runtime Server package and stable runtime-server entrypoint. `agent-cli` is a terminal/client projection and compatibility runtime name; it is not the carrier substrate behind NARS. Codex, Claude Code, Pi, Kimi, and API providers stay replaceable adapters behind the carrier/runtime boundary.
 
 ## De-Arbitrarization Result
 

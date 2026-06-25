@@ -252,8 +252,70 @@ assert.deepEqual(classifyCarrierControlRequest({ id: 'events-1', method: 'sessio
   error: null,
   method_kind: 'session_events_subscribe',
 });
+assert.deepEqual(classifyCarrierControlRequest({ id: 'recovery-1', method: 'session.recovery' }), {
+  request_id: 'recovery-1',
+  method: 'session.recovery',
+  concurrent_allowed: false,
+  allowed_when_closed: false,
+  native_control_input: false,
+  observer_action: null,
+  error: null,
+  method_kind: 'session_recovery',
+});
+assert.deepEqual(classifyCarrierControlRequest({ id: 'ops-1', method: 'session.operations' }), {
+  request_id: 'ops-1',
+  method: 'session.operations',
+  concurrent_allowed: false,
+  allowed_when_closed: false,
+  native_control_input: false,
+  observer_action: null,
+  error: null,
+  method_kind: 'session_operations',
+});
+assert.deepEqual(classifyCarrierControlRequest({ id: 'preflight-recovery-1', method: 'preflight.recovery' }), {
+  request_id: 'preflight-recovery-1',
+  method: 'preflight.recovery',
+  concurrent_allowed: false,
+  allowed_when_closed: false,
+  native_control_input: false,
+  observer_action: null,
+  error: null,
+  method_kind: 'preflight_recovery',
+});
+assert.deepEqual(classifyCarrierControlRequest({ id: 'sync-1', method: 'session.sync' }), {
+  request_id: 'sync-1',
+  method: 'session.sync',
+  concurrent_allowed: false,
+  allowed_when_closed: false,
+  native_control_input: false,
+  observer_action: null,
+  error: null,
+  method_kind: 'session_sync',
+});
 assert.equal(classifyCarrierControlRequest({ id: 'interrupt-1', method: 'conversation.interrupt' }).method_kind, 'conversation_interrupt');
 assert.equal(classifyCarrierControlRequest({ id: 'interrupt-1', method: 'conversation.interrupt' }).concurrent_allowed, true);
+assert.deepEqual(classifyCarrierControlRequest({ id: 'command-1', method: 'carrier.command.execute' }), {
+  request_id: 'command-1',
+  method: 'carrier.command.execute',
+  concurrent_allowed: false,
+  allowed_when_closed: false,
+  native_control_input: false,
+  observer_action: null,
+  error: null,
+  method_kind: 'carrier_command_execute',
+  compatibility_alias: null,
+});
+assert.deepEqual(classifyCarrierControlRequest({ id: 'legacy-command-1', method: 'agent-cli.command' }), {
+  request_id: 'legacy-command-1',
+  method: 'agent-cli.command',
+  concurrent_allowed: false,
+  allowed_when_closed: false,
+  native_control_input: false,
+  observer_action: null,
+  error: null,
+  method_kind: 'carrier_command_execute',
+  compatibility_alias: 'agent-cli.command',
+});
 assert.deepEqual(classifyCarrierControlRequest({ id: 'observer-mute-1', method: 'observer.mute' }), {
   request_id: 'observer-mute-1',
   method: 'observer.mute',

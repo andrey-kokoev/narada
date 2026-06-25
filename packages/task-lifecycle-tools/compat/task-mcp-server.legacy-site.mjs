@@ -62,7 +62,7 @@ import {
   payloadValidate,
   resultShow,
   resolveToolPayloadArgs,
-} from '../mcp-payload-file.mjs';
+} from '../../site-common-tools/compat/mcp-payload-file.legacy-site.mjs';
 import { genericCommandRegistrySummary } from '../generic-command-registry.mjs';
 import {
   acknowledgeMcpRestartRequest,

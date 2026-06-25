@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { resolveTaskRolePolicy, roleMismatchSeverity } from './task-role-policy.mjs';
 
 export function resolveAgentRole(store, siteRoot, agentId) {
   return resolveAgentRoleWithDiagnostics(store, siteRoot, agentId).role;
@@ -83,36 +84,68 @@ export function checkTaskRoleEligibilityLocal({ store, siteRoot, taskId, taskNum
   const routing = resolveTaskRouting(store, taskId, taskNumber);
   const roleResolution = resolveAgentRoleWithDiagnostics(store, siteRoot, agentId);
   const targetRole = routing.targetRole;
+  const rolePolicy = resolveTaskRolePolicy({ siteRoot, taskSpec: routing.taskSpec });
   if (targetRole && roleResolution.role !== targetRole) {
+    const severity = roleMismatchSeverity(rolePolicy);
+    const warning = `Task${taskNumber ? ` ${taskNumber}` : ''} targets role '${targetRole}'. Agent '${agentId}' has role '${roleResolution.role ?? 'null'}'.`;
     return {
-      eligible: false,
-      warning: `Task${taskNumber ? ` ${taskNumber}` : ''} targets role '${targetRole}'. Agent '${agentId}' has role '${roleResolution.role ?? 'null'}'.`,
+      eligible: rolePolicy.role_enforcement !== 'strict',
+      warning,
+      warningKind: 'target_role_mismatch',
       targetRole,
       preferredAgentId: routing.preferredAgentId,
       agentRole: roleResolution.role,
       roleBinding: roleResolution.role_binding,
       roleResolution,
+      rolePolicy,
+      roleMismatchWarning: {
+        kind: 'target_role_mismatch',
+        severity,
+        task_number: taskNumber,
+        target_role: targetRole,
+        agent_role: roleResolution.role,
+        agent_id: agentId,
+        role_enforcement: rolePolicy.role_enforcement,
+        role_policy: rolePolicy,
+        message: warning,
+      },
     };
   }
   if (routing.preferredAgentId && routing.preferredAgentId !== agentId) {
+    const warning = `Task${taskNumber ? ` ${taskNumber}` : ''} prefers agent '${routing.preferredAgentId}'. Claiming as '${agentId}'.`;
     return {
       eligible: true,
-      warning: `Task${taskNumber ? ` ${taskNumber}` : ''} prefers agent '${routing.preferredAgentId}'. Claiming as '${agentId}'.`,
+      warning,
+      warningKind: 'preferred_agent_mismatch',
       targetRole,
       preferredAgentId: routing.preferredAgentId,
       agentRole: roleResolution.role,
       roleBinding: roleResolution.role_binding,
       roleResolution,
+      rolePolicy,
+      preferredAgentWarning: {
+        kind: 'preferred_agent_mismatch',
+        severity: 'requires_authority',
+        warning: 'preferred_agent_mismatch',
+        task_number: taskNumber,
+        preferred_agent_id: routing.preferredAgentId,
+        claiming_agent: agentId,
+        message: warning,
+      },
     };
   }
   return {
     eligible: true,
     warning: null,
+    warningKind: null,
     targetRole,
     preferredAgentId: routing.preferredAgentId,
     agentRole: roleResolution.role,
     roleBinding: roleResolution.role_binding,
     roleResolution,
+    rolePolicy,
+    roleMismatchWarning: null,
+    preferredAgentWarning: null,
   };
 }
 
@@ -148,7 +181,7 @@ function resolveTaskRouting(store, taskId, taskNumber) {
   const spec = taskNumber ? store.getTaskSpecByNumber(taskNumber) : null;
   targetRole = targetRole || spec?.target_role || spec?.preferred_role || null;
   preferredAgentId = preferredAgentId || spec?.preferred_agent_id || null;
-  return { targetRole, preferredAgentId };
+  return { targetRole, preferredAgentId, taskSpec: spec };
 }
 
 function readStaticRosterRole(siteRoot, agentId, diagnostics) {

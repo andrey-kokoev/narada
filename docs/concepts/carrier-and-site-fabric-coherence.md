@@ -31,7 +31,7 @@ Current posture:
 
 | Carrier | Evidence level | Boundary claim |
 | --- | --- | --- |
-| `agent-cli` | `code_enforced` | Agent Runtime Server mode can execute read-only calls and route/refuse non-read-only calls through Carrier Action Admission. |
+| NARS / `agent-runtime-server` with `agent-cli` projection | `code_enforced` | Agent Runtime Server mode can execute read-only calls and route/refuse non-read-only calls through Carrier Action Admission; `agent-cli` is the terminal/client projection. |
 | `codex` | `config_enforced` | Launcher projects Site MCP fabric and disables native shell by default. `EnableNativeShell = $true` is break-glass posture and fails the coherence gate. Codex owns carrier execution mechanics. |
 | `pi` | `config_enforced` | Pi is admitted through the Narada-owned Pi MCP bridge extension. The bridge loads Site-local `.ai/mcp` tools; native Pi behavior remains outside Agent Runtime Server code mediation. |
 | `claude-code` | `config_enforced` | Launcher supplies strict MCP config and disallowed native tools; explicit effect mediation exists but is not universal interception. |

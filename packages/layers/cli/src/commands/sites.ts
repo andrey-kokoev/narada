@@ -3636,13 +3636,6 @@ async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<str
     }
   }
   await addCanonicalHash({
-    path: 'tools/mcp-payload-file.mjs',
-    packageName: '@narada2/site-common-tools',
-    version: '0.1.0',
-    surface: 'site-tools',
-    fileUrl: new URL('../../../../../packages/site-common-tools/compat/mcp-payload-file.legacy-site.mjs', import.meta.url),
-  });
-  await addCanonicalHash({
     path: 'tools/typed-mcp/inbox-mcp-server.mjs',
     packageName: '@narada2/typed-mcp-surface',
     version: '0.1.0',

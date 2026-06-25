@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { buildOutputRefToolContent } from '../mcp-payload-file.mjs';
+import { buildOutputRefToolContent } from '../../site-common-tools/compat/mcp-payload-file.legacy-site.mjs';
 
 const PROTOCOL_VERSION = '2024-11-05';
 const RETIRED_REASON = 'EE-MCP is retired on this Site and is not admitted in .narada/capabilities/mcp-surfaces.json.';

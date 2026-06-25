@@ -62,7 +62,7 @@ import {
   payloadValidate,
   resultShow,
   resolveToolPayloadArgs,
-} from '../mcp-payload-file.mjs';
+} from '../../site-common-tools/compat/mcp-payload-file.legacy-site.mjs';
 import { genericCommandRegistrySummary } from '../generic-command-registry.mjs';
 import {
   acknowledgeMcpRestartRequest,
@@ -75,6 +75,7 @@ import {
   writeMcpRestartRequest,
 } from '../mcp-freshness-service.mjs';
 import { agentExistsWithRole, checkTaskRoleEligibilityLocal, resolveAgentRole, resolveAgentRoleWithDiagnostics, roleExistsInRoster } from './agent-role-resolution.mjs';
+import { resolveTaskRolePolicy } from './task-role-policy.mjs';
 
 const PROTOCOL_VERSION = '2026-04-18';
 const SERVER_NAME = 'narada-task-lifecycle-mcp';
@@ -1027,6 +1028,7 @@ async function dispatchTool(canonicalName, args, dispatchContext = {}) {
       if (!lifecycle) throw new Error(`task_not_found: ${taskNumber}`);
       const spec = store.getTaskSpec(lifecycle.task_id);
       const routing = getTaskRouting(store, lifecycle.task_id);
+      const rolePolicy = resolveTaskRolePolicy({ siteRoot, taskSpec: spec });
       const executionWindow = readTaskExecutionWindow(store, lifecycle.task_id);
       const executionWindowState = classifyExecutionWindow(executionWindow);
       const assignment = store.db.prepare("SELECT * FROM task_assignments WHERE task_id = ? AND released_at IS NULL ORDER BY claimed_at DESC LIMIT 1").get(lifecycle.task_id);
@@ -1062,6 +1064,7 @@ async function dispatchTool(canonicalName, args, dispatchContext = {}) {
         execution_window_state: executionWindowState,
         spec: spec ? { ...spec, target_role: routing.target_role, preferred_agent_id: routing.preferred_agent_id, execution_window: executionWindow, execution_window_state: executionWindowState } : null,
         routing,
+        role_policy: rolePolicy,
         active_assignment: assignment ?? null,
         assignment_intents: assignmentIntents,
         observations: observations ?? [],
@@ -1106,12 +1109,22 @@ async function dispatchTool(canonicalName, args, dispatchContext = {}) {
           target_role: eligibility.targetRole,
           agent_role: eligibility.agentRole,
           role_resolution: eligibility.roleResolution,
+          role_policy: eligibility.rolePolicy,
+          role_mismatch_warning: eligibility.roleMismatchWarning,
           message: eligibility.warning,
         }, true);
       }
 
       const result = await withAuthoredRosterJsonPreserved(siteRoot, () => continueTaskService({ cwd: siteRoot, taskNumber, agent: agentId, reason }));
-      return jsonToolResult(result.result || result, result.exitCode !== 0);
+      const output = result.result || result;
+      if (output && typeof output === 'object') {
+        output.role_policy = eligibility.rolePolicy;
+        if (eligibility.roleMismatchWarning) {
+          output.role_mismatch_warning = eligibility.roleMismatchWarning;
+          output.pre_continue_warnings = [eligibility.roleMismatchWarning];
+        }
+      }
+      return jsonToolResult(output, result.exitCode !== 0);
     }
 
     case 'task_lifecycle_unclaim': {
@@ -4345,7 +4358,7 @@ function readTaskRouting(store, taskId, spec = null) {
     rolePref = null;
   }
   return {
-    policy: 'preferred_agent_id_is_soft_affinity_target_role_is_role_gate',
+    policy: 'preferred_agent_id_is_soft_affinity_target_role_enforcement_resolved_by_role_policy',
     target_role: rolePref?.target_role || rolePref?.preferred_role || spec?.target_role || spec?.preferred_role || null,
     preferred_agent_id: rolePref?.preferred_agent_id || spec?.preferred_agent_id || null,
     override_authority_required_when_claiming_nonpreferred: true,
@@ -4888,6 +4901,8 @@ async function claimTaskLifecycleWithGuards(args) {
         target_role: eligibility.targetRole,
         agent_role: eligibility.agentRole,
         role_resolution: eligibility.roleResolution,
+        role_policy: eligibility.rolePolicy,
+        role_mismatch_warning: eligibility.roleMismatchWarning,
         message: eligibility.warning,
       },
       isError: true,
@@ -4939,18 +4954,14 @@ async function claimTaskLifecycleWithGuards(args) {
     };
   }
   const result = { status: 'claimed', assignment_id: serviceResult.assignment_id, task_number: taskNumber };
-  if (eligibility.warning) {
-    result.preferred_agent_warning = {
-      kind: 'preferred_agent_mismatch',
-      severity: 'requires_authority',
-      warning: 'preferred_agent_mismatch',
-      preferred_agent_id: eligibility.preferredAgentId,
-      claiming_agent: agentId,
-      message: eligibility.warning,
-    };
-    result.pre_claim_warnings = [result.preferred_agent_warning];
+  const preClaimWarnings = [eligibility.roleMismatchWarning, eligibility.preferredAgentWarning].filter(Boolean);
+  if (eligibility.preferredAgentWarning) {
+    result.preferred_agent_warning = eligibility.preferredAgentWarning;
     result.preferred_agent_mismatch_authority = mismatchAuthority.authority_basis;
   }
+  if (eligibility.roleMismatchWarning) result.role_mismatch_warning = eligibility.roleMismatchWarning;
+  if (preClaimWarnings.length) result.pre_claim_warnings = preClaimWarnings;
+  result.role_policy = eligibility.rolePolicy;
   recordClaimIntent({
     store,
     lifecycle,
@@ -4960,24 +4971,17 @@ async function claimTaskLifecycleWithGuards(args) {
     assignmentId: serviceResult.assignment_id,
     authorityBasis: mismatchAuthority.authority_basis,
     preferredAgentWarning: result.preferred_agent_warning ?? null,
+    preClaimWarnings,
   });
   if (identityWarning) result.identity_warning = identityWarning;
   return { result, isError: false };
 }
 
 function validatePreferredAgentMismatchAuthority({ args, eligibility, lifecycle, taskNumber, agentId }) {
-  if (!eligibility.warning || !eligibility.preferredAgentId || eligibility.preferredAgentId === agentId) {
+  if (!eligibility.preferredAgentWarning || !eligibility.preferredAgentId || eligibility.preferredAgentId === agentId) {
     return { status: 'not_required', authority_basis: null, preferred_agent_warning: null };
   }
-  const preferredAgentWarning = {
-    kind: 'preferred_agent_mismatch',
-    severity: 'requires_authority',
-    warning: 'preferred_agent_mismatch',
-    task_number: taskNumber,
-    preferred_agent_id: eligibility.preferredAgentId,
-    claiming_agent: agentId,
-    message: eligibility.warning,
-  };
+  const preferredAgentWarning = eligibility.preferredAgentWarning;
   const authorityBasis = normalizeClaimAuthorityBasis(args.authority_basis);
   if (!authorityBasis) {
     return {
@@ -5008,7 +5012,7 @@ function normalizeClaimAuthorityBasis(value) {
   return { kind, summary };
 }
 
-function recordClaimIntent({ store, lifecycle, taskNumber, agentId, status, assignmentId = null, rejectionReason = null, authorityBasis = null, preferredAgentWarning = null }) {
+function recordClaimIntent({ store, lifecycle, taskNumber, agentId, status, assignmentId = null, rejectionReason = null, authorityBasis = null, preferredAgentWarning = null, preClaimWarnings = null }) {
   if (!store.upsertAssignmentIntent) return;
   const now = new Date().toISOString();
   store.upsertAssignmentIntent({
@@ -5032,7 +5036,7 @@ function recordClaimIntent({ store, lifecycle, taskNumber, agentId, status, assi
       authority_basis: authorityBasis,
       preferred_agent_mismatch_acknowledged: Boolean(authorityBasis && preferredAgentWarning),
     }),
-    warnings_json: JSON.stringify(preferredAgentWarning ? [preferredAgentWarning] : []),
+    warnings_json: JSON.stringify(preClaimWarnings ?? (preferredAgentWarning ? [preferredAgentWarning] : [])),
     updated_at: now,
   });
 }

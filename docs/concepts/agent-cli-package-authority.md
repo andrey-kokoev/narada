@@ -42,7 +42,7 @@ prompts, directives, and runtime state. They must not own carrier implementation
 provider resolution, streaming behavior, slash commands, or directive sideband
 semantics.
 
-`C:\Users\Andrey\Narada` is the operator/user-site control surface. It may contain launchers, registry configuration, and operator affordances, but machine-addressable carrier execution delegates to Narada proper's packaged `narada-agent-runtime-server` entrypoint. The runtime server may still use the packaged `narada-agent-cli --carrier-server-substrate` adapter internally as a transitional private substrate.
+`C:\Users\Andrey\Narada` is the operator/user-site control surface. It may contain launchers, registry configuration, and operator affordances, but machine-addressable carrier execution delegates to Narada proper's packaged `narada-agent-runtime-server` entrypoint. The runtime server runs `@narada2/carrier-runtime` in-process; runtime dependencies are constructed by `@narada2/carrier-runtime/runtime-dependencies`, while `agent-cli` remains a client/projection package rather than a runtime helper source.
 
 Site-local `start-agent.mjs` files are no longer admitted compatibility shims. Agent startup authority is the packaged `@narada2/agent-start` TypeScript entrypoint, reached through the site PowerShell surface or package bin metadata.
 
@@ -54,7 +54,7 @@ Site-local `start-agent.mjs` files are no longer admitted compatibility shims. A
 - pass launch identity, session, model, provider, and control JSONL path;
 - render operator-facing launch status;
 - choose the packaged `narada-agent-runtime-server` binary for machine-addressable carrier execution;
-- use direct `narada-agent-cli` execution only as a documented compatibility fallback or private runtime-server substrate.
+- attach `narada-agent-cli` only as a client/projection when the operator requests terminal interaction with an existing NARS session.
 
 It must not:
 
@@ -62,7 +62,7 @@ It must not:
 - require an API key for `codex-subscription`;
 - fork provider metadata or provider resolution;
 - bypass the package-owned carrier queue, directive sideband, or MCP fabric loading.
-- resolve the runtime server from `@narada2/agent-cli` except through the compatibility-only `agent-runtime-server` shim.
+- resolve the runtime server from `@narada2/agent-cli` or any agent-cli compatibility shim.
 
 ## Dry-Run Invariant
 

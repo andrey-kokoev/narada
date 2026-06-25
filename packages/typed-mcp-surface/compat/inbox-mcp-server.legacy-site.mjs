@@ -27,7 +27,7 @@ import {
   payloadRefMetadataFromEntry,
   resultShow,
   resolveToolPayloadArgs,
-} from '../mcp-payload-file.mjs';
+} from '../../site-common-tools/compat/mcp-payload-file.legacy-site.mjs';
 
 const PROTOCOL_VERSION = '2024-11-05';
 let activeOutputToolName = null;

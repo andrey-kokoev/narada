@@ -2,6 +2,7 @@ import { enforceMcpGuard } from './mcp-guard.mjs';
 enforceMcpGuard(process.argv);
 
 import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
+import { resolveTaskRolePolicy } from './task-role-policy.mjs';
 
 const cwd = process.argv[2] || process.cwd();
 const taskNumber = parseInt(process.argv[3], 10);
@@ -26,6 +27,7 @@ try {
   const reportAgentIds = [...new Set((reports || []).map((report) => report.agent_id).filter(Boolean))];
   const finishedBy = lifecycle.closed_by || (reportAgentIds.length === 1 ? reportAgentIds[0] : null);
   const preferredAgentId = rolePref?.preferred_agent_id || null;
+  const rolePolicy = resolveTaskRolePolicy({ siteRoot: cwd, taskSpec: spec });
 
   const result = {
     schema: 'narada.task.read.v0',
@@ -40,8 +42,9 @@ try {
     assigned_at: assignment?.claimed_at || null,
     target_role: rolePref?.target_role || null,
     preferred_agent_id: preferredAgentId,
+    role_policy: rolePolicy,
     routing_policy: {
-      policy: 'preferred_agent_id_is_soft_affinity_target_role_is_role_gate',
+      policy: `preferred_agent_id_is_soft_affinity_target_role_enforcement_${rolePolicy.role_enforcement}`,
       override_authority_required_when_claiming_nonpreferred: true,
       allowed_override_authority_kinds: ['operator_direct_instruction', 'directed_obligation', 'task_owner_handoff'],
     },

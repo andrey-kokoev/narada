@@ -64,7 +64,7 @@ See [`governed-transduction.md`](governed-transduction.md).
 | Task | Durable work obligation. | A loop may create or route tasks, but is not itself the work obligation. |
 | Directive | Situated instruction, attention, routing, or constraint for a target. | A loop may emit directives, but directives are not the recurring control routine. |
 | Agent | Reasoning actor that interprets tasks and directives. | A loop may target or summon agents, but is not an agent. |
-| Carrier | Runtime substrate for an agent, such as `agent-cli`, Codex, or Claude. | A loop may deliver through a carrier, but is not defined by that carrier. |
+| Carrier | Runtime substrate for an agent, such as NARS, Codex, Pi, or Claude Code. | A loop may deliver through a carrier, but is not defined by that carrier or by an operator surface. |
 | Daemon | Host process capable of running one or many loops. | A daemon is execution substrate; the loop is Site-governed control semantics. |
 | Prompt | Runtime-specific rendered text. | A loop may ultimately cause prompt delivery, but the governed object is upstream of prompt rendering. |
 | Cycle | Generic bounded execution pass. | A Loop Run is a kind of cycle tied to a declared Operating Loop. |
@@ -83,7 +83,7 @@ See [`governed-transduction.md`](governed-transduction.md).
     "observes": ["mailbox", "task_lifecycle"],
     "emits": ["directive", "health_event"],
     "targets": [{ "kind": "role", "id": "resident" }],
-    "carrier_preferences": ["agent-cli"],
+    "carrier_preferences": ["narada-agent-runtime-server"],
     "max_batch": 25
   }
 }
@@ -117,7 +117,7 @@ mailbox sync or inbox bridge
 -> task materialized/admitted
 -> Site Operating Loop run records observation
 -> loop emits system directive for role:resident or agent:site.resident
--> agent-cli control.jsonl carries directive
+-> NARS control transport carries directive
 -> carrier records directive_receipt_recorded
 -> loop receipt reconciliation updates delivery posture
 ```
@@ -130,7 +130,7 @@ This is coherent even when the loop is continuously running. The continuous proc
 - The loop may only observe surfaces named by policy.
 - The loop may only emit object kinds admitted by policy.
 - The loop must record bounded Loop Runs, even when implemented by a continuous process.
-- The loop must not collapse carrier availability into authority. A live `agent-cli` process is delivery capacity, not permission.
+- The loop must not collapse carrier availability into authority. A live NARS session is delivery capacity, not permission.
 - The loop must not treat append-to-transport as receipt. Receipt requires target evidence.
 - The loop must use leases or equivalent coordination before performing non-idempotent emissions.
 - Triggered and continuous modes must share the same admission and evidence rules.
@@ -159,11 +159,11 @@ Operating loops and directives complement each other:
 - Directive: admitted situated intent emitted by a source for a target.
 - Agent/carrier: consumer path that receives and interprets the directive.
 
-For autonomous `agent-cli` operations, the coherent statement is:
+For autonomous NARS-backed resident operations, the coherent statement is:
 
 ```text
 Site Operating Loop emits a directive targeted to a resident role.
-agent-cli is the current carrier used to deliver that directive.
+NARS is the carrier runtime used to deliver that directive; agent-cli may be one attached operator surface.
 ```
 
 Not:

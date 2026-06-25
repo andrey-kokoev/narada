@@ -4,7 +4,7 @@ This document defines the durable target architecture for Narada carrier/runtime
 
 ## Problem
 
-Narada currently has multiple carrier-facing implementations: `agent-cli`, `agent-tui`, and Codex-as-carrier. They should differ in presentation and adapter mechanics, but not in the meaning of a session, command, tool, payload, authority decision, or runtime state.
+Narada currently has multiple carrier-facing implementations and surfaces: NARS / `agent-runtime-server`, `agent-cli`, `agent-tui`, and Codex-as-carrier. They should differ in presentation and adapter mechanics, but not in the meaning of a session, command, tool, payload, authority decision, or runtime state.
 
 When those semantics live inside each surface, behavior drifts. One carrier may admit a tool while another hides it; one may serialize a payload ref differently; one may treat a provider or command as available while another rejects it. Those are runtime contract failures, not UI differences.
 
@@ -36,7 +36,7 @@ Carrier surfaces own presentation and transport details.
 
 Carrier hosts own deployment/runtime constraints such as local processes, Cloudflare Workers, Durable Objects, containers, process supervision, and storage bindings. Host posture must not redefine carrier runtime semantics.
 
-`agent-cli` owns line-oriented terminal presentation, stdin/stdout behavior, and CLI formatting.
+`agent-cli` owns line-oriented terminal presentation, stdin/stdout behavior, attach/session utilities, and CLI formatting.
 
 `agent-tui` owns Ratatui layout, panes, composer behavior, keybindings, and visual transcript rendering.
 

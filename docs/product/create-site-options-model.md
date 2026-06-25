@@ -155,11 +155,13 @@ Options:
 - `inbox.enable`: `false`, `drop_only`, `canonical_envelope_intake`
 - `task_lifecycle.enable`: `false`, `descriptor_only`, `local_adapter_planned`, `local_adapter_admitted`
 - `task_lifecycle.package`: `@narada2/site-task-lifecycle`
+- `task_lifecycle.role_enforcement`: `off`, `warn`, `strict`
 
 Rules:
 
 - enabling task lifecycle from the package creates descriptors/plans only by default;
 - local DB mutation and MCP `admit_task` require separate adapter and MCP admission.
+- `role_enforcement` controls claim/continuation semantics for task `target_role`: `off` treats it as advisory metadata, `warn` allows mismatches with diagnostics, and `strict` blocks mismatches.
 
 ### Agent Context Memory
 

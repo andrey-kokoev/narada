@@ -268,18 +268,30 @@ test('agent-cli exec launches package bin through node, not PowerShell', () => {
   const sessionId = output.carrier_session.carrier_session_id;
   assert.equal(output.exec_command.startsWith(process.execPath), true);
   assert.equal(output.exec_command.includes('pwsh'), false);
-  assert.equal(output.agent_cli_launch.command, process.execPath);
-  assert.equal(output.agent_cli_launch.carrier_relation, 'narada_agent_runtime_server');
-  assert.deepEqual(output.agent_cli_launch.runtime_server, {
+  assert.equal(output.nars_launch.command, process.execPath);
+  assert.equal(output.nars_launch.carrier_runtime_kind, 'narada-agent-runtime-server');
+  assert.equal(output.nars_launch.operator_surface_kind, 'agent-cli');
+  assert.equal(output.nars_launch.compatibility_runtime_alias, 'agent-cli');
+  assert.equal(output.nars_launch.carrier_relation, 'narada_agent_runtime_server');
+  assert.deepEqual(output.nars_launch.runtime_server, {
     package: '@narada2/agent-runtime-server',
     entrypoint: 'narada-agent-runtime-server',
     compatibility_alias: 'agent-runtime-server',
   });
-  assert.equal(output.agent_cli_launch.private_carrier_substrate.relation, 'transitional_private_adapter');
-  assert.equal(output.agent_cli_launch.private_carrier_substrate.package, '@narada2/agent-cli');
-  assert.equal(output.agent_cli_launch.control_transport, 'jsonl_sideband_file');
-  assert.equal(output.agent_cli_launch.reads_only_target_site_mcp_fabric, true);
-  assert.equal(output.agent_cli_launch.user_site_mcp_injected, false);
+  assert.equal(Object.hasOwn(output.nars_launch, 'private_carrier_substrate'), false);
+  assert.equal(output.nars_launch.control_transport, 'jsonl_sideband_file');
+  assert.equal(output.nars_launch.reads_only_target_site_mcp_fabric, true);
+  assert.equal(output.nars_launch.user_site_mcp_injected, false);
+  assert.equal(output.agent_cli_launch.compatibility_alias_for, 'nars_launch');
+  assert.equal(output.nars_events.attach_commands.registry_schema, 'narada.nars.client_projection_registry.v1');
+  assert.equal(output.nars_events.attach_commands.agent_cli, 'narada-agent-cli --attach <session_started.event_endpoint>');
+  assert.equal(output.nars_events.attach_commands.agent_web_ui, 'narada-agent-web-ui --event-endpoint <session_started.event_endpoint> --health-endpoint <session_started.health_endpoint>');
+  assert.match(output.nars_events.attach_commands.operator_input_protocol, /conversation\.send/);
+  assert.match(output.nars_events.attach_commands.slash_command_protocol, /carrier\.command\.execute/);
+  assert.deepEqual(output.nars_events.attach_commands.compatibility_methods, ['agent-cli.command']);
+  assert.equal(output.carrier_session.record.carrier_runtime_kind, 'narada-agent-runtime-server');
+  assert.equal(output.carrier_session.record.operator_surface_kind, 'agent-cli');
+  assert.equal(output.carrier_session.record.compatibility_runtime_alias, 'agent-cli');
   assert.equal(output.runtime_args[0].endsWith('agent-runtime-server.mjs'), true);
   assert.deepEqual(output.runtime_args.slice(1), [
     '--identity',
@@ -302,8 +314,8 @@ test('agent-cli dry-run records event-id propagation residual at runtime-server 
   assert.equal(output.required_environment.NARADA_AGENT_START_EVENT_ID, undefined);
   assert.equal(output.would_set_environment.NARADA_AGENT_START_EVENT_ID, undefined);
   assert.equal(output.carrier_session.record.agent_start_event_id, null);
-  assert.equal(output.agent_cli_launch.control_path.includes(sessionId), true);
-  assert.equal(output.agent_cli_launch.session_path.includes(sessionId), true);
+  assert.equal(output.nars_launch.control_path.includes(sessionId), true);
+  assert.equal(output.nars_launch.session_path.includes(sessionId), true);
 });
 
 test('target site MCP fabric remains isolated from user site fabric', () => {
@@ -328,9 +340,9 @@ test('target site MCP fabric remains isolated from user site fabric', () => {
   assert.equal(output.mcp_fabric.site_root, siteRoot);
   assert.deepEqual(output.mcp_fabric.server_names, ['narada-target-only']);
   assert.equal(output.mcp_fabric.server_names.some((name) => name.includes('user')), false);
-  assert.equal(output.agent_cli_launch.site_mcp_fabric, join(siteRoot, '.ai', 'mcp'));
-  assert.equal(output.agent_cli_launch.reads_only_target_site_mcp_fabric, true);
-  assert.equal(output.agent_cli_launch.user_site_mcp_injected, false);
+  assert.equal(output.nars_launch.site_mcp_fabric, join(siteRoot, '.ai', 'mcp'));
+  assert.equal(output.nars_launch.reads_only_target_site_mcp_fabric, true);
+  assert.equal(output.nars_launch.user_site_mcp_injected, false);
   assert.equal(output.required_environment.NARADA_SITE_ROOT, siteRoot);
   assert.equal(output.runtime_args[output.runtime_args.indexOf('--site-root') + 1], siteRoot);
 });

@@ -66,19 +66,28 @@ function assertModernAgentCliLaunch(result) {
   assert.equal(result.schema, 'narada.agent_start.result.v0');
   assert.equal(result.runtime, 'agent-cli');
   assert.equal(result.runtime_substrate_kind, 'agent-cli');
-  assert.equal(result.tool_fabric_adapter_kind, 'narada-agent-cli-mcp-client');
-  assert.equal(result.agent_cli_launch.schema, 'narada.agent_start.agent_cli.v0');
-  assert.equal(result.agent_cli_launch.control_transport, 'jsonl_sideband_file');
-  assert.equal(result.agent_cli_launch.carrier_relation, 'narada_agent_runtime_server');
-  assert.equal(result.agent_cli_launch.runtime_server.package, '@narada2/agent-runtime-server');
-  assert.equal(result.agent_cli_launch.runtime_server.entrypoint, 'narada-agent-runtime-server');
-  assert.equal(result.agent_cli_launch.private_carrier_substrate.relation, 'transitional_private_adapter');
-  assert.equal(result.agent_cli_launch.command, process.execPath);
+  assert.equal(result.tool_fabric_adapter_kind, 'narada-agent-runtime-server-mcp-client');
+  assert.equal(result.nars_launch.schema, 'narada.agent_start.nars_launch.v1');
+  assert.equal(result.nars_launch.carrier_runtime_kind, 'narada-agent-runtime-server');
+  assert.equal(result.nars_launch.operator_surface_kind, 'agent-cli');
+  assert.equal(result.nars_launch.compatibility_runtime_alias, 'agent-cli');
+  assert.equal(result.nars_launch.control_transport, 'jsonl_sideband_file');
+  assert.equal(result.nars_launch.carrier_relation, 'narada_agent_runtime_server');
+  assert.equal(result.nars_launch.runtime_server.package, '@narada2/agent-runtime-server');
+  assert.equal(result.nars_launch.runtime_server.entrypoint, 'narada-agent-runtime-server');
+  assert.equal(Object.hasOwn(result.nars_launch, 'private_carrier_substrate'), false);
+  assert.equal(result.nars_launch.command, process.execPath);
+  assert.equal(result.agent_cli_launch.compatibility_alias_for, 'nars_launch');
+  assert.equal(result.nars_events.attach_commands.registry_schema, 'narada.nars.client_projection_registry.v1');
+  assert.equal(result.nars_events.attach_commands.agent_web_ui, 'narada-agent-web-ui --event-endpoint <session_started.event_endpoint> --health-endpoint <session_started.health_endpoint>');
+  assert.match(result.nars_events.attach_commands.operator_input_protocol, /conversation\.send/);
+  assert.match(result.nars_events.attach_commands.slash_command_protocol, /carrier\.command\.execute/);
+  assert.deepEqual(result.nars_events.attach_commands.compatibility_methods, ['agent-cli.command']);
   assert.equal(result.runtime_args[0].endsWith('agent-runtime-server.mjs'), true);
   assert.equal(result.runtime_args.includes('--session'), true);
   assert.equal(result.runtime_args.includes(result.carrier_session.carrier_session_id), true);
   assert.equal(result.runtime_args.includes('--control-jsonl'), false);
-  assert.match(result.agent_cli_launch.control_path, /[\\/]\.narada[\\/]crew[\\/]nars-sessions[\\/]carrier_/);
+  assert.match(result.nars_launch.control_path, /[\\/]\.narada[\\/]crew[\\/]nars-sessions[\\/]carrier_/);
 }
 
 test('packaged agent-start emits modern Narada proper agent-cli launch evidence', () => {

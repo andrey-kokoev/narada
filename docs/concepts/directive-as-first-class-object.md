@@ -199,7 +199,7 @@ Directive therefore sits between interpreted intent and concrete delivery. It na
 
 Agent carriers should consume admitted directives rather than ad hoc prompt strings.
 
-For `agent-cli`, this means the session startup path can eventually read admitted directives and render them into the chat context.
+For NARS-backed local sessions, this means the session startup path can eventually read admitted directives and render them into the active conversation context; `agent-cli` may be the attached operator surface, but it is not the directive authority.
 
 For Codex, Kimi, Pi, Claude Code, and other substrates, each carrier may render the same directive differently while preserving the same directive provenance.
 
@@ -323,7 +323,7 @@ Required first slice:
 3. List pending directives for a target agent/role.
 4. Record delivery attempt state without pretending receipt.
 5. Expose a read surface for resident startup/polling.
-6. Record carrier receipt separately when `agent-cli` or `agent-runtime-server` accepts a directive into its turn queue.
+6. Record carrier receipt separately when NARS accepts a directive into its turn queue.
 
 Explicitly deferred:
 
@@ -333,14 +333,13 @@ Explicitly deferred:
 - marking delivered without carrier receipt,
 - direct command execution from directive content.
 
-The first live carrier integration should be pull-based or receipt-gated: `agent-cli` asks for pending admitted directives at startup or interval, receives them through its controlled conversation loop, and records receipt. Push can be added later only if it preserves the same lease and receipt semantics.
+The first live carrier integration should be pull-based or receipt-gated: NARS asks for pending admitted directives at startup or interval, receives them through its controlled conversation loop, and records receipt. Push can be added later only if it preserves the same lease and receipt semantics.
 
 The current admitted live transports are:
 
 | Carrier | Operator text transport | Programmatic directive transport | Receipt evidence |
 | --- | --- | --- | --- |
-| `agent-cli` | interactive terminal stdin | launcher-registered Site-local `control.jsonl` sideband | session event `directive_receipt_recorded` with `narada.directive.carrier_receipt_evidence.v1` |
-| `agent-runtime-server` | none | JSONL stdio method `system_directive.deliver` | JSONL event `directive_receipt_recorded` plus session evidence |
+| NARS / `agent-runtime-server` | attached operator surfaces such as `agent-cli` | launcher-registered Site-local `control.jsonl` sideband or JSONL stdio method `system_directive.deliver` | session event `directive_receipt_recorded` with `narada.directive.carrier_receipt_evidence.v1` |
 
 `control.jsonl` is not a global queue. It is a launcher-registered control path for one carrier session under that Site's `.narada\crew\nars-sessions\<carrier_session_id>\` directory. It preserves provenance separation between operator input and system/programmatic directive delivery while avoiding terminal text injection.
 
@@ -421,7 +420,7 @@ Authored docs/config remain Git-visible doctrine and posture. Runtime directive 
 | Storage locus | Closed. | No global directive DB; instances live in target Site runtime state. |
 | Agent startup behavior | Doctrine-closed; carrier implementation required. | Agent performs deterministic startup triage instead of executing directive order blindly. |
 | Post-work-admission emission | Doctrine-closed; runtime implementation required. | Emit resident attention directives from admitted/changed work, not raw source arrival. |
-| Carrier receipt evidence | First carrier slice closed for `agent-cli` and `agent-runtime-server`. | Receipt is recorded when the carrier accepts a directive into its turn queue, separate from work completion. |
+| Carrier receipt evidence | First carrier slice closed for NARS / `agent-runtime-server`. | Receipt is recorded when the carrier runtime accepts a directive into its turn queue, separate from work completion. |
 | Live carrier push | Not admitted yet. | Add only after directive queue, delivery lease, and carrier receipt are implemented. |
 
 Implementation task list:
@@ -430,7 +429,7 @@ Implementation task list:
 2. Add Site-local directive persistence for SQLite-backed queues.
 3. Add post-work-admission resident directive emission with idempotency by Site, task/work id, transition id, purpose, and target.
 4. Add pending directive read surface for resident startup/polling.
-5. Add carrier receipt writing from `agent-cli` and `agent-runtime-server`.
+5. Add carrier receipt writing from NARS / `agent-runtime-server`.
 6. Add runtime guards for authority locus and admitted carrier kind.
 7. Add export/import posture for Site-local directive evidence.
 8. Add retention/TTL policy for short-lived directives.
