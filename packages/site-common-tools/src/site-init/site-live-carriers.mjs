@@ -764,7 +764,8 @@ function liveCarrierCommand(context, carrierId, mode, extraArgs = []) {
 }
 
 function mcpRegistrationManifest(context, options, plan) {
-  const descriptors = normalizeMcpServerDescriptors(options.mcp_server_descriptors);
+  const descriptors = normalizeMcpServerDescriptors(options.mcp_server_descriptors)
+    .map((descriptor) => withSiteAccessPolicyAllowedRoots(descriptor, context));
   return {
     schema: 'narada.site_mcp_registration.v0',
     site_id: context.siteId,
@@ -782,6 +783,7 @@ function normalizeMcpServerDescriptors(value) {
   return list
     .filter((item) => item && typeof item === 'object')
     .map((item) => ({
+      ...item,
       name: stringOption(item.name) ?? 'mcp-server',
       transport: stringOption(item.transport) ?? 'stdio',
       command: stringOption(item.command) ?? null,
@@ -789,6 +791,85 @@ function normalizeMcpServerDescriptors(value) {
       entrypoint: stringOption(item.entrypoint) ?? null,
       grants_broader_authority: item.grants_broader_authority === true,
     }));
+}
+
+function withSiteAccessPolicyAllowedRoots(descriptor, context) {
+  if (!descriptorNeedsAllowedRoots(descriptor)) return descriptor;
+  const policyRoots = siteAccessPolicyAllowedRoots(context);
+  if (policyRoots.length === 0) return descriptor;
+  const args = [...(descriptor.args ?? [])];
+  const existingRoots = allowedRootsFromArgs(args);
+  const roots = uniqueStrings([...existingRoots, ...policyRoots]);
+  for (const root of roots) {
+    if (!existingRoots.includes(root)) args.push('--allowed-root', root);
+  }
+  return {
+    ...descriptor,
+    args,
+    allowed_root: roots[0] ?? null,
+    allowed_roots: roots,
+    allowed_roots_source: 'site_access_policy',
+  };
+}
+
+function descriptorNeedsAllowedRoots(descriptor) {
+  const name = String(descriptor?.name ?? '').toLowerCase();
+  const entrypoint = String(descriptor?.entrypoint ?? '').toLowerCase();
+  const args = descriptor?.args ?? [];
+  if (allowedRootsFromArgs(args).length > 0) return true;
+  return [
+    'local-filesystem',
+    'structured-command',
+    'worker-delegation',
+    'delegated-task',
+    'git',
+  ].some((needle) => name.includes(needle) || entrypoint.includes(needle));
+}
+
+function allowedRootsFromArgs(args) {
+  const roots = [];
+  for (let index = 0; index < args.length; index += 1) {
+    if (args[index] === '--allowed-root' && typeof args[index + 1] === 'string') roots.push(normalizePath(args[index + 1]));
+  }
+  return uniqueStrings(roots);
+}
+
+function siteAccessPolicyAllowedRoots(context) {
+  const policy = readSiteAccessPolicy(context);
+  if (!policy) return [];
+  const entries = Array.isArray(policy?.allowed_roots) ? policy.allowed_roots : [];
+  const roots = entries
+    .filter((entry) => entry && typeof entry === 'object')
+    .filter((entry) => Array.isArray(entry.access) && entry.access.includes('write'))
+    .map((entry) => stringOption(entry.path))
+    .filter(Boolean)
+    .map((root) => normalizePath(root))
+    .filter((root) => !looksLikeSecretFile(root));
+  return uniqueStrings([context.targetSiteRoot, ...roots]);
+}
+
+function readSiteAccessPolicy(context) {
+  for (const policyPath of siteAccessPolicyCandidatePaths(context)) {
+    const policy = inspectJsonFile(policyPath);
+    if (policy.status === 'json') return policy.value;
+  }
+  return null;
+}
+
+function siteAccessPolicyCandidatePaths(context) {
+  const siteSlug = String(context.siteId ?? '').toLowerCase();
+  return uniqueStrings([
+    path.join(context.targetSiteRoot, '.narada/capabilities/site-access-policy.json'),
+    siteSlug ? path.join(context.targetSiteRoot, `.narada/capabilities/${siteSlug}-access-policy.json`) : null,
+  ].filter(Boolean));
+}
+
+function looksLikeSecretFile(root) {
+  return /(^|[\\/])\.env$/i.test(root) || /secret|credential|token/i.test(root);
+}
+
+function uniqueStrings(values) {
+  return [...new Set(values.filter((value) => typeof value === 'string' && value.length > 0))];
 }
 
 function resolveProfileArtifactPath(context, options) {
@@ -950,6 +1031,7 @@ function parseArgs(argv) {
     else if (arg === '--source-site-root') options.source_site_root = argv[++i];
     else if (arg === '--runtime-target') options.runtime_target = argv[++i];
     else if (arg === '--mcp-server-json') options.mcp_server_descriptors = JSON.parse(argv[++i]);
+    else if (arg === '--mcp-server-json-file') options.mcp_server_descriptors = readMcpServerDescriptorsFile(argv[++i]);
     else if (arg === '--db-verified') options.db_verified = true;
     else if (arg === '--storage-verified') options.storage_verified = true;
     else if (arg === '--mcp-registration-verified') options.mcp_registration_verified = true;
@@ -965,6 +1047,13 @@ function parseArgs(argv) {
     else throw new Error(`unsupported_argument: ${arg}`);
   }
   return options;
+}
+
+function readMcpServerDescriptorsFile(filePath) {
+  const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  if (Array.isArray(parsed)) return parsed;
+  if (Array.isArray(parsed?.mcp_servers)) return parsed.mcp_servers;
+  throw new Error(`mcp_server_json_file_must_be_array_or_manifest: ${filePath}`);
 }
 
 function runCli(argv = process.argv.slice(2), stdout = process.stdout, stderr = process.stderr) {

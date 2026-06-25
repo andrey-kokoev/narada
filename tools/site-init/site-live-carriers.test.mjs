@@ -173,6 +173,47 @@ test('MCP registration carrier applies target-local manifest and refuses broader
   assert.equal(verify.audit_evidence.verification.server_count, 1);
 });
 
+test('MCP registration carrier admits policy write roots for bounded local surfaces', () => {
+  const root = tempSite('policy-root-mcp-carrier');
+  const siteId = path.basename(root).toLowerCase();
+  const admittedRoot = path.join(root, 'admitted-workspace');
+  const readOnlyEnv = path.join(root, '.narada', '.env');
+  fs.writeFileSync(path.join(root, `.narada/capabilities/${siteId}-access-policy.json`), JSON.stringify({
+    schema: 'narada.site.access_policy_admission.v0',
+    site_id: siteId,
+    policy_kind: 'filesystem_root_access',
+    allowed_roots: [
+      { path: root, access: ['read', 'write'], purpose: 'site root' },
+      { path: admittedRoot, access: ['read', 'write'], purpose: 'admitted workspace' },
+      { path: readOnlyEnv, access: ['read'], purpose: 'read-only credential file' },
+    ],
+  }, null, 2));
+
+  const applied = siteMcpRegistrationCarrier(mcpOptions(root, {
+    mode: 'apply',
+    mutation_authorized: true,
+    mcp_server_descriptors: [{
+      name: 'narada-test-local-filesystem',
+      transport: 'stdio',
+      command: 'node',
+      args: ['D:/code/mcp-surfaces/packages/local-filesystem-mcp/dist/src/main.js', '--mode', 'write'],
+      entrypoint: 'D:/code/mcp-surfaces/packages/local-filesystem-mcp/dist/src/main.js',
+      surface_class: 'site_local_policy_gated_filesystem_write',
+    }],
+  }));
+
+  assert.equal(applied.status, 'applied');
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, '.narada/capabilities/mcp-registration.json'), 'utf8'));
+  const [server] = manifest.mcp_servers;
+  assert.equal(server.surface_class, 'site_local_policy_gated_filesystem_write');
+  assert.equal(server.allowed_roots_source, 'site_access_policy');
+  assert.deepEqual(server.allowed_roots, [root, admittedRoot]);
+  assert.equal(server.args.filter((arg) => arg === '--allowed-root').length, 2);
+  assert.ok(server.args.includes(root));
+  assert.ok(server.args.includes(admittedRoot));
+  assert.equal(server.args.includes(readOnlyEnv), false);
+});
+
 test('Windows profile binding carrier is profile-authority gated and target-local', () => {
   const root = tempSite();
 
