@@ -1,7 +1,7 @@
 import type { Command } from 'commander';
 import { directCommandAction, silentCommandContext } from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
-import { workspaceLaunchPlanCommand } from './launcher.js';
+import { explainMcpCommand, workspaceLaunchPlanCommand } from './launcher.js';
 
 export function registerLauncherCommands(program: Command): void {
   const launcher = program
@@ -41,6 +41,29 @@ export function registerLauncherCommands(program: Command): void {
         noWaitForEnterBeforeExec: opts.waitForEnterBeforeExec === false,
         smoke: opts.smoke as boolean | undefined,
         dryRun: opts.dryRun as boolean | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  launcher
+    .command('explain-mcp')
+    .description('Explain the runtime-authoritative Site MCP fabric and compare non-authoritative projections')
+    .option('--site-root <path>', 'Target Site root whose runtime .ai/mcp fabric should be inspected')
+    .option('--site <site>', 'Site alias resolved through the launch registry when --site-root is omitted')
+    .option('--registry-path <path>', 'Launch registry path for --site lookup')
+    .option('--config-path <path...>', 'One or more launch registry files for --site lookup')
+    .option('--server <name>', 'Only report one MCP server')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[Record<string, unknown>]>({
+      command: 'launcher explain-mcp',
+      emit: emitCommandResult,
+      format: (opts: Record<string, unknown>) => opts.format,
+      invocation: (opts) => explainMcpCommand({
+        siteRoot: opts.siteRoot as string | undefined,
+        site: opts.site as string | undefined,
+        registryPath: opts.registryPath as string | undefined,
+        configPath: opts.configPath as string[] | undefined,
+        server: opts.server as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),
     }));

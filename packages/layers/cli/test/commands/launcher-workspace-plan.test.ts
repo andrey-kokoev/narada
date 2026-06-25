@@ -1,7 +1,7 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { workspaceLaunchPlanCommand } from '../../src/commands/launcher.js';
+import { explainMcpCommand, workspaceLaunchPlanCommand } from '../../src/commands/launcher.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
@@ -18,6 +18,51 @@ function createMockContext(): CommandContext {
     logger: logger as unknown as CommandContext['logger'],
     verbose: false,
   };
+}
+
+async function tempSiteWithDivergentMcpAuthority(): Promise<string> {
+  const dir = join(process.cwd(), '.ai', 'tmp-tests', `launcher-mcp-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  await mkdir(join(dir, '.ai', 'mcp'), { recursive: true });
+  await mkdir(join(dir, '.narada', 'capabilities'), { recursive: true });
+  tempDirs.push(dir);
+  await writeFile(join(dir, '.ai', 'mcp', 'site-mcp.json'), JSON.stringify({
+    schema: 'narada.mcp.client_config.v0',
+    mcpServers: {
+      'narada-test-local-filesystem': {
+        transport: 'stdio',
+        command: 'node',
+        args: [
+          'local-filesystem.js',
+          '--mode',
+          'write',
+          '--allowed-root',
+          join(dir, 'runtime-root'),
+          '--output-root',
+          dir,
+        ],
+      },
+    },
+  }), 'utf8');
+  await writeFile(join(dir, '.narada', 'capabilities', 'mcp-registration.json'), JSON.stringify({
+    schema: 'narada.site_mcp_registration.v0',
+    mcp_servers: [
+      {
+        name: 'narada-test-local-filesystem',
+        transport: 'stdio',
+        command: 'node',
+        args: [
+          'local-filesystem.js',
+          '--mode',
+          'write',
+          '--allowed-root',
+          join(dir, 'projection-only-root'),
+          '--output-root',
+          join(dir, '.ai', 'tmp', 'mcp-outputs'),
+        ],
+      },
+    ],
+  }), 'utf8');
+  return dir;
 }
 
 const tempDirs: string[] = [];
@@ -171,5 +216,39 @@ describe('launcher workspace planning', () => {
     expect(result.agents[0].agent).toBe('sonar.resident');
     expect(result.agents[0].carrier_start.mutation_performed).toBe(false);
     expect(result.agents[0].carrier_start.mode).toBe('dry_run');
+  });
+
+  it('explains runtime MCP fabric as authoritative over capability projections', async () => {
+    const siteRoot = await tempSiteWithDivergentMcpAuthority();
+    const explanation = await explainMcpCommand({
+      siteRoot,
+      server: 'narada-test-local-filesystem',
+      format: 'json',
+    }, createMockContext());
+
+    expect(explanation.exitCode).toBe(ExitCode.SUCCESS);
+    const result = explanation.result as {
+      status: string;
+      authority_boundary: {
+        runtime_authoritative_fabric: string;
+        projection_runtime_authoritative: boolean;
+      };
+      runtime_fabric: { servers: Record<string, { allowed_roots: string[] }> };
+      projection_registration: { servers: Record<string, { allowed_roots: string[] }> };
+      comparison: {
+        security_sensitive_mismatch_count: number;
+        server_comparisons: Array<{ server_name: string; security_sensitive_drift: boolean }>;
+      };
+    };
+    expect(result.status).toBe('projection_drift');
+    expect(result.authority_boundary.runtime_authoritative_fabric).toBe(join(siteRoot, '.ai', 'mcp'));
+    expect(result.authority_boundary.projection_runtime_authoritative).toBe(false);
+    expect(result.runtime_fabric.servers['narada-test-local-filesystem'].allowed_roots).toEqual([join(siteRoot, 'runtime-root')]);
+    expect(result.projection_registration.servers['narada-test-local-filesystem'].allowed_roots).toEqual([join(siteRoot, 'projection-only-root')]);
+    expect(result.comparison.security_sensitive_mismatch_count).toBe(1);
+    expect(result.comparison.server_comparisons[0]).toMatchObject({
+      server_name: 'narada-test-local-filesystem',
+      security_sensitive_drift: true,
+    });
   });
 });
