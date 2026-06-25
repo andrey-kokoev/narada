@@ -1,9 +1,13 @@
+import { buildNarsAttachCommands } from '@narada2/nars-client-projection-contract';
 import {
   classifyCarrierControlRequest,
   isNarsRuntimeEventKind,
   normalizeNarsRuntimeEventKind,
-} from '../../carrier-protocol/src/carrier-protocol.mjs';
+} from '@narada2/carrier-protocol';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { normalizeCarrierRuntimeContext } from './carrier-runtime-context.mjs';
+import { createInputQueue } from './input-queue.mjs';
 
 export async function runCarrierServerMode({
   input = process.stdin,
@@ -40,7 +44,6 @@ export async function runCarrierServerMode({
     createMcpPreflightArtifactSnapshot,
     loadRolePrompt,
     loadSession,
-    createInputQueue,
     runServerInputEvent,
     emitServerEvent,
     recordMcpPreflightArtifactLinkage,
@@ -120,14 +123,29 @@ export async function runCarrierServerMode({
         callChatApiFn,
         input: event,
         directiveId: event.directive_id ?? null,
+        identity,
+        session,
+        siteRoot,
+        sessionPath,
+        providerSettings: state.sessionSettings,
       });
     },
   });
 
   noteSessionActivity(state, 'session_started', state.startedAt);
+  const heartbeat = startCarrierHeartbeat({
+    path: sessionPath ? join(dirname(sessionPath), 'heartbeat.json') : null,
+    session,
+    identity,
+    runtime: 'agent-cli',
+    mode: 'server',
+    sessionDir: sessionPath ? dirname(sessionPath) : null,
+  });
 
   emit('session_started', {
     transport: 'jsonl_stdio',
+    runtime: 'agent-cli',
+    mode: 'server',
     site_root: siteRoot,
     provider: intelligenceProvider,
     model: state.sessionSettings.model,
@@ -148,6 +166,7 @@ export async function runCarrierServerMode({
     health_endpoint: healthUrl,
     event_endpoint: eventStreamUrl,
     websocket_endpoint: eventStreamUrl,
+    attach_commands: buildNarsAttachCommands({ eventEndpoint: eventStreamUrl, healthEndpoint: healthUrl }),
     delegated_authority_handoff: narsDelegatedAuthorityHandoff,
     delegated_authority_ref: narsDelegatedAuthorityHandoff?.authority_ref ?? null,
     session_path: sessionPath,
@@ -228,7 +247,38 @@ export async function runCarrierServerMode({
   await Promise.allSettled([...state.pendingRequests]);
   activeOperationHeartbeatDirectiveEmitter?.stop?.();
   onOperationHeartbeatDirectiveStopped();
+  heartbeat.stop?.('closed');
   closeMcpServers(mcpServers);
+}
+
+function startCarrierHeartbeat({ path, session, identity, runtime, mode, sessionDir, intervalMs = 5000 } = {}) {
+  if (!path) return { stop() {} };
+  const startedAt = new Date().toISOString();
+  const write = (status = 'alive') => {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, `${JSON.stringify({
+      schema: 'narada.carrier_heartbeat.v1',
+      status,
+      carrier_session_id: session,
+      agent_id: identity,
+      runtime,
+      mode,
+      pid: process.pid,
+      session_dir: sessionDir,
+      carrier_session_dir: sessionDir,
+      started_at: startedAt,
+      heartbeat_at: new Date().toISOString(),
+    }, null, 2)}\n`, 'utf8');
+  };
+  write();
+  const timer = setInterval(() => write(), intervalMs);
+  timer.unref?.();
+  return {
+    stop(status = 'closed') {
+      clearInterval(timer);
+      write(status);
+    },
+  };
 }
 
 export function isConcurrentServerRequestLine(line) {

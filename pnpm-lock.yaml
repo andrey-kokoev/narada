@@ -20,6 +20,9 @@ importers:
       '@narada2/agent-tui':
         specifier: workspace:*
         version: link:../agent-tui
+      '@narada2/agent-web-ui':
+        specifier: workspace:*
+        version: link:packages/agent-web-ui
       '@narada2/cli':
         specifier: workspace:*
         version: link:packages/layers/cli
@@ -53,6 +56,9 @@ importers:
       '@narada2/carrier-provider-contract':
         specifier: workspace:*
         version: link:../narada/packages/carrier-provider-contract
+      '@narada2/carrier-terminal-projection':
+        specifier: workspace:*
+        version: link:../narada/packages/carrier-terminal-projection
       '@narada2/mcp-fabric':
         specifier: workspace:*
         version: link:../narada/packages/mcp-fabric
@@ -125,15 +131,15 @@ importers:
 
   packages/agent-runtime-server:
     dependencies:
-      '@narada2/agent-cli':
-        specifier: workspace:*
-        version: link:../../../agent-cli
       '@narada2/carrier-protocol':
         specifier: workspace:*
         version: link:../carrier-protocol
       '@narada2/carrier-runtime':
         specifier: workspace:*
         version: link:../carrier-runtime
+      '@narada2/carrier-terminal-projection':
+        specifier: workspace:*
+        version: link:../carrier-terminal-projection
 
   packages/agent-start:
     dependencies:
@@ -143,10 +149,29 @@ importers:
       '@narada2/agent-runtime-server':
         specifier: workspace:*
         version: link:../agent-runtime-server
+      '@narada2/carrier-protocol':
+        specifier: workspace:*
+        version: link:../carrier-protocol
+      '@narada2/carrier-provider-support':
+        specifier: workspace:*
+        version: link:../carrier-provider-support
+      '@narada2/nars-client-projection-contract':
+        specifier: workspace:*
+        version: link:../nars-client-projection-contract
 
   packages/agent-start-bootstrap: {}
 
   packages/agent-start-renderer: {}
+
+  packages/agent-web-ui:
+    dependencies:
+      '@narada2/nars-client-projection-contract':
+        specifier: workspace:*
+        version: link:../nars-client-projection-contract
+    devDependencies:
+      '@narada2/agent-runtime-server':
+        specifier: workspace:*
+        version: link:../agent-runtime-server
 
   packages/carrier-action-admission: {}
 
@@ -158,6 +183,8 @@ importers:
 
   packages/carrier-provider-contract: {}
 
+  packages/carrier-provider-support: {}
+
   packages/carrier-rendering-contract: {}
 
   packages/carrier-routing-contract: {}
@@ -167,14 +194,25 @@ importers:
       '@narada2/carrier-action-admission':
         specifier: workspace:*
         version: link:../carrier-action-admission
+      '@narada2/carrier-protocol':
+        specifier: workspace:*
+        version: link:../carrier-protocol
       '@narada2/carrier-provider-contract':
         specifier: workspace:*
         version: link:../carrier-provider-contract
+      '@narada2/carrier-provider-support':
+        specifier: workspace:*
+        version: link:../carrier-provider-support
       '@narada2/mcp-fabric':
         specifier: workspace:*
         version: link:../mcp-fabric
+      '@narada2/nars-client-projection-contract':
+        specifier: workspace:*
+        version: link:../nars-client-projection-contract
 
   packages/carrier-runtime-contract: {}
+
+  packages/carrier-terminal-projection: {}
 
   packages/cloudflare-carrier:
     dependencies:
@@ -428,6 +466,8 @@ importers:
       vitest:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@20.19.39)
+
+  packages/nars-client-projection-contract: {}
 
   packages/operator-surface-carriers: {}
 

@@ -30,7 +30,7 @@ agent-runtime-server
 
 The alias exists for compatibility only. New launcher, worker, wrapper, and documentation paths should resolve `narada-agent-runtime-server` from `@narada2/agent-runtime-server`.
 
-The current package may delegate execution to `@narada2/agent-cli`, but the stable runtime-server entrypoint belongs to `@narada2/agent-runtime-server`.
+The stable runtime-server entrypoint belongs to `@narada2/agent-runtime-server` and executes the carrier substrate in-process through `@narada2/carrier-runtime`.
 
 ## Layer Shape
 
@@ -53,7 +53,10 @@ Load-bearing boundaries:
 | Launcher planner | Selecting agents, Sites, runtime choice, and launch packet validation. | Provider execution, conversation state, tool execution. |
 | `@narada2/agent-start` | Identity/session/event creation, Site MCP fabric validation, provider selection, credential projection, launch result materialization. | Runtime protocol, slash command semantics, provider turn loop. |
 | `@narada2/agent-runtime-server` | Stable machine-addressable session entrypoint, protocol projection, session handoff, carrier-server wrapper. | Provider credentials, task truth, external effect authority. |
-| Private carrier substrate, currently `@narada2/agent-cli --carrier-server-substrate` | MCP client, provider turn loop, carrier-local session operations, slash-command execution, and event emission under NARS supervision. | Public NARS package authority, launcher planning, or terminal-client attach/projection responsibilities. |
+| `@narada2/nars-client-projection-contract` | Client projection capability sets, attach command registry, projection command method aliases, and shared operator command/help projection for NARS clients. | Carrier protocol schema validation, runtime session execution, or browser/terminal rendering. |
+| `@narada2/carrier-protocol` | Carrier request/event vocabulary, schema helpers, input admission classification, and runtime event classification. | Client attach command rendering or client-specific capability lists. |
+| `@narada2/carrier-runtime` | In-process carrier runtime scaffold, provider/MCP runtime modules, server-mode loop, and temporary helper adapter while remaining runtime helpers are extracted. | Public NARS package authority, launcher planning, or terminal-client attach/projection responsibilities. |
+| `@narada2/carrier-terminal-projection` | Runtime-neutral terminal projection of NARS events and operator input into protocol frames. | Provider execution, MCP hosting, session dispatch, or authority decisions. |
 | Authority MCP surfaces | Admitted mutations and authoritative facts. | Model judgment or carrier convenience. |
 
 ## Session Binding
@@ -96,23 +99,27 @@ Minimum request methods:
 | `session.status` | Inspect identity, readiness, active turn, MCP posture, and blockers. |
 | `session.health` | Return the stable runtime health probe shape used by local health transports. |
 | `session.events.subscribe` | Attach to the runtime event stream with replay, filters, and cursor semantics. |
+| `session.recovery` | Inspect the current recovery recommendation and recovery handoffs. |
+| `session.operations` | Inspect active operation posture, request posture, MCP posture, and handoffs. |
 | `session.resume` | Reattach to an existing session handle. |
 | `session.close` | Close or hand off a session with terminal evidence. |
-| `command.execute` | Execute a slash/operator command through the carrier command contract. |
+| `carrier.command.execute` | Execute a slash/operator command through the carrier command contract. |
 
-Human terminal input is not raw JSONL. A terminal attached to NARS is a projection of the protocol: ordinary lines become `conversation.send`, slash commands become `command.execute`, and status/help affordances render from runtime state.
+Human terminal input is not raw JSONL. A terminal attached to NARS is a projection of the protocol: ordinary lines become `conversation.send`, slash commands become protocol frames such as `carrier.command.execute` or direct session methods, and status/help affordances render from runtime state. `agent-cli.command` remains a compatibility alias for older projected clients only.
 
 ## Client And Runtime Split
 
 NARS is the runtime owner. `@narada2/agent-runtime-server` owns session binding, provider/carrier turn execution, MCP fabric hosting, tool dispatch, durable `events.jsonl`, status/health/event subscription state, and lifecycle hook dispatch. Client packages must not silently recreate those responsibilities.
 
-`@narada2/agent-cli`, `agent-tui`, and future `agent-web-ui` are peer clients/projections over the NARS protocol. Their durable responsibilities are terminal/UI input handling, human-readable event rendering, local command affordances, and explicit attach/resume UX. In attach mode, ordinary operator text becomes `conversation.send`; slash commands become protocol frames such as `command.execute`, `session.status`, `session.health`, `session.events.subscribe`, `conversation.interrupt`, and `session.close`; incoming event envelopes are rendered through the client projection.
+`@narada2/agent-cli`, `agent-tui`, and `@narada2/agent-web-ui` are peer clients/projections over the NARS protocol. Their durable responsibilities are terminal/UI input handling, human-readable event rendering, local command affordances, and explicit attach/resume UX. In attach mode, ordinary operator text becomes `conversation.send`; slash commands become protocol frames such as `carrier.command.execute`, `session.status`, `session.health`, `session.events.subscribe`, `session.recovery`, `session.operations`, `conversation.interrupt`, and `session.close`; incoming event envelopes are rendered through the client projection. The current `@narada2/agent-web-ui` slice subscribes with `session.events.subscribe`, reads health, admits ordinary operator text as `conversation.send`, and projects slash commands into the same NARS protocol surface. Runtime hosting, provider turn execution, and MCP hosting remain outside the web package.
 
-Temporary compatibility paths are admitted only while launchers and tests migrate: public `agent-cli --server` is a compatibility alias that delegates to `@narada2/agent-runtime-server`; the runtime server may invoke the private `@narada2/agent-cli --carrier-server-substrate` adapter while the current carrier implementation is being split further. `@narada2/agent-cli` may retain `agent-runtime-server` compatibility shim exports that delegate to `@narada2/agent-runtime-server`.
+Client projection metadata is centralized in `@narada2/nars-client-projection-contract`. Launchers and carrier runtime use it for attach command materialization; web UI uses it for admitted NARS methods, operator input command projection, and help text. `@narada2/carrier-protocol` remains the carrier protocol vocabulary/classification owner and must not grow client attach command strings or client-specific projection registries.
+
+Runtime dependency construction is owned by `@narada2/carrier-runtime/runtime-dependencies`, not by the client package. `agent-cli` must not expose runtime-server shims, `--server` delegation, or private carrier-substrate adapter flags; launchers resolve `narada-agent-runtime-server` from `@narada2/agent-runtime-server` directly.
 
 ### Compatibility Removal Criteria
 
-Remove those compatibility paths only when registered launchers resolve `narada-agent-runtime-server` from `@narada2/agent-runtime-server`, attach-mode clients cover operator workflows, and runtime/provider/MCP tests live under the NARS owning package.
+The former `agent-cli` runtime-server compatibility adapter has been removed. Reintroduction requires an explicit migration document and tests proving it does not make `agent-cli` an owner of runtime/provider/MCP hosting.
 
 ## Event Shape
 
@@ -258,7 +265,7 @@ Live and replayed events are wrapped for subscription transports using `narada.n
 
 Backpressure is local-runtime policy. The minimum contract is deterministic bounded buffering: slow subscribers may be dropped or receive a structured error, but must not block the carrier event loop or corrupt durable `events.jsonl`. Reconnect uses the last acknowledged `cursor.sequence` as `since_sequence`; clients should tolerate idempotent replay of the last seen event and de-duplicate by sequence.
 
-WebSocket `ws://127.0.0.1:<port>/events` is the first durable co-presence projection. It is local-bound by default, sends `session.events.subscribe` acknowledgements and event envelopes over the socket, and accepts ordinary NARS protocol frames such as `session.status`, `session.health`, `conversation.send`, `conversation.interrupt`, `command.execute`, and `session.close` by forwarding them into the same runtime session. It must not synthesize a second provider/carrier runtime and must not fall back to ambient global MCP or Codex configuration.
+WebSocket `ws://127.0.0.1:<port>/events` is the first durable co-presence projection. It is local-bound by default, sends `session.events.subscribe` acknowledgements and event envelopes over the socket, and accepts ordinary NARS protocol frames such as `session.status`, `session.health`, `session.recovery`, `session.operations`, `conversation.send`, `conversation.interrupt`, `carrier.command.execute`, and `session.close` by forwarding them into the same runtime session. It must not synthesize a second provider/carrier runtime and must not fall back to ambient global MCP or Codex configuration.
 
 Raw stdout JSONL remains a compatibility projection for single attached processes. Durable `events.jsonl` remains the readback/recovery log. Lifecycle hooks remain callbacks correlated with events; they are not the event subscription authority and must not replace `session.events.subscribe` for client co-presence.
 
@@ -278,7 +285,7 @@ Invoker owner:
 @narada2/agent-runtime-server
 ```
 
-The current implementation invokes hooks at the runtime-server boundary while the private carrier substrate remains `@narada2/agent-cli --carrier-server-substrate`. Future carrier adapters must map their native events into the same NARS lifecycle vocabulary before dispatching hooks.
+The current implementation invokes hooks at the runtime-server boundary while carrier execution runs through `@narada2/carrier-runtime` in-process. Future carrier adapters must map their native events into the same NARS lifecycle vocabulary before dispatching hooks.
 
 ### Hook Payload
 
@@ -397,10 +404,10 @@ The command vocabulary should be sourced from `@narada2/carrier-command-contract
 
 NARS is vendor-neutral. Carrier substrates are replaceable adapters behind the NARS contract.
 
-Current private carrier substrate:
+Current carrier runtime substrate:
 
 ```text
-@narada2/agent-cli --carrier-server-substrate
+@narada2/carrier-runtime in-process
 ```
 
 Allowed adapter responsibilities:
@@ -533,6 +540,6 @@ Known convergence arrows from the current implementation:
 - keep moving runtime-specific launch branches out of `narada-agent-start.ts` into carrier launch adapters;
 - keep moving provider and credential logic into focused `agent-start` modules;
 - make `@narada2/carrier-command-contract` the single source for command parser/help/dispatch metadata;
-- keep `@narada2/agent-runtime-server` as the package authority even while it delegates to `@narada2/agent-cli`;
+- keep `@narada2/agent-runtime-server` as the package authority for server entrypoints and `@narada2/carrier-runtime` as the package authority for carrier execution;
 - make delegated workers that require Narada-bound Site MCP state use NARS instead of raw vendor runtimes;
 - document and test NARS as the stable session protocol, not as the current `agent-cli` implementation detail.

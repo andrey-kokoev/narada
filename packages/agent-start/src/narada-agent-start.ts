@@ -25,6 +25,7 @@ import { createRequire } from 'node:module';
 import { spawn, spawnSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
+import { buildNarsAttachCommands } from '@narada2/nars-client-projection-contract';
 import {
   carrierControlPath,
   carrierSessionPath,
@@ -215,7 +216,7 @@ const ADMITTED_RUNTIME_SUBSTRATE_KINDS = Object.freeze(RUNTIME_SUBSTRATE_KINDS_P
 const TOOL_FABRIC_ADAPTER_CONTRACT_SCHEMA = 'narada.tool_fabric_adapter_kind.v1';
 const ADMITTED_TOOL_FABRIC_ADAPTER_KINDS = Object.freeze([
   'codex-native-mcp',
-  'narada-agent-cli-mcp-client',
+  'narada-agent-runtime-server-mcp-client',
   'narada-agent-tui-terminal-interactive-loop',
   'pi-extension-mcp-bridge',
   'claude-code-native-mcp',
@@ -962,7 +963,8 @@ const output = {
   admitted_tool_fabric_adapter_kinds: [...ADMITTED_TOOL_FABRIC_ADAPTER_KINDS],
   tool_fabric_adapter: toolFabricAdapter,
   tool_fabric_adapter_kind: toolFabricAdapter.tool_fabric_adapter_kind,
-  agent_cli_launch: agentCliLaunch,
+  nars_launch: agentCliLaunch,
+  agent_cli_launch: agentCliLaunch ? { ...agentCliLaunch, compatibility_alias_for: 'nars_launch' } : null,
   mcp_fabric: mcpFabric ? {
     source: mcpFabric.source,
     site_root: mcpFabric.site_root,
@@ -1005,10 +1007,7 @@ const output = {
     discovery_field: 'session_started.event_endpoint',
     supports_replay: true,
     locality: 'loopback_only_by_default',
-    attach_commands: {
-      agent_cli: 'narada-agent-cli --attach <session_started.event_endpoint>',
-      protocol: '{"id":"events-1","method":"session.events.subscribe","params":{"include_replay":true,"max_replay":20}}',
-    },
+    attach_commands: buildNarsAttachCommands(),
     note: 'The loopback WebSocket endpoint is bound by the runtime server after process start; inspect session_started.event_endpoint for the live URL.',
   } : null,
   launch_result_path: null,

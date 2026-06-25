@@ -19,15 +19,20 @@
     "./provider-resolution": "./src/provider-resolution.mjs",
     "./mcp-runtime": "./src/mcp-runtime.mjs",
     "./server-mode": "./src/server-mode.mjs",
+    "./input-queue": "./src/input-queue.mjs",
+    "./runtime-dependencies": "./src/runtime-dependencies.mjs",
     "./package.json": "./package.json"
   },
   "scripts": {
     "test": "node --test src/*.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/provider-adapters.mjs src/provider-resolution.mjs src/mcp-runtime.mjs src/server-mode.mjs src/carrier-runtime-context.mjs"
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/provider-adapters.mjs src/provider-resolution.mjs src/mcp-runtime.mjs src/server-mode.mjs src/input-queue.mjs src/runtime-dependencies.mjs src/carrier-runtime-context.mjs"
   },
   "dependencies": {
     "@narada2/carrier-action-admission": "workspace:*",
+    "@narada2/carrier-protocol": "workspace:*",
     "@narada2/carrier-provider-contract": "workspace:*",
-    "@narada2/mcp-fabric": "workspace:*"
+    "@narada2/carrier-provider-support": "workspace:*",
+    "@narada2/mcp-fabric": "workspace:*",
+    "@narada2/nars-client-projection-contract": "workspace:*"
   }
 }

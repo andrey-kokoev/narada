@@ -13,7 +13,7 @@
       "carrier_substrate_handoff"
     ],
     "carrier_substrate": "@narada2/carrier-runtime in-process",
-    "compatibility_dependency_adapter": "@narada2/agent-cli runtime helper exports until request handlers and turn/tool execution move fully into @narada2/carrier-runtime"
+    "runtime_dependency_owner": "runtime dependencies are constructed by @narada2/carrier-runtime/runtime-dependencies; terminal projection is owned by @narada2/carrier-terminal-projection"
   },
   "bin": {
     "narada-agent-runtime-server": "./bin/narada-agent-runtime-server.mjs",
@@ -22,15 +22,16 @@
   "exports": {
     ".": "./src/server-wrapper.mjs",
     "./runtime-server-events": "./src/runtime-server-events.mjs",
+    "./test-fixtures": "./src/test-fixtures.mjs",
     "./package.json": "./package.json"
   },
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false bin/narada-agent-runtime-server.mjs src/server-wrapper.mjs src/runtime-server-events.mjs"
+    "typecheck": "tsc --noEmit --allowJs --checkJs false bin/narada-agent-runtime-server.mjs src/server-wrapper.mjs src/runtime-server-events.mjs src/test-fixtures.mjs"
   },
   "dependencies": {
-    "@narada2/agent-cli": "workspace:*",
     "@narada2/carrier-runtime": "workspace:*",
-    "@narada2/carrier-protocol": "workspace:*"
+    "@narada2/carrier-protocol": "workspace:*",
+    "@narada2/carrier-terminal-projection": "workspace:*"
   }
 }

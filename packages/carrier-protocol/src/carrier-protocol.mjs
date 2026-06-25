@@ -270,16 +270,25 @@ export const CARRIER_CONTROL_METHODS = Object.freeze([
   'session.status',
   'session.health',
   'session.events.subscribe',
+  'session.recovery',
+  'session.operations',
+  'preflight.recovery',
+  'session.sync',
   'session.close',
   'conversation.interrupt',
   'conversation.send',
   'system_directive.deliver',
   'carrier.input.deliver',
+  'carrier.command.execute',
   'observers.status',
   'observer.mute',
   'observer.unmute',
+  // Compatibility alias for older projected clients. New clients must use carrier.command.execute.
   'agent-cli.command',
 ]);
+
+export const NARS_COMMAND_METHOD = 'carrier.command.execute';
+export const NARS_COMMAND_COMPATIBILITY_METHODS = Object.freeze(['agent-cli.command']);
 
 const RFC3339_UTC_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 const ID_PREFIXES = Object.freeze({
@@ -367,6 +376,10 @@ export function classifyCarrierControlRequest(request = {}) {
   if (method === 'session.status') return { ...base, method_kind: 'session_status', allowed_when_closed: true };
   if (method === 'session.health') return { ...base, method_kind: 'session_health', allowed_when_closed: true, concurrent_allowed: true };
   if (method === 'session.events.subscribe') return { ...base, method_kind: 'session_events_subscribe', allowed_when_closed: true, concurrent_allowed: true };
+  if (method === 'session.recovery') return { ...base, method_kind: 'session_recovery' };
+  if (method === 'session.operations') return { ...base, method_kind: 'session_operations' };
+  if (method === 'preflight.recovery') return { ...base, method_kind: 'preflight_recovery' };
+  if (method === 'session.sync') return { ...base, method_kind: 'session_sync' };
   if (method === 'session.close') return { ...base, method_kind: 'session_close', allowed_when_closed: true };
   if (method === 'conversation.interrupt') return { ...base, method_kind: 'conversation_interrupt', concurrent_allowed: true };
   if (method === 'conversation.send') return { ...base, method_kind: 'conversation_send' };
@@ -374,7 +387,9 @@ export function classifyCarrierControlRequest(request = {}) {
   if (method === 'observers.status') return { ...base, method_kind: 'observers_status' };
   if (method === 'observer.mute') return { ...base, method_kind: 'observer_set_muted', observer_action: 'mute' };
   if (method === 'observer.unmute') return { ...base, method_kind: 'observer_set_muted', observer_action: 'unmute' };
-  if (method === 'agent-cli.command') return { ...base, method_kind: 'agent_cli_command' };
+  if (method === NARS_COMMAND_METHOD || NARS_COMMAND_COMPATIBILITY_METHODS.includes(method)) {
+    return { ...base, method_kind: 'carrier_command_execute', compatibility_alias: method !== NARS_COMMAND_METHOD ? method : null };
+  }
   return {
     ...base,
     method_kind: 'unsupported',

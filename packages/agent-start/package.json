@@ -5,7 +5,10 @@
   "private": true,
   "dependencies": {
     "@narada2/agent-context-mcp": "workspace:*",
-    "@narada2/agent-runtime-server": "workspace:*"
+    "@narada2/agent-runtime-server": "workspace:*",
+    "@narada2/carrier-protocol": "workspace:*",
+    "@narada2/carrier-provider-support": "workspace:*",
+    "@narada2/nars-client-projection-contract": "workspace:*"
   },
   "bin": {
     "narada-agent-start": "./src/narada-agent-start.ts",
