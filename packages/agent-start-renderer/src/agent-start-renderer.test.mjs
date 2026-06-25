@@ -36,7 +36,7 @@ test('formats agent-start preamble with redacted API keys and startup sequence',
 });
 
 test('formats wait prompt', () => {
-  assert.equal(formatAgentStartWaitPrompt('site.builder', 'agent-cli'), 'Press Enter to start NARS for site.builder...');
+  assert.equal(formatAgentStartWaitPrompt('site.builder', 'agent-cli'), 'Press Enter to start agent-runtime-server for site.builder...');
 });
 
 test('handles sparse result without optional sections', () => {

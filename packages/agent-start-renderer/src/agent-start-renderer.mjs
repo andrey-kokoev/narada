@@ -84,7 +84,7 @@ export function formatAgentStartResult(result, options = {}) {
 }
 
 function runtimeDisplayName(runtimeName) {
-  return runtimeName === 'agent-cli' ? 'NARS' : runtimeName;
+  return runtimeName === 'agent-cli' ? 'agent-runtime-server' : runtimeName;
 }
 
 export function formatAgentStartWaitPrompt(agentId, runtimeName) {
