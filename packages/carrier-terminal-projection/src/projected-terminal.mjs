@@ -1,10 +1,10 @@
 import readline from 'node:readline';
+import { PassThrough } from 'node:stream';
 import { createTerminalStyle, formatTerminalMessageBlockLines } from './terminal-style.mjs';
 import {
   BRACKETED_PASTE_END,
   BRACKETED_PASTE_START,
   createExplicitJsonControlFrame,
-  createBracketedPasteComposer,
   createOperatorConversationFrame,
   createProjectedSlashCommandAction,
   projectedHelpText,
@@ -104,15 +104,17 @@ export function createProjectedTerminalBridge({
   style = createOperatorStyle({ enabled: colorEnabled({ output }) }),
 } = {}) {
   const interactive = Boolean(input.isTTY && output.isTTY);
+  const readlineInput = interactive ? new PassThrough() : input;
   const rl = readline.createInterface({
-    input,
+    input: readlineInput,
     output: interactive ? output : undefined,
     terminal: interactive,
     prompt: interactive ? createOperatorPrompt(style) : undefined,
   });
   const writeProjectedOutput = createProjectedOutputWriter({ rl, interactive, output });
   const operatorState = { streamedTurns: new Set(), style };
-  let suppressedPasteLineEvents = 0;
+  const previousRawMode = interactive && typeof input.setRawMode === 'function' ? input.isRaw : null;
+  let onInputData = null;
 
   const submitOperatorInput = (line, { forceConversation = false } = {}) => {
     if (!forceConversation) {
@@ -164,31 +166,28 @@ export function createProjectedTerminalBridge({
 
   if (interactive) {
     output.write('\x1b[?2004h');
-    const pasteComposer = createBracketedPasteComposer({
-      onSuppressLines: (count) => {
-        suppressedPasteLineEvents += count;
+    if (typeof input.setRawMode === 'function') input.setRawMode(true);
+    input.resume?.();
+    const inputFilter = createBracketedPasteInputFilter({
+      onText: (text) => {
+        if (text) readlineInput.write(text);
       },
       onPaste: (text) => {
-        rl.line = '';
-        rl.cursor = 0;
-        submitOperatorInput(text, { forceConversation: /\r|\n/.test(String(text ?? '')) });
+        insertReadlineDraftText(rl, text);
       },
     });
-    input.prependListener('data', (chunk) => {
-      pasteComposer.feed(chunk);
-    });
+    onInputData = (chunk) => inputFilter.feed(chunk);
+    input.on('data', onInputData);
   }
 
   if (interactive) rl.prompt();
   rl.on('line', (line) => {
-    if (suppressedPasteLineEvents > 0) {
-      suppressedPasteLineEvents -= 1;
-      return;
-    }
-    submitOperatorInput(line);
+    submitOperatorInput(line, { forceConversation: /\r|\n/.test(String(line ?? '')) });
   });
   rl.on('close', () => {
+    if (interactive && onInputData) input.off('data', onInputData);
     if (interactive) output.write('\x1b[?2004l');
+    if (interactive && previousRawMode !== null && typeof input.setRawMode === 'function') input.setRawMode(!!previousRawMode);
     childStdin?.end();
   });
 
@@ -210,6 +209,53 @@ function rewriteInteractivePrompt({ interactive, output, operatorState, line, st
     style,
   });
   if (rewritten) output.write(rewritten);
+}
+
+function createBracketedPasteInputFilter({ onText = () => {}, onPaste = () => {} } = {}) {
+  let active = false;
+  let buffer = '';
+
+  return {
+    feed(chunk) {
+      let text = Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk ?? '');
+      while (text) {
+        if (!active) {
+          const startIndex = text.indexOf(BRACKETED_PASTE_START);
+          if (startIndex === -1) {
+            onText(text);
+            return;
+          }
+          if (startIndex > 0) onText(text.slice(0, startIndex));
+          active = true;
+          buffer = '';
+          text = text.slice(startIndex + BRACKETED_PASTE_START.length);
+          continue;
+        }
+
+        const endIndex = text.indexOf(BRACKETED_PASTE_END);
+        if (endIndex === -1) {
+          buffer += text;
+          return;
+        }
+
+        buffer += text.slice(0, endIndex);
+        onPaste(buffer);
+        buffer = '';
+        active = false;
+        text = text.slice(endIndex + BRACKETED_PASTE_END.length);
+      }
+    },
+  };
+}
+
+function insertReadlineDraftText(rl, text) {
+  const value = String(text ?? '');
+  if (!value) return;
+  const line = typeof rl.line === 'string' ? rl.line : '';
+  const cursor = typeof rl.cursor === 'number' ? rl.cursor : line.length;
+  rl.line = `${line.slice(0, cursor)}${value}${line.slice(cursor)}`;
+  rl.cursor = cursor + value.length;
+  rl._refreshLine?.();
 }
 
 export const bracketedPasteControlSequences = {

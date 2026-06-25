@@ -81,7 +81,7 @@ test('bracketed paste composer emits one paste payload and suppresses readline s
   assert.equal(composer.isActive(), false);
 });
 
-test('projected terminal bridge submits bracketed multiline paste as one conversation frame', async () => {
+test('projected terminal bridge inserts bracketed multiline paste and submits on enter', async () => {
   const input = new PassThrough();
   input.isTTY = true;
   input.setRawMode = () => input;
@@ -103,6 +103,12 @@ test('projected terminal bridge submits bracketed multiline paste as one convers
   const pasted = 'Commit: f08e99bd\nMessage: Move synced email workflow behind SOP shell\n\nWhat changed:\n- Refactored loop body';
   input.write(`${bracketedPasteControlSequences.start}${pasted}${bracketedPasteControlSequences.end}`);
   await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(frames.length, 0);
+  assert.equal(bridge.rl.line, pasted);
+
+  input.write('\r');
+  await new Promise((resolve) => setImmediate(resolve));
   bridge.rl.close();
 
   assert.equal(frames.length, 1);
@@ -110,7 +116,7 @@ test('projected terminal bridge submits bracketed multiline paste as one convers
   assert.equal(frames[0].params.message, pasted);
 });
 
-test('projected terminal bridge treats multiline slash-looking paste as conversation text', async () => {
+test('projected terminal bridge keeps multiline slash-looking paste as draft until enter', async () => {
   const input = new PassThrough();
   input.isTTY = true;
   input.setRawMode = () => input;
@@ -131,6 +137,12 @@ test('projected terminal bridge treats multiline slash-looking paste as conversa
   });
   const pasted = '/status\nthis is copied prose, not a command sequence';
   input.write(`${bracketedPasteControlSequences.start}${pasted}${bracketedPasteControlSequences.end}`);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(frames.length, 0);
+  assert.equal(bridge.rl.line, pasted);
+
+  input.write('\r');
   await new Promise((resolve) => setImmediate(resolve));
   bridge.rl.close();
 
