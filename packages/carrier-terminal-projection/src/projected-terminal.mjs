@@ -248,6 +248,7 @@ function createTerminalComposer({ output, style, columns = () => 80, onSubmit = 
   let draft = '';
   let cursor = 0;
   let renderedRows = 0;
+  let pendingEscape = '';
 
   const api = {
     getDraft() {
@@ -269,9 +270,46 @@ function createTerminalComposer({ output, style, columns = () => 80, onSubmit = 
       cursor -= 1;
       api.render();
     },
+    moveCursorStart() {
+      if (cursor === 0) return;
+      cursor = 0;
+      api.render();
+    },
+    moveCursorEnd() {
+      if (cursor === draft.length) return;
+      cursor = draft.length;
+      api.render();
+    },
+    moveCursorLeft() {
+      if (cursor <= 0) return;
+      cursor -= 1;
+      api.render();
+    },
+    moveCursorRight() {
+      if (cursor >= draft.length) return;
+      cursor += 1;
+      api.render();
+    },
+    deleteForward() {
+      if (cursor >= draft.length) return;
+      draft = `${draft.slice(0, cursor)}${draft.slice(cursor + 1)}`;
+      api.render();
+    },
     feed(text) {
       const value = String(text ?? '');
       for (const char of value) {
+        if (pendingEscape) {
+          pendingEscape += char;
+          const result = consumeComposerEscapeSequence(pendingEscape, api);
+          if (result === 'pending') continue;
+          pendingEscape = '';
+          if (result === 'handled') continue;
+          continue;
+        }
+        if (char === '\x1b') {
+          pendingEscape = char;
+          continue;
+        }
         if (char === '\r' || char === '\n') {
           api.submit();
           continue;
@@ -318,6 +356,47 @@ function renderComposerDraft({ draft, style }) {
     `${prompt}${first}`,
     ...rest.map((line) => `  ${line}`),
   ].join('\n');
+}
+
+function consumeComposerEscapeSequence(sequence, composer) {
+  const text = String(sequence ?? '');
+  if (text === '\x1b') return 'pending';
+  if (!text.startsWith('\x1b[')) return 'ignored';
+  if (/^\x1b\[[0-9;]*$/.test(text)) return 'pending';
+
+  const match = text.match(/^\x1b\[([0-9;]*)([~A-Za-z])$/);
+  if (!match) return 'ignored';
+  const params = match[1] ?? '';
+  const final = match[2];
+  if (final === 'H' || final === 'F') {
+    if (final === 'H') composer.moveCursorStart();
+    else composer.moveCursorEnd();
+    return 'handled';
+  }
+  if (final === 'D') {
+    composer.moveCursorLeft();
+    return 'handled';
+  }
+  if (final === 'C') {
+    composer.moveCursorRight();
+    return 'handled';
+  }
+  if (final === '~') {
+    const code = params.split(';')[0];
+    if (code === '1' || code === '7') {
+      composer.moveCursorStart();
+      return 'handled';
+    }
+    if (code === '4' || code === '8') {
+      composer.moveCursorEnd();
+      return 'handled';
+    }
+    if (code === '3') {
+      composer.deleteForward();
+      return 'handled';
+    }
+  }
+  return 'ignored';
 }
 
 function normalizeDraftForDisplay(draft) {

@@ -151,6 +151,42 @@ test('projected terminal bridge keeps multiline slash-looking paste as draft unt
   assert.equal(frames[0].params.message, pasted);
 });
 
+test('projected terminal bridge handles raw navigation escape sequences in draft', async () => {
+  const input = new PassThrough();
+  input.isTTY = true;
+  input.setRawMode = () => input;
+  const output = new PassThrough();
+  output.isTTY = true;
+  output.columns = 100;
+  const childStdin = new PassThrough();
+
+  const bridge = createProjectedTerminalBridge({
+    input,
+    output,
+    childStdin,
+    style: createOperatorStyle({ enabled: false }),
+  });
+
+  input.write('abc');
+  input.write('\x1b[H');
+  input.write('X');
+  input.write('\x1b[F');
+  input.write('Y');
+  input.write('\x1b[D');
+  input.write('Z');
+  input.write('\x1b[1~');
+  input.write('S');
+  input.write('\x1b[4~');
+  input.write('E');
+  input.write('\x1b[D');
+  input.write('\x1b[3~');
+  await new Promise((resolve) => setImmediate(resolve));
+  bridge.close();
+
+  assert.equal(bridge.composer.getDraft(), 'SXabcZY');
+  assert.equal(bridge.composer.getDraft().includes('[H'), false);
+});
+
 test('projected terminal bridge repaints multiline draft after async output', async () => {
   const input = new PassThrough();
   input.isTTY = true;
