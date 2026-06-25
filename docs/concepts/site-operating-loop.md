@@ -6,6 +6,8 @@ Narada should treat an **Operating Loop** as a first-class Site object for gover
 
 An operating loop is not an agent, carrier, daemon, prompt, task, or directive. It is the Site-owned routine that observes Site state over bounded runs and may emit first-class Site objects.
 
+For implementation-facing runtime details, see [`site-operating-loop-runtime-contract.md`](site-operating-loop-runtime-contract.md).
+
 ## Definition
 
 A **Site Operating Loop** is a governed Site-local control routine, continuous or event-triggered, that evaluates Site state against declared policy and records resulting observations, decisions, emissions, and receipts.
@@ -40,6 +42,65 @@ Trigger mode is an attribute of the loop. It is not the identity of the loop.
 A continuous loop still records bounded Loop Runs. The durable run may represent one tick, one handled event, one reconciliation pass, or one bounded batch.
 
 Continuous execution is substrate behavior. Loop Run evidence is the auditable unit.
+
+## Generic Runtime Host
+
+Narada proper provides a generic Site Operating Loop runtime host in
+`@narada2/site-operating-loop/runtime`. The runtime host is the reusable
+execution shell for a loop; it is not the Site-specific loop implementation.
+
+The generic host owns:
+
+- recurring cycle execution from a configured cadence;
+- durable trigger admission and pending-trigger consumption at cycle boundaries;
+- pause/resume control checks;
+- lease-backed bounded Loop Run execution;
+- run, step, health, and failure recording;
+- durable runtime lifecycle event recording and projection;
+- CLI hosting through `narada-site-loop run` when supplied a Site store module
+  and a Site loop module;
+- single-process supervision through `narada-site-loop supervise`, which hosts
+  both the runtime loop and HTTP attachment surface.
+
+Attached surfaces read loop state through the generic status, health, run, and
+event projections. They do not become the loop. A CLI, TUI, web UI, daemon, or
+future SSE/WebSocket adapter should attach to the same Site loop store and read
+`narada.site_operating_loop.runtime_event.v1` events rather than inventing a
+parallel conversation/session log.
+
+The generic HTTP observation server is one such attachment surface. It exposes
+read-only health, status, run, and event endpoints over the Site loop store. It
+also exposes generic write-side trigger admission and pause/resume controls. It
+does not execute Site-specific steps or admit emissions; execution remains owned
+by the loop runtime and the Site-provided loop body.
+
+Event subscription is live: `GET /events/stream` keeps an SSE connection open,
+emits durable runtime events after the requested cursor, and sends heartbeat
+comments while idle. Bounded snapshot reads remain available through
+`GET /events` and `GET /events/stream?snapshot=1`.
+
+Trigger admission is generic because the trigger is not the Site decision. An
+admitted trigger records why a future bounded Loop Run should happen. The Site
+loop body still owns how that trigger is interpreted, which observations are
+read, and which emissions, if any, are admitted.
+
+The Site still owns:
+
+- source adapters and source cursors;
+- concrete observation, decision, emission, and receipt-reconciliation steps;
+- policy interpretation beyond the generic policy schema;
+- target role/agent selection;
+- domain-specific idempotency and admission rules.
+
+This keeps the hierarchy stable: Narada proper owns the generic loop runtime
+contract and evidence machinery; each Site owns the authority-bearing loop body.
+
+The Site-owned loop body has a narrow module contract: it exports
+`createSiteOperatingLoopSteps(context)` or `createSteps(context)` and returns the
+bounded step records for the current cycle. The generic runtime validates that
+contract and records the resulting run, but it does not interpret domain meaning
+inside the steps. A Site may also export `summarizeSiteOperatingLoopRun()` to add
+domain summary evidence without changing the generic run shape.
 
 ## Relation To Governed Transduction
 

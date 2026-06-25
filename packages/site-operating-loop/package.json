@@ -6,7 +6,8 @@
   "type": "module",
   "main": "./dist/site-loop-store.mjs",
   "scripts": {
-    "build": "node scripts/build.mjs"
+    "build": "node scripts/build.mjs",
+    "test": "node --test test/*.test.mjs"
   },
   "bin": {
     "narada-site-loop": "./dist/bin/narada-site-loop.mjs"
@@ -20,6 +21,15 @@
     },
     "./runner": {
       "import": "./dist/runner.mjs"
+    },
+    "./runtime": {
+      "import": "./dist/runtime.mjs"
+    },
+    "./server": {
+      "import": "./dist/server.mjs"
+    },
+    "./loop-module": {
+      "import": "./dist/loop-module.mjs"
     },
     "./policy": {
       "import": "./dist/policy.mjs"

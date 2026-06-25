@@ -68,6 +68,38 @@ export function ensureSiteLoopTables(db) {
       updated_at TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS site_loop_runtime_events (
+      event_id TEXT PRIMARY KEY,
+      loop_id TEXT NOT NULL,
+      event TEXT NOT NULL,
+      run_id TEXT,
+      cycle_index INTEGER,
+      status TEXT,
+      occurred_at TEXT NOT NULL,
+      event_json TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_site_loop_runtime_events_loop_time
+      ON site_loop_runtime_events(loop_id, occurred_at DESC);
+
+    CREATE TABLE IF NOT EXISTS site_loop_triggers (
+      trigger_id TEXT PRIMARY KEY,
+      loop_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      status TEXT NOT NULL,
+      source TEXT,
+      source_ref TEXT,
+      admitted_at TEXT NOT NULL,
+      claimed_at TEXT,
+      completed_at TEXT,
+      run_id TEXT,
+      trigger_json TEXT NOT NULL,
+      result_json TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_site_loop_triggers_pending
+      ON site_loop_triggers(loop_id, status, admitted_at ASC);
+
     CREATE TABLE IF NOT EXISTS site_loop_classification_observations (
       observation_id TEXT PRIMARY KEY,
       loop_id TEXT NOT NULL,
@@ -566,6 +598,168 @@ export function setLoopControl(store, { loopId, paused = false, mode = paused ? 
   return getLoopControl(store, loopId);
 }
 
+export function recordLoopRuntimeEvent(store, event) {
+  const loopId = event?.loop_id ?? event?.loopId ?? DEFAULT_SITE_OPERATING_LOOP_ID;
+  const occurredAt = event?.timestamp ?? event?.occurred_at ?? new Date().toISOString();
+  const eventName = event?.event ? String(event.event) : 'unknown';
+  const eventId = event?.event_id ?? `loopevt_${hashStable({ loopId, eventName, occurredAt, event, nonce: randomUUID() }).slice(0, 32)}`;
+  store.db.prepare(`
+    INSERT INTO site_loop_runtime_events (
+      event_id, loop_id, event, run_id, cycle_index, status, occurred_at, event_json
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    eventId,
+    loopId,
+    eventName,
+    event?.run_id ?? event?.runId ?? null,
+    event?.cycle_index ?? event?.cycleIndex ?? null,
+    event?.status ?? null,
+    occurredAt,
+    stringifyJson({ ...event, event_id: eventId, occurred_at: occurredAt }),
+  );
+  return getLoopRuntimeEvent(store, { eventId });
+}
+
+export function getLoopRuntimeEvent(store, { eventId } = {}) {
+  const row = store.db.prepare('SELECT * FROM site_loop_runtime_events WHERE event_id = ?').get(eventId);
+  return row ? parseRuntimeEventRow(row) : null;
+}
+
+export function listLoopRuntimeEvents(store, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID, afterEventId = null, limit = 50 } = {}) {
+  const max = Math.max(1, Math.min(500, Number(limit ?? 50)));
+  let rows;
+  if (afterEventId) {
+    const cursor = store.db.prepare('SELECT occurred_at, rowid FROM site_loop_runtime_events WHERE event_id = ?').get(afterEventId);
+    rows = cursor
+      ? store.db.prepare(`
+          SELECT * FROM site_loop_runtime_events
+          WHERE loop_id = ? AND (occurred_at > ? OR (occurred_at = ? AND rowid > ?))
+          ORDER BY occurred_at ASC, rowid ASC
+          LIMIT ?
+        `).all(loopId, String(cursor.occurred_at), String(cursor.occurred_at), Number(cursor.rowid), max)
+      : [];
+  } else {
+    rows = store.db.prepare(`
+      SELECT * FROM site_loop_runtime_events
+      WHERE loop_id = ?
+      ORDER BY occurred_at DESC, rowid DESC
+      LIMIT ?
+    `).all(loopId, max).reverse();
+  }
+  return {
+    schema: 'narada.site_operating_loop.runtime_events.v1',
+    loop_id: loopId,
+    events: rows.map(parseRuntimeEventRow),
+    count: rows.length,
+    cursor: rows.length > 0 ? String(rows[rows.length - 1].event_id) : afterEventId,
+  };
+}
+
+export function admitLoopTrigger(store, {
+  loopId = DEFAULT_SITE_OPERATING_LOOP_ID,
+  kind,
+  source = null,
+  sourceRef = null,
+  payload = null,
+  triggerId = null,
+  at = new Date().toISOString(),
+} = {}) {
+  if (!kind) throw new Error('kind is required');
+  const finalTriggerId = triggerId ?? `looptrg_${hashStable({ loopId, kind, source, sourceRef, payload, at, nonce: randomUUID() }).slice(0, 32)}`;
+  const trigger = {
+    schema: 'narada.site_operating_loop.trigger.v1',
+    trigger_id: finalTriggerId,
+    loop_id: loopId,
+    kind,
+    source,
+    source_ref: sourceRef,
+    payload: payload ?? null,
+    admitted_at: at,
+  };
+  store.db.prepare(`
+    INSERT INTO site_loop_triggers (
+      trigger_id, loop_id, kind, status, source, source_ref, admitted_at, trigger_json, result_json
+    ) VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, NULL)
+  `).run(finalTriggerId, loopId, kind, source, sourceRef, at, stringifyJson(trigger));
+  return getLoopTrigger(store, { triggerId: finalTriggerId });
+}
+
+export function getLoopTrigger(store, { triggerId } = {}) {
+  const row = store.db.prepare('SELECT * FROM site_loop_triggers WHERE trigger_id = ?').get(triggerId);
+  return row ? parseTriggerRow(row) : null;
+}
+
+export function listLoopTriggers(store, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID, status = null, limit = 50 } = {}) {
+  const max = Math.max(1, Math.min(500, Number(limit ?? 50)));
+  const rows = status
+    ? store.db.prepare(`
+        SELECT * FROM site_loop_triggers
+        WHERE loop_id = ? AND status = ?
+        ORDER BY admitted_at ASC, rowid ASC
+        LIMIT ?
+      `).all(loopId, status, max)
+    : store.db.prepare(`
+        SELECT * FROM site_loop_triggers
+        WHERE loop_id = ?
+        ORDER BY admitted_at DESC, rowid DESC
+        LIMIT ?
+      `).all(loopId, max).reverse();
+  return {
+    schema: 'narada.site_operating_loop.triggers.v1',
+    loop_id: loopId,
+    status,
+    triggers: rows.map(parseTriggerRow),
+    count: rows.length,
+  };
+}
+
+export function claimNextLoopTrigger(store, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID, runId = null, at = new Date().toISOString() } = {}) {
+  store.db.exec('BEGIN IMMEDIATE');
+  try {
+    const row = store.db.prepare(`
+      SELECT * FROM site_loop_triggers
+      WHERE loop_id = ? AND status = 'pending'
+      ORDER BY admitted_at ASC, rowid ASC
+      LIMIT 1
+    `).get(loopId);
+    if (!row) {
+      store.db.exec('COMMIT');
+      return null;
+    }
+    store.db.prepare(`
+      UPDATE site_loop_triggers
+      SET status = 'claimed', claimed_at = ?, run_id = ?
+      WHERE trigger_id = ? AND status = 'pending'
+    `).run(at, runId, row.trigger_id);
+    store.db.exec('COMMIT');
+    return getLoopTrigger(store, { triggerId: row.trigger_id });
+  } catch (error) {
+    try {
+      store.db.exec('ROLLBACK');
+    } catch {
+      // Preserve original trigger claim error.
+    }
+    throw error;
+  }
+}
+
+export function finishLoopTrigger(store, {
+  triggerId,
+  status,
+  runId = null,
+  result = null,
+  at = new Date().toISOString(),
+} = {}) {
+  if (!triggerId) throw new Error('triggerId is required');
+  if (!['completed', 'failed', 'skipped'].includes(status)) throw new Error('invalid trigger finish status');
+  store.db.prepare(`
+    UPDATE site_loop_triggers
+    SET status = ?, completed_at = ?, run_id = COALESCE(?, run_id), result_json = ?
+    WHERE trigger_id = ?
+  `).run(status, at, runId, stringifyJson(result ?? {}), triggerId);
+  return getLoopTrigger(store, { triggerId });
+}
+
 export function recordLoopClassificationObservation(store, { loopId, directiveId, classification, observation, at = new Date().toISOString() } = {}) {
   const observationId = `loopobs_${hashStable({ loopId, directiveId, classification, at }).slice(0, 32)}`;
   store.db.prepare(`
@@ -964,6 +1158,40 @@ function parseStepRow(row) {
     output_refs: parseJson(row.output_refs_json) ?? [],
     evidence: parseJson(row.evidence_json),
     error: parseJson(row.error_json),
+  };
+}
+
+function parseRuntimeEventRow(row) {
+  const event = parseJson(row.event_json) ?? {};
+  return {
+    ...event,
+    schema: event.schema ?? 'narada.site_operating_loop.runtime_event.v1',
+    event_id: String(row.event_id),
+    loop_id: String(row.loop_id),
+    event: String(row.event),
+    run_id: row.run_id ? String(row.run_id) : null,
+    cycle_index: row.cycle_index == null ? null : Number(row.cycle_index),
+    status: row.status ? String(row.status) : null,
+    occurred_at: String(row.occurred_at),
+  };
+}
+
+function parseTriggerRow(row) {
+  const trigger = parseJson(row.trigger_json) ?? {};
+  return {
+    ...trigger,
+    schema: trigger.schema ?? 'narada.site_operating_loop.trigger.v1',
+    trigger_id: String(row.trigger_id),
+    loop_id: String(row.loop_id),
+    kind: String(row.kind),
+    status: String(row.status),
+    source: row.source ? String(row.source) : null,
+    source_ref: row.source_ref ? String(row.source_ref) : null,
+    admitted_at: String(row.admitted_at),
+    claimed_at: row.claimed_at ? String(row.claimed_at) : null,
+    completed_at: row.completed_at ? String(row.completed_at) : null,
+    run_id: row.run_id ? String(row.run_id) : null,
+    result: parseJson(row.result_json),
   };
 }
 

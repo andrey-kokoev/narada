@@ -23,6 +23,7 @@ export async function runSiteOperatingLoop(store, {
   if (!loopId) throw new Error('loopId is required');
   const startedAt = new Date().toISOString();
   const recordedSteps = [];
+  const resultsByStepId = {};
   let lock = null;
   let failedStep = null;
 
@@ -54,10 +55,15 @@ export async function runSiteOperatingLoop(store, {
 
     for (const step of steps) {
       const recorded = await runSiteOperatingLoopStep(store, {
+        loopId,
         runId,
+        dryRun: Boolean(dryRun),
         step,
+        priorSteps: recordedSteps,
+        resultsByStepId,
       });
       recordedSteps.push(recorded);
+      resultsByStepId[recorded.step_id] = recorded.result ?? recorded.evidence ?? null;
       if (recorded.status === 'failed') {
         failedStep = recorded;
         throw stepError(recorded);
@@ -121,13 +127,22 @@ export async function runSiteOperatingLoop(store, {
   }
 }
 
-export async function runSiteOperatingLoopStep(store, { runId, step }) {
+export async function runSiteOperatingLoopStep(store, {
+  loopId = null,
+  runId,
+  dryRun = false,
+  step,
+  priorSteps = [],
+  resultsByStepId = {},
+} = {}) {
   if (!runId) throw new Error('runId is required');
   if (!step?.stepId) throw new Error('step.stepId is required');
   const startedAt = new Date().toISOString();
   try {
-    const result = typeof step.execute === 'function' ? await step.execute() : null;
+    const stepContext = createStepContext({ loopId, runId, dryRun, step, priorSteps, resultsByStepId, startedAt });
+    const result = typeof step.execute === 'function' ? await step.execute(stepContext) : null;
     const finishedAt = new Date().toISOString();
+    const finishedContext = { ...stepContext, result, finishedAt };
     const record = {
       step_run_id: `${runId}_${step.stepId}_${randomUUID().replace(/-/g, '').slice(0, 8)}`,
       run_id: runId,
@@ -135,9 +150,10 @@ export async function runSiteOperatingLoopStep(store, { runId, step }) {
       status: step.status ?? 'ok',
       started_at: startedAt,
       finished_at: finishedAt,
-      input_refs: typeof step.inputRefs === 'function' ? step.inputRefs(result) : step.inputRefs ?? [],
-      output_refs: typeof step.outputRefs === 'function' ? step.outputRefs(result) : step.outputRefs ?? [],
-      evidence: typeof step.evidence === 'function' ? step.evidence(result) : step.evidence ?? result,
+      input_refs: typeof step.inputRefs === 'function' ? step.inputRefs(result, finishedContext) : step.inputRefs ?? [],
+      output_refs: typeof step.outputRefs === 'function' ? step.outputRefs(result, finishedContext) : step.outputRefs ?? [],
+      evidence: typeof step.evidence === 'function' ? step.evidence(result, finishedContext) : step.evidence ?? result,
+      result,
     };
     recordLoopStep(store, record);
     return publicStep(record);
@@ -154,6 +170,7 @@ export async function runSiteOperatingLoopStep(store, { runId, step }) {
       output_refs: [],
       evidence: null,
       error: errorToPayload(error),
+      result: null,
     };
     recordLoopStep(store, record);
     return publicStep(record);
@@ -163,6 +180,26 @@ export async function runSiteOperatingLoopStep(store, { runId, step }) {
 function makeRunId() {
   const stamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
   return `site_loop_run_${stamp}_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
+}
+
+function createStepContext({ loopId, runId, dryRun, step, priorSteps, resultsByStepId, startedAt }) {
+  return {
+    schema: 'narada.site_operating_loop.step_context.v1',
+    loopId,
+    loop_id: loopId,
+    runId,
+    run_id: runId,
+    stepId: step.stepId,
+    step_id: step.stepId,
+    dryRun: Boolean(dryRun),
+    dry_run: Boolean(dryRun),
+    startedAt,
+    started_at: startedAt,
+    priorSteps,
+    prior_steps: priorSteps,
+    resultsByStepId,
+    results_by_step_id: resultsByStepId,
+  };
 }
 
 function publicStep(step) {
@@ -175,6 +212,7 @@ function publicStep(step) {
     output_refs: step.output_refs ?? [],
     evidence: step.evidence ?? null,
   };
+  if ('result' in step) out.result = step.result;
   if (step.error) out.error = step.error;
   return out;
 }
