@@ -6,6 +6,7 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import {
   buildConversationSendFrame,
+  buildConversationSteerFrame,
   buildOperatorInputAction,
   buildSubscribeFrame,
   isAgentWebUiNarsMethod,
@@ -67,6 +68,12 @@ test('agent-web-ui emits admitted NARS methods for event attach and operator inp
   });
   assert.equal(isAgentWebUiProtocolFrame(input), true);
   assert.equal(buildConversationSendFrame('   '), null);
+  assert.deepEqual(buildConversationSteerFrame('change course', { id: 'steer-1', activeTurnId: 'turn_1' }), {
+    id: 'steer-1',
+    method: 'conversation.steer',
+    params: { message: 'change course', source: 'agent-web-ui', active_turn_id: 'turn_1' },
+  });
+  assert.equal(isAgentWebUiProtocolFrame(buildConversationSteerFrame('change course', { id: 'steer-1' })), true);
 
   assert.equal(buildOperatorInputAction('/status', { id: 'status-1' }).frame.method, 'session.status');
   assert.equal(buildOperatorInputAction('/health', { id: 'health-1' }).frame.method, 'session.health');
@@ -150,7 +157,16 @@ test('browser startup subscribes to events and submits operator text over the sa
   });
   assert.equal(elements.get('events').children.at(-1).children.at(1).textContent, 'run startup sequence');
 
+  socket.emit('message', { data: JSON.stringify({ event: 'session_event', cursor: { sequence: 41 }, payload: { event: 'turn_started', turn_id: 'turn_active', event_sequence: 41 } }) });
+  elements.get('operator-input').value = 'change course';
+  elements.get('operator-form').submit();
+  assert.equal(socket.sent[2].method, 'conversation.steer');
+  assert.deepEqual(socket.sent[2].params, { message: 'change course', source: 'agent-web-ui', active_turn_id: 'turn_active' });
   socket.emit('message', { data: JSON.stringify({ event: 'session_event', cursor: { sequence: 42 }, payload: { event: 'assistant_message', content: 'ack', event_sequence: 42 } }) });
+  socket.emit('message', { data: JSON.stringify({ event: 'session_event', cursor: { sequence: 43 }, payload: { event: 'turn_complete', turn_id: 'turn_active', terminal_state: 'interrupted', event_sequence: 43 } }) });
+  elements.get('operator-input').value = 'new turn';
+  elements.get('operator-form').submit();
+  assert.equal(socket.sent[3].method, 'conversation.send');
   socket.emit('close');
   assert.equal(elements.get('stream').textContent, 'reconnecting');
   assert.equal(reconnectTimers[0].delay, 1000);
@@ -160,7 +176,7 @@ test('browser startup subscribes to events and submits operator text over the sa
   assert.deepEqual(reconnectedSocket.sent[0], {
     id: 'agent-web-ui-events-subscribe',
     method: 'session.events.subscribe',
-    params: { include_replay: true, max_replay: 4, since_sequence: 42 },
+    params: { include_replay: true, max_replay: 4, since_sequence: 43 },
   });
 
   elements.get('operator-input').value = '/status';
@@ -347,6 +363,6 @@ test('CLI args and client config keep runtime authority outside the web package'
     healthEndpoint: '/api/health',
     maxReplay: 100,
     operatorInput: true,
-    admittedMethods: ['session.events.subscribe', 'conversation.send', 'session.status', 'session.health', 'session.recovery', 'session.operations', 'observers.status', 'observer.mute', 'observer.unmute', 'carrier.command.execute', 'conversation.interrupt', 'session.close'],
+    admittedMethods: ['session.events.subscribe', 'conversation.send', 'session.status', 'session.health', 'session.recovery', 'session.operations', 'observers.status', 'observer.mute', 'observer.unmute', 'carrier.command.execute', 'conversation.interrupt', 'conversation.steer', 'session.close'],
   });
 });

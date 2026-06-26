@@ -326,6 +326,10 @@ async function runServerConversationTurn({ requestId, state, messages, allTools,
     });
     return result;
   } catch (error) {
+    if (turn.interruptRequested) {
+      emit('turn_complete', { request_id: requestId, turn_id: turnId, terminal_state: 'interrupted', reason: 'interrupt_requested' });
+      return { terminal_state: 'interrupted', reason: 'interrupt_requested' };
+    }
     emit('turn_failed', { request_id: requestId, turn_id: turnId, terminal_state: 'failed', error: error instanceof Error ? error.message : String(error) });
     return { terminal_state: 'failed', reason: error instanceof Error ? error.message : String(error) };
   } finally {
@@ -576,6 +580,53 @@ async function handleServerRequest(request, context) {
       } else {
         emit('session_status', serverStatus({ requestId, state, allTools, mcpServers, mcpPreflightArtifact, context }));
       }
+      return;
+    }
+    if (controlRequest.method_kind === 'conversation_steer') {
+      const message = String(request?.params?.message ?? '');
+      if (!message.trim()) {
+        emit('error', { request_id: requestId, code: 'message_required', message: 'conversation.steer requires params.message' });
+        return;
+      }
+      if (!state.activeTurn) {
+        emit('error', { request_id: requestId, code: 'no_active_turn', message: 'conversation.steer requires an active turn.' });
+        return;
+      }
+      const activeTurn = state.activeTurn;
+      const steeringContent = `Operator steering for interrupted active turn ${activeTurn.turnId}:\n\n${message}`;
+      context.appendSessionRecord?.({
+        event: 'conversation_steer_requested',
+        request_id: requestId,
+        method: request?.method ?? 'conversation.steer',
+        active_turn_id: activeTurn.turnId,
+        delivery_semantics: 'interrupt_active_turn_then_admit_next_turn',
+        operation_status: 'requested',
+        requested_at: new Date().toISOString(),
+      });
+      emit('conversation_steer_requested', {
+        request_id: requestId,
+        method: request?.method ?? 'conversation.steer',
+        active_turn_id: activeTurn.turnId,
+        delivery_semantics: 'interrupt_active_turn_then_admit_next_turn',
+        operation_status: 'requested',
+        requested_at: new Date().toISOString(),
+      });
+      requestTurnInterrupt(activeTurn);
+      emit('turn_interrupted', { request_id: requestId, turn_id: activeTurn.turnId, terminal_state: 'interrupted_requested', reason: 'operator_steering' });
+      await state.inputQueue.enqueue(normalizeInputEvent({
+        content: steeringContent,
+        source: 'operator_steering',
+        source_id: request?.params?.source_id ?? 'agent-runtime-server.operator_terminal',
+        request_id: requestId,
+        metadata: {
+          operator_steering: {
+            raw_message: message,
+            interrupted_turn_id: activeTurn.turnId,
+            interrupted_request_id: activeTurn.requestId,
+            delivery_semantics: 'interrupt_active_turn_then_admit_next_turn',
+          },
+        },
+      }, { transport: 'jsonl_stdio' }), { drain: true, state });
       return;
     }
     if (controlRequest.method_kind === 'session_close') {

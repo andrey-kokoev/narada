@@ -13,6 +13,7 @@ export const AGENT_WEB_UI_NARS_METHOD_LIST = Object.freeze([
   'observer.unmute',
   NARS_COMMAND_METHOD,
   'conversation.interrupt',
+  'conversation.steer',
   'session.close',
 ]);
 
@@ -31,7 +32,7 @@ export const AGENT_WEB_UI_CARRIER_COMMANDS = Object.freeze([
 export const AGENT_WEB_UI_HELP_LINES = Object.freeze([
   'Commands',
   '/help, /clear, /status, /health, /events, /recovery, /ops, /interrupt, /tools, /queue, /goal, /model, /thinking, /exit',
-  'Ordinary text is submitted as conversation.send.',
+  'Ordinary text is submitted as conversation.send; during active turns it is submitted as conversation.steer.',
 ]);
 
 export const AGENT_WEB_UI_NARS_METHODS = new Set(AGENT_WEB_UI_NARS_METHOD_LIST);
@@ -69,6 +70,20 @@ export function buildAgentWebUiConversationSendFrame(text, options = {}) {
   };
 }
 
+export function buildAgentWebUiConversationSteerFrame(text, options = {}) {
+  const message = String(text ?? '').trim();
+  if (!message) return null;
+  return {
+    id: options.id ?? `agent-web-ui-steer-${Date.now()}`,
+    method: 'conversation.steer',
+    params: {
+      message,
+      source: 'agent-web-ui',
+      ...(options.activeTurnId ? { active_turn_id: options.activeTurnId } : {}),
+    },
+  };
+}
+
 export function buildAgentWebUiSubscribeFrame(options = {}) {
   const params = {
     include_replay: options.includeReplay !== false,
@@ -98,7 +113,12 @@ export function buildAgentWebUiOperatorInputAction(text, options = {}) {
   if (lower === 'exit' || lower === '/exit' || lower === '/quit') {
     return { kind: 'frame', frame: { id: options.id ?? requestIdForCommand('exit'), method: 'session.close', params: {} } };
   }
-  if (!content.startsWith('/')) return { kind: 'frame', frame: buildAgentWebUiConversationSendFrame(content, options) };
+  if (!content.startsWith('/')) {
+    return {
+      kind: 'frame',
+      frame: options.activeTurn ? buildAgentWebUiConversationSteerFrame(content, options) : buildAgentWebUiConversationSendFrame(content, options),
+    };
+  }
   if (lower.startsWith('/json ')) {
     try {
       const frame = JSON.parse(content.slice('/json '.length));

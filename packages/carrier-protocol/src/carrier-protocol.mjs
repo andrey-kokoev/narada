@@ -276,6 +276,7 @@ export const CARRIER_CONTROL_METHODS = Object.freeze([
   'session.sync',
   'session.close',
   'conversation.interrupt',
+  'conversation.steer',
   'conversation.send',
   'system_directive.deliver',
   'carrier.input.deliver',
@@ -382,6 +383,7 @@ export function classifyCarrierControlRequest(request = {}) {
   if (method === 'session.sync') return { ...base, method_kind: 'session_sync' };
   if (method === 'session.close') return { ...base, method_kind: 'session_close', allowed_when_closed: true };
   if (method === 'conversation.interrupt') return { ...base, method_kind: 'conversation_interrupt', concurrent_allowed: true };
+  if (method === 'conversation.steer') return { ...base, method_kind: 'conversation_steer', concurrent_allowed: true };
   if (method === 'conversation.send') return { ...base, method_kind: 'conversation_send' };
   if (method === 'system_directive.deliver') return { ...base, method_kind: 'system_directive_deliver' };
   if (method === 'observers.status') return { ...base, method_kind: 'observers_status' };

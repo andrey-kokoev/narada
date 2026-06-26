@@ -2,6 +2,7 @@ import {
   AGENT_WEB_UI_NARS_METHOD_LIST,
   AGENT_WEB_UI_NARS_METHODS,
   buildAgentWebUiConversationSendFrame,
+  buildAgentWebUiConversationSteerFrame,
   buildAgentWebUiHelpText,
   buildAgentWebUiOperatorInputAction,
   buildAgentWebUiSubscribeFrame,
@@ -18,6 +19,7 @@ export {
 
 export const buildOperatorInputAction = buildAgentWebUiOperatorInputAction;
 export const buildConversationSendFrame = buildAgentWebUiConversationSendFrame;
+export const buildConversationSteerFrame = buildAgentWebUiConversationSteerFrame;
 export const buildSubscribeFrame = buildAgentWebUiSubscribeFrame;
 
 export function readInjectedConfig(documentRef = globalThis.document) {
@@ -98,6 +100,19 @@ function sequenceFromRuntimeMessage(message) {
   return Number.isFinite(sequence) ? sequence : null;
 }
 
+export function applyRuntimeEventToWebUiState(state, message) {
+  const runtimeEvent = unwrapRuntimeEvent(message);
+  if (!state || !runtimeEvent || typeof runtimeEvent !== 'object') return state;
+  if (runtimeEvent.event === 'turn_started') {
+    state.activeTurnId = runtimeEvent.turn_id ?? true;
+  } else if (runtimeEvent.event === 'turn_complete' || runtimeEvent.event === 'turn_failed') {
+    if (!runtimeEvent.turn_id || state.activeTurnId === runtimeEvent.turn_id) state.activeTurnId = null;
+  } else if (runtimeEvent.event === 'session_closed') {
+    state.activeTurnId = null;
+  }
+  return state;
+}
+
 async function refreshHealth(endpoint, documentRef = document, fetchFn = globalThis.fetch) {
   if (!endpoint) {
     setText('health', 'health endpoint not configured', documentRef);
@@ -115,7 +130,10 @@ async function refreshHealth(endpoint, documentRef = document, fetchFn = globalT
 function sendOperatorMessage(socketOrConnection, text, documentRef = document) {
   const connection = socketOrConnection?.getSocket ? socketOrConnection : null;
   const socket = connection ? connection.getSocket() : socketOrConnection;
-  const action = buildOperatorInputAction(text);
+  const action = buildOperatorInputAction(text, {
+    activeTurn: Boolean(connection?.activeTurnId),
+    activeTurnId: connection?.activeTurnId,
+  });
   if (!action) return false;
   if (action.kind === 'local_help') {
     appendEvent({ event: 'agent_web_ui_help', content: buildAgentWebUiHelpText() }, documentRef);
@@ -162,6 +180,7 @@ function connectEvents(endpoint, maxReplay, documentRef = document, WebSocketCto
     socket: null,
     closed: false,
     lastSequence: null,
+    activeTurnId: null,
     reconnectTimer: null,
     getSocket() { return this.socket; },
     close() {
@@ -186,6 +205,7 @@ function connectEvents(endpoint, maxReplay, documentRef = document, WebSocketCto
         const message = JSON.parse(event.data);
         const sequence = sequenceFromRuntimeMessage(message);
         if (sequence !== null) connection.lastSequence = sequence;
+        applyRuntimeEventToWebUiState(connection, message);
         setText('stream', 'connected', documentRef);
         appendEvent(message, documentRef);
       } catch (error) {

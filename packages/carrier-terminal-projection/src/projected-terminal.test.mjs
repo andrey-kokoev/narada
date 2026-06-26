@@ -217,3 +217,40 @@ test('projected terminal bridge repaints multiline draft after async output', as
   assert.equal(plain.includes('agent-cli: turn complete 2026-06-25T16:06:09\noperator > line 1\n  line 2\n  line 3'), true);
   assert.equal(bridge.composer.getDraft(), pasted);
 });
+
+test('projected terminal bridge submits steering while a turn is active', async () => {
+  const input = new PassThrough();
+  input.isTTY = true;
+  input.setRawMode = () => input;
+  const output = new PassThrough();
+  output.isTTY = true;
+  output.columns = 100;
+  const childStdin = new PassThrough();
+  const frames = [];
+  childStdin.on('data', (chunk) => {
+    for (const line of chunk.toString('utf8').trim().split(/\n/).filter(Boolean)) frames.push(JSON.parse(line));
+  });
+
+  const bridge = createProjectedTerminalBridge({
+    input,
+    output,
+    childStdin,
+    style: createOperatorStyle({ enabled: false }),
+  });
+
+  bridge.renderEvent({ event: 'turn_started', turn_id: 'turn_active', agent_id: 'agent' });
+  input.write('steer this turn');
+  input.write('\r');
+  await new Promise((resolve) => setImmediate(resolve));
+  bridge.renderEvent({ event: 'turn_complete', turn_id: 'turn_active', terminal_state: 'interrupted' });
+  input.write('new turn');
+  input.write('\r');
+  await new Promise((resolve) => setImmediate(resolve));
+  bridge.close();
+
+  assert.equal(frames.length, 2);
+  assert.equal(frames[0].method, 'conversation.steer');
+  assert.equal(frames[0].params.message, 'steer this turn');
+  assert.equal(frames[1].method, 'conversation.send');
+  assert.equal(frames[1].params.message, 'new turn');
+});

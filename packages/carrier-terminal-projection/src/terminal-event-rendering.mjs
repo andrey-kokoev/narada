@@ -299,6 +299,7 @@ export function renderOperatorEvent(event, state = {}) {
       if (!event.turn_id) return [];
       return withStreamBoundary(state, [routeLine({ label: 'agent-cli', body: `directive ${event.terminal_state ?? 'complete'}`, labelStyle: style.label, bodyStyle: event.terminal_state === 'failed' ? style.error : style.muted, state, style })]);
     case 'turn_started':
+      state.activeTurnId = event.turn_id ?? true;
       if (consumeLocalThinkingForEvent(state, event)) return withStreamBoundary(state, []);
       markThinkingRendered(state, event.agent_id ?? projectedAgentId(state));
       return withStreamBoundary(state, [`${assistantEmissionHeader(state, style, event.agent_id ?? 'agent')} thinking...`]);
@@ -351,8 +352,12 @@ export function renderOperatorEvent(event, state = {}) {
       return withRenderedThinkingCleared(state, routedBodyLines({ label: `agent-cli -> ${event.agent_id ?? 'agent'}`, body: `${toolDisplayName(event)} ${summarizeToolResult(event)}`, labelStyle: () => `${style.tool('agent-cli')} ${style.muted('->')} ${agentLabel(event, style)}`, bodyStyle: levelStyle, state, style }));
     }
     case 'turn_complete':
-      return withRenderedThinkingCleared(state, [routeLine({ label: 'agent-cli', body: 'turn complete', labelStyle: style.label, bodyStyle: style.ok, state, style })]);
+      if (!event.turn_id || state.activeTurnId === event.turn_id) state.activeTurnId = null;
+      return withRenderedThinkingCleared(state, [routeLine({ label: 'agent-cli', body: event.terminal_state === 'interrupted' ? 'turn interrupted' : 'turn complete', labelStyle: style.label, bodyStyle: event.terminal_state === 'interrupted' ? style.warn : style.ok, state, style })]);
+    case 'turn_interrupted':
+      return withStreamBoundary(state, []);
     case 'turn_failed':
+      if (!event.turn_id || state.activeTurnId === event.turn_id) state.activeTurnId = null;
       return withRenderedThinkingCleared(state, [routeLine({ label: 'agent-cli', body: `turn failed: ${event.message ?? event.error ?? event.code ?? 'unknown error'}`, labelStyle: style.label, bodyStyle: style.error, state, style })]);
     case 'error':
       return withRenderedThinkingCleared(state, [routeLine({ label: 'error', body: `${event.code ?? 'error'}${event.message ? `: ${event.message}` : ''}`, labelStyle: style.error, bodyStyle: style.error, state, style })]);

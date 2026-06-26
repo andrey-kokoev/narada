@@ -5,6 +5,7 @@ import {
   BRACKETED_PASTE_START,
   createExplicitJsonControlFrame,
   createOperatorConversationFrame,
+  createOperatorSteeringFrame,
   createProjectedSlashCommandAction,
   projectedHelpText,
 } from './projected-input.mjs';
@@ -26,6 +27,7 @@ import {
 export {
   createExplicitJsonControlFrame,
   createOperatorConversationFrame,
+  createOperatorSteeringFrame,
   createProjectedSlashCommandAction,
 } from './projected-input.mjs';
 export { renderOperatorEvent } from './terminal-event-rendering.mjs';
@@ -144,7 +146,9 @@ export function createProjectedTerminalBridge({
       }
     }
 
-    const frame = createOperatorConversationFrame(line);
+    const frame = operatorState.activeTurnId
+      ? createOperatorSteeringFrame(line)
+      : createOperatorConversationFrame(line);
     if (frame && interactive) {
       writeSubmittedOperatorPrompt({ output, operatorState, line, style });
       const agentId = projectedAgentId(operatorState);

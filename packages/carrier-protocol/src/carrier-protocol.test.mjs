@@ -294,6 +294,8 @@ assert.deepEqual(classifyCarrierControlRequest({ id: 'sync-1', method: 'session.
 });
 assert.equal(classifyCarrierControlRequest({ id: 'interrupt-1', method: 'conversation.interrupt' }).method_kind, 'conversation_interrupt');
 assert.equal(classifyCarrierControlRequest({ id: 'interrupt-1', method: 'conversation.interrupt' }).concurrent_allowed, true);
+assert.equal(classifyCarrierControlRequest({ id: 'steer-1', method: 'conversation.steer' }).method_kind, 'conversation_steer');
+assert.equal(classifyCarrierControlRequest({ id: 'steer-1', method: 'conversation.steer' }).concurrent_allowed, true);
 assert.deepEqual(classifyCarrierControlRequest({ id: 'command-1', method: 'carrier.command.execute' }), {
   request_id: 'command-1',
   method: 'carrier.command.execute',

@@ -182,6 +182,22 @@ export function createOperatorConversationFrame(line) {
   };
 }
 
+export function createOperatorSteeringFrame(line) {
+  const rawMessage = String(line ?? '');
+  if (!rawMessage.trim()) return null;
+  const requestId = `operator-steering-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return {
+    id: requestId,
+    method: 'conversation.steer',
+    params: {
+      request_id: requestId,
+      message: rawMessage,
+      source: 'programmatic_operator',
+      source_id: 'agent-runtime-server.operator_terminal',
+    },
+  };
+}
+
 export function createExplicitJsonControlFrame(line) {
   const text = String(line ?? '');
   const match = text.match(/^\s*\/json(?:\s+(.+))?$/s);
