@@ -57,6 +57,7 @@ const VALID_TASK_STATUSES = new Set<TaskStatus>([
   'claimed',
   'needs_continuation',
   'in_review',
+  'quarantined',
   'closed',
   'confirmed',
 ]);

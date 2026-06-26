@@ -5,6 +5,7 @@ export * as taskCloseService from './task-close-service.js';
 export * as taskReportService from './task-report-service.js';
 export * as taskReviewService from './task-review-service.js';
 export * as taskFinishService from './task-finish-service.js';
+export * as taskQuarantineService from './task-quarantine-service.js';
 export * as taskAllocateService from './task-allocate-service.js';
 export * as taskAssignmentLifecycleService from './task-assignment-lifecycle-service.js';
 export * as taskSearchService from './task-search-service.js';

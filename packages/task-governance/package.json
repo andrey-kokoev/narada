@@ -38,6 +38,10 @@
       "types": "./dist/task-finish-service.d.ts",
       "import": "./dist/task-finish-service.js"
     },
+    "./task-quarantine-service": {
+      "types": "./dist/task-quarantine-service.d.ts",
+      "import": "./dist/task-quarantine-service.js"
+    },
     "./task-allocate-service": {
       "types": "./dist/task-allocate-service.d.ts",
       "import": "./dist/task-allocate-service.js"

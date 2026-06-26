@@ -38,7 +38,7 @@ export interface TaskAssignment {
   claimed_at: string;
   claim_context: string | null;
   released_at: string | null;
-  release_reason: 'completed' | 'abandoned' | 'superseded' | 'transferred' | 'budget_exhausted' | 'continued' | null;
+  release_reason: 'completed' | 'abandoned' | 'superseded' | 'transferred' | 'budget_exhausted' | 'continued' | 'wrong_locus' | null;
   /** If this assignment is a continuation/takeover, the reason why. */
   continuation_reason?: 'evidence_repair' | 'review_fix' | 'handoff' | 'blocked_agent' | 'operator_override' | null;
   /** The agent_id of the prior active assignment, if this is a continuation. */
@@ -1314,7 +1314,7 @@ export async function writeTaskProjection(path: string, frontMatter: TaskFrontMa
 /**
  * Valid task statuses per the state machine schema.
  */
-export const TASK_STATUSES = ['draft', 'opened', 'claimed', 'needs_continuation', 'in_review', 'closed', 'confirmed'] as const;
+export const TASK_STATUSES = ['draft', 'opened', 'claimed', 'needs_continuation', 'in_review', 'quarantined', 'closed', 'confirmed'] as const;
 export type TaskStatus = typeof TASK_STATUSES[number];
 
 /**
@@ -1322,10 +1322,11 @@ export type TaskStatus = typeof TASK_STATUSES[number];
  */
 const ALLOWED_TRANSITIONS: Record<string, TaskStatus[]> = {
   draft: ['opened'],
-  opened: ['claimed', 'closed'],
-  claimed: ['in_review', 'opened', 'needs_continuation'],
-  needs_continuation: ['claimed', 'opened'],
-  in_review: ['closed', 'opened'],
+  opened: ['claimed', 'closed', 'quarantined'],
+  claimed: ['in_review', 'opened', 'needs_continuation', 'quarantined'],
+  needs_continuation: ['claimed', 'opened', 'quarantined'],
+  in_review: ['closed', 'opened', 'quarantined'],
+  quarantined: ['opened'],
   closed: ['confirmed', 'opened', 'in_review'],
   confirmed: ['opened', 'in_review'],
 };

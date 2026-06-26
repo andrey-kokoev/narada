@@ -6,6 +6,7 @@ import { taskReportCommand } from './task-report.js';
 import { taskFinishCommand } from './task-finish.js';
 import { taskContinueCommand } from './task-continue.js';
 import { taskCloseCommand } from './task-close.js';
+import { taskQuarantineCommand } from './task-quarantine.js';
 import { taskReopenCommand } from './task-reopen.js';
 import { taskConfirmCommand } from './task-confirm.js';
 import {
@@ -194,6 +195,31 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
         taskNumber,
         by: opts.by as string | undefined,
         mode: opts.mode as TaskClosureMode,
+        cwd: opts.cwd as string | undefined,
+        format: resolveCommandFormat(opts.format, 'human'),
+        store,
+      }),
+    }));
+
+  taskCmd
+    .command('quarantine <task-number>')
+    .description('Truthfully remove a wrong-locus task from active executable workboards without proving its original acceptance criteria')
+    .requiredOption('--by <id>', 'Operator or agent ID performing the quarantine')
+    .requiredOption('--rationale <text>', 'Why this task is wrong-locus/foreign to this site')
+    .option('--evidence-ref <uri>', 'Evidence URI or task reference supporting the wrong-locus decision')
+    .option('--format <fmt>', 'Output format: json or human', 'human')
+    .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
+    .action(resourceScopedDirectCommandAction<SqliteTaskLifecycleStore, [string, Record<string, unknown>]>({
+      command: 'task quarantine',
+      emit: emitCommandResult,
+      format: (_taskNumber: string, opts: Record<string, unknown>) => opts.format,
+      open: (_taskNumber, opts) => openTaskLifecycleStore((opts.cwd as string | undefined) || process.cwd()),
+      close: closeStore,
+      invocation: (store, taskNumber, opts) => taskQuarantineCommand({
+        taskNumber,
+        by: opts.by as string | undefined,
+        rationale: opts.rationale as string | undefined,
+        evidenceRef: opts.evidenceRef as string | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'human'),
         store,

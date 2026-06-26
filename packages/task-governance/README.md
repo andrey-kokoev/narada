@@ -52,6 +52,24 @@ Command Execution Intent Zone and Testing Intent Zone contracts are owned by `@n
 - TIZ owns verification request/result types and test-run policy.
 - Task governance references CEIZ/TIZ artifacts as evidence, but does not define their authority grammar.
 
+## Wrong-Locus Quarantine
+
+Use `narada task quarantine <task-number> --by <agent-or-operator> --rationale <reason> --evidence-ref <uri>` only when an active task record is foreign to the current site or authority locus. This transition is for truthful quarantine of task contamination, not for completing difficult or stale local work.
+
+The transition sets lifecycle status to `quarantined`, records `wrong_locus:<actor>` provenance plus a JSON quarantine packet, releases any active assignment, and removes the task from executable workboards. It deliberately does not check or mark the original acceptance criteria complete.
+
+Allowed cases:
+
+- A task belongs to another product/site authority.
+- A generic carrier or foreign agent claimed a task that this site must not execute.
+- Evidence identifies the task as wrong-locus and the original task file/database record should remain auditable.
+
+Disallowed cases:
+
+- Genuine local work with failing evidence.
+- Normal cancellation, deferral, or scope reduction.
+- Any attempt to bypass evidence admission for a real task.
+
 ## Local Development
 
 The CLI consumes this package through workspace package exports. After editing `packages/task-governance/src`, run:
